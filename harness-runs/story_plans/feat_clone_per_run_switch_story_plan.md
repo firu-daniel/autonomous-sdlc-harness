@@ -93,7 +93,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_clone_per_run_switch/ta
 16. [x] **Task 26** — Hold job mode to the base profile and an untouched lane, and prove its launch check, in `watcher-remote-job.test.mjs` _(layer: cli)_ _(points: 10)_
 17. [x] **Task 15** — Move `watcher-review-drop-payloads.test.mjs` to the clone layout, keeping each worktree-only plant as a clone equivalent or a migration case _(layer: cli)_ _(points: 15)_
 18. [x] **Task 16** — Move `watcher-stall-reset-payloads.test.mjs` to the clone layout on the same terms _(layer: cli)_ _(points: 15)_
-19. [ ] **Task 17** — Move `watcher-remote-dispatch.test.mjs` to the clone layout _(layer: cli)_ _(points: 10)_
+19. [x] **Task 17** — Move `watcher-remote-dispatch.test.mjs` to the clone layout _(layer: cli)_ _(points: 10)_
 20. [ ] **Task 18** — Prove a parked legacy worktree run resumes, commits and is swept, in a new `cli/test/run-copy-migration.test.mjs` _(layer: cli)_ _(points: 15)_
 21. [ ] **Task 19** — State in `harness-run.yml` why the `run` job cuts no copy, and hold it with a test over the rendered template _(layer: cli)_ _(points: 10)_
 22. [ ] **Task 20** — Make `branch-prompt.md`'s collision guard check the run copy's path, not `git worktree list` alone _(layer: plugin)_ _(points: 5)_

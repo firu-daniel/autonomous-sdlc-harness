@@ -13,10 +13,17 @@
 
 **Work:**
 
-- [ ] Wherever the suite reads the cut copy, through `git worktree list`, a `.git` pointer or `worktree remove`, assert the clone instead: a `.git` directory, `alternates` naming the main checkout's objects, and `copy_kind` `clone` in the record.
-- [ ] The case that says a task or docs re-drop never reaches the placement because `create-worktree.sh` refuses the branch now asserts the live-copy refusal line. Add its perturbation: the live copy removed, then the drop proceeds.
-- [ ] Update the header's fixture description (*"`create-worktree.sh` cuts a real sibling working copy"* → a clone) and its rule.
+- [x] Wherever the suite reads the cut copy, through `git worktree list`, a `.git` pointer or `worktree remove`, assert the clone instead: a `.git` directory, `alternates` naming the main checkout's objects, and `copy_kind` `clone` in the record.
+- [x] The case that says a task or docs re-drop never reaches the placement because `create-worktree.sh` refuses the branch now asserts the live-copy refusal line. Add its perturbation: the live copy removed, then the drop proceeds.
+- [x] Update the header's fixture description (*"`create-worktree.sh` cuts a real sibling working copy"* → a clone) and its rule.
 
 **Verification:**
 
 - `npm test --workspace cli -- test/watcher-remote-dispatch.test.mjs` passes.
+
+**Deviations from plan:**
+
+- No assertion in the suite read the cut copy through `git worktree list`, a `.git` pointer or `worktree remove`, so there was nothing to replace; the clone assertion (`assertClone`: `.git` a directory, `objects/info/alternates` naming the main checkout's `.git/objects`, record `copy_kind` `clone`) was added where the suite already reads the cut copy — the first remote task drop, both key-absent cases, and the new re-drop case.
+- The re-drop case is a new `test` (three subtests) rather than an edit of the identical-re-drop case, which drops a review and never reached `create-worktree.sh`; the old comment above it now introduces both.
+- The perturbation needs two steps. Removing only the clone leaves a task re-drop at `create-worktree.sh`'s next guard (`a local branch 'feat_x' already exists`), so the second subtest asserts the live-copy line is gone and that guard answers instead; the drop proceeds (cut, committed, pushed, dispatched, a clone again) only in the third subtest, once the main checkout's `refs/heads/feat_x`, its `refs/remotes/origin/feat_x` and origin's `refs/heads/feat_x` are deleted too.
+- Observed while writing it: with only the local and origin branches deleted, a stale `refs/remotes/origin/feat_x` in the main checkout makes the re-cut fail — `create-worktree.sh: the mirror sync-out of refs/remotes/origin/feat_x to the clone failed after the push — … update-ref to <oid> failed`, then rollback (the sync-out's empty expected-old meets the ref the clone inherited). The test deletes that ref; `create-worktree.sh` was not changed (outside this unit's target).
