@@ -29827,3 +29827,208 @@ holds no memtable document and 1 segment, and lists no inversion.
 
 The commands that re-run every figure here are in `docs/retrieval-eval.md` → `### The BM25 index-state
 probe`, its closing paragraph.
+
+### Whether either mechanism moves relevance
+
+The question is whether the two mechanisms move the relevance eval's deterministic figures, so that they
+matter for ranking quality, or move scores only. Mechanism 2 is the index scan's exact length on memtable
+rows against the quantized length elsewhere. Mechanism 1 is the dead rows a refresh leaves in
+`total_docs` and `total_len`.
+
+**The setup.**
+
+- **The runs.** 2026-10-20, through the existing launcher `harness-runs/scratch/eval.mjs` as `docs/retrieval-eval.md`
+  → `## How to run it` gives it, on the TypeScript backend, after `npm run build`. Each corpus's three
+  states were run once each, all six before this subsection was written, so no edit of this document lies
+  between them.
+- **The host and models**, as every block's provenance reads: host `darwin 24.6.0`, Node `v22.23.2`,
+  embedder `Xenova/bge-small-en-v1.5:q8:cls:384:v1`, reranker `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1`,
+  abstention threshold `0.32`.
+- **The corpora.** `fixture-catalog` at `{ files: 9, chunks: 41 }`, 12 queries (9 positive, 3 negative),
+  and `self-docs` at `{ files: 71, chunks: 821 }`, 20 queries. Each corpus's three blocks carry that one
+  stamp.
+- **`k`** is the default, 5, and every run used `--repeat 1`. Arm A awaits a hand run in every block
+  and is not compared.
+- **The output.** Every block was written with `--out` into a scratch file of its own under
+  `harness-runs/scratch/bm25-relevance/`, holding only the two generated-region markers. So the generated
+  region of this document and `evals/docs-retrieval/floor.json` are untouched, and no results file under
+  `docs/` was written. The latency columns were not read.
+
+**The three states.** Each command runs from the repository root. `X` is the corpus measured and `Y` is
+the other one.
+
+- **held-another** is a data directory that held `Y` first. The second run's refresh deletes `Y`'s keys
+  and inserts `X`'s in one store opened over `Y`'s, so the index carries `Y`'s rows as dead rows. Both
+  its rows and the fresh-insert's are newly inserted, so the pair isolates the dead rows.
+
+  ```
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --data-dir harness-runs/scratch/bm25-relevance/held-fixture-catalog --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --data-dir harness-runs/scratch/bm25-relevance/held-fixture-catalog --out harness-runs/scratch/bm25-relevance/fixture-catalog-held-another.md --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --data-dir harness-runs/scratch/bm25-relevance/held-self-docs --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --data-dir harness-runs/scratch/bm25-relevance/held-self-docs --out harness-runs/scratch/bm25-relevance/self-docs-held-another.md --repeat 1
+  ```
+
+- **fresh-insert** is a refresh into an absent data directory, the index as the inserts left it.
+
+  ```
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --data-dir harness-runs/scratch/bm25-relevance/fresh-fixture-catalog --out harness-runs/scratch/bm25-relevance/fixture-catalog-fresh-insert.md --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --data-dir harness-runs/scratch/bm25-relevance/fresh-self-docs --out harness-runs/scratch/bm25-relevance/self-docs-fresh-insert.md --repeat 1
+  ```
+
+- **after-spill** is the same command again against the same directory. The launcher has no spill flag,
+  so this state is the reopened index: the corpus is unchanged, so its refresh writes nothing
+  (`cli/src/retrieval/refresh.ts` → `refreshIndex`, step (5)). The launcher does not print the refresh's
+  counts with `--out`, so "nothing written" rests on that step and on the unchanged stamp, not on a
+  printed reading.
+
+  ```
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --data-dir harness-runs/scratch/bm25-relevance/fresh-fixture-catalog --out harness-runs/scratch/bm25-relevance/fixture-catalog-after-spill.md --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --data-dir harness-runs/scratch/bm25-relevance/fresh-self-docs --out harness-runs/scratch/bm25-relevance/self-docs-after-spill.md --repeat 1
+  ```
+
+  **Why a reopen stands for the spill.** `### The score each index state ranks by` exposes
+  `bm25_spill_index` on PGlite, but the launcher cannot call it. Its `t2` row, the PGlite reopen, reads 0
+  memtable documents and differs from `t1` on 0 hits in `scan` and in `operator`, on both corpora. That
+  row was taken after `t1`'s spill had already emptied the memtable. It therefore shows that a reopen
+  leaves the spilled scores in place, but not that a reopen empties a non-empty memtable. `### The
+  candidate end-state rule, at refresh level` records one reopen that left a memtable non-empty: the
+  TypeScript `fixture-catalog` `file-added` scenario read 5 memtable documents after its reopen. The launcher reads no
+  memtable count, so this run cannot say whether the after-spill index held one.
+
+**`fixture-catalog` at `{ files: 9, chunks: 41 }`.** "Abstained" is the number of the 3 negative queries
+each arm abstained on.
+
+| Arm | State | recall@1 | recall@3 | recall@5 | MRR | Abstained |
+|---|---|---|---|---|---|---|
+| B `lexical` | held-another | 0.444 | 1.000 | 1.000 | 0.704 | 0 |
+| B `lexical` | fresh-insert | 0.444 | 0.889 | 1.000 | 0.657 | 0 |
+| B `lexical` | after-spill | 0.333 | 0.889 | 1.000 | 0.602 | 0 |
+| C `vector` | held-another | 0.778 | 1.000 | 1.000 | 0.889 | 0 |
+| C `vector` | fresh-insert | 0.778 | 1.000 | 1.000 | 0.889 | 0 |
+| C `vector` | after-spill | 0.778 | 1.000 | 1.000 | 0.889 | 0 |
+| D `fused` | held-another | 0.556 | 1.000 | 1.000 | 0.778 | 0 |
+| D `fused` | fresh-insert | 0.556 | 1.000 | 1.000 | 0.759 | 0 |
+| D `fused` | after-spill | 0.444 | 1.000 | 1.000 | 0.704 | 0 |
+| E `fused-rerank` | held-another | 0.444 | 0.667 | 0.667 | 0.556 | 3 |
+| E `fused-rerank` | fresh-insert | 0.444 | 0.667 | 0.667 | 0.556 | 3 |
+| E `fused-rerank` | after-spill | 0.444 | 0.667 | 0.667 | 0.556 | 3 |
+
+**`self-docs` at `{ files: 71, chunks: 821 }`.** "Abstained" is out of 5 negative queries.
+
+| Arm | State | recall@1 | recall@3 | recall@5 | MRR | Abstained |
+|---|---|---|---|---|---|---|
+| B `lexical` | held-another | 0.400 | 0.533 | 0.667 | 0.497 | 0 |
+| B `lexical` | fresh-insert | 0.400 | 0.533 | 0.667 | 0.497 | 0 |
+| B `lexical` | after-spill | 0.400 | 0.533 | 0.667 | 0.497 | 0 |
+| C `vector` | held-another | 0.533 | 0.533 | 0.533 | 0.533 | 0 |
+| C `vector` | fresh-insert | 0.533 | 0.533 | 0.533 | 0.533 | 0 |
+| C `vector` | after-spill | 0.533 | 0.533 | 0.533 | 0.533 | 0 |
+| D `fused` | held-another | 0.533 | 0.533 | 0.733 | 0.583 | 0 |
+| D `fused` | fresh-insert | 0.533 | 0.533 | 0.733 | 0.583 | 0 |
+| D `fused` | after-spill | 0.533 | 0.533 | 0.733 | 0.583 | 0 |
+| E `fused-rerank` | held-another | 0.400 | 0.600 | 0.667 | 0.517 | 4 |
+| E `fused-rerank` | fresh-insert | 0.400 | 0.600 | 0.667 | 0.517 | 4 |
+| E `fused-rerank` | after-spill | 0.400 | 0.600 | 0.667 | 0.517 | 4 |
+
+**The comparisons.** Each pair was compared over arms B to E on every column above, on the strict
+columns (strict recall@1, @3 and @5, strict MRR), and per query on the ordered refs, the first relevant
+rank, the first strictly relevant rank and abstention. That covers 12 queries per arm on `fixture-catalog`
+and 20 on `self-docs`. Values below are unrounded where three decimals hide a difference, and ranks read
+`0` where no relevant ref is in the top 5.
+
+**fresh-insert against after-spill, mechanism 2 alone.**
+
+- **`fixture-catalog` changes, in arms B and D.**
+  - Arm B: recall@1 0.4444 → 0.3333, MRR 0.6574 → 0.6019, strict recall@1 0.4444 → 0.3333, strict
+    recall@3 0.7778 → 0.6667, strict MRR 0.6056 → 0.5407.
+  - Arm D: recall@1 0.5556 → 0.4444, MRR 0.7593 → 0.7037, strict recall@1 0.4444 → 0.3333, strict MRR
+    0.6852 → 0.6296.
+  - Arms C and E: no change.
+
+  | Query | Arm | Rank, fresh → after | Strict rank | What changed |
+  |---|---|---|---|---|
+  | `q-fc-token-lifetime` | B | 1 → 2 | 1 → 2 | positions 1 and 2 swap: `docs/api-auth.md#token-exchange`, `docs/api-auth.md#rotating-a-key` becomes `#rotating-a-key`, `#token-exchange` |
+  | `q-fc-token-lifetime` | D | 1 → 2 | 1 → 2 | the same swap |
+  | `q-fc-unreadable-label` | B | 3 → 3 | 3 → 4 | positions 3 and 4 swap: `docs/labels.md#when-a-label-is-rejected`, `docs/depot-operations.md#inbound-scanning` becomes the reverse |
+  | `q-fc-negative-recruitment` (negative) | D | — | — | positions 3 and 4 swap: `docs/webhooks.md#delivery-and-retries`, `docs/tracking.md#estimated-delivery-window` becomes the reverse; abstained in neither |
+
+  The two positive queries are the two near-tie pairs of `### The near-tie ordering on an empty
+  database`. In fresh-insert each pair is returned in the order that subsection records for `t0`, and in
+  after-spill in the order it records for the spilled states.
+- **`self-docs`: no change.** Every column above, every strict column, and every query's ordered refs,
+  ranks and abstention are equal in all four arms.
+
+**held-another against fresh-insert, which adds mechanism 1's dead rows.**
+
+- **`fixture-catalog` changes, in arms B, C and D.**
+  - Arm B: recall@3 1.0000 → 0.8889, MRR 0.7037 → 0.6574, strict recall@1 0.3333 → 0.4444, strict
+    recall@3 0.8889 → 0.7778, strict MRR 0.5648 → 0.6056.
+  - Arm D: MRR 0.7778 → 0.7593, strict recall@1 0.3333 → 0.4444, strict MRR 0.6481 → 0.6852.
+  - Arm C: no column changes. Arm E: no change in any column or query; the arm made 11 rerank calls
+    held-another and 12 fresh-insert, because arm D's list for `q-fc-negative-lattice` was empty
+    held-another. `q-fc-negative-lattice` abstains in both states.
+
+  "Order only" means the same five refs in a different order. Otherwise the cell names the refs only one
+  state returned.
+
+  | Query | Arm | Rank, held → fresh | Strict rank | What changed |
+  |---|---|---|---|---|
+  | `q-fc-route-choice` | B | 2 → 4 | 3 → 5 | held-another only `docs/routing.md#zone-graph`; fresh-insert only `docs/depot-operations.md` |
+  | `q-fc-late-handin` | B | 1 → 1 | 1 → 1 | held-another only `docs/depot-operations.md#handover-to-a-courier`; fresh-insert only `docs/exceptions.md#redelivery-attempts` |
+  | `q-fc-barcode-contents` | B | 1 → 1 | 1 → 1 | held-another only `docs/INDEX.md`; fresh-insert only `docs/labels.md` |
+  | `q-fc-unreadable-label` | B | 2 → 3 | 4 → 3 | order only |
+  | `q-fc-billable-weight` | B | 2 → 2 | 3 → 3 | held-another only `docs/INDEX.md`, `docs/rates.md#remote-area-surcharge`; fresh-insert only `docs/routing.md#zone-graph`, `docs/routing.md#how-a-route-is-chosen` |
+  | `q-fc-surcharge-compounding` | B | 1 → 2 | 3 → 4 | held-another only `docs/rates.md#rate-cards`; fresh-insert only `docs/labels.md#label-anatomy` |
+  | `q-fc-webhook-retry` | B | 1 → 1 | 1 → 1 | held-another only `docs/webhooks.md#subscribing-to-events`, `docs/webhooks.md#replaying-missed-events`; fresh-insert only `docs/tracking.md`, `docs/labels.md` |
+  | `q-fc-verify-callback` | B | 3 → 3 | 3 → 3 | held-another only `docs/INDEX.md`; fresh-insert only `docs/exceptions.md#exception-codes` |
+  | `q-fc-token-lifetime` | B | 2 → 1 | 2 → 1 | order only |
+  | `q-fc-negative-recruitment` (negative) | B | — | — | held-another only `docs/webhooks.md#signature-verification`, `docs/webhooks.md#delivery-and-retries`, `docs/exceptions.md#exception-codes`; fresh-insert only `docs/rates.md#fuel-surcharge`, `docs/rates.md#remote-area-surcharge`, `docs/labels.md#printing-and-label-stock` |
+  | `q-fc-negative-datastore` (negative) | B | — | — | held-another only `docs/labels.md#when-a-label-is-rejected`, `docs/rates.md#volumetric-weight`; fresh-insert only `docs/api-auth.md#api-keys`, `docs/depot-operations.md#inbound-scanning` |
+  | `q-fc-verify-callback` | C | 2 → 2 | 2 → 2 | held-another returns 3 refs, fresh-insert 5; fresh-insert only `docs/webhooks.md#delivery-and-retries`, `docs/tracking.md#event-ordering-and-duplicates` |
+  | `q-fc-negative-lattice` (negative) | C | — | — | held-another returns 0 refs, fresh-insert 5 |
+  | `q-fc-route-choice` | D | 2 → 3 | 2 → 3 | held-another only `docs/routing.md#zone-graph`; fresh-insert only `docs/labels.md` |
+  | `q-fc-late-handin` | D | 1 → 1 | 1 → 1 | held-another only `docs/depot-operations.md#inbound-scanning`; fresh-insert only `docs/exceptions.md#redelivery-attempts` |
+  | `q-fc-barcode-contents` | D | 1 → 1 | 1 → 1 | order only |
+  | `q-fc-unreadable-label` | D | 1 → 2 | 2 → 2 | order only |
+  | `q-fc-billable-weight` | D | 2 → 2 | 2 → 2 | held-another only `docs/rates.md#fuel-surcharge`; fresh-insert only `docs/routing.md#how-a-route-is-chosen` |
+  | `q-fc-verify-callback` | D | 2 → 2 | 2 → 2 | held-another only `docs/routing.md#zone-graph`; fresh-insert only `docs/tracking.md#event-ordering-and-duplicates` |
+  | `q-fc-token-lifetime` | D | 2 → 1 | 2 → 1 | held-another only `docs/webhooks.md#signature-verification`; fresh-insert only `docs/webhooks.md#replaying-missed-events` |
+  | `q-fc-negative-recruitment` (negative) | D | — | — | order only |
+  | `q-fc-negative-lattice` (negative) | D | — | — | held-another returns 0 refs, fresh-insert 5 |
+  | `q-fc-negative-datastore` (negative) | D | — | — | held-another only `docs/tracking.md#event-ordering-and-duplicates`; fresh-insert only `docs/exceptions.md#returns-to-sender` |
+
+  Arm B's only unchanged query is `q-fc-negative-lattice`. Arm C's two changes are not a BM25
+  mechanism: the vector arm ranks by `embedding <=> $1::vector` over the `chunks_hnsw` index
+  (`cli/src/retrieval/store.ts`), not by `chunks_bm25`. Its short lists are recorded and unexplained;
+  this branch measured no cause for them.
+- **`self-docs`: no column changes**, in any arm, strict columns included, and no query's first relevant
+  rank, first strictly relevant rank or abstention changes. Ordered refs change below the first relevant
+  rank in 8 query-arm pairs:
+
+  | Query | Arm | Rank, held → fresh | Strict rank | What changed |
+  |---|---|---|---|---|
+  | `q-sd-stack-detection` | B | 0 → 0 | 0 → 0 | order only |
+  | `q-sd-second-init` | B | 1 → 1 | 0 → 0 | order only |
+  | `q-sd-negative-ingress` (negative) | B | — | — | order only |
+  | `q-sd-negative-migration` (negative) | B | — | — | held-another only `docs/retrieval-eval-results.md#divergence-sources-in-the-order-checked`; fresh-insert only `docs/retrieval-eval-results.md#one-agent-session-through-mcpjson` |
+  | `q-sd-new-config-key` | D | 1 → 1 | 0 → 0 | order only |
+  | `q-sd-stack-detection` | D | 1 → 1 | 2 → 2 | held-another only `docs/config.md#1-the-three-resolution-classes`; fresh-insert only `docs/watcher.md#2-the-scripts` |
+  | `q-sd-negative-blog` (negative) | D | — | — | order only |
+  | `q-sd-stack-detection` | E | 1 → 1 | 2 → 2 | held-another only `docs/cli.md#3-the-re-run-contract`; fresh-insert only `.claude/context/cli.md#how-a-module-in-this-layer-is-written` |
+
+**The answer.**
+
+- **`fixture-catalog`: ranking quality, through both comparisons.**
+  - Mechanism 2's comparison moves arm B's and arm D's recall@1 by one query each (0.444 → 0.333 and
+    0.556 → 0.444), and their MRR by 0.056. That is the `q-fc-token-lifetime` near-tie pair, whose
+    relevant `#token-exchange` ranks first in fresh-insert and second after the reopen.
+  - The dead-row comparison moves arm B's recall@3 (1.000 held-another, 0.889 fresh-insert) and MRR
+    (0.704, 0.657), and arm D's MRR (0.778, 0.759). It also changes arm B's lists on 11 of 12 queries
+    and arm D's on 10. The held-another figure is the higher one in every moved column except strict
+    recall@1 and strict MRR, which are lower held-another in both arms.
+- **`self-docs`: score parity only, through both comparisons.** No recorded figure moves in any arm.
+  Mechanism 2's comparison changes nothing at all. The dead-row comparison, where 41 rows are dead
+  against 821 live, reorders or swaps refs only below each query's first relevant rank.
+
+The limit of these figures: one run per state, on two corpora of 41 and 821 chunks, on the TypeScript
+backend only.
