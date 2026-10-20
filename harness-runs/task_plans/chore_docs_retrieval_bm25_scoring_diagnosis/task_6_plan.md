@@ -59,3 +59,9 @@
 - The reference each verdict uses is the one Task 2's statement names, or all three when it names none, and the subsection says which.
 - After the runs, the compose server lists no `bm25_refresh_rule` database.
 - `git diff` adds bytes only inside `### The candidate end-state rule, at refresh level` and the closing paragraph of `### The BM25 index-state probe`. The new results subsection carries no millisecond figure.
+
+**Deviations from plan:**
+
+- **Runs overlapped in time.** The TypeScript `self-docs` run ran in the background while both Python `fixture-catalog` runs and the first Python `self-docs` run ran; no two runs shared an engine instance, a data directory or a database. No time is measured, so no figure depends on it; the Python `self-docs` pair's 10311 `--compare` disagreements are all in readings of the Python store's own build or a spill of it, and none in any `REINDEX` reading.
+- **The procedure addition is a closing block, not one paragraph.** It follows the subsection's existing form: short prose lines between fenced blocks (the launcher's two lines, then the four run commands). The capture paths in it are spelled `refresh-rule-<backend>-<corpus>-1.txt` rather than this task's `t6-…` names.
+- **Grading of run-varying values.** On Python `self-docs`, `--compare` names most `after` differences in `fresh`, `file-added` and `unchanged` as differing between the two runs, but each of those scenarios also has differences both runs read alike (1, 1 and 31). Every difference is therefore counted in its scenario's failing verdict, and none is set aside as a one-run value.

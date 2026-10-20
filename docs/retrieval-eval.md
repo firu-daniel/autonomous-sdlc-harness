@@ -608,6 +608,32 @@ bash scripts/scratch-run.sh harness-runs/scratch/bm25-history.mjs --compare harn
 `--reindex-cost` times one `REINDEX` and is an operator's hand run on an otherwise idle machine, outside
 any session; the branch that measured the index states did not run it.
 
+The refresh-level launcher re-takes `### The candidate end-state rule, at refresh level`: it drives each
+backend's own refresh through six scenarios, issues the statement the candidate end-state rule decides
+after the last refresh, and compares the reading before and after it with fresh builds of the final
+corpus taken in the same run. `--backend` is `typescript` or `python`, `--corpus` the final corpus A and
+`--other` the corpus B a scenario holds first. Create `harness-runs/scratch/bm25-refresh-rule.mjs`:
+
+```
+import { runRefreshRuleLauncher } from '../../evals/docs-retrieval/bm25-refresh-rule.mjs';
+await runRefreshRuleLauncher(process.argv.slice(2));
+```
+
+The four runs, from the repository root:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-refresh-rule.mjs --backend typescript --corpus fixture-catalog --other self-docs --capture harness-runs/scratch/bm25-history/refresh-rule-typescript-fixture-catalog-1.txt
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-refresh-rule.mjs --backend typescript --corpus self-docs --other fixture-catalog --capture harness-runs/scratch/bm25-history/refresh-rule-typescript-self-docs-1.txt
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-refresh-rule.mjs --backend python --corpus fixture-catalog --other self-docs --capture harness-runs/scratch/bm25-history/refresh-rule-python-fixture-catalog-1.txt
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-refresh-rule.mjs --backend python --corpus self-docs --other fixture-catalog --capture harness-runs/scratch/bm25-history/refresh-rule-python-self-docs-1.txt
+```
+
+Each `python` run was taken a second time into a `-2.txt` capture and the pair compared with the probe
+launcher's `--compare`, as above. The `python` runs have the preconditions of `### The Python backend`:
+the environment synced with the `models` extra, the weights fetched, and the compose `postgres` service
+up. The module creates and drops its own `bm25_refresh_rule_*` databases on the compose server, and
+removes its own corpus mirrors and PGlite data directories, on every exit path.
+
 ## The query-set format
 
 **This section is the only statement of the format.** `evals/docs-retrieval/queries/README.md` carries

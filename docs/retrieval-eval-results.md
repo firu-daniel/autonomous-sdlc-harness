@@ -29616,3 +29616,214 @@ by the sequence above, not worked around; reporting it upstream is the maintaine
 emptied with no write and no autovacuum also moves 278 `scan` values to their segment score. Those are
 the `t0` / `t1` state difference of `### The score each index state ranks by`. What triggers it is not
 identified by this probe.
+
+### The candidate end-state rule, at refresh level
+
+**The rule**, as the task prompt that opened this work states it:
+
+- after a refresh that left a dead row, `REINDEX INDEX chunks_bm25`;
+- after any other refresh that changed something, `bm25_spill_index('chunks_bm25')`;
+- the first `docs index` build ends in the same state.
+
+The question is whether a refreshed index, after the rule, scores in the `scan` column the same as a
+freshly built index of the final corpus, whatever the database held before. The shipped refresh issues
+neither statement, so each scenario's `before` reading is the shipped code's end state, the before-fix
+figure, and its `after` reading is the state the rule would leave.
+
+**The setup.**
+
+- **The backends.** TypeScript: each refresh is `openPgliteStore` → `refreshIndex` → `close` on a PGlite
+  data directory of its own, as `docs index` refreshes. Python: each refresh is the package's own `index`
+  against a database of its own on the compose Postgres. The engines are those in `### How the probe
+  reads a score, and the setup`: PostgreSQL 18.3 (PGlite 0.5.8) and PostgreSQL 18.2 (Debian
+  18.2-1.pgdg12+1), `pg_textsearch` `1.3.1` on both, and `bm25_spill_index` available on both, so every
+  statement the rule decided was issued.
+- **The corpora.** `fixture-catalog` at `{ files: 9, chunks: 41 }`, 12 queries, and `self-docs` at `{
+  files: 71, chunks: 820 }`, 20 queries, in every run below. With `fixture-catalog` as A, `F` is
+  `docs/webhooks.md` and A without `F` is `{ files: 8, chunks: 36 }`. With `self-docs` as A, `F` is
+  `docs/work-report-research/user-review-fix-plan-writer.md` and A without `F` is `{ files: 70, chunks:
+  809 }`. B is the other corpus.
+- **The scenarios**, each on a new store: `fresh`, empty → A; `other-corpus`, B → A; `file-added`, A
+  without `F` → A; `file-edited`, A with a paragraph appended to `F` → A; `file-removed`, A → A without
+  `F`; `unchanged`, A → A. The prior refresh, where there is one, is the shipped refresh and is not
+  followed by the rule; the rule is applied after the last refresh only.
+- **The rule's inputs**, per scenario: `deleted` and `embedded` from the last refresh's own result;
+  `rebuilt` from it on TypeScript, where it was `false` in every refresh, and taken as `false` on Python,
+  whose `index` does not report it; and `updatedExisting`, the keys stored before and after the last
+  refresh with a different hash, read with `SELECT key, hash FROM chunks`.
+- **The readings.** Each reading is the score statement of `### How the probe reads a score, and the
+  setup`, run once per query with `LIMIT` the final corpus's chunk count, with its summary, its two plan
+  lines and its diagnostics. The probe's plan was the `chunks_bm25` index scan in every reading of every
+  run, so no reading was re-scored under `SET enable_seqscan = off`. On PGlite no route reads the store's
+  own instance, so every reading opens the data directory again after the store closed: each PGlite
+  `before` reading is read after a reopen. On Postgres each reading is a new session on the same database.
+- **The references.** Fresh builds of each final-corpus variant, taken in the same run by the same
+  backend's refresh into an empty store: `reference-insert` is that build as left, `reference-spill` the
+  same store after `SELECT bm25_spill_index('chunks_bm25')`, and `reference-reindex` the same store
+  after `REINDEX INDEX chunks_bm25`. The full variant's build is the `fresh` scenario's. **Every verdict
+  below is graded against `reference-reindex`**, because `### The score each index state ranks by`
+  closes with `REINDEX` and `CREATE INDEX` over loaded rows as the build forms that score alike in `scan`
+  on both engines and both corpora.
+- **The runs.** 2026-10-20: each backend with each corpus as A, once on TypeScript and twice on Python,
+  six runs. Each Python pair was compared value by value with the probe's `--compare`.
+
+**The statements the rule issues**, verbatim:
+
+```
+REINDEX INDEX chunks_bm25
+SELECT bm25_spill_index('chunks_bm25')
+```
+
+`none` issues no statement, and its `after` reading is a second reading of the same state.
+
+Columns: the last refresh's result; the rule's decision with `deleted`, `embedded` and `updatedExisting`;
+the statement issued; the hits whose value differs from `reference-reindex` of the final corpus variant in
+the `before` and `after` readings, as `scan` / `operator`; the largest raw `|after − reference|` in `scan`,
+with its query and key; and the store's `LIMIT 50` plan in the `before` and `after` readings. A hit is a
+row scoring non-zero in either column; the final corpus holds 219 hits on `fixture-catalog` and 198 on
+it without `F`, and 9471 and 9379 on `self-docs`.
+
+**TypeScript (PGlite), A `fixture-catalog`, B `self-docs`.**
+
+| Scenario | Last refresh | Decision | Statement | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 41, unchanged 0, deleted 0 | `spill` (0, 41, 0) | spill | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `other-corpus` | embedded 41, unchanged 0, deleted 820 | `reindex` (820, 41, 0) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 5, unchanged 36, deleted 0 | `spill` (0, 5, 0) | spill | 9 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 40, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `file-removed` | embedded 0, unchanged 36, deleted 5 | `reindex` (5, 0, 0) | `REINDEX` | 198 / 198 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `unchanged` | embedded 0, unchanged 41, deleted 0 | `none` (0, 0, 0) | none | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+
+**Python (Postgres), A `fixture-catalog`, B `self-docs`.** Both runs read the same in every cell, and
+their `--compare` listed no value out of 7674 compared.
+
+| Scenario | Last refresh | Decision | Statement | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 41, unchanged 0, deleted 0 | `spill` (0, 41, 0) | spill | 136 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `other-corpus` | embedded 41, unchanged 0, deleted 820 | `reindex` (820, 41, 0) | `REINDEX` | 219 / 219 | **1** / 0 | 9.5367431640625e-7 (`q-fc-token-lifetime`, `docs/api-auth.md#rotating-a-key`) | Index scan → Index scan |
+| `file-added` | embedded 5, unchanged 36, deleted 0 | `spill` (0, 5, 0) | spill | 136 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 40, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `file-removed` | embedded 0, unchanged 36, deleted 5 | `reindex` (5, 0, 0) | `REINDEX` | 198 / 198 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `unchanged` | embedded 0, unchanged 41, deleted 0 | `none` (0, 0, 0) | none | 136 / 0 | **136** / 0 | 0.1072683334350586 (`q-fc-barcode-contents`, `docs/labels.md#the-routing-barcode`) | Index scan → Index scan |
+
+**TypeScript (PGlite), A `self-docs` at `{ files: 71, chunks: 820 }`, B `fixture-catalog`.**
+
+| Scenario | Last refresh | Decision | Statement | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 820, unchanged 0, deleted 0 | `spill` (0, 820, 0) | spill | 1 / 0 | **1** / 0 | 4.76837158203125e-7 (`q-sd-guard-shell-options`, `.claude/context/cli.md#how-a-module-in-this-layer-is-written`) | Index scan → Index scan |
+| `other-corpus` | embedded 820, unchanged 0, deleted 41 | `reindex` (41, 820, 0) | `REINDEX` | 9471 / 9471 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 11, unchanged 809, deleted 0 | `spill` (0, 11, 0) | spill | 1 / 0 | **1** / 0 | 4.76837158203125e-7 (the same hit) | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 819, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 9470 / 9470 | 0 / 0 | — | Index scan → Index scan |
+| `file-removed` | embedded 0, unchanged 809, deleted 11 | `reindex` (11, 0, 0) | `REINDEX` | 9379 / 9378 | 0 / 0 | — | Index scan → Index scan |
+| `unchanged` | embedded 0, unchanged 820, deleted 0 | `none` (0, 0, 0) | none | 1 / 0 | **1** / 0 | 4.76837158203125e-7 (the same hit) | Index scan → Index scan |
+
+**Python (Postgres), A `self-docs` at `{ files: 71, chunks: 820 }`, B `fixture-catalog`.** Where the two
+runs disagree, the cell reads run 1 / run 2.
+
+| Scenario | Last refresh | Decision | Statement | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 820, unchanged 0, deleted 0 | `spill` (0, 820, 0) | spill | 1053 / 0; 2382 / 0 | **10** / 0; **7** / 0 | 0.0000019073486328125 (`q-sd-search-abstains`, `docs/retrieval-eval-results.md#one-agent-session-through-mcpjson`) / 9.5367431640625e-7 (`q-sd-run-gates`, `docs/typecheck-key-decision.md#5-option-b--an-explicit-none-sentinel`) | Index scan → Index scan |
+| `other-corpus` | embedded 820, unchanged 0, deleted 41 | `reindex` (41, 820, 0) | `REINDEX` | 9471 / 9471 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 11, unchanged 809, deleted 0 | `spill` (0, 11, 0) | spill | 2303 / 0; 158 / 0 | **3** / 0; **8** / 0 | 4.76837158203125e-7 (2 hits tied) / 9.5367431640625e-7 (2 hits tied) | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 819, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 9470 / 9470 | 0 / 0 | — | Index scan → Index scan |
+| `file-removed` | embedded 0, unchanged 809, deleted 11 | `reindex` (11, 0, 0) | `REINDEX` | 9379 / 9378 | 0 / 0 | — | Index scan → Index scan |
+| `unchanged` | embedded 0, unchanged 820, deleted 0 | `none` (0, 0, 0) | none | 568 / 0; 156 / 0 | **109** / 0; **156** / 0 | 0.2904853820800781 (`q-sd-run-gates`, `docs/work-report-research/task-plan-writer.md#draft-work-report-template`) / 0.08703994750976562 (`q-sd-retrieval-network`, `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template`) | Index scan → Index scan |
+
+The pair's `--compare` listed 10311 values out of 340036 compared, every one in `scan`: 1345 in
+`reference-insert` of the full variant, 1133 of A without `F`, 15 and 23 in `reference-spill`, and in the
+scenarios 1345 (`fresh.before`), 15 (`fresh.after`), 1119 (`other-corpus.before`), 2157
+(`file-added.before`), 9 (`file-added.after`), 1609 (`file-edited.before`), 920 (`file-removed.before`),
+418 (`unchanged.before`) and 203 (`unchanged.after`). It listed none in `reference-reindex` of either
+variant, and none in an `after` reading that followed `REINDEX`. The store's own build leaves a different
+split on each run: `fresh.before` reads 116 memtable documents beside 5 segments holding 704 in run 1, and
+276 beside 4 holding 544 in run 2, and the spill of it 6 segments in run 1 and 5 in run 2.
+
+**The verdicts**, against `reference-reindex`:
+
+- **TypeScript, `fixture-catalog`: the rule holds.** Every scenario's `after` reading differs from the
+  reference on 0 hits in `scan` and in `operator` (the first table).
+- **Python, `fixture-catalog`: the rule does not hold, in two scenarios** (the second table), and both
+  runs read them alike:
+  - `other-corpus`, after `REINDEX`: 1 hit, `q-fc-token-lifetime` → `docs/api-auth.md#rotating-a-key`,
+    raw `scan` −8.3079833984375 against the reference's −8.307984352111816. The `after` value equals that
+    row's own `operator_exact`, −8.3079833984375.
+  - `unchanged`, decision `none`: 136 hits, the same 136 as its `before` reading, the largest
+    0.1072683334350586; the first listed are `q-fc-route-choice` → `docs/routing.md#cut-off-times`
+    −3.756243 against −3.773669, `docs/routing.md#how-a-route-is-chosen` −3.574759 against −3.627705, and
+    `docs/routing.md#zone-graph` −3.503895 against −3.564632. The index read 41 memtable documents and no
+    segment before and after, the state the scenario's prior refresh left.
+- **TypeScript, `self-docs`: the rule does not hold, in three scenarios** (the third table): `fresh`,
+  `file-added` and `unchanged`, each on 1 hit, `q-sd-guard-shell-options` →
+  `.claude/context/cli.md#how-a-module-in-this-layer-is-written`, raw `scan` −7.344523906707764 against
+  −7.3445234298706055. Those three end in 4 or 5 segments, the reference in 1. Against `reference-spill`
+  and `reference-insert` the same three `after` readings differ on 0 hits. This backend was run once, so
+  no `--compare` names that hit as a one-run value.
+- **Python, `self-docs`: the rule does not hold, in three scenarios** (the fourth table), in both runs:
+  - `fresh`, after the spill: 10 and 7 hits. The pair's `--compare` names 9 of run 1's and 6 of run 2's
+    as values that differ between the runs. The one hit both runs read alike is the TypeScript run's,
+    `.claude/context/cli.md#how-a-module-in-this-layer-is-written` on `q-sd-guard-shell-options`, with
+    the same two raw values. The first listed in run 1 are `q-sd-run-gates` →
+    `docs/github-integration-research.md#t3-the-api-for-a-users-permission-on-a-repository-what-it-returns-for-an-organisation-member-an-outside-collaborator-and-a-bot-and-the-token-permission-it-needs`
+    −5.998955 against −5.998954, and `q-sd-state-dir` →
+    `docs/work-report-research/reviews/task-plan-writer.md#must-fix` −4.916140 against −4.916141.
+  - `file-added`, after the spill: 3 and 8 hits, of which `--compare` names 2 and 7; the one read alike
+    in both runs is the same `.claude/context/cli.md` hit.
+  - `unchanged`, decision `none`: 109 and 156 hits, of which `--compare` names 78 and 125; 31 are read
+    alike in both runs. The first listed in run 1 are on `q-sd-new-config-key`:
+    `docs/work-report-research/task-plan-writer.md#verdict` −4.728347 against −4.758601,
+    `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` −4.070960 against −4.088864,
+    and `docs/work-report-research/test-fix-plan-writer.md#risks-and-costs` −4.026294 against −4.075341.
+    In run 1 no statement was issued between the `before` reading, 568 hits, and the `after` reading,
+    109; both readings' summaries, read before their scoring, report 57 memtable documents beside 3
+    segments holding 763.
+
+  Every difference above is counted in its scenario's figure; none is set aside as a one-run value.
+
+In every backend and corpus, each `after` reading that followed `REINDEX` differs from the reference on 0
+hits in both columns, except Python `fixture-catalog` `other-corpus`'s 1 hit. Each `after` reading that
+followed the spill differs on 0 hits on `fixture-catalog` and on 1 to 10 on `self-docs`, the largest
+0.0000019073486328125. Each `none` differs from the reference wherever its `before` reading did, in each
+run.
+
+**The before-fix figures** are the `before` columns of the four tables. Every scenario whose last refresh
+left a dead row, `other-corpus`, `file-edited` and `file-removed`, differs from the reference on every hit,
+or on all but one, in each column, on both backends and both corpora. The largest `before` difference in
+`scan` is 16.938354969024658 on TypeScript and 16.924015522003174 on Python (`fixture-catalog` `other-corpus`,
+`q-fc-unreadable-label` → `docs/depot-operations.md#inbound-scanning`). The other scenarios differ in
+`scan` only: on TypeScript, 9 hits at `fixture-catalog` `file-added`, where the index read 5 memtable
+documents after the reopen, and the 1 `self-docs` hit above; on Python, 136 hits on `fixture-catalog` in
+`fresh`, `file-added` and `unchanged`, where the index read 41 memtable documents and no segment, and 156
+to 2382 on `self-docs`.
+
+**Observation 1 — the store's plan.** The store's `LIMIT 50` plan was the `chunks_bm25` index scan in
+every `before` reading on both backends and corpora. On `fixture-catalog`, on both backends, the
+`REINDEX` the rule issued turned it to `Seq Scan on public.chunks`, whose output column is the operator
+expression, in two scenarios: `file-edited` and `file-removed`. `reference-reindex` reads the same Seq
+Scan on both variants and both backends. The `REINDEX` of `other-corpus` left the index scan, as did
+every spill and every `none`. On `self-docs` every reading's store plan is the index scan. `docs/retrieval.md` →
+`## Still open`, the lexical-arm bullet, records a crossover of 63 rows for an index whose statistics
+describe its rows; `fixture-catalog` holds 41 chunks. The `scan` comparisons above read the probe's own
+statement, whose plan was the index scan in every reading.
+
+**Observation 2 — the near-tie on the Python store's own fresh build (goal 4).** The Python `fresh`
+scenario's `before` reading on `fixture-catalog` is the store's own build on an empty database: 41
+memtable documents and no segment. Diagnostic (f) lists 4 inversions against `operator`, the same in both
+runs, among them the two pairs of `### The near-tie ordering on an empty database`, each member as `scan`
+/ `operator` / `operator_exact` in returned order:
+
+| Query | Returned first | Returned second |
+|---|---|---|
+| `q-fc-token-lifetime` | `docs/api-auth.md#token-exchange` −8.281486 / −8.281486 / −8.281485974788666 | `docs/api-auth.md#rotating-a-key` −8.264622 / −8.307983 / −8.3079833984375 |
+| `q-fc-unreadable-label` | `docs/labels.md#when-a-label-is-rejected` −5.514854 / −5.514854 / −5.5148544907569885 | `docs/depot-operations.md#inbound-scanning` −5.514000 / −5.534851 / −5.534850656986237 |
+
+The other two are `docs/labels.md` then `docs/tracking.md#event-ordering-and-duplicates` on
+`q-fc-verify-callback` and on `q-fc-token-lifetime`. Its `after` reading, after the spill, lists no
+inversion against `operator`, so both pairs are gone. The `before` reading matches the Postgres `t0` rows of
+that subsection: 41 memtable documents, and both pairs with the same values. The TypeScript `fresh` `before` reading on `fixture-catalog`, read after a reopen,
+holds no memtable document and 1 segment, and lists no inversion.
+
+**The limit of these figures.** They were taken on two corpora of 41 and 820 chunks, through one
+`pg_textsearch` version on each engine.
+
+The commands that re-run every figure here are in `docs/retrieval-eval.md` → `### The BM25 index-state
+probe`, its closing paragraph.
