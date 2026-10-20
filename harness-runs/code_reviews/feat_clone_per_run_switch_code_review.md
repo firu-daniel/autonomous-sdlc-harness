@@ -52,7 +52,7 @@ Each entry resolves to `harness-runs/code_reviews/feat_clone_per_run_switch_code
 
 1. [x] **Finding 3** — Name the run copy `<work_root>/<project_name>-<sanitized_branch>` in `branch-prompt.md`'s opening paragraph _(layer: plugin)_
 2. [x] **Finding 2** — Log `RUN_MAIN_REFUSAL` when the watcher's exit sync cannot be anchored, and add the exit sync to the header's class list _(layer: cli)_
-3. [ ] **Finding 1** — Remove the `branch.<branch>` upstream section `start`'s cut wrote, when it was absent before, and assert it in `remote-start.test.mjs` _(layer: cli)_
+3. [x] **Finding 1** — Remove the `branch.<branch>` upstream section `start`'s cut wrote, when it was absent before, and assert it in `remote-start.test.mjs` _(layer: cli)_
 
 ---
 

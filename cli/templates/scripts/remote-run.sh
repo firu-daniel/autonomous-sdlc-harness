@@ -3714,11 +3714,12 @@ placement_fail() {
 
 # copy_baseline_var — record, before `create-worktree.sh` cuts a copy into
 # `worktree`, what existed already: the copy (`had_copy`), the local branch
-# (`had_branch`), the registry record (`had_record`, by `hr_registry_peek`'s
-# return, and its compact JSON in `prev_record`, since the cut rewrites a
-# record that names no live copy), the registry file (`had_registry_file`) and
-# the registry directory (`had_registry_dir`); the cut creates the last two
-# when absent.
+# (`had_branch`), whether the branch's `branch.<branch>` configuration
+# section existed (`had_upstream`), the registry record (`had_record`, by
+# `hr_registry_peek`'s return, and its compact JSON in `prev_record`, since the
+# cut rewrites a record that names no live copy), the registry file
+# (`had_registry_file`) and the registry directory (`had_registry_dir`); the
+# cut creates the last two when absent.
 # `start_remove_copy` removes only what these say was absent. 1 when the
 # registry path is unresolvable. Globals: the EXIT trap runs after the verb's
 # frame is gone.
@@ -3729,6 +3730,11 @@ copy_baseline_var() {
   [ ! -e "$worktree" ] || had_copy=1
   had_branch=0
   ! git -C "$root" show-ref --verify --quiet "refs/heads/$branch" || had_branch=1
+  had_upstream=0
+  if git -C "$root" config --get "branch.$branch.remote" >/dev/null 2>&1 \
+    || git -C "$root" config --get "branch.$branch.merge" >/dev/null 2>&1; then
+    had_upstream=1
+  fi
   had_record=0
   prev_record=""
   if hr_registry_peek "$copy_registry" "$branch" worktree >/dev/null; then
@@ -3753,9 +3759,10 @@ copy_saw_tip() {
 # only that, as `copy_baseline_var` recorded it: the clone, through
 # `hr_clone_remove_var` while its registry record still names it; the local
 # branch, by compare-and-swap from `seen_tip` (`branch -D` only when no tip was
-# seen); the registry record — dropped when it was absent, put back to
-# `prev_record` when the cut rewrote it to name this copy; the registry file,
-# when it holds no run; then the registry directory, when it is empty. A
+# seen); the `branch.<branch>` configuration section the cut's push wrote, when
+# it was absent before; the registry record — dropped when it was absent, put
+# back to `prev_record` when the cut rewrote it to name this copy; the registry
+# file, when it holds no run; then the registry directory, when it is empty. A
 # non-empty one stays: something else wrote into it. Idempotent; a failed step
 # is one stderr line and never changes the exit status already decided.
 start_remove_copy() {
@@ -3772,6 +3779,13 @@ start_remove_copy() {
       git -C "$root" branch -D "$branch" >/dev/null 2>&1 \
         || echo "remote-run.sh: could not delete the local branch '$branch'" >&2
     fi
+  fi
+  if [ "$had_branch" -eq 0 ] && [ "$had_upstream" -eq 0 ] \
+    && ! git -C "$root" show-ref --verify --quiet "refs/heads/$branch" \
+    && { git -C "$root" config --get "branch.$branch.remote" >/dev/null 2>&1 \
+      || git -C "$root" config --get "branch.$branch.merge" >/dev/null 2>&1; }; then
+    git -C "$root" config --remove-section "branch.$branch" >/dev/null 2>&1 \
+      || echo "remote-run.sh: could not remove the branch.$branch section from '$root/.git/config'" >&2
   fi
   if [ "$had_record" -eq 0 ] && hr_registry_peek "$copy_registry" "$branch" worktree >/dev/null; then
     hr_registry_drop "$copy_registry" "$branch" \

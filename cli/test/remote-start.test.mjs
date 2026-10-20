@@ -6,9 +6,9 @@
  * committed on `origin/<branch>`, and a refusal sends nothing.** A protected branch, a target other
  * than `github-actions` and a missing prompt file send nothing and push nothing; a branch cut that
  * fails sends no `workflow run`; a dispatch that fails still leaves the prompt commit on origin. And
- * **a start leaves no clone, no local branch and no registry record it created, on success or on any
- * failure after the cut, while a copy, branch or record that existed before the cut is never
- * touched.**
+ * **a start leaves no clone, no local branch, no `branch.<branch>` configuration section and no
+ * registry record it created, on success or on any failure after the cut, while a copy, branch,
+ * section or record that existed before the cut is never touched.**
  *
  * Each case drives a fixture `init` wired, with `execution.target` set and the adopted tree committed
  * and pushed to the fixture's bare `origin` as its default branch, so `create-worktree.sh` cuts a real
@@ -23,6 +23,8 @@
  *   left behind`.
  * - (S2) `start_remove_copy`'s `had_copy` / `had_record` tests dropped, so it removes whatever stands
  *   at the derived path → fails on the pre-existing clone's `keep.txt`, which is gone.
+ * - (S3) `start_remove_copy`'s `config --remove-section "branch.$branch"` skipped → fails `the
+ *   branch.feat_x configuration section was left behind`.
  */
 
 import assert from 'node:assert/strict';
@@ -125,11 +127,13 @@ async function startFixture(t, target = 'github-actions') {
       ]);
       assert.equal(made.status, 0, made.stderr);
     },
-    /** No derived directory, no `refs/heads/feat_x` and no registry record of `feat_x` remains. */
+    /** No derived directory, no `refs/heads/feat_x`, no `branch.feat_x` section and no registry record of `feat_x` remains. */
     assertNothingLeft: async () => {
       assert.equal(existsSync(worktree), false, 'the clone was left behind');
       const ref = await runBash(dir, ['-c', 'git show-ref --verify --quiet refs/heads/feat_x']);
       assert.notEqual(ref.status, 0, 'the local branch feat_x was left behind');
+      const section = await runBash(dir, ['-c', "git config --get-regexp '^branch\\.feat_x\\.'"]);
+      assert.notEqual(section.status, 0, 'the branch.feat_x configuration section was left behind');
       const registry = existsSync(join(dir, REGISTRY)) ? JSON.parse(readFileSync(join(dir, REGISTRY), 'utf8')) : null;
       assert.equal(registry?.runs?.feat_x, undefined, 'the registry record of feat_x was left behind');
     },
@@ -251,6 +255,17 @@ test('a refused start leaves a legacy linked worktree at the copy\'s path untouc
   assert.equal(readFileSync(join(f.worktree, 'keep.txt'), 'utf8'), 'not start\'s\n');
   assert.match((await runGit(f.dir, ['worktree', 'list'])).stdout, /-feat_x\b/);
   assert.equal(await f.originHas('feat_x'), false);
+});
+
+test('a start keeps a branch.feat_x configuration section that existed before the cut', async (t) => {
+  const f = await startFixture(t);
+  await runGit(f.dir, ['config', 'branch.feat_x.remote', 'origin']);
+  await runGit(f.dir, ['config', 'branch.feat_x.merge', 'refs/heads/feat_x']);
+
+  const result = await f.start(['feat_x', '--prompt-file', f.prompt]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(await f.git(f.dir, ['config', '--get', 'branch.feat_x.remote']), 'origin');
+  assert.equal(await f.git(f.dir, ['config', '--get', 'branch.feat_x.merge']), 'refs/heads/feat_x');
 });
 
 test('a refused start leaves a local feat_x that existed before the cut untouched', async (t) => {
