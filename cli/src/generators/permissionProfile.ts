@@ -198,12 +198,19 @@
  * `applyWriteProtection` adds the write protection last, once `permissions.additionalDirectories` is
  * final. Both modules take the profile primitives they share with this one from `profileEntries.ts`
  * and import nothing from here.
+ *
+ * ## The main-checkout anchor read
+ *
+ * The profile also carries the one `allow` rule a plugin reader needs to find the main checkout,
+ * whose name and rule `core/mainRepoAnchor.ts` → `MAIN_REPO_ANCHOR_RULE` owns; {@link renderProfile}
+ * appends it after the fragments merge, so the template carries no second spelling of the name.
  */
 
 import { basename, dirname, isAbsolute, join, sep } from 'node:path';
 
 import { browserWiringApplies, CONFIG_FILENAME, DEFAULTS, retrievalApplies, type HarnessConfig } from '../config/model.js';
 import { HarnessError, internal } from '../core/errors.js';
+import { MAIN_REPO_ANCHOR_READ, MAIN_REPO_ANCHOR_RULE } from '../core/mainRepoAnchor.js';
 import { isJsonObject, readJsonFile, valueAt, type JsonObject, type JsonValue } from '../core/json.js';
 import { defaultProjectName, readTemplate, workRoot as resolveWorkRoot, worktreeGlob } from '../core/paths.js';
 import { normalizeRepoDir } from '../core/repoPaths.js';
@@ -1547,6 +1554,14 @@ export function renderProfile({
     assertRetrievalGrant(fragment);
     mergeInto(profile, fragment, '', 'docs-retrieval');
   }
+
+  // After both fragments, through `appendAllow`, so a template or fragment already carrying the rule
+  // is not given it twice (module header).
+  appendAllow(profile, [MAIN_REPO_ANCHOR_RULE]);
+  appendReadme(
+    profile,
+    `THE MAIN CHECKOUT IS READ FROM ONE ENVIRONMENT VARIABLE: the plugin's readers find the main checkout with a bare ${MAIN_REPO_ANCHOR_READ}, which the watcher sets for every session it launches, and fall back to the first git worktree list entry when it prints nothing, so removing the ${MAIN_REPO_ANCHOR_RULE} entry costs only that fallback.`,
+  );
 
   // Before the toolchain entries and after the fragment, which is the window in which every `.sh`
   // entry in the profile came from a wrapper or outer-loop row: a toolchain command that happened

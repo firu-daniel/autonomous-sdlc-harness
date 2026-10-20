@@ -97,6 +97,7 @@ const { CONFIG_FILENAME, DEFAULTS } = await built('config/model.js');
 const { MCP_PATH } = await built('generators/repoRoot.js');
 const { PLUGIN_KEY } = await built('generators/projectSettings.js');
 const { DOCS_SEARCH_SERVER_SCRIPT_NAME } = await built('generators/outerLoopScripts.js');
+const { MAIN_REPO_ANCHOR_READ, MAIN_REPO_ANCHOR_RULE } = await built('core/mainRepoAnchor.js');
 
 /** The generated profile, and the template it is generated from. */
 const PROFILE_FILE = '.claude/settings.autonomous.json';
@@ -1238,4 +1239,46 @@ test('with the sandbox opted out the file-tool write protection still applies', 
   }
   const config = join(dir, CONFIG_FILENAME);
   assert.ok(entries(profile, 'deny').includes(`Edit(/${config})`), `the opt-out dropped the ${CONFIG_FILENAME} Edit rule`);
+});
+
+/** How many times `entry` appears in `list` — one producer per entry, so the answer is 1 or 0. */
+function occurrences(list, entry) {
+  return list.filter((value) => value === entry).length;
+}
+
+/** Assert the anchor rule is allowed exactly once and named in no `ask` or `deny` entry. */
+function assertAnchorAllowedOnce(profile, label) {
+  assert.equal(
+    occurrences(entries(profile, 'allow'), MAIN_REPO_ANCHOR_RULE),
+    1,
+    `${label}: allow does not carry ${MAIN_REPO_ANCHOR_RULE} exactly once`,
+  );
+  for (const list of ['ask', 'deny']) {
+    for (const entry of entries(profile, list)) {
+      assert.ok(
+        !entry.includes(MAIN_REPO_ANCHOR_READ),
+        `${label}: permissions.${list} names the anchor read in ${JSON.stringify(entry)}`,
+      );
+    }
+  }
+}
+
+test('the main-checkout anchor read is allowed exactly once and explained by exactly one _README line', async (t) => {
+  const { profile } = await profileFor(t);
+  assertAnchorAllowedOnce(profile, 'default init');
+  const lines = profile._README.filter((line) => typeof line === 'string' && line.includes(MAIN_REPO_ANCHOR_READ));
+  assert.equal(lines.length, 1, `_README carries ${lines.length} lines naming ${MAIN_REPO_ANCHOR_READ}, not one`);
+});
+
+test('the anchor rule survives init --force exactly once, and the browser fragment does not duplicate it', async (t) => {
+  await t.test('init --force over the generated profile', async (subtest) => {
+    const { dir } = await profileFor(subtest);
+    await initOk(dir, ['--force']);
+    assertAnchorAllowedOnce(readJson(join(dir, PROFILE_FILE)), 'after --force');
+  });
+  await t.test('phases.qa on with the web-playwright driver', async (subtest) => {
+    const { profile } = await profileFor(subtest, ['--qa', '--qa-driver', 'web-playwright']);
+    assert.ok(Object.hasOwn(profile, ENABLED_SERVERS_KEY), 'the browser fragment did not merge, so this case checks nothing');
+    assertAnchorAllowedOnce(profile, 'browser fragment merged');
+  });
 });
