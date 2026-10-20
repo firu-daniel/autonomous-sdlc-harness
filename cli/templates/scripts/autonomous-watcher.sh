@@ -1915,6 +1915,7 @@ lane_release_if_idle() {
 #
 # The flag string, in full:
 #
+#   HARNESS_MAIN_REPO=<MAIN_REPO>
 #   <agent cli> -p "<trusted instruction naming the artifact's FILE PATH>" \
 #     --settings <MAIN_REPO>/.claude/settings.autonomous.json \
 #     --permission-mode "$PERMISSION_MODE" \
@@ -1925,6 +1926,10 @@ lane_release_if_idle() {
 #     --add-dir <MAIN_REPO>/<state_dir> \
 #     [--add-dir <dir> ...]
 #
+# The environment line is exported inside spawn_engine's subshell, so the engine
+# and every command it runs inherit it. The plugin's readers read it with a bare
+# `printenv HARNESS_MAIN_REPO`; no outer-loop script reads it, because an
+# assignment prefix on an excluded call could set it.
 # where the bracketed tail is JOB MODE ONLY: one --add-dir per
 # permissions.additionalDirectories entry of the profile, in file order, minus
 # empty entries and the two directories above; outside job mode the line ends at
@@ -2162,6 +2167,9 @@ EOF
   # the only way to enumerate them is through a parent that is still alive.
   (
     cd "$worktree" || exit 97
+    # Set unconditionally, so a value the watcher inherited is overwritten rather
+    # than passed on; inside the subshell, so no other child of the watcher sees it.
+    export HARNESS_MAIN_REPO="$MAIN_REPO"
     # `--add-dir "$worktree"` is NOT redundant with the profile: that file grants
     # the sibling-worktree glob through Edit/Write/Read rules, not through
     # additionalDirectories. The job-mode extras after the two fixed --add-dir

@@ -40,3 +40,5 @@
 - `npm test --workspace cli -- test/watcher-main-anchor.test.mjs`, from the repository root as one plain foreground command. Read the `# tests`, `# pass` and `# fail` counts and the exit status: `# fail 0`.
 - `bash -n cli/templates/scripts/autonomous-watcher.sh` and `bash -n cli/templates/scripts/remote-run.sh` exit 0.
 - `git diff cli/templates/scripts/lib/harness-run-lib.sh cli/templates/scripts/setup-worktree.sh cli/templates/scripts/remote-run.sh` shows comment lines only. Read it to confirm.
+
+- **Deviations from plan:** `### Targets` lists "the comment at the mention session's call site" under `autonomous-watcher.sh`, but the watcher has no mention session: the only other `"$AGENT_CLI"` launch is `remote-run.sh` → `control_mention_session` (re-run of `grep -rn '"\$AGENT_CLI"' cli/templates/scripts`; its third hit, `remote-run.sh`'s `command -v "$AGENT_CLI"`, is a PATH probe, not a launch). The comment went there, as the Work bullet says; the watcher got only the export and the header lines.

@@ -7395,7 +7395,8 @@ control_mention_context_extra() {
 }
 
 # control_mention_session <dir> <out> <err> — the one read-only session, run
-# once in a subshell in <dir>; AGENT_STATUS is its exit.
+# once in a subshell in <dir>; AGENT_STATUS is its exit. It carries no
+# HARNESS_MAIN_REPO anchor, because its tool set runs no command.
 AGENT_STATUS=0
 control_mention_session() {
   local dir="$1" out="$2" err="$3" schema model model_args

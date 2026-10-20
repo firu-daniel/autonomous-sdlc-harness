@@ -569,6 +569,10 @@ hr_repo_root() {
 # and the kill switch live in ONE place so every run is tailable and stoppable
 # from it, while a run itself executes in a sibling worktree. A script that used
 # its own checkout for both would write a second, invisible inbox per worktree.
+#
+# Inside a clone it answers the clone itself. It never reads HARNESS_MAIN_REPO,
+# because its callers run unsandboxed and place the main checkout from their own
+# location.
 hr_main_repo() {
   local dir="${1-}" out line
   [ -n "$dir" ] || dir="${PWD-}"

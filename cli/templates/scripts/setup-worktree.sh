@@ -196,6 +196,10 @@ fi
 # The main checkout is where every machine-local file has its single source: a
 # working copy created by git carries only tracked content.
 if [ "$target_mode" -eq 0 ]; then
+  # This mode bootstraps the checkout the script sits in, which in a clone
+  # resolves to the clone, while a clone is bootstrapped through the main
+  # checkout's --target mode, which places the main checkout from its own
+  # location (`hr_wrapper_main_of`).
   main_repo="$(hr_main_repo "$top")" || main_repo=""
   [ -n "$main_repo" ] || main_repo="$top"
 fi
