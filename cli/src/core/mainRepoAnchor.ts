@@ -10,7 +10,8 @@
  * (`grep -rn HARNESS_MAIN_REPO cli/src`); every other module takes it through an import.
  *
  * The mirrors outside that scope, which cannot import and must spell the same literal —
- * `grep -rn HARNESS_MAIN_REPO cli/ plugin/` reaches all of them:
+ * `git grep -n HARNESS_MAIN_REPO`, run from the repository root, reaches all of them, together with
+ * the worked example's rendered profile and the documents that quote the name:
  *
  * - `cli/templates/scripts/autonomous-watcher.sh` → `spawn_engine`'s
  *   `export HARNESS_MAIN_REPO="$MAIN_REPO"`, which sets it for every session the watcher launches;

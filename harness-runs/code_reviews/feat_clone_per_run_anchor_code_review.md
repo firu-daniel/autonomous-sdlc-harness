@@ -24,7 +24,7 @@ Pass 2 was a no-op: the per-unit findings root holds no review folders for this 
 
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below top-to-bottom; the committing role flips each one to `[x]` as that fix's commit lands — the `committer` agent in every flow that dispatches one, the orchestrator itself in the supervised fix flow, which dispatches none. `[ ]` markers anywhere else are informational only. Each entry resolves to `harness-runs/code_reviews/feat_clone_per_run_anchor_code_review/finding_<K>.md`.
 
-1. [ ] **Finding 3** — Widen `mainRepoAnchor.ts`'s header rename sweep to a repository-wide `git grep` that also reaches the worked example's profile and the documents _(layer: cli)_
+1. [x] **Finding 3** — Widen `mainRepoAnchor.ts`'s header rename sweep to a repository-wide `git grep` that also reaches the worked example's profile and the documents _(layer: cli)_
 2. [ ] **Finding 2** — Add a `deny`-list case to `doctor-main-anchor.test.mjs` _(layer: cli)_
 3. [ ] **Finding 1** — Make the suite-isolation source guard check each `process.env` spread rather than each file _(layer: cli)_
 
