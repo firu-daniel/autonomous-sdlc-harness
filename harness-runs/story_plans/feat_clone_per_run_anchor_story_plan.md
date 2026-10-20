@@ -88,7 +88,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_clone_per_run_anchor/ta
 7. [x] **Task 7** — Make `hc_main_root` prefer the anchor for the QA-lock helpers, and say "run copy" in the hooks and scripts READMEs _(layer: plugin)_ _(points: 15)_
 8. [x] **Task 8** — Move the five instruction files that declare `<MAIN_REPO>` to the canonical row, with "run copy" wording _(layer: plugin)_ _(points: 20)_
 9. [x] **Task 9** — Move `committer.md` and `qa-tester.md` to the anchor, and say "run copy" in every agent's `<repo_root>` row, holding word counts _(layer: plugin)_ _(points: 20)_
-10. [ ] **Task 10** — Move the six registry and inbox commands to the canonical clause, with "run copy" wording _(layer: plugin)_ _(points: 15)_
+10. [x] **Task 10** — Move the six registry and inbox commands to the canonical clause, with "run copy" wording _(layer: plugin)_ _(points: 15)_
 11. [ ] **Task 11** — Move the three `branch-start-*-autonomous` commands and the docs fork's kill-switch checks to the anchor _(layer: plugin)_ _(points: 15)_
 12. [ ] **Task 12** — Move the three autonomous fix and orchestration forks' kill-switch checks to the anchor, with "run copy" wording _(layer: plugin)_ _(points: 20)_
 13. [ ] **Task 13** — Say "run copy" in the remaining cores, the QA and mode-contract files and the two flow documents, and give `AUTONOMOUS_FLOW.md` the row _(layer: plugin)_ _(points: 15)_
