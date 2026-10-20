@@ -12,9 +12,22 @@
  *
  * Every statement is composed from the store's exported shapes in `cli/dist/retrieval/store.js`
  * (`cli/src/retrieval/store.ts` → the module header's second paragraph), and every value reaches SQL
- * as a bound parameter: through `db.query` on PGlite, and through psql's `\bind` on Postgres. The score
- * statement is the comparison's own probe statement with the query bound rather than dollar-quoted
- * (`docs/retrieval-eval-results.md` → `### Divergence sources, in the order checked`, item 3).
+ * as a bound parameter: through `db.query` on PGlite, and through psql's `\bind` on Postgres.
+ *
+ * **Every score statement reads two columns, because `pg_textsearch` 1.3.1 computes a score two
+ * different ways** (tag `v1.3.1` of `github.com/timescale/pg_textsearch`). `scan` is
+ * `bm25_get_current_score()`, the score the index scan ranked the current row by (`src/access/scan.c` →
+ * `tp_cached_score`), which is what the store ranks by (`cli/src/retrieval/store.ts` → the lexical
+ * search's `SELECT id … ORDER BY`); it is a `real` and is rounded to six decimals here. It is called
+ * explicitly because a bare `BM25_ORDER_CLAUSE` column is not the scan's score in this statement: on
+ * both engines `EXPLAIN (VERBOSE)` shows it projected as the operator expression, and it returns the
+ * operator's value (`src/planner/hooks.c` → `replace_scores_in_targetlist` names the substitution that
+ * does not happen here). `operator` is `round((BM25_ORDER_CLAUSE)::numeric, 6)`, which the standalone
+ * operator computes from the row's own text (`src/types/query.c` → `bm25_text_bm25query_score`); it is
+ * the comparison's own probe column (`docs/retrieval-eval-results.md` → `### Divergence sources, in the
+ * order checked`, item 3). Both are read through the `chunks_bm25` index scan, which nothing here
+ * disables; a step whose plan is not that scan is reported with the plan it got, and its `scan`
+ * column then carries no index-scan score.
  *
  * **Postgres statements reach psql on its stdin, not through `-c`.** A `self-docs` chunk is larger than
  * the 131072 bytes Linux allows one argument, so a row cannot travel as an argument vector element,
@@ -70,7 +83,17 @@ const PSQL_MAX_BUFFER = 256 * 1024 * 1024;
 
 const MARKER = '@@bm25-history';
 
-const SCORE_EXPRESSION = `round((${BM25_ORDER_CLAUSE})::numeric, 6)`;
+/** The `operator` column: the standalone operator over the row's own text, rounded on the server. */
+const OPERATOR_EXPRESSION = `round((${BM25_ORDER_CLAUSE})::numeric, 6)`;
+
+/** The `scan` column: the score the index scan ranked the current row by. */
+const SCAN_EXPRESSION = 'bm25_get_current_score()';
+
+/** Both score columns, `scan` first, read through the store's own index-scan ordering. */
+const SCORE_SELECT = `SELECT key, ${SCAN_EXPRESSION} AS scan, ${OPERATOR_EXPRESSION} AS operator FROM ${CHUNKS_TABLE} ORDER BY ${BM25_ORDER_CLAUSE} LIMIT $2`;
+
+/** The two score columns, in the order every report and capture line lists them. */
+export const SCORE_COLUMNS = Object.freeze(['scan', 'operator']);
 
 const STATEMENTS = Object.freeze({
   extensions: ['CREATE EXTENSION IF NOT EXISTS vector', 'CREATE EXTENSION IF NOT EXISTS pg_textsearch'],
@@ -84,8 +107,8 @@ const STATEMENTS = Object.freeze({
   summarize: `SELECT bm25_summarize_index('${BM25_INDEX}')`,
   vacuum: `VACUUM ${CHUNKS_TABLE}`,
   reindex: `REINDEX INDEX ${BM25_INDEX}`,
-  score: `SELECT key, ${SCORE_EXPRESSION} AS s FROM ${CHUNKS_TABLE} ORDER BY ${BM25_ORDER_CLAUSE} LIMIT $2`,
-  explainScore: `EXPLAIN (COSTS OFF) SELECT key, ${SCORE_EXPRESSION} AS s FROM ${CHUNKS_TABLE} ORDER BY ${BM25_ORDER_CLAUSE} LIMIT $2`,
+  score: SCORE_SELECT,
+  explainScore: `EXPLAIN (VERBOSE, COSTS OFF) ${SCORE_SELECT}`,
   version: 'SELECT version()',
   extversion: "SELECT extversion FROM pg_extension WHERE extname = 'pg_textsearch'",
   autovacuumCount: `SELECT autovacuum_count FROM pg_stat_user_tables WHERE relname = '${CHUNKS_TABLE}'`,
@@ -245,7 +268,16 @@ function openPostgres(repoRoot) {
   };
 }
 
-/** Every query's hits — the rows scoring non-zero — as `qid -> key -> score`, scores as six-decimal text. */
+/** A score as six-decimal text; `scan` arrives as a float and is rounded here, `operator` is already rounded. */
+function sixDecimals(value) {
+  const rounded = Number(value).toFixed(6);
+  return rounded === '-0.000000' ? '0.000000' : rounded;
+}
+
+/**
+ * Every query's hits — the rows scoring non-zero in either column — as `qid -> key -> { scan, operator }`,
+ * each score as six-decimal text.
+ */
 async function scoreAll(engine, queries, limit) {
   const answers = await engine.run(queries.map((query) => ({ sql: STATEMENTS.score, params: [query.query, String(limit)] })));
   const byQuery = new Map();
@@ -253,29 +285,35 @@ async function scoreAll(engine, queries, limit) {
     const hits = new Map();
     for (const line of answers[index].split('\n')) {
       if (line === '') continue;
-      const split = line.lastIndexOf(' ');
-      const key = line.slice(0, split);
-      const score = line.slice(split + 1);
-      if (Number(score) !== 0) hits.set(key, score);
+      const operatorAt = line.lastIndexOf(' ');
+      const scanAt = line.lastIndexOf(' ', operatorAt - 1);
+      const key = line.slice(0, scanAt);
+      const score = { scan: sixDecimals(line.slice(scanAt + 1, operatorAt)), operator: sixDecimals(line.slice(operatorAt + 1)) };
+      if (Number(score.scan) !== 0 || Number(score.operator) !== 0) hits.set(key, score);
     }
     byQuery.set(query.id, hits);
   });
   return byQuery;
 }
 
-/** The hits on `keys` that differ between `reference` and `scores`, a hit on one side only included. */
-function differences(reference, scores, keys) {
+/** The hits on `keys` whose `column` score differs between `reference` and `scores`, a hit on one side only included. */
+function differences(reference, scores, keys, column) {
   const differing = [];
   for (const [queryId, referenceHits] of reference) {
     const hits = scores.get(queryId) ?? new Map();
     const pairs = new Set([...referenceHits.keys(), ...hits.keys()].filter((key) => keys.has(key)));
     for (const key of pairs) {
-      const before = referenceHits.get(key) ?? 'none';
-      const after = hits.get(key) ?? 'none';
+      const before = referenceHits.get(key)?.[column] ?? 'none';
+      const after = hits.get(key)?.[column] ?? 'none';
       if (before !== after) differing.push({ queryId, key, reference: before, step: after });
     }
   }
   return differing;
+}
+
+/** {@link differences} once per column of {@link SCORE_COLUMNS}, as `column -> differing hits`. */
+function differencesByColumn(reference, scores, keys) {
+  return Object.fromEntries(SCORE_COLUMNS.map((column) => [column, differences(reference, scores, keys, column)]));
 }
 
 function countHits(scores, keys) {
@@ -288,7 +326,8 @@ function countHits(scores, keys) {
  * Runs the sequence on `engine` with corpus `corpusA` as the live rows and `corpusB` as the rows a
  * refresh to A deletes. Returns `{ engine, ranAt, server, extversion, corpora, queries, steps, scores }`,
  * plus `reindexMs` under `timeReindex`. Each step carries the heap count, the parsed summary, the
- * score plan's scan line, Postgres's `autovacuum_count`, and its hits on A's keys against `s0` and `s1`.
+ * score plan's scan line and the output line under it, Postgres's `autovacuum_count`, and its hits on
+ * A's keys against `s0` and `s1`, counted per column of {@link SCORE_COLUMNS}.
  */
 export async function measureBm25History({ repoRoot, engine, corpusA, corpusB, timeReindex = false }) {
   if (!ENGINES.includes(engine)) throw new Error(`eval: bm25 history: engine ${engine} is not one of ${ENGINES.join(', ')}`);
@@ -329,21 +368,23 @@ export async function measureBm25History({ repoRoot, engine, corpusA, corpusB, t
     ]);
     const stepScores = await scoreAll(db, queries, limit);
     scores.set(id, stepScores);
-    const reference = scores.get('s0');
-    const all = differences(reference, stepScores, aKeys);
-    const versusUnion = scores.has('s1') && id !== 's0' && id !== 's1' ? differences(scores.get('s1'), stepScores, aKeys) : undefined;
+    const versusS0 = differencesByColumn(scores.get('s0'), stepScores, aKeys);
+    const versusS1 = scores.has('s1') && id !== 's0' && id !== 's1' ? differencesByColumn(scores.get('s1'), stepScores, aKeys) : undefined;
+    const planLines = plan.split('\n').map((line) => line.trim());
     steps.push({
       id,
       label,
       heapRows: Number(heap),
       summary: parseSummary(summary),
-      scan: plan.split('\n').find((line) => /Scan/.test(line))?.trim() ?? plan.split('\n')[0]?.trim() ?? '',
+      scan: planLines.find((line) => /Scan/.test(line)) ?? planLines[0] ?? '',
+      scanOutput: planLines[planLines.findIndex((line) => /Scan/.test(line)) + 1] ?? '',
       autovacuumCount: engine === 'postgres' ? autovacuum : 'n/a',
       hitsOnA: countHits(stepScores, aKeys),
       hitsOnB: countHits(stepScores, new Set(b.chunks.map((chunk) => chunk.key))),
-      differingFromS0: all.length,
-      firstDiffering: all.slice(0, LISTED_DIFFERENCES),
-      differingFromS1: versusUnion?.length,
+      differingFromS0: Object.fromEntries(SCORE_COLUMNS.map((column) => [column, versusS0[column].length])),
+      firstDiffering: Object.fromEntries(SCORE_COLUMNS.map((column) => [column, versusS0[column].slice(0, LISTED_DIFFERENCES)])),
+      differingFromS1:
+        versusS1 === undefined ? undefined : Object.fromEntries(SCORE_COLUMNS.map((column) => [column, versusS1[column].length])),
     });
   };
 
@@ -403,46 +444,80 @@ export async function measureBm25History({ repoRoot, engine, corpusA, corpusB, t
 
 const stamp = (snapshot) => `{ files: ${snapshot.files}, chunks: ${snapshot.chunks} }`;
 
-/** The summary a reader records from; `withScores` appends every score of every step. */
+/** The summary a reader records from; `withScores` appends every score of every step, `scan` before `operator`. */
 export function renderBm25History(result, { withScores = false } = {}) {
+  const perColumn = (counts) => SCORE_COLUMNS.map((column) => (counts === undefined ? 'n/a' : counts[column])).join(' | ');
   const lines = [
     `bm25-history: engine ${result.engine}, ran ${result.ranAt}`,
     `server: ${result.server}`,
     `pg_textsearch: ${result.extversion}`,
     `corpus A: ${result.corpora.a.id} ${stamp(result.corpora.a.snapshot)}; corpus B: ${result.corpora.b.id} ${stamp(result.corpora.b.snapshot)}`,
     `queries: ${result.queries.count} from ${result.queries.set}`,
+    `plan output (s0): ${result.steps[0]?.scanOutput ?? ''}`,
     '',
-    '| Step | What | Heap rows | total_docs | total_len | Memtable docs | Segments | Score plan | autovacuum_count | Hits on A | Hits on B | A hits differing from s0 | A hits differing from s1 |',
-    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    '| Step | What | Heap rows | total_docs | total_len | Memtable docs | Segments | Score plan | autovacuum_count | Hits on A | Hits on B | ' +
+      'A hits differing from s0, scan | A hits differing from s0, operator | A hits differing from s1, scan | A hits differing from s1, operator |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
   ];
   for (const step of result.steps) {
     lines.push(
       `| ${step.id} | ${step.label} | ${step.heapRows} | ${step.summary.totalDocs} | ${step.summary.totalLen} | ` +
         `${step.summary.memtableDocs} | ${step.summary.segments} | ${step.scan} | ${step.autovacuumCount} | ` +
-        `${step.hitsOnA} | ${step.hitsOnB} | ${step.differingFromS0} | ${step.differingFromS1 ?? 'n/a'} |`,
+        `${step.hitsOnA} | ${step.hitsOnB} | ${perColumn(step.differingFromS0)} | ${perColumn(step.differingFromS1)} |`,
     );
   }
   lines.push('');
   for (const step of result.steps) {
-    for (const hit of step.firstDiffering) {
-      lines.push(`differs ${step.id}: ${hit.queryId} ${hit.key} s0 ${hit.reference} ${step.id} ${hit.step}`);
+    for (const column of SCORE_COLUMNS) {
+      for (const hit of step.firstDiffering[column]) {
+        lines.push(`differs ${step.id} ${column}: ${hit.queryId} ${hit.key} s0 ${hit.reference} ${step.id} ${hit.step}`);
+      }
     }
   }
   if (result.reindexMs !== undefined) lines.push(`reindex-ms ${result.engine} ${result.corpora.a.id}: ${result.reindexMs.toFixed(1)}`);
   if (withScores) {
     lines.push('');
     for (const [stepId, byQuery] of result.scores) {
-      for (const [queryId, hits] of byQuery) for (const [key, score] of hits) lines.push(`score ${stepId} ${queryId} ${key} ${score}`);
+      for (const [queryId, hits] of byQuery) {
+        for (const [key, score] of hits) lines.push(`score ${stepId} ${queryId} ${key} ${score.scan} ${score.operator}`);
+      }
     }
   }
   return `${lines.join('\n')}\n`;
 }
 
 /**
+ * The scores that are not the same in every capture of one pair: each `score` line's value, per
+ * column, across `captures` (the texts `--capture` wrote), listed when the captures disagree on it.
+ * A hit present in one capture and absent from another is listed with `none` for the absent side.
+ */
+export function compareBm25Captures(captures) {
+  const values = new Map();
+  captures.forEach((text, index) => {
+    for (const line of text.split('\n')) {
+      if (!line.startsWith('score ')) continue;
+      const [, step, queryId] = line.split(' ', 3);
+      const operatorAt = line.lastIndexOf(' ');
+      const scanAt = line.lastIndexOf(' ', operatorAt - 1);
+      const key = line.slice(`score ${step} ${queryId} `.length, scanAt);
+      const score = { scan: line.slice(scanAt + 1, operatorAt), operator: line.slice(operatorAt + 1) };
+      for (const column of SCORE_COLUMNS) {
+        const id = `${step} ${queryId} ${key} ${column}`;
+        if (!values.has(id)) values.set(id, new Array(captures.length).fill('none'));
+        values.get(id)[index] = score[column];
+      }
+    }
+  });
+  const disagreeing = [...values].filter(([, seen]) => new Set(seen).size > 1);
+  return `${[`captures: ${captures.length}, values compared: ${values.size}, disagreeing: ${disagreeing.length}`, ...disagreeing.map(([id, seen]) => `disagrees ${id}: ${seen.join(' ')}`)].join('\n')}\n`;
+}
+
+/**
  * The launcher's whole body: `--engine`, `--corpus` (A) and `--other` (B) select one run, and
  * `--capture <path>` also writes the summary with every score to that repo-relative path.
  * `--reindex-cost` instead runs `self-docs` against `fixture-catalog` on each engine, timing step `s5`
- * alone, and prints one line per engine.
+ * alone, and prints one line per engine. `--compare <path>`, given once per capture of one pair, runs
+ * nothing and prints {@link compareBm25Captures} over them.
  */
 export async function runBm25HistoryLauncher(argv) {
   const { values } = parseFlags({
@@ -452,11 +527,21 @@ export async function runBm25HistoryLauncher(argv) {
       corpus: { type: 'string' },
       other: { type: 'string' },
       capture: { type: 'string' },
+      compare: { type: 'string', multiple: true },
       'reindex-cost': { type: 'boolean', default: false },
     },
     strict: true,
   });
   const { repo } = parseArgs([]);
+  const repoPath = (path) => (isAbsolute(path) ? path : join(repo, path));
+  if (values.compare !== undefined) {
+    if (Object.keys(values).some((name) => name !== 'compare' && name !== 'reindex-cost') || values['reindex-cost']) {
+      throw new Error('eval: bm25 history: --compare reads captures only; drop every other flag');
+    }
+    if (values.compare.length < 2) throw new Error('eval: bm25 history: --compare needs at least two captures');
+    process.stdout.write(compareBm25Captures(values.compare.map((path) => readFileSync(repoPath(path), 'utf8'))));
+    return;
+  }
   let text;
   if (values['reindex-cost']) {
     if (values.engine !== undefined || values.corpus !== undefined || values.other !== undefined) {
@@ -479,7 +564,7 @@ export async function runBm25HistoryLauncher(argv) {
     text = renderBm25History(result, { withScores: true });
   }
   if (values.capture !== undefined) {
-    const path = isAbsolute(values.capture) ? values.capture : join(repo, values.capture);
+    const path = repoPath(values.capture);
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, text);
   }
