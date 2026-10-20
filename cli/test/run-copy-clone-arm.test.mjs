@@ -7,7 +7,8 @@
  * **The rule these tests exist to enforce: on a clone, the watcher family's git runs under the same
  * pins as on a worktree — no hook, no fsmonitor, no submodule recursion, history as stored, and
  * `refs/heads/<branch>` named — reads objects from the main checkout alone, syncs the run's ref in at
- * the copy check and out after every ref it moves, and refuses a protected-path change exactly as on a
+ * the copy check and heals a clone behind the main checkout there, moves the clone's ref before the
+ * main checkout's for every ref it moves, and refuses a protected-path change exactly as on a
  * worktree.**
  *
  * Each case builds, under the system temp directory, a main checkout carrying a hand-written
@@ -15,12 +16,16 @@
  * origin standing in for the network `hr_run_trusted_base_var` asks, whose default branch carries a
  * committed `githooks/pre-push`, and the clone `hr_clone_create_var` makes at `hr_worktree_dir`. The
  * library is sourced from the template tree through `runBash`. A ref moved under a call is a `git`
- * shim first on `PATH`, the technique `cli/test/wrapper-target-check.test.mjs` uses; a substituted
- * object is planted by the method `docs/cli.md` §6 residual 6 describes. Sync in isolation is
- * `cli/test/clone-sync.test.mjs`'s, and the wrappers on a clone are another suite's.
+ * shim first on `PATH`, the technique `cli/test/wrapper-target-check.test.mjs` uses: it moves the
+ * clone's ref just before the operation's first `update-ref`, which on a clone is the clone's own
+ * swap, so the operation refuses with nothing moved. A substituted object is planted by the method
+ * `docs/cli.md` §6 residual 6 describes. Sync in isolation is `cli/test/clone-sync.test.mjs`'s, the
+ * clone-first order under every race `cli/test/clone-ref-order.test.mjs`'s, and the wrappers on a
+ * clone are another suite's.
  *
  * RED ONCE — `hr_run_copy_git`'s `GIT_DIR` pointed at `$HR_RUN_COPY_GITDIR` when the kind is `clone`:
- * case (h) fails. The fast-forward's sync-out dropped: case (e) fails on the clone's own ref.
+ * case (h) fails. The clone's swap removed from `hr_copy_ref_swap_var`'s clone arm: case (e) fails on
+ * the clone's own ref.
  */
 
 import assert from 'node:assert/strict';
@@ -178,17 +183,17 @@ async function fixture(t) {
 }
 
 /**
- * Put a `git` shim first on `PATH`: a call whose arguments contain `trigger` runs the real git
- * (`$REAL`) and then `after`.
+ * Put a `git` shim first on `PATH`: a call whose arguments contain `trigger` runs `before` and then
+ * the real git (`$REAL`).
  */
-async function gitShim(f, trigger, after) {
+async function gitShim(f, trigger, before) {
   const real = (await runBash(f.root, ['-c', 'command -v git'])).stdout.trim();
   const bin = join(f.root, 'shim-bin');
   await mkdir(bin);
   const fired = join(f.root, 'shim-fired');
   await writeFile(
     join(bin, 'git'),
-    `#!/bin/sh\nREAL='${real}'\ncase " $* " in *'${trigger}'*) : > '${fired}'; "$REAL" "$@"; s=$?; ${after}; exit $s ;; esac\nexec "$REAL" "$@"\n`,
+    `#!/bin/sh\nREAL='${real}'\ncase " $* " in *'${trigger}'*) : > '${fired}'; ${before} ;; esac\nexec "$REAL" "$@"\n`,
   );
   await chmod(join(bin, 'git'), 0o755);
   return { env: { PATH: `${bin}:${process.env.PATH}` }, fired: () => exists(fired) };
@@ -207,7 +212,7 @@ test('(a) The copy check on a clone syncs a plain clone commit in and reads clea
   assert.equal(await f.mainTip(), commit);
 });
 
-test('(b) The copy check refuses a branch the main checkout has checked out, and a clone behind it', async (t) => {
+test('(b) The copy check refuses a branch the main checkout has checked out, and heals a clone behind it', async (t) => {
   await t.test('checked out in the main checkout', async (t) => {
     const f = await fixture(t);
     const before = await f.mainTip();
@@ -218,7 +223,7 @@ test('(b) The copy check refuses a branch the main checkout has checked out, and
     assert.equal(await f.mainTip(), before);
   });
 
-  await t.test('the clone rewound behind the main checkout', async (t) => {
+  await t.test('the clone rewound behind the main checkout is healed', async (t) => {
     const f = await fixture(t);
     const parent = await f.cloneTip();
     const commit = await f.commitInClone('a.txt', 'clone work\n');
@@ -226,10 +231,10 @@ test('(b) The copy check refuses a branch the main checkout has checked out, and
     assert.equal(await f.mainTip(), commit);
     await runGit(f.clone, ['update-ref', REF, parent, commit]);
     const g = await f.check();
-    assert.equal(g.status, '1', JSON.stringify(g));
-    assert.match(g.refusal, /the clone is behind the main checkout/);
+    assert.equal(g.status, '0', JSON.stringify(g));
+    assert.equal(g.tip, commit);
     assert.equal(await f.mainTip(), commit);
-    assert.equal(await f.cloneTip(), parent);
+    assert.equal(await f.cloneTip(), commit);
   });
 });
 
@@ -283,22 +288,21 @@ test('(c) The artifact commit on a clone moves both refs, leaves the clone clean
   });
 });
 
-test('(d) A sync-out that fails after the commit returns 1 with HR_COMMIT_SYNC_FAILED, and the main checkout’s commit stands', async (t) => {
+test('(d) A clone ref moved off the synced-in tip before the commit’s first update-ref returns 4 with nothing moved on either side', async (t) => {
   const f = await fixture(t);
   const before = await f.mainTip();
   const parent = await f.commitInClone('a.txt', 'clone work\n');
   assert.equal((await f.check()).status, '0');
+  assert.equal(await f.mainTip(), parent);
   await writeFile(join(f.clone, 'b.txt'), 'artifact\n');
-  // At the commit's own `update-ref -m`, move the clone's ref off the tip the sync-out swaps from.
-  const shim = await gitShim(f, ' update-ref -m ', `"$REAL" -c advice.graftFileDeprecated=false --git-dir='${f.gitdir}' update-ref '${REF}' '${before}'`);
+  // Ahead of the clone's own swap, move the clone's ref off the tip that swap expects.
+  const shim = await gitShim(f, ' update-ref ', `"$REAL" -c advice.graftFileDeprecated=false --git-dir='${f.gitdir}' update-ref '${REF}' '${before}'`);
   const g = await f.commitPaths('b.txt', shim.env);
   assert.ok(await shim.fired(), 'the shim never ran');
-  assert.equal(g.status, '1', JSON.stringify(g));
-  assert.equal(g.syncfailed, '1');
-  assert.match(g.new, /^[0-9a-f]{40,64}$/);
-  assert.match(g.refusal, /could not be synced out$/);
-  assert.equal(await f.mainTip(), g.new);
-  assert.equal((await runGit(f.main, ['rev-parse', `${g.new}^`])).stdout.trim(), parent);
+  assert.equal(g.status, '4', JSON.stringify(g));
+  assert.equal(g.new, '');
+  assert.equal(g.syncfailed, '');
+  assert.equal(await f.mainTip(), parent);
   assert.equal(await f.cloneTip(), before);
 });
 
