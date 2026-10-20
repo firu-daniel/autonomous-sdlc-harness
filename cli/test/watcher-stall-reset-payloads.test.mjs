@@ -5,8 +5,9 @@
  * sandboxed session could have written to.
  *
  * **The rule these tests exist to enforce: the watchdog's reset never runs code a sandboxed session
- * planted, and never installs a run-authored protected path before a resumed session loads it; a
- * hung honest run still resumes from its committed ledger.**
+ * planted, never installs a run-authored protected path before a resumed session loads it, and
+ * never resets a clone whose `.git` carries a file or key a clone the harness made has not; a hung
+ * honest run still resumes from its committed ledger.**
  *
  * The hung session is the shared recording stub with a body that, on its first launch, writes
  * `hung`, keeps its stream fresh until the test writes `go` after planting, writes `silent` and
@@ -14,34 +15,67 @@
  * environment (`STALL_WARN_SECS=1`, `STALL_KILL_SECS=2`), the busy-not-hung guard is lifted
  * (`STALL_BUSY_CPU_PCT`), and the local pass back-dates both liveness files as the watcher header's
  * `a stall` REPRO row does. The local fixture is `createWatcherFixture`'s, adopted on a bare
- * `origin`, with the copy cut by `create-worktree.sh` from a task drop; its main `.git/config` sets
- * `extensions.worktreeConfig=true`, so the copy's `config.worktree` is live for an unpinned call,
- * and the repo-relative `core.hooksPath` `githooks`, so an unpinned hook-running call resolves hooks
- * inside the copy. A payload is committed through `hash-object` / `update-index` / `commit-tree` /
- * `update-ref`, with no working-tree write. Every planted hook and fsmonitor writes a marker named
- * for itself. In job mode the job checkout is the fixture itself, on the run branch.
+ * `origin`, with the copy cut by `create-worktree.sh` from a task drop: a clone, its record's
+ * `copy_kind` `clone`. Its main `.git/config` sets the repo-relative `core.hooksPath` `githooks`, so
+ * an unpinned hook-running call resolves hooks inside the copy, and `extensions.worktreeConfig=true`,
+ * so a legacy copy's `config.worktree` is live for an unpinned call. A payload is committed the way
+ * a session in a clone commits one: `hash-object` / `update-index` / `write-tree` / `commit-tree` in
+ * the clone and an `update-ref` of the clone's own branch, with no working-tree write; the
+ * watchdog's copy check syncs it into the main checkout. `{ legacy: true }` replaces the clone,
+ * while the session hangs, with a linked worktree of the main checkout on the branch, its record
+ * carrying no `copy_kind`: a parked run from before the clone layout. Every planted hook and
+ * fsmonitor writes a marker named for itself. In job mode the job checkout is the fixture itself,
+ * on the run branch.
  *
- * RED ONCE — each mutation applied once to `cli/templates/scripts/autonomous-watcher.sh` (S2, S3's
- * first, S6 to S9: to `lib/harness-run-lib.sh`), the case run, the failure observed, the mutation
- * reverted:
+ * Where each plant lives on the clone layout:
+ * - Clone-applicable, re-pointed at the clone: the uncommitted edit (honest), the committed
+ *   protected path (S1, S2), the nested repository behind a gitlink (S3), the symlinked note (S5),
+ *   the forged base, replace ref and grafts in the main repository (S6, S8, S9), and the
+ *   skip-worktree bit in the clone's index (S7).
+ * - Worktree-only, given its clone equivalent, each refused by the clone trust check with no
+ *   marker, no reset written and no note: the record's `config.worktree` (S4: a planted
+ *   `.git/config.worktree`; S4c: the same key in `.git/config`, off the allow-list) and the `.git`
+ *   pointer (S10: a planted `.git/commondir`).
+ * - Worktree-only, kept as migration coverage on a legacy worktree: S4, the original plant,
+ *   because the worktree arm still serves a parked legacy run and only there does the reset's own
+ *   pinning stand between the payload and a run.
+ * - Job mode (J1–J6) is unchanged: its copy is the job checkout, never a clone.
+ *
+ * RED ONCE — local cases: each mutation applied once to the fixture's own written copy of
+ * `autonomous-watcher.sh` (S2, S4, S4c, S6 to S10: to its `lib/harness-run-lib.sh`), never to the
+ * template, the case run, the failure observed; measured on the clone layout unless the case is a
+ * legacy one. Job cases: applied to `cli/templates/scripts/autonomous-watcher.sh` and reverted, and
+ * not re-measured here, their checkout being the job's own:
  * - (honest) the watchdog's `hr_run_reset_var` call replaced by `:` → fails `the uncommitted edit
  *   survived the reset`.
  * - (S1) `hr_run_reset_var` replaced by the old `git -C "$worktree" reset --hard HEAD` → fails `a
  *   planted payload ran`, holding `S1-reference-transaction`.
  * - (S2) the surface check dropped from `hr_run_reset_var` → the case resumes: fails on the record's
  *   `status`, `completed`, not `failed`.
- * - (S3) regression guard: the pre-hardening reset did not reach this payload. The reset's
- *   `read-tree` run without `-c core.fsmonitor=false -c submodule.recurse=false` and
- *   `--no-recurse-submodules`, with `submodule.recurse=true` in the main config, stays green, as does
- *   the old `git -C "$worktree" reset --hard HEAD`. Second mutation: `git -C "$worktree" status
- *   --short` added ahead of the reset → fails `a planted payload ran`, holding `S3-fsmonitor`.
- * - (S4) the reset run unpinned, as `git -C "$worktree" reset --hard HEAD` → fails `a planted payload
- *   ran`, holding `S4-fsmonitor`.
+ * - (S3) `git -C "$worktree" status --short` added ahead of the reset → fails `a planted payload
+ *   ran`, holding `S3-fsmonitor`. Regression guard, recorded on the worktree layout and not
+ *   re-measured: the reset's `read-tree` run without its pins, or the old `git -C "$worktree" reset
+ *   --hard HEAD`, did not reach this payload.
+ * - (S4) `config.worktree` dropped from `hr_clone_target_check_var`'s absent-file loop → the case
+ *   resumes: fails on the record's `status`, `completed`, not `failed`.
+ * - (S4c) `hr_clone_config_check_var`'s off-allow-list test skipped → the same failure.
+ * - (S10) `commondir` dropped from `hr_clone_target_check_var`'s absent-file loop → the same failure.
+ * - (S4, legacy) the (S1) mutation → fails `a planted payload ran`, holding `S4-fsmonitor`.
  * - (S5) both `hr_run_path_safe` calls on the `PAUSE_PROGRESS.md` write skipped → the case resumes:
  *   fails on the record's `status`, `completed`, not `failed`.
  * - (S6) `hr_run_surface_check_var`'s merge base taken against the local
  *   `refs/remotes/origin/<defaultBranch>` in place of `HR_RUN_TRUSTED_BASE` → the case resumes:
  *   fails on the record's `status`, `completed`, not `failed`.
+ * - (S7) `hr_run_worktree_diff_var` using `GIT_INDEX_FILE="$HR_RUN_COPY_GITDIR/index"` in place of
+ *   the temporary index → the case resumes: fails on the record's `status`, `completed`, not
+ *   `failed`.
+ * - (S8) `GIT_NO_REPLACE_OBJECTS=1` removed from `hr_copy_sync_main_git`, the body
+ *   `hr_run_main_git` runs → the case resumes: fails on the record's `status`, `completed`, not
+ *   `failed`.
+ * - (S9) `hr_run_surface_check_var`'s merge base run as `GIT_NO_REPLACE_OBJECTS=1 git -C
+ *   "$HR_RUN_MAIN" merge-base`, without `GIT_GRAFT_FILE=/dev/null` → the same failure. Removed from
+ *   `hr_copy_sync_main_git` instead, the grafts refuse the sync-in first (`have diverged`), and the
+ *   case fails on the refusal's wording.
  * - (J1) the empty-value test dropped from `stall_job_surfaces_ok` → fails `npx was called`, the stub
  *   having recorded `--job-surfaces=@<commit>`.
  * - (J2) the job-mode `stall_job_surfaces_ok` call skipped → the case resumes: fails on the record's
@@ -54,12 +88,6 @@
  * - (J5) the same mutation → fails `a planted payload ran`, holding `node-modules.marker`.
  * - (J6) `--job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH"` without
  *   `@$HARNESS_GITHUB_DEFAULT_COMMIT@$HARNESS_DEFAULT_BRANCH_COMMIT` → the case resumes: fails on the record's `status`, `completed`, not `failed`.
- * - (S7) `hr_run_worktree_diff_var` using `GIT_INDEX_FILE="$HR_RUN_COPY_GITDIR/index"` in place of
- *   the temporary index → the case resumes: fails on the record's `status`, `completed`, not
- *   `failed`.
- * - (S8) `GIT_NO_REPLACE_OBJECTS=1` removed from `hr_run_main_git` → the case resumes: fails on the
- *   record's `status`, `completed`, not `failed`.
- * - (S9) `GIT_GRAFT_FILE=/dev/null` removed from `hr_run_main_git` → the same failure.
  */
 
 import assert from 'node:assert/strict';
@@ -76,6 +104,8 @@ const STATE_DIR = 'sdlc-harness';
 const REGISTRY_PATH = `${STATE_DIR}/autonomous_logs/registry.json`;
 const SETTINGS = '.claude/settings.json';
 const PIN = ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'submodule.recurse=false'];
+/** The identity a clone-side `commit-tree` takes on its command line: the clone's config has none. */
+const AUTHOR = ['-c', 'user.name=Harness Fixture', '-c', 'user.email=fixture@example.invalid'];
 const CLI_VERSION = JSON.parse(readFileSync(join(dirname(CLI_ENTRY), '..', 'package.json'), 'utf8')).version;
 
 /** One stalled pass's bound: a hang fails naming its command, below the suite's `--test-timeout`. */
@@ -132,12 +162,13 @@ const git = (cwd, args, env = {}) => sh(cwd, 'git "$@"', [...PIN, ...args], env)
 /**
  * A watcher fixture adopted on `origin`'s default branch, with the main `.git/config` setting
  * `extensions.worktreeConfig=true` and the repo-relative `core.hooksPath` `githooks`. `job` checks
- * the run branch out in the fixture itself, the job's checkout; otherwise `localStall` cuts the copy.
+ * the run branch out in the fixture itself, the job's checkout; otherwise `localStall` cuts the
+ * copy, a clone, which `legacy` replaces with a linked worktree whose record carries no `copy_kind`.
  *
  * @param {import('node:test').TestContext} t
- * @param {{ job?: boolean }} [options]
+ * @param {{ job?: boolean, legacy?: boolean }} [options]
  */
-async function createStallFixture(t, { job = false } = {}) {
+async function createStallFixture(t, { job = false, legacy = false } = {}) {
   const w = await createWatcherFixture(t);
   if (w === null) return null;
 
@@ -239,6 +270,15 @@ async function createStallFixture(t, { job = false } = {}) {
       const argv = ['-c', script, '_', w.watcherPath, join(rec, 'silent'), logPath, logPath.replace(/\.log$/, '.stream.jsonl')];
       return stalled(argv, w.watcherEnv(stallEnv(env)), async () => {
         assert.ok(existsSync(copy), `create-worktree.sh cut no working copy\n${w.watcherLog()}`);
+        assert.equal(w.record().copy_kind, 'clone', `create-worktree.sh cut no clone\n${w.watcherLog()}`);
+        if (legacy) {
+          await rm(copy, { recursive: true, force: true });
+          await git(w.dir, ['worktree', 'add', '--quiet', copy, w.branch]);
+          const registryPath = join(w.dir, REGISTRY_PATH);
+          const registry = JSON.parse(readFileSync(registryPath, 'utf8'));
+          delete registry.runs[w.branch].copy_kind;
+          await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`, 'utf8');
+        }
         await plant();
       });
     },
@@ -287,6 +327,7 @@ async function createStallFixture(t, { job = false } = {}) {
     tip: () => git(w.dir, ['rev-parse', ref]),
     originTip: (name) => git(origin, ['rev-parse', `refs/heads/${name}`]),
     defaultFile: (path) => git(w.dir, ['show', `refs/remotes/origin/${config.defaultBranch}:${path}`]),
+    /** The copy's git directory: the clone's `.git`, or a legacy worktree's record. */
     recordDir: () => git(copy, ['rev-parse', '--absolute-git-dir']),
     /** An executable payload outside the fixture that writes `<markers>/<name>`, then `tail`. */
     async payload(name, tail = 'exit 1') {
@@ -295,8 +336,9 @@ async function createStallFixture(t, { job = false } = {}) {
       return path;
     },
     /**
-     * Commit `entries` on the run's branch the way a sandboxed session can: by plumbing through the
-     * copy's own index and `refs/heads/<branch>`, writing no working-tree file.
+     * Commit `entries` on the copy's branch the way a sandboxed session in it can: by plumbing
+     * through the copy's own index, object store and `refs/heads/<branch>`, writing no working-tree
+     * file. On a clone the main checkout's branch stays where it was until the watchdog syncs in.
      *
      * @param {{ path: string, content?: string, oid?: string, mode?: string }[]} entries
      */
@@ -306,11 +348,13 @@ async function createStallFixture(t, { job = false } = {}) {
         await git(copy, ['update-index', '--add', '--cacheinfo', `${mode},${object},${path}`]);
       }
       const tree = await git(copy, ['write-tree']);
-      const parent = await git(w.dir, ['rev-parse', ref]);
-      const commit = await git(w.dir, ['commit-tree', tree, '-p', parent, '-m', message]);
-      await git(w.dir, ['update-ref', ref, commit, parent]);
+      const parent = await git(copy, ['rev-parse', ref]);
+      const commit = await git(copy, [...AUTHOR, 'commit-tree', tree, '-p', parent, '-m', message]);
+      await git(copy, ['update-ref', ref, commit, parent]);
       return commit;
     },
+    /** Bring the clone's branch's objects into the main repository, moving no ref there. */
+    fetchCopy: () => git(w.dir, ['fetch', '--quiet', '--no-tags', copy, ref]),
     /** An uncommitted edit to a tracked file, which a reset discards. */
     edit: () => writeFile(join(copy, 'README.md'), '# edited by the hung session\n', 'utf8'),
     edited: () => readFileSync(join(copy, 'README.md'), 'utf8') === '# edited by the hung session\n',
@@ -347,6 +391,24 @@ function assertResumed(f) {
 
 const REFUSED = (path) => new RegExp(`the reset was refused.*${path.replaceAll('.', '\\.')}`);
 const JOB_SURFACE = /change a job surface, or that could not be checked/;
+
+/** The clone trust check's sentence for a planted `.git/<name>`. */
+const plantedFile = (name) => new RegExp(`is a clone, but \\S*/\\.git/${name.replaceAll('.', '\\.')} exists, and a clone the harness made has none`);
+
+/** The clone trust check's sentence for `.git/config` keys off the allow-list. */
+const offAllowList = (keys) => new RegExp(`\\.git/config sets ${keys}, which the clone allow-list does not hold`);
+
+/**
+ * Given up by the clone trust check with `reason`, ahead of the reset: `assertGivenUp`, the
+ * session's uncommitted edit still in place, no resume note written, and the branch unmoved.
+ */
+async function assertCloneRefused(f, reason, tip) {
+  assertGivenUp(f, reason);
+  assert.equal(f.edited(), true, 'the reset ran');
+  const note = join(f.copy, STATE_DIR, 'PAUSE_PROGRESS.md');
+  assert.ok(!existsSync(note) || !/discarded by a reset/.test(readFileSync(note, 'utf8')), 'the resume note was written');
+  assert.equal(await f.tip(), tip, `${f.ref} moved`);
+}
 
 // ---------------------------------------------------------------------------------------------
 // Local mode.
@@ -413,18 +475,7 @@ test("(S3) a nested repository's own core.fsmonitor behind a gitlink is never ru
   assertResumed(f);
 });
 
-test("(S4) a core.fsmonitor in the copy's config.worktree is never read: the run resumes", async (t) => {
-  const f = await createStallFixture(t);
-  if (f === null) return;
-
-  await f.localStall(async () => {
-    await git(f.dir, ['config', '--file', join(await f.recordDir(), 'config.worktree'), 'core.fsmonitor', await f.payload('S4-fsmonitor')]);
-  });
-
-  assertResumed(f);
-});
-
-test('(S5) a PAUSE_PROGRESS.md symlinked out of the copy is refused, and the outside file is unchanged', async (t) => {
+test('(S5) a PAUSE_PROGRESS.md symlinked out of the clone is refused, and the outside file is unchanged', async (t) => {
   const f = await createStallFixture(t);
   if (f === null) return;
   const target = join(f.outside, 'note.md');
@@ -445,20 +496,28 @@ test('(S6) a forged base: the local default-branch refs pointed at a payload tip
   if (f === null) return;
   const defaultBranch = f.config.defaultBranch;
   const originDefault = await f.originTip(defaultBranch);
-  const defaultSettings = await f.defaultFile(SETTINGS);
+  let tip;
 
   await f.localStall(async () => {
-    const commit = await f.commitInCopy([{ path: SETTINGS, content: markerSettings(f, 'S6-session-start') }], 'run: add a session hook');
-    await git(f.dir, ['update-ref', `refs/remotes/origin/${defaultBranch}`, commit]);
+    const payload = markerSettings(f, 'S6-session-start');
+    const commit = await f.commitInCopy([{ path: SETTINGS, content: payload }], 'run: add a session hook');
+    // The working tree matches the tip, so only the merge base the surface check takes stands
+    // between this tip and a resume.
+    await writeFile(join(f.copy, SETTINGS), payload, 'utf8');
+    tip = commit;
+    await f.fetchCopy();
+    for (const repo of [f.dir, f.copy]) {
+      await git(repo, ['update-ref', `refs/remotes/origin/${defaultBranch}`, commit]);
+    }
     await git(f.dir, ['update-ref', `refs/heads/${defaultBranch}`, commit]);
   });
 
   assertGivenUp(f, REFUSED(SETTINGS));
-  assert.equal(readFileSync(join(f.copy, SETTINGS), 'utf8').trim(), defaultSettings);
+  assert.equal(await f.tip(), tip, `${f.ref} moved`);
   assert.equal(await f.originTip(defaultBranch), originDefault, "origin's default branch moved");
 });
 
-test('(S7) a session-written .claude/settings.json hidden by a skip-worktree bit in the copy\'s index is refused', async (t) => {
+test("(S7) a session-written .claude/settings.json hidden by a skip-worktree bit in the clone's index is refused", async (t) => {
   const f = await createStallFixture(t);
   if (f === null) return;
   let tip;
@@ -483,6 +542,7 @@ test('(S8) a replace ref on the merge base does not pass a payload tip', async (
     const payload = markerSettings(f, 'S8-session-start');
     const commit = await f.commitInCopy([{ path: SETTINGS, content: payload }], 'run: add a session hook');
     await writeFile(join(f.copy, SETTINGS), payload, 'utf8');
+    await f.fetchCopy();
     tip = commit;
     const base = await git(f.dir, ['merge-base', commit, originDefault]);
     const fake = await git(f.dir, ['commit-tree', `${commit}^{tree}`, '-m', 'fake']);
@@ -503,6 +563,7 @@ test('(S9) an info/grafts line on the tip and the base does not pass a payload t
     const payload = markerSettings(f, 'S9-session-start');
     const commit = await f.commitInCopy([{ path: SETTINGS, content: payload }], 'run: add a session hook');
     await writeFile(join(f.copy, SETTINGS), payload, 'utf8');
+    await f.fetchCopy();
     tip = commit;
     const fake = await git(f.dir, ['commit-tree', `${commit}^{tree}`, '-m', 'fake']);
     await mkdir(join(f.dir, '.git', 'info'), { recursive: true });
@@ -511,6 +572,73 @@ test('(S9) an info/grafts line on the tip and the base does not pass a payload t
 
   assertGivenUp(f, REFUSED(SETTINGS));
   assert.equal(await f.tip(), tip, `${f.ref} moved`);
+});
+
+// ---------------------------------------------------------------------------------------------
+// The clone equivalents of the worktree-only plants.
+// ---------------------------------------------------------------------------------------------
+
+test('(S4) a .git/config.worktree planted in the clone, carrying core.fsmonitor, is refused before the reset', async (t) => {
+  const f = await createStallFixture(t);
+  if (f === null) return;
+  let tip;
+
+  await f.localStall(async () => {
+    tip = await f.tip();
+    await f.edit();
+    await git(f.dir, ['config', '--file', join(await f.recordDir(), 'config.worktree'), 'core.fsmonitor', await f.payload('S4-fsmonitor')]);
+  });
+
+  await assertCloneRefused(f, plantedFile('config.worktree'), tip);
+});
+
+test("(S4c) a core.fsmonitor in the clone's .git/config, off the allow-list, is refused before the reset", async (t) => {
+  const f = await createStallFixture(t);
+  if (f === null) return;
+  let tip;
+
+  await f.localStall(async () => {
+    tip = await f.tip();
+    await f.edit();
+    await git(f.dir, ['config', '--file', join(await f.recordDir(), 'config'), 'core.fsmonitor', await f.payload('S4c-fsmonitor')]);
+  });
+
+  await assertCloneRefused(f, offAllowList('core\\.fsmonitor'), tip);
+});
+
+test('(S10) a .git/commondir planted in the clone, naming a repository whose config carries a payload, is refused before the reset', async (t) => {
+  const f = await createStallFixture(t);
+  if (f === null) return;
+  let tip;
+
+  await f.localStall(async () => {
+    tip = await f.tip();
+    await f.edit();
+    // A `.git` holding the branch at the clone's tip, so the common dir resolves and the clone's ref
+    // reads the same through it: only the clone check's own file test refuses it.
+    const planted = join(f.payloads, 'planted');
+    await git(f.payloads, ['init', '--quiet', planted]);
+    await git(planted, ['fetch', '--quiet', f.copy, `${f.ref}:${f.ref}`]);
+    await git(planted, ['config', 'core.fsmonitor', await f.payload('S10-fsmonitor')]);
+    await writeFile(join(await f.recordDir(), 'commondir'), `${join(planted, '.git')}\n`, 'utf8');
+  });
+
+  await assertCloneRefused(f, plantedFile('commondir'), tip);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Migration coverage: a parked legacy worktree run, its record carrying no copy_kind.
+// ---------------------------------------------------------------------------------------------
+
+test("(S4, legacy) migration coverage: a core.fsmonitor in a legacy worktree's config.worktree is never read: the run resumes", async (t) => {
+  const f = await createStallFixture(t, { legacy: true });
+  if (f === null) return;
+
+  await f.localStall(async () => {
+    await git(f.dir, ['config', '--file', join(await f.recordDir(), 'config.worktree'), 'core.fsmonitor', await f.payload('S4-fsmonitor')]);
+  });
+
+  assertResumed(f);
 });
 
 // ---------------------------------------------------------------------------------------------
