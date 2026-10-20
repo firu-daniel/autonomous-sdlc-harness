@@ -81,7 +81,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_clone_per_run_switch/ta
 4. [x] **Task 4** — Give `refresh-branch.sh` the clone-first swap and `push-branch.sh` a pre-push clone check, map the new statuses in `commit-on-branch.sh`, and prove all three on a clone _(layer: cli)_ _(points: 20)_
 5. [x] **Task 5** — Write-deny the main checkout's whole `.git`, narrow the sibling-glob `.git` entry to the six clone paths, and keep the `_README` true _(layer: cli)_ _(points: 20)_
 6. [x] **Task 6** — Have `doctor` report a profile still carrying the sibling-glob `.git` entry, and say what the `worktrees` check is for now _(layer: cli)_ _(points: 15)_
-7. [ ] **Task 7** — Make `create-worktree.sh` create a clone in all three modes, bootstrap it through the main checkout's `setup-worktree.sh --target`, and roll back everything it created on failure _(layer: cli)_ _(points: 20)_
+7. [x] **Task 7** — Make `create-worktree.sh` create a clone in all three modes, bootstrap it through the main checkout's `setup-worktree.sh --target`, and roll back everything it created on failure _(layer: cli)_ _(points: 20)_
 8. [ ] **Task 8** — Move `create-worktree.test.mjs` to the clone layout, and the upstream case in `push-branch-worktree-config.test.mjs` with it _(layer: cli)_ _(points: 15)_
 9. [ ] **Task 9** — Make `cleanup-merged-worktrees.sh` find run copies from the registry and remove a clone through the library, with `--dry-run` deciding by the same rule _(layer: cli)_ _(points: 15)_
 10. [ ] **Task 10** — Prove the registry-driven sweep for clones and legacy worktrees, and re-aim `cleanup-worktree-record.test.mjs` at it _(layer: cli)_ _(points: 15)_

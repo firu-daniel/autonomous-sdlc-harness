@@ -5,11 +5,11 @@
 # committed pre-push backstop for THAT working copy, install dependencies and
 # build.
 #
-# WHO RUNS IT. create-worktree.sh, immediately after it adds a working copy: a
-# default-mode cut runs the new copy's own script with no argument, and
-# `--existing` runs the MAIN checkout's script with `--target <copy>`. The
-# GitHub job's `Bootstrap the checkout` runs it with no argument; and a person
-# runs it by hand on a checkout that predates a configuration change.
+# WHO RUNS IT. create-worktree.sh, immediately after it creates a run's clone,
+# in every bootstrapped mode: it runs the MAIN checkout's script with `--target
+# <clone>`. The GitHub job's `Bootstrap the checkout` runs it with no argument;
+# and a person runs it by hand on a checkout that predates a configuration
+# change.
 #
 # `--target <dir>` is for a copy whose tree a run wrote. It refuses unless this
 # script's own checkout is a main checkout (`hr_wrapper_main_of` places it as
@@ -22,7 +22,7 @@
 # A registered clone as <dir> takes that `core.hooksPath` in its own
 # `.git/config`, at the value the library's clone allow-list admits
 # (`hr_clone_config_spec`), and nothing is written to the main checkout's
-# configuration. Nothing creates a clone yet.
+# configuration. Its caller is create-worktree.sh.
 #
 # THE RESIDUAL `--target` DOES NOT CLOSE. The main checkout's
 # `commands.depInstall` and `commands.build` still run in the copy, against the
@@ -93,8 +93,8 @@
 # WHY NO `set -e`, AND WHY ITS CALLER HAS ONE. Each step's outcome is decided
 # here — skip, warn, or fail — and `-e` would turn the ordinary "this key is not
 # configured" into an abort. Failures are accumulated instead and reported in
-# the exit status, which is what create-worktree.sh's `set -e` then acts on: a
-# working copy whose dependencies did not install is not pushed as if it had.
+# the exit status, which create-worktree.sh acts on: a working copy whose
+# dependencies did not install is removed with its branch, never pushed.
 #
 # FAIL CLOSED ON A CONFIGURATION IT CANNOT READ. Every path and command below is
 # configured, and none has a remembered fallback, so an absent or unreadable
