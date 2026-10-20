@@ -97,7 +97,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_clone_per_run_switch/ta
 20. [x] **Task 18** — Prove a parked legacy worktree run resumes, commits and is swept, in a new `cli/test/run-copy-migration.test.mjs` _(layer: cli)_ _(points: 15)_
 21. [x] **Task 19** — State in `harness-run.yml` why the `run` job cuts no copy, and hold it with a test over the rendered template _(layer: cli)_ _(points: 10)_
 22. [x] **Task 20** — Make `branch-prompt.md`'s collision guard check the run copy's path, not `git worktree list` alone _(layer: plugin)_ _(points: 5)_
-23. [ ] **Task 28** — Make the flows' Phase D push-state read hold in a clone, and restate why the wrappers run from the main checkout _(layer: plugin)_ _(points: 15)_
+23. [x] **Task 28** — Make the flows' Phase D push-state read hold in a clone, and restate why the wrappers run from the main checkout _(layer: plugin)_ _(points: 15)_
 24. [ ] **Task 21** — Restate `docs/watcher.md` §1–§2 for the clone layout: creation, sync order, the per-run profile, cleanup, migration and where the main checkout's ref can lag _(layer: general)_ _(points: 20)_
 25. [ ] **Task 22** — Restate `docs/cli.md` §6 and §7: the new write protection, the per-run profile and its launch check, the job settlement, and the residuals closed and opened _(layer: general)_ _(points: 20)_
 26. [ ] **Task 23** — Add the owed clone-layout rows to `docs/sandbox-verification.md` _(layer: general)_ _(points: 15)_

@@ -288,7 +288,8 @@ Each flip (and the initial creation) is: **Edit the ledger file, then commit and
 `bash <MAIN_REPO>/<scripts_dir>/commit-on-branch.sh --repo <repo_root> <path>... -- "<subject>"`, then
 `bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>`. Both name `<MAIN_REPO>`'s copy, because that copy
 is the one the unattended permission profile runs outside the sandbox: the run copy's own scripts stay sandboxed,
-where the commit cannot write a linked worktree's record. Spell both commands literally — `<MAIN_REPO>`,
+where a commit cannot move the main checkout's branch, whose whole `.git` the profile write-denies, and, in a
+legacy worktree run, cannot write the worktree's record. Spell both commands literally — `<MAIN_REPO>`,
 `<repo_root>` and `<branch>` (in a path or in the subject) each as the text it resolves to, with no `$` anywhere
 in the command: never `"$REPO_ROOT"`, `${branch}` or any other variable. From a run copy, the script-allowlist
 guard does not vouch for the main checkout's copy, so the profile's literal `allow` entry is each call's only
