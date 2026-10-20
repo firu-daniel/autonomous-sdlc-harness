@@ -28167,3 +28167,276 @@ start, disk footprint and operational surface.
 
 **The TypeScript implementation stays the default whatever these numbers say.** Anything this section
 suggests is input to a later decision by the maintainer, not a change made or queued here.
+
+## The BM25 index's state, measured
+
+**Who reads this, and what it decides.** The maintainer deciding the route of the branch that fixes the
+BM25 scores' dependence on the `chunks_bm25` index's state. This section records the index states, the
+score each state ranks by, what still differs after `REINDEX`, the stray index-scan score, the candidate
+end-state rule and whether either mechanism moves relevance. Every `self-docs` figure carries the
+`{ files, chunks }` stamp of the runs that took it, and no comparison here crosses two stamps. The
+`pg_textsearch` source paths and issue numbers cited here are the leads of the task prompt that opened
+this work; none was re-read on the branch that measured them.
+
+### How the probe reads a score, and the setup
+
+- **The engines.** PGlite: `PostgreSQL 18.3 (PGlite 0.5.8) on wasm32-unknown-emscripten, compiled by
+  emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 3.1.74
+  (1092ec30a3fb1d46b1782ff1b4db5094d3d06ae5), 32-bit`. The compose Postgres: `PostgreSQL 18.2 (Debian
+  18.2-1.pgdg12+1) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0,
+  64-bit`. `pg_extension.extversion` reads `pg_textsearch` `1.3.1` on both.
+- **The corpora.** `fixture-catalog` at `{ files: 9, chunks: 41 }`, 12 queries, and `self-docs` at
+  `{ files: 71, chunks: 813 }`, 20 queries. Every `self-docs` run below carries that one stamp.
+- **The runs.** 2026-10-20, two runs of the states sequence per engine and corpus, eight in all. Each
+  pair was compared value by value; what the comparison listed is named under **One-run values** below.
+- **The score statement**, run once per query with the query text as `$1` and the corpus's chunk count
+  as `$2`:
+
+  ```
+  SELECT key, bm25_get_current_score() AS scan, round((text <@> to_bm25query($1, 'chunks_bm25'))::numeric, 6) AS operator, (text <@> to_bm25query($1, 'chunks_bm25'))::float8 AS operator_exact FROM chunks ORDER BY text <@> to_bm25query($1, 'chunks_bm25') LIMIT $2
+  ```
+
+  - `scan` is the score the index scan ranked the row by. It is what the store ranks by: the store's
+    lexical statement orders by the same expression (`cli/src/retrieval/store.ts` → `lexicalSearch`).
+    It is a `real`, rounded to six decimals by the probe.
+  - `operator` is the standalone operator over the row's own text, rounded to six decimals on the
+    server. It is the comparison's own probe column (`### Divergence sources, in the order checked`,
+    item 3).
+  - `operator_exact` is the same operator unrounded, as a `float8`. It is diagnostic: it decides
+    whether a hit whose `scan` and `operator` differ differs only because `scan` is the operator stored
+    as a `real` (`Math.fround` of both sides equal), and no comparison reads it.
+
+  A **hit** is a row scoring non-zero in either column. Scores are lower-is-better.
+- **The length statement**, run once per step; the summed lengths are checked against the index's
+  `total_len` at `t0`, and the length-band split below is printed only when they are equal:
+
+  ```
+  SELECT key, (SELECT coalesce(sum(array_length(positions, 1)), 0) FROM unnest(to_tsvector('english', text))) FROM chunks
+  ```
+
+- **The two `EXPLAIN` statements**, each bound to the first query: the probe's own, and the store's at
+  its `LIMIT 50` (`ARM_CANDIDATES`). "Index scan" in the tables below is a plan line reading
+  `Index Scan using chunks_bm25 on public.chunks`; "Seq Scan" is `Seq Scan on public.chunks`.
+
+  ```
+  EXPLAIN (VERBOSE, COSTS OFF) SELECT key, bm25_get_current_score() AS scan, round((text <@> to_bm25query($1, 'chunks_bm25'))::numeric, 6) AS operator, (text <@> to_bm25query($1, 'chunks_bm25'))::float8 AS operator_exact FROM chunks ORDER BY text <@> to_bm25query($1, 'chunks_bm25') LIMIT $2
+  EXPLAIN (VERBOSE, COSTS OFF) SELECT id FROM chunks ORDER BY text <@> to_bm25query($1, 'chunks_bm25') LIMIT $2
+  ```
+
+- **The forced re-score.** A step whose probe plan is not the index scan is scored a second time in the
+  same session under `SET enable_seqscan = off`, then `RESET enable_seqscan`, and both readings are
+  recorded with labels. That forces the index scan rather than disabling it: an index whose statistics
+  describe its rows can fall below the planner's crossover at fixture size, and a disabled index scan
+  would leave no `scan` score to read. In every run below the probe plan was the index scan at every
+  step, so no step was re-scored.
+- **The states.** `t0` a new table and empty index, the corpus inserted; `t1` `SELECT
+  bm25_spill_index('chunks_bm25')`; `t2` the PGlite data directory closed and reopened (PGlite only);
+  `t3` `REINDEX INDEX chunks_bm25`; `t4` a new table, the corpus inserted, then `CREATE INDEX
+  chunks_bm25 ON chunks USING bm25 (text) WITH (text_config='english')`. The index's own figures are
+  read with `SELECT bm25_summarize_index('chunks_bm25')`.
+
+The commands that re-run every figure here are in `docs/retrieval-eval.md` → `### The BM25 index-state
+probe`.
+
+### The score each index state ranks by
+
+**PGlite exposes `bm25_spill_index`.** `SELECT count(*) FROM pg_proc WHERE proname = 'bm25_spill_index'`
+found it on both engines, so `t1` was run on both. `t2` is a PGlite step and has no Postgres row.
+
+Columns: the index's `total_docs`, `total_len` and memtable documents; the probe's and the store's plan;
+hits; hits with `scan` ≠ `operator`; of those, the operator stored as a `real`, and the number differing
+beyond `real` storage; the largest `|scan − operator|` over all hits, from the raw values, with its query
+and key; and the differing-beyond-`real` hits split at 39 tokens.
+
+**PGlite, `fixture-catalog`.**
+
+| Step | total_docs | total_len | Memtable docs | Probe plan | Store plan | Hits | `scan` ≠ `operator` | `real` storage | Beyond `real` | Largest difference | ≤ 39 / > 39 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `t0` | 41 | 2393 | 41 | Index scan | Index scan | 219 | 144 | 1 | 143 | 0.1072685718536377 (`q-fc-barcode-contents`, `docs/labels.md#the-routing-barcode`) | 6 / 137 |
+| `t1` | 41 | 2393 | 0 | Index scan | Index scan | 219 | 17 | 3 | 14 | 6.556510925292969e-7 (`q-fc-route-choice`, `docs/routing.md`) | 5 / 9 |
+| `t2` | 41 | 2393 | 0 | Index scan | Index scan | 219 | 17 | 3 | 14 | 6.556510925292969e-7 (`q-fc-route-choice`, `docs/routing.md`) | 5 / 9 |
+| `t3` | 41 | 2393 | 0 | Index scan | Seq Scan | 219 | 17 | 3 | 14 | 6.556510925292969e-7 (`q-fc-route-choice`, `docs/routing.md`) | 5 / 9 |
+| `t4` | 41 | 2393 | 0 | Index scan | Seq Scan | 219 | 17 | 3 | 14 | 6.556510925292969e-7 (`q-fc-route-choice`, `docs/routing.md`) | 5 / 9 |
+
+**Postgres, `fixture-catalog`.**
+
+| Step | total_docs | total_len | Memtable docs | Probe plan | Store plan | Hits | `scan` ≠ `operator` | `real` storage | Beyond `real` | Largest difference | ≤ 39 / > 39 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `t0` | 41 | 2393 | 41 | Index scan | Index scan | 219 | 144 | 1 | 143 | 0.10726761817932129 (`q-fc-barcode-contents`, `docs/labels.md#the-routing-barcode`) | 5 / 138 |
+| `t1` | 41 | 2393 | 0 | Index scan | Index scan | 219 | 15 | 3 | 12 | 9.5367431640625e-7 (`q-fc-token-lifetime`, `docs/api-auth.md#rotating-a-key`) | 4 / 8 |
+| `t3` | 41 | 2393 | 0 | Index scan | Seq Scan | 219 | 15 | 3 | 12 | 9.5367431640625e-7 (`q-fc-token-lifetime`, `docs/api-auth.md#rotating-a-key`) | 4 / 8 |
+| `t4` | 41 | 2393 | 0 | Index scan | Seq Scan | 219 | 15 | 3 | 12 | 9.5367431640625e-7 (`q-fc-token-lifetime`, `docs/api-auth.md#rotating-a-key`) | 4 / 8 |
+
+On `fixture-catalog` the summed lengths equal `total_len` (2393 / 2393) on both engines, so the split is
+printed.
+
+**PGlite, `self-docs` at `{ files: 71, chunks: 813 }`.**
+
+| Step | total_docs | total_len | Memtable docs | Probe plan | Store plan | Hits | `scan` ≠ `operator` | `real` storage | Beyond `real` | Largest difference | ≤ 39 / > 39 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `t0` | 813 | 340498 | 7 | Index scan | Index scan | 9367 | 1103 | 278 | 825 | 0.05720013380050659 (`q-sd-run-gates`, `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template`) | withheld |
+| `t1` | 813 | 340498 | 0 | Index scan | Index scan | 9367 | 1046 | 278 | 768 | 0.0000015497207641601562 (`q-sd-guard-shell-options`, `docs/guard-verification.md#24-disclosed-residuals-re-confirmed`) | withheld |
+| `t2` | 813 | 340498 | 0 | Index scan | Index scan | 9367 | 1046 | 278 | 768 | 0.0000015497207641601562 (`q-sd-guard-shell-options`, `docs/guard-verification.md#24-disclosed-residuals-re-confirmed`) | withheld |
+| `t3` | 813 | 340498 | 0 | Index scan | Index scan | 9367 | 1047 | 277 | 770 | 0.0000019669532775878906 (`q-sd-usage-limit`, `docs/watcher.md#5-machine-level-usage-lane`) | withheld |
+| `t4` | 813 | 340498 | 0 | Index scan | Index scan | 9367 | 1047 | 277 | 770 | 0.0000019669532775878906 (`q-sd-usage-limit`, `docs/watcher.md#5-machine-level-usage-lane`) | withheld |
+
+**Postgres, `self-docs` at `{ files: 71, chunks: 813 }`.** Where the two runs disagree, the cell reads
+run 1 / run 2, and both are one-run values.
+
+| Step | total_docs | total_len | Memtable docs | Probe plan | Store plan | Hits | `scan` ≠ `operator` | `real` storage | Beyond `real` | Largest difference | ≤ 39 / > 39 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `t0` | 813 | 340498 | 7 | Index scan | Index scan | 9367 | 1156 / 1112 | 259 | 897 / 853 | 0.05719965696334839 (`q-sd-run-gates`, `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template`) | withheld |
+| `t1` | 813 | 340498 | 0 | Index scan | Index scan | 9367 | 1100 | 259 | 841 | 0.0000015497207641601562 (`q-sd-guard-shell-options`, `docs/guard-verification.md#24-disclosed-residuals-re-confirmed`) | withheld |
+| `t3` | 813 | 340498 | 0 | Index scan | Index scan | 9367 | 1099 | 258 | 841 | 0.0000019669532775878906 (`q-sd-usage-limit`, `docs/watcher.md#5-machine-level-usage-lane`) | withheld |
+| `t4` | 813 | 340498 | 0 | Index scan | Index scan | 9367 | 1099 | 258 | 841 | 0.0000019669532775878906 (`q-sd-usage-limit`, `docs/watcher.md#5-machine-level-usage-lane`) | withheld |
+
+On `self-docs` the split is withheld on both engines: the summed lengths are 336038 against a
+`total_len` of 340498, so the length statement's definition of a length is not the index's. The
+`self-docs` fresh-insert index is not all memtable: `bm25_summarize_index` reports 3 segments holding
+806 documents plus the 7 memtable documents at `t0`, 4 segments holding 813 at `t1` and `t2`, and 1
+segment holding 813 at `t3` and `t4`, on both engines. On `fixture-catalog` every state after `t0` is 1
+segment holding 41.
+
+**State against state.** Hits whose score differs between two states, in `scan` and in `operator`. No
+step was forced, so this is the default-plan reading.
+
+| States | `fixture-catalog`, PGlite | `fixture-catalog`, Postgres | `self-docs`, PGlite | `self-docs`, Postgres |
+|---|---|---|---|---|
+| `t0` / `t1` | 137 / 0 | 136 / 0 | 62 / 0 | 62 / 0 (run 2: 13 / 1) |
+| `t0` / `t2` | 137 / 0 | — | 62 / 0 | — |
+| `t0` / `t3` | 137 / 0 | 136 / 0 | 73 / 0 | 73 / 0 (run 2: 24 / 1) |
+| `t0` / `t4` | 137 / 0 | 136 / 0 | 73 / 0 | 73 / 0 (run 2: 24 / 1) |
+| `t1` / `t2` | 0 / 0 | — | 0 / 0 | — |
+| `t1` / `t3` | 0 / 0 | 0 / 0 | 12 / 0 | 12 / 0 |
+| `t1` / `t4` | 0 / 0 | 0 / 0 | 12 / 0 | 12 / 0 |
+| `t2` / `t3` | 0 / 0 | — | 12 / 0 | — |
+| `t2` / `t4` | 0 / 0 | — | 12 / 0 | — |
+| `t3` / `t4` | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
+
+**One-run values, handed to `### The stray index-scan score`.** Every figure above is reproduced by the
+second run of its pair except the Postgres `self-docs` `t0` cells marked run 1 / run 2. Those cells move
+because the comparison of that pair's captures listed 50 values at step `t0`, out of 74936 compared; the
+other three pairs listed none (`fixture-catalog` 2190 and 1752 values compared, PGlite `self-docs`
+93670). All 49 `scan` values are on `docs/work-report-research/user-review-fix-plan-writer.md` chunks, each
+differing from its `operator` in run 1; in run 2, 45 of them equal their `operator` at six decimals. The
+one `operator` value, on `q-sd-run-gates` / `docs/work-report-research/reviews/task-plan-reviewer.md#must-fix`,
+reads −6.070929 in run 2 while that row's own `operator_exact` reads −6.122591853141785 in both runs.
+
+| Query | Key | Column | Run 1 | Run 2 |
+|---|---|---|---|---|
+| `q-sd-run-gates` | `docs/work-report-research/reviews/task-plan-reviewer.md#must-fix` | `operator` | -6.122592 | -6.070929 |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -3.946979 | -3.963867 |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -1.808344 | -1.816325 |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.548666 | -0.551762 |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.514734 | -0.516774 |
+| `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -3.592312 | -3.605958 |
+| `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -1.714378 | -1.720218 |
+| `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -1.514701 | -1.539660 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.229171 | -2.247350 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -2.479785 | -2.489738 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.195607 | -2.211427 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.637454 | -0.640121 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.572122 | -0.575350 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -3.391469 | -3.407665 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.548666 | -0.551762 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.514734 | -0.516774 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.395543 | -0.398769 |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.548666 | -0.551762 |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -0.546421 | -0.549491 |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.514734 | -0.516774 |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.395543 | -0.398769 |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -5.350504 | -5.362087 |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -2.817965 | -2.829133 |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.505383 | -2.530333 |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -1.131494 | -1.150139 |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.077752 | -2.084812 |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.058120 | -2.065047 |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.961397 | -1.965644 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -3.679281 | -3.706814 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -1.820190 | -1.831818 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -0.645757 | -0.647155 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.559044 | -0.562198 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.524469 | -0.526548 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -0.497002 | -0.505191 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -1.051327 | -1.054908 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -1.011000 | -1.013481 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -0.977494 | -0.987626 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.967974 | -0.972025 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -0.948168 | -0.952543 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -0.893587 | -0.896173 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -5.182902 | -5.202586 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.790756 | -2.804495 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -2.692060 | -2.707249 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -2.102166 | -2.136805 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.234223 | -1.237324 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.524469 | -0.526548 |
+| `q-sd-negative-ingress` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.129522 | -2.144821 |
+| `q-sd-negative-tungsten` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.530190 | -1.536865 |
+| `q-sd-negative-grpc` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.077752 | -2.084812 |
+| `q-sd-negative-grpc` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.058120 | -2.065047 |
+
+**Goal 1, state by state.** In no state, on either engine or corpus, does `scan` equal `operator`, and in
+none does it differ only by `real` storage.
+
+- **`t0`, fresh insert.** `scan` differs from `operator` beyond `real` storage on 143 of 219
+  `fixture-catalog` hits on both engines, and on 825 (PGlite) and 897 / 853 (Postgres) of 9367
+  `self-docs` hits, the largest difference 0.1072685718536377 (PGlite) and 0.10726761817932129 (Postgres)
+  on `fixture-catalog` and 0.05720013380050659 and 0.05719965696334839 on `self-docs` (each table's `t0`
+  row). On `fixture-catalog`, 137 (PGlite) and 138 (Postgres) of the beyond-`real` hits are
+  longer than 39 tokens.
+- **`t1`, after `bm25_spill_index`.** `scan` differs beyond `real` storage on 14 (PGlite) and 12
+  (Postgres) `fixture-catalog` hits and on 768 and 841 `self-docs` hits, the largest difference at most
+  0.0000015497207641601562 (each table's `t1` row). `operator` is unchanged from `t0` on every hit (the
+  state-against-state table's `t0` / `t1` row, run 1).
+- **`t2`, PGlite reopen.** Identical to `t1` in every column and in every score (the PGlite tables' `t2`
+  rows; `t1` / `t2` reads 0 / 0 on both corpora).
+- **`t3`, after `REINDEX`.** `scan` differs beyond `real` storage on the same counts as `t1` on
+  `fixture-catalog`, and on 770 (PGlite) and 841 (Postgres) `self-docs` hits, the largest `self-docs`
+  difference 0.0000019669532775878906 (each table's `t3` row). On `fixture-catalog` the store's own `LIMIT 50`
+  statement no longer takes the index scan on either engine: its plan is a Seq Scan whose output column is
+  the operator expression, so the store ranks there by the operator, not by `scan`.
+- **`t4`, `CREATE INDEX` over loaded rows.** Identical to `t3` in every column and in every score, the
+  store's Seq Scan on `fixture-catalog` included (each table's `t4` row; `t3` / `t4` reads 0 / 0
+  everywhere).
+
+**Which build forms score alike in `scan`.** `REINDEX` and `CREATE INDEX` over loaded rows score alike on
+both engines and both corpora: `t3` / `t4` differs on no hit in any run. Fresh insert followed by
+`bm25_spill_index` matches them on `fixture-catalog` only; on `self-docs` it differs from both on 12 hits
+on each engine (`t1` / `t3`, `t1` / `t4`), with 4 segments against their 1. Fresh insert alone matches
+none of the other forms. The reference build form is therefore `CREATE INDEX` over loaded rows, or
+`REINDEX`, which scores the same.
+
+### The near-tie ordering on an empty database
+
+`### Divergence sources, in the order checked`, item 3, **What stays unexplained.**, records two near-tie
+pairs that the Python store's freshly built database returned against the operator's own order:
+
+- `q-fc-token-lifetime`: `docs/api-auth.md#rotating-a-key` / `#token-exchange`;
+- `q-fc-unreadable-label`: `docs/depot-operations.md#inbound-scanning` /
+  `docs/labels.md#when-a-label-is-rejected`.
+
+The lead is mechanism 2: the store ranks by `scan`, and the recorded scores are `operator`. Diagnostic (f)
+of each `fixture-catalog` run lists every adjacent returned pair whose second row has the lower
+`operator_exact`. Each row below is the pair in returned order, each member as `scan` / `operator` /
+`operator_exact`; both runs of each engine return the same values.
+
+| Query | Engine | State | Returned first | Returned second | Against `operator`'s order |
+|---|---|---|---|---|---|
+| `q-fc-token-lifetime` | PGlite, Postgres | `t0` | `#token-exchange` −8.281486 / −8.281486 / −8.281485974788666 | `#rotating-a-key` −8.264622 / −8.307983 / −8.3079833984375 | Yes |
+| `q-fc-token-lifetime` | PGlite | `t1`, `t2`, `t3`, `t4` | `#rotating-a-key` −8.307983 / −8.307983 / −8.3079833984375 | `#token-exchange` −8.281486 / −8.281486 / −8.281485974788666 | No |
+| `q-fc-token-lifetime` | Postgres | `t1`, `t3`, `t4` | `#rotating-a-key` −8.307984 / −8.307983 / −8.3079833984375 | `#token-exchange` −8.281486 / −8.281486 / −8.281485974788666 | No |
+| `q-fc-unreadable-label` | PGlite, Postgres | `t0` | `docs/labels.md#when-a-label-is-rejected` −5.514854 / −5.514854 / −5.5148544907569885 | `docs/depot-operations.md#inbound-scanning` −5.514000 / −5.534851 / −5.534850656986237 | Yes |
+| `q-fc-unreadable-label` | PGlite | `t1`, `t2`, `t3`, `t4` | `docs/depot-operations.md#inbound-scanning` −5.534851 / −5.534851 / −5.534850656986237 | `docs/labels.md#when-a-label-is-rejected` −5.514854 / −5.514854 / −5.5148544907569885 | No |
+| `q-fc-unreadable-label` | Postgres | `t1`, `t3`, `t4` | `docs/depot-operations.md#inbound-scanning` −5.534851 / −5.534851 / −5.534850656986237 | `docs/labels.md#when-a-label-is-rejected` −5.514854 / −5.514854 / −5.5148544907569885 | No |
+
+At `t0` diagnostic (f) finds 4 inversions against `operator` on each engine: these two pairs, and
+`docs/labels.md` then `docs/tracking.md#event-ordering-and-duplicates` on both `q-fc-verify-callback`
+and `q-fc-token-lifetime`. Diagnostic (g) finds no inversion against `scan` in any state, and (f) none
+against `operator` in any state after `t0`. The `operator` values equal item 3's recorded scores to six
+decimals.
+
+**Explained by mechanism 2, for the probe's states.** Both conditions hold on both engines: at `t0` each
+pair is returned in `scan`'s order and against `operator`'s, and in the spilled state, `t1` on both
+engines and `t2` on PGlite, neither pair inverts. Item 3's empty database was the Python store's own fresh
+build, which this probe did not drive; whether that build leaves the index in the `t0` state is observed
+at refresh level.

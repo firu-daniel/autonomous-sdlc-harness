@@ -556,6 +556,58 @@ runs from, which is why it runs from the repository root. The write-up lives in
 `docs/retrieval-eval-results.md` → `## The Python backend against the TypeScript one`, and is not
 restated here.
 
+### The BM25 index-state probe
+
+Run by a maintainer re-taking `docs/retrieval-eval-results.md` → `## The BM25 index's state, measured`.
+It reads BM25 scores and the index's own statistics, never time, so its figures are not wall-clock figures
+and may be taken in a session. Its `--engine postgres` runs need the compose `postgres` service up: from
+`docs-retrieval-service/`, run
+
+```
+docker compose up -d --wait postgres
+```
+
+A probe run that cannot reach it refuses with `is the compose postgres service up?`. Create
+`harness-runs/scratch/bm25-history.mjs`:
+
+```
+import { runBm25HistoryLauncher } from '../../evals/docs-retrieval/bm25-history.mjs';
+await runBm25HistoryLauncher(process.argv.slice(2));
+```
+
+The states sequence holds one corpus in each index state, on one engine per run; `--engine` is `pglite`
+or `postgres`, `--corpus` a built-in corpus id:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-history.mjs --sequence states --engine pglite --corpus fixture-catalog
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-history.mjs --sequence states --engine postgres --corpus fixture-catalog
+```
+
+The history sequence writes a second corpus, named by `--other`, and deletes it:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-history.mjs --sequence history --engine pglite --corpus fixture-catalog --other self-docs
+```
+
+`--repeat <n>` scores each step's queries `n` times and lists every value a later repetition changes:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-history.mjs --sequence states --engine postgres --corpus self-docs --repeat 5
+```
+
+`--capture <path>` also writes the summary with every score, which is what `--compare` reads. Captures go
+under `harness-runs/scratch/bm25-history/`, which is gitignored. Take each run twice and compare the
+pair; a value the comparison lists is recorded as a one-run value, never dropped:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-history.mjs --sequence states --engine pglite --corpus self-docs --capture harness-runs/scratch/bm25-history/pglite-self-docs-1.txt
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-history.mjs --sequence states --engine pglite --corpus self-docs --capture harness-runs/scratch/bm25-history/pglite-self-docs-2.txt
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-history.mjs --compare harness-runs/scratch/bm25-history/pglite-self-docs-1.txt --compare harness-runs/scratch/bm25-history/pglite-self-docs-2.txt
+```
+
+`--reindex-cost` times one `REINDEX` and is an operator's hand run on an otherwise idle machine, outside
+any session; the branch that measured the index states did not run it.
+
 ## The query-set format
 
 **This section is the only statement of the format.** `evals/docs-retrieval/queries/README.md` carries

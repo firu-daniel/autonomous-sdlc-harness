@@ -45,7 +45,7 @@ The tasks that edit a shared file run strictly in order, and each owns only its 
 Each entry resolves 1:1 to `harness-runs/task_plans/chore_docs_retrieval_bm25_scoring_diagnosis/task_<K>_plan.md`. The entries are in ship order, and every task is in the catch-all `general` layer.
 
 1. [x] **Task 1** — Extend the BM25 probe with an index-state sequence, per-hit diagnostics and a repeat mode _(layer: general)_ _(points: 20)_
-2. [ ] **Task 2** — Measure the four index states on both engines and record the score each state ranks by and the near-tie ordering _(layer: general)_ _(points: 15)_
+2. [x] **Task 2** — Measure the four index states on both engines and record the score each state ranks by and the near-tie ordering _(layer: general)_ _(points: 15)_
 3. [ ] **Task 3** — Re-take the history sequence and explain, or record as unexplained, what still differs after `REINDEX` _(layer: general)_ _(points: 10)_
 4. [ ] **Task 4** — Trace the index scan's stray score with repeated scoring in each index state _(layer: general)_ _(points: 10)_
 5. [ ] **Task 5** — Add the refresh-level module that measures the candidate end-state rule on both backends _(layer: general)_ _(points: 20)_
