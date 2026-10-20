@@ -28,3 +28,10 @@
   - a legacy worktree with a record is removed;
   - `--dry-run` removes nothing and names the same decisions.
 - `bash -n` under macOS `/bin/bash` (3.2) exits 0.
+
+- **Deviations from plan:**
+  - The "already gone" report applies to both arms, not only the clone arm: a legacy record naming a missing path would otherwise reach `hr_wrapper_target_check_var` and print a skip line for a directory that is not there. It is decided before the arm dispatch; the branch deletion still follows.
+  - A record whose `copy_kind` is neither `clone` nor absent is refused with the skip line (reason: `its record's copy_kind '<kind>' names no arm this sweep has`), failing closed rather than falling into the worktree arm.
+  - The `REPRO` block's `live copy` arm (a rewritten `.git/worktrees/<name>/HEAD`) is dropped: the sweep no longer reads `git worktree list`, so that tampering no longer reaches it. The legacy arm is the `feat_old` record written with `hr_registry_set` and no `copy_kind`.
+  - `--dry-run`'s clone arm reads its clone records from one extra enumeration `jq` (`<branch><TAB><worktree>` per `copy_kind` `clone` record), run only under `--dry-run`, beside the existing active-run enumeration; the per-branch `worktree` and `copy_kind` reads go through `hr_registry_peek`. Its stand-in `clone_would_remove_var` mirrors `hr_clone_remove_var`'s conditions in order, with the same `HR_CLONE_REFUSAL` text, so the dry-run and real skip lines are byte-identical (checked by hand: two records naming one clone).
+  - The existing suite `cli/test/cleanup-worktree-record.test.mjs` (C1–C4) builds worktrees with no registry record and expects discovery from `git worktree list`; it is expected to fail against this script until Task 10 re-aims it. Not run here: deferred to the Run gates phase, which runs `bash scripts/test.sh`.

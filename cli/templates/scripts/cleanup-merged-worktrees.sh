@@ -10,14 +10,22 @@
 # so it is the signal this sweep acts on, and it is the only one. For each such
 # branch it
 #
-#   1. removes the working copy checked out on it (`git worktree remove --force`;
-#      a failure is reported and the sweep continues, because a directory left
-#      behind is a smaller problem than a sweep that stops half-way through the
-#      set) — only when it is that branch's OWN copy (below), then
+#   1. removes the run copy its run-registry record names (`worktree`), by the
+#      record's `copy_kind`: a clone through `hr_clone_remove_var`, a record
+#      with no `copy_kind` — a legacy linked worktree — through `git worktree
+#      remove --force`; only when it is that branch's OWN copy (below). A
+#      failure is reported and the sweep continues, because a directory left
+#      behind is a smaller problem than a sweep that stops half-way through
+#      the set. No record, or no `worktree` in it, is no copy to remove; a
+#      `worktree` naming a path that no longer exists is reported as already
+#      gone. Then it
 #   2. force-deletes the local branch (`git branch -D`),
 #
 # and then runs `git worktree prune` to drop the administrative records of
-# working copies whose directories are already gone.
+# linked worktrees whose directories are already gone.
+#
+# THE COPY IS FOUND IN THE REGISTRY, NEVER IN `git worktree list`: a clone is
+# not listed there. Both layouts are swept until no worktree run is left.
 #
 # WHERE IT RUNS. In the MAIN checkout, always — that is where every working copy
 # and every branch of this repository is administered, and where the run registry
@@ -43,16 +51,25 @@
 #     one for an operator to clear it, and a paused one for a RESUME sentinel, and `worktree remove --force` would discard the pause
 #     note the resumed engine is pointed at.
 #
-# ONLY THE BRANCH'S OWN WORKING COPY IS REMOVED. Which directory `worktree list`
-# names for a branch comes from records a sandboxed run can write: a rewritten
-# `<main>/.git/worktrees/<name>/gitdir` names any directory, and a rewritten
-# record `HEAD` makes a live run's copy read as the gone branch's. So the copy is
-# removed only when it passes `hr_wrapper_target_check_var` against the main
-# checkout this script's own location gives (`hr_wrapper_main_of`), AND equals
-# `hr_worktree_dir "$main_repo" "$branch"` canonically. Otherwise one line —
-# `skip removing <dir> for '<branch>' — it is not that branch's working copy as
-# this repository derives it (<reason>)`, `[dry-run] would skip …` under
-# --dry-run — and the branch deletion still follows. A script that cannot be
+# ONLY THE BRANCH'S OWN WORKING COPY IS REMOVED, by either arm.
+#
+#   * A CLONE is removed only when `hr_clone_remove_var` accepts it: exactly one
+#     registry record has `copy_kind` `clone` and a `worktree` canonically that
+#     directory, and the directory is `hr_worktree_dir` for that record's
+#     branch. Its reason is `HR_CLONE_REFUSAL`.
+#   * A LEGACY WORKTREE's directory is backed by records a sandboxed run can
+#     write: a rewritten `<main>/.git/worktrees/<name>/gitdir` names any
+#     directory, and a rewritten record `HEAD` makes a live run's copy read as
+#     the gone branch's. So it is removed only when it passes
+#     `hr_wrapper_target_check_var` against the main checkout this script's own
+#     location gives (`hr_wrapper_main_of`), AND equals `hr_worktree_dir
+#     "$main_repo" "$branch"` canonically.
+#   * Any other `copy_kind` is refused: it names no arm this sweep has.
+#
+# A refusal is one line — `skip removing <dir> for '<branch>' — it is not that
+# branch's working copy as this repository derives it (<reason>)`,
+# `[dry-run] would skip …` under --dry-run — and the branch deletion still
+# follows. A script that cannot be
 # placed in a main checkout, or whose placement differs from `worktree list`'s,
 # removes nothing: one line, exit 0. The inherited `GIT_*` environment is dropped
 # before the first git call (`hr_git_env_drop`).
@@ -62,9 +79,12 @@
 # strict merge-then-delete-remote flow this is a non-issue. Use --dry-run to
 # preview.
 #
-# `--dry-run` IS THE PREVIEW, AND IT DELETES NOTHING. It reports the branch (and
-# the working copy) each decision would remove; no branch is deleted, no working
-# copy removed, and it does not even `worktree prune`. It is NOT read-only: the
+# `--dry-run` IS THE PREVIEW, AND IT DELETES NOTHING. It runs the same decision
+# for both arms and reports the branch (and the copy) each would remove, or the
+# skip line each would print; no branch is deleted, no copy removed, and it does
+# not even `worktree prune`. The clone arm's would-decision applies
+# `hr_clone_remove_var`'s refusal conditions — the registry match and the
+# derived path — without calling it. It is NOT read-only: the
 # `fetch --prune` that establishes which upstreams are gone runs first either
 # way, so remote-tracking refs for deleted upstreams are removed and FETCH_HEAD
 # is written. Preview the decisions, not the repository's ref state.
@@ -117,7 +137,8 @@
 #      nothing was deleted; in particular a misspelled `--dry-run` is refused
 #      here rather than silently becoming a real sweep
 #
-# REPRO — reproduce any decision by hand, against a throwaway fixture:
+# REPRO — reproduce any decision by hand, against a throwaway fixture. The
+# clone is made by `hr_clone_create_var`, which records it in the registry:
 #
 #   w=$(mktemp -d); b="$w/origin.git"; git init -q --bare "$b"
 #   d="$w/demo"; git init -q -b trunk "$d"; git -C "$d" remote add origin "$b"
@@ -125,32 +146,36 @@
 #   mkdir -p "$d/scripts/lib"   # copy this script + lib/ there
 #   git -C "$d" add -A && git -C "$d" commit -qm seed
 #   git -C "$d" push -q -u origin trunk
-#   for r in feat_gone feat_live release/1.0; do git -C "$d" branch "$r"; \
+#   for r in feat_gone feat_old feat_live release/1.0; do git -C "$d" branch "$r"; \
 #     git -C "$d" push -q -u origin "$r"; done
-#   git -C "$d" worktree add -q "$w/demo-feat_gone" feat_gone
-#   git -C "$b" branch -q -D feat_gone; git -C "$b" branch -q -D release/1.0
+#   mkdir -p "$d/sdlc-harness/autonomous_logs"
+#   bash -c '. "$1/scripts/lib/harness-run-lib.sh"
+#     hr_clone_create_var "$1" feat_gone trunk || echo "$HR_CLONE_REFUSAL"' _ "$d"
+#   bash -c '. "$1/scripts/lib/harness-run-lib.sh"; r=$(hr_state_path "$1" \
+#     autonomous_logs/registry.json); p=$(hr_worktree_dir "$1" feat_old)
+#     git -C "$1" worktree add -q "$p" feat_old
+#     hr_registry_set "$r" feat_old worktree "$p"' _ "$d"   # legacy: no copy_kind
+#   for r in feat_gone feat_old release/1.0; do git -C "$b" branch -q -D "$r"; done
 #
 #   preview       bash "$d/scripts/cleanup-merged-worktrees.sh" --dry-run
-#                 -> names feat_gone and its working copy; `git -C "$d" branch`
-#                    is unchanged and "$w/demo-feat_gone" is still there
+#                 -> `would delete branch … and remove clone "$w/demo-feat_gone"`
+#                    and `… and remove worktree "$w/demo-feat_old"`; `git -C
+#                    "$d" branch` is unchanged and both copies are still there
 #   sweep         bash "$d/scripts/cleanup-merged-worktrees.sh"
-#                 -> "$w/demo-feat_gone" removed and feat_gone deleted;
+#                 -> the clone "$w/demo-feat_gone" and the legacy worktree
+#                    "$w/demo-feat_old" removed, feat_gone and feat_old deleted;
 #                    feat_live untouched (its upstream is not gone) and
 #                    release/1.0 untouched (protected, though it IS gone)
-#   active run    mkdir -p "$d/sdlc-harness/autonomous_logs"
-#                 printf '%s' '{"runs":{"feat_gone":{"status":"running"}}}' \
-#                   > "$d/sdlc-harness/autonomous_logs/registry.json"
-#                 -> the skip line for feat_gone; nothing deleted (same with
-#                    "parked", "park_loop" and "paused")
+#   active run    before the sweep, set feat_gone's status:
+#                 bash -c '. "$1/scripts/lib/harness-run-lib.sh"
+#                   hr_registry_set "$(hr_state_path "$1" \
+#                   autonomous_logs/registry.json)" feat_gone status running' _ "$d"
+#                 -> the skip line for feat_gone; its clone and branch are
+#                    untouched (same with "parked", "park_loop" and "paused")
 #   unresolvable  printf 'x' > "$d/harness.config.json"
 #                 -> one line, exit 0, nothing deleted
 #   offline       git -C "$d" remote set-url origin /nonexistent.git
 #                 -> the fetch message, exit 0, nothing deleted
-#   live copy     git -C "$d" worktree add -q "$w/demo-feat_live" feat_live
-#                 printf 'ref: refs/heads/feat_gone\n' \
-#                   > "$d/.git/worktrees/demo-feat_live/HEAD"
-#                 -> the skip line for "$w/demo-feat_live" (not the derived
-#                    path); that copy is still there
 
 set -uo pipefail
 
@@ -196,8 +221,9 @@ fi
 
 # The sweep administers working copies and branches, so it runs in the MAIN
 # checkout. Unlike its siblings this one does NOT fall back to the checkout it
-# was started from: if the main-checkout probe does not answer, the working-copy
-# enumeration below cannot be trusted either, and the closed outcome is to stop.
+# was started from: if the main-checkout probe does not answer, the registry and
+# branch enumeration below cannot be trusted either, and the closed outcome is
+# to stop.
 main_repo="$(hr_main_repo "$top")" || main_repo=""
 if [ -z "$main_repo" ]; then
   echo "cleanup-merged-worktrees.sh: could not determine the main checkout of '$top' — refusing to delete anything"
@@ -244,6 +270,19 @@ if [ -e "$registry" ]; then
   # the refusal below fires — which is the point: reading such a file as "no
   # active runs" would delete a branch a run is still working on.
   if ! active="$(jq -r '.runs | to_entries[] | select(.value.status == "running" or .value.status == "parked" or .value.status == "park_loop" or .value.status == "paused") | .key' "$registry" 2>/dev/null)"; then
+    echo "cleanup-merged-worktrees.sh: '$registry' could not be read as a run registry — refusing to delete anything"
+    exit 0
+  fi
+fi
+
+# --dry-run's clone arm counts the clone records naming a directory, as
+# `hr_clone_remove_var` does, from this one enumeration: `<branch><TAB><worktree>`
+# per record with `copy_kind` `clone`, both `@tsv`-escaped.
+clones=""
+if [ "$dry_run" -eq 1 ] && [ -e "$registry" ]; then
+  if ! clones="$(jq -r '.runs | to_entries[]
+      | select((.value | type) == "object" and .value.copy_kind == "clone" and (.value.worktree | type) == "string")
+      | [.key, .value.worktree] | @tsv' "$registry" 2>/dev/null)"; then
     echo "cleanup-merged-worktrees.sh: '$registry' could not be read as a run registry — refusing to delete anything"
     exit 0
   fi
@@ -370,27 +409,6 @@ fi
 
 current_branch="$(hr_current_branch "$main_repo")"
 
-# The working copy checked out on <branch>, from the porcelain listing. Parsed
-# line-wise rather than by whitespace fields, because a working copy's path may
-# contain spaces. Prints nothing when there is none.
-worktree_for_branch() {
-  local branch="${1-}" list line current=""
-  [ -n "$branch" ] || return 0
-  list="$(git -C "$main_repo" worktree list --porcelain 2>/dev/null)" || return 0
-  while IFS= read -r line; do
-    case "$line" in
-      "worktree "*) current="${line#worktree }" ;;
-      "branch refs/heads/$branch")
-        printf '%s\n' "$current"
-        return 0
-        ;;
-    esac
-  done <<EOF
-$list
-EOF
-  return 0
-}
-
 # Return 0 when <dir> is <branch>'s own working copy: a worktree the main
 # checkout lists by its own records, at the path this repository derives for
 # <branch>. Return 1 otherwise, with `guard_reason` set. Call it directly.
@@ -412,6 +430,66 @@ own_worktree_check() {
     return 1
   fi
   return 0
+}
+
+# --dry-run's stand-in for `hr_clone_remove_var "$main_repo" <dir>`: the same
+# refusal conditions, in the same order and with the same `HR_CLONE_REFUSAL`
+# text, removing nothing. Return 0 when that call would remove <dir>. Call it
+# directly.
+clone_would_remove_var() {
+  local dir="${1-}" why main cdir line w wc b branch="" count=0 want
+  HR_CLONE_REFUSAL=""
+  while :; do
+    case "$dir" in
+      ?*/) dir=${dir%/} ;;
+      *) break ;;
+    esac
+  done
+  why="cannot remove the clone '$dir'"
+  if ! main=$(hr_copy_sync_main_of "$main_repo"); then
+    HR_CLONE_REFUSAL="$why: '$main_repo' is not a main checkout"
+    return 1
+  fi
+  if [ -z "$dir" ] || [ -L "$dir" ] || [ -L "$dir/.git" ] || [ ! -d "$dir/.git" ]; then
+    HR_CLONE_REFUSAL="$why: it or its .git is a symbolic link, or its .git is not a directory"
+    return 1
+  fi
+  if ! cdir=$( CDPATH= cd -P -- "$dir" 2>/dev/null && pwd -P ) || [ "$cdir" = "$main" ]; then
+    HR_CLONE_REFUSAL="$why: it is not a directory, or it is the main checkout $main"
+    return 1
+  fi
+  while IFS= read -r line; do
+    case "$line" in *"$tab"*) ;; *) continue ;; esac
+    hr_tsv_unescape_var "${line#*"$tab"}"
+    w=$HR_CFG_VALUE
+    wc=$(hr_canonical_path_nogit "$w") || continue
+    [ "$wc" = "$cdir" ] || continue
+    hr_tsv_unescape_var "${line%%"$tab"*}"
+    b=$HR_CFG_VALUE
+    count=$((count + 1))
+    branch=$b
+  done <<EOF
+$clones
+EOF
+  if [ "$count" -ne 1 ]; then
+    HR_CLONE_REFUSAL="$why: $count run registry records name a clone at $cdir, not exactly one"
+    return 1
+  fi
+  if ! want=$(hr_worktree_dir "$main" "$branch") || ! want=$(hr_canonical_path_nogit "$want") || [ "$want" != "$cdir" ]; then
+    HR_CLONE_REFUSAL="$why: it is not the path hr_worktree_dir derives from $main for the branch '$branch' its record names"
+    return 1
+  fi
+  return 0
+}
+
+# Print one skip line for <dir> and <branch> with <reason>, in this run's mode.
+say_skip() {
+  local line="skip removing ${1-} for '${2-}' — it is not that branch's working copy as this repository derives it (${3-})"
+  if [ "$dry_run" -eq 1 ]; then
+    echo "cleanup-merged-worktrees.sh: [dry-run] would $line"
+  else
+    echo "cleanup-merged-worktrees.sh: $line"
+  fi
 }
 
 # One record per local branch as `<name><TAB><upstream track>`; the tab keeps the
@@ -458,27 +536,63 @@ while IFS= read -r record; do
       ;;
   esac
 
-  wt="$(worktree_for_branch "$branch")"
-  if [ -n "$wt" ] && ! own_worktree_check "$branch" "$wt"; then
-    skip_line="skip removing $wt for '$branch' — it is not that branch's working copy as this repository derives it ($guard_reason)"
-    if [ "$dry_run" -eq 1 ]; then
-      echo "cleanup-merged-worktrees.sh: [dry-run] would $skip_line"
-    else
-      echo "cleanup-merged-worktrees.sh: $skip_line"
+  # The run copy, from the branch's registry record. A present-but-unreadable
+  # registry was refused above, so a peek's 1 here means no record.
+  wt="$(hr_registry_peek "$registry" "$branch" worktree)" || wt=""
+  kind=""
+  if [ -n "$wt" ]; then
+    kind="$(hr_registry_peek "$registry" "$branch" copy_kind)" || kind=""
+    if [ ! -e "$wt" ] && [ ! -L "$wt" ]; then
+      if [ "$dry_run" -eq 1 ]; then
+        echo "cleanup-merged-worktrees.sh: [dry-run] $wt for '$branch' is already gone"
+      else
+        echo "cleanup-merged-worktrees.sh: $wt for '$branch' is already gone"
+      fi
+      wt=""
     fi
-    wt=""
+  fi
+  if [ -n "$wt" ]; then
+    case "$kind" in
+      clone)
+        # The real sweep lets `hr_clone_remove_var` decide at removal time.
+        if [ "$dry_run" -eq 1 ] && ! clone_would_remove_var "$wt"; then
+          say_skip "$wt" "$branch" "$HR_CLONE_REFUSAL"
+          wt=""
+        fi
+        ;;
+      '')
+        if ! own_worktree_check "$branch" "$wt"; then
+          say_skip "$wt" "$branch" "$guard_reason"
+          wt=""
+        fi
+        ;;
+      *)
+        say_skip "$wt" "$branch" "its record's copy_kind '$kind' names no arm this sweep has"
+        wt=""
+        ;;
+    esac
   fi
 
   if [ "$dry_run" -eq 1 ]; then
     if [ -n "$wt" ]; then
-      echo "cleanup-merged-worktrees.sh: [dry-run] would delete branch '$branch' and remove worktree $wt"
+      if [ "$kind" = clone ]; then
+        echo "cleanup-merged-worktrees.sh: [dry-run] would delete branch '$branch' and remove clone $wt"
+      else
+        echo "cleanup-merged-worktrees.sh: [dry-run] would delete branch '$branch' and remove worktree $wt"
+      fi
     else
       echo "cleanup-merged-worktrees.sh: [dry-run] would delete branch '$branch'"
     fi
     continue
   fi
 
-  if [ -n "$wt" ] && [ "$wt" != "$main_repo" ]; then
+  if [ -n "$wt" ] && [ "$kind" = clone ]; then
+    if hr_clone_remove_var "$main_repo" "$wt"; then
+      echo "cleanup-merged-worktrees.sh: removed clone $wt"
+    else
+      say_skip "$wt" "$branch" "$HR_CLONE_REFUSAL"
+    fi
+  elif [ -n "$wt" ] && [ "$wt" != "$main_repo" ]; then
     # git's own message is captured and reported rather than printed raw, so a
     # failure names the directory a person now has to remove by hand.
     if err="$(git -C "$main_repo" worktree remove --force "$wt" 2>&1 >/dev/null)"; then
