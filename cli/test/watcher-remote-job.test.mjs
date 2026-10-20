@@ -6,7 +6,13 @@
  * every run it launched through `remote_status.json`, and carries across a job boundary only what
  * the bundle contract says it carries.** Every case points `XDG_STATE_HOME` at an empty directory
  * inside the fixture and passes `USAGE_LANE_STATE_ENABLED=1`, so a lane write that job mode failed
- * to force off would land there and be seen.
+ * to force off would land there and be seen. The same directory holds the per-run profile off: a
+ * job-mode render would land under it (`hr_run_profile_file`), so `assertLaneUntouched` asserts both.
+ *
+ * **Job mode launches only on a base profile its launch check passes:** a sandbox switched off with
+ * no opt-out marker launches nothing and ends `failed`, and the opt-out shape `applySandbox` writes
+ * launches. RED ONCE: the refusal case was confirmed red once with `run_profile_check`'s sandbox
+ * clause skipped in a fixture copy of the watcher, never by editing the tracked template.
  *
  * **A usage-paused run never leaves the job waiting on nothing:** it ends with a usable
  * `usage_resume_at` in the bundle, repaired to the gate's one-hour fallback when the value was
@@ -53,6 +59,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 
 import { MAIN_REPO_ANCHOR_VARIABLE } from '../dist/core/mainRepoAnchor.js';
+import { SANDBOX_OPT_OUT_MARKER } from '../dist/generators/sandboxProfile.js';
 import { INIT_SCRIPTS_DIR, runBash, runGit } from './helpers/fixture.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
@@ -274,6 +281,8 @@ test('none: the launch line, the start and stop records, and the parked detail',
 
     const argv = j.argv();
     const after = (flag) => argv[argv.indexOf(flag) + 1];
+    // The base profile, not a per-run copy: the machine lane is off in job mode, and the job's copy
+    // is the main checkout with no other linked worktree, so a copy would equal the base.
     assert.equal(after('--settings'), join(j.dir, '.claude', 'settings.autonomous.json'));
     assert.ok(argv.includes('--permission-mode'), argv.join(' '));
     assert.equal(after('--permission-mode'), 'dontAsk', argv.join(' '));
@@ -345,6 +354,50 @@ test("add-dir: job mode appends the profile's additionalDirectories after the tw
     const result = await j.job([j.branch, 'task', 'none']);
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
     assert.deepEqual(addDirs(), [j.dir, join(j.dir, STATE_DIR)]);
+  });
+});
+
+test('launch check: a base profile with the sandbox off and no opt-out marker launches nothing and ends failed', async (t) => {
+  /** The fixture's base profile, rewritten by <edit> on its parsed JSON. */
+  const editProfile = async (j, edit) => {
+    const profilePath = join(j.dir, '.claude', 'settings.autonomous.json');
+    const profile = JSON.parse(readFileSync(profilePath, 'utf8'));
+    edit(profile);
+    await writeFile(profilePath, `${JSON.stringify(profile, null, 2)}\n`, 'utf8');
+    return profilePath;
+  };
+
+  await t.test('sandbox.enabled false, no marker: refused', async (t) => {
+    const j = await createJobFixture(t);
+    if (j === null) return;
+    await editProfile(j, (profile) => {
+      profile.sandbox.enabled = false;
+      assert.ok(!(profile._README ?? []).some((line) => String(line).startsWith(SANDBOX_OPT_OUT_MARKER)));
+    });
+    const result = await j.job([j.branch, 'task', 'none']);
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(j.argv(), null, 'the stub was launched');
+    assert.equal(j.status().status, 'failed');
+    assert.ok(result.stdout.includes(`not launching '${j.branch}'`), result.stdout);
+    j.assertLaneUntouched();
+  });
+
+  // The perturbation: the opt-out shape launches, so the refusal above is the check's, not the fixture's.
+  await t.test("the opt-out shape applySandbox writes, with its marker: launched on the base profile", async (t) => {
+    const j = await createJobFixture(t);
+    if (j === null) return;
+    const profilePath = await editProfile(j, (profile) => {
+      profile.sandbox.enabled = false;
+      profile.sandbox.failIfUnavailable = false;
+      profile._README = [...(profile._README ?? []), `${SANDBOX_OPT_OUT_MARKER}: fixture opt-out.`];
+    });
+    const result = await j.job([j.branch, 'task', 'none']);
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    const argv = j.argv();
+    assert.notEqual(argv, null, `the stub was not launched\n${result.stdout}`);
+    assert.equal(argv[argv.indexOf('--settings') + 1], profilePath);
+    assert.equal(j.status().status, 'completed');
+    j.assertLaneUntouched();
   });
 });
 
