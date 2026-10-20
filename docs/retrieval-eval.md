@@ -608,11 +608,12 @@ bash scripts/scratch-run.sh harness-runs/scratch/bm25-history.mjs --compare harn
 `--reindex-cost` times one `REINDEX` and is an operator's hand run on an otherwise idle machine, outside
 any session; the branch that measured the index states did not run it.
 
-The refresh-level launcher re-takes `### The candidate end-state rule, at refresh level`: it drives each
-backend's own refresh through six scenarios, issues the statement the candidate end-state rule decides
-after the last refresh, and compares the reading before and after it with fresh builds of the final
-corpus taken in the same run. `--backend` is `typescript` or `python`, `--corpus` the final corpus A and
-`--other` the corpus B a scenario holds first. Create `harness-runs/scratch/bm25-refresh-rule.mjs`:
+The refresh-level launcher re-takes `docs/retrieval-eval-results.md` →
+`### The candidate end-state rule, at refresh level`: it drives each backend's own refresh through six
+scenarios, issues the statement the candidate end-state rule decides after the last refresh, and compares
+the reading before and after it with fresh builds of the final corpus taken in the same run. `--backend`
+is `typescript` or `python`, `--corpus` the final corpus A and `--other` the corpus B a scenario holds
+first. Create `harness-runs/scratch/bm25-refresh-rule.mjs`:
 
 ```
 import { runRefreshRuleLauncher } from '../../evals/docs-retrieval/bm25-refresh-rule.mjs';
