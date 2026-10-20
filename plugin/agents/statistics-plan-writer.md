@@ -16,7 +16,7 @@ The tokens below resolve from the adopting repository's `harness.config.json`, e
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file sits under. Default `sdlc-harness/`; no path segment of it begins with a dot. |
-| `<repo_root>` | derived at runtime | The absolute root of the checkout this run executes in — in an autonomous run, its **own worktree**, not the main checkout. Every `<state_dir>/…` path in this file is written repo-relative and resolves against it. Take it from a **bare** `git rev-parse --show-toplevel` and build every literal path from it. Never nest the `$(…)` in another command, or carry it across Bash calls in a shell variable. |
+| `<repo_root>` | derived at runtime | The absolute root of the checkout this run executes in — in an autonomous run, its **run copy**, not the main checkout. Every `<state_dir>/…` path in this file is written repo-relative and resolves against it. Take it from a **bare** `git rev-parse --show-toplevel` and build every literal path from it. Never nest the `$(…)` in another command, or carry it across Bash calls in a shell variable. |
 | `<layer_names>` | config value | `layers[].name`. **No substitution of the names themselves.** They are the permitted values of the `_(layer: …)_` tag the story-index entries you count carry; you read those entries, you never write one. |
 | `<default_branch>` | config value | `defaultBranch` — the base of the `<default_branch>..HEAD` commit range step 1's dispositioned-unit clause reads. Resolve it to its config value **before** issuing that command, so the string reaching the tool layer carries none of `$(`, a backtick, `\|`, `>` or `<`. |
 
