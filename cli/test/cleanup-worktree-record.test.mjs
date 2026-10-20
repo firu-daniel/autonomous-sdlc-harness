@@ -1,29 +1,33 @@
 /**
- * `cleanup-merged-worktrees.sh`'s removal guard, driven against the `init`-written script.
+ * `cleanup-merged-worktrees.sh`'s legacy worktree arm, driven against the `init`-written script.
  *
- * **The rule these tests exist to enforce: the sweep removes a directory only when it is the gone
- * branch's own derived working copy and a worktree the main repository lists.** A run's sandboxed
- * session can write its record under `<main>/.git/worktrees/<name>`, so `worktree list` can name a
- * directory that is neither: a rewritten `gitdir` points the record anywhere, and a rewritten `HEAD`
- * makes a live copy read as the gone branch's. A skipped copy still leaves the branch deletion to
- * run as before.
+ * **The rule these tests exist to enforce: the legacy arm removes a directory only when it is the
+ * gone branch's own derived working copy and a worktree the main repository lists.** The sweep's
+ * candidates come from the run registry: each case gives `feat_gone` a record with no `copy_kind`
+ * whose `worktree` names the victim, so the sweep reaches the legacy arm's check. The record tampering
+ * is that arm's: a run's sandboxed session can write its record under `<main>/.git/worktrees/<name>`,
+ * so a rewritten `gitdir` points the record anywhere, and a rewritten `HEAD` makes a live copy read as
+ * the gone branch's. A skipped copy still leaves the branch deletion to run as before. Clones, and
+ * the sweep's reading of the registry, are `cli/test/cleanup-run-copies.test.mjs`'s.
  *
  * Each case runs `init` in a fixture with a bare origin, commits, pushes `feat_gone` (and, where
  * used, `feat_live`) with an upstream, and deletes `feat_gone` on origin so the sweep's
- * `fetch --prune` marks it `[gone]`. Derived paths come from the library's own `hr_worktree_dir`.
+ * `fetch --prune` marks it `[gone]`. Derived paths and the registry path come from the library's own
+ * `hr_worktree_dir` and `hr_state_path`.
  *
  * The C2 and C3 victims carry a `.git` that is a symbolic link to a gitfile pointing back at the
  * rewritten record. Git's own `worktree remove` refuses a directory whose `.git` does not point
  * back at the record (git 2.50.1: `validation failed`), so a plain victim would leave the C2 and C3
  * mutations green; git follows the link, while `hr_wrapper_target_check_var` refuses it.
  *
- * RED ONCE — each mutation applied once to `cli/templates/scripts/cleanup-merged-worktrees.sh`'s
- * `own_worktree_check`, the file run, the failure observed, the mutation reverted:
- * - (C1) `return 1` at its top, skipping every copy → fails `the gone branch's own copy was not removed`.
- * - (C2) the target check and the derived-path equality both dropped → fails `the outside victim's
- *   sentinel was deleted`.
- * - (C3) the target check alone dropped → fails `the victim at the derived path was deleted`.
- * - (C4) the derived-path equality alone dropped → fails `the live copy was deleted`.
+ * RED ONCE — each mutation applied once to `own_worktree_check` in the fixture's `init`-written copy
+ * of the sweep, through a scratch copy of this file, never to the template; the failure observed:
+ * - `return 1` at its top, skipping every copy → (C1) fails `the gone branch's own copy was not removed`.
+ * - the target check alone dropped → (C2) fails `the target check did not refuse` and (C3) fails
+ *   `the victim at the derived path was deleted`; (C4) stays green, its live copy refused by the
+ *   derived-path equality.
+ * - the derived-path equality alone dropped → (C4) fails `the live copy was deleted`.
+ * - both dropped → (C2) fails `the outside victim's sentinel was deleted`, and (C3) and (C4) fail.
  */
 
 import assert from 'node:assert/strict';
@@ -73,6 +77,10 @@ async function sweepFixture(t, branches) {
     t.after(() => rm(path, { recursive: true, force: true }));
     return path;
   };
+  const registry = (
+    await runBash(d, ['-c', '. "$1"; r=$(hr_state_path "$2" autonomous_logs/registry.json) && mkdir -p "${r%/*}" && echo "$r"', '_', lib, d])
+  ).stdout.trim();
+  assert.ok(registry, 'hr_state_path gave no registry path');
   const scratch = realpathSync(await mkdtemp(join(tmpdir(), 'cleanup-record-')));
   t.after(() => rm(scratch, { recursive: true, force: true }));
 
@@ -80,6 +88,11 @@ async function sweepFixture(t, branches) {
     d,
     scratch,
     derived,
+    /** Record `dir` as `feat_gone`'s run copy, with no `copy_kind`: the legacy arm's record. */
+    recordGone: async (dir) => {
+      const r = await runBash(d, ['-c', '. "$1"; hr_registry_set "$2" "$3" worktree "$4" status completed', '_', lib, registry, GONE, dir]);
+      assert.equal(r.status, 0, `hr_registry_set failed: ${r.stderr}`);
+    },
     /** Add `branch`'s copy at its derived path; return the path and its record directory. */
     addCopy: async (branch) => {
       const path = await derived(branch);
@@ -110,6 +123,7 @@ const skipLine = (dir) => `skip removing ${dir} for '${GONE}' — it is not that
 test('(C1) honest: the gone branch\'s own copy is removed and its branch deleted', async (t) => {
   const f = await sweepFixture(t, [GONE]);
   const { path } = await f.addCopy(GONE);
+  await f.recordGone(path);
 
   const r = await f.sweep();
   assert.equal(r.status, 0, output(r));
@@ -122,6 +136,7 @@ test('(C2) a rewritten record gitdir naming a directory outside the fixture remo
   const { record } = await f.addCopy(GONE);
   const victim = join(f.scratch, 'victim');
   await plantVictim(f, victim, record);
+  await f.recordGone(victim);
 
   const r = await f.sweep();
   assert.equal(r.status, 0, output(r));
@@ -140,6 +155,7 @@ test('(C3) a victim at the derived path is refused by the target check alone', a
   const { path, record } = await f.addCopy(GONE);
   await rename(path, join(f.scratch, 'moved-copy'));
   await plantVictim(f, path, record);
+  await f.recordGone(path);
 
   // The fixture reaches the target check: `worktree list` names the derived path for the record.
   const list = (await runGit(f.d, ['worktree', 'list', '--porcelain'])).stdout;
@@ -156,6 +172,7 @@ test('(C4) a live copy whose record HEAD names the gone branch survives', async 
   const { path, record } = await f.addCopy(LIVE);
   await writeFile(join(path, 'work-in-progress'), 'live\n', 'utf8');
   await writeFile(join(record, 'HEAD'), `ref: refs/heads/${GONE}\n`, 'utf8');
+  await f.recordGone(path);
 
   const r = await f.sweep();
   assert.equal(r.status, 0, output(r));

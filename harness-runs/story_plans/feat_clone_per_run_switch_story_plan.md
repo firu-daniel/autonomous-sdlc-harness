@@ -84,7 +84,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_clone_per_run_switch/ta
 7. [x] **Task 7** — Make `create-worktree.sh` create a clone in all three modes, bootstrap it through the main checkout's `setup-worktree.sh --target`, and roll back everything it created on failure _(layer: cli)_ _(points: 20)_
 8. [x] **Task 8** — Move `create-worktree.test.mjs` to the clone layout, and the upstream case in `push-branch-worktree-config.test.mjs` with it _(layer: cli)_ _(points: 15)_
 9. [x] **Task 9** — Make `cleanup-merged-worktrees.sh` find run copies from the registry and remove a clone through the library, with `--dry-run` deciding by the same rule _(layer: cli)_ _(points: 15)_
-10. [ ] **Task 10** — Prove the registry-driven sweep for clones and legacy worktrees, and re-aim `cleanup-worktree-record.test.mjs` at it _(layer: cli)_ _(points: 15)_
+10. [x] **Task 10** — Prove the registry-driven sweep for clones and legacy worktrees, and re-aim `cleanup-worktree-record.test.mjs` at it _(layer: cli)_ _(points: 15)_
 11. [ ] **Task 11** — Make `remote-run.sh start` and `review` cut and remove clones through the library, and drop the registry record each created _(layer: cli)_ _(points: 15)_
 12. [ ] **Task 12** — Move `remote-start.test.mjs` and `remote-review-payloads.test.mjs` to the clone layout _(layer: cli)_ _(points: 15)_
 13. [ ] **Task 27** — Move `remote-run.test.mjs`'s `review` cases to the clone layout _(layer: cli)_ _(points: 10)_
