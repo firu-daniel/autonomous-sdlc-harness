@@ -251,6 +251,12 @@
 #     check refuse a branch that changes a protected path against origin's
 #     default-branch commit. The artifact commit is plumbing that commits one
 #     path, and the landed test reads the main checkout's refs.
+#   * THE EXIT SYNC — at every run exit, a clone's branch is brought into the
+#     main checkout by `hr_run_copy_check_var` (its sync-in: a fetch into the
+#     main repository and a compare-and-swap of `refs/heads/<branch>`), so the
+#     main checkout's branch shows what the run committed; a refusal, an
+#     unplaced RUN_MAIN included, is one log line and never changes how the
+#     run's exit is classified.
 #   * A FRESH COPY create-worktree.sh has just cut is a trusted tree: it is cut
 #     from the commit origin reported, and no session has run there; only the
 #     commit call changed. Its command lines, and `--existing`'s, are unchanged.
@@ -2715,9 +2721,12 @@ classify_run_exit() {
   # Sync a clone's branch into the main checkout, so the main checkout's branch
   # shows what the run committed. A refusal is one log line and never changes
   # the classification below.
-  if [ "$(registry_get "$branch" copy_kind)" = "clone" ] && [ -n "$RUN_MAIN" ]; then
-    hr_run_copy_check_var "$RUN_MAIN" "$worktree" >>"$log_path" 2>&1 ||
+  if [ "$(registry_get "$branch" copy_kind)" = "clone" ]; then
+    if [ -z "$RUN_MAIN" ]; then
+      log "classify: could not sync the clone of '$branch' into the main checkout ($RUN_MAIN_REFUSAL) — its branch there may lag the run's commits"
+    elif ! hr_run_copy_check_var "$RUN_MAIN" "$worktree" >>"$log_path" 2>&1; then
       log "classify: could not sync the clone of '$branch' into the main checkout ($HR_RUN_REFUSAL) — its branch there may lag the run's commits"
+    fi
   fi
 
   local state_rel clar_dir="" pause_ack="" resume_file=""
