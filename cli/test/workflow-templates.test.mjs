@@ -41,6 +41,9 @@
  * `cancelled()` step gated on `env.SCRIPTS_DIR != ''`, so a refusal runs nothing from the refused
  * tree; and every step invoking `npm` or `npx` run from `${{ runner.temp }}`, each `npx` naming
  * `--cwd "$GITHUB_WORKSPACE"`.
+ * No run copy: over the rendered file, no `run:` body of the `run` job names `create-worktree.sh` or
+ * runs `git worktree add`, the only `git clone` is `Install the pinned plugin`'s, and `Run the
+ * harness` alone runs `autonomous-watcher.sh job`, in the checkout.
  *
  * For `harness-resume.yml`: the `schedule` and `workflow_dispatch` triggers; `permissions: {}` at workflow
  * level and the `poll` job's grants exactly `contents: read`, `actions: write`, `issues: write` and
@@ -112,6 +115,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import { MAIN_REPO_ANCHOR_VARIABLE } from '../dist/core/mainRepoAnchor.js';
+import { renderTemplate } from '../dist/core/templating.js';
 import { PACKAGE_ROOT } from './helpers/fixture.mjs';
 import {
   API_KEY_SECRET,
@@ -652,6 +656,63 @@ test('no run-job step runs npm or npx in the checkout: each runs from $RUNNER_TE
 //   `working-directory` dropped from `Preflight with doctor`  -> the third case fails
 //   `--cwd "$GITHUB_WORKSPACE"` dropped from `Generate the job's permission profile` -> the third case's --cwd assertion fails
 //   `Record the default branch's commit` moved below `Read the configuration` -> the first case's record-step order assertion fails
+
+const PLUGIN_STEP = 'Install the pinned plugin';
+const WATCHER_JOB_CALL = /autonomous-watcher\.sh" job /;
+const GIT_CLONE = /\bgit(?:\s+-[cC]\s+\S+)*\s+clone\b/;
+const GIT_WORKTREE_ADD = /\bgit(?:\s+-[cC]\s+\S+)*\s+worktree\s+add\b/;
+
+/** Throws unless every `run:` body of `text`'s `run` job leaves the job's checkout the only working copy. */
+function assertRunJobCutsNoCopy(text) {
+  const lines = text.split('\n');
+  const job = blockUnder(jobStart('run', lines), lines);
+  assert.ok(!job.some((l) => /^ {4}defaults:/.test(l)), 'the run job sets no default working directory');
+  const list = job.flatMap((line, i) => (/^\s*- name: /.test(line) ? [[line, ...blockUnder(i, job)]] : []));
+  const cloning = [];
+  const watching = [];
+  for (const step of list) {
+    const name = /- name: (.*)$/.exec(step[0])[1];
+    const body = runBodies(step).flatMap((b) => b.split('\n'));
+    for (const line of body) {
+      assert.ok(!line.includes('create-worktree.sh'), `${name} names create-worktree.sh: ${line.trim()}`);
+      assert.doesNotMatch(line, GIT_WORKTREE_ADD, `${name} runs git worktree add`);
+    }
+    const code = body.filter((l) => !/^\s*#/.test(l));
+    if (code.some((l) => GIT_CLONE.test(l))) cloning.push(name);
+    const calls = code.filter((l) => WATCHER_JOB_CALL.test(l));
+    if (calls.length === 0) continue;
+    watching.push(name);
+    assert.equal(stepKey(step, 'working-directory'), undefined, `${name} runs the watcher in the step's default directory, the checkout`);
+    assert.ok(!code.some((l) => /(^|[;&|]\s*)cd\s/.test(l.trim())), `${name} changes no directory before the watcher`);
+    for (const call of calls) {
+      if (call.includes('--cwd')) assert.ok(call.includes('--cwd "$GITHUB_WORKSPACE"'), `${name} names the checkout: ${call.trim()}`);
+    }
+  }
+  assert.deepEqual(cloning, [PLUGIN_STEP], 'the only git clone is the marketplace checkout');
+  assert.deepEqual(watching, ['Run the harness'], 'one step runs the watcher in job mode');
+}
+
+const RENDERED = renderTemplate(
+  TEXT,
+  { cliVersion: '0.0.0-test' },
+  { describe: `the workflow template ${WORKFLOW_RUN_FILE}`, assertNoneSurvive: true },
+);
+
+// The rule: job mode treats the job's own checkout as the main checkout and the run's working
+// copy, so the `run` job cuts no run copy. Fails when a `run` job step creates a worktree or a
+// clone other than the marketplace one, or runs the watcher anywhere but the checkout.
+test('the run job cuts no run copy: the watcher runs in job mode in the checkout, and the only clone is the plugin\'s', () => {
+  assertRunJobCutsNoCopy(RENDERED);
+});
+
+test('the no-copy assertion fails on a rendered file whose run job calls create-worktree.sh', () => {
+  const mutated = RENDERED.replace(
+    /^( *)(bash "\$SCRIPTS_DIR\/autonomous-watcher\.sh" job )/m,
+    (_, indent, call) => `${indent}bash "$SCRIPTS_DIR/create-worktree.sh"\n${indent}${call}`,
+  );
+  assert.notEqual(mutated, RENDERED, 'the perturbation landed');
+  assert.throws(() => assertRunJobCutsNoCopy(mutated), /Run the harness names create-worktree\.sh/);
+});
 
 test('no configured directory is frozen into the file', () => {
   assert.doesNotMatch(TEXT, /(^|[^A-Za-z0-9_])scripts\//m);

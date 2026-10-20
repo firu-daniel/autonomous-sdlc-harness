@@ -146,6 +146,19 @@
 #     runtime ships. They are the npm runs left in the checkout, so both still
 #     read a branch-written .npmrc or node_modules/.
 #
+# WHY THE RUN JOB CUTS NO RUN COPY. `Run the harness` runs
+# `autonomous-watcher.sh job` in the job's own checkout, $GITHUB_WORKSPACE,
+# which job mode treats as both the main checkout and the run's working copy
+# (that script's anchors comment and its JOB MODE). So no step creates a run
+# copy and none needs the clone layout: on a runner that runs exactly one run, a
+# clone would add a copy and a sync for a checkout nothing else shares.
+#   * The profile `Generate the job's permission profile` writes denies writes to
+#     that checkout's whole .git, and the flows issue no sandboxed git write:
+#     commits and pushes go through the wrappers the sandbox excludes, and
+#     reverts use the file tool. docs/cli.md, section 6, owns that settlement.
+#   * The `git clone` in `Install the pinned plugin` is the marketplace
+#     checkout under $RUNNER_TEMP (THE PLUGIN PIN), not a run copy.
+#
 # ACTION PINS.
 #   actions/checkout          v5.1.0
 #   actions/setup-node        v5.0.0

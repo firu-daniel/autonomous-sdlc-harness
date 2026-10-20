@@ -95,7 +95,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_clone_per_run_switch/ta
 18. [x] **Task 16** — Move `watcher-stall-reset-payloads.test.mjs` to the clone layout on the same terms _(layer: cli)_ _(points: 15)_
 19. [x] **Task 17** — Move `watcher-remote-dispatch.test.mjs` to the clone layout _(layer: cli)_ _(points: 10)_
 20. [x] **Task 18** — Prove a parked legacy worktree run resumes, commits and is swept, in a new `cli/test/run-copy-migration.test.mjs` _(layer: cli)_ _(points: 15)_
-21. [ ] **Task 19** — State in `harness-run.yml` why the `run` job cuts no copy, and hold it with a test over the rendered template _(layer: cli)_ _(points: 10)_
+21. [x] **Task 19** — State in `harness-run.yml` why the `run` job cuts no copy, and hold it with a test over the rendered template _(layer: cli)_ _(points: 10)_
 22. [ ] **Task 20** — Make `branch-prompt.md`'s collision guard check the run copy's path, not `git worktree list` alone _(layer: plugin)_ _(points: 5)_
 23. [ ] **Task 28** — Make the flows' Phase D push-state read hold in a clone, and restate why the wrappers run from the main checkout _(layer: plugin)_ _(points: 15)_
 24. [ ] **Task 21** — Restate `docs/watcher.md` §1–§2 for the clone layout: creation, sync order, the per-run profile, cleanup, migration and where the main checkout's ref can lag _(layer: general)_ _(points: 20)_

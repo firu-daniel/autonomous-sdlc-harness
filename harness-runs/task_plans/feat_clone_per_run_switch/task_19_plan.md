@@ -32,3 +32,4 @@ State that in the template's header. Then add a test over the rendered template 
 
 - `npm test --workspace cli -- test/workflow-templates.test.mjs` passes.
 - `git diff --stat` for the template shows comment lines only: no step, `run:` body or expression changed.
+- **Deviations from plan:** The suite renders nothing: it reads `harness-run.yml` as raw template text. To test the rendered template as the task asks, the new case renders it in-process with `renderTemplate` from `cli/src/core/templating.ts`, with the same `cliVersion` token and `assertNoneSurvive: true` that `cli/src/generators/githubWorkflows.ts` passes. It writes no file.
