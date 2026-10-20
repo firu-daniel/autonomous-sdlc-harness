@@ -98,6 +98,16 @@ concurrentSuite('doctor profile-main-anchor', () => {
     assert.ok(!line.includes('missing from its allow list'), line);
   });
 
+  it('(f) warns when the rule is also in deny, naming deny', async (t) => {
+    const dir = await wiredFixture(t);
+    editProfile(dir, (profile) => {
+      profile.permissions.deny = [...(profile.permissions.deny ?? []), MAIN_REPO_ANCHOR_RULE];
+    });
+    const { line } = await doctorLine(dir, 'WARN');
+    assert.ok(line.includes('deny list'), line);
+    assert.ok(!line.includes('missing from its allow list'), line);
+  });
+
   it('(d) keeps case (b) a warn under --remote-job, never a fail', async (t) => {
     const dir = await wiredFixture(t);
     dropAnchorRule(dir);
