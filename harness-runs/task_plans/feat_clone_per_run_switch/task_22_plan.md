@@ -23,16 +23,16 @@
 
 **Work:**
 
-- [ ] **§6 → `### The sandbox block and the permission mode`, the three-wrappers and target-check paragraphs.**
+- [x] **§6 → `### The sandbox block and the permission mode`, the three-wrappers and target-check paragraphs.**
   - Replace *"No shipped script creates a clone yet: every run still executes in a linked worktree"* with the clone layout and its creator.
   - Restate *"sync-in, operate, sync-out"* as the clone-first swap with rollback, the heal, and `push-branch.sh`'s pre-push check.
   - Restate the exit-contract sentences: `commit-on-branch.sh`'s landed exit `1` now also covers a clone ahead of the main checkout, and `refresh-branch.sh`'s exit `5` covers a failed rollback.
-- [ ] **§6, the paragraph *"Everything that runs outside the sandbox is write-protected on both sides"*.**
+- [x] **§6, the paragraph *"Everything that runs outside the sandbox is write-protected on both sides"*.**
   - Rewrite the `.git` half of the list: the whole `<main>/.git`, the six glob paths with why each, and that the old glob `.git` entry closed a clone's git to its own sandboxed git (CL1–CL4).
   - Add the per-run profile: what it adds, where it lives and why there, and the launch check with what it refuses.
   - Add the residual the check leaves: the copy is only as valid as the base. A settings file that fails validation is silently ignored under `-p` (Claude Code 2.1.304 `--help`), so an invalid base starts unsandboxed. Point at Task 23's row.
   - Add the job settlement as its own paragraph. Include that a job's `--settings` is the base profile, checked at launch, with no per-run copy, and why.
-- [ ] **§6 residuals.**
+- [x] **§6 residuals.**
   - **Remove** residual 1.6, the object store a run's copy shares being sandbox-writable. It is closed for every run: the main checkout's `.git` is write-denied as a whole, and a clone's objects reach it only through sync-in's hashing fetch. A legacy worktree run's sandboxed git could not write the store either (`docs/sandbox-verification.md` G1).
   - In residual 1.5, restate the bullet that says *"The trusted configuration is read through the object store item 6 describes"*: the job's profile now write-denies the checkout's whole `.git`, so the session can no longer substitute that loose object.
   - **Remove** the record-race parts of residual 1.3 and residual 2 for every clone run. A clone has no record outside its own `.git`.
@@ -43,13 +43,21 @@
     - **Main-checkout lag,** pointing at `docs/watcher.md` §2.
     - **The per-run profile's base-validity residual.**
   - Update residual 2's list of globbed entries to the new set. In *"Which configurable phases run under the sandbox"*, state that `docs`, `parity` and `qa` run in a clone exactly as the list says, since the copy kind changes none of them (`harness-runs/lessons.md` → *"A new execution environment must state, for every configurable phase, whether that phase runs there"*).
-- [ ] **§7, `doctor`:**
+- [x] **§7, `doctor`:**
   - Restate the `worktrees` row's title to Task 6's.
   - Extend the `profile-write-protection` entry: it reports a profile still carrying the retired `<glob>/.git` entry, by path and side, why that is stale and not merely extra, and `init --force` as the remedy.
   - Say that `doctor` grades the base profile, and the watcher grades each per-run copy at launch.
-- [ ] Re-run the story index's derivation entries A–D against this file (entry A as widened in revision round 1). Confirm every hit is either a sentence this task wrote and means, or a sentence that stays true after this branch and that the implementer's return names. One such sentence is §7's `permission-profile` row (*"in a linked worktree, the main checkout's profile"*), which describes `doctor` run from a linked worktree; that is unchanged. Cite every anchor by heading, symbol or quoted text, never by line number. State each measured fact with what was measured, the command and the version.
+- [x] Re-run the story index's derivation entries A–D against this file (entry A as widened in revision round 1). Confirm every hit is either a sentence this task wrote and means, or a sentence that stays true after this branch and that the implementer's return names. One such sentence is §7's `permission-profile` row (*"in a linked worktree, the main checkout's profile"*), which describes `doctor` run from a linked worktree; that is unchanged. Cite every anchor by heading, symbol or quoted text, never by line number. State each measured fact with what was measured, the command and the version.
 
 **Verification:**
 
 - `git grep -nE 'No shipped script creates a clone|every run still executes in a linked worktree|which every run does today' -- docs/cli.md` prints nothing.
 - The §6 residual list is numbered consecutively after the removals, and every reference to a residual number (`residual 1`, `residual 2`, …) inside `docs/cli.md` points at the item it means. `docs/watcher.md` cites these residuals by quoted text, not by number (Task 21), so it needs no edit here.
+
+- **Deviations from plan:**
+  - Legacy record race (residual 1.3 and residual 2): the plan says a legacy worktree run keeps both until it finishes. A worktree's record lies under `<main>/.git`, which every profile the watcher now launches or resumes with write-denies as one exact directory entry (`cli/src/generators/writeProtection.ts` → `protectedPaths`' header, *"A legacy worktree run's record lies under it too"*), so a resumed legacy run loses the race too. Implemented as: a legacy worktree run keeps it only in a session launched under a profile from before the whole `.git` was write-denied, until that session exits.
+  - Residual 1.5: the object-store bullet no longer describes something that remains, so it moved out of the *"What remains:"* list into a sentence just before it, and the item's bold lead drops *"the object store under that configuration"*. The loose-object measurement from the removed residual 1.6 is kept in that sentence, because `cli/test/run-copy-clone-arm.test.mjs`'s header cites *"`docs/cli.md` §6 residual 6"* for the substitution method. That citation now points at the filter-driver residual. It is a `cli`-layer file, so it is left for the orchestrator.
+  - Three target-check sentences said the sandbox can write `<main>/.git/commondir`, `<main>/.git/modules/<name>/config` and the legacy `.git/remotes` / `.git/branches`. The whole `.git` is now write-denied, so each is restated: the wrapper's own defence stays, and the profile's write-deny is the other layer.
+  - Entry A reached §2's *"When the repository being wired has no commit yet"* (*"fails `git worktree add`"*), which is outside §6 and §7 and is not in the register. No run copy is made with `worktree add` any more, so the reason now reads *"has no commit a run's branch can be cut from"*.
+  - Residual 6: *".lfsconfig … which in a worktree a sandboxed command can write"* now reads *"in a run's copy"*.
+  - The `--settings` single-file fact and the `-p` validation sentence were read from `claude --help` on Claude Code 2.1.304 (`claude --version` printed `2.1.304 (Claude Code)`) in this session. No help line marks `--settings <file-or-json>` repeatable; `--plugin-url` carries *"(repeatable …)"*. Under `-p, --print` the help says *"Settings files that fail validation are silently ignored in this mode (no error dialog is shown)."*
