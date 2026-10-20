@@ -7,8 +7,8 @@
 # filename pattern is bound to one (engine command, worktree strategy) pairing:
 #
 #   <branch>_task_prompt.md   -> /branch-start-plan-autonomous
-#                                a fresh sibling working copy off the default
-#                                branch (create-worktree.sh)
+#                                a fresh sibling clone off the default branch
+#                                (create-worktree.sh)
 #   <branch>_review[_<n>].md  -> /branch-start-user-review-fix-autonomous
 #                                the branch's existing working copy when it is
 #                                still usable, else recreated for that branch
@@ -281,7 +281,9 @@
 # script's own location, and the MAIN checkout — the first working copy git lists
 # — is the one that holds the inbox, the logs, the registry and the kill switch,
 # so every run is tailable and stoppable from ONE place while executing in its own
-# sibling working copy — except under `job`, where the main checkout and the
+# sibling working copy — a clone (`copy_kind` `clone` in its registry record),
+# or, for a run started before clones, a legacy linked worktree, supported
+# until none is left — except under `job`, where the main checkout and the
 # working copy are the same directory, the job's own checkout (see JOB MODE);
 # and except for a record with `execution: github-actions`, whose run executes
 # in a GitHub Actions job, whose local working copy is a mirror that
@@ -375,6 +377,11 @@
 #     its directory would not outlive the job. They are forced off AFTER the
 #     override channel and the tunable defaults, so no environment value turns
 #     them back on.
+#   * THE PROFILE IS THE BASE, CHECKED: job mode passes
+#     .claude/settings.autonomous.json to --settings after the same launch check
+#     a local run's per-run copy gets, and renders no per-run copy — the lane is
+#     off, and the copy would equal the base: the run copy is the main checkout,
+#     and the job's fresh checkout has no other linked worktree.
 #   * THE REGISTRY is the checkout's gitignored one, ephemeral by construction;
 #     what must cross a job boundary rides in the remote state bundle's
 #     `status.json`, restored to `autonomous_logs/remote_status.json` before the
@@ -906,7 +913,8 @@ fi
 
 # -----------------------------------------------------------------------------
 # Anchors. All central state lives in the MAIN checkout; a run executes in a
-# sibling working copy — under `job`, the main checkout and the working copy are
+# sibling clone, or a legacy linked worktree for a run started before clones —
+# under `job`, the main checkout and the working copy are
 # the same directory, the job's own checkout, which the first working copy
 # `git worktree list` reports already yields (see JOB MODE in the header); for
 # a record with `execution: github-actions` the run executes in a GitHub Actions
@@ -983,10 +991,10 @@ PUSH_BRANCH="$SCRIPT_DIR/push-branch.sh"
 # `dispatch` and `sync` (REMOTE DISPATCH) — resolved the same way.
 REMOTE_RUN="$SCRIPT_DIR/remote-run.sh"
 
-# The unattended permission profile, resolved in the MAIN checkout even though a
-# run executes elsewhere: every working copy carries the same committed file, and
-# the absolute paths inside it resolve identically whichever one is used — so the
-# main copy is the one that cannot drift per worktree.
+# The BASE unattended permission profile, resolved in the MAIN checkout even
+# though a run executes elsewhere: the copy a session could edit is never the
+# one read. Outside job mode every session gets a per-run copy derived from it
+# (THE PER-RUN PROFILE, run_profile_render); in job mode it is passed as is.
 SETTINGS_PROFILE="$MAIN_REPO/.claude/settings.autonomous.json"
 
 # The model an unattended run is launched with, and the three engine commands the
@@ -1906,18 +1914,285 @@ lane_release_if_idle() {
 }
 
 # -----------------------------------------------------------------------------
+# THE PER-RUN PROFILE. Outside job mode a session is never handed the base
+# profile ($SETTINGS_PROFILE): every spawn renders a per-run copy carrying that
+# run's own exact write-protection entries, checks it, and passes it as the one
+# `--settings` file. In job mode the base is checked and passed unchanged (JOB
+# MODE in the header). The base's glob entries cannot be relied on for the run's
+# own copy (Linux may skip a `*` denyWrite entry), and the base carries no entry
+# for another live worktree's `.git` pointer, which its sibling-glob Edit /
+# Write allow would otherwise reach.
+# -----------------------------------------------------------------------------
+
+# A declared mirror of cli/src/generators/writeProtection.ts → COPY_GIT_PATHS:
+# each row's run-copy-relative path and kind, in order, held equal by
+# cli/test/watcher-run-profile.test.mjs. A change to that table is an edit here
+# in the same change.
+RUN_PROFILE_COPY_GIT_PATHS='.git/config file
+.git/hooks directory
+.git/objects/info/alternates file
+.git/commondir entry
+.git/config.worktree entry
+.git/objects/info/http-alternates entry'
+
+# Declared mirrors of cli/src/generators/sandboxProfile.ts, held equal by
+# cli/test/watcher-run-profile.test.mjs; a change to either owner is an edit
+# here in the same change:
+#   * RUN_PROFILE_OPT_OUT_MARKER — SANDBOX_OPT_OUT_MARKER;
+#   * RUN_PROFILE_SANDBOX_STRICT — shippedSandboxSettings()' values for
+#     sandbox.enabled, sandbox.failIfUnavailable, sandbox.allowUnsandboxedCommands;
+#   * RUN_PROFILE_SANDBOX_OPT_OUT — the shape applySandbox's opt-out branch
+#     writes: enabled and failIfUnavailable false, allowUnsandboxedCommands left
+#     at the shipped value.
+RUN_PROFILE_OPT_OUT_MARKER="THE SANDBOX IS OFF BY THIS REPOSITORY'S OWN CHOICE"
+RUN_PROFILE_SANDBOX_STRICT='{"sandbox.enabled":true,"sandbox.failIfUnavailable":true,"sandbox.allowUnsandboxedCommands":false}'
+RUN_PROFILE_SANDBOX_OPT_OUT='{"sandbox.enabled":false,"sandbox.failIfUnavailable":false,"sandbox.allowUnsandboxedCommands":false}'
+
+# Set by run_profile_render and run_profile_check; read by spawn_engine.
+RUN_PROFILE_FILE=""
+RUN_PROFILE_REFUSAL=""
+
+# 0 when <file> parses as exactly one JSON document, and that an object.
+run_profile_one_object() {
+  [ "$(jq -s 'length == 1 and (.[0] | type) == "object"' "$1" 2>/dev/null)" = "true" ]
+}
+
+# run_profile_entries <copy> <kind> — print one `<absolute path><TAB><kind>`
+# line per entry the per-run profile adds for the run copy <copy> of <kind>
+# (`clone` or `worktree`), kind being `file`, `directory` or `entry` as
+# writeProtection.ts → ProtectedKind means them:
+#   * each `hr_run_protected_rel_paths` line re-rooted at <copy>, as `entry`;
+#   * on a clone, each RUN_PROFILE_COPY_GIT_PATHS row re-rooted at <copy>;
+#   * on a legacy worktree, <copy>/.git as `file`;
+#   * the `.git` pointer of every other linked worktree the main checkout
+#     lists, as `file`.
+# Never called in job mode. Every path is exact: this watcher's own rule, not
+# the generator's refused set, refuses a path carrying a quote, a `*` or a tab —
+# a `*` would turn an exact entry into a glob, a quote does not belong in a
+# path this watcher emits, and a tab is the separator. Exit 1 the protected set
+# is unreadable, 2 the worktree list failed, 3 a path was refused, 4 <kind> is
+# neither kind; nothing useful is printed on a non-zero exit.
+run_profile_entries() {
+  local copy="${1%/}" kind="${2-}" rel p k list line first=1 out=""
+  case "$kind" in clone | worktree) ;; *) return 4 ;; esac
+  list="$(hr_run_protected_rel_paths "$MAIN_REPO")" || return 1
+  while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
+    out="${out}${copy}/${rel}	entry
+"
+  done <<EOF
+$list
+EOF
+  if [ "$kind" = clone ]; then
+    while IFS=' ' read -r p k; do
+      [ -n "$p" ] || continue
+      out="${out}${copy}/${p}	${k}
+"
+    done <<EOF
+$RUN_PROFILE_COPY_GIT_PATHS
+EOF
+  else
+    out="${out}${copy}/.git	file
+"
+  fi
+  list="$(git -C "$MAIN_REPO" worktree list --porcelain 2>/dev/null)" || return 2
+  while IFS= read -r line; do
+    case "$line" in
+      'worktree '*) ;;
+      *) continue ;;
+    esac
+    # The first worktree git lists is the main checkout.
+    if [ "$first" = 1 ]; then
+      first=0
+      continue
+    fi
+    p="${line#worktree }"
+    [ "${p%/}" = "$copy" ] && continue
+    out="${out}${p%/}/.git	file
+"
+  done <<EOF
+$list
+EOF
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    p="${line%	*}"
+    case "$p" in
+      *\"* | *\'* | *\** | *'	'*) return 3 ;;
+    esac
+  done <<EOF
+$out
+EOF
+  printf '%s' "$out"
+}
+
+# run_profile_render <branch> <copy> <kind> — write the per-run profile for
+# <branch> to the path `hr_run_profile_file "$HARNESS_REPO_SLUG" <branch>`
+# prints, through a temporary file in its directory and `mv`, the directory
+# created at mode 700, and set RUN_PROFILE_FILE to it. The content is
+# $SETTINGS_PROFILE with each run_profile_entries path appended to
+# `.sandbox.filesystem.denyWrite` and its Edit / Write rules to
+# `.permissions.deny`, each only when absent; nothing else changes. Re-rendered
+# at every spawn, so a resume gets one derived from the current base. Call it
+# directly, never inside `$(…)`: it sets globals. 1 with RUN_PROFILE_REFUSAL set
+# on any failed step, an unanchorable lane directory included.
+#
+# The kind → rule map in `rules` is a declared mirror of
+# cli/src/generators/writeProtection.ts → fileToolDenyRules, held equal by
+# cli/test/watcher-run-profile.test.mjs: `file` → Edit(/<p>), Write(/<p>);
+# `directory` → the same on <p>/**; `entry` → Edit(/<p>), Edit(/<p>/**),
+# Write(/<p>), Write(/<p>/**). A change to that map is an edit here in the same
+# change.
+run_profile_render() {
+  local branch="$1" copy="$2" kind="$3" file dir tmp entries rc=0
+  RUN_PROFILE_FILE=""
+  RUN_PROFILE_REFUSAL=""
+  if ! file="$(hr_run_profile_file "$HARNESS_REPO_SLUG" "$branch")"; then
+    RUN_PROFILE_REFUSAL="the per-run profile has no path: the repository slug or the machine-local state directory is unresolvable"
+    return 1
+  fi
+  entries="$(run_profile_entries "$copy" "$kind")" || rc=$?
+  case "$rc" in
+    0) ;;
+    1) RUN_PROFILE_REFUSAL="the run copy's protected paths could not be read from harness.config.json"; return 1 ;;
+    2) RUN_PROFILE_REFUSAL="git worktree list failed in $MAIN_REPO"; return 1 ;;
+    3) RUN_PROFILE_REFUSAL="a per-run profile entry carries a quote, a '*' or a tab"; return 1 ;;
+    *) RUN_PROFILE_REFUSAL="the run copy's kind '$kind' is neither clone nor worktree"; return 1 ;;
+  esac
+  if ! run_profile_one_object "$SETTINGS_PROFILE"; then
+    RUN_PROFILE_REFUSAL="the base profile $SETTINGS_PROFILE is not exactly one JSON object"
+    return 1
+  fi
+  dir="${file%/*}"
+  if ! (umask 077 && mkdir -p "$dir") 2>/dev/null || ! chmod 700 "$dir" 2>/dev/null; then
+    RUN_PROFILE_REFUSAL="cannot create $dir"
+    return 1
+  fi
+  if ! tmp="$(mktemp "$dir/.render.XXXXXX" 2>/dev/null)"; then
+    RUN_PROFILE_REFUSAL="cannot create a temporary file in $dir"
+    return 1
+  fi
+  if ! printf '%s' "$entries" |
+    jq -R -s --slurpfile base "$SETTINGS_PROFILE" '
+      def rules:
+        if .kind == "entry" then ["Edit(/" + .path + ")", "Edit(/" + .path + "/**)", "Write(/" + .path + ")", "Write(/" + .path + "/**)"]
+        elif .kind == "directory" then ["Edit(/" + .path + "/**)", "Write(/" + .path + "/**)"]
+        else ["Edit(/" + .path + ")", "Write(/" + .path + ")"]
+        end;
+      def add_absent($xs): reduce $xs[] as $x (.; if any(.[]; . == $x) then . else . + [$x] end);
+      [split("\n")[] | select(length > 0) | split("\t") | {path: .[0], kind: .[1]}] as $e
+      | $base[0]
+      | .sandbox.filesystem.denyWrite |= add_absent([$e[].path])
+      | .permissions.deny |= add_absent([$e[] | rules[]])
+    ' >"$tmp" 2>/dev/null; then
+    rm -f "$tmp"
+    RUN_PROFILE_REFUSAL="could not render the per-run profile from $SETTINGS_PROFILE"
+    return 1
+  fi
+  if ! mv -f "$tmp" "$file" 2>/dev/null; then
+    rm -f "$tmp"
+    RUN_PROFILE_REFUSAL="cannot write $file"
+    return 1
+  fi
+  RUN_PROFILE_FILE="$file"
+  return 0
+}
+
+# run_profile_check <file> — 0 when <file> may be passed to `--settings`; 1
+# with RUN_PROFILE_REFUSAL set to one sentence when:
+#   * $SETTINGS_PROFILE or <file> is not exactly one JSON object;
+#   * the sandbox clause fails: with no `_README` line beginning with
+#     RUN_PROFILE_OPT_OUT_MARKER the three keys must equal
+#     RUN_PROFILE_SANDBOX_STRICT, with one they must equal
+#     RUN_PROFILE_SANDBOX_OPT_OUT (both declared mirrors, above). An empty
+#     `--settings` file starts an unsandboxed session with no error
+#     (docs/sandbox-verification.md §6);
+#   * removing exactly the entries <file> appends to
+#     `.sandbox.filesystem.denyWrite` and `.permissions.deny` does not give
+#     back $SETTINGS_PROFILE, compared as JSON;
+#   * an appended entry is not a string.
+# A settings file failing Claude Code's validation is silently ignored under
+# `-p`, so this reduces the per-run copy's validity to the base's, which
+# `doctor` grades. In job mode <file> is $SETTINGS_PROFILE and the appended set
+# is empty.
+run_profile_check() {
+  local file="$1" verdict
+  RUN_PROFILE_REFUSAL=""
+  if ! run_profile_one_object "$SETTINGS_PROFILE"; then
+    RUN_PROFILE_REFUSAL="the base profile $SETTINGS_PROFILE is not exactly one JSON object"
+    return 1
+  fi
+  if ! run_profile_one_object "$file"; then
+    RUN_PROFILE_REFUSAL="the per-run profile $file is not exactly one JSON object"
+    return 1
+  fi
+  verdict="$(jq -n -r --slurpfile b "$SETTINGS_PROFILE" --slurpfile f "$file" \
+    --arg marker "$RUN_PROFILE_OPT_OUT_MARKER" \
+    --argjson strict "$RUN_PROFILE_SANDBOX_STRICT" \
+    --argjson optout "$RUN_PROFILE_SANDBOX_OPT_OUT" '
+      $b[0] as $B | $f[0] as $F
+      | def delta(p):
+          ($B | getpath(p)) as $bv | ($F | getpath(p)) as $fv
+          | if $bv == $fv then {ok: true, extra: []}
+            elif ($bv | type) == "array" and ($fv | type) == "array"
+              and ($fv | length) >= ($bv | length) and $fv[0:($bv | length)] == $bv
+            then {ok: true, extra: $fv[($bv | length):]}
+            else {ok: false, extra: []}
+            end;
+        def restore(p): if (getpath(p) == ($B | getpath(p))) then . else setpath(p; $B | getpath(p)) end;
+        (any(($F._README // [])[]?; type == "string" and startswith($marker))) as $optedout
+        | (if $optedout then $optout else $strict end) as $want
+        | ["sandbox", "filesystem", "denyWrite"] as $dw
+        | ["permissions", "deny"] as $pd
+        | delta($dw) as $d1 | delta($pd) as $d2
+        | if ($want | to_entries | all(.[]; . as $e | ($F | getpath($e.key | split("."))) == $e.value)) | not
+          then (if $optedout then "optout" else "strict" end)
+          elif ($d1.ok and $d2.ok) | not then "delta"
+          elif ($F | restore($dw) | restore($pd)) != $B then "delta"
+          elif any(($d1.extra + $d2.extra)[]; type != "string") then "nonstring"
+          else "ok"
+          end
+    ' 2>/dev/null)" || verdict=""
+  case "$verdict" in
+    ok) return 0 ;;
+    strict) RUN_PROFILE_REFUSAL="$file does not carry sandbox.enabled true, sandbox.failIfUnavailable true and sandbox.allowUnsandboxedCommands false, and names no sandbox opt-out" ;;
+    optout) RUN_PROFILE_REFUSAL="$file names the sandbox opt-out but does not carry its shape: sandbox.enabled false, sandbox.failIfUnavailable false, sandbox.allowUnsandboxedCommands false" ;;
+    delta) RUN_PROFILE_REFUSAL="$file differs from the base profile $SETTINGS_PROFILE by more than entries appended to sandbox.filesystem.denyWrite and permissions.deny" ;;
+    nonstring) RUN_PROFILE_REFUSAL="$file appends an entry that is not a string" ;;
+    *) RUN_PROFILE_REFUSAL="$file could not be checked against the base profile $SETTINGS_PROFILE" ;;
+  esac
+  return 1
+}
+
+# spawn_engine's pre-launch refusal: SPAWN_REFUSAL holds the reason, which the
+# caller's spawn_refused reads. Both run in the caller's shell, never `$(…)`.
+SPAWN_REFUSAL=""
+spawn_refuse() {
+  SPAWN_REFUSAL="$2"
+  log "not launching '$1': $2"
+}
+
+# spawn_refused <branch> <log_path> — what every caller of spawn_engine does
+# when it returns 1: the record goes to `failed`, with one `failed`
+# notification naming the reason, and no pid stays attached.
+spawn_refused() {
+  registry_set "$1" status failed
+  registry_set "$1" pid ""
+  notify failed "$1" "$2" "not launched: ${SPAWN_REFUSAL:-the launch was refused}"
+}
+
+# -----------------------------------------------------------------------------
 # Headless launch. It DELIMITS THE UNTRUSTED PROMPT CONTENT: the launch prompt
 # references the dropped artifact's FILE PATH for the engine to read — it never
 # concatenates that artifact's text into the trusted instruction layer. The
 # engine command resolves its own worktree-relative anchors; this function only
-# points it at the right checkout (`--add-dir` the worktree) and hands it the
-# generated permission profile.
+# points it at the right checkout (`--add-dir` the worktree) and hands it a
+# checked permission profile.
 #
 # The flag string, in full:
 #
 #   HARNESS_MAIN_REPO=<MAIN_REPO>
 #   <agent cli> -p "<trusted instruction naming the artifact's FILE PATH>" \
-#     --settings <MAIN_REPO>/.claude/settings.autonomous.json \
+#     --settings <per-run copy> \
 #     --permission-mode "$PERMISSION_MODE" \
 #     --model "<agentModel>" \
 #     --effort "<agentEffort>" \
@@ -1926,12 +2201,21 @@ lane_release_if_idle() {
 #     --add-dir <MAIN_REPO>/<state_dir> \
 #     [--add-dir <dir> ...]
 #
+# `<per-run copy>` is `hr_run_profile_file`'s path,
+# `${XDG_STATE_HOME:-$HOME/.local/state}/autonomous-sdlc-harness/run-profiles/<repo slug>/<sanitized branch>.json`,
+# re-rendered at every launch and resume. It sits under the machine lane
+# directory, outside the run copy, the state directory and every other root the
+# profile lets a session write, so the session cannot rewrite its own
+# protection. In job mode it is <MAIN_REPO>/.claude/settings.autonomous.json,
+# the base, unchanged. Either file is checked first (run_profile_check), and
+# the launch is refused when the check fails: Claude Code takes one
+# `--settings` file, and silently ignores one that fails its validation.
 # The environment line is exported inside spawn_engine's subshell, so the engine
 # and every command it runs inherit it. The plugin's readers read it with a bare
 # `printenv HARNESS_MAIN_REPO`; no outer-loop script reads it, because an
 # assignment prefix on an excluded call could set it.
 # where the bracketed tail is JOB MODE ONLY: one --add-dir per
-# permissions.additionalDirectories entry of the profile, in file order, minus
+# permissions.additionalDirectories entry of the base profile, in file order, minus
 # empty entries and the two directories above; outside job mode the line ends at
 # the state directory. See spawn_engine for why the profile's list is repeated.
 # And NEVER a permission-bypass flag: the profile's deny floor is what keeps an
@@ -1956,6 +2240,7 @@ lane_release_if_idle() {
 # about fresh versus resume.
 spawn_engine() {
   local branch="$1" worktree="$2" log_path="$3" resume_indexes="${4:-}" pause_resume="${5:-}"
+  SPAWN_REFUSAL=""
 
   # Every artifact path named in the prompts below is `<state_dir>/…` INSIDE the
   # run's own working copy, so the name is resolved there. Unresolvable is the
@@ -1963,7 +2248,7 @@ spawn_engine() {
   # nobody wrote, and it would look like an empty task rather than an error.
   local state_rel
   state_rel="$(run_state_dir "$worktree")" || {
-    log "not launching '$branch': the state directory in '$worktree' is unresolvable"
+    spawn_refuse "$branch" "the state directory in '$worktree' is unresolvable"
     return 1
   }
   # The main checkout's state tree, granted to the run as well: it holds the
@@ -1971,9 +2256,29 @@ spawn_engine() {
   # additionalDirectories entry (belt and braces if the two ever diverge).
   local main_state
   main_state="$(hr_state_path "$MAIN_REPO")" || {
-    log "not launching '$branch': the state directory under '$MAIN_REPO' is unresolvable"
+    spawn_refuse "$branch" "the state directory under '$MAIN_REPO' is unresolvable"
     return 1
   }
+
+  # The one `--settings` file (THE PER-RUN PROFILE, above). Job mode never
+  # reaches hr_run_profile_file or run_profile_render, so nothing is written
+  # under the machine lane there.
+  local settings_file copy_kind
+  if [ "$JOB_MODE" = "1" ]; then
+    settings_file="$SETTINGS_PROFILE"
+  else
+    copy_kind="$(registry_get "$branch" copy_kind)"
+    [ -n "$copy_kind" ] || copy_kind="worktree"
+    if ! run_profile_render "$branch" "$worktree" "$copy_kind"; then
+      spawn_refuse "$branch" "$RUN_PROFILE_REFUSAL"
+      return 1
+    fi
+    settings_file="$RUN_PROFILE_FILE"
+  fi
+  if ! run_profile_check "$settings_file"; then
+    spawn_refuse "$branch" "$RUN_PROFILE_REFUSAL"
+    return 1
+  fi
 
   # Trusted instruction layer. It NAMES the artifact's path; it never inlines the
   # untrusted body. The engine reads the file itself.
@@ -2106,8 +2411,8 @@ ${GLOBAL_STOP}. End at 'branch ready for review' — never merge, never push to 
     effort_args=(--effort "$AGENT_EFFORT")
   fi
 
-  # JOB MODE ONLY: every permissions.additionalDirectories entry of the profile
-  # (the plugin roots `init --plugin-root-entries` wrote) also goes on the line as
+  # JOB MODE ONLY: every permissions.additionalDirectories entry of the base
+  # profile, the file job mode passes to --settings (the plugin roots `init --plugin-root-entries` wrote) also goes on the line as
   # an --add-dir, because a job session was refused reads under a root the profile
   # file already granted. `init` stays the one producer of the list. File order;
   # an empty entry and one equal to the two directories already passed are
@@ -2171,9 +2476,9 @@ EOF
     # than passed on; inside the subshell, so no other child of the watcher sees it.
     export HARNESS_MAIN_REPO="$MAIN_REPO"
     # `--add-dir "$worktree"` is NOT redundant with the profile: that file grants
-    # the sibling-worktree glob through Edit/Write/Read rules, not through
+    # the sibling-run-copy glob through Edit/Write/Read rules, not through
     # additionalDirectories. The job-mode extras after the two fixed --add-dir
-    # flags duplicate the profile's additionalDirectories on purpose: a job
+    # flags duplicate the base profile's additionalDirectories on purpose: a job
     # session was refused reads under a directory that file granted, and a
     # launch flag does not depend on how the settings file is merged.
     #
@@ -2188,7 +2493,7 @@ EOF
     # PIPESTATUS[0], NEVER from the end of the pipe, or classify_run_exit would
     # read the formatter's status instead of the engine's.
     "$AGENT_CLI" -p "$launch_prompt" \
-      --settings "$SETTINGS_PROFILE" \
+      --settings "$settings_file" \
       --permission-mode "$PERMISSION_MODE" \
       ${model_args[@]+"${model_args[@]}"} \
       ${effort_args[@]+"${effort_args[@]}"} \
@@ -2292,7 +2597,10 @@ launch_run() {
   log "launching headless run for '$branch' (engine=$engine_kind) in $worktree (log: $log_path)"
   notify launched "$branch" "$log_path" "engine=$engine_kind"
   open_log_terminal "$branch" "$log_path"
-  spawn_engine "$branch" "$worktree" "$log_path"
+  if ! spawn_engine "$branch" "$worktree" "$log_path"; then
+    spawn_refused "$branch" "$log_path"
+    return 1
+  fi
 }
 
 # launch_remote_run <branch> <worktree> <log_path> <engine_kind>
@@ -2402,6 +2710,14 @@ classify_run_exit() {
   # `failed` or clobber the status that pass just set.
   if [ "$(registry_get "$branch" stall_killing)" = "1" ]; then
     return 0
+  fi
+
+  # Sync a clone's branch into the main checkout, so the main checkout's branch
+  # shows what the run committed. A refusal is one log line and never changes
+  # the classification below.
+  if [ "$(registry_get "$branch" copy_kind)" = "clone" ] && [ -n "$RUN_MAIN" ]; then
+    hr_run_copy_check_var "$RUN_MAIN" "$worktree" >>"$log_path" 2>&1 ||
+      log "classify: could not sync the clone of '$branch' into the main checkout ($HR_RUN_REFUSAL) — its branch there may lag the run's commits"
   fi
 
   local state_rel clar_dir="" pause_ack="" resume_file=""
@@ -2746,7 +3062,7 @@ resume_parked_run() {
   begin_park_resume "$branch" "$clar_dir" "$answered_set"
   notify resumed "$branch" "$log_path" "answered clarification(s) #$answered_set"
   open_log_terminal "$branch" "$log_path"
-  spawn_engine "$branch" "$worktree" "$log_path" "$answered_set"
+  spawn_engine "$branch" "$worktree" "$log_path" "$answered_set" || spawn_refused "$branch" "$log_path"
   return 0
 }
 
@@ -2907,7 +3223,7 @@ resume_paused_run() {
   begin_pause_resume "$branch" "$state_abs"
   notify resumed "$branch" "$log_path" "after pause"
   open_log_terminal "$branch" "$log_path"
-  spawn_engine "$branch" "$worktree" "$log_path" "" 1
+  spawn_engine "$branch" "$worktree" "$log_path" "" 1 || spawn_refused "$branch" "$log_path"
   return 0
 }
 
@@ -3191,7 +3507,11 @@ check_stalled_runs() {
     registry_set "$b" stall_restarts "$((restarts + 1))"
     registry_set "$b" stall_warned ""
     registry_set "$b" status running
-    spawn_engine "$b" "$worktree" "$log_path" "" 1
+    if ! spawn_engine "$b" "$worktree" "$log_path" "" 1; then
+      spawn_refused "$b" "$log_path"
+      registry_set "$b" stall_killing ""
+      continue
+    fi
     # Lowered AFTER the spawn, so nothing between the kill and the relaunch can
     # be classified by a subshell this pass tore down. A restarted run that then
     # exits before this line is left `running` with a dead pid — which the next
@@ -4453,7 +4773,7 @@ job_auto_resume() {
     log "job: the hosted time budget's PAUSE was pending at the resume of '$branch' after $why — re-dropped it"
   fi
   notify resumed "$branch" "$log_path" "automatic resume $count/$REMOTE_AUTO_RESUME_MAX after $why ($(job_label))"
-  spawn_engine "$branch" "$worktree" "$log_path" "" 1 || registry_set "$branch" status failed
+  spawn_engine "$branch" "$worktree" "$log_path" "" 1 || spawn_refused "$branch" "$log_path"
   return 0
 }
 
@@ -4567,7 +4887,7 @@ run_job() {
       log "job: launching run for '$branch' (engine=$engine) in $worktree (log: $log_path)"
       spawn_engine "$branch" "$worktree" "$log_path"
       ;;
-  esac || registry_set "$branch" status failed
+  esac || spawn_refused "$branch" "$log_path"
 
   # The runner-wait note belongs to the job's own start: a later automatic
   # resume's `resumed` comment never carries it (THE RUNNER WAIT in the header).
@@ -4657,6 +4977,12 @@ run_job() {
         esac
         ;;
       failed)
+        # A launch spawn_engine refused is not retried: the refusal does not
+        # change between attempts, and no session ran.
+        if [ -n "$SPAWN_REFUSAL" ]; then
+          detail="not launched: $SPAWN_REFUSAL"
+          break
+        fi
         restarts="$(job_int "$(registry_get "$branch" stall_restarts)")" || restarts=0
         if [ "$STALL_CHECK_ENABLED" = "1" ] && [ "$restarts" -ge "$STALL_MAX_RESTARTS" ]; then
           log "job: no auto-resume of '$branch' — the stall watchdog gave up on it"

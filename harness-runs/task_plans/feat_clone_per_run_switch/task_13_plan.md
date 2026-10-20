@@ -35,7 +35,7 @@
 
 **Work:**
 
-- [ ] **`run_profile_entries <copy> <kind>`**, new, printing one entry per line as a path plus its kind. Every path is exact; none is a glob.
+- [x] **`run_profile_entries <copy> <kind>`**, new, printing one entry per line as a path plus its kind. Every path is exact; none is a glob.
   - **The run copy's surface:** each `hr_run_protected_rel_paths "$MAIN_REPO"` line re-rooted at `<copy>`, as `entry`, so both the path and everything under it are denied whatever it turns out to be.
   - **On a clone:** each `COPY_GIT_PATHS` row re-rooted at `<copy>`, with its own kind. This is a mirror; declare it in the function's comment as Task 5's module header declares it.
   - **On a legacy worktree:** `<copy>/.git` as `file`.
@@ -43,12 +43,12 @@
   - It is never called in job mode (see `spawn_engine` below).
 
   Refuse an entry carrying a quote or a `*`. This is the watcher's own rule, stated in the function's comment as such, not a copy of the generator's refused set: every path it emits is a run copy, a configured path or a `git worktree list` path, and a quote would break the `jq` argument while a `*` would turn an exact entry into a glob.
-- [ ] **`run_profile_render <branch> <copy> <kind>`**, new. It writes the path `hr_run_profile_file "$HARNESS_REPO_SLUG" <branch>` prints (Task 1), never joining that path itself, through `mktemp` in that file's directory and `mv`, with the directory `mkdir -p`ed at mode `700`.
+- [x] **`run_profile_render <branch> <copy> <kind>`**, new. It writes the path `hr_run_profile_file "$HARNESS_REPO_SLUG" <branch>` prints (Task 1), never joining that path itself, through `mktemp` in that file's directory and `mv`, with the directory `mkdir -p`ed at mode `700`.
   - The content is `jq` over `$SETTINGS_PROFILE`: each entry's path appended to `.sandbox.filesystem.denyWrite`, and its `Edit` / `Write` rules appended to `.permissions.deny`, each only when not already present. Nothing else changes, `_README` included.
   - The kind → rule map is a mirror of `cli/src/generators/writeProtection.ts` → `fileToolDenyRules`, exactly as quoted under **Depends on:** Task 5, `entry` giving all four rules. Declare it in the function's comment as a mirror, naming its owner and the suite that holds it equal (Task 14), as Task 5's module header declares it.
   - `hr_run_profile_file` returning `1` (an unresolvable lane directory), or any failed step, is a refusal.
   - The file is re-rendered at every spawn, so a resume always gets one derived from the current base profile.
-- [ ] **`run_profile_check <file>`**, new. It compares `<file>` against `$SETTINGS_PROFILE`. In job mode `<file>` **is** `$SETTINGS_PROFILE`, so the appended set is empty and the comparison below holds trivially. The parse and sandbox clauses are what the job gets. It returns `0`, or `1` with one sentence in a global, when:
+- [x] **`run_profile_check <file>`**, new. It compares `<file>` against `$SETTINGS_PROFILE`. In job mode `<file>` **is** `$SETTINGS_PROFILE`, so the appended set is empty and the comparison below holds trivially. The parse and sandbox clauses are what the job gets. It returns `0`, or `1` with one sentence in a global, when:
   - the base or the per-run file does not parse as exactly one JSON object;
   - the sandbox clause fails. It is a **declared mirror of `cli/src/generators/sandboxProfile.ts`**, never a value of its own, and it has two shapes:
     - **No `_README` line begins with the `SANDBOX_OPT_OUT_MARKER` mirror:** `.sandbox.enabled`, `.sandbox.failIfUnavailable` and `.sandbox.allowUnsandboxedCommands` must equal `shippedSandboxSettings()`' values for `sandbox.enabled`, `sandbox.failIfUnavailable` and `sandbox.allowUnsandboxedCommands` (the shipped template's `true`, `true`, `false` today, read off `GRADED_SETTINGS`' template entries).
@@ -59,13 +59,13 @@
   - any appended entry is not a string.
 
   Because a settings file that fails Claude Code's validation is silently ignored under `-p` (2.1.304 `--help`), this reduces the per-run copy's validity to the base profile's. The base is graded by `doctor`'s profile checks, and an invalid base is the residual `docs/cli.md` §6 states (Task 22).
-- [ ] **`spawn_engine`:**
+- [x] **`spawn_engine`:**
   - **In job mode:** run `run_profile_check "$SETTINGS_PROFILE"` and pass `$SETTINGS_PROFILE` to `--settings`, exactly as today. Never call `hr_run_profile_file` or `run_profile_render`, and create nothing under `$XDG_STATE_HOME` or the lane directory.
   - **Otherwise:** the copy's kind is the registry record's `copy_kind`, absent meaning `worktree`. Render, then check the rendered file. Pass the per-run file to `--settings` in place of `$SETTINGS_PROFILE`.
   - On a render or check refusal, log `not launching '<branch>': <reason>` and return `1`, as its other pre-launch refusals do.
   - Make every caller handle that `1` the same way: the run's record goes to `failed` with one `failed` notification naming the reason. Today some callers ignore the status. In job mode the caller is `run_job`'s launch `case`, whose `|| registry_set "$branch" status failed` arm already catches it. Make sure the job's following status write records `failed` in `remote_status.json`, naming the reason, and that nothing is launched.
   - **At run exit**, in `classify_run_exit` before it records the terminal state: when the record's `copy_kind` is `clone` and `RUN_MAIN` is set, run `hr_run_copy_check_var "$RUN_MAIN" "$worktree"`, which syncs the clone's branch into the main checkout. Log one line on a refusal, and never change the exit classification.
-- [ ] **The header.**
+- [x] **The header.**
   - Rewrite the flag string block: `--settings <per-run copy>`, with where it lives and why that is outside every writable root. In the *JOB MODE* header, add one bullet: job mode passes the base profile after the same launch check and renders no per-run copy, because the lane is off and the copy would equal the base.
   - Rewrite the anchors comment, the `SETTINGS_PROFILE` comment, which now names the base the per-run copy is derived from, and the job-mode `--add-dir` comment, which reads `additionalDirectories` from the base.
   - Rewrite every sentence still saying a run executes in a linked worktree, to say it executes in a clone, with a legacy worktree run supported until none is left.
@@ -80,3 +80,10 @@
 - The same fixture with the base profile's `sandbox.enabled` set to `false` and no marker line: the tick logs `not launching` and the stub is never called.
 - A second fixture whose `harness.config.json` carries `sandbox.optOut`, rendered by `init`: one `tick` launches the stub, so the opt-out shape `applySandbox` writes (`failIfUnavailable` `false` included) passes the check.
 - `grep -n 'run_profile_render\|hr_run_profile_file' cli/templates/scripts/autonomous-watcher.sh` shows no call reachable with `JOB_MODE=1`: each call sits in the non-job branch of `spawn_engine`. The job-mode behaviour itself is asserted by Task 26's suite, not run here.
+- **Deviations from plan:**
+  - `run_profile_entries` also refuses a path carrying a tab, because a tab is its own line separator between path and kind; the plan named a quote and a `*` only.
+  - In job mode, a launch `spawn_engine` refused is not auto-resumed: `run_job`'s `failed)` arm breaks at once when `SPAWN_REFUSAL` is set, with the detail `not launched: <reason>`, so `remote_status.json` names the reason and nothing is launched. Without it the arm would call `job_auto_resume`, re-attempting a launch whose refusal cannot change between attempts.
+  - The refusal reason reaches every caller through a global, `SPAWN_REFUSAL`, set by a new `spawn_refuse` (which also writes the `not launching '<branch>': <reason>` line); the shared caller handling is a new `spawn_refused <branch> <log_path>` (record `failed`, `pid` cleared, one `failed` notification `not launched: <reason>`). Both `spawn_engine` state-directory refusals now go through `spawn_refuse` as well.
+  - `run_profile_render` refuses a base that is not exactly one JSON object before rendering, through the same helper `run_profile_check` uses (`run_profile_one_object`), so an empty or two-document base is refused with the check's own sentence rather than a generic render failure.
+  - The mirrors are exposed as globals a suite can read by sourcing the watcher: `RUN_PROFILE_COPY_GIT_PATHS` (`<path> <kind>` lines), `RUN_PROFILE_OPT_OUT_MARKER`, `RUN_PROFILE_SANDBOX_STRICT` and `RUN_PROFILE_SANDBOX_OPT_OUT` (JSON objects keyed by the dotted paths `shippedSandboxSettings()` returns). `run_profile_render` sets `RUN_PROFILE_FILE`; both functions set `RUN_PROFILE_REFUSAL`.
+  - Verification was run through a throwaway probe (`harness-runs/scratch/t13_probe.mjs`, run with `bash scripts/scratch-run.sh`) built on `cli/test/helpers/watcher.mjs`, rather than by hand in a shell: one task drop launched the stub with `--settings` under `$XDG_STATE_HOME/autonomous-sdlc-harness/run-profiles/`, carrying the clone's six `.git` paths in `denyWrite`, every other key equal to the base's; after the stub committed directly in the clone, the main checkout's `refs/heads/feat_x` equalled the clone's. `sandbox.enabled` `false` with no marker logged `not launching`, did not call the stub, and left the record `failed` with one `failed` notification. A fixture re-rendered by `init --force` with `sandbox.optOut` launched. The job-mode behaviour was not run (Task 26's suite).
