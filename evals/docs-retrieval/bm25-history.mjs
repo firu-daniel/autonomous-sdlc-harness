@@ -980,7 +980,8 @@ export function renderBm25History(result, { withScores = false } = {}) {
   if (result.reindexMs !== undefined) lines.push(`reindex-ms ${result.engine} ${result.corpora.a.id}: ${result.reindexMs.toFixed(1)}`);
   if (withScores) {
     lines.push('');
-    for (const step of result.steps) lines.push(...scoreLines(step.id, step.state));
+    // Not a spread: a --repeat capture holds more score lines than one call's argument limit.
+    for (const step of result.steps) for (const line of scoreLines(step.id, step.state)) lines.push(line);
   }
   return `${lines.join('\n')}\n`;
 }
@@ -1012,7 +1013,8 @@ export function renderBm25States(result, { withScores = false } = {}) {
   }
   if (withScores) {
     lines.push('');
-    for (const step of result.steps) if (step.state !== undefined) lines.push(...scoreLines(step.id, step.state));
+    // Not a spread: a --repeat capture holds more score lines than one call's argument limit.
+    for (const step of result.steps) if (step.state !== undefined) for (const line of scoreLines(step.id, step.state)) lines.push(line);
   }
   return `${lines.join('\n')}\n`;
 }

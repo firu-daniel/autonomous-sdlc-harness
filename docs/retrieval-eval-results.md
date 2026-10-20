@@ -28795,3 +28795,824 @@ Every one is below, as step, query, key, column and both runs.
 | `s2` | `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -1.580668 | -1.554279 |
 | `s2` | `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.578847 | -1.558516 |
 | `s2` | `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -1.458738 | -1.453483 |
+
+### The stray index-scan score
+
+**The lead.** The branch before this one found that the score statement, run as the `chunks_bm25` index
+scan on the compose Postgres, sometimes returned one (query, key) score that no other run returned:
+about one value per 300 queries, and none on PGlite. In five runs of `self-docs` against
+`fixture-catalog`, three runs each had one such value: `q-sd-search-abstains` →
+`docs/analyze.md#8-how-this-is-verified` −0.221485 against −0.735353, `q-sd-cross-asset-reference` →
+`docs/github-run-control.md#5-lifecycle-comments-and-state-labels` −0.341426 against −1.891997, and
+`q-sd-analyze-writes` → `docs/development.md#7-releasing` −1.629181 against −4.567675. That probe read the
+operator column only. Those figures are leads, recorded in that branch's task prompt under `## A second
+defect, found while implementing Task 1` (commit `234162d2`). The task prompt that opened this work
+describes two upstream issues, and neither was read on this branch: `timescale/pg_textsearch#557`, a
+wrong top-N before the memtable is spilled, open on 1.3.1 and 1.5.1; and `#516`, the score changing
+within a statement when the index changes, fixed after 1.4.0.
+
+**The runs.** 2026-10-20, the states sequence with `--repeat 30`, once per engine and corpus, and the
+Postgres `self-docs` run twice; then the history sequence with `self-docs` as A and `fixture-catalog` as
+B on Postgres with `--repeat 15`, the lead's own shape. `fixture-catalog` is at `{ files: 9, chunks: 41
+}` and `self-docs` at `{ files: 71, chunks: 819 }` in every run. The engines, the `pg_textsearch` version,
+the score statement and the states are those in `### How the probe reads a score, and the setup`, and
+the history steps are those in `### What still differs after REINDEX`. Each repetition scores every
+query of the corpus's set once; on Postgres each repetition is its own `psql` process. Every value of a
+later repetition is compared with the first repetition's, per (query, key) and per column, a hit on one
+side only included. `bm25_summarize_index`, and on Postgres `autovacuum_count`, are read before the first
+repetition and after the last. The probe plan was the index scan at every step of every run, so no step
+was re-scored. The commands are in `docs/retrieval-eval.md` → `### The BM25 index-state probe`: the
+states-sequence and history-sequence commands with `--repeat 30` and `--repeat 15`, each with
+`--capture`.
+
+**Per engine, corpus and state.** Memtable documents are `bm25_summarize_index`'s, before the first
+repetition and after the last. "Disagreeing" counts every (repetition, query, key, column) whose value
+differs from the first repetition's.
+
+| Engine | Corpus | Step | Memtable docs, before → after | Values compared | Disagreeing `scan` | Disagreeing `operator` | Summary and `autovacuum_count` across the repetitions |
+|---|---|---|---|---|---|---|---|
+| PGlite | `fixture-catalog` | `t0` | 41 → 41 | 12702 | 0 | 0 | Summary identical; no `autovacuum_count` on PGlite |
+| PGlite | `fixture-catalog` | `t1`, `t2`, `t3`, `t4` | 0 → 0 | 12702 each | 0 | 0 | Summary identical |
+| Postgres | `fixture-catalog` | `t0` | 41 → 41 | 12702 | 0 | 0 | Both unchanged, `autovacuum_count` 0 |
+| Postgres | `fixture-catalog` | `t1`, `t3`, `t4` | 0 → 0 | 12702 each | 0 | 0 | Both unchanged, 0 |
+| PGlite | `self-docs` | `t0` | 30 → 30 | 548216 | 0 | 0 | Summary differs in one line only, `DSA total size: 1048576 bytes (1.00 MB)` → `DSA total size: 2097152 bytes (2.00 MB)` |
+| PGlite | `self-docs` | `t1`, `t2`, `t3`, `t4` | 0 → 0 | 548216 each | 0 | 0 | Summary identical |
+| Postgres, run 1 | `self-docs` | `t0` | 30 → 0 | 548216 | 7760 | 1 | **Changed:** 3 segments holding 789 documents → 4 segments holding 819; `autovacuum_count` 0 → 0 |
+| Postgres, run 1 | `self-docs` | `t1`, `t3`, `t4` | 0 → 0 | 548216 each | 0 | 0 | Both unchanged, 0 |
+| Postgres, run 2 | `self-docs` | `t0` | 30 → 0 | 548216 | 6583 | 29 | **Changed:** as run 1; `autovacuum_count` 0 → 0 |
+| Postgres, run 2 | `self-docs` | `t1`, `t3`, `t4` | 0 → 0 | 548216 each | 0 | 0 | Both unchanged, 0 |
+| Postgres, history | A `self-docs` | `s0` | 30 → 0 | 264656 | 728 | 0 | **Changed:** 3 segments holding 789 → 4 segments holding 819; `autovacuum_count` 0 → 0 |
+| Postgres, history | A `self-docs` | `s1` | 71 → 0 | 269920 | 5054 | 14 | **Changed:** 3 segments holding 789 → 4 segments holding 860; `autovacuum_count` 0 → 0 |
+| Postgres, history | A `self-docs` | `s2`, `s4`, `s5`, `s7` | 0 → 0 | 264656 each | 0 | 0 | Both unchanged, 0 |
+| Postgres, history | A `self-docs` | `s6` | 2 → 2 | 264656 | 0 | 0 | Both unchanged, 0 |
+
+In each changed block the memtable was emptied into one new segment while the repetitions only read:
+no statement between the two summaries writes, and `autovacuum_count` stayed 0. The probe does not
+identify what triggered it. The resulting segments match `t1`'s, after `SELECT
+bm25_spill_index('chunks_bm25')`: 4 segments, 218 pages, 22953 terms, 819 documents at `t0`.
+
+**Where in the repetitions the index changed.** A disagreeing `scan` value is the same in every
+repetition from the change onward, so the first disagreeing repetition locates it:
+
+- **Run 1, `t0`:** during repetition 3, within `q-sd-deny-guard`, the second query of 20. Its `scan`
+  values are still the first repetition's, and one of its `operator` values is not. From
+  `q-sd-new-subcommand` on, 254 `scan` values move in repetition 3; from repetition 4 on, all 278 move,
+  `q-sd-new-config-key`'s and `q-sd-deny-guard`'s included.
+- **Run 2, `t0`:** during repetition 1, within `q-sd-stack-detection`, the 14th query. Its `scan` values
+  are pre-change, one of its `operator` values is not, and every query after it was already scored
+  after the change. The 227 `scan` values of it and the queries before it move in every repetition
+  from 2 on.
+- **History, `s0`:** during repetition 1, between `q-sd-run-gates` (4th) and `q-sd-state-dir` (5th). No
+  `operator` value moves.
+- **History, `s1`:** during repetition 1, within `q-sd-second-init`, the 15th query, with one `operator`
+  value moving, as in run 2.
+
+**The 278 `scan` values that move are the memtable's rows changing to their segment score.** They are
+on 29 keys: 1 in `docs/watcher.md` and the rest in three `docs/work-report-research/` files. After the
+change each reads exactly the `scan` value that run 2's `t1` reads for the same query and key, on all
+278. Both `t0` runs read the same value before and the same value after on each of the 227 (query, key,
+column) entries they share. Each of the 52 `s0` entries is one of them, with the same two values. This
+is the state difference `### The score each index state ranks by` records between `t0` and `t1`,
+reached here without a write.
+
+**The `operator` values are a different thing: one value per event, wrong within its own row.** The
+probe reads the operator twice in one row: `operator`, rounded on the server, and `operator_exact`,
+unrounded. In the three moved `operator` values the two disagree within one row of one statement:
+
+| Run | Step, repetition | Query | Key | `scan` | `operator` | `operator_exact` | `operator` in every other repetition |
+|---|---|---|---|---|---|---|---|
+| Postgres, run 1 | `t0`, r3 | `q-sd-deny-guard` | `docs/guard-verification.md#22-expansion-bypass-rows` | not captured | −6.303114 | not captured | −6.419051 |
+| Postgres, run 2 | `t0`, r1 | `q-sd-stack-detection` | `docs/guard-verification.md#31-narrowed--allow--silent` | −1.947800 | −1.906893 | −1.947800189256668 | −1.947800 |
+| Postgres, history | `s1`, r1 | `q-sd-second-init` | `docs/work-report-research/README.md#pre-existing-bugs-found-along-the-way-confirmed-by-a-reviewer` | −2.607430 | −2.266997 | −2.6074300408363342 | −2.607430 |
+
+Run 1 wrote no capture, so its stray row's `scan` and `operator_exact` were not read. Run 2's and the
+history run's 29 and 14 `operator` disagreements are each that one first-repetition value, listed
+against every later repetition.
+
+**The one-run values earlier subsections handed here, each placed in its state.** Each was taken on
+Postgres `self-docs` with no `--repeat`. The memtable figure is `bm25_summarize_index`'s at the step,
+from that run's capture.
+
+| Handed by | Stamp | Step | Memtable docs at the step, run 1 / run 2 | Values listed | Of them `operator` | The `operator` value against its row's own reading |
+|---|---|---|---|---|---|---|
+| `### The score each index state ranks by` | `{ files: 71, chunks: 813 }` | `t0` | 7 / 7 | 50 | 1 | `q-sd-run-gates` → `docs/work-report-research/reviews/task-plan-reviewer.md#must-fix`: run 2 `operator` −6.070929, while that row's `scan` reads −6.122592 and its `operator_exact` −6.122591853141785, as run 1's |
+| `### What still differs after REINDEX` | `{ files: 71, chunks: 818 }` | `s0` | 18 / 18 | 28 | 1 | `q-sd-stack-detection` → `docs/retrieval-eval-results.md#corpus-self-docs--backend-python`: run 2 `operator` −5.949055, while that row's `scan` reads −5.990453 and its `operator_exact` −5.990452811121941, as run 1's |
+| `### What still differs after REINDEX` | `{ files: 71, chunks: 818 }` | `s1` | 59 / 59 | 161 | 1 | `q-sd-cross-asset-reference` → `docs/retrieval-eval-results.md#spread-repetitions-and-what-moved`: run 1 `operator` −4.058823, while that row's `scan` reads −4.220252 and its `operator_exact` −4.2202518582344055, as run 2's |
+| `### What still differs after REINDEX` | `{ files: 71, chunks: 818 }` | `s2` | 0 / 59 | 47 | 0 | — |
+
+Every one is in a step whose index held memtable documents at the step, or, for `s2`, in the pair where
+one run's memtable had been emptied before the step and the other's had not. Each `operator` one is the
+same form as the three above: `operator` disagreeing with `scan` and `operator_exact` of its own row.
+
+**Every disagreement of this task's runs.** Only the Postgres `self-docs` blocks marked changed above
+have any. Each row is one (query, key, column): its value in the first repetition, the value every
+disagreeing repetition read, and the repetitions that read it, per run. A row's two values are the same
+in every run that lists it, and no repetition read a third. "none" means that run listed no
+disagreement for it. In run 2 the 51 rows it does not list belong to queries scored after the change
+in its first repetition.
+
+**Postgres `self-docs`, `t0` in both states-sequence runs and `s0` in the history run.**
+
+| Query | Key | Column | `r1` | Later | Run 1 | Run 2 | History `s0` |
+|---|---|---|---|---|---|---|---|
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -4.038979 | -4.057068 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -3.921275 | -3.949205 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -3.495382 | -3.510338 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -3.085175 | -3.095923 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -2.648918 | -2.660371 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -2.346287 | -2.370328 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -1.787785 | -1.804438 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -1.611781 | -1.620772 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -1.581086 | -1.585399 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -1.528569 | -1.557241 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.523073 | -1.535143 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.493712 | -1.519091 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -1.277068 | -1.301377 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -1.165642 | -1.175070 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -1.105758 | -1.138245 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.022129 | -1.040429 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-deny-guard` | `docs/guard-verification.md#22-expansion-bypass-rows` | `operator` | -6.419051 | -6.303114 | r3 | none | none |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -4.695407 | -4.775873 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -2.256407 | -2.263800 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -1.825327 | -1.875379 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -1.816669 | -1.818394 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.810681 | -1.825030 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -1.726287 | -1.757702 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -1.691504 | -1.714217 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -1.127858 | -1.139015 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-subcommand` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -2.346287 | -2.370328 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-subcommand` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -1.772416 | -1.785041 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-subcommand` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -1.740123 | -1.746186 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -7.872875 | -7.930100 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -7.580843 | -7.660351 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -4.917943 | -4.943481 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -4.681727 | -4.722239 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -4.456702 | -4.509297 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -3.893460 | -3.939690 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -3.887132 | -3.968003 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -3.845651 | -3.889642 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -3.364815 | -3.366885 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -3.298122 | -3.306683 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -3.267900 | -3.294330 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -3.210081 | -3.234509 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#review-response` | `scan` | -3.154655 | -3.162781 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -3.079024 | -3.083901 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -2.884174 | -2.888963 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -2.883209 | -2.912751 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -2.492334 | -2.531140 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.839365 | -1.843540 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -1.780524 | -1.787506 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -1.775057 | -1.778296 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -1.754818 | -1.761159 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -1.691869 | -1.695794 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -1.657348 | -1.664897 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -1.507995 | -1.517385 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.544883 | -0.547922 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -6.588382 | -6.667645 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -4.939462 | -5.016406 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -3.972713 | -3.989538 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -3.436150 | -3.472824 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -3.326783 | -3.338853 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -2.527913 | -2.538730 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -2.190534 | -2.214180 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -1.965778 | -1.976774 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -1.817723 | -1.825648 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -1.764874 | -1.795383 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -1.476856 | -1.504967 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.373832 | -1.388273 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -1.328134 | -1.336404 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -1.281183 | -1.316314 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -1.275106 | -1.276316 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -1.187180 | -1.197113 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -1.167800 | -1.170986 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -1.093429 | -1.099028 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.544883 | -0.547922 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.511542 | -0.513548 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -4.718201 | -4.782929 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -3.947464 | -3.965144 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -3.835649 | -3.845461 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -3.601269 | -3.614798 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -2.914258 | -2.966640 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -1.717821 | -1.723601 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -1.612864 | -1.613922 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -1.534420 | -1.548908 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.529651 | -1.548908 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -1.518806 | -1.543576 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -1.423893 | -1.428854 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -6.152997 | -6.293133 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -3.615720 | -3.618346 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -3.138070 | -3.169352 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -2.703303 | -2.777431 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -2.640877 | -2.688937 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.381629 | -2.413382 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.248386 | -2.266571 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.940146 | -1.949620 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -1.701128 | -1.708407 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -1.656431 | -1.670290 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -1.629391 | -1.633836 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -1.425031 | -1.433905 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -1.316085 | -1.341137 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.183756 | -1.203870 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -1.065944 | -1.069658 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -1.026734 | -1.031332 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -2.950124 | -2.958771 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -2.792005 | -2.839444 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -2.707504 | -2.761704 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.705741 | -2.734952 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -2.698054 | -2.699939 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#review-response` | `scan` | -2.526953 | -2.537891 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -2.491071 | -2.522892 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -2.483584 | -2.493461 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.201296 | -2.217048 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -1.933774 | -1.957684 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -1.834033 | -1.837866 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -0.675165 | -0.677378 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -0.670644 | -0.678904 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -0.669243 | -0.675439 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.639237 | -0.641883 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -0.635959 | -0.641883 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.573350 | -0.576549 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -0.541795 | -0.546088 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -0.503524 | -0.508478 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -0.478468 | -0.480135 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -3.972900 | -4.039831 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -3.397284 | -3.413340 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -2.673551 | -2.684636 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -2.604587 | -2.626379 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -2.562069 | -2.569059 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -2.464310 | -2.472384 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -2.073031 | -2.123060 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.977515 | -1.993187 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.672648 | -1.702594 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -0.649328 | -0.653287 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.544883 | -0.547922 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.511542 | -0.513548 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -0.490008 | -0.494634 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.394060 | -0.397247 | r3–r30 | r2–r30 | none |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -0.649328 | -0.653287 | r3–r30 | r2–r30 | none |
+| `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -0.637346 | -0.645195 | r3–r30 | r2–r30 | none |
+| `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -0.604383 | -0.610013 | r3–r30 | r2–r30 | none |
+| `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -0.574138 | -0.575821 | r3–r30 | r2–r30 | none |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.544883 | -0.547922 | r3–r30 | r2–r30 | none |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -0.543620 | -0.546646 | r3–r30 | r2–r30 | none |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.511542 | -0.513548 | r3–r30 | r2–r30 | none |
+| `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -0.490008 | -0.494634 | r3–r30 | r2–r30 | none |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.394060 | -0.397247 | r3–r30 | r2–r30 | none |
+| `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -0.345544 | -0.351730 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -5.316369 | -5.327751 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -5.166443 | -5.217275 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -4.866122 | -4.920241 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -4.218097 | -4.263839 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -3.485568 | -3.522206 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -3.147726 | -3.150715 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -2.835551 | -2.846669 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.532174 | -2.557221 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -1.591199 | -1.621045 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -1.350405 | -1.354362 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -1.329394 | -1.354698 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-reviewer.md#review-response` | `scan` | -1.327622 | -1.333369 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -1.152526 | -1.163408 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -1.140798 | -1.159403 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.064009 | -1.083058 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -0.917648 | -0.934347 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -7.083829 | -7.159740 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -5.723363 | -5.811337 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -5.459342 | -5.542094 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -5.429748 | -5.434903 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -3.625957 | -3.655885 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -3.203929 | -3.264027 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -2.676776 | -2.727728 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -2.614764 | -2.626475 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -2.118926 | -2.132189 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.053344 | -2.060244 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -2.052786 | -2.063147 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.033626 | -2.040393 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.938563 | -1.942713 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -1.610613 | -1.642982 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.606932 | -1.619667 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -1.473486 | -1.487983 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -5.329547 | -5.468697 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -4.119907 | -4.187735 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -3.704641 | -3.732138 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.316254 | -2.345549 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -1.827316 | -1.838921 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -0.797944 | -0.799190 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -0.741811 | -0.745689 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -0.725799 | -0.726844 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -0.700600 | -0.705185 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -0.676414 | -0.679829 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -0.670705 | -0.671820 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -0.667749 | -0.671820 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -0.647421 | -0.648807 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -0.646646 | -0.653443 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -0.625137 | -0.629029 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -0.625137 | -0.629029 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -0.573870 | -0.576325 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.560341 | -0.563466 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -0.531412 | -0.541380 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -0.529501 | -0.533697 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.526054 | -0.528117 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -0.514664 | -0.517299 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -0.498781 | -0.506916 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -0.421295 | -0.422175 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -2.957989 | -2.972433 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -2.887325 | -2.896286 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -2.787729 | -2.805676 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -2.670851 | -2.677025 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -2.622764 | -2.624205 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -2.300957 | -2.320084 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -2.225642 | -2.262023 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -2.186354 | -2.210055 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.092486 | -2.118264 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -2.084782 | -2.132697 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.146170 | -1.153005 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -1.085813 | -1.092609 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#review-response` | `scan` | -1.076242 | -1.079014 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -1.068461 | -1.073328 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -1.053684 | -1.057230 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -1.027128 | -1.035592 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.026153 | -1.029516 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -1.013738 | -1.016197 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -1.000025 | -1.003218 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -0.990954 | -0.991997 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -0.986867 | -0.992713 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -0.980519 | -0.990566 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.971547 | -0.975569 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -0.952102 | -0.956450 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -0.940880 | -0.942998 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -0.918196 | -0.920887 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -0.897219 | -0.899789 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -0.826421 | -0.841922 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/guard-verification.md#31-narrowed--allow--silent` | `operator` | -1.906893 | -1.947800 | none | r2–r30 | none |
+| `q-sd-second-init` | `docs/watcher.md#3-the-daemon` | `scan` | -8.229276 | -8.229277 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -5.203752 | -5.223309 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -5.029585 | -5.098451 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -3.247891 | -3.332348 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -3.078114 | -3.110905 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -3.038274 | -3.068618 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -2.806080 | -2.814246 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.794801 | -2.808418 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -2.763785 | -2.789372 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -2.692665 | -2.707685 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -2.667779 | -2.675852 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.485702 | -2.509409 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -2.231076 | -2.247498 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -2.118614 | -2.153166 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -1.994249 | -2.011612 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -1.960750 | -1.986886 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -1.458712 | -1.460097 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -1.329933 | -1.332748 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.237753 | -1.240830 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.177996 | -1.193821 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -1.141828 | -1.151955 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -1.128661 | -1.137508 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.071295 | -1.079785 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -0.675165 | -0.677378 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.526054 | -0.528117 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -0.514664 | -0.517299 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -0.421295 | -0.422175 | r3–r30 | none | none |
+| `q-sd-negative-ingress` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -2.665162 | -2.691384 | r3–r30 | none | none |
+| `q-sd-negative-ingress` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -2.281691 | -2.286459 | r3–r30 | none | none |
+| `q-sd-negative-ingress` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.148859 | -2.164165 | r3–r30 | none | none |
+| `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -2.340610 | -2.345709 | r3–r30 | none | none |
+| `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -2.039244 | -2.047969 | r3–r30 | none | none |
+| `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.845308 | -1.876661 | r3–r30 | none | none |
+| `q-sd-negative-tungsten` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.545407 | -1.552089 | r3–r30 | none | none |
+| `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -1.425717 | -1.451662 | r3–r30 | none | none |
+| `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -1.366036 | -1.406169 | r3–r30 | none | none |
+| `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.262722 | -1.285329 | r3–r30 | none | none |
+| `q-sd-negative-blog` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -2.609341 | -2.614793 | r3–r30 | none | none |
+| `q-sd-negative-blog` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -2.385494 | -2.450907 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -2.118926 | -2.132189 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -2.108057 | -2.117156 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.053344 | -2.060244 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -2.052786 | -2.063147 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.033626 | -2.040393 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -1.825163 | -1.840227 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.768351 | -1.785516 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -1.612731 | -1.642982 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -1.610613 | -1.642982 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.606932 | -1.619667 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -1.347383 | -1.373030 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -1.163320 | -1.164425 | r3–r30 | none | none |
+
+**Postgres `self-docs`, history run, `s1`.**
+
+| Query | Key | Column | `r1` | Later | Repetitions |
+|---|---|---|---|---|---|
+| `q-sd-new-config-key` | `docs/webhooks.md#replaying-missed-events` | `scan` | -5.015410 | -5.030988 | r2–r15 |
+| `q-sd-new-config-key` | `docs/api-auth.md#rotating-a-key` | `scan` | -4.569855 | -4.574067 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -4.070919 | -4.089681 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -3.921550 | -3.950242 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -3.547617 | -3.563364 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -3.088348 | -3.099432 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -2.664542 | -2.676386 | r2–r15 |
+| `q-sd-new-config-key` | `docs/api-auth.md#api-keys` | `scan` | -2.391612 | -2.393494 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -2.343908 | -2.368800 | r2–r15 |
+| `q-sd-new-config-key` | `docs/exceptions.md#returns-to-sender` | `scan` | -2.234335 | -2.237783 | r2–r15 |
+| `q-sd-new-config-key` | `docs/api-auth.md#scopes` | `scan` | -2.061099 | -2.066700 | r2–r15 |
+| `q-sd-new-config-key` | `docs/INDEX.md` | `scan` | -1.912537 | -1.914142 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -1.814531 | -1.832013 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -1.639537 | -1.649015 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -1.607204 | -1.611745 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.546218 | -1.558893 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -1.545872 | -1.575762 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.515412 | -1.542038 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -1.289360 | -1.314615 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -1.173943 | -1.183686 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -1.112150 | -1.145652 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.026131 | -1.044926 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -4.781335 | -4.865946 | r2–r15 |
+| `q-sd-deny-guard` | `docs/webhooks.md#subscribing-to-events` | `scan` | -4.687421 | -4.701891 | r2–r15 |
+| `q-sd-deny-guard` | `docs/exceptions.md#claims-for-a-lost-parcel` | `scan` | -3.044040 | -3.049574 | r2–r15 |
+| `q-sd-deny-guard` | `docs/exceptions.md#redelivery-attempts` | `scan` | -2.597098 | -2.605164 | r2–r15 |
+| `q-sd-deny-guard` | `docs/exceptions.md#exception-codes` | `scan` | -2.581113 | -2.589081 | r2–r15 |
+| `q-sd-deny-guard` | `docs/api-auth.md#api-keys` | `scan` | -2.577147 | -2.589081 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -2.319895 | -2.327785 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.855116 | -1.870324 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -1.840775 | -1.892529 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -1.831830 | -1.833612 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -1.708389 | -1.740292 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -1.702747 | -1.726138 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -1.140838 | -1.152363 | r2–r15 |
+| `q-sd-new-subcommand` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -2.343908 | -2.368800 | r2–r15 |
+| `q-sd-new-subcommand` | `docs/webhooks.md#replaying-missed-events` | `scan` | -2.244713 | -2.251685 | r2–r15 |
+| `q-sd-new-subcommand` | `docs/exceptions.md#returns-to-sender` | `scan` | -2.234335 | -2.237783 | r2–r15 |
+| `q-sd-new-subcommand` | `docs/api-auth.md#rotating-a-key` | `scan` | -2.220646 | -2.224053 | r2–r15 |
+| `q-sd-new-subcommand` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -1.755141 | -1.767983 | r2–r15 |
+| `q-sd-new-subcommand` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -1.728288 | -1.734491 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -8.036443 | -8.095713 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -7.772997 | -7.855981 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -5.127784 | -5.155220 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -4.877972 | -4.921525 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -4.583892 | -4.639334 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -4.040298 | -4.126500 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -4.031678 | -4.080925 | r2–r15 |
+| `q-sd-run-gates` | `docs/exceptions.md#claims-for-a-lost-parcel` | `scan` | -4.015471 | -4.018232 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -3.980683 | -4.027576 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -3.473871 | -3.476055 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -3.466384 | -3.475674 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -3.322037 | -3.348300 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -3.312985 | -3.340482 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#review-response` | `scan` | -3.268136 | -3.276889 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -3.213977 | -3.219251 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -3.007195 | -3.039130 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -2.986336 | -2.991484 | r2–r15 |
+| `q-sd-run-gates` | `docs/INDEX.md` | `scan` | -2.629519 | -2.633072 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -2.589390 | -2.630825 | r2–r15 |
+| `q-sd-run-gates` | `docs/routing.md#how-a-route-is-chosen` | `scan` | -2.125571 | -2.132315 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.924124 | -1.928668 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -1.879886 | -1.887508 | r2–r15 |
+| `q-sd-run-gates` | `docs/routing.md#cut-off-times` | `scan` | -1.878678 | -1.881458 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -1.856962 | -1.860487 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -1.834943 | -1.841840 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -1.766589 | -1.770845 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -1.729187 | -1.737361 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -1.570478 | -1.580609 | r2–r15 |
+| `q-sd-run-gates` | `docs/webhooks.md#subscribing-to-events` | `scan` | -1.551887 | -1.554708 | r2–r15 |
+| `q-sd-run-gates` | `docs/rates.md#remote-area-surcharge` | `scan` | -1.524469 | -1.526843 | r2–r15 |
+| `q-sd-run-gates` | `docs/labels.md#the-routing-barcode` | `scan` | -1.343816 | -1.350000 | r2–r15 |
+| `q-sd-run-gates` | `docs/tracking.md#estimated-delivery-window` | `scan` | -1.342740 | -1.344851 | r2–r15 |
+| `q-sd-run-gates` | `docs/routing.md#rerouting-a-parcel-in-flight` | `scan` | -1.301859 | -1.303844 | r2–r15 |
+| `q-sd-run-gates` | `docs/rates.md#rate-cards` | `scan` | -1.293980 | -1.295940 | r2–r15 |
+| `q-sd-run-gates` | `docs/labels.md#printing-and-label-stock` | `scan` | -0.634017 | -0.634984 | r2–r15 |
+| `q-sd-run-gates` | `docs/routing.md#zone-graph` | `scan` | -0.624510 | -0.627332 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.598485 | -0.601945 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -6.788215 | -6.871640 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -5.027122 | -5.107568 | r2–r15 |
+| `q-sd-state-dir` | `docs/labels.md#the-routing-barcode` | `scan` | -4.904999 | -4.927571 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -4.129370 | -4.147341 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -3.554385 | -3.593393 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -3.459427 | -3.472299 | r2–r15 |
+| `q-sd-state-dir` | `docs/api-auth.md#api-keys` | `scan` | -2.907482 | -2.920945 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -2.585481 | -2.596957 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -2.271816 | -2.296833 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -2.087148 | -2.099284 | r2–r15 |
+| `q-sd-state-dir` | `docs/exceptions.md#exception-codes` | `scan` | -2.030779 | -2.037048 | r2–r15 |
+| `q-sd-state-dir` | `docs/depot-operations.md#inbound-scanning` | `scan` | -2.021448 | -2.024549 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -1.925922 | -1.934640 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -1.878684 | -1.912035 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -1.491473 | -1.520688 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.446656 | -1.462431 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -1.396816 | -1.405827 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -1.288998 | -1.325239 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -1.282734 | -1.283982 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -1.249040 | -1.259871 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -1.227926 | -1.231395 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -1.147131 | -1.153201 | r2–r15 |
+| `q-sd-state-dir` | `docs/labels.md#printing-and-label-stock` | `scan` | -0.634017 | -0.634984 | r2–r15 |
+| `q-sd-state-dir` | `docs/routing.md#zone-graph` | `scan` | -0.624510 | -0.627332 | r2–r15 |
+| `q-sd-state-dir` | `docs/routing.md#cut-off-times` | `scan` | -0.615284 | -0.616195 | r2–r15 |
+| `q-sd-state-dir` | `docs/routing.md#how-a-route-is-chosen` | `scan` | -0.613472 | -0.616195 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.598485 | -0.601945 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.560622 | -0.562895 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -4.798215 | -4.865318 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -4.005941 | -4.024404 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -3.980629 | -3.991214 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -3.722085 | -3.736545 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/exceptions.md#claims-for-a-lost-parcel` | `scan` | -3.044040 | -3.049574 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -3.007852 | -3.063135 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/exceptions.md#redelivery-attempts` | `scan` | -2.597098 | -2.605164 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/exceptions.md#exception-codes` | `scan` | -2.581113 | -2.589081 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/webhooks.md#subscribing-to-events` | `scan` | -2.581113 | -2.589081 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/api-auth.md#api-keys` | `scan` | -2.577147 | -2.589081 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -1.795734 | -1.802012 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -1.647982 | -1.649095 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -1.565537 | -1.580745 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.560532 | -1.580745 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -1.554896 | -1.581083 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -1.454808 | -1.460029 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -6.238745 | -6.384683 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -3.689330 | -3.692073 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -3.196563 | -3.229105 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/exceptions.md#claims-for-a-lost-parcel` | `scan` | -3.044040 | -3.049574 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -2.739339 | -2.816356 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -2.645388 | -2.694788 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/exceptions.md#redelivery-attempts` | `scan` | -2.597098 | -2.605164 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/exceptions.md#exception-codes` | `scan` | -2.581113 | -2.589081 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/webhooks.md#subscribing-to-events` | `scan` | -2.581113 | -2.589081 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/api-auth.md#api-keys` | `scan` | -2.577147 | -2.589081 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.445462 | -2.478895 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.261803 | -2.280576 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -2.011665 | -2.021858 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -1.763253 | -1.771079 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -1.715249 | -1.730124 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -1.686255 | -1.691019 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -1.474266 | -1.483776 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/api-auth.md#scopes` | `scan` | -1.404853 | -1.411318 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/routing.md#zone-graph` | `scan` | -1.379574 | -1.385808 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -1.352778 | -1.379276 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/INDEX.md` | `scan` | -1.241785 | -1.243463 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.221993 | -1.243463 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -1.096720 | -1.100657 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -1.055211 | -1.060075 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/webhooks.md#subscribing-to-events` | `scan` | -3.517847 | -3.528707 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -3.027691 | -3.036864 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -2.849181 | -2.899241 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.771423 | -2.802143 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -2.748919 | -2.805641 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -2.739036 | -2.741007 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#review-response` | `scan` | -2.576631 | -2.588205 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -2.532943 | -2.566275 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -2.526677 | -2.536994 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.241299 | -2.257535 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -1.968932 | -1.993831 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -1.851016 | -1.854988 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/exceptions.md#exception-codes` | `scan` | -0.830235 | -0.831063 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/api-auth.md#api-keys` | `scan` | -0.803323 | -0.804875 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/routing.md#cut-off-times` | `scan` | -0.790115 | -0.790615 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/api-auth.md#rotating-a-key` | `scan` | -0.753731 | -0.754414 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/tracking.md#event-ordering-and-duplicates` | `scan` | -0.753050 | -0.754414 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/rates.md#rate-cards` | `scan` | -0.748314 | -0.748987 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/routing.md#how-a-route-is-chosen` | `scan` | -0.736406 | -0.738364 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -0.705830 | -0.708231 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -0.699215 | -0.708131 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -0.698270 | -0.704968 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.665894 | -0.668745 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -0.662364 | -0.668745 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/rates.md#fuel-surcharge` | `scan` | -0.651880 | -0.652901 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/rates.md#remote-area-surcharge` | `scan` | -0.647824 | -0.648833 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/webhooks.md#replaying-missed-events` | `scan` | -0.644815 | -0.646818 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/exceptions.md#returns-to-sender` | `scan` | -0.641834 | -0.642824 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.598485 | -0.601945 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -0.564421 | -0.569048 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -0.523290 | -0.528603 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -0.496467 | -0.498249 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -4.051659 | -4.121332 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -3.460677 | -3.477602 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/rates.md#remote-area-surcharge` | `scan` | -2.850197 | -2.854637 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -2.730680 | -2.742273 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -2.625580 | -2.648348 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -2.581198 | -2.588490 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -2.534554 | -2.543174 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -2.157012 | -2.209843 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -2.026769 | -2.043385 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.719616 | -1.751114 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -0.713421 | -0.717930 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/labels.md#printing-and-label-stock` | `scan` | -0.634017 | -0.634984 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/routing.md#zone-graph` | `scan` | -0.624510 | -0.627332 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/routing.md#cut-off-times` | `scan` | -0.615284 | -0.616195 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/routing.md#how-a-route-is-chosen` | `scan` | -0.613472 | -0.616195 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.598485 | -0.601945 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.560622 | -0.562895 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -0.534254 | -0.539444 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.428528 | -0.432085 | r2–r15 |
+| `q-sd-usage-limit` | `docs/exceptions.md#exception-codes` | `scan` | -3.415181 | -3.425724 | r2–r15 |
+| `q-sd-usage-limit` | `docs/exceptions.md#claims-for-a-lost-parcel` | `scan` | -3.415181 | -3.425724 | r2–r15 |
+| `q-sd-usage-limit` | `docs/INDEX.md` | `scan` | -2.995718 | -2.999766 | r2–r15 |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -0.713421 | -0.717930 | r2–r15 |
+| `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -0.699215 | -0.708131 | r2–r15 |
+| `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -0.662364 | -0.668745 | r2–r15 |
+| `q-sd-usage-limit` | `docs/labels.md#printing-and-label-stock` | `scan` | -0.634017 | -0.634984 | r2–r15 |
+| `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -0.629071 | -0.630977 | r2–r15 |
+| `q-sd-usage-limit` | `docs/routing.md#zone-graph` | `scan` | -0.624510 | -0.627332 | r2–r15 |
+| `q-sd-usage-limit` | `docs/routing.md#cut-off-times` | `scan` | -0.615284 | -0.616195 | r2–r15 |
+| `q-sd-usage-limit` | `docs/routing.md#how-a-route-is-chosen` | `scan` | -0.613472 | -0.616195 | r2–r15 |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.598485 | -0.601945 | r2–r15 |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -0.593747 | -0.597152 | r2–r15 |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.560622 | -0.562895 | r2–r15 |
+| `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -0.534254 | -0.539444 | r2–r15 |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.428528 | -0.432085 | r2–r15 |
+| `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -0.374572 | -0.381433 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -5.432780 | -5.444824 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -5.277916 | -5.331506 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -4.965104 | -5.022212 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -4.299001 | -4.347003 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -3.513968 | -3.552287 | r2–r15 |
+| `q-sd-search-abstains` | `docs/tracking.md#status-codes` | `scan` | -3.371508 | -3.376711 | r2–r15 |
+| `q-sd-search-abstains` | `docs/depot-operations.md#inbound-scanning` | `scan` | -3.350852 | -3.355992 | r2–r15 |
+| `q-sd-search-abstains` | `docs/api-auth.md#rotating-a-key` | `scan` | -3.243062 | -3.248037 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -3.182829 | -3.185926 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -2.850176 | -2.861732 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.536280 | -2.561901 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -1.632377 | -1.663939 | r2–r15 |
+| `q-sd-search-abstains` | `docs/INDEX.md` | `scan` | -1.626131 | -1.628328 | r2–r15 |
+| `q-sd-search-abstains` | `docs/labels.md#the-routing-barcode` | `scan` | -1.413776 | -1.420282 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -1.398476 | -1.402713 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-reviewer.md#review-response` | `scan` | -1.380060 | -1.386258 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -1.361511 | -1.388179 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -1.187691 | -1.199228 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -1.179618 | -1.199485 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.083552 | -1.103399 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -0.942950 | -0.960559 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -7.028742 | -7.105223 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -5.697534 | -5.786874 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -5.423151 | -5.507486 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -5.383524 | -5.388762 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/labels.md#printing-and-label-stock` | `scan` | -4.746227 | -4.753464 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/routing.md#how-a-route-is-chosen` | `scan` | -4.592425 | -4.612808 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/webhooks.md#replaying-missed-events` | `scan` | -4.168647 | -4.181595 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -3.727578 | -3.759409 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/INDEX.md` | `scan` | -3.665312 | -3.669220 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -3.280612 | -3.344044 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -2.736249 | -2.789845 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -2.596065 | -2.608030 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/rates.md#fuel-surcharge` | `scan` | -2.229805 | -2.231850 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -2.179473 | -2.193621 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -2.115420 | -2.126513 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.108904 | -2.116241 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.089683 | -2.096887 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.998716 | -2.003146 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.648604 | -1.662119 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -1.646005 | -1.680105 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -1.513759 | -1.529129 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/api-auth.md#api-keys` | `scan` | -5.664241 | -5.684592 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -5.422452 | -5.565835 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -4.188251 | -4.258322 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -3.776903 | -3.805449 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/exceptions.md#claims-for-a-lost-parcel` | `scan` | -3.044040 | -3.049574 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/api-auth.md#rotating-a-key` | `scan` | -2.607955 | -2.611956 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/exceptions.md#redelivery-attempts` | `scan` | -2.597098 | -2.605164 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/exceptions.md#exception-codes` | `scan` | -2.581113 | -2.589081 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/webhooks.md#subscribing-to-events` | `scan` | -2.581113 | -2.589081 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.414921 | -2.445215 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -1.939781 | -1.951990 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -0.895841 | -0.897297 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -0.831507 | -0.836025 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -0.813173 | -0.814388 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -0.784307 | -0.789633 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -0.758165 | -0.762141 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -0.750265 | -0.751559 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -0.746838 | -0.751559 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -0.723564 | -0.731454 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -0.723298 | -0.724901 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -0.698636 | -0.703143 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -0.698636 | -0.703143 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -0.642207 | -0.645058 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.626519 | -0.630141 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -0.590859 | -0.595703 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -0.590727 | -0.602148 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.586882 | -0.589262 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -0.573753 | -0.576789 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -0.555478 | -0.564833 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -0.466854 | -0.467856 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -3.083539 | -3.099163 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -3.016617 | -3.026293 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -2.909427 | -2.928790 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -2.783954 | -2.790611 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -2.718781 | -2.720325 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -2.397556 | -2.418115 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -2.306814 | -2.345597 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -2.274602 | -2.299997 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.168478 | -2.195725 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -2.158120 | -2.208918 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.209399 | -1.216898 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -1.142736 | -1.150154 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#review-response` | `scan` | -1.135816 | -1.138858 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -1.125352 | -1.130671 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -1.111084 | -1.114968 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.080956 | -1.084633 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -1.080245 | -1.089471 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -1.067389 | -1.070075 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -1.052419 | -1.055904 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -1.040875 | -1.042009 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -1.035618 | -1.041962 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -1.031152 | -1.042103 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -1.019796 | -1.024162 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -0.997946 | -1.002652 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -0.988026 | -0.990326 | r2–r15 |
+| `q-sd-stack-detection` | `docs/exceptions.md#redelivery-attempts` | `scan` | -0.987513 | -0.990580 | r2–r15 |
+| `q-sd-stack-detection` | `docs/exceptions.md#returns-to-sender` | `scan` | -0.982948 | -0.984465 | r2–r15 |
+| `q-sd-stack-detection` | `docs/exceptions.md#claims-for-a-lost-parcel` | `scan` | -0.981435 | -0.984465 | r2–r15 |
+| `q-sd-stack-detection` | `docs/api-auth.md#rotating-a-key` | `scan` | -0.976926 | -0.978424 | r2–r15 |
+| `q-sd-stack-detection` | `docs/rates.md#rate-cards` | `scan` | -0.965100 | -0.966563 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -0.963402 | -0.966321 | r2–r15 |
+| `q-sd-stack-detection` | `docs/routing.md#cut-off-times` | `scan` | -0.942288 | -0.943682 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -0.940669 | -0.943452 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -0.864199 | -0.880908 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -5.404170 | -5.424913 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -5.221668 | -5.294846 | r2–r15 |
+| `q-sd-second-init` | `docs/api-auth.md#rotating-a-key` | `scan` | -4.882208 | -4.889224 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -3.345634 | -3.434511 | r2–r15 |
+| `q-sd-second-init` | `docs/exceptions.md#exception-codes` | `scan` | -3.282551 | -3.290949 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -3.224588 | -3.259842 | r2–r15 |
+| `q-sd-second-init` | `docs/tracking.md#event-ordering-and-duplicates` | `scan` | -3.190365 | -3.199206 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -3.177669 | -3.210105 | r2–r15 |
+| `q-sd-second-init` | `docs/webhooks.md#replaying-missed-events` | `scan` | -3.112318 | -3.121984 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -2.945280 | -2.954254 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.910202 | -2.924778 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -2.869939 | -2.896364 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -2.808167 | -2.824401 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -2.799407 | -2.808055 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.615240 | -2.640052 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/README.md#pre-existing-bugs-found-along-the-way-confirmed-by-a-reviewer` | `operator` | -2.266997 | -2.607430 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -2.336791 | -2.354456 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -2.214974 | -2.252278 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -2.082884 | -2.101446 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -2.055184 | -2.082888 | r2–r15 |
+| `q-sd-second-init` | `docs/exceptions.md#redelivery-attempts` | `scan` | -1.705717 | -1.711015 | r2–r15 |
+| `q-sd-second-init` | `docs/tracking.md#status-codes` | `scan` | -1.697831 | -1.700452 | r2–r15 |
+| `q-sd-second-init` | `docs/labels.md#the-routing-barcode` | `scan` | -1.682276 | -1.690018 | r2–r15 |
+| `q-sd-second-init` | `docs/INDEX.md` | `scan` | -1.487007 | -1.489016 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -1.475567 | -1.477002 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -1.442244 | -1.445365 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.337525 | -1.340945 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.276740 | -1.294349 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -1.238616 | -1.249807 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -1.221925 | -1.231746 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.155279 | -1.164750 | r2–r15 |
+| `q-sd-second-init` | `docs/api-auth.md#api-keys` | `scan` | -0.803323 | -0.804875 | r2–r15 |
+| `q-sd-second-init` | `docs/routing.md#cut-off-times` | `scan` | -0.790115 | -0.790615 | r2–r15 |
+| `q-sd-second-init` | `docs/rates.md#rate-cards` | `scan` | -0.748314 | -0.748987 | r2–r15 |
+| `q-sd-second-init` | `docs/routing.md#how-a-route-is-chosen` | `scan` | -0.736406 | -0.738364 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -0.705830 | -0.708231 | r2–r15 |
+| `q-sd-second-init` | `docs/rates.md#fuel-surcharge` | `scan` | -0.651880 | -0.652901 | r2–r15 |
+| `q-sd-second-init` | `docs/rates.md#remote-area-surcharge` | `scan` | -0.647824 | -0.648833 | r2–r15 |
+| `q-sd-second-init` | `docs/exceptions.md#returns-to-sender` | `scan` | -0.641834 | -0.642824 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.586882 | -0.589262 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -0.573753 | -0.576789 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -0.466854 | -0.467856 | r2–r15 |
+
+**The trace, from the tables above.**
+
+1. **Memtable or segment.** Disagreements appear only in the four blocks whose index held memtable
+   documents at the step and had emptied them by the last repetition: `t0` in both Postgres `self-docs`
+   runs, and `s0` and `s1` of the history run. The segment states compared as many values as `t0` in
+   both runs, 548216 each at `t1`, `t3` and `t4`, and none disagreed. In the history run `s2`, `s4`,
+   `s5` and `s7` compared 264656 each, as many as `s0`, with none disagreeing. So in these runs the
+   stray disappears once the rows are in a segment. Holding a memtable is not enough on its own: at
+   Postgres `fixture-catalog` `t0`, 41 memtable documents, and at `s6`, 2, the memtable was not emptied
+   and nothing disagreed. That is consistent with `#557`'s description as far as the state goes: the
+   stray occurs before the memtable is spilled and not after. The probe's statement takes as many rows
+   as the corpus holds, so it tests no top-N cut, and no hit appeared or vanished in any repetition.
+2. **Column.** Both, and they are two different effects. In `scan`, the memtable's rows move once, to
+   their segment score, and stay there. In `operator`, a single value in the statement during which the
+   index changed differs from every other repetition's. In the two such rows captured, it also
+   disagrees with its own row's `scan` and `operator_exact`.
+3. **A changing index.** The memtable and segments changed under the repetitions in every block with
+   a disagreement, and in no block without one, while `autovacuum_count` read 0 throughout. The only
+   other summary change is PGlite `self-docs` `t0`'s DSA size line, with no disagreement. So `#516`'s
+   described trigger, the index changing within a statement, is ruled out for every Postgres block
+   except those four, and is present in those four. The `operator` stray, two readings of one operator expression differing
+   within one row while the memtable is being emptied, is consistent with `#516`'s description. This
+   is not a finding about `#516` itself, which was not read.
+4. **Engines.** PGlite shows no stray: no value disagreed in any state on either corpus, and its `t0`
+   memtable, 41 and 30 documents, was not emptied during the repetitions.
+
+The lead's three values are consistent in form with the `operator` stray here. Each was a single
+operator value in a run, differing from every other run's, on a probe that read the operator only.
+
+**The reproducible sequence.** On the compose Postgres with `pg_textsearch` 1.3.1, and `self-docs` at `{
+files: 71, chunks: 819 }`:
+
+1. The `t0` statements of `### How the probe reads a score, and the setup` → **The states.**: a new
+   table and empty `chunks_bm25` index, then the corpus inserted. That leaves 30 memtable documents
+   beside 3 segments holding 789.
+2. The score statement of the same subsection, once for each of the 20 `self-docs` queries, repeated 30
+   times, each repetition in its own `psql` process.
+
+The memtable was emptied during the repetitions in both runs of this sequence, and in both history-run
+blocks that began with a memtable of 30 or more. Each time it happened at a different point. The
+`operator` stray rate is 1 in 548216 values compared in each states-sequence run, and 0 in 264656
+(`s0`) and 1 in 269920 (`s1`) in the history run. No (query, key) recurs: the three strays above and
+the three handed here are six different (query, key) pairs. So the sequence reproduces the rate, not a
+fixed value. The `scan` moves do recur, with the same 278 values in both runs.
+
+**Conclusion.** The stray is an `operator` reading that disagrees with the same row's `scan` and
+`operator_exact` within one statement. It occurs only while the index's memtable is emptied under a
+workload that only reads. None of this repository's code sits between the statement and the value, so
+the stray lies in the extension's behaviour: a defect in `pg_textsearch` 1.3.1 as run here, reproduced
+by the sequence above, not worked around; reporting it upstream is the maintainer's. The memtable being
+emptied with no write and no autovacuum also moves 278 `scan` values to their segment score. Those are
+the `t0` / `t1` state difference of `### The score each index state ranks by`. What triggers it is not
+identified by this probe.
