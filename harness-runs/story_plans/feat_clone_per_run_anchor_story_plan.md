@@ -91,7 +91,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_clone_per_run_anchor/ta
 10. [x] **Task 10** — Move the six registry and inbox commands to the canonical clause, with "run copy" wording _(layer: plugin)_ _(points: 15)_
 11. [x] **Task 11** — Move the three `branch-start-*-autonomous` commands and the docs fork's kill-switch checks to the anchor _(layer: plugin)_ _(points: 15)_
 12. [x] **Task 12** — Move the three autonomous fix and orchestration forks' kill-switch checks to the anchor, with "run copy" wording _(layer: plugin)_ _(points: 20)_
-13. [ ] **Task 13** — Say "run copy" in the remaining cores, the QA and mode-contract files and the two flow documents, and give `AUTONOMOUS_FLOW.md` the row _(layer: plugin)_ _(points: 15)_
+13. [x] **Task 13** — Say "run copy" in the remaining cores, the QA and mode-contract files and the two flow documents, and give `AUTONOMOUS_FLOW.md` the row _(layer: plugin)_ _(points: 15)_
 14. [ ] **Task 14** — Prove the QA-lock helpers follow the anchor from a clone and fall back without it, in `cli/test/qa-user-locks.test.mjs` _(layer: cli)_ _(points: 15)_
 15. [ ] **Task 15** — Add the owed anchor rows to `docs/sandbox-verification.md`, and record the library change in `docs/guard-verification.md` _(layer: general)_ _(points: 10)_
 16. [ ] **Task 16** — State in `docs/watcher.md` how the anchor is set, read and graded, and what a session no launcher started resolves _(layer: general)_ _(points: 10)_
