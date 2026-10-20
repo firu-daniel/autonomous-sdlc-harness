@@ -26,7 +26,7 @@ Pass 2 was a no-op: the per-unit findings root holds no review folders for this 
 
 1. [x] **Finding 3** — Widen `mainRepoAnchor.ts`'s header rename sweep to a repository-wide `git grep` that also reaches the worked example's profile and the documents _(layer: cli)_
 2. [x] **Finding 2** — Add a `deny`-list case to `doctor-main-anchor.test.mjs` _(layer: cli)_
-3. [ ] **Finding 1** — Make the suite-isolation source guard check each `process.env` spread rather than each file _(layer: cli)_
+3. [x] **Finding 1** — Make the suite-isolation source guard check each `process.env` spread rather than each file _(layer: cli)_
 
 ---
 
