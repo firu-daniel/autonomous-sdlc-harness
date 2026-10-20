@@ -110,7 +110,8 @@
 # directory it created — on every exit after the cut, success included and
 # wherever `start` runs, because nothing reads the copy once the push has landed
 # and a leftover branch makes the next cut of that name refuse; a copy, branch,
-# record or directory that existed before the cut is never removed — and `dispatch --engine task
+# record or directory that existed before the cut is never removed, and a
+# record the cut rewrote is put back as it was — and `dispatch --engine task
 # --resume none --chain 0`, composed by `verb_dispatch` itself. The placement is the library's
 # (`hr_task_prompt_rel`, `hr_place_artifact`, `hr_commit_placed`,
 # `hr_push_landed`), the same calls the watcher's inbox pass makes, so nothing
@@ -123,7 +124,8 @@
 # is a failure (4). Its `create-worktree.sh` call writes a registry record for
 # the clone (`worktree`, `copy_kind`) and creates the registry directory
 # `<state_dir>/autonomous_logs/` when absent, as a trigger job's fresh checkout
-# always has it. `start` drops a record that did not exist before the cut, and
+# always has it. `start` drops a record that did not exist before the cut,
+# puts back one that did when the cut rewrote it to name the clone, and
 # removes the registry file and directory when it made them and the drop left
 # them empty, so no record is left behind and the local commands still act on
 # such a run through GitHub.
@@ -1247,7 +1249,8 @@
 # the prompt committed on `origin/<branch>`, through a clone, a local branch,
 # the clone's registry record and the registry directory
 # `<state_dir>/autonomous_logs/`, each written and then removed before it
-# returns (the record only when none existed before, the registry file and the
+# returns (the record dropped only when none existed before, and otherwise put
+# back as it was when the cut rewrote it, the registry file and the
 # directory only when each was absent and is empty after the drop), and, after a push that did not land, a
 # fetch that force-writes that copy's `refs/remotes/origin/<branch>`
 # (`hr_push_landed`'s, to name the commit the remote moved to); `review`'s are
@@ -3712,8 +3715,10 @@ placement_fail() {
 # copy_baseline_var — record, before `create-worktree.sh` cuts a copy into
 # `worktree`, what existed already: the copy (`had_copy`), the local branch
 # (`had_branch`), the registry record (`had_record`, by `hr_registry_peek`'s
-# return), the registry file (`had_registry_file`) and the registry directory
-# (`had_registry_dir`); the cut creates the last two when absent.
+# return, and its compact JSON in `prev_record`, since the cut rewrites a
+# record that names no live copy), the registry file (`had_registry_file`) and
+# the registry directory (`had_registry_dir`); the cut creates the last two
+# when absent.
 # `start_remove_copy` removes only what these say was absent. 1 when the
 # registry path is unresolvable. Globals: the EXIT trap runs after the verb's
 # frame is gone.
@@ -3725,7 +3730,11 @@ copy_baseline_var() {
   had_branch=0
   ! git -C "$root" show-ref --verify --quiet "refs/heads/$branch" || had_branch=1
   had_record=0
-  ! hr_registry_peek "$copy_registry" "$branch" worktree >/dev/null || had_record=1
+  prev_record=""
+  if hr_registry_peek "$copy_registry" "$branch" worktree >/dev/null; then
+    had_record=1
+    prev_record=$(jq -c --arg b "$branch" '.runs[$b]' "$copy_registry" 2>/dev/null) || prev_record=""
+  fi
   had_registry_file=0
   [ ! -e "$copy_registry" ] || had_registry_file=1
   had_registry_dir=0
@@ -3744,10 +3753,11 @@ copy_saw_tip() {
 # only that, as `copy_baseline_var` recorded it: the clone, through
 # `hr_clone_remove_var` while its registry record still names it; the local
 # branch, by compare-and-swap from `seen_tip` (`branch -D` only when no tip was
-# seen); the registry record; the registry file, when it holds no run; then the
-# registry directory, when it is empty. A non-empty one stays: something else
-# wrote into it. Idempotent; a failed step is one stderr line and never changes the exit
-# status already decided.
+# seen); the registry record — dropped when it was absent, put back to
+# `prev_record` when the cut rewrote it to name this copy; the registry file,
+# when it holds no run; then the registry directory, when it is empty. A
+# non-empty one stays: something else wrote into it. Idempotent; a failed step
+# is one stderr line and never changes the exit status already decided.
 start_remove_copy() {
   local regdir
   if [ "$had_copy" -eq 0 ] && [ -e "$worktree" ]; then
@@ -3766,6 +3776,11 @@ start_remove_copy() {
   if [ "$had_record" -eq 0 ] && hr_registry_peek "$copy_registry" "$branch" worktree >/dev/null; then
     hr_registry_drop "$copy_registry" "$branch" \
       || echo "remote-run.sh: could not drop the registry record of '$branch' from '$copy_registry'" >&2
+  elif [ "$had_record" -eq 1 ] && [ -n "$prev_record" ] \
+    && [ "$(hr_registry_peek "$copy_registry" "$branch" worktree)" = "$worktree" ] \
+    && [ "$(jq -c --arg b "$branch" '.runs[$b]' "$copy_registry" 2>/dev/null)" != "$prev_record" ]; then
+    hr_registry_restore "$copy_registry" "$branch" "$prev_record" \
+      || echo "remote-run.sh: could not put back the registry record of '$branch' in '$copy_registry'; set .runs[\"$branch\"] back to: $prev_record" >&2
   fi
   if [ "$had_registry_file" -eq 0 ] && [ -f "$copy_registry" ] \
     && jq -e '.runs == {}' "$copy_registry" >/dev/null 2>&1; then

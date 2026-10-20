@@ -87,7 +87,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_clone_per_run_switch/ta
 10. [x] **Task 10** — Prove the registry-driven sweep for clones and legacy worktrees, and re-aim `cleanup-worktree-record.test.mjs` at it _(layer: cli)_ _(points: 15)_
 11. [x] **Task 11** — Make `remote-run.sh start` and `review` cut and remove clones through the library, and drop the registry record each created _(layer: cli)_ _(points: 15)_
 12. [x] **Task 12** — Move `remote-start.test.mjs` and `remote-review-payloads.test.mjs` to the clone layout _(layer: cli)_ _(points: 15)_
-13. [ ] **Task 27** — Move `remote-run.test.mjs`'s `review` cases to the clone layout _(layer: cli)_ _(points: 10)_
+13. [x] **Task 27** — Move `remote-run.test.mjs`'s `review` cases to the clone layout _(layer: cli)_ _(points: 10)_
 14. [ ] **Task 13** — Render a per-run profile at every launch, refuse to launch on one that fails the check, and sync in at every run exit, in the watcher _(layer: cli)_ _(points: 20)_
 15. [ ] **Task 14** — Prove the per-run profile, its launch check and its three mirrors in a new `cli/test/watcher-run-profile.test.mjs` _(layer: cli)_ _(points: 15)_
 16. [ ] **Task 26** — Hold job mode to the base profile and an untouched lane, and prove its launch check, in `watcher-remote-job.test.mjs` _(layer: cli)_ _(points: 10)_

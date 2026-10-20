@@ -88,7 +88,10 @@
  * its fixed subject and dispatched once — leaving no copy, no local branch and no bootstrap behind —
  * a branch with no run listed taking one only under `--allow-no-run`, and under `forge` `github` the
  * round reported on the run's issue after the dispatch**;
- * those cases push to the fixture's bare `origin`, as `remote-start.test.mjs` does. The bootstrap
+ * those cases push to the fixture's bare `origin`, as `remote-start.test.mjs` does. The copy `review`
+ * cuts is a clone, which `git worktree list` never shows, so its removal is asserted on the path, the
+ * local branch and the registry record it created; a record that existed before the verb stays as it
+ * was seeded. The bootstrap
  * sentinel is a `commands.depInstall` writing a marker outside the copy, because the copy itself is
  * removed before the case can look in it.
  *
@@ -2599,6 +2602,12 @@ async function reviewFixture(t, reviews = [], { forge = false } = {}) {
   };
 }
 
+/** The fixture's registry record of `feat_x`, or `undefined` when the registry or the record is absent. */
+function reviewRecord(fx) {
+  const path = join(fx.dir, REGISTRY);
+  return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')).runs?.feat_x : undefined;
+}
+
 /** A completed newest run whose bundle says `status`. */
 function finishedEnv(fx, status) {
   return syncEnv({
@@ -2619,6 +2628,7 @@ test('review is refused while the newest run is in progress, or its bundle is pa
   assert.equal(await fx.originRefs(), before);
   assert.deepEqual(joined(fx).filter((line) => line.startsWith('workflow run')), []);
   assert.equal(existsSync(fx.copy), false);
+  assert.equal(reviewRecord(fx), undefined, 'a refused review left a registry record of feat_x');
 });
 
 test('review places the next round by exact branch equality, commits it, and dispatches once', async (t) => {
@@ -2638,8 +2648,23 @@ test('review places the next round by exact branch equality, commits it, and dis
   assert.equal(existsSync(fx.copy), false, 'the copy was left behind');
   const local = await runBash(fx.dir, ['-c', 'git show-ref --verify --quiet refs/heads/feat_x']);
   assert.notEqual(local.status, 0, 'the local branch feat_x was left behind');
-  assert.doesNotMatch((await runGit(fx.dir, ['worktree', 'list'])).stdout, /-feat_x\b/);
+  assert.equal(reviewRecord(fx), undefined, 'the clone\'s registry record was left behind');
   assert.equal(existsSync(fx.bootstrapMarker), false, 'the copy was bootstrapped');
+});
+
+test('review keeps a registry record of feat_x that existed before it, byte for byte', async (t) => {
+  const fx = await reviewFixture(t);
+  const gone = join(fx.dir, STATE_DIR, 'stub', 'no-such-copy');
+  mkdirSync(join(fx.dir, STATE_DIR, 'autonomous_logs'), { recursive: true });
+  writeFileSync(join(fx.dir, REGISTRY),
+    `${JSON.stringify({ runs: { feat_x: { branch: 'feat_x', status: 'completed', worktree: gone } } }, null, 2)}\n`);
+  const seeded = readFileSync(join(fx.dir, REGISTRY));
+
+  const result = await remoteRun(fx, ['review', 'feat_x', '--review-file', fx.reviewFile], finishedEnv(fx, 'completed'));
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(joined(fx).filter((line) => line.startsWith('workflow run')), [REVIEW_DISPATCH]);
+  assert.equal(existsSync(fx.copy), false, 'the copy was left behind');
+  assert.equal(readFileSync(join(fx.dir, REGISTRY), 'utf8'), seeded.toString('utf8'));
 });
 
 test('review of a branch with no earlier round places round 1', async (t) => {
