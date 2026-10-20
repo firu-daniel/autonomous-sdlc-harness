@@ -98,6 +98,7 @@ const { MCP_PATH } = await built('generators/repoRoot.js');
 const { PLUGIN_KEY } = await built('generators/projectSettings.js');
 const { DOCS_SEARCH_SERVER_SCRIPT_NAME } = await built('generators/outerLoopScripts.js');
 const { MAIN_REPO_ANCHOR_READ, MAIN_REPO_ANCHOR_RULE } = await built('core/mainRepoAnchor.js');
+const { COPY_GIT_PATHS, copySurfacePaths } = await built('generators/writeProtection.js');
 
 /** The generated profile, and the template it is generated from. */
 const PROFILE_FILE = '.claude/settings.autonomous.json';
@@ -1063,9 +1064,8 @@ test('a domain carrying a quote is the adopter\'s to fix, never this CLI\'s faul
 
 /**
  * Both sides of one protected path: its `denyWrite` entry and its `Edit`/`Write` deny rules — on the
- * path for a `file` or a `name` (a globbed directory protected against creation, moving and removal
- * while the files in it stay writable), under it for a `directory`, and both for an `entry`, a path
- * that must not come to exist as either.
+ * path for a `file`, under it for a `directory`, and both for an `entry`, a path that must not come
+ * to exist as either.
  */
 function assertProtected(profile, path, kind) {
   const targets = kind === 'entry' ? [path, `${path}/**`] : [kind === 'directory' ? `${path}/**` : path];
@@ -1121,7 +1121,6 @@ test('every path that runs outside the sandbox is write-protected on both sides'
   assertProtected(profile, join(dir, SCRIPTS_DIR, LIB_SUBDIR), 'directory');
   assertProtected(profile, join(dir, githooks), 'directory');
   assertProtected(profile, join(glob, githooks), 'directory');
-  assertProtected(profile, join(dir, '.git', 'hooks'), 'directory');
   assertProtected(profile, join(dir, MCP_PATH), 'file');
   assertProtected(profile, join(glob, MCP_PATH), 'file');
   assertProtected(profile, join(dir, '.claude', 'settings.autonomous.json'), 'file');
@@ -1129,28 +1128,46 @@ test('every path that runs outside the sandbox is write-protected on both sides'
   assertProtected(profile, join(glob, '.claude', 'settings.json'), 'file');
   assertProtected(profile, join(dir, '.claude', 'settings.local.json'), 'file');
   assertProtected(profile, join(glob, '.claude', 'settings.local.json'), 'file');
-  assertProtected(profile, join(dir, '.git', 'config'), 'file');
-  assertProtected(profile, join(dir, '.git', 'config.worktree'), 'file');
-  // The wrappers place their main checkout from their own location: a planted `commondir` would
-  // redirect it, and so would a nearer `.git` between the main checkout and the scripts directory.
-  assertProtected(profile, join(dir, '.git', 'commondir'), 'file');
-  assertProtected(profile, join(dir, SCRIPTS_DIR, '.git'), 'entry');
-  // The worktree records git and the wrappers follow: each record can be neither created nor moved,
-  // and the three files in it that point elsewhere are protected, while the record's own HEAD,
-  // index and logs stay writable for a run's git.
+  // The main checkout's whole `.git` is one directory entry, replacing the per-file entries under it.
+  assertProtected(profile, join(dir, '.git'), 'directory');
   const records = join(dir, '.git', 'worktrees');
-  assertProtected(profile, join(records, '*'), 'name');
-  assert.ok(!profile.sandbox.filesystem.denyWrite.includes(records), 'denyWrite holds the whole worktrees directory');
-  for (const file of ['commondir', 'gitdir', 'config.worktree']) assertProtected(profile, join(records, '*', file), 'file');
-  for (const file of ['HEAD', 'index', 'logs']) assertUnprotected(profile, join(records, '*', file));
-  assert.ok(
-    !profile.permissions.deny.some((rule) => rule.endsWith(`${join(records, '*')}/**)`)),
-    'a deny rule covers everything under a worktree record',
+  const retired = [
+    join(dir, '.git', 'hooks'),
+    join(dir, '.git', 'config'),
+    join(dir, '.git', 'config.worktree'),
+    join(dir, '.git', 'commondir'),
+    join(dir, '.git', 'remotes'),
+    join(dir, '.git', 'branches'),
+    join(records, '*'),
+    ...['commondir', 'gitdir', 'config.worktree'].map((file) => join(records, '*', file)),
+  ];
+  for (const path of retired) {
+    assert.ok(!profile.sandbox.filesystem.denyWrite.includes(path), `denyWrite still holds ${path} as its own entry`);
+    for (const rule of entries(profile, 'deny')) {
+      assert.ok(!rule.startsWith(`Edit(/${path}`) && !rule.startsWith(`Write(/${path}`), `permissions.deny still holds ${rule}`);
+    }
+  }
+  // A nearer `.git` between the main checkout and the scripts directory would redirect the wrappers.
+  assertProtected(profile, join(dir, SCRIPTS_DIR, '.git'), 'entry');
+  // Under the glob only the run copy's trust files: a whole `.git` there would close a clone to its
+  // own sandboxed git.
+  assert.deepEqual(
+    COPY_GIT_PATHS.map(({ path, kind }) => [path, kind]),
+    [
+      ['.git/config', 'file'],
+      ['.git/hooks', 'directory'],
+      ['.git/objects/info/alternates', 'file'],
+      ['.git/commondir', 'entry'],
+      ['.git/config.worktree', 'entry'],
+      ['.git/objects/info/http-alternates', 'entry'],
+    ],
   );
-  assertProtected(profile, join(glob, '.git'), 'file');
-  // A remote with no configured URL is read from these.
-  assertProtected(profile, join(dir, '.git', 'remotes'), 'entry');
-  assertProtected(profile, join(dir, '.git', 'branches'), 'entry');
+  for (const { path, kind } of COPY_GIT_PATHS) assertProtected(profile, join(glob, ...path.split('/')), kind);
+  const copyGit = join(glob, '.git');
+  assert.ok(!profile.sandbox.filesystem.denyWrite.includes(copyGit), `denyWrite holds ${copyGit}`);
+  for (const rule of [`Edit(/${copyGit})`, `Write(/${copyGit})`, `Edit(/${copyGit}/**)`, `Write(/${copyGit}/**)`]) {
+    assert.ok(!entries(profile, 'deny').includes(rule), `permissions.deny holds ${rule}`);
+  }
   assertProtected(profile, join(dir, CONFIG_FILENAME), 'file');
   assertUnprotected(profile, join(glob, CONFIG_FILENAME));
 
@@ -1169,6 +1186,26 @@ test('every path that runs outside the sandbox is write-protected on both sides'
     'no _README line names the write-protected set and its Linux residual',
   );
   assertEntriesRunnable(profile);
+});
+
+test('copySurfacePaths leaves out every path inside a run copy\'s .git', () => {
+  const base = seededConfig({});
+  assert.deepEqual(
+    [...copySurfacePaths(base)],
+    [DEFAULTS.githooksDir, '.mcp.json', '.claude/settings.json', '.claude/settings.local.json'],
+  );
+  const retrieval = seededConfig({ phases: { docs: true }, docs: { root: 'docs', retrieval: true } });
+  assert.deepEqual(
+    [...copySurfacePaths(retrieval)],
+    [
+      DEFAULTS.githooksDir,
+      '.mcp.json',
+      '.claude/settings.json',
+      '.claude/settings.local.json',
+      `${SCRIPTS_DIR}/${DOCS_SEARCH_SERVER_SCRIPT_NAME}`,
+      `${SCRIPTS_DIR}/${LIB_SUBDIR}`,
+    ],
+  );
 });
 
 test('the docs-search launcher and its worktree library are write-protected only when retrieval applies', async (t) => {

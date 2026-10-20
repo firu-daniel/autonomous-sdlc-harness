@@ -13,14 +13,33 @@
  * configuration file's name, the run registry's two segments — never joined by hand, so the file protected is the file the writer wrote. `doctor` grades a profile on disk against
  * {@link protectedPaths} and {@link fileToolDenyRules}, so they are the one statement of the set.
  *
+ * The set: the main checkout's outer-loop scripts and their library, the hooks directories, the MCP
+ * wiring, the profile and the settings files, the plugin roots, the main checkout's whole `.git`, its
+ * configuration file and run registry, a `.git` at each scripts-directory level, and, under the
+ * sibling-run-copy glob, the same hooks, MCP and settings paths plus the {@link COPY_GIT_PATHS} rows.
+ * **A run copy's `.git` must never be covered as a whole, by glob or by exact path:** on a clone that
+ * closes it to the run's own sandboxed git (`docs/sandbox-verification.md` CL4), so only the trust
+ * files in {@link COPY_GIT_PATHS} are protected under it. {@link retiredProtectedPaths} names the
+ * entry an earlier release wrote that broke this.
+ *
  * Two relative sets are projections of {@link protectedPaths}, filtered and re-rooted from its answer
- * and never listed again: {@link copySurfacePaths}, the paths an unsandboxed checkout of a run's
- * branch refuses to install run-authored content at, and {@link jobSurfacePaths}, the paths a remote
- * job's surface check compares against the default branch before the job runs or loads anything from
- * its own checkout, which leaves out the run registry: a remote job neither runs nor loads it. The one mirror outside this package is `hr_run_protected_rel_paths` in
- * `cli/templates/scripts/lib/harness-run-lib.sh`, which prints {@link copySurfacePaths}' lines in
- * the same order; `cli/test/outer-loop-scripts.test.mjs` holds the two equal. A mirror this header
- * does not declare is a defect.
+ * and never listed again: {@link copySurfacePaths}, the run-copy-relative paths outside `.git` that an
+ * unsandboxed checkout of a run's branch refuses to install run-authored content at, and
+ * {@link jobSurfacePaths}, the checkout-relative paths outside any `.git` that a remote job's surface
+ * check compares against the default branch before the job runs or loads anything from its own
+ * checkout, which leaves out the run registry: a remote job neither runs nor loads it.
+ *
+ * Mirrors outside this package, each held equal by the suite named:
+ * - `hr_run_protected_rel_paths` in `cli/templates/scripts/lib/harness-run-lib.sh` prints
+ *   {@link copySurfacePaths}' lines in the same order (`cli/test/outer-loop-scripts.test.mjs`).
+ * - `cli/templates/scripts/autonomous-watcher.sh` holds a copy of {@link COPY_GIT_PATHS}, each row's
+ *   relative path and kind (`cli/test/watcher-run-profile.test.mjs`).
+ * - The same script's `run_profile_render` holds a copy of {@link fileToolDenyRules}' kind → rule map
+ *   (`cli/test/watcher-run-profile.test.mjs`): `file` → `Edit(/<p>)`, `Write(/<p>)`; `directory` →
+ *   the same on `<p>/**`; `entry` → both forms of each tool. Any change to that map is an edit to
+ *   `run_profile_render` in the same change.
+ *
+ * A mirror this header does not declare is a defect.
  */
 
 import { isAbsolute, join, relative, sep } from 'node:path';
@@ -46,19 +65,18 @@ import { MCP_PATH } from './repoRoot.js';
 import { SANDBOX_KEY } from './sandboxProfile.js';
 import { RUN_LOGS_DIR, RUN_REGISTRY_FILENAME } from './stateDir.js';
 
+/** How a protected path is denied; {@link fileToolDenyRules} maps each to its rules. */
+export type ProtectedKind = 'file' | 'directory' | 'entry';
+
 /** One path the profile write-protects. */
 export interface ProtectedPath {
   /** Absolute, or a pattern under the sibling-worktree glob. */
   readonly path: string;
   /**
    * `entry` is a path that must not come to exist at all, as a file or as a directory: its file-tool
-   * rules cover both the path and everything under it. `name` protects the path itself and nothing
-   * under it — it cannot be created, renamed, replaced or removed, while the files inside a directory
-   * of that name stay writable — and is used only where the last segment is a `*` glob: the sandbox
-   * matches a glob entry as an anchored pattern against the name alone, while a literal entry is
-   * protected with everything under it.
+   * rules cover both the path and everything under it.
    */
-  readonly kind: 'file' | 'directory' | 'entry' | 'name';
+  readonly kind: ProtectedKind;
   /** One clause, rendered into the profile's `_README` and into `doctor`'s message. */
   readonly reason: string;
 }
@@ -79,21 +97,50 @@ export interface WriteProtectionInput {
   readonly config: HarnessConfig;
 }
 
-/**
- * The main repository's git directory, its default hooks directory, its two config files, its
- * `commondir`, its linked worktrees' records and the three files in each record git follows, and
- * the two legacy remote-definition directories git reads a remote from when the configuration names
- * no URL for it.
- */
 const GIT_DIR = '.git';
-const GIT_DEFAULT_HOOKS = 'hooks';
-const GIT_CONFIG = 'config';
-const GIT_CONFIG_WORKTREE = 'config.worktree';
-const GIT_COMMONDIR = 'commondir';
-const GIT_WORKTREES = 'worktrees';
-const GIT_RECORD_GITDIR = 'gitdir';
-const GIT_LEGACY_REMOTES = 'remotes';
-const GIT_LEGACY_BRANCHES = 'branches';
+
+/** One trust file under a run copy's `.git`, protected under the sibling-run-copy glob. */
+export interface CopyGitPath {
+  /** Relative to the run copy, `/`-separated. */
+  readonly path: string;
+  readonly kind: ProtectedKind;
+  readonly reason: string;
+}
+
+/**
+ * The run-copy `.git` paths the profile protects, in order. The runtime already refuses the first
+ * three to the cwd repository's sandboxed git and leaves the last three open
+ * (`docs/sandbox-verification.md` CL5); the first three are restated so the protection does not rest
+ * on an undocumented default.
+ */
+export const COPY_GIT_PATHS: readonly CopyGitPath[] = Object.freeze([
+  {
+    path: `${GIT_DIR}/config`,
+    kind: 'file',
+    reason: "the unsandboxed wrappers' clone trust check and every git call in that run copy read it",
+  },
+  { path: `${GIT_DIR}/hooks`, kind: 'directory', reason: "it is git's default hooks directory for that run copy" },
+  {
+    path: `${GIT_DIR}/objects/info/alternates`,
+    kind: 'file',
+    reason: "the unsandboxed wrappers' clone trust check reads where that run copy borrows objects from",
+  },
+  {
+    path: `${GIT_DIR}/commondir`,
+    kind: 'entry',
+    reason: "a planted one would redirect that run copy's git to another repository's configuration and hooks",
+  },
+  {
+    path: `${GIT_DIR}/config.worktree`,
+    kind: 'entry',
+    reason: 'a planted one would be read by every git call in that run copy once extensions.worktreeConfig is on',
+  },
+  {
+    path: `${GIT_DIR}/objects/info/http-alternates`,
+    kind: 'entry',
+    reason: 'a planted one would point that run copy at objects from another repository',
+  },
+]);
 
 /** The main checkout's run registry, under the configured `stateDir`. */
 function runRegistryPath(repoRoot: string, config: HarnessConfig): string {
@@ -129,27 +176,22 @@ function libraryDir(): string {
 /**
  * The write-protected set, in a fixed order: the main checkout's copy of every top-level outer-loop
  * script (the unsandboxed wrappers first) and the wrappers' library, the hooks
- * directories, the MCP launch surface, the profile and the project settings files, the plugin roots, the main repository's git configuration and
- * its `commondir`, the linked worktrees' records, the legacy remote definitions, the main checkout's
- * configuration file, the run registry by its exact path, and a `.git` at each level of the scripts
- * directory. The configuration file and the `.git` levels are protected because the wrappers place
+ * directories, the MCP launch surface, the profile and the project settings files, the plugin roots,
+ * the main checkout's whole `.git`, the {@link COPY_GIT_PATHS} rows under the sibling-run-copy glob,
+ * the main checkout's configuration file, the run registry by its exact path, and a `.git` at each
+ * level of the scripts directory. The configuration file and the `.git` levels are protected because the wrappers place
  * their main checkout from their own location, as the nearest directory holding a `.git` that is a
  * real directory without a `commondir` (`cli/templates/scripts/lib/harness-run-lib.sh` →
  * `hr_wrapper_main_of`); the run registry because the clone arm of the wrappers' target check reads
  * which run copy a branch has from it.
  *
- * The worktree records are protected file by file, never as a directory: no `denyWrite` covers a
- * whole record, because the change that measured why a run could not commit was barred from changing
- * a protection. On Claude Code 2.1.299, macOS, the runtime keeps a record outside the session's cwd
- * closed to sandboxed git whatever the profile says (`docs/sandbox-verification.md` G1, G2), so a
- * run's commits go through the excluded `commit-on-branch.sh`, which writes only the record's
- * `index`. The per-file entries stay because git and the excluded wrappers follow exactly those
- * files: what they follow out of a record — its `commondir`, its `gitdir` back-pointer and its `config.worktree` — is
- * protected, as is each worktree's `.git` pointer; `<main>/.git/worktrees/*` is protected as a
- * `name`, so a record cannot be created, renamed, replaced or removed, which keeps a record prepared
- * elsewhere from being moved into place past the per-file entries. Only `git worktree add` and
- * `setup-worktree.sh` write those files, and both run outside the sandbox (`create-worktree.sh`, run
- * by the watcher).
+ * The main checkout's `.git` is protected as one directory: objects reach it only through sync-in's
+ * fetch, which runs outside the sandbox, and git and the unsandboxed wrappers follow its
+ * configuration, hooks, `commondir`, worktree records and legacy remotes, so no sandboxed write into
+ * it is needed and any could redirect them. A legacy worktree run's record lies under it too; the
+ * runtime already keeps a record outside the session's cwd closed to sandboxed git
+ * (`docs/sandbox-verification.md` G2), so such a run's commits go through the excluded
+ * `commit-on-branch.sh` either way.
  */
 export function protectedPaths({
   repoRoot,
@@ -190,11 +232,6 @@ export function protectedPaths({
   paths.push(
     { path: join(repoRoot, githooksDir), kind: 'directory', reason: 'git runs the pre-push hook from it, outside the sandbox' },
     { path: join(glob, githooksDir), kind: 'directory', reason: "a worktree's pre-push hook runs from it, outside the sandbox" },
-    {
-      path: join(repoRoot, GIT_DIR, GIT_DEFAULT_HOOKS),
-      kind: 'directory',
-      reason: "it is git's default hooks directory, which the wrappers' hooks pin accepts",
-    },
   );
 
   paths.push(
@@ -232,57 +269,16 @@ export function protectedPaths({
     paths.push({ path: directory, kind: 'directory', reason: 'the plugin guard hooks run from it, outside the sandbox' });
   }
 
+  paths.push({
+    path: join(repoRoot, GIT_DIR),
+    kind: 'directory',
+    reason:
+      "objects reach it only through sync-in's fetch, and git and the unsandboxed wrappers follow its configuration, hooks, commondir, worktree records and legacy remotes",
+  });
+  for (const row of COPY_GIT_PATHS) {
+    paths.push({ path: join(glob, ...row.path.split('/')), kind: row.kind, reason: row.reason });
+  }
   paths.push(
-    {
-      path: join(repoRoot, GIT_DIR, GIT_CONFIG),
-      kind: 'file',
-      reason: "the unsandboxed wrappers read the hooks pin's core.hooksPath from it",
-    },
-    {
-      path: join(repoRoot, GIT_DIR, GIT_CONFIG_WORKTREE),
-      kind: 'file',
-      reason: 'every git call in the main checkout reads it once extensions.worktreeConfig is on',
-    },
-    {
-      path: join(repoRoot, GIT_DIR, GIT_COMMONDIR),
-      kind: 'file',
-      reason: "git, and the unsandboxed wrappers placing their main checkout, would follow it to another repository's configuration and hooks",
-    },
-    {
-      path: join(repoRoot, GIT_DIR, GIT_WORKTREES, '*'),
-      kind: 'name',
-      reason: "a worktree's record must not be created, moved or replaced from inside the sandbox; the files in it stay writable",
-    },
-    {
-      path: join(repoRoot, GIT_DIR, GIT_WORKTREES, '*', GIT_COMMONDIR),
-      kind: 'file',
-      reason: "git, and the unsandboxed wrappers' target check, follow it from a worktree to its repository's configuration",
-    },
-    {
-      path: join(repoRoot, GIT_DIR, GIT_WORKTREES, '*', GIT_RECORD_GITDIR),
-      kind: 'file',
-      reason: "the unsandboxed wrappers' target check reads it as the worktree's back-pointer",
-    },
-    {
-      path: join(repoRoot, GIT_DIR, GIT_WORKTREES, '*', GIT_CONFIG_WORKTREE),
-      kind: 'file',
-      reason: "every git call made in that worktree reads it, the run watcher's included",
-    },
-    {
-      path: join(glob, GIT_DIR),
-      kind: 'file',
-      reason: "git follows a worktree's .git pointer to its record on every call made there",
-    },
-    {
-      path: join(repoRoot, GIT_DIR, GIT_LEGACY_REMOTES),
-      kind: 'entry',
-      reason: 'git reads a remote with no configured URL from it, which would name the repository the unsandboxed wrappers push to',
-    },
-    {
-      path: join(repoRoot, GIT_DIR, GIT_LEGACY_BRANCHES),
-      kind: 'entry',
-      reason: 'git reads a remote with no configured URL from it, which would name the repository the unsandboxed wrappers push to',
-    },
     {
       path: join(repoRoot, CONFIG_FILENAME),
       kind: 'file',
@@ -303,6 +299,21 @@ export function protectedPaths({
   }
 
   return paths;
+}
+
+/**
+ * The entries an earlier release wrote that {@link protectedPaths} no longer does, each with why it was
+ * retired; `doctor` grades a profile still carrying one.
+ */
+export function retiredProtectedPaths({ repoRoot, workRoot, config }: WriteProtectionInput): readonly ProtectedPath[] {
+  const glob = worktreeGlob(workRoot, config.projectName ?? defaultProjectName(repoRoot));
+  return [
+    {
+      path: join(glob, GIT_DIR),
+      kind: 'file',
+      reason: "on a clone it closes the whole .git to the run's own sandboxed git",
+    },
+  ];
 }
 
 /**
@@ -337,7 +348,7 @@ function distinct(values: readonly string[]): readonly string[] {
 
 /**
  * The worktree-relative protected set: {@link protectedPaths}' entries under the sibling-worktree
- * glob, the glob prefix stripped and the worktree's `.git` pointer dropped — `<githooksDir>`,
+ * glob, the glob prefix stripped and every entry inside `.git` dropped — `<githooksDir>`,
  * `.mcp.json`, `.claude/settings.json`, `.claude/settings.local.json`, then, where docs retrieval
  * applies, `<scriptsDir>/docs-search-server.sh` and `<scriptsDir>/lib`. `/`-separated, no trailing
  * `/`, in {@link protectedPaths}' order, which is the order `hr_run_protected_rel_paths` prints.
@@ -347,7 +358,7 @@ export function copySurfacePaths(config: HarnessConfig): readonly string[] {
   const paths: string[] = [];
   for (const { path } of placeholderProtectedPaths(config)) {
     const rel = relativeUnder(glob, path);
-    if (rel !== undefined && rel !== GIT_DIR) paths.push(rel);
+    if (rel !== undefined && rel !== GIT_DIR && !rel.startsWith(`${GIT_DIR}/`)) paths.push(rel);
   }
   return distinct(paths);
 }
@@ -372,7 +383,7 @@ export function jobSurfacePaths(config: HarnessConfig): readonly string[] {
 
 /**
  * The `Edit` and `Write` deny rules for one protected path, in the `//` absolute form: the path for a
- * `file` or a `name`, everything under it for a `directory`, and both for an `entry`.
+ * `file`, everything under it for a `directory`, and both for an `entry`.
  */
 export function fileToolDenyRules(entry: ProtectedPath): readonly string[] {
   if (entry.kind === 'entry') {
@@ -418,6 +429,8 @@ export function applyWriteProtection(profile: JsonObject, { repoRoot, workRoot, 
     profile,
     `WHAT RUNS OUTSIDE THE SANDBOX CANNOT BE WRITTEN FROM INSIDE IT: each path below is in \`sandbox.filesystem.denyWrite\` and has an \`Edit\` and a \`Write\` rule in \`deny\`, because the file tools run outside the sandbox. ${paths
       .map(({ path, reason }) => `${path} - ${reason}`)
-      .join('; ')}. How the Linux sandbox treats a \`denyWrite\` entry containing \`*\` is unverified - it may skip one, or expand it to the paths that exist when the sandbox starts - so on Linux only the file-tool side is relied on for the globbed entries: the worktree's hooks directory, MCP wiring, settings files and .git pointer, the worktree records and the files in them, and the worktree's docs-search-server.sh and library when docs retrieval applies. A run's own edit under a protected worktree path, such as a change to its hooks directory or to ${MCP_PATH}, or to ${SETTINGS_PATH}, is refused by design.`,
+      .join('; ')}. How the Linux sandbox treats a \`denyWrite\` entry containing \`*\` is unverified - it may skip one, or expand it to the paths that exist when the sandbox starts - so on Linux only the file-tool side is relied on for the globbed entries: a run copy's hooks directory, MCP wiring and settings files, its ${COPY_GIT_PATHS.map(
+      ({ path }) => path,
+    ).join(', ')}, and its docs-search-server.sh and library when docs retrieval applies. The run watcher passes each run a per-run copy of this file that adds that run's own copy's paths, and every other live worktree's .git pointer, by exact path, which holds on Linux too. A run's own edit under a protected worktree path, such as a change to its hooks directory or to ${MCP_PATH}, or to ${SETTINGS_PATH}, is refused by design.`,
   );
 }

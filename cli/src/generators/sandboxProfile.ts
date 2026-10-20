@@ -12,9 +12,20 @@
  *
  * The static half — the strict-mode booleans, the empty lists, the state directory's write grant,
  * the credentials block — is the shipped template's, which {@link shippedSandboxSettings} reads rather
- * than restating. The template is also the one list of credential paths: the file tools run outside
- * the sandbox, so {@link applySandbox} derives a `Read` deny pair per path from it rather than from a
- * second copy here.
+ * than restating; the one declared copy outside TypeScript is the watcher's, below. The template is
+ * also the one list of credential paths: the file tools run outside the sandbox, so
+ * {@link applySandbox} derives a `Read` deny pair per path from it rather than from a second copy here.
+ *
+ * Mirrors outside this package, in `cli/templates/scripts/autonomous-watcher.sh` → `run_profile_check`
+ * and held equal by `cli/test/watcher-run-profile.test.mjs`:
+ * - {@link SANDBOX_OPT_OUT_MARKER};
+ * - the strict values of `sandbox.enabled`, `sandbox.failIfUnavailable` and
+ *   `sandbox.allowUnsandboxedCommands` that {@link shippedSandboxSettings} reads from the template;
+ * - the opt-out shape {@link applySandbox} writes: `enabled` `false`, `failIfUnavailable` `false`,
+ *   `allowUnsandboxedCommands` left at the template's value.
+ *
+ * Any change to `GRADED_SETTINGS`' template values for those three keys, or to {@link applySandbox}'s
+ * opt-out branch, is an edit to `run_profile_check` in the same change.
  */
 
 import { join } from 'node:path';
