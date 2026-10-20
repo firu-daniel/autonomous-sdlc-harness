@@ -79,6 +79,7 @@ import { delimiter, dirname, join } from 'node:path';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 
+import { MAIN_REPO_ANCHOR_VARIABLE } from '../dist/core/mainRepoAnchor.js';
 import { createFixture, INIT_SCRIPTS_DIR, readJson, runCli, snapshotTree, PACKAGE_ROOT } from './helpers/fixture.mjs';
 
 /** A compiled module of the CLI, imported for the answers a subprocess cannot be asked for. */
@@ -411,7 +412,7 @@ function commentBlocks(text) {
 function shellSlug(libPath, repoRoot) {
   return new Promise((resolve, reject) => {
     const script = '. "$1" || exit 90; hr_repo_slug "$2"';
-    execFile('bash', ['-c', script, 'bash', libPath, repoRoot], { encoding: 'utf8' }, (error, stdout, stderr) => {
+    execFile('bash', ['-c', script, 'bash', libPath, repoRoot], { encoding: 'utf8', env: { ...process.env, [MAIN_REPO_ANCHOR_VARIABLE]: '' } }, (error, stdout, stderr) => {
       if (error !== null && typeof error.code !== 'number') reject(error);
       else resolve({ status: error === null ? 0 : error.code, stdout: stdout.trim(), stderr });
     });

@@ -111,6 +111,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
+import { MAIN_REPO_ANCHOR_VARIABLE } from '../dist/core/mainRepoAnchor.js';
 import { PACKAGE_ROOT } from './helpers/fixture.mjs';
 import {
   API_KEY_SECRET,
@@ -370,6 +371,7 @@ test('the run-actor gate, under bash -e -o pipefail, passes the bot and admitted
     const r = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', body], {
       env: {
         ...process.env,
+        [MAIN_REPO_ANCHOR_VARIABLE]: '',
         [RUN_ACTORS_VARIABLE]: list,
         IN_TRIGGERING_ACTOR: actor,
         IN_OWNER: owner,
@@ -1049,7 +1051,7 @@ test('control: under bash -e -o pipefail the step passes on exit 0 and 2 and fai
       mkdirSync(dir);
       writeFileSync(join(dir, 'remote-run.sh'), `[ "$1" = control ] || exit 99\nexit ${code}\n`);
       const r = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', line], {
-        env: { ...process.env, SCRIPTS_DIR: dir },
+        env: { ...process.env, [MAIN_REPO_ANCHOR_VARIABLE]: '', SCRIPTS_DIR: dir },
         encoding: 'utf8',
       });
       assert.equal(r.error, undefined);
@@ -1075,7 +1077,7 @@ test('control: under bash -e -o pipefail the agent check passes on every exit an
       const output = join(dir, 'github-output');
       writeFileSync(output, '');
       const r = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', body], {
-        env: { ...process.env, SCRIPTS_DIR: dir, GITHUB_OUTPUT: output },
+        env: { ...process.env, [MAIN_REPO_ANCHOR_VARIABLE]: '', SCRIPTS_DIR: dir, GITHUB_OUTPUT: output },
         encoding: 'utf8',
       });
       assert.equal(r.error, undefined);

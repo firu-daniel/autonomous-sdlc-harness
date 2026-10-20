@@ -52,6 +52,7 @@ import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 
+import { MAIN_REPO_ANCHOR_VARIABLE } from '../dist/core/mainRepoAnchor.js';
 import { INIT_SCRIPTS_DIR, runBash, runGit } from './helpers/fixture.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
@@ -527,7 +528,7 @@ test('a job killed mid-run leaves running / continue', async (t) => {
   await j.setStub('sleep 30');
   const child = spawn('bash', [j.watcher, 'job', j.branch, 'task', 'none'], {
     cwd: j.dir,
-    env: { ...process.env, ...j.jobEnv({}) },
+    env: { ...process.env, [MAIN_REPO_ANCHOR_VARIABLE]: '', ...j.jobEnv({}) },
     detached: true,
     stdio: 'ignore',
   });

@@ -35,6 +35,7 @@ import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 
+import { MAIN_REPO_ANCHOR_VARIABLE } from '../dist/core/mainRepoAnchor.js';
 import { INIT_SCRIPTS_DIR, runBash, runGit } from './helpers/fixture.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
@@ -235,7 +236,7 @@ async function createSequenceFixture(t) {
       await rm(launched, { force: true });
       const child = spawn('bash', [watcher, 'job', w.branch, 'task', resume], {
         cwd: w.dir,
-        env: { ...process.env, ...jobEnv(env) },
+        env: { ...process.env, [MAIN_REPO_ANCHOR_VARIABLE]: '', ...jobEnv(env) },
         detached: true,
         stdio: 'ignore',
       });

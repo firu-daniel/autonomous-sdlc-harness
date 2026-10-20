@@ -78,6 +78,7 @@ import {
   PYTHON_SERVE_SUB_COMMAND,
 } from '../dist/retrieval/pythonBackend.js';
 import { copySurfacePaths } from '../dist/generators/writeProtection.js';
+import { MAIN_REPO_ANCHOR_VARIABLE } from '../dist/core/mainRepoAnchor.js';
 import {
   createFixture,
   INIT_SCRIPTS_DIR,
@@ -198,7 +199,7 @@ function copiesOf(snapshot, name) {
 function sourceAndCall(dir, reader, scriptsDir = SCRIPTS_DIR) {
   return new Promise((resolve, reject) => {
     const script = `. "$1"; ${reader} "$2"`;
-    execFile('bash', ['-c', script, '_', join(dir, scriptsDir, LIB_SUBDIR, LIB_FILE), dir], { cwd: dir, encoding: 'utf8' }, (error, out, err) => {
+    execFile('bash', ['-c', script, '_', join(dir, scriptsDir, LIB_SUBDIR, LIB_FILE), dir], { cwd: dir, encoding: 'utf8', env: { ...process.env, [MAIN_REPO_ANCHOR_VARIABLE]: '' } }, (error, out, err) => {
       if (error !== null && typeof error.code !== 'number') reject(error);
       else resolve({ status: error === null ? 0 : error.code, stdout: out, stderr: err });
     });
@@ -265,7 +266,7 @@ test('the library is sourced-only: running it directly does nothing and exits 0'
   await initOk(dir);
 
   const { status, stdout, stderr } = await new Promise((resolve, reject) => {
-    execFile('bash', [join(dir, LIB_PATH)], { cwd: dir, encoding: 'utf8' }, (error, out, err) => {
+    execFile('bash', [join(dir, LIB_PATH)], { cwd: dir, encoding: 'utf8', env: { ...process.env, [MAIN_REPO_ANCHOR_VARIABLE]: '' } }, (error, out, err) => {
       if (error !== null && typeof error.code !== 'number') reject(error);
       else resolve({ status: error === null ? 0 : error.code, stdout: out, stderr: err });
     });
@@ -461,7 +462,7 @@ test('hr_registry_set then hr_registry_get round-trips a value through a fresh r
   const registry = join(dir, 'registry.json');
   const { status, stdout, stderr } = await new Promise((resolve, reject) => {
     const script = '. "$1"; hr_registry_set "$2" feat/x status running && hr_registry_get "$2" feat/x status';
-    execFile('bash', ['-c', script, '_', join(dir, LIB_PATH), registry], { cwd: dir, encoding: 'utf8' }, (error, out, err) => {
+    execFile('bash', ['-c', script, '_', join(dir, LIB_PATH), registry], { cwd: dir, encoding: 'utf8', env: { ...process.env, [MAIN_REPO_ANCHOR_VARIABLE]: '' } }, (error, out, err) => {
       if (error !== null && typeof error.code !== 'number') reject(error);
       else resolve({ status: error === null ? 0 : error.code, stdout: out, stderr: err });
     });
@@ -1750,7 +1751,7 @@ test('the launcher passes an INT on to the Python backend as TERM', async (t) =>
   );
   chmodSync(fakePath, 0o755);
 
-  const child = spawn('bash', [join(dir, LAUNCHER_PATH)], { cwd: dir, env: { ...process.env, ...env }, stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawn('bash', [join(dir, LAUNCHER_PATH)], { cwd: dir, env: { ...process.env, [MAIN_REPO_ANCHOR_VARIABLE]: '', ...env }, stdio: ['pipe', 'pipe', 'pipe'] });
   let stdout = '';
   let stderr = '';
   let signalled = false;

@@ -20,6 +20,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
+import { MAIN_REPO_ANCHOR_VARIABLE } from '../dist/core/mainRepoAnchor.js';
 import { createFixture } from './helpers/fixture.mjs';
 
 const CHILD_TEST_NAME = 'a watch loop that never returns';
@@ -55,7 +56,7 @@ function execResult(command, args, options = {}) {
 /** The parent's environment minus the runner's child marker, plus `extra`. */
 function topLevelRunnerEnv(extra) {
   const { NODE_TEST_CONTEXT: _childMarker, ...env } = process.env;
-  return { ...env, ...extra };
+  return { ...env, [MAIN_REPO_ANCHOR_VARIABLE]: '', ...extra };
 }
 
 function childSource() {

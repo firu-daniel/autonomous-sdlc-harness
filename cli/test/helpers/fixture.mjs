@@ -65,6 +65,7 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, readdir, readFile, lstat, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
+import { MAIN_REPO_ANCHOR_VARIABLE } from '../../dist/core/mainRepoAnchor.js';
 
 /**
  * The directory a fresh `init` writes its scripts into. A suite addressing scripts that an `init`
@@ -119,6 +120,10 @@ const MAX_BUFFER = 16 * 1024 * 1024;
  * `HARNESS_GITHUB_DEFAULT_COMMIT` is blanked because the remote bundle library switches to the
  * trusted configuration whenever it is non-empty, and a `harness-run` job exports it to every later
  * step, a session's gate runs included; a case that exercises trusted mode passes it explicitly.
+ *
+ * {@link MAIN_REPO_ANCHOR_VARIABLE} is blanked because the plugin's readers act on the main checkout
+ * it names, and the watcher exports it to every session it launches, a session's gate runs
+ * included; a case whose subject is the anchor passes it explicitly.
  */
 const ISOLATED_ENV = Object.freeze({
   GIT_CONFIG_GLOBAL: '/dev/null',
@@ -126,6 +131,7 @@ const ISOLATED_ENV = Object.freeze({
   GIT_CONFIG_SYSTEM: '/dev/null',
   GIT_TERMINAL_PROMPT: '0',
   HARNESS_GITHUB_DEFAULT_COMMIT: '',
+  [MAIN_REPO_ANCHOR_VARIABLE]: '',
 });
 
 /**

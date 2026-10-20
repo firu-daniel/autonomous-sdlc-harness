@@ -22,6 +22,7 @@ import test from 'node:test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
+import { MAIN_REPO_ANCHOR_VARIABLE } from '../dist/core/mainRepoAnchor.js';
 import {
   CLI_ENTRY,
   createFixture,
@@ -282,7 +283,7 @@ async function withServer(fixture, body, extraEnv = {}) {
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [CLI_ENTRY, 'docs', 'serve', '--cwd', fixture.dir],
-    env: { ...process.env, ...retrievalEnv(fixture.cacheHome), ...extraEnv },
+    env: { ...process.env, [MAIN_REPO_ANCHOR_VARIABLE]: '', ...retrievalEnv(fixture.cacheHome), ...extraEnv },
     stderr: 'pipe',
   });
   let stderr = '';
