@@ -12,7 +12,7 @@ Gate 13a–13c reported `BLOCKED` because the Python service environment is not 
 
 This list is the **single source of truth** for the fix loop. `[ ]` markers anywhere else in this plan or its per-finding files are informational only.
 
-1. [ ] **Finding 1** — Make the fetch prove the hooks pin in refresh-branch case (a). _(layer: cli)_
+1. [x] **Finding 1** — Make the fetch prove the hooks pin in refresh-branch case (a). _(layer: cli)_
 2. [ ] **Finding 2** — Make the fetch prove the hooks pin in refresh-branch case (d). _(layer: cli)_
 
 ## Must Fix

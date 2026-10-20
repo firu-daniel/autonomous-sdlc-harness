@@ -8,13 +8,15 @@
  * worktree's `config.worktree` is absent, empty or holds just the `core.hooksPath`
  * `setup-worktree.sh` writes, refusing otherwise with exit 1 and the worktree untouched; and every
  * merge it makes runs the main repository's configured hooks directory, never the worktree's — and,
- * built from plumbing, runs no merge hook at all, only the `reference-transaction` hook its ref
- * update fires; and a
+ * built from plumbing, its ref swap runs no hook at all, the only hook that fires being the
+ * `reference-transaction` hook of the wrapper's fetch, under the main hooks directory; and a
  * main-checkout `defaultBranch` starting with `-` is refused with exit 1 before git can read it as an
  * option; and `defaultBranch` and the protected set come from the MAIN checkout's
  * `harness.config.json`, never from the worktree's own committed copy, which the sandbox can
  * rewrite.**
  * Case (a)'s marker assertion is the proof of the pin: a refusal case passing proves nothing about it.
+ * Cases (a) and (d) move the main checkout's `refs/remotes/origin/trunk` back one commit before the
+ * refresh, so that the fetch has a ref to move.
  * Cases (k)–(m) cover the merge mechanics: a fast-forward, a conflict that writes nothing, and an
  * untracked file in the way; (a) and (c) pin the merge commit's message in each mode; (n) is the
  * refusal on a git older than 2.38, whose `merge-tree` has no `--write-tree`.
@@ -71,8 +73,8 @@ async function worktreeFixture(t) {
   await runGit(origin, ['init', '--bare', '--quiet']);
 
   // A `post-merge` hook writing `<name>` and a `reference-transaction` hook writing `<name>-rt`:
-  // git runs the second whenever a ref moves, so it proves which hooks directory the wrapper's own
-  // ref update ran under, and the first proves no merge hook ran at all.
+  // git runs the second whenever a ref moves, so it proves which hooks directory the wrapper's fetch
+  // ran under, and the first proves no merge hook ran at all.
   const hook = async (dir, name) => {
     await mkdir(dir, { recursive: true });
     const file = join(dir, 'post-merge');
@@ -138,6 +140,10 @@ async function worktreeFixture(t) {
 
 test('(a) The main checkout’s copy refreshes the named worktree under the main hooks, and runs no merge hook', async (t) => {
   const f = await worktreeFixture(t);
+  // The fixture's push already advanced origin/trunk; put it back one commit so the wrapper's
+  // fetch moves a ref, and its reference-transaction hook shows which hooks directory it ran under.
+  await runGit(f.main, ['update-ref', `refs/remotes/origin/${BASE}`, `${f.baseSha}~1`]);
+  await f.resetMarkers();
   const mainHead = await f.head(f.main);
   const result = await f.refresh(f.mainScript, [f.wt]);
   assert.equal(result.status, 0, output(result));
