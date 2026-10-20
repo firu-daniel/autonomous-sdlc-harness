@@ -687,7 +687,7 @@ export function renderIndexState(id, label, state) {
 }
 
 /** Every capture `score` line of one step: its recorded scoring, its later repetitions, and its forced readings. */
-function scoreLines(stepId, state) {
+export function scoreLines(stepId, state) {
   const lines = [];
   const emit = (id, scores) => {
     for (const [queryId, hits] of scores) {
@@ -943,7 +943,7 @@ export async function measureBm25States({ repoRoot, engine, corpus, repeat = 1 }
   };
 }
 
-const stamp = (snapshot) => `{ files: ${snapshot.files}, chunks: ${snapshot.chunks} }`;
+export const stamp = (snapshot) => `{ files: ${snapshot.files}, chunks: ${snapshot.chunks} }`;
 
 /** The summary a reader records from; `withScores` appends every score of every step, `scan` before `operator`. */
 export function renderBm25History(result, { withScores = false } = {}) {

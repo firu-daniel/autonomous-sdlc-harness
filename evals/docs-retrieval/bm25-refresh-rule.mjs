@@ -40,7 +40,9 @@ import {
   openPostgresEngine,
   readIndexState,
   renderIndexState,
+  scoreLines,
   spillAvailable,
+  stamp,
 } from './bm25-history.mjs';
 import { BUILT_IN_CORPORA, corpusConfig } from './corpora.mjs';
 import { assertRealModelsAreAvailable } from './index-build.mjs';
@@ -399,8 +401,6 @@ export async function measureRefreshRule({ checkout, backend, corpusA, corpusB }
   });
 }
 
-const stamp = (snapshot) => `{ files: ${snapshot.files}, chunks: ${snapshot.chunks} }`;
-
 function refreshLine(result, rebuildReported) {
   const rebuilt = result.rebuilt ?? (rebuildReported ? 'unknown' : 'not reported by indexPythonCorpus, taken as false');
   const warnings = result.warnings?.length > 0 ? `; warnings: ${result.warnings.join(' / ')}` : '';
@@ -420,18 +420,6 @@ function comparisonLines(stepId, variant, comparisons) {
       }
     }
   }
-  return lines;
-}
-
-function scoreLines(stepId, state) {
-  const lines = [];
-  const emit = (id, scores) => {
-    for (const [queryId, hits] of scores) {
-      for (const [key, score] of hits) lines.push(`score ${id} ${queryId} ${key} ${score.scan} ${score.operator} ${score.scanRaw} ${score.operatorRaw}`);
-    }
-  };
-  emit(stepId, state.scores);
-  if (state.forced !== undefined) emit(`${stepId}.forced`, state.forced.scores);
   return lines;
 }
 
