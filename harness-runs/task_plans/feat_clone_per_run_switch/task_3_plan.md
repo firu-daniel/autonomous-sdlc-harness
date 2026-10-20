@@ -37,3 +37,9 @@ This task changes no script.
 - `npm test --workspace cli -- test/clone-sync.test.mjs` passes.
 - `npm test --workspace cli -- test/clone-create-remove.test.mjs` passes.
 - Each new case is red against the library as it stood before Task 1. When this task runs, Tasks 1 and 2 are both committed, so no `HEAD~<n>` names that revision: name it by the merge-base with the default branch. First issue a bare `git merge-base HEAD origin/<defaultBranch>`, with `<defaultBranch>` read from `harness.config.json` before the command is issued. Then confirm each case once against `git show <that hash>:cli/templates/scripts/lib/harness-run-lib.sh` copied into a temp fixture, not by editing the tracked library, and note it in the file's header.
+
+- **Deviations from plan:**
+  - `clone-sync.test.mjs`'s header rule sentence did not list "behind" among the refusals as the plan said; the heal and the diverged refusal were added to it as one new clause instead.
+  - The (gc) case reads the clone's ref list **before** the main checkout's `gc`, then `cat-file -e`s each recorded object afterwards: `for-each-ref` skips a ref whose object is missing, so a list read afterwards would hide the very failure the case exists to catch.
+  - The (a) subset case also pushes `trunk` to `origin/feat_c` and fetches, so `origin/<branch>` is exercised alongside `origin/<defaultBranch>`, `origin/HEAD` and the excluded `origin/other`.
+  - Red replay: `git merge-base HEAD origin/dev` = `fb44db76ca53b84586ed5be0b3786370a1ac6f02`; its library copied to a temp dir and both suites rewritten to source it, via `bash scripts/scratch-run.sh harness-runs/scratch/red-replay.mjs`. Results: `clone-sync` 17 pass / 1 fail — (c); `clone-create-remove` 20 pass / 8 fail — (a), (gc) (`the clone’s refs/remotes/origin/other (…) no longer resolves`), and (live) with all five subtests (`hr_run_copy_live_var: command not found`). Recorded in each file's header.

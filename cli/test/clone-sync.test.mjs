@@ -3,8 +3,14 @@
  *
  * **The rule these tests exist to enforce: a clone's objects enter the main checkout only through
  * sync-in's fetch, which hashes what it indexes, so a substituted object is rejected and the main
- * checkout's refs are left as they were; sync-in never moves a branch the main checkout or one of its
- * worktrees has checked out; and both halves are no-ops for a worktree and for the main checkout.**
+ * checkout's refs are left as they were; sync-in fast-forwards a clone strictly behind the main
+ * checkout to the main checkout's tip, and refuses a diverged one with neither ref moved; sync-in
+ * never moves a branch the main checkout or one of its worktrees has checked out; and both halves are
+ * no-ops for a worktree and for the main checkout.**
+ *
+ * RED ONCE — the library at `git merge-base HEAD origin/dev` (the revision before this branch's heal),
+ * copied into a temp fixture: case (c) fails, sync-in refusing the behind clone. Every other case
+ * passes under it.
  *
  * MEASURED ANSWERS, git 2.50.1 (Apple Git-155). Sync-in's local-transport fetch honours none of the
  * clone's own configuration keys measured here, and runs no hook, filter or fsmonitor in the clone:
@@ -200,16 +206,19 @@ test('(b) Equal tips: sync-in writes nothing', async (t) => {
   assert.deepEqual(await f.mainSnapshot(), before);
 });
 
-test('(c) A clone behind the main checkout is refused, the main checkout’s ref unchanged', async (t) => {
+test('(c) A clone behind the main checkout is healed to the main checkout’s tip, and a clone ahead then syncs in', async (t) => {
   const f = await fixture(t);
   const ahead = await f.advanceMain('main: ahead');
   const before = await f.mainSnapshot();
-  const g = await f.syncIn();
-  assert.equal(g.status, '1');
-  assert.equal(g.tip, '');
-  assert.match(g.refusal, /the clone is behind the main checkout/);
+  assert.deepEqual(await f.syncIn(), { status: '0', tip: ahead, refusal: '' });
+  assert.equal(await f.cloneTip(), ahead);
   assert.equal(await f.mainTip(), ahead);
   assert.deepEqual(await f.mainSnapshot(), before);
+
+  const commit = await f.commitInClone('a.txt', 'clone work\n');
+  assert.deepEqual(await f.syncIn(), { status: '0', tip: commit, refusal: '' });
+  assert.equal(await f.mainTip(), commit);
+  assert.equal(await f.cloneTip(), commit);
 });
 
 test('(d) Diverged tips are refused, naming both short ids', async (t) => {
@@ -223,6 +232,8 @@ test('(d) Diverged tips are refused, naming both short ids', async (t) => {
   assert.ok(g.refusal.includes(theirs.slice(0, 12)), g.refusal);
   assert.ok(g.refusal.includes(ours.slice(0, 12)), g.refusal);
   assert.deepEqual(await f.mainSnapshot(), before);
+  assert.equal(await f.mainTip(), ours);
+  assert.equal(await f.cloneTip(), theirs);
 });
 
 test('(e) The main checkout having the branch checked out refuses sync-in, its ref unchanged', async (t) => {

@@ -17,6 +17,18 @@
  * listing a refusal compares skips the contents of every `.git` directory and of the bare origin:
  * the surface check's trusted-base fetch writes `FETCH_HEAD`, which no ref listing sees. The check's
  * own refusals are `cli/test/clone-trust-check.test.mjs`'s, and sync is `cli/test/clone-sync.test.mjs`'s.
+ * The main checkout also holds `origin/other`, naming a commit nothing else reaches, so a clone that
+ * mirrored every remote-tracking ref would show it.
+ *
+ * A clone keeps borrowing the main checkout's objects through `alternates` for its whole life;
+ * dissociation is deliberately not used, because it copies the whole history into every clone. Case
+ * (gc) is what makes that safe: every ref the clone holds survives the main checkout's
+ * `gc --prune=now`.
+ *
+ * RED ONCE — the library at `git merge-base HEAD origin/dev` (the revision before this branch's
+ * clone-first changes), copied into a temp fixture: case (a) fails on the mirrored `origin/other`,
+ * case (gc) fails on the clone's `origin/other` no longer resolving, and every `hr_run_copy_live_var`
+ * case in (live) fails, the function not existing. Every other case passes under it.
  *
  * RED ONCE — the rollback's `update-ref -d` of the cut branch skipped in `hr_clone_create_var`:
  * cases (h) and (j) fail. `hr_clone_remove_var`'s derived-path comparison deleted: the off-path
@@ -160,6 +172,10 @@ async function fixture(t, { objectFormat } = {}) {
       tree: await listing(root),
     }),
   };
+  await f.commitOn('refs/heads/other', 'other.txt', 'other work\n');
+  await runGit(main, ['push', '--quiet', 'origin', 'other']);
+  await runGit(main, ['fetch', '--quiet', 'origin']);
+  await runGit(main, ['branch', '--quiet', '-D', 'other']);
   return f;
 }
 
@@ -214,8 +230,10 @@ async function gitShim(f, trigger, action) {
 // Creation's invariants.
 // ---------------------------------------------------------------------------
 
-test('(a) A created clone is shared, borrows every object, mirrors origin and is recorded', async (t) => {
+test('(a) A created clone is shared, borrows every object, holds only the remote refs the main checkout keeps alive and is recorded', async (t) => {
   const f = await fixture(t);
+  await runGit(f.main, ['push', '--quiet', 'origin', `trunk:${REF}`]);
+  await runGit(f.main, ['fetch', '--quiet', 'origin']);
   const startTip = await f.tip('refs/heads/trunk');
   const clone = await created(f);
   const gd = join(clone, '.git');
@@ -244,8 +262,16 @@ test('(a) A created clone is shared, borrows every object, mirrors origin and is
   const remotes = async (cwd) =>
     (await runGit(cwd, ['for-each-ref', '--format=%(objectname) %(refname) %(symref)', 'refs/remotes/origin/'])).stdout;
   const mainRemotes = await remotes(f.main);
-  assert.notEqual(mainRemotes, '');
-  assert.equal(await remotes(clone), mainRemotes);
+  assert.match(mainRemotes, / refs\/remotes\/origin\/other $/m);
+  assert.match(mainRemotes, / refs\/remotes\/origin\/feat_c $/m);
+  const kept = new Set(['HEAD', 'trunk', BRANCH].map((name) => `refs/remotes/origin/${name}`));
+  const subset = mainRemotes
+    .split('\n')
+    .filter((line) => kept.has(line.split(' ')[1]))
+    .map((line) => `${line}\n`)
+    .join('');
+  assert.match(subset, / refs\/remotes\/origin\/trunk $/m);
+  assert.equal(await remotes(clone), subset);
   const url = async (cwd) => (await runGit(cwd, ['config', '--get', 'remote.origin.url'])).stdout;
   assert.equal(await url(clone), await url(f.main));
   assert.equal((await runGit(clone, ['status', '--porcelain'])).stdout, '');
@@ -281,6 +307,33 @@ test('(sha256) A SHA-256 main checkout gets a clone the trust check accepts', as
   assert.equal((await f.check(g.dir)).kind, 'clone');
   const fmt = await runGit(f.root, ['-C', '/', 'config', '--file', join(g.dir, '.git', 'config'), '--get', 'extensions.objectformat']);
   assert.equal(fmt.stdout.trim(), 'sha256');
+});
+
+test('(gc) Every ref the clone holds survives the main checkout losing origin/other and running gc --prune=now', async (t) => {
+  const f = await fixture(t);
+  const clone = await created(f);
+  // Read before the gc: a ref naming a pruned object is skipped by for-each-ref afterwards.
+  const held = (await runGit(clone, ['for-each-ref', '--format=%(objectname) %(refname)'])).stdout;
+  assert.notEqual(held, '');
+
+  await runGit(f.main, ['update-ref', '-d', 'refs/remotes/origin/other']);
+  await runGit(f.main, ['reflog', 'expire', '--expire=now', '--all']);
+  await runGit(f.main, ['gc', '--quiet', '--prune=now']);
+
+  const resolves = async (name) => (await runBash(clone, ['-c', 'git cat-file -e "$1"', 'hr', name])).status === 0;
+  assert.ok(await resolves('HEAD^{tree}'), 'the clone’s HEAD^{tree}');
+  for (const line of held.trim().split('\n')) {
+    const [oid, name] = line.split(' ');
+    assert.ok(await resolves(oid), `the clone’s ${name} (${oid}) no longer resolves`);
+  }
+  const g = globals(
+    await lib(f.root, `hr_copy_sync_in_var "$1" "$2" "$3"; s=$?; printf 'status=%s\\nrefusal=%s\\n' "$s" "$HR_SYNC_REFUSAL"`, [
+      f.main,
+      join(clone, '.git'),
+      BRANCH,
+    ]),
+  );
+  assert.deepEqual(g, { status: '0', refusal: '' });
 });
 
 // ---------------------------------------------------------------------------
@@ -340,6 +393,57 @@ test('(f) The branch checked out in the main checkout, or in a linked worktree, 
   await runGit(f.main, ['checkout', '--quiet', 'trunk']);
   await runGit(f.main, ['worktree', 'add', '--quiet', join(f.root, 'wt'), BRANCH]);
   await assertRefused(f, /a checkout of .* has it checked out$/);
+});
+
+// ---------------------------------------------------------------------------
+// The one-live-copy rule: hr_run_copy_live_var, and creation refusing on it.
+// ---------------------------------------------------------------------------
+
+const LIVE = `hr_run_copy_live_var "$1" "$2"; s=$?
+printf 'status=%s\\ncopy=%s\\nwhy=%s\\n' "$s" "$HR_LIVE_COPY" "$HR_LIVE_COPY_WHY"`;
+
+test('(live) hr_run_copy_live_var names each live copy, and creation refuses on it with nothing written', async (t) => {
+  const live = async (f) => globals(await lib(f.root, LIVE, [f.main, BRANCH]));
+
+  await t.test('no live copy: 1, both globals empty', async (t) => {
+    const f = await fixture(t);
+    assert.deepEqual(await live(f), { status: '1', copy: '', why: '' });
+  });
+
+  await t.test('the derived path exists', async (t) => {
+    const f = await fixture(t);
+    await mkdir(f.derived());
+    assert.deepEqual(await live(f), { status: '0', copy: f.derived(), why: `${f.derived()} already exists` });
+    await assertRefused(f, /already exists$/);
+  });
+
+  await t.test('the registry’s worktree names an existing path', async (t) => {
+    const f = await fixture(t);
+    const copy = join(f.root, 'live-copy');
+    await mkdir(copy);
+    await f.writeRegistry({ ...BYSTANDER, [BRANCH]: { branch: BRANCH, worktree: copy, copy_kind: 'worktree', updated_at: '2026-01-01T00:00:00' } });
+    assert.deepEqual(await live(f), {
+      status: '0',
+      copy,
+      why: `the run registry records a run copy of it at ${copy}, which exists`,
+    });
+    await assertRefused(f, /the run registry records a run copy of it at .*, which exists$/);
+  });
+
+  await t.test('the main checkout has the branch checked out', async (t) => {
+    const f = await fixture(t);
+    await runGit(f.main, ['checkout', '--quiet', '-b', BRANCH]);
+    assert.deepEqual(await live(f), { status: '0', copy: f.main, why: `the main checkout ${f.main} has it checked out` });
+    await assertRefused(f, /the main checkout .* has it checked out$/);
+  });
+
+  await t.test('a linked worktree has the branch checked out', async (t) => {
+    const f = await fixture(t);
+    const wt = join(f.root, 'wt');
+    await runGit(f.main, ['worktree', 'add', '--quiet', wt, '-b', BRANCH]);
+    assert.deepEqual(await live(f), { status: '0', copy: wt, why: `a checkout of ${f.main} has it checked out` });
+    await assertRefused(f, /a checkout of .* has it checked out$/);
+  });
 });
 
 test('(g) An existing branch whose tip changes a protected path is refused by the surface check', async (t) => {
