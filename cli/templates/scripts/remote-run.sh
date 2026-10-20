@@ -88,26 +88,29 @@
 #        list, the listing or `git ls-remote` failed; nothing written
 #     4  start: placement failed — the main checkout's placement, the branch
 #        cut, the copy, the state directory, the commit or the push — and
-#        nothing was dispatched; the working copy and the local branch the cut
-#        created were removed. review: placement failed — the main checkout's
-#        placement, the copy (the branch checked out in another working copy
-#        included), the fetch, the fast-forward, the protected-surface check,
-#        the state directory, the commit or the push — and nothing was
-#        dispatched; a copy it cut was removed
+#        nothing was dispatched; the clone, local branch, registry record and
+#        registry directory the cut created were removed. review: placement
+#        failed — the main checkout's placement, the copy (the branch checked
+#        out in another working copy included), the fetch, the fast-forward,
+#        the protected-surface check, the state directory, the commit or the push — and nothing was
+#        dispatched; a clone it cut was removed with what the cut created
 #     5  pause-requested only: the read succeeded and found no such run
 #
 # `start` IS THE ADAPTERS' ONE ENTRY: every trigger (an issue event, a forge
 # dispatch, anything later) reduces to a branch and a task text and ends here.
 # In order, stopping at the first failure: refuse a protected branch (2); refuse
 # a prompt file that is not a readable regular file (2); cut the branch from
-# `origin/<defaultBranch>` with `create-worktree.sh --no-bootstrap`; place the
-# file at `<state_dir>/task_prompts/<branch>_task_prompt.md` in that working
-# copy, commit it as `chore: add task prompt for <branch>` and confirm
-# `origin/<branch>` equals `refs/heads/<branch>` (each failure 4); then remove the working copy and the local
-# branch it created — on every exit after the cut, success included and
+# `origin/<defaultBranch>` with `create-worktree.sh --no-bootstrap`, which
+# makes a clone at `hr_worktree_dir`; place the
+# file at `<state_dir>/task_prompts/<branch>_task_prompt.md` in that clone,
+# commit it as `chore: add task prompt for <branch>` and confirm
+# `origin/<branch>` equals `refs/heads/<branch>` (each failure 4); then remove
+# the clone (`hr_clone_remove_var`), the local branch (a compare-and-swap from
+# the last tip `start` saw), the clone's registry record and the registry
+# directory it created — on every exit after the cut, success included and
 # wherever `start` runs, because nothing reads the copy once the push has landed
-# and a leftover branch makes the next cut of that name refuse; a copy or branch
-# that existed before the cut is never removed — and `dispatch --engine task
+# and a leftover branch makes the next cut of that name refuse; a copy, branch,
+# record or directory that existed before the cut is never removed — and `dispatch --engine task
 # --resume none --chain 0`, composed by `verb_dispatch` itself. The placement is the library's
 # (`hr_task_prompt_rel`, `hr_place_artifact`, `hr_commit_placed`,
 # `hr_push_landed`), the same calls the watcher's inbox pass makes, so nothing
@@ -117,9 +120,13 @@
 # `stateDir`; a copy whose own resolvable `stateDir` differs is refused (4).
 # The commit is `hr_commit_placed`'s plumbing in the main checkout, with
 # `core.hooksPath=/dev/null`, so no hook runs, and its protected-branch refusal
-# is a failure (4). It writes no registry record: a
-# trigger job has no registry, and such a run needs no local record: the local
-# commands act on it through GitHub.
+# is a failure (4). Its `create-worktree.sh` call writes a registry record for
+# the clone (`worktree`, `copy_kind`) and creates the registry directory
+# `<state_dir>/autonomous_logs/` when absent, as a trigger job's fresh checkout
+# always has it. `start` drops a record that did not exist before the cut, and
+# removes the registry file and directory when it made them and the drop left
+# them empty, so no record is left behind and the local commands still act on
+# such a run through GitHub.
 #
 # `fetch` IS THE COMMANDS' READ OF ONE BRANCH ON GITHUB, needing no local
 # record. Gated like a sending verb. <out_dir> must be an existing, empty
@@ -160,10 +167,12 @@
 # verb because a local round's file exists only on the caller's machine, so no
 # later collection could pick it up. The bundle it reads is
 # downloaded to `sync`'s directory, the one write a refusal makes. The copy: the main
-# checkout's remote record's mirror when its `worktree` exists and is on the
-# branch, never removed; otherwise `create-worktree.sh --existing
-# --no-bootstrap` into `hr_worktree_dir`, removed with the local branch it
-# DWIM-created on every exit, as `start` removes its cut. The mirror is used
+# checkout's remote record's mirror when its `worktree` (a clone or a legacy
+# linked worktree) exists and is on the branch, never removed; otherwise
+# `create-worktree.sh --existing --no-bootstrap`, a clone at `hr_worktree_dir`,
+# removed on every exit with the local branch it DWIM-created, the registry
+# record it wrote and the registry directory it created, each only when absent
+# before, as `start` removes its cut. The mirror is used
 # only when `hr_run_copy_check_var` trusts it against the main checkout this
 # script's own location gives and its branch, read from the main repository,
 # is <branch>; a mirror that fails falls through to a cut copy, and the cut
@@ -1235,12 +1244,16 @@
 # inbox, and never watches a run it sent beyond the bounded lookup of its
 # listing that `trigger` and `review` make. Only `start` and `review` push, and
 # only through `create-worktree.sh` and `push-branch.sh`; `start`'s writes are
-# the prompt committed on `origin/<branch>`, through a working copy and a local
-# branch it removes before it returns, and, after a push that did not land, a
+# the prompt committed on `origin/<branch>`, through a clone, a local branch,
+# the clone's registry record and the registry directory
+# `<state_dir>/autonomous_logs/`, each written and then removed before it
+# returns (the record only when none existed before, the registry file and the
+# directory only when each was absent and is empty after the drop), and, after a push that did not land, a
 # fetch that force-writes that copy's `refs/remotes/origin/<branch>`
 # (`hr_push_landed`'s, to name the commit the remote moved to); `review`'s are
 # the round committed on `origin/<branch>`, through the record's mirror or a
-# copy and a local branch it removes, and, after a push that did not land, the
+# clone, a local branch, the clone's registry record and the registry
+# directory, each written and then removed as for `start`, and, after a push that did not land, the
 # same `hr_push_landed` fetch force-writing `refs/remotes/origin/<branch>` in
 # the main checkout, its own fetch force-writing that ref before the
 # fast-forward, the record's `status` / `engine`, the bundle download
@@ -3696,21 +3709,71 @@ placement_fail() {
   exit "$EXIT_PLACEMENT"
 }
 
-# start_remove_copy — remove the working copy and the local branch `start`
-# cut, and only those: `had_copy` / `had_branch` record what existed before the
-# cut. Idempotent; a failed step is one stderr line and never changes the exit
-# status already decided. `--force` because a failure exit may leave the placed,
-# uncommitted prompt, which is only a copy of --prompt-file.
+# copy_baseline_var — record, before `create-worktree.sh` cuts a copy into
+# `worktree`, what existed already: the copy (`had_copy`), the local branch
+# (`had_branch`), the registry record (`had_record`, by `hr_registry_peek`'s
+# return), the registry file (`had_registry_file`) and the registry directory
+# (`had_registry_dir`); the cut creates the last two when absent.
+# `start_remove_copy` removes only what these say was absent. 1 when the
+# registry path is unresolvable. Globals: the EXIT trap runs after the verb's
+# frame is gone.
+copy_baseline_var() {
+  seen_tip=""
+  copy_registry=$(hr_state_path "$run_main" autonomous_logs/registry.json) || return 1
+  had_copy=0
+  [ ! -e "$worktree" ] || had_copy=1
+  had_branch=0
+  ! git -C "$root" show-ref --verify --quiet "refs/heads/$branch" || had_branch=1
+  had_record=0
+  ! hr_registry_peek "$copy_registry" "$branch" worktree >/dev/null || had_record=1
+  had_registry_file=0
+  [ ! -e "$copy_registry" ] || had_registry_file=1
+  had_registry_dir=0
+  [ ! -d "$(hr_registry_dir "$copy_registry")" ] || had_registry_dir=1
+}
+
+# copy_saw_tip — set `seen_tip` to the main checkout's `refs/heads/<branch>`
+# after a step of this verb's own moved it, so the branch deletion is a
+# compare-and-swap from the last tip this verb wrote.
+copy_saw_tip() {
+  seen_tip=$(hr_copy_sync_main_git "$run_main" rev-parse --verify --quiet "refs/heads/$branch^{commit}" 2>/dev/null) \
+    || seen_tip=""
+}
+
+# start_remove_copy — remove what `start`, or `review`'s cut path, created, and
+# only that, as `copy_baseline_var` recorded it: the clone, through
+# `hr_clone_remove_var` while its registry record still names it; the local
+# branch, by compare-and-swap from `seen_tip` (`branch -D` only when no tip was
+# seen); the registry record; the registry file, when it holds no run; then the
+# registry directory, when it is empty. A non-empty one stays: something else
+# wrote into it. Idempotent; a failed step is one stderr line and never changes the exit
+# status already decided.
 start_remove_copy() {
+  local regdir
   if [ "$had_copy" -eq 0 ] && [ -e "$worktree" ]; then
-    git -C "$root" worktree remove --force "$worktree" >/dev/null 2>&1 \
-      || echo "remote-run.sh: could not remove the working copy '$worktree'" >&2
+    hr_clone_remove_var "$run_main" "$worktree" \
+      || echo "remote-run.sh: could not remove the working copy '$worktree': $HR_CLONE_REFUSAL" >&2
   fi
-  git -C "$root" worktree prune >/dev/null 2>&1 \
-    || echo "remote-run.sh: git worktree prune failed in '$root'" >&2
   if [ "$had_branch" -eq 0 ] && git -C "$root" show-ref --verify --quiet "refs/heads/$branch"; then
-    git -C "$root" branch -D "$branch" >/dev/null 2>&1 \
-      || echo "remote-run.sh: could not delete the local branch '$branch'" >&2
+    if [ -n "$seen_tip" ]; then
+      hr_copy_sync_main_git "$run_main" update-ref -d "refs/heads/$branch" "$seen_tip" >/dev/null 2>&1 \
+        || echo "remote-run.sh: could not delete the local branch '$branch' (it is no longer at $seen_tip)" >&2
+    else
+      git -C "$root" branch -D "$branch" >/dev/null 2>&1 \
+        || echo "remote-run.sh: could not delete the local branch '$branch'" >&2
+    fi
+  fi
+  if [ "$had_record" -eq 0 ] && hr_registry_peek "$copy_registry" "$branch" worktree >/dev/null; then
+    hr_registry_drop "$copy_registry" "$branch" \
+      || echo "remote-run.sh: could not drop the registry record of '$branch' from '$copy_registry'" >&2
+  fi
+  if [ "$had_registry_file" -eq 0 ] && [ -f "$copy_registry" ] \
+    && jq -e '.runs == {}' "$copy_registry" >/dev/null 2>&1; then
+    rm -f -- "$copy_registry" || echo "remote-run.sh: could not remove the empty registry '$copy_registry'" >&2
+  fi
+  regdir=$(hr_registry_dir "$copy_registry")
+  if [ "$had_registry_dir" -eq 0 ] && [ -d "$regdir" ]; then
+    rmdir -- "$regdir" 2>/dev/null || :
   fi
   return 0
 }
@@ -3759,15 +3822,13 @@ verb_start() {
 
   # Global, not local: the EXIT trap runs after this function's frame is gone.
   worktree=$(hr_worktree_dir "$root" "$branch") || placement_fail "resolving the working copy"
-  had_copy=0
-  [ ! -e "$worktree" ] || had_copy=1
-  had_branch=0
-  ! git -C "$root" show-ref --verify --quiet "refs/heads/$branch" || had_branch=1
+  copy_baseline_var || placement_fail "resolving the run registry"
 
   # The cut itself can leave a half-created copy, and every failure below exits.
   trap start_remove_copy EXIT
   bash "$script_dir/create-worktree.sh" --no-bootstrap "$branch" >&2 || status=$?
   [ "$status" -eq 0 ] || placement_fail "the branch cut (create-worktree.sh exited $status)"
+  copy_saw_tip
 
   placed_state_rel_var "$worktree" || placement_fail "resolving the state directory for '$worktree'"
   state_rel="$PLACED_STATE_REL"
@@ -3779,8 +3840,10 @@ verb_start() {
   status=0
   hr_commit_placed "$run_main" "$worktree" "$rel" "$subject" >&2 || status=$?
   [ "$status" -eq 0 ] || [ "$status" -eq 3 ] || placement_fail "committing '$rel'"
+  copy_saw_tip
   status=0
   hr_push_landed "$script_dir/push-branch.sh" "$worktree" "$branch" >&2 || status=$?
+  copy_saw_tip
   [ "$status" -ne 2 ] \
     || placement_fail "pushing $branch: origin/$branch moved to $HR_PUSH_REMOTE_TIP, which this branch does not have (something else pushed)"
   [ "$status" -eq 0 ] \
@@ -3898,13 +3961,11 @@ verb_review() {
   else
     # Global, not local: the EXIT trap runs after this function's frame is gone.
     worktree=$(hr_worktree_dir "$root" "$branch") || review_fail "resolving the working copy"
-    had_copy=0
-    [ ! -e "$worktree" ] || had_copy=1
-    had_branch=0
-    ! git -C "$root" show-ref --verify --quiet "refs/heads/$branch" || had_branch=1
+    copy_baseline_var || review_fail "resolving the run registry"
     trap start_remove_copy EXIT
     bash "$script_dir/create-worktree.sh" --existing --no-bootstrap "$branch" >&2 || status=$?
     [ "$status" -eq 0 ] || review_fail "the working copy (create-worktree.sh exited $status)"
+    copy_saw_tip
     hr_run_copy_check_var "$run_main" "$worktree" \
       || review_fail "checking the working copy '$worktree': $HR_RUN_REFUSAL"
     [ "$HR_RUN_COPY_BRANCH" = "$branch" ] \
@@ -3917,6 +3978,7 @@ verb_review() {
     || review_fail "git fetch origin $branch in '$run_main'"
   status=0
   hr_run_fast_forward_var "refs/remotes/origin/$branch" >&2 || status=$?
+  [ "$use_mirror" -eq 1 ] || copy_saw_tip
   [ "$status" -eq 0 ] \
     || review_fail "the fast-forward of '$worktree' to origin/$branch (exit $status): $HR_RUN_FF_REFUSAL"
   hr_run_surface_check_var "refs/heads/$branch" copy \
@@ -3951,8 +4013,10 @@ NAMES
   status=0
   hr_commit_placed "$run_main" "$worktree" "$rel" "$(hr_user_review_subject "$branch")" >&2 || status=$?
   [ "$status" -eq 0 ] || review_fail "committing '$rel'"
+  [ "$use_mirror" -eq 1 ] || copy_saw_tip
   status=0
   hr_push_landed "$script_dir/push-branch.sh" "$worktree" "$branch" >&2 || status=$?
+  [ "$use_mirror" -eq 1 ] || copy_saw_tip
   [ "$status" -ne 2 ] \
     || review_fail "pushing $branch: origin/$branch moved to $HR_PUSH_REMOTE_TIP, which this branch does not have (something else pushed)"
   [ "$status" -eq 0 ] \
