@@ -22,7 +22,7 @@ The one net-new finding is a documentation hazard in how a person is told to set
 
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below top-to-bottom; the committing role flips each one to `[x]` as that fix's commit lands — the `committer` agent in every flow that dispatches one, the orchestrator itself in the supervised fix flow, which dispatches none. `[ ]` markers anywhere else are informational only. Each entry resolves to `harness-runs/skeptic_reviews/feat_clone_per_run_anchor_skeptic_review/finding_<K>.md`.
 
-1. [ ] **Finding 1** — Set `HARNESS_MAIN_REPO` as a one-launch prefix in `docs/watcher.md`'s hand-started-session block instead of a shell-wide `export` _(layer: general)_
+1. [x] **Finding 1** — Set `HARNESS_MAIN_REPO` as a one-launch prefix in `docs/watcher.md`'s hand-started-session block instead of a shell-wide `export` _(layer: general)_
 
 ---
 

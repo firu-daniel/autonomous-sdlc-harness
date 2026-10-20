@@ -118,12 +118,13 @@ What this leaves open — the bootstrap's configured commands, filter drivers, t
 
 **Graded.** `doctor`'s `profile-main-anchor` warns, and never fails, when the rule is missing from `permissions.allow` or sits in `ask` or `deny` (`docs/cli.md` §7).
 
-**A session no launcher started.** A supervised session, a `claude` started by hand in a run copy, or a session whose profile lacks the rule gets no path from the read and resolves the fallback: from the main checkout or a linked worktree that is the main checkout, as before; in a clone it is the clone itself. A session started by hand in a clone therefore exports the variable first, from that clone, naming the main checkout:
+**A session no launcher started.** A supervised session, a `claude` started by hand in a run copy, or a session whose profile lacks the rule gets no path from the read and resolves the fallback: from the main checkout or a linked worktree that is the main checkout, as before; in a clone it is the clone itself. A session started by hand in a clone therefore sets the variable on that one launch, from that clone, naming the main checkout with no trailing slash:
 
 ```bash
-export HARNESS_MAIN_REPO=/absolute/path/to/main/checkout
-claude
+HARNESS_MAIN_REPO=/absolute/path/to/main/checkout claude
 ```
+
+Never `export` it in a shell you go on using: every later session in that terminal, in any repository, would read it and act on this main checkout's inbox, registry, kill switch and QA locks.
 
 No launcher creates a clone yet (*Where the family runs git in a run's copy, and under what pins*, above).
 
