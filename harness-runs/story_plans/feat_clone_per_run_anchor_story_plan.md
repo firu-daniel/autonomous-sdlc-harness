@@ -93,7 +93,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_clone_per_run_anchor/ta
 12. [x] **Task 12** — Move the three autonomous fix and orchestration forks' kill-switch checks to the anchor, with "run copy" wording _(layer: plugin)_ _(points: 20)_
 13. [x] **Task 13** — Say "run copy" in the remaining cores, the QA and mode-contract files and the two flow documents, and give `AUTONOMOUS_FLOW.md` the row _(layer: plugin)_ _(points: 15)_
 14. [x] **Task 14** — Prove the QA-lock helpers follow the anchor from a clone and fall back without it, in `cli/test/qa-user-locks.test.mjs` _(layer: cli)_ _(points: 15)_
-15. [ ] **Task 15** — Add the owed anchor rows to `docs/sandbox-verification.md`, and record the library change in `docs/guard-verification.md` _(layer: general)_ _(points: 10)_
+15. [x] **Task 15** — Add the owed anchor rows to `docs/sandbox-verification.md`, and record the library change in `docs/guard-verification.md` _(layer: general)_ _(points: 10)_
 16. [ ] **Task 16** — State in `docs/watcher.md` how the anchor is set, read and graded, and what a session no launcher started resolves _(layer: general)_ _(points: 10)_
 17. [ ] **Task 17** — State the anchor's allow rule, its `doctor` check and the suite's isolation in `docs/cli.md` _(layer: general)_ _(points: 15)_
 18. [ ] **Task 18** — Say "run copy" in the five developer documents, and add the anchor to `ARCHITECTURE.md`'s launch contract _(layer: general)_ _(points: 15)_

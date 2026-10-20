@@ -169,6 +169,8 @@ Three candidates fall out of that table, in descending size:
 
 **(c) The grid stops at 8 pieces and the expansion parser is quadratic.** `hc_split_command` costs O(pieces × length) and is called three times per decision. Warm-up call excluded, 50 iterations per cell: 0.42 ms at 1 piece, 0.34 at 2, 0.40 at 4, 0.57 at 8, 1.07 at 16, 2.63 at 32, 28.4 at 128; separately, 409 ms at 512 and 1.6 s at 1,024. End to end through `allow-safe-compounds.sh`, the `sed`-fork parser it replaced is still slower at every ordinary size — 8 pieces 126 → 61 ms, 128 pieces 904 → 522 ms, 512 pieces 3.5 → 2.9 s — with the crossover near **1,024 pieces**, where the fork form wins at 7.0 s against 8.2 s. Nothing in a real session approaches that; the number is here so the ceiling is stated rather than discovered. The scaling and the trade are also recorded in `lib/harness-config-lib.sh` under **BOTH PARSERS ARE PURE PARAMETER EXPANSION, AND THAT IS A COST FIX WITH A SECOND, SAFETY HALF**.
 
+**2026-10-20: `hc_main_root` changed, and no guard calls it.** `feat_clone_per_run_anchor` changed `hc_main_root` in `plugin/hooks/lib/harness-config-lib.sh` to read `HARNESS_MAIN_REPO` first, and changed nothing else in the library. `grep -n 'hc_main_root' plugin/hooks/*.sh`, run against `dc53f1d0`, printed nothing and exited 1. The per-Bash-call path the §1.2 composite measures is therefore unchanged, and no latency row is re-taken.
+
 ---
 
 ## 2. Standing decision matrices
