@@ -97,7 +97,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_clone_per_run_anchor/ta
 16. [x] **Task 16** — State in `docs/watcher.md` how the anchor is set, read and graded, and what a session no launcher started resolves _(layer: general)_ _(points: 10)_
 17. [x] **Task 17** — State the anchor's allow rule, its `doctor` check and the suite's isolation in `docs/cli.md` _(layer: general)_ _(points: 15)_
 18. [x] **Task 18** — Say "run copy" in the five developer documents, and add the anchor to `ARCHITECTURE.md`'s launch contract _(layer: general)_ _(points: 15)_
-19. [ ] **Task 19** — Re-render the worked example's profile for the anchor rule and the reworded `_README` lines _(layer: general)_ _(points: 8)_
+19. [x] **Task 19** — Re-render the worked example's profile for the anchor rule and the reworded `_README` lines _(layer: general)_ _(points: 8)_
 
 ## Scope register
 
