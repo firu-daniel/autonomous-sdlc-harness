@@ -41,3 +41,9 @@
 - **verbatim:** "Task 12's new part `#### The lexical-plan crossover, on 1.5.1` in docs/retrieval-eval-results.md ends with a sentence that takes the next branch's fix as ending refreshes in the state `REINDEX INDEX chunks_bm25` leaves (route 2); if this task's statement changes how route 2 is framed, check that sentence still agrees (source: Task 12 implementer's report, commit f9950f3e)."
 - **why the agent could not derive it:** the coupling was raised only in Task 12's return to the orchestrator
 - **reported back by the agent:** the sentence still agrees; its "ends refreshes" wording reads as settled rather than proposed, left unedited as outside the task's target
+
+## [C · Item 3 · general · iter 0] → layer-implementer  (#38)
+- **added:** `context_notes:`
+- **verbatim:** "The cli layer's dispatch for this finding has already applied fix step 2 in cli/test/docs-retrieval-store-upgrade.test.mjs (uncommitted in the working tree): the before-handling block is removed from the header and replaced by the finding's two-line pointer to `docs/retrieval.md` → `## How it fits together`, **An index older extension versions built.** Fix step 1 in `docs/retrieval.md` is still owed, and the `bm25_summarize_index` counts the header carried are now recorded nowhere until it lands (source: the cli implementer's return to the orchestrator in this session)."
+- **why the agent could not derive it:** the cli half of the multi-layer unit existed only as an uncommitted working-tree edit reported in the previous dispatch's return
+- **reported back by the agent:** the counts it wrote match those the cli dispatch removed, checked against the working-tree diff
