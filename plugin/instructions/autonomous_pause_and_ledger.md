@@ -30,7 +30,7 @@ ordinary path placeholder, exactly as it uses `<branch>`, `<entry-id>` and `<n>`
 | `<MAIN_REPO>` | derived at runtime | The main checkout — the path a bare `printenv HARNESS_MAIN_REPO` prints, else the first `worktree ` line of a bare `git worktree list --porcelain`. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
 | `<default_branch>` | config value | `defaultBranch` — the branch work starts from and merges back into. Never a remembered branch name. Bound for completeness — no step in this file consumes it. |
 | `<protected_branches>` | config value | `protectedBranches` — the branches the commit wrapper and the `git-commit-branch-guard.sh` hook refuse to commit or push to, and the set the guard quotes back in its refusal message (§1.6). The effective set is these together with `<default_branch>`. |
-| `<worktree_glob>` | derived at runtime | The **parent directory of `<repo_root>`** (the work root) joined to the configured `projectName` stem and a `-*` suffix — the sibling pattern an autonomous run's run copies match, and the pattern the generated permission profile is materialized with. It is **absolute**, so a permission rule written over it takes one leading slash of its own — `Write(/<worktree_glob>/**)`, two slashes in the rendered rule, never three; §2.2 sub-step (a) states that rule where it is used. |
+| `<worktree_glob>` | derived at runtime | The **parent directory of `<repo_root>`** (the work root) joined to the configured `projectName` stem and a `-*` suffix — the sibling pattern an autonomous run's run copies match, and the pattern the generated permission profile is materialized with. It is **absolute**, so a permission rule written over it takes one leading slash of its own — `Edit(/<worktree_glob>/**)`, two slashes in the rendered rule, never three; §2.2 sub-step (a) states that rule where it is used. |
 
 ---
 
@@ -495,9 +495,9 @@ The safety contract runs **before every Agent dispatch** and already does the pe
         the active detail-index state, and the exact next step. **Append, never overwrite** (a run may pause
         more than once) — use the **`Write` tool** (Read the existing file, if any, then Write back its
         content plus the new entry) or `echo "<entry>" >> <state_dir>/PAUSE_PROGRESS.md`. Both are allowed;
-        `Write(/<worktree_glob>/**)` and `Bash(echo:*)` are on the profile. **A permission rule naming an
-        absolute path needs a `//` prefix — for `Read`, `Edit` and `Write` alike**: `//` anchors the rule at
-        the filesystem root, whereas a single leading `/` is resolved relative to the settings source root
+        `Edit(/<worktree_glob>/**)` (which covers the `Write` tool) and `Bash(echo:*)` are on the profile.
+        **A permission rule naming an absolute path needs a `//` prefix — for `Read` and `Edit` alike — a
+        `Write` path rule is never consulted**: `//` anchors the rule at the filesystem root, whereas a single leading `/` is resolved relative to the settings source root
         and so names a path nobody has. That `//` is one written slash plus the path's own leading one —
         `<worktree_glob>` is already absolute, so the rule carries two slashes and not three; adding a
         third gives the same silent nothing from the other side.

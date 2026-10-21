@@ -31,7 +31,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_profile_inert_permission
 3. [x] **Task 3** — Base profile: drop the `Write` allow pair and the sibling-glob wrapper rows _(layer: cli)_ _(points: 20)_
 4. [x] **Task 4** — Restate the wrapper forms in `cli/scripts/README.md` and the QA profile fragment _(layer: cli)_ _(points: 5)_
 5. [x] **Task 5** — Script-allowlist guard vouches only for its own checkout's scripts directory _(layer: plugin)_ _(points: 15)_
-6. [ ] **Task 6** — The pause step names the `Edit` rule that grants its file writes _(layer: plugin)_ _(points: 5)_
+6. [x] **Task 6** — The pause step names the `Edit` rule that grants its file writes _(layer: plugin)_ _(points: 5)_
 7. [ ] **Task 7** — Restate the profile's file-tool rules and wrapper forms in `docs/cli.md`, `docs/watcher.md` and `docs/development.md` _(layer: general)_ _(points: 15)_
 8. [ ] **Task 8** — Record the guard narrowing's decision rows in `docs/guard-verification.md` _(layer: general)_ _(points: 10)_
 9. [ ] **Task 9** — Record F4's fix and the owed `--debug` re-run rows in `docs/sandbox-verification.md` _(layer: general)_ _(points: 10)_
