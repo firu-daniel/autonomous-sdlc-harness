@@ -30390,6 +30390,211 @@ above.**:
   run's change came at a different point, giving 59 (run 1), 0 (run 2), 28 (`s0`) and 721 (`s1`) at
   `{ files: 71, chunks: 826 }`.
 
+#### The candidate end-state rule, at refresh level, on 1.5.1
+
+**The outcome.** On `fixture-catalog` every 1.3.1 figure re-takes to the same value except one: the
+Python `other-corpus` 1-hit residual after `REINDEX` is gone, so the rule now holds on that corpus on
+both backends. On `self-docs` the verdicts keep their 1.3.1 shape: the rule does not hold on either
+backend, in `fresh`, `file-added` and `unchanged`, and every `after` reading that followed `REINDEX`
+matches the reference.
+
+**The runs.** 2026-10-21, through the four commands of `docs/retrieval-eval.md` → `### The BM25
+index-state probe`, its refresh-level paragraph, each with `--capture`, and each `python` run a second
+time, six runs, with `evals/docs-retrieval/bm25-refresh-rule.mjs` unchanged. `SHOW
+pg_textsearch.library_version` read `1.5.1` on both engines before the first run, and every run's
+summary read `pg_textsearch: 1.5.1`. The engines are those of `#### How these were taken, on 1.5.1`.
+`fixture-catalog` is at `{ files: 9, chunks: 41 }` and without `F` at `{ files: 8, chunks: 36 }`, as at
+1.3.1. `self-docs` is at `{ files: 71, chunks: 826 }` and without `F` at `{ files: 70, chunks: 815 }` in
+all six runs, taken from commit `5cbd2f60`; the 1.3.1 runs carry `{ files: 71, chunks: 820 }` and `{
+files: 70, chunks: 809 }`, so by the comparison rule above every `self-docs` count here is compared
+structurally. The final corpus holds 219 hits on `fixture-catalog` and 198 without `F`, and 9579 and
+9487 on `self-docs`. The probe plan was the `chunks_bm25` index scan in every reading of every run, so
+no reading was re-scored. The scenarios, the rule's inputs, the readings, the references and the
+columns are those of `### The candidate end-state rule, at refresh level`.
+
+**The old-index handling on open issued nothing.** It issues `ALTER EXTENSION <name> UPDATE` only for
+an extension whose installed `extversion` differs from the server's `default_version`. On both engines
+`pg_available_extensions` reads `default_version` `1.5.1` for `pg_textsearch` and `0.8.7` for `vector`,
+and every store here was created on an empty data directory or database, where the extensions install at
+those versions; the run's own `extversion` reading read `1.5.1`. No refresh reported a warning. The
+module does not log the statements a store issues, so this rests on the handling's condition reading
+false, not on a trace of statements.
+
+**TypeScript (PGlite), A `fixture-catalog`, B `self-docs`.**
+
+| Scenario | Last refresh | Decision | Statement | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 41, unchanged 0, deleted 0 | `spill` (0, 41, 0) | spill | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `other-corpus` | embedded 41, unchanged 0, deleted 826 | `reindex` (826, 41, 0) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 5, unchanged 36, deleted 0 | `spill` (0, 5, 0) | spill | 9 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 40, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `file-removed` | embedded 0, unchanged 36, deleted 5 | `reindex` (5, 0, 0) | `REINDEX` | 198 / 198 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `unchanged` | embedded 0, unchanged 41, deleted 0 | `none` (0, 0, 0) | none | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+
+**Python (Postgres), A `fixture-catalog`, B `self-docs`.** Both runs read the same in every cell, and
+their `--compare` listed no value out of 7674 compared.
+
+| Scenario | Last refresh | Decision | Statement | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 41, unchanged 0, deleted 0 | `spill` (0, 41, 0) | spill | 136 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `other-corpus` | embedded 41, unchanged 0, deleted 826 | `reindex` (826, 41, 0) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 5, unchanged 36, deleted 0 | `spill` (0, 5, 0) | spill | 136 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 40, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `file-removed` | embedded 0, unchanged 36, deleted 5 | `reindex` (5, 0, 0) | `REINDEX` | 198 / 198 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `unchanged` | embedded 0, unchanged 41, deleted 0 | `none` (0, 0, 0) | none | 136 / 0 | **136** / 0 | 0.1072683334350586 (`q-fc-barcode-contents`, `docs/labels.md#the-routing-barcode`) | Index scan → Index scan |
+
+**TypeScript (PGlite), A `self-docs` at `{ files: 71, chunks: 826 }`, B `fixture-catalog`.**
+
+| Scenario | Last refresh | Decision | Statement | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 826, unchanged 0, deleted 0 | `spill` (0, 826, 0) | spill | 2 / 0 | **2** / 0 | 4.76837158203125e-7 (2 hits tied: `q-sd-daemon-lifecycle`, `docs/work-report-research/task-plan-reviewer.md#dispatch-sites-and-phases`; `q-sd-second-init`, `docs/github-run-control.md#1-commands-in-a-comment`) | Index scan → Index scan |
+| `other-corpus` | embedded 826, unchanged 0, deleted 41 | `reindex` (41, 826, 0) | `REINDEX` | 9579 / 9579 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 11, unchanged 815, deleted 0 | `spill` (0, 11, 0) | spill | 1 / 0 | **1** / 0 | 4.76837158203125e-7 (`q-sd-second-init`, `docs/github-run-control.md#1-commands-in-a-comment`) | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 825, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 9577 / 9577 | 0 / 0 | — | Index scan → Index scan |
+| `file-removed` | embedded 0, unchanged 815, deleted 11 | `reindex` (11, 0, 0) | `REINDEX` | 9487 / 9487 | 0 / 0 | — | Index scan → Index scan |
+| `unchanged` | embedded 0, unchanged 826, deleted 0 | `none` (0, 0, 0) | none | 2 / 0 | **2** / 0 | 4.76837158203125e-7 (the same 2 hits as `fresh`) | Index scan → Index scan |
+
+**Python (Postgres), A `self-docs` at `{ files: 71, chunks: 826 }`, B `fixture-catalog`.** Where the two
+runs disagree, the cell reads run 1; run 2.
+
+| Scenario | Last refresh | Decision | Statement | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 826, unchanged 0, deleted 0 | `spill` (0, 826, 0) | spill | 1547 / 0; 2117 / 0 | **2** / 0; **1** / 0 | 4.76837158203125e-7 (run 1: 2 hits tied; run 2: `q-sd-second-init`, `docs/github-run-control.md#1-commands-in-a-comment`) | Index scan → Index scan |
+| `other-corpus` | embedded 826, unchanged 0, deleted 41 | `reindex` (41, 826, 0) | `REINDEX` | 9579 / 9579 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 11, unchanged 815, deleted 0 | `spill` (0, 11, 0) | spill | 3187 / 0; 1547 / 0 | **8** / 0; **2** / 0 | 0.0000019073486328125 (`q-sd-second-init`, `docs/cli.md#5-the-wrapper-script-contract`); 4.76837158203125e-7 (2 hits tied) | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 825, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 9577 / 9577 | 0 / 0 | — | Index scan → Index scan |
+| `file-removed` | embedded 0, unchanged 815, deleted 11 | `reindex` (11, 0, 0) | `REINDEX` | 9487 / 9487 | 0 / 0 | — | Index scan → Index scan |
+| `unchanged` | embedded 0, unchanged 826, deleted 0 | `none` (0, 0, 0) | none | 3188 / 0; 1265 / 0 | **1166** / 0; **1262** / 0 | 0.2901477813720703 (`q-sd-run-gates`, `docs/work-report-research/task-plan-writer.md#draft-work-report-template`), in both runs | Index scan → Index scan |
+
+The pair's `--compare` listed 10570 values out of 343924 compared, every one in `scan`: 570 in
+`reference-insert` of the full variant, 2481 of A without `F`, 1 and 8 in `reference-spill`, and in the
+scenarios 570 (`fresh.before`), 1 (`fresh.after`), 306 (`other-corpus.before`), 1640
+(`file-added.before`), 8 (`file-added.after`), 184 (`file-edited.before`), 1392 (`file-removed.before`),
+1923 (`unchanged.before`) and 1486 (`unchanged.after`). It listed none in `reference-reindex` of either
+variant, and none in an `after` reading that followed `REINDEX`. The store's own build leaves a different
+split on each run: `fresh.before` reads 186 memtable documents beside 1 segment holding 640 in run 1, and
+251 beside 1 holding 575 in run 2; the spill of it leaves 2 segments in both.
+
+**The verdicts**, against `reference-reindex`:
+
+- **TypeScript, `fixture-catalog`: the rule holds.** Every scenario's `after` reading differs from the
+  reference on 0 hits in `scan` and in `operator` (the first table).
+- **Python, `fixture-catalog`: the rule holds except under `none`** (the second table), and both runs
+  read alike:
+  - `other-corpus`, after `REINDEX`: 0 hits in both columns.
+  - `unchanged`, decision `none`: 136 hits in `scan`, the same 136 as its `before` reading, the largest
+    0.1072683334350586; the first listed are `q-fc-route-choice` → `docs/routing.md#cut-off-times`
+    −3.756243 against −3.773669, `docs/routing.md#how-a-route-is-chosen` −3.574759 against −3.627705, and
+    `docs/routing.md#zone-graph` −3.503895 against −3.564632. The index read 41 memtable documents and no
+    segment before and after, the state the scenario's prior refresh left.
+- **TypeScript, `self-docs`: the rule does not hold, in three scenarios** (the third table): `fresh` and
+  `unchanged` on 2 hits, `q-sd-daemon-lifecycle` →
+  `docs/work-report-research/task-plan-reviewer.md#dispatch-sites-and-phases`, raw `scan`
+  −5.781850337982178 against −5.781850814819336, and `q-sd-second-init` →
+  `docs/github-run-control.md#1-commands-in-a-comment`, −4.252700328826904 against −4.2527008056640625;
+  `file-added` on the second of those alone. `fresh` and `unchanged` end in 3 segments and `file-added`
+  in 4, the reference in 1. Against `reference-spill` and `reference-insert`, `fresh` and `unchanged`
+  differ on 0 hits and `file-added` on 1. This backend was run once, so no `--compare` names a one-run
+  value.
+- **Python, `self-docs`: the rule does not hold, in three scenarios** (the fourth table), in both runs:
+  - `fresh`, after the spill: 2 and 1 hits. The pair's `--compare` names 1 of run 1's and none of run 2's:
+    `q-sd-run-gates` → `docs/work-report-research/reviews/conventions-reviewer.md#must-fix`, −6.710533 in
+    run 1 against the reference's −6.710534. The one hit both runs read alike is
+    `docs/github-run-control.md#1-commands-in-a-comment` on `q-sd-second-init`, with the TypeScript run's
+    two raw values.
+  - `file-added`, after the spill: 8 and 2 hits, of which `--compare` names 7 and 1; the one read alike in
+    both runs is the same `docs/github-run-control.md` hit. Run 1's largest is `q-sd-second-init` →
+    `docs/cli.md#5-the-wrapper-script-contract`, −10.94384765625 against −10.943849563598633, one of the 7.
+  - `unchanged`, decision `none`: 1166 and 1262 hits, of which `--compare` names 695 and 791; 471 are
+    read alike in both runs. The first listed in run 1 are on `q-sd-new-config-key`:
+    `docs/work-report-research/committer.md#open-questions` −6.972599 against −7.067108,
+    `docs/work-report-research/reviews/task-plan-reviewer.md#must-fix` −6.715343 against −6.738985, and
+    `docs/work-report-research/business-parity-reviewer.md#risks-and-costs` −6.437809 against −6.453379.
+    No statement was issued between the `before` and `after` readings: in run 1 they read 3188 and 1166
+    hits, and both summaries, read before their scoring, report 360 memtable documents beside 2 segments
+    holding 466; in run 2, 1265 and 1262, with 150 beside 1 segment holding 676 in both.
+
+  Every difference above is counted in its scenario's figure; none is set aside as a one-run value.
+
+In every backend and corpus, each `after` reading that followed `REINDEX` differs from the reference on 0
+hits in both columns. Each `after` reading that followed the spill differs on 0 hits on
+`fixture-catalog` and on 1 to 8 on `self-docs`, the largest 0.0000019073486328125. Each `none` differs
+from the reference wherever its `before` reading did, in each run.
+
+**The before-fix figures** are the `before` columns of the four tables. Every scenario whose last
+refresh left a dead row, `other-corpus`, `file-edited` and `file-removed`, differs from the reference on
+every hit in each column, on both backends and both corpora, except `self-docs` `file-edited`, which
+differs on 9577 of 9579. The largest `before` difference in `scan`
+is 16.813740253448486 on TypeScript and 16.799747943878174 on Python, in both runs (`fixture-catalog`
+`other-corpus`, `q-fc-unreadable-label` → `docs/depot-operations.md#inbound-scanning`). The other
+scenarios differ in `scan` only: on TypeScript, 9 hits at `fixture-catalog` `file-added`, where the index
+read 5 memtable documents beside 1 segment after the reopen, and the 1 or 2 `self-docs` hits above; on
+Python, 136 hits on `fixture-catalog` in `fresh`, `file-added` and `unchanged`, where the index read 41
+memtable documents and no segment, and 1265 to 3188 on `self-docs`.
+
+**Observation 1 — the store's plan.** The store's `LIMIT 50` plan was the `chunks_bm25` index scan in
+every `before` reading on both backends and corpora. On `fixture-catalog`, on both backends, the
+`REINDEX` the rule issued turned it to `Seq Scan on public.chunks` in `file-edited` and `file-removed`.
+`reference-reindex` reads the same Seq Scan on both variants and both backends. The `REINDEX` of
+`other-corpus` left the index scan, as did every spill and every `none`. On `self-docs` every reading's
+store plan is the index scan. `docs/retrieval.md` → `## Still open`, the lexical-arm bullet, records the
+crossover at 63 rows; `fixture-catalog` holds 41 chunks.
+
+**Observation 2 — the near-tie on the Python store's own fresh build.** The Python `fresh` scenario's
+`before` reading on `fixture-catalog` is 41 memtable documents and no segment. Diagnostic (f) lists 4
+inversions against `operator`, the same in both runs, among them the two pairs of `### The near-tie
+ordering on an empty database`, each member as `scan` / `operator` / `operator_exact` in returned order:
+
+| Query | Returned first | Returned second |
+|---|---|---|
+| `q-fc-token-lifetime` | `docs/api-auth.md#token-exchange` −8.281486 / −8.281486 / −8.281485974788666 | `docs/api-auth.md#rotating-a-key` −8.264622 / −8.307983 / −8.3079833984375 |
+| `q-fc-unreadable-label` | `docs/labels.md#when-a-label-is-rejected` −5.514854 / −5.514854 / −5.5148544907569885 | `docs/depot-operations.md#inbound-scanning` −5.514000 / −5.534851 / −5.534850656986237 |
+
+The other two are `docs/labels.md` then `docs/tracking.md#event-ordering-and-duplicates` on
+`q-fc-verify-callback` and on `q-fc-token-lifetime`. Its `after` reading, after the spill, lists no
+inversion against `operator`. The TypeScript `fresh` `before` reading on `fixture-catalog`, read after a
+reopen, holds no memtable document and 1 segment, and lists no inversion.
+
+**Changed or unchanged.** Against `### The candidate end-state rule, at refresh level`, `fixture-catalog`
+value for value against the figures that part publishes (its captures are not in this checkout), and
+`self-docs` structurally, at `{ files: 71, chunks: 820 }` there and `826` here:
+
+- **TypeScript, `fixture-catalog` verdict:** unchanged; every count, decision and plan in the first table
+  is the 1.3.1 one, except the `other-corpus` decision's `deleted`, 826 here against 820, which is corpus
+  B's chunk count.
+- **Python, `fixture-catalog` verdict:** changed. The `other-corpus` 1-hit residual after `REINDEX`
+  (`q-fc-token-lifetime` → `docs/api-auth.md#rotating-a-key`, 9.5367431640625e-7 at 1.3.1) is 0 hits in
+  both runs. Every other cell of the second table is the 1.3.1 value, except the `other-corpus`
+  decision's `deleted`, corpus B's chunk count, and the `--compare` pair again listed no value out of
+  7674.
+- **The `unchanged` / `none` scenarios:** unchanged in outcome on every backend and corpus: `none` reads
+  0 hits where its `before` reading did and the same hits where it did not. On `fixture-catalog` the
+  Python figure is the 1.3.1 value: 136 hits, the largest 0.1072683334350586 on the same hit, and the
+  same three first-listed values. The Python `self-docs` `after` reading again differs from its own
+  `before` reading with no statement between them and with the same summary: 3188 then 1166 in run 1
+  here, 568 then 109 in run 1 at 1.3.1.
+- **TypeScript, `self-docs` verdict and its 1-hit spill residual:** unchanged in outcome, changed in
+  hits. The rule still fails in the same three scenarios, `fresh`, `file-added` and `unchanged`, each at
+  4.76837158203125e-7, with no residual after any `REINDEX`. The 1.3.1 hit,
+  `.claude/context/cli.md#how-a-module-in-this-layer-is-written` on `q-sd-guard-shell-options`, does not
+  differ here; the residual is 2, 1 and 2 hits on two other keys. At 1.3.1 those three `after` readings
+  differed from `reference-spill` and `reference-insert` on 0 hits; here `file-added` differs from both
+  on 1. The counts are not compared, by the stamp rule.
+- **Python, `self-docs` verdict:** unchanged in outcome: the same three scenarios fail, in both runs,
+  every `REINDEX` `after` reading matches the reference, and the hit both runs read alike after the spill
+  is again the TypeScript run's. The counts are not compared, by the stamp rule.
+- **The before-fix figures:** unchanged on `fixture-catalog` in every count, and in which scenarios
+  differ on every hit. On `self-docs`, at the other stamp, 1.3.1's `file-edited` differed on all but one
+  hit and `file-removed` on all but one in `operator`; here `file-edited` differs on all but two and
+  `file-removed` on every hit. The largest `before` value moved from
+  16.938354969024658 (TypeScript) and 16.924015522003174 (Python) to 16.813740253448486 and
+  16.799747943878174 on the same hit; that reading is the `other-corpus` store, which held corpus B,
+  `self-docs`, at 820 chunks then and 826 here, so the move is not attributed to 1.5.1.
+- **Observation 1:** unchanged. `REINDEX` still turns the store plan to `Seq Scan` on `fixture-catalog`
+  in `file-edited` and `file-removed` on both backends, and nowhere else.
+- **Observation 2:** unchanged. The Python `fresh` `before` reading lists the same 4 inversions, the two
+  pairs with the same three values each, and the spill removes them; the TypeScript reading lists none.
+
 ### The recommendation for the fix branch
 
 **What this is.** A proposal to the maintainer for the route of the branch that fixes the BM25 scores'

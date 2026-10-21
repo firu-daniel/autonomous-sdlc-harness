@@ -41,3 +41,11 @@
 - Each of the four tables has all six scenarios. Each verdict names its backend, corpus, scenarios and hit counts, and cites its table.
 - `git diff evals/docs-retrieval/bm25-refresh-rule.mjs` is empty. `git diff docs/retrieval-eval-results.md` adds lines only directly after Task 9's part.
 - No line in the part proposes the rule or any route as work. It records figures and verdicts only.
+
+**Deviations from plan:**
+
+- **Python precondition (implementer record, 2026-10-21).** The `--backend python` path's own self-check, `assertPythonBackendAvailable` with `--repo <mirror>`, passed: all four Python runs completed with exit 0. The bare `run self-check` FAIL on `index` the dispatch reported was taken without `--repo`, a call the module never makes; it was not investigated further.
+- **`fixture-catalog` value-for-value comparison** rests on the figures the 1.3.1 part publishes, not on its captures: no 1.3.1 `refresh-rule-*` capture exists under `harness-runs/scratch/bm25-history/` in this checkout.
+- **"The old-index handling issued nothing"** rests on reading its condition false (`pg_available_extensions.default_version` `1.5.1` / `0.8.7` on both engines, read with `docker compose exec … psql` and `harness-runs/scratch/pglite-engine.mjs`; each run's `extversion` `1.5.1`; fresh stores only; no refresh warning), not on a statement trace: `bm25-refresh-rule.mjs` logs no statement a store issues, and the task forbids changing it.
+- **Corpus stamp.** `self-docs` read `{ files: 71, chunks: 826 }` (without `F` `{ 70, 815 }`) at commit `5cbd2f60` in all six runs; every `self-docs` count is compared structurally per Task 8's rule. Corpus B's count also moves the `other-corpus` `deleted` input (826 vs 820) and the `other-corpus` `before` values on `fixture-catalog`, which the part says rather than attributing to 1.5.1.
+- **Table cross-check.** Each table cell was re-derived from the capture's `score` lines by `harness-runs/scratch/t10-tables.mjs` and `t10-pair.mjs`, and every `≠ ref` count equals the module's own `versus reference-reindex` line.
