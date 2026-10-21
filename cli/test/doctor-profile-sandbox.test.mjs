@@ -8,7 +8,8 @@
  * grades rather than as an unnamed extra, and a taken opt-out is reported as a `warn` carrying its reason; and a path that runs outside the
  * sandbox but lacks its `denyWrite` entry or a file-tool deny rule is reported by path and side, with
  * the same grades, `denyWrite` going ungraded under a taken opt-out; and the sibling-glob `.git` entry an
- * earlier release wrote is reported, still present, by path, side and reason under the same grades.** Every case is one edit to a
+ * earlier release wrote is reported, still present, by path, side and reason under the same grades; and a
+ * leftover `Write` rule is neither required nor reported.** Every case is one edit to a
  * freshly wired repository, so the edit is what the line is about; each suite's case (a) is the
  * end-to-end proof that the generator and the check agree on a fresh profile. No case reaches the
  * network.
@@ -113,19 +114,34 @@ function staleExcludedSpelling(dir) {
 
 /**
  * Put the sibling-glob `.git` entry an earlier release wrote back into the profile — its `denyWrite`
- * entry and its `Edit` and `Write` rules — returning the path and the two rules. Spelled here rather
- * than read from the generator, so a change to the retired entry's shape fails this suite.
+ * entry and its `Edit` rule — returning the path and the rules. Spelled here rather than read from the
+ * generator, so a change to the retired entry's shape fails this suite.
  */
 function restoreRetiredGitEntry(dir) {
   const config = JSON.parse(readFileSync(join(dir, CONFIG_FILE), 'utf8'));
   const path = join(dirname(dir), `${config.projectName}-*`, '.git');
-  const rules = [`Edit(/${path})`, `Write(/${path})`];
+  const rules = [`Edit(/${path})`];
   editJson(dir, PROFILE_FILE, (profile) => {
     assert.ok(!profile.sandbox.filesystem.denyWrite.includes(path), `a fresh profile already carries ${path}`);
     profile.sandbox.filesystem.denyWrite.push(path);
     profile.permissions.deny.push(...rules);
   });
   return { path, rules };
+}
+
+/**
+ * Append a `Write` deny rule for every `Edit` deny rule naming a `denyWrite` path — `Write(/<p>)` for a
+ * file, `Write(/<p>/**)` for a directory — as an earlier release's profile carries them.
+ */
+function addLeftoverWriteRules(dir) {
+  editJson(dir, PROFILE_FILE, (profile) => {
+    const paths = new Set(profile.sandbox.filesystem.denyWrite);
+    const leftovers = profile.permissions.deny
+      .filter((rule) => rule.startsWith('Edit(/') && paths.has(rule.slice('Edit(/'.length, -1).replace(/\/\*\*$/, '')))
+      .map((rule) => `Write(${rule.slice('Edit('.length)}`);
+    assert.ok(leftovers.length > 0, 'no Edit deny rule names a denyWrite path');
+    profile.permissions.deny.push(...leftovers);
+  });
 }
 
 /** Delete `path`'s `Edit` deny rule from the profile, returning the rule. */
@@ -313,18 +329,13 @@ concurrentSuite('doctor profile-write-protection', () => {
     assert.equal(status, 0, line);
   });
 
-  it('(h) warns when the run registry loses its denyWrite entry and both rules, and fails under --remote-job', async (t) => {
+  it('(h) warns when the run registry loses its denyWrite entry and its Edit rule, and fails under --remote-job', async (t) => {
     const dir = await wiredFixture(t);
     const config = JSON.parse(readFileSync(join(dir, CONFIG_FILE), 'utf8'));
     const path = join(dir, config.stateDir.replace(/\/$/, ''), 'autonomous_logs', 'registry.json');
     assert.equal(mainCheckoutEntry(dir, 'registry.json'), path);
     dropDenyWrite(dir, path);
     dropEditRule(dir, path);
-    editJson(dir, PROFILE_FILE, (profile) => {
-      const rule = `Write(/${path})`;
-      assert.ok(profile.permissions.deny.includes(rule), `no ${rule} in the profile's deny list`);
-      profile.permissions.deny = profile.permissions.deny.filter((entry) => entry !== rule);
-    });
     const { line, status } = await doctorLine(dir, 'WARN', [], WRITE_CHECK_ID);
     assert.ok(line.includes(`${path} (`), line);
     assert.equal(status, 0, line);
@@ -368,5 +379,24 @@ concurrentSuite('doctor profile-write-protection', () => {
     assert.ok(!line.includes('is still a sandbox.filesystem.denyWrite entry'), line);
     assert.ok(line.includes('not graded because the sandbox is off'), line);
     assert.ok(line.includes(`${path} (`), line);
+  });
+
+  it("(l) passes a profile still carrying an earlier release's Write rule for every protected path, naming no Write rule", async (t) => {
+    const dir = await wiredFixture(t);
+    addLeftoverWriteRules(dir);
+    const { line } = await doctorLine(dir, 'PASS', ['--remote-job'], WRITE_CHECK_ID);
+    assert.ok(!/\bWrite\b/.test(line), line);
+  });
+
+  it('(m) with leftover Write rules, removing only an Edit rule warns and names exactly that rule', async (t) => {
+    const dir = await wiredFixture(t);
+    addLeftoverWriteRules(dir);
+    const path = mainCheckoutEntry(dir, PUSH_SCRIPT);
+    const rule = dropEditRule(dir, path);
+    const { line, status } = await doctorLine(dir, 'WARN', [], WRITE_CHECK_ID);
+    assert.ok(line.includes(`${path} (`), line);
+    assert.ok(line.includes(`lacks the file-tool deny rule ${rule}.`) || line.includes(`lacks the file-tool deny rule ${rule};`), line);
+    assert.ok(!/\bWrite\b/.test(line), line);
+    assert.equal(status, 0, line);
   });
 });

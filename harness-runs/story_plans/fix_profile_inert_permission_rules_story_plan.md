@@ -27,7 +27,7 @@ The work is cut into single-layer tasks in the configured layer order: `cli` (Ta
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_profile_inert_permission_rules/task_<K>_plan.md`. The entries are in ship order: bottom-up in the configured layer order, with the catch-all layer last.
 
 1. [x] **Task 1** — Per-run profile: `Edit`-only file-tool deny map, and the run copy's exact wrapper twins _(layer: cli)_ _(points: 20)_
-2. [ ] **Task 2** — `doctor` requires an `Edit` deny rule only and never grades a `Write` rule _(layer: cli)_ _(points: 10)_
+2. [x] **Task 2** — `doctor` requires an `Edit` deny rule only and never grades a `Write` rule _(layer: cli)_ _(points: 10)_
 3. [ ] **Task 3** — Base profile: drop the `Write` allow pair and the sibling-glob wrapper rows _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Restate the wrapper forms in `cli/scripts/README.md` and the QA profile fragment _(layer: cli)_ _(points: 5)_
 5. [ ] **Task 5** — Script-allowlist guard vouches only for its own checkout's scripts directory _(layer: plugin)_ _(points: 15)_
