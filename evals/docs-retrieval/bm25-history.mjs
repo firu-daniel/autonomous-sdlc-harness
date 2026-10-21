@@ -87,6 +87,7 @@ import {
   BM25_ORDER_CLAUSE,
   CHUNKS_TABLE,
   CHUNK_TEXT_COLUMN,
+  LEXICAL_SEARCH_STATEMENT,
   chunkEmbeddingColumn,
 } from '../../cli/dist/retrieval/store.js';
 import { parseArgs } from './args.mjs';
@@ -142,8 +143,12 @@ const SCAN_EXPRESSION = 'bm25_get_current_score()';
 /** Both score columns, `scan` first, then the diagnostic one, read through the store's own index-scan ordering. */
 const SCORE_SELECT = `SELECT key, ${SCAN_EXPRESSION} AS scan, ${OPERATOR_EXPRESSION} AS operator, ${OPERATOR_EXACT_EXPRESSION} AS operator_exact FROM ${CHUNKS_TABLE} ORDER BY ${BM25_ORDER_CLAUSE} LIMIT $2`;
 
-/** The store's own lexical statement (`cli/src/retrieval/store.ts` → `lexicalSearch`), bound at `ARM_CANDIDATES`. */
-const STORE_SELECT = `SELECT id FROM ${CHUNKS_TABLE} ORDER BY ${BM25_ORDER_CLAUSE} LIMIT $2`;
+/**
+ * The statement `lexicalSearch` issues, imported rather than retyped, bound at `ARM_CANDIDATES`. Its
+ * `score` column projects the `<@>` operator expression in the index-scan plan's `Output`, not
+ * `bm25_get_current_score()`; the plan node and order are the ones the old `SELECT id` statement got.
+ */
+const STORE_SELECT = LEXICAL_SEARCH_STATEMENT;
 
 /** The two score columns, in the order every report and capture line lists them. */
 export const SCORE_COLUMNS = Object.freeze(['scan', 'operator']);

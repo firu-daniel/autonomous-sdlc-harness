@@ -31513,6 +31513,129 @@ Seq Scan plan, moving B/mrr, D/mrr (docs/retrieval-eval.md → The regression fl
 This run's figures equal the ones those values were taken from. No other row moved, so none was
 re-recorded. `evals/docs-retrieval/check-floor.mjs` was not run; gate 11 grades it at the Run gates phase.
 
+#### The shipped end state at refresh level
+
+**The outcome.** The shipped refresh's end state matches `reference-reindex` in 11 of the 12 TypeScript
+scenarios, at 0 hits in `scan` and in `operator`, `unchanged` included. The exception is `self-docs`
+`file-edited`, whose `before` reading differs on 1 hit in `scan` and 0 in `operator`. The hand-issued
+`REINDEX` that follows leaves the same hit. The maintainer ruled that this hit is recorded and not
+attributed, and that it is not a defect in Task 8's commit, as for Task 6's real-catalog residual in
+`#### Route 2 on the real catalog`. On both corpora the fix moved `other-corpus`, `file-added` and `file-removed` from
+differing to matching. On `fixture-catalog` it also moved `file-edited`. On `self-docs` it took
+`file-edited` from 9636 / 9636 to 1 / 0.
+
+**The setup.**
+
+- **The code.** 2026-10-21, at commit `300b1e04`, after `npm run build`. The tree held this task's two
+  probe edits, neither of which changes a statement the refresh-rule module issues or a reading it takes:
+  `evals/docs-retrieval/bm25-history.mjs` → `STORE_SELECT` is now the store's exported
+  `LEXICAL_SEARCH_STATEMENT`, and `evals/docs-retrieval/bm25-refresh-rule.mjs`'s header is restated. On
+  this commit `refreshIndex` calls `DocStore.rebuildIndexes()`, which issues `END_STATE_STATEMENTS`
+  (`REINDEX INDEX chunks_bm25` alone), after every refresh that wrote anything and after any refresh whose
+  index is not marked rebuilt (`cli/src/retrieval/store.ts`, `cli/src/retrieval/refresh.ts`).
+- **The engine.** `harness-runs/scratch/fix-bm25/versions.mjs`, run before the first run, read `version()`
+  `PostgreSQL 18.6 (PGlite 0.5.10) on wasm32-unknown-emscripten`, `SHOW pg_textsearch.library_version`
+  `1.5.1`, and `pg_extension.extversion` `pg_textsearch` `1.5.1` and `vector` `0.8.7`.
+- **The runs.** These are the two TypeScript refresh-level commands of `docs/retrieval-eval.md` → `### The
+  BM25 index-state probe`, unchanged, at the default `--end-state candidate`, with `--capture` into
+  `harness-runs/scratch/fix-bm25/shipped-typescript-<corpus>-1.txt`. Each was run once, and both exited
+  `0`. The `self-docs` run outlasted the session's 600 s foreground limit and finished in the background.
+  Its capture was read once it had exited, and the maintainer accepted that collection. Both summaries read `pg_textsearch: 1.5.1`. The Python
+  backend's refresh is unchanged on this branch, so it was not run. Its figures in `#### Route 2 at refresh
+  level, issued by hand` and `#### The candidate end-state rule, at refresh level, on 1.5.1` stand.
+- **The corpora.** `fixture-catalog` is at `{ files: 9, chunks: 41 }`, and at `{ files: 8, chunks: 36 }`
+  without `F` (`docs/webhooks.md`). `self-docs` is at `{ files: 71, chunks: 830 }`, and at `{ files: 70,
+  chunks: 819 }` without `F` (`docs/work-report-research/user-review-fix-plan-writer.md`). Task 2's runs
+  read `829` and `818`. This branch has edited `docs/`, so every `self-docs` count is compared
+  structurally. The final corpus holds 219 hits on `fixture-catalog` and 198 without `F`, and 9656 and 9564
+  on `self-docs`.
+- **The plans.** The probe plan was the `chunks_bm25` index scan in all 18 readings of each run, so no
+  reading was re-scored.
+- **The columns** are those of `#### Route 2 at refresh level, issued by hand`, with one change. **Statement
+  issued** is what the module issued by hand after the shipped refresh, and that refresh had already
+  ended in `REINDEX`.
+
+**TypeScript (PGlite), A `fixture-catalog`, B `self-docs`.**
+
+| Scenario | Last refresh | Candidate decision | Statement issued | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 41, unchanged 0, deleted 0 | `spill` (0, 41, 0) | spill | 0 / 0 | 0 / 0 | — | **Seq Scan** → **Seq Scan** |
+| `other-corpus` | embedded 41, unchanged 0, deleted 830 | `reindex` (830, 41, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 5, unchanged 36, deleted 0 | `spill` (0, 5, 0) | spill | 0 / 0 | 0 / 0 | — | **Seq Scan** → **Seq Scan** |
+| `file-edited` | embedded 1, unchanged 40, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 0 / 0 | 0 / 0 | — | **Seq Scan** → **Seq Scan** |
+| `file-removed` | embedded 0, unchanged 36, deleted 5 | `reindex` (5, 0, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | **Seq Scan** → **Seq Scan** |
+| `unchanged` | embedded 0, unchanged 41, deleted 0 | `none` (0, 0, 0) | none | 0 / 0 | 0 / 0 | — | **Seq Scan** → **Seq Scan** |
+
+**TypeScript (PGlite), A `self-docs` at `{ files: 71, chunks: 830 }`, B `fixture-catalog`.**
+
+| Scenario | Last refresh | Candidate decision | Statement issued | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 830, unchanged 0, deleted 0 | `spill` (0, 830, 0) | spill | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `other-corpus` | embedded 830, unchanged 0, deleted 41 | `reindex` (41, 830, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 11, unchanged 819, deleted 0 | `spill` (0, 11, 0) | spill | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 829, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | **1** / 0 | **1** / 0 | 2.384185791015625e-7, raw (`q-sd-stack-detection`, `docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls`) | Index scan → Index scan |
+| `file-removed` | embedded 0, unchanged 819, deleted 11 | `reindex` (11, 0, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `unchanged` | embedded 0, unchanged 830, deleted 0 | `none` (0, 0, 0) | none | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+
+**The verdict, against `reference-reindex`:**
+
+- **TypeScript, `fixture-catalog`: the shipped end state matches** in all six scenarios, at 0 hits in both
+  columns, `unchanged` included.
+- **TypeScript, `self-docs`: the shipped end state does not match in `file-edited`.** It differs on 1 hit
+  in `scan` and 0 in `operator`. It matches in the other five, `unchanged` included. The run was taken
+  once, so no `--compare` says whether the hit recurs. By the maintainer's ruling the hit is recorded, not
+  attributed, and is not a defect in Task 8's commit.
+
+**The differing hit.** `q-sd-stack-detection` → `docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls`.
+
+- **`scan`:** `file-edited.before` reads `−2.548860`, raw `−2.5488603115081787`, against
+  `reference-reindex.full`'s `−2.548861`, raw `−2.548860549926758`.
+- **`operator`:** `−2.5488604307174683` in both.
+- **Where it shows:** `fresh`, `other-corpus`, `file-added` and `unchanged` all read `reference-reindex`'s
+  raw `scan`. `file-edited.after`, read after the hand-issued `REINDEX`, reads the same
+  `−2.5488603115081787` as `before`.
+- **What was ruled out:** the index summary has the same totals in `before`, `after` and the reference:
+  `total_docs 830`, `total_len 384157`, 1 segment, no memtable document.
+
+So a second `REINDEX` over the same live rows did not reach the reference's value for this hit. That
+`REINDEX` was issued in the same database, whose `chunks` table had one row rewritten by the edit. The
+cause is not attributed here. The difference is 2.384185791015625e-7, one float32 ULP at this
+magnitude. The `operator` reading and the index summary are identical, and a second `REINDEX` leaves the hit.
+The maintainer ruled, as for Task 6's real-catalog residual (`#### Route 2 on the real catalog`), that
+the hit is recorded and not attributed, and that it is not a defect in Task 8's commit.
+
+**The index state left behind.** Every `before` reading leaves 1 segment and no memtable document, read
+after a reopen. That is 41 documents on `fixture-catalog` (36 in `file-removed`), and 830 on `self-docs`
+(819 in `file-removed`).
+
+**The store's `LIMIT 50` plan.** On `fixture-catalog`, the `before` plan is `Seq Scan on public.chunks` in
+five scenarios and the `chunks_bm25` index scan in `other-corpus`. That is the plan Task 2's route-2 run
+read *after* its hand-issued `REINDEX`, scenario for scenario. `other-corpus`'s table held corpus B's 830
+rows before the refresh, and its `REINDEX` leaves the index scan, as in Task 2's run. On `self-docs`
+every reading's store plan is the index scan. Each plan's `Output` lists `id` and the `<@>` operator
+expression, which is `LEXICAL_SEARCH_STATEMENT`'s `score` column.
+
+**Against the two earlier tables.** These are the TypeScript `before` columns of `#### Route 2 at refresh
+level, issued by hand` (Task 2, *route 2*) and `#### The candidate end-state rule, at refresh level, on
+1.5.1` (*candidate*). On `fixture-catalog`, at the same counts, the comparison is value for value. On
+`self-docs` it is structural.
+
+- **Moved from differing to matching:**
+  - **`other-corpus`:** `fixture-catalog` from 219 / 219 in both; `self-docs` from 9636 / 9636 (route 2) and
+    9579 / 9579 (candidate).
+  - **`file-added`:** `fixture-catalog` from 9 / 0 in both; `self-docs` from 1 / 0 in both.
+  - **`file-removed`:** `fixture-catalog` from 198 / 198 in both; `self-docs` from 9544 / 9542 (route 2) and
+    9487 / 9487 (candidate).
+  - **`file-edited` on `fixture-catalog`:** from 219 / 219 in both.
+- **Moved, and still differing:** `file-edited` on `self-docs`, from 9636 / 9636 (route 2) and 9577 /
+  9577 (candidate) to 1 / 0.
+- **Matching before and after the fix:** `fresh` and `unchanged` on `fixture-catalog`, at 0 / 0 in all
+  three.
+- **Shifted with the stamp, not attributed:** `fresh` and `unchanged` on `self-docs` read 0 / 0 in route 2
+  and here, and 2 / 0 in candidate.
+- **The store plan:** on `fixture-catalog`, the `before` plan moved from the index scan to `Seq Scan` in
+  every scenario but `other-corpus`. On `self-docs` it stayed the index scan.
+
 ### The recommendation for the fix branch
 
 **What this is.** A proposal to the maintainer for the route of the branch that fixes the BM25 scores'

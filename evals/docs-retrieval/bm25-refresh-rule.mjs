@@ -4,12 +4,14 @@
  * that changed something, `bm25_spill_index('chunks_bm25')`; the first `docs index` build ends in the
  * same state.
  *
- * **The rule this module exists to enforce: the rule's statements are issued by hand, because the
- * shipped refresh does not issue them yet; every reading is compared against fresh builds of the final
- * corpus taken in the same run, never against a remembered figure; and every mirror, data directory and
- * database this module creates is removed on every exit path, failure included** (`harness-runs/lessons.md`
- * → `## Remote and branch-scoped operations`, the temporary-copy rule). Its `before` readings are the
- * shipped code's end state; its `after` readings are the state the rule would leave.
+ * **The rule this module exists to enforce: the rule's statements are issued by hand, after the
+ * backend's own refresh; every reading is compared against fresh builds of the final corpus taken in the
+ * same run, never against a remembered figure; and every mirror, data directory and database this module
+ * creates is removed on every exit path, failure included** (`harness-runs/lessons.md` → `## Remote and
+ * branch-scoped operations`, the temporary-copy rule). Its `before` readings are the shipped code's end
+ * state: on TypeScript, `refreshIndex` ends every refresh that wrote anything, and every refresh whose
+ * index is not marked rebuilt, by issuing `END_STATE_STATEMENTS` (`cli/src/retrieval/store.ts`); on
+ * Python, the state its own refresh leaves. Its `after` readings are the state the rule would leave.
  *
  * A refresh is the backend's own: on TypeScript `openPgliteStore` → `refreshIndex` → `close`, as
  * `docs index` does through `openRetrieval`; on Python the package's `index` through
