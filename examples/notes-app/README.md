@@ -113,13 +113,15 @@ same three clauses, and on that pass the home-directory clause fired: the creden
 name the generating machine's home directory, which became `/workspace`. A later re-render of the
 same keys, through the same three clauses, replaced the glob's `.git` pointer entry with the clone's
 six `.git` paths under `/workspace/notes-app-*` and the per-file `.git` entries with the whole
-`/workspace/notes-app/.git`. The file now carries 212 `/workspace`-rooted occurrences across 173
-lines (`grep -o '/workspace' … | wc -l` and `grep -c '/workspace'`): 181 `/workspace/notes-app`,
-59 of them the sibling worktree glob `/workspace/notes-app-*`; 30 home-directory ones
+`/workspace/notes-app/.git`. A later re-render of the same keys, through the same three clauses,
+dropped every `Write` file rule and the sibling-glob wrapper `Bash` rows. The file now carries 163
+`/workspace`-rooted occurrences across 124 lines (`grep -o '/workspace' … | wc -l` and `grep -c '/workspace'`): 132 `/workspace/notes-app`,
+36 of them the sibling worktree glob `/workspace/notes-app-*`; 30 home-directory ones
 (`grep -o '/workspace/\.'`), the `Read(//workspace/.ssh)` family; and one bare `/workspace`
-(`grep -o '/workspace\($\|[^/]\)'`). Every occurrence was substituted, **prose included** — the two `_comment`
-sentences that quote the file rules and the sibling-glob relation, every `Read` / `Edit` / `Write`
-file rule, every wrapper `Bash` entry, and the state-directory entry under `additionalDirectories` —
+(`grep -o '/workspace\($\|[^/]\)'`). Every occurrence was substituted, **prose included** — the four `_README`
+sentences that quote a path (the sibling-glob relation, the file rules, the excluded commands and
+the write-protected paths), every `Read` and `Edit` file rule (the file carries no `Write` rule),
+every wrapper `Bash` entry, and the state-directory entry under `additionalDirectories` —
 and the derived relation `init` wrote is preserved: the work root is the repository root's parent
 and the worktree glob is `<work_root>/<project_name>-*`, so `/workspace`, `/workspace/notes-app` and
 `/workspace/notes-app-*` stand in exactly the relation `init` rendered. The reason for the
