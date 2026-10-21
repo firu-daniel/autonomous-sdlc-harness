@@ -1063,6 +1063,21 @@ Seven of those SILENT holds are `&`-borne ride-along shapes that were **already*
 
 **What §1 owes this change: nothing.** No §1 figure depends on the deny list's length — `is_denied_script` is reached only from a `.sh` token and none of §1's payloads carries one, and the list is lower-cased by one `tr` whatever its length — and with §0's shim this guard's counts are unchanged before → after, at **0 `jq`, 0 `git`, 0 `sed`, 0 `grep`, 0 `tr`, 1 `cat`** on `git status && ls` and on the bare `ls`, and at **3 `jq`, 1 `git`, 0 `sed`, 0 `grep`, 2 `tr`, 1 `cat`** on `bash <repo>/<S>/typecheck.sh`.
 
+**The script-allowlist guard's sibling-run-copy rows, added after every block above and measured against the same kind of pair.** `under_allowed_scripts` had a second half: a `.sh` token under `<work_root>/<project_name>-*` that spelled the same repo-relative `scriptsDir` at that worktree's own root was granted, so a session judged at one checkout vouched for every sibling run copy's wrappers. The per-run permission profile grants a run only its own copy's wrappers, and a sibling glob in a `Bash` rule is matched literally (`docs/sandbox-verification.md` F4), so the guard granted what the profile does not. The fix keeps only the judged checkout's scripts directory and drops *" or of one of its sibling worktrees"* from the `permissionDecisionReason`. Silence, never a deny. Its rows carry **N120–N123**, the numbers free above every row already recorded. `<S>` is §0's primary fixture's `packages/storefront/scripts`, holding `typecheck.sh` and `commit-on-branch.sh`; the sibling is `<work_root>/<project_name>-<branch>`, a linked worktree on the ordinary branch `feat_x`, added with `git worktree add` beside the fixture. Every row is driven with `payload.cwd` at `<repo>`.
+
+| # | Shape | before | after | What narrowed it |
+|---|---|---|---|---|
+| N120 | `bash <work_root>/<project_name>-<branch>/<S>/typecheck.sh` | allow | **SILENT** | `under_allowed_scripts` keeps only the judged checkout's scripts directory |
+| N121 | `bash "<work_root>/<project_name>-<branch>/<S>/typecheck.sh"` | allow | **SILENT** | the same, through the quoted-path normalization |
+| N122 | `cd <repo> && bash <work_root>/<project_name>-<branch>/<S>/typecheck.sh` | allow | **SILENT** | the same, behind a leading `cd <repo>` |
+| N123 | `bash <repo>/<S>/typecheck.sh && bash <work_root>/<project_name>-<branch>/<S>/typecheck.sh` | allow | **SILENT** | the same, composed with the all-or-nothing rule: the sibling piece silences a compound whose other piece is allowed |
+
+**Which two trees these columns are.** As with N23–N119: **this plugin's tree immediately before this fix and immediately after** — the branch's base tree and the tree carrying the narrowing — each taken by `git archive` of `plugin/hooks` into a scratch directory, driven back to back on 2026-10-21 in one session on §0's primary fixture, built on a resolved path, with `/bin/bash` 3.2.57(1)-release and `jq` 1.8.2. Not the pre-extraction baseline, which §3's caveat says cannot be re-taken here.
+
+**Four keeper controls hold `allow` in both columns**: `bash <repo>/<S>/typecheck.sh` bare and quoted, and `cd <repo> && bash <S>/typecheck.sh`, each with `payload.cwd` at `<repo>`; and the sibling's own wrapper, `bash <work_root>/<project_name>-<branch>/<S>/typecheck.sh` with `payload.cwd` at that sibling, which the shipped guard grants under a reason naming the sibling as the directory's checkout — the run copy a session launched there judges as its own `<top>`. The guard was live in both columns, and the fixture configuration was byte-identical to its pristine copy afterwards.
+
+**What §1 owes this change.** With §0's shim, payload fed by redirection, this guard's counts on `bash <repo>/<S>/typecheck.sh` are unchanged before → after, at **3 `jq`, 1 `git`, 0 `sed`, 0 `grep`, 2 `tr`, 1 `cat`**. The wall-clock §1.2 figure for this guard is **not** taken here: it is owed to a hand re-take of §0's paired recipe outside any headless session.
+
 ### 3.2 Tightened — SILENT → `deny`
 
 All in the one deny-capable guard.

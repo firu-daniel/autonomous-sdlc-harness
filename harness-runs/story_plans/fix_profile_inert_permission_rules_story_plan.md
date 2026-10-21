@@ -33,7 +33,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_profile_inert_permission
 5. [x] **Task 5** — Script-allowlist guard vouches only for its own checkout's scripts directory _(layer: plugin)_ _(points: 15)_
 6. [x] **Task 6** — The pause step names the `Edit` rule that grants its file writes _(layer: plugin)_ _(points: 5)_
 7. [x] **Task 7** — Restate the profile's file-tool rules and wrapper forms in `docs/cli.md`, `docs/watcher.md` and `docs/development.md` _(layer: general)_ _(points: 15)_
-8. [ ] **Task 8** — Record the guard narrowing's decision rows in `docs/guard-verification.md` _(layer: general)_ _(points: 10)_
+8. [x] **Task 8** — Record the guard narrowing's decision rows in `docs/guard-verification.md` _(layer: general)_ _(points: 10)_
 9. [ ] **Task 9** — Record F4's fix and the owed `--debug` re-run rows in `docs/sandbox-verification.md` _(layer: general)_ _(points: 10)_
 10. [ ] **Task 10** — Bring the example project's profile in line with the generator _(layer: general)_ _(points: 10)_
 
