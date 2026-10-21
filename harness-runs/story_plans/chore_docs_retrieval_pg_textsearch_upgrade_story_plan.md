@@ -58,7 +58,7 @@ This branch moves both docs-retrieval backends from `pg_textsearch` 1.3.1 to 1.5
 Each entry resolves 1:1 to `harness-runs/task_plans/chore_docs_retrieval_pg_textsearch_upgrade/task_<K>_plan.md`. The entries are in ship order, which follows dependency (see `## Context`, **How the work is cut**).
 
 1. [x] **Task 1** — Build the old-store fixture under the installed `pg_textsearch` 1.3.1 packages _(layer: cli)_ _(points: 15)_
-2. [ ] **Task 2** — Bump the three PGlite packages in `cli/package.json` to the 1.5.1 set _(layer: cli)_ _(points: 5)_
+2. [x] **Task 2** — Bump the three PGlite packages in `cli/package.json` to the 1.5.1 set _(layer: cli)_ _(points: 5)_
 3. [ ] **Task 3** — Refresh `package-lock.json` and read the new PGlite engine on Node 22 and Node 20 _(layer: general)_ _(points: 10)_
 4. [ ] **Task 4** — Make `openPgliteStore` handle an index the old versions built, pinned by a test that opens the fixture _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 5** — Re-take the lexical-plan crossover in the store suite on the new engine _(layer: cli)_ _(points: 8)_
