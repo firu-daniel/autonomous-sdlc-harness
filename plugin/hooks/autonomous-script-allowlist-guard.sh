@@ -2,8 +2,8 @@
 # autonomous-script-allowlist-guard.sh — PreToolUse guard for Bash:
 # capability containment for an unattended run. It auto-allows a command ONLY
 # when EVERY piece of it is judged safe: a piece that RUNS a script must run one
-# resolving under the adopting repository's configured `scriptsDir` — inside that
-# repository or inside one of its sibling worktrees — and not on the deny list
+# resolving under the configured `scriptsDir` of the checkout it judges — never
+# under a sibling worktree's — and not on the deny list
 # below, and a piece that runs no script must match the same safe-prefix set
 # `allow-safe-compounds.sh` judges it against. It emits `allow` or NOTHING; it
 # never denies and never asks.
@@ -223,15 +223,15 @@
 # this file, deliberately: any of the three would bind the guard to one machine
 # or one product. The allowed root is `<repo_root>/<scripts_dir>` where
 # `<scripts_dir>` is the adopter's `scriptsDir` — a REPO-relative key, so
-# `appDir` is deliberately NOT joined into it — plus that same repo-relative path
-# inside any sibling worktree `<work_root>/<project_name>-*`. Worktree
-# membership is decided by `hc_in_workspace`, which matches by `case` glob and
-# never touches the filesystem, so it does not depend on which worktrees happen
-# to exist right now; the checkout root is then the first component under
-# `<work_root>`, so a sibling worktree has to spell the SAME repo-relative
-# scripts directory rather than any directory of that name at any depth. A
-# repository that configures a different `scriptsDir` gets no allowance for this
-# one.
+# `appDir` is deliberately NOT joined into it — and `<repo_root>` is the checkout
+# this guard judges, so that one root is the only one. A script under a sibling
+# worktree `<work_root>/<project_name>-*` is NOT vouched for: the per-run
+# permission profile grants a run only its own copy's wrappers, and a sibling
+# glob in a `Bash` rule is matched literally (`docs/sandbox-verification.md`
+# F4), so a guard allowing siblings would grant what the profile does not. In an
+# unattended run the judged checkout is the run's own copy, because the watcher
+# launches the session there. A repository that configures a different
+# `scriptsDir` gets no allowance for this one.
 #
 # THE DENY LIST IS THE DEPLOY WRAPPER AND THE OUTER LOOP. `deploy.sh` and the
 # four outer-loop scripts (`autonomous-watcher.sh`, `restart-watcher.sh`,
@@ -245,7 +245,7 @@
 # system, which asks or refuses as its own rules say. `DENY_SCRIPT_BASENAMES` below is that mechanism,
 # kept as a newline-delimited constant so an adopter can read off exactly what is
 # excluded, and matched on BASENAME — LOWER-CASED ON BOTH SIDES — so a relative
-# spelling, an absolute one, any sibling worktree and any capitalisation are all
+# spelling, an absolute one, the checkout's own spellings and any capitalisation are all
 # covered by one entry. The per-entry reasons are stated at the constant itself,
 # together with the wrappers deliberately left allowed, and so is why the
 # comparison ignores case.
@@ -337,7 +337,7 @@
 #     compared lower-cased on both sides        -> silent (deploy wrapper, or
 #                                                  one of the four outer-loop
 #                                                  scripts)
-#   any token resolves outside the allowed roots-> silent
+#   any token resolves outside the allowed root -> silent
 #   a piece running NO script is not a safe
 #     prefix and not a path-anchored arm        -> silent
 #   the prefix sets will not resolve, once a
@@ -376,7 +376,8 @@
 #     cd <repo> && bash <scripts dir>/<wrapper>.sh    relative to a leading `cd`
 #     bash "<repo>/<scripts dir>/<wrapper>.sh"        quoted (the refused-wrapper escape)
 #     bash <work_root>/<project_name>-<branch>/<scripts dir>/<wrapper>.sh
-#                                                     sibling worktree of <repo>
+#                                                     with "cwd" set to that
+#                                                     sibling, now its own <top>
 #     bash <repo>/<scripts dir>/<wrapper>.sh 2>&1     descriptor duplication
 #     bash <repo>/<scripts dir>/<wrapper>.sh > /dev/null
 #     bash <repo>/<scripts dir>/<wrapper>.sh 2>/dev/null
@@ -400,6 +401,11 @@
 #     bash <repo>/<scripts dir>/REMOTE-RUN.sh dispatch feat_x --engine task
 #                                                     same, any case
 #     bash /tmp/payload.sh                           outside the workspace
+#     bash <work_root>/<project_name>-<branch>/<scripts dir>/<wrapper>.sh
+#                                                     another run copy: judged
+#                                                     from <repo>, its scripts
+#                                                     directory is not this
+#                                                     checkout's
 #     bash <repo>/<scripts dir>/../../evil.sh         `..` traversal
 #     bash <repo>/<scripts dir>/*.sh                  glob
 #     bash <repo>/<other dir>/thing.sh                outside <scripts dir>
@@ -596,12 +602,6 @@ fi
 
 scripts_abs="$top/$scripts_rel"
 
-# The parent directory holding the repository and its sibling worktrees. The
-# trailing slash is stripped so the degenerate case of a root-level checkout
-# still composes into a usable pattern.
-work=$(hc_work_root "$top") || exit 0
-work=${work%/}
-
 # ---------------------------------------------------------------------------
 # The directory a relative script path is anchored at: a leading `cd` in the
 # command if there is one, else the payload's own cwd, else `$PWD`. Pieces are
@@ -719,29 +719,14 @@ EOF
   return 1
 }
 
-# Membership test: is an absolute path under an allowed scripts directory? The
-# in-repository half is a literal prefix; the sibling-worktree half asks
-# `hc_in_workspace` (a `case` glob, never the filesystem) and then requires the
-# SAME repo-relative scripts directory at that worktree's own root, so a
-# directory of the same name nested deeper inside a worktree is not allowed.
+# Membership test: is an absolute path under the judged checkout's own scripts
+# directory? A literal prefix; a sibling worktree's scripts directory is not
+# vouched for (header, THE ALLOWED ROOTS ARE CONFIGURED, NOT BAKED IN).
 under_allowed_scripts() {
-  local abs="$1" rest wt
+  local abs="$1"
 
   case "$abs" in
     "$scripts_abs"/*) return 0 ;;
-  esac
-
-  hc_in_workspace "$abs" "$top" || return 1
-
-  case "$abs" in
-    "$work"/*) rest=${abs#"$work"/} ;;
-    *) return 1 ;;
-  esac
-  wt=${rest%%/*}
-  [ -n "$wt" ] || return 1
-
-  case "$abs" in
-    "$work"/"$wt"/"$scripts_rel"/*) return 0 ;;
   esac
   return 1
 }
@@ -953,7 +938,7 @@ jq -nc --arg d "$scripts_rel" --arg p "$top" '{
   hookSpecificOutput: {
     hookEventName: "PreToolUse",
     permissionDecision: "allow",
-    permissionDecisionReason: ("Auto-allowed: every script target resolves under the configured " + $d + " directory of " + $p + " or of one of its sibling worktrees")
+    permissionDecisionReason: ("Auto-allowed: every script target resolves under the configured " + $d + " directory of " + $p + "")
   }
 }'
 
