@@ -1235,14 +1235,19 @@ hr_worktree_config_check_var() {
 #
 # WHY NO SIGNING KEY. `user.signingkey`, `commit.gpgsign`, `gpg.format`,
 # `gpg.program`, `gpg.<format>.program` and `gpg.ssh.defaultKeyCommand` are
-# deliberately not listed. A commit written with the clone as git's repository
-# can be signed only by a program that reaches the signing key or agent socket
-# from wherever that commit is written; that is unmeasured, and a failed
-# signature fails the commit. The main-checkout wrappers' `git -C <main>
-# commit-tree` already signs under the main checkout's configuration. If signing
-# is ever carried, the program keys travel only as the main checkout's exact
-# values, as a deliberate trust decision naming the main checkout's
-# `.git/config` as the trusted source, never as a widened rule.
+# deliberately not listed. No harness commit is signed today, on either side:
+# every one is written by `commit-tree` (`hr_commit_paths_var`,
+# `refresh-branch.sh`), which never reads `commit.gpgsign` and is passed no
+# `-S`. So the main-checkout wrappers' `git -C <main> commit-tree` writes
+# unsigned commits under the main checkout's identity, and carrying the
+# signing keys into a clone would sign nothing. Signing a run's commits needs
+# an explicit `-S`. Whether a commit written with the clone as git's
+# repository can be signed at all is unmeasured: that needs a program that
+# reaches the signing key or agent socket from there. A signature that cannot
+# be made fails the commit. If signing is ever carried, the program keys
+# travel only as the main checkout's exact values, as a deliberate trust
+# decision naming the main checkout's `.git/config` as the trusted source,
+# never as a widened rule.
 #
 # `hr_clone_config_spec <main> <top>` prints one line per allowed key,
 # `<lowercase key><TAB><rule>`, `<rule>` being `=<exact value>` or `bool`

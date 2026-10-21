@@ -29,7 +29,7 @@
 Each entry resolves to `harness-runs/code_reviews/fix_run_copy_commit_identity_code_review/finding_<K>.md` through its `**Finding K**` reference.
 
 1. [x] **Finding 3** — Extend case (u) to plant each signing key at the main checkout's own value in the clone and assert the refusal _(layer: cli)_
-2. [ ] **Finding 1** — Correct the branch's signing rationale: `commit-tree` never reads `commit.gpgSign`, so no wrapper commit is signed _(layer: cli, general)_
+2. [x] **Finding 1** — Correct the branch's signing rationale: `commit-tree` never reads `commit.gpgSign`, so no wrapper commit is signed _(layer: cli, general)_
 3. [ ] **Finding 2** — Correct residual 7 and the `commit-on-branch.sh` / `refresh-branch.sh` headers, which still claim the wrappers' commits carry the main checkout's signing _(layer: cli, general)_
 
 ---
