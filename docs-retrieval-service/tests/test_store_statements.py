@@ -24,6 +24,8 @@ from harness_docs_retrieval.store import (
     CHUNKS_TABLE,
     DATABASE_URL_ENV,
     EMBEDDER_META_KEY,
+    EXTENSION_UPDATE_STATEMENTS,
+    STALE_EXTENSIONS_QUERY,
     chunk_embedding_column,
     open_postgres_store,
     statements,
@@ -42,6 +44,8 @@ def test_constants_match_typescript() -> None:
     assert CHUNK_TEXT_COLUMN == ts_store["CHUNK_TEXT_COLUMN"]
     assert EMBEDDER_META_KEY == ts_store["EMBEDDER_META_KEY"]
     assert chunk_embedding_column(384) == ts_store["embeddingColumn384"]
+    assert STALE_EXTENSIONS_QUERY == ts_store["STALE_EXTENSIONS_QUERY"]
+    assert dict(EXTENSION_UPDATE_STATEMENTS) == ts_store["EXTENSION_UPDATE_STATEMENTS"]
 
 
 def test_the_lexical_arm_orders_by_the_bm25_clause() -> None:
@@ -58,6 +62,13 @@ def test_no_statement_carries_a_psycopg_placeholder() -> None:
     for name, statement in statements(384).items():
         assert "%s" not in statement, name
         assert "%(" not in statement, name
+
+
+def test_the_extension_statements_carry_no_psycopg_placeholder() -> None:
+    for statement in (STALE_EXTENSIONS_QUERY, *EXTENSION_UPDATE_STATEMENTS.values()):
+        assert "%s" not in statement, statement
+        assert "%(" not in statement, statement
+        assert statement in statements(384).values(), statement
 
 
 @pytest.mark.parametrize("dimensions", [0, -1, True, 1.5])

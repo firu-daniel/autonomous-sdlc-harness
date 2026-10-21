@@ -3,8 +3,9 @@
 The rule this module exists to enforce, carried over from `store.ts`: every value reaches SQL as a
 bound parameter, and the SQL stays plain Postgres plus the `vector` and `pg_textsearch` extensions.
 A search query comes from an agent and is untrusted, so no input is ever spliced into a statement;
-the two spliced tokens are the `vector(<dimensions>)` column type, taken from a checked integer, and
-the constant index name inside `to_bm25query($1, 'chunks_bm25')`.
+the three spliced tokens are the `vector(<dimensions>)` column type, taken from a checked integer,
+the constant index name inside `to_bm25query($1, 'chunks_bm25')`, and the extension name in each
+`ALTER EXTENSION <name> UPDATE`, taken from the constant record `EXTENSION_UPDATE_STATEMENTS`.
 
 Every statement is `store.ts`'s, character for character, and lives in `statements`, which the
 methods read. The connection's cursor is `psycopg.AsyncRawCursor`, which binds PostgreSQL-native
@@ -28,6 +29,7 @@ Departures from store.ts:
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any, Protocol
 
 import psycopg
@@ -58,6 +60,27 @@ EMBEDDER_META_KEY = "embedder"
 
 DATABASE_URL_ENV = "HARNESS_DOCS_RETRIEVAL_DATABASE_URL"
 
+# Each extension the store creates, to the statement that moves an older installed version to the
+# server's.
+EXTENSION_UPDATE_STATEMENTS: Mapping[str, str] = MappingProxyType(
+    {
+        "vector": "ALTER EXTENSION vector UPDATE",
+        "pg_textsearch": "ALTER EXTENSION pg_textsearch UPDATE",
+    }
+)
+
+# The store's extensions whose installed `extversion` differs from the server's `default_version`,
+# by name: the ones `EXTENSION_UPDATE_STATEMENTS` must be issued for.
+STALE_EXTENSIONS_QUERY = (
+    "SELECT e.extname FROM pg_extension e JOIN pg_available_extensions a ON a.name = e.extname "
+    "WHERE e.extname IN ('vector', 'pg_textsearch') "
+    "AND e.extversion IS DISTINCT FROM a.default_version ORDER BY e.extname"
+)
+
+
+def _update_extension_key(extname: str) -> str:
+    return f"update_extension_{extname}"
+
 
 def _check_dimensions(dimensions: object) -> int:
     # `bool` is an `int` subclass, and `True` would splice as `vector(True)`.
@@ -80,6 +103,11 @@ def statements(dimensions: int) -> Mapping[str, str]:
         "create_extensions": (
             "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_textsearch;"
         ),
+        "stale_extensions": STALE_EXTENSIONS_QUERY,
+        **{
+            _update_extension_key(extname): statement
+            for extname, statement in EXTENSION_UPDATE_STATEMENTS.items()
+        },
         "create_meta": (
             "CREATE TABLE IF NOT EXISTS meta (key text PRIMARY KEY, value text NOT NULL)"
         ),
@@ -290,6 +318,10 @@ async def open_postgres_store(database_url: str, dimensions: int) -> DocStore:
 
     An existing index built at another width has its `chunks` table dropped and its embedder
     record removed, so the next refresh rebuilds rather than failing on the column type.
+
+    An index an older `vector` or `pg_textsearch` built is brought to the server's versions by
+    issuing `EXTENSION_UPDATE_STATEMENTS`' entry for each extension `STALE_EXTENSIONS_QUERY` lists,
+    before any other statement reads it, and nothing when it lists none.
     """
     sql = statements(_check_dimensions(dimensions))
     try:
@@ -306,6 +338,9 @@ async def open_postgres_store(database_url: str, dimensions: int) -> DocStore:
     store = _PostgresStore(conn, dimensions)
     try:
         await conn.execute(sql["create_extensions"])
+        cursor = await conn.execute(sql["stale_extensions"])
+        for (extname,) in await cursor.fetchall():
+            await conn.execute(sql[_update_extension_key(str(extname))])
         await conn.execute(sql["create_meta"])
         width = str(dimensions)
         if await store.read_meta(DIMENSIONS_META_KEY) != width:

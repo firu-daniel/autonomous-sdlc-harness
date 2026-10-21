@@ -48,6 +48,8 @@ import {
   CHUNKS_TABLE,
   CHUNK_TEXT_COLUMN,
   EMBEDDER_META_KEY,
+  EXTENSION_UPDATE_STATEMENTS,
+  STALE_EXTENSIONS_QUERY,
   chunkEmbeddingColumn,
 } from '../../cli/dist/retrieval/store.js';
 import { BUILT_IN_CORPORA, corpusConfig } from '../../evals/docs-retrieval/corpora.mjs';
@@ -102,6 +104,8 @@ function constants() {
       BM25_ORDER_CLAUSE,
       CHUNK_TEXT_COLUMN,
       EMBEDDER_META_KEY,
+      EXTENSION_UPDATE_STATEMENTS,
+      STALE_EXTENSIONS_QUERY,
       embeddingColumn384: chunkEmbeddingColumn(384),
     },
     server: { DOCS_SERVER_NAME, SEARCH_TOOL_NAME, SEARCH_TOOL_PERMISSION },

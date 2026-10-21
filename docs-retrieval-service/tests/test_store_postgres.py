@@ -208,3 +208,47 @@ def test_close_releases_the_connection(
         assert _other_backends(fresh_database_url) == 0
 
     _run(monkeypatch, fresh_database_url, scenario)
+
+
+def _extension_versions(url: str) -> list[tuple[str, str, str]]:
+    with psycopg.connect(url) as conn:
+        rows = conn.execute(
+            "SELECT e.extname, e.extversion, a.default_version FROM pg_extension e "
+            "JOIN pg_available_extensions a ON a.name = e.extname "
+            "WHERE e.extname IN ('vector', 'pg_textsearch') ORDER BY e.extname"
+        ).fetchall()
+        return [(str(name), str(installed), str(default)) for name, installed, default in rows]
+
+
+def _library_version(url: str) -> str:
+    with psycopg.connect(url) as conn:
+        row = conn.execute("SHOW pg_textsearch.library_version").fetchone()
+        assert row is not None
+        return str(row[0])
+
+
+def test_opening_leaves_both_extensions_at_the_servers_versions(
+    fresh_database_url: str,
+) -> None:
+    """Both extensions read their `default_version` after an open; a second open changes nothing.
+
+    No old-catalog case is possible here: the `v1.5.1` build installs `pg_textsearch--1.5.1.sql`
+    as its only install script, so this server cannot create a 1.3.1 catalog. The outcome measured
+    on a database the 1.3.1 server built is recorded in `docs-retrieval-service/README.md` →
+    `## The seam, as found`, item 4.
+    """
+
+    async def open_and_close() -> None:
+        store = await open_postgres_store(fresh_database_url, EMBEDDING_DIMENSIONS)
+        await store.close()
+
+    asyncio.run(open_and_close())
+    first = _extension_versions(fresh_database_url)
+    assert [name for name, _, _ in first] == ["pg_textsearch", "vector"]
+    for name, installed, default in first:
+        assert installed == default, name
+    installed_versions = {name: installed for name, installed, _ in first}
+    assert _library_version(fresh_database_url) == installed_versions["pg_textsearch"]
+
+    asyncio.run(open_and_close())
+    assert _extension_versions(fresh_database_url) == first
