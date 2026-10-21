@@ -1105,11 +1105,11 @@
 # `status` WITH NO LOCAL RECORD (no registry file, or no record of the branch)
 # is gated like a sending verb and answers from GitHub alone: the same runs
 # listing, then `remote_state` with the bundle downloaded into a `mktemp -d`
-# directory under `${TMPDIR:-/tmp}` removed on exit, printing the state, pause reason, detail, engine
-# and run URL, each open question (the rule `fetch` states) with its `## Q<k>`
-# heading lines; an expired bundle's expired line is its `detail`. No `harness run
-# <branch>` run listed prints one line and exits 0. There is no sync to compare
-# against, so no finished-since line.
+# directory under `${TMPDIR:-/tmp}` removed on exit, printing the state, pause
+# reason, detail, engine and run URL, each open question (the rule `fetch`
+# states) with its `## Q<k>` heading lines; an expired bundle's expired line is
+# its `detail`. No `harness run <branch>` run listed prints one line and
+# exits 0. There is no sync to compare against, so no finished-since line.
 #
 # `list` IS `branch-status`'s DIGEST: one listing (`list_all_runs`) and one
 # `git ls-remote --heads origin`, never a bundle. It prints `on GitHub, no
