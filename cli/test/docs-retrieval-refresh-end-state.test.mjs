@@ -10,6 +10,9 @@
  * operator's own value, and each comparison is exact. The reference is a fresh refresh of the final
  * corpus into its own directory followed by a raw `REINDEX INDEX chunks_bm25`.
  *
+ * Case (c) pins the marker's other two branches, which no score comparison can see: an unchanged
+ * refresh leaves an index marked `rebuilt` alone, and rebuilds one marked `pending`.
+ *
  * **No model, and nothing downloaded.** Vectors come from {@link EMBEDDER}, a deterministic test-local
  * embedder; every store is an on-disk data directory under the system temp directory, removed in process.
  */
@@ -27,7 +30,15 @@ import { pg_textsearch } from '@electric-sql/pglite-pg_textsearch';
 import { vector } from '@electric-sql/pglite-pgvector';
 
 import { refreshIndex } from '../dist/retrieval/refresh.js';
-import { BM25_INDEX, BM25_ORDER_CLAUSE, CHUNKS_TABLE, INDEX_STATE_META_KEY, openPgliteStore } from '../dist/retrieval/store.js';
+import {
+  BM25_INDEX,
+  BM25_ORDER_CLAUSE,
+  CHUNKS_TABLE,
+  INDEX_STATE_META_KEY,
+  INDEX_STATE_PENDING,
+  INDEX_STATE_REBUILT,
+  openPgliteStore,
+} from '../dist/retrieval/store.js';
 import { createFixture } from './helpers/fixture.mjs';
 
 const DIMENSIONS = 384;
@@ -118,6 +129,19 @@ async function refreshInto(repoRoot, dataDir) {
   }
 }
 
+/** `store` with its `rebuildIndexes()` calls counted; every other method is the store's own. */
+function countingRebuilds(store) {
+  const counter = { rebuilds: 0 };
+  const wrapped = {
+    ...store,
+    rebuildIndexes: async () => {
+      counter.rebuilds += 1;
+      await store.rebuildIndexes();
+    },
+  };
+  return { counter, store: wrapped };
+}
+
 /** Opens `dataDir` raw with both extensions, runs `body`, and closes it. */
 async function withRaw(dataDir, body) {
   const db = await PGlite.create({ dataDir, extensions: { vector, pg_textsearch } });
@@ -201,4 +225,29 @@ test('(b) an index the shipped code left is brought to the end state by an uncha
   assert.equal(result.deleted, 0, `the refresh deleted: ${JSON.stringify(result)}`);
 
   assertScoresEqual(await readScores(dataDir), await referenceScores(t, DOCS));
+});
+
+test('(c) an unchanged refresh rebuilds an index marked pending and leaves one marked rebuilt alone', async (t) => {
+  const repoRoot = await fixtureWith(t, DOCS);
+  const dataDir = dataDirFor(t, 'marker');
+  await refreshInto(repoRoot, dataDir);
+
+  const store = await openStore(dataDir);
+  try {
+    assert.equal(await store.readMeta(INDEX_STATE_META_KEY), INDEX_STATE_REBUILT, 'a first build did not mark the index rebuilt');
+
+    const quiet = countingRebuilds(store);
+    const unchanged = await refreshIndex({ repoRoot, config: CONFIG, store: quiet.store, embedder: EMBEDDER });
+    assert.equal(unchanged.embedded + unchanged.deleted, 0, `the refresh wrote: ${JSON.stringify(unchanged)}`);
+    assert.equal(quiet.counter.rebuilds, 0, 'an unchanged refresh over an index marked rebuilt rebuilt it');
+
+    // The state a refresh interrupted after its first write leaves.
+    await store.writeMeta(INDEX_STATE_META_KEY, INDEX_STATE_PENDING);
+    const resumed = countingRebuilds(store);
+    await refreshIndex({ repoRoot, config: CONFIG, store: resumed.store, embedder: EMBEDDER });
+    assert.equal(resumed.counter.rebuilds, 1, 'an unchanged refresh over an index marked pending did not rebuild it');
+    assert.equal(await store.readMeta(INDEX_STATE_META_KEY), INDEX_STATE_REBUILT, 'the rebuild did not mark the index rebuilt');
+  } finally {
+    await store.close();
+  }
 });
