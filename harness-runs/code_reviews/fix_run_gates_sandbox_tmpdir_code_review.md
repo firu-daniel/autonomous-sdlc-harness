@@ -14,7 +14,7 @@ Every changed call now uses an explicit `"${TMPDIR:-/tmp}/<name>.XXXXXX"` templa
 
 1. [x] **Finding 4** — Reflow the over-long `status` WITH NO LOCAL RECORD comment line in both copies of `remote-run.sh` _(layer: cli, general)_
 2. [x] **Finding 3** — Name the branch in `docs/sandbox-verification.md`'s TD1 and T2 rows and in the 2026-10-14 unsandboxed-gates paragraph _(layer: general)_
-3. [ ] **Finding 1** — Stop TD1's verdict claiming a sandboxed result that TD2, which is owed, never measured _(layer: general)_
+3. [x] **Finding 1** — Stop TD1's verdict claiming a sandboxed result that TD2, which is owed, never measured _(layer: general)_
 4. [ ] **Finding 2** — Make `run-gates.sh` stop with a message when its log cannot be created _(layer: general)_
 
 ---
