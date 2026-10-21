@@ -30883,6 +30883,146 @@ structurally on `self-docs`, at `{ files: 71, chunks: 829 }` here and `826` ther
   0 / 0 before here, on 3 segments, against 2 / 0 there. The stamps differ, so this is recorded and not
   attributed.
 
+#### The relevance eval's deterministic figures, before the fix
+
+**The outcome.** The fresh `fixture-catalog` run equals `#### The relevance eval's deterministic figures,
+on 1.5.1`: 36 of 36 figures, and every query's ordered refs, ranks and abstention, in arms B to E. Every
+row of `evals/docs-retrieval/floor.json` holds. On the `Seq Scan` plan a `REINDEX` leaves, 9 of the 36
+figures moved, all down: 5 in arm B and 4 in arm D. Arms C and E did not move. Arm B returned five rows,
+every one at score `0`, for the one query that carries no matching term, where the index scan returned
+none. `self-docs`, read from the base commit's snapshot at `{ files: 71, chunks: 829 }`, is the baseline
+the after-fix run compares with.
+
+**The setup.**
+
+- **The code.** 2026-10-21, at commit `625c57b4` with a clean tree, after `npm run build`. `git diff
+  --stat d15e5cc3 HEAD -- cli/src` lists nothing, so `cli/dist` is the base commit's retrieval code. The
+  TypeScript model cache under `~/.cache/autonomous-sdlc-harness/retrieval/models` held both models, and
+  none was fetched.
+- **The engine.** A scratch probe opened an in-memory PGlite with both extensions before the runs. It read
+  `version()` `PostgreSQL 18.6 (PGlite 0.5.10) on wasm32-unknown-emscripten`, `SHOW
+  pg_textsearch.library_version` `1.5.1`, and `pg_extension.extversion` `pg_textsearch` `1.5.1` and
+  `vector` `0.8.7`.
+- **The `self-docs` snapshot.** A scratch program wrote every file of commit `d15e5cc3` under `docs/`,
+  `.claude/context/`, `evals/docs-retrieval/queries/` and `harness.config.json`, 76 files, from `git
+  ls-tree -r --name-only` and `git show`, into a scratch directory, and removed it once the readings
+  below were taken. The runs read it as `--repo`. Its stamp is `{ files: 71, chunks: 829 }`, with 15
+  positive and 5 negative queries.
+- **The runs**, each through the launcher `harness-runs/scratch/eval.mjs` (`docs/retrieval-eval.md` →
+  `## How to run it`), on the TypeScript backend, with `--repeat 1`. Each `--out` file was a scratch file
+  holding only the two generated-region markers, so this document's generated region and
+  `evals/docs-retrieval/floor.json` are untouched. All ran before this part was written.
+
+  ```
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --data-dir harness-runs/scratch/fix-bm25/before-fixture-catalog --out harness-runs/scratch/fix-bm25/before-fixture-catalog.md --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --repo harness-runs/scratch/fix-bm25/base-corpus --corpus self-docs --out ../before-self-docs.md --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --data-dir harness-runs/scratch/fix-bm25/before-fixture-catalog --out harness-runs/scratch/fix-bm25/before-fixture-catalog-seqscan.md --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --repo harness-runs/scratch/fix-bm25/base-corpus --corpus self-docs --data-dir ../before-self-docs-plan --arms B --repeat 1
+  ```
+
+  The first `fixture-catalog` run went into a data directory that did not exist yet. Between it and the
+  second, a scratch program issued `BM25_HISTORY_STATEMENTS.reindex` on that directory
+  (`evals/docs-retrieval/bm25-history.mjs`). The second run's refresh wrote nothing
+  (`cli/src/retrieval/refresh.ts` → `refreshIndex`, step (5)), so it ranks with the shipped
+  `lexicalSearch` on the `REINDEX` state's plan. The `self-docs` run of record was held in memory, so
+  its plan could not be read afterwards. The fourth command, arm B only and with no `--out`, persisted the
+  same snapshot only so that its plan could be read. Its arm B figures equal the in-memory run's.
+- **The provenance**, as every block reads: host `darwin 24.6.0`, Node `v22.23.2`, embedder
+  `Xenova/bge-small-en-v1.5:q8:cls:384:v1`, reranker `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1`,
+  abstention threshold `0.32`, `k` 5, `--repeat 1`. The stub was unset.
+- **The stamps.** `fixture-catalog` at `{ files: 9, chunks: 41 }`, 9 positive and 3 negative queries, in
+  both of its runs (`generatedAt` `2026-10-21T16:46:08.867Z` fresh, `2026-10-21T16:46:51.243Z` on the Seq
+  Scan plan). `self-docs` at `{ files: 71, chunks: 829 }` from `d15e5cc3` (`generatedAt`
+  `2026-10-21T16:47:34.043Z`).
+
+**The plans**, each read by a scratch program through `openPgliteEngine` on the run's data directory, with
+`BM25_HISTORY_STATEMENTS.explainStore` bound to the corpus's first query and `ARM_CANDIDATES` (50), and
+`summarize`:
+
+- **`fixture-catalog`, after the fresh run:** `->  Index Scan using chunks_bm25 on public.chunks`. The
+  summary read `total_docs: 41`, memtable `documents: 0`, `Total: 1 segments, 5 pages (0.0MB), 649 terms,
+  41 docs`, on-disk 73728 bytes.
+- **`fixture-catalog`, after `REINDEX`:** `->  Seq Scan on public.chunks`, under a `Sort` whose key is the
+  operator expression. The summary read the same counts, 1 segment of 41 docs, on-disk 57344 bytes. Read
+  again after the third run, the plan and the counts were the same.
+- **`self-docs`, after the fourth run:** `->  Index Scan using chunks_bm25 on public.chunks`. The summary
+  read `total_docs: 829`, memtable `documents: 0`, `Total: 3 segments, 219 pages (1.7MB), 22658 terms,
+  829 docs`.
+
+**`fixture-catalog`, fresh.** Every value equals the generated region's unkeyed `fixture-catalog` block,
+which `#### The relevance eval's deterministic figures, on 1.5.1` compared with too. Every query's ordered
+refs, rank, strict rank and abstention are equal as well.
+
+| Arm | recall@1 | recall@3 | recall@5 | MRR | strict recall@1 | strict recall@3 | strict recall@5 | strict MRR | abstained, of 3 negatives |
+|---|---|---|---|---|---|---|---|---|---|
+| B `lexical` | 0.444 | 0.889 | 1.000 | 0.657 | 0.444 | 0.778 | 1.000 | 0.606 | 0 |
+| C `vector` | 0.778 | 1.000 | 1.000 | 0.889 | 0.667 | 0.889 | 1.000 | 0.806 | 0 |
+| D `fused` | 0.556 | 1.000 | 1.000 | 0.759 | 0.444 | 1.000 | 1.000 | 0.685 | 0 |
+| E `fused-rerank` | 0.444 | 0.667 | 0.667 | 0.556 | 0.444 | 0.667 | 0.667 | 0.556 | 3 |
+
+**`self-docs`, from the `d15e5cc3` snapshot, at `{ files: 71, chunks: 829 }`.** The 1.5.1 part's run
+carries `{ files: 71, chunks: 826 }`, so these are not compared with it value for value.
+
+| Arm | recall@1 | recall@3 | recall@5 | MRR | strict recall@1 | strict recall@3 | strict recall@5 | strict MRR | abstained, of 5 negatives |
+|---|---|---|---|---|---|---|---|---|---|
+| B `lexical` | 0.400 | 0.533 | 0.667 | 0.497 | 0.200 | 0.333 | 0.467 | 0.286 | 0 |
+| C `vector` | 0.533 | 0.533 | 0.533 | 0.533 | 0.200 | 0.267 | 0.267 | 0.233 | 0 |
+| D `fused` | 0.533 | 0.600 | 0.733 | 0.589 | 0.200 | 0.467 | 0.600 | 0.344 | 0 |
+| E `fused-rerank` | 0.400 | 0.600 | 0.667 | 0.517 | 0.267 | 0.467 | 0.600 | 0.400 | 4 |
+
+**`fixture-catalog` on the Seq Scan plan, beside its fresh run.** Each cell reads fresh → Seq Scan; a
+figure in bold moved.
+
+| Arm | recall@1 | recall@3 | recall@5 | MRR | strict recall@1 | strict recall@3 | strict recall@5 | strict MRR | abstained, of 3 negatives |
+|---|---|---|---|---|---|---|---|---|---|
+| B `lexical` | **0.444 → 0.333** | 0.889 → 0.889 | 1.000 → 1.000 | **0.657 → 0.602** | **0.444 → 0.333** | **0.778 → 0.667** | 1.000 → 1.000 | **0.606 → 0.541** | 0 → 0 |
+| C `vector` | 0.778 → 0.778 | 1.000 → 1.000 | 1.000 → 1.000 | 0.889 → 0.889 | 0.667 → 0.667 | 0.889 → 0.889 | 1.000 → 1.000 | 0.806 → 0.806 | 0 → 0 |
+| D `fused` | **0.556 → 0.444** | 1.000 → 1.000 | 1.000 → 1.000 | **0.759 → 0.704** | **0.444 → 0.333** | 1.000 → 1.000 | 1.000 → 1.000 | **0.685 → 0.630** | 0 → 0 |
+| E `fused-rerank` | 0.444 → 0.444 | 0.667 → 0.667 | 0.667 → 0.667 | 0.556 → 0.556 | 0.444 → 0.444 | 0.667 → 0.667 | 0.667 → 0.667 | 0.556 → 0.556 | 3 → 3 |
+
+Every query whose ordered refs differ between the two runs, of the 12 in each of arms B to E:
+
+| Arm | Query | Fresh refs | Seq Scan refs | Rank, strict rank |
+|---|---|---|---|---|
+| B | `q-fc-unreadable-label` | `docs/labels.md`, `docs/INDEX.md`, `docs/labels.md#when-a-label-is-rejected`, `docs/depot-operations.md#inbound-scanning`, `docs/labels.md#the-routing-barcode` | `docs/labels.md`, `docs/INDEX.md`, `docs/depot-operations.md#inbound-scanning`, `docs/labels.md#when-a-label-is-rejected`, `docs/labels.md#the-routing-barcode` | 3, 3 → 3, 4 |
+| B | `q-fc-token-lifetime` | `docs/api-auth.md#token-exchange`, `#rotating-a-key`, `#scopes`, `#api-keys`, `docs/rates.md#volumetric-weight` | `docs/api-auth.md#rotating-a-key`, `#token-exchange`, `#scopes`, `#api-keys`, `docs/rates.md#volumetric-weight` | 1, 1 → 2, 2 |
+| B | `q-fc-negative-lattice` (negative) | none | `docs/INDEX.md`, `docs/api-auth.md`, `docs/api-auth.md#api-keys`, `#token-exchange`, `#scopes` | — |
+| D | `q-fc-token-lifetime` | `docs/api-auth.md#token-exchange`, `#rotating-a-key`, `#api-keys`, `#scopes`, `docs/webhooks.md#replaying-missed-events` | `docs/api-auth.md#rotating-a-key`, `#token-exchange`, `#api-keys`, `#scopes`, `docs/webhooks.md#replaying-missed-events` | 1, 1 → 2, 2 |
+| D | `q-fc-negative-recruitment` (negative) | `docs/exceptions.md#redelivery-attempts`, `docs/webhooks.md#signature-verification`, `docs/webhooks.md#delivery-and-retries`, `docs/tracking.md#estimated-delivery-window`, `docs/exceptions.md#claims-for-a-lost-parcel` | `docs/exceptions.md#redelivery-attempts`, `docs/webhooks.md#signature-verification`, `docs/tracking.md#estimated-delivery-window`, `docs/webhooks.md#delivery-and-retries`, `docs/exceptions.md#claims-for-a-lost-parcel` | — |
+| D | `q-fc-negative-lattice` (negative) | `docs/labels.md#label-anatomy`, `docs/labels.md#printing-and-label-stock`, `docs/webhooks.md#delivery-and-retries`, `docs/depot-operations.md#bay-numbering`, `docs/rates.md#rate-cards` | `docs/api-auth.md#scopes`, `docs/depot-operations.md#bay-numbering`, `docs/api-auth.md#rotating-a-key`, `docs/INDEX.md`, `docs/labels.md#label-anatomy` | — |
+
+A `#…` entry continues the path of the entry before it. No query's refs differ in arm C or arm E.
+
+**The rows the lexical arm returned for a query carrying no matching term.** `q-fc-negative-lattice`
+(*"quantum chromodynamics lattice spacing"*) returned no row in arm B on the index scan. On the Seq Scan
+plan arm B returned `docs/INDEX.md`, `docs/api-auth.md`, `docs/api-auth.md#api-keys`,
+`docs/api-auth.md#token-exchange` and `docs/api-auth.md#scopes`. On the same data directory, the store's
+ordering expression bound to that query scored all 41 rows `0`, and `count(*) FILTER (WHERE … <> 0)` read
+`0`. The five rows are the first five that ordering returned, so every one is a score-`0` row with no
+query term. Through fusion, they are why arm D's refs for that query changed. The other two negatives
+returned five rows in arm B on both plans, with the same refs.
+
+**The two positive reorderings, read on the Seq Scan state.** There the operator scored
+`docs/api-auth.md#rotating-a-key` `-8.307983` and `docs/api-auth.md#token-exchange` `-8.281486` for
+`q-fc-token-lifetime`. It scored `docs/depot-operations.md#inbound-scanning` `-5.534851` and
+`docs/labels.md#when-a-label-is-rejected` `-5.514854` for `q-fc-unreadable-label`. The fresh index
+scan's scores for those rows were not read before the `REINDEX`, so these swaps are recorded and not
+attributed.
+
+**The floor, by reading.** Each `evals/docs-retrieval/floor.json` row against the fresh `fixture-catalog`
+run, with the Seq Scan run beside it for reference. None is breached in either:
+
+| Arm | Metric | Floor | Fresh | Seq Scan |
+|---|---|---|---|---|
+| B | recall@5 | 0.95 | 1.000 | 1.000 |
+| B | MRR | 0.60 | 0.657 | 0.602 |
+| C | recall@5 | 0.95 | 1.000 | 1.000 |
+| C | MRR | 0.83 | 0.889 | 0.889 |
+| D | recall@5 | 0.95 | 1.000 | 1.000 |
+| D | MRR | 0.70 | 0.759 | 0.704 |
+| E | recall@5 | 0.61 | 0.667 | 0.667 |
+| E | MRR | 0.50 | 0.556 | 0.556 |
+
 ### The recommendation for the fix branch
 
 **What this is.** A proposal to the maintainer for the route of the branch that fixes the BM25 scores'

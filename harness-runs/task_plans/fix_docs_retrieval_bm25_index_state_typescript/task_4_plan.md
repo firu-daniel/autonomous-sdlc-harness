@@ -51,3 +51,9 @@
 - `git diff --stat` lists `docs/retrieval-eval-results.md` only, and the new lines sit directly after Task 2's part.
 - `harness-runs/scratch/fix-bm25/base-corpus/` is absent when the task returns, whatever the outcome: success, `blocker:` or stop (`test ! -e harness-runs/scratch/fix-bm25/base-corpus` exits `0`).
 - `harness-runs/scratch/fix-bm25/before-fixture-catalog.md` and `harness-runs/scratch/fix-bm25/before-self-docs.md` both exist when the task returns successfully (`test -f` on each exits `0`), each holding its run's metric tables and per-query refs: the snapshot's removal left them in place for Task 9.
+
+**Deviations from plan:**
+
+- **A plan-only `self-docs` run was added.** The `self-docs` run of record is in memory, so its plan cannot be read afterwards, and the part requires each run's plan reading. A fourth eval run, `--repo harness-runs/scratch/fix-bm25/base-corpus --corpus self-docs --data-dir ../before-self-docs-plan --arms B --repeat 1`, with no `--out`, persisted the same snapshot (stamp `{ files: 71, chunks: 829 }`), and `pglite-statement.mjs` read `Index Scan using chunks_bm25 on public.chunks` on it. Its arm B figures equal the in-memory run's. Its data directory, `harness-runs/scratch/fix-bm25/before-self-docs-plan/`, stays in scratch beside `before-fixture-catalog/`.
+- **The Seq Scan run's per-query score-`0` claim rests on a direct statement, not only on the eval's output.** The eval prints rank-derived fusion scores, so the zero scores were read with the store's ordering expression on the same data directory: all 41 rows scored `0` for `q-fc-negative-lattice`, and the count of non-zero rows was `0`.
+- **The floor table carries a Seq Scan column beside the fresh one**, for reference only. The plan asks for the fresh run alone. Arm B's MRR reads `0.602` against its `0.60` floor on the Seq Scan plan, which bears on Task 8's floor reading (Q1).
