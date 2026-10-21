@@ -14,8 +14,9 @@
  * (`cli/src/retrieval/store.ts` → the module header's second paragraph), and every value reaches SQL
  * as a bound parameter: through `db.query` on PGlite, and through psql's `\bind` on Postgres.
  *
- * **Every score statement reads two columns, because `pg_textsearch` 1.3.1 computes a score two
- * different ways** (tag `v1.3.1` of `github.com/timescale/pg_textsearch`). `scan` is
+ * **Every score statement reads two columns, because `pg_textsearch` computes a score two different
+ * ways** (written against tag `v1.3.1` of `github.com/timescale/pg_textsearch`, and re-run unchanged
+ * on `v1.5.1`). `scan` is
  * `bm25_get_current_score()`, the score the index scan ranked the current row by (`src/access/scan.c` →
  * `tp_cached_score`), which is what the store ranks by (`cli/src/retrieval/store.ts` → the lexical
  * search's `SELECT id … ORDER BY`); it is a `real` and is rounded to six decimals here. It is called

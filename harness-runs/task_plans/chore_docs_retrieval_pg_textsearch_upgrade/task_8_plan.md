@@ -48,3 +48,10 @@ Later tasks add their own parts below these, in order: **Task 9** the stray, **T
 - Every `self-docs` figure carries its stamp. No `self-docs` comparison against a 1.3.1 count states "unchanged" or "changed" across two different stamps without naming both.
 - `git diff docs/retrieval-eval-results.md` adds lines only between the end of `### Whether either mechanism moves relevance` and the `### The recommendation for the fix branch` heading. `git diff evals/docs-retrieval/bm25-history.mjs` changes comment lines only.
 - No figure in the new parts is a wall-clock figure, and no line points at a capture file.
+
+**Deviations from plan:**
+
+- **`vector` on the compose image reads `0.8.7`, not `0.8.1`.** The plan's setup bullet expected `0.8.1` on the compose image, explained by `docs-retrieval-service/postgres/Dockerfile` record 2. Task 6 moved the base to `pgvector/pgvector:0.8.7-pg18` (PostgreSQL 18.6) on a maintainer ruling, and record 2 now explains that move. Read 2026-10-21 on a database created for the read (`CREATE DATABASE t8_version_probe`, both extensions created, then dropped): `pg_textsearch | 1.5.1`, `vector | 0.8.7`. The setup part states `0.8.7` on both engines and cites record 2 for why the compose server moved from 18.2.
+- **The compose `extversion`s were read on a hand-made database, not on one the probe creates.** The probe drops its own database on exit and prints only `pg_textsearch: <extversion>`, which read `1.5.1` in all eight runs; `vector`'s `extversion` was read on `t8_version_probe` above.
+- **`self-docs` stamp moved to `{ files: 71, chunks: 825 }`** (from 1.3.1's `{ files: 71, chunks: 813 }`), at commit `52d8749c`, so every `self-docs` comparison in the new parts is structural, per the plan's comparison rule.
+- **Forward citation.** The **One-run values** paragraph names `#### The stray index-scan score, on 1.5.1` as its receiver, mirroring the 1.3.1 hand-off; that heading is Task 9's and does not exist until Task 9 lands.
