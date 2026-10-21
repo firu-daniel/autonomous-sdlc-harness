@@ -44,9 +44,10 @@
 # agent child. A killed run does NOT auto-resume — the watcher's reconcile pass
 # marks it `failed` on the next tick, and only cleanly PARKED OR PAUSED runs
 # are ever re-launched. Committed work is safe on the branch; a killed run is
-# continued by re-launching the engine BY HAND in its worktree, where it picks
-# up from the last commit and the next unchecked task. So this REFUSES by
-# default while a run is in flight, and `--force` is how you say you meant it.
+# continued by re-launching the engine BY HAND in its run copy (a clone, or a
+# legacy worktree), where it picks up from the last commit and the next
+# unchecked task. So this REFUSES by default while a run is in flight, and
+# `--force` is how you say you meant it.
 #
 # WHAT COUNTS AS IN FLIGHT, and what happens when that cannot be answered:
 #
@@ -63,9 +64,9 @@
 #     watcher that was killed before it could update it. It is SCOPED to this
 #     project, because the probe searches every process on the machine while a
 #     daemon's identity is per repository: a match counts only if the process's
-#     arguments name this repository's MAIN CHECKOUT or its sibling-worktree
+#     arguments name this repository's MAIN CHECKOUT or its sibling-run-copy
 #     prefix `<work_root>/<projectName>-`. The second spelling is what keeps an
-#     engine RE-LAUNCHED BY HAND in its worktree — the continuation route the
+#     engine RE-LAUNCHED BY HAND in its run copy — the continuation route the
 #     SAFETY block above prescribes, which has no registry record either —
 #     visible to this guard; without it the refusal would become a silent
 #     `--force`. A process whose argument vector cannot be read COUNTS AS A
@@ -299,15 +300,17 @@ fi
 # repository's runs.
 #
 # TWO SPELLINGS ARE ACCEPTED, and dropping either one is a fail-OPEN:
-#   * $main_repo/ — every run THIS WATCHER launched carries it (spawn_engine
-#     passes --settings "$MAIN_REPO/.claude/..." and --add-dir
-#     "<MAIN_REPO>/<state_dir>");
+#   * $main_repo/ — every run THIS WATCHER launched carries it through
+#     spawn_engine's --add-dir "<MAIN_REPO>/<state_dir>". Its --settings names
+#     "$MAIN_REPO/.claude/settings.autonomous.json" only in job mode; outside
+#     it, the per-run profile under the machine state lane
+#     (run-profiles/<slug>/<branch>.json), which carries no $main_repo path;
 #   * <work_root>/<projectName>- — a run an operator RE-LAUNCHED BY HAND in its
-#     worktree, which the SAFETY block above tells them to do. That process runs
-#     under a sibling checkout, carries no $main_repo path, and has no registry
-#     record either, so the main-checkout key alone would make this guard
-#     invisible to it and turn a refusal into a --force-equivalent teardown of a
-#     live run. The prefix is the same one hr_worktree_dir builds and the CLI's
+#     run copy (a clone, or a legacy worktree), which the SAFETY block above
+#     tells them to do. That process runs under a sibling checkout, carries no
+#     $main_repo path, and has no registry record either, so the main-checkout
+#     key alone would make this guard invisible to it and turn a refusal into a
+#     --force-equivalent teardown of a live run. The prefix is the same one hr_worktree_dir builds and the CLI's
 #     worktreeGlob() puts in the permission profile.
 #
 # FAIL SAFE ON AN UNREADABLE ARGUMENT VECTOR: a pid whose command line `ps`
@@ -370,7 +373,7 @@ EOF
     printf '    agent process id(s): %s\n' "$(printf '%s' "$headless" | tr '\n' ' ')"
   fi
   echo "  A restart KILLS it: the whole process tree goes, killed runs reconcile to 'failed' and do NOT auto-resume."
-  echo "  Committed work stays on the branch — re-launch the engine in that worktree to continue it."
+  echo "  Committed work stays on the branch — re-launch the engine in that run copy to continue it."
   if [ "$force" -eq 0 ]; then
     echo "  Aborting. Re-run with --force to restart anyway." >&2
     exit 2

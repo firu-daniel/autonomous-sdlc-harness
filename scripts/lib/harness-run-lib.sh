@@ -87,7 +87,10 @@
 # `commands.*`) from the main checkout. They skip
 # `hr_worktree_config_check_var` because no runner lets git read the record's
 # `config.worktree`; the section THE WATCHER FAMILY'S GIT IN A RUN'S COPY holds
-# the detail. Nothing
+# the detail. The target check's clone arm reads the main checkout's
+# registry and configuration, plus the clone's `HEAD`,
+# `objects/info/alternates`, `.git/config` and the absence of the three
+# planted files, once each. Nothing
 # here reads an environment variable in place of a configured value, and nothing
 # here writes inside a repository except through the named write exceptions
 # below.
@@ -106,9 +109,11 @@
 #      `.stale.*` move-aside and `.break` mutex while a stale one is broken)
 #      and the temp files
 #      `.registry.*` in the registry's own directory. Written only by
-#      `hr_registry_init`, `hr_registry_set`, `hr_remote_record_init` (through
+#      `hr_registry_init`, `hr_registry_set`, `hr_registry_drop`,
+#      `hr_registry_restore`, `hr_remote_record_init` (through
 #      `hr_registry_set`) and the `hr_registry_lock` / `hr_registry_unlock`
-#      pair `hr_registry_set` calls.
+#      pair `hr_registry_set`, `hr_registry_drop` and `hr_registry_restore`
+#      call.
 #   3. THE REMOTE STATE BUNDLE writes the files its format lists. Fence: inside
 #      `<root>/<state_dir>/` (resolved through `hr_remote_state_dir_var`), only
 #      `autonomous_logs/remote_status.json`, `clarifications/<branch>/`,
@@ -140,24 +145,60 @@
 #      failed landing, to name the commit the remote moved to.
 #      Written only by `hr_place_artifact`, `hr_commit_placed`,
 #      `hr_commit_paths_var`, `hr_run_blob_var` (objects only) and
-#      `hr_push_landed`. A path's parent swapped for a symbolic link between
+#      `hr_push_landed`. On a clone, `hr_commit_paths_var` moves the clone's
+#      `refs/heads/<branch>` first and the main checkout's second through
+#      `hr_copy_ref_swap_var` (exception 6). A path's parent swapped for a symbolic link between
 #      `hr_run_blob_var`'s walk and its hash is the same race
 #      `hr_commit_placed` already carried.
 #   5. THE WATCHER FAMILY'S GIT IN A RUN'S COPY moves a copy's branch and tree.
-#      Fence: `refs/heads/<branch>`, moved only by a compare-and-swap
-#      `update-ref` against the tip `hr_run_copy_check_var` read, plus the
-#      copy's index (`<record>/index`) and working tree; a `mktemp` temporary
-#      index, removed on every exit path; and
+#      Fence: `refs/heads/<branch>`, moved on a worktree or the main checkout
+#      only by a compare-and-swap `update-ref` against the tip
+#      `hr_run_copy_check_var` read; on a clone the copy check itself first
+#      moves that ref, by `hr_copy_sync_in_var`'s compare-and-swap against the
+#      main checkout's previous value (writing objects there too), and every
+#      later move in this section is a compare-and-swap against the tip the
+#      copy check read after that sync-in; plus the copy's index
+#      (`<record>/index`, `<clone>/.git/index`) and working tree; a `mktemp`
+#      temporary index, removed on every exit path;
 #      `hr_run_trusted_base_var`'s fetch, which writes objects and `FETCH_HEAD`
-#      in the main repository and moves no ref. Written only by
+#      in the main repository and moves no ref; and, on a clone, the clone's
+#      `refs/heads/<branch>` through `hr_copy_ref_swap_var` (clone first,
+#      rollback on a failed main swap). Written only by
 #      `hr_run_fast_forward_var`, `hr_run_reset_var`,
-#      `hr_run_trusted_base_var` (`hr_run_surface_check_var` through it) and
-#      `hr_run_worktree_diff_var` (the temporary index).
-#      `hr_run_main_git` and `hr_run_copy_git` are general-purpose runners that
+#      `hr_run_trusted_base_var` (`hr_run_surface_check_var` through it),
+#      `hr_run_worktree_diff_var` (the temporary index) and
+#      `hr_run_copy_check_var`, which on a clone only, through
+#      `hr_copy_sync_in_var`, writes objects into the main repository and
+#      moves the main checkout's `refs/heads/<branch>` by compare-and-swap,
+#      may also heal the clone's `refs/heads/<branch>` by compare-and-swap,
+#      with its index and working tree, and on `main` and `worktree` writes nothing.
+#      `hr_run_main_git`, `hr_run_copy_git` and `hr_copy_git_at` are
+#      general-purpose runners that
 #      write only what their caller's arguments ask, so a caller that drives a
-#      writing git command through them (`create-worktree.sh`'s
-#      `worktree add`, `read-tree` and cleanup `worktree remove`) owns that
-#      write.
+#      writing git command through them owns that write.
+#   6. THE CLONE ARM'S SYNC moves objects and one ref between a clone and the
+#      main repository, and CREATING AND REMOVING A RUN'S CLONE makes and
+#      deletes a clone. Fence: sync-in writes objects, `FETCH_HEAD` and
+#      `refs/heads/<branch>` in the main repository, the ref only by a
+#      compare-and-swap `update-ref`, and moves the clone's
+#      `refs/heads/<branch>` when it heals a strictly-behind clone, only by a
+#      compare-and-swap from the tip `ls-remote` read to the main checkout's
+#      tip, together with the clone's index and working tree
+#      (`hr_copy_git_at`'s two-tree `read-tree -m -u`); sync-out writes the one named ref in a clone's own `.git`; the
+#      swap writes a compare-and-swap `update-ref` of the clone's
+#      `refs/heads/<branch>` first, then of the main checkout's, and on a
+#      failed main swap a compare-and-swap rollback of the clone's ref from
+#      <new> to <old> (its verify-only form writes the clone's ref onto
+#      itself). Creation writes the derived path
+#      `hr_worktree_dir <main> <branch>` and everything under it;
+#      `refs/heads/<branch>` in <main> only when it cut that ref, created
+#      against an empty old value and deleted on rollback only by a
+#      compare-and-swap from the commit it cut; and the registry, through
+#      `hr_registry_set`, `hr_registry_drop` and `hr_registry_restore` alone.
+#      Removal deletes only the
+#      derived path of a clone the registry records. Written only by
+#      `hr_copy_sync_in_var`, `hr_copy_sync_out_var`, `hr_copy_ref_swap_var`,
+#      `hr_clone_create_var` and `hr_clone_remove_var`.
 #
 # MIRRORS OF `cli/src/remote/githubActions.ts`, which owns these names; a
 # rename there is an edit here, byte for byte:
@@ -178,9 +219,13 @@
 # `hr_remote_bundle_write`, `hr_remote_copy_tree`, `hr_remote_bundle_restore`,
 # `hr_remote_move_aside`, `hr_remote_state_dir_var`, `hr_place_artifact`,
 # `hr_commit_placed`, `hr_commit_paths_var`, `hr_run_blob_var`, `hr_push_landed`,
-# `hr_run_fast_forward_var`, `hr_run_reset_var`,
-# `hr_run_trusted_base_var`, `hr_run_surface_check_var` (through it), `hr_run_main_git` or
-# `hr_run_copy_git` function still gets a library that only reads. The
+# `hr_run_fast_forward_var`, `hr_run_reset_var`, `hr_run_copy_check_var` (on a
+# clone only),
+# `hr_run_trusted_base_var`, `hr_run_surface_check_var` (through it), `hr_run_main_git`,
+# `hr_run_copy_git`, `hr_copy_git_at`, `hr_copy_sync_in_var`, `hr_copy_sync_out_var`,
+# `hr_copy_ref_swap_var`, `hr_registry_drop`, `hr_registry_restore`, `hr_clone_create_var` or
+# `hr_clone_remove_var` function
+# still gets a library that only reads. The
 # lane's ceilings are the only environment values here that carry policy, because
 # the lane is machine-scoped and has no configuration key to carry them; each is
 # named where it is used. `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`,
@@ -273,16 +318,18 @@
 # both. No top-level side effects, no exiting, no writes outside the fences of
 # the write exceptions named above, and no diagnostics on stdout OR stderr:
 # every reader is silent on failure and signals through its return status,
-# because callers capture stdout. The one pass-through is the registry's two
-# writers, `hr_registry_init` and `hr_registry_set`, which leave the shell's,
-# `mktemp`'s and `jq`'s own stderr on a failed write to the caller, as the
-# watcher's bodies they replaced did — that stream is the watcher's log — and
-# add one line of their own, naming the lock, when `hr_registry_set` cannot
-# take the registry lock. The artifact placement's three writers likewise leave
-# `mkdir`'s, `cp`'s, git's and the push wrapper's own output on their stdout
-# and stderr for the caller to redirect into its log, and `hr_commit_placed`
-# adds its own refusal lines on stderr. `hr_remote_bundle_write` (through
-# `hr_remote_bundle_source_ok`) and `hr_remote_copy_tree` print one
+# because callers capture stdout. The one pass-through is the registry's
+# writers, `hr_registry_init`, `hr_registry_set`, `hr_registry_drop` and
+# `hr_registry_restore`, which leave the shell's, `mktemp`'s and `jq`'s own
+# stderr on a failed write to the caller, as the watcher's bodies they replaced
+# did — that stream is the watcher's log — and add one line of their own,
+# naming the lock, when `hr_registry_set`, `hr_registry_drop` or
+# `hr_registry_restore` cannot take the registry lock.
+# `hr_clone_create_var` silences all four. The artifact placement's three
+# writers likewise leave `mkdir`'s, `cp`'s, git's and the push wrapper's own
+# output on their stdout and stderr for the caller to redirect into its log,
+# and `hr_commit_placed` adds its own refusal lines on stderr.
+# `hr_remote_bundle_write` (through `hr_remote_bundle_source_ok`) and `hr_remote_copy_tree` print one
 # `remote state bundle: skipped …` line on stderr per source or entry they
 # skip, because a skipped source still yields a written bundle and the job's
 # log is the only place the skip can be seen. `hr_run_fast_forward_var` and
@@ -315,7 +362,12 @@
 # `HR_RUN_COPY_GITDIR`, `HR_RUN_COPY_BRANCH`, `HR_RUN_COPY_TIP`,
 # `HR_RUN_SURFACE_REFUSAL`, `HR_RUN_WT_DIFF`, `HR_RUN_FF_REFUSAL`,
 # `HR_RUN_RESET_REFUSAL`, `HR_RUN_BLOB` and `HR_RUN_BLOB_MODE`, and the shared
-# commit's `HR_COMMIT_REFUSAL` and `HR_COMMIT_NEW`.
+# commit's `HR_COMMIT_REFUSAL`, `HR_COMMIT_NEW` and `HR_COMMIT_SYNC_FAILED`,
+# the target check's clone arm's `HR_TARGET_KIND`, `HR_TARGET_BRANCH`,
+# `HR_CLONE_CONFIG_REFUSAL` and `HR_CLONE_RULE`, the watcher family's
+# `HR_RUN_COPY_KIND`, and the clone arm's sync's `HR_SYNC_TIP` and
+# `HR_SYNC_REFUSAL`, and the clone creation's `HR_CLONE_DIR` and
+# `HR_CLONE_REFUSAL`.
 # Every one of them is assigned
 # before it is read by the function that owns it, so an inherited value from a
 # parent process is overwritten rather than believed — except
@@ -525,6 +577,10 @@ hr_repo_root() {
 # and the kill switch live in ONE place so every run is tailable and stoppable
 # from it, while a run itself executes in a sibling worktree. A script that used
 # its own checkout for both would write a second, invisible inbox per worktree.
+#
+# Inside a clone it answers the clone itself. It never reads HARNESS_MAIN_REPO,
+# because its callers run unsandboxed and place the main checkout from their own
+# location.
 hr_main_repo() {
   local dir="${1-}" out line
   [ -n "$dir" ] || dir="${PWD-}"
@@ -801,10 +857,17 @@ hr_wrapper_main_of() {
 # record's `gitdir`, each worktree's `.git` pointer and the record directories
 # themselves (`cli/src/generators/writeProtection.ts`); how the Linux sandbox
 # treats those globbed entries is unverified.
+#
+# It also sets `HR_TARGET_KIND` — `main`, `worktree` or `clone` — and, on the
+# clone arm only, `HR_TARGET_BRANCH`. The clone arm is taken only when
+# `<target_top>/.git` is a real directory, not a symbolic link; it is
+# `hr_clone_target_check_var`, whose header lists its conditions.
 hr_wrapper_target_check_var() {
   local main="${1-}" target="${2-}" p common line="" back back_c want
   HR_TARGET_REFUSAL=""
   HR_TARGET_GITDIR=""
+  HR_TARGET_KIND=""
+  HR_TARGET_BRANCH=""
   if ! main=$( CDPATH= cd -P -- "$main" 2>/dev/null && pwd -P ); then
     HR_TARGET_REFUSAL="the main checkout '${1-}' is not a directory"
     return 1
@@ -815,9 +878,14 @@ hr_wrapper_target_check_var() {
   fi
   if [ "$target" = "$main" ]; then
     HR_TARGET_GITDIR="$main/.git"
+    HR_TARGET_KIND=main
     return 0
   fi
   local refused="'$target' is neither the main checkout $main nor a worktree it lists"
+  if [ -d "$target/.git" ] && [ ! -L "$target/.git" ]; then
+    hr_clone_target_check_var "$main" "$target" "$refused"
+    return
+  fi
   if [ ! -f "$target/.git" ] || [ -L "$target/.git" ]; then
     HR_TARGET_REFUSAL="$refused: its .git is not a regular pointer file"
     return 1
@@ -846,6 +914,112 @@ hr_wrapper_target_check_var() {
     return 1
   fi
   HR_TARGET_GITDIR=$p
+  HR_TARGET_KIND=worktree
+  return 0
+}
+
+# The clone arm of `hr_wrapper_target_check_var`, for a canonical <main> and a
+# canonical <target> whose `.git` is a real directory; <refused> is that
+# function's refusal prefix. Return 0 with `HR_TARGET_GITDIR` (`<target>/.git`),
+# `HR_TARGET_KIND` (`clone`) and `HR_TARGET_BRANCH` set when, in order:
+#   1. `<target>/.git/HEAD` is one line `ref: refs/heads/<branch>`, and the
+#      registry at `hr_state_path <main> autonomous_logs/registry.json` gives
+#      `copy_kind` `clone` for <branch> and a `worktree` that is <target>;
+#   2. <target> is `hr_worktree_dir <main> <branch>`;
+#   3. `.git/commondir`, `.git/config.worktree` and
+#      `.git/objects/info/http-alternates` are absent, symbolic links included,
+#      and `.git/objects` and `.git/objects/info` are real directories;
+#   4. `.git/objects/info/alternates` is a regular file holding one line,
+#      `<main>/.git/objects`;
+#   5. `hr_clone_config_check_var <main> <target>` passes.
+# Each comparison is canonical. Return 1 otherwise, with `HR_TARGET_REFUSAL`
+# one sentence naming the condition and the key or file, never a file's
+# contents. Every record is read once — the registry's two keys in one `jq`
+# call, under `hr_registry_peek`'s guards — and the registry is never created.
+#
+# Condition 3 is load-bearing: the runtime leaves a clone's `objects/info/`,
+# `info/` and new top-level `.git` files sandbox-writable
+# (`docs/sandbox-verification.md`, row CL5), so a sandboxed command could plant
+# a `commondir` that redirects git's ref store, a `config.worktree` git layers
+# over `.git/config`, or an `http-alternates` that borrows objects from a host.
+hr_clone_target_check_var() {
+  local main="${1-}" target="${2-}" refused="${3-}" gd hf head_line="" extra=""
+  local branch="" registry kind wt wt_c want name alt alt_line="" alt_c main_obj
+  local line="" tab=$'\t'
+  gd="$target/.git"
+  hf="$gd/HEAD"
+  if [ -f "$hf" ] && [ ! -L "$hf" ] && [ -r "$hf" ]; then
+    { IFS= read -r head_line || :; IFS= read -r extra || :; } <"$hf" 2>/dev/null
+  fi
+  if [ -z "$extra" ]; then
+    case "$head_line" in
+      'ref: refs/heads/'?*) branch=${head_line#ref: refs/heads/} ;;
+    esac
+  fi
+  kind=""
+  wt_c=""
+  if [ -n "$branch" ] && registry=$(hr_state_path "$main" autonomous_logs/registry.json) \
+    && [ -f "$registry" ] && [ -r "$registry" ] \
+    && line=$(jq -r --arg b "$branch" '
+      .runs[$b] | if type == "object"
+        then [(.copy_kind // "" | tostring), (.worktree // "" | tostring)] | @tsv
+        else error("absent") end
+    ' "$registry" 2>/dev/null); then
+    hr_tsv_unescape_var "${line%%"$tab"*}"
+    kind=$HR_CFG_VALUE
+    hr_tsv_unescape_var "${line#*"$tab"}"
+    wt=$HR_CFG_VALUE
+    if [ -n "$wt" ]; then
+      wt_c=$(hr_canonical_path_nogit "$wt") || wt_c=""
+    fi
+  fi
+  if [ "$kind" != clone ] || [ "$wt_c" != "$target" ]; then
+    HR_TARGET_REFUSAL="$refused: its .git is not a regular pointer file, and the run registry records no clone of $main at that path"
+    return 1
+  fi
+
+  want=$(hr_worktree_dir "$main" "$branch") && want=$(hr_canonical_path_nogit "$want") || want=""
+  if [ -z "$want" ] || [ "$want" != "$target" ]; then
+    HR_TARGET_REFUSAL="'$target' is a clone the run registry records, but not at the path hr_worktree_dir derives from $main for the branch its HEAD names"
+    return 1
+  fi
+
+  for name in commondir config.worktree objects/info/http-alternates; do
+    if [ -e "$gd/$name" ] || [ -L "$gd/$name" ]; then
+      HR_TARGET_REFUSAL="'$target' is a clone, but $gd/$name exists, and a clone the harness made has none"
+      return 1
+    fi
+  done
+  for name in objects objects/info; do
+    if [ ! -d "$gd/$name" ] || [ -L "$gd/$name" ]; then
+      HR_TARGET_REFUSAL="'$target' is a clone, but $gd/$name is not a real directory"
+      return 1
+    fi
+  done
+
+  alt="$gd/objects/info/alternates"
+  alt_c=""
+  if [ -f "$alt" ] && [ ! -L "$alt" ] && [ -r "$alt" ]; then
+    extra=""
+    { IFS= read -r alt_line || :; IFS= read -r extra || :; } <"$alt" 2>/dev/null
+    if [ -n "$alt_line" ] && [ -z "$extra" ]; then
+      case "$alt_line" in /*) ;; *) alt_line="$gd/objects/$alt_line" ;; esac
+      alt_c=$(hr_canonical_path_nogit "$alt_line") || alt_c=""
+    fi
+  fi
+  main_obj=$(hr_canonical_path_nogit "$main/.git/objects") || main_obj=""
+  if [ -z "$alt_c" ] || [ -z "$main_obj" ] || [ "$alt_c" != "$main_obj" ]; then
+    HR_TARGET_REFUSAL="'$target' is a clone, but $alt is not a regular file holding one line naming $main/.git/objects"
+    return 1
+  fi
+
+  if ! hr_clone_config_check_var "$main" "$target"; then
+    HR_TARGET_REFUSAL=$HR_CLONE_CONFIG_REFUSAL
+    return 1
+  fi
+  HR_TARGET_GITDIR=$gd
+  HR_TARGET_KIND=clone
+  HR_TARGET_BRANCH=$branch
   return 0
 }
 
@@ -863,19 +1037,28 @@ hr_wrapper_target_check_var() {
 # `refs/heads/<branch>` in every later call, so a HEAD rewritten afterwards
 # changes nothing it does. A name starting with `-` is returned, not refused:
 # each wrapper refuses it under its own exit contract.
+#
+# A clone's branch is `HR_TARGET_BRANCH`, taken when `HR_TARGET_KIND` is
+# `clone` and <gitdir> is `HR_TARGET_GITDIR`: the target check already read
+# the clone's `HEAD`, and reading it again would break the read-once rule.
 hr_wrapper_branch_var() {
   local main="${1-}" gitdir="${2-}" head ref
   HR_WRAPPER_BRANCH=""
   [ -n "$main" ] && [ -n "$gitdir" ] || return 1
-  if [ "$gitdir" = "$main/.git" ]; then
-    head=HEAD
+  if [ "${HR_TARGET_KIND-}" = clone ] && [ "$gitdir" = "${HR_TARGET_GITDIR-}" ]; then
+    [ -n "${HR_TARGET_BRANCH-}" ] || return 1
+    ref="refs/heads/$HR_TARGET_BRANCH"
   else
-    case "$gitdir" in
-      "$main/.git/worktrees/"?*) head="worktrees/${gitdir##*/}/HEAD" ;;
-      *) return 1 ;;
-    esac
+    if [ "$gitdir" = "$main/.git" ]; then
+      head=HEAD
+    else
+      case "$gitdir" in
+        "$main/.git/worktrees/"?*) head="worktrees/${gitdir##*/}/HEAD" ;;
+        *) return 1 ;;
+      esac
+    fi
+    ref=$(git -C "$main" symbolic-ref -q "$head" 2>/dev/null) || return 1
   fi
-  ref=$(git -C "$main" symbolic-ref -q "$head" 2>/dev/null) || return 1
   case "$ref" in
     refs/heads/?*) ;;
     *) return 1 ;;
@@ -886,6 +1069,29 @@ hr_wrapper_branch_var() {
   esac
   HR_WRAPPER_BRANCH=${ref#refs/heads/}
   return 0
+}
+
+# Print which run copy the gitdir <gitdir> of the main checkout <main> is:
+# `main` for `<main>/.git`, `worktree` for a path directly under
+# `<main>/.git/worktrees/`, `clone` otherwise. Purely lexical: call it only on
+# a gitdir `hr_wrapper_target_check_var` has already accepted.
+hr_copy_kind() {
+  local main="${1-}" gitdir="${2-}" rest
+  [ -n "$main" ] && [ -n "$gitdir" ] || return 1
+  if [ "$gitdir" = "$main/.git" ]; then
+    printf 'main\n'
+    return 0
+  fi
+  case "$gitdir" in
+    "$main/.git/worktrees/"?*)
+      rest=${gitdir#"$main/.git/worktrees/"}
+      case "$rest" in
+        */*) ;;
+        *) printf 'worktree\n'; return 0 ;;
+      esac
+      ;;
+  esac
+  printf 'clone\n'
 }
 
 # Return 0 when the main checkout <main>'s own `.git/config` names a URL for
@@ -1003,6 +1209,174 @@ hr_worktree_config_check_var() {
   fi
   [ -n "$parts" ] || return 0
   HR_WT_CONFIG_REFUSAL="$parts; remove the file, then re-run setup-worktree.sh in that working copy"
+  return 1
+}
+
+# THE CLONE CONFIGURATION ALLOW-LIST — one contract. `hr_clone_create_var`
+# writes a clone's `.git/config` from exactly this set, and
+# `setup-worktree.sh --target` adds only `core.hooksPath`; the check below
+# holds a clone to it. Required keys: `core.repositoryformatversion`,
+# `core.bare`, `remote.origin.fetch`, and `remote.origin.url` and
+# `extensions.objectformat` whenever the spec lists them.
+#
+# `hr_clone_config_spec <main> <top>` prints one line per allowed key,
+# `<lowercase key><TAB><rule>`, `<rule>` being `=<exact value>` or `bool`
+# (`true` or `false`). `remote.origin.url` is listed, with the value the main
+# checkout's `.git/config` names, only when it names one;
+# `extensions.objectformat` is listed, with the main checkout's value and
+# `core.repositoryformatversion` `=1`, only when the main checkout's
+# `.git/config` names one, and the version is `=0` otherwise; `core.hooksPath` is
+# `<top>/<githooksDir>`, with `githooksDir` read from the MAIN checkout. Return
+# 1, printing nothing, when `githooksDir` cannot be read or a value holds a
+# newline the line format cannot carry.
+hr_clone_config_spec() {
+  local main="${1-}" top="${2-}" rel url fmt nl
+  nl='
+'
+  [ -n "$main" ] && [ -n "$top" ] || return 1
+  rel=$(hr_githooks_dir "$main") || return 1
+  url=$(git -C / config --file "$main/.git/config" --get remote.origin.url 2>/dev/null) || url=""
+  fmt=$(git -C / config --file "$main/.git/config" --get extensions.objectformat 2>/dev/null) || fmt=""
+  case "$top/$rel$url$fmt" in *"$nl"*) return 1 ;; esac
+  if [ -n "$fmt" ]; then
+    printf 'core.repositoryformatversion\t=1\nextensions.objectformat\t=%s\n' "$fmt"
+  else
+    printf 'core.repositoryformatversion\t=0\n'
+  fi
+  printf '%s\t%s\n' \
+    core.bare =false \
+    core.logallrefupdates =true \
+    core.filemode bool \
+    core.ignorecase bool \
+    core.precomposeunicode bool \
+    core.symlinks bool \
+    remote.origin.fetch '=+refs/heads/*:refs/remotes/origin/*' \
+    core.hookspath "=$top/$rel"
+  [ -z "$url" ] || printf 'remote.origin.url\t=%s\n' "$url"
+}
+
+# Set `HR_CLONE_RULE` to the rule <spec> (`hr_clone_config_spec`'s output)
+# gives <key>; return 1, the variable empty, when <spec> lists no <key>.
+hr_clone_spec_rule_var() {
+  local spec="${1-}" key="${2-}" rest line nl tab=$'\t'
+  nl='
+'
+  HR_CLONE_RULE=""
+  rest="$spec$nl"
+  while [ -n "$rest" ]; do
+    line=${rest%%"$nl"*}
+    rest=${rest#*"$nl"}
+    if [ "${line%%"$tab"*}" = "$key" ]; then
+      HR_CLONE_RULE=${line#*"$tab"}
+      return 0
+    fi
+  done
+  return 1
+}
+
+# `hr_clone_config_check_var <main> <top>` judges `<top>/.git/config` against
+# `hr_clone_config_spec <main> <top>`. Return 0 only when every key is in the
+# spec, appears once and passes its rule, and every required key is present;
+# return 1 otherwise — including a file that is absent, not a regular file, a
+# symbolic link, or one git cannot parse — with `HR_CLONE_CONFIG_REFUSAL` set to
+# one sentence naming each offending, duplicated or missing key, never a value.
+# Prints nothing. Call it directly, never inside `$(…)`.
+#
+# Read as `hr_worktree_config_check_var` reads its file: one
+# `git -C / config --file <f> --null --list` call, a trailing `hr-status=<n>`
+# record carrying git's exit status. Section and variable names are compared
+# case-insensitively and a subsection name exactly, as git compares them, so
+# `remote.ORIGIN.url` is not `remote.origin.url`.
+hr_clone_config_check_var() {
+  local main="${1-}" top="${2-}" f spec entry name lname key value has_value status="" nl
+  local seen="" offending="" duplicated="" wrong="" missing="" parts="" req mid
+  HR_CLONE_CONFIG_REFUSAL=""
+  nl='
+'
+  f="$top/.git/config"
+  if [ -L "$f" ] || [ ! -f "$f" ] || [ ! -r "$f" ]; then
+    HR_CLONE_CONFIG_REFUSAL="$f is absent, not a readable regular file, or a symbolic link, so this clone's configuration is not trusted"
+    return 1
+  fi
+  if ! spec=$(hr_clone_config_spec "$main" "$top"); then
+    HR_CLONE_CONFIG_REFUSAL="cannot build the clone configuration allow-list from the main checkout $main, so $f is not trusted"
+    return 1
+  fi
+
+  while IFS= read -r -d '' entry; do
+    case "$entry" in
+      hr-status=*)
+        status=${entry#hr-status=}
+        continue
+        ;;
+      *"$nl"*)
+        name=${entry%%"$nl"*}
+        value=${entry#*"$nl"}
+        has_value=1
+        ;;
+      *)
+        name=$entry
+        value=""
+        has_value=0
+        ;;
+    esac
+    lname=$(printf '%s' "$name" | LC_ALL=C tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
+    case "$name" in
+      *.*.*)
+        mid=${name#*.}
+        mid=${mid%.*}
+        key="${lname%%.*}.$mid.${lname##*.}"
+        ;;
+      *) key=$lname ;;
+    esac
+    case "$seen" in
+      *"$nl$key$nl"*)
+        case ", $duplicated, " in
+          *", $name, "*) ;;
+          *) duplicated="${duplicated:+$duplicated, }$name" ;;
+        esac
+        continue
+        ;;
+    esac
+    seen="${seen:-$nl}$key$nl"
+    if ! hr_clone_spec_rule_var "$spec" "$key"; then
+      offending="${offending:+$offending, }$name"
+      continue
+    fi
+    case "$HR_CLONE_RULE" in
+      bool)
+        case "$has_value:$value" in
+          1:true | 1:false) ;;
+          *) wrong="${wrong:+$wrong, }$name" ;;
+        esac
+        ;;
+      =*)
+        if [ "$has_value" -ne 1 ] || [ "$value" != "${HR_CLONE_RULE#=}" ]; then
+          wrong="${wrong:+$wrong, }$name"
+        fi
+        ;;
+    esac
+  done < <(git -C / config --file "$f" --null --list 2>/dev/null; printf 'hr-status=%s\0' "$?")
+
+  if [ "$status" != 0 ]; then
+    HR_CLONE_CONFIG_REFUSAL="git cannot parse $f, so this clone's configuration is not trusted"
+    return 1
+  fi
+  for req in core.repositoryformatversion extensions.objectformat core.bare remote.origin.fetch remote.origin.url; do
+    if [ "$req" = remote.origin.url ] || [ "$req" = extensions.objectformat ]; then
+      hr_clone_spec_rule_var "$spec" "$req" || continue
+    fi
+    case "$seen" in
+      *"$nl$req$nl"*) ;;
+      *) missing="${missing:+$missing, }$req" ;;
+    esac
+  done
+  [ -z "$offending" ] || parts="$f sets $offending, which the clone allow-list does not hold"
+  [ -z "$duplicated" ] || parts="${parts:+$parts; }$f sets $duplicated more than once"
+  [ -z "$wrong" ] || parts="${parts:+$parts; }$f sets $wrong to a value the clone allow-list does not allow"
+  [ -z "$missing" ] || parts="${parts:+$parts; }$f lacks $missing, which the clone allow-list requires"
+  [ -n "$parts" ] || return 0
+  HR_CLONE_CONFIG_REFUSAL="$parts, so this clone's configuration is not trusted"
   return 1
 }
 
@@ -2231,6 +2605,59 @@ hr_registry_set() {
   return "$status"
 }
 
+# hr_registry_drop <file> <branch> — delete `.runs[<branch>]` under
+# `hr_registry_set`'s lock, temp file and `mv`. Its callers:
+# `hr_clone_create_var`'s rollback, `create-worktree.sh`'s failure rollback
+# and `remote-run.sh`'s `start_remove_copy`. 0 dropped, or no file to drop from (none is created); 1,
+# writing nothing, when the lock cannot be taken or the write fails.
+hr_registry_drop() {
+  local file="${1-}" branch="${2-}" dir tmp status=0 written=0
+  [ -n "$file" ] || return 1
+  dir=$(hr_registry_dir "$file")
+  tmp=$(mktemp "$dir/.registry.XXXXXX") || return 1
+  if ! hr_registry_lock "$file" "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  if [ -f "$file" ]; then
+    if jq --arg b "$branch" 'del(.runs[$b])' "$file" >"$tmp"; then
+      mv "$tmp" "$file" && written=1 || status=1
+    else
+      status=1
+    fi
+  fi
+  [ "$written" -eq 1 ] || rm -f "$tmp"
+  hr_registry_unlock "$file" "$tmp"
+  return "$status"
+}
+
+# hr_registry_restore <file> <branch> <json> — set `.runs[<branch>]` back to
+# <json>, the compact record a caller read from the same file, under
+# `hr_registry_set`'s lock, temp file and `mv`. Its callers:
+# `hr_clone_create_var`'s rollback and `create-worktree.sh`'s failure
+# rollback, each putting a previous record back. 0 restored; 1, writing nothing, when <file> is absent,
+# <json> is not an object, the lock cannot be taken or the write fails.
+hr_registry_restore() {
+  local file="${1-}" branch="${2-}" rec="${3-}" dir tmp status=0 written=0
+  [ -n "$file" ] && [ -f "$file" ] && [ -n "$rec" ] || return 1
+  dir=$(hr_registry_dir "$file")
+  tmp=$(mktemp "$dir/.registry.XXXXXX") || return 1
+  if ! hr_registry_lock "$file" "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  if jq --arg b "$branch" --arg r "$rec" \
+    '($r | fromjson) as $p | if ($p | type) == "object" then .runs[$b] = $p else error("not a record") end' \
+    "$file" >"$tmp"; then
+    mv "$tmp" "$file" && written=1 || status=1
+  else
+    status=1
+  fi
+  [ "$written" -eq 1 ] || rm -f "$tmp"
+  hr_registry_unlock "$file" "$tmp"
+  return "$status"
+}
+
 # hr_registry_get <file> <branch> <key>   -> the value, or nothing
 hr_registry_get() {
   local file="${1-}"
@@ -2245,6 +2672,21 @@ hr_registry_branches() {
   local file="${1-}"
   hr_registry_init "$file" || :
   jq -r '.runs | keys[]' "$file" 2>/dev/null
+}
+
+# hr_registry_peek <file> <branch> <key> — print `.runs[<branch>][<key>]`
+# (nothing for an absent or null key) and return 0; return 1, printing nothing,
+# when <file> is not a readable regular file or `jq` fails or finds no
+# `.runs[<branch>]`. The read a check makes: unlike `hr_registry_get` and
+# `hr_registry_branches` it never calls `hr_registry_init`, takes no lock and
+# creates neither the file nor its directory.
+hr_registry_peek() {
+  local file="${1-}" out
+  [ -n "$file" ] && [ -f "$file" ] && [ -r "$file" ] || return 1
+  out=$(jq -r --arg b "${2-}" --arg k "${3-}" '
+    .runs[$b] | if type == "object" then (if .[$k] == null then empty else .[$k] end) else error("absent") end
+  ' "$file" 2>/dev/null) || return 1
+  [ -z "$out" ] || printf '%s\n' "$out"
 }
 
 # hr_remote_record_init <file> <branch> <worktree> <log_path> <engine>
@@ -2513,11 +2955,19 @@ hr_derive_branch() {
 # THE WATCHER FAMILY'S GIT IN A RUN'S COPY.
 #
 # The watcher family runs git outside the sandbox in a working copy a run has
-# written, so every call made here holds four rules:
+# written — a worktree, the main checkout or a clone — so every call made here
+# holds four rules on every arm:
 #   - No hook runs: `core.hooksPath=/dev/null` holds none.
-#   - The copy's worktree record is read once, by the checks, and never again.
-#     Only `<record>/index` is borrowed, so git never reads the copy's `.git`
-#     pointer, the record's `commondir`, its `HEAD` or its `config.worktree`.
+#   - The copy's record is read once, by the checks, and never again. For a
+#     worktree only `<record>/index` is borrowed, so git never reads the copy's
+#     `.git` pointer, the record's `commondir`, its `HEAD` or its
+#     `config.worktree`. For a clone the checks read the registry, `HEAD`,
+#     `alternates` and `.git/config` once; the copy check's sync-in then runs
+#     `git-upload-pack` in the clone, which reads the clone's `.git/config`,
+#     refs and objects (through `alternates`) again under the measured fetch
+#     pins (`docs/cli.md` §6), and after that only `<clone>/.git/index` is
+#     borrowed: every runner reads objects and refs from the main checkout
+#     alone, never through the clone's own store.
 #   - Every call names `refs/heads/<branch>`, never `HEAD`: under
 #     `GIT_DIR=<main>/.git`, `HEAD` is the main checkout's.
 #   - Git reads history as stored: `GIT_NO_REPLACE_OBJECTS=1` and
@@ -2528,6 +2978,12 @@ hr_derive_branch() {
 #     the tip's real tree. Each call also sets
 #     `-c advice.graftFileDeprecated=false`, because a set graft file makes
 #     git print its deprecation hint on stderr; an older git ignores the key.
+# On a clone, the main checkout's `refs/heads/<branch>` is synced in by the
+# copy check (`hr_copy_sync_in_var`), and every ref this section moves goes
+# through `hr_copy_ref_swap_var`, the clone's ref first. `hr_run_surface_check_var` and
+# `hr_run_worktree_diff_var` need no arm of their own: they read refs and
+# objects from the main checkout and the copy's working tree through a fresh
+# index, which holds for a clone as for a worktree.
 # `hr_worktree_config_check_var` is skipped here because no runner below lets
 # git read the record's `config.worktree`; `push-branch.sh` and
 # `refresh-branch.sh` keep it under their own headers. Write exception 5 in the
@@ -2552,6 +3008,7 @@ hr_run_main_set_var() {
   HR_RUN_COPY_GITDIR=""
   HR_RUN_COPY_BRANCH=""
   HR_RUN_COPY_TIP=""
+  HR_RUN_COPY_KIND=""
   if [ -z "$main" ] || ! c=$( CDPATH= cd -P -- "$main" 2>/dev/null && pwd -P ); then
     HR_RUN_REFUSAL="the main checkout '$main' is not a directory"
     return 1
@@ -2570,10 +3027,13 @@ hr_run_main_set_var() {
 
 # hr_run_copy_check_var <main> <copy> — judge <copy> against <main> and set
 # `HR_RUN_MAIN`, `HR_RUN_COPY_TOP` (canonical), `HR_RUN_COPY_GITDIR`
-# (`HR_TARGET_GITDIR`), `HR_RUN_COPY_BRANCH` (empty on a detached, unreadable
-# or invalid HEAD, or a name starting with `-`) and `HR_RUN_COPY_TIP`: the
-# copy's HEAD commit read from the main repository, empty when unborn. 0
-# trusted; 1 untrusted, with `HR_RUN_REFUSAL` set.
+# (`HR_TARGET_GITDIR`), `HR_RUN_COPY_KIND` (`HR_TARGET_KIND`),
+# `HR_RUN_COPY_BRANCH` (empty on a detached, unreadable or invalid HEAD, or a
+# name starting with `-`) and `HR_RUN_COPY_TIP`: the copy's HEAD commit read
+# from the main repository, empty when unborn. On a clone with a branch it
+# first syncs that branch in (`hr_copy_sync_in_var`), so the tip is the main
+# checkout's `refs/heads/<branch>` after the sync. 0 trusted; 1 untrusted or
+# the sync-in refused, with `HR_RUN_REFUSAL` set.
 hr_run_copy_check_var() {
   local main="${1-}" copy="${2-}" top head
   hr_run_main_set_var "$main" || return 1
@@ -2587,11 +3047,21 @@ hr_run_copy_check_var() {
   fi
   HR_RUN_COPY_TOP=$top
   HR_RUN_COPY_GITDIR=$HR_TARGET_GITDIR
+  HR_RUN_COPY_KIND=$HR_TARGET_KIND
   if hr_wrapper_branch_var "$HR_RUN_MAIN" "$HR_RUN_COPY_GITDIR"; then
     case "$HR_WRAPPER_BRANCH" in
       -*) ;;
       *) HR_RUN_COPY_BRANCH=$HR_WRAPPER_BRANCH ;;
     esac
+  fi
+  if [ "$HR_RUN_COPY_KIND" = clone ]; then
+    [ -n "$HR_RUN_COPY_BRANCH" ] || return 0
+    if ! hr_copy_sync_in_var "$HR_RUN_MAIN" "$HR_RUN_COPY_GITDIR" "$HR_RUN_COPY_BRANCH"; then
+      HR_RUN_REFUSAL=$HR_SYNC_REFUSAL
+      return 1
+    fi
+    HR_RUN_COPY_TIP=$(hr_run_main_git rev-parse --verify --quiet "refs/heads/$HR_RUN_COPY_BRANCH^{commit}" 2>/dev/null) || HR_RUN_COPY_TIP=""
+    return 0
   fi
   if [ "$HR_RUN_COPY_GITDIR" = "$HR_RUN_MAIN/.git" ]; then
     head=HEAD
@@ -2604,17 +3074,31 @@ hr_run_copy_check_var() {
 
 # The two pinned runners. Each writes only what its caller's arguments ask, and
 # returns 1 without running git when the globals it needs are not set.
+# `hr_run_main_git` is `hr_copy_sync_main_git` on `HR_RUN_MAIN`, whose header
+# states the main-side pins.
 hr_run_main_git() {
   [ -n "${HR_RUN_MAIN-}" ] || return 1
-  GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null \
-    git -C "$HR_RUN_MAIN" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false -c advice.graftFileDeprecated=false "$@"
+  hr_copy_sync_main_git "$HR_RUN_MAIN" "$@"
 }
 
 hr_run_copy_git() {
   [ -n "${HR_RUN_MAIN-}" ] && [ -n "${HR_RUN_COPY_GITDIR-}" ] && [ -n "${HR_RUN_COPY_TOP-}" ] || return 1
+  hr_copy_git_at "$HR_RUN_MAIN" "$HR_RUN_COPY_GITDIR" "$HR_RUN_COPY_TOP" "$@"
+}
+
+# hr_copy_git_at <canonical-main> <copy-gitdir> <copy-top> <git-args>... — the
+# one body of the copy-side pins: objects and refs from `<main>/.git`, the
+# index borrowed from `<copy-gitdir>/index`, the working tree <copy-top>, and
+# the main-side pins `hr_copy_sync_main_git` states. `hr_run_copy_git` calls it
+# on the `HR_RUN_*` globals; `hr_clone_create_var` calls it directly because
+# those globals are not set while a clone is being created. Reads no global.
+hr_copy_git_at() {
+  local main="${1-}" gd="${2-}" top="${3-}"
+  [ -n "$main" ] && [ -n "$gd" ] && [ -n "$top" ] || return 1
+  shift 3
   GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null \
-  GIT_DIR="$HR_RUN_MAIN/.git" GIT_INDEX_FILE="$HR_RUN_COPY_GITDIR/index" GIT_WORK_TREE="$HR_RUN_COPY_TOP" \
-    git -C "$HR_RUN_COPY_TOP" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false -c advice.graftFileDeprecated=false "$@"
+  GIT_DIR="$main/.git" GIT_INDEX_FILE="$gd/index" GIT_WORK_TREE="$top" \
+    git -C "$top" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false -c advice.graftFileDeprecated=false "$@"
 }
 
 # 0 when the copy's working tree matches its index and its index matches
@@ -2826,15 +3310,19 @@ EOF
 # hr_run_fast_forward_var <ref> — move `refs/heads/$HR_RUN_COPY_BRANCH` and the
 # copy's index and tree from `HR_RUN_COPY_TIP` to <ref>'s commit, by
 # `refresh-branch.sh`'s sequence with no merge commit: the dry-run `read-tree`,
-# a compare-and-swap `update-ref`, the real `read-tree`, and a guarded put-back.
+# the compare-and-swap `hr_copy_ref_swap_var` (on a clone, the clone's ref
+# first), the real `read-tree`, and a put-back through the same helper with
+# <new> and <old> exchanged.
 #   0  moved, or already at or ahead of <ref> with nothing written (`merge
 #      --ff-only`'s "already up to date"); `HR_RUN_COPY_TIP` is the branch's
 #      commit;
 #   1  refused or failed with nothing changed, `HR_RUN_FF_REFUSAL` set;
-#   5  the branch moved, the tree refused and the put-back failed too
-#      (`refresh-branch.sh`'s exit 5), `HR_RUN_FF_REFUSAL` set.
+#   5  the branch moved, the tree refused and the put-back of either side
+#      failed (`refresh-branch.sh`'s exit 5), or, on a clone, the clone's
+#      `refs/heads/<branch>` moved, the main checkout's could not follow and
+#      the rollback failed; `HR_RUN_FF_REFUSAL` set.
 hr_run_fast_forward_var() {
-  local ref="${1-}" tip="${HR_RUN_COPY_TIP-}" branch="${HR_RUN_COPY_BRANCH-}" new
+  local ref="${1-}" tip="${HR_RUN_COPY_TIP-}" branch="${HR_RUN_COPY_BRANCH-}" new swap
   HR_RUN_FF_REFUSAL=""
   if [ -z "$branch" ] || [ -z "$tip" ]; then
     HR_RUN_FF_REFUSAL="the working copy has no branch or no commit to fast-forward"
@@ -2869,24 +3357,35 @@ hr_run_fast_forward_var() {
     HR_RUN_FF_REFUSAL="'$HR_RUN_COPY_TOP' cannot be updated to '$ref' (an untracked or changed file is in the way)"
     return 1
   fi
-  if ! hr_run_main_git update-ref -m "fast-forward to $ref" "refs/heads/$branch" "$new" "$tip"; then
-    HR_RUN_FF_REFUSAL="'$branch' moved, or its ref could not be locked"
-    return 1
-  fi
+  swap=0
+  hr_copy_ref_swap_var "$HR_RUN_MAIN" "$HR_RUN_COPY_GITDIR" "refs/heads/$branch" "$new" "$tip" "fast-forward to $ref" || swap=$?
+  case "$swap" in
+    0) ;;
+    5)
+      HR_RUN_FF_REFUSAL="'$branch' could not be fast-forwarded to '$ref': $HR_SYNC_REFUSAL"
+      return 5
+      ;;
+    *)
+      HR_RUN_FF_REFUSAL="'$branch' moved, or its ref could not be locked: $HR_SYNC_REFUSAL"
+      return 1
+      ;;
+  esac
   if hr_run_copy_git read-tree --no-recurse-submodules -m -u "$tip" "$new"; then
     HR_RUN_COPY_TIP=$new
     return 0
   fi
-  if hr_run_main_git update-ref -m "undo fast-forward to $ref" "refs/heads/$branch" "$tip" "$new"; then
+  if hr_copy_ref_swap_var "$HR_RUN_MAIN" "$HR_RUN_COPY_GITDIR" "refs/heads/$branch" "$tip" "$new" "undo fast-forward to $ref"; then
     HR_RUN_FF_REFUSAL="'$HR_RUN_COPY_TOP' could not be updated to '$ref'; '$branch' was put back"
     return 1
   fi
-  HR_RUN_FF_REFUSAL="'$HR_RUN_COPY_TOP' could not be updated to '$ref', and putting '$branch' back failed too"
+  HR_RUN_FF_REFUSAL="'$HR_RUN_COPY_TOP' could not be updated to '$ref', and putting '$branch' back failed too: $HR_SYNC_REFUSAL"
   return 5
 }
 
 # hr_run_reset_var — the watchdog's reset of the copy to `HR_RUN_COPY_TIP`. It
-# moves no ref, so no ref hook runs and no `ORIG_HEAD` is written.
+# moves no ref, so no ref hook runs, no `ORIG_HEAD` is written and a clone needs
+# no sync-out: the copy check's sync-in already made `HR_RUN_COPY_TIP` the
+# clone's tip.
 #   0  reset;
 #   1  refused with nothing written, `HR_RUN_RESET_REFUSAL` set from the
 #      `reset` surface check, which also compares the copy's working tree on
@@ -2978,15 +3477,22 @@ hr_run_blob_var() {
 # `hr_run_blob_var` record (<file_mode> passed through); the records are
 # applied to a `mktemp -d` index seeded from <tip>, `write-tree` builds the
 # tree, `commit-tree <tree> -p <tip>` the commit with one `-m` per <message>,
-# and `update-ref -m <reflog_subject>` moves the branch as a compare-and-swap
-# from <tip>. After a moved ref, `HR_RUN_COPY_TIP` and `HR_COMMIT_NEW` are the
-# new commit and the same records are applied to the copy's own index.
+# and `hr_copy_ref_swap_var` moves the branch as a compare-and-swap from <tip>
+# (on a clone, the clone's ref first, the main checkout's with
+# `-m <reflog_subject>` second). After a moved ref, `HR_RUN_COPY_TIP` and
+# `HR_COMMIT_NEW` are the new commit and the same records are applied to the
+# copy's own index.
 #   0  committed;
 #   3  the tree equals <tip>'s, nothing committed;
-#   4  the swap was lost or could not be locked: only objects were written;
+#   4  the swap was lost or could not be locked, or the main swap failed and
+#      the clone was rolled back: only objects were written;
 #   1  anything else, `HR_COMMIT_REFUSAL` set to one sentence naming a path,
 #      never a file's contents — including the copy's index failing to take the
-#      records after a moved ref, when `HR_COMMIT_NEW` is still set.
+#      records after a moved ref, when `HR_COMMIT_NEW` is still set, and, on a
+#      clone, the commit standing on the clone's `refs/heads/<branch>` while
+#      the main checkout's could not follow and the rollback failed (the swap's
+#      `5`; the next sync-in fast-forwards it), when `HR_COMMIT_NEW` is set and
+#      `HR_COMMIT_SYNC_FAILED` is 1 (empty on every other path).
 # <sync> `committed` syncs the copy's index on 0 only; `always` also on 3 and 4.
 # The temporary directory is removed on every return path. git's own stderr is
 # left to the caller.
@@ -2999,12 +3505,13 @@ hr_run_blob_var() {
 hr_commit_paths_var() {
   local main="${1-}" top="${2-}" gitdir="${3-}" branch="${4-}" tip="${5-}"
   local file_mode="${6-}" sync="${7-}" reflog="${8-}"
-  local tmpdir records tip_c tip_tree null tree commit rel saw_sep=0 n
+  local tmpdir records tip_c tip_tree null tree commit rel saw_sep=0 n swap
   local -a rels msg_args
   rels=()
   msg_args=()
   HR_COMMIT_REFUSAL=""
   HR_COMMIT_NEW=""
+  HR_COMMIT_SYNC_FAILED=""
   if [ "$#" -lt 8 ]; then
     HR_COMMIT_REFUSAL="hr_commit_paths_var needs <main> <top> <gitdir> <branch> <tip> <file_mode> <sync> <reflog_subject>"
     return 1
@@ -3124,23 +3631,841 @@ hr_commit_paths_var() {
     HR_COMMIT_REFUSAL="git could not write the commit for '$branch' in '$HR_RUN_MAIN' (an unset user.name or user.email is the usual cause)"
     return 1
   fi
-  if ! hr_run_main_git update-ref -m "$reflog" "refs/heads/$branch" "$commit" "$tip_c"; then
-    if [ "$sync" = always ] && ! hr_run_copy_git update-index -z --index-info <"$records"; then
+  swap=0
+  hr_copy_ref_swap_var "$HR_RUN_MAIN" "$gitdir" "refs/heads/$branch" "$commit" "$tip_c" "$reflog" || swap=$?
+  case "$swap" in
+    0 | 5) ;;
+    4)
+      if [ "$sync" = always ] && ! hr_run_copy_git update-index -z --index-info <"$records"; then
+        rm -rf "$tmpdir"
+        HR_COMMIT_REFUSAL="'$branch' moved or could not be locked, and the index of '$top' could not take the given paths"
+        return 1
+      fi
       rm -rf "$tmpdir"
-      HR_COMMIT_REFUSAL="'$branch' moved or could not be locked, and the index of '$top' could not take the given paths"
+      return 4
+      ;;
+    *)
+      rm -rf "$tmpdir"
+      HR_COMMIT_REFUSAL="'$branch' could not be moved: $HR_SYNC_REFUSAL"
       return 1
-    fi
-    rm -rf "$tmpdir"
-    return 4
-  fi
+      ;;
+  esac
   HR_RUN_COPY_TIP=$commit
   HR_COMMIT_NEW=$commit
+  if [ "$swap" -eq 5 ]; then
+    HR_COMMIT_SYNC_FAILED=1
+    HR_COMMIT_REFUSAL="the main checkout's refs/heads/$branch in '$HR_RUN_MAIN' could not follow the clone's to $commit ($HR_SYNC_REFUSAL); the next sync-in fast-forwards it"
+    hr_run_copy_git update-index -z --index-info <"$records" ||
+      HR_COMMIT_REFUSAL="$HR_COMMIT_REFUSAL, and the index of '$top' could not take the committed paths"
+    rm -rf "$tmpdir"
+    return 1
+  fi
   if ! hr_run_copy_git update-index -z --index-info <"$records"; then
     rm -rf "$tmpdir"
     HR_COMMIT_REFUSAL="'$branch' moved to $commit, but the index of '$top' could not take the committed paths"
     return 1
   fi
   rm -rf "$tmpdir"
+  return 0
+}
+
+# ---------------------------------------------------------------------------
+# THE CLONE ARM'S SYNC.
+#
+# A clone's objects reach the main repository only by a fetch, which hashes
+# every object it receives; a clone's ref is set only from a value read in the
+# main repository. The order on a clone: sync in; operate; move the clone's
+# ref first by compare-and-swap against the tip sync-in read, then the main
+# checkout's; roll the clone back on a failed main swap
+# (`hr_copy_ref_swap_var`). A commit landing in the clone after sync-in so
+# loses the clone's swap with nothing moved on either side. Sync-in brings a
+# clone's `refs/heads/<branch>` into the main checkout, and heals a clone
+# strictly behind it. Two paths still move the main checkout first and sync
+# out after (`hr_copy_sync_out_var`): `push-branch.sh`'s `origin/<branch>`
+# mirror and `refresh-branch.sh`'s fetched-base mirror, both remote-tracking
+# refs no run commits to. All four are no-ops for the main checkout and a
+# worktree (`hr_copy_kind`), except the swap, which there moves the main
+# checkout's ref alone. Every caller runs `hr_wrapper_target_check_var` first,
+# so the clone's configuration has passed the allow-list; no function here
+# checks it again.
+#
+# THE GLOBALS CONTRACT. No function here reads or writes `HR_RUN_MAIN`,
+# `HR_RUN_TRUSTED_BASE`, `HR_RUN_REFUSAL` or any `HR_RUN_COPY_*` global, calls
+# `hr_run_main_set_var` or `hr_run_main_git`, or changes any `HR_TARGET_*`,
+# `HR_WRAPPER_*` or `HR_COMMIT_*` global. Each takes its main checkout from its
+# own <main> argument, canonicalized on the clone arm by the predicate
+# `hr_run_main_set_var` applies, and drives the main side through
+# `hr_copy_sync_main_git`, the one body of the main-side pins, which
+# `hr_run_main_git` wraps. They set only
+# `HR_SYNC_TIP` (sync-in) and `HR_SYNC_REFUSAL`, both cleared at entry.
+#
+# THE PINS. Main side: `hr_copy_sync_main_git`'s, stated in its header. The fetch and
+# the `ls-remote` that reads the clone's tip add `--upload-pack` running the
+# clone side's `git-upload-pack` under `-c core.hooksPath=/dev/null -c
+# core.fsmonitor=false`; the fetch adds `--no-tags --no-recurse-submodules`
+# and `--refmap=` with no destination, so it moves no ref. The clone's tip is
+# held in a shell variable and `cat-file -e` proves the fetch brought it, so
+# nothing the sandbox can write, `FETCH_HEAD` included, is read back. Which of
+# the clone's own configuration keys a local-transport fetch honours, and
+# whether a hook, filter or fsmonitor in the clone runs during it, is measured
+# in `docs/cli.md` §6, the measured fetch pins (added by this branch);
+# `cli/test/clone-sync.test.mjs` re-checks it. Every `update-ref` of a clone's
+# ref (sync-out, the swap, the heal) runs
+# with `GIT_DIR` and `GIT_COMMON_DIR` both the clone's gitdir, so a
+# `commondir` planted after the check cannot redirect the write, and
+# `GIT_OBJECT_DIRECTORY` the main repository's store, so the object-existence
+# test reads that store: it runs through `hr_clone_git`, whose header states
+# the clone-side pins. Nothing here needs more than git 2.23; no `fetch
+# --no-write-fetch-head`. Write exception 6 in the header is this section's.
+#
+# Every `_var` function here sets globals and must be called directly, never
+# inside `$(…)`.
+# ---------------------------------------------------------------------------
+
+# Print <main> canonical when `cd -P` succeeds and `<main>/.git` is a real
+# directory, not a symbolic link, holding no `commondir` — the predicate
+# `hr_run_main_set_var` applies; print nothing and return 1 otherwise.
+hr_copy_sync_main_of() {
+  local main="${1-}" c
+  [ -n "$main" ] || return 1
+  c=$( CDPATH= cd -P -- "$main" 2>/dev/null && pwd -P ) || return 1
+  if [ -L "$c/.git" ] || [ ! -d "$c/.git" ] || [ -e "$c/.git/commondir" ] || [ -L "$c/.git/commondir" ]; then
+    return 1
+  fi
+  printf '%s\n' "$c"
+}
+
+# hr_copy_sync_main_git <canonical-main> <git-args>... — the one body of the
+# main-side pins, on the main checkout named by the argument; `hr_run_main_git`
+# is its `HR_RUN_MAIN` wrapper. The pins: `GIT_NO_REPLACE_OBJECTS=1`,
+# `GIT_GRAFT_FILE=/dev/null`, `-c core.hooksPath=/dev/null -c
+# core.fsmonitor=false -c submodule.recurse=false -c
+# advice.graftFileDeprecated=false`. Reads no `HR_RUN_*` global.
+hr_copy_sync_main_git() {
+  local main="${1-}"
+  [ -n "$main" ] || return 1
+  shift
+  GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null \
+    git -C "$main" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false -c advice.graftFileDeprecated=false "$@"
+}
+
+# hr_copy_sync_in_var <main> <gitdir> <branch> — on a clone, bring the clone's
+# `refs/heads/<branch>` into <main> and set `HR_SYNC_TIP` to <main>'s
+# `refs/heads/<branch>` commit afterwards. <main>'s ref moves only forward, by
+# a compare-and-swap `update-ref`; equal is a no-op. A clone strictly behind
+# <main> (a ref move that stopped after the clone's half was rolled back, or
+# one made by hand) is healed: the clone's index and working tree are moved to
+# <main>'s tip by a two-tree `read-tree -m -u` (dry run first, refused with
+# nothing moved when a changed or untracked file is in the way) and its ref by
+# a compare-and-swap through `hr_clone_git` from the tip `ls-remote` read, put
+# back if the real `read-tree` refuses, and the sync is then a no-op. Refused: an empty or `-`-led branch, a branch
+# <main> or any of its worktrees has checked out (the guard git's
+# one-branch-one-checkout rule gives a worktree), a branch <main> lacks, a
+# heal whose compare-and-swap fails, and a diverged clone. 0 synced, healed or
+# a no-op (main or worktree, `HR_SYNC_TIP` empty); 1 with `HR_SYNC_REFUSAL`
+# set to one sentence naming the branch and the failed step.
+hr_copy_sync_in_var() {
+  local main="${1-}" gitdir="${2-}" branch="${3-}" kind cmain clone ref
+  local up out line oid="" count=0 cur main_old status tab=$'\t'
+  HR_SYNC_TIP=""
+  HR_SYNC_REFUSAL=""
+  kind=$(hr_copy_kind "$main" "$gitdir") || kind=""
+  [ "$kind" = clone ] || return 0
+  if ! cmain=$(hr_copy_sync_main_of "$main"); then
+    HR_SYNC_REFUSAL="cannot sync branch '$branch' in: '$main' is not a main checkout"
+    return 1
+  fi
+  # <main> given non-canonical can make `hr_copy_kind` call the main checkout
+  # or a worktree a clone; re-judged against the canonical path.
+  kind=$(hr_copy_kind "$cmain" "$gitdir") || kind=""
+  [ "$kind" = clone ] || return 0
+  clone=${gitdir%/.git}
+  ref="refs/heads/$branch"
+  case "$branch" in
+    '' | -*)
+      HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': the branch name is empty or starts with '-'"
+      return 1
+      ;;
+  esac
+  if [ "$clone" = "$gitdir" ] || ! hr_copy_sync_main_git "$cmain" check-ref-format "$ref" >/dev/null 2>&1; then
+    HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$gitdir': not a valid branch name of a clone's .git"
+    return 1
+  fi
+  cur=$(hr_copy_sync_main_git "$cmain" symbolic-ref -q HEAD 2>/dev/null) || cur=""
+  if [ "$cur" = "$ref" ]; then
+    HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': the main checkout '$cmain' has it checked out"
+    return 1
+  fi
+  if ! out=$(hr_copy_sync_main_git "$cmain" worktree list --porcelain 2>/dev/null); then
+    HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': 'git worktree list' failed in '$cmain'"
+    return 1
+  fi
+  while IFS= read -r line; do
+    if [ "$line" = "branch $ref" ]; then
+      HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': a checkout of '$cmain' has it checked out"
+      return 1
+    fi
+  done <<EOF
+$out
+EOF
+  if ! main_old=$(hr_copy_sync_main_git "$cmain" rev-parse --verify --quiet "$ref^{commit}" 2>/dev/null) || [ -z "$main_old" ]; then
+    HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': the main checkout '$cmain' has no $ref"
+    return 1
+  fi
+  up="git -c core.hooksPath=/dev/null -c core.fsmonitor=false upload-pack"
+  if ! out=$(hr_copy_sync_main_git "$cmain" ls-remote --upload-pack="$up" "$clone" "$ref" 2>/dev/null); then
+    HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': reading the clone's $ref failed"
+    return 1
+  fi
+  while IFS= read -r line; do
+    [ "${line#*"$tab"}" = "$ref" ] || continue
+    count=$((count + 1))
+    oid=${line%%"$tab"*}
+  done <<EOF
+$out
+EOF
+  case "$oid" in
+    '' | *[!0-9a-f]*) count=0 ;;
+  esac
+  if [ "$count" -ne 1 ] || { [ "${#oid}" -ne 40 ] && [ "${#oid}" -ne 64 ]; }; then
+    HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': the clone's $ref is not one object id"
+    return 1
+  fi
+  if ! hr_copy_sync_main_git "$cmain" fetch --quiet --no-tags --no-recurse-submodules --refmap= --upload-pack="$up" "$clone" "$ref" >/dev/null 2>&1; then
+    HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': the fetch of $ref failed"
+    return 1
+  fi
+  if ! hr_copy_sync_main_git "$cmain" cat-file -e "$oid^{commit}" 2>/dev/null; then
+    HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': the fetch did not bring commit $oid"
+    return 1
+  fi
+  if [ "$oid" != "$main_old" ]; then
+    hr_copy_sync_main_git "$cmain" merge-base --is-ancestor "$main_old" "$oid" 2>/dev/null
+    status=$?
+    case "$status" in
+      0)
+        if ! hr_copy_sync_main_git "$cmain" update-ref "$ref" "$oid" "$main_old" >/dev/null 2>&1; then
+          HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': moving the main checkout's $ref from ${main_old:0:12} to ${oid:0:12} failed"
+          return 1
+        fi
+        ;;
+      1)
+        hr_copy_sync_main_git "$cmain" merge-base --is-ancestor "$oid" "$main_old" 2>/dev/null
+        status=$?
+        case "$status" in
+          0)
+            if ! hr_copy_git_at "$cmain" "$gitdir" "$clone" read-tree -n --no-recurse-submodules -m -u "$oid" "$main_old" >/dev/null 2>&1; then
+              HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': the clone is behind the main checkout (${oid:0:12} to ${main_old:0:12}) and its working tree cannot take the main checkout's tip (a changed or untracked file is in the way)"
+              return 1
+            fi
+            if ! hr_clone_git "$cmain" "$gitdir" update-ref "$ref" "$main_old" "$oid" >/dev/null 2>&1; then
+              HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': healing the clone's $ref, which is behind the main checkout, from ${oid:0:12} to ${main_old:0:12} failed"
+              return 1
+            fi
+            if ! hr_copy_git_at "$cmain" "$gitdir" "$clone" read-tree --no-recurse-submodules -m -u "$oid" "$main_old" >/dev/null 2>&1; then
+              if hr_clone_git "$cmain" "$gitdir" update-ref "$ref" "$oid" "$main_old" >/dev/null 2>&1; then
+                HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': its working tree refused the main checkout's tip ${main_old:0:12}; the clone's $ref was put back to ${oid:0:12}"
+              else
+                HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': its working tree refused the main checkout's tip ${main_old:0:12}, and putting the clone's $ref back to ${oid:0:12} failed too — inspect the clone by hand"
+              fi
+              return 1
+            fi
+            ;;
+          1)
+            HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': the clone (${oid:0:12}) and the main checkout (${main_old:0:12}) have diverged"
+            return 1
+            ;;
+          *)
+            HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': comparing ${oid:0:12} with ${main_old:0:12} failed"
+            return 1
+            ;;
+        esac
+        ;;
+      *)
+        HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': comparing ${main_old:0:12} with ${oid:0:12} failed"
+        return 1
+        ;;
+    esac
+  fi
+  if ! HR_SYNC_TIP=$(hr_copy_sync_main_git "$cmain" rev-parse --verify --quiet "$ref^{commit}" 2>/dev/null) || [ -z "$HR_SYNC_TIP" ]; then
+    HR_SYNC_TIP=""
+    HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': reading the main checkout's $ref afterwards failed"
+    return 1
+  fi
+  return 0
+}
+
+# hr_copy_sync_out_var <main> <gitdir> <ref> [<expected_old>] — on a clone, set
+# the clone's <ref> (`refs/heads/<name>` or `refs/remotes/origin/<name>`) to
+# the commit <ref> names in <main>, as a compare-and-swap against
+# <expected_old> when one is given (empty: the ref must not exist). 0 set or a
+# no-op (main or worktree); 1 with `HR_SYNC_REFUSAL` set to one sentence.
+hr_copy_sync_out_var() {
+  local main="${1-}" gitdir="${2-}" ref="${3-}" kind cmain oid
+  local -a old
+  old=()
+  HR_SYNC_REFUSAL=""
+  kind=$(hr_copy_kind "$main" "$gitdir") || kind=""
+  [ "$kind" = clone ] || return 0
+  if ! cmain=$(hr_copy_sync_main_of "$main"); then
+    HR_SYNC_REFUSAL="cannot sync '$ref' out: '$main' is not a main checkout"
+    return 1
+  fi
+  kind=$(hr_copy_kind "$cmain" "$gitdir") || kind=""
+  [ "$kind" = clone ] || return 0
+  case "$ref" in
+    refs/heads/?* | refs/remotes/origin/?*) ;;
+    *)
+      HR_SYNC_REFUSAL="cannot sync '$ref' out to '$gitdir': only refs/heads/<name> and refs/remotes/origin/<name> are synced"
+      return 1
+      ;;
+  esac
+  if [ "${gitdir%/.git}" = "$gitdir" ] || ! hr_copy_sync_main_git "$cmain" check-ref-format "$ref" >/dev/null 2>&1; then
+    HR_SYNC_REFUSAL="cannot sync '$ref' out to '$gitdir': not a valid ref name of a clone's .git"
+    return 1
+  fi
+  if [ "$#" -ge 4 ]; then
+    case "${4-}" in
+      *[!0-9a-f]*)
+        HR_SYNC_REFUSAL="cannot sync '$ref' out to '$gitdir': the expected old value '${4-}' is not an object id"
+        return 1
+        ;;
+    esac
+    old=("${4-}")
+  fi
+  if ! oid=$(hr_copy_sync_main_git "$cmain" rev-parse --verify --quiet "$ref^{commit}" 2>/dev/null) || [ -z "$oid" ]; then
+    HR_SYNC_REFUSAL="cannot sync '$ref' out to '$gitdir': it names no commit in the main checkout '$cmain'"
+    return 1
+  fi
+  if ! hr_clone_git "$cmain" "$gitdir" update-ref "$ref" "$oid" ${old[@]+"${old[@]}"} >/dev/null 2>&1; then
+    HR_SYNC_REFUSAL="cannot sync '$ref' out to '$gitdir': update-ref to ${oid:0:12} failed"
+    return 1
+  fi
+  return 0
+}
+
+# hr_copy_ref_swap_var <main> <gitdir> <ref> <new> <old> <reflog> — move the
+# branch <ref> (`refs/heads/<name>`) from the commit <old> to the commit <new>,
+# both full object ids. On a clone (judged as `hr_copy_sync_out_var` judges
+# it): a compare-and-swap of the clone's <ref> through `hr_clone_git`, then of
+# <main>'s through `hr_copy_sync_main_git … update-ref -m <reflog>`, and, when
+# the main swap fails, a compare-and-swap rollback of the clone's <ref> from
+# <new> to <old>. On the main checkout or a worktree: the main swap alone.
+# <new> equal to <old> is the verify-only form: on a clone, a locked
+# compare-and-swap of the clone's <ref> onto itself and nothing else, proving
+# it still holds the tip sync-in read.
+#   0  both moved (verified);
+#   4  nothing moved: the clone's <ref> moved since sync-in, or the main swap
+#      failed and the clone was rolled back;
+#   5  the clone's <ref> is at <new>, <main>'s is not, and the rollback failed;
+#   1  refused arguments, nothing moved.
+# `HR_SYNC_REFUSAL` is one sentence naming both tips on every non-zero exit.
+hr_copy_ref_swap_var() {
+  local main="${1-}" gitdir="${2-}" ref="${3-}" new="${4-}" old="${5-}" reflog="${6-}" kind cmain id
+  local -a msg
+  msg=()
+  HR_SYNC_REFUSAL=""
+  for id in "$new" "$old"; do
+    case "$id" in
+      '' | *[!0-9a-f]*)
+        HR_SYNC_REFUSAL="cannot move '$ref' from '$old' to '$new': both must be object ids"
+        return 1
+        ;;
+    esac
+  done
+  case "$ref" in
+    refs/heads/?*) ;;
+    *)
+      HR_SYNC_REFUSAL="cannot move '$ref' from ${old:0:12} to ${new:0:12}: only refs/heads/<name> is moved"
+      return 1
+      ;;
+  esac
+  if ! cmain=$(hr_copy_sync_main_of "$main"); then
+    HR_SYNC_REFUSAL="cannot move '$ref' from ${old:0:12} to ${new:0:12}: '$main' is not a main checkout"
+    return 1
+  fi
+  if ! hr_copy_sync_main_git "$cmain" check-ref-format "$ref" >/dev/null 2>&1; then
+    HR_SYNC_REFUSAL="cannot move '$ref' from ${old:0:12} to ${new:0:12}: not a valid ref name"
+    return 1
+  fi
+  [ -z "$reflog" ] || msg=(-m "$reflog")
+  kind=$(hr_copy_kind "$main" "$gitdir") || kind=""
+  [ "$kind" != clone ] || kind=$(hr_copy_kind "$cmain" "$gitdir") || kind=""
+  if [ "$kind" != clone ]; then
+    if ! hr_copy_sync_main_git "$cmain" update-ref ${msg[@]+"${msg[@]}"} "$ref" "$new" "$old" >/dev/null 2>&1; then
+      HR_SYNC_REFUSAL="the main checkout's $ref is no longer ${old:0:12} or could not be locked, so it was not moved to ${new:0:12}"
+      return 4
+    fi
+    return 0
+  fi
+  if [ "${gitdir%/.git}" = "$gitdir" ]; then
+    HR_SYNC_REFUSAL="cannot move '$ref' from ${old:0:12} to ${new:0:12} in '$gitdir': not a clone's .git"
+    return 1
+  fi
+  if ! hr_clone_git "$cmain" "$gitdir" update-ref "$ref" "$new" "$old" >/dev/null 2>&1; then
+    HR_SYNC_REFUSAL="the clone's $ref in '$gitdir' is no longer ${old:0:12} (it moved since sync-in) or could not be locked, so nothing was moved to ${new:0:12}"
+    return 4
+  fi
+  [ "$new" != "$old" ] || return 0
+  if hr_copy_sync_main_git "$cmain" update-ref ${msg[@]+"${msg[@]}"} "$ref" "$new" "$old" >/dev/null 2>&1; then
+    return 0
+  fi
+  if hr_clone_git "$cmain" "$gitdir" update-ref "$ref" "$old" "$new" >/dev/null 2>&1; then
+    HR_SYNC_REFUSAL="the main checkout's $ref is no longer ${old:0:12} or could not be locked, so the clone's was rolled back from ${new:0:12} and nothing moved"
+    return 4
+  fi
+  HR_SYNC_REFUSAL="the clone's $ref in '$gitdir' moved to ${new:0:12}, but the main checkout's could not follow from ${old:0:12} and rolling the clone back failed"
+  return 5
+}
+
+# ---------------------------------------------------------------------------
+# CREATING AND REMOVING A RUN'S CLONE.
+#
+# `hr_clone_create_var` makes the clone `hr_clone_target_check_var` accepts and
+# runs that check last, as the judge of its own result; `hr_clone_remove_var`
+# deletes one; `hr_run_copy_live_var` answers the one-live-copy rule creation
+# applies. Their callers: `create-worktree.sh`, `remote-run.sh` and
+# `cleanup-merged-worktrees.sh`. Creation runs git in the main checkout
+# through `hr_run_main_git`, in the clone it has just made only through
+# `hr_clone_git`, and populates the clone's working tree through
+# `hr_copy_git_at`. Removal runs no git and no check that reads the clone's
+# records, so a registered clone whose configuration was tampered with can
+# still be removed. Write exception 6 in the header is this section's. Flags
+# and constructs hold to git 2.23 and bash 3.2.
+#
+# Every `_var` function here sets globals and must be called directly, never
+# inside `$(…)`.
+# ---------------------------------------------------------------------------
+
+# hr_clone_git <canonical-main> <clone-gitdir> <git-args>... — the one body of
+# the clone-side pins, used by sync-in's heal, sync-out, the swap and creation: `GIT_DIR` and
+# `GIT_COMMON_DIR` both the clone's gitdir, so a planted `commondir` is not
+# followed, the main repository's object store as `GIT_OBJECT_DIRECTORY`,
+# `GIT_NO_REPLACE_OBJECTS=1`, `GIT_GRAFT_FILE=/dev/null`, and `-c
+# core.hooksPath=/dev/null -c core.fsmonitor=false -c
+# advice.graftFileDeprecated=false`.
+hr_clone_git() {
+  local main="${1-}" gd="${2-}"
+  [ -n "$main" ] && [ -n "$gd" ] || return 1
+  shift 2
+  GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null GIT_DIR="$gd" GIT_COMMON_DIR="$gd" GIT_OBJECT_DIRECTORY="$main/.git/objects" \
+    git -C "$gd" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c advice.graftFileDeprecated=false "$@"
+}
+
+# hr_run_copy_live_var <main> <branch> — the one-live-copy rule: is there a
+# live run copy of <branch>? A live copy is any of, tested in this order:
+# `hr_worktree_dir <main> <branch>` existing in any form (as given or
+# canonical); the registry's `worktree` for <branch> naming a path that
+# exists, read with `hr_registry_peek`, which never creates the file; and
+# <main> or a worktree of it having <branch> checked out, from `git worktree
+# list --porcelain`. Writes nothing and reads no `HR_RUN_*` global.
+#   0  a live copy exists: `HR_LIVE_COPY` its path, `HR_LIVE_COPY_WHY` one
+#      clause naming it;
+#   1  none does, both empty;
+#   2  it cannot tell (<main> not a main checkout, a path that cannot be
+#      derived or resolved, `git worktree list` failing): `HR_LIVE_COPY_WHY`
+#      names what failed.
+hr_run_copy_live_var() {
+  local branch="${2-}" main ref derived dir registry p wt cur out line at=""
+  HR_LIVE_COPY=""
+  HR_LIVE_COPY_WHY=""
+  if ! main=$(hr_copy_sync_main_of "${1-}"); then
+    HR_LIVE_COPY_WHY="'${1-}' is not a main checkout"
+    return 2
+  fi
+  ref="refs/heads/$branch"
+  if [ -z "$branch" ] || ! derived=$(hr_worktree_dir "$main" "$branch") || ! dir=$(hr_canonical_path_nogit "$derived"); then
+    HR_LIVE_COPY_WHY="its run copy's path cannot be derived from $main"
+    return 2
+  fi
+  for p in "$derived" "$dir"; do
+    if [ -e "$p" ] || [ -L "$p" ]; then
+      HR_LIVE_COPY=$p
+      HR_LIVE_COPY_WHY="$p already exists"
+      return 0
+    fi
+  done
+  if ! registry=$(hr_state_path "$main" autonomous_logs/registry.json); then
+    HR_LIVE_COPY_WHY="the run registry's path cannot be resolved from '$main/harness.config.json'"
+    return 2
+  fi
+  wt=$(hr_registry_peek "$registry" "$branch" worktree) || wt=""
+  if [ -n "$wt" ] && { [ -e "$wt" ] || [ -L "$wt" ]; }; then
+    HR_LIVE_COPY=$wt
+    HR_LIVE_COPY_WHY="the run registry records a run copy of it at $wt, which exists"
+    return 0
+  fi
+  cur=$(hr_copy_sync_main_git "$main" symbolic-ref -q HEAD 2>/dev/null) || cur=""
+  if [ "$cur" = "$ref" ]; then
+    HR_LIVE_COPY=$main
+    HR_LIVE_COPY_WHY="the main checkout $main has it checked out"
+    return 0
+  fi
+  if ! out=$(hr_copy_sync_main_git "$main" worktree list --porcelain 2>/dev/null); then
+    HR_LIVE_COPY_WHY="'git worktree list' failed in $main"
+    return 2
+  fi
+  while IFS= read -r line; do
+    case "$line" in
+      'worktree '*) at=${line#worktree } ;;
+    esac
+    if [ "$line" = "branch $ref" ]; then
+      HR_LIVE_COPY=$at
+      HR_LIVE_COPY_WHY="a checkout of $main has it checked out"
+      return 0
+    fi
+  done <<EOF
+$out
+EOF
+  return 1
+}
+
+# hr_clone_create_var <main> <branch> <start> — create the run clone of
+# <branch> at `hr_worktree_dir <main> <branch>` and set `HR_CLONE_DIR` to its
+# canonical path. <main> must pass `hr_run_main_set_var`, which this resets.
+#
+# Refused with nothing written: a <branch> that is empty, starts with `-`,
+# fails `check-ref-format` or is protected (or unresolvable) by <main>'s
+# configuration; a registry directory that does not exist, which this never
+# creates: its creators are the watcher (`autonomous-watcher.sh`'s `mkdir -p`
+# of its logs directory) and `create-worktree.sh` when a trigger job's fresh
+# checkout has none; and a second live run copy of <branch>, or one that
+# cannot be ruled out (`hr_run_copy_live_var`).
+#
+# Then, in order: record `worktree` and `copy_kind` `clone` in one
+# `hr_registry_set`, before any check can read the clone; cut
+# `refs/heads/<branch>` at <start> when <main> lacks it, else take its tip and
+# require `hr_run_surface_check_var <tip> tree`, as `create-worktree.sh
+# --existing` does; `git clone --shared` into a directory this call `mkdir`s,
+# never `--local`, whose hardlinked objects would be the main checkout's own
+# inodes; rewrite `.git/config` to the allow-list's required keys plus the
+# platform booleans <main>'s `.git/config` sets to `true` or `false`; leave
+# `refs/heads/` holding only <branch> at the tip, `refs/remotes/origin/`
+# holding only <main>'s `origin/<defaultBranch>`, its `origin/HEAD` symref and
+# `origin/<branch>`, each where <main> has it, and `HEAD` on <branch>; write
+# `objects/info/alternates`; populate through `read-tree` under
+# `GIT_DIR=<main>/.git`; and pass `hr_wrapper_target_check_var`.
+#
+# WHY ONLY THOSE REMOTE REFS. The clone borrows <main>'s objects through
+# `alternates`, so every ref the clone holds must name a commit <main> keeps
+# reachable, or <main>'s `gc` may prune it from under the clone. Those are the
+# refs <main> keeps alive for the run's life; a mirror of every
+# `refs/remotes/origin/*` would name commits a `fetch --prune` in <main> can
+# drop. Dissociating instead (`--dissociate`, or `repack -a` and dropping
+# `alternates`) would copy the whole history into every clone.
+#
+# Any failure after the record undoes what this call created and nothing else:
+# the directory, the ref (a compare-and-swap from the commit it cut), and the
+# record (`hr_registry_drop` when there was none, else the whole previous record
+# through `hr_registry_restore`). 0 created; 1 with
+# `HR_CLONE_REFUSAL` naming the refused condition or the failed step, and
+# anything the rollback could not undo.
+hr_clone_create_var() {
+  local branch="${2-}" start="${3-}" why main ref registry regdir derived dir gd
+  local out line existed=0 prev_json="" made=0 cut=0 start_oid="" tip="" default want
+  local failed="" detail="" undo="" spec key value alt oid rest name sym keep input="" syms="" nl
+  nl='
+'
+  HR_CLONE_DIR=""
+  HR_CLONE_REFUSAL=""
+  why="cannot create a clone for branch '$branch'"
+  if ! hr_run_main_set_var "${1-}"; then
+    HR_CLONE_REFUSAL="$why: $HR_RUN_REFUSAL"
+    return 1
+  fi
+  main=$HR_RUN_MAIN
+  ref="refs/heads/$branch"
+  case "$branch" in
+    '' | -*)
+      HR_CLONE_REFUSAL="$why: the branch name is empty or starts with '-'"
+      return 1
+      ;;
+  esac
+  if ! hr_run_main_git check-ref-format "$ref" >/dev/null 2>&1; then
+    HR_CLONE_REFUSAL="$why: $ref is not a valid ref name"
+    return 1
+  fi
+  hr_branch_is_protected "$main" "$branch"
+  case "$?" in
+    1) ;;
+    0)
+      HR_CLONE_REFUSAL="$why: '$main/harness.config.json' protects it"
+      return 1
+      ;;
+    *)
+      HR_CLONE_REFUSAL="$why: the protected set in '$main/harness.config.json' cannot be resolved"
+      return 1
+      ;;
+  esac
+  if ! registry=$(hr_state_path "$main" autonomous_logs/registry.json); then
+    HR_CLONE_REFUSAL="$why: the run registry's path cannot be resolved from '$main/harness.config.json'"
+    return 1
+  fi
+  regdir=$(hr_registry_dir "$registry")
+  if [ ! -d "$regdir" ]; then
+    HR_CLONE_REFUSAL="$why: the run registry's directory $regdir does not exist"
+    return 1
+  fi
+  if ! derived=$(hr_worktree_dir "$main" "$branch") || ! dir=$(hr_canonical_path_nogit "$derived"); then
+    HR_CLONE_REFUSAL="$why: its run copy's path cannot be derived from $main"
+    return 1
+  fi
+  if hr_run_copy_live_var "$main" "$branch" || [ "$?" -ne 1 ]; then
+    HR_CLONE_REFUSAL="$why: $HR_LIVE_COPY_WHY"
+    return 1
+  fi
+
+  if hr_registry_peek "$registry" "$branch" branch >/dev/null; then
+    existed=1
+    if ! prev_json=$(jq -c --arg b "$branch" '.runs[$b]' "$registry" 2>/dev/null) || [ -z "$prev_json" ]; then
+      HR_CLONE_REFUSAL="$why: reading its existing record in $registry failed"
+      return 1
+    fi
+  fi
+  if ! hr_registry_set "$registry" "$branch" worktree "$dir" copy_kind clone 2>/dev/null; then
+    HR_CLONE_REFUSAL="$why: recording it in $registry failed"
+    return 1
+  fi
+
+  gd="$dir/.git"
+  while :; do
+    if hr_run_main_git show-ref --verify --quiet "$ref" 2>/dev/null; then
+      tip=$(hr_run_main_git rev-parse --verify --quiet "$ref^{commit}" 2>/dev/null) || tip=""
+      if [ -z "$tip" ]; then
+        failed="reading $ref in $main"
+        break
+      fi
+      if ! hr_run_surface_check_var "$tip" tree; then
+        failed="the protected-surface check of $tip"
+        detail=$HR_RUN_SURFACE_REFUSAL
+        break
+      fi
+    else
+      case "$start" in
+        '' | -*)
+          failed="taking the start point, which is empty or starts with '-',"
+          break
+          ;;
+      esac
+      start_oid=$(hr_run_main_git rev-parse --verify --quiet "$start^{commit}" 2>/dev/null) || start_oid=""
+      if [ -z "$start_oid" ]; then
+        failed="resolving the start point '$start' to a commit in $main"
+        break
+      fi
+      if ! hr_run_main_git update-ref "$ref" "$start_oid" "" >/dev/null 2>&1; then
+        failed="cutting $ref at $start_oid"
+        break
+      fi
+      cut=1
+      tip=$start_oid
+    fi
+
+    if ! mkdir "$dir" 2>/dev/null; then
+      failed="creating $dir"
+      break
+    fi
+    made=1
+    if ! hr_run_main_git clone --shared --no-checkout --template= --no-tags "$main" "$dir" >/dev/null 2>&1; then
+      failed="git clone --shared into $dir"
+      break
+    fi
+
+    if ! spec=$(hr_clone_config_spec "$main" "$dir"); then
+      failed="building the clone configuration allow-list from $main"
+      break
+    fi
+    if [ -L "$gd/config" ] || ! : >"$gd/config" 2>/dev/null; then
+      failed="emptying $gd/config"
+      break
+    fi
+    for key in core.repositoryformatversion extensions.objectformat core.bare remote.origin.fetch remote.origin.url \
+      core.filemode core.ignorecase core.precomposeunicode core.symlinks; do
+      hr_clone_spec_rule_var "$spec" "$key" || continue
+      case "$HR_CLONE_RULE" in
+        =*) value=${HR_CLONE_RULE#=} ;;
+        bool)
+          value=$(git -C / config --file "$main/.git/config" --get "$key" 2>/dev/null) || continue
+          case "$value" in true | false) ;; *) continue ;; esac
+          ;;
+        *) continue ;;
+      esac
+      if ! git -C / config --file "$gd/config" "$key" "$value" >/dev/null 2>&1; then
+        failed="writing $key into $gd/config"
+        break 2
+      fi
+    done
+
+    if ! default=$(hr_default_branch "$main") || [ -z "$default" ]; then
+      failed="reading defaultBranch from $main/harness.config.json"
+      break
+    fi
+    want="${nl}refs/remotes/origin/HEAD${nl}refs/remotes/origin/$default${nl}refs/remotes/origin/$branch$nl"
+    if ! out=$(hr_run_main_git for-each-ref --format='%(objectname) %(refname) %(symref)' \
+      refs/remotes/origin/HEAD "refs/remotes/origin/$default" "refs/remotes/origin/$branch" 2>/dev/null); then
+      failed="listing $main's refs/remotes/origin/"
+      break
+    fi
+    keep="$nl$ref$nl"
+    input="update $ref $tip$nl"
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      oid=${line%% *}
+      rest=${line#* }
+      name=${rest%% *}
+      sym=${rest#"$name"}
+      sym=${sym# }
+      case "$want" in
+        *"$nl$name$nl"*) ;;
+        *) continue ;;
+      esac
+      keep="$keep$name$nl"
+      if [ -n "$sym" ]; then
+        syms="$syms$name $sym$nl"
+      else
+        input="${input}update $name $oid$nl"
+      fi
+    done <<EOF
+$out
+EOF
+    if ! out=$(hr_clone_git "$main" "$gd" for-each-ref --format='%(refname)' 2>/dev/null); then
+      failed="listing the refs of $dir"
+      break
+    fi
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      case "$keep" in
+        *"$nl$line$nl"*) ;;
+        *) input="${input}delete $line$nl" ;;
+      esac
+    done <<EOF
+$out
+EOF
+    if ! printf '%s' "$input" | hr_clone_git "$main" "$gd" update-ref --no-deref --stdin >/dev/null 2>&1; then
+      failed="setting the refs of $dir"
+      break
+    fi
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      if ! hr_clone_git "$main" "$gd" symbolic-ref "${line%% *}" "${line#* }" >/dev/null 2>&1; then
+        failed="setting ${line%% *} in $dir"
+        break 2
+      fi
+    done <<EOF
+$syms
+EOF
+    if ! hr_clone_git "$main" "$gd" symbolic-ref HEAD "$ref" >/dev/null 2>&1; then
+      failed="pointing $dir's HEAD at $ref"
+      break
+    fi
+
+    alt="$gd/objects/info/alternates"
+    if ! value=$(hr_canonical_path_nogit "$main/.git/objects") || [ -L "$alt" ] \
+      || ! printf '%s\n' "$value" >"$alt" 2>/dev/null; then
+      failed="writing $alt"
+      break
+    fi
+
+    if ! hr_copy_git_at "$main" "$gd" "$dir" read-tree --reset -u --no-recurse-submodules "$tip" >/dev/null 2>&1; then
+      failed="populating $dir from $tip"
+      break
+    fi
+
+    if ! hr_wrapper_target_check_var "$main" "$dir"; then
+      failed="the trust check of the finished clone"
+      detail=$HR_TARGET_REFUSAL
+      break
+    fi
+    HR_CLONE_DIR=$dir
+    return 0
+  done
+
+  if [ "$made" -eq 1 ]; then
+    rm -rf -- "$dir" 2>/dev/null || :
+    if [ -e "$dir" ] || [ -L "$dir" ]; then undo="$dir"; fi
+  fi
+  if [ "$cut" -eq 1 ] && ! hr_run_main_git update-ref -d "$ref" "$start_oid" >/dev/null 2>&1; then
+    undo="${undo:+$undo, }$ref in $main"
+  fi
+  if [ "$existed" -eq 1 ]; then
+    hr_registry_restore "$registry" "$branch" "$prev_json" 2>/dev/null \
+      || undo="${undo:+$undo, }the registry record of '$branch'"
+  else
+    hr_registry_drop "$registry" "$branch" 2>/dev/null || undo="${undo:+$undo, }the registry record of '$branch'"
+  fi
+  HR_CLONE_REFUSAL="$why: $failed failed${detail:+ ($detail)}"
+  if [ -n "$undo" ]; then
+    HR_CLONE_REFUSAL="$HR_CLONE_REFUSAL, and the rollback could not undo: $undo"
+  else
+    HR_CLONE_REFUSAL="$HR_CLONE_REFUSAL, and everything this call created was rolled back"
+  fi
+  return 1
+}
+
+# hr_clone_remove_var <main> <dir> — delete the run clone at <dir> with
+# `rm -rf`. Refused, removing nothing, when <main> fails `hr_run_main_set_var`'s
+# predicate (`hr_copy_sync_main_of`); <dir> or `<dir>/.git` is a symbolic link
+# or `<dir>/.git` is not a directory; <dir> is <main>; not exactly one registry
+# record has `copy_kind` `clone` and a `worktree` canonically <dir> — found by
+# `jq` over the file without creating it, never by the clone's `HEAD`; or <dir>
+# is not `hr_worktree_dir <main> <that record's branch>`. The registry record
+# and the branch are left as they are. 0 removed; 1 with `HR_CLONE_REFUSAL`
+# set.
+hr_clone_remove_var() {
+  local dir="${2-}" why main cdir registry out line b w wc branch="" count=0 want tab=$'\t'
+  HR_CLONE_REFUSAL=""
+  while :; do
+    case "$dir" in
+      ?*/) dir=${dir%/} ;;
+      *) break ;;
+    esac
+  done
+  why="cannot remove the clone '$dir'"
+  if ! main=$(hr_copy_sync_main_of "${1-}"); then
+    HR_CLONE_REFUSAL="$why: '${1-}' is not a main checkout"
+    return 1
+  fi
+  if [ -z "$dir" ] || [ -L "$dir" ] || [ -L "$dir/.git" ] || [ ! -d "$dir/.git" ]; then
+    HR_CLONE_REFUSAL="$why: it or its .git is a symbolic link, or its .git is not a directory"
+    return 1
+  fi
+  if ! cdir=$( CDPATH= cd -P -- "$dir" 2>/dev/null && pwd -P ) || [ "$cdir" = "$main" ]; then
+    HR_CLONE_REFUSAL="$why: it is not a directory, or it is the main checkout $main"
+    return 1
+  fi
+  if ! registry=$(hr_state_path "$main" autonomous_logs/registry.json) \
+    || [ ! -f "$registry" ] || [ ! -r "$registry" ] \
+    || ! out=$(jq -r '.runs | to_entries[]
+      | select((.value | type) == "object" and .value.copy_kind == "clone" and (.value.worktree | type) == "string")
+      | [.key, .value.worktree] | @tsv' "$registry" 2>/dev/null); then
+    HR_CLONE_REFUSAL="$why: the run registry of $main cannot be read"
+    return 1
+  fi
+  while IFS= read -r line; do
+    case "$line" in *"$tab"*) ;; *) continue ;; esac
+    hr_tsv_unescape_var "${line#*"$tab"}"
+    w=$HR_CFG_VALUE
+    wc=$(hr_canonical_path_nogit "$w") || continue
+    [ "$wc" = "$cdir" ] || continue
+    hr_tsv_unescape_var "${line%%"$tab"*}"
+    b=$HR_CFG_VALUE
+    count=$((count + 1))
+    branch=$b
+  done <<EOF
+$out
+EOF
+  if [ "$count" -ne 1 ]; then
+    HR_CLONE_REFUSAL="$why: $count run registry records name a clone at $cdir, not exactly one"
+    return 1
+  fi
+  if ! want=$(hr_worktree_dir "$main" "$branch") || ! want=$(hr_canonical_path_nogit "$want") || [ "$want" != "$cdir" ]; then
+    HR_CLONE_REFUSAL="$why: it is not the path hr_worktree_dir derives from $main for the branch '$branch' its record names"
+    return 1
+  fi
+  rm -rf -- "$cdir" 2>/dev/null || :
+  if [ -e "$cdir" ] || [ -L "$cdir" ]; then
+    HR_CLONE_REFUSAL="$why: rm -rf left $cdir behind"
+    return 1
+  fi
   return 0
 }
 
@@ -3602,8 +4927,9 @@ hr_remote_status_get() {
 # is no second configuration parser; the file is removed and the directory
 # `rmdir`ed. A bad id, or a commit, blob or configuration that cannot be read,
 # is 2 with no fallback to the checkout. The read still goes through the
-# object store the session shares, whose loose-object substitution is
-# `docs/cli.md` §6 residual 1, item 6.
+# object store the session shares; every permission profile, a job's included,
+# write-denies the checkout's whole `.git`, so a session cannot plant a loose
+# object there.
 #
 # OUTSIDE A JOB (the variable empty or unset: a local `sync` into a mirror, or
 # the watcher locally) THE SOURCE IS THE CHECKOUT: there is no recorded commit,
@@ -3986,7 +5312,7 @@ EOF
 # this library reads neither, and reads no environment variable in place of a
 # configured value.
 #
-# TWO ARTIFACTS, BOTH UNDER `hr_lane_dir` (created 0700, outside every
+# THREE ARTIFACTS, ALL UNDER `hr_lane_dir` (created 0700, outside every
 # repository):
 #
 #   usage-state.json  the worst assessment any watcher has published:
@@ -3998,6 +5324,10 @@ EOF
 #                     and never a half-written line.
 #   run-lane.lock     a DIRECTORY holding one `owner` file whose single line is
 #                     `<slug> <pid> <acquired_at>`.
+#   run-profiles/<slug>/<branch>.json
+#                     the per-run settings copy the watcher writes at every
+#                     launch, re-rendered at every spawn. This library only
+#                     names it (`hr_run_profile_file`); it writes none.
 #
 # THE LOCK IS A DIRECTORY BECAUSE `mkdir` IS THE ATOMIC PRIMITIVE AVAILABLE HERE.
 # `flock(1)` is a util-linux program and is absent on macOS; the shell's own
@@ -4075,7 +5405,7 @@ hr_lane_dir() {
   printf '%s/autonomous-sdlc-harness\n' "${base%/}"
 }
 
-# The two artifact paths, so no caller re-joins either string.
+# The three artifact paths, so no caller re-joins any of the strings.
 hr_lane_state_file() {
   local dir
   dir=$(hr_lane_dir) || return 1
@@ -4086,6 +5416,19 @@ hr_lane_lock_dir() {
   local dir
   dir=$(hr_lane_dir) || return 1
   printf '%s/run-lane.lock\n' "$dir"
+}
+
+# hr_run_profile_file <repo slug> <branch> — print
+# `<hr_lane_dir>/run-profiles/<slug>/<hr_sanitize_branch branch>.json`; return
+# 1, printing nothing, when `hr_lane_dir` cannot anchor or an argument is
+# empty. Creates nothing: its one caller, `autonomous-watcher.sh`'s
+# `run_profile_render`, makes the directory.
+hr_run_profile_file() {
+  local slug="${1-}" dir safe
+  [ -n "$slug" ] || return 1
+  safe=$(hr_sanitize_branch "${2-}") || return 1
+  dir=$(hr_lane_dir) || return 1
+  printf '%s/run-profiles/%s/%s.json\n' "$dir" "$slug" "$safe"
 }
 
 # Print the lane directory, creating it 0700 when it is not there. Return 1 —

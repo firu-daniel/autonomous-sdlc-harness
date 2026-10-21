@@ -5,11 +5,11 @@
 # committed pre-push backstop for THAT working copy, install dependencies and
 # build.
 #
-# WHO RUNS IT. create-worktree.sh, immediately after it adds a working copy: a
-# default-mode cut runs the new copy's own script with no argument, and
-# `--existing` runs the MAIN checkout's script with `--target <copy>`. The
-# GitHub job's `Bootstrap the checkout` runs it with no argument; and a person
-# runs it by hand on a checkout that predates a configuration change.
+# WHO RUNS IT. create-worktree.sh, immediately after it creates a run's clone,
+# in every bootstrapped mode: it runs the MAIN checkout's script with `--target
+# <clone>`. The GitHub job's `Bootstrap the checkout` runs it with no argument;
+# and a person runs it by hand on a checkout that predates a configuration
+# change.
 #
 # `--target <dir>` is for a copy whose tree a run wrote. It refuses unless this
 # script's own checkout is a main checkout (`hr_wrapper_main_of` places it as
@@ -18,6 +18,11 @@
 # `commands.depInstall`, `commands.build` — from the main checkout's
 # `harness.config.json`, runs each step in <dir>, and writes the main
 # checkout's `githooksDir` under <dir> as the copy's `core.hooksPath`.
+#
+# A registered clone as <dir> takes that `core.hooksPath` in its own
+# `.git/config`, at the value the library's clone allow-list admits
+# (`hr_clone_config_spec`), and nothing is written to the main checkout's
+# configuration. Its caller is create-worktree.sh.
 #
 # THE RESIDUAL `--target` DOES NOT CLOSE. The main checkout's
 # `commands.depInstall` and `commands.build` still run in the copy, against the
@@ -88,8 +93,8 @@
 # WHY NO `set -e`, AND WHY ITS CALLER HAS ONE. Each step's outcome is decided
 # here — skip, warn, or fail — and `-e` would turn the ordinary "this key is not
 # configured" into an abort. Failures are accumulated instead and reported in
-# the exit status, which is what create-worktree.sh's `set -e` then acts on: a
-# working copy whose dependencies did not install is not pushed as if it had.
+# the exit status, which create-worktree.sh acts on: a working copy whose
+# dependencies did not install is removed with its branch, never pushed.
 #
 # FAIL CLOSED ON A CONFIGURATION IT CANNOT READ. Every path and command below is
 # configured, and none has a remembered fallback, so an absent or unreadable
@@ -164,6 +169,7 @@ if [ "$target_mode" -eq 1 ]; then
     exit 1
   fi
   target_gitdir="$HR_TARGET_GITDIR"
+  target_kind="$HR_TARGET_KIND"
   top="$( CDPATH= cd -P -- "$2" && pwd -P )"
   cfg_root="$main_repo"
 else
@@ -190,6 +196,10 @@ fi
 # The main checkout is where every machine-local file has its single source: a
 # working copy created by git carries only tracked content.
 if [ "$target_mode" -eq 0 ]; then
+  # This mode bootstraps the checkout the script sits in, which in a clone
+  # resolves to the clone, while a clone is bootstrapped through the main
+  # checkout's --target mode, which places the main checkout from its own
+  # location (`hr_wrapper_main_of`).
   main_repo="$(hr_main_repo "$top")" || main_repo=""
   [ -n "$main_repo" ] || main_repo="$top"
 fi
@@ -252,7 +262,8 @@ fi
 # Under `--target` the value is `<dir>/<the main checkout's githooksDir>`, and
 # both writes go through the main checkout and the record
 # `hr_wrapper_target_check_var` checked, so git reads none of the copy's own
-# records or configuration.
+# records or configuration. A clone has no record and its own `.git/config`,
+# so its one write goes to that file and the main checkout's is left alone.
 if [ "$target_mode" -eq 1 ]; then
   hooks_rel="$(hr_githooks_dir "$main_repo")" || hooks_rel=""
   hooks_dir=""
@@ -261,7 +272,9 @@ else
   hooks_dir="$(hr_worktree_hooks_path "$top")" || hooks_dir=""
 fi
 hooks_config_write() {
-  if [ "$target_mode" -eq 1 ]; then
+  if [ "$target_mode" -eq 1 ] && [ "$target_kind" = clone ]; then
+    git -C / config --file "$target_gitdir/config" core.hooksPath "$hooks_dir"
+  elif [ "$target_mode" -eq 1 ]; then
     git -C "$main_repo" -c core.hooksPath=/dev/null -c core.fsmonitor=false config extensions.worktreeConfig true &&
       git -C / config --file "$target_gitdir/config.worktree" core.hooksPath "$hooks_dir"
   else
