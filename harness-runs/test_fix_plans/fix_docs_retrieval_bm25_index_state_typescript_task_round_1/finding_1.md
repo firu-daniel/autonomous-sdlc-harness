@@ -19,3 +19,5 @@
 - [ ] Confirm by reading only: a `grep -nF` of the home directory (from a bare `printenv HOME`) over that file prints nothing.
 
 Do not add the file or its directory to gate 6a's exclusions, and do not change `scripts/run-gates.sh`. The gate is right, and the committed artifact is what has to change.
+
+**Deviations from plan:** The finding names no test file (`none — test`, gate 6a of `scripts/run-gates.sh`), so per the row-`G.4` fix-site fallback no gate was run. The fix site still carried the home-directory path, so the fix was implemented. Evidence: a `grep -nF` of the `printenv HOME` value over `harness-runs/architecture_reviews/fix_docs_retrieval_bm25_index_state_typescript/review_0.md` printed nothing (exit 1) after the edit. Gate 6a itself is deferred to the Run gates phase.
