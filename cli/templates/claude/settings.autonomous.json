@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "_README": [
-    "UNATTENDED SETTINGS PROFILE - written by `autonomous-sdlc-harness init`, and yours from there on: edit it freely, a re-run keeps your copy. It is selected per run with `--settings .claude/settings.autonomous.json` and is never installed as the interactive default, so dropping that flag reverts every grant below with nothing to undo.",
+    "UNATTENDED SETTINGS PROFILE - written by `autonomous-sdlc-harness init`, and yours from there on: edit it freely, a re-run keeps your copy. It is selected per run with `--settings` - a remote job passes this file, and the run watcher passes a per-run copy rendered from it - and is never installed as the interactive default, so dropping that flag reverts every grant below with nothing to undo.",
     "COMPLETENESS IS LOAD-BEARING: a tool call that is neither allowed nor denied is refused at once, so `allow` has to cover the whole flow end to end. A gap surfaces as a refused step - add the missing entry here rather than relaxing the permission mode.",
     "THE PERMISSION MODE IS dontAsk: a call that matches neither `allow` nor `deny`, or that matches an `ask` rule, is refused at once instead of prompting a session nobody is there to answer. The run watcher passes `--permission-mode` from its `PERMISSION_MODE` tunable, which overrides `defaultMode` below. `PERMISSION_MODE=acceptEdits` in the watcher's `watcher.env` restores prompting, and under it every such call stalls the run instead of being refused.",
     "SCRIPT PATHS ARE UNQUOTED LITERALS: the guard matches the raw command string, so a quoted path fails a `*.sh` match and is refused. Never put quotes around one of the wrapper paths below.",

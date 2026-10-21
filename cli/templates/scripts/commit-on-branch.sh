@@ -15,25 +15,32 @@
 # literal allow entry as well. An invocation of a SCRIPT PATH has neither
 # problem: the generated permission profile allow-lists
 # `bash <scripts_dir>/commit-on-branch.sh` in literal forms, and the commit
-# guard's parser never matches it. A run in a linked worktree calls the MAIN
-# checkout's copy, `bash <main>/<scripts_dir>/commit-on-branch.sh --repo
-# <worktree> …` (WHY THE MAIN CHECKOUT'S COPY RUNS OUTSIDE THE SANDBOX below);
-# from a worktree the script-allowlist guard does not vouch for that copy, so
-# the profile's literal `allow` entry is its only grant, and MESSAGE ARGUMENTS
-# below states what that costs the caller. Either way the caller's command line
+# guard's parser never matches it. A run in a run copy — a clone, or a legacy
+# linked worktree — calls the MAIN checkout's copy, `bash
+# <main>/<scripts_dir>/commit-on-branch.sh --repo <run copy> …` (WHY THE MAIN
+# CHECKOUT'S COPY RUNS OUTSIDE THE SANDBOX below); from a run copy the
+# script-allowlist guard does not vouch for that copy, so the profile's literal
+# `allow` entry is its only grant, and MESSAGE ARGUMENTS below states what that
+# costs the caller. Either way the caller's command line
 # carries NO heredoc and NO `$(…)`: the subject and every body paragraph are
 # ordinary positional arguments.
 #
-# WHY THE MAIN CHECKOUT'S COPY RUNS OUTSIDE THE SANDBOX. A sandboxed git cannot
-# write a linked worktree's record, `<main>/.git/worktrees/<name>/`: `git add`
-# and `git commit` there fail with `Operation not permitted` on `index.lock`
-# (docs/sandbox-verification.md -> G1, G2 and F1, measured on Claude Code
-# 2.1.299, macOS, headless). So the permission profile names the main
-# checkout's copy in `sandbox.excludedCommands`, beside `push-branch.sh` and
-# `refresh-branch.sh`, and an excluded command runs with full access. Every
-# paragraph from THE TARGET IS NOT TRUSTED to NO FILTER DRIVER RUNS is what that
-# access costs. A worktree's own copy sits in a sandbox-writable tree, is never
-# excluded, and still fails on the record.
+# WHY THE MAIN CHECKOUT'S COPY RUNS OUTSIDE THE SANDBOX. A run's branch is the
+# main checkout's `refs/heads/<branch>`, and a sandboxed git cannot move it: the
+# permission profile write-denies the main checkout's whole `.git`, so a
+# sandboxed commit in a clone lands on the clone's own ref alone
+# (docs/sandbox-verification.md -> CL4; the whole-`.git` deny itself is row
+# CS2, owed). A legacy worktree run is closed one step earlier: a sandboxed git
+# cannot write a linked worktree's record, `<main>/.git/worktrees/<name>/`:
+# `git add` and `git commit` there fail with `Operation not permitted` on
+# `index.lock` (docs/sandbox-verification.md -> G1, G2 and F1, measured on
+# Claude Code 2.1.299, macOS, headless). So the permission profile names the
+# main checkout's copy in `sandbox.excludedCommands`, beside `push-branch.sh`
+# and `refresh-branch.sh`, and an excluded command runs with full access. Every paragraph from THE
+# TARGET IS NOT TRUSTED to NO FILTER DRIVER RUNS is what that access costs. A
+# run copy's own `commit-on-branch.sh` sits in a sandbox-writable tree and is
+# never excluded: in a clone it cannot move the main checkout's branch, and in
+# a worktree it still fails on the record.
 #
 # SAFETY-CRITICAL CONSEQUENCE. Not reaching the commit branch-guard also means
 # not reaching its protected-branch refusal, so this script MUST make that
@@ -228,7 +235,7 @@
 # escaped backtick matches exactly as a bare one does. The ONE admitted
 # expansion is a bare `${IDENT}`, bought back by the guard's narrowed `${` arm —
 # but only for a call the guard vouches for. THE MAIN CHECKOUT'S COPY, called
-# from a worktree, is granted only by the profile's literal `allow` entry, which
+# from a run copy, is granted only by the profile's literal `allow` entry, which
 # a command carrying any shell expansion does not match: that caller spells its
 # main checkout, its `--repo` and every message token literally, and its command
 # carries no `$` at all. THIS SCRIPT ENFORCES NONE OF THIS: it validates no
@@ -237,8 +244,9 @@
 # what to do with a title that cannot satisfy it.
 #
 # Usage: commit-on-branch.sh [--repo <repo-dir>] <path>... -- <subject> [<body-line>...]
-#        bash <main checkout>/<scripts_dir>/commit-on-branch.sh --repo <worktree> <path>... -- <subject>
-#   --repo <repo-dir>  worktree/repository to operate in (default: $PWD)
+#        bash <main checkout>/<scripts_dir>/commit-on-branch.sh --repo <run copy> <path>... -- <subject>
+#   --repo <repo-dir>  the main checkout or a run copy (a clone, or a legacy
+#                      worktree) to operate in (default: $PWD)
 #   <path>...          explicit paths to commit (before `--`); missing paths warn+skip
 #   --                 separates the path list from the message lines
 #   <subject>          first token after `--` — the commit subject; see

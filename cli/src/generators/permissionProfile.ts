@@ -1642,7 +1642,10 @@ export interface PermissionProfileOptions
 export interface PermissionProfileResult {
   /** Absolute path of the profile. */
   readonly path: string;
-  /** The same path repo-relative — the value an unattended run passes to its own `--settings` flag. */
+  /**
+   * The same path repo-relative — the base profile the watcher renders each run's per-run profile
+   * from, and the file job mode passes to `--settings` unchanged.
+   */
   readonly repoPath: string;
   /** Things needing attention, one line each, for the reporter's `warn`. */
   readonly warnings: readonly string[];

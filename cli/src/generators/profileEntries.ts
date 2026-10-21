@@ -53,8 +53,9 @@ export const RETRIEVAL_TEMPLATE_PATH = 'claude/settings.autonomous.retrieval.jso
 const CLAUDE_DIR = '.claude';
 
 /**
- * Where the rendered profile is written, relative to the adopting repository's root — and the path
- * an unattended run names in its own `--settings` flag.
+ * Where the rendered profile is written, relative to the adopting repository's root — the base
+ * profile the watcher renders each run's per-run profile from, and the file job mode passes to
+ * `--settings` unchanged.
  *
  * Exported because more than one caller has to say it: `init`'s summary points at it, and `doctor`
  * checks that the file is there and that the absolute paths inside it still resolve.

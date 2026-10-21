@@ -19,9 +19,9 @@
  * shim first on `PATH`, the technique `cli/test/wrapper-target-check.test.mjs` uses: it moves the
  * clone's ref just before the operation's first `update-ref`, which on a clone is the clone's own
  * swap, so the operation refuses with nothing moved. A substituted object is planted by the method
- * `docs/cli.md` §6 residual 6 describes. Sync in isolation is `cli/test/clone-sync.test.mjs`'s, the
- * clone-first order under every race `cli/test/clone-ref-order.test.mjs`'s, and the wrappers on a
- * clone are another suite's.
+ * `docs/cli.md` §6 residual 1, item 5 describes. Sync in isolation is
+ * `cli/test/clone-sync.test.mjs`'s, the clone-first order under every race
+ * `cli/test/clone-ref-order.test.mjs`'s, and the wrappers on a clone are another suite's.
  *
  * RED ONCE — `hr_run_copy_git`'s `GIT_DIR` pointed at `$HR_RUN_COPY_GITDIR` when the kind is `clone`:
  * case (h) fails. The clone's swap removed from `hr_copy_ref_swap_var`'s clone arm: case (e) fails on

@@ -404,9 +404,10 @@ export function currentBranch(repoRoot: string): string | undefined {
  *
  * `undefined` and an empty answer are the same result on purpose: `git worktree list` prints the
  * main working copy even when there is only one, so nothing to report means the probe did not work
- * rather than that there are no checkouts. The one caller is `doctor`, which asks whether
- * worktree-based runs can be prepared here and reports a `warn` either way, so the distinction
- * between the ways it can fail buys nothing.
+ * rather than that there are no checkouts. The one caller is `doctor`'s `worktrees` check, which
+ * asks whether the one-live-copy rule (`hr_run_copy_live_var`) and sync-in can see which checkout
+ * has a branch checked out — a legacy worktree run is listed there and nowhere else in git — and
+ * reports a `warn` either way, so the distinction between the ways it can fail buys nothing.
  *
  * It lives here rather than in that check, for the reason in the module header: every
  * repository-state probe has one definition and one place a review checks that it stayed read-only.

@@ -4782,10 +4782,12 @@ const PROFILE_MAIN_ANCHOR_CHECK: Check = {
  */
 /**
  * What a `runsUnsandboxed` wrapper loses when its excluded entry is missing or inert — true of the
- * commit, the push and the refresh wrapper alike (`docs/sandbox-verification.md` F1, F3).
+ * commit, the push and the refresh wrapper alike: on a clone, the main checkout's `.git` the profile
+ * write-denies as a whole (`docs/cli.md` §6; `docs/sandbox-verification.md` CL4, and CS2, owed); on
+ * a legacy worktree and for SSH (`docs/sandbox-verification.md` F1, F3).
  */
 const SANDBOXED_WRAPPER_CONSEQUENCE =
-  "that wrapper runs sandboxed, where a linked worktree's git record and an SSH remote are both out of reach on macOS";
+  "that wrapper runs sandboxed, where a clone cannot move the main checkout's branch because the profile write-denies the main checkout's whole `.git`, and a linked worktree's git record and an SSH remote are both out of reach on macOS";
 
 const PROFILE_SANDBOX_CHECK: Check = {
   id: 'profile-sandbox',

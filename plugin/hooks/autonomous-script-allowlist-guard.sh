@@ -176,9 +176,9 @@
 #       may still carry `${branch}` in a path and in its subject. The corpus's
 #       own commit calls no longer lean on that: they name the main checkout's
 #       copy of `commit-on-branch.sh`, a `sandbox.excludedCommands` entry this
-#       guard does not vouch for from a linked worktree, spelled with no `$`
-#       anywhere, and are granted by the permission profile's literal `allow`
-#       entry rather than by THIS GUARD.
+#       guard does not vouch for from a run copy, spelled with no `$` anywhere,
+#       and are granted by the permission profile's literal `allow` entry
+#       rather than by THIS GUARD.
 #
 # `<<` IS NOT IN THE SCANNED SET, AND ITS ABSENCE IS COVERED TWICE. A
 # here-document was measured SILENT before this scan existed — incidentally, not

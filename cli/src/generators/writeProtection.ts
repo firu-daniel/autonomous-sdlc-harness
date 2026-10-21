@@ -231,17 +231,21 @@ export function protectedPaths({
 
   paths.push(
     { path: join(repoRoot, githooksDir), kind: 'directory', reason: 'git runs the pre-push hook from it, outside the sandbox' },
-    { path: join(glob, githooksDir), kind: 'directory', reason: "a worktree's pre-push hook runs from it, outside the sandbox" },
+    { path: join(glob, githooksDir), kind: 'directory', reason: "a run copy's pre-push hook runs from it, outside the sandbox" },
   );
 
   paths.push(
     { path: join(repoRoot, MCP_PATH), kind: 'file', reason: 'the agent runner starts the MCP servers it declares outside the sandbox' },
-    { path: join(glob, MCP_PATH), kind: 'file', reason: "a worktree's MCP servers start outside the sandbox" },
-    { path: join(repoRoot, PROFILE_PATH), kind: 'file', reason: 'the run watcher passes it to every unattended run with --settings' },
+    { path: join(glob, MCP_PATH), kind: 'file', reason: "a run copy's MCP servers start outside the sandbox" },
+    {
+      path: join(repoRoot, PROFILE_PATH),
+      kind: 'file',
+      reason: "the run watcher renders every local run's --settings file from it, and a remote job passes it with --settings",
+    },
     { path: join(repoRoot, SETTINGS_PATH), kind: 'file', reason: 'Claude Code runs the hooks it declares outside the sandbox' },
-    { path: join(glob, SETTINGS_PATH), kind: 'file', reason: "a worktree's session runs the hooks it declares outside the sandbox" },
+    { path: join(glob, SETTINGS_PATH), kind: 'file', reason: "a run copy's session runs the hooks it declares outside the sandbox" },
     { path: join(repoRoot, SETTINGS_LOCAL_PATH), kind: 'file', reason: 'Claude Code runs the hooks it declares outside the sandbox' },
-    { path: join(glob, SETTINGS_LOCAL_PATH), kind: 'file', reason: "a worktree's session runs the hooks it declares outside the sandbox" },
+    { path: join(glob, SETTINGS_LOCAL_PATH), kind: 'file', reason: "a run copy's session runs the hooks it declares outside the sandbox" },
   );
   if (retrievalApplies(config)) {
     const docs = outerLoopRelativePath(rowNamed(DOCS_SEARCH_SERVER_SCRIPT_NAME));
@@ -254,12 +258,12 @@ export function protectedPaths({
       {
         path: join(glob, scriptsDir, ...docs.split('/')),
         kind: 'file',
-        reason: "a worktree's docs MCP server is launched from it, outside the sandbox",
+        reason: "a run copy's docs MCP server is launched from it, outside the sandbox",
       },
       {
         path: join(glob, scriptsDir, lib),
         kind: 'directory',
-        reason: "a worktree's docs MCP launcher sources its library from it",
+        reason: "a run copy's docs MCP launcher sources its library from it",
       },
     );
   }
