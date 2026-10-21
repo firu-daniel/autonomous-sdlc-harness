@@ -45,3 +45,9 @@ The task prompt asks for both in this module, not in a new one (Leads, **How.**:
 - An unknown `--end-state` value, and `--corpus` given together with `--docs-root`, are each refused by name, with nothing run.
 - `git diff --stat` lists the two target files only.
 - This task needs the TypeScript model cache (`## Context`, **Manual setup required**). If it is absent, stop and say so, and never fetch models.
+
+- **Deviations from plan:**
+  - The `end state:` summary line is rendered only when `--end-state` is not the default, so a run without the new flags renders as before (the task's byte-for-byte requirement outranks the example line); a capture with no `end state:` line is a candidate run. Under `route-2` the `statement:` line also carries `(end state route-2; the candidate rule decides <decision>)`.
+  - `npm run build` was run through `commands.typecheck` (`bash scripts/typecheck.sh`, which runs `npm run build`): `PASS: typecheck`.
+  - The refusal of `--corpus` with `--docs-root` is `evals/docs-retrieval/args.mjs` → `parseArgs`'s own, so its message lists that module's whole flag table, including flags this launcher does not forward (`--arms`, `--k`, …); an unknown flag given to this launcher is refused by the launcher itself, listing its own and the corpus flags.
+  - The default-unchanged check rests on the captured TypeScript `fixture-catalog` run matching the 1.5.1 first table scenario by scenario, and on the diff review of the render path; the pre-change module was not re-run beside it for a byte comparison. Corpus B `self-docs` read `{ files: 71, chunks: 829 }`, so `other-corpus`'s `deleted` input is 829.

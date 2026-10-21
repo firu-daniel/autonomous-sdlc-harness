@@ -18,12 +18,22 @@
  * copied. On PGlite no route reads the store's own instance, so every reading opens the data directory
  * again after the store closed, and each `before` reading is labelled as read after a reopen. No time is
  * measured here.
+ *
+ * **Two end states.** `--end-state candidate`, the default, issues the rule's statement. `--end-state
+ * route-2` is the route `docs/retrieval-eval-results.md` → `### The recommendation for the fix branch`
+ * proposes, measured with its statement issued by hand: `REINDEX INDEX chunks_bm25` after every
+ * scenario's last refresh, `unchanged` included. The candidate decision is still computed and printed
+ * beside the statement issued.
+ *
+ * **Corpus A is a built-in id or an ad-hoc corpus** composed from an operator's own paths, which is how a
+ * private catalog is measured. Its flags are `evals/docs-retrieval/args.mjs` → `parseArgs`'s and are
+ * forwarded there, so every rule that module states holds here unrestated; corpus B is a built-in id.
+ * The rendered `corpus A:` line names the corpus id and its stamp, never its path.
  */
 
 import { appendFileSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, isAbsolute, join } from 'node:path';
-import { parseArgs as parseFlags } from 'node:util';
+import { basename, dirname, isAbsolute, join, relative } from 'node:path';
 
 import { chunkMarkdown } from '../../cli/dist/retrieval/chunk.js';
 import { resolveModels } from '../../cli/dist/retrieval/models.js';
@@ -50,8 +60,14 @@ import { buildMirrorFixture, removeMirrorFixture } from './mirror-fixture.mjs';
 import { assertPythonBackendAvailable, indexPythonCorpus } from './python-backend.mjs';
 import { loadQueries } from './queries.mjs';
 
-/** Where a corpus's query set lives (`evals/docs-retrieval/args.mjs` → `QUERIES_DIR`). */
-const QUERIES_DIR = 'evals/docs-retrieval/queries';
+/** The end states a run can leave after each scenario's last refresh; the first is the default. */
+const END_STATES = Object.freeze({ candidate: 'candidate', route2: 'route-2' });
+
+/** This launcher's own flags; every other flag a run takes names corpus A and is `parseArgs`'s. */
+const OWN_FLAGS = Object.freeze(['--backend', '--other', '--capture', '--end-state']);
+
+/** The `evals/docs-retrieval/args.mjs` flags that compose corpus A, forwarded to `parseArgs` unread. */
+const CORPUS_FLAGS = Object.freeze(['--corpus', '--repo', '--docs-root', '--conventions', '--corpus-id', '--queries']);
 
 /** How many differing hits a comparison lists with both values. */
 const LISTED_DIFFERENCES = 3;
@@ -240,24 +256,35 @@ function compare(state, reference, keys) {
   return { forced, byColumn: differencesByColumn(indexScanScores(reference), indexScanScores(state), keys) };
 }
 
-/**
- * Measures the rule on `backend` (`typescript` or `python`) with corpus `corpusA` as the final corpus
- * and `corpusB` as the `other-corpus` scenario's prior one. Returns `{ backend, engine, ranAt, server,
- * extversion, spillAvailable, corpora, file, queries, references, scenarios }`: `references` holds each
- * variant's three readings, and each scenario its refreshes, stored-state change, decision, statement,
- * `before` and `after` readings and their comparisons against its variant's references.
- */
-export async function measureRefreshRule({ checkout, backend, corpusA, corpusB }) {
-  if (!BACKENDS.includes(backend)) refuse(`backend ${backend} is not one of ${BACKENDS.join(', ')}`);
-  for (const id of [corpusA, corpusB]) {
-    if (!BUILT_IN_CORPORA.includes(id)) refuse(`corpus ${id} is not one of ${BUILT_IN_CORPORA.join(', ')}`);
-  }
-  if (corpusA === corpusB) refuse('corpus A and corpus B must differ');
+/** A query set as the summary names it: repo-relative to this checkout, or its file name alone outside it. */
+function querySetLabel(checkout, path) {
+  const inCheckout = relative(checkout, path);
+  if (inCheckout === '' || inCheckout.startsWith('..') || isAbsolute(inCheckout)) return `${basename(path)}, outside this checkout`;
+  return inCheckout.split('\\').join('/');
+}
 
-  const resolvedA = corpusConfig({ repoRoot: checkout, corpus: corpusA });
+/**
+ * Measures the rule on `backend` (`typescript` or `python`) with corpus `corpusA` as the final corpus,
+ * scored by the query set at the absolute path `queries`, and the built-in id `corpusB` as the
+ * `other-corpus` scenario's prior one. `corpusA` is `evals/docs-retrieval/corpora.mjs` → `corpusConfig`'s
+ * `{ id, config, repoRoot }`. `endState` is one of {@link END_STATES}. Returns `{ backend, engine,
+ * endState, ranAt, server, extversion, spillAvailable, corpora, file, queries, references, scenarios }`:
+ * `references` holds each variant's three readings, and each scenario its refreshes, stored-state
+ * change, decision, statement, `before` and `after` readings and their comparisons against its
+ * variant's references.
+ */
+export async function measureRefreshRule({ checkout, backend, corpusA, queries: queriesPath, corpusB, endState = END_STATES.candidate }) {
+  if (!BACKENDS.includes(backend)) refuse(`backend ${backend} is not one of ${BACKENDS.join(', ')}`);
+  if (!Object.values(END_STATES).includes(endState)) {
+    refuse(`end state ${endState} is not one of ${Object.values(END_STATES).join(', ')}`);
+  }
+  if (!BUILT_IN_CORPORA.includes(corpusB)) refuse(`corpus ${corpusB} is not one of ${BUILT_IN_CORPORA.join(', ')}`);
+  if (corpusA.id === corpusB) refuse('corpus A and corpus B must differ');
+
+  const resolvedA = corpusA;
   const resolvedB = corpusConfig({ repoRoot: checkout, corpus: corpusB });
-  const queriesSet = `${QUERIES_DIR}/${corpusA}.jsonl`;
-  const queries = loadQueries(join(checkout, queriesSet));
+  const queriesSet = querySetLabel(checkout, queriesPath);
+  const queries = loadQueries(queriesPath);
   const ranAt = new Date().toISOString();
 
   return withCleanups(async (onExit) => {
@@ -271,12 +298,12 @@ export async function measureRefreshRule({ checkout, backend, corpusA, corpusB }
     const bChunks = chunksOf(resolvedB.repoRoot, mirrorB.files);
     const fullKeys = new Set(fullChunks.map((chunk) => chunk.key));
     const collision = bChunks.find((chunk) => fullKeys.has(chunk.key));
-    if (collision !== undefined) refuse(`key ${collision.key} is in both ${corpusA} and ${corpusB}`);
+    if (collision !== undefined) refuse(`key ${collision.key} is in both ${resolvedA.id} and ${corpusB}`);
     const variants = {
       [VARIANTS.full]: { keys: fullKeys },
       [VARIANTS.withoutF]: { keys: new Set(fullChunks.filter((chunk) => chunk.path !== file).map((chunk) => chunk.key)) },
     };
-    if (variants[VARIANTS.withoutF].keys.size === 0) refuse(`corpus ${corpusA} holds one file, ${file}, so removing it leaves no final corpus`);
+    if (variants[VARIANTS.withoutF].keys.size === 0) refuse(`corpus ${resolvedA.id} holds one file, ${file}, so removing it leaves no final corpus`);
 
     // The A mirror's state; `F` is reset from the resolved corpus root before each change, never mutated twice.
     const filePath = join(mirrorA.dir, file);
@@ -353,7 +380,8 @@ export async function measureRefreshRule({ checkout, backend, corpusA, corpusB }
       const decision = endStateRule(inputs);
 
       const beforeReading = await issueAndRead(store, 'none', spill, read(scenario.final));
-      const afterReading = await issueAndRead(store, decision, spill, read(scenario.final));
+      const issued = endState === END_STATES.route2 ? 'reindex' : decision;
+      const afterReading = await issueAndRead(store, issued, spill, read(scenario.final));
       if (scenario.id === 'fresh') await readReferenceForms(store, VARIANTS.full, beforeReading.state);
       await store.remove();
 
@@ -383,12 +411,13 @@ export async function measureRefreshRule({ checkout, backend, corpusA, corpusB }
       backend,
       engine: driver.engine,
       rebuildReported: driver.rebuildReported,
+      endState,
       ranAt,
       server,
       extversion,
       spillAvailable: spill,
       corpora: {
-        a: { id: corpusA, snapshot: { files: mirrorA.files.length, chunks: fullChunks.length } },
+        a: { id: resolvedA.id, snapshot: { files: mirrorA.files.length, chunks: fullChunks.length } },
         aWithoutF: { snapshot: { files: mirrorA.files.length - 1, chunks: variants[VARIANTS.withoutF].keys.size } },
         b: { id: corpusB, snapshot: { files: mirrorB.files.length, chunks: bChunks.length } },
       },
@@ -430,6 +459,10 @@ export function renderRefreshRule(result, { withScores = false } = {}) {
     `bm25-refresh-rule: backend ${result.backend} (engine ${result.engine}), ran ${result.ranAt}`,
     `server: ${result.server}`,
     `pg_textsearch: ${result.extversion}`,
+    // Named only off the default, so a candidate run renders as it did before the variant existed.
+    ...(result.endState === END_STATES.candidate
+      ? []
+      : [`end state: ${result.endState}, ${BM25_HISTORY_STATEMENTS.reindex} issued after every scenario's last refresh; each rule line is the candidate rule's decision, not issued`]),
     `bm25_spill_index: ${result.spillAvailable ? 'available' : `not available on ${result.engine}`}`,
     `corpus A: ${result.corpora.a.id} ${stamp(result.corpora.a.snapshot)}; A without F: ${stamp(result.corpora.aWithoutF.snapshot)}; ` +
       `corpus B: ${result.corpora.b.id} ${stamp(result.corpora.b.snapshot)}`,
@@ -454,7 +487,7 @@ export function renderRefreshRule(result, { withScores = false } = {}) {
       `  stored keys: before ${scenario.stored.before}, after ${scenario.stored.after}; deleted ${scenario.stored.deleted}, ` +
         `added ${scenario.stored.added}, updated existing ${scenario.stored.updatedExisting}`,
       `  rule: ${decision} (deleted ${inputs.deleted}, rebuilt ${inputs.rebuilt}, embedded ${inputs.embedded}, updatedExisting ${inputs.updatedExisting})`,
-      `  statement: ${scenario.statement}`,
+      `  statement: ${scenario.statement}${result.endState === END_STATES.candidate ? '' : ` (end state ${result.endState}; the candidate rule decides ${decision})`}`,
       ...renderIndexState(`${scenario.id}.before`, `right after the refresh${pgliteBefore}`, scenario.before),
       ...comparisonLines(`${scenario.id}.before`, scenario.final, scenario.comparisons.before),
       ...renderIndexState(`${scenario.id}.after`, `after ${scenario.statement}`, scenario.after),
@@ -475,27 +508,45 @@ export function renderRefreshRule(result, { withScores = false } = {}) {
 }
 
 /**
- * The launcher's whole body: `--backend`, `--corpus` (A) and `--other` (B) select one run, and
- * `--capture <path>` also writes the text with every score line to that repo-relative path, which the
- * `bm25-history.mjs` launcher's `--compare` reads.
+ * The launcher's whole body: `--backend`, corpus A and `--other` (B) select one run, `--end-state`
+ * picks what each scenario's last refresh is followed by, and `--capture <path>` also writes the text
+ * with every score line to that path, resolved against this checkout, which the `bm25-history.mjs`
+ * launcher's `--compare` reads. Corpus A is `--corpus <id>`, or an ad-hoc corpus's `--docs-root` with
+ * its `--repo`, `--conventions`, `--corpus-id` and `--queries`, all forwarded to `parseArgs`.
  */
 export async function runRefreshRuleLauncher(argv) {
-  let values;
-  try {
-    ({ values } = parseFlags({
-      args: argv,
-      options: { backend: { type: 'string' }, corpus: { type: 'string' }, other: { type: 'string' }, capture: { type: 'string' } },
-      strict: true,
-    }));
-  } catch (error) {
-    refuse(`${error.message}; the flags are --backend, --corpus, --other and --capture`);
+  const legal = `the flags are ${OWN_FLAGS.join(', ')} and corpus A's ${CORPUS_FLAGS.join(', ')}`;
+  const values = {};
+  const corpusFlags = [];
+  for (let index = 0; index < argv.length; index += 2) {
+    const flag = argv[index];
+    const value = argv[index + 1];
+    if (!OWN_FLAGS.includes(flag) && !CORPUS_FLAGS.includes(flag)) refuse(`unknown flag ${flag}; ${legal}`);
+    if (value === undefined || OWN_FLAGS.includes(value) || CORPUS_FLAGS.includes(value)) refuse(`${flag} takes a value`);
+    if (CORPUS_FLAGS.includes(flag)) corpusFlags.push(flag, value);
+    else values[flag.slice(2)] = value;
   }
-  for (const flag of ['backend', 'corpus', 'other']) {
+  for (const flag of ['backend', 'other']) {
     if (values[flag] === undefined) refuse(`--${flag} is required`);
   }
-  if (values.corpus === values.other) refuse(`--corpus and --other are both ${values.corpus}; they must differ`);
-  const { checkout } = parseArgs([]);
-  const result = await measureRefreshRule({ checkout, backend: values.backend, corpusA: values.corpus, corpusB: values.other });
+  if (!corpusFlags.includes('--corpus') && !corpusFlags.includes('--docs-root')) {
+    refuse('--corpus is required, or an ad-hoc corpus A named by --docs-root');
+  }
+  const endState = values['end-state'] ?? END_STATES.candidate;
+  if (!Object.values(END_STATES).includes(endState)) {
+    refuse(`--end-state ${endState} is not one of ${Object.values(END_STATES).join(', ')}`);
+  }
+  const args = parseArgs(corpusFlags);
+  const { checkout } = args;
+  if (args.corpus !== undefined && args.corpus === values.other) refuse(`--corpus and --other are both ${args.corpus}; they must differ`);
+  const corpusA = corpusConfig({
+    repoRoot: args.repo,
+    corpus: args.corpus,
+    docsRoot: args.docsRoot,
+    conventions: args.conventions,
+    corpusId: args.corpusId,
+  });
+  const result = await measureRefreshRule({ checkout, backend: values.backend, corpusA, queries: args.queries, corpusB: values.other, endState });
   process.stdout.write(renderRefreshRule(result));
   if (values.capture !== undefined) {
     const path = isAbsolute(values.capture) ? values.capture : join(checkout, values.capture);
