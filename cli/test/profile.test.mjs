@@ -6,7 +6,8 @@
  * in an unattended run, and a refused step is a missing step.** The step does not happen, and nothing
  * else in the run announces it. So each assertion below pins one shape that has already cost a run:
  * a quoted path that fails the guard's literal match, a compound command that matches no entry, a
- * wrapper listed for the checkout but not for its sibling worktrees, and a browser tool named in
+ * file glob listed for the checkout but not for its sibling worktrees, a wrapper rule spelled under a
+ * glob the guard matches literally, and a browser tool named in
  * `deny`, which is evaluated before any allow and would revoke the interactive-test agent's own
  * grant. A later edit to the shipped template cannot silently reintroduce any of them without failing here.
  *
@@ -42,7 +43,7 @@
  *   template (choice 2). Reading the table also means the negative assertion covers every row that
  *   is *not* agent-invocable, rather than the subset a test author remembered.
  * - **One of them calls the renderer directly, against choice 1.** What that test asserts — that a
- *   row an agent runs contributes exactly its three forms and a row it must not contributes nothing —
+ *   row an agent runs contributes exactly its two forms and a row it must not contributes nothing —
  *   is a property of the emission rather than of the shipped set, and a table-driven test can only
  *   check the half its current rows happen to cover. Shipping the mechanism with nothing running
  *   through it is the exact shape this suite exists to catch, so that test hands the renderer a
@@ -143,7 +144,7 @@ const PERMISSION_LISTS = ['allow', 'deny', 'ask'];
 
 /**
  * The file-rule kinds a run needs granted, each with the prefix its rule puts before an absolute
- * path. One syntax governs all three: a rule whose content starts with `//` is anchored at the
+ * path. One syntax governs both: a rule whose content starts with `//` is anchored at the
  * filesystem root, while a single leading `/` is resolved against the root of the settings file the
  * rule came from. The absolute path brings its own leading slash, so the marked entry carries two
  * slashes and the prefix below is the one the template adds. Spelling the whole entry out is the
@@ -153,7 +154,6 @@ const PERMISSION_LISTS = ['allow', 'deny', 'ask'];
  */
 const FILE_RULE_KINDS = [
   ['Edit', '/'],
-  ['Write', '/'],
   ['Read', '/'],
 ];
 
@@ -336,36 +336,43 @@ test('every permission entry is a single unquoted command, with the phase off an
   }
 });
 
-test('every wrapper that was written is allow-listed for this checkout and for a sibling worktree', async (t) => {
+/**
+ * Assert no `allow` or `ask` entry is a wrapper rule spelled under the sibling-worktree glob: a `*`
+ * before a rule's trailing `:*` is matched literally, so such a row matches no run copy's call. The
+ * run copy's exact form is the watcher's per-run copy's to add.
+ */
+function assertNoGlobWrapperRow(profile, worktreeGlob) {
+  for (const list of ['allow', 'ask']) {
+    for (const entry of entries(profile, list)) {
+      assert.ok(!entry.startsWith(`Bash(bash ${worktreeGlob}`), `permissions.${list} carries the glob wrapper row ${entry}`);
+    }
+  }
+}
+
+test('every wrapper that was written is allow-listed in its two forms, and none under the sibling-worktree glob', async (t) => {
   const { dir, profile } = await profileFor(t);
   const written = await writtenWrappers(dir);
   assert.ok(written.length > 0, 'this fixture wrote no wrapper scripts, so there is nothing to pair');
 
-  const worktreeGlob = worktreeGlobFor(dir);
   const allow = entries(profile, 'allow');
 
   for (const name of written) {
-    // A run executing in a run copy that matches neither form does not fail loudly: it
-    // silently skips whatever phase needed the path.
-    for (const form of [join(dir, INIT_SCRIPTS_DIR, name), join(worktreeGlob, INIT_SCRIPTS_DIR, name)]) {
-      assert.ok(
-        allow.some((entry) => entry.includes(form)),
-        `no allow entry names ${form}`,
-      );
+    for (const form of expectedForms({ repoRoot: dir, scriptsDir: INIT_SCRIPTS_DIR, relative: name })) {
+      assert.ok(allow.includes(form), `no allow entry is ${form}`);
     }
   }
+  assertNoGlobWrapperRow(profile, worktreeGlobFor(dir));
 });
 
-/** The three forms one script under `scriptsDir` contributes, given where the repository sits. */
-function expectedForms({ repoRoot, worktreeGlob, scriptsDir, relative }) {
+/** The two forms one script under `scriptsDir` contributes to the base profile, given where the repository sits. */
+function expectedForms({ repoRoot, scriptsDir, relative }) {
   return [
     `Bash(${scriptInvocation(scriptsDir, relative)}:*)`,
     `Bash(bash ${join(repoRoot, scriptsDir, relative)}:*)`,
-    `Bash(bash ${join(worktreeGlob, scriptsDir, relative)}:*)`,
   ];
 }
 
-test('an outer-loop script an agent runs is allow-listed in three forms, and every other one is named nowhere', async (t) => {
+test('an outer-loop script an agent runs is allow-listed in two forms, and every other one is named nowhere', async (t) => {
   // Both the directory a configless `init` writes and a relocated multi-segment one: the second is
   // where a naive join or a hand-formatted invocation would show, and it is the case an adopter who
   // moved the directory has.
@@ -374,7 +381,7 @@ test('an outer-loop script an agent runs is allow-listed in three forms, and eve
       const seeded = scriptsDir === INIT_SCRIPTS_DIR ? {} : { 'harness.config.json': seededConfig({ scriptsDir }) };
       const { dir, profile } = await profileFor(subtest, [], seeded);
       const worktreeGlob = worktreeGlobFor(dir);
-      // The grant lists only: `deny` carries the write protection's `Edit`/`Write` rules for the
+      // The grant lists only: `deny` carries the write protection's `Edit` rules for the
       // unsandboxed wrappers, which refuse a write rather than grant a run.
       const everyEntry = [...entries(profile, 'allow'), ...entries(profile, 'ask')];
 
@@ -396,11 +403,11 @@ test('an outer-loop script an agent runs is allow-listed in three forms, and eve
           continue;
         }
 
-        const expected = expectedForms({ repoRoot: dir, worktreeGlob, scriptsDir, relative }).sort();
+        const expected = expectedForms({ repoRoot: dir, scriptsDir, relative }).sort();
         assert.deepEqual(
           naming,
           expected,
-          `${relative} is not allow-listed in exactly the three forms a caller may use: a caller using a missing spelling matches neither allow nor deny, which an unattended run refuses`,
+          `${relative} is not allow-listed in exactly the two forms a caller may use: a caller using a missing spelling matches neither allow nor deny, which an unattended run refuses`,
         );
 
         // Form (i) is the invocation producer's own return value rather than a lookalike: the corpus
@@ -412,41 +419,42 @@ test('an outer-loop script an agent runs is allow-listed in three forms, and eve
         );
       }
 
+      assertNoGlobWrapperRow(profile, worktreeGlob);
       assertEntriesRunnable(profile);
     });
   }
 });
 
 /**
- * The one row whose entries *are* a capability rather than a convenience: without all three, an
+ * The one row whose entries *are* a capability rather than a convenience: without both, an
  * agent reaching for the spelling that is missing is refused in an unattended run, and the
  * probe or mutation check it was going to run is silently downgraded to a claim nobody executed.
  */
 const SCRATCH_FILE = 'scratch-run.sh';
 
-test('the scratch runner is allow-listed in exactly its three forms, and asked about in none', async (t) => {
+test('the scratch runner is allow-listed in exactly its two forms, and asked about in none', async (t) => {
   const { dir, profile } = await profileFor(t);
   const naming = (list) => entries(profile, list).filter((entry) => entry.includes(SCRATCH_FILE));
 
-  // Exactly three rather than at least one: the count is the invariant, and a dropped form is
+  // Exactly two rather than at least one: the count is the invariant, and a dropped form is
   // invisible until the run that happened to use that spelling is refused.
   assert.deepEqual(
     naming('allow').sort(),
     expectedForms({
       repoRoot: dir,
-      worktreeGlob: worktreeGlobFor(dir),
       scriptsDir: INIT_SCRIPTS_DIR,
       relative: SCRATCH_FILE,
     }).sort(),
-    `${SCRATCH_FILE} is not allow-listed in the repo-relative, repo-root-absolute and sibling-worktree forms`,
+    `${SCRATCH_FILE} is not allow-listed in the repo-relative and repo-root-absolute forms`,
   );
+  assertNoGlobWrapperRow(profile, worktreeGlobFor(dir));
 
   // And in `ask` in none of them: an `ask` entry is refused in an unattended run exactly as a
   // missing entry is — while reading, in review, like a grant that was made.
   assert.deepEqual(naming('ask'), [], `${SCRATCH_FILE} is named in permissions.ask, which an unattended run refuses`);
 });
 
-test('the three-form emission holds for a written outer-loop row an agent runs, and drops one it must not', async (t) => {
+test('the two-form emission holds for a written outer-loop row an agent runs, and drops one it must not', async (t) => {
   // Driven rather than end-to-end, so both halves of the emission are pinned whatever the shipped
   // table carries — including the day its last agent-invocable row is removed or its last refused one
   // is. See the module header. The rows below are fabricated for this test and are not a second
@@ -478,9 +486,10 @@ test('the three-form emission holds for a written outer-loop row an agent runs, 
       const everyEntry = allEntries(profile);
       assert.deepEqual(
         everyEntry.filter((entry) => entry.includes(invocable.file)).sort(),
-        expectedForms({ repoRoot, worktreeGlob, scriptsDir, relative: invocable.file }).sort(),
-        `${invocable.file} is agent-invocable and did not contribute exactly its three forms`,
+        expectedForms({ repoRoot, scriptsDir, relative: invocable.file }).sort(),
+        `${invocable.file} is agent-invocable and did not contribute exactly its two forms`,
       );
+      assertNoGlobWrapperRow(profile, worktreeGlob);
 
       for (const script of [refused, sourcedOnly]) {
         assert.deepEqual(
@@ -592,11 +601,17 @@ test('reading, changing and creating a file are each granted, for this checkout 
   const { dir, profile } = await profileFor(t);
   const allow = entries(profile, 'allow');
 
+  // `Edit` rules cover every file-editing tool, creation by `Write` included, and a `Write(path)` rule
+  // is accepted, never consulted, and warned about at startup: the `Edit` pair is the creation grant
+  // the flow uses most, and a `Write` rule anywhere is one that reads like a grant or a protection and
+  // is neither.
+  for (const list of ['allow', 'deny']) {
+    for (const entry of entries(profile, list)) {
+      assert.ok(!entry.startsWith('Write('), `permissions.${list} carries ${entry}, which is never consulted`);
+    }
+  }
+
   for (const [kind, prefix] of FILE_RULE_KINDS) {
-    // Creating a file and changing one are different grants, and it is creating that the flow does
-    // most: a plan, a review, a ledger entry and a new source file are all written, not edited. A
-    // profile carrying only the `Edit` pair leaves the commonest operation in the flow matching
-    // neither `allow` nor `deny`, which an unattended run refuses.
     for (const path of [dir, worktreeGlobFor(dir)]) {
       const expected = `${kind}(${prefix}${path}/**)`;
       assert.ok(allow.includes(expected), `no allow entry is ${expected}`);
@@ -1063,7 +1078,7 @@ test('a domain carrying a quote is the adopter\'s to fix, never this CLI\'s faul
 });
 
 /**
- * Both sides of one protected path: its `denyWrite` entry and its `Edit`/`Write` deny rules — on the
+ * Both sides of one protected path: its `denyWrite` entry and its `Edit` deny rules — on the
  * path for a `file`, under it for a `directory`, and both for an `entry`, a path that must not come
  * to exist as either.
  */
@@ -1071,24 +1086,22 @@ function assertProtected(profile, path, kind) {
   const targets = kind === 'entry' ? [path, `${path}/**`] : [kind === 'directory' ? `${path}/**` : path];
   assert.ok(profile.sandbox.filesystem.denyWrite.includes(path), `sandbox.filesystem.denyWrite does not hold ${path}`);
   for (const target of targets) {
-    for (const rule of [`Edit(/${target})`, `Write(/${target})`]) {
-      assert.ok(entries(profile, 'deny').includes(rule), `permissions.deny does not hold ${rule}`);
-    }
+    const rule = `Edit(/${target})`;
+    assert.ok(entries(profile, 'deny').includes(rule), `permissions.deny does not hold ${rule}`);
   }
 }
 
 /**
- * Neither side of one path: no `denyWrite` entry, and no `Edit`/`Write` deny naming it or anything
+ * Neither side of one path: no `denyWrite` entry, and no `Edit` deny naming it or anything
  * under it but the `file` rules of the paths in `except`.
  */
 function assertUnprotected(profile, path, except = []) {
-  const excepted = new Set(except.flatMap((file) => [`Edit(/${file})`, `Write(/${file})`]));
+  const excepted = new Set(except.map((file) => `Edit(/${file})`));
   assert.ok(!profile.sandbox.filesystem.denyWrite.includes(path), `sandbox.filesystem.denyWrite holds ${path}`);
   for (const rule of entries(profile, 'deny')) {
-    if (!rule.startsWith('Edit(') && !rule.startsWith('Write(')) continue;
+    if (!rule.startsWith('Edit(')) continue;
     if (excepted.has(rule)) continue;
     assert.ok(rule !== `Edit(/${path})` && !rule.startsWith(`Edit(/${path}/`), `permissions.deny holds ${rule}`);
-    assert.ok(rule !== `Write(/${path})` && !rule.startsWith(`Write(/${path}/`), `permissions.deny holds ${rule}`);
   }
 }
 
@@ -1144,7 +1157,7 @@ test('every path that runs outside the sandbox is write-protected on both sides'
   for (const path of retired) {
     assert.ok(!profile.sandbox.filesystem.denyWrite.includes(path), `denyWrite still holds ${path} as its own entry`);
     for (const rule of entries(profile, 'deny')) {
-      assert.ok(!rule.startsWith(`Edit(/${path}`) && !rule.startsWith(`Write(/${path}`), `permissions.deny still holds ${rule}`);
+      assert.ok(!rule.startsWith(`Edit(/${path}`), `permissions.deny still holds ${rule}`);
     }
   }
   // A nearer `.git` between the main checkout and the scripts directory would redirect the wrappers.
@@ -1165,7 +1178,7 @@ test('every path that runs outside the sandbox is write-protected on both sides'
   for (const { path, kind } of COPY_GIT_PATHS) assertProtected(profile, join(glob, ...path.split('/')), kind);
   const copyGit = join(glob, '.git');
   assert.ok(!profile.sandbox.filesystem.denyWrite.includes(copyGit), `denyWrite holds ${copyGit}`);
-  for (const rule of [`Edit(/${copyGit})`, `Write(/${copyGit})`, `Edit(/${copyGit}/**)`, `Write(/${copyGit}/**)`]) {
+  for (const rule of [`Edit(/${copyGit})`, `Edit(/${copyGit}/**)`]) {
     assert.ok(!entries(profile, 'deny').includes(rule), `permissions.deny holds ${rule}`);
   }
   assertProtected(profile, join(dir, CONFIG_FILENAME), 'file');
@@ -1270,9 +1283,8 @@ test('with the sandbox opted out the file-tool write protection still applies', 
   const { dir, profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ scriptsDir: SCRIPTS_DIR, sandbox }) });
   for (const row of UNSANDBOXED_ROWS) {
     const path = join(dir, SCRIPTS_DIR, outerLoopRelativePath(row));
-    for (const rule of [`Edit(/${path})`, `Write(/${path})`]) {
-      assert.ok(entries(profile, 'deny').includes(rule), `the opt-out dropped ${rule}`);
-    }
+    const rule = `Edit(/${path})`;
+    assert.ok(entries(profile, 'deny').includes(rule), `the opt-out dropped ${rule}`);
   }
   const config = join(dir, CONFIG_FILENAME);
   assert.ok(entries(profile, 'deny').includes(`Edit(/${config})`), `the opt-out dropped the ${CONFIG_FILENAME} Edit rule`);

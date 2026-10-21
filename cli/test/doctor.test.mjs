@@ -702,19 +702,18 @@ const PASTE_HEADING = 'permissions.allow:';
 const WRAPPER_NOT_READABLE = 'is not readable under';
 
 /**
- * The three `permissions.allow` entries one wrapper implies: the repo-relative invocation, its
- * repo-root-absolute twin, and its sibling-worktree twin.
+ * The two `permissions.allow` entries one wrapper implies in the base profile: the repo-relative
+ * invocation and its repo-root-absolute twin. The run copy's exact form is the watcher's per-run
+ * copy's, never the base's.
  *
  * Spelled here rather than read back from the generator the check itself calls — a case that derived
  * its expectation from the producer under test would go on passing against a producer that had
- * changed shape. `init.test.mjs` states the same three forms for the writer's side.
+ * changed shape. `init.test.mjs` states the same two forms for the writer's side.
  */
-function wrapperAllowEntries(dir, projectName, file) {
-  const worktreeGlob = join(dirname(dir), `${projectName}-*`);
+function wrapperAllowEntries(dir, file) {
   return [
     `Bash(bash ${SCRIPTS_DIR}/${file}:*)`,
     `Bash(bash ${join(dir, SCRIPTS_DIR, file)}:*)`,
-    `Bash(bash ${join(worktreeGlob, SCRIPTS_DIR, file)}:*)`,
   ];
 }
 
@@ -768,11 +767,6 @@ async function handFilledFixture(t) {
   return fixture.dir;
 }
 
-/** The `projectName` the generated config carries, which the worktree form of every entry is built on. */
-function projectNameOf(dir) {
-  return readJson(join(dir, CONFIG_FILE)).projectName;
-}
-
 /**
  * The entries a filled `commands.*` key implies are graded, in both directions Finding 41 owes: a
  * repository whose keys were filled after `init` is warned and told what to paste, and a normally
@@ -796,7 +790,7 @@ test('doctor grades the permission entries a filled commands key implies', async
     assert.ok(block, `the report carried no command-permissions warning:\n${stderr}`);
     assert.ok(block.includes(PASTE_HEADING), `the warning named no list to paste into:\n${block}`);
     for (const { file } of HAND_FILLED) {
-      for (const entry of wrapperAllowEntries(dir, projectNameOf(dir), file)) {
+      for (const entry of wrapperAllowEntries(dir, file)) {
         assert.ok(block.includes(entry), `the warning did not name ${entry}:\n${block}`);
       }
     }
@@ -824,7 +818,7 @@ test('doctor grades the permission entries a filled commands key implies', async
     // check having stopped grading the keys it was warning about.
     const { permissions } = readJson(join(dir, PROFILE_FILE));
     for (const { file } of HAND_FILLED) {
-      for (const entry of wrapperAllowEntries(dir, projectNameOf(dir), file)) {
+      for (const entry of wrapperAllowEntries(dir, file)) {
         assert.ok(permissions.allow.includes(entry), `init --force left ${entry} out of ${PROFILE_FILE}`);
       }
     }
@@ -836,7 +830,7 @@ test('doctor grades the permission entries a filled commands key implies', async
     // so a pass is the check finding them rather than finding nothing to grade.
     const { permissions } = readJson(join(dir, PROFILE_FILE));
     for (const { file } of HAND_FILLED) {
-      for (const entry of wrapperAllowEntries(dir, projectNameOf(dir), file)) {
+      for (const entry of wrapperAllowEntries(dir, file)) {
         assert.ok(permissions.allow.includes(entry), `a freshly wired repository does not carry ${entry}`);
       }
     }
@@ -5189,7 +5183,7 @@ test('doctor --remote-job fails an unusable profile where a default run warns', 
     editJson(dir, PROFILE_FILE, (profile) => {
       profile.permissions.additionalDirectories = [...(profile.permissions.additionalDirectories ?? []), ...directories];
       profile.sandbox.filesystem.denyWrite.push(...directories);
-      profile.permissions.deny.push(...directories.flatMap((root) => [`Edit(/${root}/**)`, `Write(/${root}/**)`]));
+      profile.permissions.deny.push(...directories.map((root) => `Edit(/${root}/**)`));
     });
   }
 

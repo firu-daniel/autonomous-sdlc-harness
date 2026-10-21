@@ -12,10 +12,12 @@
  *    so a quoted path fails a `*.sh` match and the call is refused.
  * 2. **One command per entry, never a compound.** A single `mkdir && cp && rm` block is refused
  *    where each of those commands succeeds on its own, because the joined string matches no entry.
- * 3. **The checkout *and* its sibling worktrees.** A glob that misses the worktree a run is
+ * 3. **The checkout *and* its sibling worktrees.** A file glob that misses the worktree a run is
  *    executing in does not fail loudly; it silently skips whatever phase needed the path. A
  *    single-checkout adopter simply has no sibling for the second entry to match, which is why the
- *    worktree entries are unconditional rather than a second template.
+ *    worktree file globs are unconditional rather than a second template. A wrapper rule takes no
+ *    glob — a `*` before its trailing `:*` is matched literally (`docs/sandbox-verification.md` F4) —
+ *    so the run copy's exact wrapper path is added by the watcher's per-run copy instead.
  *
  * {@link assertRunnable} turns 1 and 2 from prose into a check: an entry carrying a quote or a
  * shell operator throws {@link EXIT.INTERNAL} before the profile can be written. That code is
@@ -27,15 +29,17 @@
  *
  * ## Three non-obvious choices, and where each comes from
  *
- * 1. **Every wrapper is allow-listed in three forms, not one.** `commands.*` is repo-relative —
- *    every path in `harness.config.json` is (`docs/config.md` §5) — while a profile entry is
- *    conventionally absolute. A profile carrying only the absolute form would leave the configured
- *    verification command matching neither `allow` nor `deny`, and so refused. So each selected
- *    wrapper contributes the repo-relative invocation an agent runs verbatim from the repository
- *    root, its repo-root-absolute twin for a caller that resolves the path first, and its sibling-worktree
- *    twin for a run executing in a second working copy. The agent-invocable outer-loop scripts land
- *    in the same directory and are emitted through the same row family, so they take the same three
- *    forms for the same reason rather than a shape of their own.
+ * 1. **Every wrapper is allow-listed in two forms here, not one, and a third per run.** `commands.*`
+ *    is repo-relative — every path in `harness.config.json` is (`docs/config.md` §5) — while a
+ *    profile entry is conventionally absolute. A profile carrying only the absolute form would leave
+ *    the configured verification command matching neither `allow` nor `deny`, and so refused. So
+ *    each selected wrapper contributes the repo-relative invocation an agent runs verbatim from the
+ *    repository root and its repo-root-absolute twin for a caller that resolves the path first. The
+ *    third form, the run copy's own exact path, is not a glob here — a `*` before a rule's trailing
+ *    `:*` is matched literally — but a twin the watcher's per-run copy appends beside each
+ *    repo-root-absolute row (see the mirror below). The agent-invocable outer-loop scripts land in the
+ *    same directory and are emitted through the same row family, so they take the same forms for the
+ *    same reason rather than a shape of their own.
  * 2. **The wrapper set comes from {@link WRAPPER_SCRIPTS} and the invocation string from
  *    {@link wrapperInvocation}** — never from parsing a `commands.*` value back into a path. That
  *    value may legitimately be a raw command line an adopter wrote by hand, and parsing it is how
@@ -142,7 +146,7 @@
  *   inside a remote job the plugin is installed immediately before `init` runs and the profile dies
  *   with the job, so neither reason above holds there, while both still hold for the default.
  *   Moving the helpers somewhere a rule can name unconditionally — the adopter's own
- *   `scriptsDir`, which the three wrapper forms already reach — would remove the manual step but
+ *   `scriptsDir`, which the wrapper forms already reach — would remove the manual step but
  *   change the invocation form everywhere the shipped instruction corpus calls them, so it belongs
  *   to the item that ships them (`plugin/scripts/README.md`) and not to this module.
  * - **It emits no entry for an outer-loop script the table does not mark agent-invocable.** See
@@ -157,7 +161,7 @@
  * rather than a new mechanism.
  *
  * Only the rows {@link OUTER_LOOP_SCRIPTS} marks {@link OuterLoopScript.agentInvocable} get entries,
- * and each gets the same three forms a wrapper does, built by the same row family from the same
+ * and each gets the same two forms a wrapper does, built by the same row family from the same
  * {@link scriptInvocation} return value. The set is taken from {@link writeOuterLoopScripts}'s own
  * `written` result when `init` supplies it — exactly as the wrapper set prefers `written` over
  * {@link selectWrapperScripts} — so this file cannot name a script that generator did not write.
@@ -204,6 +208,16 @@
  * The profile also carries the one `allow` rule a plugin reader needs to find the main checkout,
  * whose name and rule `core/mainRepoAnchor.ts` → `MAIN_REPO_ANCHOR_RULE` owns; {@link renderProfile}
  * appends it after the fragments merge, so the template carries no second spelling of the name.
+ *
+ * Mirrors outside this package, each held equal by the suite named:
+ * - `cli/templates/scripts/autonomous-watcher.sh` → `run_profile_wrapper_prefixes` holds a copy of
+ *   the main-checkout wrapper-row prefix the repo-root-absolute rows of {@link WRAPPER_ROW_TOKENS},
+ *   {@link OUTER_LOOP_ROW_TOKENS} and {@link DEPLOY_ROW_TOKENS} render to:
+ *   `Bash(bash <repoRoot>/<scriptsDir>/`, a `.` scripts directory collapsing to `Bash(bash <repoRoot>/`
+ *   as `join(repoRoot, scriptsDir)` does (`cli/test/watcher-run-profile.test.mjs`). Any change to that
+ *   row spelling is an edit to `run_profile_wrapper_prefixes` in the same change.
+ *
+ * A mirror this header does not declare is a defect.
  */
 
 import { basename, dirname, isAbsolute, join, sep } from 'node:path';
@@ -262,14 +276,15 @@ const ENABLED_SERVERS_KEY = 'enabledMcpjsonServers';
 const MCP_ENTRY_PREFIX = 'mcp__';
 const MCP_SERVER_PATTERN = /^mcp__(.+?)__/;
 
-/** The three token names one row family marks its rows with — one per wrapper form. */
+/**
+ * The two token names one row family marks its rows with — one per form the base profile carries.
+ * The run copy's exact form is the watcher's per-run twin of form (ii): the module header's mirror.
+ */
 interface RowTokens {
   /** Form (i): the repo-relative `bash <scriptsDir>/<file>` the config holds. */
   readonly invocation: string;
   /** Form (ii): the bare file name, joined to the repo-root-absolute `scriptsDir`. */
   readonly file: string;
-  /** Form (iii): the repo-relative path, joined to the sibling-worktree glob. */
-  readonly path: string;
 }
 
 /**
@@ -279,11 +294,10 @@ interface RowTokens {
 const WRAPPER_ROW_TOKENS: RowTokens = Object.freeze({
   invocation: 'scriptInvocation',
   file: 'scriptFile',
-  path: 'scriptPath',
 });
 
 /**
- * The same three forms, for the outer-loop rows a dispatched agent is the thing that runs.
+ * The same two forms, for the outer-loop rows a dispatched agent is the thing that runs.
  *
  * A separate token family rather than more values on the wrapper one, because the two sets are
  * selected by different rules and are answered for by different generators: a wrapper exists only
@@ -297,28 +311,27 @@ const WRAPPER_ROW_TOKENS: RowTokens = Object.freeze({
 const OUTER_LOOP_ROW_TOKENS: RowTokens = Object.freeze({
   invocation: 'outerLoopInvocation',
   file: 'outerLoopFile',
-  path: 'outerLoopPath',
 });
 
 /**
- * The same three forms, restricted to the deploy wrapper.
+ * The same two forms, restricted to the deploy wrapper; the watcher's per-run copy twins the
+ * repo-root-absolute one into `ask` as well.
  *
  * The deploy rows live in `ask`, so a deploy stays a decision a person makes rather than one an
- * unattended run makes for them — and because `ask` is evaluated before `allow`, all three forms
- * are asked about rather than one. Asking about a single spelling would leave the other two
- * matching `allow` and running unattended, which is the opposite of what an `ask` entry is for. A
+ * unattended run makes for them — and because `ask` is evaluated before `allow`, every form is
+ * asked about rather than one. Asking about a single spelling would leave the others matching
+ * `allow` and running unattended, which is the opposite of what an `ask` entry is for. A
  * configuration with no `deploy.command` selects no deploy wrapper, and these rows then expand to
  * nothing at all.
  */
 const DEPLOY_ROW_TOKENS: RowTokens = Object.freeze({
   invocation: 'deployInvocation',
   file: 'deployFile',
-  path: 'deployPath',
 });
 
 /** A row family's token names as a list, for the "is this a form row?" test and the known-token set. */
 function tokenNames(tokens: RowTokens): readonly string[] {
-  return [tokens.invocation, tokens.file, tokens.path];
+  return [tokens.invocation, tokens.file];
 }
 
 /** The permission lists checked by {@link assertRunnable}, in the order the template writes them. */
@@ -338,11 +351,11 @@ const CREDENTIAL_LISTS: ReadonlyArray<readonly [list: string, field: string]> = 
   ['envVars', 'name'],
 ] as const);
 
-/** How many `allow` entries one selected script must contribute — the three forms of choice 1. */
-const FORMS_PER_SCRIPT = 3;
+/** How many `allow` entries one selected script must contribute to the base — the two forms of choice 1. */
+const FORMS_PER_SCRIPT = 2;
 
 /**
- * One script under `scriptsDir` the profile allow-lists, with everything the three forms are built
+ * One script under `scriptsDir` the profile allow-lists, with everything its forms are built
  * from — a wrapper or an agent-invocable outer-loop script alike.
  *
  * The two families differ in how they are *selected* and in nothing else once selected, which is why
@@ -357,7 +370,7 @@ export interface SelectedScript {
   readonly file: string;
   /** `bash <scriptsDir>/<file>` — {@link scriptInvocation}'s return value, unmodified. */
   readonly invocation: string;
-  /** The repo-relative path that invocation names, i.e. the invocation without its interpreter. */
+  /** The repo-relative path that invocation names, i.e. the invocation without its interpreter; {@link invokedPath}'s check. */
   readonly path: string;
 }
 
@@ -511,18 +524,17 @@ function mergeInto(base: JsonObject, fragment: JsonObject, at: string, label: st
 /**
  * The repo-relative path inside a script invocation — `bash scripts/test.sh` → `scripts/test.sh`.
  *
- * Derived from the invocation rather than re-joined from `scriptsDir` and the file name, so forms
- * (ii) and (iii) name the same file form (i) does even where the two spellings would differ: a
+ * Derived from the invocation rather than re-joined from `scriptsDir` and the file name: a
  * `scriptsDir` of `.` makes {@link scriptInvocation} return `bash test.sh`, while a naive join would
  * produce `./test.sh`. It throws rather than guessing if the invocation stops looking like
- * `bash <one path>`, because at that point this module's three forms no longer describe the string
- * the config holds.
+ * `bash <one path>`, because at that point form (ii) here — and the run copy's exact form the
+ * watcher's per-run copy re-prefixes from it — no longer name the file the config's string runs.
  */
 function invokedPath(invocation: string): string {
   const path = invocation.startsWith(INVOCATION_PREFIX) ? invocation.slice(INVOCATION_PREFIX.length) : '';
   if (path === '' || path.includes(' ')) {
     throw internal(
-      `the script invocation ${JSON.stringify(invocation)} is not of the form "${INVOCATION_PREFIX}<path>", so the permission profile cannot derive its absolute and worktree forms from it`,
+      `the script invocation ${JSON.stringify(invocation)} is not of the form "${INVOCATION_PREFIX}<path>", so the permission profile cannot derive its absolute forms from it`,
     );
   }
   return path;
@@ -615,7 +627,6 @@ function rowValues(script: SelectedScript, tokens: RowTokens): Readonly<Record<s
   return {
     [tokens.invocation]: script.invocation,
     [tokens.file]: script.file,
-    [tokens.path]: script.path,
   };
 }
 
@@ -651,7 +662,7 @@ function substitute(text: string, values: Readonly<Record<string, string>>, know
  * Render one array, expanding its **form rows**.
  *
  * A run of consecutive rows belonging to one family is expanded script-major: the whole run is
- * emitted once per selected script, so a script's three forms stay together and read as the unit
+ * emitted once per selected script, so a script's forms stay together and read as the unit
  * they are. A family with no selected script contributes nothing at all — which is how a
  * configuration without `deploy.command` produces a profile with no deploy entry rather than one
  * naming a wrapper that was never written.
@@ -786,7 +797,7 @@ function bashScriptRuleTarget(entry: string): string | undefined {
  * `undefined` for everything else: an `mcp__…` entry, a command rule with no `bash ` prefix, a rule
  * whose path is repo-relative (`Bash(bash scripts/test.sh:*)`, the form {@link scriptInvocation}
  * returns), and a rule whose directory carries a glob character, which names a pattern rather than a
- * directory — the sibling-worktree spelling.
+ * directory — the sibling-worktree spelling a profile an earlier release wrote carries.
  *
  * **Telling a plugin root from the repository root is deliberately the caller's job.** Under the
  * default `scriptsDir`, a wrapper's repo-root-absolute entry renders byte-identically to what
@@ -883,8 +894,10 @@ function assertRunnable(profile: JsonObject): void {
  * agent-invocable outer-loop row alike — contributes exactly {@link FORMS_PER_SCRIPT} `allow`
  * entries.
  *
- * Checked rather than assumed because the three forms live in the template, where a well-meaning
- * edit can drop one — and a dropped form is invisible until the run that used that spelling is refused.
+ * Checked rather than assumed because the base profile's two forms live in the template, where a
+ * well-meaning edit can drop one, and a dropped form is invisible until the run that used that
+ * spelling is refused. The watcher's per-run copy twins only the repo-root-absolute form, so
+ * dropping that one here drops the run copy's exact form as well.
  * The other direction (no entry names a script that was not written, and none names one an agent
  * must not run) is the fixture tests', which can see the filesystem this module deliberately never
  * touches.
@@ -1476,7 +1489,7 @@ function appendCarriedPluginRootEntries(
 
 /**
  * Render the permission profile for one repository: the template, with every token resolved from
- * the runtime paths and the config in effect, and one group of three `allow` entries per wrapper
+ * the runtime paths and the config in effect, and one group of two `allow` entries per wrapper
  * script that was written.
  *
  * Nothing here reads a path out of a file that ships and nothing here touches the filesystem beyond
@@ -1565,7 +1578,7 @@ export function renderProfile({
 
   // Before the toolchain entries and after the fragment, which is the window in which every `.sh`
   // entry in the profile came from a wrapper or outer-loop row: a toolchain command that happened
-  // to be named like one of them would otherwise be counted as a fourth form of it.
+  // to be named like one of them would otherwise be counted as a third form of it.
   assertEveryScriptListed(profile, [...scripts, ...outerLoop]);
 
   appendToolchainAllowances(profile, {
@@ -1600,7 +1613,7 @@ export function renderProfile({
   pluginRootOutcome?.(outcome);
 
   // In the same window and for the same reason: a carried plugin helper whose basename happens to
-  // match a wrapper's would be counted as a fourth form of that wrapper above. Gated on `force`,
+  // match a wrapper's would be counted as a third form of that wrapper above. Gated on `force`,
   // which is the only run that replaces the file these entries are read out of — an unforced render
   // reads nothing and produces exactly what it did before this step existed.
   if (force) {
