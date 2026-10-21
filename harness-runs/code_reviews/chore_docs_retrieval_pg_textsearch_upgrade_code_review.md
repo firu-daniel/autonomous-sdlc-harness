@@ -12,7 +12,7 @@ Every accompanying test the touched layers' conventions documents require is pre
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 3** — Say `vector` moved on both engines, not on PGlite alone, in `docs/retrieval.md`'s old-index bullet _(layer: general)_
+1. [x] **Finding 3** — Say `vector` moved on both engines, not on PGlite alone, in `docs/retrieval.md`'s old-index bullet _(layer: general)_
 2. [ ] **Finding 1** — Drop the false stdout-notice rationale from `openPgliteStore`'s doc comment _(layer: cli)_
 3. [ ] **Finding 2** — Keep the before-handling measurement in `docs/retrieval.md` only, and point the upgrade suite's header at it _(layer: cli, general)_
 
