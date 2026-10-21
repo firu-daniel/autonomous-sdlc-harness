@@ -160,16 +160,17 @@
 #     checkout under $RUNNER_TEMP (THE PLUGIN PIN), not a run copy.
 #
 # ACTION PINS.
-#   actions/checkout          v5.1.0
-#   actions/setup-node        v5.0.0
-#   actions/cache/restore     v5.1.0
-#   actions/cache             v5.1.0
-#   actions/upload-artifact   v6.0.0
+#   actions/checkout          v7.0.1
+#   actions/setup-node        v7.0.0
+#   actions/cache/restore     v6.1.0
+#   actions/cache             v6.1.0
+#   actions/upload-artifact   v7.0.1
 # Each `uses:` names the full commit sha of the release on the comment line
-# above it. Each release is in the lowest major whose own action.yml declares
-# `runs.using: node24`, per a maintainer's lookups of each action's action.yml
-# and release notes on 2026-09-29T08:21Z (UTC). Each of those majors' release
-# notes requires Actions Runner 2.327.1 or newer; a GitHub-hosted runner already
+# above it. Each release's own action.yml declares `runs.using: node24`, per
+# a maintainer's lookups on 2026-10-21 (UTC) of each action's action.yml,
+# release notes and tag: each sha is the commit its release tag names, on the
+# action's default branch. Each release's README requires Actions Runner
+# 2.327.1 or newer; a GitHub-hosted runner already
 # has it, and a self-hosted one must run it (docs/remote-execution.md, section
 # 8). A sha, not a tag: a tag is mutable, and this job holds the Claude
 # credential and write tokens. A pin moves when
@@ -313,7 +314,7 @@
 # 2026-09-29, observed the cap rather than a rejection on `actions/upload-artifact@v4`:
 # the artifact's `expires_at` fell 90 days after its creation, with the
 # repository's artifact-and-log-retention at {"days":90,"maximum_allowed_days":400}.
-# That was v4; the v6 pinned above has not yet been observed by a gate round.
+# That was v4; the v7 pinned above has not yet been observed by a gate round.
 
 name: harness-run
 run-name: harness ${{ inputs.action }} ${{ inputs.branch }}
@@ -526,8 +527,8 @@ jobs:
 
       - name: Check out the run's branch
         if: env.HARNESS_STOPPED != '1'
-        # actions/checkout v5.1.0
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ inputs.branch }}
           fetch-depth: 0
@@ -547,8 +548,8 @@ jobs:
 
       - name: Set up Node
         if: env.HARNESS_STOPPED != '1'
-        # actions/setup-node v5.0.0
-        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        # actions/setup-node v7.0.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22'
           # v5 caches by package.json's packageManager; the job installs nothing through npm's cache, and a lockfile-less repository must not fail this step.
@@ -633,8 +634,8 @@ jobs:
 
       - name: Restore the docs-retrieval cache
         if: env.HARNESS_STOPPED != '1' && steps.config.outputs.retrieval == 'true'
-        # actions/cache/restore v5.1.0
-        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25
+        # actions/cache/restore v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ${{ env.HARNESS_RETRIEVAL_CACHE }}
           key: harness-retrieval-${{ runner.os }}-${{ env.HARNESS_CLI_VERSION }}
@@ -696,8 +697,8 @@ jobs:
 
       - name: Upload the state bundle
         if: always() && env.SCRIPTS_DIR != ''
-        # actions/upload-artifact v6.0.0
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        # actions/upload-artifact v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: harness-state
           path: ${{ runner.temp }}/harness-state
@@ -789,8 +790,8 @@ jobs:
           exit 1
 
       - name: Check out the default branch for collecting
-        # actions/checkout v5.1.0
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.repository.default_branch }}
           token: ${{ github.token }}
@@ -839,8 +840,8 @@ jobs:
 
       - name: Check out the dispatched ref
         if: env.HARNESS_STOPPED != '1'
-        # actions/checkout v5.1.0
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
@@ -861,8 +862,8 @@ jobs:
 
       - name: Set up Node
         if: env.HARNESS_STOPPED != '1' && steps.config.outputs.retrieval == 'true'
-        # actions/setup-node v5.0.0
-        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        # actions/setup-node v7.0.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22'
           # As in the run job: no npm cache is used, and a lockfile-less repository must not fail this step.
@@ -870,8 +871,8 @@ jobs:
 
       - name: Restore and save the docs-retrieval cache
         if: env.HARNESS_STOPPED != '1' && steps.config.outputs.retrieval == 'true'
-        # actions/cache v5.1.0
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        # actions/cache v6.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ${{ env.HARNESS_RETRIEVAL_CACHE }}
           key: harness-retrieval-${{ runner.os }}-${{ env.HARNESS_CLI_VERSION }}
