@@ -3,9 +3,9 @@
  * bracketing the two committed corpora's recorded sizes, and the row count at which a
  * stats-informed planner starts choosing the BM25 index scan.
  *
- * **The rule these tests exist to enforce: the lexical arm's "matching rows only" property belongs to
- * the BM25 index scan and not to the `<@>` operator, so it holds above a row count and not below it,
- * and that row count is recorded here rather than assumed.** The prior is `docs/retrieval.md` →
+ * **The rule these tests exist to enforce: the BM25 index scan filters to matching rows, and
+ * `lexicalSearch` filters on every other plan; the row count below which the planner leaves the index
+ * scan is recorded here rather than assumed.** The prior is `docs/retrieval.md` →
  * `## Measured, and how`, item (b): a `Seq Scan` on three rows returned every row at score `0`, and
  * the planner chose the index unforced at 2,003.
  *
@@ -18,16 +18,22 @@
  * own BM25 index definition and `<@>` ordering clause — imported from `cli/src/retrieval/store.ts`,
  * never retyped — with the index built after the rows: the conditions
  * item (b) measured, and the ones a `REINDEX` or a dump restore would recreate under a store whose
- * rows are already there.
+ * rows are already there. Case (c) reaches that plan through the store itself — `rebuildIndexes()`
+ * below the crossover — and asserts `lexicalSearch` still returns the match alone.
  *
  * **No model, and nothing downloaded.** The store is opened directly through
  * `openPgliteStore({ dataDir: undefined, dimensions: 384 })` and fed `upsertChunks` with locally
  * generated vectors, so this suite is stub-independent: it loads no embedder and no reranker, reaches
- * no network, and writes nothing to disk.
+ * no network, and writes nothing to disk except case (c)'s on-disk store under the system temp
+ * directory, which it removes: it needs one, because it reads the store's plan back through a raw
+ * `PGlite` opened on the same directory.
  */
 
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 
 import { PGlite } from '@electric-sql/pglite';
@@ -48,6 +54,7 @@ import {
   CHUNK_TEXT_COLUMN,
   CHUNKS_TABLE,
   chunkEmbeddingColumn,
+  LEXICAL_SEARCH_STATEMENT,
   openPgliteStore,
 } from '../dist/retrieval/store.js';
 
@@ -141,9 +148,8 @@ test('(a) lexicalSearch returns the matching chunk alone at three synthetic corp
   // non-matching rows coming back after the match at score `0`, which is what a `Seq Scan` returns.
   // It does not happen here because `openPgliteStore` creates the BM25 index before any row exists,
   // so the planner has no row estimate for `chunks` and takes the index scan at every size — see the
-  // header. If this case ever flips to that branch, `DocStore.lexicalSearch`'s own doc comment in
-  // `cli/src/retrieval/store.ts` already describes the behaviour and needs no change; what changes is
-  // that the fused arm is then carrying non-matching rows on a corpus this size.
+  // header. Were the plan here to flip to that `Seq Scan`, `lexicalSearch`'s own filter drops those
+  // rows, so this case would still pass; case (c) is the one that reaches that plan on purpose.
   for (const n of [40, 166, 1024]) {
     const store = await storeOf(t, n);
     const hits = await store.lexicalSearch(PROBE_TERM, ARM_CANDIDATES);
@@ -215,5 +221,53 @@ test('(b) the index-scan crossover, bisected on a stats-informed plan', async (t
   assert.ok(
     Math.abs(low - CROSSOVER_ROWS) <= CROSSOVER_BAND,
     `the crossover measured at ${low} rows, outside ${CROSSOVER_ROWS} +/- ${CROSSOVER_BAND}: a PGlite or pg_textsearch version bump has moved it, and the recorded number needs re-taking`,
+  );
+});
+
+test('(c) lexicalSearch returns the matching chunk alone on the Seq Scan plan below the crossover', async (t) => {
+  const n = 40;
+  assert.ok(
+    n < CROSSOVER_ROWS - CROSSOVER_BAND,
+    `${n} rows is not below the crossover band's low end of ${CROSSOVER_ROWS - CROSSOVER_BAND}`,
+  );
+  const dataDir = mkdtempSync(join(tmpdir(), 'docs-retrieval-store-'));
+  // One hook, so the reopened store is closed before its directory is removed.
+  let reopened;
+  t.after(async () => {
+    await reopened?.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  // The rows exist before `rebuildIndexes()` rebuilds the BM25 index, which is what gives the planner
+  // the real row estimate that puts this size on the `Seq Scan`.
+  const store = await openPgliteStore({ dataDir, dimensions: DIMENSIONS });
+  const chunks = corpusOf(n);
+  await store.upsertChunks(
+    chunks,
+    chunks.map((chunk) => vectorFor(chunk.key)),
+  );
+  await store.rebuildIndexes();
+  await store.close();
+
+  const raw = await PGlite.create({ dataDir, extensions: { vector, pg_textsearch } });
+  const explained = await raw.query(`EXPLAIN (VERBOSE, COSTS OFF) ${LEXICAL_SEARCH_STATEMENT}`, [PROBE_TERM, ARM_CANDIDATES]);
+  await raw.close();
+  const plan = explained.rows.map((row) => row['QUERY PLAN']).join('\n');
+  assert.match(
+    plan,
+    new RegExp(`Seq Scan on public\\.${CHUNKS_TABLE}\\b`),
+    `this case no longer reaches the Seq Scan plan it exists for; the plan was:\n${plan}`,
+  );
+
+  reopened = await openPgliteStore({ dataDir, dimensions: DIMENSIONS });
+  assert.deepEqual(
+    await reopened.lexicalSearch(PROBE_TERM, ARM_CANDIDATES),
+    [{ id: n, rank: 1 }],
+    `on the Seq Scan plan at ${n} rows the lexical arm returned more than the matching chunk`,
+  );
+  assert.deepEqual(
+    await reopened.lexicalSearch(ABSENT_TERM, ARM_CANDIDATES),
+    [],
+    `on the Seq Scan plan at ${n} rows a term no chunk carries matched`,
   );
 });

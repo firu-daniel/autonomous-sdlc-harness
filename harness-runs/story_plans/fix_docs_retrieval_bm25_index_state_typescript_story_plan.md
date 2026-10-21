@@ -73,7 +73,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_docs_retrieval_bm25_inde
 4. [x] **Task 4** — Take the before-fix relevance figures on both corpora and on the Seq Scan plan _(layer: general)_ _(points: 15)_
 5. [x] **Task 5** — Measure the vector arm after a refresh with deletes, and record any vector-index statement as a proposal to the maintainer _(layer: general)_ _(points: 15)_
 6. [x] **Task 6** — Record the user's real-catalog route-2 figure — the park point the fix waits on _(layer: general)_ _(points: 8)_
-7. [ ] **Task 7** — Make `lexicalSearch` return only matching chunks on every plan, and give the store its end-state method _(layer: cli)_ _(points: 20)_
+7. [x] **Task 7** — Make `lexicalSearch` return only matching chunks on every plan, and give the store its end-state method _(layer: cli)_ _(points: 20)_
 8. [ ] **Task 8** — End every changing refresh, and every index the shipped code left, in the `REINDEX` state, pinned by a history test _(layer: cli)_ _(points: 20)_
 9. [ ] **Task 9** — Re-run the relevance figures after the fix and report every figure that moved _(layer: general)_ _(points: 15)_
 10. [ ] **Task 10** — Read the shipped end state at refresh level and bring the probe modules up to date with it _(layer: general)_ _(points: 15)_
