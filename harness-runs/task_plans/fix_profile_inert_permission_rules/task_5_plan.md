@@ -1,0 +1,25 @@
+### Task 5 — Script-allowlist guard vouches only for its own checkout's scripts directory
+
+**Goal:** The script-allowlist guard and the permission profile must make one statement about which run copy's wrappers a session may run. The profile now grants only the run's own copy, by exact path in the per-run copy. So the guard stops auto-allowing a script under **another** sibling run copy, `<work_root>/<project_name>-<x>/<scripts_dir>/`. It vouches only for `<top>/<scripts_dir>/`, where `<top>` is the checkout it judges. In an unattended run that is the run's own copy, because the watcher launches the session with that copy as its working directory.
+
+**Depends on:** Task 1. It makes the per-run copy append `Bash(bash <copy>/<scripts_dir>/<x>.sh:*)` twins for the run's own copy only, so no profile grants another copy's wrappers. Task 3 dropped the base profile's sibling-glob wrapper rows. Nothing in `plugin/` calls a wrapper under another checkout's scripts directory, so no corpus spelling loses its permit. The main checkout's excluded wrappers, `bash <MAIN_REPO>/<scripts_dir>/…`, were never vouched for from a run copy, and that is unchanged (`.claude/context/conventions.md` → `## Shell assets`).
+
+**Where this task stops.** The before/after decision rows in `docs/guard-verification.md` are **Task 8**'s (general layer). The guard's wall-clock latency re-take is a post-merge manual step listed in the story index.
+
+### Targets
+
+- `plugin/hooks/autonomous-script-allowlist-guard.sh`: `under_allowed_scripts`, the work-root resolution, the header, `REPRO`, and the `permissionDecisionReason`.
+- `plugin/hooks/README.md`: the `autonomous-script-allowlist-guard.sh` outcome row and `## The deny list`.
+
+**Work:**
+
+- [ ] `under_allowed_scripts`: keep only the literal `"$scripts_abs"/*` arm. Drop the `hc_in_workspace` / `$work` sibling half. If nothing else in the file reads `work` after that, remove the `work=$(hc_work_root "$top") || exit 0` resolution, its comment and the trailing-slash strip, so an unresolvable work root no longer silences a call it does not judge. Leave `hc_in_workspace` in `plugin/hooks/lib/harness-config-lib.sh` untouched, because other guards use it.
+- [ ] Header: the opening paragraph's *"inside that repository or inside one of its sibling worktrees"* and **THE ALLOWED ROOTS ARE CONFIGURED, NOT BAKED IN** now state one root, `<repo_root>/<scripts_dir>` of the judged checkout. Add the reason: the per-run permission profile grants a run only its own copy's wrappers, and a sibling glob in a `Bash` rule is matched literally (`docs/sandbox-verification.md` F4). In the deny-list paragraph, *"any sibling worktree"* becomes *"the checkout's own spellings"*.
+- [ ] `REPRO`: move the `bash <work_root>/<project_name>-<branch>/<scripts dir>/<wrapper>.sh` row from ALLOW to NO OUTPUT, with the reason *"another run copy: judged from <repo>, its scripts directory is not this checkout's"*. Add an ALLOW row for the same command with `"cwd"` set to that sibling, which is now its own `<top>`. In the `jq` output, the `permissionDecisionReason` drops *" or of one of its sibling worktrees"*.
+- [ ] `plugin/hooks/README.md`: the outcome-table row *"under the configured `scriptsDir` of the resolved repository or one of its sibling run copies"* now says the resolved repository only. In `## The deny list`, *"and the same script inside any sibling run copy"* becomes *"in the resolved repository"*. Keep every other sentence byte-identical.
+
+**Verification:**
+
+- Drive the guard's own `REPRO` decisions against a throwaway `git init` fixture carrying a `harness.config.json` and two branches, per `plugin/hooks/README.md` → `## Reproducing a decision by hand`, plus one sibling linked worktree. Write the driver as a `.sh` file under `harness-runs/scratch/` and run it with `bash scripts/scratch-run.sh harness-runs/scratch/<file>.sh`. Never use a piped one-liner. Every pre-existing ALLOW row still prints the `allow` object, and every NO OUTPUT row prints nothing. The sibling path judged from `<repo>` is now silent. The same path with `"cwd"` at the sibling prints `allow`.
+- Run `grep -nE 'sibling|\$work' plugin/hooks/autonomous-script-allowlist-guard.sh`. No remaining hit may describe an allowed root. Only prose saying the guard no longer vouches for siblings may match.
+- `jq . plugin/hooks/hooks.json` exits 0 and the file is unchanged by this task. The manifest gate itself runs once in the closing `commands.test`, not per task.
