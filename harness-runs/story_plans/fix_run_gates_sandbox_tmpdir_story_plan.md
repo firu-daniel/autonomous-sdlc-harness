@@ -44,7 +44,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_run_gates_sandbox_tmpdir
 
 1. [x] **Task 1** — Give every bare `mktemp` in the shipped `remote-run.sh` template an explicit `${TMPDIR:-/tmp}` template, and guard the shipped scripts against a bare or `-t` call _(layer: cli)_ _(points: 15)_
 2. [x] **Task 2** — Create `run-gates.sh`'s log, and the temporaries of `publish-main.sh`, `release.sh` and this repository's `remote-run.sh`, under `${TMPDIR:-/tmp}` _(layer: general)_ _(points: 10)_
-3. [ ] **Task 3** — Record the `mktemp` measurements and the owed sandboxed gates re-run in `docs/sandbox-verification.md` _(layer: general)_ _(points: 10)_
+3. [x] **Task 3** — Record the `mktemp` measurements and the owed sandboxed gates re-run in `docs/sandbox-verification.md` _(layer: general)_ _(points: 10)_
 
 ## Scope register
 
