@@ -30867,3 +30867,30 @@ effect is measured on a 41-chunk corpus only.
   probe`).
 - **Every `pg_textsearch` source path and issue number cited in this section is a task-prompt lead,** not
   re-read on this branch.
+
+**Its standing on pg_textsearch 1.5.1.** Route 2 stands, with one qualification narrowed. Every figure here
+is quoted from `### The deciding figures on pg_textsearch 1.5.1`, whose `self-docs` runs carry `{ files:
+71, chunks: 825 }` and `826`, so its `self-docs` figures are compared with the ones above by outcome only.
+Goal 5 still fails route 1 on `self-docs`: TypeScript in `fresh`, `file-added` and `unchanged` on 2, 1 and
+2 hits at 4.76837158203125e-7, and Python in the same three scenarios in both runs, the largest after the
+spill 0.0000019073486328125; on `fixture-catalog` the rule holds on both backends except Python's
+`unchanged`, decision `none`, on 136 hits, the largest 0.1072683334350586 (`#### The candidate end-state
+rule, at refresh level, on 1.5.1`, **The verdicts**). Goals 5 and 1 still fail route 3: every `after`
+reading that followed `REINDEX` differs from `reference-reindex` on 0 hits in both columns on every backend
+and corpus (the same part, the paragraph after **The verdicts**), and `t3` / `t4` differ on no hit on
+either engine or corpus (`#### The score each index state ranks by, on 1.5.1`, **State against state, on
+1.5.1.**, the `t3` / `t4` row). Goal 1 still points at `REINDEX` rather than the spill: on `self-docs` the
+spill leaves 3 segments and differs from `t3` and `t4` on 1 hit (PGlite) and 4 (Postgres), and on
+`fixture-catalog` on none (the same table, the `t1` / `t3` and `t1` / `t4` rows). Goal 3's stray is gone:
+no `operator` value disagreed, of 555466 compared in each states-sequence run and of 268156 (`s0`) and
+273420 (`s1`) in the history run, while each memtable row's `scan` still moves once to its segment score
+when the memtable is emptied (`#### The stray index-scan score, on 1.5.1`, the paragraph after its table,
+and **Changed or unchanged.**, the column and `scan`-move bullets). The not-bit-identical qualification
+loses its goal-5 instance: Python `fixture-catalog` `other-corpus` after `REINDEX` reads 0 hits in both
+runs, against 1 hit at 9.5367431640625e-7 on 1.3.1 (the refresh-level part, **Changed or unchanged.**, the
+Python `fixture-catalog` bullet); goal 2's two-`REINDEX` difference was not re-taken on 1.5.1 and stands as
+recorded. The Seq Scan qualification stands: `REINDEX` still turns the store's plan to `Seq Scan` on
+`fixture-catalog` in `file-edited` and `file-removed` on both backends (that part, **Observation 1**), and
+the crossover is still 63 rows (`#### The lexical-plan crossover, on 1.5.1`, **The outcome.**). The `none`
+qualification stands on the `unchanged` figures above. Route 2 remains a proposal, and the fix branch
+decides.
