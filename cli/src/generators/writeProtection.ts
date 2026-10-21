@@ -4,9 +4,11 @@
  *
  * **The rule this module exists to enforce: anything that runs outside the sandbox must not be
  * writable from inside it.** Every path {@link protectedPaths} names is protected on both sides: a
- * `sandbox.filesystem.denyWrite` entry for sandboxed commands, and an `Edit` and a `Write` deny rule
- * for Claude's file tools, which run outside the sandbox and which the profile's own
- * `Edit(//<repoRoot>/**)` / `Write(//<repoRoot>/**)` allows would otherwise reach.
+ * `sandbox.filesystem.denyWrite` entry for sandboxed commands, and an `Edit` deny rule for Claude's
+ * file tools, which run outside the sandbox and which the profile's own `Edit(//<repoRoot>/**)` allow
+ * would otherwise reach. There is no `Write` rule: `Edit(path)` rules cover every file-editing tool,
+ * `Write` included, and a `Write(path)` rule is accepted, never consulted, and warned about at startup
+ * (`docs/sandbox-verification.md` → F4).
  *
  * Every path is built through its owner — the outer-loop table and its path builders, the hooks
  * directory resolver, the MCP wiring's path, the profile's and the settings files' paths, the
@@ -35,9 +37,9 @@
  * - `cli/templates/scripts/autonomous-watcher.sh` holds a copy of {@link COPY_GIT_PATHS}, each row's
  *   relative path and kind (`cli/test/watcher-run-profile.test.mjs`).
  * - The same script's `run_profile_render` holds a copy of {@link fileToolDenyRules}' kind → rule map
- *   (`cli/test/watcher-run-profile.test.mjs`): `file` → `Edit(/<p>)`, `Write(/<p>)`; `directory` →
- *   the same on `<p>/**`; `entry` → both forms of each tool. Any change to that map is an edit to
- *   `run_profile_render` in the same change.
+ *   (`cli/test/watcher-run-profile.test.mjs`): `file` → `Edit(/<p>)`; `directory` → `Edit(/<p>/**)`;
+ *   `entry` → `Edit(/<p>)`, `Edit(/<p>/**)`. Any change to that map is an edit to `run_profile_render`
+ *   in the same change.
  *
  * A mirror this header does not declare is a defect.
  */
@@ -386,15 +388,13 @@ export function jobSurfacePaths(config: HarnessConfig): readonly string[] {
 }
 
 /**
- * The `Edit` and `Write` deny rules for one protected path, in the `//` absolute form: the path for a
- * `file`, everything under it for a `directory`, and both for an `entry`.
+ * The `Edit` deny rules for one protected path, in the `//` absolute form: the path for a `file`,
+ * everything under it for a `directory`, and both for an `entry`. `Edit` alone covers `Write` (module
+ * header).
  */
 export function fileToolDenyRules(entry: ProtectedPath): readonly string[] {
-  if (entry.kind === 'entry') {
-    return [`Edit(/${entry.path})`, `Edit(/${entry.path}/**)`, `Write(/${entry.path})`, `Write(/${entry.path}/**)`];
-  }
-  const target = entry.kind === 'directory' ? `${entry.path}/**` : entry.path;
-  return [`Edit(/${target})`, `Write(/${target})`];
+  if (entry.kind === 'entry') return [`Edit(/${entry.path})`, `Edit(/${entry.path}/**)`];
+  return [entry.kind === 'directory' ? `Edit(/${entry.path}/**)` : `Edit(/${entry.path})`];
 }
 
 /** The list at `path` in the rendered profile, or an internal fault naming where the template lost its shape. */
@@ -431,7 +431,7 @@ export function applyWriteProtection(profile: JsonObject, { repoRoot, workRoot, 
 
   appendReadme(
     profile,
-    `WHAT RUNS OUTSIDE THE SANDBOX CANNOT BE WRITTEN FROM INSIDE IT: each path below is in \`sandbox.filesystem.denyWrite\` and has an \`Edit\` and a \`Write\` rule in \`deny\`, because the file tools run outside the sandbox. ${paths
+    `WHAT RUNS OUTSIDE THE SANDBOX CANNOT BE WRITTEN FROM INSIDE IT: each path below is in \`sandbox.filesystem.denyWrite\` and has an \`Edit\` rule in \`deny\`, because the file tools run outside the sandbox. ${paths
       .map(({ path, reason }) => `${path} - ${reason}`)
       .join('; ')}. How the Linux sandbox treats a \`denyWrite\` entry containing \`*\` is unverified - it may skip one, or expand it to the paths that exist when the sandbox starts - so on Linux only the file-tool side is relied on for the globbed entries: a run copy's hooks directory, MCP wiring and settings files, its ${COPY_GIT_PATHS.map(
       ({ path }) => path,

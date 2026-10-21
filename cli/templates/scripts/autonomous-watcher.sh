@@ -1958,6 +1958,32 @@ RUN_PROFILE_SANDBOX_OPT_OUT='{"sandbox.enabled":false,"sandbox.failIfUnavailable
 RUN_PROFILE_FILE=""
 RUN_PROFILE_REFUSAL=""
 
+# run_profile_wrapper_prefixes <copy> — set RUN_PROFILE_MAIN_PREFIX to
+# `Bash(bash <MAIN_REPO>/<scripts_dir>/` and RUN_PROFILE_COPY_PREFIX to
+# `Bash(bash <copy>/<scripts_dir>/`; 1 when the scripts directory is
+# unresolvable. Call it directly, never inside `$(…)`: it sets globals.
+# The main prefix is a declared mirror of
+# cli/src/generators/permissionProfile.ts → the `{{repoRoot}}` wrapper rows of
+# `WRAPPER_ROW_TOKENS`, `OUTER_LOOP_ROW_TOKENS` and `DEPLOY_ROW_TOKENS`
+# (`Bash(bash <repoRoot>/<scriptsDir>/`, a `.` scripts directory collapsing to
+# the root), held equal by cli/test/watcher-run-profile.test.mjs. A change to
+# that row spelling is an edit here in the same change.
+RUN_PROFILE_MAIN_PREFIX=""
+RUN_PROFILE_COPY_PREFIX=""
+run_profile_wrapper_prefixes() {
+  local copy="${1%/}" scripts
+  RUN_PROFILE_MAIN_PREFIX=""
+  RUN_PROFILE_COPY_PREFIX=""
+  scripts="$(hr_scripts_dir "$MAIN_REPO")" || return 1
+  while [ "${scripts#./}" != "$scripts" ]; do scripts="${scripts#./}"; done
+  case "$scripts" in
+    . | '') scripts="" ;;
+    *) scripts="${scripts}/" ;;
+  esac
+  RUN_PROFILE_MAIN_PREFIX="Bash(bash ${MAIN_REPO%/}/${scripts}"
+  RUN_PROFILE_COPY_PREFIX="Bash(bash ${copy}/${scripts}"
+}
+
 # 0 when <file> parses as exactly one JSON document, and that an object.
 run_profile_one_object() {
   [ "$(jq -s 'length == 1 and (.[0] | type) == "object"' "$1" 2>/dev/null)" = "true" ]
@@ -1975,7 +2001,10 @@ run_profile_one_object() {
 # Never called in job mode. Every path is exact: this watcher's own rule, not
 # the generator's refused set, refuses a path carrying a quote, a `*` or a tab —
 # a `*` would turn an exact entry into a glob, a quote does not belong in a
-# path this watcher emits, and a tab is the separator. Exit 1 the protected set
+# path this watcher emits, and a tab is the separator — and a <copy> carrying
+# `$`, a backquote, `&`, `;`, `|`, `<` or `>`, the shapes
+# cli/src/generators/profileEntries.ts → FORBIDDEN_IN_ENTRY never lets a
+# command entry carry, which the copy's wrapper twins would. Exit 1 the protected set
 # is unreadable, 2 the worktree list failed, 3 a path was refused, 4 <kind> is
 # neither kind; nothing useful is printed on a non-zero exit.
 run_profile_entries() {
@@ -2028,6 +2057,9 @@ EOF
   done <<EOF
 $out
 EOF
+  case "$copy" in
+    *'$'* | *'`'* | *'&'* | *';'* | *'|'* | *'<'* | *'>'*) return 3 ;;
+  esac
   printf '%s' "$out"
 }
 
@@ -2036,18 +2068,22 @@ EOF
 # prints, through a temporary file in its directory and `mv`, the directory
 # created at mode 700, and set RUN_PROFILE_FILE to it. The content is
 # $SETTINGS_PROFILE with each run_profile_entries path appended to
-# `.sandbox.filesystem.denyWrite` and its Edit / Write rules to
-# `.permissions.deny`, each only when absent; nothing else changes. Re-rendered
+# `.sandbox.filesystem.denyWrite` and its Edit rules to `.permissions.deny`,
+# and the run copy's twins of the base's main-checkout wrapper rules appended
+# to `.permissions.allow` and `.permissions.ask`: each base entry of that list
+# starting with RUN_PROFILE_MAIN_PREFIX, that prefix replaced by
+# RUN_PROFILE_COPY_PREFIX (run_profile_wrapper_prefixes), in base order. The
+# `ask` twins keep a run copy's deploy wrapper asked about. Every append is
+# made only when absent. Re-rendered
 # at every spawn, so a resume gets one derived from the current base. Call it
 # directly, never inside `$(…)`: it sets globals. 1 with RUN_PROFILE_REFUSAL set
 # on any failed step, an unanchorable lane directory included.
 #
 # The kind → rule map in `rules` is a declared mirror of
 # cli/src/generators/writeProtection.ts → fileToolDenyRules, held equal by
-# cli/test/watcher-run-profile.test.mjs: `file` → Edit(/<p>), Write(/<p>);
-# `directory` → the same on <p>/**; `entry` → Edit(/<p>), Edit(/<p>/**),
-# Write(/<p>), Write(/<p>/**). A change to that map is an edit here in the same
-# change.
+# cli/test/watcher-run-profile.test.mjs: `file` → Edit(/<p>); `directory` →
+# Edit(/<p>/**); `entry` → Edit(/<p>), Edit(/<p>/**). A change to that map is
+# an edit here in the same change.
 run_profile_render() {
   local branch="$1" copy="$2" kind="$3" file dir tmp entries rc=0
   RUN_PROFILE_FILE=""
@@ -2061,11 +2097,15 @@ run_profile_render() {
     0) ;;
     1) RUN_PROFILE_REFUSAL="the run copy's protected paths could not be read from harness.config.json"; return 1 ;;
     2) RUN_PROFILE_REFUSAL="git worktree list failed in $MAIN_REPO"; return 1 ;;
-    3) RUN_PROFILE_REFUSAL="a per-run profile entry carries a quote, a '*' or a tab"; return 1 ;;
+    3) RUN_PROFILE_REFUSAL="a per-run profile entry carries a quote, a '*' or a tab, or the run copy's path carries a '\$', a backquote, '&', ';', '|', '<' or '>'"; return 1 ;;
     *) RUN_PROFILE_REFUSAL="the run copy's kind '$kind' is neither clone nor worktree"; return 1 ;;
   esac
   if ! run_profile_one_object "$SETTINGS_PROFILE"; then
     RUN_PROFILE_REFUSAL="the base profile $SETTINGS_PROFILE is not exactly one JSON object"
+    return 1
+  fi
+  if ! run_profile_wrapper_prefixes "$copy"; then
+    RUN_PROFILE_REFUSAL="the scripts directory could not be read from harness.config.json"
     return 1
   fi
   dir="${file%/*}"
@@ -2078,17 +2118,21 @@ run_profile_render() {
     return 1
   fi
   if ! printf '%s' "$entries" |
-    jq -R -s --slurpfile base "$SETTINGS_PROFILE" '
+    jq -R -s --slurpfile base "$SETTINGS_PROFILE" \
+      --arg main "$RUN_PROFILE_MAIN_PREFIX" --arg twin "$RUN_PROFILE_COPY_PREFIX" '
       def rules:
-        if .kind == "entry" then ["Edit(/" + .path + ")", "Edit(/" + .path + "/**)", "Write(/" + .path + ")", "Write(/" + .path + "/**)"]
-        elif .kind == "directory" then ["Edit(/" + .path + "/**)", "Write(/" + .path + "/**)"]
-        else ["Edit(/" + .path + ")", "Write(/" + .path + ")"]
+        if .kind == "entry" then ["Edit(/" + .path + ")", "Edit(/" + .path + "/**)"]
+        elif .kind == "directory" then ["Edit(/" + .path + "/**)"]
+        else ["Edit(/" + .path + ")"]
         end;
       def add_absent($xs): reduce $xs[] as $x (.; if any(.[]; . == $x) then . else . + [$x] end);
+      def add_twins: add_absent([.[] | select(type == "string" and startswith($main)) | $twin + .[($main | length):]]);
       [split("\n")[] | select(length > 0) | split("\t") | {path: .[0], kind: .[1]}] as $e
       | $base[0]
       | .sandbox.filesystem.denyWrite |= add_absent([$e[].path])
       | .permissions.deny |= add_absent([$e[] | rules[]])
+      | if (.permissions.allow | type) == "array" then .permissions.allow |= add_twins else . end
+      | if (.permissions.ask | type) == "array" then .permissions.ask |= add_twins else . end
     ' >"$tmp" 2>/dev/null; then
     rm -f "$tmp"
     RUN_PROFILE_REFUSAL="could not render the per-run profile from $SETTINGS_PROFILE"
@@ -2103,8 +2147,8 @@ run_profile_render() {
   return 0
 }
 
-# run_profile_check <file> — 0 when <file> may be passed to `--settings`; 1
-# with RUN_PROFILE_REFUSAL set to one sentence when:
+# run_profile_check <file> [<copy>] — 0 when <file> may be passed to
+# `--settings`; 1 with RUN_PROFILE_REFUSAL set to one sentence when:
 #   * $SETTINGS_PROFILE or <file> is not exactly one JSON object;
 #   * the sandbox clause fails: with no `_README` line beginning with
 #     RUN_PROFILE_OPT_OUT_MARKER the three keys must equal
@@ -2113,15 +2157,20 @@ run_profile_render() {
 #     `--settings` file starts an unsandboxed session with no error
 #     (docs/sandbox-verification.md §6);
 #   * removing exactly the entries <file> appends to
-#     `.sandbox.filesystem.denyWrite` and `.permissions.deny` does not give
-#     back $SETTINGS_PROFILE, compared as JSON;
-#   * an appended entry is not a string.
+#     `.sandbox.filesystem.denyWrite`, `.permissions.deny`,
+#     `.permissions.allow` and `.permissions.ask` does not give back
+#     $SETTINGS_PROFILE, compared as JSON;
+#   * an entry appended to `.sandbox.filesystem.denyWrite` or
+#     `.permissions.deny` is not a string;
+#   * an entry appended to `.permissions.allow` or `.permissions.ask` is not
+#     the <copy> twin, as run_profile_render makes it, of a base entry of the
+#     same list. With no <copy> every such append is refused.
 # A settings file failing Claude Code's validation is silently ignored under
 # `-p`, so this reduces the per-run copy's validity to the base's, which
-# `doctor` grades. In job mode <file> is $SETTINGS_PROFILE and the appended set
-# is empty.
+# `doctor` grades. In job mode <file> is $SETTINGS_PROFILE, no <copy> is
+# passed, and the appended set is empty.
 run_profile_check() {
-  local file="$1" verdict
+  local file="$1" copy="${2-}" verdict main="" twin=""
   RUN_PROFILE_REFUSAL=""
   if ! run_profile_one_object "$SETTINGS_PROFILE"; then
     RUN_PROFILE_REFUSAL="the base profile $SETTINGS_PROFILE is not exactly one JSON object"
@@ -2131,7 +2180,16 @@ run_profile_check() {
     RUN_PROFILE_REFUSAL="the per-run profile $file is not exactly one JSON object"
     return 1
   fi
+  if [ -n "$copy" ]; then
+    if ! run_profile_wrapper_prefixes "$copy"; then
+      RUN_PROFILE_REFUSAL="the scripts directory could not be read from harness.config.json"
+      return 1
+    fi
+    main="$RUN_PROFILE_MAIN_PREFIX"
+    twin="$RUN_PROFILE_COPY_PREFIX"
+  fi
   verdict="$(jq -n -r --slurpfile b "$SETTINGS_PROFILE" --slurpfile f "$file" \
+    --arg main "$main" --arg twin "$twin" \
     --arg marker "$RUN_PROFILE_OPT_OUT_MARKER" \
     --argjson strict "$RUN_PROFILE_SANDBOX_STRICT" \
     --argjson optout "$RUN_PROFILE_SANDBOX_OPT_OUT" '
@@ -2145,16 +2203,24 @@ run_profile_check() {
             else {ok: false, extra: []}
             end;
         def restore(p): if (getpath(p) == ($B | getpath(p))) then . else setpath(p; $B | getpath(p)) end;
+        def twins(p):
+          if $main == "" then []
+          else [($B | getpath(p)) | .[]? | select(type == "string" and startswith($main)) | $twin + .[($main | length):]]
+          end;
+        def twinned(p; d): twins(p) as $t | all(d.extra[]; . as $x | any($t[]; . == $x));
         (any(($F._README // [])[]?; type == "string" and startswith($marker))) as $optedout
         | (if $optedout then $optout else $strict end) as $want
         | ["sandbox", "filesystem", "denyWrite"] as $dw
         | ["permissions", "deny"] as $pd
-        | delta($dw) as $d1 | delta($pd) as $d2
+        | ["permissions", "allow"] as $pa
+        | ["permissions", "ask"] as $pk
+        | delta($dw) as $d1 | delta($pd) as $d2 | delta($pa) as $d3 | delta($pk) as $d4
         | if ($want | to_entries | all(.[]; . as $e | ($F | getpath($e.key | split("."))) == $e.value)) | not
           then (if $optedout then "optout" else "strict" end)
-          elif ($d1.ok and $d2.ok) | not then "delta"
-          elif ($F | restore($dw) | restore($pd)) != $B then "delta"
+          elif ($d1.ok and $d2.ok and $d3.ok and $d4.ok) | not then "delta"
+          elif ($F | restore($dw) | restore($pd) | restore($pa) | restore($pk)) != $B then "delta"
           elif any(($d1.extra + $d2.extra)[]; type != "string") then "nonstring"
+          elif (twinned($pa; $d3) and twinned($pk; $d4)) | not then "twin"
           else "ok"
           end
     ' 2>/dev/null)" || verdict=""
@@ -2164,6 +2230,7 @@ run_profile_check() {
     optout) RUN_PROFILE_REFUSAL="$file names the sandbox opt-out but does not carry its shape: sandbox.enabled false, sandbox.failIfUnavailable false, sandbox.allowUnsandboxedCommands false" ;;
     delta) RUN_PROFILE_REFUSAL="$file differs from the base profile $SETTINGS_PROFILE by more than entries appended to sandbox.filesystem.denyWrite and permissions.deny" ;;
     nonstring) RUN_PROFILE_REFUSAL="$file appends an entry that is not a string" ;;
+    twin) RUN_PROFILE_REFUSAL="$file appends a permissions.allow or permissions.ask entry that is not the run copy's twin of a base wrapper rule" ;;
     *) RUN_PROFILE_REFUSAL="$file could not be checked against the base profile $SETTINGS_PROFILE" ;;
   esac
   return 1
@@ -2281,7 +2348,9 @@ spawn_engine() {
     fi
     settings_file="$RUN_PROFILE_FILE"
   fi
-  if ! run_profile_check "$settings_file"; then
+  local check_copy=""
+  [ "$JOB_MODE" = "1" ] || check_copy="$worktree"
+  if ! run_profile_check "$settings_file" "$check_copy"; then
     spawn_refuse "$branch" "$RUN_PROFILE_REFUSAL"
     return 1
   fi
@@ -2482,7 +2551,7 @@ EOF
     # than passed on; inside the subshell, so no other child of the watcher sees it.
     export HARNESS_MAIN_REPO="$MAIN_REPO"
     # `--add-dir "$worktree"` is NOT redundant with the profile: that file grants
-    # the sibling-run-copy glob through Edit/Write/Read rules, not through
+    # the sibling-run-copy glob through Edit/Read rules, not through
     # additionalDirectories. The job-mode extras after the two fixed --add-dir
     # flags duplicate the base profile's additionalDirectories on purpose: a job
     # session was refused reads under a directory that file granted, and a

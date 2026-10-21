@@ -4,8 +4,9 @@
  * functions called directly in a shell that sourced it.
  *
  * **The rule these tests exist to enforce: a session is launched only on a per-run copy that equals
- * the base profile plus that run's exact entries, with the sandbox on and strict or the named
- * opt-out taken.** And **a clone run's exit brings its branch into the main checkout, while a sync
+ * the base profile plus that run's exact deny entries and its wrapper twins — the run copy's spelling
+ * of each base `allow` or `ask` rule for a main-checkout wrapper — with the sandbox on and strict or
+ * the named opt-out taken.** And **a clone run's exit brings its branch into the main checkout, while a sync
  * that cannot run — RUN_MAIN unplaced included — is one log line and never changes the
  * classification.**
  *
@@ -14,6 +15,9 @@
  * - `RUN_PROFILE_COPY_GIT_PATHS` (read through `run_profile_entries`) — `COPY_GIT_PATHS`, and the
  *   kind → rule map inside `run_profile_render` — `fileToolDenyRules`, both in
  *   `cli/src/generators/writeProtection.ts`;
+ * - `run_profile_wrapper_prefixes`' main prefix — the `{{repoRoot}}` wrapper rows
+ *   `cli/src/generators/permissionProfile.ts` writes, held by the clone launch case, which twins every
+ *   such row a real `init` wrote;
  * - `RUN_PROFILE_OPT_OUT_MARKER` — `SANDBOX_OPT_OUT_MARKER`, and `RUN_PROFILE_SANDBOX_STRICT` —
  *   `shippedSandboxSettings()` filtered to `sandbox.enabled`, `sandbox.failIfUnavailable` and
  *   `sandbox.allowUnsandboxedCommands`, both in `cli/src/generators/sandboxProfile.ts`.
@@ -53,12 +57,27 @@ function addAbsent(list, entries) {
   return out;
 }
 
-/** `profile` with the two arrays a per-run copy may append to removed. */
+/** `profile` with the four arrays a per-run copy may append to removed. */
 function withoutAppendable(profile) {
   const copy = structuredClone(profile);
   delete copy.sandbox.filesystem.denyWrite;
   delete copy.permissions.deny;
+  delete copy.permissions.allow;
+  delete copy.permissions.ask;
   return copy;
+}
+
+/** The wrapper-rule prefix `run_profile_wrapper_prefixes` gives a checkout at `root`. */
+function wrapperPrefix(root) {
+  return `Bash(bash ${root}/${INIT_SCRIPTS_DIR}/`;
+}
+
+/** The `copy` twin of each entry of `list` carrying `main`'s wrapper prefix, in order. */
+function wrapperTwins(list, main, copy) {
+  const from = wrapperPrefix(main);
+  return (list ?? [])
+    .filter((entry) => typeof entry === 'string' && entry.startsWith(from))
+    .map((entry) => `${wrapperPrefix(copy)}${entry.slice(from.length)}`);
 }
 
 /**
@@ -132,13 +151,27 @@ function cloneEntries(config, copy, others = []) {
   ];
 }
 
-/** Assert `profile` is `base` with exactly `entries` appended, in order, each only when absent. */
-function assertBasePlus(profile, base, entries) {
+/**
+ * Assert `profile` is `base` with exactly `entries` appended to the deny lists and the `copy` twins of
+ * `main`'s wrapper rules to `allow` and `ask`, in order, each only when absent.
+ */
+function assertBasePlus(profile, base, entries, { main, copy }) {
   assert.deepEqual(
     profile.sandbox.filesystem.denyWrite,
     addAbsent(base.sandbox.filesystem.denyWrite, entries.map((e) => e.path)),
   );
   assert.deepEqual(profile.permissions.deny, addAbsent(base.permissions.deny, entries.flatMap((e) => fileToolDenyRules(e))));
+  for (const list of ['allow', 'ask']) {
+    if (base.permissions[list] === undefined) {
+      assert.equal(profile.permissions[list], undefined, `${list} was created`);
+      continue;
+    }
+    assert.deepEqual(
+      profile.permissions[list],
+      addAbsent(base.permissions[list], wrapperTwins(base.permissions[list], main, copy)),
+      `${list} is not the base plus its wrapper twins`,
+    );
+  }
   assert.deepEqual(withoutAppendable(profile), withoutAppendable(base));
 }
 
@@ -171,7 +204,21 @@ test('a task drop launches on a per-run copy at hr_run_profile_file: the base pl
   assert.equal(f.record().copy_kind, 'clone');
   assert.equal(f.record().worktree, f.clone);
 
-  assertBasePlus(JSON.parse(readFileSync(settings, 'utf8')), f.base(), cloneEntries(f.config, f.clone));
+  const profile = JSON.parse(readFileSync(settings, 'utf8'));
+  const base = f.base();
+  assertBasePlus(profile, base, cloneEntries(f.config, f.clone), { main: f.dir, copy: f.clone });
+
+  // Every main-checkout wrapper rule init wrote has its exact run-copy twin in the same list.
+  let twins = 0;
+  for (const list of ['allow', 'ask']) {
+    for (const entry of base.permissions[list] ?? []) {
+      if (!entry.startsWith(wrapperPrefix(f.dir))) continue;
+      const twin = `${wrapperPrefix(f.clone)}${entry.slice(wrapperPrefix(f.dir).length)}`;
+      assert.ok(profile.permissions[list].includes(twin), `${list} has no twin for ${entry}`);
+      twins += 1;
+    }
+  }
+  assert.ok(twins > 0, `the base carries no ${wrapperPrefix(f.dir)} rule to twin`);
 });
 
 test('a parked legacy worktree run, resumed, carries its own .git pointer and no clone .git path', async (t) => {
@@ -193,7 +240,8 @@ test('a parked legacy worktree run, resumed, carries its own .git pointer and no
   const profile = JSON.parse(readFileSync(settings, 'utf8'));
   const denyWrite = profile.sandbox.filesystem.denyWrite;
   assert.ok(denyWrite.includes(`${wt}/.git`), `${wt}/.git is not in denyWrite`);
-  assert.ok(profile.permissions.deny.includes(`Edit(/${wt}/.git)`) && profile.permissions.deny.includes(`Write(/${wt}/.git)`));
+  assert.ok(profile.permissions.deny.includes(`Edit(/${wt}/.git)`), `Edit(/${wt}/.git) is not in deny`);
+  assert.deepEqual(profile.permissions.deny.filter((rule) => rule.startsWith('Write(')), []);
   for (const row of COPY_GIT_PATHS) {
     assert.ok(!denyWrite.includes(`${wt}/${row.path}`), `${row.path} was added for a legacy worktree`);
   }
@@ -212,7 +260,10 @@ test('another live linked worktree\'s .git pointer is in the clone run\'s per-ru
 
   const settings = f.settingsArg();
   assert.ok(settings, `the stub was never called:\n${f.watcherLog()}`);
-  assertBasePlus(JSON.parse(readFileSync(settings, 'utf8')), f.base(), cloneEntries(f.config, f.clone, [other]));
+  assertBasePlus(JSON.parse(readFileSync(settings, 'utf8')), f.base(), cloneEntries(f.config, f.clone, [other]), {
+    main: f.dir,
+    copy: f.clone,
+  });
 });
 
 // --- Refusal ------------------------------------------------------------------------------------
@@ -237,23 +288,37 @@ test('run_profile_check refuses a per-run copy tampered after render, and accept
   const f = await adoptedFixture(t);
   if (f === null) return;
 
+  const copy = `${f.dir}-tamper`;
   const rendered = await f.watcherCall('run_profile_render "$1" "$2" clone && printf "%s" "$RUN_PROFILE_FILE"', [
     'feat_tamper',
-    `${f.dir}-tamper`,
+    copy,
   ]);
   assert.equal(rendered.status, 0, rendered.stderr);
   const file = rendered.stdout;
   assert.equal(file, await f.profileFileFor('feat_tamper'));
-  const check = (path) => f.watcherCall('run_profile_check "$1"; printf "%s|%s" "$?" "$RUN_PROFILE_REFUSAL"', [path]);
+  const check = (path, checkCopy = copy) =>
+    f.watcherCall('run_profile_check "$1" "$2"; printf "%s|%s" "$?" "$RUN_PROFILE_REFUSAL"', [path, checkCopy]);
+  const notTwin = /^1\|.* appends a permissions\.allow or permissions\.ask entry that is not the run copy's twin of a base wrapper rule$/;
 
   assert.equal((await check(file)).stdout, '0|');
+  // With no copy — job mode — the rendered twins are appends like any other.
+  assert.match((await check(file, '')).stdout, notTwin);
 
   const profile = JSON.parse(readFileSync(file, 'utf8'));
   const changed = structuredClone(profile);
   changed.permissions.allow = [...(changed.permissions.allow ?? []), 'Bash(*)'];
   const changedPath = join(f.dir, 'watcher-test', 'changed.json');
   await writeFile(changedPath, `${JSON.stringify(changed, null, 2)}\n`, 'utf8');
-  assert.match((await check(changedPath)).stdout, /^1\|.* differs from the base profile .* by more than entries appended/);
+  assert.match((await check(changedPath)).stdout, notTwin);
+
+  const base = f.base();
+  const [twin] = wrapperTwins(base.permissions.allow, f.dir, copy);
+  assert.ok(twin, `the base carries no ${wrapperPrefix(f.dir)} allow rule`);
+  const handTwinned = structuredClone(base);
+  handTwinned.permissions.allow.push(twin);
+  const handTwinnedPath = join(f.dir, 'watcher-test', 'hand-twinned.json');
+  await writeFile(handTwinnedPath, `${JSON.stringify(handTwinned, null, 2)}\n`, 'utf8');
+  assert.equal((await check(handTwinnedPath)).stdout, '0|');
 
   const nonString = structuredClone(profile);
   nonString.sandbox.filesystem.denyWrite.push(42);
@@ -373,6 +438,40 @@ test('the watcher\'s mirrors equal their TypeScript owners', async (t) => {
     const rendered = JSON.parse(readFileSync(printed.stdout, 'utf8'));
     assert.deepEqual(rendered.permissions.deny, entries.flatMap((e) => fileToolDenyRules(e)));
     assert.deepEqual(rendered.sandbox.filesystem.denyWrite, entries.map((e) => e.path));
+  });
+
+  await t.test('run_profile_render twins only the main-prefixed wrapper rules, each in its own list', async () => {
+    const main = wrapperPrefix(f.dir);
+    const minimal = {
+      sandbox: { filesystem: { denyWrite: [] } },
+      permissions: {
+        allow: [`${main}x.sh:*)`, `Bash(bash ${INIT_SCRIPTS_DIR}/x.sh:*)`, `Bash(bash /elsewhere/${INIT_SCRIPTS_DIR}/y.sh:*)`],
+        deny: [],
+        ask: [`${main}deploy.sh:*)`],
+      },
+    };
+    await writeFile(scratch('twins.json'), `${JSON.stringify(minimal)}\n`, 'utf8');
+    const copy = '/twin/copy';
+    const printed = await f.watcherCall(
+      [
+        'SETTINGS_PROFILE="$1"',
+        'run_profile_entries() { :; }',
+        'run_profile_render feat_twins "$2" clone && printf "%s" "$RUN_PROFILE_FILE"',
+      ].join('\n'),
+      [scratch('twins.json'), copy],
+    );
+    assert.equal(printed.status, 0, printed.stderr);
+    const rendered = JSON.parse(readFileSync(printed.stdout, 'utf8'));
+    const twin = wrapperPrefix(copy);
+    assert.deepEqual(rendered.permissions.allow, [...minimal.permissions.allow, `${twin}x.sh:*)`]);
+    assert.deepEqual(rendered.permissions.ask, [...minimal.permissions.ask, `${twin}deploy.sh:*)`]);
+    assert.deepEqual(rendered.permissions.deny, []);
+  });
+
+  await t.test('run_profile_entries refuses a run copy path carrying $ with exit 3', async () => {
+    const printed = await f.watcherCall('run_profile_entries "$1" clone', [`${f.dir}-a$b`]);
+    assert.equal(printed.status, 3, printed.stderr);
+    assert.equal(printed.stdout, '');
   });
 
   await t.test('RUN_PROFILE_OPT_OUT_MARKER is SANDBOX_OPT_OUT_MARKER', async () => {
