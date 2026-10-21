@@ -244,7 +244,7 @@
 #   HARNESS_TRIGGER_LOOKUP_SECS    seconds between run lookups; `5` when empty.
 #                        A test seam
 #   RUNNER_TEMP          where the prompt snapshot is written; a `mktemp -d`
-#                        directory when empty
+#                        directory under `${TMPDIR:-/tmp}` when empty
 # THE LEGACY LABEL. The workflow `init` now writes always passes a non-empty
 # `HARNESS_TRIGGER_LABEL`; only the previous release's workflow, which
 # `init --upgrade-workflows` never re-renders, passes it empty, and its `if:`
@@ -1105,7 +1105,7 @@
 # `status` WITH NO LOCAL RECORD (no registry file, or no record of the branch)
 # is gated like a sending verb and answers from GitHub alone: the same runs
 # listing, then `remote_state` with the bundle downloaded into a `mktemp -d`
-# directory removed on exit, printing the state, pause reason, detail, engine
+# directory under `${TMPDIR:-/tmp}` removed on exit, printing the state, pause reason, detail, engine
 # and run URL, each open question (the rule `fetch` states) with its `## Q<k>`
 # heading lines; an expired bundle's expired line is its `detail`. No `harness run
 # <branch>` run listed prints one line and exits 0. There is no sync to compare
@@ -1783,7 +1783,7 @@ gh_run() {
     GH_ERR="gh not found: '$GH'"
     return 127
   fi
-  errfile=$(mktemp) || { GH_ERR="mktemp failed"; return 1; }
+  errfile=$(mktemp "${TMPDIR:-/tmp}/remote-run.gh_run.XXXXXX") || { GH_ERR="mktemp failed"; return 1; }
   if [ "$with_token" = 1 ]; then
     GH_OUT=$(GH_TOKEN="$token" "$GH" "$@" 2>"$errfile")
   else
@@ -2467,7 +2467,7 @@ status_from_github() {
     return 0
   fi
   echo "remote-run.sh: no local record; state from GitHub (newest run):"
-  status_tmp=$(mktemp -d) || { echo "remote-run.sh: cannot create a temporary directory" >&2; exit "$EXIT_USAGE"; }
+  status_tmp=$(mktemp -d "${TMPDIR:-/tmp}/remote-run.status_from_github.XXXXXX") || { echo "remote-run.sh: cannot create a temporary directory" >&2; exit "$EXIT_USAGE"; }
   trap 'rm -rf "$status_tmp"' EXIT
   remote_state "$status_tmp"
   printf '  state: %s\n' "$RS_STATE"
@@ -3188,7 +3188,7 @@ REMOTE_BRANCH_ERR=""
 remote_branch_exists() {
   local errfile status
   REMOTE_BRANCH_ERR=""
-  errfile=$(mktemp) || { REMOTE_BRANCH_ERR="mktemp failed"; return 2; }
+  errfile=$(mktemp "${TMPDIR:-/tmp}/remote-run.remote_branch_exists.XXXXXX") || { REMOTE_BRANCH_ERR="mktemp failed"; return 2; }
   git -C "$root" ls-remote --exit-code --heads origin "refs/heads/$1" >/dev/null 2>"$errfile"
   status=$?
   case "$status" in
@@ -3209,7 +3209,7 @@ REDISPATCH_ERR=""
 redispatch() {
   local errfile status
   REDISPATCH_ERR=""
-  errfile=$(mktemp) || { REDISPATCH_ERR="mktemp failed"; return 1; }
+  errfile=$(mktemp "${TMPDIR:-/tmp}/remote-run.redispatch.XXXXXX") || { REDISPATCH_ERR="mktemp failed"; return 1; }
   (
     engine="$1"; resume=pause; chain="$2"
     answers_from=""; indexes=""; indexes_given=0; park_loop_clear=0
@@ -4478,7 +4478,7 @@ verb_trigger() {
 
   trigger_tmp="${RUNNER_TEMP-}"
   if [ -z "$trigger_tmp" ] || [ ! -d "$trigger_tmp" ]; then
-    trigger_tmp=$(mktemp -d) || { echo "remote-run.sh: trigger: mktemp failed" >&2; exit "$EXIT_USAGE"; }
+    trigger_tmp=$(mktemp -d "${TMPDIR:-/tmp}/remote-run.verb_trigger.XXXXXX") || { echo "remote-run.sh: trigger: mktemp failed" >&2; exit "$EXIT_USAGE"; }
   fi
 
   if [ "$trigger_source" = dispatch ] && [ -z "$title" ]; then
@@ -5185,7 +5185,7 @@ forge_report() {
 
   tmp="${RUNNER_TEMP-}"
   if [ -z "$tmp" ] || [ ! -d "$tmp" ]; then
-    tmp=$(mktemp -d) || tmp=""
+    tmp=$(mktemp -d "${TMPDIR:-/tmp}/remote-run.forge_report.XXXXXX") || tmp=""
     made_tmp="$tmp"
   fi
   if [ -n "$OPEN_QUESTIONS" ]; then
@@ -5329,7 +5329,7 @@ forge_progress() {
 
   tmp="${RUNNER_TEMP-}"
   if [ -z "$tmp" ] || [ ! -d "$tmp" ]; then
-    tmp=$(mktemp -d) || tmp=""
+    tmp=$(mktemp -d "${TMPDIR:-/tmp}/remote-run.forge_progress.XXXXXX") || tmp=""
     made_tmp="$tmp"
   fi
   if [ -z "$tmp" ] || ! file=$(mktemp "$tmp/harness-progress-comment.XXXXXX"); then
@@ -5418,7 +5418,7 @@ forge_progress_stopped() {
   fi
   tmp="${RUNNER_TEMP-}"
   if [ -z "$tmp" ] || [ ! -d "$tmp" ]; then
-    tmp=$(mktemp -d) || tmp=""
+    tmp=$(mktemp -d "${TMPDIR:-/tmp}/remote-run.forge_progress_stopped.XXXXXX") || tmp=""
     made_tmp="$tmp"
   fi
   if [ -z "$tmp" ] || ! file=$(mktemp "$tmp/harness-progress-stopped.XXXXXX"); then
@@ -5524,7 +5524,7 @@ forge_open_pr() {
   fi
   tmp="${RUNNER_TEMP-}"
   if [ -z "$tmp" ] || [ ! -d "$tmp" ]; then
-    tmp=$(mktemp -d) || tmp=""
+    tmp=$(mktemp -d "${TMPDIR:-/tmp}/remote-run.forge_open_pr.XXXXXX") || tmp=""
     made_tmp="$tmp"
   fi
   if [ -z "$tmp" ] || ! body=$(mktemp "$tmp/harness-pr-body.XXXXXX") || ! deliver_pr_body "$body" "$br"; then
@@ -5826,7 +5826,7 @@ verb_deliver() {
 
   tmp="${RUNNER_TEMP-}"
   if [ -z "$tmp" ] || [ ! -d "$tmp" ]; then
-    tmp=$(mktemp -d) || tmp=""
+    tmp=$(mktemp -d "${TMPDIR:-/tmp}/remote-run.verb_deliver.XXXXXX") || tmp=""
     made_tmp="$tmp"
   fi
 
@@ -5913,7 +5913,7 @@ verb_open() {
   fi
   tmp="${RUNNER_TEMP-}"
   if [ -z "$tmp" ] || [ ! -d "$tmp" ]; then
-    tmp=$(mktemp -d) || tmp=""
+    tmp=$(mktemp -d "${TMPDIR:-/tmp}/remote-run.verb_open.XXXXXX") || tmp=""
     made_tmp="$tmp"
   fi
   if [ -n "$tmp" ] && file=$(mktemp "$tmp/harness-open-comment.XXXXXX"); then
@@ -6788,7 +6788,7 @@ round_collect() {
     return 4
   fi
 
-  if ! tmp=$(mktemp -d); then
+  if ! tmp=$(mktemp -d "${TMPDIR:-/tmp}/remote-run.round_collect.XXXXXX"); then
     RC_ERR="a collection directory could not be created"
     return 4
   fi
@@ -7792,7 +7792,7 @@ verb_control() {
 
   control_tmp="${RUNNER_TEMP-}"
   if [ -z "$control_tmp" ] || [ ! -d "$control_tmp" ]; then
-    control_tmp=$(mktemp -d) || { echo "remote-run.sh: control: mktemp failed" >&2; exit "$EXIT_USAGE"; }
+    control_tmp=$(mktemp -d "${TMPDIR:-/tmp}/remote-run.verb_control.XXXXXX") || { echo "remote-run.sh: control: mktemp failed" >&2; exit "$EXIT_USAGE"; }
     control_dirs="$control_tmp"
   fi
   trap control_cleanup EXIT
@@ -7888,7 +7888,7 @@ verb_collect() {
   # Read before the pull request is required: a first run has none.
   control_tmp="${RUNNER_TEMP-}"
   if [ -z "$control_tmp" ] || [ ! -d "$control_tmp" ]; then
-    control_tmp=$(mktemp -d) || { echo "remote-run.sh: collect: mktemp failed; nothing collected"; exit "$EXIT_OK"; }
+    control_tmp=$(mktemp -d "${TMPDIR:-/tmp}/remote-run.verb_collect.XXXXXX") || { echo "remote-run.sh: collect: mktemp failed; nothing collected"; exit "$EXIT_OK"; }
     control_dirs="$control_tmp"
   fi
   trap control_cleanup EXIT

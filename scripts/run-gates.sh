@@ -32,7 +32,7 @@ if [ -z "$repo_root" ] || ! cd "$repo_root"; then
   exit 1
 fi
 
-log="$(mktemp -t harness-gates)"
+log="$(mktemp "${TMPDIR:-/tmp}/harness-gates.XXXXXX")"
 trap 'rm -f "$log"' EXIT
 
 failed=()

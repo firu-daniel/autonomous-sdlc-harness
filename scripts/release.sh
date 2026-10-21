@@ -159,7 +159,7 @@ if [ "$bump_done" -eq 0 ]; then
   pr="$(gh pr list --repo "$slug" --head "$bump_branch" --base dev --state open \
     --json number --jq '.[0].number // empty')"
   if [ -z "$pr" ]; then
-    worktree="$(mktemp -d)" || fail "could not create a temporary directory"
+    worktree="$(mktemp -d "${TMPDIR:-/tmp}/release-bump.XXXXXX")" || fail "could not create a temporary directory"
     trap 'git worktree remove --force "$worktree" >/dev/null 2>&1; rm -rf "$worktree"; git branch -D "$bump_branch" >/dev/null 2>&1' EXIT
     git worktree add --quiet -B "$bump_branch" "$worktree" refs/remotes/origin/dev \
       || fail "could not cut ${bump_branch} from origin/dev"

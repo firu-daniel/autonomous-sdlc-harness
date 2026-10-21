@@ -153,7 +153,7 @@ fi
 
 # --- The tree ------------------------------------------------------------------------------------
 
-tmp_dir="$(mktemp -d)" || fail "could not create a temporary directory"
+tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/publish-main.XXXXXX")" || fail "could not create a temporary directory"
 trap 'rm -rf "$tmp_dir"' EXIT
 export GIT_INDEX_FILE="$tmp_dir/index"
 
