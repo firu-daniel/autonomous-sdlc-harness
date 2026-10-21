@@ -542,7 +542,7 @@ test("(t) The main checkout's identity changing or unset under a live clone refu
   });
 });
 
-test('(u) Signing keys the main checkout sets are neither listed nor written into the clone', async (t) => {
+test("(u) Signing keys the main checkout sets are neither listed nor written into the clone, and are refused there at the main checkout's own value", async (t) => {
   const f = await fixture(t, { clone: false });
   const signing = { 'commit.gpgsign': 'true', 'gpg.format': 'ssh', 'user.signingkey': join(f.root, 'signing-key.pub') };
   for (const [key, value] of Object.entries(signing)) await runGit(f.main, ['config', key, value]);
@@ -555,4 +555,9 @@ test('(u) Signing keys the main checkout sets are neither listed nor written int
   }
   const g = await f.check(f.clone);
   assert.equal(g.status, '0', g.refusal);
+  for (const [key, value] of Object.entries(signing)) {
+    await f.config(key, value);
+    await assertConfigRefused(f, key, /which the clone allow-list does not hold/);
+    await f.config('--unset', key);
+  }
 });
