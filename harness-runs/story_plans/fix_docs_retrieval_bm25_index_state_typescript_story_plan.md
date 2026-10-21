@@ -77,7 +77,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_docs_retrieval_bm25_inde
 8. [x] **Task 8** — End every changing refresh, and every index the shipped code left, in the `REINDEX` state, pinned by a history test _(layer: cli)_ _(points: 20)_
 9. [x] **Task 9** — Re-run the relevance figures after the fix and report every figure that moved _(layer: general)_ _(points: 15)_
 10. [x] **Task 10** — Read the shipped end state at refresh level and bring the probe modules up to date with it _(layer: general)_ _(points: 15)_
-11. [ ] **Task 11** — Update `docs/retrieval.md` and the Python README's seam sentence: the incremental refresh, the lexical-arm bullet, the rebuild's cost, gate 10's legs and the backends' SQL _(layer: general)_ _(points: 15)_
+11. [x] **Task 11** — Update `docs/retrieval.md` and the Python README's seam sentence: the incremental refresh, the lexical-arm bullet, the rebuild's cost, gate 10's legs and the backends' SQL _(layer: general)_ _(points: 15)_
 12. [ ] **Task 12** — Record what shipped under the recommendation, and the probe paragraph's post-fix reading _(layer: general)_ _(points: 8)_
 
 ## Scope register
