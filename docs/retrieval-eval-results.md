@@ -31181,6 +31181,120 @@ INDEX chunks_bm25`, and the planner then answered the vector statement with a `S
 `Index Scan using chunks_hnsw` are therefore unmeasured. That question stays open on the shipped end
 state.
 
+#### Route 2 on the real catalog
+
+**The outcome.** In five of the six scenarios, the `after` reading differs from `reference-reindex` on 0
+hits in `scan` and 0 in `operator`. Those five are `fresh`, `file-added`, `file-edited`, `file-removed` and
+`unchanged`. In `other-corpus` the `after` reading differs on **1 hit in `scan`** and 0 in `operator`. So
+on this catalog, route 2 does not hold value for value in `other-corpus`'s `scan` column. This is gate 10's
+leg (vii) (`docs/development.md` → `## 5. Verifying a change` → **Gate 10**), on the TypeScript backend
+only. The run falls under the leg's ~1,500-chunk floor and is on a different snapshot from the catalog's
+earlier runs. The maintainer accepted both gaps, which **The gaps, as ruled** records. The leg was run
+twice, and the `other-corpus` difference recurred exactly. The maintainer ruled that the fix (Tasks 7–12)
+goes ahead with that hit recorded and not attributed.
+
+**The gaps, as ruled.** Under the leg's own text, *"a run under the floor is invalid"*. The maintainer
+ruled on this run and directed that it be taken as it is, with both gaps recorded:
+
+- **Under the floor.** Corpus A reads `{ files: 105, chunks: 1454 }`, which is under the ~1,500-chunk
+  floor.
+- **A different snapshot.** The catalog is at commit `dce0de74e`, not gate 10's `010c50e`
+  (`{ files: 156, chunks: 1960 }`), and the docs layout has changed. That stamp was taken with `docs.root`
+  `docs` (the `gate10-catalog` corpus block's **Provenance.**). This run takes `--docs-root expause_web/docs`, and every key it
+  prints begins `expause_web/docs/` or `.claude/context/`. Every label in
+  `evals/docs-retrieval/queries/gate10-catalog.jsonl` begins `docs/expause-web/` or `docs/vite/`. The
+  probe scores every hit whatever the labels say, so the query set supplies query text only.
+- **The missing commits.** Neither `010c50e` nor `57a6c25` exists in the local catalog checkout, or in a
+  fresh clone of the catalog's remote, on any branch.
+- **The `other-corpus` hit.** After the first run's 1-hit `scan` difference, the maintainer directed a
+  second run. It recurred exactly, and the maintainer ruled that the fix proceeds with the hit recorded and
+  not attributed.
+
+By the stamp rule, nothing here is compared value for value with any other `gate10-catalog` figure.
+
+**The setup.**
+
+- **Who ran it, and when.** On 2026-10-21, by hand, in an interactive session the maintainer directed,
+  from this checkout's root after `npm run build`. It was run twice with the same command apart from
+  `--capture`. The module printed `ran 2026-10-21T17:08:09.752Z` for run 1 and
+  `ran 2026-10-21T18:19:41.715Z` for run 2. Each exited 0 and raised no collision refusal, so
+  `--other fixture-catalog` stood. No time was taken: this leg reads scores and plans only. The Python
+  backend was not run.
+- **The command.** It is leg (vii)'s TypeScript command, with `--docs-root expause_web/docs` and seven
+  `--conventions`. Those are the seven documents the catalog's own `harness.config.json` names:
+  `.claude/context/data-layer.md`, `domain.md`, `presentation.md`, `tests.md`, `flutter.md`, `backend.md`
+  and `conventions.md`. The captures went to
+  `harness-runs/scratch/fix-bm25/route-2-typescript-gate10-catalog-1.txt` and `…-2.txt`.
+- **The two runs compared.** Their stdout differs only in line 1, the `ran` timestamp: a `diff` of the two
+  with line 1 dropped exits 0. So do the two captures: a `cmp` of the two with line 1 dropped exits 0.
+  Every figure below is therefore both runs' figure.
+- **The host.** `uname -sr` `Darwin 24.6.0`, Node `v22.23.2`.
+- **The engine.** `server: PostgreSQL 18.6 (PGlite 0.5.10) on wasm32-unknown-emscripten`,
+  `pg_textsearch: 1.5.1`, `bm25_spill_index: available`.
+- **The end state.** `end state: route-2, REINDEX INDEX chunks_bm25 issued after every scenario's last
+  refresh; each rule line is the candidate rule's decision, not issued`.
+- **The corpora.** Corpus A is `gate10-catalog` at catalog commit `dce0de74e` with a clean tree: `{ files:
+  105, chunks: 1454 }`, and `{ files: 104, chunks: 1442 }` without `F`. `F` is
+  `expause_web/docs/roadmap/stripe-web-payments.md`. Corpus B is `fixture-catalog` at `{ files: 9, chunks:
+  41 }`. There are 69 queries, from `evals/docs-retrieval/queries/gate10-catalog.jsonl`. The final corpus
+  holds 37281 hits, and 36878 without `F`.
+- **The plans.** The probe plan was the `chunks_bm25` index scan in every reading, so no reading was
+  re-scored.
+- **The columns** are those of `#### Route 2 at refresh level, issued by hand`.
+
+**TypeScript (PGlite), A `gate10-catalog` at `{ files: 105, chunks: 1454 }`, B `fixture-catalog`.** Run
+twice, with identical output.
+
+| Scenario | Last refresh | Candidate decision | Statement issued | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 1454, unchanged 0, deleted 0 | `spill` (0, 1454, 0) | `REINDEX` | 5 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `other-corpus` | embedded 1454, unchanged 0, deleted 41 | `reindex` (41, 1454, 0) | `REINDEX` | 37280 / 37280 | **1 / 0** | `scan`, `q-g10-neg-login-sms-2fa` → `expause_web/docs/INDEX.md#users--social-1`: reference −12.909946, after −12.909947 | Index scan → Index scan |
+| `file-added` | embedded 12, unchanged 1442, deleted 0 | `spill` (0, 12, 0) | `REINDEX` | 7 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 1453, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 37276 / 37276 | 0 / 0 | — | Index scan → Index scan |
+| `file-removed` | embedded 0, unchanged 1442, deleted 12 | `reindex` (12, 0, 0) | `REINDEX` | 36877 / 36877 | 0 / 0 | — | Index scan → Index scan |
+| `unchanged` | embedded 0, unchanged 1454, deleted 0 | `none` (0, 0, 0) | `REINDEX` | 5 / 0 | 0 / 0 | — | Index scan → Index scan |
+
+**The verdicts**, against `reference-reindex`:
+
+- **TypeScript, `gate10-catalog`: route 2 holds in five of the six scenarios**, at 0 hits in `scan` and in
+  `operator` after `REINDEX`.
+- **In `other-corpus` it does not hold value for value.** The `after` reading differs on 1 hit in `scan`
+  and on none in `operator`. The probe printed that hit's values rounded to six places: −12.909946 in the
+  reference, −12.909947 after. `versus reference-spill.full` names the same hit, also at 1 / 0. Beside it,
+  the probe's own count lines differ by one: `other-corpus.after` read `scan != operator 5597, of which the
+  operator stored as a real 950`, and `reference-reindex.full` read `5598` and `951`. Both summaries read
+  the same: `total_docs 1454, total_len 214271, memtable docs 0, segments 1 segments, 209 pages (1.6MB),
+  19409 terms, 1454 docs`. The hit recurred exactly in the second run, so it is deterministic across these
+  two runs. It is recorded and not attributed, and by the maintainer's ruling it does not hold the fix.
+- **Python: not run.**
+
+Every `after` reading leaves 1 segment and no memtable document, as `reference-reindex` does: 1454
+documents, and 1442 in `file-removed`. The `before` readings hold 2 segments in `fresh`, `file-removed`
+and `unchanged`. They hold 3 in `other-corpus` (`total_docs 1495`) and in `file-added`. `file-edited`
+holds 2 segments beside 1 memtable document (`total_docs 1455`).
+
+**The `unchanged` scenario, read as an index the shipped code left.** Its `before` reading, taken after a
+reopen, holds 0 memtable documents beside 2 segments. It reads 5 / 0 before, and 0 / 0 after `REINDEX` on
+1 segment.
+
+**The store's `LIMIT 50` plan** was the `chunks_bm25` index scan in every reading, `before` and `after`,
+in all six scenarios. That includes all six reference readings. The crossover is 63 rows (`#### The
+lexical-plan crossover, on 1.5.1`). This corpus holds 1454 chunks, and 1442 without `F`.
+
+**Against the built-in corpora.** By the stamp rule, this compares structurally with `#### Route 2 at
+refresh level, issued by hand`, TypeScript rows only:
+
+- **The verdict differs in one scenario.** On `fixture-catalog` and `self-docs` every `after` cell read
+  0 / 0. Here `other-corpus` reads 1 / 0. The other five scenarios match: 0 / 0 after.
+- **The store plan matches `self-docs`, not `fixture-catalog`.** Here it is the index scan everywhere, as
+  on `self-docs` (829 chunks). On `fixture-catalog` (41 chunks), `REINDEX` turned it to `Seq Scan` in five
+  scenarios. Both this corpus and `self-docs` are above the 63-row crossover.
+- **The `before` readings.** They are 0 / 0 in `operator` wherever the built-in corpora's are, and they
+  differ in `scan`. `fresh` and `unchanged` read 5 / 0 here, against 0 / 0 on both built-in corpora.
+  `file-added` reads 7 / 0, against 9 / 0 and 1 / 0. In the three scenarios where the candidate rule
+  decides `reindex`, the `before` reading differs on nearly every hit in both columns: 37280 and 37276 of
+  37281, and 36877 of 36878. On the built-in corpora those three differ on every hit, or on all but two.
+
 ### The recommendation for the fix branch
 
 **What this is.** A proposal to the maintainer for the route of the branch that fixes the BM25 scores'
