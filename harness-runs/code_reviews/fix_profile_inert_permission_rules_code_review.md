@@ -33,7 +33,7 @@ Three findings remain. The highest-impact one is that the owed W7 measurement ca
 
 1. [x] **Finding 2** — Name all four appendable arrays in `run_profile_check`'s `delta` refusal and pin it with a case _(layer: cli)_
 2. [x] **Finding 3** — Restate the "three forms" script and generator comments as two base forms plus the per-run copy's exact path _(layer: cli, general)_
-3. [ ] **Finding 1** — Give W7 a call the guard does not grant, so it measures the run-copy twin _(layer: general)_
+3. [x] **Finding 1** — Give W7 a call the guard does not grant, so it measures the run-copy twin _(layer: general)_
 
 ---
 
