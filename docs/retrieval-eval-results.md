@@ -28173,7 +28173,8 @@ suggests is input to a later decision by the maintainer, not a change made or qu
 **Who reads this, and what it decides.** The maintainer deciding the route of the branch that fixes the
 BM25 scores' dependence on the `chunks_bm25` index's state. This section records the index states, the
 score each state ranks by, what still differs after `REINDEX`, the stray index-scan score, the candidate
-end-state rule and whether either mechanism moves relevance. Every `self-docs` figure carries the
+end-state rule and whether either mechanism moves relevance, and, under `### Route 2 on the fix branch`,
+the figures the branch implementing route 2 took. Every `self-docs` figure carries the
 `{ files, chunks }` stamp of the runs that took it, and no comparison here crosses two stamps. The
 `pg_textsearch` source paths and issue numbers cited here are the leads of the task prompt that opened
 this work; none was re-read on the branch that measured them.
@@ -30719,6 +30720,168 @@ open`, the lexical-arm bullet, both read 63.
 leaves (route 2, `### The recommendation for the fix branch`), which is the statistics-bearing state case
 `(b)` measures, so this figure bounds the corpus size below which the store's lexical plan becomes a `Seq
 Scan`, for that suite's synthetic row width.
+
+### Route 2 on the fix branch
+
+**Who reads this, and what it decides.** The maintainer, and the next reader of the fix that implements
+route 2 (`### The recommendation for the fix branch`). This subsection holds the figures that branch took:
+route 2 measured at refresh level with its statement issued by hand, before any code changed; the
+real-catalog figure; the relevance and vector-arm figures before and after the fix; and the shipped end
+state read at refresh level. Its comparison rule is `### The deciding figures on pg_textsearch 1.5.1` →
+**The comparison rule.**, and its probe setup is `### How the probe reads a score, and the setup`; neither
+is restated here.
+
+#### Route 2 at refresh level, issued by hand
+
+**The outcome.** On both backends and both corpora, every scenario's `after` reading, `REINDEX INDEX
+chunks_bm25` issued after its last refresh, differs from `reference-reindex` on 0 hits in `scan` and in
+`operator`, in every run. That includes `unchanged`, where the candidate rule issues nothing, and
+`fresh` and `file-added`, where it issues the spill.
+
+**The setup.**
+
+- **The engines**, read by a scratch probe before the first run, each on a new database: PGlite
+  `PostgreSQL 18.6 (PGlite 0.5.10) on wasm32-unknown-emscripten`, and the compose Postgres `PostgreSQL 18.6
+  (Debian 18.6-1.pgdg12+2) on aarch64-unknown-linux-gnu`. On both, `SHOW pg_textsearch.library_version`
+  read `1.5.1`, and `pg_extension.extversion` read `pg_textsearch` `1.5.1` and `vector` `0.8.7`.
+- **The environment.** `npm run build` ran first. `bash scripts/python-service.sh sync --with-models`
+  synced this checkout's environment, and the Python weights were present under
+  `~/.cache/harness-docs-retrieval/models`; none was fetched. A bare `bash scripts/python-service.sh run
+  self-check` reported `ok` for packages and weights and `FAIL index`, with
+  `HARNESS_DOCS_RETRIEVAL_DATABASE_URL` unset; every `--backend python` run passed the module's own
+  availability check.
+- **The runs.** 2026-10-21, at commit `3dbf4b27` with a clean tree. They were the four refresh-level
+  commands of `docs/retrieval-eval.md` → `### The BM25 index-state probe`, each with `--end-state route-2`
+  added and `--capture` into a scratch file. Each `python` run was taken twice, six runs in all, and
+  `evals/docs-retrieval/bm25-refresh-rule.mjs` was not changed. All six ran before this part was written.
+  Every summary read `pg_textsearch: 1.5.1` and `end state: route-2`.
+- **The corpora.** `fixture-catalog` is at `{ files: 9, chunks: 41 }`, and at `{ files: 8, chunks: 36 }`
+  without `F` (`docs/webhooks.md`). `self-docs` is at `{ files: 71, chunks: 829 }`, and at `{ files: 70,
+  chunks: 818 }` without `F` (`docs/work-report-research/user-review-fix-plan-writer.md`), in all six runs.
+  The final corpus holds 219 hits on `fixture-catalog` and 198 without `F`, and 9636 and 9544 on
+  `self-docs`.
+- **The plans.** The probe plan was the `chunks_bm25` index scan in every reading of every run, so no
+  reading was re-scored.
+- **The columns** are those of `#### The candidate end-state rule, at refresh level, on 1.5.1`.
+  **Candidate decision** is the candidate rule's decision, computed and not issued. **Statement issued**
+  is what the run issued. Each `≠ ref` cell is `scan` / `operator` against `reference-reindex` of the
+  scenario's final-corpus variant.
+
+**TypeScript (PGlite), A `fixture-catalog`, B `self-docs`.**
+
+| Scenario | Last refresh | Candidate decision | Statement issued | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 41, unchanged 0, deleted 0 | `spill` (0, 41, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `other-corpus` | embedded 41, unchanged 0, deleted 829 | `reindex` (829, 41, 0) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 5, unchanged 36, deleted 0 | `spill` (0, 5, 0) | `REINDEX` | 9 / 0 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `file-edited` | embedded 1, unchanged 40, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `file-removed` | embedded 0, unchanged 36, deleted 5 | `reindex` (5, 0, 0) | `REINDEX` | 198 / 198 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `unchanged` | embedded 0, unchanged 41, deleted 0 | `none` (0, 0, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → **Seq Scan** |
+
+**Python (Postgres), A `fixture-catalog`, B `self-docs`.** Both runs read the same in every cell. Their
+`--compare` listed no value out of 7674 compared.
+
+| Scenario | Last refresh | Candidate decision | Statement issued | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 41, unchanged 0, deleted 0 | `spill` (0, 41, 0) | `REINDEX` | 136 / 0 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `other-corpus` | embedded 41, unchanged 0, deleted 829 | `reindex` (829, 41, 0) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 5, unchanged 36, deleted 0 | `spill` (0, 5, 0) | `REINDEX` | 136 / 0 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `file-edited` | embedded 1, unchanged 40, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `file-removed` | embedded 0, unchanged 36, deleted 5 | `reindex` (5, 0, 0) | `REINDEX` | 198 / 198 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `unchanged` | embedded 0, unchanged 41, deleted 0 | `none` (0, 0, 0) | `REINDEX` | 136 / 0 | 0 / 0 | — | Index scan → **Seq Scan** |
+
+**TypeScript (PGlite), A `self-docs` at `{ files: 71, chunks: 829 }`, B `fixture-catalog`.** Run once.
+
+| Scenario | Last refresh | Candidate decision | Statement issued | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 829, unchanged 0, deleted 0 | `spill` (0, 829, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `other-corpus` | embedded 829, unchanged 0, deleted 41 | `reindex` (41, 829, 0) | `REINDEX` | 9636 / 9636 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 11, unchanged 818, deleted 0 | `spill` (0, 11, 0) | `REINDEX` | 1 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 828, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 9636 / 9636 | 0 / 0 | — | Index scan → Index scan |
+| `file-removed` | embedded 0, unchanged 818, deleted 11 | `reindex` (11, 0, 0) | `REINDEX` | 9544 / 9542 | 0 / 0 | — | Index scan → Index scan |
+| `unchanged` | embedded 0, unchanged 829, deleted 0 | `none` (0, 0, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+
+**Python (Postgres), A `self-docs` at `{ files: 71, chunks: 829 }`, B `fixture-catalog`.** Where the two
+runs disagree, the cell reads run 1; run 2.
+
+| Scenario | Last refresh | Candidate decision | Statement issued | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 829, unchanged 0, deleted 0 | `spill` (0, 829, 0) | `REINDEX` | 240 / 0; 849 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `other-corpus` | embedded 829, unchanged 0, deleted 41 | `reindex` (41, 829, 0) | `REINDEX` | 9636 / 9636 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 11, unchanged 818, deleted 0 | `spill` (0, 11, 0) | `REINDEX` | 1199 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 828, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 9636 / 9636 | 0 / 0 | — | Index scan → Index scan |
+| `file-removed` | embedded 0, unchanged 818, deleted 11 | `reindex` (11, 0, 0) | `REINDEX` | 9544 / 9542 | 0 / 0 | — | Index scan → Index scan |
+| `unchanged` | embedded 0, unchanged 829, deleted 0 | `none` (0, 0, 0) | `REINDEX` | 849 / 0; 2210 / 0 | 0 / 0 | — | Index scan → Index scan |
+
+The pair's `--compare` listed 5617 values out of 345976 compared, every one in `scan`. They fall in
+`reference-insert` (611 full, 1611 without `F`), in `reference-spill` without `F` (1), and in the `before`
+readings of `fresh` (611), `file-edited` (136), `file-removed` (1282) and `unchanged` (1365). It listed
+none in `reference-reindex` of either variant, and none in any `after` reading. The counts in the
+`file-edited` and `file-removed` cells read alike in both runs even though some of their values moved.
+
+**The verdicts**, against `reference-reindex`:
+
+- **TypeScript, `fixture-catalog`: route 2 holds** in all six scenarios, at 0 hits in `scan` and in
+  `operator` after `REINDEX` (the first table).
+- **Python, `fixture-catalog`: route 2 holds** in all six scenarios, at 0 hits in both columns, in both
+  runs (the second table).
+- **TypeScript, `self-docs`: route 2 holds** in all six scenarios, at 0 hits in both columns (the third
+  table). This backend was run once, so no `--compare` names a one-run value.
+- **Python, `self-docs`: route 2 holds** in all six scenarios, at 0 hits in both columns, in both runs
+  (the fourth table). The values `--compare` lists are all in `before` readings and in references other
+  than `reference-reindex`.
+
+Every `after` reading leaves 1 segment and no memtable document, as `reference-reindex` does. That is 1
+segment of 41 documents on `fixture-catalog` (36 in `file-removed`), and of 829 on `self-docs` (818 in
+`file-removed`).
+
+**The `unchanged` scenario, read as an index the shipped code left.** Its last refresh changed nothing,
+so its `before` reading is the state the shipped refresh that preceded it left:
+
+- **TypeScript, `fixture-catalog`:** 0 memtable documents and 1 segment, read after a reopen. It reads
+  0 / 0 before, and 0 / 0 after `REINDEX`.
+- **TypeScript, `self-docs`:** 0 memtable documents beside 3 segments, read after a reopen. It reads
+  0 / 0 before, and after `REINDEX` 0 / 0 on 1 segment.
+- **Python, `fixture-catalog`:** 41 memtable documents and no segment, in both runs. It reads 136 / 0
+  before. The first listed are `q-fc-route-choice` → `docs/routing.md#cut-off-times` −3.756243 against
+  −3.773669, `docs/routing.md#how-a-route-is-chosen` −3.574759 against −3.627705, and
+  `docs/routing.md#zone-graph` −3.503895 against −3.564632. After `REINDEX` it reads 0 / 0.
+- **Python, `self-docs`:** 88 memtable documents beside 2 segments holding 741 in run 1, and 261 beside 1
+  holding 568 in run 2. It reads 849 / 0 and 2210 / 0 before, and 0 / 0 after `REINDEX` in both runs.
+
+So on every backend and corpus `REINDEX` brought the shipped code's end state to the reference, whatever
+that state held: memtable documents, more than one segment, or neither.
+
+**The store's `LIMIT 50` plan.** It was the `chunks_bm25` index scan in every `before` reading, on both
+backends and corpora. On `fixture-catalog`, on both backends, the `REINDEX` turned it to `Seq Scan on
+public.chunks` in five scenarios: `fresh`, `file-added`, `file-edited`, `file-removed` and `unchanged`.
+`reference-reindex` reads the same Seq Scan on both variants and both backends. The `REINDEX` of
+`other-corpus`, whose table held corpus B's 829 rows before the refresh, left the index scan on both
+backends. On `self-docs` every reading's store plan is the index scan. The crossover is 63 rows (`####
+The lexical-plan crossover, on 1.5.1`). `fixture-catalog` holds 41 chunks, 36 without `F`, and `self-docs`
+829, 818 without `F`.
+
+**Against the candidate rule.** The comparison is with `#### The candidate end-state rule, at refresh
+level, on 1.5.1`: value for value on `fixture-catalog`, at `{ files: 9, chunks: 41 }` in both, and
+structurally on `self-docs`, at `{ files: 71, chunks: 829 }` here and `826` there.
+
+- **`fresh` and `file-added`, where the candidate rule issued the spill:**
+  - On `fixture-catalog`, route 2 differs from the reference where the spill did: nowhere. Both read 0 / 0
+    after, on both backends. The `before` cells are the candidate run's values (TypeScript 0 / 0 and
+    9 / 0, Python 136 / 0 in both). What changes is the store plan after the statement. The spill left
+    the index scan, and `REINDEX` leaves the Seq Scan.
+  - On `self-docs`, the spill left a residual and `REINDEX` leaves none. There, TypeScript differed on 2
+    hits after the spill in `fresh` and 1 in `file-added`, and Python on 2; 1 and 8; 2. Here every one of
+    those cells reads 0 / 0, on both backends, in every run.
+- **`unchanged`, where the candidate rule issued nothing:** there, `none` differed wherever its `before`
+  reading did: Python `fixture-catalog` on 136 hits, TypeScript `self-docs` on 2, and Python `self-docs`
+  on 1166 and 1262. Here `REINDEX` reads 0 / 0 in every one of them.
+- **`other-corpus`, `file-edited` and `file-removed`, where both issue `REINDEX`:** 0 / 0 after, on both
+  backends and corpora, there and here. The `fixture-catalog` cells match value for value, except the
+  `other-corpus` decision's `deleted`. That is corpus B's chunk count, 829 here against 826.
+- **One structural difference in a `before` reading.** TypeScript `self-docs` `fresh` and `unchanged` read
+  0 / 0 before here, on 3 segments, against 2 / 0 there. The stamps differ, so this is recorded and not
+  attributed.
 
 ### The recommendation for the fix branch
 

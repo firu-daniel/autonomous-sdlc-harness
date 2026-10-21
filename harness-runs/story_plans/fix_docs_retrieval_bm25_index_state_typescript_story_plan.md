@@ -68,7 +68,7 @@ Every task that edits a shared file runs strictly after the previous editor of t
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_docs_retrieval_bm25_index_state_typescript/task_<K>_plan.md`. The entries are in ship order, which follows dependency (see `## Context`, **How the work is cut**).
 
 1. [x] **Task 1** — Add the route-2 variant and the ad-hoc corpus route to `evals/docs-retrieval/bm25-refresh-rule.mjs` _(layer: general)_ _(points: 15)_
-2. [ ] **Task 2** — Measure route 2 at refresh level on both backends and both corpora, opening the fix branch's results subsection _(layer: general)_ _(points: 20)_
+2. [x] **Task 2** — Measure route 2 at refresh level on both backends and both corpora, opening the fix branch's results subsection _(layer: general)_ _(points: 20)_
 3. [ ] **Task 3** — Document the probe's new flags and add gate 10's leg (vii), the real-catalog route-2 hand run _(layer: general)_ _(points: 10)_
 4. [ ] **Task 4** — Take the before-fix relevance figures on both corpora and on the Seq Scan plan _(layer: general)_ _(points: 15)_
 5. [ ] **Task 5** — Measure the vector arm after a refresh with deletes, and record any vector-index statement as a proposal to the maintainer _(layer: general)_ _(points: 15)_
