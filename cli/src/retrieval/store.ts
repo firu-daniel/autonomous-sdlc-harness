@@ -4,10 +4,12 @@
  *
  * **The rule this module exists to enforce: every value reaches SQL as a bound parameter, and the SQL
  * stays plain Postgres plus the `vector` and `pg_textsearch` extensions.** A search query comes from an
- * agent and is untrusted, so no input is ever spliced into a statement; the two spliced tokens are the
- * `vector(<dimensions>)` column type, taken from a checked integer, and the constant index name inside
- * `to_bm25query($1, 'chunks_bm25')`. Keeping the dialect plain is what would let a real Postgres
- * implement {@link DocStore} by connection string; this module builds no such implementation.
+ * agent and is untrusted, so no input is ever spliced into a statement; the three spliced tokens are the
+ * `vector(<dimensions>)` column type, taken from a checked integer, the constant index name inside
+ * `to_bm25query($1, 'chunks_bm25')`, and the extension name in each `ALTER EXTENSION <name> UPDATE`,
+ * taken from the constant record {@link EXTENSION_UPDATE_STATEMENTS}. Keeping the dialect plain is what
+ * would let a real Postgres implement {@link DocStore} by connection string; this module builds no such
+ * implementation.
  *
  * **The shapes the lexical plan's cost depends on are exported, and a caller composes them rather than
  * retyping them:** {@link CHUNKS_TABLE}, {@link BM25_INDEX}, {@link BM25_INDEX_DEFINITION},
@@ -119,6 +121,21 @@ const DIMENSIONS_META_KEY = 'dimensions';
 /** The meta key refresh compares against the embedder's id; cleared when the column is recreated. */
 export const EMBEDDER_META_KEY = 'embedder';
 
+/** Each extension the store creates, to the statement that moves an older installed version to the library's. */
+export const EXTENSION_UPDATE_STATEMENTS: Readonly<Record<'vector' | 'pg_textsearch', string>> = Object.freeze({
+  vector: 'ALTER EXTENSION vector UPDATE',
+  pg_textsearch: 'ALTER EXTENSION pg_textsearch UPDATE',
+});
+
+/**
+ * The store's extensions whose installed `extversion` differs from the loaded library's
+ * `default_version`, by name — the ones {@link EXTENSION_UPDATE_STATEMENTS} must be issued for. It
+ * compares the two catalogs rather than naming a version, so a package bump needs no edit here.
+ */
+export const STALE_EXTENSIONS_QUERY =
+  'SELECT e.extname FROM pg_extension e JOIN pg_available_extensions a ON a.name = e.extname ' +
+  "WHERE e.extname IN ('vector', 'pg_textsearch') AND e.extversion IS DISTINCT FROM a.default_version ORDER BY e.extname";
+
 /** A vector as pgvector's text input form, bound as `$n::vector`. */
 function vectorLiteral(embedding: readonly number[]): string {
   return `[${embedding.map((value) => String(value)).join(',')}]`;
@@ -129,6 +146,11 @@ function vectorLiteral(embedding: readonly number[]): string {
  *
  * An existing index built at another width has its `chunks` table dropped and its embedder record
  * removed, so the next refresh rebuilds rather than failing on the column type.
+ *
+ * An index an older `vector` or `pg_textsearch` built is brought to the loaded libraries' versions by
+ * issuing {@link EXTENSION_UPDATE_STATEMENTS}' entry for each extension {@link STALE_EXTENSIONS_QUERY}
+ * lists, before any other statement reads it, and nothing when it lists none — a no-op open must not
+ * emit a notice on a process whose stdout is the MCP transport.
  */
 export async function openPgliteStore(options: { dataDir: string | undefined; dimensions: number }): Promise<DocStore> {
   const { dataDir, dimensions } = options;
@@ -148,6 +170,8 @@ export async function openPgliteStore(options: { dataDir: string | undefined; di
   const db = await PGlite.create({ dataDir, extensions: { vector, pg_textsearch } });
 
   await db.exec('CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_textsearch;');
+  const stale = await db.query<{ extname: keyof typeof EXTENSION_UPDATE_STATEMENTS }>(STALE_EXTENSIONS_QUERY);
+  for (const { extname } of stale.rows) await db.exec(EXTENSION_UPDATE_STATEMENTS[extname]);
   await db.exec('CREATE TABLE IF NOT EXISTS meta (key text PRIMARY KEY, value text NOT NULL)');
 
   const readMeta = async (key: string): Promise<string | undefined> => {
