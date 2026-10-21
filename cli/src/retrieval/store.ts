@@ -149,8 +149,7 @@ function vectorLiteral(embedding: readonly number[]): string {
  *
  * An index an older `vector` or `pg_textsearch` built is brought to the loaded libraries' versions by
  * issuing {@link EXTENSION_UPDATE_STATEMENTS}' entry for each extension {@link STALE_EXTENSIONS_QUERY}
- * lists, before any other statement reads it, and nothing when it lists none — a no-op open must not
- * emit a notice on a process whose stdout is the MCP transport.
+ * lists, before any other statement reads it, and nothing when it lists none.
  */
 export async function openPgliteStore(options: { dataDir: string | undefined; dimensions: number }): Promise<DocStore> {
   const { dataDir, dimensions } = options;
