@@ -51,3 +51,9 @@
 - No figure of this run is below its `floor.json` row's `value` (that would be a breach, red at gate 11). A breach found here is a `blocker:`, per **Where this task stops**.
 - `harness-runs/scratch/fix-bm25/base-corpus/` is absent when the task returns, whatever the outcome: success, `blocker:` or stop (`test ! -e harness-runs/scratch/fix-bm25/base-corpus` exits `0`).
 - `git diff --stat` lists `docs/retrieval-eval-results.md` only. The new lines sit directly after Task 6's part, and the generated region is untouched.
+
+**Deviations from plan:**
+
+- **A plan-only `self-docs` run was added, arm C only.** The after-fix `self-docs` run moved no figure but reordered arm C's refs on two negatives, and the run of record is in memory. `--repo harness-runs/scratch/fix-bm25/base-corpus --corpus self-docs --data-dir ../after-self-docs-plan --arms C --repeat 1` persisted the same snapshot (stamp `{ files: 71, chunks: 829 }`, arm C figures equal the in-memory run's). Its vector plan read `Seq Scan on chunks` under a `Sort` (`chunks` reltuples 829); Task 4's `before-self-docs-plan` directory, read by the same program, read `Index Scan using chunks_hnsw` (reltuples -1). The part records the arm C reorderings as consistent with that plan move, not attributed. Both data directories stay in scratch.
+- **The readings program is new**: `harness-runs/scratch/fix-bm25/after-readings.mjs` reads `EXPLAIN (VERBOSE, COSTS OFF)` of `LEXICAL_SEARCH_STATEMENT` imported from `cli/dist/retrieval/store.js`, rather than `pglite-statement.mjs` with `BM25_HISTORY_STATEMENTS.explainStore`, so the plan read is the statement the store issues. It also reads the vector plan, `pg_class`, the `index_state` meta row and `summarize`.
+- **The snapshot was removed before the held-another build**, which reads the live `self-docs`, not the snapshot; `test ! -e harness-runs/scratch/fix-bm25/base-corpus` exited `0` then and at the end.
