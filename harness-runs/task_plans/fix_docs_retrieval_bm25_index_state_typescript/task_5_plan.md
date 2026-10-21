@@ -43,3 +43,11 @@ The defect, as the diagnosis recorded it: in the held-another state on `fixture-
 - **The decision.** states that the end state is `REINDEX INDEX chunks_bm25` alone. Any vector statement it names appears only as a proposal to the maintainer, taken from the candidates measured here, with the rule above that chose it and what adopting it would still need.
 - No file other than this part names a vector statement as pending work.
 - `git diff --stat` lists `docs/retrieval-eval-results.md` only. The new lines sit directly after Task 4's part, and the generated region is untouched.
+
+**Deviations from plan:**
+
+- **A candidate-count reading was added**, so the hypothesis is graded on a measurement rather than inferred. For each of the 41 live rows, the store's vector statement at `LIMIT 50`, queried with that row's own embedding, on the planner's plan and with `enable_seqscan` / `enable_sort` off, each at `hnsw.ef_search` 40 and 1000 (session-only `SET`s). It showed that after `REINDEX INDEX chunks_bm25` the planner moves the vector statement to `Seq Scan`, so arm C's full lists on this corpus come from the plan, while the HNSW graph forced still returns 7 to 32 of 41 rows.
+- **A third data directory, `held-3`, was built** (same two commands, `--arms B`, no `--out`) and given `REINDEX INDEX chunks_bm25` alone, because `held-1`'s reading after that statement was taken before the forced count existed and the next statement replaced that state. Every other reading on it equals `held-1`'s.
+- **Two `held-1` readings were retaken after the eval run that followed them**, to add the `pg_class`, lexical-plan and forced-count columns; that run's refresh wrote nothing and the first reading's values are unchanged. `held-1`'s as-built reading lacks those columns; `held-2`'s as-built reading carries them.
+- **The decision took the plan's first branch** (full lists after `REINDEX INDEX chunks_bm25` alone, nothing proposed), qualified in the part: the restoration rests on the plan change, and arm C after deletes on a corpus whose vector statement stays on the HNSW plan is recorded as unmeasured.
+- **The TypeScript model cache was not checked separately**; every block's provenance reads the models as loaded outside the stub.

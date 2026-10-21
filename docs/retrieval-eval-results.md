@@ -31023,6 +31023,164 @@ run, with the Seq Scan run beside it for reference. None is breached in either:
 | E | recall@5 | 0.61 | 0.667 | 0.667 |
 | E | MRR | 0.50 | 0.556 | 0.556 |
 
+#### The vector arm after a refresh with deletes, before the fix
+
+**The outcome.** The diagnosis's two short lists recur in the held-another state as built, on both data
+directories: arm C returned 3 refs for `q-fc-verify-callback` and 0 for `q-fc-negative-lattice`. After
+`REINDEX INDEX chunks_bm25` alone, arm C returned 5 refs on all 12 queries, each query's ordered refs equal
+to the fresh `fixture-catalog` run of `#### The relevance eval's deterministic figures, before the fix`. It
+did the same after `REINDEX INDEX chunks_hnsw` as well, and after `VACUUM chunks` followed by `REINDEX INDEX
+chunks_bm25`. On this corpus those full lists come from the plan, not from the vector index. After every
+statement the planner answered the vector statement with a `Seq Scan on chunks` under a `Sort`. Forced onto
+`chunks_hnsw` after `REINDEX INDEX chunks_bm25` alone, the graph still returned 7 to 32 of the 41 live rows.
+
+**The setup.**
+
+- **The code.** 2026-10-21, at commit `e26228ef` with a clean tree, after `npm run build`. `git diff --stat
+  d15e5cc3 HEAD -- cli/src` lists nothing, so `cli/dist` is the base commit's retrieval code.
+- **The engine.** A scratch probe opened an in-memory PGlite with both extensions before the runs. It read
+  `version()` `PostgreSQL 18.6 (PGlite 0.5.10) on wasm32-unknown-emscripten`, `SHOW
+  pg_textsearch.library_version` `1.5.1`, and `pg_extension.extversion` `pg_textsearch` `1.5.1` and
+  `vector` `0.8.7`.
+- **The states.** Each was built as `### Whether either mechanism moves relevance` built held-another, with
+  the live `self-docs` corpus supplying the dead rows. Every command ran from the repository root through
+  the launcher `harness-runs/scratch/eval.mjs` (`docs/retrieval-eval.md` → `## How to run it`), on the
+  TypeScript backend, with `--repeat 1`. Each `fixture-catalog` `--out` was a scratch file holding only
+  the two generated-region markers, so this document's generated region and
+  `evals/docs-retrieval/floor.json` are untouched. All ran before this part was written.
+
+  ```
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --data-dir harness-runs/scratch/fix-bm25/held-1 --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --data-dir harness-runs/scratch/fix-bm25/held-1 --out harness-runs/scratch/fix-bm25/held-1-a.md --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --data-dir harness-runs/scratch/fix-bm25/held-2 --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --data-dir harness-runs/scratch/fix-bm25/held-2 --out harness-runs/scratch/fix-bm25/held-2-a.md --repeat 1
+  ```
+
+  Each statement was issued through `harness-runs/scratch/fix-bm25/pglite-statement.mjs` as
+  `sql:<statement>`. After each, the `fixture-catalog` command ran again on the same `--data-dir`, into
+  `held-1-b.md`, `held-1-c.md` and `held-2-b.md`. Its refresh wrote nothing (`cli/src/retrieval/refresh.ts`
+  → `refreshIndex`, step (5)), so each run ranks over the state the statement left. `held-2`'s `VACUUM
+  chunks` and `REINDEX INDEX chunks_bm25` were issued back to back, with one eval run after the pair.
+- **The provenance**, as every block reads: host `darwin 24.6.0`, Node `v22.23.2`, embedder
+  `Xenova/bge-small-en-v1.5:q8:cls:384:v1`, reranker `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1`,
+  abstention threshold `0.32`, `k` 5, `--repeat 1`. The stub was unset.
+- **The stamps.** Each `self-docs` run read `{ files: 71, chunks: 830 }`, from the live tree.
+  `fixture-catalog` read `{ files: 9, chunks: 41 }`, 9 positive and 3 negative queries, in every run.
+  The `generatedAt` values were: `held-1` as built `2026-10-21T16:55:19.091Z`, after `REINDEX INDEX
+  chunks_bm25` `16:56:28.529Z`, after `REINDEX INDEX chunks_hnsw` `16:57:13.931Z`; `held-2` as built
+  `16:58:52.896Z`, after the pair `16:59:20.588Z`.
+- **The readings.** A scratch program opened the data directory through `evals/docs-retrieval/bm25-history.mjs`
+  → `openPgliteEngine` before and after each statement, with no eval run between the two. It read:
+  - `SELECT count(*) FROM chunks`;
+  - `pg_relation_size` and `pg_class.relpages` / `reltuples` of `chunks`, `chunks_bm25` and `chunks_hnsw`;
+  - `bm25_summarize_index('chunks_bm25')`;
+  - `SHOW hnsw.ef_search`, which read `40`, and `SHOW hnsw.iterative_scan`, which read `off`, in every
+    reading;
+  - the vector statement's plan, `EXPLAIN (COSTS OFF)` of the store's `vectorSearch` statement
+    (`cli/src/retrieval/store.ts`) with a constant vector and a literal `LIMIT 50`, `ARM_CANDIDATES`;
+  - `BM25_HISTORY_STATEMENTS.explainStore` bound to the first query and `ARM_CANDIDATES`.
+
+  pgvector exposes no index summary, and `pg_stat_user_tables` read `0` in every column of every reading,
+  so the readings carry no dead-tuple count. Two readings were taken again after the eval run that followed
+  them, to add columns, and their other values equal the first reading's: `held-1` after `REINDEX INDEX
+  chunks_bm25` gained the `pg_class` and lexical-plan readings, and `held-1` after `REINDEX INDEX
+  chunks_hnsw` gained the forced count. That eval run's refresh wrote nothing.
+- **The candidate count**, the reading that tests the hypothesis. For each of the 41 live rows, it counts
+  the rows the store's vector statement returns at `LIMIT 50` with that row's own embedding as the query.
+  It was read four ways, each with session-only `SET`s: on the planner's plan, and with `enable_seqscan`
+  and `enable_sort` off, which put the statement on `Index Scan using chunks_hnsw`; each at `ef_search`
+  `40` and `1000`. The eval's own query embeddings were not run through it.
+- **Two readings came from a third directory.** The as-built `held-1` reading predates the `pg_class`,
+  lexical-plan and forced-count readings, which were added after it; `held-2`'s as-built reading carries
+  them. Its eval figures and every query's ordered refs equal `held-1`'s in arms B to E. The forced count
+  after `REINDEX INDEX chunks_bm25` alone was taken on `held-3`. That directory was built with the same two
+  commands, with `--arms B` and no `--out`, and given `REINDEX INDEX chunks_bm25` alone. Every other
+  reading on it equals `held-1`'s after the same statement.
+
+**The readings, per state.** "Forced" is the candidate count with `enable_seqscan` and `enable_sort` off.
+Each count cell gives the range over the 41 queries.
+
+| State | Statement before | `count(*)` | `chunks` relpages / reltuples | `chunks_bm25` summary | `chunks_bm25` / `chunks_hnsw` bytes | Vector plan | Lexical plan | Planner count, ef 40 | Forced count, ef 40 | Forced count, ef 1000 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `held-1` | none, as built | 41 | not read | `total_docs` 871, 4 segments, 871 docs | 4890624 / 1794048 | `Index Scan using chunks_hnsw` | not read | 7–32 | not read | not read |
+| `held-2` | none, as built | 41 | 0 / -1 | `total_docs` 871, 4 segments, 871 docs | 4890624 / 1794048 | `Index Scan using chunks_hnsw` | `Index Scan using chunks_bm25` | 7–32 | 7–32 | 41 |
+| `held-1` | `REINDEX INDEX chunks_bm25` | 41 | 185 / 41 | `total_docs` 41, 1 segment, 41 docs | 57344 / 1794048 | `Seq Scan on chunks`, under `Sort` | `Index Scan using chunks_bm25` | 41 | 7–32, on `held-3` | 41, on `held-3` |
+| `held-1` | then `REINDEX INDEX chunks_hnsw` | 41 | 185 / 41 | unchanged | 57344 / 98304 | `Seq Scan on chunks`, under `Sort` | `Index Scan using chunks_bm25` | 41 | 40 | 41 |
+| `held-2` | `VACUUM chunks` | 41 | 185 / 41 | `total_docs` 428, 2 segments, 428 docs (alive=41, dead=387) | 4890624 / 1794048 | `Seq Scan on chunks`, under `Sort` | `Seq Scan on public.chunks`, under `Sort` | 41 | 40 | 41 |
+| `held-2` | then `REINDEX INDEX chunks_bm25` | 41 | 185 / 41 | `total_docs` 41, 1 segment, 41 docs | 57344 / 1794048 | `Seq Scan on chunks`, under `Sort` | `Index Scan using chunks_bm25` | 41 | 40 | 41 |
+
+The as-built count's distribution, identical on both directories and, forced, on `held-3`: 7 rows for 2
+queries, 9 for 1, 11 for 2, 12 for 1, 13 for 2, 14 for 1, 15 for 3, 16 for 3, 18 for 2, 19 for 2, 20 for 4,
+22 for 3, 24 for 2, 26 for 2, 27 for 4, 28 for 1, 29 for 3, 31 for 2, 32 for 1. `chunks_hnsw`'s relpages /
+reltuples read 2 / 0 until a statement rewrote them: 12 / 41 after its `REINDEX`, 219 / 41 after `VACUUM`.
+
+**Arm C, per state.** Ref counts of the 12 queries, and how many have ordered refs, rank, strict rank and
+abstention equal to the fresh run.
+
+| State | Statement before | `q-fc-verify-callback` refs | `q-fc-negative-lattice` refs | The other 10 queries | Equal to fresh |
+|---|---|---|---|---|---|
+| `held-1` | none, as built | 3 | 0 | 5 each | 10 of 12 |
+| `held-2` | none, as built | 3 | 0 | 5 each | 10 of 12 |
+| `held-1` | `REINDEX INDEX chunks_bm25` | 5 | 5 | 5 each | 12 of 12 |
+| `held-1` | then `REINDEX INDEX chunks_hnsw` | 5 | 5 | 5 each | 12 of 12 |
+| `held-2` | `VACUUM chunks`, then `REINDEX INDEX chunks_bm25` | 5 | 5 | 5 each | 12 of 12 |
+
+As built, `q-fc-verify-callback` returned `docs/webhooks.md#replaying-missed-events`,
+`docs/webhooks.md#signature-verification` and `docs/api-auth.md#rotating-a-key`, the fresh run's first three in
+its order, and its rank and strict rank stayed 2. No arm C figure moved in any state: 0.778, 1.000, 1.000,
+0.889, strict 0.667, 0.889, 1.000, 0.806, 0 abstained.
+
+**The comparison, arms B, D and E, each state against the fresh run.**
+
+- **As built, on both directories**, arms B and D move as the diagnosis's held-another row did:
+  - arm B: recall@3 0.8889 → 1.0000, MRR 0.6574 → 0.7037, strict recall@1 0.4444 → 0.3333, strict recall@3
+    0.7778 → 0.8889, strict MRR 0.6056 → 0.5648, with 11 of 12 queries' refs differing;
+  - arm D: MRR 0.7593 → 0.7778, strict recall@1 0.4444 → 0.3333, strict MRR 0.6852 → 0.6481, with 10 of 12
+    differing, `q-fc-negative-lattice`'s list empty among them.
+
+  Arm E's figures and refs equal the fresh run. It made 11 rerank calls against the fresh run's 12, as
+  arm D's list for `q-fc-negative-lattice` was empty.
+- **After each statement, in all three statement states**, the figures and refs are the same:
+  - arm B: recall@1 0.4444 → 0.3333, MRR 0.6574 → 0.6019, strict recall@1 0.4444 → 0.3333, strict recall@3
+    0.7778 → 0.6667, strict MRR 0.6056 → 0.5407;
+  - arm D: recall@1 0.5556 → 0.4444, MRR 0.7593 → 0.7037, strict recall@1 0.4444 → 0.3333, strict MRR
+    0.6852 → 0.6296.
+
+  Those are the previous part's Seq Scan run's values, equal unrounded. The refs differ from the fresh run on 2
+  queries in each arm, the same pairs that part records:
+  - arm B: the `q-fc-token-lifetime` pair `#token-exchange` / `#rotating-a-key` (rank 1 → 2) and
+    `q-fc-unreadable-label`'s `#when-a-label-is-rejected` / `#inbound-scanning` (strict rank 3 → 4);
+  - arm D: `q-fc-token-lifetime` (rank 1 → 2) and `q-fc-negative-recruitment`'s third and fourth refs.
+
+  Unlike that run, arm B returned no row for `q-fc-negative-lattice`. The lexical plan here read `Index
+  Scan using chunks_bm25` after each `REINDEX INDEX chunks_bm25`, over a heap of 185 pages. Arm E equals the
+  fresh run, with 12 rerank calls. The `held-1` runs before and after `REINDEX INDEX chunks_hnsw` are equal
+  in every arm, figure and ref, as are `held-1` after `REINDEX INDEX chunks_bm25` and `held-2` after the
+  pair.
+
+**The hypothesis: supported.** The task prompt's hypothesis is that the HNSW scan filters out dead tuples
+after its candidate limit. Forced onto `chunks_hnsw` over the 830 dead entries the refresh left, the
+statement returned 7 to 32 of the 41 live rows at `ef_search` 40, and 41 at `ef_search` 1000. After
+`REINDEX INDEX chunks_hnsw`, and after `VACUUM chunks`, it returned 40, the `ef_search` value, for every
+query. After `REINDEX INDEX chunks_bm25` alone it still
+returned 7 to 32. The eval's two short lists were read through the planner's plan only, not through the
+forced count. So the support rests on row-embedding queries, and the 3 and 0 are consistent with it
+rather than reproduced by it. A separate reading, recorded and not acted on: on the `chunks_hnsw` plan
+with `iterative_scan` `off`, the statement returns at most `ef_search` rows, 40, against `ARM_CANDIDATES`
+50, with no dead row present.
+
+**The decision.** No vector-index statement joins the end state on this branch; the end state is `REINDEX
+INDEX chunks_bm25` alone. These states are taken on the 41-chunk `fixture-catalog`. A fixture-sized figure
+justifies no design decision (`harness-runs/lessons.md` → `## Evidence and measurement`, the first rule).
+The real-shape step this branch ships, gate 10's leg (vii), takes no arm C reading after deletes, and
+`--reindex-cost` times the BM25 `REINDEX` only. Arm C already returns full lists after `REINDEX INDEX
+chunks_bm25` alone: on this corpus the shipped end state restores them, and nothing is proposed. That
+restoration comes from the plan. `chunks`' reltuples read -1 as built (on `held-2`) and 41 after `REINDEX
+INDEX chunks_bm25`, and the planner then answered the vector statement with a `Seq Scan`. Forced onto
+`chunks_hnsw` in that state, the count still read 7 to 32. Arm C's lists after deletes on a corpus whose vector statement stays on
+`Index Scan using chunks_hnsw` are therefore unmeasured. That question stays open on the shipped end
+state.
+
 ### The recommendation for the fix branch
 
 **What this is.** A proposal to the maintainer for the route of the branch that fixes the BM25 scores'

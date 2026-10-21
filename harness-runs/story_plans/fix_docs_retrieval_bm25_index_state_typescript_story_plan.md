@@ -71,7 +71,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_docs_retrieval_bm25_inde
 2. [x] **Task 2** — Measure route 2 at refresh level on both backends and both corpora, opening the fix branch's results subsection _(layer: general)_ _(points: 20)_
 3. [x] **Task 3** — Document the probe's new flags and add gate 10's leg (vii), the real-catalog route-2 hand run _(layer: general)_ _(points: 10)_
 4. [x] **Task 4** — Take the before-fix relevance figures on both corpora and on the Seq Scan plan _(layer: general)_ _(points: 15)_
-5. [ ] **Task 5** — Measure the vector arm after a refresh with deletes, and record any vector-index statement as a proposal to the maintainer _(layer: general)_ _(points: 15)_
+5. [x] **Task 5** — Measure the vector arm after a refresh with deletes, and record any vector-index statement as a proposal to the maintainer _(layer: general)_ _(points: 15)_
 6. [ ] **Task 6** — Record the user's real-catalog route-2 figure — the park point the fix waits on _(layer: general)_ _(points: 8)_
 7. [ ] **Task 7** — Make `lexicalSearch` return only matching chunks on every plan, and give the store its end-state method _(layer: cli)_ _(points: 20)_
 8. [ ] **Task 8** — End every changing refresh, and every index the shipped code left, in the `REINDEX` state, pinned by a history test _(layer: cli)_ _(points: 20)_
