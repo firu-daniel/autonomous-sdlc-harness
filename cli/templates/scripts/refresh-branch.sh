@@ -49,11 +49,11 @@
 # `git reflog` there does not. A branch the base is ahead of
 # is fast-forwarded to it, as `git merge` does by default; `merge.ff` and
 # `branch.<branch>.mergeOptions` are not consulted. A conflict is `merge-tree`'s
-# exit 1, before any write. The commit takes its identity and its signing from
-# the main checkout's configuration (`user.*`, `commit.gpgSign`) as the merge
-# did, and an unset identity is a refusal (exit 1) with nothing written. No
-# merge hook runs — not `pre-merge-commit`, `prepare-commit-msg`, `commit-msg`
-# nor `post-merge`.
+# exit 1, before any write. The commit takes its identity from the main
+# checkout's configuration (`user.*`) as the merge did, and is unsigned, because
+# `commit-tree` never reads `commit.gpgSign` and is passed no `-S`; and an unset
+# identity is a refusal (exit 1) with nothing written. No merge hook runs — not
+# `pre-merge-commit`, `prepare-commit-msg`, `commit-msg` nor `post-merge`.
 #
 # `--local` MERGES THE LOCAL `<base>` REF AND MAKES NO NETWORK CALL. Default mode
 # fetches and merges `origin/<base>`. `--local` is for the state where the local
