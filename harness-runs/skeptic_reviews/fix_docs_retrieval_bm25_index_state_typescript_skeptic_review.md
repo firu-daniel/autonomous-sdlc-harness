@@ -21,7 +21,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Name the widened width-change `DELETE FROM meta` and the missing `rebuildIndexes` in the two lists of what `store.py` does not yet carry _(layer: general)_
+1. [x] **Finding 1** — Name the widened width-change `DELETE FROM meta` and the missing `rebuildIndexes` in the two lists of what `store.py` does not yet carry _(layer: general)_
 
 ---
 
