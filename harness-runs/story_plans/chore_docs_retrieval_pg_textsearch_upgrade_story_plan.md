@@ -61,7 +61,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_docs_retrieval_pg_text
 2. [x] **Task 2** — Bump the three PGlite packages in `cli/package.json` to the 1.5.1 set _(layer: cli)_ _(points: 5)_
 3. [x] **Task 3** — Refresh `package-lock.json` and read the new PGlite engine on Node 22 and Node 20 _(layer: general)_ _(points: 10)_
 4. [x] **Task 4** — Make `openPgliteStore` handle an index the old versions built, pinned by a test that opens the fixture _(layer: cli)_ _(points: 20)_
-5. [ ] **Task 5** — Re-take the lexical-plan crossover in the store suite on the new engine _(layer: cli)_ _(points: 8)_
+5. [x] **Task 5** — Re-take the lexical-plan crossover in the store suite on the new engine _(layer: cli)_ _(points: 8)_
 6. [ ] **Task 6** — Move the compose image to `pg_textsearch` `v1.5.1` and record what it does to a database 1.3.1 built _(layer: general)_ _(points: 15)_
 7. [ ] **Task 7** — Port the old-index handling to the Python store and open the 1.3.1-built database with it _(layer: general)_ _(points: 15)_
 8. [ ] **Task 8** — Re-take the states sequence and the near-tie pairs on 1.5.1, opening the new results subsection _(layer: general)_ _(points: 20)_

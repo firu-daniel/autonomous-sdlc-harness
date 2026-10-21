@@ -66,7 +66,9 @@ const VOCAB = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 
 /**
  * The measured crossover, in rows, for the synthetic corpus below — see the `(b)` case. It is a
  * property of this corpus's row width as much as of the planner, so a change to {@link VOCAB}, to the
- * filler length or to {@link DIMENSIONS} moves it and is expected to.
+ * filler length or to {@link DIMENSIONS} moves it and is expected to. Measured on
+ * `@electric-sql/pglite` 0.5.10 with `@electric-sql/pglite-pg_textsearch` 0.0.12 (`pg_textsearch`
+ * 1.5.1) on 2026-10-21, printed as 63 on Node 22.23.2 and on Node 20.19.5.
  */
 const CROSSOVER_ROWS = 63;
 
