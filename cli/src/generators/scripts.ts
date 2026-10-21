@@ -188,8 +188,8 @@ function resolvedScriptsDir(config: HarnessConfig): string {
  *
  * Repo-relative, forward-slashed and unquoted, because commands are executed from the repository
  * root and every path in the config file is repo-relative. The profile's allow entry (i) is this
- * exact string; its repo-root-absolute and sibling-worktree twins are the profile's to derive and
- * are deliberately not produced here.
+ * exact string; its repo-root-absolute twin is the profile's to derive, and a run copy's exact
+ * twin the run watcher's per-run copy's, and neither is produced here.
  *
  * `file` is a path relative to `scriptsDir`, so a script in a subdirectory is named by passing
  * `<subdir>/<file>` rather than by joining the pieces at the call site.
