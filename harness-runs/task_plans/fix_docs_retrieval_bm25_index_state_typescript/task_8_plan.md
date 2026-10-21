@@ -59,3 +59,27 @@ This task calls `rebuildIndexes()` and owns when. It changes nothing in `store.t
 - `bash scripts/typecheck.sh` passes.
 - The return states each `floor.json` row's reading against Task 4's figure. If any floored figure moved, the return is a `blocker:` carrying every moved row's arithmetic (measured figure, minus 0.05, truncated), and the working tree holds no edit to `floor.json`.
 - `git diff --stat` lists `cli/src/retrieval/refresh.ts` and the new test file only, and never `evals/docs-retrieval/floor.json`.
+
+**Deviations from plan:**
+
+- **Equal scores are ordered by key before the comparison.** The first run with the fix failed case (a) on `"driver shift depot"`: `docs/depots.md#routing-parcels` and `docs/depots.md#depot-capacity` both scored `-0.6290906071662903` in the history directory and in the reference, but came back in opposite orders, because the index scan returns equal-score rows in heap order and the history's upserts moved the heap. That is not a sub-`real` residual: every score was bit-equal. The test now sorts each `(key, scan)` list by `scan`, then `key` (`byScoreThenKey`), with no rounding and no tolerance, and its doc comment says why.
+- **The run with the fix**, `npm test --workspace cli -- test/docs-retrieval-refresh-end-state.test.mjs` (Node v22.23.2, 2026-10-21): `# tests 2`, `# pass 2`, `# fail 0`; re-run after the mutation was reverted, same counts.
+- **The run without the fix** (the `await store.rebuildIndexes();` line in `refreshIndex` replaced by a comment, rebuilt by the same command's `pretest`): `# tests 2`, `# pass 0`, `# fail 2`.
+  - Case (a): `"parcel depot" ranks differently from a fresh build of the final corpus`; first differing key `docs/depots.md#routing-parcels`, actual `-1.3948192596435547`, reference `-1.4101169109344482`.
+  - Case (b): `"parcel depot" ranks differently from a fresh build of the final corpus`; first differing key `docs/depots.md#routing-parcels`, actual `-1.607191801071167`, reference `-1.8460416793823242`.
+  - The line was restored from a scratchpad copy, `npm run build` rerun, and `bash scripts/typecheck.sh` printed `PASS: typecheck`.
+- **The floor, by reading.** `bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --repeat 1 --data-dir harness-runs/scratch/fix-bm25/t8-fixture-catalog --out harness-runs/scratch/fix-bm25/t8-fixture-catalog-results.md`, into a data directory that did not exist, stamp `{ files: 9, chunks: 41 }`. Against Task 4's fresh `fixture-catalog` run (`docs/retrieval-eval-results.md` → `#### The relevance eval's deterministic figures, before the fix` → **The floor, by reading.**; unrounded values from `harness-runs/scratch/fix-bm25/before-fixture-catalog.md`):
+
+  | Arm | Metric | Floor | Task 4 | This run | Moved |
+  |---|---|---|---|---|---|
+  | B | recall@5 | 0.95 | 1.000 | 1.000 | no |
+  | B | MRR | 0.60 | 0.6574074074074074 | 0.6018518518518519 | yes: re-record 0.6018518518518519 − 0.05 = 0.5518…, truncated 0.55 |
+  | C | recall@5 | 0.95 | 1.000 | 1.000 | no |
+  | C | MRR | 0.83 | 0.8888888888888888 | 0.8888888888888888 | no |
+  | D | recall@5 | 0.95 | 1.000 | 1.000 | no |
+  | D | MRR | 0.70 | 0.7592592592592592 | 0.7037037037037037 | yes: re-record 0.7037037037037037 − 0.05 = 0.6537…, truncated 0.65 |
+  | E | recall@5 | 0.61 | 0.667 | 0.667 | no |
+  | E | MRR | 0.50 | 0.5555555555555556 | 0.5555555555555556 | no |
+
+  Both moved figures equal Task 4's Seq Scan column (`0.602`, `0.704`). Neither breaches its current floor. `check-floor.mjs` was not run.
+- **Floor re-record in this task's commit — a user-ruled exception to the cli-only scope.** The first dispatch returned the Q1 floor `blocker:`; the user ruled that the re-record lands in Task 8's own commit, per `docs/retrieval-eval.md` → `## The regression floor` → **The same-commit re-record rule.** `evals/docs-retrieval/floor.json` now holds `fixture-catalog` B `mrr` `0.55` (was `0.6`) and D `mrr` `0.65` (was `0.7`), each `recordedAt` `2026-10-21`; no other row changed. The file's entries carry no reason field (`check-floor.mjs` reads `value` and `recordedAt` only), so the reason goes in the commit message: `Re-record fixture-catalog floors: route 2's REINDEX end state puts the 41-chunk corpus on the filtered Seq Scan plan, moving B/mrr, D/mrr (docs/retrieval-eval.md → The regression floor)`. This supersedes the `**Verification:**` bullets requiring a `blocker:` return and a `git diff --stat` without `floor.json`.
