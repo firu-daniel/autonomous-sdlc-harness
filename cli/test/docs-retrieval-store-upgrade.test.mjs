@@ -10,25 +10,8 @@
  * the loaded library's `default_version`. No case asserts a version literal; each compares the two
  * catalogs, so a package bump moves nothing here.
  *
- * **What the new packages did with that directory before the handling** — measured on 2026-10-21 under
- * Node 22.23.2, opening the archive built by `@electric-sql/pglite` 0.5.8, `pglite-pg_textsearch` 0.0.10
- * (`pg_textsearch` 1.3.1) and `pglite-pgvector` 0.0.9 (`vector` 0.8.1) under `@electric-sql/pglite`
- * 0.5.10, `pglite-pg_textsearch` 0.0.12 (`pg_textsearch` 1.5.1) and `pglite-pgvector` 0.0.11 (`vector`
- * 0.8.7), with `openPgliteStore` as it stood before `STALE_EXTENSIONS_QUERY` existed:
- *
- * - `PGlite.create({ dataDir, loadDataDir, extensions })` accepted the 0.5.8 archive;
- * - `openPgliteStore` resolved, and every call succeeded: `lexicalSearch(OLD_INDEX_PROBE_TERM, 50)`
- *   returned one row, `OLD_INDEX_PROBE_KEY`, and not the deleted key; `vectorSearch` of that key's
- *   vector returned that key first; `listChunkHashes()` returned the 31 keys of `OLD_INDEX_KEYS`; an
- *   `upsertChunks` and a `deleteChunks` succeeded;
- * - but after the store closed, a raw re-open still read `SHOW pg_textsearch.library_version` as
- *   `1.5.1` against `pg_extension` `pg_textsearch` `1.3.1` (`default_version` `1.5.1`) and `vector`
- *   `0.8.1` (`default_version` `0.8.7`): the 1.5.1 library serving a catalog that recorded 1.3.1 —
- *   the half-working state this suite forbids. `bm25_summarize_index('chunks_bm25')` read
- *   `total_docs: 33`, `docs_persisted: 24`, memtable `documents: 9`, `Total: 1 segments`.
- *
- * With the handling, the same probe left both `extversion`s equal to their `default_version` and every
- * call's result unchanged.
+ * **What the new packages did with that directory before the handling, and with it,** is recorded in
+ * `docs/retrieval.md` → `## How it fits together`, **An index older extension versions built.**
  *
  * **No model, and nothing downloaded.** Vectors come from `oldIndexVector`; each case loads the archive
  * into its own data directory under the system temp directory, removed in process.
