@@ -55,3 +55,5 @@ The user runs that leg on the private 1,960-chunk catalog. Task 6 parks the run 
 - `git grep -nE "six legs|Six legs" -- docs/development.md` shows no line claiming the gate has six legs today. The one remaining *"six legs"* phrase describes the 2026-09-22 run.
 - `grep -nE '/(Users|home)/[a-z]' docs/development.md docs/retrieval-eval.md` shows no hit this task added. Gate 6a is red in this checkout by design, so a new hit would be invisible to a *"no new failure"* reading.
 - `git diff --stat` lists the two target files only.
+
+- **Deviations from plan:** The plan gave leg (vii)'s comparison sizes as "41 and about 826 chunks". `docs/retrieval-eval-results.md` → `#### Route 2 at refresh level, issued by hand` records `self-docs` at `{ files: 71, chunks: 829 }` in all six route-2 runs; 826 is the earlier candidate-rule run's size. Implemented as "41 and 829 chunks".
