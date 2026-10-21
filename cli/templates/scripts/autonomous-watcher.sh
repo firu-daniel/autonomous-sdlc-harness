@@ -2229,7 +2229,7 @@ run_profile_check() {
     ok) return 0 ;;
     strict) RUN_PROFILE_REFUSAL="$file does not carry sandbox.enabled true, sandbox.failIfUnavailable true and sandbox.allowUnsandboxedCommands false, and names no sandbox opt-out" ;;
     optout) RUN_PROFILE_REFUSAL="$file names the sandbox opt-out but does not carry its shape: sandbox.enabled false, sandbox.failIfUnavailable false, sandbox.allowUnsandboxedCommands false" ;;
-    delta) RUN_PROFILE_REFUSAL="$file differs from the base profile $SETTINGS_PROFILE by more than entries appended to sandbox.filesystem.denyWrite and permissions.deny" ;;
+    delta) RUN_PROFILE_REFUSAL="$file differs from the base profile $SETTINGS_PROFILE by more than entries appended to sandbox.filesystem.denyWrite, permissions.deny, permissions.allow and permissions.ask" ;;
     nonstring) RUN_PROFILE_REFUSAL="$file appends an entry that is not a string" ;;
     twin) RUN_PROFILE_REFUSAL="$file appends a permissions.allow or permissions.ask entry that is not the run copy's twin of a base wrapper rule" ;;
     *) RUN_PROFILE_REFUSAL="$file could not be checked against the base profile $SETTINGS_PROFILE" ;;

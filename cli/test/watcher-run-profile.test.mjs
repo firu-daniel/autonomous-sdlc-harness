@@ -323,6 +323,15 @@ test('run_profile_check refuses a per-run copy tampered after render, and accept
   await writeFile(handTwinnedPath, `${JSON.stringify(handTwinned, null, 2)}\n`, 'utf8');
   assert.equal((await check(handTwinnedPath)).stdout, '0|');
 
+  const dropped = structuredClone(profile);
+  dropped.permissions.allow = dropped.permissions.allow.slice(1);
+  const droppedPath = join(f.dir, 'watcher-test', 'dropped.json');
+  await writeFile(droppedPath, `${JSON.stringify(dropped, null, 2)}\n`, 'utf8');
+  assert.match(
+    (await check(droppedPath)).stdout,
+    /^1\|.* by more than entries appended to sandbox\.filesystem\.denyWrite, permissions\.deny, permissions\.allow and permissions\.ask$/,
+  );
+
   const nonString = structuredClone(profile);
   nonString.sandbox.filesystem.denyWrite.push(42);
   const nonStringPath = join(f.dir, 'watcher-test', 'non-string.json');

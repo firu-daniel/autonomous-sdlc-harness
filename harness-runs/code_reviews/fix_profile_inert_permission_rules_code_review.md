@@ -31,7 +31,7 @@ Three findings remain. The highest-impact one is that the owed W7 measurement ca
 
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below top-to-bottom; the committing role flips each one to `[x]` as that fix's commit lands. `[ ]` markers anywhere else are informational and never the iteration source.
 
-1. [ ] **Finding 2** — Name all four appendable arrays in `run_profile_check`'s `delta` refusal and pin it with a case _(layer: cli)_
+1. [x] **Finding 2** — Name all four appendable arrays in `run_profile_check`'s `delta` refusal and pin it with a case _(layer: cli)_
 2. [ ] **Finding 3** — Restate the "three forms" script and generator comments as two base forms plus the per-run copy's exact path _(layer: cli, general)_
 3. [ ] **Finding 1** — Give W7 a call the guard does not grant, so it measures the run-copy twin _(layer: general)_
 
