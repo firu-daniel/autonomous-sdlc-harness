@@ -18,17 +18,17 @@
 
 **Work:**
 
-- [ ] **`docs/cli.md`.**
+- [x] **`docs/cli.md`.**
   - *"Every wrapper is allow-listed in three forms, not one"*: two forms in the base, plus the run copy's exact form in the per-run copy, with the reason. A `*` before the trailing `:*` is a literal prefix, and the space-star spelling would cross `/` and stop matching a bare call (`docs/sandbox-verification.md` F4).
   - *"Everything that runs outside the sandbox is write-protected on both sides"*: *"an `Edit` deny rule"*, and the checkout-wide *"`Edit` allow"*. Add a clause saying `Edit` rules cover the `Write` tool and a `Write` path rule is never consulted.
   - *"Each run adds its own copy's paths by exact path, in a per-run profile"*: the copy also gets its wrapper twins in `allow` and `ask`, and the `Edit` rules.
   - Residual 2: *"the `Edit` deny rules carry the same globs"*.
   - The `profile-write-protection` bullet: *"an `Edit` deny rule"*. A leftover `Write` rule is neither required nor reported. The stale-entry clause *"as `Edit` / `Write` rules"* becomes *"as `Edit` rules"*.
-- [ ] **`docs/watcher.md`.**
+- [x] **`docs/watcher.md`.**
   - *"Why only the `yes` rows carry a profile entry"*: *"in the three literal forms a caller may spell them"* becomes two forms in the base plus the per-run copy's exact twin.
   - **What it adds.**: the `Edit` rules, plus a new bullet for the wrapper twins in `permissions.allow` and `permissions.ask`, where the `ask` twins keep a run copy's deploy asked about. The last bullet's *"sibling-glob `Edit` / `Write` allow"* becomes *"sibling-glob `Edit` allow"*.
   - **The launch check.**: a new bullet saying every appended `allow`/`ask` entry must be a twin, and that a job-mode check accepts none.
-- [ ] **`docs/development.md`.** In the paragraph opening *"The `$HOME` half is a different matter"*, *"every file glob and every wrapper allow entry, plus the sibling-worktree pattern beside each"* becomes *"every file glob and every wrapper allow entry, plus the sibling-worktree pattern beside each file glob"*. Leave the roadmap item 6 narrative unchanged, as the story index's register row 9 states.
+- [x] **`docs/development.md`.** In the paragraph opening *"The `$HOME` half is a different matter"*, *"every file glob and every wrapper allow entry, plus the sibling-worktree pattern beside each"* becomes *"every file glob and every wrapper allow entry, plus the sibling-worktree pattern beside each file glob"*. Leave the roadmap item 6 narrative unchanged, as the story index's register row 9 states.
 
 **Verification:**
 
@@ -38,3 +38,8 @@
   git grep -nE 'Edit ?/ ?`?Write|Edit` and (a )?`Write|three (literal )?forms|sibling-worktree twin' -- docs/cli.md docs/watcher.md
   ```
 - Each restated fact matches its owner, read in the tree rather than from this file: `fileToolDenyRules`, `run_profile_render`, `run_profile_check`, `PROFILE_WRITE_PROTECTION_CHECK`, and the template's `permissions` lists.
+
+- **Deviations from plan:**
+  - Four further stale sentences in the same documents, outside the Work list, restated to the same owners: `docs/cli.md` §6's deploy paragraph (*"**all three** forms are asked about"* → every form, the run copy's `ask` twin included); §6's excluded-wrapper paragraph (*"The repo-relative and sibling-worktree spellings of all three wrappers stay in `allow`"* → the repo-relative spelling in `allow` and the run copy's exact spelling in its per-run copy); §7's `command-permissions` bullet (*"no second copy of the three forms"* → *"of the base's wrapper forms"*, the one remaining hit of the verification grep that described the current profile); and `docs/watcher.md`'s launch-check bullet *"removing exactly the entries appended to those two arrays"* → four arrays, as `run_profile_check` → `delta` now compares `denyWrite`, `deny`, `allow` and `ask`.
+  - The verification grep was run after the edits and returns no hit in either file.
+  - Not changed, outside this layer's path: `cli/templates/scripts/autonomous-watcher.sh` → `run_profile_check`'s `delta` refusal text still reads *"by more than entries appended to sandbox.filesystem.denyWrite and permissions.deny"*, though the comparison now also admits `allow`/`ask` twins.
