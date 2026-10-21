@@ -45,3 +45,5 @@
 - A lexical query on `OLD_INDEX_PROBE_TERM`, run in the read-back probe with the store's own statement shape (`ORDER BY text <@> to_bm25query($1, 'chunks_bm25') LIMIT $2`), returns `OLD_INDEX_PROBE_KEY` first. It returns no row whose key is the deleted one.
 - `git status --short cli/test/fixtures` lists both new files as untracked, and neither is ignored.
 - The archive is gzip, and gate 6a greps for the running user's home path. Run `grep -c "$HOME" cli/test/fixtures/docs-index-pg-textsearch-1.3.1.mjs`, which must read `0`. No path from the build machine may appear in the header.
+
+- **Deviations from plan:** The module exports one name beyond the plan's list: `OLD_INDEX_DELETED_KEY`, the first-batch key deleted after the spill (`synthetic/doc-011.md#section`). The deleted chunk carries `OLD_INDEX_PROBE_TERM` as well, so a lexical query that returns it is reading a dead row. Task 4 needs the key by name to assert the plan's "returns no row whose key is the deleted one" check. Whole-tree `bash scripts/typecheck.sh` was run and passed. No test file was created or edited, and no `<test_cmd>` was run.
