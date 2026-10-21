@@ -69,7 +69,7 @@ export const LEXICAL_SEARCH_STATEMENT = `SELECT id, ${BM25_ORDER_CLAUSE} AS scor
  * The statements that bring every index to the state a rebuild over the stored rows leaves, issued in
  * order by {@link DocStore.rebuildIndexes}. No vector-index statement is among them.
  */
-export const END_STATE_STATEMENTS: readonly string[] = Object.freeze([`REINDEX INDEX ${BM25_INDEX}`]);
+const END_STATE_STATEMENTS: readonly string[] = Object.freeze([`REINDEX INDEX ${BM25_INDEX}`]);
 
 /** The BM25-indexed column's declaration. */
 export const CHUNK_TEXT_COLUMN = 'text text NOT NULL';

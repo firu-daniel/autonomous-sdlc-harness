@@ -12,7 +12,7 @@ The refresh logic is correct on every path I traced: a first build, an embedder 
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Make `END_STATE_STATEMENTS` module-private: it has no consumer outside `store.ts` _(layer: cli)_
+1. [x] **Finding 1** — Make `END_STATE_STATEMENTS` module-private: it has no consumer outside `store.ts` _(layer: cli)_
 2. [ ] **Finding 3** — Qualify `docs/retrieval.md` → **Incremental refresh.**'s history-independence claim with the residual its own cited measurement records _(layer: general)_
 3. [ ] **Finding 2** — Pin the marker's two untested branches: an unchanged refresh over a rebuilt index issues no rebuild, and one over a `pending` index does _(layer: cli)_
 
