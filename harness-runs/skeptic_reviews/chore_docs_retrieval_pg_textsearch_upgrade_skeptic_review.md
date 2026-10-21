@@ -25,7 +25,7 @@ No parity review exists, because `phases.parity` is `false`.
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Name the suite that pins the old-index handling in `docs/retrieval.md`'s TypeScript-backend bullet _(layer: general)_
+1. [x] **Finding 1** — Name the suite that pins the old-index handling in `docs/retrieval.md`'s TypeScript-backend bullet _(layer: general)_
 
 ---
 
