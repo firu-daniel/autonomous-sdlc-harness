@@ -30595,6 +30595,107 @@ value for value against the figures that part publishes (its captures are not in
 - **Observation 2:** unchanged. The Python `fresh` `before` reading lists the same 4 inversions, the two
   pairs with the same three values each, and the spill removes them; the TypeScript reading lists none.
 
+#### The relevance eval's deterministic figures, on 1.5.1
+
+**The outcome.** On `fixture-catalog` no recorded figure moved: 36 of 36 are equal. Every query's ordered
+refs, first relevant rank, first strictly relevant rank and abstention are equal too, in arms B to E. Every
+row of `evals/docs-retrieval/floor.json` holds. On `self-docs` 23 of 36 figures moved, against a recorded
+block whose corpus stamp is a different corpus. The figures are listed below.
+
+**The setup.**
+
+- **The runs.** 2026-10-21, at commit `5c9b9440` with a clean tree, after `npm run build`. Each run went
+  through the existing launcher `harness-runs/scratch/eval.mjs`, as `docs/retrieval-eval.md` → `## How to
+  run it` gives it, on the TypeScript backend. Each ran once, into a data directory that did not exist yet,
+  so the store was created on 1.5.1 and the old-index handling had nothing to update. Both ran before this
+  part was written, so no edit of this document lies between them.
+
+  ```
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --data-dir harness-runs/scratch/v151-relevance/fresh-fixture-catalog --out harness-runs/scratch/v151-relevance/fixture-catalog.md --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --data-dir harness-runs/scratch/v151-relevance/fresh-self-docs --out harness-runs/scratch/v151-relevance/self-docs.md --repeat 1
+  ```
+
+- **The output.** Each `--out` file was a scratch file that held only the two generated-region markers. So
+  this document's generated region and `evals/docs-retrieval/floor.json` are untouched.
+- **The engine.** A scratch probe opened an in-memory PGlite with both extensions before the runs. It read
+  `version()` `PostgreSQL 18.6 (PGlite 0.5.10) on wasm32-unknown-emscripten`, `SHOW
+  pg_textsearch.library_version` `1.5.1`, and `pg_extension.extversion` `pg_textsearch` `1.5.1` and
+  `vector` `0.8.7`.
+- **The provenance**, as both blocks read: host `darwin 24.6.0`, Node `v22.23.2`, embedder
+  `Xenova/bge-small-en-v1.5:q8:cls:384:v1`, reranker `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1`,
+  abstention threshold `0.32`, `k` 5, `--repeat 1`. The stub was unset.
+- **The stamps.** `fixture-catalog` at `{ files: 9, chunks: 41 }`, 9 positive and 3 negative queries, and
+  `self-docs` at `{ files: 71, chunks: 826 }`, 15 positive and 5 negative.
+- **What they are compared with.** The generated region's unkeyed `fixture-catalog` and `self-docs`
+  blocks, the ones with no `@<backend>` suffix, which take the same in-process route. Both were last written by commit
+  `e0af2712` (`git log -S` on each block's `generatedAt`). Their provenance reads Node `v20.19.5`, the same
+  embedder, reranker and threshold, and stamps `{ files: 9, chunks: 41 }` and `{ files: 14, chunks: 213 }`.
+  That commit's `package-lock.json` pins `@electric-sql/pglite` 0.5.8, `pglite-pg_textsearch` 0.0.10
+  (`pg_textsearch` 1.3.1) and `pglite-pgvector` 0.0.9 (`vector` 0.8.1). `git diff --stat e0af2712 HEAD`
+  shows no change to `evals/docs-retrieval/queries/` or `cli/src/retrieval/search.ts`. It shows changes to
+  `cli/src/retrieval/store.ts`, `refresh.ts`, `models.ts` and `runtime.ts`.
+- **What was compared.** Arms B to E: recall@1, @3 and @5, MRR, strict recall@1, @3 and @5, strict MRR and
+  the count of negative queries abstained on, 9 figures per arm. Arm A awaits a hand run in every block and
+  is not compared. The latency columns were not read.
+
+**`fixture-catalog`, at the same stamp: no figure moved.** Arm B reads 0.444, 0.889, 1.000 and MRR 0.657.
+Arm C reads 0.778, 1.000, 1.000 and MRR 0.889. Arm D reads 0.556, 1.000, 1.000 and MRR 0.759. Arm E reads
+0.444, 0.667, 0.667 and MRR 0.556, and abstains on 3 of 3 negatives. Every value is the recorded one.
+
+**`self-docs`: 23 figures moved, at `{ files: 71, chunks: 826 }` against `{ files: 14, chunks: 213 }`.**
+The recorded block measured a corpus a quarter this size. So every move below can also be the corpus
+moving, and none is a before/after pair (`docs/retrieval-eval.md` → `### Writing the results, and the
+corpus that grows when you do`).
+
+| Arm | Figure | Recorded | 1.5.1 |
+|---|---|---|---|
+| B `lexical` | recall@1 | 0.333 | 0.400 |
+| B `lexical` | recall@3 | 0.600 | 0.533 |
+| B `lexical` | recall@5 | 0.867 | 0.667 |
+| B `lexical` | MRR | 0.501 | 0.497 |
+| B `lexical` | strict recall@5 | 0.600 | 0.467 |
+| B `lexical` | strict MRR | 0.301 | 0.286 |
+| C `vector` | recall@3 | 0.600 | 0.533 |
+| C `vector` | recall@5 | 0.667 | 0.533 |
+| C `vector` | MRR | 0.569 | 0.533 |
+| C `vector` | strict recall@5 | 0.333 | 0.267 |
+| C `vector` | strict MRR | 0.247 | 0.233 |
+| D `fused` | recall@3 | 0.733 | 0.600 |
+| D `fused` | recall@5 | 0.800 | 0.733 |
+| D `fused` | MRR | 0.639 | 0.589 |
+| D `fused` | strict recall@3 | 0.533 | 0.467 |
+| D `fused` | strict recall@5 | 0.667 | 0.600 |
+| D `fused` | strict MRR | 0.363 | 0.333 |
+| E `fused-rerank` | recall@1 | 0.467 | 0.400 |
+| E `fused-rerank` | recall@5 | 0.600 | 0.667 |
+| E `fused-rerank` | MRR | 0.533 | 0.517 |
+| E `fused-rerank` | strict recall@5 | 0.533 | 0.600 |
+| E `fused-rerank` | strict MRR | 0.383 | 0.400 |
+| E `fused-rerank` | abstained, of 5 negatives | 5 | 4 |
+
+The 13 figures not listed are equal. They are arms B to D's abstention count, 0 in both, and these recall
+and MRR figures: B strict recall@1 and @3; C recall@1, strict recall@1 and @3; D recall@1 and strict
+recall@1; E recall@3, strict recall@1 and @3.
+
+**The floor check, by reading.** Every row of `evals/docs-retrieval/floor.json` was compared with this
+`fixture-catalog` run's figure, and none is breached:
+
+| Arm | Metric | Floor | 1.5.1 |
+|---|---|---|---|
+| B | recall@5 | 0.95 | 1.000 |
+| B | MRR | 0.60 | 0.657 |
+| C | recall@5 | 0.95 | 1.000 |
+| C | MRR | 0.83 | 0.889 |
+| D | recall@5 | 0.95 | 1.000 |
+| D | MRR | 0.70 | 0.759 |
+| E | recall@5 | 0.61 | 0.667 |
+| E | MRR | 0.50 | 0.556 |
+
+**The attribution.** On the TypeScript backend three things moved at once: PGlite 0.5.8 to 0.5.10,
+`pg_textsearch` 1.3.1 to 1.5.1, and `vector` 0.8.1 to 0.8.7. Node and four retrieval modules also differ
+from the recorded run. These runs separate none of these, so no moved figure here is attributed to
+`pg_textsearch` alone. On `fixture-catalog` none of them, together, moved a figure.
+
 ### The recommendation for the fix branch
 
 **What this is.** A proposal to the maintainer for the route of the branch that fixes the BM25 scores'
