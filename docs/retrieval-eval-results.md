@@ -31810,3 +31810,14 @@ recorded. The Seq Scan qualification stands: `REINDEX` still turns the store's p
 the crossover is still 63 rows (`#### The lexical-plan crossover, on 1.5.1`, **The outcome.**). The `none`
 qualification stands on the `unchanged` figures above. Route 2 remains a proposal, and the fix branch
 decides.
+
+**What shipped.** Route 2 shipped on the TypeScript backend, on
+`fix_docs_retrieval_bm25_index_state_typescript`: `refreshIndex` ends every refresh that wrote anything,
+and every refresh whose index is not marked rebuilt, with `DocStore.rebuildIndexes()`, which issues
+`END_STATE_STATEMENTS` — `REINDEX INDEX chunks_bm25` alone (`cli/src/retrieval/store.ts`,
+`cli/src/retrieval/refresh.ts`). An index an earlier version built is detected by the `meta` marker: the
+`index_state` key reads `rebuilt` only once `rebuildIndexes()` has returned over the stored rows, and an
+index without that value is rebuilt by the next refresh. `lexicalSearch` drops every score-`0` row on every
+plan. The figures are in `### Route 2 on the fix branch`, the real-catalog figure in `#### Route 2 on the
+real catalog` and the shipped end state in `#### The shipped end state at refresh level`. The Python
+backend's store is unchanged on this branch.
