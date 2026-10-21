@@ -65,7 +65,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_docs_retrieval_pg_text
 6. [x] **Task 6** — Move the compose image to `pg_textsearch` `v1.5.1` and record what it does to a database 1.3.1 built _(layer: general)_ _(points: 15)_
 7. [x] **Task 7** — Port the old-index handling to the Python store and open the 1.3.1-built database with it _(layer: general)_ _(points: 15)_
 8. [x] **Task 8** — Re-take the states sequence and the near-tie pairs on 1.5.1, opening the new results subsection _(layer: general)_ _(points: 20)_
-9. [ ] **Task 9** — Re-take the stray index-scan score on 1.5.1, and reduce it to a standalone reproduction if it survives _(layer: general)_ _(points: 20)_
+9. [x] **Task 9** — Re-take the stray index-scan score on 1.5.1, and reduce it to a standalone reproduction if it survives _(layer: general)_ _(points: 20)_
 10. [ ] **Task 10** — Re-take the candidate end-state rule at refresh level on 1.5.1 _(layer: general)_ _(points: 15)_
 11. [ ] **Task 11** — Run the relevance eval's deterministic figures on 1.5.1 and report every figure that moved _(layer: general)_ _(points: 15)_
 12. [ ] **Task 12** — Record the old-index handling and the crossover on 1.5.1 in `docs/retrieval.md` and the results subsection _(layer: general)_ _(points: 10)_

@@ -30289,6 +30289,107 @@ Against `### The near-tie ordering on an empty database`:
 - **Explained by mechanism 2, for the probe's states**: unchanged. On both engines each pair is still
   returned against `operator`'s order at `t0`, in `scan`'s order, and in no spilled state.
 
+#### The stray index-scan score, on 1.5.1
+
+**The outcome: the stray is gone.** On 1.5.1 no `operator` value disagreed with the first repetition's
+in any block of any run, and no row's `operator` disagreed with its own `operator_exact`. The memtable
+is still emptied while the repetitions only read, and the `scan` values of the rows it held still move
+once, to their segment score. Those moves are the state difference of `#### The score each index state
+ranks by, on 1.5.1`, not the stray.
+
+**The runs.** 2026-10-21, on the compose Postgres, through the commands of `docs/retrieval-eval.md` →
+`### The BM25 index-state probe`, each with `--capture`: the states sequence on `self-docs` with
+`--repeat 30`, twice, and the history sequence with `self-docs` as A and `fixture-catalog` as B with
+`--repeat 15`, once. `SHOW pg_textsearch.library_version` read `1.5.1` before the first run, and every
+run's summary read `pg_textsearch: 1.5.1`. `self-docs` is at `{ files: 71, chunks: 826 }` in all three
+runs, taken from commit `58beee8b`, and `fixture-catalog` at `{ files: 9, chunks: 41 }`. The 1.3.1 runs
+carry `{ files: 71, chunks: 819 }`, so every `self-docs` count here is compared structurally, by the
+comparison rule above. The probe plan was the `chunks_bm25` index scan at every step of every run, so no
+step was re-scored. The repetitions, comparisons and readings are those of `### The stray index-scan
+score` → **The runs.**
+
+**Per engine, corpus and state, on 1.5.1.** The columns are those of `### The stray index-scan score` →
+**Per engine, corpus and state.**
+
+| Engine | Corpus | Step | Memtable docs, before → after | Values compared | Disagreeing `scan` | Disagreeing `operator` | Summary and `autovacuum_count` across the repetitions |
+|---|---|---|---|---|---|---|---|
+| Postgres, run 1 | `self-docs` | `t0` | 61 → 0 | 555466 | 1711 | 0 | **Changed:** 2 segments holding 765 documents → 3 segments holding 826; `autovacuum_count` 0 → 0 |
+| Postgres, run 1 | `self-docs` | `t1`, `t3`, `t4` | 0 → 0 | 555466 each | 0 | 0 | Both unchanged, 0 |
+| Postgres, run 2 | `self-docs` | `t0` | 0 → 0 | 555466 | 0 | 0 | Both unchanged, 0: the memtable was already emptied, 3 segments holding 826, when the step's summary was first read |
+| Postgres, run 2 | `self-docs` | `t1`, `t3`, `t4` | 0 → 0 | 555466 each | 0 | 0 | Both unchanged, 0 |
+| Postgres, history | A `self-docs` | `s0` | 61 → 0 | 268156 | 392 | 0 | **Changed:** 2 segments holding 765 → 3 segments holding 826; `autovacuum_count` 0 → 0 |
+| Postgres, history | A `self-docs` | `s1` | 102 → 0 | 273420 | 7074 | 0 | **Changed:** 2 segments holding 765 → 3 segments holding 867; `autovacuum_count` 0 → 0 |
+| Postgres, history | A `self-docs` | `s2`, `s4`, `s5`, `s7` | 0 → 0 | 268156 each | 0 | 0 | Both unchanged, 0 |
+| Postgres, history | A `self-docs` | `s6` | 2 → 2 | 268156 | 0 | 0 | Both unchanged, 0 |
+
+Against the 1.3.1 table, at `{ files: 71, chunks: 819 }` there and `{ files: 71, chunks: 826 }` here:
+the `operator` strays were 1 in 548216 values compared in each states-sequence run, and 0 in 264656
+(`s0`) and 1 in 269920 (`s1`) in the history run. Here they are 0 in 555466 in each states-sequence run,
+and 0 in 268156 (`s0`) and 0 in 273420 (`s1`).
+
+**Each row against itself.** A reading of the three captures compared every row's `operator` with its
+`operator_exact` rounded to six decimals, in every repetition of every step: no row disagreed. No hit
+appeared or vanished between repetitions in any step.
+
+**The memtable is still emptied during a workload that only reads.** In each changed block no statement
+between the two summaries writes, and `autovacuum_count` stayed 0. The resulting layout matches `t1`'s
+after `SELECT bm25_spill_index('chunks_bm25')`: 3 segments, 215 pages, 22172 terms, 826 documents. Where
+it happened, located by the first repetition in which each query's `scan` values move:
+
+- **Run 1, `t0`:** during repetition 1, between `q-sd-new-subcommand` (3rd of 20) and `q-sd-run-gates`
+  (4th).
+- **Run 2, `t0`:** before the first repetition, between the step's inserts and its first summary
+  reading, so not during the read-only repetitions.
+- **History, `s0`:** during repetition 1, between `q-sd-new-config-key` (1st) and `q-sd-deny-guard`
+  (2nd).
+- **History, `s1`:** during repetition 6, between `q-sd-run-gates` (4th) and `q-sd-state-dir` (5th).
+
+The probe does not identify what triggered it.
+
+**The `scan` values that move are the memtable's rows changing to their segment score.** Each moves
+once and every later repetition reads the same value; no repetition read a third.
+
+- **Run 1, `t0`:** 59 (query, key) values, on 37 keys, all in `docs/work-report-research/`, from the
+  three queries scored before the change: `q-sd-new-config-key` 28, `q-sd-deny-guard` 18,
+  `q-sd-new-subcommand` 13. Each moves from repetition 2 on and then equals run 1's `t1` `scan` for the
+  same query and key, on all 59.
+- **History, `s0`:** 28 values on 28 keys, all `q-sd-new-config-key`'s, all in
+  `docs/work-report-research/`. Each moves from repetition 2 on and equals run 1's `t1` `scan` for the
+  same query and key, on all 28.
+- **History, `s1`:** 721 values on 78 keys, 585 of them in repetition 6 (queries 5 to 20) and all 721
+  from repetition 7 on. 591 are on `self-docs` keys, each equal to `s2`'s `scan` for the same query and
+  key; the other 130 are on `fixture-catalog` keys.
+
+**The one-run values `#### The score each index state ranks by, on 1.5.1` handed here, placed in their
+state.** They were taken at `{ files: 71, chunks: 825 }` with no `--repeat`, at `t0`, where both runs'
+summaries read 57 memtable documents. In run 2 the `scan` values of the last four queries,
+`q-sd-negative-tungsten`, `q-sd-negative-blog`, `q-sd-negative-grpc` and `q-sd-negative-migration`,
+equal run 2's own `t1` `scan` on every hit, while every earlier query's differ from it as run 1's do. So
+in run 2 the memtable was emptied during `t0`'s scoring, between `q-sd-negative-ingress` (16th) and
+`q-sd-negative-tungsten` (17th), and the 48 values are those four queries' rows already at their segment
+score. None is an `operator` value.
+
+**Changed or unchanged.** Against `### The stray index-scan score` → **The trace, from the tables
+above.**:
+
+- **Memtable or segment (item 1):** unchanged in outcome, at `{ files: 71, chunks: 819 }` there and
+  `826` here. Disagreements appear only in blocks whose index held memtable documents at the step and
+  had emptied them by the last repetition; the segment states compared as many values with none
+  disagreeing; and `s6`, holding 2 memtable documents that were not emptied, had none.
+- **Column (item 2):** changed. At 1.3.1 both columns disagreed, `scan` by moving once and `operator` by
+  one wrong value per event. On 1.5.1 only `scan` disagrees; no `operator` value moved and no row
+  disagreed within itself.
+- **A changing index (item 3):** the trigger is unchanged, the index changing under the repetitions in
+  every block with a disagreement and in no block without one, with `autovacuum_count` 0 throughout.
+  Its effect within a statement changed: the `operator` stray that the 1.3.1 trace found consistent with
+  `#516`'s description does not occur. `#516` was closed before `v1.5.0`; this is consistent with it
+  having been fixed there, and is not a finding about `#516` itself, which was not read.
+- **The `scan` moves when the memtable is emptied (278 values at `{ files: 71, chunks: 819 }`):**
+  unchanged in form, each memtable row's `scan` moving once to its segment score. The counts are not
+  compared: they sit at a different stamp, with 61 memtable documents here against 30 there, and each
+  run's change came at a different point, giving 59 (run 1), 0 (run 2), 28 (`s0`) and 721 (`s1`) at
+  `{ files: 71, chunks: 826 }`.
+
 ### The recommendation for the fix branch
 
 **What this is.** A proposal to the maintainer for the route of the branch that fixes the BM25 scores'

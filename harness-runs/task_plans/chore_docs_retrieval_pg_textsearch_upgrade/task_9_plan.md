@@ -38,3 +38,11 @@ The leads are in the story index's `## Context`. `timescale/pg_textsearch#516` w
 - Exactly one of "gone, with the counts" and "survives, with the standalone script" is written. If the script is there, it creates every object it uses and names no path, table or corpus of this repository.
 - No upstream issue or comment was created: `gh` was used, if at all, for `gh issue view` alone.
 - `git diff docs/retrieval-eval-results.md` adds lines only directly after Task 8's `#### The near-tie ordering, on 1.5.1` part.
+
+**Deviations from plan:**
+
+- **"Any value disagrees" read as any stray value, not any `scan` move.** The three runs listed 1711 (run 1 `t0`), 392 (`s0`) and 7074 (`s1`) disagreeing values, every one `scan`, and 0 `operator`. Every `scan` move is a memtable row changing once to its segment score (each later value equals `t1`'s, or `s2`'s for `s1`), which `### The stray index-scan score` → **Conclusion.** separates from the stray, an `operator` reading wrong within its own row. The plan's "gone" bullet also asks whether the memtable was still emptied, which always produces such `scan` moves. So the part is written as **gone, with the counts**, and no standalone script was written or run. `gh issue view 573 --repo timescale/pg_textsearch` worked and was the only `gh` call; its shape was not needed.
+- **`self-docs` stamp is `{ files: 71, chunks: 826 }`** at commit `58beee8b`, one chunk more than Task 8's `825` at `52d8749c`; the part names both where it cites Task 8's figures.
+- **Task 8's handed one-run values were placed in this part**, as Task 8's forward citation asked: a reading of Task 8's own captures shows run 2's memtable was emptied during `t0`'s scoring, after the 16th query, and the 48 values are the last four queries' rows already at segment score.
+- **Two readings come from a throwaway scratch reader over the captures, not the probe's printed summary:** the row-internal check (`operator` against `operator_exact` rounded to six decimals, every row of every repetition: 0 disagree) and the locating of each change by query. The reader was deleted after use, per the scratch README.
+- **Run 2's `t0` memtable was emptied before its first summary reading**, between the inserts and the reads, so that block shows no move; recorded as such in the table, not dropped.
