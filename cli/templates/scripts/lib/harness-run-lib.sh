@@ -1217,27 +1217,59 @@ hr_worktree_config_check_var() {
 # `setup-worktree.sh --target` adds only `core.hooksPath`; the check below
 # holds a clone to it. Required keys: `core.repositoryformatversion`,
 # `core.bare`, `remote.origin.fetch`, and `remote.origin.url` and
-# `extensions.objectformat` whenever the spec lists them.
+# `extensions.objectformat` whenever the spec lists them. Optional
+# exact-value keys: the identity keys `hr_clone_identity_keys` prints
+# (`user.name`, `user.email`), each whenever the spec lists it.
+#
+# WHY THE IDENTITY IS SAFE TO CARRY. Git writes `user.name` and `user.email`
+# into a commit and never executes them. The spec lists each only at the exact
+# value the main checkout's `.git/config` holds, so a session still cannot set
+# its own author identity; and a session cannot write the clone's `.git/config`
+# at all (`docs/sandbox-verification.md`, row CL5), so this check stays defence
+# in depth. What the copy does not cover: the main checkout's file is read with
+# `--file`, so an identity it sets only through `include` / `includeIf` is not
+# seen, and the clone falls back to the global identity, as before the copy
+# existed. The accepted cost: a main checkout whose `user.name` or `user.email`
+# changes, or is unset, while a clone is live makes that clone's copy wrong, and
+# the clone is refused until it is recreated.
+#
+# WHY NO SIGNING KEY. `user.signingkey`, `commit.gpgsign`, `gpg.format`,
+# `gpg.program`, `gpg.<format>.program` and `gpg.ssh.defaultKeyCommand` are
+# deliberately not listed. A commit written with the clone as git's repository
+# can be signed only by a program that reaches the signing key or agent socket
+# from wherever that commit is written; that is unmeasured, and a failed
+# signature fails the commit. The main-checkout wrappers' `git -C <main>
+# commit-tree` already signs under the main checkout's configuration. If signing
+# is ever carried, the program keys travel only as the main checkout's exact
+# values, as a deliberate trust decision naming the main checkout's
+# `.git/config` as the trusted source, never as a widened rule.
 #
 # `hr_clone_config_spec <main> <top>` prints one line per allowed key,
 # `<lowercase key><TAB><rule>`, `<rule>` being `=<exact value>` or `bool`
 # (`true` or `false`). `remote.origin.url` is listed, with the value the main
-# checkout's `.git/config` names, only when it names one;
-# `extensions.objectformat` is listed, with the main checkout's value and
-# `core.repositoryformatversion` `=1`, only when the main checkout's
+# checkout's `.git/config` names, only when it names one; so is each identity
+# key, with the main checkout's value, only when its `.git/config` names a
+# non-empty one; `extensions.objectformat` is listed, with the main checkout's
+# value and `core.repositoryformatversion` `=1`, only when the main checkout's
 # `.git/config` names one, and the version is `=0` otherwise; `core.hooksPath` is
 # `<top>/<githooksDir>`, with `githooksDir` read from the MAIN checkout. Return
 # 1, printing nothing, when `githooksDir` cannot be read or a value holds a
 # newline the line format cannot carry.
 hr_clone_config_spec() {
-  local main="${1-}" top="${2-}" rel url fmt nl
+  local main="${1-}" top="${2-}" rel url fmt nl key value ids="" idv="" tab=$'\t'
   nl='
 '
   [ -n "$main" ] && [ -n "$top" ] || return 1
   rel=$(hr_githooks_dir "$main") || return 1
   url=$(git -C / config --file "$main/.git/config" --get remote.origin.url 2>/dev/null) || url=""
   fmt=$(git -C / config --file "$main/.git/config" --get extensions.objectformat 2>/dev/null) || fmt=""
-  case "$top/$rel$url$fmt" in *"$nl"*) return 1 ;; esac
+  for key in $(hr_clone_identity_keys); do
+    value=$(git -C / config --file "$main/.git/config" --get "$key" 2>/dev/null) || continue
+    [ -n "$value" ] || continue
+    idv="$idv$value"
+    ids="$ids$key$tab=$value$nl"
+  done
+  case "$top/$rel$url$fmt$idv" in *"$nl"*) return 1 ;; esac
   if [ -n "$fmt" ]; then
     printf 'core.repositoryformatversion\t=1\nextensions.objectformat\t=%s\n' "$fmt"
   else
@@ -1253,6 +1285,13 @@ hr_clone_config_spec() {
     remote.origin.fetch '=+refs/heads/*:refs/remotes/origin/*' \
     core.hookspath "=$top/$rel"
   [ -z "$url" ] || printf 'remote.origin.url\t=%s\n' "$url"
+  printf '%s' "$ids"
+}
+
+# Print the identity keys a clone mirrors from the main checkout, one per line:
+# the one list `hr_clone_config_spec` and `hr_clone_create_var` both read.
+hr_clone_identity_keys() {
+  printf '%s\n' user.name user.email
 }
 
 # Set `HR_CLONE_RULE` to the rule <spec> (`hr_clone_config_spec`'s output)
@@ -1280,7 +1319,9 @@ hr_clone_spec_rule_var() {
 # return 1 otherwise — including a file that is absent, not a regular file, a
 # symbolic link, or one git cannot parse — with `HR_CLONE_CONFIG_REFUSAL` set to
 # one sentence naming each offending, duplicated or missing key, never a value.
-# Prints nothing. Call it directly, never inside `$(…)`.
+# Prints nothing. Call it directly, never inside `$(…)`. The identity keys are
+# never required, so a clone made before they were mirrored still passes; one
+# the clone sets where the spec lists none is refused as off the list.
 #
 # Read as `hr_worktree_config_check_var` reads its file: one
 # `git -C / config --file <f> --null --list` call, a trailing `hr-status=<n>`
@@ -4139,7 +4180,8 @@ EOF
 # --existing` does; `git clone --shared` into a directory this call `mkdir`s,
 # never `--local`, whose hardlinked objects would be the main checkout's own
 # inodes; rewrite `.git/config` to the allow-list's required keys plus the
-# platform booleans <main>'s `.git/config` sets to `true` or `false`; leave
+# platform booleans <main>'s `.git/config` sets to `true` or `false`, plus the
+# main checkout's identity keys it sets (`hr_clone_identity_keys`); leave
 # `refs/heads/` holding only <branch> at the tip, `refs/remotes/origin/`
 # holding only <main>'s `origin/<defaultBranch>`, its `origin/HEAD` symref and
 # `origin/<branch>`, each where <main> has it, and `HEAD` on <branch>; write
@@ -4279,7 +4321,7 @@ hr_clone_create_var() {
       break
     fi
     for key in core.repositoryformatversion extensions.objectformat core.bare remote.origin.fetch remote.origin.url \
-      core.filemode core.ignorecase core.precomposeunicode core.symlinks; do
+      core.filemode core.ignorecase core.precomposeunicode core.symlinks $(hr_clone_identity_keys); do
       hr_clone_spec_rule_var "$spec" "$key" || continue
       case "$HR_CLONE_RULE" in
         =*) value=${HR_CLONE_RULE#=} ;;

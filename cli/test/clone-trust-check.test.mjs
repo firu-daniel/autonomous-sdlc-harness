@@ -5,9 +5,10 @@
  * **The rule these tests exist to enforce: an unsandboxed wrapper runs git in a clone only when the
  * run registry records that clone at the path `hr_worktree_dir` derives for its branch, its `.git`
  * holds no file that redirects git, its `objects/info/alternates` borrows from the main checkout's
- * object store alone, and its `.git/config` is on the one allow-list its creator writes. Anything
- * else is refused, naming a key or a file and never a value, and the check writes nothing — not the
- * registry, not its lock, not a ref.** The planted-file cases (h) and (i) rest on the measurement in
+ * object store alone, and its `.git/config` is on the one allow-list its creator writes — which may
+ * carry the main checkout's identity (`user.name`, `user.email`) at its exact value, and nothing
+ * else that identifies or signs. Anything else is refused, naming a key or a file and never a
+ * value, and the check writes nothing — not the registry, not its lock, not a ref.** The planted-file cases (h) and (i) rest on the measurement in
  * `docs/sandbox-verification.md`, row CL5: the runtime leaves a clone's new top-level `.git` files
  * and `objects/info/` sandbox-writable.
  *
@@ -18,6 +19,10 @@
  *
  * RED ONCE — condition 4's alternates comparison deleted from `hr_clone_target_check_var`: case (i)
  * fails on its first three variants, every other case passes.
+ *
+ * RED ONCE — `hr_clone_identity_keys` printing nothing: case (q)'s identity arm, case (l)'s
+ * `user.name` and `user.email` variants, case (s), case (t) and case (p) fail, every other case
+ * passes.
  */
 
 import assert from 'node:assert/strict';
@@ -38,6 +43,11 @@ const CONFIG = {
   commands: {},
 };
 const BRANCH = 'feat_c';
+/** The seed commit's identity when the main checkout sets none, as `cli/test/clone-sync.test.mjs` has it. */
+const IDENTITY = ['-c', 'user.name=Harness Fixture', '-c', 'user.email=fixture@example.invalid'];
+/** The identity the probe commit's global configuration names, distinct from the main checkout's. */
+const GLOBAL_NAME = 'Global Fixture';
+const GLOBAL_EMAIL = 'global@example.invalid';
 /** A value no refusal may carry; every path a refusal names is under the fixture root, not this. */
 const MARKER = 'hr-marker-value-7f3c';
 const NOT_LISTED = /is neither the main checkout .* nor a worktree it lists: its \.git is not a regular pointer file/;
@@ -72,11 +82,12 @@ printf 'status=%s\\nkind=%s\\ngitdir=%s\\nbranch=%s\\nrefusal=%s\\n' "$s" "$HR_T
 /**
  * A bare origin; a main checkout on `trunk` carrying `harness.config.json` and `githooks/`, with
  * its registry directory made; and, unless `clone` is false, the clone of {@link BRANCH} that
- * `hr_clone_create_var` makes at `<root>/main-feat_c`.
+ * `hr_clone_create_var` makes at `<root>/main-feat_c`. With `identity` false the main checkout sets
+ * no `user.*` key and makes its seed commit under {@link IDENTITY}.
  *
  * @param {import('node:test').TestContext} t
  */
-async function fixture(t, { clone = true } = {}) {
+async function fixture(t, { clone = true, identity = true } = {}) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'clone-trust-')));
   t.after(() => rm(root, { recursive: true, force: true }));
   const origin = join(root, 'origin.git');
@@ -85,13 +96,15 @@ async function fixture(t, { clone = true } = {}) {
   await mkdir(main);
   await runGit(origin, ['init', '--bare', '--quiet']);
   await runGit(main, ['init', '--quiet', '-b', 'trunk']);
-  await runGit(main, ['config', 'user.email', 'fixture@example.invalid']);
-  await runGit(main, ['config', 'user.name', 'Harness Fixture']);
+  if (identity) {
+    await runGit(main, ['config', 'user.email', 'fixture@example.invalid']);
+    await runGit(main, ['config', 'user.name', 'Harness Fixture']);
+  }
   await writeFile(join(main, 'harness.config.json'), `${JSON.stringify(CONFIG)}\n`);
   await mkdir(join(main, 'githooks'));
   await writeFile(join(main, 'githooks', 'README'), 'hooks\n');
   await runGit(main, ['add', 'harness.config.json', 'githooks']);
-  await runGit(main, ['commit', '--quiet', '-m', 'fixture: seed']);
+  await runGit(main, [...(identity ? [] : IDENTITY), 'commit', '--quiet', '-m', 'fixture: seed']);
   await runGit(main, ['config', 'core.hooksPath', 'githooks']);
   await runGit(main, ['remote', 'add', 'origin', origin]);
   await runGit(main, ['push', '--quiet', 'origin', 'trunk']);
@@ -149,6 +162,60 @@ async function assertConfigRefused(f, key, pattern) {
   assert.match(refusal, pattern);
   assert.ok(!refusal.includes(MARKER), refusal);
   assert.match(refusal, /so this clone's configuration is not trusted$/);
+}
+
+/** `hr_clone_config_spec <main> <clone>` as a key → rule map, refusing a key listed twice. */
+async function readSpec(f) {
+  const printed = await lib(f.root, 'hr_clone_config_spec "$1" "$2"', f.main, f.clone);
+  assert.equal(printed.status, 0, printed.stderr);
+  const spec = new Map();
+  for (const line of printed.stdout.split('\n').filter(Boolean)) {
+    const [key, rule] = line.split('\t');
+    assert.ok(!spec.has(key), `the spec lists ${key} twice`);
+    spec.set(key, rule);
+  }
+  return spec;
+}
+
+/** The created clone's `.git/config` as a key → value map, refusing a key set twice. */
+async function readHeld(f) {
+  const held = new Map();
+  for (const entry of (await f.config('--null', '--list')).stdout.split('\0').filter(Boolean)) {
+    const at = entry.indexOf('\n');
+    const key = entry.slice(0, at);
+    assert.ok(!held.has(key), `the created clone sets ${key} twice`);
+    held.set(key, entry.slice(at + 1));
+  }
+  return held;
+}
+
+/**
+ * Write a commit with the clone as git's repository — `commit-tree`, so no ref moves — under a
+ * global configuration naming {@link GLOBAL_NAME}, with every identity variable unset so the
+ * caller's environment cannot mask the configuration; answer with its `author` and `committer`
+ * lines.
+ */
+async function probeCommit(f) {
+  const home = join(f.root, 'probe-home');
+  await mkdir(home, { recursive: true });
+  const gitconfig = join(home, '.gitconfig');
+  await writeFile(gitconfig, `[user]\n\tname = ${GLOBAL_NAME}\n\temail = ${GLOBAL_EMAIL}\n`);
+  const result = await runBash(
+    f.root,
+    [
+      '-c',
+      `unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL EMAIL
+tree=$(git -C "$1" rev-parse 'HEAD^{tree}') || exit 97
+git -C "$1" commit-tree "$tree" -p HEAD -m probe`,
+      'hr',
+      f.clone,
+    ],
+    { HOME: home, GIT_CONFIG_GLOBAL: gitconfig, GIT_CONFIG_NOSYSTEM: '1' },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const body = (await runGit(f.clone, ['cat-file', '-p', result.stdout.trim()])).stdout;
+  const line = (field) => body.split('\n').find((l) => l.startsWith(`${field} `)) ?? '';
+  return { author: line('author'), committer: line('committer') };
 }
 
 /** A repository at `dir` on `branch`, cloned from origin — what a sandboxed command could build. */
@@ -331,7 +398,18 @@ test('(j) A .git that is a symbolic link to a real .git directory takes the poin
 });
 
 test('(k) An off-list key is refused, naming the key and never its value', async (t) => {
-  for (const key of ['core.fsmonitor', 'core.sshCommand', 'uploadpack.packObjectsHook', 'extensions.worktreeConfig', 'include.path']) {
+  for (const key of [
+    'core.fsmonitor',
+    'core.sshCommand',
+    'uploadpack.packObjectsHook',
+    'extensions.worktreeConfig',
+    'include.path',
+    'commit.gpgsign',
+    'user.signingkey',
+    'gpg.format',
+    'gpg.program',
+    'gpg.ssh.program',
+  ]) {
     await t.test(key, async (t) => {
       const f = await fixture(t);
       await f.config(key, join(f.root, MARKER));
@@ -345,6 +423,8 @@ test('(l) An allowed key with a wrong value is refused, naming the key and never
     'core.repositoryformatversion': () => '1',
     'remote.origin.url': (f) => join(f.root, `${MARKER}.git`),
     'core.hooksPath': (f) => join(f.root, MARKER, 'githooks'),
+    'user.name': () => `${MARKER} name`,
+    'user.email': () => `${MARKER}@example.invalid`,
   };
   for (const [key, value] of Object.entries(cases)) {
     await t.test(key, async (t) => {
@@ -381,24 +461,11 @@ test('(o) A .git/config git cannot parse is refused', async (t) => {
 
 test('(p) hr_clone_config_spec and the created clone’s .git/config are one statement', async (t) => {
   const f = await fixture(t);
-  const spec = new Map();
-  const printed = await lib(f.root, 'hr_clone_config_spec "$1" "$2"', f.main, f.clone);
-  assert.equal(printed.status, 0, printed.stderr);
-  for (const line of printed.stdout.split('\n').filter(Boolean)) {
-    const [key, rule] = line.split('\t');
-    assert.ok(!spec.has(key), `the spec lists ${key} twice`);
-    spec.set(key, rule);
-  }
+  const spec = await readSpec(f);
   assert.equal(spec.get('remote.origin.url'), `=${f.origin}`);
   assert.equal(spec.get('core.hookspath'), `=${join(f.clone, 'githooks')}`);
 
-  const held = new Map();
-  for (const entry of (await f.config('--null', '--list')).stdout.split('\0').filter(Boolean)) {
-    const at = entry.indexOf('\n');
-    const key = entry.slice(0, at);
-    assert.ok(!held.has(key), `the created clone sets ${key} twice`);
-    held.set(key, entry.slice(at + 1));
-  }
+  const held = await readHeld(f);
 
   for (const [key, value] of held) {
     const rule = spec.get(key);
@@ -409,10 +476,83 @@ test('(p) hr_clone_config_spec and the created clone’s .git/config are one sta
   for (const key of ['core.repositoryformatversion', 'core.bare', 'remote.origin.fetch', 'remote.origin.url']) {
     assert.ok(held.has(key), `the created clone lacks the required ${key}`);
   }
-  for (const [key, rule] of spec) {
-    if (rule !== 'bool') continue;
+  for (const key of [...[...spec].filter(([, rule]) => rule === 'bool').map(([key]) => key), 'user.name', 'user.email']) {
     const main = await runBash(f.root, ['-c', 'git -C / config --file "$1" --get "$2"', 'hr', join(f.main, '.git', 'config'), key]);
+    if (key.startsWith('user.')) assert.equal(main.status, 0, `the fixture's main checkout sets no ${key}`);
     if (main.status === 0) assert.equal(held.get(key), main.stdout.trim(), `${key} is not copied from the main checkout`);
     else assert.ok(!held.has(key), `${key} is set though the main checkout sets none`);
   }
+});
+
+test("(q) The clone carries the main checkout's identity exactly when the main checkout sets one", async (t) => {
+  await t.test('with an identity: listed, written, accepted, and the commit names it', async (t) => {
+    const f = await fixture(t);
+    const spec = await readSpec(f);
+    assert.equal(spec.get('user.name'), '=Harness Fixture');
+    assert.equal(spec.get('user.email'), '=fixture@example.invalid');
+    const held = await readHeld(f);
+    assert.equal(held.get('user.name'), 'Harness Fixture');
+    assert.equal(held.get('user.email'), 'fixture@example.invalid');
+    const g = await f.check(f.clone);
+    assert.equal(g.status, '0', g.refusal);
+    const { author, committer } = await probeCommit(f);
+    assert.match(author, /^author Harness Fixture <fixture@example\.invalid> /);
+    assert.match(committer, /^committer Harness Fixture <fixture@example\.invalid> /);
+  });
+  await t.test('without one: unlisted, unwritten, accepted, and the commit names the global identity', async (t) => {
+    const f = await fixture(t, { identity: false });
+    const spec = await readSpec(f);
+    assert.deepEqual([...spec.keys()].filter((key) => key.startsWith('user.')), []);
+    const held = await readHeld(f);
+    assert.deepEqual([...held.keys()].filter((key) => key.startsWith('user.')), []);
+    const g = await f.check(f.clone);
+    assert.equal(g.status, '0', g.refusal);
+    const { author, committer } = await probeCommit(f);
+    assert.match(author, new RegExp(`^author ${GLOBAL_NAME} <${escape(GLOBAL_EMAIL)}> `));
+    assert.match(committer, new RegExp(`^committer ${GLOBAL_NAME} <${escape(GLOBAL_EMAIL)}> `));
+  });
+});
+
+test('(r) An identity key the main checkout does not set is refused in the clone', async (t) => {
+  const f = await fixture(t, { identity: false });
+  await f.config('user.name', `${MARKER} name`);
+  await assertConfigRefused(f, 'user.name', /which the clone allow-list does not hold/);
+});
+
+test('(s) A clone without the identity keys — the shape made before they were mirrored — is accepted', async (t) => {
+  const f = await fixture(t);
+  const held = await readHeld(f);
+  assert.ok(held.has('user.name') && held.has('user.email'), 'the created clone lacks the identity to unset');
+  await f.config('--unset', 'user.name');
+  await f.config('--unset', 'user.email');
+  const g = await f.check(f.clone);
+  assert.equal(g.status, '0', g.refusal);
+});
+
+test("(t) The main checkout's identity changing or unset under a live clone refuses it, naming the key", async (t) => {
+  await t.test('changed', async (t) => {
+    const f = await fixture(t);
+    await runGit(f.main, ['config', 'user.name', 'Harness Fixture Renamed']);
+    await assertConfigRefused(f, 'user.name', /to a value the clone allow-list does not allow/);
+  });
+  await t.test('unset', async (t) => {
+    const f = await fixture(t);
+    await runGit(f.main, ['config', '--unset', 'user.name']);
+    await assertConfigRefused(f, 'user.name', /which the clone allow-list does not hold/);
+  });
+});
+
+test('(u) Signing keys the main checkout sets are neither listed nor written into the clone', async (t) => {
+  const f = await fixture(t, { clone: false });
+  const signing = { 'commit.gpgsign': 'true', 'gpg.format': 'ssh', 'user.signingkey': join(f.root, 'signing-key.pub') };
+  for (const [key, value] of Object.entries(signing)) await runGit(f.main, ['config', key, value]);
+  assert.equal(await f.create(BRANCH), f.clone);
+  const spec = await readSpec(f);
+  const held = await readHeld(f);
+  for (const key of Object.keys(signing)) {
+    assert.ok(!spec.has(key.toLowerCase()), `the spec lists ${key}`);
+    assert.ok(!held.has(key.toLowerCase()), `the created clone sets ${key}`);
+  }
+  const g = await f.check(f.clone);
+  assert.equal(g.status, '0', g.refusal);
 });

@@ -27,7 +27,7 @@ The work is two single-layer tasks in bottom-up order. Task 1 (`cli`) widens the
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_run_copy_commit_identity/task_<K>_plan.md`. The entries are in bottom-up ship order, with the catch-all layer last.
 
-1. [ ] **Task 1** — Mirror the main checkout's `user.name` / `user.email` into the clone allow-list, and prove both arms _(layer: cli)_ _(points: 20)_
+1. [x] **Task 1** — Mirror the main checkout's `user.name` / `user.email` into the clone allow-list, and prove both arms _(layer: cli)_ _(points: 20)_
 2. [ ] **Task 2** — Record the commit-identity measurement and the identity, signing and consistency decisions in the docs _(layer: general)_ _(points: 15)_
 
 ## Scope register
