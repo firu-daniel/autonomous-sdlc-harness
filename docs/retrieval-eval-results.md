@@ -30696,6 +30696,30 @@ recall@1; E recall@3, strict recall@1 and @3.
 from the recorded run. These runs separate none of these, so no moved figure here is attributed to
 `pg_textsearch` alone. On `fixture-catalog` none of them, together, moved a figure.
 
+#### The lexical-plan crossover, on 1.5.1
+
+**The outcome.** The crossover is **63 rows** on 1.5.1, the figure measured on 1.3.1: 1.5.1 did not move
+it. `cli/test/docs-retrieval-store.test.mjs` → `CROSSOVER_ROWS` and `docs/retrieval.md` → `## Still
+open`, the lexical-arm bullet, both read 63.
+
+**The setup.**
+
+- **The statement.** `cli/test/docs-retrieval-store.test.mjs`, case `(b) the index-scan crossover,
+  bisected on a stats-informed plan`: the bisect on a table carrying the store's own BM25 index
+  definition, built after the rows. The case and the suite's header state it; it is not restated here.
+- **The packages.** `@electric-sql/pglite` 0.5.10 with `@electric-sql/pglite-pg_textsearch` 0.0.12
+  (`pg_textsearch` 1.5.1), on 2026-10-21 (`CROSSOVER_ROWS`'s doc comment).
+- **The Node versions.** The case printed 63 on Node 22.23.2 and on Node 20.19.5; the Node 20 reading
+  did not differ.
+- **The previous figure.** 63, on PGlite 0.5.8 with `pg_textsearch` 1.3.1, the value `CROSSOVER_ROWS`
+  carried before this re-take and the one `### The candidate end-state rule, at refresh level`,
+  **Observation 1**, quotes.
+
+**What the figure bounds.** The next branch's fix ends refreshes in the state `REINDEX INDEX chunks_bm25`
+leaves (route 2, `### The recommendation for the fix branch`), which is the statistics-bearing state case
+`(b)` measures, so this figure bounds the corpus size below which the store's lexical plan becomes a `Seq
+Scan`, for that suite's synthetic row width.
+
 ### The recommendation for the fix branch
 
 **What this is.** A proposal to the maintainer for the route of the branch that fixes the BM25 scores'
