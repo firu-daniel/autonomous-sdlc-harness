@@ -25,6 +25,8 @@
  *   at the derived path → fails on the pre-existing clone's `keep.txt`, which is gone.
  * - (S3) `start_remove_copy`'s `config --remove-section "branch.$branch"` skipped → fails `the
  *   branch.feat_x configuration section was left behind`.
+ * - (S4) `start_remove_copy`'s `hr_registry_restore` skipped, in the fixture's copy → fails `the registry record of feat_x
+ *   was not put back`.
  */
 
 import assert from 'node:assert/strict';
@@ -266,6 +268,22 @@ test('a start keeps a branch.feat_x configuration section that existed before th
   assert.equal(result.status, 0, result.stderr);
   assert.equal(await f.git(f.dir, ['config', '--get', 'branch.feat_x.remote']), 'origin');
   assert.equal(await f.git(f.dir, ['config', '--get', 'branch.feat_x.merge']), 'refs/heads/feat_x');
+});
+
+test('a start keeps a registry record of feat_x that existed before the cut, byte for byte', async (t) => {
+  const f = await startFixture(t);
+  // A record naming no live copy, so the cut rewrites it to name the clone and the cleanup must put it back.
+  const gone = join(f.dir, STATE_DIR, 'stub', 'no-such-copy');
+  mkdirSync(join(f.dir, STATE_DIR, 'autonomous_logs'), { recursive: true });
+  writeFileSync(join(f.dir, REGISTRY),
+    `${JSON.stringify({ runs: { feat_x: { branch: 'feat_x', status: 'completed', worktree: gone } } }, null, 2)}\n`);
+  const seeded = f.registry();
+
+  const result = await f.start(['feat_x', '--prompt-file', f.prompt]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(f.calls(), [TASK_DISPATCH]);
+  assert.equal(existsSync(f.worktree), false, 'the clone was left behind');
+  assert.equal(f.registry(), seeded, 'the registry record of feat_x was not put back');
 });
 
 test('a refused start leaves a local feat_x that existed before the cut untouched', async (t) => {

@@ -5,7 +5,9 @@
  *
  * **The rule these tests exist to enforce: a session is launched only on a per-run copy that equals
  * the base profile plus that run's exact entries, with the sandbox on and strict or the named
- * opt-out taken.**
+ * opt-out taken.** And **a clone run's exit brings its branch into the main checkout, while a sync
+ * that cannot run — RUN_MAIN unplaced included — is one log line and never changes the
+ * classification.**
  *
  * The watcher holds declared mirrors of TypeScript owners; the last test holds each equal to its
  * owner, imported from `cli/dist`:
@@ -20,6 +22,11 @@
  * hand-written copy of that shape.
  *
  * Every per-run profile lands under the fixture's own `XDG_STATE_HOME` (`watcherEnv`).
+ *
+ * RED ONCE — each mutation applied once to the fixture's copy of `autonomous-watcher.sh`, the file
+ * run, the failure observed, the mutation reverted:
+ * - (P1) `classify_run_exit`'s `could not sync the clone … ($RUN_MAIN_REFUSAL)` log line replaced
+ *   by `:` → fails `no unsynced-clone line`.
  */
 
 import assert from 'node:assert/strict';
@@ -299,6 +306,35 @@ test('a clone run\'s exit syncs its branch into the main checkout', async (t) =>
   const subjects = (await runGit(f.clone, ['log', '-2', '--format=%s', ref])).stdout.trim().split('\n');
   assert.deepEqual(subjects, ['test: commit directly in the clone', 'test: commit through the wrapper']);
   assert.equal((await runGit(f.dir, ['rev-parse', ref])).stdout.trim(), cloneTip, `the main checkout lags:\n${f.watcherLog()}`);
+});
+
+test('a clone run\'s exit with no placed main checkout logs the unsynced clone and classifies as before', async (t) => {
+  const f = await adoptedFixture(t);
+  if (f === null) return;
+
+  // RUN_MAIN is placed once, when the watcher is sourced, from the script's own location. The exit is
+  // classified directly in a shell that sourced it: once with RUN_MAIN emptied, as the watcher's top
+  // empties it when it cannot place itself, and once as placed, for the classification to compare.
+  const classify = async (emptyMain) => {
+    await f.seedRecord({ status: 'running', copy_kind: 'clone' });
+    const called = await f.watcherCall(
+      `${emptyMain ? 'RUN_MAIN=""; ' : ''}classify_run_exit "$1" "$2" "$3" 0`,
+      [f.branch, f.dir, f.record().log_path],
+    );
+    assert.equal(called.status, 0, called.stderr);
+    return f.record().status;
+  };
+  const line =
+    `classify: could not sync the clone of '${f.branch}' into the main checkout ` +
+    '(cannot place the watcher in a main checkout) — its branch there may lag the run\'s commits';
+
+  const placed = await classify(false);
+  assert.ok(!f.watcherLog().includes(line), `the line was logged with RUN_MAIN placed:\n${f.watcherLog()}`);
+  const unplaced = await classify(true);
+  assert.ok(f.watcherLog().includes(line), `no unsynced-clone line:\n${f.watcherLog()}`);
+  assert.equal(unplaced, placed);
+  assert.equal(unplaced, 'completed');
+  assert.deepEqual(f.notifications().map((n) => n.event), ['completed', 'completed']);
 });
 
 // --- Mirrors ------------------------------------------------------------------------------------
