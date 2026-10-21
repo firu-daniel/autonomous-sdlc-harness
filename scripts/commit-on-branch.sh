@@ -134,10 +134,11 @@
 # (`rev-parse`, `ls-tree`, `ls-files`, `check-attr`) carry the pinned `<main>`
 # hooks directory, and none of them starts a hook. The message lands exactly as
 # given, one paragraph per argument, because `commit-tree` does no clean-up.
-# The identity and the signing are the main repository's configuration
-# (`user.*`, `commit.gpgSign`). The ref update is logged in
-# `logs/refs/heads/<branch>` (reflog subject `commit-on-branch.sh: <subject>`),
-# and no `logs/HEAD` entry is written for a linked worktree.
+# The identity is the main repository's configuration (`user.*`); the commit
+# is unsigned, because `commit-tree` never reads `commit.gpgSign` and is passed
+# no `-S`. The ref update is logged in `logs/refs/heads/<branch>` (reflog
+# subject `commit-on-branch.sh: <subject>`), and no `logs/HEAD` entry is
+# written for a linked worktree.
 #
 # NO FILTER DRIVER RUNS. Every blob is hashed under `hr_commit_paths_var`'s
 # filter policy, so content is stored exactly as the working tree holds it:
