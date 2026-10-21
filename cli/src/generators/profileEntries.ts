@@ -8,6 +8,14 @@
  * primitives; holding them here, below all three, keeps every edge between those modules one-way, so
  * a binding imported from here may be read while a module is being evaluated. A primitive that would
  * need to import one of them back does not belong here.
+ *
+ * Mirrors outside this package, each held equal by the suite named:
+ * - `cli/templates/scripts/autonomous-watcher.sh` → `run_profile_entries` refuses a run-copy path
+ *   carrying any {@link FORBIDDEN_IN_ENTRY} needle other than `///`
+ *   (`cli/test/watcher-run-profile.test.mjs`). Any change to that set is an edit to
+ *   `run_profile_entries` in the same change.
+ *
+ * A mirror this header does not declare is a defect.
  */
 
 import { join } from 'node:path';

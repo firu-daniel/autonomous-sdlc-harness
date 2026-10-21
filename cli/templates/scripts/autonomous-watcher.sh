@@ -2002,9 +2002,10 @@ run_profile_one_object() {
 # the generator's refused set, refuses a path carrying a quote, a `*` or a tab —
 # a `*` would turn an exact entry into a glob, a quote does not belong in a
 # path this watcher emits, and a tab is the separator — and a <copy> carrying
-# `$`, a backquote, `&`, `;`, `|`, `<` or `>`, the shapes
-# cli/src/generators/profileEntries.ts → FORBIDDEN_IN_ENTRY never lets a
-# command entry carry, which the copy's wrapper twins would. Exit 1 the protected set
+# `$`, a backquote, `&`, `;`, `|`, `<`, `>` or a newline: a declared mirror of
+# cli/src/generators/profileEntries.ts → FORBIDDEN_IN_ENTRY's command rows
+# (every row but `///`; the loop above covers the quotes), which the copy's
+# wrapper twins would otherwise carry. Exit 1 the protected set
 # is unreadable, 2 the worktree list failed, 3 a path was refused, 4 <kind> is
 # neither kind; nothing useful is printed on a non-zero exit.
 run_profile_entries() {
@@ -2058,7 +2059,7 @@ EOF
 $out
 EOF
   case "$copy" in
-    *'$'* | *'`'* | *'&'* | *';'* | *'|'* | *'<'* | *'>'*) return 3 ;;
+    *'$'* | *'`'* | *'&'* | *';'* | *'|'* | *'<'* | *'>'* | *$'\n'*) return 3 ;;
   esac
   printf '%s' "$out"
 }
@@ -2097,7 +2098,7 @@ run_profile_render() {
     0) ;;
     1) RUN_PROFILE_REFUSAL="the run copy's protected paths could not be read from harness.config.json"; return 1 ;;
     2) RUN_PROFILE_REFUSAL="git worktree list failed in $MAIN_REPO"; return 1 ;;
-    3) RUN_PROFILE_REFUSAL="a per-run profile entry carries a quote, a '*' or a tab, or the run copy's path carries a '\$', a backquote, '&', ';', '|', '<' or '>'"; return 1 ;;
+    3) RUN_PROFILE_REFUSAL="a per-run profile entry carries a quote, a '*' or a tab, or the run copy's path carries a '\$', a backquote, '&', ';', '|', '<', '>' or a newline"; return 1 ;;
     *) RUN_PROFILE_REFUSAL="the run copy's kind '$kind' is neither clone nor worktree"; return 1 ;;
   esac
   if ! run_profile_one_object "$SETTINGS_PROFILE"; then

@@ -15,7 +15,7 @@ One non-blocking finding: the watcher's new refusal of unsafe run-copy path char
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Declare and test the watcher's copy of `FORBIDDEN_IN_ENTRY`'s command shapes _(layer: cli)_
+1. [x] **Finding 1** — Declare and test the watcher's copy of `FORBIDDEN_IN_ENTRY`'s command shapes _(layer: cli)_
 
 ## Must Fix
 

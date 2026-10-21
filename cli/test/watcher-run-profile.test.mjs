@@ -20,7 +20,9 @@
  *   such row a real `init` wrote;
  * - `RUN_PROFILE_OPT_OUT_MARKER` — `SANDBOX_OPT_OUT_MARKER`, and `RUN_PROFILE_SANDBOX_STRICT` —
  *   `shippedSandboxSettings()` filtered to `sandbox.enabled`, `sandbox.failIfUnavailable` and
- *   `sandbox.allowUnsandboxedCommands`, both in `cli/src/generators/sandboxProfile.ts`.
+ *   `sandbox.allowUnsandboxedCommands`, both in `cli/src/generators/sandboxProfile.ts`;
+ * - `run_profile_entries`' run-copy path refusal — every `FORBIDDEN_IN_ENTRY` needle but `///`, in
+ *   `cli/src/generators/profileEntries.ts`.
  * `RUN_PROFILE_SANDBOX_OPT_OUT` mirrors `applySandbox`'s opt-out branch in the same module; it is
  * held by the launch of a profile a real `init` rendered from `sandbox.optOut`, never by a
  * hand-written copy of that shape.
@@ -39,6 +41,7 @@ import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
 
+import { FORBIDDEN_IN_ENTRY } from '../dist/generators/profileEntries.js';
 import { COPY_GIT_PATHS, copySurfacePaths, fileToolDenyRules } from '../dist/generators/writeProtection.js';
 import { SANDBOX_OPT_OUT_MARKER, shippedSandboxSettings } from '../dist/generators/sandboxProfile.js';
 import { INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
@@ -468,10 +471,14 @@ test('the watcher\'s mirrors equal their TypeScript owners', async (t) => {
     assert.deepEqual(rendered.permissions.deny, []);
   });
 
-  await t.test('run_profile_entries refuses a run copy path carrying $ with exit 3', async () => {
-    const printed = await f.watcherCall('run_profile_entries "$1" clone', [`${f.dir}-a$b`]);
-    assert.equal(printed.status, 3, printed.stderr);
-    assert.equal(printed.stdout, '');
+  await t.test('run_profile_entries refuses a run copy path carrying any FORBIDDEN_IN_ENTRY needle but /// with exit 3', async () => {
+    const needles = FORBIDDEN_IN_ENTRY.map(([needle]) => needle).filter((needle) => needle !== '///');
+    assert.ok(needles.length > 0);
+    for (const needle of needles) {
+      const printed = await f.watcherCall('run_profile_entries "$1" clone', [`${f.dir}-a${needle}b`]);
+      assert.equal(printed.status, 3, `${JSON.stringify(needle)}: ${printed.stderr}`);
+      assert.equal(printed.stdout, '', JSON.stringify(needle));
+    }
   });
 
   await t.test('RUN_PROFILE_OPT_OUT_MARKER is SANDBOX_OPT_OUT_MARKER', async () => {
