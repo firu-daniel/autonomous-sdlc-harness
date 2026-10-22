@@ -3428,8 +3428,10 @@ test('the daemon-path check grades the installed unit, and never above a warning
     assert.equal(status, 0, `doctor exited ${status} on a condition that only warns\n${stdout}\n${stderr}`);
     assert.match(stderr, warnLine('daemon-path'));
     const line = reportLine(stderr, 'warn', 'daemon-path');
-    assert.ok(line.includes(FIXTURE_AGENT_CLI), `the warning does not name the CLI the unit launches:\n${line}`);
-    assert.ok(!line.includes(DEFAULT_AGENT_CLI), `the warning grades the default the unit overrides:\n${line}`);
+    // The line carries temp paths, and a sandbox's temp directory sits under `claude-<uid>`, so a bare
+    // name match is satisfied by a path alone. Match the `<name> (` entry shape the check writes.
+    assert.ok(line.includes(`${FIXTURE_AGENT_CLI} (`), `the warning does not name the CLI the unit launches:\n${line}`);
+    assert.ok(!line.includes(`${DEFAULT_AGENT_CLI} (`), `the warning grades the default the unit overrides:\n${line}`);
   }));
 
   subtests.push(t.test('a toolchain reached only through a wrapper is graded, and the warning says which wrapper', { skip: NO_BACKEND }, async (subtest) => {

@@ -25,12 +25,14 @@ The branch did not change this check. Its diff touches `cli/test/doctor.test.mjs
 
 **Fix.** Make the two binary-name assertions in this subtest match the binary as it appears in the list of missing binaries, not as a substring of the line. `describeMissing` writes each entry as `<name> (<sources>; …)`, so the entry's own shape is `` `${name} (` ``:
 
-- [ ] Replace `assert.ok(line.includes(FIXTURE_AGENT_CLI), …)` with `assert.ok(line.includes(\`${FIXTURE_AGENT_CLI} (\`), …)`. Keep the existing message.
-- [ ] Replace `assert.ok(!line.includes(DEFAULT_AGENT_CLI), …)` with `assert.ok(!line.includes(\`${DEFAULT_AGENT_CLI} (\`), …)`. Keep the existing message.
-- [ ] Add a short comment above the pair. It should say that the line carries temp paths, and a temp path can contain the binary's name (the sandbox's temp directory is under `claude-<uid>`). That is why the assertion matches the `<name> (` entry shape rather than the bare name.
+- [x] Replace `assert.ok(line.includes(FIXTURE_AGENT_CLI), …)` with `assert.ok(line.includes(\`${FIXTURE_AGENT_CLI} (\`), …)`. Keep the existing message.
+- [x] Replace `assert.ok(!line.includes(DEFAULT_AGENT_CLI), …)` with `assert.ok(!line.includes(\`${DEFAULT_AGENT_CLI} (\`), …)`. Keep the existing message.
+- [x] Add a short comment above the pair. It should say that the line carries temp paths, and a temp path can contain the binary's name (the sandbox's temp directory is under `claude-<uid>`). That is why the assertion matches the `<name> (` entry shape rather than the bare name.
 
 A temp path such as `/private/tmp/claude-501/harness-home-xyz/…` never contains `claude (`, so the negative assertion still fails if the check grades the default binary. The positive assertion still requires the fixture CLI to be named as a graded entry. Neither assertion gets weaker: both now test the property the subtest's comment states.
 
 The other subtests of this test have the same blind spot in the positive direction, though none of them fails. `'a unit whose PATH reaches every required binary passes'` and `'a unit left on the service manager\'s own directories warns …'` assert `line.includes(DEFAULT_AGENT_CLI)`, which a temp path alone satisfies. Tightening them is optional and outside this finding. If it is done in the same edit, use the same entry shape. The `pass` line writes each binary as `${binary.name} (${binary.sources.join(', ')})`, so `` `${DEFAULT_AGENT_CLI} (` `` fits there too.
 
 No source file under `cli/src/` changes.
+
+- **Deviations from plan:** The optional tightening of the two sibling subtests' positive assertions was not done; this edit is limited to the finding's own subtest. The row-`G.4` before-run (`npm test --workspace cli -- test/doctor.test.mjs`) had its output redirected to a temp file, which `.claude/context/conventions.md` → `## The testing bar` forbids. Its result: exit 1, `not ok 4 - a unit that sets the agent CLI variable is graded against the CLI it names`, `# tests 286`, `# pass 284`, `# fail 2`. The after-run was a plain foreground command.
