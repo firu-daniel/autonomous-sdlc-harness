@@ -62,11 +62,13 @@
  * callers take it up **for a whole artifact class**: `config/io.ts`'s `saveConfig` for
  * `harness.config.json` — `'never'` on an ordinary `init`, `'always'` on `init --reset-config` —
  * and `generators/stateDir.ts` for the two ledgers, `'never'` and nothing else, because no command
- * rebuilds a ledger. **Three more** read the tree and answer **per request**: `generators/claudeContext.ts`
+ * rebuilds a ledger. **Four more** read the tree and answer **per request**: `generators/claudeContext.ts`
  * sets `'never'` on a conventions stub that is already a skeleton whose `.bak` holds a filled
  * document, because that one write would replace the only surviving copy of the analysis with a
  * skeleton — and on `.claude/CLAUDE.md` when its bytes already are the text that run renders, because
- * that write would put nothing in the `.bak` and destroy what is in the one already there; and
+ * that write would put nothing in the `.bak` and destroy what is in the one already there;
+ * `generators/stateDir.ts` sets `'never'` on a run-artifact README whose bytes already are its
+ * template, for that same reason; and
  * `generators/githooks.ts` sets `'always'` on the `pre-push` hook when the run rebuilt
  * `harness.config.json` (`init --reset-config`) **and** the hook's rendered `case` label no longer
  * matches the set that config resolves, so the run that made the guard wrong is the run that
@@ -159,13 +161,15 @@ export interface WriteRequest {
    * only copy and a replacement cannot be regenerated — the `.bak` this engine takes is
    * single-generation, so it is a one-run reprieve rather than a history.
    *
-   * The remaining **two** users take it **per request rather than per class**, and for the same
+   * The remaining users take it **per request rather than per class**, and for the same
    * single-generation reason read off the tree instead of off the artifact:
    * `generators/claudeContext.ts` sets `'never'` on a conventions stub that is already a skeleton
    * and whose `.bak` holds a filled document, where replacing it would spend the one reprieve on
    * the copy it was holding — and on the always-loaded project file when its bytes already are the
    * text that run renders, where the replacement would put nothing in the `.bak` and destroy
-   * whatever the previous forced run left there. `generators/githooks.ts` sets `'always'` on the
+   * whatever the previous forced run left there. `generators/stateDir.ts` sets `'never'` on a
+   * run-artifact README whose bytes already are its template, for that same identical-bytes reason.
+   * `generators/githooks.ts` sets `'always'` on the
    * `pre-push` hook of the run that rebuilt `harness.config.json`, and only where the label that
    * hook renders no longer matches the set the rebuilt file resolves — the same reasoning in the
    * other direction: a label the reader cannot get back out is a guard somebody wrote by hand, so
