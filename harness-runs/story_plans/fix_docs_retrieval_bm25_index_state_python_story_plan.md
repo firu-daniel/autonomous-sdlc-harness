@@ -50,7 +50,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_docs_retrieval_bm25_inde
 
 1. [x] **Task 1** — Port the end-state statements, `rebuild_indexes`, the matching-only lexical filter and the width-change delete to `store.py`, with statement parity through the bridge _(layer: general)_ _(points: 20)_
 2. [x] **Task 2** — Pin the store's width-change marker removal and the matching-only filter on the Seq Scan plan in `test_store_postgres.py` _(layer: general)_ _(points: 10)_
-3. [ ] **Task 3** — End every Python refresh that wrote, and every index not marked rebuilt, with `rebuild_indexes()` in `refresh.py` _(layer: general)_ _(points: 15)_
+3. [x] **Task 3** — End every Python refresh that wrote, and every index not marked rebuilt, with `rebuild_indexes()` in `refresh.py` _(layer: general)_ _(points: 15)_
 4. [ ] **Task 4** — Add the container test of the refresh's end state, shown failing with the fix removed and passing with it _(layer: general)_ _(points: 20)_
 5. [ ] **Task 5** — Re-run the refresh-level probe on the Python backend, both corpora, with the shipped rule _(layer: general)_ _(points: 15)_
 6. [ ] **Task 6** — Update the service README: the seam, the rebuild's lock, and the new container test _(layer: general)_ _(points: 10)_
