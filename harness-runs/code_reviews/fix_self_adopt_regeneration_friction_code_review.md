@@ -37,7 +37,7 @@ What is left is three Should Fix findings, all about text: one recipe line, one 
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 3** — Replace "Both classes" with "Every one of them" in `WriteRequest.forceOverride`'s doc comment _(layer: cli)_
-2. [ ] **Finding 2** — Correct `wrapper-carry-forward.test.mjs`'s header to name `self-adopt-force.test.mjs` as the end-to-end case _(layer: cli)_
+2. [x] **Finding 2** — Correct `wrapper-carry-forward.test.mjs`'s header to name `self-adopt-force.test.mjs` as the end-to-end case _(layer: cli)_
 3. [ ] **Finding 1** — Add `--non-interactive` to the recipe's real-run line so it is the run the dry run previewed _(layer: general)_
 
 ---

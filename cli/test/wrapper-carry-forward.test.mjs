@@ -6,9 +6,10 @@
  * input apart — the option — and have opposite outcomes, which ties the result to the option rather
  * than to the fixture.
  *
- * The generator is driven through the compiled module rather than the CLI because the option has no
- * caller yet; the end-to-end case that drives `init` belongs to the task that sets it. Every fixture
- * lives under the system temp directory and is removed in process; nothing writes into this checkout.
+ * The generator is driven through the compiled module rather than the CLI so that each precedence arm
+ * is reached on its own, with no `init` around it; the end-to-end case, which drives `init` on a forced
+ * self-adopt run, is `cli/test/self-adopt-force.test.mjs`. Every fixture lives under the system temp
+ * directory and is removed in process; nothing writes into this checkout.
  *
  * These run against the **compiled** CLI, so `npm run build` precedes `npm test`.
  */
