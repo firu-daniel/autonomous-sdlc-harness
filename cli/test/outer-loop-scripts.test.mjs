@@ -1278,6 +1278,22 @@ function onPath(name) {
 }
 
 /**
+ * The interpreter run directly on a probe, without the runner: the control a failing runner run is
+ * read against. Resolves on every outcome; a spawn failure resolves with its non-numeric `code`.
+ */
+function runDirect(interpreter, path, arg, cwd) {
+  return new Promise((resolveRun) => {
+    execFile(interpreter, [path, arg], { cwd, encoding: 'utf8' }, (error, stdout, stderr) => {
+      resolveRun({
+        status: error === null ? 0 : error.code,
+        stdout: stdout ?? '',
+        stderr: stderr ?? (error?.message ?? ''),
+      });
+    });
+  });
+}
+
+/**
  * One probe per interpreter these cases cover, each printing its first argument and exiting 7.
  *
  * The status is 7 rather than 0 because 0 is what a runner that swallowed the file's status would
@@ -1308,6 +1324,19 @@ test("the scratch runner runs a file in its extension's interpreter, forwards th
 
       writeFileSync(join(dir, SCRATCH_DIR, file), body, 'utf8');
       const { status, stdout, stderr } = await runScratch(dir, [`${SCRATCH_DIR}/${file}`, PROBE_ARG]);
+
+      // An interpreter on PATH that cannot run the probe even when invoked directly is skipped with
+      // its own output quoted; a direct run that succeeds leaves the runner's failure standing.
+      if (status !== 7 || stdout.trim() !== PROBE_ARG) {
+        const direct = await runDirect(interpreter, join(dir, SCRATCH_DIR, file), PROBE_ARG, dir);
+        if (direct.status !== 7 || direct.stdout.trim() !== PROBE_ARG) {
+          subtest.skip(
+            `${interpreter} cannot run ${file} on this machine even without the runner ` +
+              `(exit ${direct.status}: ${`${direct.stdout}${direct.stderr}`.trim()}), so ${file} cannot be driven here`,
+          );
+          return;
+        }
+      }
 
       assertContextEstablished(status, stderr);
       assert.equal(status, 7, `the file's own exit status did not come back:\n${stderr}`);

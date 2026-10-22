@@ -25,7 +25,7 @@ The gate wrapper keeps only each failing test's `not ok` line. The assertion det
 **This section is the single source of truth for the fix loop.** The loop walks the `[ ]` entries below from top to bottom, and the committing role flips each one to `[x]` when that fix's commit lands. `[ ]` markers anywhere else, including the `- [ ]` sub-step bullets inside the finding files, are informational only.
 
 1. [x] **Finding 1** — Skip the hung-watcher survivor check only when `pgrep` cannot read the process table. _(layer: cli)_
-2. [ ] **Finding 2** — Give every scratch-runner probe a direct-interpreter control run, and skip only when the interpreter itself cannot run the probe. _(layer: cli)_
+2. [x] **Finding 2** — Give every scratch-runner probe a direct-interpreter control run, and skip only when the interpreter itself cannot run the probe. _(layer: cli)_
 
 ---
 
