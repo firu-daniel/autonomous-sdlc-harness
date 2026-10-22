@@ -37,7 +37,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_unatte
 4. [x] **Task 4** — Refuse a fresh local launch on a host that cannot sandbox it _(layer: cli)_ _(points: 15)_
 5. [x] **Task 5** — Install the sandbox prerequisites in the `harness-run.yml` job before its preflight _(layer: cli)_ _(points: 15)_
 6. [x] **Task 6** — Describe the check, the refusal and the opt-out's exemption in `docs/cli.md`, `docs/config.md` and `docs/watcher.md` _(layer: general)_ _(points: 15)_
-7. [ ] **Task 7** — Close roadmap item 20 in `docs/remote-execution.md`, `docs/development.md` and `ROADMAP.md` _(layer: general)_ _(points: 10)_
+7. [x] **Task 7** — Close roadmap item 20 in `docs/remote-execution.md`, `docs/development.md` and `ROADMAP.md` _(layer: general)_ _(points: 10)_
 
 ## Scope register
 
