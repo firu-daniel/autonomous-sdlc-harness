@@ -11,7 +11,8 @@
 #
 # WHY A WRAPPER EXISTS AT ALL. Same reason as its siblings: an invocation of a
 # script path under the configured scripts directory is allow-listed literally in
-# three forms by the generated permission profile (this file's row in
+# two forms by the generated permission profile, plus the run copy's exact path
+# in the run watcher's per-run copy (this file's row in
 # `cli/src/generators/outerLoopScripts.ts` carries `agentInvocable: true`) and is
 # auto-allowed by the script-allowlist guard — a script under that directory
 # whose basename is not on the guard's deny list, in a command carrying none of
@@ -191,7 +192,7 @@ fi
 requested="$1"
 
 # The repository is THIS FILE's own checkout, never the caller's directory: the
-# three forms the permission profile emits include a sibling worktree's own copy,
+# forms the permission profiles allow-list include a run copy's own copy,
 # and each copy must answer for the checkout it belongs to whatever directory the
 # caller stood in.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
