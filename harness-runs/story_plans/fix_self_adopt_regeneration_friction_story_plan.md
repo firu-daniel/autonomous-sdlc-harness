@@ -23,7 +23,7 @@ Task 6 also aligns this repository's managed `.gitignore` block with the current
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_self_adopt_regeneration_friction/task_<K>_plan.md`. The list is ordered bottom-up by ship sequence, in this repository's configured layer order (`cli`, `plugin`, `general`), with the catch-all last.
 
-1. [ ] **Task 1** — Carry a self-invoking wrapper's on-disk command line forward in `writeWrapperScripts` when asked to _(layer: cli)_ _(points: 15)_
+1. [x] **Task 1** — Carry a self-invoking wrapper's on-disk command line forward in `writeWrapperScripts` when asked to _(layer: cli)_ _(points: 15)_
 2. [ ] **Task 2** — Keep a state-dir README whose bytes already match its template, so `--force` takes no `.bak` of it _(layer: cli)_ _(points: 10)_
 3. [ ] **Task 3** — Wire the carry-forward to self-adopt runs in `init`, report it, and name every `.bak` left in a contents-ignored state-dir folder _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Let `restart-watcher.sh` take a multi-word `HARNESS_CLI` _(layer: cli)_ _(points: 15)_

@@ -24,3 +24,7 @@
 - `npm test --workspace cli -- test/wrapper-carry-forward.test.mjs`, run from the repository root as one plain foreground command, passes. Cases (a) and (b) are one input apart and have opposite outcomes, which is what ties the result to the option rather than to the fixture.
 - The doc comment of `resolveBody` and the module header both name the new arm and state that it is opt-in. `git grep -n "carryOnDiskCommandLines" -- cli/src` shows it only in `cli/src/generators/scripts.ts` until Task 3 lands.
 - `commands.typecheck` (`bash scripts/typecheck.sh`) exits zero.
+
+**Deviations from plan:**
+
+- The new arm is labelled **precedence 1a** in `resolveBody`'s doc comment rather than renumbering the list. Existing citations name detection's arm as `resolveBody` precedence 2 — `cli/src/commands/init.ts` (the warning doc near line 544, and the clause doc near line 824) and `wrappedKeyMismatchMessage`'s doc in `cli/src/generators/scripts.ts` — and `init.ts` is outside this task's reach. Renumbering would have left those citing the wrong arm; the doc comment says the arm is lettered for that reason.
