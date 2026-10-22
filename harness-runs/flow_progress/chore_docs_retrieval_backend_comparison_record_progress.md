@@ -25,4 +25,4 @@ Source: harness-runs/task_prompts/chore_docs_retrieval_backend_comparison_record
 - [x] C2f.    Skeptic findings fixed (findings index all [x] — or no index, the review having passed clean)
 - [-] E.      QA passed (UI-test index all [x], or only blocked tests left / no_ui)
 - [x] G.      Run gates passed (the Run gates wrapper printed pass: test passed, typecheck passed or not run for <none>)
-- [ ] D.      Branch statistics committed & pushed
+- [x] D.      Branch statistics committed & pushed
