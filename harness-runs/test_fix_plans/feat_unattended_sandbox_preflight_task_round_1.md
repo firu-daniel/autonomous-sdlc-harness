@@ -18,7 +18,7 @@ Each entry resolves to a self-contained `feat_unattended_sandbox_preflight_task_
 
 1. [x] **Finding 1** — Match the agent binary as a graded entry, not a substring, in the daemon-path override case, so a temp path containing `claude` no longer fails it. _(layer: cli)_
 2. [x] **Finding 2** — Fix the fresh-drop legacy-migration case's single watcher pass: a bound sized for its two launches, or the probe override reaching the inbox pass. _(layer: cli)_
-3. [ ] **Finding 3** — Fix the hung-watcher timeout case: the child runner's file bound, or the group reap it asserts. _(layer: cli)_
+3. [x] **Finding 3** — Fix the hung-watcher timeout case: the child runner's file bound, or the group reap it asserts. _(layer: cli)_
 
 ---
 

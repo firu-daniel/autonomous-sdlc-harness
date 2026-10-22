@@ -27,7 +27,23 @@ The branch's diff does not reach this path. The child drops nothing into the inb
 
 - [ ] **The message is assertion (2) or (3), and the child's TAP shows `not ok 1 - <child path>` (the file, not the case).** The child runner's file bound was exceeded during setup. Raise `CHILD_TEST_TIMEOUT_MS` to `600_000`. That is still below the parent suite's `--test-timeout` (`cli/package.json` → `scripts.test`, 1 800 000 ms), which the constant's doc comment requires. Amend that doc comment to give the new figure and the reason: a loaded gate host was measured taking longer than 240 s for the child's setup. `CHILD_BOUND_MS` stays at 2 000; it is the bound under test.
 - [ ] **The message is assertion (4), and the listed processes belong to the fixture.** The group kill in `cli/test/helpers/fixture.mjs` → `runBounded` / `killGroup` left a descendant behind. Find the process that left the group (its command line is in the message) and make the reap cover it. Do not lengthen `REAP_GRACE_MS` to hide it.
-- [ ] **The message is assertion (4) with a `pgrep` status other than 0 or 1, and the `pgrep` output carries `Operation not permitted` or another refusal of the process-table read.** This is the sandbox refusing a verification. Per `layer-implementer.md` → **A sandbox refusal is the boundary working, in every mode.**, it is recorded with the refusal quoted, and the case and its assertion stay as they are.
+- [x] **The message is assertion (4) with a `pgrep` status other than 0 or 1, and the `pgrep` output carries `Operation not permitted` or another refusal of the process-table read.** This is the sandbox refusing a verification. Per `layer-implementer.md` → **A sandbox refusal is the boundary working, in every mode.**, it is recorded with the refusal quoted, and the case and its assertion stay as they are.
 - [ ] **Any other message.** The diagnosis above does not cover it. Fix what the message names, at the site it names, and record the message in this file's deviation note.
 
 None of these branches deletes, skips or loosens an assertion in the case.
+
+**Deviations from plan:**
+
+- **Branch taken: assertion (4), the sandbox refusing the process-table read. No code or test file was edited.** The named test's file was run from the repository root with `npm test --workspace cli -- test/test-timeout.test.mjs`. The result was `not ok 1 - a hung watcher case fails by name with a timeout and leaves no process behind`, with `# tests 1`, `# pass 0`, `# fail 1` and `duration_ms: 3029.020917`. The failing assertion is `test-timeout.test.mjs:108:10` (`assert.equal(left.status, 1, …)`), quoted from the run:
+
+  ```
+  processes of the hung fixture survived:
+  sysmon request failed with error: sysmond service not found
+  pgrep: Cannot get process list
+
+
+  3 !== 1
+  ```
+
+  Assertions (1) to (3) passed in this run, so the child named the case and reported a timeout well inside its bound. The 240 s child-timeout branch does not apply, and `CHILD_TEST_TIMEOUT_MS` stays at `240_000`. The listing is empty, and the error is `pgrep` exiting 3 because it could not reach `sysmond` for the process list. That is the macOS Seatbelt sandbox this run executes under refusing the process-table read. It is not a process that survived the group kill, so the `killGroup` branch does not apply either.
+- **Evidence downgrade.** The case's no-survivor claim (assertion 4) could not be verified inside this sandbox, and the reap in `cli/test/helpers/fixture.mjs` → `runBounded` / `killGroup` is unverified here. The case and its assertion stay as they are, per this file's third fix branch and `layer-implementer.md` → **A sandbox refusal is the boundary working, in every mode.** No sandbox profile entry was added or requested. The case passes only on a host where `pgrep` can read the process table, so the Run gates phase reports it `not ok` again for as long as the gates run under this sandbox. Whether to run that gate outside the sandbox is the operator's decision.
