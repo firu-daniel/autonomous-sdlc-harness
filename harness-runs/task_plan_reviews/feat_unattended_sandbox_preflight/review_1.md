@@ -1,0 +1,22 @@
+# Task plan review — iteration 1
+
+## Must Fix
+1. **Task 3 calls `assessSandboxHost` but never restates its input contract** — `task_3_plan.md`, `**Depends on:**` and the host-matrix bullet of `cli/test/sandbox-prerequisites-shell-mirror.test.mjs`.
+   The host matrix asserts that the judge's `HR_SANDBOX_MISSING` equals *"`assessSandboxHost(...).missing.join(' ')`, with AppArmor facts held at `absent`"*. To build that call, the test has to construct a `SandboxHostFacts` value: `platform`, `kernelRelease`, `resolvedBinaries` as a `ReadonlySet<string>`, and `appArmorRestrict` / `bwrapProfile` as `FileRead` values, where "absent" is `{ state: 'absent' }`. Task 3's `**Depends on:**` list restates `sandboxHostKind`, `SANDBOX_HOST_BINARIES`, the id order, `SANDBOX_INSTALLERS` / `installCommands(missing)` and `WSL1_AGENT_MESSAGE`. It does not list `assessSandboxHost`, `SandboxHostFacts` or `FileRead` at all. The producer, `task_1_plan.md`, defines those shapes. Task 2, the other consumer, restates them in its own `**Depends on:**`. Task 3 leaves its implementer to work them out from Task 1's file or from the module body. A cross-task interface has to be restated on both sides.
+   **Fix:** In `task_3_plan.md` → `**Depends on:**`, add `assessSandboxHost(facts)`, which returns `{ host, missing, appArmor }`. Add the facts type exactly as Task 1 declares it: `SandboxHostFacts { platform: string; kernelRelease: string; resolvedBinaries: ReadonlySet<string>; appArmorRestrict: FileRead; bwrapProfile: FileRead }`, with `FileRead` = `{ state: 'absent' } | { state: 'unreadable' } | { state: 'read'; text: string }`. In the host-matrix bullet, state how each case builds its facts: `resolvedBinaries` is the set of binaries the case marks present, and both file facts are `{ state: 'absent' }`.
+
+## Should Fix
+1. **Re-raised from iteration 0: Task 5's suite reads the raw template, but the prompt asks for a test over the rendered one** — `task_5_plan.md`.
+   The plan still reads `templates/<WORKFLOW_TEMPLATE_DIR>/<WORKFLOW_RUN_FILE>` directly, and the story index has no `## Rejected findings` entry for this finding. The prompt asks for *"the install step and its `# DECLARED MIRRORS` entry pinned by a test over the rendered template"*.
+   **Fix:** Pick one. Pin the step and the mirror entry in a fixture's rendered `.github/workflows/harness-run.yml`. Or state in the suite's header why the template's text equals the render for this step and this header entry, and assert that neither contains `{{`. Or record a rejection with its reason.
+
+2. **Re-raised from iteration 0: the refusal also catches review and docs drops, and no file says so** — `task_4_plan.md` and `task_6_plan.md` (the `docs/watcher.md` bullet).
+   The guard sits after the `park_loop` rejection and before `lane_blocks_start`. That position is shared by all three inbox patterns (`cli/templates/scripts/autonomous-watcher.sh` → `process_inbox_file`, *"The shared guards, in this order for all three patterns"*). So a `_review[_<n>].md` drop on a `completed` record is also refused through `fail_before_launch`, and the record becomes `failed`. The plan still describes only "a fresh local launch", and every test case drops only a `_task_prompt.md`.
+   **Fix:** In the **THE SANDBOX PREFLIGHT** paragraph and in Task 6's step-3 text, state that every inbox pattern is judged, and what happens to an existing record's status. Add a review-drop case to `watcher-sandbox-refusal.test.mjs`, or name it as covered by reading only. Or record a rejection with its reason.
+
+3. **Re-raised from iteration 0: the whitespace set in the opt-out reader is still written as invisible characters** — `task_3_plan.md`, the opt-out reader bullet and the opt-out matrix.
+   After `space`, the `<ws>` list continues as literal characters that do not show, for example `` ` ` `` and `` ` - ` ``. The matrix's non-breaking-space and BOM cases are written the same way.
+   **Fix:** Spell every member as a code-point escape (` `, ` `, ` `–` `, ` `, ` `, ` `, ` `, `　`, `﻿`), and use the same escapes in the matrix cases.
+
+## Nice to Have
+1. **Task 3 adds three run-library functions with no REPRO line** — `task_3_plan.md`. `cli/templates/scripts/lib/harness-run-lib.sh` has a `REPRO` block (*"reproduce any answer by hand, against a throwaway fixture"*). Add a line that sources the library and calls `hr_sandbox_prereq_judge_var Linux 6.8.0-45-generic 0 1` and `hr_sandbox_opted_out <dir>`, so the new answers can be reproduced by hand like the others.
