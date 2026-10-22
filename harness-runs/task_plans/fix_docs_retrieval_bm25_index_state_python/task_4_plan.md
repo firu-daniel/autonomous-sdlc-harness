@@ -42,3 +42,7 @@
 - Both scratch files exist; the fix-removed one lists four failing cases.
 - `git diff --stat` lists only the two targets; `refresh.py` is unchanged.
 - Without `HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL` the file's cases are skipped by `conftest.py`'s collection hook, which is what keeps `scripts/run-gates.sh` green with no Docker.
+
+- **Deviations from plan:**
+  - The plan asks for a non-empty reference for every query and also for every query of `fixture-catalog.jsonl`. Those two clash for `q-fc-negative-lattice` (`quantum chromodynamics lattice spacing`, `negativeKind: "far"`): `grep -rilE "quantum|chromodynamic|lattice|spacing"` over the corpus's `docs/` finds no file (exit 1), so its reference is always empty. Implemented this way: every query is still compared exactly, and the non-empty check skips only a query whose `negativeKind` is `far`. Both `near` negatives match corpus terms and are checked.
+  - The assertion lines quoted in `end-state-test-fix-removed.txt` come from a second run of the same command with the fix still removed. That run's output was redirected to a session scratchpad file only so cases (b) and (c) could be quoted in full, because the tool display had truncated them in the first run. Both runs gave `4 failed`.
