@@ -28174,7 +28174,8 @@ suggests is input to a later decision by the maintainer, not a change made or qu
 BM25 scores' dependence on the `chunks_bm25` index's state. This section records the index states, the
 score each state ranks by, what still differs after `REINDEX`, the stray index-scan score, the candidate
 end-state rule and whether either mechanism moves relevance, and, under `### Route 2 on the fix branch`,
-the figures the branch implementing route 2 took. Every `self-docs` figure carries the
+the figures the branch implementing route 2 took, with the Python port's after-fix and real-catalog
+figures, taken on `fix_docs_retrieval_bm25_index_state_python`. Every `self-docs` figure carries the
 `{ files, chunks }` stamp of the runs that took it, and no comparison here crosses two stamps. The
 `pg_textsearch` source paths and issue numbers cited here are the leads of the task prompt that opened
 this work; none was re-read on the branch that measured them.
@@ -30727,7 +30728,9 @@ Scan`, for that suite's synthetic row width.
 route 2 (`### The recommendation for the fix branch`). This subsection holds the figures that branch took:
 route 2 measured at refresh level with its statement issued by hand, before any code changed; the
 real-catalog figure; the relevance and vector-arm figures before and after the fix; and the shipped end
-state read at refresh level. Its comparison rule is `### The deciding figures on pg_textsearch 1.5.1` →
+state read at refresh level. It also holds the Python port's after-fix figures, its real-catalog figure
+and its container test's fix-removed record, taken on `fix_docs_retrieval_bm25_index_state_python`, each
+in a **Python** part of the subsection it extends. Its comparison rule is `### The deciding figures on pg_textsearch 1.5.1` →
 **The comparison rule.**, and its probe setup is `### How the probe reads a score, and the setup`; neither
 is restated here.
 
@@ -31295,6 +31298,106 @@ refresh level, issued by hand`, TypeScript rows only:
   decides `reindex`, the `before` reading differs on nearly every hit in both columns: 37280 and 37276 of
   37281, and 36877 of 36878. On the built-in corpora those three differ on every hit, or on all but two.
 
+**Python (Postgres), on `fix_docs_retrieval_bm25_index_state_python`.**
+
+**The outcome.** This is gate 10's leg (vii) on the Python backend, run twice on the code that ships the
+Python port. Its `before` reading is therefore the shipped Python refresh's end state, and every `after`
+reading, read after a hand-issued `REINDEX`, equals its `before` reading in both runs. Against
+`reference-reindex`, `fresh` and `file-edited` differ on 0 hits in both columns in both runs. The other
+scenarios differ in `scan` only, on 1 to 39 hits, and on different scenarios in each run: in run 1,
+`other-corpus` and `unchanged`; in run 2, `other-corpus`, `file-added`, `file-removed` and `unchanged`.
+Every reading differs in `operator` on 0 hits. This is not the ruled one-hit shape. The maintainer ruled
+on this result: it is accepted as a residual, recorded and not attributed. The ruling covers this
+real-catalog Python result only; it loosens nothing else, and no test gains a tolerance.
+
+**The gaps, as ruled.** The two gaps the TypeScript part records hold here unchanged, and this run was
+taken on the same terms:
+
+- **Under the floor.** Corpus A reads `{ files: 105, chunks: 1454 }`, which is under the leg's ~1,500-chunk
+  floor.
+- **A different snapshot.** The catalog is at commit `dce0de74e`, not gate 10's `010c50e`
+  (`{ files: 156, chunks: 1960 }`), the snapshot of the 2026-09-22 catalog runs, which no longer exists
+  (the TypeScript part's **The missing commits.**). The run takes `--docs-root expause_web/docs`, and the
+  query set supplies query text only, as there.
+
+By the stamp rule, nothing here is compared value for value with any `gate10-catalog` figure except the
+TypeScript part's, which is at the same commit and stamp.
+
+**The setup.**
+
+- **Who ran it, and when.** On 2026-10-22, by hand, in an interactive session the maintainer directed,
+  from this checkout's root after `npm run build`, at commit `0a2d8665`. It was run twice with the same
+  command apart from `--capture`. The module printed `ran 2026-10-22T08:02:25.431Z` for run 1 and
+  `ran 2026-10-22T08:49:42.454Z` for run 2. Each exited 0 and raised no collision refusal, so
+  `--other fixture-catalog` stood. No time was taken.
+- **The command.** It is leg (vii)'s Python command, with `--end-state route-2`, `--docs-root
+  expause_web/docs`, the seven `--conventions` the TypeScript part names, `--corpus-id gate10-catalog` and
+  `--other fixture-catalog`.
+- **The engine.** `server: PostgreSQL 18.6 (Debian 18.6-1.pgdg12+2) on aarch64-unknown-linux-gnu`,
+  `pg_textsearch: 1.5.1`, `bm25_spill_index: available`.
+- **The end state.** `end state: route-2, REINDEX INDEX chunks_bm25 issued after every scenario's last
+  refresh; each rule line is the candidate rule's decision, not issued`.
+- **The corpora.** Corpus A is `gate10-catalog` at catalog commit `dce0de74e` with a clean tree: `{ files:
+  105, chunks: 1454 }`, and `{ files: 104, chunks: 1442 }` without `F`. `F` is
+  `expause_web/docs/roadmap/stripe-web-payments.md`. Corpus B is `fixture-catalog` at `{ files: 9, chunks:
+  41 }`. There are 69 queries, from `evals/docs-retrieval/queries/gate10-catalog.jsonl`. The final corpus
+  holds 37281 hits, and 36878 without `F`.
+- **The plans.** The probe plan was the `chunks_bm25` index scan in all 18 readings of each run, so no
+  reading was re-scored.
+- **The two runs compared.** `bm25-history.mjs --compare` of the two captures printed `captures: 2, values
+  compared: 1338086, disagreeing: 141`. All 141 are in `scan` and none in `operator`: 48 each in
+  `other-corpus.before` and `.after`, 15 each in `file-added.before` and `.after`, 2 each in
+  `file-removed.before` and `.after` and in `unchanged.before` and `.after`, and 1 each in `fresh.before`,
+  `fresh.after`, `file-edited.before`, `file-edited.after`, `reference-insert.full`, `reference-spill.full`
+  and `reference-reindex.full`. That one value is the same hit in all seven, `q-g10-ew-tojson-optional-keys`
+  → `expause_web/docs/features/roadmap-comments.md#data`: `scan` `−6.418941` in run 1 and `−6.418940` in
+  run 2. So the reference itself differs between the runs, and the cells below give run 1; run 2 where
+  they differ.
+- **The columns** are those of the TypeScript part.
+
+**Python (Postgres), A `gate10-catalog` at `{ files: 105, chunks: 1454 }`, B `fixture-catalog`.** Run
+twice; where the runs differ, the cell reads run 1; run 2.
+
+| Scenario | Last refresh | Candidate decision | Statement issued | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 1454, unchanged 0, deleted 0 | `spill` (0, 1454, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `other-corpus` | embedded 1454, unchanged 0, deleted 41 | `reindex` (41, 1454, 0) | `REINDEX` | **39** / 0; **18** / 0 | **39** / 0; **18** / 0 | `scan`, 0.0000019073486328125 (`q-g10-ew-sendgift-chat-side-effects`, `expause_web/docs/features/video-call.md#cloud-functions`: reference −23.075117, after −23.075119); 9.5367431640625e-7 (`q-g10-ew-sendgift-chat-side-effects`, `expause_web/docs/product/product-recommendations.md#3-missing-features-make-it-desired-not-just-complete`: reference −9.966702, after −9.966701) | Index scan → Index scan |
+| `file-added` | embedded 12, unchanged 1442, deleted 0 | `spill` (0, 12, 0) | `REINDEX` | 0 / 0; **16** / 0 | 0 / 0; **16** / 0 | —; `scan`, 0.0000019073486328125 (the same `video-call.md#cloud-functions` hit and values as run 1's `other-corpus`) | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 1453, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-removed` | embedded 0, unchanged 1442, deleted 12 | `reindex` (12, 0, 0) | `REINDEX` | 0 / 0; **2** / 0 | 0 / 0; **2** / 0 | —; `scan`, 9.5367431640625e-7 (`q-g10-ew-gift-community-post`, `expause_web/docs/features/gifting.md`: reference −15.702406, after −15.702405) | Index scan → Index scan |
+| `unchanged` | embedded 0, unchanged 1454, deleted 0 | `none` (0, 0, 0) | `REINDEX` | **2** / 0; **1** / 0 | **2** / 0; **1** / 0 | `scan`, 9.5367431640625e-7 (`q-g10-ew-sendgift-chat-side-effects`, `expause_web/docs/features/saved-users.md#cloud-functions`: reference −11.230772, after −11.230773); 4.76837158203125e-7 (`q-g10-ew-tojson-optional-keys`, `expause_web/docs/features/roadmap-comments.md#data`: reference −6.418940, after −6.418941) | Index scan → Index scan |
+
+Each largest difference is the unrounded `scan` difference of the largest of the hits the six-place
+count names.
+
+**The verdicts**, against `reference-reindex`:
+
+- **Python, `gate10-catalog`: route 2 holds value for value in `fresh` and `file-edited` in both runs,**
+  and in `file-added` and `file-removed` in run 1, at 0 hits in `scan` and in `operator`.
+- **Elsewhere it differs in `scan` only.** The largest difference is 0.0000019073486328125, in both runs.
+  Every reading differs from the reference on 0 hits in `operator`, lists no order inversion against
+  `operator`, and reads the reference's index summary: `total_docs 1454, total_len 214271, memtable docs
+  0, segments 1 segments, 209 pages (1.6MB), 19409 terms, 1454 docs`, and in `file-removed` `total_docs
+  1442, total_len 211935`, 1 segment, 207 pages, 19244 terms. The differing hits are not the same in the
+  two runs, and the references differ between the runs on one hit.
+- **By the maintainer's ruling**, this result is a residual, recorded and not attributed.
+
+**The store's `LIMIT 50` plan** was the `chunks_bm25` index scan in every reading, `before` and `after`,
+in all six scenarios and all six reference readings, in both runs.
+
+**Against the TypeScript part.** Same commit, stamp and query set, so value for value, with one
+difference in what `before` is: the TypeScript run's `before` is the refresh before its fix, and this
+run's is the shipped Python refresh's end state.
+
+- **The `after` readings.** TypeScript differs only in `other-corpus`, on 1 hit, recurring exactly
+  across its two runs. Python differs in `other-corpus` on 39 and 18 hits, and in one to three other
+  scenarios, differently in each run. Both read 0 in `operator` everywhere.
+- **The TypeScript hit.** `q-g10-neg-login-sms-2fa` → `expause_web/docs/INDEX.md#users--social-1` is
+  among the Python `other-corpus` differences in both runs, with the same six-place values: reference
+  `−12.909946`, after `−12.909947`.
+- **The index summary and the store plan** are the same on both backends: 1 segment, no memtable
+  document, 1454 documents (1442 in `file-removed`), and the index scan in every reading.
+
 #### The relevance eval's deterministic figures, after the fix
 
 **The outcome.** On `fixture-catalog`, 9 of the 36 figures moved against the fresh run of `#### The
@@ -31542,7 +31645,9 @@ differing to matching. On `fixture-catalog` it also moved `file-edited`. On `sel
   `0`. The `self-docs` run outlasted the session's 600 s foreground limit and finished in the background.
   Its capture was read once it had exited, and the maintainer accepted that collection. Both summaries read `pg_textsearch: 1.5.1`. The Python
   backend's refresh is unchanged on this branch, so it was not run. Its figures in `#### Route 2 at refresh
-  level, issued by hand` and `#### The candidate end-state rule, at refresh level, on 1.5.1` stand.
+  level, issued by hand` and `#### The candidate end-state rule, at refresh level, on 1.5.1` stand. The
+  Python port's after-fix figures are in **Python, on `fix_docs_retrieval_bm25_index_state_python`**
+  below.
 - **The corpora.** `fixture-catalog` is at `{ files: 9, chunks: 41 }`, and at `{ files: 8, chunks: 36 }`
   without `F` (`docs/webhooks.md`). `self-docs` is at `{ files: 71, chunks: 830 }`, and at `{ files: 70,
   chunks: 819 }` without `F` (`docs/work-report-research/user-review-fix-plan-writer.md`). Task 2's runs
@@ -31635,6 +31740,161 @@ level, issued by hand` (Task 2, *route 2*) and `#### The candidate end-state rul
   and here, and 2 / 0 in candidate.
 - **The store plan:** on `fixture-catalog`, the `before` plan moved from the index scan to `Seq Scan` in
   every scenario but `other-corpus`. On `self-docs` it stayed the index scan.
+
+**Python, on `fix_docs_retrieval_bm25_index_state_python`.** The same reading, taken on the Python port
+of the fix (goal 4), and read against the Python rows of `#### The candidate end-state rule, at refresh
+level, on 1.5.1` as its before-fix figures.
+
+**The outcome.** The shipped Python refresh's end state matches `reference-reindex` in 11 of the 12
+scenarios, at 0 hits in `scan` and in `operator`, `unchanged` included. The exception is `self-docs`
+`file-edited`, as on TypeScript: 1 hit in `scan` and 0 in `operator`, on the same query as the TypeScript
+hit and on another key. It has the ruled shape, so it is recorded, not attributed, and is not a defect.
+Each corpus was run twice, and both runs read the same in every cell. On both corpora the fix moved every
+scenario that differed before it to matching, except `self-docs` `file-edited`, which moved from 9577 /
+9577 to 1 / 0.
+
+**The setup.**
+
+- **The code.** 2026-10-22, on `fix_docs_retrieval_bm25_index_state_python`. The runs' `ran` stamps fall
+  after commit `1023cde1` and before `483b56ad`, which changed only the header of
+  `evals/docs-retrieval/bm25-refresh-rule.mjs`. On that code `refresh_index` ends every refresh that wrote
+  anything, and every refresh whose `index_state` is not `rebuilt`, with `DocStore.rebuild_indexes()`,
+  which issues `END_STATE_STATEMENTS` (`docs-retrieval-service/src/harness_docs_retrieval/refresh.py`,
+  `docs-retrieval-service/src/harness_docs_retrieval/store.py`).
+- **The engine.** Read before the first run, on the compose Postgres: `version()` `PostgreSQL 18.6
+  (Debian 18.6-1.pgdg12+2) on aarch64-unknown-linux-gnu`, `SHOW pg_textsearch.library_version` `1.5.1`,
+  and `pg_extension.extversion` `pg_textsearch` `1.5.1` and `vector` `0.8.7`.
+- **The runs.** These are the two Python refresh-level commands of `docs/retrieval-eval.md` → `### The
+  BM25 index-state probe`, at the default `--end-state candidate`, each with `--capture`. Each was run
+  twice, four runs in all, and each pair was then compared with `bm25-history.mjs --compare`. All four
+  exited `0` and raised no collision refusal. Every summary read `pg_textsearch: 1.5.1`.
+- **The two runs of each corpus compared.** `--compare` printed `captures: 2, values compared: 7674,
+  disagreeing: 0` for `fixture-catalog` and `captures: 2, values compared: 346660, disagreeing: 0` for
+  `self-docs`. The stdout of each pair differs only in line 1, the `ran` timestamp, and so do its
+  captures. Every figure below is therefore both runs' figure.
+- **The corpora.** `fixture-catalog` is at `{ files: 9, chunks: 41 }`, and at `{ files: 8, chunks: 36 }`
+  without `F` (`docs/webhooks.md`). `self-docs` is at `{ files: 71, chunks: 830 }`, and at `{ files: 70,
+  chunks: 819 }` without `F` (`docs/work-report-research/user-review-fix-plan-writer.md`), the TypeScript
+  run's stamp above. The final corpus holds 219 hits on `fixture-catalog` and 198 without `F`, and 9655
+  and 9563 on `self-docs`, against the TypeScript run's 9656 and 9564 at the same stamp.
+- **The plans.** The probe plan was the `chunks_bm25` index scan in all 18 readings of each run, so no
+  reading was re-scored.
+- **The columns** are those of the TypeScript tables above.
+
+**Python (Postgres), A `fixture-catalog`, B `self-docs`.** Both runs read the same in every cell.
+
+| Scenario | Last refresh | Candidate decision | Statement issued | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 41, unchanged 0, deleted 0 | `spill` (0, 41, 0) | spill | 0 / 0 | 0 / 0 | — | **Seq Scan** → **Seq Scan** |
+| `other-corpus` | embedded 41, unchanged 0, deleted 830 | `reindex` (830, 41, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 5, unchanged 36, deleted 0 | `spill` (0, 5, 0) | spill | 0 / 0 | 0 / 0 | — | **Seq Scan** → **Seq Scan** |
+| `file-edited` | embedded 1, unchanged 40, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 0 / 0 | 0 / 0 | — | **Seq Scan** → **Seq Scan** |
+| `file-removed` | embedded 0, unchanged 36, deleted 5 | `reindex` (5, 0, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | **Seq Scan** → **Seq Scan** |
+| `unchanged` | embedded 0, unchanged 41, deleted 0 | `none` (0, 0, 0) | none | 0 / 0 | 0 / 0 | — | **Seq Scan** → **Seq Scan** |
+
+**Python (Postgres), A `self-docs` at `{ files: 71, chunks: 830 }`, B `fixture-catalog`.** Both runs read
+the same in every cell.
+
+| Scenario | Last refresh | Candidate decision | Statement issued | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 830, unchanged 0, deleted 0 | `spill` (0, 830, 0) | spill | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `other-corpus` | embedded 830, unchanged 0, deleted 41 | `reindex` (41, 830, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 11, unchanged 819, deleted 0 | `spill` (0, 11, 0) | spill | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 829, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | **1** / 0 | **1** / 0 | 2.384185791015625e-7, raw (`q-sd-stack-detection`, `docs/team-accounts-research.md#option-b--a-team-organisation-on-the-claude-api`) | Index scan → Index scan |
+| `file-removed` | embedded 0, unchanged 819, deleted 11 | `reindex` (11, 0, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `unchanged` | embedded 0, unchanged 830, deleted 0 | `none` (0, 0, 0) | none | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+
+**The verdict, against `reference-reindex`:**
+
+- **Python, `fixture-catalog`: the shipped end state matches** in all six scenarios, at 0 hits in both
+  columns, `unchanged` included.
+- **Python, `self-docs`: the shipped end state does not match in `file-edited`.** It differs on 1 hit in
+  `scan` and 0 in `operator`, in both runs. It matches in the other five, `unchanged` included. One hit,
+  `operator` identical and the index summary identical is the ruled residual shape: the hit is recorded,
+  not attributed, and is not a defect.
+
+**The differing hit.** `q-sd-stack-detection` →
+`docs/team-accounts-research.md#option-b--a-team-organisation-on-the-claude-api`.
+
+- **`scan`:** `file-edited.before` reads `−3.700792`, raw `−3.7007923126220703`, against
+  `reference-reindex.full`'s `−3.700793`, raw `−3.7007925510406494`.
+- **`operator`:** `−3.700792` in both, `operator_exact` `−3.70079243183136` in both.
+- **Where it shows:** `fresh`, `other-corpus`, `file-added` and `unchanged` all read `reference-reindex`'s
+  raw `scan`. `file-edited.after`, read after the hand-issued `REINDEX`, reads the same
+  `−3.7007923126220703` as `before`.
+- **What was ruled out:** the index summary is the same in `before`, `after` and the reference:
+  `total_docs 830`, `total_len 386472`, 1 segment, no memtable document.
+- **Below the probe's rounding:** the `≠ ref` counts compare six-place values. Read unrounded from the
+  capture, `file-edited` also differs from the reference on a second hit of the same query,
+  `docs/team-accounts-research.md#option-a--each-members-own-credential-selected-by-who-triggered-the-work`,
+  `−4.704884052276611` against `−4.704883575439453`, which round alike. No `operator_exact` value differs
+  from the reference's in any reading of either corpus.
+- **Beside the TypeScript hit:** the same query and the same difference, 2.384185791015625e-7, on another
+  key of the same scenario; the TypeScript hit,
+  `docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls`, does not differ here.
+
+**The index state left behind.** Every `before` reading holds 1 segment and no memtable document. That is
+41 documents on `fixture-catalog` (36 in `file-removed`), and 830 on `self-docs` (819 in `file-removed`).
+
+**The store's `LIMIT 50` plan.** On `fixture-catalog`, the plan is `Seq Scan on public.chunks` in five
+scenarios and the `chunks_bm25` index scan in `other-corpus`, `before` and `after`, scenario for scenario
+the TypeScript table's. On `self-docs` every reading's store plan is the index scan.
+
+**Order inversions.** No `fixture-catalog` reading lists an order inversion against `operator`, the
+`fresh` scenario's `before` reading included.
+
+**Against the before-fix figures.** These are the Python rows of `#### The candidate end-state rule, at
+refresh level, on 1.5.1`. On `fixture-catalog`, at the same counts, the comparison is value for value;
+the one count that differs is the `other-corpus` refresh's `deleted`, corpus B's chunk count, 830 here
+and 826 there. On `self-docs`, at `{ files: 71, chunks: 830 }` here and `826` there, it is structural.
+
+- **Moved from differing to matching, `fixture-catalog`, in both runs:** `fresh`, `file-added` and
+  `unchanged` from 136 / 0; `other-corpus` and `file-edited` from 219 / 219; `file-removed` from 198 /
+  198.
+- **Moved from differing to matching, `self-docs`:** `fresh` from 1547 / 0 and 2117 / 0 (the two
+  before-fix runs); `other-corpus` from 9579 / 9579; `file-added` from 3187 / 0 and 1547 / 0;
+  `file-removed` from 9487 / 9487; `unchanged` from 3188 / 0 and 1265 / 0.
+- **Moved, and still differing:** `self-docs` `file-edited`, from 9577 / 9577 to 1 / 0.
+- **Between the two runs:** the before-fix `self-docs` pair's `--compare` listed 10570 values out of
+  343924; this pair lists none out of 346660. On `fixture-catalog` both pairs list none out of 7674.
+- **The index state:** before the fix, the `fixture-catalog` `fresh`, `file-added` and `unchanged`
+  `before` readings held 41 memtable documents and no segment; here they hold 1 segment and no memtable
+  document.
+- **The store plan:** on `fixture-catalog`, the `before` plan moved from the index scan to `Seq Scan` in
+  every scenario but `other-corpus`. On `self-docs` it stayed the index scan.
+- **Observation 2:** the 4 order inversions against `operator` that the before-fix `fresh` `before`
+  reading listed on `fixture-catalog` are gone.
+
+**The container test, with the fix removed.** `docs-retrieval-service/tests/test_refresh_end_state_postgres.py`
+was run on 2026-10-22 at commit `a161a3d4`, against the compose Postgres (`PostgreSQL 18.6`,
+`pg_textsearch` `1.5.1`), from this checkout's root:
+
+```
+HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL=postgresql://harness:harness@127.0.0.1:5432/docs_retrieval bash scripts/python-service.sh test tests/test_refresh_end_state_postgres.py
+```
+
+- **With step (6) removed**, the `if wrote or index_state != INDEX_STATE_REBUILT:` block of `refresh.py`
+  deleted for the run and nothing else in it changed, it exited `1` with `4 failed`, in each of two runs:
+  - (a) a refresh with deletes, (b) the Python store's own fresh build on an empty database and (c) a
+    database the shipped code left each failed `"how does the planner decide which depots a parcel
+    travels through" ranks differently from a fresh build of the final corpus`. The first difference was
+    `docs/routing.md` at `−8.710104942321777` against `−8.17165470123291` in (a),
+    `docs/routing.md#cut-off-times` at `−3.756242513656616` against `−3.7736687660217285` in (b), and
+    `docs/routing.md` at `−9.169733047485352` against `−9.20033073425293` in (c).
+  - (d) the marker's two other branches failed `a first build did not mark the index rebuilt`, `assert
+    'pending' == 'rebuilt'`.
+- **With the block restored**, `git diff --exit-code` on `refresh.py` exited `0`, and the same command
+  exited `0` with `4 passed` and no case skipped.
+
+**The backend parity case.** The maintainer ran it by hand on 2026-10-22, at commit `0a2d8665`, against
+the same compose Postgres, twice:
+
+```
+HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL=postgresql://harness:harness@127.0.0.1:5432/docs_retrieval bash scripts/python-service.sh test tests/test_backend_parity_e2e.py -v
+```
+
+Both runs reported `test_both_backends_answer_byte_identically PASSED`,
+`test_both_backends_deliver_a_snippet_ending_in_a_lone_surrogate PASSED` and `2 passed`.
 
 ### The recommendation for the fix branch
 
@@ -31820,4 +32080,8 @@ and every refresh whose index is not marked rebuilt, with `DocStore.rebuildIndex
 index without that value is rebuilt by the next refresh. `lexicalSearch` drops every score-`0` row on every
 plan. The figures are in `### Route 2 on the fix branch`, the real-catalog figure in `#### Route 2 on the
 real catalog` and the shipped end state in `#### The shipped end state at refresh level`. The Python
-backend's store is unchanged on this branch.
+backend's store is unchanged on this branch. Route 2 then shipped on the Python backend, on
+`fix_docs_retrieval_bm25_index_state_python`: `refresh.py` → `refresh_index` ends every refresh the same
+way through `store.py` → `rebuild_indexes`, with the same `END_STATE_STATEMENTS`, `index_state` marker
+and matching-only lexical filter, and its figures are in the **Python** parts of `#### The shipped end
+state at refresh level` and `#### Route 2 on the real catalog`.
