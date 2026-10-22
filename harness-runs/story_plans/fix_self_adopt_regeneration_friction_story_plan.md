@@ -28,7 +28,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_self_adopt_regeneration_
 3. [x] **Task 3** — Wire the carry-forward to self-adopt runs in `init`, report it, and name every `.bak` left in a contents-ignored state-dir folder _(layer: cli)_ _(points: 20)_
 4. [x] **Task 4** — Let `restart-watcher.sh` take a multi-word `HARNESS_CLI` _(layer: cli)_ _(points: 15)_
 5. [x] **Task 5** — Qualify the `.gitignore` template's "every other `.bak` is left visible" comment with the contents-ignored exception _(layer: cli)_ _(points: 5)_
-6. [ ] **Task 6** — Re-copy `scripts/restart-watcher.sh` and align this repository's managed `.gitignore` block with the template _(layer: general)_ _(points: 8)_
+6. [x] **Task 6** — Re-copy `scripts/restart-watcher.sh` and align this repository's managed `.gitignore` block with the template _(layer: general)_ _(points: 8)_
 7. [ ] **Task 7** — Document the self-adopt regeneration recipe and the changed re-run and `HARNESS_CLI` behaviour _(layer: general)_ _(points: 15)_
 
 ## Scope register
