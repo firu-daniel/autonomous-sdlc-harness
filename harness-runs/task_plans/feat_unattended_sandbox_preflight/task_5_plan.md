@@ -46,3 +46,9 @@ This task mirrors them. It does not grade the runner, which is Task 2's `doctor`
 - `npm test --workspace cli -- test/workflow-sandbox-install.test.mjs` passes. It is this task's own new test file.
 - The rendered template still parses and passes actionlint and zizmor. `node scripts/check-rendered-workflows.mjs` is gate 14's leg, run by the Run gates round, and not by this unit.
 - Read the new step back against the header's `TWO RULES EVERY EDIT KEEPS`. No input reaches the shell outside `env:`, and the step has no `{{`.
+
+**Deviations from plan:**
+
+- The actionlint / zizmor bullet (`node scripts/check-rendered-workflows.mjs`, gate 14's leg) was not run by this unit: deferred to the Run gates phase, as the bullet itself states. A probe for `shellcheck`, `actionlint` and `zizmor` on PATH was refused by the tool layer, so the step body was not linted locally; the claim that it lints clean rests on reading it (every expansion quoted, the root prefix held in the `as_root` array) until the Run gates round runs it.
+- The step does more than the plan spells out on two paths, and still never exits non-zero: it exits 0 at once, printing that the prerequisites are present, when no package is missing and no profile is needed; and it emits `::warning::` and skips on a host where `uname -s` is not `Linux`, whether the missing piece is a package or the profile.
+- The read-back bullet was met by reading: the body references no input, variable or secret, carries no `{{` and no `${{`, and its only brace forms are bash's `${…}` and the profile's own `{` / `}`.

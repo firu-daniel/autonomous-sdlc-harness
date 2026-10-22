@@ -43,6 +43,14 @@
 #   cli/src/machine/paths.ts          machineCacheDir, under which the retrieval
 #                                     runtime sits in `retrieval/`
 #   cli/src/retrieval/runtime.ts      RETRIEVAL_CACHE_DIRNAME, that `retrieval/`
+#   cli/src/doctor/sandboxPrerequisites.ts SANDBOX_INSTALLERS' families in its
+#                                     order (apt-get, then dnf),
+#                                     SANDBOX_HOST_BINARIES' packages,
+#                                     APPARMOR_USERNS_SYSCTL_PATH,
+#                                     BWRAP_APPARMOR_PROFILE_PATH,
+#                                     bwrapAppArmorProfile() and
+#                                     APPARMOR_RELOAD_COMMAND, in `Install the
+#                                     sandbox prerequisites`
 #   remote-run.sh (the scriptsDir copy) RUN_JOB_NAME (`run`): the `run` job has no
 #                                     `name:`, so GitHub names it by its key,
 #                                     and the settledness test reads that
@@ -300,6 +308,16 @@
 # upgrade route, when `claude plugin list --json` reports another version. What
 # the agent-runner CLI was measured to accept is recorded in
 # docs/remote-execution.md, section 6.
+#
+# THE SANDBOX PREREQUISITES. The generated profile sets `failIfUnavailable`, so
+# on a runner without `bubblewrap` or `socat` the agent session would end at
+# startup. `Install the sandbox prerequisites` installs them where the runner
+# lets it (root or passwordless sudo), and writes the `bwrap` AppArmor profile
+# where Ubuntu 24.04's policy would block unprivileged user namespaces. It never
+# fails the job itself: `Preflight with doctor` refuses the job on whatever is
+# still missing, through `sandbox-prerequisites`, unless `sandbox.optOut` is
+# taken. The step has not yet run on GitHub: it runs first in a job whose
+# workflow a CLI carrying it rendered (docs/remote-execution.md, section 8).
 #
 # WHY retention-days IS SET. The `harness-state` bundle is the only remote copy
 # of a run's clarifications, uncommitted planning drafts and carried counts; a
@@ -650,6 +668,69 @@ jobs:
             printf '%s\n' "$changed"
             echo "::error::init $HARNESS_CLI_VERSION changed tracked files. Run 'npx autonomous-sdlc-harness@$HARNESS_CLI_VERSION init' locally and commit the result."
             exit 1
+          fi
+
+      - name: Install the sandbox prerequisites
+        if: env.HARNESS_STOPPED != '1'
+        run: |
+          sysctl_file=/proc/sys/kernel/apparmor_restrict_unprivileged_userns
+          profile=/etc/apparmor.d/bwrap
+          missing=()
+          command -v bwrap >/dev/null 2>&1 || missing+=(bubblewrap)
+          command -v socat >/dev/null 2>&1 || missing+=(socat)
+          needs_profile=0
+          if [ -r "$sysctl_file" ] && [ "$(cat "$sysctl_file")" = 1 ]; then
+            if [ ! -f "$profile" ] || ! grep -q '^[[:space:]]*userns,' "$profile"; then
+              needs_profile=1
+            fi
+          fi
+          if [ "${#missing[@]}" -eq 0 ] && [ "$needs_profile" = 0 ]; then
+            echo "The sandbox prerequisites are present."
+            exit 0
+          fi
+          if [ "$(uname -s)" != Linux ]; then
+            echo "::warning::not a Linux runner, so nothing was installed; missing packages: ${missing[*]:-none}."
+            exit 0
+          fi
+          if [ "$(id -u)" = 0 ]; then
+            as_root=()
+          elif sudo -n true >/dev/null 2>&1; then
+            as_root=(sudo -n)
+          else
+            echo "::warning::no root and no passwordless sudo on this runner, so nothing was installed; missing packages: ${missing[*]:-none}; bwrap AppArmor profile needed: $needs_profile."
+            exit 0
+          fi
+          if [ "${#missing[@]}" -gt 0 ]; then
+            if command -v apt-get >/dev/null 2>&1; then
+              if ! { "${as_root[@]}" apt-get update -qq && "${as_root[@]}" apt-get install -y -qq "${missing[@]}"; }; then
+                echo "::warning::apt-get could not install ${missing[*]}."
+              fi
+            elif command -v dnf >/dev/null 2>&1; then
+              if ! "${as_root[@]}" dnf install -y "${missing[@]}"; then
+                echo "::warning::dnf could not install ${missing[*]}."
+              fi
+            else
+              echo "::warning::neither apt-get nor dnf is on this runner, so ${missing[*]} was not installed."
+            fi
+          fi
+          if [ "$needs_profile" = 1 ]; then
+            if "${as_root[@]}" tee "$profile" >/dev/null <<'PROFILE'
+          abi <abi/4.0>,
+          include <tunables/global>
+
+          profile bwrap /usr/bin/bwrap flags=(unconfined) {
+            userns,
+
+            include if exists <local/bwrap>
+          }
+          PROFILE
+            then
+              if ! "${as_root[@]}" systemctl reload apparmor; then
+                echo "::warning::systemctl could not reload apparmor after writing $profile."
+              fi
+            else
+              echo "::warning::could not write $profile."
+            fi
           fi
 
       - name: Preflight with doctor
