@@ -37,7 +37,7 @@ Every new runtime export has a caller outside its defining file. The Pass 0 swee
 
 This section is the single source of truth for the per-item fix loop. The orchestrator walks the `[ ]` entries below from top to bottom, and the committing role flips each one to `[x]` as that fix's commit lands. Each entry resolves to `harness-runs/code_reviews/feat_unattended_sandbox_preflight_code_review/finding_<K>.md`, the file its `**Finding K**` reference names.
 
-1. [ ] **Finding 4** — Restore the sixth space in the watcher header's `a resume` REPRO row _(layer: cli)_
+1. [x] **Finding 4** — Restore the sixth space in the watcher header's `a resume` REPRO row _(layer: cli)_
 2. [ ] **Finding 3** — Narrow `SandboxBinary.binary` to `SandboxBinaryName` and drop the two `as SandboxPiece` casts _(layer: cli)_
 3. [ ] **Finding 2** — Run `hr_sandbox_prereq_probe_var` against a stubbed `uname` and `PATH` in the shell-mirror suite _(layer: cli)_
 4. [ ] **Finding 1** — Choose the `sandbox-prerequisites` consequence sentence by mode: job, `github-actions` repository, or local _(layer: cli)_

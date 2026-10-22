@@ -630,7 +630,7 @@
 #                    notification naming bubblewrap, and the stub NOT launched.
 #                    A non-blank `"sandbox":{"optOut":{"reason":"…"}}` in
 #                    "$d/harness.config.json" -> it launches
-#   a resume     from a `parked` record whose run wrote question_1.md,
+#   a resume      from a `parked` record whose run wrote question_1.md,
 #                 question_2.md and question_3.md under
 #                 "$d/sdlc-harness/clarifications/feat_x/", write answer_1.md and
 #                 answer_2.md there
