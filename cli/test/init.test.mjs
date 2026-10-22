@@ -1390,7 +1390,8 @@ test('the dev-server wrapper builds before it launches, and only where the deriv
  * and both arms of {@link resolveBody} that reach a written wrapper are covered: a detected raw line,
  * and the unresolved body that runs no command at all. `deploy` is the second arm in the same config:
  * it is selected because `deploy.command` holds its own wrapper's invocation, and no detection ever
- * supplies a deploy line.
+ * supplies a deploy line. Both entries report `carried: false`: this test does not pass
+ * `carryOnDiskCommandLines`, whose arm `cli/test/wrapper-carry-forward.test.mjs` covers.
  */
 test('the command line writeWrapperScripts returns is the one it inlined into the wrapper', async (t) => {
   const dir = await fixtureFor(t, { files: nodeProjectFiles() });
@@ -1432,6 +1433,7 @@ test('the command line writeWrapperScripts returns is the one it inlined into th
     invocation: `bash ${INIT_SCRIPTS_DIR}/typecheck.sh`,
     command: 'npm run typecheck',
     unresolved: false,
+    carried: false,
   });
   assert.deepEqual(byKey.deploy, {
     key: 'deploy',
@@ -1439,6 +1441,7 @@ test('the command line writeWrapperScripts returns is the one it inlined into th
     invocation: `bash ${INIT_SCRIPTS_DIR}/deploy.sh`,
     command: 'harness_fail "harness: put the deploy command line in deploy.sh"',
     unresolved: true,
+    carried: false,
   });
 });
 
