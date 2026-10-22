@@ -10,7 +10,7 @@
 
 This list is the **single source of truth** for the fix loop. `[ ]` markers anywhere else in this plan or its per-finding files are informational only.
 
-1. [ ] **Finding 1** — Replace the absolute checkout path in the dispatch-additions record. _(layer: general)_
+1. [x] **Finding 1** — Replace the absolute checkout path in the dispatch-additions record. _(layer: general)_
 2. [ ] **Finding 2** — Add `carried: false` to the `writeWrapperScripts` result expectations in `init.test.mjs`. _(layer: cli)_
 
 ## Must Fix
