@@ -27726,18 +27726,25 @@ as TypeScript → Python, where rank 0 means no relevant hit. Both come from the
 
 **They disagree, and the reason is not yet identified.**
 
-No arm returns the same ordered refs on every query of either corpus, so *within noise* cannot be
-claimed. Two differences are identified, each by a measurement below. The first is arm B's divergence,
-which is the Python index's history in its database (divergence source (3)). The second is the one
-abstention mismatch, which is the reranker scoring one identical pair differently (sources (1) and (2)
-together). Four differences are not identified:
+This is the case for the 2026-10-08 blocks. No arm returns the same ordered refs on every query of
+either corpus in them, so *within noise* cannot be claimed. Three differences are identified, each by a
+measurement below. The first is arm B's divergence, which is the Python index's state: mechanisms 1 and
+2, the latter `timescale/pg_textsearch#573` (divergence source (3)). The second is the one abstention
+mismatch, which is the reranker scoring one identical pair differently (sources (1) and (2) together).
+The third is the two near-tie swaps in arm B that remain on a fresh database, which are mechanism 2,
+`timescale/pg_textsearch#573`, in the Python store's own fresh build (source (3), **The near-tie pairs,
+since explained.**). Three differences are not identified:
 
 - arm C's ref-order changes;
-- how arms D and E split between the index's history and model precision;
-- two near-tie swaps in arm B that remain on a fresh database;
+- how arms D and E split between the index's state and model precision;
 - `q-sd-daemon-lifecycle` dropping out of arm E's top five on the Python side.
 
 Calling the second case would claim more than was measured.
+
+**On the fresh reading.** `### A fresh fixture-catalog reading, both backends as shipped` reads
+`fixture-catalog` again with both backends in the `REINDEX` state, and arm B returns the same ordered
+refs on both sides on every one of its 12 queries. On that reading the backends differ only in arms C to
+E, for which the models, sources (1) and (2), are the measured candidate. `self-docs` was not re-read.
 
 ### Divergence sources, in the order checked
 
@@ -27762,9 +27769,16 @@ Calling the second case would claim more than was measured.
      'chunks_bm25')` (`cli/src/retrieval/store.ts` and `docs-retrieval-service/src/harness_docs_retrieval/store.py`
      → `BM25_INDEX_DEFINITION`, `BM25_ORDER_CLAUSE`). `pg_extension.extversion` reads `pg_textsearch`
      1.3.1 on both. The servers are PGlite 0.5.8's PostgreSQL 18.3 and the compose image's
-     PostgreSQL 18.2, and `EXPLAIN` shows both choosing the `chunks_bm25` index scan.
+     PostgreSQL 18.2, and `EXPLAIN` shows both choosing the `chunks_bm25` index scan. These readings
+     were taken on `pg_textsearch` 1.3.1; `chore_docs_retrieval_pg_textsearch_upgrade` has since moved
+     both engines to 1.5.1 (`### The deciding figures on pg_textsearch 1.5.1` → `#### How these were
+     taken, on 1.5.1`).
    - **The probe.** It ran that `ORDER BY` with the score selected, top 8 per query, over
-     `fixture-catalog`'s 12 queries. One side was a freshly built TypeScript index; the TypeScript runner
+     `fixture-catalog`'s 12 queries. The score it selected is the `<@>` operator, not the score the store
+     ranks by: the store ranks by the index scan's own score, `bm25_get_current_score()`, and the two
+     differ while rows sit in the memtable (`### How the probe reads a score, and the setup`, the `scan`
+     and `operator` bullets). Every score this probe recorded, on the compose database and on the empty
+     one alike, is therefore an `operator` score. One side was a freshly built TypeScript index; the TypeScript runner
      builds a fresh in-memory index on every run, as it did for its block. The other side was the Python
      index, built through `indexPythonCorpus`, in two states:
      - **The compose database, after it had held other corpora.** This is the state the Python blocks
@@ -27801,19 +27815,50 @@ Calling the second case would claim more than was measured.
      The probe was a scratch launcher run in a session, as **What was taken in a session.** in
      `### What was compared, and through what` already says. Its scores are not a wall-clock figure: the
      statement returns the same scores whenever it runs against the same database state.
-   - **What it shows.** The recorded arm B divergence comes from the Python database's history: its BM25
-     statistics are not those of the live rows alone. The measured fact is that the scores depend on
-     the history. That the statistics still count rows a refresh deleted is inferred from the refresh's
-     delete-and-insert path, and was not measured.
-   - **What stays unexplained.** On the empty database, two queries order a near-tie pair against the
-     score the operator itself returns, while TypeScript orders both by score. On
+   - **What it shows.** The recorded arm B divergence comes from the Python index's state: its BM25
+     scores are not those of an index built over the live rows alone. The measured fact is that the
+     scores depend on the database's state. Two mechanisms produce that dependence, both defined in
+     `### Whether either mechanism moves relevance`:
+     - **Mechanism 1, dead rows that stay in the index's statistics.** The rows a refresh deletes stay
+       counted in `total_docs` and `total_len`. This bullet first recorded that as an inference that was
+       not measured; it has since been measured. In every `other-corpus` scenario, whose last refresh
+       deleted the other corpus's rows, the shipped end state differs from a fresh build followed by
+       `REINDEX` on every hit in both columns, on both backends and both corpora
+       (`### The candidate end-state rule, at refresh level`, the `other-corpus` rows).
+     - **Mechanism 2, exact lengths in the memtable against quantized ones in segments.** The index scan
+       scores a memtable row with its exact length and a segment row with a quantized one, so a freshly
+       inserted index ranks its rows by other scores than the same rows in a segment
+       (`### The score each index state ranks by`, the `t0` rows). This is reported upstream as
+       `timescale/pg_textsearch#573`, which the maintainer filed after this diagnosis and which is still
+       open on 1.5.1, cited from the task prompt of `chore_docs_retrieval_backend_comparison_record` and
+       not read on that branch.
+     - **The fresh build is not one state.** The Python store's own fresh build left 116 memtable
+       documents in one run and 276 in another on `self-docs` (`### The candidate end-state rule, at
+       refresh level`, the paragraph after its Python `self-docs` table).
+     - **What shipped.** Both backends now end every refresh that wrote anything, the first build, and
+       any refresh whose index is not marked rebuilt, in `REINDEX INDEX chunks_bm25`
+       (`### The recommendation for the fix branch` → **What shipped.**). Their shipped end states match
+       a fresh build followed by `REINDEX` in 11 of 12 scenarios each (`### Route 2 on the fix branch` →
+       `#### The shipped end state at refresh level`, its TypeScript and Python parts).
+   - **The near-tie pairs, since explained.** On the empty database, two queries order a near-tie pair
+     against the score the operator itself returns, while TypeScript orders both by score. On
      `q-fc-token-lifetime`, `docs/api-auth.md#rotating-a-key` scores −8.307983 and
      `#token-exchange` scores −8.281486. On `q-fc-unreadable-label`,
      `docs/depot-operations.md#inbound-scanning` scores −5.534851 and
-     `docs/labels.md#when-a-label-is-rejected` scores −5.514854.
+     `docs/labels.md#when-a-label-is-rejected` scores −5.514854. Both are mechanism 2,
+     `timescale/pg_textsearch#573`: the store ranks by `scan`, the scores recorded here are `operator`,
+     and the Python store's fresh build on an empty database is the `t0` state that returns both pairs
+     against `operator`'s order (`### The near-tie ordering on an empty database`;
+     `### The recommendation for the fix branch` → **Goal 4's conclusion**). The same inversions recur at
+     `t0` on 1.5.1 (`#### The near-tie ordering, on 1.5.1`). On the fresh reading, arm B returns the same
+     ordered refs on both sides for both queries (`### A fresh fixture-catalog reading, both backends as
+     shipped`).
 4. **Anything else the per-query lists show.**
-   - **Arms D and E** fuse arm B's lexical ranking, so their Python sides carry the database's history
-     as well as (1) and (2). The blocks cannot separate the two, so the split is unexplained.
+   - **Arms D and E** fuse arm B's lexical ranking, so in the 2026-10-08 blocks their Python sides carry
+     arm B's index-state mechanisms, source (3), as well as (1) and (2). Those blocks cannot separate the
+     two, so for them the split stays unexplained. On the fresh reading arm B contributes no difference
+     to the fusion, so arms D and E differ there only where the vector arm or the reranker does
+     (`### A fresh fixture-catalog reading, both backends as shipped`).
    - **Arm C** changes order on 6 `fixture-catalog` queries, none of which moves a positive's rank, and
      on 16 `self-docs` queries, one of which moves a positive's rank (`q-sd-new-subcommand`, 5 → 1).
      Source (1) together with (2) is the measured candidate for those changes, but only for document
