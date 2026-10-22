@@ -45,3 +45,5 @@
 - `git grep -n "roadmap item 20" -- docs/cli.md docs/config.md docs/watcher.md` prints nothing.
 - Re-run the story index's `## Scope register` entries C1, C3, C4 and C5. Every hit in these three files appears in the register as a row, and every `change` row owned by Task 6 is edited.
 - Every command this task adds is in a fenced block of its own, one command per line. The opt-out never appears as the first fix.
+
+- **Deviations from plan:** `docs/cli.md` §6's old sentence "Native Windows runs unsandboxed." is replaced by "Any platform other than macOS or Linux, native Windows included, is unsupported as well.", because the Task 1 table (`sandboxPrerequisites.ts` → `sandboxHostKind`, `assessSandboxHost`) grades every non-darwin, non-linux platform as the definite piece `unsupported-platform`. Re-running C1 over the three files also reaches lines this task added (the two install blocks, the WSL1 sentence, the `doctor` paragraph in §6, the new table row and the new `sandbox-prerequisites` bullet in §7). Each one sits inside register row 8 or 29, or is the bullet this plan's Work list assigns, so the register gains no row.
