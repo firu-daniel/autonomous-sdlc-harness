@@ -3,7 +3,8 @@
  *
  * **The rule this suite enforces: a host missing a piece the sandbox needs is reported, naming the
  * piece, its package and the command that installs it and never offering the opt-out — a `warn` in a
- * default run, a `fail` under `--remote-job` — while macOS passes naming Seatbelt and a taken
+ * default run, a `fail` under `--remote-job`, and told the watcher refuses its launches only where it
+ * would: never in a job, never where `execution.target` is `github-actions` — while macOS passes naming Seatbelt and a taken
  * `sandbox.optOut` passes naming its reason in both modes.** Its expectations depend on the host by
  * design: the check probes the real platform, so (a) and (b) each skip, naming why, on a host they
  * are not about, and (c) runs on every host because a taken opt-out probes nothing. No case reaches
@@ -68,6 +69,14 @@ function takeOptOut(dir) {
   writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
 }
 
+/** Write `execution.target` `github-actions` into the fixture's config. */
+function targetGithubActions(dir) {
+  const path = join(dir, CONFIG_FILE);
+  const config = JSON.parse(readFileSync(path, 'utf8'));
+  config.execution = { ...config.execution, target: 'github-actions' };
+  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+}
+
 /** A `PATH` value naming one temp directory that holds only a symlink to this process's `git`. */
 function gitOnlyPath(t) {
   const git = (process.env['PATH'] ?? '')
@@ -109,7 +118,15 @@ concurrentSuite('doctor sandbox-prerequisites', () => {
         assert.ok(line.includes(named), `${named} not named:\n${line}`);
       }
       assert.ok(!line.includes('optOut'), `the remedy offers the opt-out:\n${line}`);
+      if (status === 'FAIL') {
+        assert.ok(!line.includes('the watcher refuses'), `a job is told the watcher refuses it:\n${line}`);
+        assert.ok(line.includes("This job's agent session"), `the job consequence is not named:\n${line}`);
+      }
     }
+    const remoteDir = await wiredFixture(t);
+    targetGithubActions(remoteDir);
+    const { line } = await doctorLine(remoteDir, 'WARN', [], env);
+    assert.ok(line.includes('refuses none here'), `a github-actions repository is told its launches are refused:\n${line}`);
   });
 
   it('(c) passes under a taken opt-out naming its reason, in both modes and with the git-only PATH', async (t) => {

@@ -5026,8 +5026,9 @@ const SANDBOX_HOST_LABELS: Readonly<Record<SandboxHostKind, string>> = {
  * - **A taken opt-out** ({@link sandboxOptedOut}; a `ctx.config` of `undefined` is not one) is a `pass`:
  *   the sandbox is not required, and `profile-sandbox` reports the choice.
  * - **A definite missing piece** is a `warn`, and a `fail` under `--remote-job`
- *   ({@link CheckContext.remoteJob}): the watcher refuses every fresh local launch, and the agent CLI
- *   exits at startup under `failIfUnavailable`.
+ *   ({@link CheckContext.remoteJob}): a local repository's watcher refuses every fresh local launch, a
+ *   job's session would exit at startup under `failIfUnavailable`, and a `github-actions`
+ *   repository's watcher refuses nothing here.
  * - **An `uncertain` AppArmor answer** is a `warn` in both modes — the probe cannot settle it, so it
  *   is never a pass and never a failure. With a missing piece, the worse grade wins and both
  *   sentences are joined with `; `.
@@ -5046,9 +5047,13 @@ const SANDBOX_PREREQUISITES_CHECK: Check = {
     const { host, missing, appArmor } = assessSandboxHost(facts);
     const sentences: string[] = [];
     if (missing.length > 0) {
-      sentences.push(
-        `${describeMissingPieces(missing, facts.kernelRelease, facts.platform).join(' ')} Until then the watcher refuses every fresh local launch, and the agent CLI (\`${DEFAULT_AGENT_CLI}\`, or \`$${AGENT_CLI_VARIABLE}\`) exits at startup under \`failIfUnavailable\``,
-      );
+      const agent = `\`${DEFAULT_AGENT_CLI}\`, or \`$${AGENT_CLI_VARIABLE}\``;
+      const consequence = ctx.remoteJob
+        ? `This job's agent session (${agent}) would exit at startup under \`failIfUnavailable\``
+        : ctx.config !== undefined && remoteExecutionApplies(ctx.config)
+          ? `\`execution.target\` is \`github-actions\`, so the watcher dispatches every drop to GitHub Actions and refuses none here, but a session started on this host (${agent}) exits at startup under \`failIfUnavailable\``
+          : `Until then the watcher refuses every fresh local launch, and the agent CLI (${agent}) exits at startup under \`failIfUnavailable\``;
+      sentences.push(`${describeMissingPieces(missing, facts.kernelRelease, facts.platform).join(' ')} ${consequence}`);
     }
     if (appArmor === 'uncertain') sentences.push(describeAppArmor(appArmor));
     if (missing.length > 0) return (ctx.remoteJob ? fail : warn)(sentences.join('; '));
