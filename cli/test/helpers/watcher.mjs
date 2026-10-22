@@ -10,7 +10,7 @@
  *
  * `node --test test` loads this file as a test file of its own, so nothing here runs at import time.
  *
- * ## Four non-obvious choices
+ * ## Five non-obvious choices
  *
  * 1. **The stub sleeps before its body runs.** Not for the registry: its writes are serialized, so
  *    the pass's post-spawn `pid` write and the session's exit classification both survive whichever
@@ -27,6 +27,10 @@
  *    that sleeps under a second is far below it; it sits below the suite's `--test-timeout`
  *    (`cli/package.json` → `scripts.test`) so a hung pass fails naming its command, and its session
  *    and `sleep`s are killed with it.
+ * 5. **`tick` overrides the sourced sandbox probe** (`hr_sandbox_prereq_probe_var`) with
+ *    {@link DEFAULT_SANDBOX_PROBE}, which reports nothing missing, so a pass launches on any host — a
+ *    Linux host without `bubblewrap` or `socat` included. The override is test-only: the watcher
+ *    carries no environment switch for it, because such a switch would be a bypass of the preflight.
  */
 
 import assert from 'node:assert/strict';
@@ -48,6 +52,9 @@ const PROMPT_DELIMITER = '----- end of prompt -----';
 
 /** One watcher pass's bound (choice 4 in the module header). */
 const TICK_TIMEOUT_MS = 60_000;
+
+/** The body `tick` gives the sourced probe unless a case passes its own (choice 5). */
+export const DEFAULT_SANDBOX_PROBE = 'HR_SANDBOX_HOST=macos; HR_SANDBOX_MISSING=; HR_SANDBOX_REFUSAL=; return 0';
 
 /** The seed `init`'s own tests use: a repository whose stack detection resolves every command. */
 function nodeProjectFiles() {
@@ -184,10 +191,12 @@ export async function createWatcherFixture(t, { branch = 'feat_x' } = {}) {
       await writeFile(join(dir, REGISTRY_PATH), `${JSON.stringify({ runs: { [branch]: record } }, null, 2)}\n`, 'utf8');
     },
     record: () => JSON.parse(readFileSync(join(dir, REGISTRY_PATH), 'utf8')).runs[branch],
-    async tick(env = {}) {
+    /** One pass; `sandboxProbe` is a shell function body replacing {@link DEFAULT_SANDBOX_PROBE}. */
+    async tick(env = {}, { sandboxProbe = DEFAULT_SANDBOX_PROBE } = {}) {
+      const script = `. "$1" status >/dev/null\nhr_sandbox_prereq_probe_var() {\n${sandboxProbe}\n}\ntick; wait`;
       const result = await runBash(
         dir,
-        ['-c', '. "$1" status >/dev/null; tick; wait', '_', watcherPath],
+        ['-c', script, '_', watcherPath],
         watcherEnv(env),
         { timeoutMs: TICK_TIMEOUT_MS, signal: t.signal },
       );

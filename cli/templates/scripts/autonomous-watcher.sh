@@ -619,7 +619,18 @@
 #                 `park_loop` record for that branch it is archived as
 #                 rejected_<ts>_… and that record is byte-identical afterwards;
 #                 with a LIVE `running` record it is archived as dup_<ts>_…
-#   a resume      from a `parked` record whose run wrote question_1.md,
+#   no sandbox    `a drop`, with the sourced probe overridden to report a
+#                 missing piece:
+#                   HARNESS_AGENT_CLI="$s" bash -c '. "$1" status >/dev/null
+#                     hr_sandbox_prereq_probe_var() { HR_SANDBOX_MISSING="bwrap socat"
+#                       HR_SANDBOX_REFUSAL="needs bubblewrap"; return 1; }
+#                     tick; wait' _ "$d/scripts/autonomous-watcher.sh"
+#                 -> the record `failed`, the inbox file archived as
+#                    failed_<ts>_feat_x_task_prompt.md, ONE `failed`
+#                    notification naming bubblewrap, and the stub NOT launched.
+#                    A non-blank `"sandbox":{"optOut":{"reason":"…"}}` in
+#                    "$d/harness.config.json" -> it launches
+#   a resume     from a `parked` record whose run wrote question_1.md,
 #                 question_2.md and question_3.md under
 #                 "$d/sdlc-harness/clarifications/feat_x/", write answer_1.md and
 #                 answer_2.md there
@@ -3738,6 +3749,19 @@ process_inbox_file() {
   # the lane commits the whole machine to this repository, which is why it sits
   # below every cheaper refusal. A REMOTE drop skips the usage hold, the cap and
   # the lane, keeping the rest in this order (REMOTE DISPATCH in the header).
+  #
+  # THE SANDBOX PREFLIGHT sits between the branch-owning-record rejections and
+  # the lane. It is below those rejections because they archive while preserving
+  # the record's status, and its own refusal (fail_before_launch) overwrites it
+  # with `failed`. It judges only a fresh LOCAL launch: the resume passes, job
+  # mode and a remote drop are left to the run profile's `failIfUnavailable`, and
+  # the remote job is refused by its own `doctor --remote-job` preflight. It
+  # refuses only on a definite missing piece; an `uncertain` AppArmor answer
+  # never refuses, and the library's probe does not read AppArmor at all. A taken
+  # `sandbox.optOut`, read from the main checkout only, exempts the drop. The
+  # prerequisite table is owned by cli/src/doctor/sandboxPrerequisites.ts and
+  # reaches this script through the library's mirror
+  # (hr_sandbox_prereq_probe_var, hr_sandbox_opted_out).
   # ---------------------------------------------------------------------------
 
   # The global kill switch, honored before anything is launched. Deferring leaves
@@ -3827,6 +3851,15 @@ process_inbox_file() {
   if [ "$existing_status" = "park_loop" ]; then
     log "'$branch' has a run held by the park-loop guard — rejecting '$fname' (create $hint_worktree/$hint_state/clarifications/$branch/PARK_LOOP_CLEAR to clear it, then drop the file again)"
     reject_preserving_status "$branch" "$file" "$fname" "(the branch has a run held by the park-loop guard — create $hint_worktree/$hint_state/clarifications/$branch/PARK_LOOP_CLEAR to clear it, then drop the file again)"
+    return 0
+  fi
+
+  # The sandbox preflight (THE SANDBOX PREFLIGHT above). Archived, never deferred:
+  # a host does not install its own packages, so a deferral would retry this drop
+  # on every pass without bound.
+  if [ "$remote" != 1 ] && ! hr_sandbox_opted_out "$MAIN_REPO" && ! hr_sandbox_prereq_probe_var; then
+    log "this machine cannot sandbox an unattended run — not launching '$branch': $HR_SANDBOX_REFUSAL"
+    fail_before_launch "$branch" "$file" "$fname" "(this machine cannot sandbox the run: $HR_SANDBOX_REFUSAL — nothing launched; npx autonomous-sdlc-harness doctor reports it under sandbox-prerequisites)"
     return 0
   fi
 

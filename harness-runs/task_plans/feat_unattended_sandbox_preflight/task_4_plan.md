@@ -41,3 +41,10 @@ This task calls them and owns the refusal. It does not change them.
 - `npm test --workspace cli -- test/watcher-sandbox-refusal.test.mjs` passes. It is this task's own new test file. `cli/test/helpers/watcher.mjs` is a helper, not a test file, and the Run gates round runs the suites that import it.
 - Read the refusal block back against the guard order in the watcher's shared-guards comment. It sits below the `park_loop` rejection and above `lane_blocks_start`, and it is inside `[ "$remote" != 1 ]`.
 - `git diff --name-only` for this task names no file under the repository-root `scripts/`.
+
+- **Deviations from plan:**
+  - Case (a)'s "the inbox holds nothing" is asserted as "the inbox holds no drop": the `README.md` `init` writes into `autonomous_inbox/` stays there by design (the watcher's REPRO `routing` entry: "README.md -> left in place, never archived"), so the suite's `inbox()` excludes it and `.processed/`.
+  - THE SANDBOX PREFLIGHT paragraph is written into the shared-guards comment block inside `process_inbox_file` (the comment the plan names), not into the file-top header; the REPRO line (`no sandbox`) is in the file-top REPRO block as planned.
+  - Case (e) was implemented (the remote-dispatch setup was reusable as a local copy: `execution.target`, commit and push, a recorded `gh`); the probe override touches a marker file and the case asserts the marker is absent and one `workflow run` was recorded.
+  - Case (b) runs `init --force --no-analyze` after writing the opt-out, as `cli/test/watcher-run-profile.test.mjs` → `adoptedFixture` does, so the base profile matches the taken opt-out and the launch is not refused by the run-profile check; case (c) does not, because its preflight refusal lands before any profile is read.
+  - Host-dependent suites found by the grep (edited none): `cli/test/watcher-stall-reset-payloads.test.mjs` → `localStall` sources the watcher and runs `tick` in its own shell after a local task drop, so it reaches `process_inbox_file` outside the helper's `tick` and is not covered by the default probe override.
