@@ -27747,7 +27747,9 @@ Calling the second case would claim more than was measured.
 **On the fresh reading.** `### A fresh fixture-catalog reading, both backends as shipped` reads
 `fixture-catalog` again with both backends in the `REINDEX` state, and arm B returns the same ordered
 refs on both sides on every one of its 12 queries. On that reading the backends differ only in arms C to
-E, for which the models, sources (1) and (2), are the measured candidate. `self-docs` was not re-read.
+E, for which the models, sources (1) and (2), are the measured candidate. Those differences stay
+unexplained, for the reason item 4 of `### Divergence sources, in the order checked` gives for arm C:
+the query vectors and the Python side's HNSW graph were not measured. `self-docs` was not re-read.
 
 ### Divergence sources, in the order checked
 
@@ -28060,7 +28062,8 @@ The comparison's p50 and p95 latency columns were taken in a session and are lef
 sides, negatives included, and every arm B figure is equal. The remaining differences are in arms C to E
 only: ordered-ref changes on 6, 5 and 1 of the 12 queries, none of which moves a positive's first relevant
 rank. The models, divergence sources (1) and (2) of `### Divergence sources, in the order checked`, are
-the only measured candidate for them.
+the only measured candidate for them, and they stay unexplained for the reason that subsection's
+item 4 gives for arm C: the query vectors and the Python side's HNSW graph were not measured.
 
 This reading is not compared value for value with the 2026-10-08 blocks. Those were taken on
 `pg_textsearch` 1.3.1 before either fix branch. The 1.5.1 upgrade and the fix on both backends both lie
