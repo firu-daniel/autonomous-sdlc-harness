@@ -33,7 +33,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Rewrap the `test_store_statements.py` docstring line and join the `END_STATE_STATEMENTS` comprehension in `store.py` so gate 13a passes _(layer: general)_
+1. [x] **Finding 1** — Rewrap the `test_store_statements.py` docstring line and join the `END_STATE_STATEMENTS` comprehension in `store.py` so gate 13a passes _(layer: general)_
 
 ---
 

@@ -6,8 +6,8 @@ The constants are compared against the running TypeScript through the bridge. Th
 `ORDER BY embedding <=> $1::vector LIMIT $2` and the width-change delete
 `DELETE FROM meta WHERE key = ANY($1::text[])` are not exported by `store.ts`, so no bridge can
 reach them; each is guarded by reading `cli/src/retrieval/store.ts`'s source instead, a last resort
-taken for those two strings. Nothing here needs a database: the refusals below fail before connecting,
-against a port nothing listens on, or against a fake connection.
+taken for those two strings. Nothing here needs a database: the refusals below fail before
+connecting, against a port nothing listens on, or against a fake connection.
 """
 
 import asyncio

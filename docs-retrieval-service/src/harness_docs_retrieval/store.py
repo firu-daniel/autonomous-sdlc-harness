@@ -178,8 +178,7 @@ def statements(dimensions: int) -> Mapping[str, str]:
             "WHERE id = ANY($1::int[])"
         ),
         **{
-            _end_state_key(index): statement
-            for index, statement in enumerate(END_STATE_STATEMENTS)
+            _end_state_key(index): statement for index, statement in enumerate(END_STATE_STATEMENTS)
         },
     }
 
