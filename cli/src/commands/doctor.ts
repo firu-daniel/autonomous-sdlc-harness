@@ -41,8 +41,8 @@
  *   and {@link CHECK_REGISTRY_FLAG} and {@link CHECK_GITHUB_FLAG}, reads that change nothing anywhere
  *   and so are not suppressed by `--dry-run`. A POST fired by every `doctor` — in CI, from an `&&` chain, from the
  *   run daemon before it starts a run — would cost the command every property above.
- *   {@link REMOTE_JOB_FLAG} reaches no network either: it changes five profile checks' grades, and what `plugin-permissions` grades,
- *   and nothing else.
+ *   {@link REMOTE_JOB_FLAG} reaches no network either: it changes six checks' grades — five profile checks' and
+ *   `sandbox-prerequisites`' — and what `plugin-permissions` grades, and nothing else.
  * - **{@link JOB_SURFACES_FLAG} replaces the check list rather than adding to it.** The remote job
  *   runs it from the pinned CLI before it trusts anything the run's branch carries, so it runs the
  *   one `job-surfaces` check and nothing else, reaches no network, and takes no other option. It is a
@@ -100,9 +100,10 @@ const CHECK_GITHUB_FLAG = '--check-github';
 
 /**
  * An option this command takes of its own: it grades the permission profile for a remote job, where
- * `profile-paths`, `profile-tracked`, `plugin-permissions`, `profile-sandbox` and
- * `profile-write-protection` fail instead of warning — except that a taken sandbox opt-out stays a
- * warning — and the profile's `additionalDirectories` must carry every plugin root.
+ * `profile-paths`, `profile-tracked`, `plugin-permissions`, `profile-sandbox`,
+ * `profile-write-protection` and `sandbox-prerequisites` fail instead of warning — except that a taken
+ * sandbox opt-out stays a warning in `profile-sandbox` and passes `sandbox-prerequisites` — and the
+ * profile's `additionalDirectories` must carry every plugin root.
  *
  * A flag rather than a probe of the job's environment, so an operator's own shell cannot trip it by
  * inheriting a variable; the remote workflow's preflight passes it.
@@ -211,13 +212,14 @@ const DOCTOR_USAGE: readonly string[] = Object.freeze([
   'which runner HARNESS_RUNNER selects. A call that times out or cannot reach GitHub warns rather than',
   'fails. Every call is a read, so --dry-run does not suppress it either.',
   '',
-  `${REMOTE_JOB_FLAG} turns five warnings into failures: profile-paths, when no rule in the profile`,
+  `${REMOTE_JOB_FLAG} turns six warnings into failures: profile-paths, when no rule in the profile`,
   'covers this checkout; profile-tracked, when the profile is committed at HEAD; plugin-permissions,',
   'when an entry a plugin root needs is missing or no plugin root resolves; profile-sandbox, when the',
-  'profile lacks the sandbox block the configuration implies, unless the opt-out was taken; and',
-  'profile-write-protection, when a path that runs outside the sandbox is writable from inside it. It',
-  'also requires every plugin root in permissions.additionalDirectories. The remote workflow passes it,',
-  'so its preflight stops before a session whose missing entries would be refused at once under the',
+  'profile lacks the sandbox block the configuration implies, unless the opt-out was taken;',
+  'profile-write-protection, when a path that runs outside the sandbox is writable from inside it; and',
+  'sandbox-prerequisites, when this host lacks a piece the sandbox needs, unless the opt-out was taken.',
+  'It also requires every plugin root in permissions.additionalDirectories. The remote workflow passes',
+  'it, so its preflight stops before a session whose missing entries would be refused at once under the',
   'default dontAsk mode. It reaches no network.',
   '',
   `${JOB_SURFACES_FLAG}=<branch> runs one check, job-surfaces, instead of the list, and takes no other`,

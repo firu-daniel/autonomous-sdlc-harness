@@ -5156,6 +5156,21 @@ test('the plugin-permissions check prints the entries to paste, and never above 
 });
 
 /**
+ * A `--remote-job` run the case expects clean: exit 0 — or, where this host lacks a sandbox
+ * prerequisite, exit 1 with `sandbox-prerequisites` as its only `FAIL` line, since that check grades
+ * the host rather than the fixture.
+ */
+function assertRemoteJobClean(job) {
+  const failed = job.stderr.split('\n').filter((line) => /^!! FAIL\s/.test(line));
+  if (failLine('sandbox-prerequisites').test(job.stderr)) {
+    assert.equal(failed.length, 1, `a FAIL besides sandbox-prerequisites:\n${job.stdout}\n${job.stderr}`);
+    assert.equal(job.status, 1, `doctor --remote-job exited ${job.status}\n${job.stdout}\n${job.stderr}`);
+    return;
+  }
+  assert.equal(job.status, 0, `doctor --remote-job exited ${job.status}\n${job.stdout}\n${job.stderr}`);
+}
+
+/**
  * `doctor --remote-job`: the remote job's preflight, under which a profile that cannot work on the
  * runner is a `fail` — exit 1, so the job stops before it spends a session — where a default run warns.
  *
@@ -5258,7 +5273,7 @@ test('doctor --remote-job fails an unusable profile where a default run warns', 
 
     const job = await runCli(dir, ['doctor', '--remote-job'], env);
 
-    assert.equal(job.status, 0, `doctor --remote-job exited ${job.status}\n${job.stdout}\n${job.stderr}`);
+    assertRemoteJobClean(job);
     assert.match(job.stdout, passLine('plugin-permissions'));
     assert.match(detailLine(job.stdout, passLine('plugin-permissions')), /additionalDirectories/);
     assert.match(job.stdout, passLine('profile-paths'));
@@ -5273,7 +5288,7 @@ test('doctor --remote-job fails an unusable profile where a default run warns', 
 
     // The ignored, untracked profile `init` leaves is the passing state, and the job is otherwise clean.
     const untracked = await runCli(dir, ['doctor', '--remote-job'], env);
-    assert.equal(untracked.status, 0, `doctor --remote-job exited ${untracked.status}\n${untracked.stdout}\n${untracked.stderr}`);
+    assertRemoteJobClean(untracked);
     assert.match(untracked.stdout, passLine('profile-tracked'));
 
     await runGit(dir, ['add', '--force', '--', PROFILE_FILE]);
@@ -5447,7 +5462,8 @@ const PRE_BRANCH_CHECK_IDS = Object.freeze([
   'remote-execution', 'remote-github', 'forge', 'config', 'command-wrappers', 'command-permissions', 'command-resolves',
   'state-dir', 'artifact-tree', 'setup-analysis', 'task-offer-rules', 'layer-profile', 'layer-drift', 'ignore-rules',
   'plugin-wiring', 'permission-profile', 'profile-paths', 'profile-tracked', 'profile-browser-deny',
-  'profile-deny-floor', 'profile-main-anchor', 'profile-sandbox', 'profile-write-protection', 'plugin-permissions', 'browser-wiring',
+  'profile-deny-floor', 'profile-main-anchor', 'profile-sandbox', 'profile-write-protection', 'sandbox-prerequisites', 'plugin-permissions',
+  'browser-wiring',
   'retrieval-dependencies', 'retrieval-model-cache', 'retrieval-index',
 ]);
 

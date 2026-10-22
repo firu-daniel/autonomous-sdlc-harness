@@ -92,6 +92,7 @@
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import { accessSync, constants as fsConstants, existsSync, readFileSync, statSync } from 'node:fs';
+import { release as kernelRelease } from 'node:os';
 import { delimiter, join, posix, resolve as resolvePath } from 'node:path';
 
 import { formatProblem, hasErrors, type ConfigProblem } from '../config/check.js';
@@ -309,6 +310,17 @@ import {
   retrievalRuntimeState,
 } from '../retrieval/runtime.js';
 import { DOCS_SERVER_NAME } from '../retrieval/server.js';
+import {
+  APPARMOR_USERNS_SYSCTL_PATH,
+  assessSandboxHost,
+  BWRAP_APPARMOR_PROFILE_PATH,
+  describeAppArmor,
+  describeMissingPieces,
+  SANDBOX_HOST_BINARIES,
+  type FileRead,
+  type SandboxHostFacts,
+  type SandboxHostKind,
+} from './sandboxPrerequisites.js';
 
 /**
  * How the CLI is typed, for every remedy that tells an operator what to run next. The `npx` prefix
@@ -481,9 +493,9 @@ export interface CheckContext {
   readonly probeGithub: boolean;
   /**
    * Whether `doctor --remote-job` graded the profile for a remote job: {@link PROFILE_PATHS_CHECK},
-   * {@link PROFILE_TRACKED_CHECK}, {@link PROFILE_SANDBOX_CHECK}, {@link PROFILE_WRITE_PROTECTION_CHECK} and
-   * {@link PLUGIN_PERMISSIONS_CHECK} fail where they otherwise warn, and the last also grades
-   * `permissions.additionalDirectories`. `false` in every default run.
+   * {@link PROFILE_TRACKED_CHECK}, {@link PROFILE_SANDBOX_CHECK}, {@link PROFILE_WRITE_PROTECTION_CHECK},
+   * {@link SANDBOX_PREREQUISITES_CHECK} and {@link PLUGIN_PERMISSIONS_CHECK} fail where they otherwise
+   * warn, and the last also grades `permissions.additionalDirectories`. `false` in every default run.
    */
   readonly remoteJob: boolean;
   /** What `doctor --job-surfaces=<branch>[@<commit>[@<base>]]` asked {@link JOB_SURFACES_CHECK} about; absent otherwise. */
@@ -654,6 +666,40 @@ function resolvesOnPath(command: string, searchPath: string = process.env['PATH'
   if (command === '') return false;
   if (command.includes('/')) return isExecutableFile(resolvePath(command));
   return locateOnPath(command, searchPath) !== undefined;
+}
+
+/** One host file as {@link FileRead}: `ENOENT` and `ENOTDIR` are absent, any other error unreadable. */
+function readHostFile(path: string): FileRead {
+  try {
+    return { state: 'read', text: readFileSync(path, 'utf8') };
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | null)?.code;
+    return code === 'ENOENT' || code === 'ENOTDIR' ? { state: 'absent' } : { state: 'unreadable' };
+  }
+}
+
+/**
+ * The host facts {@link SANDBOX_PREREQUISITES_CHECK} grades: the platform, the kernel release, which
+ * {@link SANDBOX_HOST_BINARIES} resolve on this process's `PATH`, and the two AppArmor files.
+ *
+ * It spawns nothing and reaches no network. It answers for the `PATH` `doctor` was typed at, not the
+ * daemon's: the watcher's own launch-time probe is the authority for the `PATH` a run starts under.
+ *
+ * **DECLARED MIRROR** — `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_sandbox_prereq_probe_var`
+ * mirrors its platform, kernel-release and `PATH` reads, held equal by
+ * `cli/test/sandbox-prerequisites-shell-mirror.test.mjs`. A rename of this function or a change to
+ * what it reads is an edit to that shell function.
+ */
+function probeSandboxHost(): SandboxHostFacts {
+  return {
+    platform: process.platform,
+    kernelRelease: kernelRelease(),
+    resolvedBinaries: new Set(
+      SANDBOX_HOST_BINARIES.filter((entry) => resolvesOnPath(entry.binary)).map((entry) => entry.binary),
+    ),
+    appArmorRestrict: readHostFile(APPARMOR_USERNS_SYSCTL_PATH),
+    bwrapProfile: readHostFile(BWRAP_APPARMOR_PROFILE_PATH),
+  };
 }
 
 /** One permission list's string entries, or none when the profile does not carry it as a list. */
@@ -4775,8 +4821,8 @@ const PROFILE_MAIN_ANCHOR_CHECK: Check = {
  * commands are absolute paths into the checkout the profile was generated at.
  *
  * Every finding is a `warn`: a profile an earlier release generated is legitimately in that state,
- * as with {@link PROFILE_DENY_FLOOR_CHECK}, and refusing to launch an unsandboxed run is roadmap
- * item 20 (`docs/development.md` → `## 6. The roadmap this tree defers to`). **Under `--remote-job`**
+ * as with {@link PROFILE_DENY_FLOOR_CHECK}, and refusing a run on a host that cannot start the sandbox
+ * is {@link SANDBOX_PREREQUISITES_CHECK}'s and the watcher's launch refusal, not this check's. **Under `--remote-job`**
  * ({@link CheckContext.remoteJob}) every finding is a `fail`, except the taken opt-out, which stays a
  * `warn` because it is the repository's choice. Every non-pass names `init --force` as the remedy.
  * An excluded entry in an earlier release's `Bash(…)` form ({@link expectedSandbox}'s `staleExcludedCommands`)
@@ -4961,6 +5007,59 @@ const PROFILE_WRITE_PROTECTION_CHECK: Check = {
       : pass(
           `${PROFILE_PATH} write-protects each of the ${expected.length} paths that run outside the sandbox on both sides: a ${denyWritePath} entry, and an Edit deny rule. How the Linux sandbox treats a ${denyWritePath} entry containing * is unverified, so on Linux only the file-tool side is relied on for the globbed paths`,
         );
+  },
+};
+
+/** How the sandbox-prerequisites pass names each host kind it can pass on. */
+const SANDBOX_HOST_LABELS: Readonly<Record<SandboxHostKind, string>> = {
+  macos: 'macOS, sandboxed by Seatbelt',
+  linux: 'Linux, sandboxed by bubblewrap',
+  wsl2: 'WSL2, sandboxed by bubblewrap',
+  wsl1: 'WSL1',
+  unsupported: 'an unsupported platform',
+};
+
+/**
+ * Can this host start the sandbox an unattended run needs? Graded from {@link probeSandboxHost}'s
+ * facts by `doctor/sandboxPrerequisites.ts`'s {@link assessSandboxHost}; no table value is re-spelled.
+ *
+ * - **A taken opt-out** ({@link sandboxOptedOut}; a `ctx.config` of `undefined` is not one) is a `pass`:
+ *   the sandbox is not required, and `profile-sandbox` reports the choice.
+ * - **A definite missing piece** is a `warn`, and a `fail` under `--remote-job`
+ *   ({@link CheckContext.remoteJob}): the watcher refuses every fresh local launch, and the agent CLI
+ *   exits at startup under `failIfUnavailable`.
+ * - **An `uncertain` AppArmor answer** is a `warn` in both modes — the probe cannot settle it, so it
+ *   is never a pass and never a failure. With a missing piece, the worse grade wins and both
+ *   sentences are joined with `; `.
+ * - Otherwise a `pass`, naming the host kind, where each binary resolved and the AppArmor answer.
+ */
+const SANDBOX_PREREQUISITES_CHECK: Check = {
+  id: 'sandbox-prerequisites',
+  title: 'this host can start the sandbox an unattended run needs',
+  run: (ctx) => {
+    if (ctx.config !== undefined && sandboxOptedOut(ctx.config)) {
+      return pass(
+        `not required: sandbox.optOut is taken — ${String(ctx.config.sandbox?.optOut?.reason)}; profile-sandbox reports it`,
+      );
+    }
+    const facts = probeSandboxHost();
+    const { host, missing, appArmor } = assessSandboxHost(facts);
+    const sentences: string[] = [];
+    if (missing.length > 0) {
+      sentences.push(
+        `${describeMissingPieces(missing, facts.kernelRelease, facts.platform).join(' ')} Until then the watcher refuses every fresh local launch, and the agent CLI (\`${DEFAULT_AGENT_CLI}\`, or \`$${AGENT_CLI_VARIABLE}\`) exits at startup under \`failIfUnavailable\``,
+      );
+    }
+    if (appArmor === 'uncertain') sentences.push(describeAppArmor(appArmor));
+    if (missing.length > 0) return (ctx.remoteJob ? fail : warn)(sentences.join('; '));
+    if (sentences.length > 0) return warn(sentences.join('; '));
+
+    const resolved = SANDBOX_HOST_BINARIES.filter((entry) => facts.resolvedBinaries.has(entry.binary)).map(
+      (entry) => `\`${entry.binary}\` in ${locateOnPath(entry.binary, process.env['PATH'] ?? '') ?? 'an explicit path'}`,
+    );
+    return pass(
+      `${SANDBOX_HOST_LABELS[host]}${resolved.length > 0 ? `, with ${resolved.join(' and ')}` : ''}. ${describeAppArmor(appArmor)}`,
+    );
   },
 };
 
@@ -5867,6 +5966,9 @@ const RETRIEVAL_PYTHON_INDEX_CHECK: Check = {
  * `profile-tracked` sits under `profile-paths` because the two name the same file carried somewhere it
  * does not belong, and a committed profile is the usual reason a job's `profile-paths` fails.
  *
+ * `sandbox-prerequisites` sits under `profile-write-protection` because the two profile checks above it
+ * grade the sandbox a run asks for, and this one whether the host can start it.
+ *
  * `plugin-permissions` closes the profile block for the same shape of reason: it is the only profile
  * question whose other half is not in the repository at all — the plugin's machine-local install
  * root — so it is answerable only once the profile itself has been read, and a reader whose
@@ -5916,6 +6018,7 @@ export const CHECKS: readonly Check[] = Object.freeze([
   PROFILE_MAIN_ANCHOR_CHECK,
   PROFILE_SANDBOX_CHECK,
   PROFILE_WRITE_PROTECTION_CHECK,
+  SANDBOX_PREREQUISITES_CHECK,
   PLUGIN_PERMISSIONS_CHECK,
   BROWSER_WIRING_CHECK,
   RETRIEVAL_DEPENDENCIES_CHECK,

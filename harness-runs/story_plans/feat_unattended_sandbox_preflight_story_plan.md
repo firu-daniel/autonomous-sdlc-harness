@@ -32,7 +32,7 @@
 Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_unattended_sandbox_preflight/task_<K>_plan.md` file. The entries are ordered bottom-up by ship sequence in the configured layer order, with the catch-all layer last.
 
 1. [x] **Task 1** — Declare the sandbox prerequisite table in `cli/src/doctor/sandboxPrerequisites.ts` _(layer: cli)_ _(points: 15)_
-2. [ ] **Task 2** — Add `doctor`'s `sandbox-prerequisites` check and its live host probe _(layer: cli)_ _(points: 20)_
+2. [x] **Task 2** — Add `doctor`'s `sandbox-prerequisites` check and its live host probe _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Mirror the prerequisite table and `sandboxOptedOut` in the run library _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Refuse a fresh local launch on a host that cannot sandbox it _(layer: cli)_ _(points: 15)_
 5. [ ] **Task 5** — Install the sandbox prerequisites in the `harness-run.yml` job before its preflight _(layer: cli)_ _(points: 15)_
