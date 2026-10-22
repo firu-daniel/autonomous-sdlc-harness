@@ -1,11 +1,12 @@
 /**
- * The run library's sandbox mirrors — `hr_sandbox_prereq_judge_var` and `hr_sandbox_opted_out` in
- * `cli/templates/scripts/lib/harness-run-lib.sh`.
+ * The run library's sandbox mirrors — `hr_sandbox_prereq_judge_var`, `hr_sandbox_prereq_probe_var`
+ * and `hr_sandbox_opted_out` in `cli/templates/scripts/lib/harness-run-lib.sh`.
  *
  * **The rule this suite enforces: each shell mirror answers as its owner does over the same
  * inputs.** The judge is held to `cli/src/doctor/sandboxPrerequisites.ts` → `sandboxHostKind` and
  * `assessSandboxHost` across a platform × kernel-release × binary-presence matrix, and its refusal
- * sentence to `installCommands` and `WSL1_AGENT_MESSAGE`; the opt-out reader is held to
+ * sentence to `installCommands` and `WSL1_AGENT_MESSAGE`, and the probe is held to the same
+ * assessment over a stubbed `uname` and `PATH`; the opt-out reader is held to
  * `cli/src/config/model.ts` → `sandboxOptedOut` across `reason` shapes, and answers *not opted out*
  * for every configuration it cannot load.
  *
@@ -15,7 +16,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -123,6 +124,62 @@ test('the judge answers as sandboxHostKind and assessSandboxHost do, and its ref
       }
     }),
   );
+});
+
+/** A stub bin directory: `uname` answering `unameS` / `unameR` (or failing), plus `present` as executables. */
+function stubBin(unameS, unameR, present, { unameFails = false } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'sandbox-probe-'));
+  const bin = join(dir, 'bin');
+  mkdirSync(bin);
+  const write = (name, body) => {
+    writeFileSync(join(bin, name), `#!/bin/sh\n${body}\n`);
+    chmodSync(join(bin, name), 0o755);
+  };
+  write('uname', unameFails ? 'exit 1' : `case "$1" in -s) echo '${unameS}' ;; -r) echo '${unameR}' ;; esac`);
+  for (const binary of present) write(binary, 'exit 0');
+  return { dir, bin };
+}
+
+test('hr_sandbox_prereq_probe_var reads uname and PATH and answers as assessSandboxHost does', async () => {
+  for (const [platform, unameS] of [['linux', 'Linux'], ['darwin', 'Darwin']]) {
+    for (const kernelRelease of ['6.8.0-45-generic', '4.4.0-19041-Microsoft']) {
+      for (const present of PRESENCE) {
+        const { dir, bin } = stubBin(unameS, kernelRelease, present);
+        try {
+          const result = await libCall(
+            'PATH="$1"; hr_sandbox_prereq_probe_var; status=$?; printf "%s\\n" "$status" "$HR_SANDBOX_MISSING"',
+            [bin],
+          );
+          const [status, missing] = result.stdout.split('\n');
+          const owner = assessSandboxHost({
+            platform,
+            kernelRelease,
+            resolvedBinaries: new Set(present),
+            appArmorRestrict: { state: 'absent' },
+            bwrapProfile: { state: 'absent' },
+          });
+          const label = `${unameS} ${kernelRelease} [${present.join(',')}]`;
+          assert.equal(missing, owner.missing.join(' '), label);
+          assert.equal(Number(status), owner.missing.length === 0 ? 0 : 1, label);
+        } finally {
+          rmSync(dir, { recursive: true, force: true });
+        }
+      }
+    }
+  }
+});
+
+test('hr_sandbox_prereq_probe_var leaves a host whose uname fails to failIfUnavailable', async () => {
+  const { dir, bin } = stubBin('', '', [], { unameFails: true });
+  try {
+    const result = await libCall(
+      'PATH="$1"; hr_sandbox_prereq_probe_var; status=$?; printf "%s|%s|%s\\n" "$status" "$HR_SANDBOX_MISSING" "$HR_SANDBOX_REFUSAL"',
+      [bin],
+    );
+    assert.equal(result.stdout.trim(), '0||');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /** Write `content` as `harness.config.json` in a fresh temp directory (none when `undefined`). */

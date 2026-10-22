@@ -39,7 +39,7 @@ This section is the single source of truth for the per-item fix loop. The orches
 
 1. [x] **Finding 4** — Restore the sixth space in the watcher header's `a resume` REPRO row _(layer: cli)_
 2. [x] **Finding 3** — Narrow `SandboxBinary.binary` to `SandboxBinaryName` and drop the two `as SandboxPiece` casts _(layer: cli)_
-3. [ ] **Finding 2** — Run `hr_sandbox_prereq_probe_var` against a stubbed `uname` and `PATH` in the shell-mirror suite _(layer: cli)_
+3. [x] **Finding 2** — Run `hr_sandbox_prereq_probe_var` against a stubbed `uname` and `PATH` in the shell-mirror suite _(layer: cli)_
 4. [ ] **Finding 1** — Choose the `sandbox-prerequisites` consequence sentence by mode: job, `github-actions` repository, or local _(layer: cli)_
 
 ---
