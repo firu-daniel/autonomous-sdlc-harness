@@ -25,7 +25,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_self_adopt_regeneration_
 
 1. [x] **Task 1** — Carry a self-invoking wrapper's on-disk command line forward in `writeWrapperScripts` when asked to _(layer: cli)_ _(points: 15)_
 2. [x] **Task 2** — Keep a state-dir README whose bytes already match its template, so `--force` takes no `.bak` of it _(layer: cli)_ _(points: 10)_
-3. [ ] **Task 3** — Wire the carry-forward to self-adopt runs in `init`, report it, and name every `.bak` left in a contents-ignored state-dir folder _(layer: cli)_ _(points: 20)_
+3. [x] **Task 3** — Wire the carry-forward to self-adopt runs in `init`, report it, and name every `.bak` left in a contents-ignored state-dir folder _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Let `restart-watcher.sh` take a multi-word `HARNESS_CLI` _(layer: cli)_ _(points: 15)_
 5. [ ] **Task 5** — Qualify the `.gitignore` template's "every other `.bak` is left visible" comment with the contents-ignored exception _(layer: cli)_ _(points: 5)_
 6. [ ] **Task 6** — Re-copy `scripts/restart-watcher.sh` and align this repository's managed `.gitignore` block with the template _(layer: general)_ _(points: 8)_

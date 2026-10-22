@@ -126,7 +126,7 @@ import { insideRepo, ownManifestString, packageRoot } from '../core/paths.js';
 import { ANALYZE_COMMAND, USER_REVIEW_COMMAND } from '../core/pluginIdentity.js';
 import { askLine, askYesNo, canPrompt, REPROMPT_LIMIT, type PromptContext } from '../core/prompt.js';
 import { normalizeRepoDir, normalizeRepoPathStrict } from '../core/repoPaths.js';
-import { WritePlan, type WriteEffect } from '../core/writer.js';
+import { displayPath, WritePlan, type WriteEffect, type WriteResult } from '../core/writer.js';
 import { findNestedApplicationDir } from '../detect/nestedApplication.js';
 import {
   buildPreset,
@@ -184,11 +184,11 @@ import {
   type ProjectSettingsFlags,
   type ProjectSettingsResult,
 } from '../generators/projectSettings.js';
-import { writeRepoRootFiles, MCP_PATH } from '../generators/repoRoot.js';
+import { contentsIgnoredDirectories, writeRepoRootFiles, MCP_PATH } from '../generators/repoRoot.js';
 import {
   configKeyPath,
   configuredCommand,
-  wrapperCommandLine,
+  readWrapperBody,
   wrapperPath,
   writeWrapperScripts,
   WRAPPER_SCRIPTS,
@@ -356,6 +356,11 @@ const CLI_MANIFEST = join('cli', 'package.json');
  * changes and `--reset-config` rebuilds the configuration, so the run this exists for recurs every
  * time a template moves. An edit-build-revert-build cycle per template change is a standing invitation
  * to ship the CLI with its guard removed, and the test that would catch it only runs if it is run.
+ *
+ * **It changes one other behaviour, under `--force` only:** a wrapper whose configured value is its own
+ * invocation keeps the command line its file on disk carries, re-rendered into the current template
+ * ({@link selfAdoptionOf}, `generators/scripts.ts` → `carryOnDiskCommandLines`). It is not offered to
+ * adopters, whose contract is `docs/cli.md` §5's: a forced run re-renders every wrapper from detection.
  */
 const SELF_ADOPT_ENV = 'HARNESS_SELF_ADOPT';
 
@@ -1035,7 +1040,9 @@ function ownPackageName(): string {
 }
 
 /**
- * Refuse a run aimed at the repository this CLI itself lives in.
+ * Refuse a run aimed at the repository this CLI itself lives in, and answer whether this run is the
+ * deliberate self-adoption {@link SELF_ADOPT_ENV} opens: `true` only past both identity tests with
+ * the variable at `1`, `false` for every other root.
  *
  * Wiring the harness's own repository is never what was meant, and it is a plausible accident:
  * `docs/development.md` §5's gate 2 documents running the built CLI from this root, which was a
@@ -1045,14 +1052,14 @@ function ownPackageName(): string {
  * It is a refusal and not a prohibition: {@link SELF_ADOPT_ENV} set to `1` is how a contributor asks
  * for that wiring deliberately, and nothing else reaches it.
  */
-function assertNotHarnessOwnRepository(repoRoot: string): void {
-  if (!existsSync(join(repoRoot, MARKETPLACE_MANIFEST))) return;
-  if (packageNameAt(join(repoRoot, CLI_MANIFEST)) !== ownPackageName()) return;
+function selfAdoptionOf(repoRoot: string): boolean {
+  if (!existsSync(join(repoRoot, MARKETPLACE_MANIFEST))) return false;
+  if (packageNameAt(join(repoRoot, CLI_MANIFEST)) !== ownPackageName()) return false;
   // Checked **after** both identity tests rather than before them, which is what keeps the variable
   // inert everywhere it is not wanted: every root that is not this one has already returned above,
   // so a value left in a shell's environment changes the behaviour of no adopter's run. Only the
   // exact `1` opens it — a variable that is merely *set* is too easy to inherit by accident.
-  if (process.env[SELF_ADOPT_ENV] === '1') return;
+  if (process.env[SELF_ADOPT_ENV] === '1') return true;
 
   throw new HarnessError(
     `refusing to wire the harness's own repository; run \`${INIT_VERB}\` in the repository you want to adopt it. ${repoRoot} carries ${MARKETPLACE_MANIFEST} and a ${CLI_MANIFEST} naming this package, so it is the harness itself rather than an adopting project: wiring it would generate a ${CONFIG_FILENAME}, a run-artifact tree and a permission profile into the tree that ships them. Run ${INIT_VERB} from the adopting repository, or point it at one with --cwd <path>. To wire this repository on purpose — the harness's own self-adoption, a contributor workflow \`docs/development.md\` documents — set ${SELF_ADOPT_ENV}=1`,
@@ -1805,8 +1812,8 @@ const RUNS_NO_COMMAND = 'runs no command; the wrapper reports what to fix';
  * run found it. `--force` upgrades `create-if-absent` to overwrite-after-`.bak` (`core/writer.ts`), so
  * a forced run writes its own body and the file on disk has nothing to say.
  *
- * A read that throws is answered `unrecognised`, the same state an adopter's unreadable edit reports:
- * both mean *this command cannot say what that file runs*, and neither is a licence to guess.
+ * The read is `generators/scripts.ts` → `readWrapperBody`'s, so a read that throws is answered
+ * `unrecognised`: *this command cannot say what that file runs*, which is no licence to guess.
  */
 function keptWrapperBody(options: {
   readonly repoRoot: string;
@@ -1814,13 +1821,8 @@ function keptWrapperBody(options: {
   readonly file: string;
   readonly force: boolean;
 }): WrapperBody | undefined {
-  const path = join(options.repoRoot, options.scriptsDir, options.file);
-  if (options.force || !existsSync(path)) return undefined;
-  try {
-    return wrapperCommandLine(readFileSync(path, 'utf8'));
-  } catch {
-    return { kind: 'unrecognised' };
-  }
+  if (options.force) return undefined;
+  return readWrapperBody(join(options.repoRoot, options.scriptsDir, options.file));
 }
 
 /**
@@ -1830,6 +1832,10 @@ function keptWrapperBody(options: {
  * leads with the kept line, because that is what executes, and names the resolved one after it — an
  * adopter who edited a wrapper to correct its command and re-ran `init` is exactly the reader who
  * needs to see both, and that difference is the state `--force` exists for.
+ *
+ * **A carried body is its own row.** {@link WrittenWrapper.carried} is set only on a forced self-adopt
+ * run, where {@link keptWrapperBody} answers `undefined`, so it never meets the kept-on-disk row; it
+ * names the file's own line as re-rendered, and never says `--force` would replace it.
  */
 function wrappedRowLine(options: {
   readonly keyPath: string;
@@ -1841,6 +1847,11 @@ function wrappedRowLine(options: {
   const head = `${keyPath} -> ${wrapper.invocation} ->`;
   const resolved = wrapper.unresolved ? RUNS_NO_COMMAND : wrapper.command;
 
+  if (wrapper.carried) {
+    const kept = dryRun ? 'would be kept' : 'kept';
+    const rendered = dryRun ? 'would be re-rendered' : 're-rendered';
+    return `${head} ${wrapper.command} — the line ${wrapper.file} already carries, ${kept} by this self-adopt run and ${rendered} into the current template`;
+  }
   if (kept === undefined) {
     const writes = dryRun ? 'a real run would write it' : 'this run writes it';
     return `${head} ${resolved} — the line this run resolved for ${wrapper.file}; ${writes}`;
@@ -2138,6 +2149,33 @@ function layerGapNote(repoRoot: string, config: HarnessConfig): string | undefin
 }
 
 /**
+ * The note naming every `.bak` this run left inside a state-dir directory the managed `.gitignore`
+ * block ignores by its contents, or `undefined` when it left none there — `git status` never lists
+ * such a file, so nothing else would tell the adopter it exists.
+ *
+ * Read off `effect`, which a dry run reports faithfully, and off `generators/repoRoot.ts` →
+ * `contentsIgnoredDirectories`, so the directory set is the one the ignore block is written from.
+ */
+function hiddenBackupsNote(options: {
+  readonly repoRoot: string;
+  readonly stateDir: string;
+  readonly applied: readonly WriteResult[];
+  readonly dryRun: boolean;
+}): string | undefined {
+  const { repoRoot, stateDir, applied, dryRun } = options;
+  const directories = contentsIgnoredDirectories(stateDir).map((entry) => `${entry.directory}/`);
+  const hidden = applied
+    .filter((result) => result.effect === 'backed-up-and-replaced' && result.backupPath !== undefined)
+    .map((result) => displayPath(repoRoot, result.backupPath as string).split('\\').join('/'))
+    .filter((path) => directories.some((directory) => path.startsWith(directory)));
+  if (hidden.length === 0) return undefined;
+
+  const one = hidden.length === 1;
+  // Joined rather than `nameList`ed: its cap would leave a hidden file unnamed.
+  return `${hidden.join(', ')} ${dryRun ? 'would be written' : one ? 'was written' : 'were written'} inside ${one ? 'a directory' : 'directories'} the managed .gitignore block ignores by ${one ? 'its' : 'their'} contents, so git status will not list ${one ? 'it' : 'them'}`;
+}
+
+/**
  * Wire one repository: detect, build the whole write plan bottom-up, apply it once, report what
  * happened, and end by pointing at the analyze command.
  *
@@ -2168,7 +2206,7 @@ async function run(ctx: CommandContext): Promise<number> {
   // by a check against the root that answer resolved.
   const target = resolveTargetRepository(ctx, flags);
   const repoRoot = target.root;
-  assertNotHarnessOwnRepository(repoRoot);
+  const selfAdopt = selfAdoptionOf(repoRoot);
 
   // The one fact the rest of this run is relative to, named before any of it: every path below is
   // under this root, and until this line an adopter standing in a subdirectory had ninety lines of
@@ -2371,7 +2409,15 @@ async function run(ctx: CommandContext): Promise<number> {
   const layerGap = layerGapNote(repoRoot, effective);
   if (layerGap !== undefined) notes.push(layerGap);
 
-  const wrappers = writeWrapperScripts({ repoRoot, config: effective, rawCommands: profile.rawCommands, plan });
+  // Forced only: an unforced run keeps every wrapper on disk untouched (`core/writer.ts` → `resolve`),
+  // so there is nothing to carry and a carried row would claim a re-render that did not happen.
+  const wrappers = writeWrapperScripts({
+    repoRoot,
+    config: effective,
+    rawCommands: profile.rawCommands,
+    plan,
+    carryOnDiskCommandLines: selfAdopt && ctx.flags.force,
+  });
   warnings.push(...wrappers.warnings);
 
   // What this run put in effect, before the file log rather than after it, so the reader has the
@@ -2504,6 +2550,8 @@ async function run(ctx: CommandContext): Promise<number> {
   const pluginRootNote =
     profileWrite === undefined ? undefined : pluginRootEntriesNote(permissions.pluginRootEntries, profileWrite.effect);
   if (pluginRootNote !== undefined) notes.push(pluginRootNote);
+  const hiddenBackups = hiddenBackupsNote({ repoRoot, stateDir: state.stateDir, applied, dryRun: ctx.flags.dryRun });
+  if (hiddenBackups !== undefined) notes.push(hiddenBackups);
 
   // After the plan, deliberately: this is the one git-configuration write, and pointing
   // `core.hooksPath` at a directory whose hook has not landed yet would enable nothing.
