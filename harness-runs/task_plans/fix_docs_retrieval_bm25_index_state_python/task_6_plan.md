@@ -23,3 +23,5 @@
 - The lock paragraph names the PostgreSQL reference it rests on, carries no time figure, and names `--reindex-cost` as the only source of one.
 - Scope register: derivation entries A and C, re-run, reach in this file only lines inside rows 1–3, and the lines this task adds fall in rows 1 and 3.
 - `git diff --stat` lists only `docs-retrieval-service/README.md`.
+
+- **Deviations from plan:** The `REINDEX` reference's *Notes* (fetched 2026-10-22 from `https://www.postgresql.org/docs/18/sql-reindex.html`) name `ACCESS EXCLUSIVE` on the index and the planner's `ACCESS SHARE` on every index, but not the modes a `DELETE`, `INSERT` or `SELECT` takes; those (`ROW EXCLUSIVE`, `ACCESS SHARE`) were verified against the same version's *Explicit Locking* → *Table-Level Locks* (`https://www.postgresql.org/docs/18/explicit-locking.html`), which the paragraph cites beside the `REINDEX` reference. The table-level mode `REINDEX` takes on `chunks` is not named by the `REINDEX` page, so it is stated only as "locks out writes … while reads go on". Added the *Notes*' planner sentence (*"blocks virtually any query"*), since it is what makes a vector-only search wait too.

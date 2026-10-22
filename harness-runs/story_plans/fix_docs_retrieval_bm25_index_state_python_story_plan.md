@@ -53,7 +53,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_docs_retrieval_bm25_inde
 3. [x] **Task 3** — End every Python refresh that wrote, and every index not marked rebuilt, with `rebuild_indexes()` in `refresh.py` _(layer: general)_ _(points: 15)_
 4. [x] **Task 4** — Add the container test of the refresh's end state, shown failing with the fix removed and passing with it _(layer: general)_ _(points: 20)_
 5. [x] **Task 5** — Re-run the refresh-level probe on the Python backend, both corpora, with the shipped rule _(layer: general)_ _(points: 15)_
-6. [ ] **Task 6** — Update the service README: the seam, the rebuild's lock, and the new container test _(layer: general)_ _(points: 10)_
+6. [x] **Task 6** — Update the service README: the seam, the rebuild's lock, and the new container test _(layer: general)_ _(points: 10)_
 7. [ ] **Task 7** — Update `docs/retrieval.md` and the probe paragraph of `docs/retrieval-eval.md` for the Python end state _(layer: general)_ _(points: 10)_
 8. [ ] **Task 8** — Record the Python after-fix figures, the fix-removed evidence and the real-catalog figure — the park point for the maintainer's hand runs _(layer: general)_ _(points: 20)_
 
