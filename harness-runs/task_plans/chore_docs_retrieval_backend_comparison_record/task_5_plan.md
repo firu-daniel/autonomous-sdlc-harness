@@ -61,3 +61,5 @@ Its provenance is stated separately from the task-prompt leads, so the lead's st
 - Every heading listed in the first Work bullet is named by the lead. Check each against `git grep -nE '^### ' -- docs/retrieval-eval-results.md`, between the `## The BM25 index's state, measured` heading and the end of the file.
 - `git grep -nE 'each with .--capture.' -- docs/retrieval-eval-results.md` shows no claim left inside `### The stray index-scan score` → **The runs.** that every run wrote a capture.
 - `git grep -n 'task-prompt lead' -- docs/retrieval-eval-results.md` still prints the recommendation bullet, now carrying the `#573` exception.
+
+- **Deviations from plan:** `### The near-tie ordering on an empty database`'s opening sentence still cited item 3's old label **What stays unexplained.**, which Task 2 (commit `2446a80a`) renamed to **The near-tie pairs, since explained.**; updated the citation to the new label so the cross-reference resolves (source: Task 2's deviation note, relayed by the orchestrator). Not a measured-content change. Wrapped lines around the four `#573` sites were reflowed to the file's width; no other wording changed.

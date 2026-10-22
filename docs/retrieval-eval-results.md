@@ -28358,14 +28358,20 @@ suggests is input to a later decision by the maintainer, not a change made or qu
 ## The BM25 index's state, measured
 
 **Who reads this, and what it decides.** The maintainer deciding the route of the branch that fixes the
-BM25 scores' dependence on the `chunks_bm25` index's state. This section records the index states, the
-score each state ranks by, what still differs after `REINDEX`, the stray index-scan score, the candidate
-end-state rule and whether either mechanism moves relevance, and, under `### Route 2 on the fix branch`,
-the figures the branch implementing route 2 took, with the Python port's after-fix and real-catalog
-figures, taken on `fix_docs_retrieval_bm25_index_state_python`. Every `self-docs` figure carries the
-`{ files, chunks }` stamp of the runs that took it, and no comparison here crosses two stamps. The
-`pg_textsearch` source paths and issue numbers cited here are the leads of the task prompt that opened
-this work; none was re-read on the branch that measured them.
+BM25 scores' dependence on the `chunks_bm25` index's state. This section records, in order, how the probe
+reads a score and its setup, the score each index state ranks by, the near-tie ordering on an empty
+database, what still differs after `REINDEX`, the stray index-scan score, the candidate end-state rule at
+refresh level, and whether either mechanism moves relevance; then, under `### The deciding figures on
+pg_textsearch 1.5.1`, the same goals' deciding figures re-taken on `pg_textsearch` 1.5.1; then, under
+`### Route 2 on the fix branch`, the figures the branch implementing route 2 took, with the Python port's
+after-fix and real-catalog figures, taken on `fix_docs_retrieval_bm25_index_state_python`; and last, the
+recommendation for the fix branch. Every `self-docs` figure carries the `{ files, chunks }` stamp of the
+runs that took it, and no comparison here crosses two stamps. The `pg_textsearch` source paths and issue
+numbers cited here, except `#573`, are the leads of the task prompt that opened this work; none was re-read
+on the branch that measured them. `timescale/pg_textsearch#573` is not one of those leads: it reports
+mechanism 2 upstream, was filed by the maintainer after this diagnosis and is still open on 1.5.1; it is
+cited from the task prompt of `chore_docs_retrieval_backend_comparison_record` and was not read on that
+branch.
 
 ### How the probe reads a score, and the setup
 
@@ -28597,8 +28603,9 @@ none of the other forms. The reference build form is therefore `CREATE INDEX` ov
 
 ### The near-tie ordering on an empty database
 
-`### Divergence sources, in the order checked`, item 3, **What stays unexplained.**, records two near-tie
-pairs that the Python store's freshly built database returned against the operator's own order:
+`### Divergence sources, in the order checked`, item 3, **The near-tie pairs, since explained.**, records
+two near-tie pairs that the Python store's freshly built database returned against the operator's own
+order:
 
 - `q-fc-token-lifetime`: `docs/api-auth.md#rotating-a-key` / `#token-exchange`;
 - `q-fc-unreadable-label`: `docs/depot-operations.md#inbound-scanning` /
@@ -28624,7 +28631,8 @@ and `q-fc-token-lifetime`. Diagnostic (g) finds no inversion against `scan` in a
 against `operator` in any state after `t0`. The `operator` values equal item 3's recorded scores to six
 decimals.
 
-**Explained by mechanism 2, for the probe's states.** Both conditions hold on both engines: at `t0` each
+**Explained by mechanism 2, for the probe's states.** Mechanism 2 is the one reported upstream as
+`timescale/pg_textsearch#573`. Both conditions hold on both engines: at `t0` each
 pair is returned in `scan`'s order and against `operator`'s, and in the spilled state, `t1` on both
 engines and `t2` on PGlite, neither pair inverts. Item 3's empty database was the Python store's own fresh
 build, which this probe did not drive; whether that build leaves the index in the `t0` state is observed
@@ -29011,8 +29019,9 @@ later repetition is compared with the first repetition's, per (query, key) and p
 side only included. `bm25_summarize_index`, and on Postgres `autovacuum_count`, are read before the first
 repetition and after the last. The probe plan was the index scan at every step of every run, so no step
 was re-scored. The commands are in `docs/retrieval-eval.md` → `### The BM25 index-state probe`: the
-states-sequence and history-sequence commands with `--repeat 30` and `--repeat 15`, each with
-`--capture`.
+states-sequence and history-sequence commands with `--repeat 30` and `--repeat 15`. Every run was taken
+with `--capture` except Postgres `self-docs` run 1, which wrote no capture, as the `not captured` cells
+and "Run 1 wrote no capture" below record.
 
 **Per engine, corpus and state.** Memtable documents are `bm25_summarize_index`'s, before the first
 repetition and after the last. "Disagreeing" counts every (repetition, query, key, column) whose value
@@ -30021,8 +30030,8 @@ probe`, its closing paragraph.
 
 The question is whether the two mechanisms move the relevance eval's deterministic figures, so that they
 matter for ranking quality, or move scores only. Mechanism 2 is the index scan's exact length on memtable
-rows against the quantized length elsewhere. Mechanism 1 is the dead rows a refresh leaves in
-`total_docs` and `total_len`.
+rows against the quantized length elsewhere (`timescale/pg_textsearch#573`). Mechanism 1 is the dead
+rows a refresh leaves in `total_docs` and `total_len`.
 
 **The setup.**
 
@@ -30476,7 +30485,8 @@ Against `### The near-tie ordering on an empty database`:
 - Each of the six rows: unchanged, every value equal to the same row there.
 - Diagnostics (f) and (g): unchanged, the same 4 inversions at `t0` and none after it.
 - **Explained by mechanism 2, for the probe's states**: unchanged. On both engines each pair is still
-  returned against `operator`'s order at `t0`, in `scan`'s order, and in no spilled state.
+  returned against `operator`'s order at `t0`, in `scan`'s order, and in no spilled state. That is
+  consistent with `timescale/pg_textsearch#573`, which reports mechanism 2 still present on 1.5.1.
 
 #### The stray index-scan score, on 1.5.1
 
@@ -32093,10 +32103,10 @@ something, and the first `docs index` build, in the state `REINDEX INDEX chunks_
 the candidate rule's `bm25_spill_index` branch.** Goals 5, 1 and 3 decided it, goal 2 qualifies it, and
 goal 6 sets its priority.
 
-**Goal 4's conclusion: explained by mechanism 2.** On both engines the probe's `t0` rows return each
-`fixture-catalog` near-tie pair in `scan`'s order and against `operator`'s, and no spilled state inverts
-either (`### The near-tie ordering on an empty database`, its table's `t0` rows against its `t1`–`t4`
-rows); and the Python store's own fresh build on an empty database is that `t0` state, with 41 memtable
+**Goal 4's conclusion: explained by mechanism 2** (`timescale/pg_textsearch#573`). On both engines the
+probe's `t0` rows return each `fixture-catalog` near-tie pair in `scan`'s order and against
+`operator`'s, and no spilled state inverts either (`### The near-tie ordering on an empty database`, its
+table's `t0` rows against its `t1`–`t4` rows); and the Python store's own fresh build on an empty database is that `t0` state, with 41 memtable
 documents, no segment and both pairs inverted with the same values, neither of which is inverted after the
 spill (`### The candidate end-state rule, at refresh level`, **Observation 2**).
 
@@ -32228,8 +32238,8 @@ effect is measured on a 41-chunk corpus only.
 - **The rebuild's wall-clock cost was not measured by this branch.** Only an operator's hand run through
   the probe's `--reindex-cost` seam may supply it (`docs/retrieval-eval.md` → `### The BM25 index-state
   probe`).
-- **Every `pg_textsearch` source path and issue number cited in this section is a task-prompt lead,** not
-  re-read on this branch.
+- **Every `pg_textsearch` source path and issue number cited in this section but `#573` is a
+  task-prompt lead,** not re-read on this branch; `#573`'s provenance is stated in this section's lead.
 
 **Its standing on pg_textsearch 1.5.1.** Route 2 stands, with one qualification narrowed. Every figure here
 is quoted from `### The deciding figures on pg_textsearch 1.5.1`, whose `self-docs` runs carry `{ files:
