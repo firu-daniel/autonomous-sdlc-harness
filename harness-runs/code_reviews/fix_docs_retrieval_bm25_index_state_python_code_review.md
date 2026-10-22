@@ -27,7 +27,7 @@ The three findings below are documentation gaps. Each one leaves a reader with a
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 3** — Name both `REINDEX` triggers in the Python cost bullet of `docs/retrieval.md` _(layer: general)_
+1. [x] **Finding 3** — Name both `REINDEX` triggers in the Python cost bullet of `docs/retrieval.md` _(layer: general)_
 2. [ ] **Finding 2** — Add `tests/test_store_statements.py` to the service README's byte-parity list _(layer: general)_
 3. [ ] **Finding 1** — Summarise the Python end-state figures, real catalog included, in `docs/retrieval.md` → **Incremental refresh.** _(layer: general)_
 
