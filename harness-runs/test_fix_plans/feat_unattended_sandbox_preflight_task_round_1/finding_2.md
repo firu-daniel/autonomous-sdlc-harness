@@ -31,3 +31,9 @@ The evidence favours (2). The fix is chosen by the message the case reports, bec
 - [ ] **Any other message.** The diagnosis above does not cover it. Fix what the message names, at the site it names, and record the message in this file's deviation note.
 
 None of these branches deletes, skips or loosens an assertion in the case.
+
+## Already passing
+
+- **(a) What was checked:** the named test `a new drop beside a legacy run gets a clone, and the sweep removes only the legacy worktree`, by running its file `cli/test/run-copy-migration.test.mjs` (all three cases) before any edit.
+- **(b) Evidence:** `npm test --workspace cli -- test/run-copy-migration.test.mjs`, from the repository root, Node v20.19.5, on an otherwise idle host: `ok 3 - a new drop beside a legacy run gets a clone, and the sweep removes only the legacy worktree`, `duration_ms: 12671.862375`; file totals `# tests 3`, `# pass 3`, `# fail 0`. The two sibling cases took `3987.907042` and `3510.886709` ms. No failure message was produced, so none of the three Fix branches is selected by a message. The named test's pass is unloaded: its one pass ran at roughly a fifth of `TICK_TIMEOUT_MS` (60 000 ms) and about three times either sibling, which is consistent with diagnosis (2) — a timeout only under the gate's concurrent, 2 342-second suite load — but a single-file run cannot reproduce that load, so this close does not rule (2) out. Phase G's next suite run re-tests it; if it fails again with `runBash timed out after 60000 ms`, the first Fix branch applies as written.
+- **(c)** No code file was edited.
