@@ -35,3 +35,9 @@
 - Every run exited 0 and raised no collision refusal.
 - `git diff --stat` lists only `evals/docs-retrieval/bm25-refresh-rule.mjs`, and `git diff -- evals/docs-retrieval/bm25-refresh-rule.mjs` touches only lines inside the opening `/** … */` header.
 - No time figure is taken or written anywhere.
+
+**Deviations from plan:**
+
+- `summary.md` was not written. The Write tool refused it with `Subagents should return findings as text, not write report files. Include this content in your final response instead.`, and the implementer did not route the write around that refusal. The summary's full content is in the implementer's return, for the orchestrator to place at `harness-runs/scratch/fix-bm25-python/summary.md` or to hand to Task 8 directly. The verification bullet *"… and `summary.md` exist"* is therefore unmet for that one file. The other five artifacts exist: the four captures and `versions.txt`. Both `--compare` results are recorded in the return.
+- Each run's stdout went past the tool output limit. The harness saved each one to a tool-results file, and `cp` copied that file verbatim beside its capture as `shipped-python-<corpus>-<n>.stdout.txt`, not the Write tool, so the copy is byte-exact.
+- `bash scripts/python-service.sh run self-check`, run bare as a precondition probe, printed `ok` for packages (python 3.14.7) and weights, and `FAIL index` only because no service `harness.config.json` exists outside the eval's own mirror. The four runs passed `assertPythonBackendAvailable` and exited 0, and that is the evidence the precondition held.
