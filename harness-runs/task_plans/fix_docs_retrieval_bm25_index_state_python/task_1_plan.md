@@ -41,3 +41,9 @@
 - `git grep -nF "SELECT id FROM {CHUNKS_TABLE} ORDER BY" -- docs-retrieval-service/src` and `git grep -nF "DELETE FROM meta WHERE key = \$1" -- docs-retrieval-service/src` each have no hit.
 - `git grep -n "rebuild_indexes" -- docs-retrieval-service/src/harness_docs_retrieval/refresh.py` has no hit: nothing calls the method until Task 3.
 - Python lint and typecheck are not run by this task: they are gates 13a and 13b at the Run gates phase.
+
+- **Deviations from plan:**
+  - The verification grep `git grep -nF "SELECT id FROM {CHUNKS_TABLE} ORDER BY" -- docs-retrieval-service/src` has one hit, `store.py` → `statements` → `"vector_search"` (`SELECT id FROM {CHUNKS_TABLE} ORDER BY embedding <=> $1::vector LIMIT $2`), which this task leaves unchanged on purpose. The plan's prefix matches both arms; the lexical arm's old form (`... ORDER BY {BM25_ORDER_CLAUSE} LIMIT $2`) is gone. `git grep -nF "ORDER BY {BM25_ORDER_CLAUSE}" -- docs-retrieval-service/src` hits only `LEXICAL_SEARCH_STATEMENT`.
+  - `LEXICAL_SEARCH_STATEMENT` is written as two concatenated f-string pieces to keep within the line limit; its value is the plan's string, and `test_constants_match_typescript` asserts it against the bridge.
+  - The general layer's conventions document states no single-file command for a Python test file. The test file this task edited was run with `bash scripts/python-service.sh test tests/test_store_statements.py`, the command the plan's `**Verification:**` bullet and the wrapper's own header both name, after `npm run build`: 14 passed.
+  - Python lint and mypy were not run (gates 13a and 13b); `fakes.py` → `_check_protocol` is how mypy proves the fake still satisfies the protocol now that `rebuild_indexes` is part of it, and the Run gates phase is where that check runs.

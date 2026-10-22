@@ -3,9 +3,10 @@ bound parameter, and the SQL is `store.ts`'s own, so the two arms that decide ev
 are the same text against a different engine.
 
 The constants are compared against the running TypeScript through the bridge. The vector arm's
-`ORDER BY embedding <=> $1::vector LIMIT $2` is not exported by `store.ts`, so no bridge can reach
-it; it is guarded by reading `cli/src/retrieval/store.ts`'s source instead, a last resort taken for
-that one string. Nothing here needs a database: the refusals below fail before connecting,
+`ORDER BY embedding <=> $1::vector LIMIT $2` and the width-change delete
+`DELETE FROM meta WHERE key = ANY($1::text[])` are not exported by `store.ts`, so no bridge can
+reach them; each is guarded by reading `cli/src/retrieval/store.ts`'s source instead, a last resort
+taken for those two strings. Nothing here needs a database: the refusals below fail before connecting,
 against a port nothing listens on, or against a fake connection.
 """
 
@@ -24,7 +25,12 @@ from harness_docs_retrieval.store import (
     CHUNKS_TABLE,
     DATABASE_URL_ENV,
     EMBEDDER_META_KEY,
+    END_STATE_STATEMENTS,
     EXTENSION_UPDATE_STATEMENTS,
+    INDEX_STATE_META_KEY,
+    INDEX_STATE_PENDING,
+    INDEX_STATE_REBUILT,
+    LEXICAL_SEARCH_STATEMENT,
     STALE_EXTENSIONS_QUERY,
     chunk_embedding_column,
     open_postgres_store,
@@ -33,6 +39,7 @@ from harness_docs_retrieval.store import (
 from ts_bridge import CHECKOUT_ROOT, run_bridge
 
 VECTOR_ORDER = "ORDER BY embedding <=> $1::vector LIMIT $2"
+WIDTH_CHANGE_DELETE = "DELETE FROM meta WHERE key = ANY($1::text[])"
 
 
 def test_constants_match_typescript() -> None:
@@ -46,10 +53,33 @@ def test_constants_match_typescript() -> None:
     assert chunk_embedding_column(384) == ts_store["embeddingColumn384"]
     assert STALE_EXTENSIONS_QUERY == ts_store["STALE_EXTENSIONS_QUERY"]
     assert dict(EXTENSION_UPDATE_STATEMENTS) == ts_store["EXTENSION_UPDATE_STATEMENTS"]
+    assert LEXICAL_SEARCH_STATEMENT == ts_store["LEXICAL_SEARCH_STATEMENT"]
+    assert INDEX_STATE_META_KEY == ts_store["INDEX_STATE_META_KEY"]
+    assert INDEX_STATE_PENDING == ts_store["INDEX_STATE_PENDING"]
+    assert INDEX_STATE_REBUILT == ts_store["INDEX_STATE_REBUILT"]
+    assert list(END_STATE_STATEMENTS) == ts_store["END_STATE_STATEMENTS"]
 
 
 def test_the_lexical_arm_orders_by_the_bm25_clause() -> None:
     assert "ORDER BY " + BM25_ORDER_CLAUSE in statements(384)["lexical_search"]
+
+
+def test_the_lexical_and_end_state_statements_are_issued_from_their_constants() -> None:
+    issued = statements(384)
+    assert issued["lexical_search"] == LEXICAL_SEARCH_STATEMENT
+    end_state = [(key, value) for key, value in issued.items() if key.startswith("end_state_")]
+    assert end_state == [
+        (f"end_state_{index}", statement) for index, statement in enumerate(END_STATE_STATEMENTS)
+    ]
+    for statement in END_STATE_STATEMENTS:
+        assert "%s" not in statement, statement
+        assert "%(" not in statement, statement
+
+
+def test_the_width_change_delete_is_store_ts_own() -> None:
+    assert statements(384)["delete_meta"] == WIDTH_CHANGE_DELETE
+    source = (CHECKOUT_ROOT / "cli" / "src" / "retrieval" / "store.ts").read_text(encoding="utf-8")
+    assert WIDTH_CHANGE_DELETE in source
 
 
 def test_the_vector_arm_orders_as_store_ts_does() -> None:
