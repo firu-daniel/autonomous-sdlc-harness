@@ -27,8 +27,9 @@
  *    row is {@link OuterLoopScript.agentInvocable}.
  * 3. **The invocation string comes from `scriptInvocation`, in `generators/scripts.ts`.** That is
  *    the single producer of `bash <scriptsDir>/<file>`, and the permission profile derives its
- *    three allow forms from that exact string. Formatting the same shape here would be a second
- *    producer, and the two would disagree the first time either is corrected.
+ *    two allow forms from that exact string, and the run watcher's per-run copy twins the absolute
+ *    one. Formatting the same shape here would be a second producer, and the two would disagree
+ *    the first time either is corrected.
  *
  * ## Scope this release
  *
@@ -235,9 +236,10 @@ export interface OuterLoopScriptsResult {
 /**
  * A row's path relative to `scriptsDir`, which is also its path under `cli/templates/scripts/`.
  *
- * Exported because the permission profile needs the same answer: its repo-root-absolute and
- * sibling-worktree forms are that path joined to a root, and a row in a subdirectory is the case
- * where re-deriving it from `file` alone would name a file that is not there.
+ * Exported because the permission profile needs the same answer: its repo-root-absolute form is
+ * that path joined to the root, and the run watcher's per-run twin is the same path under the run
+ * copy, and a row in a subdirectory is the case where re-deriving it from `file` alone would name a
+ * file that is not there.
  */
 export function outerLoopRelativePath(script: OuterLoopScript): string {
   return script.subdir === undefined ? script.file : `${script.subdir}/${script.file}`;

@@ -4605,7 +4605,7 @@ function profileUntrackRemedy(ctx: CheckContext): string {
  * printed there. The remedy is {@link profileUntrackRemedy}, so the job generates its own.
  *
  * The question asked is "does any rule cover this root", not "is every path correct": a profile
- * generated here mentions the root in its edit, write and read rules, so its complete absence is the
+ * generated here mentions the root in its edit, read and script rules, so its complete absence is the
  * signal.
  *
  * "Cover" is deliberately not "contain" ({@link namesRoot}). A generated profile names two locations —
@@ -4627,7 +4627,7 @@ const PROFILE_PATHS_CHECK: Check = {
     const covered = locationStrings(ctx.profile).some((entry) => namesRoot(entry, ctx.repoRoot as string));
     if (!covered && ctx.remoteJob) {
       return fail(
-        `neither a path nor a pattern in ${PROFILE_PATH} covers this repository root (${ctx.repoRoot}): the profile was generated on another machine and committed, and this job's create-if-absent \`${CLI} init\` kept it, so a run loading it would find its edit, write, read and script rules matching nothing here. Stop tracking it so the job generates its own: ${profileUntrackRemedy(ctx)}`,
+        `neither a path nor a pattern in ${PROFILE_PATH} covers this repository root (${ctx.repoRoot}): the profile was generated on another machine and committed, and this job's create-if-absent \`${CLI} init\` kept it, so a run loading it would find its edit, read and script rules matching nothing here. Stop tracking it so the job generates its own: ${profileUntrackRemedy(ctx)}`,
       );
     }
     return covered
@@ -4635,7 +4635,7 @@ const PROFILE_PATHS_CHECK: Check = {
           `the profile's rules cover this repository root (${ctx.repoRoot}) — by naming it, or by a pattern such as the sibling-worktree glob that matches it — so they apply to this checkout`,
         )
       : warn(
-          `neither a path nor a pattern in ${PROFILE_PATH} covers this repository root (${ctx.repoRoot}): the profile was generated for another location, so a run loading it would find its edit, write, read and script rules matching nothing here — re-run \`${CLI} init --force\` from the checkout the profile should be generated for, which writes a .bak sibling before regenerating it`,
+          `neither a path nor a pattern in ${PROFILE_PATH} covers this repository root (${ctx.repoRoot}): the profile was generated for another location, so a run loading it would find its edit, read and script rules matching nothing here — re-run \`${CLI} init --force\` from the checkout the profile should be generated for, which writes a .bak sibling before regenerating it`,
         );
   },
 };
