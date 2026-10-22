@@ -174,7 +174,7 @@ export interface WriteRequest {
    * hook renders no longer matches the set the rebuilt file resolves — the same reasoning in the
    * other direction: a label the reader cannot get back out is a guard somebody wrote by hand, so
    * that request sets nothing and the hook is kept, rather than spending the one reprieve on the
-   * only copy of it. Both classes stay `create-if-absent` above.
+   * only copy of it. Every one of them stays `create-if-absent` above.
    *
    * The alternative — a fifth {@link WritePolicy} value — was not taken because a policy is a
    * re-run contract shared by a class of artifacts, and this is a short, enumerated exception to
