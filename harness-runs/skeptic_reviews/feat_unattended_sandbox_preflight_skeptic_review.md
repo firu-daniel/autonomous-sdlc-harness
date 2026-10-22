@@ -37,7 +37,7 @@ No branch-level architecture review and no parity review exist for this branch. 
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Override the sandbox probe in the stall-watchdog suite's own `tick` script _(layer: cli)_
+1. [x] **Finding 1** — Override the sandbox probe in the stall-watchdog suite's own `tick` script _(layer: cli)_
 
 ---
 

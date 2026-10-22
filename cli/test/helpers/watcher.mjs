@@ -31,6 +31,9 @@
  *    {@link DEFAULT_SANDBOX_PROBE}, which reports nothing missing, so a pass launches on any host — a
  *    Linux host without `bubblewrap` or `socat` included. The override is test-only: the watcher
  *    carries no environment switch for it, because such a switch would be a bypass of the preflight.
+ *    A suite that runs its own `tick` script instead of this `tick`
+ *    (`cli/test/watcher-stall-reset-payloads.test.mjs` → `localStall`) defines the same override from
+ *    {@link DEFAULT_SANDBOX_PROBE}.
  */
 
 import assert from 'node:assert/strict';

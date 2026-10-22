@@ -98,7 +98,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 
 import { CLI_ENTRY, INIT_SCRIPTS_DIR, runBash, runGit } from './helpers/fixture.mjs';
-import { createWatcherFixture } from './helpers/watcher.mjs';
+import { createWatcherFixture, DEFAULT_SANDBOX_PROBE } from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
 const REGISTRY_PATH = `${STATE_DIR}/autonomous_logs/registry.json`;
@@ -261,6 +261,7 @@ async function createStallFixture(t, { job = false, legacy = false } = {}) {
       await writeFile(join(w.dir, STATE_DIR, 'autonomous_inbox', `${w.branch}_task_prompt.md`), 'do the thing\n', 'utf8');
       const script = [
         '. "$1" status >/dev/null',
+        `hr_sandbox_prereq_probe_var() {\n${DEFAULT_SANDBOX_PROBE}\n}`,
         'tick',
         'until [ -e "$2" ]; do sleep 0.1; done',
         'touch -t 202001010000 "$3" "$4"',
