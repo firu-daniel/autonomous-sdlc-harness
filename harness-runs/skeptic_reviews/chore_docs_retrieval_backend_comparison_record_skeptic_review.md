@@ -29,7 +29,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Stop attributing the fresh reading's arm D and E differences to the vector arm and reranker alone _(layer: general)_
+1. [x] **Finding 1** — Stop attributing the fresh reading's arm D and E differences to the vector arm and reranker alone _(layer: general)_
 
 ---
 

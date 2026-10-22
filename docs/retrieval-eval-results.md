@@ -27861,9 +27861,13 @@ the query vectors and the Python side's HNSW graph were not measured. `self-docs
 4. **Anything else the per-query lists show.**
    - **Arms D and E** fuse arm B's lexical ranking, so in the 2026-10-08 blocks their Python sides carry
      arm B's index-state mechanisms, source (3), as well as (1) and (2). Those blocks cannot separate the
-     two, so for them the split stays unexplained. On the fresh reading arm B contributes no difference
-     to the fusion, so arms D and E differ there only where the vector arm or the reranker does
-     (`### A fresh fixture-catalog reading, both backends as shipped`).
+     two, so for them the split stays unexplained. On the fresh reading arm B's top five ordered refs
+     agree on every query, but each backend fuses every arm's top `ARM_CANDIDATES` hits, 50
+     (`cli/src/retrieval/search.ts` and `docs-retrieval-service/src/harness_docs_retrieval/search.py`),
+     and arm B's ranks past five were not compared. On `q-fc-route-choice` arm D differs at rank 5 while
+     arms B and C return the same five refs on both sides, so arms D and E's differences there are not
+     attributed to either arm and stay unexplained (`### A fresh fixture-catalog reading, both backends
+     as shipped`).
    - **Arm C** changes order on 6 `fixture-catalog` queries, none of which moves a positive's rank, and
      on 16 `self-docs` queries, one of which moves a positive's rank (`q-sd-new-subcommand`, 5 → 1).
      Source (1) together with (2) is the measured candidate for those changes, but only for document
