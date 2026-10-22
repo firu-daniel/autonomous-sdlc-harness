@@ -1,0 +1,15 @@
+## The plan writer reported corpus staleness: `docs-retrieval-service/` is an undescribed layer
+- **category:** tooling-gap
+- **evidence:** the `task-plan-writer` return's `## Corpus staleness` section carried one `undescribed-layer` entry: directory `docs-retrieval-service/`, which holds the Python docs-retrieval package (`src/harness_docs_retrieval/`, its pytest suite and the compose stack). Only the `general` catch-all covers it; `.claude/context/conventions.md` → `## The layers` lists the catch-all's contents without it, and `## The testing bar` states only `node --test`, so no conventions document gives a single-file Python test command. Every implementer this run took the command from the plan and the wrapper header instead (recorded in `harness-runs/task_plans/fix_docs_retrieval_bm25_index_state_python/task_1_plan.md`'s deviation note).
+- **cost this run:** the supervised remedy is owed — a `/autonomous-sdlc-harness:harness-analyze` run in this repository answered `skip` for every already-filled document (not `--yes`), then `npx autonomous-sdlc-harness config set layers`; `doctor`'s `layer-drift` check reports the same directory.
+
+## A layer-implementer's Write of a scratch summary file was refused as a report file
+- **category:** tooling-gap
+- **evidence:** Task 5's `layer-implementer` tried to write `harness-runs/scratch/fix-bm25-python/summary.md`, the file its plan's Verification bullet names; the Write tool refused it with `Subagents should return findings as text, not write report files. Include this content in your final response instead.` (recorded in `harness-runs/task_plans/fix_docs_retrieval_bm25_index_state_python/task_5_plan.md`'s `**Deviations from plan:**` note). The file was never written; Task 8, whose plan reads it, was told in its re-dispatch to take the figures from the raw captures instead (`harness-runs/dispatch_additions/fix_docs_retrieval_bm25_index_state_python.md`).
+- **cost this run:** one plan Verification bullet left unmet; one cross-task hand-off rerouted through the orchestrator and a maintainer question (Q3).
+- **hypothesis:** a guess — the refusal keys on the file being a summary written by a sub-agent, whatever its path.
+
+## Python lint failures flagged in Task 2's return were fixed only in Phase C2
+- **category:** flow-efficiency
+- **evidence:** Task 2's `layer-implementer` return (dispatch #3 of implementation) reported `E501` at `docs-retrieval-service/tests/test_store_statements.py` line 9 and a `ruff format` diff in `docs-retrieval-service/src/harness_docs_retrieval/store.py`, both from Task 1's commit `33f59858`; Task 4's return repeated it. The Phase B `branch-reviewer` did not raise it; the Phase C2 `skeptic-reviewer` raised it as Must Fix Finding 1 (`harness-runs/skeptic_reviews/fix_docs_retrieval_bm25_index_state_python_skeptic_review.md`), fixed in `d04be36b`. The story plan's units were kept off the lint command (Task 1's Verification).
+- **cost this run:** the defect stood across 6 task commits and Phase B before being fixed; one skeptic fix-loop unit (an implementer and a committer dispatch).
