@@ -214,7 +214,7 @@ HARNESS_SELF_ADOPT=1 node cli/dist/cli.js init --force --no-analyze --dry-run --
 Then run it and list what it changed:
 
 ```
-HARNESS_SELF_ADOPT=1 node cli/dist/cli.js init --force --no-analyze
+HARNESS_SELF_ADOPT=1 node cli/dist/cli.js init --force --no-analyze --non-interactive
 git status --short
 ```
 
