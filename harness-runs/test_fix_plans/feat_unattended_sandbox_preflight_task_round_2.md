@@ -17,7 +17,7 @@ The gate wrapper keeps only each failing test's `not ok` line and the tail of th
 
 Each entry resolves to a self-contained `feat_unattended_sandbox_preflight_task_round_2/finding_<K>.md` through its `**Finding K**` reference. Entries are sorted with the lowest blast radius first.
 
-1. [ ] **Finding 1** — Make the lost-`usage_resume_at` job case independent of host load: a reset lead the gate cannot miss, a longer PAUSE wait, and a fallback bound taken from the job's start. _(layer: cli)_
+1. [x] **Finding 1** — Make the lost-`usage_resume_at` job case independent of host load: a reset lead the gate cannot miss, a longer PAUSE wait, and a fallback bound taken from the job's start. _(layer: cli)_
 2. [ ] **Finding 2** — Give the fresh-drop legacy-migration case's two-launch watcher pass a larger `tick` bound. _(layer: cli)_
 
 ---

@@ -84,7 +84,10 @@ function jobUsageRepeat() {
 
 const JOB_USAGE_REPEAT = jobUsageRepeat();
 
-/** The repeated case's reset lead and PAUSE wait — the header argues why they differ from one run's. */
+/**
+ * The repeated case's reset lead and PAUSE wait — the header argues why they differ from one run's.
+ * The lost-`usage_resume_at` case takes them too, for the same reason.
+ */
 const REPEAT_RESET_AHEAD_SECS = 15;
 const REPEAT_PAUSE_WAIT_TENTHS = 600;
 
@@ -840,9 +843,13 @@ test('usage: a short reset is waited out in the job, a reset past the deadline g
     const loseResumeAt =
       `. ${shellQuote(lib)}; ` +
       `hr_registry_set "$STATE/autonomous_logs/registry.json" feat_x usage_resume_at ""`;
+    // This case asserts the repair, not the in-job wait's timing, so it takes the repeated case's
+    // lead and wait: a 2-second lead lets a loaded gate downgrade the event and never pause (the
+    // header's `HARNESS_JOB_USAGE_REPEAT` paragraph).
     await j.setStub(
-      `${rateLimitRejected(2)}; for i in $(seq 1 100); do if [ -f "$STATE/PAUSE" ]; then ${loseResumeAt}; : > "$STATE/PAUSE_ACK"; exit 0; fi; sleep 0.1; done`,
+      `${rateLimitRejected(REPEAT_RESET_AHEAD_SECS)}; for i in $(seq 1 ${REPEAT_PAUSE_WAIT_TENTHS}); do if [ -f "$STATE/PAUSE" ]; then ${loseResumeAt}; : > "$STATE/PAUSE_ACK"; exit 0; fi; sleep 0.1; done`,
     );
+    const before = nowSecs();
     const result = await j.job([j.branch, 'task', 'none'], {
       USAGE_CHECK_INTERVAL_SECS: '1',
       USAGE_RESUME_MARGIN_SECS: '0',
@@ -851,8 +858,9 @@ test('usage: a short reset is waited out in the job, a reset past the deadline g
     assert.equal(lastLine(result.stdout), 'job: paused wait-poller');
     assert.equal(j.status().pause_reason, 'usage');
     assert.match(j.status().usage_resume_at, /^\d+$/);
+    const resumeAt = Number(j.status().usage_resume_at);
     assert.ok(
-      Number(j.status().usage_resume_at) >= nowSecs() + 3600 - 30,
+      resumeAt >= before + 3600 && resumeAt <= nowSecs() + 3600,
       `usage_resume_at ${j.status().usage_resume_at} is not the one-hour fallback`,
     );
     const paused = j.notifications().filter((n) => n.event === 'paused');
