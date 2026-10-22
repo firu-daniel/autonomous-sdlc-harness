@@ -697,6 +697,9 @@ export const SANDBOX_DOMAIN_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?
  * A blank reason answers `false`: an opt-out nobody explained is not one taken, and the structural
  * check reports it as an error. The `typeof` is load-bearing: `config/io.ts` → `loadConfig` can hand
  * a caller a config the check found errors in, and a non-string `reason` must not throw here.
+ *
+ * Its shell mirror is `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_sandbox_opted_out`, held
+ * equal by `cli/test/sandbox-prerequisites-shell-mirror.test.mjs`.
  */
 export function sandboxOptedOut(config: HarnessConfig): boolean {
   const reason: unknown = config.sandbox?.optOut?.reason;

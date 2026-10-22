@@ -59,3 +59,10 @@ AppArmor is **not** mirrored here. No shell decision reads it, because an AppArm
 - `bash scripts/typecheck.sh` reports no error in `cli/src/config/model.ts`. The edit there is a comment only.
 - `grep -n "set -[euo]" cli/templates/scripts/lib/harness-run-lib.sh` shows nothing new, so the library still sets no shell option.
 - `git diff --name-only` for this task names no file under the repository-root `scripts/`.
+
+**Deviations from plan:**
+
+- The plan's `<ws>` list reached the implementer with several of its Unicode characters lost in rendering. Implemented as ECMAScript `String.prototype.trim`'s full set (WhiteSpace plus LineTerminator), written as jq escapes: `\t \n \u000b \f \r`, space, `     -          　 ﻿`.
+- The opt-out matrix carries the plan's cases plus ` `, ` `, ` `, `\u000b` (inside the set) and `​`, `\u0085` (outside it, so `trim()` keeps them and the opt-out counts as taken). These check both edges of the character class.
+- The library header's `PATH` sentence said `PATH` is read by `hr_path_with_fallbacks` alone. It now also names `hr_sandbox_prereq_probe_var`'s `command -v`, so the header's claim stays true.
+- The verification went beyond the suite with a throwaway probe (`harness-runs/scratch/task3_probe.mjs`, run through `bash scripts/scratch-run.sh`). Under bash 3.2.57 it showed a `"null"` reason opted out (0), a `　` reason not opted out (1), and the judge's two refusal sentences. The probe file could not be removed: `rm` was refused by the tool layer. It sits under the uncommitted scratch directory.
