@@ -1,0 +1,6 @@
+# Dispatch additions — feat_unattended_sandbox_preflight
+
+## [G · test-fix-plan · iter 0] → test-fix-plan-writer  (#1)
+- **added:** `outside the sanctioned form` — the answered clarification pair, appended after the G.2 prompt as the clarification-resume channel (`task_plan_writing_instructions_autonomous.md` → `## Override 2 — resumability` (a)) feeds an answer back to the agent that parked; the core's G.2 block names no such append, so it is recorded here
+- **verbatim:** a lead line naming both files — "Answered clarification (park raised after round 3's `fixable: 0`), appended per the clarification-resume channel — question file harness-runs/clarifications/feat_unattended_sandbox_preflight/question_1.md, answer file harness-runs/clarifications/feat_unattended_sandbox_preflight/answer_1.md. Both files are reproduced verbatim below." — followed by the full text of `question_1.md` and `answer_1.md`, each between `--- <file> ---` / `--- end <file> ---` delimiters, with nothing added or reworded
+- **why the agent could not derive it:** the question and answer files are machine-local and absent from every file the writer's G.2 read set names (the test logs and the tree); the user's ruling exists only in `harness-runs/clarifications/feat_unattended_sandbox_preflight/answer_1.md`
