@@ -154,25 +154,32 @@ There is no navigation surface in this project; its analogue is the set of table
 
 ## Commit-message policy
 
-**Prefix vocabulary.** One token, `chore`, and it is reserved for the fixed-form subjects the flow emits for its own run artifacts. No other prefix token is in use in this repository.
+**Subject form:** `<prefix>: <Description>`, at most 72 characters.
 
-**Per commit class, which prefix a commit of that class takes:**
+**Prefix vocabulary — closed:** `feat`, `fix`, `refactor`, `docs`, `chore`, `research`. Any other token is not a legal `commit_prefix`.
+
+**Per commit class:**
 
 | Commit class | Prefix |
 |---|---|
-| **Adding new work** — a story task's commit | **`none`** — no prefix and no `: ` separator; the subject is the description alone. |
-| **Fixing existing work** — the class the review-fix loops commit in | **`none`**, on the same terms. |
-| A run artifact the flow emits on its own behalf | The fixed form below, each of which carries `chore:`. |
+| New work — a story task's commit (row `A`, or the supervised item loop) | The token derived from the branch name (row `A`'s rule). It yields only `feat`, `fix`, `refactor` or `chore`, so a task on a `docs_` or `research_` branch commits as `chore`. |
+| A fix to existing work — the review-fix rows' commits | `fix` |
+| A user-review fix item (row `UR-A`) | The token its severity mapping names. |
+| Restructuring existing work with no behaviour change | `refactor` |
+| A change confined to documentation prose, other than a research record | `docs` |
+| A research or measurement record under `docs/` | `research` |
+| A configuration or housekeeping commit outside the flow | `chore` |
+| A run artifact the flow emits on its own behalf | Its fixed form below. |
 
-A merge commit `refresh-branch.sh` writes is outside this table and every rule below but the trailer ban: its message is `Merge branch '<base>' into <branch>` or `Merge remote-tracking branch 'origin/<base>' into <branch>`, fixed by the script as `git merge` would spell it.
+`none` never arises: every class above carries a token.
 
-**Capitalisation.** The first word after the prefix is **capitalized**. Where the prefix is `none`, the rule applies to the description's first word instead.
+**Capitalisation.** The first word after the prefix is capitalized (`fix: Add foo`, not `fix: add foo`). It binds the committer's `record disposition of ` / `mark … done — ` subject templates too (`fix: Record disposition of Task 3 — <cause>`), whose reader matches that leading word case-insensitively; a body line stays lower-case.
 
-**Subject-length cap: 72 characters.** No source in this tree states a cap; this document sets it, and every subject in the repository's history clears it.
+**Attribution trailers are forbidden** — no `Co-Authored-By:`, no `Claude-Session:`, no trailer naming an agent, a model or a session.
 
-**Attribution trailers are forbidden.** No trailer naming an agent, a model or a session — no `Co-Authored-By:`, no `Claude-Session:`. This repository keeps a single commit identity, its history carries no such trailer, and the autonomous flows say so at every commit point they own (`plugin/instructions/task_plan_writing_instructions_autonomous.md`, `plugin/instructions/user_review_fixes_instructions_autonomous.md`: *"no `Co-Authored-By:` / trailer"*). A dispatched agent's commit point has it enforced by the commit wrapper, which builds the message from the positional arguments after `--` only; the run watcher's and `remote-run.sh`'s artifact commits by `hr_commit_placed`, whose message is the single fixed subject its caller passes — `hr_task_prompt_subject` or `hr_user_review_subject` in `cli/templates/scripts/lib/harness-run-lib.sh`, or the watcher's own docs-checklist literal — and nothing else; `refresh-branch.sh`'s merge commit by its own fixed message, the one `git merge` would have used.
+**Merge commits.** A merge commit `refresh-branch.sh` writes is bound by the trailer ban only: its message is `Merge branch '<base>' into <branch>` or `Merge remote-tracking branch 'origin/<base>' into <branch>`, as `git merge` spells it.
 
-**Fixed-form subjects — exempt from the capitalisation rule and from the length cap, and passed byte-for-byte by the commit point that owns each.** Re-casing or truncating one breaks that commit point.
+**Fixed-form subjects — passed byte-for-byte by the commit point that owns each, exempt from the capitalisation rule and the length cap.** `<branch>`, `<entry-id>` and `K` are substituted verbatim; re-casing or truncating one breaks that commit point.
 
 - `chore: Add branch statistics for <branch>`
 - `chore: Add flow-progress ledger for <branch>`
@@ -186,14 +193,14 @@ A merge commit `refresh-branch.sh` writes is outside this table and every rule b
 - `chore: Flow progress <entry-id> for <branch>`
 - `chore: Log dispatch additions for <branch>`
 - `chore: Log improvement observations for <branch>`
-- `chore: Mark UI test K passing for <branch>` — spelled with `N` in `plugin/instructions/plan_orchestration_instructions_core.md` and with `K` in `plugin/agents/committer.md`; both stand for the test number, substituted verbatim
+- `chore: Mark UI test K passing for <branch>` — `plugin/instructions/plan_orchestration_instructions_core.md` spells the test number `N`; both are the same subject
 - `chore: Record clarification digest for <branch>`
 - `chore: Record lessons for <branch>`
 - `chore: Update branch statistics for <branch>`
 
-**Provenance of that list, and the subjects it omits.** It is derived by the probe `docs`/`feat`/`fix`/`refactor`/`chore`/`test` over `${CLAUDE_PLUGIN_ROOT}` and `scripts`, not copied from anywhere, and is re-derived rather than carried over on any later pass. The probe reaches **branch-scoped** subjects only — it requires a `<branch>` / `$branch` / `${branch}` / `<entry-id>` / `K passing` token — so a fixed subject carrying none of them falls outside it, and widening the probe is part of the cost of adding one. Every subject the probe reaches and this list omits falls in one of two classes. **Forbidden:** `chore: add qa review for <branch>`, in `plugin/instructions/plan_orchestration_instructions_core.md`, whose own sentence tells the flow **not** to emit it (*"do **not** ask the committer to emit"*). **Worked examples, not commit points:** `chore: Add branch statistics for ${branch}`, quoted in a comment in `plugin/hooks/autonomous-script-allowlist-guard.sh`, and `chore: Flow progress A1.5f for <branch>`, the `e.g.` in `plugin/instructions/autonomous_pause_and_ledger.md` that substitutes a real `<entry-id>`; each subject they illustrate is on the list on its own emitting home's account.
+**Re-derive that list, never carry it over:** probe `${CLAUDE_PLUGIN_ROOT}` and `scripts` for `docs`/`feat`/`fix`/`refactor`/`chore`/`test`/`research` subjects carrying a `<branch>` / `$branch` / `${branch}` / `<entry-id>` / `K passing` token. A new fixed subject without one of those tokens is outside the probe; widen it. Leave out `chore: add qa review for <branch>` (its flow forbids emitting it) and the worked examples `chore: Add branch statistics for ${branch}` (a comment in `plugin/hooks/autonomous-script-allowlist-guard.sh`) and `chore: Flow progress A1.5f for <branch>` (an `e.g.` in `plugin/instructions/autonomous_pause_and_ledger.md`).
 
-**Changing any fixed subject is a multi-file edit.** `review_plan_file` and `ui_test_pass` are the committer's own modes and the dispatching flow files quote both; the flow's other commit points own theirs the same way.
+**Changing any fixed subject is a multi-file edit.** Edit the commit point that owns it and every flow file that quotes it.
 
 ## Reference implementation
 
