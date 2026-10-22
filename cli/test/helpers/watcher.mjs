@@ -24,9 +24,10 @@
  *    process's first pass and acts on worktrees and branches, none of which these suites assert.
  * 4. **`tick` is bounded at {@link TICK_TIMEOUT_MS}**, through `runBash`'s process-group bound
  *    (`fixture.mjs`, choice 6), and by the test's own `t.signal`. A pass plus its `wait` for a stub
- *    that sleeps under a second is far below it; it sits below the suite's `--test-timeout`
- *    (`cli/package.json` → `scripts.test`) so a hung pass fails naming its command, and its session
- *    and `sleep`s are killed with it.
+ *    that sleeps under a second is far below it. A case whose single pass launches more than one
+ *    session may pass a larger bound through `tick`'s `timeoutMs`. Any bound stays below the suite's
+ *    `--test-timeout` (`cli/package.json` → `scripts.test`, 1 800 000 ms) so a hung pass fails naming
+ *    its command, and its session and `sleep`s are killed with it.
  * 5. **`tick` overrides the sourced sandbox probe** (`hr_sandbox_prereq_probe_var`) with
  *    {@link DEFAULT_SANDBOX_PROBE}, which reports nothing missing, so a pass launches on any host — a
  *    Linux host without `bubblewrap` or `socat` included. The override is test-only: the watcher
@@ -194,14 +195,18 @@ export async function createWatcherFixture(t, { branch = 'feat_x' } = {}) {
       await writeFile(join(dir, REGISTRY_PATH), `${JSON.stringify({ runs: { [branch]: record } }, null, 2)}\n`, 'utf8');
     },
     record: () => JSON.parse(readFileSync(join(dir, REGISTRY_PATH), 'utf8')).runs[branch],
-    /** One pass; `sandboxProbe` is a shell function body replacing {@link DEFAULT_SANDBOX_PROBE}. */
-    async tick(env = {}, { sandboxProbe = DEFAULT_SANDBOX_PROBE } = {}) {
+    /**
+     * One pass; `sandboxProbe` is a shell function body replacing {@link DEFAULT_SANDBOX_PROBE};
+     * `timeoutMs` replaces {@link TICK_TIMEOUT_MS} for a pass that launches more than one session
+     * (choice 4).
+     */
+    async tick(env = {}, { sandboxProbe = DEFAULT_SANDBOX_PROBE, timeoutMs = TICK_TIMEOUT_MS } = {}) {
       const script = `. "$1" status >/dev/null\nhr_sandbox_prereq_probe_var() {\n${sandboxProbe}\n}\ntick; wait`;
       const result = await runBash(
         dir,
         ['-c', script, '_', watcherPath],
         watcherEnv(env),
-        { timeoutMs: TICK_TIMEOUT_MS, signal: t.signal },
+        { timeoutMs, signal: t.signal },
       );
       assert.equal(result.status, 0, `the watcher pass exited ${result.status}\n${result.stdout}\n${result.stderr}`);
       return result;

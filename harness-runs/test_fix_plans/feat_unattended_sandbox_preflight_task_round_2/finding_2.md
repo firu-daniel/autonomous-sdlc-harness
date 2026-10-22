@@ -26,3 +26,5 @@ What remains is the bound. This case's single pass does the most work of any cas
 **On a single-file run of this case.** Under `## The test-run rule` point 1 this unit may run the named file. The isolated pass is already on record from round 1 and showed nothing about the load the case fails under. A second isolated pass adds no evidence, so it does not make the fix unnecessary.
 
 **If the gates still report this case after this fix**, the bound is not the cause. The next round's plan then needs the case's assertion message, which the gate wrapper does not keep.
+
+- **Deviations from plan:** None in the fix itself. Evidence note: the claim that the 180 000 ms bound clears the failure under suite load was not executed here — the isolated `npm test --workspace cli -- test/run-copy-migration.test.mjs` run passed all three cases (`# pass 3`, `# fail 0`; this case `ok 3`, `duration_ms: 12890.687875`) but cannot reproduce the gate's concurrent load. That claim rests on the Run gates phase's `commands.test` run.

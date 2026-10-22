@@ -185,7 +185,8 @@ test('a new drop beside a legacy run gets a clone, and the sweep removes only th
   await f.stubCommitAndPush('test: commit from the legacy run beside a new one');
   await writeFile(join(f.dir, STATE_DIR, 'autonomous_inbox', `${NEW}_task_prompt.md`), 'do it\n', 'utf8');
 
-  await f.tick();
+  // This pass resumes one run (commit and push) and launches a second, so it takes the larger bound.
+  await f.tick({}, { timeoutMs: 180_000 });
 
   // New beside old, in one pass.
   assertLegacyProfile(f, f.settingsArg(f.wt));
