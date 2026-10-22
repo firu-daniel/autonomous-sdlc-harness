@@ -32,9 +32,15 @@
  * "Set up Linux and WSL2" and its "Ubuntu 24.04 and later" accordion, checked 2026-10-12.
  */
 
+/** One missing prerequisite, as an id the shell mirror reports in the same order. */
+export type SandboxPiece = 'bwrap' | 'socat' | 'wsl1' | 'unsupported-platform';
+
+/** The pieces that are binaries on `PATH`. */
+export type SandboxBinaryName = Extract<SandboxPiece, 'bwrap' | 'socat'>;
+
 /** One binary the sandbox needs on `PATH`, the package that installs it, and what it is for. */
 export interface SandboxBinary {
-  readonly binary: string;
+  readonly binary: SandboxBinaryName;
   readonly package: string;
   readonly purpose: string;
 }
@@ -77,9 +83,6 @@ export const WSL1_AGENT_MESSAGE = 'Sandboxing requires WSL2';
 
 /** The host classes the sandbox distinguishes. */
 export type SandboxHostKind = 'macos' | 'linux' | 'wsl2' | 'wsl1' | 'unsupported';
-
-/** One missing prerequisite, as an id the shell mirror reports in the same order. */
-export type SandboxPiece = 'bwrap' | 'socat' | 'wsl1' | 'unsupported-platform';
 
 /** Whether AppArmor lets `bwrap` create user namespaces; `uncertain` never makes a piece missing. */
 export type AppArmorAnswer = 'not-applicable' | 'clear' | 'allowed' | 'uncertain';
@@ -149,13 +152,13 @@ export function assessSandboxHost(facts: SandboxHostFacts): SandboxPrerequisites
   if (host === 'wsl1') return { host, missing: ['wsl1'], appArmor: 'not-applicable' };
   if (host === 'macos') return { host, missing: [], appArmor: 'not-applicable' };
   const missing = SANDBOX_HOST_BINARIES.filter((entry) => !facts.resolvedBinaries.has(entry.binary)).map(
-    (entry) => entry.binary as SandboxPiece,
+    (entry) => entry.binary,
   );
   return { host, missing, appArmor: judgeAppArmor(facts.appArmorRestrict, facts.bwrapProfile) };
 }
 
 function missingBinaries(missing: readonly SandboxPiece[]): readonly SandboxBinary[] {
-  return SANDBOX_HOST_BINARIES.filter((entry) => missing.includes(entry.binary as SandboxPiece));
+  return SANDBOX_HOST_BINARIES.filter((entry) => missing.includes(entry.binary));
 }
 
 /** One install command per {@link SANDBOX_INSTALLERS} family for the missing binaries; `[]` if none. */
