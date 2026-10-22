@@ -27644,8 +27644,10 @@ those situations has been measured — is `docs/retrieval.md` → `## When to tu
 **Who reads this, and what it decides.** A maintainer deciding whether the Python backend
 (`docs-retrieval-service/`) retrieves what the TypeScript one (`cli/src/retrieval/`) retrieves over the
 same corpora and query sets, and whether the two may share an embedder id. The subsections up to
-`### Abstention, query by query` cover relevance. Cost, latency beyond the arm tables, cold start,
-footprint and the agent session follow them.
+`### A fresh fixture-catalog reading, both backends as shipped` cover relevance. That subsection is a
+later, deterministic reading on both backends as shipped; the rest of the section is the 2026-10-08
+reading on `pg_textsearch` 1.3.1. Cost, latency beyond the arm tables, cold start, footprint and the agent
+session follow them.
 
 ### What was compared, and through what
 
@@ -27683,7 +27685,8 @@ footprint and the agent session follow them.
 Every figure is copied from `renderBackendComparison` over the four blocks. The `fixture-catalog` floor is
 `evals/docs-retrieval/floor.json`, recorded 2026-09-21. It is graded `>=`, as gate 11 grades it, and
 shown as `met` or `short` per backend. `self-docs` has no floor. The p50 and p95 latencies are measured at
-different boundaries on the two sides, as `### What was compared, and through what` states.
+different boundaries on the two sides, as `### What was compared, and through what` states. They were
+taken on `pg_textsearch` 1.3.1 on 2026-10-08, before the BM25 fixes, and are left as recorded.
 
 **`fixture-catalog`**
 
@@ -27867,12 +27870,16 @@ E, for which the models, sources (1) and (2), are the measured candidate. `self-
    - **`q-sd-daemon-lifecycle`** drops out of arm E's top five on the Python side, rank 4 → 0. This is
      unexplained for the same reason as the arm D and E split.
 
-**Finding — a defect, recorded and not acted on.** The Python backend's lexical scores depend on what its
-database held before, so the same corpus can rank differently after a re-index. A fresh database removes
-the effect on this corpus. It is named here as work for its own branch, and this branch fixes nothing.
-That branch would decide whether a refresh should rebuild the BM25 index or the eval should index into an
-empty database, and would measure whether the TypeScript backend's persistent index, which is refreshed
-the same way, carries the same dependence. That was not measured here.
+**Finding — a defect, since diagnosed and fixed.** On 2026-10-08 the Python backend's lexical scores
+were found to depend on the database's earlier contents, so the same corpus could rank differently after
+a re-index, and a fresh database removed the effect on this corpus. The dependence was since diagnosed as
+two mechanisms (item 3; `## The BM25 index's state, measured`), mechanism 2 being
+`timescale/pg_textsearch#573`. The question it left open, whether the TypeScript backend's persistent
+index, refreshed the same way, carries the same dependence, was since measured: it does, in the `before`
+readings of `### The candidate end-state rule, at refresh level`'s TypeScript tables. Both backends now
+end every refresh that wrote anything, and the first build, in `REINDEX INDEX chunks_bm25`, on
+`fix_docs_retrieval_bm25_index_state_typescript` and `fix_docs_retrieval_bm25_index_state_python`
+(`### The recommendation for the fix branch` → **What shipped.**).
 
 ### Vector agreement, and the embedder id
 
@@ -28068,7 +28075,8 @@ sitting on 2026-10-08, on the host that `harness-runs/scratch/backend-comparison
 footprint, the cold starts and the TypeScript cold build (`ranAt` 05:35:19.813Z). So the TypeScript side
 is a re-run from the same sitting, not a figure cited from another day. The protocol asks for an idle
 machine. `host.txt`'s `uptime` line reads `load averages: 1.69 1.88 1.84` at the start of the sitting,
-so the host was not idle.
+so the host was not idle. Every wall-clock figure here was taken on `pg_textsearch` 1.3.1, before the BM25
+fixes, and is left as recorded.
 
 **The library call, arm E** (`fused-rerank`, the mode the server runs), copied from the recorded blocks'
 arm E rows:
@@ -28108,7 +28116,8 @@ not restated here.
 **Two senses of *cold*, stated the way `evals/docs-retrieval/cold-build.mjs`'s header states them.**
 *Process cold* is the server process and its model load over an index that already exists. *Index cold*
 is a build into an empty index. Every figure below has a **warm model cache**: no figure includes a
-weight download.
+weight download. Every figure below was taken on `pg_textsearch` 1.3.1 on 2026-10-08, before the BM25
+fixes, and is left as recorded.
 
 **Process and model load, warm index**, from `mcp-*.txt`. `connectMs` is the MCP `connect`. `firstCallMs`
 runs from the same start until the first `search_docs` call returns, so it contains `connectMs` and the
@@ -28327,10 +28336,13 @@ from it: the server never reconnects, and the next session's fresh server recove
 
 The relevance case `### Which case this is` names is *"They disagree, and the reason is not yet
 identified."* The Python backend does not buy relevance. Arm E is identical on `fixture-catalog` and one
-recall@5 step lower on `self-docs` (0.533 against 0.600), and the lexical arm carries the
-database-history defect recorded above. On warm latency it is somewhat faster at arm E and over MCP: a
+recall@5 step lower on `self-docs` (0.533 against 0.600), and the lexical arm's divergence on 2026-10-08
+came from the index-state defect, since fixed on both backends (**Finding — a defect, since diagnosed and
+fixed.**). On warm latency it is somewhat faster at arm E and over MCP: a
 `self-docs` p50 of 499.4 against 551.0 ms at the library and 499.4 against 567.8 ms at the client. That
-is one repetition on a loaded host, so the gap is not shown to exceed run-to-run variation. Its resident
+is one repetition on a loaded host, so the gap is not shown to exceed run-to-run variation. These latency
+figures, like the cold-start ones below, were taken on `pg_textsearch` 1.3.1 on 2026-10-08, before the
+BM25 fixes, and are left as recorded. Its resident
 memory is about half: 1066256 KB for the subtree plus 37.96MiB of Postgres, against 2044608 KB.
 
 What it costs: process cold start rises from 1169.9 to 6864.1 ms. A Postgres container must be kept
