@@ -195,6 +195,9 @@ The last row is the shared perturbation partner for the seven refusals above it:
 | only `completed` records | **0** | `daemon stop`, then `daemon install`, in that order |
 | a live `running` record, `--force` | **0** | both, plus the "restarting despite the in-flight run" line |
 | `HARNESS_CLI` names something not on `PATH` | **1** | none |
+| `HARNESS_CLI` with leading arguments, `hcli --via` | **0** | `--via daemon stop`, then `--via daemon install`: the first word is run and the rest lead its arguments |
+| `HARNESS_CLI` with leading arguments whose first word is not on `PATH`, `definitely-not-installed --via` | **1** | none. The refusal names `definitely-not-installed` alone |
+| `HARNESS_CLI` blank, `' '` | **1** | none. One line, `HARNESS_CLI is blank — nothing was restarted` |
 | no registry file at all | **0** | both — absent is "nothing in flight"; the process probe still guards it |
 | registry present, not readable | **2** | none — it cannot prove nothing is running |
 | the recorder made to exit 3 on `stop` | **1** | both. The stop failure is surfaced, the **install is still attempted once** (a stop that failed because nothing was loaded leaves an install to do), and the status stays non-zero. That is deliberate and stated in the script; it is not a retry |
@@ -204,6 +207,8 @@ The last row is the shared perturbation partner for the seven refusals above it:
 | the same stub naming this fixture's **sibling worktree** `<work_root>/<projectName>-<branch>` | **2** | none — an engine re-launched by hand there has no registry record, so the probe is the only thing that can see it |
 
 Rows one and three are each other's perturbation: identical registry state, one flag apart, opposite outcome.
+
+The two leading-argument rows are each other's perturbation: identical registry state (only `completed` records), one word of `HARNESS_CLI` different, opposite outcome. All three `HARNESS_CLI` rows were driven with the header's `REPRO` helper as it now reads, `HARNESS_CLI="${HARNESS_CLI:-hcli}"`, so the value set in front of `run` reaches the script; a helper that pins `HARNESS_CLI=hcli` records `daemon stop`, `daemon install` and exit 0 for each of them.
 
 The last three are each other's perturbation in the same way: one machine, one live process, one string different in its command line, and the exit flips. That is what attributes those rows to the **scoping** rather than to the registry, which is idle in all three. The third is a row rather than a footnote because it is the one that fails if the accept predicate is narrowed back to the main checkout alone — the narrowing would read a hand-relaunched engine as someone else's process and restart on top of it. Their shared perturbation is the pre-fix file, which refuses in all three.
 

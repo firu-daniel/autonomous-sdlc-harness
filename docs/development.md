@@ -204,6 +204,55 @@ Then four invocations, in this order and with these expectations: `node cli/dist
 
 A one-off source edit is the other way to get a single run through, and it was rejected for a reason worth recording: `init` is not one-shot. `--force` regenerates a generated file when `cli/templates/` changes, and `--reset-config` rebuilds the configuration, so the run this exists for recurs every time a template moves. An edit-build-revert-build cycle per template change is a standing invitation to ship the CLI with its guard removed — and while the refusal *is* covered (`cli/test/init.test.mjs`, the harness's-own-repository subtest), a test only catches a forgotten revert if it is run before the commit.
 
+**Regenerating this repository's adoption after a `cli/templates/` change is one forced self-adopt run, read as a dry run first.** From this checkout's root, build, then read what the run would do before it writes anything:
+
+```
+npm run build
+HARNESS_SELF_ADOPT=1 node cli/dist/cli.js init --force --no-analyze --dry-run --non-interactive
+```
+
+Then run it and list what it changed:
+
+```
+HARNESS_SELF_ADOPT=1 node cli/dist/cli.js init --force --no-analyze
+git status --short
+```
+
+**The two wrappers keep their hand-set lines.** `commands.typecheck` and `commands.test` are the wrappers' own invocations here (`bash scripts/typecheck.sh`, `bash scripts/test.sh`), so a forced self-adopt run carries the line each wrapper already runs, `npm run build` and `bash scripts/run-gates.sh`, into the re-rendered template rather than replacing it from detection. The run's `== commands` section prints one carried row per wrapper, for example `commands.test -> bash scripts/test.sh -> bash scripts/run-gates.sh — the line test.sh already carries, kept by this self-adopt run and re-rendered into the current template`. Only a self-adopt run carries the line. An adopter's `--force` still re-renders both wrappers from detection (`docs/cli.md` §5).
+
+**What it still overwrites, and what to restore.** Measured on this branch at `e5da5416`: the dry run above printed these `would replace` lines for the files to restore:
+
+```
++ would replace  .claude/CLAUDE.md (backed up to CLAUDE.md.bak)
++ would replace  .claude/context/conventions.md (backed up to conventions.md.bak)
++ would replace  .claude/context/cli.md (backed up to cli.md.bak)
++ would replace  .claude/context/plugin.md (backed up to plugin.md.bak)
++ would replace  githooks/pre-push (backed up to pre-push.bak)
+```
+
+- `githooks/pre-push`: the generic render folds `publish` into the one `main|dev|publish)` refusal and drops this repository's dedicated `publish)` branch, whose message (`refusing to push to 'publish' - it is staged by the publish workflow alone; run publish-main.sh --dry-run to see what would be staged`) is the one that names the route.
+- `.claude/CLAUDE.md` and `.claude/context/conventions.md`, `cli.md`, `plugin.md`: `--force` puts each back to a skeleton after one `.bak` (`docs/cli.md` §3), and these hold the analysis.
+
+```
+git restore --source=HEAD -- githooks/pre-push .claude/CLAUDE.md .claude/context/conventions.md .claude/context/cli.md .claude/context/plugin.md
+```
+
+The same run, taken with `--non-interactive` in a throwaway clone of that commit, showed which of the other `would replace` lines change a committed file. Review these and keep them, because each is a template that moved, which is the change the run exists to bring in:
+
+- `.claude/harness-task-offer.md`, `.claude/push-notify.env.example`, and each `harness-runs/**/README.md` the dry run marks `would replace`. At `e5da5416` the template behind each one had changed since the copy was last regenerated, so its diff is the template's newer text. A state-dir README already matching its template is `= would keep` and takes no `.bak`.
+- `scripts/create-worktree.sh`: mode only, committed `100644`, written `100755`. Every other file under `scripts/`, the two wrappers included, comes back byte-identical.
+- `.gitattributes` is marked `would replace` but writes the same bytes, so only its `.bak` appears. `.gitignore` is `= would keep`, because the managed block merges nothing.
+
+**The `.bak` files are removed by hand once the review is done.** Those beside committed files, `scripts/` included, show as `??` in `git status --short`. Those inside a contents-ignored state-dir directory never appear there, so the run's `== notes` section names them. At `e5da5416` the note read: `harness-runs/autonomous_inbox/README.md.bak, harness-runs/autonomous_logs/README.md.bak, harness-runs/clarifications/README.md.bak, harness-runs/scratch/README.md.bak were written inside directories the managed .gitignore block ignores by their contents, so git status will not list them`.
+
+**Restart the run daemon last, because it holds the copy of the watcher's scripts it started with.** `<root>` is this checkout's root, taken from `git rev-parse --show-toplevel`:
+
+```
+HARNESS_CLI="node <root>/cli/dist/cli.js" bash scripts/restart-watcher.sh
+```
+
+It refuses while a run is in flight (`docs/outer-loop-verification.md` §1.5). `HARNESS_CLI` is split on whitespace with no quoting, so a `<root>` containing a space needs a one-line shim on `PATH` instead.
+
 **This repository cannot host its own remote runs.** Two reasons, either sufficient: a job's `init --plugin-root-entries` step meets the refusal above, because the job sets no `HARNESS_SELF_ADOPT`; and `main` — GitHub's default branch here, and the branch the poller and `remote-run.sh warm` run from — carries no adoption, because `scripts/publish-main.sh` removes it (`removed_paths`). Gate 12 runs against a scratch repository for this reason.
 
 **A fifth invocation, optional per run where the four above are mandatory: the linked binary.** `cli/package.json` declares `"bin": {"autonomous-sdlc-harness": "./dist/cli.js"}`, and every gate below runs `node cli/dist/cli.js …` instead, so nothing in this repository exercises that declaration — the form an adopter installs is otherwise first executed on publication day. Run it when the `bin` declaration, `cli/dist/cli.js`'s shebang or the package layout changed, and skip it otherwise:
