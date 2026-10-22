@@ -27825,9 +27825,9 @@ E, for which the models, sources (1) and (2), are the measured candidate. `self-
      - **Mechanism 1, dead rows that stay in the index's statistics.** The rows a refresh deletes stay
        counted in `total_docs` and `total_len`. This bullet first recorded that as an inference that was
        not measured; it has since been measured. In every `other-corpus` scenario, whose last refresh
-       deleted the other corpus's rows, the shipped end state differs from a fresh build followed by
-       `REINDEX` on every hit in both columns, on both backends and both corpora
-       (`### The candidate end-state rule, at refresh level`, the `other-corpus` rows).
+       deleted the other corpus's rows, the before-fix end state, each scenario's `before` reading,
+       differs from a fresh build followed by `REINDEX` on every hit in both columns, on both backends
+       and both corpora (`### The candidate end-state rule, at refresh level`, the `other-corpus` rows).
      - **Mechanism 2, exact lengths in the memtable against quantized ones in segments.** The index scan
        scores a memtable row with its exact length and a segment row with a quantized one, so a freshly
        inserted index ranks its rows by other scores than the same rows in a segment

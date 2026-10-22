@@ -44,7 +44,7 @@ Two findings remain. Both are wording corrections in `docs/retrieval-eval-result
 
 Each entry resolves to `harness-runs/code_reviews/chore_docs_retrieval_backend_comparison_record_code_review/finding_<K>.md` through its `**Finding K**` reference.
 
-1. [ ] **Finding 2** — Call mechanism 1's `before` readings "the before-fix end state", not "the shipped end state" _(layer: general)_
+1. [x] **Finding 2** — Call mechanism 1's `before` readings "the before-fix end state", not "the shipped end state" _(layer: general)_
 2. [ ] **Finding 1** — Name the fresh reading's arm C to E differences as unexplained beside their measured candidate _(layer: general)_
 
 ---
