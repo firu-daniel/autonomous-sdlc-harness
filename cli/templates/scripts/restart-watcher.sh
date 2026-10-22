@@ -97,6 +97,12 @@
 #   restart-watcher.sh --force    restart even then, killing the run
 #   restart-watcher.sh --help     print this header
 #
+# HARNESS_CLI names the CLI, `autonomous-sdlc-harness` when unset. It is split
+# on whitespace: the first word must be on PATH and the remaining words are
+# leading arguments, so `HARNESS_CLI="node <path>/cli/dist/cli.js"` runs
+# `node <path>/cli/dist/cli.js daemon stop`. There is no quoting, so a path
+# containing a space needs a one-line shim on PATH instead.
+#
 # Exit map a caller can switch on:
 #
 #   0  both delegated commands succeeded. On launchd that pair IS the bounce and
@@ -105,8 +111,8 @@
 #      the restart is complete only once you have run them
 #   1  nothing was restarted for a reason that is not about runs: a usage
 #      error, a missing shared library, no repository here, no configuration at
-#      the main checkout, the CLI not on PATH, or a delegated command that
-#      exited non-zero
+#      the main checkout, a blank HARNESS_CLI, the CLI's first word not on
+#      PATH, or a delegated command that exited non-zero
 #   2  REFUSED: a run is in flight, or it could not be proven that none is, and
 #      `--force` was not given. Nothing was stopped and nothing was installed
 #
@@ -120,7 +126,7 @@
 #   printf '#!/usr/bin/env bash\necho "$*" >> "%s/calls"\n' "$w" > "$w/bin/hcli"
 #   chmod +x "$w/bin/hcli"
 #   reg="$d/sdlc-harness/autonomous_logs/registry.json"
-#   run() { PATH="$w/bin:$PATH" HARNESS_CLI=hcli bash "$d/scripts/restart-watcher.sh" "$@"; echo "exit $?"; }
+#   run() { PATH="$w/bin:$PATH" HARNESS_CLI="${HARNESS_CLI:-hcli}" bash "$d/scripts/restart-watcher.sh" "$@"; echo "exit $?"; }
 #
 #   in flight     printf '%s' '{"runs":{"feat_x":{"status":"running"}}}' > "$reg"
 #                 run            -> the in-flight report, exit 2, and no
@@ -141,6 +147,13 @@
 #                                -> "cannot prove no run is in flight", exit 2
 #   no CLI        HARNESS_CLI=definitely-not-installed run
 #                                -> one line naming it, exit 1, no registry read
+#   multi-word    printf '%s' '{"runs":{"feat_x":{"status":"completed"}}}' > "$reg"
+#                 rm -f "$w/calls"
+#                 HARNESS_CLI='hcli --via' run
+#                                -> "$w/calls" holds `--via daemon stop` then
+#                                   `--via daemon install`, exit 0
+#   blank         HARNESS_CLI=' ' run
+#                                -> one line naming HARNESS_CLI, exit 1
 #   stop failed   printf '#!/usr/bin/env bash\necho "$*" >> "%s/calls"\ncase "$*" in *stop*) exit 3;; esac\n' "$w" > "$w/bin/hcli"
 #                 rm -f "$w/calls"; run
 #                                -> `daemon stop` reported as exit 3, the
@@ -230,10 +243,20 @@ fi
 # --- The CLI that owns the lifecycle. Checked before anything is read, so a
 # host without it stops here having done nothing — the analogue of asking
 # whether the unit is installed before deciding whether it may be torn down.
+# `read -a` splits without glob expansion or quote parsing. The blank refusal
+# precedes every "${cli_argv[@]}": bash 3.2 under `set -u` treats that
+# expansion of an empty array as unbound.
 cli="${HARNESS_CLI:-autonomous-sdlc-harness}"
-if ! command -v "$cli" >/dev/null 2>&1; then
-  echo "restart-watcher.sh: '$cli' is not on PATH — nothing was restarted" >&2
-  echo "  install the harness CLI, or set HARNESS_CLI to the command that runs it" >&2
+cli_argv=()
+read -r -a cli_argv <<< "$cli"
+if [ -z "${cli_argv[0]:-}" ]; then
+  echo "restart-watcher.sh: HARNESS_CLI is blank — nothing was restarted" >&2
+  exit 1
+fi
+if ! command -v "${cli_argv[0]}" >/dev/null 2>&1; then
+  echo "restart-watcher.sh: '${cli_argv[0]}' is not on PATH — nothing was restarted" >&2
+  echo "  install the harness CLI, or set HARNESS_CLI to the command that runs it," >&2
+  echo "  or set HARNESS_CLI to a command and its leading arguments, e.g. \`node <path>/cli/dist/cli.js\`" >&2
   exit 1
 fi
 
@@ -388,7 +411,7 @@ echo "restart-watcher.sh: $cli daemon stop, then $cli daemon install, in '$main_
 
 status=0
 
-(cd "$main_repo" && "$cli" daemon stop)
+(cd "$main_repo" && "${cli_argv[@]}" daemon stop)
 stop_status=$?
 if [ "$stop_status" -ne 0 ]; then
   echo "restart-watcher.sh: '$cli daemon stop' exited $stop_status" >&2
@@ -402,7 +425,7 @@ if [ "$stop_status" -ne 0 ]; then
   status=1
 fi
 
-(cd "$main_repo" && "$cli" daemon install)
+(cd "$main_repo" && "${cli_argv[@]}" daemon install)
 install_status=$?
 if [ "$install_status" -ne 0 ]; then
   echo "restart-watcher.sh: '$cli daemon install' exited $install_status" >&2
