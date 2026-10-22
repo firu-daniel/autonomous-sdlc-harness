@@ -27884,6 +27884,136 @@ score is 0.2926, over its own candidates, and that pair is first among them. So 
 pair at least 0.0748 lower. The chunk's
 stored text is the same on both sides. For a negative query, Python's abstention is the correct outcome.
 
+### A fresh fixture-catalog reading, both backends as shipped
+
+**Who reads this, and what it decides.** A maintainer reading whether, with both backends now ending in the
+`REINDEX` state on `pg_textsearch` 1.5.1, arm B returns the same ordered refs on both sides of
+`fixture-catalog`.
+
+**The setup.**
+
+- **When, and at what commit.** 2026-10-22, at commit `002e7c77f9f01217d652dbaaa9b1427165f35b83`, after
+  `npm run build`, with `git status --porcelain` printing nothing. The blocks' `generatedAt` reads
+  2026-10-22T13:22:40.232Z for TypeScript and 2026-10-22T13:23:27.094Z for Python.
+- **The engines, exactly as read.**
+  - **TypeScript, PGlite.** `version()`: `PostgreSQL 18.6 (PGlite 0.5.10) on wasm32-unknown-emscripten,
+    compiled by emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 6.0.5
+    (1db513782be24469589d7cb8a1f1834e9a33f271), 32-bit`. `pg_textsearch.library_version`: `1.5.1`.
+    `extversion`: `pg_textsearch` 1.5.1, `plpgsql` 1.0, `vector` 0.8.7.
+  - **Python, the compose server.** `version()`: `PostgreSQL 18.6 (Debian 18.6-1.pgdg12+2) on
+    aarch64-unknown-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit`.
+    `pg_textsearch.library_version`: `1.5.1`. `extversion`: `pg_textsearch` 1.5.1, `plpgsql` 1.0,
+    `vector` 0.8.7.
+- **The compose database.** It was not emptied: the question is about the shipped end state whatever the
+  database held. Before the Python run, `chunks` held 1454 rows and `meta`'s `index_state` read
+  `rebuilt`. After it, `index_state` read `rebuilt` and `chunks` held 41 rows.
+- **The Python package.** `harness-docs-retrieval` 0.1.0 (`docs-retrieval-service/pyproject.toml`).
+  `self-check` printed `ok` for packages (python 3.14.7) and for weights. Its `FAIL index` line is the
+  expected one for a checkout with no service config, and the Python run's own
+  `assertPythonBackendAvailable` accepted the backend.
+- **What both blocks record.** Host `darwin 24.6.0`, Node `v22.23.2`. TypeScript: embedder
+  `Xenova/bge-small-en-v1.5:q8:cls:384:v1`, reranker `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1`.
+  Python: embedder `py-st/BAAI/bge-small-en-v1.5:fp32:cls:384:v1`, reranker
+  `py-st/cross-encoder/ms-marco-MiniLM-L-6-v2:fp32:sigmoid:v1`. Threshold `0.32`, `k` 5, `--repeat 1`, and
+  the stamp `{ files: 9, chunks: 41 }` on both. `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` was unset, as both
+  blocks record, and `HARNESS_DOCS_RETRIEVAL_DATABASE_URL` was unset, so the Python run used the compose
+  database.
+- **Where the blocks went.** Both were written into a gitignored scratch file holding only the two
+  generated-region markers, and the comparison read that file alone. Neither block is recorded in this
+  document: its generated region and `evals/docs-retrieval/floor.json` are untouched by this reading.
+- **The end state each backend's refresh leaves** is the one `### The recommendation for the fix branch` →
+  **What shipped.** states, for each backend.
+
+**The commands**, each one plain foreground call from the repository root. The compose server's engines
+and state were read in the form below, with `-c "SHOW pg_textsearch.library_version"`,
+`-c "SELECT extname, extversion FROM pg_extension ORDER BY extname"`, `-c "SELECT count(*) FROM chunks"` and
+`-c "SELECT value FROM meta WHERE key = 'index_state'"` in place of the last argument:
+
+```
+docker exec harness-docs-retrieval-postgres-1 psql -U harness -d docs_retrieval -At -c "SELECT version()"
+```
+
+PGlite's were read through `evals/docs-retrieval/bm25-history.mjs` → `openPgliteEngine()`, with these
+statements in order. The two `CREATE EXTENSION` statements come first because a fresh PGlite lists only
+`plpgsql` in `pg_extension` before them:
+
+```
+CREATE EXTENSION IF NOT EXISTS vector
+CREATE EXTENSION IF NOT EXISTS pg_textsearch
+SELECT version()
+SHOW pg_textsearch.library_version
+SELECT extname, extversion FROM pg_extension ORDER BY extname
+```
+
+The two runs, through the launcher `## How to run it` in `docs/retrieval-eval.md` gives, into a file
+created holding only `<!-- eval:generated:start -->` and `<!-- eval:generated:end -->`:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --backend typescript --repeat 1 --out harness-runs/scratch/backend-parity/results.md
+bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --backend python --repeat 1 --out harness-runs/scratch/backend-parity/results.md
+```
+
+The comparison, through `harness-runs/scratch/backend-parity/compare-scratch.mjs`. It is the launcher
+`docs/retrieval-eval.md` → `### Writing the comparison up` gives, reading that file instead of this one,
+with its imports one directory deeper:
+
+```
+import { readFileSync } from 'node:fs';
+import { parseArgs } from '../../../evals/docs-retrieval/args.mjs';
+import { compareBackends, renderBackendComparison } from '../../../evals/docs-retrieval/backend-comparison.mjs';
+const { checkout } = parseArgs([]);
+const resultsText = readFileSync(`${checkout}/harness-runs/scratch/backend-parity/results.md`, 'utf8');
+console.log(renderBackendComparison(compareBackends({ resultsText, corpusId: process.argv[2] })));
+```
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/backend-parity/compare-scratch.mjs fixture-catalog
+```
+
+**The figures**, copied from `renderBackendComparison` over the two blocks. The floor is
+`evals/docs-retrieval/floor.json` at the commit above, graded `>=`. Its arm B and arm D MRR entries were
+recorded on 2026-10-21, so those two floor cells differ from the ones in `### Relevance, side by side`.
+
+| Arm | Backend | recall@1 | recall@3 | recall@5 | MRR | Floor recall@5 | Floor MRR |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| B `lexical` | TypeScript | 0.333 | 0.889 | 1.000 | 0.602 | >= 0.95: met | >= 0.55: met |
+| B `lexical` | Python | 0.333 | 0.889 | 1.000 | 0.602 | >= 0.95: met | >= 0.55: met |
+| C `vector` | TypeScript | 0.778 | 1.000 | 1.000 | 0.889 | >= 0.95: met | >= 0.83: met |
+| C `vector` | Python | 0.778 | 1.000 | 1.000 | 0.889 | >= 0.95: met | >= 0.83: met |
+| D `fused` | TypeScript | 0.444 | 1.000 | 1.000 | 0.704 | >= 0.95: met | >= 0.65: met |
+| D `fused` | Python | 0.444 | 1.000 | 1.000 | 0.704 | >= 0.95: met | >= 0.65: met |
+| E `fused-rerank` | TypeScript | 0.444 | 0.667 | 0.667 | 0.556 | >= 0.61: met | >= 0.5: met |
+| E `fused-rerank` | Python | 0.444 | 0.667 | 0.667 | 0.556 | >= 0.61: met | >= 0.5: met |
+
+**Per-query agreement**, as `### Relevance, side by side` → **Per-query agreement.** defines *same order*
+and the rank changes:
+
+| Arm | `fixture-catalog` same order | `fixture-catalog` rank changes |
+| --- | --- | --- |
+| B | 12 of 12 | none |
+| C | 6 of 12 | none |
+| D | 7 of 12 | none |
+| E | 11 of 12 | none |
+
+**Abstention.** The sets match. Both sides abstain on `q-fc-billable-weight`,
+`q-fc-surcharge-compounding`, `q-fc-verify-callback`, `q-fc-negative-recruitment`,
+`q-fc-negative-lattice` and `q-fc-negative-datastore`, and no entry's abstention disagrees with `0.32`.
+
+**Arm E's rerank scores.** The largest `|typescript − python|` of `bestRerankScore` is 0.0307, on
+`q-fc-webhook-retry` (0.5472 / 0.5779). The median over the 12 queries is 0.0002.
+
+The comparison's p50 and p95 latency columns were taken in a session and are left out.
+
+**The answer: arm B agrees on every query.** All 12 queries return the same five ordered refs on both
+sides, negatives included, and every arm B figure is equal. The remaining differences are in arms C to E
+only: ordered-ref changes on 6, 5 and 1 of the 12 queries, none of which moves a positive's first relevant
+rank. The models, divergence sources (1) and (2) of `### Divergence sources, in the order checked`, are
+the only measured candidate for them.
+
+This reading is not compared value for value with the 2026-10-08 blocks. Those were taken on
+`pg_textsearch` 1.3.1 before either fix branch. The 1.5.1 upgrade and the fix on both backends both lie
+between them and this reading, so no difference between the two could be attributed to either.
+
 ### Latency: the library call and the MCP round trip
 
 **When and where.** The operator took every figure in this section and the two after it by hand, in one

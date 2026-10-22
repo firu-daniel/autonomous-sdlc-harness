@@ -68,3 +68,10 @@ It edits no file under `cli/`, `docs-retrieval-service/` or `evals/`, and does n
 - `git grep -n '^### A fresh fixture-catalog reading, both backends as shipped$' -- docs/retrieval-eval-results.md` prints exactly one line.
 - The new subsection contains no `p50`, `p95` or `ms` figure. A `git diff -- docs/retrieval-eval-results.md | grep -nE 'p50|p95| ms\b'` shows only the sentence stating that the latencies are left out.
 - Each arm B to E figure in the subsection equals the comparison output's figure for that arm and backend, as read in your return.
+
+- **Deviations from plan:**
+  - `versions.mjs` runs `CREATE EXTENSION IF NOT EXISTS vector` and `CREATE EXTENSION IF NOT EXISTS pg_textsearch` (the statements `evals/docs-retrieval/bm25-history.mjs` → `STATEMENTS.extensions` issues) before the three reads. With the three reads alone, the first run printed `plpgsql 1.0` as the whole of `pg_extension`, so `vector`'s `extversion` could not be read; `version()` and `library_version` read the same both times (`PostgreSQL 18.6 (PGlite 0.5.10) …`, `1.5.1`). The subsection states the five statements and why.
+  - `compare-scratch.mjs` imports `../../../evals/docs-retrieval/…` where the documented launcher imports `../../evals/docs-retrieval/…`, because it sits one directory deeper under `harness-runs/scratch/backend-parity/`. Otherwise only the `resultsText` path changed.
+  - Neither `--out` run printed anything on stdout (both exited 0), so no stamp was printed. The stamp `{ files: 9, chunks: 41 }` was read off each block's provenance line in the scratch file and off the comparison's `Snapshot { files: 9, chunks: 41 }, the same on both blocks.` line.
+  - Read in addition to the plan: `SELECT count(*) FROM chunks` after the Python run, which returned `41` (`1454` before). Recorded in the subsection's setup.
+  - The `fixture-catalog` floor cells for arm B MRR (`>= 0.55`) and arm D MRR (`>= 0.65`) differ from the 2026-10-08 table's, because `evals/docs-retrieval/floor.json` records both entries as `recordedAt` 2026-10-21. The subsection says so; `floor.json` is unchanged (`git diff --quiet` exit 0).

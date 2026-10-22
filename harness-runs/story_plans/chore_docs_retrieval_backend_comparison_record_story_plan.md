@@ -39,7 +39,7 @@ This branch corrects `docs/retrieval-eval-results.md` → `## The Python backend
 
 Each entry resolves 1:1 to `harness-runs/task_plans/chore_docs_retrieval_backend_comparison_record/task_<K>_plan.md`. The entries are in ship order, and every task is in the catch-all `general` layer.
 
-1. [ ] **Task 1** — Take the fresh `fixture-catalog` parity reading on both shipped backends and record it as its own subsection _(layer: general)_ _(points: 20)_
+1. [x] **Task 1** — Take the fresh `fixture-catalog` parity reading on both shipped backends and record it as its own subsection _(layer: general)_ _(points: 20)_
 2. [ ] **Task 2** — Correct `### Which case this is` and divergence sources 3 and 4 to the diagnosis's mechanisms and the fresh reading, citing `#573` _(layer: general)_ _(points: 15)_
 3. [ ] **Task 3** — Correct the comparison's **Finding** paragraph, its lead and its trade-off, and mark every wall-clock figure as 1.3.1 before the fixes _(layer: general)_ _(points: 15)_
 4. [ ] **Task 4** — Correct `docs/retrieval-eval.md` → step 3's paragraph on the persistent compose database _(layer: general)_ _(points: 8)_
