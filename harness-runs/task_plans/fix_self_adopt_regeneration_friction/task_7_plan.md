@@ -1,0 +1,51 @@
+### Task 7 — Document the self-adopt regeneration recipe and the changed re-run and `HARNESS_CLI` behaviour
+
+**Goal:** Give a contributor the exact, copyable recipe for regenerating this repository's own adoption, including the list of what that run still overwrites and how to restore each item, in `docs/development.md`'s self-adoption paragraphs. Bring the two other developer documents that state the changed behaviour up to date: `docs/cli.md` §3 for the state-dir README re-run row (and the `--force` row of its global options table, which summarises §3's conditionally-kept set), and `docs/outer-loop-verification.md` §1.5 for `HARNESS_CLI`. These are this task's `change` rows of the story index's `## Scope register` (rows 1, 2, 3, 6, 15 and 16). No other site is edited.
+
+**Depends on:** Tasks 1–6, every one of them, because this task documents what they built and measures the result.
+
+- **Task 3**: a forced self-adopt run keeps a wrapper's on-disk line when `commands.<key>` is that wrapper's own invocation, and reports it with a carried row. Any `.bak` left inside a contents-ignored state-dir directory is named in the run's notes.
+- **Task 2**: a template-identical state-dir README takes no `.bak`.
+- **Task 4**: `HARNESS_CLI` may be a command plus leading arguments, with the first word checked on `PATH`.
+- **Task 5**: the `.gitignore` template's `{{harnessBackups}}` comment now names the contents-ignored exception to *"Every other .bak a forced run writes is left visible on purpose."*.
+- **Task 6**: this repository's `.gitignore` block now merges nothing.
+
+This task describes those behaviours. It does not restate their mechanics beyond what a reader acts on, and it changes no code. The self-adopt carry-forward is documented **only** in `docs/development.md`, never in `docs/cli.md`'s adopter-facing tables, for the reason `SELF_ADOPT_ENV`'s doc comment gives.
+
+### Targets
+
+- `docs/development.md` → `## 5. Verifying a change`, Gate 2: a new block after the paragraph opening *"A one-off source edit is the other way to get a single run through"* and before *"**This repository cannot host its own remote runs.**"*.
+- `docs/cli.md` → the global options table: the `--force` row (*"Three more things are kept by what the run measures rather than by name (§3 for all three)"*).
+- `docs/cli.md` → `## 3. The re-run contract`: the row "`<stateDir>/README.md` and the per-directory READMEs", the row "`.gitignore`'s `.bak` lines for the two workflows and the permission profile", and the bullet "**`--force` upgrades `create-if-absent` only**".
+- `docs/outer-loop-verification.md` → `### 1.5 \`restart-watcher.sh\``: new rows in its table.
+
+**Work:**
+
+- [ ] `docs/development.md`, the recipe. Start with a bold lead sentence naming it as the way this repository's adoption is regenerated after a `cli/templates/` change. Then give the commands, **each in a fenced block, one command per line, never inlined in prose** (`harness-runs/lessons.md` → `## Adopter-facing documentation`, the first rule):
+  - `npm run build`;
+  - `HARNESS_SELF_ADOPT=1 node cli/dist/cli.js init --force --no-analyze`, preceded by its `--dry-run --non-interactive` twin as the step to read first;
+  - `git status --short`;
+  - the `git restore --source=HEAD -- <paths>` line for the files it must restore;
+  - the restart line `HARNESS_CLI="node <root>/cli/dist/cli.js" bash scripts/restart-watcher.sh`, with `<root>` explained as this checkout's root from `git rev-parse --show-toplevel`. No absolute machine path appears anywhere, so Gate 6 stays green.
+
+  State which wrappers are kept and why: `commands.typecheck` and `commands.test` name their own wrappers here, so their hand-set lines `npm run build` and `bash scripts/run-gates.sh` are carried. Say where the carried row is printed.
+- [ ] `docs/development.md`, *what it must restore*. Derive the list from the output of the dry-run command above, run on this branch's final tree, and record that output's relevant lines as the measured fact: the command and the exact `would replace` lines (`.claude/context/conventions.md` → `## Documents of record`, *"A measured fact states what was measured, the command and the exact message"*). At minimum, name and give the reason for:
+  - `githooks/pre-push`, whose dedicated `publish) … refusing to push to 'publish'` branch the generic render drops;
+  - `.claude/CLAUDE.md` and `.claude/context/conventions.md`, `cli.md`, `plugin.md`, which `--force` puts back to skeletons after one `.bak` each (`docs/cli.md` §3);
+  - every other `would replace` outside `scripts/` and the permission profile that the dry run shows differs from what is committed.
+
+  Also state where the `.bak` files go: those beside `scripts/` files and other committed files are visible in `git status`, and those inside a contents-ignored state-dir directory are named in the run's notes. Say they are removed by hand after the review.
+- [ ] `docs/cli.md` §3 and its options-table summary: the state-dir README row says `--force` regenerates one after a `.bak` **except where its bytes already are the template's**, in which case it is kept and no `.bak` is taken. It also says a `.bak` it does take inside a contents-ignored directory is named in the run's notes, because `git status` never shows it. In the "**`--force` upgrades `create-if-absent` only**" bullet, the sentence *"The same property reaches three further artifacts"* gains the state-dir READMEs, worded on the `.claude/CLAUDE.md` byte-identity precedent beside it, with the count corrected. In the row "`.gitignore`'s `.bak` lines for the two workflows and the permission profile", the closing sentence *"Every other `.bak` a forced run takes is deliberately left visible."* gains the same exception the template comment now states (Task 5): a `.bak` landing inside a contents-ignored directory is hidden by that directory's rule all the same, so the run's notes name it, pointing at the state-dir README row above. The two rows of the one table must then agree. The `harness-control.yml` row's *"That `.bak` is left visible rather than ignored"* stays as written (`## Scope register` row 14). The global options table's `--force` row, *"Three more things are kept by what the run measures rather than by name (§3 for all three)"*, names the template-identical state-dir README keep beside the other three (a conventions document, `.claude/CLAUDE.md`, the plugin-root profile entries), with its count and its *"(§3 for all three)"* pointer corrected to match, so the row and the §3 bullet state the same set (`## Scope register` row 16). `docs/analyze.md`'s *"Two artifacts are kept instead"* stays as written (`## Scope register` row 17).
+- [ ] `docs/outer-loop-verification.md` §1.5: add rows to the table for the conditions Task 4 added, each measured by reproducing the script's own `REPRO` rows by hand against a throwaway fixture (never this checkout), with the exit and calls recorded as observed. Measure them with the **corrected** `run()` helper Task 4 writes into the header's preamble (`HARNESS_CLI="${HARNESS_CLI:-hcli}"`, so the value put in front of `run` reaches the script); the pre-Task-4 helper pinned `HARNESS_CLI=hcli` and would record `daemon stop` / `daemon install` and exit 0 for every row below:
+  - `HARNESS_CLI` with leading arguments, `hcli --via`: exit **0**, calls `--via daemon stop` then `--via daemon install`;
+  - `HARNESS_CLI` whose first word is not on `PATH`: exit **1**, none;
+  - `HARNESS_CLI` blank: exit **1**, none.
+
+  Add one sentence after the table naming the first two rows as each other's perturbation, as the section's other pairs are named. The existing single-word not-on-`PATH` row stays as it is (`## Scope register` row 7).
+
+**Verification:**
+
+- Re-run both of the story index's `## Scope register` derivation commands verbatim. Every hit is a register row, and every `change` row's site now states the new behaviour. This one is checked by reading each cited site.
+- `git grep -nE '/Users/|/home/' -- docs/development.md docs/cli.md docs/outer-loop-verification.md` prints no line this task added (Gate 6's sentence: nothing may name a location on the machine that wrote it).
+- Every command the new `docs/development.md` block hands a reader sits on its own line inside a fenced block. Check by reading the block. `git grep -n 'HARNESS_SELF_ADOPT=1 node cli/dist/cli.js init --force --no-analyze' -- docs/development.md` finds it inside a fence.
+- The `docs/development.md` restore list is a subset of the `would replace` lines of the dry-run output this task recorded. Nothing is listed that the command did not print.
