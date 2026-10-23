@@ -8,7 +8,7 @@ Headline: the layering holds, with one exception. Every new file and edit lands 
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Autonomous forks restate the core G.0's Phase G consumption rule instead of citing it _(layer: plugin)_
+1. [x] **Finding 1** — Autonomous forks restate the core G.0's Phase G consumption rule instead of citing it _(layer: plugin)_
 
 ## Must Fix
 
