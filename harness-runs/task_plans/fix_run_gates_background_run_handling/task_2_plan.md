@@ -48,3 +48,18 @@ The existing cases are re-grounded on the new run form.
 - `grep -nE 'pgrep|ps -p|ps -o' cli/test/run-test-suite.test.mjs` prints nothing.
 - Lines 83–85 of the file are still the three `typecheckHeader` / `typecheckExited` / `typecheckNotRun` entries of `GATE_MARKER`.
 - After the run, no process from this file is left holding a fixture. The teardown is the guarantee, and a held stub also ends once its fixture is gone.
+
+**Deviations from plan:**
+- **The watchdog-kill case is intermittent, because of a template defect outside this layer's scope.** In 1 of 3 sandboxed runs of this file, the case `a run form killed with its session leaves the worker running, and a re-issued run form collects it` failed. Its `--wait` with `RUN_TEST_SUITE_STALE=3` refused `no run in flight` while the gate was still alive. The other 2 runs passed 35/35.
+  - Probe: `harness-runs/scratch/holder-probe.mjs`, run through `bash scripts/scratch-run.sh`, sandboxed, against the template that `init` wrote into a `$TMPDIR` fixture.
+  - With the holder shape (a detached `bash -c '<run form>; exec sleep 600'`), the heartbeat went stale in 2 of 14 runs, even though the worker and the gate were both alive:
+    - 1 of 8 runs that SIGKILLed the holder;
+    - 1 of 6 runs that sent **no signal at all**. In that run `.running`'s age was 3.1 s at 2 s after start and still rising, and `--wait` refused.
+  - With a plain run form (no holder), it went stale in 0 of 4 runs.
+  - When it happened, 100 ms sampling of the log directory never showed `.running.stop.<pid>`. So the heartbeat reader did not see end of file. The toucher stopped refreshing without a stop file, and the cause was not established (`ps` is refused).
+  - So the 2-of-7 INT and 6-of-8 KILL heartbeat observations in the wrapper's `SIGNALS` paragraph are probably not caused by those signals. The stall happens without any signal.
+  - Consequence for the shipped wrapper: a live run's label can read free after `STALE_SECONDS`, and a re-issued run form would then start a second worker. This task changed nothing under `cli/templates/`. The assertion stays as the plan specifies, and the defect goes back to the orchestrator.
+- The killed-without-a-verdict case is still killed by a group SIGKILL, now of the holder's process group, which the worker inherits. Aborting a `runBash` signal there kills the worker together with its gate and heartbeat.
+- In the detach case, the second run form is issued after `untilInFlight` and after the gate's output reaches the log, not straight after the run form. Before that point, the counter and the log cannot yet show whether a second run started.
+- The plan asks for the run form's own PID, which `runBash` does not expose. The detach case records it through `bash -c 'printf "$$" > runform-pid.txt; exec bash <wrapper> <label>'`, where `exec` keeps the PID.
+- The single teardown hook lives in `wiredFixture` and runs for every case. It releases the gate, then waits until `.running` is gone or every PID recorded in `.running` / `stub-pid.txt` is dead. Only after that does it run per-case steps (the holder abort) and remove the fixture. For cases that start no worker, it returns at once.

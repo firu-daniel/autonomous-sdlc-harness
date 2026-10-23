@@ -2,22 +2,22 @@
  * `run-test-suite.sh` — the Run gates phase's test-suite runner, driven against a repository the
  * test builds and throws away.
  *
- * **The rule these tests exist to enforce: the wrapper hands the orchestrator one line and nothing
- * else, runs `commands.typecheck` and then `commands.test` exactly once each per invocation, decides
- * one verdict for the pair, never runs while a run of the same label is live, and versions its log
- * per round. A run's liveness is its heartbeat, the mtime of `.running`, never a signal to its PID.**
+ * **The rule these tests exist to enforce: the run form detaches the gate run and answers `pending`
+ * at once; the verdict, one line and nothing else, is read through `--wait`; a run runs
+ * `commands.typecheck` and then `commands.test` exactly once each under one verdict; no run starts
+ * while one of the same label is live; each round keeps its log. Liveness is the heartbeat.**
  * Every case seeds `commands.test` with a stub that counts its own runs, so "exactly once" is an
- * assertion on a counter file; the stub's own output must reach the log and neither stream. The
- * two-gate cases wire `commands.typecheck` to a second counting stub; a `<none>` one is asserted as
- * not run — a marker line and no counter — never as a pass: a failing test still fails the round.
- * A signal to the run form's process group stops the gate too; a trapped signal to its PID alone
- * leaves the label live until the gate returns, then removes `.running` and writes no verdict.
+ * assertion on a counter file; the stub's own output must reach the log and neither stream. A
+ * `<none>` typecheck is asserted as not run — a marker line and no counter — never as a pass.
+ * Signals go to the worker `.running` names: TERM to it alone leaves the label live until the gate
+ * returns, then no verdict; INT to the calling shell's group stops neither it nor its gate.
  *
- * Not covered here: the Run gates phase's own sequencing (instruction prose, Task 23's walk); the
- * sandbox itself (`docs/sandbox-verification.md` rows WF2–WF5); a `SIGKILL` to the run form's PID
- * alone, whose orphaned gate is today's behaviour; and the second `stat` spelling — the wrapper reads
- * the mtime through `hr_lane_mtime`, where only one of BSD `stat -f %m` and GNU `stat -c %Y` yields.
- * These run the **compiled** `dist/cli.js`, whose `init` writes the wrapper: `npm run build` first.
+ * Not covered here: the Run gates phase's own sequencing (instruction prose); the sandbox itself
+ * (`docs/sandbox-verification.md` rows BG10 and WF5); a gate that never exits, which keeps `--wait`
+ * at `pending` by design; a KILL to the worker's PID alone, whose heartbeat the wrapper's `SIGNALS`
+ * paragraph records as unreliable; and the second `stat` spelling, as only one of BSD `stat -f %m`
+ * and GNU `stat -c %Y` yields under `hr_lane_mtime`. Each fixture's one teardown hook releases the
+ * gate and outwaits `.running` before removing it. Runs the compiled `dist/cli.js`: build first.
  */
 
 import assert from 'node:assert/strict';
@@ -48,7 +48,7 @@ const STDERR_MARKER = 'STUB-STDERR-MARKER';
 /**
  * The stub `commands.test` runs. Its exit status, a tag appended to both markers, and an optional
  * release file it blocks on come from the environment, which the wrapper's `eval` passes through.
- * Its paths are relative, so it only finds them when it runs from the repository root.
+ * Its paths are relative, so it only finds them from the repository root; a hold ends with its fixture.
  */
 const STUB = [
   '#!/usr/bin/env bash',
@@ -57,7 +57,7 @@ const STUB = [
   `echo "${STDOUT_MARKER} \${STUB_TAG-}"`,
   `echo "${STDERR_MARKER} \${STUB_TAG-}" >&2`,
   'if [ -n "${STUB_RELEASE-}" ]; then',
-  '  while [ ! -e "$STUB_RELEASE" ]; do sleep 0.1; done',
+  '  while [ ! -e "$STUB_RELEASE" ] && [ -e stub.sh ]; do sleep 0.1; done',
   'fi',
   'exit "${STUB_EXIT:-0}"',
   '',
@@ -100,7 +100,11 @@ function seededConfig({ typecheck = 'echo typecheck' } = {}) {
   };
 }
 
-/** A fixture on {@link BRANCH} with the stub wired as `commands.test` and `init` already run. */
+/**
+ * A fixture on {@link BRANCH} with the stub wired as `commands.test` and `init` already run. Its one
+ * `t.after` hook releases any held gate and outwaits the worker before the fixture goes, so the
+ * order `node:test` runs hooks in cannot remove a fixture under a live worker.
+ */
 async function wiredFixture(t, { typecheck } = {}) {
   const fixture = await createFixture({
     files: {
@@ -110,13 +114,30 @@ async function wiredFixture(t, { typecheck } = {}) {
       'typecheck-stub.sh': TC_STUB,
     },
   });
-  t.after(fixture.cleanup);
   const { dir } = fixture;
+  const steps = [];
+  TEARDOWN_STEPS.set(dir, steps);
+  t.after(async () => {
+    try {
+      await drainWorker(dir);
+      for (const step of steps) await step();
+    } finally {
+      TEARDOWN_STEPS.delete(dir);
+      await fixture.cleanup();
+    }
+  });
 
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
   await runGit(dir, ['checkout', '--quiet', '-b', BRANCH]);
   return dir;
+}
+
+/** Per fixture, the steps its one teardown hook runs after draining the worker and before removing it. */
+const TEARDOWN_STEPS = new Map();
+
+function onTeardown(dir, step) {
+  TEARDOWN_STEPS.get(dir).push(step);
 }
 
 function wrapper(dir, args, env = {}, cwd = dir) {
@@ -135,10 +156,14 @@ function logFiles(dir) {
   return existsSync(join(dir, LOG_DIR)) ? readdirSync(join(dir, LOG_DIR)).filter((name) => name.endsWith('.log')).sort() : [];
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function pollUntil(predicate, what) {
   for (let i = 0; i < POLL_LIMIT; i += 1) {
     if (await predicate()) return;
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await sleep(50);
   }
   assert.fail(`never observed: ${what}`);
 }
@@ -151,10 +176,14 @@ function deadPid() {
 }
 
 const STALE_ENV = 'RUN_TEST_SUITE_STALE';
+const LABEL = 'task_round_1';
 const RUNNING = `${LOG_DIR}/task_round_1.running`;
 const VERDICT = `${LOG_DIR}/task_round_1.verdict`;
 const LOG = `${LOG_DIR}/task_round_1.log`;
 const REFUSAL = 'run-test-suite.sh: no run in flight for task_round_1\n';
+const NOT_STARTED = 'run-test-suite.sh: the detached run of task_round_1 did not start\n';
+/** The file a held stub waits on; every fixture's teardown writes it. */
+const RELEASE = 'stub-release';
 
 /** Plants `task_round_1.running` holding `pid`, its mtime — the heartbeat — `ageSeconds` in the past. */
 function plantRunning(dir, { pid, ageSeconds }) {
@@ -176,7 +205,7 @@ function stubPidOf(dir) {
   return Number(text(dir, STUB_PID_RECORD).trim());
 }
 
-/** Whether `pid` exists; the test process is unsandboxed, so signal 0 answers here as it cannot for the wrapper. */
+/** Whether `pid` exists; signal 0 from this process to processes its own call started answers, sandboxed or not. */
 function isAlive(pid) {
   try {
     process.kill(pid, 0);
@@ -184,6 +213,35 @@ function isAlive(pid) {
   } catch (error) {
     if (error.code === 'ESRCH') return false;
     throw error;
+  }
+}
+
+/** The PIDs recorded in `relativePaths` as positive integers; a half-written record reads as none. */
+function recordedPids(dir, relativePaths) {
+  return relativePaths
+    .filter((path) => existsSync(join(dir, path)))
+    .map((path) => Number(text(dir, path).trim()))
+    .filter((pid) => Number.isInteger(pid) && pid > 0);
+}
+
+/**
+ * Releases the gate and waits until `.running` is gone or nothing it and the stub record is alive;
+ * past {@link POLL_LIMIT} it SIGKILLs both, the one signal a case not about signals ever sends.
+ */
+async function drainWorker(dir) {
+  if (!existsSync(dir)) return;
+  writeFileSync(join(dir, RELEASE), '');
+  const recorded = () => recordedPids(dir, [RUNNING, STUB_PID_RECORD]);
+  for (let i = 0; i < POLL_LIMIT; i += 1) {
+    if (!existsSync(join(dir, RUNNING)) || !recorded().some(isAlive)) return;
+    await sleep(50);
+  }
+  for (const pid of recorded()) {
+    try {
+      process.kill(pid, 'SIGKILL');
+    } catch (error) {
+      if (error.code !== 'ESRCH') throw error;
+    }
   }
 }
 
@@ -195,10 +253,66 @@ function untilInFlight(dir) {
   );
 }
 
+/**
+ * Issues the run form and asserts it answered `pending`, exit 3, nothing on stderr. No caller puts
+ * {@link STALE_ENV} in `env`: it is also the worker's start-up window, never shortened for a start.
+ */
+async function startRun(dir, env = {}, { label = LABEL, cwd = dir } = {}) {
+  const started = await wrapper(dir, [label], env, cwd);
+  assert.equal(started.stdout, 'pending\n', `the run form answered ${JSON.stringify(started.stdout)}: ${started.stderr}`);
+  assert.equal(started.status, 3);
+  assert.equal(started.stderr, '', 'the run form wrote to stderr');
+}
+
+/** Re-issues `--wait` one slice at a time until it prints something other than `pending`. */
+async function collect(dir, { label = LABEL, env = {} } = {}) {
+  let waited;
+  await pollUntil(async () => {
+    waited = await wrapper(dir, ['--wait', label], { ...env, RUN_TEST_SUITE_WAIT_SLICE: '1' });
+    return waited.stdout !== 'pending\n';
+  }, `--wait ${label} to stop printing \`pending\``);
+  return waited;
+}
+
+/** {@link startRun} then {@link collect}: the round's verdict line and exit status. */
+async function runAndCollect(dir, env = {}, { label = LABEL, cwd = dir } = {}) {
+  await startRun(dir, env, { label, cwd });
+  return collect(dir, { label });
+}
+
+const HOLDER_PID = 'holder-pid.txt';
+const HOLDER_OUT = 'holder-out.txt';
+
+/**
+ * Stands in for a session: a `bash` leading its own process group issues the run form, keeps the
+ * form's answer in {@link HOLDER_OUT}, then holds on `exec sleep` under the PID in {@link HOLDER_PID}.
+ * The gate is held on {@link RELEASE}, and the worker inherits the holder's group. Teardown aborts
+ * the holder, SIGKILLing that group, after the drain.
+ */
+function startHolder(dir) {
+  const controller = new AbortController();
+  onTeardown(dir, () => controller.abort());
+  const script = `printf '%s\\n' "$$" > ${HOLDER_PID}; bash "$0" ${LABEL} > ${HOLDER_OUT} 2>&1; exec sleep 600`;
+  const env = { STUB_RELEASE: join(dir, RELEASE) };
+  const settled = runBash(dir, ['-c', script, join(dir, WRAPPER)], env, { signal: controller.signal });
+  settled.catch(() => {});
+  return { controller, settled };
+}
+
+/** Resolves with the holder's PID once its run form has answered, and asserts that answer was `pending`. */
+async function untilHolderAnswered(dir) {
+  await pollUntil(
+    () => existsSync(join(dir, HOLDER_PID)) && existsSync(join(dir, HOLDER_OUT)) && text(dir, HOLDER_OUT).endsWith('\n'),
+    'the holder\'s run form to answer',
+  );
+  assert.equal(text(dir, HOLDER_OUT), 'pending\n');
+  return Number(text(dir, HOLDER_PID).trim());
+}
+
 for (const [name, stubExit, expectedStdout, expectedStatus] of [
-  ['a zero-exit command prints exactly `pass` and exits 0', '0', 'pass\n', 0],
+  ['a zero-exit command collects exactly `pass` with exit 0', '0', 'pass\n', 0],
   [
-    'a non-zero command prints exactly `fail <log path>` and exits 1',
+    'a non-zero command collects exactly `fail <log path>` with exit 1',
     '3',
     `fail ${LOG_DIR}/task_round_1.log\n`,
     1,
@@ -207,7 +321,7 @@ for (const [name, stubExit, expectedStdout, expectedStatus] of [
   test(name, async (t) => {
     const dir = await wiredFixture(t);
 
-    const result = await wrapper(dir, ['task_round_1'], { STUB_EXIT: stubExit });
+    const result = await runAndCollect(dir, { STUB_EXIT: stubExit });
 
     assert.equal(result.stdout, expectedStdout);
     assert.equal(result.status, expectedStatus);
@@ -222,14 +336,14 @@ for (const [name, stubExit, expectedStdout, expectedStatus] of [
 test('each round keeps its own log, and only a re-run of the same label replaces one', async (t) => {
   const dir = await wiredFixture(t);
 
-  assert.equal((await wrapper(dir, ['task_round_1'], { STUB_TAG: 'first' })).stdout, 'pass\n');
+  assert.equal((await runAndCollect(dir, { STUB_TAG: 'first' })).stdout, 'pass\n');
   const roundOne = text(dir, `${LOG_DIR}/task_round_1.log`);
-  assert.equal((await wrapper(dir, ['task_round_2'], { STUB_TAG: 'second' })).stdout, 'pass\n');
+  assert.equal((await runAndCollect(dir, { STUB_TAG: 'second' }, { label: 'task_round_2' })).stdout, 'pass\n');
 
   assert.deepEqual(logFiles(dir), ['task_round_1.log', 'task_round_2.log']);
   assert.equal(text(dir, `${LOG_DIR}/task_round_1.log`), roundOne, 'round 2 changed round 1\'s log');
 
-  assert.equal((await wrapper(dir, ['task_round_1'], { STUB_TAG: 'rerun' })).stdout, 'pass\n');
+  assert.equal((await runAndCollect(dir, { STUB_TAG: 'rerun' })).stdout, 'pass\n');
   const rerun = text(dir, `${LOG_DIR}/task_round_1.log`);
   assert.match(rerun, new RegExp(`${STDOUT_MARKER} rerun`));
   assert.doesNotMatch(rerun, /first/, 'the re-run appended to the log instead of replacing it');
@@ -248,11 +362,11 @@ for (const [name, stubExit, line, expectedStatus] of [
   test(name, async (t) => {
     const dir = await wiredFixture(t);
 
-    const run = await wrapper(dir, ['task_round_1'], { STUB_EXIT: stubExit });
+    const run = await runAndCollect(dir, { STUB_EXIT: stubExit });
     assert.equal(run.stdout, line);
 
-    assert.equal(text(dir, `${LOG_DIR}/task_round_1.verdict`), line);
-    assert.equal(existsSync(join(dir, LOG_DIR, 'task_round_1.running')), false, '.running outlived the run');
+    assert.equal(text(dir, VERDICT), line);
+    assert.equal(existsSync(join(dir, RUNNING)), false, '.running outlived the run');
 
     const waited = await wrapper(dir, ['--wait', 'task_round_1']);
     assert.equal(waited.stdout, line);
@@ -264,50 +378,112 @@ for (const [name, stubExit, line, expectedStatus] of [
 
 test('--wait prints `pending` while the run is live, then its verdict once re-issued after it ends', async (t) => {
   const dir = await wiredFixture(t);
-  const release = join(dir, 'stub-release');
-  const running = join(dir, LOG_DIR, 'task_round_1.running');
 
-  const inFlight = wrapper(dir, ['task_round_1'], { STUB_RELEASE: release });
-  await pollUntil(() => existsSync(running) && counterLines(dir).length === 1, 'the run in flight');
+  await startRun(dir, { STUB_RELEASE: join(dir, RELEASE) });
+  await untilInFlight(dir);
 
-  const pending = await wrapper(dir, ['--wait', 'task_round_1'], { RUN_TEST_SUITE_WAIT_SLICE: '1' });
+  const pending = await wrapper(dir, ['--wait', LABEL], { RUN_TEST_SUITE_WAIT_SLICE: '1' });
   assert.equal(pending.stdout, 'pending\n');
   assert.equal(pending.status, 3);
-  assert.equal(existsSync(running), true);
+  assert.equal(existsSync(join(dir, RUNNING)), true);
 
-  writeFileSync(release, '');
-  let waited;
-  await pollUntil(async () => {
-    waited = await wrapper(dir, ['--wait', 'task_round_1'], { RUN_TEST_SUITE_WAIT_SLICE: '1' });
-    return waited.stdout !== 'pending\n';
-  }, '--wait to stop printing `pending`');
+  writeFileSync(join(dir, RELEASE), '');
+  const waited = await collect(dir);
 
   assert.equal(waited.stdout, 'pass\n');
   assert.equal(waited.status, 0);
-  assert.equal((await inFlight).stdout, 'pass\n');
   assert.deepEqual(counterLines(dir), ['ran'], 'the command did not run exactly once');
 });
 
 test('a run form issued while a run of the same label is live prints `pending` and starts nothing', async (t) => {
   const dir = await wiredFixture(t);
-  const release = join(dir, 'stub-release');
-  const running = join(dir, LOG_DIR, 'task_round_1.running');
 
-  const inFlight = wrapper(dir, ['task_round_1'], { STUB_RELEASE: release });
-  await pollUntil(() => existsSync(running) && counterLines(dir).length === 1, 'the run in flight');
+  await startRun(dir, { STUB_RELEASE: join(dir, RELEASE) });
+  await untilInFlight(dir);
 
-  const second = await wrapper(dir, ['task_round_1'], { RUN_TEST_SUITE_WAIT_SLICE: '1' });
+  const second = await wrapper(dir, [LABEL], { RUN_TEST_SUITE_WAIT_SLICE: '1' });
   assert.equal(second.stdout, 'pending\n');
   assert.equal(second.status, 3);
   assert.deepEqual(counterLines(dir), ['ran'], 'the second run form started the command');
 
-  writeFileSync(release, '');
-  const first = await inFlight;
-  assert.equal(first.stdout, 'pass\n');
-
-  const waited = await wrapper(dir, ['--wait', 'task_round_1']);
+  writeFileSync(join(dir, RELEASE), '');
+  const waited = await collect(dir);
   assert.equal(waited.stdout, 'pass\n');
   assert.deepEqual(counterLines(dir), ['ran'], 'the command did not run exactly once');
+});
+
+test('the run form detaches: `pending` at once while the gate is held, and a later --wait collects', async (t) => {
+  const dir = await wiredFixture(t);
+  const release = join(dir, RELEASE);
+  // `exec` keeps the PID, so the one recorded is the run form's own.
+  const script = `printf '%s\\n' "$$" > runform-pid.txt; exec bash "$0" ${LABEL}`;
+
+  // Resolving at all, with the gate held, proves the worker's streams point away from the caller's.
+  const started = await runBash(dir, ['-c', script, join(dir, WRAPPER)], { STUB_RELEASE: release });
+  assert.equal(started.stdout, 'pending\n');
+  assert.equal(started.status, 3);
+  assert.equal(started.stderr, '');
+  assert.equal(existsSync(join(dir, VERDICT)), false, 'the gate finished before its release');
+  assert.equal(existsSync(join(dir, RUNNING)), true, 'the run form answered before the worker claimed .running');
+  const worker = pidOf(dir);
+  assert.notEqual(worker, Number(text(dir, 'runform-pid.txt').trim()), '.running holds the run form\'s own PID');
+
+  const immediate = await wrapper(dir, ['--wait', LABEL], { RUN_TEST_SUITE_WAIT_SLICE: '1' });
+  assert.equal(immediate.stdout, 'pending\n');
+  assert.equal(immediate.status, 3);
+  assert.equal(immediate.stderr, '');
+
+  await untilInFlight(dir);
+  assert.notEqual(stubPidOf(dir), worker, 'the gate ran as the worker\'s own process');
+  await pollUntil(() => text(dir, LOG).includes(STDERR_MARKER), 'the gate\'s output in the log');
+  const logBefore = text(dir, LOG);
+
+  const second = await wrapper(dir, [LABEL], { RUN_TEST_SUITE_WAIT_SLICE: '1' });
+  assert.equal(second.stdout, 'pending\n');
+  assert.equal(second.status, 3);
+  assert.deepEqual(counterLines(dir), ['ran'], 'the second run form started the command');
+  assert.equal(text(dir, LOG), logBefore, 'the second run form truncated the log');
+  assert.equal(pidOf(dir), worker, 'the second run form replaced .running');
+
+  writeFileSync(release, '');
+  const waited = await collect(dir);
+  assert.equal(waited.stdout, 'pass\n');
+  assert.equal(waited.status, 0);
+  assert.equal(text(dir, VERDICT), 'pass\n');
+  assert.deepEqual(counterLines(dir), ['ran'], 'the command did not run exactly once');
+});
+
+test('a worker that finishes inside the start-up poll still answers `pending`, and one --wait collects it', async (t) => {
+  const dir = await wiredFixture(t);
+
+  const started = await wrapper(dir, [LABEL]);
+  assert.equal(started.stdout, 'pending\n');
+  assert.equal(started.status, 3);
+  assert.equal(started.stderr, '', 'the run form refused a worker that had already finished');
+
+  const waited = await wrapper(dir, ['--wait', LABEL], { RUN_TEST_SUITE_WAIT_SLICE: '1' });
+  assert.equal(waited.stdout, 'pass\n');
+  assert.equal(waited.status, 0);
+  assert.deepEqual(counterLines(dir), ['ran'], 'the wait form ran the command');
+});
+
+test('a worker that never starts refuses with exit 2, one stderr line and no gate run', async (t) => {
+  const dir = await wiredFixture(t);
+  const fakeBin = join(dir, 'fake-bin');
+  mkdirSync(fakeBin);
+  writeFileSync(join(fakeBin, 'nohup'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+
+  // The short start-up window is this case's subject.
+  const result = await wrapper(dir, [LABEL], { PATH: `${fakeBin}:${process.env.PATH}`, [STALE_ENV]: '3' });
+
+  assert.equal(result.status, 2);
+  assert.equal(result.stdout, '');
+  assert.equal(result.stderr, NOT_STARTED);
+  for (const path of [RUNNING, VERDICT, LOG]) {
+    assert.equal(existsSync(join(dir, path)), false, `${path} exists`);
+  }
+  assert.equal(existsSync(join(dir, COUNTER)), false, 'the test gate ran');
+  assert.equal(existsSync(join(dir, TC_COUNTER)), false, 'the typecheck gate ran');
 });
 
 for (const [name, plant] of [
@@ -364,10 +540,11 @@ test('a run form finding a fresh heartbeat of its label prints `pending` and sta
 test('a run form finding a stale heartbeat of its label starts a fresh run', async (t) => {
   const dir = await wiredFixture(t);
   const sentinel = 'PLANTED-LOG-SENTINEL\n';
+  // Back-dated past the default STALE_SECONDS, which is also the run form's start-up window.
   plantRunning(dir, { pid: deadPid(), ageSeconds: 120 });
   writeFileSync(join(dir, LOG), sentinel);
 
-  const result = await wrapper(dir, ['task_round_1']);
+  const result = await runAndCollect(dir);
 
   assert.equal(result.stdout, 'pass\n');
   assert.equal(result.status, 0);
@@ -378,103 +555,127 @@ test('a run form finding a stale heartbeat of its label starts a fresh run', asy
 
 test('a run killed without a verdict reads as no run in flight once its heartbeat is stale', async (t) => {
   const dir = await wiredFixture(t);
-  const release = join(dir, 'stub-release');
-  const controller = new AbortController();
 
-  const run = runBash(dir, [join(dir, WRAPPER), 'task_round_1'], { STUB_RELEASE: release }, { signal: controller.signal });
-  const rejected = assert.rejects(run, /^Error: runBash aborted:/);
+  // The worker inherits the holder's process group, so aborting the holder SIGKILLs the whole run.
+  const holder = startHolder(dir);
+  await untilHolderAnswered(dir);
   await untilInFlight(dir);
-  controller.abort();
-  await rejected;
-  await pollUntil(() => !isAlive(stubPidOf(dir)), 'the group SIGKILL to reach the gate');
+  const worker = pidOf(dir);
+  const gate = stubPidOf(dir);
+  holder.controller.abort();
+  await assert.rejects(holder.settled, /^Error: runBash aborted:/);
+  await pollUntil(() => !isAlive(worker) && !isAlive(gate), 'the group SIGKILL to reach the worker and its gate');
 
-  const result = await wrapper(dir, ['--wait', 'task_round_1'], { [STALE_ENV]: '3', RUN_TEST_SUITE_WAIT_SLICE: '30' });
+  const result = await wrapper(dir, ['--wait', LABEL], { [STALE_ENV]: '3', RUN_TEST_SUITE_WAIT_SLICE: '30' });
 
   assert.equal(result.status, 2);
   assert.equal(result.stdout, '');
   assert.equal(result.stderr, REFUSAL);
   assert.equal(existsSync(join(dir, VERDICT)), false, 'a killed run left a verdict');
   assert.equal(existsSync(join(dir, RUNNING)), true, '.running is gone, so the refusal did not come from staleness');
-  writeFileSync(release, '');
 });
 
 test('a run that outlives the stale window keeps its heartbeat fresh', async (t) => {
   const dir = await wiredFixture(t);
-  const release = join(dir, 'stub-release');
-  const controller = new AbortController();
-  t.after(() => controller.abort());
 
-  const run = runBash(dir, [join(dir, WRAPPER), 'task_round_1'], { STUB_RELEASE: release }, { signal: controller.signal });
+  await startRun(dir, { STUB_RELEASE: join(dir, RELEASE) });
   await untilInFlight(dir);
-  await new Promise((resolve) => setTimeout(resolve, 10000));
+  await sleep(10000);
 
-  const pending = await wrapper(dir, ['--wait', 'task_round_1'], { [STALE_ENV]: '5', RUN_TEST_SUITE_WAIT_SLICE: '1' });
+  const pending = await wrapper(dir, ['--wait', LABEL], { [STALE_ENV]: '5', RUN_TEST_SUITE_WAIT_SLICE: '1' });
   assert.equal(pending.stdout, 'pending\n');
   assert.equal(pending.status, 3);
 
-  writeFileSync(release, '');
-  let waited;
-  await pollUntil(async () => {
-    waited = await wrapper(dir, ['--wait', 'task_round_1'], { [STALE_ENV]: '5', RUN_TEST_SUITE_WAIT_SLICE: '1' });
-    return waited.stdout !== 'pending\n';
-  }, '--wait to stop printing `pending`');
+  writeFileSync(join(dir, RELEASE), '');
+  const waited = await collect(dir, { env: { [STALE_ENV]: '5' } });
   assert.equal(waited.stdout, 'pass\n');
-  assert.equal((await run).stdout, 'pass\n');
   assert.deepEqual(counterLines(dir), ['ran'], 'the command did not run exactly once');
 });
 
-test('a SIGTERM to the run form\'s PID alone leaves the label live until the gate returns, then no verdict', async (t) => {
+test('a run form killed with its session leaves the worker running, and a re-issued run form collects it', async (t) => {
   const dir = await wiredFixture(t);
-  const release = join(dir, 'stub-release');
-  const controller = new AbortController();
-  t.after(() => controller.abort());
 
-  const run = runBash(dir, [join(dir, WRAPPER), 'task_round_1'], { STUB_RELEASE: release }, { signal: controller.signal });
+  const holder = startHolder(dir);
+  const holderPid = await untilHolderAnswered(dir);
   await untilInFlight(dir);
-  process.kill(pidOf(dir), 'SIGTERM');
+  const worker = pidOf(dir);
+  const gate = stubPidOf(dir);
+  // A stall watchdog kills the session's PID and the descendants it can enumerate; the worker is not one.
+  process.kill(holderPid, 'SIGKILL');
+  await assert.rejects(holder.settled, /was killed by SIGKILL/);
+
+  // Longer than the shortened stale window the next calls are given, so a stopped heartbeat would show.
+  await sleep(5000);
+  assert.equal(isAlive(gate), true, 'the gate died with the session');
+  const pending = await wrapper(dir, ['--wait', LABEL], { [STALE_ENV]: '3', RUN_TEST_SUITE_WAIT_SLICE: '1' });
+  assert.equal(pending.stdout, 'pending\n', `the heartbeat went stale with the session: ${pending.stderr}`);
+  assert.equal(pending.status, 3);
+
+  // Finds the run live, so it starts no worker and the shortened window is not its start-up window.
+  const logBefore = text(dir, LOG);
+  const resumed = await wrapper(dir, [LABEL], { [STALE_ENV]: '3', RUN_TEST_SUITE_WAIT_SLICE: '1' });
+  assert.equal(resumed.stdout, 'pending\n');
+  assert.equal(resumed.status, 3);
+  assert.deepEqual(counterLines(dir), ['ran'], 'the resumed run form started the command');
+  assert.equal(text(dir, LOG), logBefore, 'the resumed run form truncated the log');
+  assert.equal(pidOf(dir), worker, 'the resumed run form replaced .running');
+
+  writeFileSync(join(dir, RELEASE), '');
+  const waited = await collect(dir, { env: { [STALE_ENV]: '3' } });
+  assert.equal(waited.stdout, 'pass\n');
+  assert.equal(waited.status, 0);
+  assert.deepEqual(counterLines(dir), ['ran'], 'the command did not run exactly once');
+});
+
+test('a SIGTERM to the worker\'s PID alone leaves the label live until the gate returns, then no verdict', async (t) => {
+  const dir = await wiredFixture(t);
+
+  await startRun(dir, { STUB_RELEASE: join(dir, RELEASE) });
+  await untilInFlight(dir);
+  const worker = pidOf(dir);
+  const gate = stubPidOf(dir);
+  process.kill(worker, 'SIGTERM');
 
   assert.equal(existsSync(join(dir, RUNNING)), true, '.running went before the gate returned');
-  assert.equal(isAlive(stubPidOf(dir)), true, 'the SIGTERM stopped the gate');
-  const pending = await wrapper(dir, ['--wait', 'task_round_1'], { RUN_TEST_SUITE_WAIT_SLICE: '1' });
+  assert.equal(isAlive(gate), true, 'the SIGTERM stopped the gate');
+  const pending = await wrapper(dir, ['--wait', LABEL], { RUN_TEST_SUITE_WAIT_SLICE: '1' });
   assert.equal(pending.stdout, 'pending\n');
   assert.equal(pending.status, 3);
 
-  writeFileSync(release, '');
-  const result = await run;
+  writeFileSync(join(dir, RELEASE), '');
+  await pollUntil(() => !existsSync(join(dir, RUNNING)), 'the trap to remove .running');
+  await pollUntil(() => !isAlive(worker) && !isAlive(gate), 'the worker and its gate to end');
 
-  assert.equal(result.status, 143);
-  assert.equal(result.stdout, '');
-  assert.equal(existsSync(join(dir, RUNNING)), false, 'the trap left .running');
   assert.equal(existsSync(join(dir, VERDICT)), false, 'a signalled run left a verdict');
-  assert.equal(isAlive(stubPidOf(dir)), false, 'the gate outlived the run form');
   const exitedPrefix = GATE_MARKER.testExited('#').split('#')[0];
   assert.ok(!text(dir, LOG).split('\n').some((line) => line.startsWith(exitedPrefix)), 'a marker followed the trap');
-  const refused = await wrapper(dir, ['--wait', 'task_round_1']);
+  const refused = await wrapper(dir, ['--wait', LABEL]);
   assert.equal(refused.status, 2);
   assert.equal(refused.stderr, REFUSAL);
 });
 
-test('a SIGINT to the run form\'s process group stops the gate before any release, then no verdict', async (t) => {
+test('a SIGINT to the calling shell\'s process group stops neither the worker nor its gate, and the run reaches its verdict', async (t) => {
   const dir = await wiredFixture(t);
-  const release = join(dir, 'stub-release');
-  const controller = new AbortController();
-  t.after(() => controller.abort());
 
-  const run = runBash(dir, [join(dir, WRAPPER), 'task_round_1'], { STUB_RELEASE: release }, { signal: controller.signal });
+  startHolder(dir);
+  const holderPid = await untilHolderAnswered(dir);
   await untilInFlight(dir);
-  process.kill(-pidOf(dir), 'SIGINT');
+  const worker = pidOf(dir);
+  const gate = stubPidOf(dir);
+  process.kill(-holderPid, 'SIGINT');
 
-  await pollUntil(() => !existsSync(join(dir, RUNNING)), 'the trap to remove .running');
-  assert.equal(isAlive(stubPidOf(dir)), false, 'the interrupt did not stop the gate');
-  const result = await run;
-
-  assert.equal(result.status, 130);
-  assert.equal(result.stdout, '');
+  await sleep(1000);
+  assert.equal(isAlive(worker), true, 'the interrupt stopped the worker');
+  assert.equal(isAlive(gate), true, 'the interrupt stopped the gate');
   assert.equal(existsSync(join(dir, VERDICT)), false, 'an interrupted run left a verdict');
-  const refused = await wrapper(dir, ['--wait', 'task_round_1']);
-  assert.equal(refused.status, 2);
-  assert.equal(refused.stderr, REFUSAL);
-  writeFileSync(release, '');
+
+  writeFileSync(join(dir, RELEASE), '');
+  const waited = await collect(dir);
+  assert.equal(waited.stdout, 'pass\n');
+  assert.equal(waited.status, 0);
+  assert.equal(text(dir, VERDICT), 'pass\n');
+  assert.equal(existsSync(join(dir, RUNNING)), false, '.running outlived the run');
+  assert.deepEqual(counterLines(dir), ['ran'], 'the command did not run exactly once');
 });
 
 test('a .running whose heartbeat cannot be read refuses in both forms, and the run form starts nothing', async (t) => {
@@ -545,7 +746,7 @@ test('invoked from a subdirectory, the command still runs from the repository ro
   const nested = join(dir, 'nested', 'deeper');
   mkdirSync(nested, { recursive: true });
 
-  const result = await wrapper(dir, ['task_round_1'], {}, nested);
+  const result = await runAndCollect(dir, {}, { cwd: nested });
 
   assert.equal(result.stdout, 'pass\n');
   assert.equal(text(dir, PWD_RECORD), `${dir}\n`);
@@ -561,7 +762,7 @@ for (const [name, tcExit, stubExit, expectedStdout, expectedStatus] of [
   test(`two gates — ${name}`, async (t) => {
     const dir = await wiredFixture(t, { typecheck: TC_STUB_COMMAND });
 
-    const result = await wrapper(dir, ['task_round_1'], { TC_STUB_EXIT: tcExit, STUB_EXIT: stubExit });
+    const result = await runAndCollect(dir, { TC_STUB_EXIT: tcExit, STUB_EXIT: stubExit });
 
     assert.equal(result.stdout, expectedStdout);
     assert.equal(result.status, expectedStatus);
@@ -582,7 +783,7 @@ for (const [name, tcExit, stubExit] of [
   test(`two gates — the log carries each gate's marker lines, typecheck first (${name})`, async (t) => {
     const dir = await wiredFixture(t, { typecheck: TC_STUB_COMMAND });
 
-    await wrapper(dir, ['task_round_1'], { TC_STUB_EXIT: tcExit, STUB_EXIT: stubExit });
+    await runAndCollect(dir, { TC_STUB_EXIT: tcExit, STUB_EXIT: stubExit });
 
     const lines = text(dir, `${LOG_DIR}/task_round_1.log`).split('\n');
     for (const marker of [
@@ -608,7 +809,7 @@ for (const [name, stubExit, expectedStdout, expectedStatus] of [
     const dir = await wiredFixture(t, { typecheck: '<none>' });
     assert.equal(existsSync(join(dir, 'scripts', 'typecheck.sh')), false, 'init wrote typecheck.sh for `<none>`');
 
-    const result = await wrapper(dir, ['task_round_1'], { STUB_EXIT: stubExit });
+    const result = await runAndCollect(dir, { STUB_EXIT: stubExit });
 
     assert.equal(result.stdout, expectedStdout);
     assert.equal(result.status, expectedStatus);
@@ -624,7 +825,7 @@ for (const [name, stubExit, expectedStdout, expectedStatus] of [
 test('commands.typecheck `<none>` padded with whitespace is still the sentinel, as isNoneSentinel reads it', async (t) => {
   const dir = await wiredFixture(t, { typecheck: '  <none> ' });
 
-  const result = await wrapper(dir, ['task_round_1']);
+  const result = await runAndCollect(dir);
 
   assert.equal(result.stdout, 'pass\n');
   assert.equal(result.status, 0);
@@ -656,7 +857,7 @@ test('--wait after a run that failed on typecheck alone reprints its `fail` and 
   const dir = await wiredFixture(t, { typecheck: TC_STUB_COMMAND });
   const line = `fail ${LOG_DIR}/task_round_1.log\n`;
 
-  assert.equal((await wrapper(dir, ['task_round_1'], { TC_STUB_EXIT: '1' })).stdout, line);
+  assert.equal((await runAndCollect(dir, { TC_STUB_EXIT: '1' })).stdout, line);
 
   const waited = await wrapper(dir, ['--wait', 'task_round_1']);
   assert.equal(waited.stdout, line);
