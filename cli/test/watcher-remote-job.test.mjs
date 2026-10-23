@@ -86,7 +86,7 @@ const JOB_USAGE_REPEAT = jobUsageRepeat();
 
 /**
  * The repeated case's reset lead and PAUSE wait — the header argues why they differ from one run's.
- * The lost-`usage_resume_at` case takes them too, for the same reason.
+ * The lost-`usage_resume_at` and held-off-relaunch cases take them too, for the same reason.
  */
 const REPEAT_RESET_AHEAD_SECS = 15;
 const REPEAT_PAUSE_WAIT_TENTHS = 600;
@@ -875,13 +875,19 @@ test('usage: a short reset is waited out in the job, a reset past the deadline g
     // The kill switch is GLOBAL_STOP — `<state_dir>/AUTONOMOUS_STOP` in the job's own checkout —
     // and kill_switch_active makes resume_paused_runs return before it relaunches anything, so
     // the gate's RESUME stands unconsumed and the record stays `paused` with both tags cleared.
+    // This case asserts the post-reset bound, not the in-job wait's timing, so it takes the
+    // repeated case's lead and wait: a 2-second lead lets a loaded gate downgrade the event and
+    // never pause (the header's `HARNESS_JOB_USAGE_REPEAT` paragraph). That lead exceeds
+    // REMOTE_WAIT_MAX_SECS, so the runner is self-hosted to bypass the hosted lead admission,
+    // which other cases cover; the bound applies self-hosted included.
     await j.setStub(
-      `${rateLimitRejected(2)}; for i in $(seq 1 100); do if [ -f "$STATE/PAUSE" ]; then : > "$STATE/AUTONOMOUS_STOP"; : > "$STATE/PAUSE_ACK"; exit 0; fi; sleep 0.1; done`,
+      `${rateLimitRejected(REPEAT_RESET_AHEAD_SECS)}; for i in $(seq 1 ${REPEAT_PAUSE_WAIT_TENTHS}); do if [ -f "$STATE/PAUSE" ]; then : > "$STATE/AUTONOMOUS_STOP"; : > "$STATE/PAUSE_ACK"; exit 0; fi; sleep 0.1; done`,
     );
     const result = await j.job([j.branch, 'task', 'none'], {
       USAGE_RESUME_MARGIN_SECS: '0',
       REMOTE_WAIT_MAX_SECS: '2',
       USAGE_CHECK_INTERVAL_SECS: '1',
+      RUNNER_ENVIRONMENT: 'self-hosted',
     });
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
 
