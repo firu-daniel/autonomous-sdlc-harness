@@ -66,4 +66,10 @@ _[Add headings of your own as themes emerge — one per recurring theme — and 
 
 - **When code deliberately produces an edge value (a lone surrogate, NaN, an oversize integer), add a case that carries it through every transport's serializer to the client, not only through the producing function.** _(taught by: feat_docs_retrieval_python_backend)_
 
+## Agent prose
+
+- **State a new behaviour once, in the section that decides it, and cite it from everywhere else; never re-walk in prose the cases that other arms or sections already route.** _(taught by: fix_run_gates_answered_park_resume)_ — codified in `.claude/context/plugin.md` §Writing agent prose
+
+- **When an agent definition has to give back words to hold its word count, cut restatement or rationale, never a definition or edge case the agent acts on.** _(taught by: fix_run_gates_answered_park_resume)_
+
 _Written by `autonomous-sdlc-harness init`, and yours from there on: a re-run never touches a ledger that already exists._
