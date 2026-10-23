@@ -474,6 +474,30 @@ test('a SIGINT to the run form\'s process group stops the gate before any releas
   writeFileSync(release, '');
 });
 
+test('a .running whose heartbeat cannot be read refuses in both forms, and the run form starts nothing', async (t) => {
+  const dir = await wiredFixture(t);
+  plantRunning(dir, { pid: deadPid(), ageSeconds: 0 });
+  // `hr_lane_mtime` is the only `stat` the wrapper reaches; a `stat` that always fails makes it print 0.
+  const fakeBin = join(dir, 'fake-bin');
+  mkdirSync(fakeBin);
+  writeFileSync(join(fakeBin, 'stat'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+  const env = { PATH: `${fakeBin}:${process.env.PATH}` };
+  const refusal = /^run-test-suite\.sh: cannot read the heartbeat of '[^'\n]*task_round_1\.running'\n$/;
+  const before = await snapshotTree(dir);
+
+  const waited = await wrapper(dir, ['--wait', 'task_round_1'], env);
+  assert.equal(waited.status, 2);
+  assert.equal(waited.stdout, '');
+  assert.match(waited.stderr, refusal);
+
+  const ran = await wrapper(dir, ['task_round_1'], env);
+  assert.equal(ran.status, 2);
+  assert.equal(ran.stdout, '');
+  assert.match(ran.stderr, refusal);
+  assert.deepEqual(counterLines(dir), [], 'the run form started the command');
+  assert.deepEqual(await snapshotTree(dir), before, 'a refusal wrote a file');
+});
+
 test('malformed invocations refuse with exit 2, one stderr line and nothing written', async (t) => {
   const dir = await wiredFixture(t);
   const before = await snapshotTree(dir);
