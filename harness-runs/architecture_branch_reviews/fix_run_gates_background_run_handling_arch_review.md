@@ -19,7 +19,7 @@ One violation of the plugin layer's single-owner rule for cores: the new uncolle
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — The uncollected-gate-run clause is copied into the user-review fix core instead of cited from the plan core _(layer: plugin)_
+1. [x] **Finding 1** — The uncollected-gate-run clause is copied into the user-review fix core instead of cited from the plan core _(layer: plugin)_
 
 ## Must Fix
 

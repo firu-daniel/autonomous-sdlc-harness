@@ -22,3 +22,5 @@ A later edit to the event definitions in the plan core would therefore leave the
 3. Leave the plan core's copy unchanged, because it is the owner.
 
 After the edit, `grep -rn 'gate runs not collected' plugin` should match only the plan core and `plugin/instructions/improvement_observations_instructions.md`, and that file's citation should still resolve to the plan core.
+
+- **Deviations from plan:** The post-edit check expected `grep -rn 'gate runs not collected' plugin` to match the plan core and `plugin/instructions/improvement_observations_instructions.md`. Run after the edit, it matches only `plugin/instructions/plan_orchestration_instructions_core.md` (the `### D.2 Done summary` Run gates bullet). The observations file never carried that literal: its **A gate run stopped, re-launched or lost is always noted.** rule cites `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_core.md` → `### D.2 Done summary` by heading, and `grep -n '^### D.2 Done summary'` on the plan core confirms the heading resolves. No edit was made to the observations file.
