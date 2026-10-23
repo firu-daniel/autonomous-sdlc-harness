@@ -64,7 +64,8 @@
 # verdict. A stall watchdog's kill-and-resume kills the session's PID and the
 # descendants it can enumerate; the worker has been reparented away from them,
 # so it survives, and the resumed session's run form for the same label
-# collects it rather than starting a second run.
+# collects it rather than starting a second run — while its heartbeat stays
+# fresh (RESIDUALS OF THE DETACHED SHAPE).
 #
 # WHY NOT A SIGNAL. Measured 2026-10-23, Claude Code 2.1.309, macOS, headless
 # sandboxed session under the live profile: `kill -0` from a later call on a
@@ -98,18 +99,29 @@
 # not start`, which G.1 escalates. Nothing here kills it: it runs its gates to a
 # verdict and removes its `.running` as any worker does, and whoever next looks
 # at the label — a `--wait`, or a run form re-issued by a resumed session after
-# the escalation is answered — finds the run live and starts nothing. The one
+# the escalation is answered — finds the run live and starts nothing. Another
 # unguarded case is a run form re-issued INSIDE the gap between the refusal and
 # the late claim: it finds no live run, starts a second worker, and the two race
 # for `.running`. G.1 does not re-issue the run form within a session, so this
 # needs a human or a resumed session to re-issue in that gap; it is recorded,
 # not handled.
 #
+# A heartbeat can also stop with NO signal sent: in a sandboxed macOS fixture
+# (2026-10-23) `.running`'s mtime stopped advancing while the worker and its
+# gate were both alive, and no `.running.stop.<pid>` file appeared, so the
+# reader had not seen end of file; the cause was not established
+# (`docs/sandbox-verification.md` → the paragraph after row BG10). The label
+# then reads free after STALE_SECONDS while the run still runs: `--wait`
+# refuses `no run in flight`, and a run form issued then starts a second
+# worker that races the first for `.running`. Row BG10 is the measurement
+# that would show it on a real run.
+#
 # SIGNALS. Measured 2026-10-23, Claude Code 2.1.309 (`claude --version`), macOS,
 # GNU bash 3.2.57, SANDBOXED, within one Bash call: a Node driver run through
 # `scratch-run.sh` started the run form in a throwaway fixture and signalled the
 # worker its own descendant had started, with the gate held on a release file.
 # No signal was refused by the sandbox.
+# A heartbeat stop below may not be the signal's doing: one was also seen with no signal sent (RESIDUALS OF THE DETACHED SHAPE).
 #   - TERM to the worker's PID alone: bash runs a trap only once its foreground
 #     command returns, so the gate kept running and `--wait` printed `pending`
 #     until the gate was released; then `.running` was removed, no verdict and
