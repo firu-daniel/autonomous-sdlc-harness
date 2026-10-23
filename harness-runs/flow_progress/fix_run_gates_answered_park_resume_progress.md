@@ -7,7 +7,7 @@ Source: harness-runs/task_prompts/fix_run_gates_answered_park_resume_task_prompt
 - remote-skipped: none   (from the launch prompt's remote-job clause, read at this write; `none` for a local run)
 
 ## Fix planning
-- [ ] R1. Fix plan written & converged (parity + architecture gates PASS)
+- [x] R1. Fix plan written & converged (parity + architecture gates PASS)
 - [ ] R2. Fix plan + source review committed
 ## Fixing
 - [ ] R3. All fix-plan findings implemented (fix-plan index all [x])
