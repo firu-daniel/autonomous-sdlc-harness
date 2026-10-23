@@ -1,0 +1,6 @@
+# Review plan meta-review — iteration 0
+
+## Must Fix
+1. **Finding 2's fix asks for a run of a test file the fix neither creates nor edits** — refers to review finding #2. Offending file: `harness-runs/code_reviews/fix_run_gates_wait_form_sandbox_code_review/finding_2.md`.
+   The fix paragraph closes with: "The test file this change touches is `cli/test/run-test-suite.test.mjs` (it is not edited, but it drives the template), so the only test this fix runs is `npm test --workspace cli -- test/run-test-suite.test.mjs`." The fix edits only `cli/templates/scripts/run-test-suite.sh` and `scripts/run-test-suite.sh`. It creates and edits no test file. `plugin/instructions/unit_loop_core.md` → `## The test-run rule` point 4 says no finding fix or sub-step may name "a test file the unit neither creates nor edits". A finding's own text admits the file "is not edited", so this is exactly the forbidden case. Under that rule's point 3, the unit runs no test at all. The suite runs in the Run gates phase.
+   **Fix:** In `finding_2.md`, replace the sentence quoted above with a statement that this fix edits no test file, so it runs no test, and the suite runs in the Run gates phase. Keep the `cmp cli/templates/scripts/run-test-suite.sh scripts/run-test-suite.sh` check: it is not a test run. Leave the index and the readiness entry unchanged.
