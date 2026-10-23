@@ -51,10 +51,63 @@
 #
 # ONE RUN PER LABEL. The run form never starts a second run of a label whose
 # run is live: it collects that run's verdict as the wait form would. A run
-# removes a `.running` file only while it still holds its own PID.
+# removes a `.running` file only while it still holds its own PID. `.running`'s
+# content is the run form's PID as an ownership token; its MTIME IS THE
+# HEARTBEAT, refreshed every HEARTBEAT_SECONDS while the run form is alive. A
+# reader judges liveness from the files alone: `.verdict` present means
+# finished; `.running` with a heartbeat no older than STALE_SECONDS means live;
+# anything else means no run in flight, including a run that died without a
+# verdict.
+#
+# WHY NOT A SIGNAL. Measured 2026-10-23, Claude Code 2.1.309, macOS, headless
+# sandboxed session under the live profile: `kill -0` from a later call on a
+# process another call started was refused (`kill: (68252) - Operation not
+# permitted`, exit 1), and so was it on a process the wrapper had detached
+# itself (`nohup … &`, `disown`: `kill: (70347) - Operation not permitted`);
+# `kill -0` within one call on that call's own child exited 0; `ps -p` was
+# refused even within one call (`/bin/ps: Operation not permitted`, exit 126);
+# `pgrep` could not read the process list (`pgrep: Cannot get process list`,
+# exit 3). So no signal or process-table check can tell a later call whether a
+# run is alive, and this script sends no signal and lists no process.
+#
+# HOW THE RUN FORM WAS STARTED DOES NOT MATTER. A tool-level background task and
+# a self-detached process heartbeat the same way, because nothing sends a
+# signal: the heartbeat process reads a pipe whose only write end is the run
+# form's fd 3 and stops at that pipe's end of file, so it lives exactly as long
+# as the run form's fd 3. Each gate runs with `3>&-`, so a gate orphaned by the
+# run form's death cannot keep the heartbeat fresh.
+#
+# SIGNALS. Properties of this shape, measured 2026-10-23 on macOS, GNU bash
+# 3.2.57, UNSANDBOXED, with a gate held by `exec sleep`:
+#   - INT to the run form's process group (Ctrl-C): the foreground gate stops as
+#     it always did, the trap removes `.running`.
+#   - KILL to the process group: gate and heartbeat stop; the heartbeat goes
+#     stale and the label reads free after STALE_SECONDS.
+#   - TERM to the run form's PID alone: bash runs a trap only once its
+#     foreground command returns, so the gate keeps running and the heartbeat
+#     stays fresh until the gate ends; then `.running` is removed and the run
+#     form exits 143 with no further marker and no verdict.
+#   - KILL to the run form's PID alone: the gate survives orphaned, as it always
+#     did, and the heartbeat stops.
+# A run form stopped by a trapped signal therefore never reports its label free
+# while its gate runs, and once the trap ran the next `--wait` refuses at once.
+# Residuals: after a KILL to the run form's PID alone, the label reads free once
+# the heartbeat is stale while the orphaned gate still runs; a KILL sent to the
+# internal heartbeat process alone stops the heartbeat while the gate runs; a
+# host suspended mid-run can wake with a stale heartbeat before the heartbeat
+# process refreshes it.
+#
+# THE BOUND. STALE_SECONDS (30) is below WAIT_SLICE_SECONDS (60), so one
+# `--wait` call ends for a crashed run. RUN_TEST_SUITE_STALE is its test seam,
+# accepted only as digits with a value >= 3, else the default stands: mtimes are
+# whole seconds, so a live run's age reads up to 2 and a smaller bound would
+# judge it dead. The mtime is read through the library's `hr_lane_mtime`, which
+# picks the BSD or GNU `stat` spelling on the value rather than the exit status;
+# this script carries no `stat` of its own.
 #
 # BESIDE THE LOG, in the same directory:
-#   <label>.running  the run form's own PID, present while the gates run
+#   <label>.running  the run form's own PID (ownership token), present while the
+#                    gates run; its mtime is the heartbeat
 #   <label>.verdict  the verdict line, renamed into place whole once both gates
 #                    finished, so a reader never sees half a line
 # A refusal writes neither file, and no log.
@@ -68,7 +121,8 @@
 #   1  fail (likewise)
 #   2  refusal — one stderr line `run-test-suite.sh: <reason>`, nothing on stdout:
 #      bad arguments, a label outside the pattern, an unresolvable configuration,
-#      `commands.typecheck` or `commands.test` unset, no current branch, or (wait form) no run in flight
+#      `commands.typecheck` or `commands.test` unset, no current branch, (wait form) no run in flight — no .running, or a heartbeat older than STALE_SECONDS,
+#      or an unreadable heartbeat
 #   3  pending — the wait form, or the run form finding a run of the same label already in flight; issue the wait form
 
 # Deliberately no `-e`: this script has to outlive the command's failure long
@@ -80,6 +134,12 @@ set -uo pipefail
 WAIT_SLICE_SECONDS=60
 if [[ "${RUN_TEST_SUITE_WAIT_SLICE-}" =~ ^[0-9]+$ ]]; then
   WAIT_SLICE_SECONDS="$RUN_TEST_SUITE_WAIT_SLICE"
+fi
+
+HEARTBEAT_SECONDS=1
+STALE_SECONDS=30
+if [[ "${RUN_TEST_SUITE_STALE-}" =~ ^[0-9]+$ ]] && [ "$RUN_TEST_SUITE_STALE" -ge 3 ] 2>/dev/null; then
+  STALE_SECONDS="$RUN_TEST_SUITE_STALE"
 fi
 
 LOG_SUBDIR='test_run_logs'
@@ -124,6 +184,7 @@ log_dir="$state_dir/$LOG_SUBDIR/$safe_branch"
 log_file="$log_dir/$label.log"
 running_file="$log_dir/$label.running"
 verdict_file="$log_dir/$label.verdict"
+heartbeat_stop_file="$running_file.stop.$$"
 
 # Print a verdict file's line and exit with its status.
 emit_verdict() {
@@ -136,12 +197,65 @@ emit_verdict() {
   refuse "'$verdict_file' holds no verdict line"
 }
 
+# Print the heartbeat's age in whole seconds; fail, printing nothing, when the
+# mtime cannot be read (`hr_lane_mtime` prints 0 for that and for a missing path).
+heartbeat_age() {
+  local mtime now
+  mtime="$(hr_lane_mtime "$running_file")"
+  [ "$mtime" != 0 ] || return 1
+  now="$(date +%s)"
+  if [ "$now" -gt "$mtime" ]; then
+    printf '%s\n' "$((now - mtime))"
+  else
+    printf '0\n'
+  fi
+}
+
 run_alive() {
-  local pid
+  local age
   [ -f "$running_file" ] || return 1
-  pid="$(cat "$running_file" 2>/dev/null)" || return 1
-  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
-  kill -0 "$pid" 2>/dev/null
+  if age="$(heartbeat_age)"; then
+    [ "$age" -le "$STALE_SECONDS" ]
+    return
+  fi
+  # Vanished since the first test: the run finished, and the caller re-checks
+  # for its verdict. Still present: unreadable, which is never guessed.
+  [ -f "$running_file" ] || return 1
+  refuse "cannot read the heartbeat of '$running_file'"
+}
+
+# The heartbeat process: runs on the read end of the run form's fd 3 and ends at
+# that pipe's end of file. `read` without `-t`, because bash 3.2's `read -t`
+# returns 1 on both timeout and EOF; hence the separate touch loop. `touch -c`
+# never recreates a `.running` the run form already removed.
+heartbeat_loop() {
+  local toucher _
+  (
+    while [ ! -e "$heartbeat_stop_file" ]; do
+      touch -c "$running_file"
+      sleep "$HEARTBEAT_SECONDS"
+    done
+  ) &
+  toucher=$!
+  while IFS= read -r _; do :; done
+  : > "$heartbeat_stop_file"
+  wait "$toucher"
+  rm -f "$heartbeat_stop_file"
+}
+
+# A gate runs in the foreground, so INT and QUIT keep their default dispositions
+# in it. `3>&-` drops its copy of the heartbeat pipe, so an orphaned gate cannot
+# keep the heartbeat fresh. `set +u +o pipefail` grades the command under the
+# options a plain `bash -c` would give it, not this script's.
+run_gate() {
+  ( set +u +o pipefail; eval "$1" ) 3>&- < /dev/null >> "$log_file" 2>&1
+  return $?
+}
+
+# Sends no signal: exiting closes fd 3, which ends the heartbeat.
+on_signal() {
+  if [ "$(cat "$running_file" 2>/dev/null)" = "$$" ]; then rm -f "$running_file"; fi
+  exit $((128 + $1))
 }
 
 # Poll for the verdict of the run of <label> that is in flight, for at most one
@@ -198,32 +312,29 @@ fi
 mkdir -p "$log_dir" || refuse "cannot create '$log_dir'"
 rm -f "$verdict_file" "$verdict_file.tmp"
 printf '%s\n' "$$" > "$running_file"
+trap 'on_signal 15' TERM
+trap 'on_signal 2' INT
+trap 'on_signal 1' HUP
+rm -f "$heartbeat_stop_file"
+exec 3> >(heartbeat_loop > /dev/null 2>&1)
 : > "$log_file"
 
 marker() {
   printf '== run-test-suite.sh: %s ==\n' "$1" >> "$log_file"
 }
 
-# `set +u +o pipefail` inside each subshell grades the command under the
-# options a plain `bash -c` would give it, not this script's.
 marker "gate typecheck (commands.typecheck)"
 if [ "$typecheck_is_none" -eq 1 ]; then
   typecheck_status=0
   marker "gate typecheck not run: commands.typecheck is <none>"
 else
-  (
-    set +u +o pipefail
-    eval "$typecheck_line"
-  ) < /dev/null >> "$log_file" 2>&1
+  run_gate "$typecheck_line"
   typecheck_status=$?
   marker "gate typecheck exited $typecheck_status"
 fi
 
 marker "gate test (commands.test)"
-(
-  set +u +o pipefail
-  eval "$command_line"
-) < /dev/null >> "$log_file" 2>&1
+run_gate "$command_line"
 test_status=$?
 marker "gate test exited $test_status"
 
@@ -236,8 +347,10 @@ else
   verdict="fail $log_file"
 fi
 
+trap - TERM INT HUP
 printf '%s\n' "$verdict" > "$verdict_file.tmp" && mv -f "$verdict_file.tmp" "$verdict_file"
 if [ "$(cat "$running_file" 2>/dev/null)" = "$$" ]; then rm -f "$running_file"; fi
+exec 3>&-
 
 echo "$verdict"
 [ "$status" -eq 0 ] && exit 0
