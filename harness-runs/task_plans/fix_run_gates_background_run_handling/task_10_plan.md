@@ -17,3 +17,4 @@
 - `grep -n 'run-test-suite.sh' docs/watcher.md` shows the row with `pending` and `--wait` in its second cell and its last two cells unchanged.
 - `grep -c "prints only \`pass\` or \`fail" docs/watcher.md` prints `0`.
 - The table still renders: the edited row has the same number of `|` separators as its neighbours.
+  - **Deviations from plan:** The separator-count claim was to be executed with an `awk` count over lines 61–63 of `docs/watcher.md`; that compound command was refused by the permission layer. The claim rests instead on reading the bare `grep -n 'run-test-suite.sh' docs/watcher.md` output and the `Read` of lines 54–67: the edited row carries five `|` (leading, three separators, trailing), as do its neighbours `flow-walker.sh` and `create-worktree.sh`, and no `|` was added inside a cell.
