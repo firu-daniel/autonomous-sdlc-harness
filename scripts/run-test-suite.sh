@@ -110,6 +110,9 @@
 #                    gates run; its mtime is the heartbeat
 #   <label>.verdict  the verdict line, renamed into place whole once both gates
 #                    finished, so a reader never sees half a line
+#   <label>.running.stop.<pid>
+#                    transient: the heartbeat's own stop signal, written at the
+#                    end of a run and removed once the heartbeat has stopped
 # A refusal writes neither file, and no log.
 #
 # Usage:
