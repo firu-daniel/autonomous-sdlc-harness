@@ -284,10 +284,10 @@ run_alive() {
   refuse "cannot read the heartbeat of '$running_file'"
 }
 
-# The heartbeat process: runs on the read end of the run form's fd 3 and ends at
+# The heartbeat process: runs on the read end of the worker's fd 3 and ends at
 # that pipe's end of file. `read` without `-t`, because bash 3.2's `read -t`
 # returns 1 on both timeout and EOF; hence the separate touch loop. `touch -c`
-# never recreates a `.running` the run form already removed, and the loop also
+# never recreates a `.running` the worker already removed, and the loop also
 # ends once `.running` is gone, so a stop file that cannot be written (its
 # directory removed mid-run) never leaves it touching forever.
 heartbeat_loop() {
