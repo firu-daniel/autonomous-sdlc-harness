@@ -7,7 +7,10 @@
 # path lies strictly inside the state directory's scratch directory
 # (`hr_scratch_path_var`), answers whether the progress comment is on
 # (`hr_progress_comments`) and which main phases a flow-progress ledger records
-# as through (`hr_ledger_phases`), places a dropped
+# as through (`hr_ledger_phases`), answers whether the sandbox opt-out is taken
+# (`hr_sandbox_opted_out`) and whether this host has a definite missing sandbox
+# prerequisite (`hr_sandbox_prereq_probe_var`, judged by
+# `hr_sandbox_prereq_judge_var`), places a dropped
 # artifact in a working copy and commits and pushes it, and derives the
 # anchors (main checkout, work root, worktree directory, repo slug,
 # state-dir paths) the scripts would otherwise each re-derive slightly
@@ -214,6 +217,24 @@
 # owns a working copy's protected set; `hr_run_protected_rel_paths` is its shell
 # mirror, so a change to that set's order or spelling there is an edit here.
 #
+# MIRROR OF `cli/src/doctor/sandboxPrerequisites.ts` → `sandboxHostKind`,
+# `SANDBOX_HOST_BINARIES`, the missing-piece order, `SANDBOX_INSTALLERS` and
+# `WSL1_AGENT_MESSAGE`; `hr_sandbox_prereq_judge_var` codes them, the last two
+# into `HR_SANDBOX_REFUSAL`. AppArmor is not mirrored: no shell decision reads
+# it.
+#
+# MIRROR OF `cli/src/doctor/checks.ts` → `probeSandboxHost`;
+# `hr_sandbox_prereq_probe_var` mirrors its platform, kernel-release and `PATH`
+# reads (`uname -s`, `uname -r`, `command -v`). A change to the probe is an edit
+# here.
+#
+# MIRROR OF `cli/src/config/model.ts` → `sandboxOptedOut`;
+# `hr_sandbox_opted_out` and the `sandbox.optedOut` flag `hr_config_load`
+# computes. A change to either owner is an edit here.
+#
+# All three are held equal to their owners by
+# `cli/test/sandbox-prerequisites-shell-mirror.test.mjs`.
+#
 # A caller that calls no `hr_lane_*`, `hr_registry_init`, `hr_registry_set`,
 # `hr_remote_record_init`, `hr_registry_lock`, `hr_registry_unlock`, `hr_remote_status_write`,
 # `hr_remote_bundle_write`, `hr_remote_copy_tree`, `hr_remote_bundle_restore`,
@@ -231,7 +252,8 @@
 # named where it is used. `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`,
 # `HOME` and `PWD` are also read, as location anchors only, and `PATH` is read by
 # `hr_path_with_fallbacks` alone — as that function's input, which it prints back
-# transformed and never assigns. `GITHUB_RUN_ID`, `GITHUB_SERVER_URL`,
+# transformed and never assigns — beside `hr_sandbox_prereq_probe_var`'s
+# `command -v`, which resolves against it and never assigns it. `GITHUB_RUN_ID`, `GITHUB_SERVER_URL`,
 # `GITHUB_REPOSITORY` and `HARNESS_INPUT_CHAIN` are read by
 # `hr_remote_status_write` alone, as provenance values copied into
 # `status.json` — never a configured value and never policy.
@@ -1622,6 +1644,11 @@ hr_config_load() {
   # `tostring` would otherwise make indistinguishable from `true` — reaches
   # `hr_phase_enabled`, `hr_docs_retrieval_applies` or `hr_progress_comments` as
   # a value it refuses (2).
+  #
+  # `sandbox.optedOut` is a computed flag rather than the raw `reason`, because
+  # `s()` drops `"null"` and `""` and the string `"null"` is a taken opt-out. Its
+  # character class is JavaScript `trim`'s whitespace set: removing every such
+  # character leaves something exactly when `trim()` does.
   out=$(jq -n -r '
     def s($k; $v):
       if $v == null then empty
@@ -1661,6 +1688,10 @@ hr_config_load() {
       s("docs.retrievalBackend"; try .docs.retrievalBackend catch null),
       s("docs.retrieval";        try (.docs.retrieval | if type == "boolean" or . == null then . else "invalid" end) catch null),
       s("forge";                 try .forge                catch null),
+      s("sandbox.optedOut";
+        try (.sandbox.optOut.reason
+             | if type == "string" and (gsub("[\t\n\u000b\f\r    -     　﻿]"; "") != "")
+               then "true" else null end) catch null),
       s("protectedBranches.present";
         try (if (.protectedBranches | type) == "array" then "1" else null end) catch null),
       l("protectedBranches";     try .protectedBranches    catch null)
@@ -1962,6 +1993,99 @@ hr_progress_comments() {
     false) return 1 ;;
   esac
   return 2
+}
+
+# ---------------------------------------------------------------------------
+# The sandbox: the opt-out, and whether this host has a definite missing piece.
+# Mirrors of `sandboxOptedOut`, `sandboxPrerequisites.ts` and `probeSandboxHost`;
+# see the header. Every function here only reads.
+# ---------------------------------------------------------------------------
+
+# `sandbox.optOut` — 0 when the opt-out is taken (a `reason` that is a string
+# and not blank); 1 otherwise. The caller passes the MAIN checkout, never a run
+# copy, whose `harness.config.json` the sandbox can rewrite. Every non-0 answer,
+# including every `hr_config_load` failure — an absent, unparseable or
+# multi-document file, or a missing `defaultBranch` — means NOT opted out, so a
+# refusal that rests on it stands.
+hr_sandbox_opted_out() {
+  local root="${1-}"
+  hr_config_load "$root" || return 1
+  hr_cfg_scalar_var "sandbox.optedOut" || return 1
+  [ "$HR_CFG_VALUE" = "true" ] || return 1
+  return 0
+}
+
+# Judge a host's facts: <uname_s> <uname_r> <bwrap> <socat>, each binary `1`
+# when it resolves and `0` when it does not. Pure and bash-3.2-safe. Sets
+# `HR_SANDBOX_HOST` (`macos`, `linux`, `wsl2`, `wsl1`, `unsupported`),
+# `HR_SANDBOX_MISSING` (space-separated ids in the owner's order: `bwrap`,
+# `socat`, `wsl1`, `unsupported-platform`) and `HR_SANDBOX_REFUSAL` (one line
+# naming each missing piece and its fix, never the opt-out). 0 when nothing is
+# missing; 1 otherwise.
+hr_sandbox_prereq_judge_var() {
+  local uname_s="${1-}" uname_r="${2-}" have_bwrap="${3-0}" have_socat="${4-0}" packages="" named=""
+  HR_SANDBOX_HOST=""
+  HR_SANDBOX_MISSING=""
+  HR_SANDBOX_REFUSAL=""
+  case "$uname_s" in
+    Darwin) HR_SANDBOX_HOST="macos" ;;
+    Linux)
+      case "$uname_r" in
+        *[Mm][Ii][Cc][Rr][Oo][Ss][Oo][Ff][Tt]*)
+          case "$uname_r" in
+            *[Mm][Ii][Cc][Rr][Oo][Ss][Oo][Ff][Tt]-[Ss][Tt][Aa][Nn][Dd][Aa][Rr][Dd]*|*[Ww][Ss][Ll]2*)
+              HR_SANDBOX_HOST="wsl2" ;;
+            *) HR_SANDBOX_HOST="wsl1" ;;
+          esac
+          ;;
+        *) HR_SANDBOX_HOST="linux" ;;
+      esac
+      ;;
+    *) HR_SANDBOX_HOST="unsupported" ;;
+  esac
+  case "$HR_SANDBOX_HOST" in
+    unsupported)
+      HR_SANDBOX_MISSING="unsupported-platform"
+      HR_SANDBOX_REFUSAL='The sandbox does not run on platform `'"$uname_s"'`; it runs on macOS, Linux and WSL2.'
+      return 1
+      ;;
+    wsl1)
+      HR_SANDBOX_MISSING="wsl1"
+      HR_SANDBOX_REFUSAL='This is a WSL1 host (kernel release `'"$uname_r"'`), where the agent CLI refuses with "Sandboxing requires WSL2"; run the harness under WSL2.'
+      return 1
+      ;;
+    macos) return 0 ;;
+  esac
+  if [ "$have_bwrap" != "1" ]; then
+    HR_SANDBOX_MISSING="bwrap"
+    packages="bubblewrap"
+    named='`bwrap` (package `bubblewrap`)'
+  fi
+  if [ "$have_socat" != "1" ]; then
+    HR_SANDBOX_MISSING="${HR_SANDBOX_MISSING:+$HR_SANDBOX_MISSING }socat"
+    packages="${packages:+$packages }socat"
+    named="${named:+$named and }"'`socat` (package `socat`)'
+  fi
+  [ -n "$HR_SANDBOX_MISSING" ] || return 0
+  HR_SANDBOX_REFUSAL='The sandbox needs '"$named"' on PATH; install with `sudo apt-get install '"$packages"'` (Ubuntu/Debian) or `sudo dnf install '"$packages"'` (Fedora).'
+  return 1
+}
+
+# Probe this host for the judge: `uname -s`, `uname -r`, and `command -v bwrap`
+# / `command -v socat` against the caller's `PATH`; returns the judge's status.
+# A `uname` that fails is no definite answer: the three variables are cleared and
+# this returns 0, leaving the run to the agent CLI's `failIfUnavailable`.
+hr_sandbox_prereq_probe_var() {
+  local uname_s uname_r have_bwrap=0 have_socat=0
+  HR_SANDBOX_HOST=""
+  HR_SANDBOX_MISSING=""
+  HR_SANDBOX_REFUSAL=""
+  uname_s=$(uname -s 2>/dev/null) || return 0
+  [ -n "$uname_s" ] || return 0
+  uname_r=$(uname -r 2>/dev/null) || return 0
+  if command -v bwrap >/dev/null 2>&1; then have_bwrap=1; fi
+  if command -v socat >/dev/null 2>&1; then have_socat=1; fi
+  hr_sandbox_prereq_judge_var "$uname_s" "$uname_r" "$have_bwrap" "$have_socat"
 }
 
 # ---------------------------------------------------------------------------
