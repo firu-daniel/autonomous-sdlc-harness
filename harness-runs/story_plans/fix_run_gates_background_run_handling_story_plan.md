@@ -81,7 +81,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_run_gates_background_run
 4. [x] **Task 4** — Rewrite `### G.1 Run the gates` for the detached run form and add the uncollected-gate-run clause to the plan core's Done summary _(layer: plugin)_ _(points: 20)_
 5. [x] **Task 5** — Rewrite the `pending` bullet of the three supervised flows that run the gates _(layer: plugin)_ _(points: 10)_
 6. [x] **Task 6** — Correct `autonomous_pause_and_ledger.md` §2.5's teardown account to the three measured cases _(layer: plugin)_ _(points: 10)_
-7. [ ] **Task 7** — Correct the teardown clause in the five autonomous forks' self-pause paragraphs _(layer: plugin)_ _(points: 10)_
+7. [x] **Task 7** — Correct the teardown clause in the five autonomous forks' self-pause paragraphs _(layer: plugin)_ _(points: 10)_
 8. [ ] **Task 8** — Report uncollected gate runs in the user-review fix core's Done summary and in the improvement observations _(layer: plugin)_ _(points: 15)_
 9. [ ] **Task 9** — Bring this repository's `scripts/run-test-suite.sh` level with the template _(layer: general)_ _(points: 5)_
 10. [ ] **Task 10** — Correct the `run-test-suite.sh` row of `docs/watcher.md` _(layer: general)_ _(points: 5)_
