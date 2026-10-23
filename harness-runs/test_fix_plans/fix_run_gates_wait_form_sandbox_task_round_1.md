@@ -10,7 +10,7 @@
 
 This list is the **single source of truth** for the fix loop. `[ ]` markers anywhere else in this plan or its per-finding files are informational only.
 
-1. [ ] **Finding 1** — Respell `unparseable` in the `hr_sandbox_opted_out` comment. _(layer: cli, general)_
+1. [x] **Finding 1** — Respell `unparseable` in the `hr_sandbox_opted_out` comment. _(layer: cli, general)_
 
 ## Must Fix
 

@@ -2004,7 +2004,7 @@ hr_progress_comments() {
 # `sandbox.optOut` — 0 when the opt-out is taken (a `reason` that is a string
 # and not blank); 1 otherwise. The caller passes the MAIN checkout, never a run
 # copy, whose `harness.config.json` the sandbox can rewrite. Every non-0 answer,
-# including every `hr_config_load` failure — an absent, unparseable or
+# including every `hr_config_load` failure — an absent, unparsable or
 # multi-document file, or a missing `defaultBranch` — means NOT opted out, so a
 # refusal that rests on it stands.
 hr_sandbox_opted_out() {
