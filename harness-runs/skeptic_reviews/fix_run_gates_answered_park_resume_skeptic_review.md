@@ -64,7 +64,7 @@ One net-new defect remains, outside the local lane:
 
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below from top to bottom, and the committer flips each one to `[x]` as that fix's commit lands. **Only the committing role flips a marker.** `[ ]` markers anywhere else, such as sub-step bullets inside the per-finding files, are informational only.
 
-1. [ ] **Finding 1** — Let the architecture reviewer accept an unreadable test log on an answer-mode index, word-count neutral _(layer: plugin)_
+1. [x] **Finding 1** — Let the architecture reviewer accept an unreadable test log on an answer-mode index, word-count neutral _(layer: plugin)_
 
 ---
 

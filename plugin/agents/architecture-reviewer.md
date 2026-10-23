@@ -73,7 +73,7 @@ You judge the *planned* architecture, before any code is written. The **key name
 |---|---|
 | `story_path` | The plan index. Its `## Context` is shared by every detail file. |
 | `task_files_dir` | The folder of detail files — `task_<N>_plan.md` in (a), `finding_<N>.md` in (b) and (c). Read **every** one. |
-| `prompt_path` | Where the caller supplies one: the original prompt under `<state_dir>/task_prompts/` in (a), the active user-review file under `<state_dir>/user_reviews/` in (b), and in (c) the machine-local test log the plan was written from, read as the requirement. |
+| `prompt_path` | Requirement, if supplied: (a) original prompt under `<state_dir>/task_prompts/`; (b) active user-review file under `<state_dir>/user_reviews/`; (c) test log — if unreadable while `story_path` carries a `Park answer consumed:` line, its quoted failure lines stand in, no blocker. |
 | `findings_folder` | Where your output goes: you write `<findings_folder>/review_{iteration}.md`. |
 | `iteration` | Integer from the caller — the index your findings file is named and titled with; never re-derive it. |
 
