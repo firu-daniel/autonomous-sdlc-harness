@@ -31,7 +31,7 @@ The other two findings are wording defects left by the compression pass on `test
 Each entry resolves to a self-contained `harness-runs/code_reviews/fix_run_gates_answered_park_resume_code_review/finding_<K>.md` through its `**Finding K**` reference. The leading `N.` is the fix order. `K` is the finding's stable identity.
 
 1. [x] **Finding 4** — Restore the blank line above `## Read on demand` in `test-fix-plan-writer` _(layer: plugin)_
-2. [ ] **Finding 3** — Replace "implementable from alone" with "self-contained" in `test-fix-plan-writer` step 6 _(layer: plugin)_
+2. [x] **Finding 3** — Replace "implementable from alone" with "self-contained" in `test-fix-plan-writer` step 6 _(layer: plugin)_
 3. [ ] **Finding 1** — Make the `<park_answer_lookup>` command glob-free (recursive `grep --include`) in both autonomous forks and the test pin _(layer: cli, plugin)_
 4. [ ] **Finding 2** — Let an `**Authorised by:**` line lift `layer-implementer`'s sandbox-avoidance rule, word-count neutral _(layer: plugin)_
 
