@@ -37,7 +37,7 @@ const CLAUSE = 'Park answer: <question_file> + <answer_file>.';
 const MARKER = 'Park answer consumed:';
 const ORIGIN = 'Phase G test-fix-plan-writer';
 const LOOKUP =
-  "grep -lF '<test_fix_plan_path>' <state_dir>/clarifications/<branch>/question_*.md <state_dir>/clarifications/<branch>/answered/question_*.md";
+  "grep -rlF --include='question_*.md' '<test_fix_plan_path>' <state_dir>/clarifications/<branch>/";
 
 function section(file, heading) {
   const lines = file.text.split('\n');
