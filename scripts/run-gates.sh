@@ -148,11 +148,22 @@ gate_silent "6a no machine paths" machine_path_hits
 # output; `./.claude` is THIS repository's, once it adopts the harness itself. Neither is a
 # template committed into the namespace `init` generates, which is the breach this gate is for —
 # and a `.claude/` under `cli/templates/`, or anywhere else, is still printed.
-gate_silent "6b no template in the dot-namespace" \
+# A `.claude/` holding no file or symlink at any depth is not printed: git tracks files only, so
+# such a directory can put nothing into a commit. That is why the empty `.claude/.cc-writes/` the
+# agent runner's sandbox leaves under the run-artifact tree no longer fails this gate, while a
+# `.claude/` holding any file is still printed wherever it sits, `harness-runs/` included.
+dot_namespace_hits() {
   find . -name '.claude' -type d \
-  -not -path './examples/notes-app/.claude' \
-  -not -path './.claude' \
-  -not -path './node_modules/*'
+    -not -path './examples/notes-app/.claude' \
+    -not -path './.claude' \
+    -not -path './node_modules/*' |
+    while IFS= read -r dir; do
+      if [ -n "$(find "$dir" \( -type f -o -type l \) -print -quit)" ]; then
+        printf '%s\n' "$dir"
+      fi
+    done
+}
+gate_silent "6b no template in the dot-namespace" dot_namespace_hits
 gate "6c llms.txt links resolve on main" bash scripts/check-llms-txt.sh
 gate "6d plugin command spellings carry the prefix" bash scripts/check-command-spelling.sh
 # 6a greps for the running user's `$HOME` only, so a transcript ref under /tmp, /private/var or

@@ -12,7 +12,7 @@ The BLOCKED legs (13a–13c) and SKIPPED legs (6f, 13d, 14d) in the log are repo
 
 This list is the **single source of truth** for the fix loop. `[ ]` markers anywhere else, including the `- [ ]` sub-step bullets inside the per-finding files, are informational only.
 
-1. [ ] **Finding 1** — Gate 6b reports a file-less `.claude/` directory under the run-artifact tree. _(layer: general)_
+1. [x] **Finding 1** — Gate 6b reports a file-less `.claude/` directory under the run-artifact tree. _(layer: general)_
 
 ## Must Fix
 
