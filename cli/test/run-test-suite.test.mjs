@@ -5,24 +5,24 @@
  * **The rule these tests exist to enforce: the wrapper hands the orchestrator one line and nothing
  * else, runs `commands.typecheck` and then `commands.test` exactly once each per invocation, decides
  * one verdict for the pair, never runs while a run of the same label is live, and versions its log
- * per round.**
+ * per round. A run's liveness is its heartbeat, the mtime of `.running`, never a signal to its PID.**
  * Every case seeds `commands.test` with a stub that counts its own runs, so "exactly once" is an
- * assertion on a counter file rather than an inference from the verdict, and "nothing else" is an
- * assertion that the stub's own output reached the log and neither of the wrapper's streams. The
- * two-gate cases wire `commands.typecheck` to a second counting stub the same way. A
- * `commands.typecheck` of `<none>` is asserted as not run — a marker line and no counter — and
- * never as a pass: a failing test still fails the round.
+ * assertion on a counter file; the stub's own output must reach the log and neither stream. The
+ * two-gate cases wire `commands.typecheck` to a second counting stub; a `<none>` one is asserted as
+ * not run — a marker line and no counter — never as a pass: a failing test still fails the round.
+ * A signal to the run form's process group stops the gate too; a trapped signal to its PID alone
+ * leaves the label live until the gate returns, then removes `.running` and writes no verdict.
  *
- * Not covered here: the Run gates phase's own sequencing — which gate runs when, and what a `fail`
- * dispatches — is instruction prose, and Task 23's walk of that prose covers it.
- *
- * These run against the **compiled** CLI at `dist/cli.js`, because `init` is what writes the
- * wrapper into the fixture; `npm run build` precedes `npm test`.
+ * Not covered here: the Run gates phase's own sequencing (instruction prose, Task 23's walk); the
+ * sandbox itself (`docs/sandbox-verification.md` rows WF2–WF5); a `SIGKILL` to the run form's PID
+ * alone, whose orphaned gate is today's behaviour; and the second `stat` spelling — the wrapper reads
+ * the mtime through `hr_lane_mtime`, where only one of BSD `stat -f %m` and GNU `stat -c %Y` yields.
+ * These run the **compiled** `dist/cli.js`, whose `init` writes the wrapper: `npm run build` first.
  */
 
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -53,7 +53,7 @@ const STDERR_MARKER = 'STUB-STDERR-MARKER';
 const STUB = [
   '#!/usr/bin/env bash',
   `printf 'ran\\n' >> ${COUNTER}`,
-  `pwd > ${PWD_RECORD}`,
+  `pwd > ${PWD_RECORD}; printf '%s\\n' "$$" > stub-pid.txt`,
   `echo "${STDOUT_MARKER} \${STUB_TAG-}"`,
   `echo "${STDERR_MARKER} \${STUB_TAG-}" >&2`,
   'if [ -n "${STUB_RELEASE-}" ]; then',
@@ -148,6 +148,51 @@ function deadPid() {
   const { pid, status } = spawnSync('true');
   assert.equal(status, 0);
   return pid;
+}
+
+const STALE_ENV = 'RUN_TEST_SUITE_STALE';
+const RUNNING = `${LOG_DIR}/task_round_1.running`;
+const VERDICT = `${LOG_DIR}/task_round_1.verdict`;
+const LOG = `${LOG_DIR}/task_round_1.log`;
+const REFUSAL = 'run-test-suite.sh: no run in flight for task_round_1\n';
+
+/** Plants `task_round_1.running` holding `pid`, its mtime — the heartbeat — `ageSeconds` in the past. */
+function plantRunning(dir, { pid, ageSeconds }) {
+  mkdirSync(join(dir, LOG_DIR), { recursive: true });
+  const path = join(dir, RUNNING);
+  writeFileSync(path, `${pid}\n`);
+  const at = Date.now() / 1000 - ageSeconds;
+  utimesSync(path, at, at);
+}
+
+function pidOf(dir) {
+  return Number(text(dir, RUNNING).trim());
+}
+
+/** The same literal the `STUB`'s `pwd > ${PWD_RECORD}; printf …` line writes the gate's own PID to. */
+const STUB_PID_RECORD = 'stub-pid.txt';
+
+function stubPidOf(dir) {
+  return Number(text(dir, STUB_PID_RECORD).trim());
+}
+
+/** Whether `pid` exists; the test process is unsandboxed, so signal 0 answers here as it cannot for the wrapper. */
+function isAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (error.code === 'ESRCH') return false;
+    throw error;
+  }
+}
+
+/** Resolves once the run held on its release file is in flight: `.running`, one counter line, the gate's PID. */
+function untilInFlight(dir) {
+  return pollUntil(
+    () => existsSync(join(dir, RUNNING)) && counterLines(dir).length === 1 && existsSync(join(dir, STUB_PID_RECORD)),
+    'the run in flight',
+  );
 }
 
 for (const [name, stubExit, expectedStdout, expectedStatus] of [
@@ -268,11 +313,8 @@ test('a run form issued while a run of the same label is live prints `pending` a
 for (const [name, plant] of [
   ['--wait for a label never run refuses: no run in flight', () => {}],
   [
-    '--wait for a label whose .running names a dead PID refuses: no run in flight',
-    (dir) => {
-      mkdirSync(join(dir, LOG_DIR), { recursive: true });
-      writeFileSync(join(dir, LOG_DIR, 'task_round_1.running'), `${deadPid()}\n`);
-    },
+    '--wait for a label whose .running heartbeat is stale refuses: no run in flight',
+    (dir) => plantRunning(dir, { pid: deadPid(), ageSeconds: 120 }),
   ],
 ]) {
   test(name, async (t) => {
@@ -288,6 +330,149 @@ for (const [name, plant] of [
     assert.deepEqual(await snapshotTree(dir), before, 'a refused --wait wrote a file');
   });
 }
+
+test('--wait for a label whose fresh heartbeat names an unsignalable PID prints `pending`: the heartbeat decides', async (t) => {
+  const dir = await wiredFixture(t);
+  // The planted PID is dead, so the old `kill -0` liveness check would refuse this case.
+  plantRunning(dir, { pid: deadPid(), ageSeconds: 0 });
+  const before = await snapshotTree(dir);
+
+  const result = await wrapper(dir, ['--wait', 'task_round_1'], { RUN_TEST_SUITE_WAIT_SLICE: '1' });
+
+  assert.equal(result.stdout, 'pending\n');
+  assert.equal(result.status, 3);
+  assert.equal(result.stderr, '');
+  assert.deepEqual(await snapshotTree(dir), before, 'the wait form wrote a file');
+});
+
+test('a run form finding a fresh heartbeat of its label prints `pending` and starts nothing', async (t) => {
+  const dir = await wiredFixture(t);
+  const sentinel = 'PLANTED-LOG-SENTINEL\n';
+  const pid = deadPid();
+  plantRunning(dir, { pid, ageSeconds: 0 });
+  writeFileSync(join(dir, LOG), sentinel);
+
+  const result = await wrapper(dir, ['task_round_1'], { RUN_TEST_SUITE_WAIT_SLICE: '1' });
+
+  assert.equal(result.stdout, 'pending\n');
+  assert.equal(result.status, 3);
+  assert.deepEqual(counterLines(dir), [], 'the run form started the command');
+  assert.equal(text(dir, LOG), sentinel, 'the run form touched the live run\'s log');
+  assert.equal(pidOf(dir), pid, 'the run form replaced the live run\'s .running');
+});
+
+test('a run form finding a stale heartbeat of its label starts a fresh run', async (t) => {
+  const dir = await wiredFixture(t);
+  const sentinel = 'PLANTED-LOG-SENTINEL\n';
+  plantRunning(dir, { pid: deadPid(), ageSeconds: 120 });
+  writeFileSync(join(dir, LOG), sentinel);
+
+  const result = await wrapper(dir, ['task_round_1']);
+
+  assert.equal(result.stdout, 'pass\n');
+  assert.equal(result.status, 0);
+  assert.deepEqual(counterLines(dir), ['ran']);
+  assert.doesNotMatch(text(dir, LOG), /PLANTED-LOG-SENTINEL/, 'the re-run did not truncate the log');
+  assert.equal(existsSync(join(dir, RUNNING)), false, '.running outlived the run');
+});
+
+test('a run killed without a verdict reads as no run in flight once its heartbeat is stale', async (t) => {
+  const dir = await wiredFixture(t);
+  const release = join(dir, 'stub-release');
+  const controller = new AbortController();
+
+  const run = runBash(dir, [join(dir, WRAPPER), 'task_round_1'], { STUB_RELEASE: release }, { signal: controller.signal });
+  const rejected = assert.rejects(run, /^Error: runBash aborted:/);
+  await untilInFlight(dir);
+  controller.abort();
+  await rejected;
+  await pollUntil(() => !isAlive(stubPidOf(dir)), 'the group SIGKILL to reach the gate');
+
+  const result = await wrapper(dir, ['--wait', 'task_round_1'], { [STALE_ENV]: '3', RUN_TEST_SUITE_WAIT_SLICE: '30' });
+
+  assert.equal(result.status, 2);
+  assert.equal(result.stdout, '');
+  assert.equal(result.stderr, REFUSAL);
+  assert.equal(existsSync(join(dir, VERDICT)), false, 'a killed run left a verdict');
+  assert.equal(existsSync(join(dir, RUNNING)), true, '.running is gone, so the refusal did not come from staleness');
+  writeFileSync(release, '');
+});
+
+test('a run that outlives the stale window keeps its heartbeat fresh', async (t) => {
+  const dir = await wiredFixture(t);
+  const release = join(dir, 'stub-release');
+
+  const run = wrapper(dir, ['task_round_1'], { STUB_RELEASE: release });
+  await untilInFlight(dir);
+  await new Promise((resolve) => setTimeout(resolve, 10000));
+
+  const pending = await wrapper(dir, ['--wait', 'task_round_1'], { [STALE_ENV]: '5', RUN_TEST_SUITE_WAIT_SLICE: '1' });
+  assert.equal(pending.stdout, 'pending\n');
+  assert.equal(pending.status, 3);
+
+  writeFileSync(release, '');
+  let waited;
+  await pollUntil(async () => {
+    waited = await wrapper(dir, ['--wait', 'task_round_1'], { [STALE_ENV]: '5', RUN_TEST_SUITE_WAIT_SLICE: '1' });
+    return waited.stdout !== 'pending\n';
+  }, '--wait to stop printing `pending`');
+  assert.equal(waited.stdout, 'pass\n');
+  assert.equal((await run).stdout, 'pass\n');
+  assert.deepEqual(counterLines(dir), ['ran'], 'the command did not run exactly once');
+});
+
+test('a SIGTERM to the run form\'s PID alone leaves the label live until the gate returns, then no verdict', async (t) => {
+  const dir = await wiredFixture(t);
+  const release = join(dir, 'stub-release');
+
+  const run = wrapper(dir, ['task_round_1'], { STUB_RELEASE: release });
+  await untilInFlight(dir);
+  process.kill(pidOf(dir), 'SIGTERM');
+
+  assert.equal(existsSync(join(dir, RUNNING)), true, '.running went before the gate returned');
+  assert.equal(isAlive(stubPidOf(dir)), true, 'the SIGTERM stopped the gate');
+  const pending = await wrapper(dir, ['--wait', 'task_round_1'], { RUN_TEST_SUITE_WAIT_SLICE: '1' });
+  assert.equal(pending.stdout, 'pending\n');
+  assert.equal(pending.status, 3);
+
+  writeFileSync(release, '');
+  const result = await run;
+
+  assert.equal(result.status, 143);
+  assert.equal(result.stdout, '');
+  assert.equal(existsSync(join(dir, RUNNING)), false, 'the trap left .running');
+  assert.equal(existsSync(join(dir, VERDICT)), false, 'a signalled run left a verdict');
+  assert.equal(isAlive(stubPidOf(dir)), false, 'the gate outlived the run form');
+  const exitedPrefix = GATE_MARKER.testExited('#').split('#')[0];
+  assert.ok(!text(dir, LOG).split('\n').some((line) => line.startsWith(exitedPrefix)), 'a marker followed the trap');
+  const refused = await wrapper(dir, ['--wait', 'task_round_1']);
+  assert.equal(refused.status, 2);
+  assert.equal(refused.stderr, REFUSAL);
+  writeFileSync(release, '');
+});
+
+test('a SIGINT to the run form\'s process group stops the gate before any release, then no verdict', async (t) => {
+  const dir = await wiredFixture(t);
+  const release = join(dir, 'stub-release');
+  const controller = new AbortController();
+  t.after(() => controller.abort());
+
+  const run = runBash(dir, [join(dir, WRAPPER), 'task_round_1'], { STUB_RELEASE: release }, { signal: controller.signal });
+  await untilInFlight(dir);
+  process.kill(-pidOf(dir), 'SIGINT');
+
+  await pollUntil(() => !existsSync(join(dir, RUNNING)), 'the trap to remove .running');
+  assert.equal(isAlive(stubPidOf(dir)), false, 'the interrupt did not stop the gate');
+  const result = await run;
+
+  assert.equal(result.status, 130);
+  assert.equal(result.stdout, '');
+  assert.equal(existsSync(join(dir, VERDICT)), false, 'an interrupted run left a verdict');
+  const refused = await wrapper(dir, ['--wait', 'task_round_1']);
+  assert.equal(refused.status, 2);
+  assert.equal(refused.stderr, REFUSAL);
+  writeFileSync(release, '');
+});
 
 test('malformed invocations refuse with exit 2, one stderr line and nothing written', async (t) => {
   const dir = await wiredFixture(t);
