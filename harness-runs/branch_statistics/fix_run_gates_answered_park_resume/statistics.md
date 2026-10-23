@@ -2,11 +2,11 @@
 
 ## Summary
 
-- `success_rate`: **`100%`** — headline metric.
+- `success_rate`: **`90.6%`** — headline metric.
 - `story_points_total`: `106` — denominator (sum of every task's `_(points: <N>)_` story-point estimate in the story index's `## Phase 2 Readiness — Ordered Fix List`).
-- `issue_cost_total`: `0` — subtraction (sum of each user-review observation's severity weight, in story-point units).
+- `issue_cost_total`: `10` — subtraction (sum of each user-review observation's severity weight, in story-point units).
 - `story_plan_tasks`: `6` — retained raw count of `## Phase 2 Readiness — Ordered Fix List` task entries.
-- `user_review_issues`: `0` — retained raw count of observations across all `fix_run_gates_answered_park_resume_review*.md` user-review files.
+- `user_review_issues`: `2` — retained raw count of observations across all `fix_run_gates_answered_park_resume_review*.md` user-review files.
 
 Formula:
 
@@ -14,7 +14,7 @@ Formula:
 success_rate = round(clamp((story_points_total - issue_cost_total) / story_points_total, 0, 1) * 100, 1) percent
 ```
 
-Worked example: `round(clamp((106 - 0) / 106, 0, 1) * 100, 1)` = `100%` (and the no-issues rule below gives `100%` directly).
+Worked example: `round(clamp((106 - 10) / 106, 0, 1) * 100, 1)` = `round(90.5660…, 1)` = `90.6%`.
 
 Edge cases (the rate is always computed via the formula, then adjusted by these rules):
 
@@ -39,16 +39,21 @@ Per-source raw numbers and per-issue costs are retained so the metric can be ref
     - **sum (`story_points_total`)**: `106`
   - `dispositioned_points`: `0` — no commit in `dev..HEAD` (evaluated as `origin/dev..HEAD`, since no local `dev` ref exists in this checkout) carries the `record disposition of ` record, so no task here was closed without a fix and no unpointed token was matched.
   - (Back-compat: every entry carries a `_(points: …)_` tag, so the legacy task-count fallback did not fire.)
-- **User-review source** — `user_review_issues`: `0`, `issue_cost_total`: `0` (per user-review file, then summed)
-  - glob `harness-runs/user_reviews/fix_run_gates_answered_park_resume_review*.md` matched no file (first write, pre-user-review), so no file was counted and no enumeration arm was run.
-  - **total**: `0` observations → `issue_cost_total` `0`
-  - Each file's observation count is the count of whatever top-level enumeration that file uses, taken from the first of four arms to return non-zero and never summed across arms: (1) numbered `##`–`####` headings with required trailing punctuation, `grep -cE '^#{2,4} +[0-9]+[.):]'`; (2) top-level numbered/bulleted list items, `grep -cE '^[0-9]+\.|^[-*][[:space:]]'`; (3) an explicit per-observation marker the file itself uses, with the matching grep recorded beside the count; (4) `1`, reserved for a file with no enumeration of any kind. Every observation the user wrote is counted and weighted, including any a later fix plan verifies as OK.
+- **User-review source** — `user_review_issues`: `2`, `issue_cost_total`: `10` (per user-review file, then summed)
+  - glob `harness-runs/user_reviews/fix_run_gates_answered_park_resume_review*.md` matched one file after dropping `_fix_plan` matches (`fix_run_gates_answered_park_resume_fix_plan.md` and the `fix_run_gates_answered_park_resume_fix_plan/` directory were excluded).
+  - `fix_run_gates_answered_park_resume_review.md`: `2` observations → cost `10`. Counted by **arm 2, top-level list items** — `grep -cE '^[0-9]+\.|^[-*][[:space:]]' <file>` → `2`, arm 1 (`grep -cE '^#{2,4} +[0-9]+[.):]' <file>`) having returned `0`. The indented `   - ` candidate sub-items under observation 1 are not counted. Each observation's assigned weight beside it:
+    1. the instruction prose the branch added is longer than its effect needs (about 2,300 words), against `plugin.md` → `## Writing agent prose`; trim with behaviour unchanged → **Minor** `5`
+    2. two definitions in `test-fix-plan-writer.md` (what *new this round* means; the order of the typecheck and test sections in the log) "may have gone" in the word-count trim; check and restore if acted on → **Minor** `5`
+  - **total**: `2` observations → `issue_cost_total` `10`
+  - Each file's observation count is the count of whatever top-level enumeration that file uses, taken from the first of four arms to return non-zero and never summed across arms: (1) numbered `##`–`####` headings with required trailing punctuation, `grep -cE '^#{2,4} +[0-9]+[.):]'` — here `0`; (2) top-level numbered/bulleted list items, `grep -cE '^[0-9]+\.|^[-*][[:space:]]'` — here `2`, so arm 2 is this file's count; (3) an explicit per-observation marker the file itself uses, with the matching grep recorded beside the count; (4) `1`, reserved for a file with no enumeration of any kind. Every observation the user wrote is counted and weighted, including any a later fix plan verifies as OK — the count measures what the user found, not what survived triage.
   - Each observation is weighted in story-point units: **Major** `15` (explicit `[major]` marker, or the observation describes a broken/incorrect user-facing flow, a missing/client-only authorization gate, data loss/corruption/unprotected data, or an absent whole ported behaviour — the deciding phrase is quoted beside the observation), **Trivial** `2` (explicit `[trivial]` marker), **Minor** `5` (the default for every observation without a Major/Trivial classification).
+
+**Why both took the Minor default.** Neither observation carries an explicit `[major]` or `[trivial]` marker. Observation 1 is prose length and rule-stating style, with behaviour explicitly to stay unchanged. Observation 2 is a conditional possible loss of two definitions ("may have gone", "Check whether either was an edge case"), not a described broken end-to-end flow or an absent whole behaviour.
 
 ## Status
 
-- status: `pre-user-review` — `pre-user-review` means this file was written right after the branch (code) review with no user review yet (`issue_cost_total` `0` → `100%`); `post-user-review` means it was re-written after user-review fixes, with the issues from the `fix_run_gates_answered_park_resume_review*.md` files counted and weighted.
-- last_updated: `2026-10-23`
+- status: `post-user-review` — `pre-user-review` means this file was written right after the branch (code) review with no user review yet (`issue_cost_total` `0` → `100%`); `post-user-review` means it was re-written after user-review fixes, with the issues from the `fix_run_gates_answered_park_resume_review*.md` files counted and weighted.
+- last_updated: `2026-10-24`
 
 ## Notes
 
