@@ -121,8 +121,10 @@
 #   1  fail (likewise)
 #   2  refusal — one stderr line `run-test-suite.sh: <reason>`, nothing on stdout:
 #      bad arguments, a label outside the pattern, an unresolvable configuration,
-#      `commands.typecheck` or `commands.test` unset, no current branch, (wait form) no run in flight — no .running, or a heartbeat older than STALE_SECONDS,
-#      or an unreadable heartbeat
+#      `commands.typecheck` or `commands.test` unset, no current branch,
+#      (wait form) no run in flight — no `.running`, or a heartbeat older than
+#      STALE_SECONDS — or (either form) a `.running` whose heartbeat cannot be
+#      read: `cannot read the heartbeat of '<path>'`
 #   3  pending — the wait form, or the run form finding a run of the same label already in flight; issue the wait form
 
 # Deliberately no `-e`: this script has to outlive the command's failure long

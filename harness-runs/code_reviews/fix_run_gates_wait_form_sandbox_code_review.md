@@ -28,7 +28,7 @@ Pass 0: the sweep table's regex cells are still the stub, so the grep half had n
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 5** — Name `run-test-suite.sh`'s heartbeat read as a second caller in `hr_lane_mtime`'s doc comment, in both library copies _(layer: cli, general)_
-2. [ ] **Finding 3** — Give the unreadable-heartbeat refusal its own entry in the exit map, reachable from either form, in both script copies _(layer: cli, general)_
+2. [x] **Finding 3** — Give the unreadable-heartbeat refusal its own entry in the exit map, reachable from either form, in both script copies _(layer: cli, general)_
 3. [ ] **Finding 6** — List the transient `<label>.running.stop.<pid>` file under `BESIDE THE LOG`, in both script copies _(layer: cli, general)_
 4. [ ] **Finding 2** — End the heartbeat's touch loop once `.running` is gone, so an unwritable stop file cannot leave it running forever, in both script copies _(layer: cli, general)_
 5. [ ] **Finding 1** — Add a case for the `cannot read the heartbeat` refusal in both forms, using a failing `stat` on `PATH` _(layer: cli)_
