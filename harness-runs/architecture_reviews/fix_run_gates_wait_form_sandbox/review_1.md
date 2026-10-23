@@ -1,0 +1,10 @@
+# Architecture review — iteration 1
+
+## Must Fix
+1. **The story index's shared `## Context` still has Task 1 carrying its own `stat` fallback** — `fix_run_gates_wait_form_sandbox_story_plan.md` (`**Top risks:**`, the third bullet: *"Task 1 tries GNU `stat -c %Y` first and BSD `stat -f %m` second, and refuses rather than guesses when it can read neither."*). Rule: `.claude/context/conventions.md` → `### Where a new responsibility goes`: *"A responsibility that already has a home does not get a second one"* and *"Before adding a copy of anything, grep for it."*
+   Iteration 0's Must Fix was applied to `task_1_plan.md`, `task_2_plan.md` and `task_4_plan.md`. `heartbeat_age` now reads the mtime through `hr_lane_mtime` (`cli/templates/scripts/lib/harness-run-lib.sh`), and Task 1's Verification requires `grep -n 'stat ' cli/templates/scripts/run-test-suite.sh` to hit only comment lines. The index's `## Context` was not updated, and every detail file shares it. It still describes the design iteration 0 rejected: the script picks its own `stat` spelling, GNU first, which is the reverse of the library's BSD-first order chosen on the value. An implementer who reads the shared Context and then Task 1 gets two contradictory placements for the mtime read, and one of them is the second home the rule forbids. The index does not record this finding in a `## Rejected findings` section.
+   **Fix:** In `fix_run_gates_wait_form_sandbox_story_plan.md` → `**Top risks:**`, rewrite the third bullet so that the BSD/GNU difference is handled by the library. Task 1 reads the mtime through `hr_lane_mtime`, which `cli/templates/scripts/lib/harness-run-lib.sh` already owns. That function picks `stat -f %m` or `stat -c %Y` on the value, not the exit status, and prints `0` for a missing path or an unreadable mtime. Task 1 maps that `0` to a refusal rather than a guess, and the script carries no `stat` of its own. Keep the bullet's last two sentences, about Task 4's owed sandbox rows and the Linux sandbox being not measured, as they are.
+
+## Should Fix
+
+## Nice to Have
