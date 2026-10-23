@@ -22,3 +22,8 @@
 - **added:** `context_notes:`
 - **verbatim:** `context_notes: This finding's readiness entry is tagged `_(layer: cli, general)_` in harness-runs/code_reviews/fix_run_gates_wait_form_sandbox_code_review.md, so the orchestrator dispatches the `general` layer of this same unit immediately after this one, and that dispatch owns the scripts/run-test-suite.sh copy; the commit lands once, after both layers (source: unit_loop_core.md → ## Layer routing table, multi-layer case).`
 - **why the agent could not derive it:** same as #16
+
+## [C2 · Item 1 · cli · iter 0] → layer-implementer  (#37)
+- **added:** `context_notes:`
+- **verbatim:** `context_notes: This finding's readiness entry is tagged `_(layer: cli, general)_` in harness-runs/skeptic_reviews/fix_run_gates_wait_form_sandbox_skeptic_review.md, so the orchestrator dispatches the `general` layer of this same unit immediately after this one, and that dispatch owns the scripts/run-test-suite.sh copy; the commit lands once, after both layers (source: unit_loop_core.md → ## Layer routing table, multi-layer case).`
+- **why the agent could not derive it:** same as #16 — the multi-layer tag and dispatch order are in the orchestrator's read set, not the implementer's
