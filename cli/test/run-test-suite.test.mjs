@@ -401,8 +401,10 @@ test('a run killed without a verdict reads as no run in flight once its heartbea
 test('a run that outlives the stale window keeps its heartbeat fresh', async (t) => {
   const dir = await wiredFixture(t);
   const release = join(dir, 'stub-release');
+  const controller = new AbortController();
+  t.after(() => controller.abort());
 
-  const run = wrapper(dir, ['task_round_1'], { STUB_RELEASE: release });
+  const run = runBash(dir, [join(dir, WRAPPER), 'task_round_1'], { STUB_RELEASE: release }, { signal: controller.signal });
   await untilInFlight(dir);
   await new Promise((resolve) => setTimeout(resolve, 10000));
 
@@ -424,8 +426,10 @@ test('a run that outlives the stale window keeps its heartbeat fresh', async (t)
 test('a SIGTERM to the run form\'s PID alone leaves the label live until the gate returns, then no verdict', async (t) => {
   const dir = await wiredFixture(t);
   const release = join(dir, 'stub-release');
+  const controller = new AbortController();
+  t.after(() => controller.abort());
 
-  const run = wrapper(dir, ['task_round_1'], { STUB_RELEASE: release });
+  const run = runBash(dir, [join(dir, WRAPPER), 'task_round_1'], { STUB_RELEASE: release }, { signal: controller.signal });
   await untilInFlight(dir);
   process.kill(pidOf(dir), 'SIGTERM');
 
@@ -448,7 +452,6 @@ test('a SIGTERM to the run form\'s PID alone leaves the label live until the gat
   const refused = await wrapper(dir, ['--wait', 'task_round_1']);
   assert.equal(refused.status, 2);
   assert.equal(refused.stderr, REFUSAL);
-  writeFileSync(release, '');
 });
 
 test('a SIGINT to the run form\'s process group stops the gate before any release, then no verdict', async (t) => {
