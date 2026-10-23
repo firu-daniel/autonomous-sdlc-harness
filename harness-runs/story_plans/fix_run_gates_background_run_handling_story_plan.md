@@ -77,7 +77,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_run_gates_background_run
 
 1. [x] **Task 1** — Make the `run-test-suite.sh` template's run form detach the gate run and print `pending` at once _(layer: cli)_ _(points: 20)_
 2. [x] **Task 2** — Cover the detached run form in `cli/test/run-test-suite.test.mjs`: immediate `pending`, collection by a later `--wait`, and the watchdog-kill path _(layer: cli)_ _(points: 20)_
-3. [ ] **Task 3** — Correct the run form's description in `cli/templates/scripts/README.md` _(layer: cli)_ _(points: 5)_
+3. [x] **Task 3** — Correct the run form's description in `cli/templates/scripts/README.md` _(layer: cli)_ _(points: 5)_
 4. [ ] **Task 4** — Rewrite `### G.1 Run the gates` for the detached run form and add the uncollected-gate-run clause to the plan core's Done summary _(layer: plugin)_ _(points: 20)_
 5. [ ] **Task 5** — Rewrite the `pending` bullet of the three supervised flows that run the gates _(layer: plugin)_ _(points: 10)_
 6. [ ] **Task 6** — Correct `autonomous_pause_and_ledger.md` §2.5's teardown account to the three measured cases _(layer: plugin)_ _(points: 10)_
