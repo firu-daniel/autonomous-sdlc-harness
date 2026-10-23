@@ -16,7 +16,7 @@ Each entry points to a self-contained `harness-runs/user_reviews/fix_run_gates_a
 
 1. [x] **Finding 1** — Restore the *new this round* definition and the order and closing of the log sections in `test-fix-plan-writer.md`, without raising its word count. _(layer: plugin)_
 2. [x] **Finding 2** — Trim the `<park_answer_lookup>` row in `mode_contract.md` to its definition and justification. _(layer: plugin)_
-3. [ ] **Finding 3** — Drop the archived-Phase-G-pair rationale from both planning forks' Override 2(a), and tighten the Consume-then-archive statement. _(layer: plugin)_
+3. [x] **Finding 3** — Drop the archived-Phase-G-pair rationale from both planning forks' Override 2(a), and tighten the Consume-then-archive statement. _(layer: plugin)_
 4. [ ] **Finding 4** — Shorten **The Phase G answer lookup.** paragraph and the row pointers to it in both implementation forks. _(layer: plugin)_
 5. [ ] **Finding 5** — Trim G.0's arm sentence, **Which Phase G answers G.0 consumes.**, G.2's restated return arm, and G.5's cap paragraph in the plan-orchestration core. _(layer: plugin)_
 
