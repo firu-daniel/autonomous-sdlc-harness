@@ -9,3 +9,23 @@
 - **added:** `context_notes:`
 - **verbatim:** context_notes: Task 1 (commit 03d1ab7c) and Task 2 (commit ccf46f5e) each appended a **Deviations from plan:** note with sandboxed measurements of the detached worker's signal and heartbeat behaviour, including a heartbeat that stopped refreshing with no signal sent in 1 of 6 runs (source: harness-runs/task_plans/fix_run_gates_background_run_handling/task_1_plan.md and task_2_plan.md → **Deviations from plan:**).
 - **why the agent could not derive it:** both deviation notes were written during implementation, after `task_11_plan.md` was written; Task 11's detail file does not name them.
+
+## [C · Item 1 · cli · iter 0] → layer-implementer  (#31)
+- **added:** `context_notes:`
+- **verbatim:** context_notes: This unit's readiness entry is tagged `_(layer: cli, general)_`; the orchestrator dispatches the `general` layer (path `.`) for this same unit immediately after this `cli` dispatch, and that dispatch owns `scripts/run-test-suite.sh` — the commit lands once, after both layers (source: harness-runs/code_reviews/fix_run_gates_background_run_handling_code_review.md → `## Phase 2 Readiness — Ordered Fix List`, entry 1).
+- **why the agent could not derive it:** the finding file names both copies but not the layer split; dispatch #30 for the same unit, carrying no note, returned an unmarked blocker asking for exactly this split.
+
+## [C · Item 1 · general · iter 0] → layer-implementer  (#32)
+- **added:** `context_notes:`
+- **verbatim:** context_notes: The preceding `cli` dispatch of this same unit already applied the fix to `cli/templates/scripts/run-test-suite.sh` (uncommitted in the working tree; its note is under **Deviations from plan:** in the finding file); this `general` dispatch owns `scripts/run-test-suite.sh` (source: harness-runs/code_reviews/fix_run_gates_background_run_handling_code_review.md → readiness entry 1, tagged `_(layer: cli, general)_`).
+- **why the agent could not derive it:** the sibling layer's edit is uncommitted and the finding file does not record which dispatch owns which copy.
+
+## [C · Item 2 · cli · iter 0] → layer-implementer  (#34)
+- **added:** `context_notes:`
+- **verbatim:** context_notes: This unit's readiness entry is tagged `_(layer: cli, general)_`; the orchestrator dispatches the `general` layer (path `.`) for this same unit immediately after this `cli` dispatch, and that dispatch owns `scripts/run-test-suite.sh` — the commit lands once, after both layers (source: harness-runs/code_reviews/fix_run_gates_background_run_handling_code_review.md → `## Phase 2 Readiness — Ordered Fix List`, entry 2).
+- **why the agent could not derive it:** the finding file names both copies but not the layer split (same gap as #30/#31).
+
+## [C · Item 2 · general · iter 0] → layer-implementer  (#35)
+- **added:** `context_notes:`
+- **verbatim:** context_notes: The preceding `cli` dispatch of this same unit already applied the fix to `cli/templates/scripts/run-test-suite.sh` (uncommitted in the working tree; its note is under **Deviations from plan:** in the finding file); this `general` dispatch owns `scripts/run-test-suite.sh` (source: harness-runs/code_reviews/fix_run_gates_background_run_handling_code_review.md → readiness entry 2, tagged `_(layer: cli, general)_`).
+- **why the agent could not derive it:** the sibling layer's edit is uncommitted and the finding file does not record which dispatch owns which copy.
