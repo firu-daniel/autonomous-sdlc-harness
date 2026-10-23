@@ -4,11 +4,12 @@
 
 **Stamp.** 2026-10-14 · profile regenerated from `46c4b45e` (`dev`), scripts committed as `0cfd4014` · macOS 15.7.4 (24G517), arm64 · `claude --version` **2.1.299 (Claude Code)** · `git --version` **2.50.1 (Apple Git-155)** · SSH remote `git@github-firu:firu-daniel/autonomous-sdlc-harness.git` (a host alias for `github.com`).
 
-**The headline, before the rows.** Three defects stop an unattended macOS run under this profile as shipped:
+**The headline, before the rows.** Four defects stop an unattended macOS run under this profile as shipped:
 
 - **No sandboxed git call in a linked worktree can write that worktree's record**, so no run can commit. The full flow parked at its first commit. See §2 G1 and §5 F1. Since `fix_sandbox_worktree_record_writes`, runs commit through the main checkout's `commit-on-branch.sh` as a third excluded command; its rows, CW1–CW6 in §3, are owed.
 - **The two `excludedCommands` entries match nothing**, so the main checkout's wrappers run sandboxed and every SSH push and refresh fails. See §3 P1 and R0. `fix_sandbox_excluded_commands_form` changes the generated form to P2's; the rows it affects are owed a re-run (§3).
 - **`run-gates.sh` fails every status-graded gate sandboxed.** See §5 F2. `fix_run_gates_sandbox_tmpdir` changes the call to an explicit template under `${TMPDIR:-/tmp}` (§5 TD1–TD4); T2, the sandboxed re-run, is owed (§5).
+- **`run-test-suite.sh --wait` cannot see a live gate run sandboxed**, and neither can the run form's one-run-per-label guard, so every gate run that outlasts the Bash tool's foreground window escalates. See §5 WF1 and F5. `fix_run_gates_wait_form_sandbox` makes the mtime of `<label>.running` the liveness signal; WF2–WF4, the sandboxed re-runs, are owed (§5).
 
 Each one has its own follow-up. The write protection, the credential denial and the network allowlist all held.
 

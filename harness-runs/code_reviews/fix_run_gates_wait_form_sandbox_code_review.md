@@ -33,7 +33,7 @@ Pass 0: the sweep table's regex cells are still the stub, so the grep half had n
 4. [x] **Finding 2** — End the heartbeat's touch loop once `.running` is gone, so an unwritable stop file cannot leave it running forever, in both script copies _(layer: cli, general)_
 5. [x] **Finding 1** — Add a case for the `cannot read the heartbeat` refusal in both forms, using a failing `stat` on `PATH` _(layer: cli)_
 6. [x] **Finding 7** — Start the two held-run cases under an aborting controller, so a failed assertion cannot hang the suite _(layer: cli)_
-7. [ ] **Finding 4** — Count F5 in `docs/sandbox-verification.md`'s headline as a fourth run-stopping defect _(layer: general)_
+7. [x] **Finding 4** — Count F5 in `docs/sandbox-verification.md`'s headline as a fourth run-stopping defect _(layer: general)_
 
 ---
 
