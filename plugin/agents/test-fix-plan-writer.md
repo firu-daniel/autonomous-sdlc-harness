@@ -69,9 +69,9 @@ Where the auto-loaded `CLAUDE.md` routing table names a document this definition
    == run-test-suite.sh: gate test exited <status> ==
    ```
 
-   The test section is present even when the typecheck failed. A non-zero `exited` status is a failing gate. A `not run` line is neither a failure nor a pass and never yields a finding.
+   The typecheck section comes first and closes with its `exited` line or its `not run` line, never both; the test section follows and is present even when the typecheck failed. A non-zero `exited` status is a failing gate. A `not run` line is neither a failure nor a pass and never yields a finding.
 
-2. **Classify each failure against the earlier logs**, where the prompt names any: *new this round* (a likely regression) or *persisting*. Record the class in `## Source failures` and in the finding's diagnosis.
+2. **Classify each failure against the earlier logs**, where the prompt names any: *new this round* (absent from the previous round's log: a likely regression from that round's fix) or *persisting*. Record the class in `## Source failures` and in the finding's diagnosis.
 
 3. **Diagnose each failure against the current tree**, not the log's snapshot alone.
 
@@ -105,7 +105,6 @@ Where the auto-loaded `CLAUDE.md` routing table names a document this definition
 - Every fixable failure has exactly one readiness entry, one `### K. <title>` pointer and one `finding_<K>.md`, and every entry carries a `_(layer: …)_` tag drawn from `<layer_names>`.
 - Every `**Suspected shared cause:**` line names a `Finding <K>` that exists in this plan.
 - `grep -rlF` of the literal `<repo_root>`, then of the literal home directory (bare `printenv HOME`), over the index and the per-finding folder prints nothing; a hit is rewritten per `## Process` step 5 before returning.
-- In answer mode, `## Not fixable on this branch` ends with exactly one `Park answer consumed: ` line naming every answer file in the clause, and every converted finding has its `**Authorised by:**` line.
 
 ## What you must not do
 
