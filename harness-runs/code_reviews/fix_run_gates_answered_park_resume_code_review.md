@@ -33,7 +33,7 @@ Each entry resolves to a self-contained `harness-runs/code_reviews/fix_run_gates
 1. [x] **Finding 4** — Restore the blank line above `## Read on demand` in `test-fix-plan-writer` _(layer: plugin)_
 2. [x] **Finding 3** — Replace "implementable from alone" with "self-contained" in `test-fix-plan-writer` step 6 _(layer: plugin)_
 3. [x] **Finding 1** — Make the `<park_answer_lookup>` command glob-free (recursive `grep --include`) in both autonomous forks and the test pin _(layer: cli, plugin)_
-4. [ ] **Finding 2** — Let an `**Authorised by:**` line lift `layer-implementer`'s sandbox-avoidance rule, word-count neutral _(layer: plugin)_
+4. [x] **Finding 2** — Let an `**Authorised by:**` line lift `layer-implementer`'s sandbox-avoidance rule, word-count neutral _(layer: plugin)_
 
 ---
 
