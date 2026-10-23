@@ -565,13 +565,25 @@ counts against `MAX_TOTAL_DISPATCHES` like any other dispatch — an overloaded 
 
 ⚠️ **A backoff is not a resumption mechanism, and neither is a `Monitor`.** Do **not** schedule a `Monitor`,
 do **not** sleep for minutes, and above all do **not** end the turn "intending to continue once the backoff
-elapses". A headless `claude -p` session is torn down when the turn ends: the process exits, any pending
-monitor dies with it, and nothing re-invokes the run. That exit is `rc=0` with no `PAUSE_ACK`, so
+elapses". What a headless `claude -p` session does when the turn ends depends on what the turn left pending,
+measured on Claude Code 2.1.309, macOS, headless, sandboxed (`docs/sandbox-verification.md`; the Linux
+sandbox was not measured — BG9):
+- **nothing pending** — the process exits `rc=0` right after the turn ends (BG1);
+- **a background Bash task pending** — the process stays alive, is woken when the task completes, runs one
+  more turn and then exits `rc=0` (BG5); an unattended run on Claude Code 2.1.308 matched this case (BG7);
+- **a `Monitor` pending** — the same, woken when the Monitor's stream ends (BG6).
+
+In the nothing-pending case (BG1) that exit is `rc=0` with no `PAUSE_ACK`, so
 `classify_run_exit` stamps the run **`completed`** and fires a **success** notification for a run that never
 finished — the flow is silently abandoned mid-phase behind a green light, and because the registry says
 `completed` rather than `paused`, both `/autonomous-sdlc-harness:branch-resume` and the watcher's `resume_paused_runs` (which filters
-on `status == "paused"`) refuse to touch it, so even a hand-dropped `RESUME` is ignored. Writing `PAUSE_ACK`
-and ending the session is the **only** durable way to survive an outage.
+on `status == "paused"`) refuse to touch it, so even a hand-dropped `RESUME` is ignored. A pending task or
+`Monitor` is still no resumption mechanism: the wake-up in BG5 and BG6 is observed behaviour of one CLI
+version, not a contract this flow relies on; a session waiting silently gives the stall watchdog no output, so
+a silence longer than `STALL_KILL_SECS` (default 2700 s, `<scripts_dir>/autonomous-watcher.sh` →
+`STALL_KILL_SECS`) is exposed to a kill-and-resume, and whether the busy-CPU guard (`STALL_BUSY_CPU_PCT`)
+spares a silent session has not been measured (BG8); and the STOP and PAUSE checks do not run while the
+session sleeps. Writing `PAUSE_ACK` and ending the session is the **only** durable way to survive an outage.
 
 **Action** — identical artifacts to §2.2, minus the request file (there is no `<state_dir>/PAUSE` to leave alone):
    a. Append an entry to `<state_dir>/PAUSE_PROGRESS.md` (Write tool or `echo … >>`, per §2.2a) recording — on top
