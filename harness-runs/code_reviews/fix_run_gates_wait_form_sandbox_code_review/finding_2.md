@@ -28,3 +28,6 @@ heartbeat_loop() {
 ```
 
 Leave the rest of the function unchanged. Then confirm the two copies are identical: `cmp cli/templates/scripts/run-test-suite.sh scripts/run-test-suite.sh`. This fix creates and edits no test file, so it runs no test; the suite runs in the Run gates phase. The `cmp` check above is not a test run.
+
+- **Deviations from plan:** The `cli` layer dispatch edited only `cli/templates/scripts/run-test-suite.sh`; the `scripts/run-test-suite.sh` copy and the `cmp` check belong to this unit's `general` layer dispatch, so at the end of the `cli` dispatch the two files differ by exactly this edit. The `cli` dispatch verified the edit with `bash -n cli/templates/scripts/run-test-suite.sh` (syntax ok) and `bash scripts/typecheck.sh` (`PASS: typecheck`); the suite is deferred to the Run gates phase.
+- **Deviations from plan:** The `general` layer dispatch copied the template's bytes into `scripts/run-test-suite.sh` (`cat` redirect, so the copy's executable mode is kept). `cmp cli/templates/scripts/run-test-suite.sh scripts/run-test-suite.sh` printed nothing and exited 0; `bash -n scripts/run-test-suite.sh` passed; `bash scripts/typecheck.sh` printed `PASS: typecheck`. The suite is deferred to the Run gates phase.
