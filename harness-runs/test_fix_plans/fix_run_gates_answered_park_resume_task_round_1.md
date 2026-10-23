@@ -10,7 +10,7 @@
 
 This list is the **single source of truth** for the fix loop. `[ ]` markers anywhere else in this plan are informational only.
 
-1. [ ] **Finding 1** — Make the start-up-poll case wait for the verdict before its one `--wait`. _(layer: cli)_
+1. [x] **Finding 1** — Make the start-up-poll case wait for the verdict before its one `--wait`. _(layer: cli)_
 
 ## Must Fix
 

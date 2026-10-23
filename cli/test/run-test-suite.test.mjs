@@ -463,6 +463,8 @@ test('a worker that finishes inside the start-up poll still answers `pending`, a
   assert.equal(started.status, 3);
   assert.equal(started.stderr, '', 'the run form refused a worker that had already finished');
 
+  // A one-second slice under a loaded suite can end before the worker's two gates do.
+  await pollUntil(() => existsSync(join(dir, VERDICT)), 'the worker\'s verdict');
   const waited = await wrapper(dir, ['--wait', LABEL], { RUN_TEST_SUITE_WAIT_SLICE: '1' });
   assert.equal(waited.stdout, 'pass\n');
   assert.equal(waited.status, 0);
