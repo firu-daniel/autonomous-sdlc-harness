@@ -65,10 +65,11 @@
 # permitted`, exit 1), and so was it on a process the wrapper had detached
 # itself (`nohup … &`, `disown`: `kill: (70347) - Operation not permitted`);
 # `kill -0` within one call on that call's own child exited 0; `ps -p` was
-# refused even within one call (`/bin/ps: Operation not permitted`, exit 126);
-# `pgrep` could not read the process list (`pgrep: Cannot get process list`,
-# exit 3). So no signal or process-table check can tell a later call whether a
-# run is alive, and this script sends no signal and lists no process.
+# refused even within one call (`/bin/ps: Operation not permitted`, exit 126).
+# Observed separately, not in that session, by a sandboxed run of a test that
+# reads the process list: `pgrep` could not read it (`pgrep: Cannot get process
+# list`, exit 3). So no signal or process-table check can tell a later call
+# whether a run is alive, and this script sends no signal and lists no process.
 #
 # HOW THE RUN FORM WAS STARTED DOES NOT MATTER. A tool-level background task and
 # a self-detached process heartbeat the same way, because nothing sends a

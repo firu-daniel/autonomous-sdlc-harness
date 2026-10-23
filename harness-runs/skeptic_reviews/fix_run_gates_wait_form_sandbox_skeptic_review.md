@@ -28,7 +28,7 @@ The heartbeat design holds up. One net-new defect survives: the script header at
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Move the `pgrep` refusal out of the 2.1.309 measurement in the `WHY NOT A SIGNAL` header, in both script copies _(layer: cli, general)_
+1. [x] **Finding 1** — Move the `pgrep` refusal out of the 2.1.309 measurement in the `WHY NOT A SIGNAL` header, in both script copies _(layer: cli, general)_
 
 ---
 
