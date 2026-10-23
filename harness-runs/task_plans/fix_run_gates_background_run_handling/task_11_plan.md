@@ -51,3 +51,10 @@ The ids and the content of each row are fixed by the story index's `## Context` 
 - Every BG row's Observed cell names `2.1.309` or `2.1.308`, or is `not measured`, `not taken` or `not run — owed`.
 - `grep -n 'Five defects' docs/sandbox-verification.md` hits the headline, and `grep -n '| F6 |' docs/sandbox-verification.md` hits once.
 - Every figure in the new rows appears in the task prompt (`harness-runs/task_prompts/fix_run_gates_background_run_handling_task_prompt.md`). Read each new row against the task prompt's evidence table once.
+
+**Deviations from plan:**
+- Added one sentence after the BG table, carrying no figure, that points to Task 1's and Task 2's **Deviations from plan:** notes. Those notes record a worker heartbeat that stopped refreshing while the worker and its gate were still alive, once with no signal sent. The sentence names BG10's hold past `STALE_SECONDS` as the row that would show this on a real run. The orchestrator's context notes flagged those notes. No BG row carries their figures, because every figure in a BG row has to come from the task prompt.
+- The §5 Stamp line also names BG8 as **not measured**, and the WF stamp now reads `WF2 and WF3 not taken · WF4 superseded by BG10`, so it stays consistent with WF4's new Observed cell.
+- BG10's Check leaves out `STALE_SECONDS`'s value (30 s), because the task prompt does not state it. WF2's row still states it.
+- BG7's attribution reads *"Recorded by the maintainer (from the task prompt)"* and gives no date. The task prompt dates the run (2026-10-22) but not the day its logs were read.
+- No verification step was downgraded. All five **Verification:** checks were run as greps or as a read in this session: the BG ids each appear once, `BG1`–`BG10`; the plugin cites BG1, BG2 and BG5–BG9, and every one resolves; `Five defects` matches line 7; `| F6 |` matches once; every figure in a BG row was read against the task prompt's evidence table. `commands.typecheck` (`bash scripts/typecheck.sh`) was run and printed `PASS: typecheck`.
