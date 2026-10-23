@@ -28,7 +28,7 @@
 
 1. [x] **Finding 4** — Make the `heartbeat_loop` comment name the worker's fd 3, not the run form's _(layer: cli, general)_
 2. [x] **Finding 1** — Record the no-signal heartbeat stall in the wrapper header's residuals and qualify ONE RUN PER LABEL _(layer: cli, general)_
-3. [ ] **Finding 2** — Assert in `run-test-suite.test.mjs` that the worker marker never reaches a gate _(layer: cli)_
+3. [x] **Finding 2** — Assert in `run-test-suite.test.mjs` that the worker marker never reaches a gate _(layer: cli)_
 4. [ ] **Finding 3** — Stop listing WF4 as owed in `docs/sandbox-verification.md`'s headline and F5 row _(layer: general)_
 
 ---

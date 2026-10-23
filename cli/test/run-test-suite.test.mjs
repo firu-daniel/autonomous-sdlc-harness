@@ -10,7 +10,7 @@
  * assertion on a counter file; the stub's own output must reach the log and neither stream. A
  * `<none>` typecheck is asserted as not run — a marker line and no counter — never as a pass.
  * Signals go to the worker `.running` names: TERM to it alone leaves the label live until the gate
- * returns, then no verdict; INT to the calling shell's group stops neither it nor its gate.
+ * returns, then no verdict; INT to the calling shell's group stops neither it nor its gate. The worker's marker never reaches a gate.
  *
  * Not covered here: the Run gates phase's own sequencing (instruction prose); the sandbox itself
  * (`docs/sandbox-verification.md` rows BG10 and WF5); a gate that never exits, which keeps `--wait`
@@ -53,7 +53,7 @@ const STDERR_MARKER = 'STUB-STDERR-MARKER';
 const STUB = [
   '#!/usr/bin/env bash',
   `printf 'ran\\n' >> ${COUNTER}`,
-  `pwd > ${PWD_RECORD}; printf '%s\\n' "$$" > stub-pid.txt`,
+  `pwd > ${PWD_RECORD}; printf '%s\\n' "$$" > stub-pid.txt; printf '%s\\n' "\${RUN_TEST_SUITE_WORKER-unset}" > stub-env.txt`,
   `echo "${STDOUT_MARKER} \${STUB_TAG-}"`,
   `echo "${STDERR_MARKER} \${STUB_TAG-}" >&2`,
   'if [ -n "${STUB_RELEASE-}" ]; then',
@@ -451,6 +451,7 @@ test('the run form detaches: `pending` at once while the gate is held, and a lat
   assert.equal(waited.status, 0);
   assert.equal(text(dir, VERDICT), 'pass\n');
   assert.deepEqual(counterLines(dir), ['ran'], 'the command did not run exactly once');
+  assert.equal(text(dir, 'stub-env.txt'), 'unset\n', 'the worker marker reached the gate');
 });
 
 test('a worker that finishes inside the start-up poll still answers `pending`, and one --wait collects it', async (t) => {
