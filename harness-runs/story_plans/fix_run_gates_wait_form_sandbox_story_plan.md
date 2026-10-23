@@ -37,7 +37,7 @@ The work is cut into four single-layer tasks, in bottom-up ship order. Task 1 ch
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_run_gates_wait_form_sandbox/task_<K>_plan.md`. The entries are ordered bottom-up by ship sequence, with the catch-all `general` layer last.
 
-1. [ ] **Task 1** — Replace `run_alive`'s `kill -0` with a `.running` mtime heartbeat in the `run-test-suite.sh` template _(layer: cli)_ _(points: 20)_
+1. [x] **Task 1** — Replace `run_alive`'s `kill -0` with a `.running` mtime heartbeat in the `run-test-suite.sh` template _(layer: cli)_ _(points: 20)_
 2. [ ] **Task 2** — Cover the heartbeat in `cli/test/run-test-suite.test.mjs`: an unsignalable live run, a run that died without a verdict, and the run form finding a live run _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Bring this repository's `scripts/run-test-suite.sh` level with the template _(layer: general)_ _(points: 5)_
 4. [ ] **Task 4** — Record the measurement and the wait form's sandbox rows in `docs/sandbox-verification.md` _(layer: general)_ _(points: 10)_
