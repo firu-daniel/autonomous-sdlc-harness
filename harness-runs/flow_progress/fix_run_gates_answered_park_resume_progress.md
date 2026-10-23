@@ -8,7 +8,7 @@ Source: harness-runs/task_prompts/fix_run_gates_answered_park_resume_task_prompt
 
 ## Fix planning
 - [x] R1. Fix plan written & converged (parity + architecture gates PASS)
-- [ ] R2. Fix plan + source review committed
+- [x] R2. Fix plan + source review committed
 ## Fixing
 - [ ] R3. All fix-plan findings implemented (fix-plan index all [x])
 - [-] R4. QA passed (UI-test index all [x], or only blocked tests left / no_ui / no-op augment)
