@@ -1,0 +1,4 @@
+## [plan-write · iter 1] → task-plan-writer  (#17)
+- **added:** `context_notes:`
+- **verbatim:** `context_notes: The user, asked live in this session, authorised this revision to also apply the still-open Should Fix findings from earlier plan reviews that the writer's previous returns listed as carried — Should Fix 1 (RUN_TEST_SUITE_STALE lower bound), Should Fix 2 (the stale-window test timing) and Should Fix 4 (Task 4's WF grep check); source: the user's answer to the orchestrator's AskUserQuestion, and the findings in harness-runs/task_plan_reviews/fix_run_gates_wait_form_sandbox/review_0.md … review_3.md.`
+- **why the agent could not derive it:** the user's authorisation was given only as a live answer in the orchestrating session, after the 5-revision cap escalated twice; it is recorded in no file the writer reads, and the writer's revision-mode contract applies Must Fix items only without an explicit authorisation
