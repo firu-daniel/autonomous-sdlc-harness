@@ -70,7 +70,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/fix_run_gat
 2. [x] **Task 6** — Mint `<park_answer_lookup>` in the binding vocabulary, and make the family-1 core's vocabulary reference count-free _(layer: plugin)_ _(points: 8)_
 3. [x] **Task 3** — Bind `<park_answer_lookup>` in the task flow's implementation forks, and leave Phase G pairs out of the planning fork's `Override 2(a)` _(layer: plugin)_ _(points: 20)_
 4. [x] **Task 4** — Route the cited Phase G's parks and answers through the user-review fix flow's forks, binding `<park_answer_lookup>` in both and declaring it in the user-review fix core _(layer: plugin)_ _(points: 20)_
-5. [ ] **Task 2** — Resume an answered `fixable: 0` park at G.2 for the same round in Phase G's G.0, G.2, G.3, G.5 and stop conditions _(layer: plugin)_ _(points: 20)_
+5. [x] **Task 2** — Resume an answered `fixable: 0` park at G.2 for the same round in Phase G's G.0, G.2, G.3, G.5 and stop conditions _(layer: plugin)_ _(points: 20)_
 6. [ ] **Task 5** — Pin the park-answer wire strings in a `cli/test` suite and restate the `test_fix_plans/` and `clarifications/` README templates _(layer: cli)_ _(points: 18)_
 
 ## Scope register

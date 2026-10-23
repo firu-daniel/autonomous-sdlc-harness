@@ -30,7 +30,7 @@ This file states no fallback for an absent value. An unbound `<park_answer_looku
 
 **Work:**
 
-- [ ] **The binding, then G.0 — the pending-answer state, judged on the committed index.**
+- [x] **The binding, then G.0 — the pending-answer state, judged on the committed index.**
   - **Declare the binding.** Add one row to `## Mode contract — bindings this file uses`, after the `<escalate>` row: `` | `<park_answer_lookup>` | `## Phase G — Run gates` → `### G.0 Resolve the round` (the pending-answer test) | The procedure that yields the complete question/answer pairs of a Phase G park naming a given `<test_fix_plan_path>` — or `none`, for a flow whose `<escalate>` writes no answer file. | ``. Leave `<escalate>`'s row unchanged. It stays the halting path, and this binding is the resume-time read.
   - **Name it in Phase G's own binding statement.** The blockquote that opens `## Phase G — Run gates` ("**Two flow-dependent vocabularies of `<…>` name appear below** …") is the section's statement, for a flow from another family that runs it by reference, of which of its names are bindings and which are path placeholders. Amend exactly two clauses of it and leave every other byte of it unchanged:
     - the bindings sentence, "The **Mode-contract bindings** it uses are `<escalate>` and `<committer_push>` — plus `<per_unit_review>`, via the unit-loop row G.4 runs —", gains `<park_answer_lookup>`, read at `### G.0 Resolve the round`'s pending-answer test, so a family-3 executor resolves it from its fork and never looks for it in its own `## Setup` (`plugin/instructions/mode_contract.md` → `### Bindings vs. path placeholders`: "Both vocabularies are spelled `<…>`, and conflating them is silent");
@@ -50,7 +50,7 @@ This file states no fallback for an absent value. An unbound `<park_answer_looku
     - **Consumed.** G.0 passes a pair to `test-fix-plan-writer` only when its question file names the index's repo-relative `<test_fix_plan_path>` **and** that index is pending an answer when G.0 runs. Two kinds of park satisfy both: the `fixable: 0` park (G.2, without the clause), and every park raised from an answer-mode G.2 — the planner's `## Questions` / `blocker:` and the architecture gate's `iteration >= 5` — because each of them names the index (see G.2 below) and leaves its committed version as the `fixable: 0` commit with no marker. The resumed G.0 passes such a park's pair **together with** the original `fixable: 0` pair, since both name the same index.
     - **Read by no agent.** Every other Phase G park — G.1's round cap and its no-verdict case, G.2's `## Questions` / `blocker:` on a dispatch **without** the clause, and G.2's architecture-gate `iteration >= 5` on a dispatch without the clause — leaves no index pending an answer: the round's index is absent or untracked, or the highest index is complete. Its answer is **read by no agent**, and the resumed G.0 follows its existing arms: **G.1** for the same round after a G.2 park, the gates once more after G.1's round cap. Write this as a plain statement in G.0, not as an implication. Add the one later path such an answer can still take: if the same round's re-run G.2 later leaves its index pending an answer (a `fixable: 0` park), the lookup also yields an earlier pair that named that index's path, and G.0 passes it along with the rest.
     - **Already consumed.** A pair `<park_answer_lookup>` yields for an index that is not pending (its marker is present, or a later index exists) is passed to no one.
-- [ ] **G.2 — the clause, and the answer-mode branches.**
+- [x] **G.2 — the clause, and the answer-mode branches.**
   - **The prompt.** Add the optional clause to the prompt block's lead sentence and to the revision prompt, so the two prompts read:
     - `Write the test fix plan. Branch: <branch>. Test log: <log>. Earlier logs: <paths or none>. Output: <test_fix_plan_path>. Park answer: <question_file> + <answer_file>.`
     - `Revise the test fix plan at <test_fix_plan_path> per architecture findings: <findings_file>. Park answer: <question_file> + <answer_file>.`
@@ -70,10 +70,10 @@ This file states no fallback for an absent value. An unbound `<park_answer_looku
     - **`## Questions` or `blocker:` without the clause** → `<escalate>` as today, naming the origin `Phase G test-fix-plan-writer` and not the index. State in this branch that its answer is read by no agent and the resumed phase re-runs G.1 for the same round (G.0's closing paragraph above).
     - **Otherwise** → the architecture gate, unchanged.
   - **The orchestrator and the answer.** State once, in G.2, that the orchestrator never opens a question or answer file and never acts on its content. It passes their paths to `test-fix-plan-writer`, and the answer reaches no other agent.
-- [ ] **G.3 and its closing sentence.**
+- [x] **G.3 and its closing sentence.**
   - **The commit.** On an answer-mode G.2, the committer stages a **modified** tracked index together with any new per-finding files, so the dispatch block is unchanged (`mode: review_plan_file`, same existence guard on `meta_findings_folder`, same fixed subject). The consumed marker guarantees the index differs from its commit, so `error: nothing to commit` cannot arise from this path.
   - **The closing sentence.** Rewrite "Then run **G.4**, or `<escalate>` on the `fixable: 0` path." to cover three outcomes: G.4 when the index has `[ ]` entries; `<escalate>` on a `fixable: 0` returned without the clause; **G.5** on a `fixable: 0` returned under it.
-- [ ] **G.5 — "An answered park never buys a fresh cap."** Extend this paragraph so it covers the new park:
+- [x] **G.5 — "An answered park never buys a fresh cap."** Extend this paragraph so it covers the new park:
   - A `fixable: 0` park whose answer is present resumes at G.2 **for the same round** and runs no gate. `<gate_round>` therefore stays the parked round, the next gate run is the next round's, and the cap counts it like any other, so the path buys no extra run.
   - A revision that has fixes walks G.4, and the next round's gates then test those fixes.
   - A revision that returns `fixable: 0` runs the next round's gates at once.
@@ -81,7 +81,7 @@ This file states no fallback for an absent value. An unbound `<park_answer_looku
   - Amend the paragraph's last sentence ("a `fixable: 0` park leaves a committed index with no `[ ]` entry, so the resumed phase runs the gates for the next round"): that holds only when G.0 finds no answer for it.
   - In the same paragraph, state the fate of the other parks' answers in one sentence: the answer to a round-cap park, or to a G.2 park that leaves its round's index absent or untracked, is read by no agent, and the resumed phase follows the arms this paragraph already names. Cite G.0's closing paragraph rather than restating its list.
   - Keep the bold lead sentence byte-identical, because Task 5 pins it.
-- [ ] **Stop conditions and the must-not list.**
+- [x] **Stop conditions and the must-not list.**
   - **Stop conditions.** Amend the `test-fix-plan-writer` returns `fixable: 0` (G.2) entry so it reads as an escalation only for a dispatch without the clause, and add that an answer-mode `fixable: 0` continues to the next round.
   - **Must-not list.** Add one `## What you must NOT do` bullet: never open a park's question or answer file, and never compose a dispatch from its content. Its paths travel only in G.2's clause.
   - **The binding-table bullet.** Leave the existing bullet that opens "Do NOT execute this file without a fork's binding table." byte-identical. Task 6 already made it count-free.

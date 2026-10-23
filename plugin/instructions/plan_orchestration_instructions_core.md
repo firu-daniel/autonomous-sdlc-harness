@@ -41,6 +41,7 @@ The `Used at` column is load-bearing, not documentation. A flow that enters this
 | Binding | Used at | Meaning (short) |
 |---|---|---|
 | `<escalate>` | `## Setup` step 2 (story index missing); the blocker paths inside Phases A, A1.5, A2, B, C, C2, E and G — including the unit loop (cited by reference); Phase D's ledger completion check, on the flows that keep a ledger; `## Stop conditions` | This flow's path for halting and reporting an **agent/flow blocker**. Never used for a `<state_dir>/STOP` halt or the dispatch-cap halt — see `## Setup` step 4 and `## Safety contract`. **Phase D has exactly one `<escalate>` site, and only where this flow keeps a flow-progress ledger:** the completion check that must pass before the terminal ledger flip, listed in `## Stop conditions`. D.1's `statistics-plan-writer` `error:` is **not** a site — it is a non-halting report the flow continues past. |
+| `<park_answer_lookup>` | `## Phase G — Run gates` → `### G.0 Resolve the round` (the pending-answer test) | The procedure that yields the complete question/answer pairs of a Phase G park naming a given `<test_fix_plan_path>` — or `none`, for a flow whose `<escalate>` writes no answer file. |
 | `<repo_root>` | `## Setup` step 3 (working directory / absolute-path anchor); `## Phase E — QA testing` (E.1, where the QA credentials file lives) | Absolute root of the checkout this flow runs in. |
 | `<app_root>` | `## Setup` step 3 (where the app's own source tree sits — the configured commands themselves run from `<repo_root>`); `## Phase E — QA testing` E.0 (the app the dev server serves) | The flow's app root, `<repo_root>/<app_dir>` — the resolved root, distinct from the config token `<app_dir>` it is built from. |
 | `<per_unit_review>` | The unit loop (cited by reference — `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `### Per-unit review step`): the implement → \[review\] → commit body run by Phases A, A1.5, A2, C, C2, E and G (row `G.4`) | `on` \| `off` — whether the per-unit reviewer step (and its `iteration >= 5` convergence cap) runs between implementer and committer. |
@@ -535,19 +536,31 @@ Tear down the dev server when QA passes (E.2) or on any halt in this phase.
 
 Run this phase after Phase E — or after Phase E was skipped — and before Phase D. **It is the only place in the flow `<test_cmd>` runs, and the only place `<typecheck_cmd>` runs over the whole tree on the flow's behalf** — both through one `run-test-suite.sh` call per round. You never learn what the gates are and never read their output: you read the one line the wrapper prints, and hand its log path on unread. Why no unit runs the suite, and what a unit runs instead, is `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule`. A `fail` opens a fix loop — a test fix plan written from the log, approved by the architecture gate, committed, then walked by the unit loop — and the gates run again, for at most `MAX_GATE_ROUNDS` gate runs.
 
-> **Two flow-dependent vocabularies of `<…>` name appear below, and this section is written to be executed by a flow from another family too** (`mode_contract.md` rule (5) — another family's core may cite it by reference). The **Mode-contract bindings** it uses are `<escalate>` and `<committer_push>` — plus `<per_unit_review>`, via the unit-loop row G.4 runs — and they resolve from the fork the executing flow was dispatched via. Every **other** `<…>` name here — setting aside the config-value tokens declared in `## Resolved values` — is a **path placeholder** and resolves from the `## Setup` of the flow's **own entry core**: `<branch>`, `<gate_key>`, `<test_fix_plan_path>`, `<test_fix_findings_dir>`, `<test_fix_review_folder>` and `<test_fix_findings_root>`. **Resolve the four test-fix paths through that Setup every round, never as a literal** — each carries `<gate_round>`, and a path baked in on one round lands the next round's artifacts in the previous round's folder. `<gate_round>`, the wrapper's `<log>`, the counter `<iteration>` and the next-free index `<test_fix_review_index>` are neither kind: they are bound below, at their point of use. No step in this phase depends on any other phase of this file having run.
+> **Two flow-dependent vocabularies of `<…>` name appear below, and this section is written to be executed by a flow from another family too** (`mode_contract.md` rule (5) — another family's core may cite it by reference). The **Mode-contract bindings** it uses are `<escalate>`, `<committer_push>` and `<park_answer_lookup>` (read at G.0's pending-answer test) — plus `<per_unit_review>`, via the unit-loop row G.4 runs — and they resolve from the fork the executing flow was dispatched via. Every **other** `<…>` name here — setting aside the config-value tokens declared in `## Resolved values` — is a **path placeholder** and resolves from the `## Setup` of the flow's **own entry core**: `<branch>`, `<gate_key>`, `<test_fix_plan_path>`, `<test_fix_findings_dir>`, `<test_fix_review_folder>` and `<test_fix_findings_root>`. **Resolve the four test-fix paths through that Setup every round, never as a literal** — each carries `<gate_round>`, and a path baked in on one round lands the next round's artifacts in the previous round's folder. `<gate_round>`, the wrapper's `<log>`, the counter `<iteration>`, the next-free index `<test_fix_review_index>` and the answer pairs `<question_file>` / `<answer_file>` (bound by G.0's pending-answer arm) are neither kind: they are bound below, at their point of use. No step in this phase depends on any other phase of this file having run.
 
 ### G.0 Resolve the round
 
 `<gate_round>` is derived from the tree, never carried in memory, so a resumed session derives the same round a straight-through one holds:
 
 1. List this `<gate_key>`'s test fix plan indices — the files `<branch>_<gate_key>_round_<j>.md` directly under `<state_dir>/test_fix_plans/` — and which of them are tracked, with `git ls-files <state_dir>/test_fix_plans/`.
-2. An index is **complete** when it is tracked and its readiness list has no `[ ]` entry — `grep -cE '^[0-9]+\. \[ \]' <index>` prints `0`. (Match the entry form, never a bare `[ ]`: the index's lead paragraph names the marker in prose.)
+2. An index is **complete** when it is tracked, its readiness list has no `[ ]` entry — `grep -cE '^[0-9]+\. \[ \]' <index>` prints `0` — and it is **not pending an answer** (below). (Match the entry form, never a bare `[ ]`: the index's lead paragraph names the marker in prose.)
 3. `<gate_round>` = 1 + the number of complete indices.
-4. Then look at the index numbered `<gate_round>`, if one exists:
+4. Then look at the index numbered `<gate_round>`, if one exists. Test the arms in this order:
+   - **Pending an answer** — an answered `fixable: 0` park. Resume at **G.2 for this round, in answer mode**; do **not** run G.1. Bind `<log>` to the path the wrapper writes for this round's label, `<state_dir>/test_run_logs/<sanitized branch>/<gate_key>_round_<gate_round>.log`, where the sanitized branch is `<branch>` with every `/` replaced by `-` (`<scripts_dir>/run-test-suite.sh` → the header comment opening `THE LOG IS VERSIONED PER ROUND` owns that shape). Bind the answer pairs — one `<question_file>` / `<answer_file>` per pair — to every pair `<park_answer_lookup>` yielded. This arm runs first because it reads the **committed** version: a modified, uncommitted answer-mode revision carrying `[ ]` entries is not yet approved, and must never reach the next arm.
    - **Tracked, with a `[ ]` entry** — a committed test fix plan still in flight. Resume at **G.4** on it; do not re-run the gates for this round.
    - **Untracked** — a draft that never converged. Run **G.1** for this round; G.2 rewrites the draft.
    - **None** → run **G.1**.
+
+**Pending an answer.** An index is pending an answer when all of these hold:
+
+- it is tracked;
+- it is the highest-numbered index of this `<gate_key>` — an index with a higher-numbered one beside it already had its next round's gates run;
+- its **committed** version has no readiness entry at all — `grep -cE '^[0-9]+\. \[[ x]\]'` prints `0` — and no `Park answer consumed:` line — `grep -c '^Park answer consumed:'` prints `0`;
+- `<park_answer_lookup>` is not `none`, and running it for this index's repo-relative path yields at least one complete pair.
+
+When `<park_answer_lookup>` is `none`, do not evaluate the last condition: the index is not pending an answer, and the arm never fires. The **committed version** is the working file when `git status --porcelain -- <index>` prints nothing; when it prints a line, apply both counts to the output of `git show HEAD:<index>`, and to nothing else.
+
+**Which Phase G answers G.0 consumes.** G.0 passes a pair to `test-fix-plan-writer` only when its question file names the index's repo-relative `<test_fix_plan_path>` **and** that index is pending an answer when G.0 runs. Two kinds of park satisfy both: the `fixable: 0` park from a G.2 without the `Park answer:` clause, and every park raised from an answer-mode G.2 — the planner's `## Questions` / `blocker:` and the architecture gate's `iteration >= 5` — because each names the index and leaves its committed version as the `fixable: 0` commit with no marker; the resumed G.0 passes such a park's pair **together with** the original `fixable: 0` pair. **Every other Phase G park's answer is read by no agent**: G.1's round cap and its no-verdict case, and G.2's `## Questions` / `blocker:` or architecture-gate `iteration >= 5` on a dispatch without the clause, leave no index pending an answer — the round's index is absent or untracked, or the highest index is complete — so the resumed G.0 takes its other arms: **G.1** for the same round after a G.2 park, the gates once more after G.1's round cap. Such an answer has one later path: if that same round's re-run G.2 then leaves its index pending an answer (a `fixable: 0` park), the lookup also yields the earlier pair if it named that index's path, and G.0 passes it with the rest. A pair the lookup yields for an index that is not pending — its marker is present, or a later index exists — is already consumed and is passed to no one.
 
 ### G.1 Run the gates
 
@@ -568,9 +581,9 @@ The wrapper runs the type check, then the suite, and its one line is the round's
 Branch on the verdict line:
 
 - `pass` → leave the phase for **Phase D**, under the phase-boundary sentence that closes G.5.
-- `fail <log>` with `<gate_round>` ≥ `MAX_GATE_ROUNDS` → `<escalate>`: the gates are not converging. Name every round's log path — `<log>` with its round number replaced by each `j` ≤ `<gate_round>` whose log exists — and the latest test fix plan index.
+- `fail <log>` with `<gate_round>` ≥ `MAX_GATE_ROUNDS` → `<escalate>`, naming the origin `Phase G gates`: the gates are not converging. Name every round's log path — `<log>` with its round number replaced by each `j` ≤ `<gate_round>` whose log exists — and the latest test fix plan index.
 - `fail <log>` otherwise → bind `<log>` to the printed path and go to **G.2**.
-- **No verdict line** — the wrapper, or its wait form, printed nothing on stdout → `<escalate>`, quoting the wrapper's one stderr line.
+- **No verdict line** — the wrapper, or its wait form, printed nothing on stdout → `<escalate>`, naming the origin `Phase G gates` and quoting the wrapper's one stderr line.
 
 ### G.2 Write and review the test fix plan
 
@@ -583,14 +596,17 @@ Branch on the verdict line:
 Prompt — `Earlier logs:` lists `<log>` with its round number replaced by each `j` < `<gate_round>` whose file exists, comma-separated, or `none`:
 
 ```
-Write the test fix plan. Branch: <branch>. Test log: <log>. Earlier logs: <paths or none>. Output: <test_fix_plan_path>.
+Write the test fix plan. Branch: <branch>. Test log: <log>. Earlier logs: <paths or none>. Output: <test_fix_plan_path>. Park answer: <question_file> + <answer_file>.
 ```
 
-Parse the return — on this dispatch and on every revision dispatch below alike:
+**The `Park answer:` clause** — the trailing sentence above, and the same sentence on the revision prompt below — is sent **only** on a G.2 entered from G.0's pending-answer arm (**answer mode**), and on every architecture-revision dispatch of that same G.2; omit it on a G.2 entered from G.1. Several pairs are separated by `; ` (`Park answer: <q1> + <a1>; <q2> + <a2>.`), every path repo-relative. You never open a question or answer file and never act on its content: you pass their paths to `test-fix-plan-writer`, and the answer reaches no other agent.
 
-- A **`## Questions`** section (`fix_plan_file: (pending — questions for user)`) → `<escalate>`, carrying the questions verbatim.
-- `blocker:` → `<escalate>` with it.
-- `fixable: 0` → **G.3**, then `<escalate>`: nothing on this round's plan is the branch's to fix. Name the index and its `## Not fixable on this branch` section. No architecture gate runs for a plan with no fixes.
+Parse the return — on this dispatch and on every revision dispatch below alike. Every escalation below names the origin `Phase G test-fix-plan-writer`:
+
+- A **`## Questions`** section (`fix_plan_file: (pending — questions for user)`) or `blocker:`, **without** the clause → `<escalate>`, carrying the questions verbatim or the blocker. It does not name the index — the planner wrote none. Its answer is read by no agent: the resumed phase re-runs **G.1** for the same round (G.0 → **Which Phase G answers G.0 consumes.**).
+- A **`## Questions`** section or `blocker:`, **under** the clause → `<escalate>` as above, also naming the index by its repo-relative `<test_fix_plan_path>`, so the next G.0's `<park_answer_lookup>` finds the new park beside the old one.
+- `fixable: 0`, **without** the clause → **G.3**, then `<escalate>`: nothing on this round's plan is the branch's to fix. Name the index by its repo-relative `<test_fix_plan_path>` and its `## Not fixable on this branch` section. No architecture gate runs for a plan with no fixes.
+- `fixable: 0`, **under** the clause → **G.3**, then **G.5** — the next round's G.1, with no escalation: the answer called for no code change, only a re-run.
 - Otherwise → the architecture gate.
 
 **The architecture gate.** Apply the safety contract, then dispatch `architecture-reviewer` in plan-review mode. Heartbeat:
@@ -612,7 +628,7 @@ iteration: <test_fix_review_index>
 (The `architecture-reviewer` creates `<test_fix_review_folder>` itself only when it has findings to write — do NOT `mkdir -p` here.)
 
 - `verdict: PASS` → **G.3**.
-- `verdict: FAIL` → increment `iteration`. If `>= 5`, `<escalate>`, naming the latest `findings_file:` and the index's `## Rejected findings` section. Else apply the safety contract, dispatch `test-fix-plan-writer` with `Revise the test fix plan at <test_fix_plan_path> per architecture findings: <findings_file>.` (heartbeat as above, at the new `iteration`), parse its return as above, and re-run the gate.
+- `verdict: FAIL` → increment `iteration`. If `>= 5`, `<escalate>`, naming the origin `Phase G architecture-reviewer gate`, the latest `findings_file:` and the index's `## Rejected findings` section — and, **under** the clause, the index by its repo-relative `<test_fix_plan_path>`. Else apply the safety contract, dispatch `test-fix-plan-writer` with `Revise the test fix plan at <test_fix_plan_path> per architecture findings: <findings_file>. Park answer: <question_file> + <answer_file>.` — the clause under the same rule as above — (heartbeat as above, at the new `iteration`), parse its return as above, and re-run the gate.
 
 ### G.3 Commit the test fix plan
 
@@ -626,7 +642,7 @@ commit_prefix: chore
 <committer_push>
 ```
 
-**The existence guard on `meta_findings_folder` is yours**, exactly as in B.3: include the key **only if** `<test_fix_review_folder>` exists and is non-empty — a gate that passed on iteration 0 created none, and a `fixable: 0` plan may never have reached the gate. The fixed subject `chore: add code review for <branch>` is reused as-is, as in E.2. Then run **G.4**, or `<escalate>` on the `fixable: 0` path.
+**The existence guard on `meta_findings_folder` is yours**, exactly as in B.3: include the key **only if** `<test_fix_review_folder>` exists and is non-empty — a gate that passed on iteration 0 created none, and a `fixable: 0` plan may never have reached the gate. The fixed subject `chore: add code review for <branch>` is reused as-is, as in E.2. In answer mode the index is a **modified** tracked file, staged with any new per-finding files by the same block; its `Park answer consumed:` line guarantees it differs from its commit, so this path cannot yield `error: nothing to commit`. Then run **G.4** when the index has `[ ]` entries; `<escalate>` on a `fixable: 0` returned without the `Park answer:` clause; or go to **G.5** on a `fixable: 0` returned under it.
 
 ### G.4 Fix loop
 
@@ -638,7 +654,7 @@ When the loop ends — every `[ ]` entry inside the test fix plan index's `## Ph
 
 `MAX_GATE_ROUNDS = 5`. Increment `<gate_round>`, re-resolve the four test-fix paths through it, and return to **G.1**. The cap counts **gate runs**, not fix loops — the same five-iteration bound the plan-writing and end-of-branch review loops carry — so a branch gets at most four fix loops, and a `fail` on round 5 escalates without a fifth. The wrapper runs the suite even after a failing type check, so a round broken both ways yields one log and one fix plan for everything broken, and spends **one** of the five gate runs where fail-fast would spend at least two.
 
-**An answered park never buys a fresh cap.** A round-cap park writes no index for its round, so on resume G.0 counts the four complete indices before it and yields round 5 — at least `MAX_GATE_ROUNDS`. The resumed phase therefore runs the gates exactly once more, and a further `fail` escalates again without another fix loop. A park from G.2 leaves its round's index absent or untracked, so the resumed phase re-runs that same round; a `fixable: 0` park leaves a committed index with no `[ ]` entry, so the resumed phase runs the gates for the next round.
+**An answered park never buys a fresh cap.** A round-cap park writes no index for its round, so on resume G.0 counts the four complete indices before it and yields round 5 — at least `MAX_GATE_ROUNDS`. The resumed phase therefore runs the gates exactly once more, and a further `fail` escalates again without another fix loop. A park from G.2 leaves its round's index absent or untracked, so the resumed phase re-runs that same round; a `fixable: 0` park leaves a committed index with no `[ ]` entry, so — when G.0 finds no answer for it — the resumed phase runs the gates for the next round. The answer to a round-cap park, or to a G.2 park that leaves its round's index absent or untracked, is read by no agent, and the resumed phase follows those arms (G.0 → **Which Phase G answers G.0 consumes.**). A `fixable: 0` park whose answer is present resumes at **G.2 for the same round** and runs no gate: `<gate_round>` stays the parked round, the next gate run is the next round's, and the cap counts it like any other, so the path buys no extra run. A revision that has fixes walks G.4, and the next round's gates test those fixes; a revision that returns `fixable: 0` runs the next round's gates at once. A later round's own `fixable: 0` parks exactly as before, and the watcher's park-loop guard bounds resumes that make no progress.
 
 Before you leave this phase — on `pass`, and before any durable phase-completion marker your fork records — run `## Phase boundaries`.
 
@@ -714,7 +730,7 @@ Then stop. Do not push, do not open a PR, do not run a final test command unless
 - **Run gates round cap exceeded** (G.1: a `fail` at `<gate_round>` ≥ `MAX_GATE_ROUNDS = 5`) — `<escalate>`, naming every round's log path and the latest test fix plan index.
 - **The Run gates wrapper prints no verdict line** (G.1, the run form or its wait form) — `<escalate>`, quoting its stderr line.
 - **`test-fix-plan-writer` returns a `## Questions` section** (G.2) — `<escalate>`, carrying the questions verbatim; a `blocker:` from it — `<escalate>`.
-- **`test-fix-plan-writer` returns `fixable: 0`** (G.2) — commit the index (G.3), then `<escalate>`, naming its `## Not fixable on this branch` section.
+- **`test-fix-plan-writer` returns `fixable: 0`** (G.2) on a dispatch **without** the `Park answer:` clause — commit the index (G.3), then `<escalate>`, naming its `## Not fixable on this branch` section. Under the clause it is no stop: commit the index (G.3) and continue to the next round (G.5).
 - **The test fix plan's architecture gate** (G.2) hits `iteration >= 5` without `PASS` — `<escalate>`, naming the latest findings file and the index's `## Rejected findings` section.
 - **Phase-D completion check fails.** Where this flow keeps its phase-progress record as a ledger, the check that runs before the terminal ledger flip finds an entry still `[ ]` — a phase that neither ran nor was authorised to be skipped — **or** the ledger's recorded `phases:` line disagreeing with the live `harness.config.json` (`${CLAUDE_PLUGIN_ROOT}/instructions/autonomous_pause_and_ledger.md` → `### 1.8` owns the check, both fail arms and their remedies). Do **not** flip the terminal entry and do **not** emit the Done summary — `<escalate>`, naming every unresolved entry id and the phase each names. A flow that keeps no such ledger runs no such check, and this entry is inert for it.
 
@@ -727,6 +743,7 @@ On any Phase E halt, **tear down the background dev server** before stopping.
 - Do NOT read the contents of any reviewer findings file. The path is enough. **Narrow exception — E.2 QA aggregation only:** because the QA phase dispatches the qa-tester once per test (E.1), no single dispatch can produce the round-level index, so you read the qa-tester's **per-dispatch QA indices** (`qa_review_<iteration>_t<T>.md`) to lift their readiness entries + finding pointers into the merged round index. This is the *only* findings content you read directly, and only to merge — you still do not read layer-reviewer findings, code-review findings, or the per-finding QA detail bodies.
 - Do NOT read the implementer's listed files to verify changes. The reviewer did that.
 - Do NOT edit code or plan files yourself, not even trivial typos. Dispatch the appropriate implementer. **Narrow exception — E.2 QA aggregation only:** you assemble the merged round-level QA-review index (`<qa_review_path>`) from the per-dispatch indices, because it cannot exist before all per-test dispatches return and no per-test dispatch can write the cross-test readiness list. This is a workflow-document assembly, not an app-code or task-plan edit; it does not extend to editing the per-finding files, the UI-test plan, the story/code-review indices, or any app code — those still go through implementers/agents.
+- Do NOT open a park's question or answer file, and never compose a dispatch from its content. Its paths travel only in G.2's `Park answer:` clause.
 - Do NOT bundle commits across tasks. One task = one commit. One review item = one commit.
 - Do NOT skip Phase B because Phase A "looked clean." The general reviewer is scoped to find *cross-task* issues that the per-task reviewers cannot see (cumulative duplication, dead code introduced by an earlier task and orphaned by a later one, UX flow gaps).
 - Do NOT modify the plan to reflect implementer-observed deviations. The implementer adds those notes itself; you just keep dispatching.
