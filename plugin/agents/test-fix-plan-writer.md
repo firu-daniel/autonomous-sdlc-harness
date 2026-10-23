@@ -42,6 +42,7 @@ Revise the test fix plan at <test_fix_plan_path> per architecture findings: <fin
 ```
 
 **Answer mode.** The trailing `Park answer:` clause is optional, its pairs separated by `; ` (`Park answer: <q1> + <a1>; <q2> + <a2>.`). With it, the index at `<test_fix_plan_path>` already exists and is committed (`fixable: 0` on the initial-write form): revise it in place, never as a fresh write.
+
 ## Read on demand (no auto-loaded context)
 
 - **The log at `<log_path>`, in full** — always. Nothing you write may point a reader back at it for detail.
