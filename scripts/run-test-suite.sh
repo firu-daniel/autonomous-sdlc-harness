@@ -77,7 +77,8 @@
 # Observed separately, not in that session, by a sandboxed run of a test that
 # reads the process list: `pgrep` could not read it (`pgrep: Cannot get process
 # list`, exit 3). So no signal or process-table check can tell a later call
-# whether a run is alive, and this script sends no signal and lists no process.
+# whether a run is alive, and this script sends no signal to a process another
+# call started, and lists no process.
 #
 # HOW THE RUN FORM WAS STARTED DOES NOT MATTER. Whatever becomes of the call
 # that issued the run form, the gates run in the worker, which no tool tracks.
@@ -86,10 +87,8 @@
 # to finish between two polls, whose `.running` is already gone — and answers
 # `pending` in both cases. Only seeing neither within the window is the refusal
 # `the detached run of <label> did not start`. The poll bounds a process that
-# has not begun, never a gate. The heartbeat process reads a pipe whose only
-# write end is the worker's fd 3 and stops at that pipe's end of file; each gate
-# runs with `3>&-`, so a gate orphaned by the worker's death cannot keep it
-# fresh.
+# has not begun, never a gate. The worker refreshes `.running` while it waits on
+# its own gate, so the heartbeat stops when the worker stops.
 #
 # RESIDUALS OF THE DETACHED SHAPE. A gate that never exits keeps the heartbeat
 # fresh, so `--wait` prints `pending` indefinitely: nothing in this script
@@ -106,22 +105,24 @@
 # needs a human or a resumed session to re-issue in that gap; it is recorded,
 # not handled.
 #
-# A heartbeat can also stop with NO signal sent: in a sandboxed macOS fixture
-# (2026-10-23) `.running`'s mtime stopped advancing while the worker and its
-# gate were both alive, and no `.running.stop.<pid>` file appeared, so the
-# reader had not seen end of file; the cause was not established
-# (`docs/sandbox-verification.md` → the paragraph after row BG10). The label
-# then reads free after STALE_SECONDS while the run still runs: `--wait`
-# refuses `no run in flight`, and a run form issued then starts a second
-# worker that races the first for `.running`. Row BG10 is the measurement
-# that would show it on a real run.
+# A heartbeat stall with NO signal sent was observed with the former separate
+# heartbeat process — a toucher fed by a pipe on the worker's fd 3: in a
+# sandboxed macOS fixture (2026-10-23) `.running`'s mtime stopped advancing
+# while the worker and its gate were both alive; the cause was not established
+# (`docs/sandbox-verification.md` → the paragraph after row BG10). That process
+# has been removed. A stalled heartbeat makes the label read free after
+# STALE_SECONDS while the run still runs: `--wait` refuses `no run in flight`,
+# and a run form issued then starts a second worker that races the first for
+# `.running`. Row BG10 remains the measurement that would show a stall on a
+# real run; no figure has been measured for the current shape.
 #
 # SIGNALS. Measured 2026-10-23, Claude Code 2.1.309 (`claude --version`), macOS,
 # GNU bash 3.2.57, SANDBOXED, within one Bash call: a Node driver run through
 # `scratch-run.sh` started the run form in a throwaway fixture and signalled the
 # worker its own descendant had started, with the gate held on a release file.
-# No signal was refused by the sandbox.
-# A heartbeat stop below may not be the signal's doing: one was also seen with no signal sent (RESIDUALS OF THE DETACHED SHAPE).
+# No signal was refused by the sandbox. Every bullet was measured against the
+# former separate heartbeat process (RESIDUALS OF THE DETACHED SHAPE), whose
+# stall a heartbeat stop below may be rather than the signal's doing.
 #   - TERM to the worker's PID alone: bash runs a trap only once its foreground
 #     command returns, so the gate kept running and `--wait` printed `pending`
 #     until the gate was released; then `.running` was removed, no verdict and
@@ -149,13 +150,11 @@
 #     verdict `pass` was written and `.running` removed.
 # A worker stopped by TERM therefore never reports its label free while its gate
 # runs, and once the trap ran the next `--wait` refuses at once.
-# Residuals: after a KILL to the worker's PID alone, the label may read live
-# with no run behind it (above), or free once the heartbeat is stale while the
-# orphaned gate still runs; after an INT to the calling group, the label may
-# read free while the run still runs (above); a KILL sent to the internal
-# heartbeat process alone stops the heartbeat while the gate runs; a host
-# suspended mid-run can wake with a stale heartbeat before the heartbeat process
-# refreshes it.
+# Residuals: after a KILL to the worker's PID alone, the heartbeat stops with
+# the worker, and the label reads free after STALE_SECONDS while an orphaned
+# gate may still run; after an INT to the calling group, the label may read
+# free while the run still runs (above); a host suspended mid-run can wake with
+# a stale heartbeat before the worker refreshes it.
 #
 # THE BOUND. STALE_SECONDS (30) is below WAIT_SLICE_SECONDS (60), so one
 # `--wait` call ends for a crashed run. RUN_TEST_SUITE_STALE is its test seam,
@@ -170,9 +169,6 @@
 #                    gates run; its mtime is the heartbeat
 #   <label>.verdict  the verdict line, renamed into place whole once both gates
 #                    finished, so a reader never sees half a line
-#   <label>.running.stop.<pid>
-#                    transient: the heartbeat's own stop signal, written at the
-#                    end of a run and removed once the heartbeat has stopped
 # A refusal writes neither file, and no log.
 #
 # Usage:
@@ -256,7 +252,6 @@ log_dir="$state_dir/$LOG_SUBDIR/$safe_branch"
 log_file="$log_dir/$label.log"
 running_file="$log_dir/$label.running"
 verdict_file="$log_dir/$label.verdict"
-heartbeat_stop_file="$running_file.stop.$$"
 
 # Print a verdict file's line and exit with its status.
 emit_verdict() {
@@ -296,40 +291,37 @@ run_alive() {
   refuse "cannot read the heartbeat of '$running_file'"
 }
 
-# The heartbeat process: runs on the read end of the worker's fd 3 and ends at
-# that pipe's end of file. `read` without `-t`, because bash 3.2's `read -t`
-# returns 1 on both timeout and EOF; hence the separate touch loop. `touch -c`
-# never recreates a `.running` the worker already removed, and the loop also
-# ends once `.running` is gone, so a stop file that cannot be written (its
-# directory removed mid-run) never leaves it touching forever.
-heartbeat_loop() {
-  local toucher _
-  (
-    while [ ! -e "$heartbeat_stop_file" ] && [ -e "$running_file" ]; do
-      touch -c "$running_file"
-      sleep "$HEARTBEAT_SECONDS"
-    done
-  ) &
-  toucher=$!
-  while IFS= read -r _; do :; done
-  : > "$heartbeat_stop_file"
-  wait "$toucher"
-  rm -f "$heartbeat_stop_file"
-}
-
 # A gate inherits the worker's dispositions; INT reached it ignored when
-# measured (SIGNALS above). `3>&-` drops its copy of the heartbeat pipe, so an orphaned gate cannot
-# keep the heartbeat fresh. `set +u +o pipefail` grades the command under the
-# options a plain `bash -c` would give it, not this script's.
+# measured (SIGNALS above), and a non-interactive `&` job starts with INT and
+# QUIT ignored besides. `set +u +o pipefail` grades the command under the
+# options a plain `bash -c` would give it, not this script's. The worker is the
+# only process that refreshes the heartbeat, so it stops when the worker stops;
+# `kill -0` goes only to the worker's own child (WHY NOT A SIGNAL). `touch -c`
+# never recreates a `.running` already removed.
 run_gate() {
-  ( set +u +o pipefail; eval "$1" ) 3>&- < /dev/null >> "$log_file" 2>&1
-  return $?
+  local gate_pid
+  ( set +u +o pipefail; eval "$1" ) < /dev/null >> "$log_file" 2>&1 &
+  gate_pid=$!
+  while kill -0 "$gate_pid" 2>/dev/null; do
+    touch -c "$running_file"
+    sleep "$HEARTBEAT_SECONDS"
+  done
+  wait "$gate_pid"
 }
 
-# Sends no signal: exiting closes fd 3, which ends the heartbeat.
+# Records the signal only: the worker keeps refreshing the heartbeat until its
+# gate returns, and finish_signalled then ends the run with no verdict.
+signalled=
 on_signal() {
+  signalled=$1
+}
+
+# Called after each gate returns and before its `exited` marker, so a signalled
+# worker never starts the next gate and writes no further marker.
+finish_signalled() {
+  [ -n "$signalled" ] || return 0
   if [ "$(cat "$running_file" 2>/dev/null)" = "$$" ]; then rm -f "$running_file"; fi
-  exit $((128 + $1))
+  exit $((128 + signalled))
 }
 
 # Poll for the verdict of the run of <label> that is in flight, for at most one
@@ -410,8 +402,6 @@ printf '%s\n' "$$" > "$running_file"
 trap 'on_signal 15' TERM
 trap 'on_signal 2' INT
 trap 'on_signal 1' HUP
-rm -f "$heartbeat_stop_file"
-exec 3> >(heartbeat_loop > /dev/null 2>&1)
 : > "$log_file"
 
 marker() {
@@ -425,12 +415,15 @@ if [ "$typecheck_is_none" -eq 1 ]; then
 else
   run_gate "$typecheck_line"
   typecheck_status=$?
+  finish_signalled
   marker "gate typecheck exited $typecheck_status"
 fi
 
+finish_signalled
 marker "gate test (commands.test)"
 run_gate "$command_line"
 test_status=$?
+finish_signalled
 marker "gate test exited $test_status"
 
 status=0
@@ -443,9 +436,9 @@ else
 fi
 
 trap - TERM INT HUP
+finish_signalled
 printf '%s\n' "$verdict" > "$verdict_file.tmp" && mv -f "$verdict_file.tmp" "$verdict_file"
 if [ "$(cat "$running_file" 2>/dev/null)" = "$$" ]; then rm -f "$running_file"; fi
-exec 3>&-
 
 # The worker's stdout is /dev/null; the run form and `--wait` read `.verdict`.
 echo "$verdict"

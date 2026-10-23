@@ -13,7 +13,7 @@ Every other gate passed or was reported SKIPPED or BLOCKED (6f, 13a–13d, 14d).
 This list is the **single source of truth** for the fix loop. `[ ]` markers anywhere else in this plan or its finding files are informational only.
 
 1. [x] **Finding 1** — The held-off-relaunch usage case keeps a 2-second reset lead a loaded suite outruns. _(layer: cli)_
-2. [ ] **Finding 2** — The worker's heartbeat stalls while the worker and its gate are alive. _(layer: cli, general)_
+2. [x] **Finding 2** — The worker's heartbeat stalls while the worker and its gate are alive. _(layer: cli, general)_
 
 ## Must Fix
 

@@ -14,8 +14,9 @@
  *
  * Not covered here: the Run gates phase's own sequencing (instruction prose); the sandbox itself
  * (`docs/sandbox-verification.md` rows BG10 and WF5); a gate that never exits, which keeps `--wait`
- * at `pending` by design; a KILL to the worker's PID alone, whose heartbeat the wrapper's `SIGNALS`
- * paragraph records as unreliable; and the second `stat` spelling, as only one of BSD `stat -f %m`
+ * at `pending` by design; a KILL to the worker's PID alone, after which the wrapper's `SIGNALS`
+ * paragraph records the heartbeat stopping with the worker while an orphaned gate may still run;
+ * and the second `stat` spelling, as only one of BSD `stat -f %m`
  * and GNU `stat -c %Y` yields under `hr_lane_mtime`. Each fixture's one teardown hook releases the
  * gate and outwaits `.running` before removing it. Runs the compiled `dist/cli.js`: build first.
  */
