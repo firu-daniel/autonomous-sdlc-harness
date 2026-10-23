@@ -24,3 +24,8 @@ Producing that outcome directly leaves untouched the hand-kept files the recipe 
 - `git status --short` lists none of `.claude/CLAUDE.md`, `.claude/context/conventions.md`, `.claude/context/cli.md`, `.claude/context/plugin.md` or `githooks/pre-push`, and no `*.bak` file.
 - `bash -n scripts/run-test-suite.sh` exits 0.
 - No test is aimed at this repository's own `scripts/` (`.claude/context/conventions.md` → `## The testing bar`). Task 2's suite proves the behaviour against the template, and `cmp` above carries that proof to this copy. The Run gates phase then runs this copy itself, which is that phase's check, not this task's.
+
+**Deviations from plan:**
+
+- The file was written with the Write tool from the template's content as read, not with `cp`: the `cp` call was refused by the session's permission mode (`Permission to use Bash has been denied because Claude Code is running in don't ask mode`). `cmp cli/templates/scripts/run-test-suite.sh scripts/run-test-suite.sh` exited 0 with no output, so the bytes match. `git diff --summary -- scripts/run-test-suite.sh` printed nothing, so the mode stayed `100755`.
+- Evidence downgrade: `bash -n scripts/run-test-suite.sh` was refused the same way and did not run. The syntax claim rests on `cmp` showing the file is byte-identical to `cli/templates/scripts/run-test-suite.sh`, which Task 2's suite runs. The Run gates phase runs this copy itself.

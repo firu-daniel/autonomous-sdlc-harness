@@ -83,7 +83,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_run_gates_background_run
 6. [x] **Task 6** — Correct `autonomous_pause_and_ledger.md` §2.5's teardown account to the three measured cases _(layer: plugin)_ _(points: 10)_
 7. [x] **Task 7** — Correct the teardown clause in the five autonomous forks' self-pause paragraphs _(layer: plugin)_ _(points: 10)_
 8. [x] **Task 8** — Report uncollected gate runs in the user-review fix core's Done summary and in the improvement observations _(layer: plugin)_ _(points: 15)_
-9. [ ] **Task 9** — Bring this repository's `scripts/run-test-suite.sh` level with the template _(layer: general)_ _(points: 5)_
+9. [x] **Task 9** — Bring this repository's `scripts/run-test-suite.sh` level with the template _(layer: general)_ _(points: 5)_
 10. [ ] **Task 10** — Correct the `run-test-suite.sh` row of `docs/watcher.md` _(layer: general)_ _(points: 5)_
 11. [ ] **Task 11** — Record the probe results and the run's evidence in `docs/sandbox-verification.md` as rows BG1–BG10 _(layer: general)_ _(points: 20)_
 

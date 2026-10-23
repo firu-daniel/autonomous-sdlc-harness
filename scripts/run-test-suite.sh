@@ -4,13 +4,13 @@
 # for the pair, `pass` or `fail`, so the Run gates phase's orchestrator reads
 # that verdict and never either gate's output.
 #
-# OUTPUT CONTRACT — the run form prints exactly one stdout line: `pass` (exit 0)
-# only when the typecheck passed or was not run for `<none>` AND the test passed;
-# otherwise `fail <log path>` (exit 1); or — when a run of the same label is
-# already in flight — `pending` (exit 3). The log path is repo-relative. Nothing
-# either command prints reaches stdout or stderr; all of it goes to the one log.
-# The orchestrator never reads the log — it hands the path on to whatever plans
-# the fix.
+# OUTPUT CONTRACT — one stdout line. The run form prints `pending` (exit 3) once
+# it has started a detached run of the label and that run has claimed `.running`
+# or already written `.verdict` (the next `--wait` reads it); for a label already
+# in flight it prints what the wait form would. A verdict is `pass` (exit 0) only
+# when the typecheck passed or was not run for `<none>` AND the test passed, else
+# `fail <log path>` (exit 1), the path repo-relative. No gate output reaches
+# stdout or stderr; the orchestrator never reads the log, only hands its path on.
 #
 # TWO GATES, ONE VERDICT. Typecheck first, then test, each from the repository
 # root with stdin from /dev/null, into the same log under these marker lines —
@@ -40,24 +40,31 @@
 # output after round N+1 ran. Only a re-run of the SAME label — a resumed round —
 # truncates that label's log.
 #
-# THE WAIT FORM, AND WHY IT EXISTS. A headless session is torn down when its turn
-# ends (`plugin/instructions/autonomous_pause_and_ledger.md` → §2.5), so a caller
-# whose run the Bash tool moved to the background must not end its turn, sleep,
-# or hand the wait to a `Monitor` to collect the verdict. It issues
-# `--wait <label>` as a foreground call instead, repeatedly, until that prints a
-# verdict. Each call polls for at most one wait slice and then prints `pending`.
-# No caller's correctness depends on the slice's length: `pending` means only
-# "issue the same call again", so the suite may take any length of time.
+# THE WAIT FORM, AND WHY IT EXISTS. The run form never runs the gates itself: it
+# re-invokes this script as a WORKER detached from the calling shell (`nohup`,
+# stdin, stdout and stderr all away from the caller, then `disown`) and answers
+# `pending`. A gate run is therefore not a tool task, and no tool-level time
+# limit applies to it (`docs/sandbox-verification.md` → row BG2: Claude Code
+# 2.1.309, macOS, headless, sandboxed). Every round is collected by
+# `--wait <label>` issued as a foreground call, repeatedly, until it prints a
+# verdict; those repeated calls are what keep a session's turn open and its STOP
+# and PAUSE checks running. Each call polls for at most one wait slice and then
+# prints `pending`. No caller's correctness depends on the slice's length:
+# `pending` means only "issue the same call again", so the suite may take any
+# length of time.
 #
 # ONE RUN PER LABEL. The run form never starts a second run of a label whose
 # run is live: it collects that run's verdict as the wait form would. A run
 # removes a `.running` file only while it still holds its own PID. `.running`'s
-# content is the run form's PID as an ownership token; its MTIME IS THE
-# HEARTBEAT, refreshed every HEARTBEAT_SECONDS while the run form is alive. A
+# content is the worker's PID as an ownership token; its MTIME IS THE
+# HEARTBEAT, refreshed every HEARTBEAT_SECONDS while the worker is alive. A
 # reader judges liveness from the files alone: `.verdict` present means
 # finished; `.running` with a heartbeat no older than STALE_SECONDS means live;
 # anything else means no run in flight, including a run that died without a
-# verdict.
+# verdict. A stall watchdog's kill-and-resume kills the session's PID and the
+# descendants it can enumerate; the worker has been reparented away from them,
+# so it survives, and the resumed session's run form for the same label
+# collects it rather than starting a second run.
 #
 # WHY NOT A SIGNAL. Measured 2026-10-23, Claude Code 2.1.309, macOS, headless
 # sandboxed session under the live profile: `kill -0` from a later call on a
@@ -71,32 +78,72 @@
 # list`, exit 3). So no signal or process-table check can tell a later call
 # whether a run is alive, and this script sends no signal and lists no process.
 #
-# HOW THE RUN FORM WAS STARTED DOES NOT MATTER. A tool-level background task and
-# a self-detached process heartbeat the same way, because nothing sends a
-# signal: the heartbeat process reads a pipe whose only write end is the run
-# form's fd 3 and stops at that pipe's end of file, so it lives exactly as long
-# as the run form's fd 3. Each gate runs with `3>&-`, so a gate orphaned by the
-# run form's death cannot keep the heartbeat fresh.
+# HOW THE RUN FORM WAS STARTED DOES NOT MATTER. Whatever becomes of the call
+# that issued the run form, the gates run in the worker, which no tool tracks.
+# START-UP: the run form waits, bounded by STALE_SECONDS, until the worker has
+# claimed `.running` OR has already written `.verdict` — a gate pair fast enough
+# to finish between two polls, whose `.running` is already gone — and answers
+# `pending` in both cases. Only seeing neither within the window is the refusal
+# `the detached run of <label> did not start`. The poll bounds a process that
+# has not begun, never a gate. The heartbeat process reads a pipe whose only
+# write end is the worker's fd 3 and stops at that pipe's end of file; each gate
+# runs with `3>&-`, so a gate orphaned by the worker's death cannot keep it
+# fresh.
 #
-# SIGNALS. Properties of this shape, measured 2026-10-23 on macOS, GNU bash
-# 3.2.57, UNSANDBOXED, with a gate held by `exec sleep`:
-#   - INT to the run form's process group (Ctrl-C): the foreground gate stops as
-#     it always did, the trap removes `.running`.
-#   - KILL to the process group: gate and heartbeat stop; the heartbeat goes
-#     stale and the label reads free after STALE_SECONDS.
-#   - TERM to the run form's PID alone: bash runs a trap only once its
-#     foreground command returns, so the gate keeps running and the heartbeat
-#     stays fresh until the gate ends; then `.running` is removed and the run
-#     form exits 143 with no further marker and no verdict.
-#   - KILL to the run form's PID alone: the gate survives orphaned, as it always
-#     did, and the heartbeat stops.
-# A run form stopped by a trapped signal therefore never reports its label free
-# while its gate runs, and once the trap ran the next `--wait` refuses at once.
-# Residuals: after a KILL to the run form's PID alone, the label reads free once
-# the heartbeat is stale while the orphaned gate still runs; a KILL sent to the
-# internal heartbeat process alone stops the heartbeat while the gate runs; a
-# host suspended mid-run can wake with a stale heartbeat before the heartbeat
-# process refreshes it.
+# RESIDUALS OF THE DETACHED SHAPE. A gate that never exits keeps the heartbeat
+# fresh, so `--wait` prints `pending` indefinitely: nothing in this script
+# bounds a live run, by design, and a STOP file ends the wait, not the run.
+# A worker that claims `.running` after the start-up window has closed sits
+# behind a run form that already exited 2 with `the detached run of <label> did
+# not start`, which G.1 escalates. Nothing here kills it: it runs its gates to a
+# verdict and removes its `.running` as any worker does, and whoever next looks
+# at the label — a `--wait`, or a run form re-issued by a resumed session after
+# the escalation is answered — finds the run live and starts nothing. The one
+# unguarded case is a run form re-issued INSIDE the gap between the refusal and
+# the late claim: it finds no live run, starts a second worker, and the two race
+# for `.running`. G.1 does not re-issue the run form within a session, so this
+# needs a human or a resumed session to re-issue in that gap; it is recorded,
+# not handled.
+#
+# SIGNALS. Measured 2026-10-23, Claude Code 2.1.309 (`claude --version`), macOS,
+# GNU bash 3.2.57, SANDBOXED, within one Bash call: a Node driver run through
+# `scratch-run.sh` started the run form in a throwaway fixture and signalled the
+# worker its own descendant had started, with the gate held on a release file.
+# No signal was refused by the sandbox.
+#   - TERM to the worker's PID alone: bash runs a trap only once its foreground
+#     command returns, so the gate kept running and `--wait` printed `pending`
+#     until the gate was released; then `.running` was removed, no verdict and
+#     no further marker were written, and the next `--wait` refused `no run in
+#     flight`. Unchanged from the unsandboxed run-form measurement.
+#   - KILL to the worker's PID alone: the worker ended at once; the gate
+#     survived orphaned until released; `.running` stayed and no verdict was
+#     written. CHANGED: the heartbeat did not reliably stop. In 6 of 8 runs it
+#     stayed fresh after both the worker and the orphaned gate had ended, for as
+#     long as observed (24 s), so `--wait` kept printing `pending`; in 2 of 8 it
+#     stopped and the label read free after STALE_SECONDS. The pre-detach run
+#     form, KILLed the same way, showed the same split (3 of 4 fresh), so the
+#     detach did not cause it; its cause was not established.
+#   - INT to the calling shell's process group: in 7 of 7 runs the worker, the
+#     gate and the calling shell's own `exec sleep` kept running, and once the
+#     gate was released the verdict `pass` was written and `.running` removed.
+#     CHANGED: INT no longer stops the gate; and in 2 of 7 runs the heartbeat
+#     stopped within 3 s while the worker and gate ran on, so the label read
+#     free once stale (`--wait` refused `no run in flight` with STALE_SECONDS at
+#     5) while the run still ran; its cause was not established. Under that
+#     call a plain `sleep` also survived INT to its own PID, so INT was ignored
+#     on entry by every process measured, and this case does not isolate the
+#     background-job rule.
+#   - HUP to the worker's PID alone: no effect; once the gate was released the
+#     verdict `pass` was written and `.running` removed.
+# A worker stopped by TERM therefore never reports its label free while its gate
+# runs, and once the trap ran the next `--wait` refuses at once.
+# Residuals: after a KILL to the worker's PID alone, the label may read live
+# with no run behind it (above), or free once the heartbeat is stale while the
+# orphaned gate still runs; after an INT to the calling group, the label may
+# read free while the run still runs (above); a KILL sent to the internal
+# heartbeat process alone stops the heartbeat while the gate runs; a host
+# suspended mid-run can wake with a stale heartbeat before the heartbeat process
+# refreshes it.
 #
 # THE BOUND. STALE_SECONDS (30) is below WAIT_SLICE_SECONDS (60), so one
 # `--wait` call ends for a crashed run. RUN_TEST_SUITE_STALE is its test seam,
@@ -107,7 +154,7 @@
 # this script carries no `stat` of its own.
 #
 # BESIDE THE LOG, in the same directory:
-#   <label>.running  the run form's own PID (ownership token), present while the
+#   <label>.running  the worker's own PID (ownership token), present while the
 #                    gates run; its mtime is the heartbeat
 #   <label>.verdict  the verdict line, renamed into place whole once both gates
 #                    finished, so a reader never sees half a line
@@ -117,23 +164,30 @@
 # A refusal writes neither file, and no log.
 #
 # Usage:
-#   run-test-suite.sh <label>          run typecheck then test; label ^[A-Za-z0-9][A-Za-z0-9._-]*$
+#   run-test-suite.sh <label>          start typecheck then test detached and print `pending`; label ^[A-Za-z0-9][A-Za-z0-9._-]*$
 #   run-test-suite.sh --wait <label>   read the verdict of a run of <label>; never runs anything
 #
 # Exit map:
-#   0  pass (run form, or wait form reading a `pass` verdict)
+#   0  pass (wait form reading a `pass` verdict, or run form collecting a run already in flight)
 #   1  fail (likewise)
 #   2  refusal — one stderr line `run-test-suite.sh: <reason>`, nothing on stdout:
 #      bad arguments, a label outside the pattern, an unresolvable configuration,
 #      `commands.typecheck` or `commands.test` unset, no current branch,
 #      (wait form) no run in flight — no `.running`, or a heartbeat older than
 #      STALE_SECONDS — or (either form) a `.running` whose heartbeat cannot be
-#      read: `cannot read the heartbeat of '<path>'`
-#   3  pending — the wait form, or the run form finding a run of the same label already in flight; issue the wait form
+#      read: `cannot read the heartbeat of '<path>'` — or (run form) a worker
+#      that neither claimed `.running` nor wrote `.verdict` within STALE_SECONDS:
+#      `the detached run of <label> did not start`
+#   3  pending — the run form's normal answer once its detached run has started, or the wait form (or run form) while a run is in flight; issue the wait form
 
 # Deliberately no `-e`: this script has to outlive the command's failure long
 # enough to write and print the verdict.
 set -uo pipefail
+
+# Read and dropped before anything else, so no gate ever inherits the marker:
+# this repository's own suite spawns this wrapper with a gate label.
+worker_marker="${RUN_TEST_SUITE_WORKER-}"
+unset RUN_TEST_SUITE_WORKER
 
 # The wait form's poll bound. Far inside the Bash tool's default foreground
 # window, so a `--wait` call is never itself moved to the background.
@@ -251,8 +305,8 @@ heartbeat_loop() {
   rm -f "$heartbeat_stop_file"
 }
 
-# A gate runs in the foreground, so INT and QUIT keep their default dispositions
-# in it. `3>&-` drops its copy of the heartbeat pipe, so an orphaned gate cannot
+# A gate inherits the worker's dispositions; INT reached it ignored when
+# measured (SIGNALS above). `3>&-` drops its copy of the heartbeat pipe, so an orphaned gate cannot
 # keep the heartbeat fresh. `set +u +o pipefail` grades the command under the
 # options a plain `bash -c` would give it, not this script's.
 run_gate() {
@@ -310,15 +364,36 @@ typecheck_trimmed="${typecheck_trimmed%"${typecheck_trimmed##*[![:space:]]}"}"
 typecheck_is_none=0
 if [ "$typecheck_trimmed" = "$TYPECHECK_NONE_SENTINEL" ]; then typecheck_is_none=1; fi
 
-# ONE RUN PER LABEL. A live run of this label — a session that re-entered the
-# phase while its earlier, backgrounded run still runs — is never joined by a
-# second: collect that run's verdict instead, exactly as the wait form would.
-if run_alive; then
-  wait_for_verdict
+if [ "$worker_marker" != "$label" ]; then
+  # ONE RUN PER LABEL. A live run of this label — a session that re-entered the
+  # phase while its earlier detached run still runs — is never joined by a
+  # second: collect that run's verdict instead, exactly as the wait form would.
+  if run_alive; then
+    wait_for_verdict
+  fi
+
+  mkdir -p "$log_dir" || refuse "cannot create '$log_dir'"
+  rm -f "$verdict_file" "$verdict_file.tmp"
+
+  # `nohup` by name on PATH: the suite shadows it to exercise the refusal below.
+  RUN_TEST_SUITE_WORKER="$label" nohup bash "$script_dir/$(basename "${BASH_SOURCE[0]}")" "$label" </dev/null >/dev/null 2>&1 &
+  worker_pid=$!
+  disown
+
+  # A `.verdict` is this worker's: the stale one was removed above. A worker
+  # whose gates finish between two polls has already removed its `.running`.
+  start_deadline=$((SECONDS + STALE_SECONDS))
+  while :; do
+    if [ -f "$verdict_file" ] || [ "$(cat "$running_file" 2>/dev/null)" = "$worker_pid" ]; then
+      echo pending
+      exit 3
+    fi
+    [ "$SECONDS" -lt "$start_deadline" ] || break
+    sleep 1
+  done
+  refuse "the detached run of $label did not start"
 fi
 
-mkdir -p "$log_dir" || refuse "cannot create '$log_dir'"
-rm -f "$verdict_file" "$verdict_file.tmp"
 printf '%s\n' "$$" > "$running_file"
 trap 'on_signal 15' TERM
 trap 'on_signal 2' INT
@@ -360,6 +435,7 @@ printf '%s\n' "$verdict" > "$verdict_file.tmp" && mv -f "$verdict_file.tmp" "$ve
 if [ "$(cat "$running_file" 2>/dev/null)" = "$$" ]; then rm -f "$running_file"; fi
 exec 3>&-
 
+# The worker's stdout is /dev/null; the run form and `--wait` read `.verdict`.
 echo "$verdict"
 [ "$status" -eq 0 ] && exit 0
 exit 1
