@@ -20,7 +20,7 @@
 
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below top to bottom, and the committing role flips each one to `[x]` as that fix's commit lands. Each entry resolves to `harness-runs/code_reviews/fix_swept_run_profile_leak_code_review/finding_<K>.md` through its `**Finding K**` reference. The leading number is the fix order; `K` is the finding's stable identity.
 
-1. [ ] **Finding 3** — Correct the § 1.4 "What moved" sentence: `cleanup-run-copies.test.mjs` uses a throwaway checkout carrying the template sweep, not an `init`-built fixture _(layer: general)_
+1. [x] **Finding 3** — Correct the § 1.4 "What moved" sentence: `cleanup-run-copies.test.mjs` uses a throwaway checkout carrying the template sweep, not an `init`-built fixture _(layer: general)_
 2. [ ] **Finding 2** — Add the fail-closed "registry could not be re-read" keep line to `cleanup-run-copies.test.mjs`'s *Not covered* list _(layer: cli)_
 3. [ ] **Finding 1** — Make the "no run profile path" line name the unanchorable state directory too, in the template, its `scripts/` mirror and the test that asserts it _(layer: cli, general)_
 
