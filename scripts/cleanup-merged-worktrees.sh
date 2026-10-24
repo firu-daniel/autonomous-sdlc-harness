@@ -19,7 +19,20 @@
 #      the set. No record, or no `worktree` in it, is no copy to remove; a
 #      `worktree` naming a path that no longer exists is reported as already
 #      gone. Then it
-#   2. force-deletes the local branch (`git branch -D`),
+#   2. deletes that run's per-run profile — `hr_run_profile_file "$slug"
+#      "$branch"`, i.e. `${XDG_STATE_HOME:-$HOME/.local/state}/
+#      autonomous-sdlc-harness/run-profiles/<slug>/<sanitized branch>.json`,
+#      with `slug` from `hr_repo_slug "$main_repo"` (never the inherited
+#      `HARNESS_REPO_SLUG`, which this sweep does not read: in job mode the
+#      watcher sets it to the remote slug). No glob, no hand-built path. Three
+#      gates, all of them: this sweep removed the run's copy in step 1 (a
+#      refusal, a skip, a failed removal, an already-gone `worktree` or no
+#      record removes no profile); the path is the one the watcher writes; and
+#      no record in a live status maps to that same file — the registry is
+#      re-read just before the `rm`, and a second branch `hr_sanitize_branch`
+#      folds onto the same name keeps it too. Leftovers from earlier releases
+#      are not migrated: `docs/watcher.md` → `### The per-run profile`. Then it
+#   3. force-deletes the local branch (`git branch -D`),
 #
 # and then runs `git worktree prune` to drop the administrative records of
 # linked worktrees whose directories are already gone.
@@ -45,11 +58,15 @@
 #     checkout's own directory;
 #   * a branch with an ACTIVE RUN — one whose record in the run registry
 #     (`<state_dir>/autonomous_logs/registry.json`, shaped
-#     `{"runs": {"<branch>": {"status": …}}}`) says `running`, `parked`,
-#     `park_loop` or `paused`. All four own a working copy the watcher will come
-#     back to: a parked run is waiting for a clarification answer, a `park_loop`
-#     one for an operator to clear it, and a paused one for a RESUME sentinel, and `worktree remove --force` would discard the pause
-#     note the resumed engine is pointed at.
+#     `{"runs": {"<branch>": {"status": …}}}`) is in one of THE LIVE STATUSES:
+#     `running`, `parked`, `park_loop` or `paused`. They are what
+#     `autonomous-watcher.sh` → `process_inbox_file` treats as owning a run
+#     copy: it refuses a fresh launch over a `parked`, `paused` or `park_loop`
+#     record and over a `running` one with a live pid. `live_runs` is their one
+#     list. A parked run is waiting for a clarification answer, a `park_loop`
+#     one for an operator to clear it, and a paused one for a RESUME sentinel,
+#     and `worktree remove --force` would discard the pause note the resumed
+#     engine is pointed at.
 #
 # ONLY THE BRANCH'S OWN WORKING COPY IS REMOVED, by either arm.
 #
@@ -81,8 +98,10 @@
 #
 # `--dry-run` IS THE PREVIEW, AND IT DELETES NOTHING. It runs the same decision
 # for both arms and reports the branch (and the copy) each would remove, or the
-# skip line each would print; no branch is deleted, no copy removed, and it does
-# not even `worktree prune`. The clone arm's would-decision applies
+# skip line each would print; for each copy it would remove it makes step 2's
+# decision and prints `[dry-run] would remove run profile <file> for
+# '<branch>'` (or the keep line). No branch is deleted, no copy or profile
+# removed, and it does not even `worktree prune`. The clone arm's would-decision applies
 # `hr_clone_remove_var`'s refusal conditions — the registry match and the
 # derived path — without calling it. It is NOT read-only: the
 # `fetch --prune` that establishes which upstreams are gone runs first either
@@ -140,6 +159,7 @@
 # REPRO — reproduce any decision by hand, against a throwaway fixture. The
 # clone is made by `hr_clone_create_var`, which records it in the registry:
 #
+#   export XDG_STATE_HOME=$(mktemp -d)
 #   w=$(mktemp -d); b="$w/origin.git"; git init -q --bare "$b"
 #   d="$w/demo"; git init -q -b trunk "$d"; git -C "$d" remote add origin "$b"
 #   printf '%s' '{"version":1,"projectName":"demo","defaultBranch":"trunk","protectedBranches":["trunk","release/*"],"stateDir":"sdlc-harness/","layers":[],"commands":{}}' > "$d/harness.config.json"
@@ -157,21 +177,34 @@
 #     hr_registry_set "$r" feat_old worktree "$p"' _ "$d"   # legacy: no copy_kind
 #   for r in feat_gone feat_old release/1.0; do git -C "$b" branch -q -D "$r"; done
 #
+#   profile       before the preview, plant feat_gone's per-run profile:
+#                 bash -c '. "$1/scripts/lib/harness-run-lib.sh"
+#                   f=$(hr_run_profile_file "$(hr_repo_slug "$1")" feat_gone)
+#                   mkdir -p "${f%/*}" && printf "{}" > "$f"' _ "$d"
+#                 -> `$XDG_STATE_HOME/autonomous-sdlc-harness/run-profiles/
+#                    <slug>/feat_gone.json`; the preview names it, the sweep
+#                    removes it
 #   preview       bash "$d/scripts/cleanup-merged-worktrees.sh" --dry-run
 #                 -> `would delete branch … and remove clone "$w/demo-feat_gone"`
-#                    and `… and remove worktree "$w/demo-feat_old"`; `git -C
-#                    "$d" branch` is unchanged and both copies are still there
+#                    then `[dry-run] would remove run profile <file> for
+#                    'feat_gone'`, and `… and remove worktree "$w/demo-feat_old"`;
+#                    `git -C "$d" branch` is unchanged and both copies and the
+#                    profile are still there
 #   sweep         bash "$d/scripts/cleanup-merged-worktrees.sh"
 #                 -> the clone "$w/demo-feat_gone" and the legacy worktree
-#                    "$w/demo-feat_old" removed, feat_gone and feat_old deleted;
-#                    feat_live untouched (its upstream is not gone) and
-#                    release/1.0 untouched (protected, though it IS gone)
+#                    "$w/demo-feat_old" removed, `removed run profile <file> for
+#                    'feat_gone'` between feat_gone's `removed clone` and
+#                    `deleted merged branch` lines and the file gone, feat_gone
+#                    and feat_old deleted; feat_live untouched (its upstream is
+#                    not gone) and release/1.0 untouched (protected, though it
+#                    IS gone)
 #   active run    before the sweep, set feat_gone's status:
 #                 bash -c '. "$1/scripts/lib/harness-run-lib.sh"
 #                   hr_registry_set "$(hr_state_path "$1" \
 #                   autonomous_logs/registry.json)" feat_gone status running' _ "$d"
-#                 -> the skip line for feat_gone; its clone and branch are
-#                    untouched (same with "parked", "park_loop" and "paused")
+#                 -> the skip line for feat_gone; its clone, branch and planted
+#                    profile are untouched (same with "parked", "park_loop" and
+#                    "paused")
 #   unresolvable  printf 'x' > "$d/harness.config.json"
 #                 -> one line, exit 0, nothing deleted
 #   offline       git -C "$d" remote set-url origin /nonexistent.git
@@ -250,6 +283,11 @@ if [ "$cfg_status" -ne 0 ]; then
   exit 0
 fi
 
+# The repository slug the per-run profile path is keyed on, derived here. The
+# inherited `HARNESS_REPO_SLUG` is never read: in job mode the watcher sets it
+# to the remote slug. Empty makes `profile_remove` remove nothing.
+slug="$(hr_repo_slug "$main_repo")" || slug=""
+
 # --- The active-run set. A HARD PRECONDITION, not a best-effort read: the
 # question it answers is whether a branch about to be force-deleted has a run
 # writing to it.
@@ -259,17 +297,25 @@ if [ -z "$registry" ]; then
   exit 0
 fi
 
+# live_runs <registry> — print the branch of every record in a live status, one
+# per line. The one list of the live statuses: the start-of-sweep read and
+# `profile_remove`'s re-check both call it. An absent registry prints nothing
+# and returns 0. Enumerated through the `.runs` wrapper the whole flow writes
+# and reads, so a present document without it — or one that cannot be read —
+# makes `jq` fail and this return non-zero: reading such a file as "no live
+# runs" would delete a branch, or a profile, a run is still using.
+live_runs() {
+  [ -e "${1-}" ] || return 0
+  jq -r '.runs | to_entries[] | select(.value.status == "running" or .value.status == "parked" or .value.status == "park_loop" or .value.status == "paused") | .key' "$1" 2>/dev/null
+}
+
 active=""
 if [ -e "$registry" ]; then
   if [ ! -r "$registry" ]; then
     echo "cleanup-merged-worktrees.sh: '$registry' is not readable — refusing to delete anything"
     exit 0
   fi
-  # Enumerated through the `.runs` wrapper the whole flow writes and reads. A
-  # document without it is a registry this cannot enumerate, so `jq` fails and
-  # the refusal below fires — which is the point: reading such a file as "no
-  # active runs" would delete a branch a run is still working on.
-  if ! active="$(jq -r '.runs | to_entries[] | select(.value.status == "running" or .value.status == "parked" or .value.status == "park_loop" or .value.status == "paused") | .key' "$registry" 2>/dev/null)"; then
+  if ! active="$(live_runs "$registry")"; then
     echo "cleanup-merged-worktrees.sh: '$registry' could not be read as a run registry — refusing to delete anything"
     exit 0
   fi
@@ -492,6 +538,44 @@ say_skip() {
   fi
 }
 
+# profile_remove <branch> — delete <branch>'s per-run profile, in this run's
+# mode. Call it only once <branch>'s copy has been removed (or, under --dry-run,
+# would be). The registry is re-read here rather than trusting `active`: a sweep
+# run by hand can race a watcher launch, and a live branch whose sanitized name
+# folds onto the same file keeps it too. Prints at most one line; never stops
+# the sweep.
+profile_remove() {
+  local branch="${1-}" file live b bfile pre=""
+  [ "$dry_run" -eq 1 ] && pre="[dry-run] "
+  if [ -z "$slug" ] || ! file="$(hr_run_profile_file "$slug" "$branch")"; then
+    echo "cleanup-merged-worktrees.sh: ${pre}no run profile path for '$branch' (hr_run_profile_file refused the repository slug or the branch) — no profile removed"
+    return 0
+  fi
+  [ -f "$file" ] || [ -L "$file" ] || return 0
+  if ! live="$(live_runs "$registry")"; then
+    echo "cleanup-merged-worktrees.sh: ${pre}keep run profile $file for '$branch' — the run registry could not be re-read"
+    return 0
+  fi
+  while IFS= read -r b; do
+    [ -n "$b" ] || continue
+    bfile="$(hr_run_profile_file "$slug" "$b")" || continue
+    if [ "$bfile" = "$file" ]; then
+      echo "cleanup-merged-worktrees.sh: ${pre}keep run profile $file for '$branch' — the live run '$b' uses that file"
+      return 0
+    fi
+  done <<EOF
+$live
+EOF
+  if [ "$dry_run" -eq 1 ]; then
+    echo "cleanup-merged-worktrees.sh: [dry-run] would remove run profile $file for '$branch'"
+  elif rm -f -- "$file"; then
+    echo "cleanup-merged-worktrees.sh: removed run profile $file for '$branch'"
+  else
+    echo "cleanup-merged-worktrees.sh: FAILED to remove run profile $file for '$branch' — remove it by hand"
+  fi
+  return 0
+}
+
 # One record per local branch as `<name><TAB><upstream track>`; the tab keeps the
 # two apart without splitting on whitespace.
 gone_list="$(git -C "$main_repo" for-each-ref --format='%(refname:short)%09%(upstream:track)' refs/heads/ 2>/dev/null)" || gone_list=""
@@ -580,6 +664,7 @@ while IFS= read -r record; do
       else
         echo "cleanup-merged-worktrees.sh: [dry-run] would delete branch '$branch' and remove worktree $wt"
       fi
+      profile_remove "$branch"
     else
       echo "cleanup-merged-worktrees.sh: [dry-run] would delete branch '$branch'"
     fi
@@ -589,6 +674,7 @@ while IFS= read -r record; do
   if [ -n "$wt" ] && [ "$kind" = clone ]; then
     if hr_clone_remove_var "$main_repo" "$wt"; then
       echo "cleanup-merged-worktrees.sh: removed clone $wt"
+      profile_remove "$branch"
     else
       say_skip "$wt" "$branch" "$HR_CLONE_REFUSAL"
     fi
@@ -597,6 +683,7 @@ while IFS= read -r record; do
     # failure names the directory a person now has to remove by hand.
     if err="$(git -C "$main_repo" worktree remove --force "$wt" 2>&1 >/dev/null)"; then
       echo "cleanup-merged-worktrees.sh: removed worktree $wt"
+      profile_remove "$branch"
     else
       echo "cleanup-merged-worktrees.sh: FAILED to remove worktree $wt: ${err:-no error output} — the directory may be left behind; remove it by hand"
     fi

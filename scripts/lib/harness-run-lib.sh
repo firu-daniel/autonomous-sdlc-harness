@@ -5497,8 +5497,10 @@ EOF
 #                     `<slug> <pid> <acquired_at>`.
 #   run-profiles/<slug>/<branch>.json
 #                     the per-run settings copy the watcher writes at every
-#                     launch, re-rendered at every spawn. This library only
-#                     names it (`hr_run_profile_file`); it writes none.
+#                     launch, re-rendered at every spawn, and removed by
+#                     `cleanup-merged-worktrees.sh` with its run's copy. This
+#                     library only names it (`hr_run_profile_file`); it writes
+#                     none.
 #
 # THE LOCK IS A DIRECTORY BECAUSE `mkdir` IS THE ATOMIC PRIMITIVE AVAILABLE HERE.
 # `flock(1)` is a util-linux program and is absent on macOS; the shell's own
@@ -5592,8 +5594,10 @@ hr_lane_lock_dir() {
 # hr_run_profile_file <repo slug> <branch> — print
 # `<hr_lane_dir>/run-profiles/<slug>/<hr_sanitize_branch branch>.json`; return
 # 1, printing nothing, when `hr_lane_dir` cannot anchor or an argument is
-# empty. Creates nothing: its one caller, `autonomous-watcher.sh`'s
-# `run_profile_render`, makes the directory.
+# empty. Creates nothing. Its two callers: `autonomous-watcher.sh`'s
+# `run_profile_render`, which writes the file and makes its directory, and
+# `cleanup-merged-worktrees.sh`'s `profile_remove`, which deletes it after the
+# run's copy is removed.
 hr_run_profile_file() {
   local slug="${1-}" dir safe
   [ -n "$slug" ] || return 1
