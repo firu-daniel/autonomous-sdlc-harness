@@ -13,7 +13,8 @@
  * Each case runs `init` in a fixture with a bare origin, commits, pushes `feat_gone` (and, where
  * used, `feat_live`) with an upstream, and deletes `feat_gone` on origin so the sweep's
  * `fetch --prune` marks it `[gone]`. Derived paths and the registry path come from the library's own
- * `hr_worktree_dir` and `hr_state_path`.
+ * `hr_worktree_dir` and `hr_state_path`. Every sweep runs under `XDG_STATE_HOME` set to the case's
+ * own `scratch` directory, so the per-run profile path it resolves never lands in the real one.
  *
  * The C2 and C3 victims carry a `.git` that is a symbolic link to a gitfile pointing back at the
  * rewritten record. Git's own `worktree remove` refuses a directory whose `.git` does not point
@@ -101,7 +102,8 @@ async function sweepFixture(t, branches) {
       const record = (await readdir(join(d, '.git', 'worktrees'))).find((name) => !before.has(name));
       return { path, record: join(d, '.git', 'worktrees', record) };
     },
-    sweep: (args = []) => runBash(d, [join(d, INIT_SCRIPTS_DIR, 'cleanup-merged-worktrees.sh'), ...args]),
+    sweep: (args = []) =>
+      runBash(d, [join(d, INIT_SCRIPTS_DIR, 'cleanup-merged-worktrees.sh'), ...args], { XDG_STATE_HOME: join(scratch, 'state') }),
     localHas: async (branch) =>
       (await runBash(d, ['-c', 'git show-ref --verify --quiet "refs/heads/$1"', '_', branch])).status === 0,
   };
