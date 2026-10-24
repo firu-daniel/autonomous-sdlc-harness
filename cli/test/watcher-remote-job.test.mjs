@@ -6,7 +6,13 @@
  * every run it launched through `remote_status.json`, and carries across a job boundary only what
  * the bundle contract says it carries.** Every case points `XDG_STATE_HOME` at an empty directory
  * inside the fixture and passes `USAGE_LANE_STATE_ENABLED=1`, so a lane write that job mode failed
- * to force off would land there and be seen.
+ * to force off would land there and be seen. The same directory holds the per-run profile off: a
+ * job-mode render would land under it (`hr_run_profile_file`), so `assertLaneUntouched` asserts both.
+ *
+ * **Job mode launches only on a base profile its launch check passes:** a sandbox switched off with
+ * no opt-out marker launches nothing and ends `failed`, and the opt-out shape `applySandbox` writes
+ * launches. RED ONCE: the refusal case was confirmed red once with `run_profile_check`'s sandbox
+ * clause skipped in a fixture copy of the watcher, never by editing the tracked template.
  *
  * **A usage-paused run never leaves the job waiting on nothing:** it ends with a usable
  * `usage_resume_at` in the bundle, repaired to the gate's one-hour fallback when the value was
@@ -52,6 +58,8 @@ import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 
+import { MAIN_REPO_ANCHOR_VARIABLE } from '../dist/core/mainRepoAnchor.js';
+import { SANDBOX_OPT_OUT_MARKER } from '../dist/generators/sandboxProfile.js';
 import { INIT_SCRIPTS_DIR, runBash, runGit } from './helpers/fixture.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
@@ -76,7 +84,10 @@ function jobUsageRepeat() {
 
 const JOB_USAGE_REPEAT = jobUsageRepeat();
 
-/** The repeated case's reset lead and PAUSE wait — the header argues why they differ from one run's. */
+/**
+ * The repeated case's reset lead and PAUSE wait — the header argues why they differ from one run's.
+ * The lost-`usage_resume_at` and held-off-relaunch cases take them too, for the same reason.
+ */
 const REPEAT_RESET_AHEAD_SECS = 15;
 const REPEAT_PAUSE_WAIT_TENTHS = 600;
 
@@ -273,8 +284,11 @@ test('none: the launch line, the start and stop records, and the parked detail',
 
     const argv = j.argv();
     const after = (flag) => argv[argv.indexOf(flag) + 1];
+    // The base profile, not a per-run copy: the machine lane is off in job mode, and the job's copy
+    // is the main checkout with no other linked worktree, so a copy would equal the base.
     assert.equal(after('--settings'), join(j.dir, '.claude', 'settings.autonomous.json'));
     assert.ok(argv.includes('--permission-mode'), argv.join(' '));
+    assert.equal(after('--permission-mode'), 'dontAsk', argv.join(' '));
     // The profile's only additionalDirectories entry is the state directory, so it is not repeated.
     const addDirs = argv.flatMap((arg, i) => (arg === '--add-dir' ? [argv[i + 1]] : []));
     assert.deepEqual(addDirs, [j.dir, join(j.dir, STATE_DIR)]);
@@ -343,6 +357,50 @@ test("add-dir: job mode appends the profile's additionalDirectories after the tw
     const result = await j.job([j.branch, 'task', 'none']);
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
     assert.deepEqual(addDirs(), [j.dir, join(j.dir, STATE_DIR)]);
+  });
+});
+
+test('launch check: a base profile with the sandbox off and no opt-out marker launches nothing and ends failed', async (t) => {
+  /** The fixture's base profile, rewritten by <edit> on its parsed JSON. */
+  const editProfile = async (j, edit) => {
+    const profilePath = join(j.dir, '.claude', 'settings.autonomous.json');
+    const profile = JSON.parse(readFileSync(profilePath, 'utf8'));
+    edit(profile);
+    await writeFile(profilePath, `${JSON.stringify(profile, null, 2)}\n`, 'utf8');
+    return profilePath;
+  };
+
+  await t.test('sandbox.enabled false, no marker: refused', async (t) => {
+    const j = await createJobFixture(t);
+    if (j === null) return;
+    await editProfile(j, (profile) => {
+      profile.sandbox.enabled = false;
+      assert.ok(!(profile._README ?? []).some((line) => String(line).startsWith(SANDBOX_OPT_OUT_MARKER)));
+    });
+    const result = await j.job([j.branch, 'task', 'none']);
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(j.argv(), null, 'the stub was launched');
+    assert.equal(j.status().status, 'failed');
+    assert.ok(result.stdout.includes(`not launching '${j.branch}'`), result.stdout);
+    j.assertLaneUntouched();
+  });
+
+  // The perturbation: the opt-out shape launches, so the refusal above is the check's, not the fixture's.
+  await t.test("the opt-out shape applySandbox writes, with its marker: launched on the base profile", async (t) => {
+    const j = await createJobFixture(t);
+    if (j === null) return;
+    const profilePath = await editProfile(j, (profile) => {
+      profile.sandbox.enabled = false;
+      profile.sandbox.failIfUnavailable = false;
+      profile._README = [...(profile._README ?? []), `${SANDBOX_OPT_OUT_MARKER}: fixture opt-out.`];
+    });
+    const result = await j.job([j.branch, 'task', 'none']);
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    const argv = j.argv();
+    assert.notEqual(argv, null, `the stub was not launched\n${result.stdout}`);
+    assert.equal(argv[argv.indexOf('--settings') + 1], profilePath);
+    assert.equal(j.status().status, 'completed');
+    j.assertLaneUntouched();
   });
 });
 
@@ -526,7 +584,7 @@ test('a job killed mid-run leaves running / continue', async (t) => {
   await j.setStub('sleep 30');
   const child = spawn('bash', [j.watcher, 'job', j.branch, 'task', 'none'], {
     cwd: j.dir,
-    env: { ...process.env, ...j.jobEnv({}) },
+    env: { ...process.env, [MAIN_REPO_ANCHOR_VARIABLE]: '', ...j.jobEnv({}) },
     detached: true,
     stdio: 'ignore',
   });
@@ -785,9 +843,13 @@ test('usage: a short reset is waited out in the job, a reset past the deadline g
     const loseResumeAt =
       `. ${shellQuote(lib)}; ` +
       `hr_registry_set "$STATE/autonomous_logs/registry.json" feat_x usage_resume_at ""`;
+    // This case asserts the repair, not the in-job wait's timing, so it takes the repeated case's
+    // lead and wait: a 2-second lead lets a loaded gate downgrade the event and never pause (the
+    // header's `HARNESS_JOB_USAGE_REPEAT` paragraph).
     await j.setStub(
-      `${rateLimitRejected(2)}; for i in $(seq 1 100); do if [ -f "$STATE/PAUSE" ]; then ${loseResumeAt}; : > "$STATE/PAUSE_ACK"; exit 0; fi; sleep 0.1; done`,
+      `${rateLimitRejected(REPEAT_RESET_AHEAD_SECS)}; for i in $(seq 1 ${REPEAT_PAUSE_WAIT_TENTHS}); do if [ -f "$STATE/PAUSE" ]; then ${loseResumeAt}; : > "$STATE/PAUSE_ACK"; exit 0; fi; sleep 0.1; done`,
     );
+    const before = nowSecs();
     const result = await j.job([j.branch, 'task', 'none'], {
       USAGE_CHECK_INTERVAL_SECS: '1',
       USAGE_RESUME_MARGIN_SECS: '0',
@@ -796,8 +858,9 @@ test('usage: a short reset is waited out in the job, a reset past the deadline g
     assert.equal(lastLine(result.stdout), 'job: paused wait-poller');
     assert.equal(j.status().pause_reason, 'usage');
     assert.match(j.status().usage_resume_at, /^\d+$/);
+    const resumeAt = Number(j.status().usage_resume_at);
     assert.ok(
-      Number(j.status().usage_resume_at) >= nowSecs() + 3600 - 30,
+      resumeAt >= before + 3600 && resumeAt <= nowSecs() + 3600,
       `usage_resume_at ${j.status().usage_resume_at} is not the one-hour fallback`,
     );
     const paused = j.notifications().filter((n) => n.event === 'paused');
@@ -812,13 +875,19 @@ test('usage: a short reset is waited out in the job, a reset past the deadline g
     // The kill switch is GLOBAL_STOP — `<state_dir>/AUTONOMOUS_STOP` in the job's own checkout —
     // and kill_switch_active makes resume_paused_runs return before it relaunches anything, so
     // the gate's RESUME stands unconsumed and the record stays `paused` with both tags cleared.
+    // This case asserts the post-reset bound, not the in-job wait's timing, so it takes the
+    // repeated case's lead and wait: a 2-second lead lets a loaded gate downgrade the event and
+    // never pause (the header's `HARNESS_JOB_USAGE_REPEAT` paragraph). That lead exceeds
+    // REMOTE_WAIT_MAX_SECS, so the runner is self-hosted to bypass the hosted lead admission,
+    // which other cases cover; the bound applies self-hosted included.
     await j.setStub(
-      `${rateLimitRejected(2)}; for i in $(seq 1 100); do if [ -f "$STATE/PAUSE" ]; then : > "$STATE/AUTONOMOUS_STOP"; : > "$STATE/PAUSE_ACK"; exit 0; fi; sleep 0.1; done`,
+      `${rateLimitRejected(REPEAT_RESET_AHEAD_SECS)}; for i in $(seq 1 ${REPEAT_PAUSE_WAIT_TENTHS}); do if [ -f "$STATE/PAUSE" ]; then : > "$STATE/AUTONOMOUS_STOP"; : > "$STATE/PAUSE_ACK"; exit 0; fi; sleep 0.1; done`,
     );
     const result = await j.job([j.branch, 'task', 'none'], {
       USAGE_RESUME_MARGIN_SECS: '0',
       REMOTE_WAIT_MAX_SECS: '2',
       USAGE_CHECK_INTERVAL_SECS: '1',
+      RUNNER_ENVIRONMENT: 'self-hosted',
     });
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
 

@@ -2,15 +2,15 @@
 # autonomous-script-allowlist-guard.sh — PreToolUse guard for Bash:
 # capability containment for an unattended run. It auto-allows a command ONLY
 # when EVERY piece of it is judged safe: a piece that RUNS a script must run one
-# resolving under the adopting repository's configured `scriptsDir` — inside that
-# repository or inside one of its sibling worktrees — and not on the deny list
+# resolving under the configured `scriptsDir` of the checkout it judges — never
+# under a sibling worktree's — and not on the deny list
 # below, and a piece that runs no script must match the same safe-prefix set
 # `allow-safe-compounds.sh` judges it against. It emits `allow` or NOTHING; it
 # never denies and never asks.
 #
 # WHY IT EXISTS. An unattended run is driven by a task prompt the flow did not
 # write. It must be able to run the repository's own version-controlled wrapper
-# scripts without an interactive approval — an unanswerable prompt is a stall —
+# scripts without an interactive approval — an unattended run refuses the call —
 # but it must NOT be able to run an arbitrary script a prompt points it at: a
 # downloaded payload, a script somewhere outside the workspace, or a deployment.
 # This guard is what separates those two cases.
@@ -48,21 +48,22 @@
 # `${`, and `>` with its superstrings `>>`, `>(`, `2>` and `&>`.
 #
 # `${` IS THE FIFTH CONSTRUCT AND IT IS SCANNED BY SHAPE, NOT AS A SEQUENCE.
-# Refusing every `${` was measured silencing the shipped instruction corpus's
-# own canonical commit invocation, which carries `${branch}` in a path and again
-# in its subject. Deleting the arm was measured too and is worse: it releases
-# `${x@P}`, whose bash 4.4+ prompt expansion performs command substitution on a
-# `$(` held INSIDE the variable's value — a `$(` that is not in the command
-# string, so the `$(` arm cannot see it. macOS's bash 3.2 floor makes that inert
-# where this file is authored and live on the Linux an adopter runs. So the arm
-# is NARROWED rather than kept or dropped: a bare parameter expansion `${IDENT}`
-# — an ASCII letter or `_`, then letters, digits or `_`, then `}` — is admitted,
-# and every other braced form is refused, `@`, `!`, `#`, `[`, `:`, `/` and a
-# nested `$(` among them, as is an unterminated `${`. The walk is a `while` over
-# builtin parameter expansion plus one `=~`, so it stays config-independent and
-# fork-free like the `case` above it. What it is no longer is a single `case`
-# glob — the same trade the `>` arm below now makes, for the same measured
-# reason.
+# Refusing every `${` was measured silencing a wrapper call carrying `${branch}`
+# in a path and again in its subject — the spelling the shipped instruction
+# corpus's commit calls had when it was measured; they now carry no `$` at all
+# (see cost class (ii) below). Deleting the arm was measured too and is worse:
+# it releases `${x@P}`, whose bash 4.4+ prompt expansion performs command
+# substitution on a `$(` held INSIDE the variable's value — a `$(` that is not
+# in the command string, so the `$(` arm cannot see it. macOS's bash 3.2 floor
+# makes that inert where this file is authored and live on the Linux an adopter
+# runs. So the arm is NARROWED rather than kept or dropped: a bare parameter
+# expansion `${IDENT}` — an ASCII letter or `_`, then letters, digits or `_`,
+# then `}` — is admitted, and every other braced form is refused, `@`, `!`, `#`,
+# `[`, `:`, `/` and a nested `$(` among them, as is an unterminated `${`. The
+# walk is a `while` over builtin parameter expansion plus one `=~`, so it stays
+# config-independent and fork-free like the `case` above it. What it is no
+# longer is a single `case` glob — the same trade the `>` arm below now makes,
+# for the same measured reason.
 #
 # `>` IS THE SIXTH CONSTRUCT AND IT IS SCANNED BY SHAPE TOO. Refusing every `>`
 # was measured silencing `bash <scripts dir>/<wrapper>.sh 2>&1` — the flow's own
@@ -135,8 +136,8 @@
 # binaries because it judges tiny commands (`cat <path>`), where a false positive
 # costs nothing. This guard judges commands carrying prose and paths — a commit
 # subject mentioning `sed`, a path component `node` — and in an allow-only guard
-# a false positive is silence, which is a prompt, which in an unattended run is a
-# stall. A token list also enumerates the attacker's tools, an open-ended set in
+# a false positive is silence, which is a prompt, which an unattended run
+# refuses. A token list also enumerates the attacker's tools, an open-ended set in
 # which every unlisted binary is a gap; the construct set is closed and specified
 # by POSIX. Adding a SHORT list of unambiguous network and interpreter names
 # (`curl`, `wget`, `nc`, `base64`) on top of this scan is deferred, not rejected —
@@ -171,10 +172,13 @@
 #       as the reason this guard refuses no binary by name; here it is accepted,
 #       because the alternative is parsing quoting. The `${…}` half of the class
 #       was NOT accepted: it was measured against the shipped corpus and bought
-#       back by the narrowed `${` arm, so the corpus's canonical commit
-#       invocation — `${branch}` in a path and in its subject — is auto-allowed
-#       by THIS GUARD and does not fall through to the permission profile's
-#       literal `commit-on-branch.sh` forms.
+#       back by the narrowed `${` arm, so a wrapper call this guard vouches for
+#       may still carry `${branch}` in a path and in its subject. The corpus's
+#       own commit calls no longer lean on that: they name the main checkout's
+#       copy of `commit-on-branch.sh`, a `sandbox.excludedCommands` entry this
+#       guard does not vouch for from a run copy, spelled with no `$` anywhere,
+#       and are granted by the permission profile's literal `allow` entry
+#       rather than by THIS GUARD.
 #
 # `<<` IS NOT IN THE SCANNED SET, AND ITS ABSENCE IS COVERED TWICE. A
 # here-document was measured SILENT before this scan existed — incidentally, not
@@ -219,15 +223,15 @@
 # this file, deliberately: any of the three would bind the guard to one machine
 # or one product. The allowed root is `<repo_root>/<scripts_dir>` where
 # `<scripts_dir>` is the adopter's `scriptsDir` — a REPO-relative key, so
-# `appDir` is deliberately NOT joined into it — plus that same repo-relative path
-# inside any sibling worktree `<work_root>/<project_name>-*`. Worktree
-# membership is decided by `hc_in_workspace`, which matches by `case` glob and
-# never touches the filesystem, so it does not depend on which worktrees happen
-# to exist right now; the checkout root is then the first component under
-# `<work_root>`, so a sibling worktree has to spell the SAME repo-relative
-# scripts directory rather than any directory of that name at any depth. A
-# repository that configures a different `scriptsDir` gets no allowance for this
-# one.
+# `appDir` is deliberately NOT joined into it — and `<repo_root>` is the checkout
+# this guard judges, so that one root is the only one. A script under a sibling
+# worktree `<work_root>/<project_name>-*` is NOT vouched for: the per-run
+# permission profile grants a run only its own copy's wrappers, and a sibling
+# glob in a `Bash` rule is matched literally (`docs/sandbox-verification.md`
+# F4), so a guard allowing siblings would grant what the profile does not. In an
+# unattended run the judged checkout is the run's own copy, because the watcher
+# launches the session there. A repository that configures a different
+# `scriptsDir` gets no allowance for this one.
 #
 # THE DENY LIST IS THE DEPLOY WRAPPER AND THE OUTER LOOP. `deploy.sh` and the
 # four outer-loop scripts (`autonomous-watcher.sh`, `restart-watcher.sh`,
@@ -241,7 +245,7 @@
 # system, which asks or refuses as its own rules say. `DENY_SCRIPT_BASENAMES` below is that mechanism,
 # kept as a newline-delimited constant so an adopter can read off exactly what is
 # excluded, and matched on BASENAME — LOWER-CASED ON BOTH SIDES — so a relative
-# spelling, an absolute one, any sibling worktree and any capitalisation are all
+# spelling, an absolute one, the checkout's own spellings and any capitalisation are all
 # covered by one entry. The per-entry reasons are stated at the constant itself,
 # together with the wrappers deliberately left allowed, and so is why the
 # comparison ignores case.
@@ -252,7 +256,7 @@
 # quotes is stripped. A quoted path (`"…/<wrapper>.sh"`) MUST resolve identically
 # to a bare one — otherwise the trailing quote makes the token end in `.sh"`,
 # defeats the suffix match, and a legitimately-quoted wrapper invocation falls
-# through to `ask` and STALLS an unattended run. That is a real escape this
+# through to `ask`, which an unattended run refuses. That is a real escape this
 # normalization was added to fix, and it must survive every future edit.
 # Strip-then-match is allow-only-safe: a stripped token that still does not sit
 # under an allowed scripts directory simply fails the checks below and falls
@@ -333,7 +337,7 @@
 #     compared lower-cased on both sides        -> silent (deploy wrapper, or
 #                                                  one of the four outer-loop
 #                                                  scripts)
-#   any token resolves outside the allowed roots-> silent
+#   any token resolves outside the allowed root -> silent
 #   a piece running NO script is not a safe
 #     prefix and not a path-anchored arm        -> silent
 #   the prefix sets will not resolve, once a
@@ -370,9 +374,10 @@
 #
 #     bash <repo>/<scripts dir>/<wrapper>.sh          absolute
 #     cd <repo> && bash <scripts dir>/<wrapper>.sh    relative to a leading `cd`
-#     bash "<repo>/<scripts dir>/<wrapper>.sh"        quoted (the stall escape)
+#     bash "<repo>/<scripts dir>/<wrapper>.sh"        quoted (the refused-wrapper escape)
 #     bash <work_root>/<project_name>-<branch>/<scripts dir>/<wrapper>.sh
-#                                                     sibling worktree of <repo>
+#                                                     with "cwd" set to that
+#                                                     sibling, now its own <top>
 #     bash <repo>/<scripts dir>/<wrapper>.sh 2>&1     descriptor duplication
 #     bash <repo>/<scripts dir>/<wrapper>.sh > /dev/null
 #     bash <repo>/<scripts dir>/<wrapper>.sh 2>/dev/null
@@ -396,6 +401,11 @@
 #     bash <repo>/<scripts dir>/REMOTE-RUN.sh dispatch feat_x --engine task
 #                                                     same, any case
 #     bash /tmp/payload.sh                           outside the workspace
+#     bash <work_root>/<project_name>-<branch>/<scripts dir>/<wrapper>.sh
+#                                                     another run copy: judged
+#                                                     from <repo>, its scripts
+#                                                     directory is not this
+#                                                     checkout's
 #     bash <repo>/<scripts dir>/../../evil.sh         `..` traversal
 #     bash <repo>/<scripts dir>/*.sh                  glob
 #     bash <repo>/<other dir>/thing.sh                outside <scripts dir>
@@ -452,9 +462,9 @@
 #     bash <repo>/<scripts dir>/commit-on-branch.sh --repo "$REPO_ROOT" \
 #       "<state dir>/branch_statistics/${branch}/statistics.md" \
 #       -- "chore: Add branch statistics for ${branch}"
-#                                                     the corpus's own commit
-#                                                     invocation — `${IDENT}` in
-#                                                     a path and in a subject
+#                                                     `${IDENT}` in a path and in
+#                                                     a subject — the shape the
+#                                                     `${` narrowing exists for
 
 set -u
 set -f
@@ -497,8 +507,8 @@ esac
 
 # The sixth construct, `${`, scanned BY SHAPE rather than as a byte sequence —
 # see the header paragraph carrying the measurement. A bare `${IDENT}` is
-# admitted because the shipped instruction corpus's own commit invocation spells
-# one; every other braced form is refused, `${x@P}` above all, because its
+# admitted because a vouched-for wrapper call may spell one in a path or a
+# subject; every other braced form is refused, `${x@P}` above all, because its
 # prompt expansion runs a `$(` that never appears in the command string. The
 # whole walk is builtin parameter expansion plus one `=~`: no fork, no
 # configuration, and it is bounded by the number of `${` in the string.
@@ -591,12 +601,6 @@ if [[ "$scripts_rel" =~ (^|/)\.\.($|/) ]]; then
 fi
 
 scripts_abs="$top/$scripts_rel"
-
-# The parent directory holding the repository and its sibling worktrees. The
-# trailing slash is stripped so the degenerate case of a root-level checkout
-# still composes into a usable pattern.
-work=$(hc_work_root "$top") || exit 0
-work=${work%/}
 
 # ---------------------------------------------------------------------------
 # The directory a relative script path is anchored at: a leading `cd` in the
@@ -715,29 +719,14 @@ EOF
   return 1
 }
 
-# Membership test: is an absolute path under an allowed scripts directory? The
-# in-repository half is a literal prefix; the sibling-worktree half asks
-# `hc_in_workspace` (a `case` glob, never the filesystem) and then requires the
-# SAME repo-relative scripts directory at that worktree's own root, so a
-# directory of the same name nested deeper inside a worktree is not allowed.
+# Membership test: is an absolute path under the judged checkout's own scripts
+# directory? A literal prefix; a sibling worktree's scripts directory is not
+# vouched for (header, THE ALLOWED ROOTS ARE CONFIGURED, NOT BAKED IN).
 under_allowed_scripts() {
-  local abs="$1" rest wt
+  local abs="$1"
 
   case "$abs" in
     "$scripts_abs"/*) return 0 ;;
-  esac
-
-  hc_in_workspace "$abs" "$top" || return 1
-
-  case "$abs" in
-    "$work"/*) rest=${abs#"$work"/} ;;
-    *) return 1 ;;
-  esac
-  wt=${rest%%/*}
-  [ -n "$wt" ] || return 1
-
-  case "$abs" in
-    "$work"/"$wt"/"$scripts_rel"/*) return 0 ;;
   esac
   return 1
 }
@@ -949,7 +938,7 @@ jq -nc --arg d "$scripts_rel" --arg p "$top" '{
   hookSpecificOutput: {
     hookEventName: "PreToolUse",
     permissionDecision: "allow",
-    permissionDecisionReason: ("Auto-allowed: every script target resolves under the configured " + $d + " directory of " + $p + " or of one of its sibling worktrees")
+    permissionDecisionReason: ("Auto-allowed: every script target resolves under the configured " + $d + " directory of " + $p + "")
   }
 }'
 

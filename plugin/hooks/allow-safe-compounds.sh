@@ -7,8 +7,8 @@
 # WHY IT EXISTS. The permission system matches a command as one opaque string,
 # so a block such as `mkdir -p <dir> && git add <path> && git status` is refused
 # even though each piece on its own is allow-listed and would run without a
-# prompt. Interactively that costs a prompt; in an unattended run an unanswerable
-# prompt is a stall. This guard reads the compound apart and grants it only when
+# prompt. Interactively that costs a prompt; in an unattended run that prompt is
+# a refusal. This guard reads the compound apart and grants it only when
 # EVERY piece is judged against the same safe-prefix set the bare spelling of that
 # piece would be judged against — including a piece that names a workspace
 # directory with `git -C <dir>` or `<runner> --prefix <dir>`, which is rewritten to

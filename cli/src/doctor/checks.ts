@@ -8,6 +8,11 @@
  * {@link runChecks} therefore evaluates every entry of {@link CHECKS} in order and turns a thrown
  * value into that check's own `fail`, so the count at the end is always over the whole list.
  *
+ * {@link JOB_SURFACES_CHECK} is declared beside {@link CHECKS} rather than in it: it reads a ref only
+ * a remote job's checkout carries, and the job runs it before the plugin and the permission profile
+ * exist, so a plain `doctor` run would grade it against nothing. `doctor --job-surfaces=<branch>`
+ * runs it alone, through the same {@link runChecks}.
+ *
  * ## Three non-obvious choices, and where each comes from
  *
  * 1. **Nothing here is re-derived from a second copy.** The backend detection and the watcher path
@@ -42,8 +47,8 @@
  *    **The remote is the one condition that qualifies that sentence, and it is deliberately a
  *    `fail`** — do not soften it back to a warning. A repository adopted by `init --git-init` has no
  *    remote by construction, so it is freshly wired and still exits non-zero: `create-worktree.sh`
- *    creates every run's checkout from `origin/<defaultBranch>`, so with no such ref the flow does
- *    not start at all and the report would otherwise be all-green about a repository nothing can run
+ *    creates every run's checkout from the commit origin reports for `<defaultBranch>`, so with no
+ *    origin the flow does not start at all and the report would otherwise be all-green about a repository nothing can run
  *    in. That is what separates it from the two checks whose remedies are also hand steps and which
  *    never fail (`notifications`, `repo-registry`): neither of those is a precondition for a run to
  *    begin, and this one is. The remedy is an adopter's to take — add a remote, push the branch —
@@ -87,10 +92,11 @@
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import { accessSync, constants as fsConstants, existsSync, readFileSync, statSync } from 'node:fs';
+import { release as kernelRelease } from 'node:os';
 import { delimiter, join, posix, resolve as resolvePath } from 'node:path';
 
-import { formatProblem, type ConfigProblem } from '../config/check.js';
-import { loadConfig } from '../config/io.js';
+import { formatProblem, hasErrors, type ConfigProblem } from '../config/check.js';
+import { loadConfig, loadConfigText } from '../config/io.js';
 import {
   answersNone,
   browserWiringApplies,
@@ -105,6 +111,7 @@ import {
   pythonRetrievalApplies,
   remoteExecutionApplies,
   retrievalApplies,
+  sandboxOptedOut,
   STATE_DIR_DOT_PATTERN,
   STATE_DIR_PATTERN,
   type HarnessConfig,
@@ -112,18 +119,22 @@ import {
 } from '../config/model.js';
 import {
   branchResolves,
+  changedPathsBetween,
   checkedOutBranch,
+  commitResolves,
   commitsAhead,
   configuredRemotes,
+  fileAtRef,
   hasCommits,
   mainWorktreeRoot,
+  mergeBase,
   pathAtRef,
   pathIsIgnored,
   remoteTrackingBranchResolves,
   resolveRepoRoot,
   worktreeList,
 } from '../core/git.js';
-import { isJsonObject, readJsonFile, type JsonObject, type JsonValue } from '../core/json.js';
+import { isJsonObject, readJsonFile, stringsAt, valueAt, type JsonObject, type JsonValue } from '../core/json.js';
 import {
   defaultBranchPushCommand,
   defaultBranchPushReason,
@@ -133,6 +144,7 @@ import {
 import { internal } from '../core/errors.js';
 import { layerCoverage } from '../core/layerCoverage.js';
 import { layerGapRemedy, recordedVerdictClause } from '../core/layerGapRemedy.js';
+import { MAIN_REPO_ANCHOR_READ, MAIN_REPO_ANCHOR_RULE, MAIN_REPO_ANCHOR_VARIABLE } from '../core/mainRepoAnchor.js';
 import { nameList } from '../core/nameList.js';
 import { ownManifestString, readTemplate, workRoot } from '../core/paths.js';
 import { ANALYZE_COMMAND } from '../core/pluginIdentity.js';
@@ -169,20 +181,23 @@ import {
 import { IN_FLIGHT_RUNS_NOTE, pinnedCliCommand, unparseableControlRoute, upgradeWorkflowsCommand } from '../generators/githubWorkflows.js';
 import { DOCS_SEARCH_SERVER_SCRIPT_NAME, outerLoopScriptsDir } from '../generators/outerLoopScripts.js';
 import {
-  bashScriptRule,
   entryWord,
   isUnderDirectory,
   namesBrowserTool,
-  normalizedRoot,
   pluginRootDirectories,
   pluginRootEntries,
   pluginRootEntryTarget,
   pluginRootHelpers,
   PLUGIN_ROOT_ENTRIES_FLAG,
-  PROFILE_PATH,
   renderProfile,
-  TEMPLATE_PATH as PROFILE_TEMPLATE_PATH,
 } from '../generators/permissionProfile.js';
+import {
+  bashScriptRule,
+  normalizedRoot,
+  PROFILE_PATH,
+  README_KEY,
+  TEMPLATE_PATH as PROFILE_TEMPLATE_PATH,
+} from '../generators/profileEntries.js';
 import {
   ENABLED_PLUGINS_KEY,
   MARKETPLACE_ENTRY_SHAPE,
@@ -202,6 +217,18 @@ import {
   MCP_PATH,
 } from '../generators/repoRoot.js';
 import {
+  expectedSandbox,
+  SANDBOX_KEY,
+  SANDBOX_OPT_OUT_MARKER,
+  shippedSandboxSettings,
+} from '../generators/sandboxProfile.js';
+import {
+  fileToolDenyRules,
+  jobSurfacePaths,
+  protectedPaths,
+  retiredProtectedPaths,
+} from '../generators/writeProtection.js';
+import {
   configKeyPath,
   configuredWrapperFile,
   scriptInvocation,
@@ -211,7 +238,7 @@ import {
   WRAPPER_SCRIPTS,
   wrapperCommandLine,
 } from '../generators/scripts.js';
-import { selectedStateDirs } from '../generators/stateDir.js';
+import { RUN_LOGS_DIR, RUN_REGISTRY_FILENAME, selectedStateDirs } from '../generators/stateDir.js';
 import { machineConfigDir } from '../machine/paths.js';
 import {
   installedPluginsPath,
@@ -283,6 +310,17 @@ import {
   retrievalRuntimeState,
 } from '../retrieval/runtime.js';
 import { DOCS_SERVER_NAME } from '../retrieval/server.js';
+import {
+  APPARMOR_USERNS_SYSCTL_PATH,
+  assessSandboxHost,
+  BWRAP_APPARMOR_PROFILE_PATH,
+  describeAppArmor,
+  describeMissingPieces,
+  SANDBOX_HOST_BINARIES,
+  type FileRead,
+  type SandboxHostFacts,
+  type SandboxHostKind,
+} from './sandboxPrerequisites.js';
 
 /**
  * How the CLI is typed, for every remedy that tells an operator what to run next. The `npx` prefix
@@ -435,6 +473,12 @@ export interface CheckContext {
    */
   readonly profilePath?: string;
   /**
+   * The checkout whose {@link profilePath} was read — the main worktree, or {@link repoRoot} when the
+   * probe did not answer. Absent exactly when {@link repoRoot} is. A check grading the profile against
+   * values derived from a root reads this rather than probing again, so both describe one checkout.
+   */
+  readonly profileRoot?: string;
+  /**
    * Whether the run asked for {@link BROWSER_WIRING_CHECK}'s registry reachability probe, which
    * `doctor --check-registry` turns on and nothing else reads. It and {@link probeGithub} are the only
    * questions in this module that reach the network; both are `false` in every default run, which is
@@ -449,11 +493,30 @@ export interface CheckContext {
   readonly probeGithub: boolean;
   /**
    * Whether `doctor --remote-job` graded the profile for a remote job: {@link PROFILE_PATHS_CHECK},
-   * {@link PROFILE_TRACKED_CHECK} and {@link PLUGIN_PERMISSIONS_CHECK} fail where they otherwise warn,
-   * and the last also grades
-   * `permissions.additionalDirectories`. `false` in every default run.
+   * {@link PROFILE_TRACKED_CHECK}, {@link PROFILE_SANDBOX_CHECK}, {@link PROFILE_WRITE_PROTECTION_CHECK},
+   * {@link SANDBOX_PREREQUISITES_CHECK} and {@link PLUGIN_PERMISSIONS_CHECK} fail where they otherwise
+   * warn, and the last also grades `permissions.additionalDirectories`. `false` in every default run.
    */
   readonly remoteJob: boolean;
+  /** What `doctor --job-surfaces=<branch>[@<commit>[@<base>]]` asked {@link JOB_SURFACES_CHECK} about; absent otherwise. */
+  readonly jobSurfaces?: JobSurfacesTarget;
+}
+
+/** The value of `doctor --job-surfaces=`, split at its last `@`, and at the one before it when both ids are given. */
+export interface JobSurfacesTarget {
+  /** The default branch the job was dispatched against. Without {@link commit}, its ref is the trusted one. */
+  readonly branch: string;
+  /**
+   * The default branch's commit recorded before any session had the checkout. When present it is the
+   * trusted configuration's tree and the merge-base side, no `refs/remotes/origin/*` ref is read, and
+   * {@link branch} only labels the messages.
+   */
+  readonly commit?: string;
+  /**
+   * The configured `defaultBranch`'s commit, recorded before any session had the checkout. When present
+   * it is the merge-base side in place of {@link commit}, which still supplies the configuration.
+   */
+  readonly base?: string;
 }
 
 /** The permission lists a generated profile carries, in the order the template writes them. */
@@ -503,6 +566,17 @@ const JQ_MIN_MINOR = 5;
  * graded rather than parsed anyway; see {@link JQ_CHECK}.
  */
 const JQ_VERSION_PATTERN = /(\d+)\.(\d+)/;
+
+/**
+ * The oldest git `refresh-branch.sh` runs on: it builds its merge with `git merge-tree
+ * --write-tree`, which git 2.38 introduced, and refuses on anything older (that script's header →
+ * `THE MERGE IS BUILT FROM PLUMBING`). Nothing else the harness ships needs it.
+ */
+const GIT_MIN_MAJOR = 2;
+const GIT_MIN_MINOR = 38;
+
+/** The `<major>.<minor>` in `git --version`'s `git version 2.50.1 (Apple Git-155)`. */
+const GIT_VERSION_PATTERN = /git version (\d+)\.(\d+)/;
 
 /** How much of a probe's own output a detail quotes back before it elides the rest. */
 const PROBE_OUTPUT_CAP = 60;
@@ -594,6 +668,40 @@ function resolvesOnPath(command: string, searchPath: string = process.env['PATH'
   return locateOnPath(command, searchPath) !== undefined;
 }
 
+/** One host file as {@link FileRead}: `ENOENT` and `ENOTDIR` are absent, any other error unreadable. */
+function readHostFile(path: string): FileRead {
+  try {
+    return { state: 'read', text: readFileSync(path, 'utf8') };
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | null)?.code;
+    return code === 'ENOENT' || code === 'ENOTDIR' ? { state: 'absent' } : { state: 'unreadable' };
+  }
+}
+
+/**
+ * The host facts {@link SANDBOX_PREREQUISITES_CHECK} grades: the platform, the kernel release, which
+ * {@link SANDBOX_HOST_BINARIES} resolve on this process's `PATH`, and the two AppArmor files.
+ *
+ * It spawns nothing and reaches no network. It answers for the `PATH` `doctor` was typed at, not the
+ * daemon's: the watcher's own launch-time probe is the authority for the `PATH` a run starts under.
+ *
+ * **DECLARED MIRROR** — `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_sandbox_prereq_probe_var`
+ * mirrors its platform, kernel-release and `PATH` reads, held equal by
+ * `cli/test/sandbox-prerequisites-shell-mirror.test.mjs`. A rename of this function or a change to
+ * what it reads is an edit to that shell function.
+ */
+function probeSandboxHost(): SandboxHostFacts {
+  return {
+    platform: process.platform,
+    kernelRelease: kernelRelease(),
+    resolvedBinaries: new Set(
+      SANDBOX_HOST_BINARIES.filter((entry) => resolvesOnPath(entry.binary)).map((entry) => entry.binary),
+    ),
+    appArmorRestrict: readHostFile(APPARMOR_USERNS_SYSCTL_PATH),
+    bwrapProfile: readHostFile(BWRAP_APPARMOR_PROFILE_PATH),
+  };
+}
+
 /** One permission list's string entries, or none when the profile does not carry it as a list. */
 function permissionEntries(profile: JsonObject, list: string): readonly string[] {
   const permissions = profile['permissions'];
@@ -626,11 +734,12 @@ const RULE_WRAPPER = /^[A-Za-z]+\(([\s\S]*)\)$/;
  * The absolute path expressions inside one location string, each normalized to what it points at.
  *
  * Three shapes are handled at once because all three are in every generated profile: `Edit(//<abs>/**)`
- * and its `Write`/`Read` twins, whose leading `//` is the tool syntax marking an absolute path and is
- * collapsed here to the single slash the path itself carries; `Bash(bash <abs>/<script>:*)`, where the
- * path is the second whitespace-separated word and `:*` is the argument wildcard rather than part of
- * it; and a bare directory. A word not starting with `/` — `git`, `bash`, a repo-relative invocation —
- * names no root and is dropped.
+ * and its `Read` twin, whose leading `//` is the tool syntax marking an absolute path and is collapsed
+ * here to the single slash the path itself carries; `Bash(bash <abs>/<scripts>/<x>.sh:*)`, an exact
+ * absolute path, where the path is the second whitespace-separated word and `:*` is the argument
+ * wildcard rather than part of it; and a bare directory. The parser is generic over the wrapper, so a
+ * `Write(//…)` rule an earlier release's profile still carries is read the same way. A word not
+ * starting with `/` — `git`, `bash`, a repo-relative invocation — names no root and is dropped.
  */
 function absolutePathExpressions(entry: string): readonly string[] {
   const inner = RULE_WRAPPER.exec(entry)?.[1] ?? entry;
@@ -657,9 +766,11 @@ function segmentMatcher(segment: string): RegExp {
  *
  * - `<work>/<project>-*` against a sibling worktree `<work>/<project>-feature_x` — equal depth, and
  *   the wildcard segment is the whole point (`core/paths.ts`'s `worktreeGlob`, emitted unconditionally);
- * - a wrapper-script rule under that same pattern — `<work>/<project>-<wildcard>/scripts/test.sh` —
- *   against that same root: the expression is *deeper* than the root, and a script rule inside a
- *   checkout names that checkout;
+ * - a rule under that same pattern — `Edit(//<work>/<project>-<wildcard>/**)`, or the wrapper-script
+ *   rule `<work>/<project>-<wildcard>/scripts/test.sh` that only an earlier release's profile still
+ *   carries — against that same root: the expression is *deeper* than the root, and a rule inside a
+ *   checkout names that checkout. A run copy's root is covered by the base's `Edit(//<glob>/**)` and
+ *   `Read(//<glob>/**)` rules;
  * - `<work>/**` against `<work>/<project>` — the expression is *shallower*, and a rule spanning the
  *   directory above covers what is under it.
  *
@@ -730,12 +841,14 @@ function serversStartedByProfile(profile: JsonObject): readonly string[] {
  * default to `false`: a context built without them is the context every default run gets, and no
  * check here reaches a network unless the command was asked to. `remoteJob` is the caller's too, and
  * defaults to `false` for the same reason: only the remote job's preflight asks for its grading.
+ * `jobSurfaces` is carried through untouched for {@link JOB_SURFACES_CHECK}.
  */
 export function buildCheckContext(
   cwd: string,
   probeRegistry = false,
   probeGithub = false,
   remoteJob = false,
+  jobSurfaces?: JobSurfacesTarget,
 ): CheckContext {
   let repoRoot: string | undefined;
   let repoProblem: string | undefined;
@@ -745,7 +858,10 @@ export function buildCheckContext(
     repoProblem = messageOf(error);
   }
 
-  if (repoRoot === undefined) return { cwd, repoProblem, configProblems: [], probeRegistry, probeGithub, remoteJob };
+  const job = jobSurfaces === undefined ? {} : { jobSurfaces };
+  if (repoRoot === undefined) {
+    return { cwd, repoProblem, configProblems: [], probeRegistry, probeGithub, remoteJob, ...job };
+  }
 
   const loaded = loadConfig(repoRoot);
   const profileRoot = mainWorktreeRoot(repoRoot) ?? repoRoot;
@@ -778,23 +894,65 @@ export function buildCheckContext(
     profile,
     profileProblem,
     profilePath,
+    profileRoot,
     probeRegistry,
     probeGithub,
     remoteJob,
+    ...job,
   };
 }
 
-/** Is this repository inside a work tree at all — the precondition every repo-wiring check has. */
+/**
+ * Is this repository inside a work tree at all — the precondition every repo-wiring check has — and
+ * is git at or above {@link GIT_MIN_MAJOR}.{@link GIT_MIN_MINOR}?
+ *
+ * The version floor is a `warn`, never a `fail`: one shipped script, `refresh-branch.sh`, refuses
+ * below it, and every other one works, so a run starts and parks cleanly on an older git and only
+ * the stale-base repair is out of reach. `git --version` not answering, or answering with a string
+ * this check cannot parse, warns too, in {@link JQ_CHECK}'s manner, since git demonstrably resolved
+ * the repository root.
+ */
 const GIT_CHECK: Check = {
   id: 'git',
-  title: 'git is available and the current directory is inside a work tree',
-  run: (ctx) =>
-    ctx.repoRoot === undefined
-      ? fail(
-          ctx.repoProblem ??
-            `the repository root of ${ctx.cwd} could not be resolved, so there is no repository to check`,
-        )
-      : pass(`git answered, and ${ctx.cwd} is inside the work tree rooted at ${ctx.repoRoot}`),
+  title: `git is available and the current directory is inside a work tree; warns below ${GIT_MIN_MAJOR}.${GIT_MIN_MINOR}`,
+  run: (ctx) => {
+    if (ctx.repoRoot === undefined) {
+      return fail(
+        ctx.repoProblem ??
+          `the repository root of ${ctx.cwd} could not be resolved, so there is no repository to check`,
+      );
+    }
+    const located = `${ctx.cwd} is inside the work tree rooted at ${ctx.repoRoot}`;
+    const floor = `${GIT_MIN_MAJOR}.${GIT_MIN_MINOR}`;
+    let output: string;
+    try {
+      output = execFileSync('git', ['--version'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: JQ_PROBE_TIMEOUT_MS,
+        windowsHide: true,
+      });
+    } catch (error) {
+      return warn(
+        `${located}, but \`git --version\` did not answer (${messageOf(error)}), so the ${floor} floor refresh-branch.sh needs could not be checked — run \`git --version\` yourself`,
+      );
+    }
+    const printed = firstLine(output);
+    const parsed = GIT_VERSION_PATTERN.exec(printed);
+    if (parsed === null) {
+      return warn(
+        `${located}, and \`git --version\` printed ${JSON.stringify(printed)}, which carries no version number this check recognises, so the ${floor} floor refresh-branch.sh needs could not be checked — compare it by hand`,
+      );
+    }
+    const major = Number(parsed[1]);
+    const minor = Number(parsed[2]);
+    if (major < GIT_MIN_MAJOR || (major === GIT_MIN_MAJOR && minor < GIT_MIN_MINOR)) {
+      return warn(
+        `${located}, but git is ${major}.${minor} (\`git --version\` printed ${JSON.stringify(printed)}), older than ${floor}: refresh-branch.sh builds its merge with \`git merge-tree --write-tree\` and refuses on this git, so a stale working copy cannot be refreshed through it — every other script works. Install git ${floor} or newer`,
+      );
+    }
+    return pass(`git ${major}.${minor} answered, at or above the ${floor} floor, and ${located}`);
+  },
 };
 
 /**
@@ -976,17 +1134,20 @@ const DEFAULT_BRANCH_CHECK: Check = {
  * `fatal: 'origin' does not appear to be a git repository`.
  *
  * The precondition is `create-worktree.sh`'s, and it is two steps rather than one: the new-branch
- * arm fetches `origin/<defaultBranch>` and then creates the worktree **from that ref**, and pushes
- * the new branch to `origin` afterwards. That script refuses both bad states itself, before it
- * creates anything (`exit 2`, naming the remedy and this check), so a repository missing one gets no
- * worktree and nothing downstream — no phase, no agent, no commit — runs. This check is what says so
+ * arm creates the worktree from the default branch's commit as origin reports it
+ * (`hr_run_trusted_base_var`) and pushes the new branch to `origin` afterwards. That script refuses
+ * a missing `origin`, and one it cannot reach or that does not report exactly one commit for the
+ * branch, itself, before it creates anything (`exit 2`, naming the remedy and this check), so such
+ * a repository gets no worktree and nothing downstream — no phase, no agent, no commit — runs. This check is what says so
  * before a prompt is dropped rather than in the run log of the drop that failed.
  *
  * Both bad states are a `fail`, for the reason choice 2 in the module header spells out: this is the
  * one hand-remediable condition that is a precondition for a run to begin, which is what separates
  * it from `notifications` and `repo-registry`. The second state is the one worth having a check for
- * — a remote is configured, so `git remote -v` reassures, and the ref the script actually names is
- * still not there.
+ * — a remote is configured, so `git remote -v` reassures, and the branch the script asks origin for
+ * may still not be there. The check reads the remote-tracking ref as this checkout last fetched it,
+ * so it is an offline proxy: a stale ref with an unreachable `origin` passes here and is refused by
+ * the script.
  *
  * It asks {@link remoteTrackingBranchResolves} rather than {@link branchResolves}: the latter stops
  * at the local spelling, which the checkout of an integration line always has, so it would answer
@@ -1012,32 +1173,33 @@ const REMOTE_CHECK: Check = {
     const remotes = configuredRemotes(ctx.repoRoot);
     if (remotes.length === 0) {
       return fail(
-        `this repository has no remote configured, so no run can be started in it: ${WORKTREE_SCRIPT} fetches origin/${branch} and creates every run's checkout from that ref, and with no origin it refuses before a worktree exists — the flow stops before any phase begins. Add one and push the branch (\`git remote add origin <url> && git push -u origin ${branch}\`), or run the flow in a checkout that already has a remote`,
+        `this repository has no remote configured, so no run can be started in it: ${WORKTREE_SCRIPT} creates every run's checkout from the commit origin reports for ${branch}, and with no origin it refuses before a worktree exists — the flow stops before any phase begins. Add one and push the branch (\`git remote add origin <url> && git push -u origin ${branch}\`), or run the flow in a checkout that already has a remote`,
       );
     }
 
     if (!remoteTrackingBranchResolves(ctx.repoRoot, branch)) {
       return fail(
-        `this repository has a remote (${nameList(remotes)}) but no origin/${branch} remote-tracking ref, so no run can be started in it: ${WORKTREE_SCRIPT} creates every run's checkout from origin/${branch}, and a local branch of that name does not satisfy it. Push the branch with \`git push -u origin ${branch}\`, or fetch it with \`git fetch origin ${branch}\` if it is already on the remote — and if the remote here is not called origin, add one that is`,
+        `this repository has a remote (${nameList(remotes)}) but no origin/${branch} remote-tracking ref, so no run can be started in it: ${WORKTREE_SCRIPT} creates every run's checkout from the commit origin reports for ${branch}, and a local branch of that name does not satisfy it. Push the branch with \`git push -u origin ${branch}\`, or fetch it with \`git fetch origin ${branch}\` if it is already on the remote — and if the remote here is not called origin, add one that is`,
       );
     }
 
     return pass(
-      `origin is configured (${nameList(remotes)}) and origin/${branch} resolves as a remote-tracking ref, which is what ${WORKTREE_SCRIPT} branches a run's checkout from`,
+      `origin is configured (${nameList(remotes)}) and origin/${branch} resolves as a remote-tracking ref, as this checkout last fetched it; ${WORKTREE_SCRIPT} cuts a run's checkout from the commit origin reports for ${branch} when the run starts`,
     );
   },
 };
 
 /**
- * Is the ref a run's working copy would be cut from **current** — or has this checkout got commits
- * on the integration line that were never pushed?
+ * Is the default branch as this checkout last saw it on origin **current** — or has this checkout
+ * got commits on the integration line that were never pushed?
  *
  * **The question `remote` above cannot answer.** That one asks whether `origin/<defaultBranch>`
  * exists at all; a ref that exists and is behind the local branch satisfies it completely. So the
  * repository this reports on is one where every other line is green: `create-worktree.sh` branches
- * every run's working copy from `origin/<defaultBranch>`, and a run started there gets a base
- * missing whatever was not pushed — commonly the harness wiring itself, which is discovered only
- * after a planning phase has been paid for and the run has parked.
+ * every run's working copy from the commit origin reports for `<defaultBranch>`, which that ref
+ * records as of the last fetch, and a run started there gets a base missing whatever was not
+ * pushed — commonly the harness wiring itself, which is discovered only after a planning phase has
+ * been paid for and the run has parked.
  *
  * **A `warn`, never a `fail`, and do not promote it.** The run does start and parks cleanly, so
  * this is not a precondition in the sense the module header's choice 2 reserves `fail` for — and a
@@ -1064,7 +1226,7 @@ const REMOTE_CHECK: Check = {
  */
 const BASE_FRESHNESS_CHECK: Check = {
   id: 'base-freshness',
-  title: "the ref a run's working copy is branched from is not behind this checkout",
+  title: 'the default branch as this checkout last saw it on origin is not behind the local one',
   run: (ctx) => {
     if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
     if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
@@ -1100,12 +1262,12 @@ const BASE_FRESHNESS_CHECK: Check = {
 
     if (ahead > 0) {
       return warn(
-        `${branch} is ${ahead} commit${ahead === 1 ? '' : 's'} ahead of origin/${branch}, so a run started now gets a stale base: ${WORKTREE_SCRIPT} branches every run's working copy from origin/${branch}, and nothing in those commits would be in it — which is how a whole planning phase gets paid for before anything discovers what is missing from the worktree. Push them from this checkout with \`git push origin ${branch}\`; a working copy that already exists catches up with \`${scriptInvocation(outerLoopScriptsDir(ctx.config), REFRESH_SCRIPT)} --local\`, the one refresh route the protected-branch guard permits. A warning rather than a failure because the run does start and parks cleanly`,
+        `${branch} is ${ahead} commit${ahead === 1 ? '' : 's'} ahead of origin/${branch}, so a run started now gets a stale base: ${WORKTREE_SCRIPT} branches every run's working copy from the commit origin reports for ${branch}, which origin/${branch} records as of the last fetch, and nothing in those commits would be in it — which is how a whole planning phase gets paid for before anything discovers what is missing from the worktree. Push them from this checkout with \`git push origin ${branch}\`; a working copy that already exists catches up with \`${scriptInvocation(outerLoopScriptsDir(ctx.config), REFRESH_SCRIPT)} --local\`, the one refresh route the protected-branch guard permits. A warning rather than a failure because the run does start and parks cleanly`,
       );
     }
 
     return pass(
-      `origin/${branch} contains every commit ${branch} has, as this checkout last saw the remote, so a working copy ${WORKTREE_SCRIPT} cuts from origin/${branch} carries everything this checkout has of the integration line`,
+      `origin/${branch} contains every commit ${branch} has, as this checkout last saw the remote, so a working copy ${WORKTREE_SCRIPT} cuts from the commit origin reports for ${branch} carries everything this checkout has of the integration line`,
     );
   },
 };
@@ -1394,24 +1556,30 @@ const JQ_CHECK: Check = {
 };
 
 /**
- * Can worktree-based runs be prepared here?
+ * Does `git worktree list` answer here, so the checks that read which checkout has a branch checked
+ * out can be made?
  *
- * A `warn` rather than a `fail`: the flow runs in a single checkout, and an adopter whose git cannot
- * list worktrees loses the isolation a parallel run wants rather than the ability to run at all.
+ * A run copy is a clone and is not created through it. What reads it: the one-live-copy rule
+ * (`hr_run_copy_live_var` in the generated `lib/harness-run-lib.sh`) and sync-in, which each refuse a
+ * branch the main checkout or one of its worktrees has checked out; and a legacy worktree run, which
+ * is listed there and nowhere else in git. The id stays `worktrees`.
+ *
+ * A `warn` rather than a `fail`: with no answer, both of those checks refuse rather than guess, so
+ * a run that needs one stops at it, and nothing else in the flow reads this.
  */
 const WORKTREE_CHECK: Check = {
   id: 'worktrees',
-  title: 'git worktree list answers, so worktree-based runs are possible',
+  title: 'git worktree list answers, so the one-live-copy rule and sync-in can see which checkout has a branch checked out',
   run: (ctx) => {
     if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
     const checkouts = worktreeList(ctx.repoRoot);
     if (checkouts === undefined) {
       return warn(
-        `git worktree list did not answer in ${ctx.repoRoot}, so a run cannot be given a checkout of its own: the flow still runs in this single working copy, and two runs then share it`,
+        `git worktree list did not answer in ${ctx.repoRoot}, so the one-live-copy rule and sync-in cannot see which checkout has a branch checked out and each refuses rather than guess: creating a run copy, and a wrapper syncing a clone's branch in, stop there; a legacy worktree run is not listed either`,
       );
     }
     return pass(
-      `git worktree list answers with ${checkouts.length} checkout${checkouts.length === 1 ? '' : 's'}, so a run can be given one of its own`,
+      `git worktree list answers with ${checkouts.length} checkout${checkouts.length === 1 ? '' : 's'}, so the one-live-copy rule and sync-in can see which of them has a branch checked out, and any legacy worktree run is among them`,
     );
   },
 };
@@ -1715,15 +1883,6 @@ const DEFAULT_MAX_PARALLEL_RUNS = '5';
 
 /** One `MAX_PARALLEL_RUNS=` assignment, `export`ed or not, with the value as it was written. */
 const MAX_PARALLEL_RUNS_ASSIGNMENT = new RegExp(`^[ \\t]*(?:export[ \\t]+)?${MAX_PARALLEL_RUNS_VARIABLE}[ \\t]*=(.*)$`);
-
-/**
- * Where one repository keeps its **run** registry, relative to that repository's `stateDir`.
- *
- * `autonomous-watcher.sh`'s `REGISTRY="$LOGS_DIR/registry.json"` is the definition of record — this
- * is the first TypeScript reader of that file, and it reads it for a *report* only.
- */
-const RUN_LOGS_DIR = 'autonomous_logs';
-const RUN_REGISTRY_FILENAME = 'registry.json';
 
 /** The record status that counts toward a repository's live runs. Half of the predicate; see below. */
 const RUNNING_STATUS = 'running';
@@ -3313,7 +3472,7 @@ function renderListGroup(list: string, entries: readonly string[]): string {
  * `init --force`. Measured on one such adoption, `permissions.allow` carried no `test.sh` or
  * `typecheck.sh` entry where a normally-detected repository carries six, and the report was clean.
  * What it costs is the failure the profile exists to prevent — a command matching neither `allow` nor
- * `deny` does not prompt in print mode, it hangs.
+ * `deny` is refused in an unattended run.
  *
  * **The expectation is re-derived, never restated.** {@link renderProfile}, the producer `init` itself
  * uses, is called with no `written` list — so the wrapper selection falls back to
@@ -3325,7 +3484,7 @@ function renderListGroup(list: string, entries: readonly string[]): string {
  *
  * **Each list is compared against its own.** A rendered `allow` entry is looked for in `allow` and a
  * rendered `ask` entry — which the deploy wrapper's three are — in `ask`, never in a union of the two:
- * `ask` is evaluated before `allow`, so a wrapper entry that moved into it is the stall rather than
+ * `ask` is evaluated before `allow`, so a wrapper entry that moved into it is the refusal rather than
  * the grant, and which list a row belongs in stays the template's statement rather than a second one
  * here.
  *
@@ -3436,7 +3595,7 @@ const COMMAND_PERMISSIONS_CHECK: Check = {
         .filter(({ entries }) => entries.length > 0)
         .map(({ list, entries }) => renderListGroup(list, entries));
       return warn(
-        `${absentSentence}${absentSentence === '' ? '' : ' '}${PROFILE_PATH} is missing ${missing.length} of the ${owed} permission ${entryWord(owed)} this repository's ${keys} imply, so a command an agent runs from one of them matches neither allow nor deny and an unattended run hangs there with no diagnostic rather than failing. \`${CLI} init\` writes these entries from the commands it detected, so a key filled in afterwards carries none of them and no ordinary re-run adds them. Run \`${CLI} init --force\`, which regenerates the profile from the config as it now stands after copying the current one to a .bak sibling and carrying the plugin-root entries forward — or add each line below to that list in ${PROFILE_PATH} as its own string, unquoted exactly as it stands:\n${blocks.join('\n\n')}`,
+        `${absentSentence}${absentSentence === '' ? '' : ' '}${PROFILE_PATH} is missing ${missing.length} of the ${owed} permission ${entryWord(owed)} this repository's ${keys} imply, so a command an agent runs from one of them matches neither allow nor deny and an unattended run is refused there. \`${CLI} init\` writes these entries from the commands it detected, so a key filled in afterwards carries none of them and no ordinary re-run adds them. Run \`${CLI} init --force\`, which regenerates the profile from the config as it now stands after copying the current one to a .bak sibling and carrying the plugin-root entries forward — or add each line below to that list in ${PROFILE_PATH} as its own string, unquoted exactly as it stands:\n${blocks.join('\n\n')}`,
       );
     }
 
@@ -4461,7 +4620,7 @@ const PROFILE_CHECK: Check = {
  * branch, so the job's create-if-absent `init` finds none and generates its own.
  *
  * The commit must land on the **default branch**, because every run's branch is cut from
- * `origin/<defaultBranch>` (`create-worktree.sh` → `worktree add … "origin/$default_branch"`): an
+ * `origin/<defaultBranch>` (`create-worktree.sh` → `hr_run_trusted_base_var`): an
  * untrack pushed only to a run branch covers that one run, and the next branch carries the profile
  * again. The push and its `--no-verify` reason are `core/defaultBranchPush.ts`'s, spelled nowhere here.
  *
@@ -4492,7 +4651,7 @@ function profileUntrackRemedy(ctx: CheckContext): string {
  * printed there. The remedy is {@link profileUntrackRemedy}, so the job generates its own.
  *
  * The question asked is "does any rule cover this root", not "is every path correct": a profile
- * generated here mentions the root in its edit, write and read rules, so its complete absence is the
+ * generated here mentions the root in its edit, read and script rules, so its complete absence is the
  * signal.
  *
  * "Cover" is deliberately not "contain" ({@link namesRoot}). A generated profile names two locations —
@@ -4514,7 +4673,7 @@ const PROFILE_PATHS_CHECK: Check = {
     const covered = locationStrings(ctx.profile).some((entry) => namesRoot(entry, ctx.repoRoot as string));
     if (!covered && ctx.remoteJob) {
       return fail(
-        `neither a path nor a pattern in ${PROFILE_PATH} covers this repository root (${ctx.repoRoot}): the profile was generated on another machine and committed, and this job's create-if-absent \`${CLI} init\` kept it, so a run loading it would find its edit, write, read and script rules matching nothing here. Stop tracking it so the job generates its own: ${profileUntrackRemedy(ctx)}`,
+        `neither a path nor a pattern in ${PROFILE_PATH} covers this repository root (${ctx.repoRoot}): the profile was generated on another machine and committed, and this job's create-if-absent \`${CLI} init\` kept it, so a run loading it would find its edit, read and script rules matching nothing here. Stop tracking it so the job generates its own: ${profileUntrackRemedy(ctx)}`,
       );
     }
     return covered
@@ -4522,7 +4681,7 @@ const PROFILE_PATHS_CHECK: Check = {
           `the profile's rules cover this repository root (${ctx.repoRoot}) — by naming it, or by a pattern such as the sibling-worktree glob that matches it — so they apply to this checkout`,
         )
       : warn(
-          `neither a path nor a pattern in ${PROFILE_PATH} covers this repository root (${ctx.repoRoot}): the profile was generated for another location, so a run loading it would find its edit, write, read and script rules matching nothing here — re-run \`${CLI} init --force\` from the checkout the profile should be generated for, which writes a .bak sibling before regenerating it`,
+          `neither a path nor a pattern in ${PROFILE_PATH} covers this repository root (${ctx.repoRoot}): the profile was generated for another location, so a run loading it would find its edit, read and script rules matching nothing here — re-run \`${CLI} init --force\` from the checkout the profile should be generated for, which writes a .bak sibling before regenerating it`,
         );
   },
 };
@@ -4615,6 +4774,301 @@ const PROFILE_DENY_FLOOR_CHECK: Check = {
 };
 
 /**
+ * Does the profile let an unattended run read the main checkout's anchor — is
+ * {@link MAIN_REPO_ANCHOR_RULE} in `permissions.allow`, and in neither `ask` nor `deny`?
+ *
+ * Without it every plugin reader's {@link MAIN_REPO_ANCHOR_READ} is refused and the reader falls
+ * back to the first `git worktree list` entry: right in the main checkout and in a linked worktree,
+ * but the copy itself in a clone. `ask` is evaluated before `allow` and refuses under `dontAsk`, and
+ * `deny` cannot be overridden, so the rule in either is as good as absent.
+ *
+ * A `warn` on {@link PROFILE_DENY_FLOOR_CHECK}'s terms — an adopter-owned file a run is
+ * worse-served by rather than stopped by — and, unlike that family's `--remote-job` escalations,
+ * **never a `fail`, `--remote-job` included**: a job's checkout is its own main checkout, so the
+ * fallback answers the same directory there. Every name in its messages is
+ * `core/mainRepoAnchor.ts`'s, imported rather than retyped.
+ */
+const PROFILE_MAIN_ANCHOR_CHECK: Check = {
+  id: 'profile-main-anchor',
+  title: 'the permission profile allow-lists the read of the main-checkout anchor',
+  run: (ctx) => {
+    if (ctx.profile === undefined) return unevaluated(`${PROFILE_PATH} could not be read (see the permission-profile check)`);
+
+    const faults: string[] = [];
+    if (!permissionEntries(ctx.profile, 'allow').includes(MAIN_REPO_ANCHOR_RULE)) faults.push('is missing from its allow list');
+    if (permissionEntries(ctx.profile, 'ask').includes(MAIN_REPO_ANCHOR_RULE)) {
+      faults.push('is in its ask list, which is evaluated before allow and refuses under dontAsk');
+    }
+    if (permissionEntries(ctx.profile, 'deny').includes(MAIN_REPO_ANCHOR_RULE)) {
+      faults.push('is in its deny list, which no allow overrides');
+    }
+    if (faults.length > 0) {
+      return warn(
+        `the rule for reading ${MAIN_REPO_ANCHOR_VARIABLE} ${faults.join(' and ')} in ${PROFILE_PATH}, so each plugin reader's \`${MAIN_REPO_ANCHOR_READ}\` is refused and it falls back to the first \`git worktree list\` entry — right in the main checkout and in a linked worktree, but the copy itself in a clone. Allow it with this permissions.allow entry (and remove it from ask and deny), or regenerate the profile with \`${CLI} init --force\`, which writes a .bak sibling first:\n${MAIN_REPO_ANCHOR_RULE}`,
+      );
+    }
+    return pass(`${PROFILE_PATH} allows ${MAIN_REPO_ANCHOR_RULE}, and neither asks about nor denies it`);
+  },
+};
+
+/**
+ * Is the profile's `sandbox` block what the configuration asks for: on, strict, excluding exactly
+ * the expected wrapper entries, allowing exactly the expected domains — or, under a taken
+ * `sandbox.optOut`, off with the opt-out marker in `_README`?
+ *
+ * Every expected value is {@link expectedSandbox}'s or {@link shippedSandboxSettings}', computed for
+ * the main checkout's root as {@link buildCheckContext} resolves the profile's location: the excluded
+ * commands are absolute paths into the checkout the profile was generated at.
+ *
+ * Every finding is a `warn`: a profile an earlier release generated is legitimately in that state,
+ * as with {@link PROFILE_DENY_FLOOR_CHECK}, and refusing a run on a host that cannot start the sandbox
+ * is {@link SANDBOX_PREREQUISITES_CHECK}'s and the watcher's launch refusal, not this check's. **Under `--remote-job`**
+ * ({@link CheckContext.remoteJob}) every finding is a `fail`, except the taken opt-out, which stays a
+ * `warn` because it is the repository's choice. Every non-pass names `init --force` as the remedy.
+ * An excluded entry in an earlier release's `Bash(…)` form ({@link expectedSandbox}'s `staleExcludedCommands`)
+ * is reported as stale by name, under the same grading, instead of as an unnamed extra: that form
+ * matches no command (`docs/sandbox-verification.md` → P1a), so its wrapper runs sandboxed.
+ */
+/**
+ * What a `runsUnsandboxed` wrapper loses when its excluded entry is missing or inert — true of the
+ * commit, the push and the refresh wrapper alike: on a clone, the main checkout's `.git` the profile
+ * write-denies as a whole (`docs/cli.md` §6; `docs/sandbox-verification.md` CL4, and CS2, owed); on
+ * a legacy worktree and for SSH (`docs/sandbox-verification.md` F1, F3).
+ */
+const SANDBOXED_WRAPPER_CONSEQUENCE =
+  "that wrapper runs sandboxed, where a clone cannot move the main checkout's branch because the profile write-denies the main checkout's whole `.git`, and a linked worktree's git record and an SSH remote are both out of reach on macOS";
+
+const PROFILE_SANDBOX_CHECK: Check = {
+  id: 'profile-sandbox',
+  title: "the permission profile's sandbox block is what the configuration asks for",
+  run: (ctx) => {
+    if (ctx.repoRoot === undefined || ctx.profileRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
+    if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
+    if (ctx.profile === undefined) return unevaluated(`${PROFILE_PATH} could not be read (see the permission-profile check)`);
+
+    const profileRoot = ctx.profileRoot;
+    const expected = expectedSandbox({ repoRoot: profileRoot, config: ctx.config });
+    const sandbox = ctx.profile[SANDBOX_KEY];
+    const enabledPath = `${SANDBOX_KEY}.enabled`;
+    const enabled = valueAt(ctx.profile, enabledPath.split('.'));
+    const marked = stringsAt(ctx.profile[README_KEY]).some((line) => line.startsWith(SANDBOX_OPT_OUT_MARKER));
+    const regenerate = `Regenerate it with \`${CLI} init --force\`, which writes a .bak sibling first`;
+    const grade = ctx.remoteJob ? fail : warn;
+
+    if (expected.optedOut) {
+      if (isJsonObject(sandbox) && enabled === false && marked) {
+        return warn(
+          `unattended runs are unsandboxed by this repository's own choice: ${expected.optOutReason ?? ''} — every \`deny\` entry still applies. To undo it, delete sandbox.optOut from ${CONFIG_FILENAME} and run \`${CLI} init --force\`, which writes a .bak sibling first`,
+        );
+      }
+      return grade(
+        `${CONFIG_FILENAME} takes sandbox.optOut, but ${PROFILE_PATH} does not reflect it: \`${enabledPath}\` holds ${JSON.stringify(enabled ?? null)} and ${marked ? 'a' : 'no'} \`${README_KEY}\` line carries the opt-out marker, so the profile in use is not the one the configuration asks for. ${regenerate}`,
+      );
+    }
+
+    if (!isJsonObject(sandbox)) {
+      return grade(
+        `${PROFILE_PATH} has no \`${SANDBOX_KEY}\` object: it was generated by an earlier release, and unattended commands run unsandboxed. ${regenerate}`,
+      );
+    }
+
+    const findings: string[] = [];
+    if (enabled === false || marked) {
+      findings.push(
+        `\`${enabledPath}\` holds ${JSON.stringify(enabled ?? null)}${marked ? ` and \`${README_KEY}\` carries the opt-out marker` : ''}: the profile is opted out but the configuration is not, so unattended commands run unsandboxed`,
+      );
+    }
+    for (const { path, value } of shippedSandboxSettings()) {
+      const held = valueAt(ctx.profile, path.split('.'));
+      if (held === value || (path === enabledPath && held === false)) continue;
+      findings.push(
+        `\`${path}\` holds ${held === undefined ? 'nothing' : JSON.stringify(held)} where a generated profile holds ${JSON.stringify(value)}: the sandbox is weaker than the one this configuration asks for`,
+      );
+    }
+
+    const excludedPath = `${SANDBOX_KEY}.excludedCommands`;
+    const excluded = stringsAt(valueAt(ctx.profile, excludedPath.split('.')));
+    const staleHeld = expected.staleExcludedCommands.filter((rule) => excluded.includes(rule));
+    for (const stale of staleHeld) {
+      const paired = expected.excludedCommands[expected.staleExcludedCommands.indexOf(stale)];
+      findings.push(
+        `\`${excludedPath}\` carries ${stale}, the \`Bash(…)\` spelling an earlier release generated, which matches no command: ${paired} is the spelling that runs outside the sandbox, and without it ${SANDBOXED_WRAPPER_CONSEQUENCE}`,
+      );
+    }
+    const missing = expected.excludedCommands.filter(
+      (rule, i) => !excluded.includes(rule) && !staleHeld.includes(expected.staleExcludedCommands[i] ?? ''),
+    );
+    for (const entry of missing) {
+      findings.push(
+        `\`${excludedPath}\` lacks ${entry}: without it ${SANDBOXED_WRAPPER_CONSEQUENCE}`,
+      );
+    }
+    for (const entry of excluded.filter((rule) => !expected.excludedCommands.includes(rule) && !staleHeld.includes(rule))) {
+      findings.push(`\`${excludedPath}\` carries ${entry}, which the configuration does not name: it runs with full access and reaches any host`);
+    }
+
+    const domainsPath = `${SANDBOX_KEY}.network.allowedDomains`;
+    const domains = stringsAt(valueAt(ctx.profile, domainsPath.split('.')));
+    for (const domain of expected.allowedDomains.filter((host) => !domains.includes(host))) {
+      findings.push(
+        `\`${domainsPath}\` lacks ${domain}, which the configuration asks for: a sandboxed command reaching it is refused`,
+      );
+    }
+    for (const domain of domains.filter((host) => !expected.allowedDomains.includes(host))) {
+      findings.push(
+        `\`${domainsPath}\` carries ${domain}, which the configuration does not list: a sandboxed command may reach it for no stated reason`,
+      );
+    }
+
+    if (findings.length > 0) return grade(`${PROFILE_PATH}: ${findings.join('; ')}. ${regenerate}`);
+    return pass(
+      `${PROFILE_PATH}'s \`${SANDBOX_KEY}\` block is on and strict, excludes exactly the ${expected.excludedCommands.length} expected wrapper entries and allows exactly the ${expected.allowedDomains.length} expected domains`,
+    );
+  },
+};
+
+/**
+ * Is every path that runs outside the sandbox write-protected on both sides — a
+ * `sandbox.filesystem.denyWrite` entry, and an `Edit` deny rule?
+ *
+ * The expected set is {@link protectedPaths} and {@link fileToolDenyRules}, the generator's own,
+ * computed for the main checkout's root as {@link buildCheckContext} resolves the profile's location
+ * and with the profile's own `permissions.additionalDirectories`, so this check and the generator
+ * cannot disagree on which paths are protected. A `Write` rule is not required and is not reported,
+ * because the runtime never consults a `Write(path)` rule (`docs/sandbox-verification.md` → F4), so an
+ * earlier release's leftover `Write` rules are neither missing nor stale. Under a taken opt-out
+ * ({@link sandboxOptedOut}) only the file-tool rules are graded: with the sandbox off a `denyWrite`
+ * entry protects nothing.
+ *
+ * A `warn` rather than a `fail`, on {@link PROFILE_DENY_FLOOR_CHECK}'s terms: the profile is a file the
+ * adopter owns and may deliberately have restructured, a run missing an entry is worse-defended
+ * rather than unable to proceed, and a profile an earlier release generated is legitimately in that
+ * state. **Under `--remote-job`** ({@link CheckContext.remoteJob}) it is a `fail`, as
+ * {@link PROFILE_SANDBOX_CHECK}'s findings are. Every non-pass names `init --force` as the remedy.
+ *
+ * Each {@link retiredProtectedPaths} entry still in `denyWrite`, or with a {@link fileToolDenyRules}
+ * rule still in `permissions.deny`, is a finding under the same grades and the same opt-out rule. It
+ * is stale rather than merely extra: the sibling-glob `.git` entry covers every clone's whole `.git`,
+ * which closes a clone to its own run's sandboxed git.
+ */
+const PROFILE_WRITE_PROTECTION_CHECK: Check = {
+  id: 'profile-write-protection',
+  title: 'everything that runs outside the sandbox is write-protected on both sides',
+  run: (ctx) => {
+    if (ctx.repoRoot === undefined || ctx.profileRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
+    if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
+    if (ctx.profile === undefined) return unevaluated(`${PROFILE_PATH} could not be read (see the permission-profile check)`);
+
+    const profileRoot = ctx.profileRoot;
+    const expected = protectedPaths({
+      repoRoot: profileRoot,
+      workRoot: workRoot(profileRoot),
+      config: ctx.config,
+      additionalDirectories: permissionEntries(ctx.profile, 'additionalDirectories'),
+    });
+    const optedOut = sandboxOptedOut(ctx.config);
+    const denyWritePath = `${SANDBOX_KEY}.filesystem.denyWrite`;
+    const denyWrite = stringsAt(valueAt(ctx.profile, denyWritePath.split('.')));
+    const denied = permissionEntries(ctx.profile, 'deny');
+    const notGraded = `; ${denyWritePath} is not graded because the sandbox is off (sandbox.optOut)`;
+
+    const findings: string[] = [];
+    for (const entry of expected) {
+      const subject = `${entry.path} (${entry.reason})`;
+      if (!optedOut && !denyWrite.includes(entry.path)) findings.push(`${subject} has no ${denyWritePath} entry`);
+      const missingRules = fileToolDenyRules(entry).filter((rule) => !denied.includes(rule));
+      if (missingRules.length > 0) {
+        findings.push(`${subject} lacks the file-tool deny ${missingRules.length === 1 ? 'rule' : 'rules'} ${nameList(missingRules)}`);
+      }
+    }
+    const stale: string[] = [];
+    for (const entry of retiredProtectedPaths({ repoRoot: profileRoot, workRoot: workRoot(profileRoot), config: ctx.config })) {
+      const subject = `${entry.path} (${entry.reason})`;
+      if (!optedOut && denyWrite.includes(entry.path)) stale.push(`${subject} is still a ${denyWritePath} entry`);
+      const heldRules = fileToolDenyRules(entry).filter((rule) => denied.includes(rule));
+      if (heldRules.length > 0) {
+        stale.push(`${subject} still has the file-tool deny ${heldRules.length === 1 ? 'rule' : 'rules'} ${nameList(heldRules)}`);
+      }
+    }
+
+    if (findings.length > 0 || stale.length > 0) {
+      const parts = [
+        ...(findings.length > 0 ? [`leaves a path that runs outside the sandbox writable from inside it: ${findings.join('; ')}`] : []),
+        ...(stale.length > 0 ? [`still carries an entry an earlier release wrote, which is stale rather than merely extra: ${stale.join('; ')}`] : []),
+      ];
+      return (ctx.remoteJob ? fail : warn)(
+        `${PROFILE_PATH} ${parts.join('; and it ')}${optedOut ? notGraded : ''}. Regenerate it with \`${CLI} init --force\`, which writes a .bak sibling first`,
+      );
+    }
+    return optedOut
+      ? pass(
+          `${PROFILE_PATH} carries an Edit deny rule for each of the ${expected.length} paths that run outside the sandbox${notGraded}`,
+        )
+      : pass(
+          `${PROFILE_PATH} write-protects each of the ${expected.length} paths that run outside the sandbox on both sides: a ${denyWritePath} entry, and an Edit deny rule. How the Linux sandbox treats a ${denyWritePath} entry containing * is unverified, so on Linux only the file-tool side is relied on for the globbed paths`,
+        );
+  },
+};
+
+/** How the sandbox-prerequisites pass names each host kind it can pass on. */
+const SANDBOX_HOST_LABELS: Readonly<Record<SandboxHostKind, string>> = {
+  macos: 'macOS, sandboxed by Seatbelt',
+  linux: 'Linux, sandboxed by bubblewrap',
+  wsl2: 'WSL2, sandboxed by bubblewrap',
+  wsl1: 'WSL1',
+  unsupported: 'an unsupported platform',
+};
+
+/**
+ * Can this host start the sandbox an unattended run needs? Graded from {@link probeSandboxHost}'s
+ * facts by `doctor/sandboxPrerequisites.ts`'s {@link assessSandboxHost}; no table value is re-spelled.
+ *
+ * - **A taken opt-out** ({@link sandboxOptedOut}; a `ctx.config` of `undefined` is not one) is a `pass`:
+ *   the sandbox is not required, and `profile-sandbox` reports the choice.
+ * - **A definite missing piece** is a `warn`, and a `fail` under `--remote-job`
+ *   ({@link CheckContext.remoteJob}): a local repository's watcher refuses every fresh local launch, a
+ *   job's session would exit at startup under `failIfUnavailable`, and a `github-actions`
+ *   repository's watcher refuses nothing here.
+ * - **An `uncertain` AppArmor answer** is a `warn` in both modes — the probe cannot settle it, so it
+ *   is never a pass and never a failure. With a missing piece, the worse grade wins and both
+ *   sentences are joined with `; `.
+ * - Otherwise a `pass`, naming the host kind, where each binary resolved and the AppArmor answer.
+ */
+const SANDBOX_PREREQUISITES_CHECK: Check = {
+  id: 'sandbox-prerequisites',
+  title: 'this host can start the sandbox an unattended run needs',
+  run: (ctx) => {
+    if (ctx.config !== undefined && sandboxOptedOut(ctx.config)) {
+      return pass(
+        `not required: sandbox.optOut is taken — ${String(ctx.config.sandbox?.optOut?.reason)}; profile-sandbox reports it`,
+      );
+    }
+    const facts = probeSandboxHost();
+    const { host, missing, appArmor } = assessSandboxHost(facts);
+    const sentences: string[] = [];
+    if (missing.length > 0) {
+      const agent = `\`${DEFAULT_AGENT_CLI}\`, or \`$${AGENT_CLI_VARIABLE}\``;
+      const consequence = ctx.remoteJob
+        ? `This job's agent session (${agent}) would exit at startup under \`failIfUnavailable\``
+        : ctx.config !== undefined && remoteExecutionApplies(ctx.config)
+          ? `\`execution.target\` is \`github-actions\`, so the watcher dispatches every drop to GitHub Actions and refuses none here, but a session started on this host (${agent}) exits at startup under \`failIfUnavailable\``
+          : `Until then the watcher refuses every fresh local launch, and the agent CLI (${agent}) exits at startup under \`failIfUnavailable\``;
+      sentences.push(`${describeMissingPieces(missing, facts.kernelRelease, facts.platform).join(' ')} ${consequence}`);
+    }
+    if (appArmor === 'uncertain') sentences.push(describeAppArmor(appArmor));
+    if (missing.length > 0) return (ctx.remoteJob ? fail : warn)(sentences.join('; '));
+    if (sentences.length > 0) return warn(sentences.join('; '));
+
+    const resolved = SANDBOX_HOST_BINARIES.filter((entry) => facts.resolvedBinaries.has(entry.binary)).map(
+      (entry) => `\`${entry.binary}\` in ${locateOnPath(entry.binary, process.env['PATH'] ?? '') ?? 'an explicit path'}`,
+    );
+    return pass(
+      `${SANDBOX_HOST_LABELS[host]}${resolved.length > 0 ? `, with ${resolved.join(' and ')}` : ''}. ${describeAppArmor(appArmor)}`,
+    );
+  },
+};
+
+/**
  * A `permissions.allow` entry a run needs, paired with what it does when the profile does not carry
  * it. The symptom travels with the entry so a report describes the consequence of the entries that
  * are **actually** missing rather than one selected by the phase: a helper entry and a read entry
@@ -4652,9 +5106,9 @@ function namesHelperScript(entry: string): boolean {
  * its path, so an entry written once goes silently stale on an upgrade and no document can hold one
  * either: the entries are an operator's to add. Until this check existed the requirement lived only
  * in prose an adopter reaches by already knowing to look, and what a missing entry costs is a
- * **silent stall** — a run that reaches one of these helpers with nothing matching parks with no
- * error. So the check does the one thing a written-down answer cannot: it **re-resolves the roots on
- * every run** and prints the exact lines to paste, which turns that stall into a copy-paste and
+ * **refusal** — a run that reaches one of these helpers with nothing matching is refused
+ * there. So the check does the one thing a written-down answer cannot: it **re-resolves the roots on
+ * every run** and prints the exact lines to paste, which turns that refusal into a copy-paste and
  * catches a version bump that has silently invalidated entries added against a previous root.
  *
  * **Why two roots, and how each is derived.** A helper named in an **instruction file** arrives as
@@ -4701,8 +5155,8 @@ function namesHelperScript(entry: string): boolean {
  * each a `fail`, and every directory {@link pluginRootDirectories} returns for the graded roots is
  * required in `permissions.additionalDirectories` — the shell-readable grant. The job differs because
  * the plugin was installed and the profile generated moments earlier on a machine that exists for one
- * run, so a gap is a launch that parks rather than an operator's paste. Outside the flag that list is
- * not graded: a missing shell grant has not been observed to stall a run on a person's machine, and a
+ * run, so a gap is a launch whose helper calls are refused rather than an operator's paste. Outside the flag that list is
+ * not graded: a missing shell grant has not been observed to stop a run on a person's machine, and a
  * version-carrying directory would go stale at every upgrade.
  *
  * **A helper entry under no resolved root is named in every *graded* disposition and moves no
@@ -4787,7 +5241,7 @@ const PLUGIN_PERMISSIONS_CHECK: Check = {
 
     // A config that did not parse leaves the phase unknowable, so the report says the helper entries
     // were not graded rather than reading an absent phase as "off" and reporting a repository as
-    // complete that is one unreadable file away from a stall.
+    // complete that is one unreadable file away from a refused helper.
     const phaseKnown = ctx.config !== undefined;
     const qaOn = ctx.config?.phases?.qa === true;
     const helpers = pluginRootHelpers(roots, qaOn);
@@ -4809,7 +5263,7 @@ const PLUGIN_PERMISSIONS_CHECK: Check = {
         symptom:
           kind === 'read'
             ? 'improvises in place of a contract file it is refused'
-            : 'parks with no error at the first helper script it reaches',
+            : 'is refused at the first helper script it reaches',
       })),
     }));
     const required = groups.flatMap((group) => group.required);
@@ -4838,7 +5292,7 @@ const PLUGIN_PERMISSIONS_CHECK: Check = {
     const directoryBlock =
       missingDirectories.length === 0 ? '' : `\n\npermissions.additionalDirectories:\n${missingDirectories.join('\n')}`;
     const jobClause = ctx.remoteJob
-      ? ' Under --remote-job this is a failure: the plugin was installed and the profile generated moments earlier on a machine that exists for one run, so a gap here is a launch that parks rather than an operator\'s paste.'
+      ? ' Under --remote-job this is a failure: the plugin was installed and the profile generated moments earlier on a machine that exists for one run, so a gap here is a launch whose helper calls are refused rather than an operator\'s paste.'
       : '';
     const jobRemedy = ` In a remote job \`${CLI} init ${PLUGIN_ROOT_ENTRIES_FLAG}\`, which the job's setup step runs, writes these into the profile it generates, so a profile lacking them is one that step did not generate — a committed copy its create-if-absent run kept, which the profile-tracked check names the untrack route for — or one whose plugin root carries a character the permission guard matches literally, which that step warned about in its own log. The lines below are what is missing:`;
 
@@ -5517,6 +5971,9 @@ const RETRIEVAL_PYTHON_INDEX_CHECK: Check = {
  * `profile-tracked` sits under `profile-paths` because the two name the same file carried somewhere it
  * does not belong, and a committed profile is the usual reason a job's `profile-paths` fails.
  *
+ * `sandbox-prerequisites` sits under `profile-write-protection` because the two profile checks above it
+ * grade the sandbox a run asks for, and this one whether the host can start it.
+ *
  * `plugin-permissions` closes the profile block for the same shape of reason: it is the only profile
  * question whose other half is not in the repository at all — the plugin's machine-local install
  * root — so it is answerable only once the profile itself has been read, and a reader whose
@@ -5563,6 +6020,10 @@ export const CHECKS: readonly Check[] = Object.freeze([
   PROFILE_TRACKED_CHECK,
   PROFILE_BROWSER_DENY_CHECK,
   PROFILE_DENY_FLOOR_CHECK,
+  PROFILE_MAIN_ANCHOR_CHECK,
+  PROFILE_SANDBOX_CHECK,
+  PROFILE_WRITE_PROTECTION_CHECK,
+  SANDBOX_PREREQUISITES_CHECK,
   PLUGIN_PERMISSIONS_CHECK,
   BROWSER_WIRING_CHECK,
   RETRIEVAL_DEPENDENCIES_CHECK,
@@ -5574,14 +6035,100 @@ export const CHECKS: readonly Check[] = Object.freeze([
 ]);
 
 /**
- * Evaluate every check in order and return one result each.
+ * Whether the run branch's **own** commits — those between `merge-base(HEAD, <base>)` and `HEAD` —
+ * changed any path in {@link jobSurfacePaths}, the files a remote job runs or loads from its checkout.
+ *
+ * Every value it grades by is the trusted side's: the configuration, its `defaultBranch` and the
+ * surface list derived from it come from `<trusted ref>:harness.config.json`, never from `HEAD`, so a
+ * branch cannot widen what it may change by rewriting its own configuration. The trusted ref and the
+ * base are `refs/remotes/origin/<branch>` and `refs/remotes/origin/<defaultBranch>`, or, under
+ * `@<commit>`, the recorded commit for the configuration and — under `@<commit>@<base>` — the recorded
+ * `defaultBranch` commit for the merge base, where a session that wrote the checkout's refs could have moved
+ * them. Comparing from the merge base rather than the default branch's tip is what lets a branch that
+ * merged a newer default branch pass: those changes are not its own.
+ */
+export const JOB_SURFACES_CHECK: Check = {
+  id: 'job-surfaces',
+  title: "the run branch's own commits leave every path the remote job runs or loads unchanged",
+  run: (ctx) => {
+    const target = ctx.jobSurfaces;
+    if (target === undefined) return unevaluated('no --job-surfaces value was given');
+    if (ctx.repoRoot === undefined) {
+      return unevaluated(`the repository root did not resolve: ${ctx.repoProblem ?? 'git gave no reason'}`);
+    }
+    const root = ctx.repoRoot;
+    const { branch, commit, base } = target;
+
+    let trustedRef: string;
+    if (commit !== undefined) {
+      if (!commitResolves(root, commit)) {
+        return fail(
+          `the trusted commit ${commit} given for ${branch} is not a commit this checkout holds (${commit}^{commit} does not resolve), so neither the trusted configuration nor the merge base can be read — pass the commit ${branch} pointed at before any session had the checkout`,
+        );
+      }
+      trustedRef = commit;
+    } else {
+      trustedRef = `refs/remotes/origin/${branch}`;
+      if (!remoteTrackingBranchResolves(root, branch)) {
+        return fail(
+          `${trustedRef} does not resolve, so the trusted ${CONFIG_FILENAME} cannot be read — fetch origin/${branch} into this checkout first`,
+        );
+      }
+    }
+    if (base !== undefined && !commitResolves(root, base)) {
+      return fail(
+        `the recorded base commit ${base} is not a commit this checkout holds (${base}^{commit} does not resolve), so the merge base cannot be taken — pass the commit the workflow recorded`,
+      );
+    }
+
+    const origin = `${trustedRef}:${CONFIG_FILENAME}`;
+    const loaded = loadConfigText(fileAtRef(root, trustedRef, CONFIG_FILENAME), origin);
+    if (loaded.config === undefined || hasErrors(loaded.problems)) {
+      const errors = loaded.problems.filter((problem) => problem.severity === 'error').map(formatProblem);
+      return fail(
+        `the trusted configuration ${origin} is not usable, so no surface list can be derived from it: ${errors.length === 0 ? 'it is not a JSON object' : errors.join('; ')}`,
+      );
+    }
+    const trusted = loaded.config;
+    const defaultBranch = trusted.defaultBranch;
+    if (typeof defaultBranch !== 'string' || defaultBranch === '') {
+      return fail(`the trusted configuration ${origin} carries no defaultBranch, so no merge base can be computed`);
+    }
+
+    const baseRef = base ?? commit ?? `refs/remotes/origin/${defaultBranch}`;
+    const mergeBaseId = mergeBase(root, 'HEAD', baseRef);
+    if (mergeBaseId === undefined) {
+      return fail(
+        `HEAD and ${baseRef} have no merge base, or one of them does not resolve, so the run branch's own commits cannot be told apart from the default branch's`,
+      );
+    }
+
+    const surfaces = jobSurfacePaths(trusted);
+    const changed = changedPathsBetween(root, mergeBaseId, 'HEAD', surfaces);
+    if (changed === undefined) {
+      return fail(`git could not compare ${mergeBaseId} with HEAD over the job's surfaces, so whether the run branch changed them is unknown`);
+    }
+    if (changed.length > 0) {
+      return fail(
+        `the run branch's own commits since ${mergeBaseId} changed ${changed.length === 1 ? 'a path' : 'paths'} the remote job runs or loads from its checkout: ${changed.join(', ')} — land that change on ${defaultBranch} through a supervised route, then re-dispatch`,
+      );
+    }
+    return pass(
+      `the run branch's own commits since ${mergeBaseId} change none of the ${surfaces.length} paths the remote job runs or loads (configuration read from ${origin})`,
+    );
+  },
+};
+
+/**
+ * Evaluate every check in order — {@link CHECKS} unless the caller names another list — and return
+ * one result each.
  *
  * **The try/catch is here rather than in each check**, so the property the module header states is
  * structural: a check cannot forget to catch, because it is not the thing catching. A thrown value
  * becomes that check's `fail` naming the check that threw, and the rest of the list still runs.
  */
-export function runChecks(ctx: CheckContext): CheckResult[] {
-  return CHECKS.map((check) => {
+export function runChecks(ctx: CheckContext, checks: readonly Check[] = CHECKS): CheckResult[] {
+  return checks.map((check) => {
     let outcome: CheckOutcome;
     try {
       outcome = check.run(ctx);

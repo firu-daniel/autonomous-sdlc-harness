@@ -27644,8 +27644,10 @@ those situations has been measured — is `docs/retrieval.md` → `## When to tu
 **Who reads this, and what it decides.** A maintainer deciding whether the Python backend
 (`docs-retrieval-service/`) retrieves what the TypeScript one (`cli/src/retrieval/`) retrieves over the
 same corpora and query sets, and whether the two may share an embedder id. The subsections up to
-`### Abstention, query by query` cover relevance. Cost, latency beyond the arm tables, cold start,
-footprint and the agent session follow them.
+`### A fresh fixture-catalog reading, both backends as shipped` cover relevance. That subsection is a
+later, deterministic reading on both backends as shipped; the rest of the section is the 2026-10-08
+reading on `pg_textsearch` 1.3.1. Cost, latency beyond the arm tables, cold start, footprint and the agent
+session follow them.
 
 ### What was compared, and through what
 
@@ -27683,7 +27685,8 @@ footprint and the agent session follow them.
 Every figure is copied from `renderBackendComparison` over the four blocks. The `fixture-catalog` floor is
 `evals/docs-retrieval/floor.json`, recorded 2026-09-21. It is graded `>=`, as gate 11 grades it, and
 shown as `met` or `short` per backend. `self-docs` has no floor. The p50 and p95 latencies are measured at
-different boundaries on the two sides, as `### What was compared, and through what` states.
+different boundaries on the two sides, as `### What was compared, and through what` states. They were
+taken on `pg_textsearch` 1.3.1 on 2026-10-08, before the BM25 fixes, and are left as recorded.
 
 **`fixture-catalog`**
 
@@ -27726,18 +27729,27 @@ as TypeScript → Python, where rank 0 means no relevant hit. Both come from the
 
 **They disagree, and the reason is not yet identified.**
 
-No arm returns the same ordered refs on every query of either corpus, so *within noise* cannot be
-claimed. Two differences are identified, each by a measurement below. The first is arm B's divergence,
-which is the Python index's history in its database (divergence source (3)). The second is the one
-abstention mismatch, which is the reranker scoring one identical pair differently (sources (1) and (2)
-together). Four differences are not identified:
+This is the case for the 2026-10-08 blocks. No arm returns the same ordered refs on every query of
+either corpus in them, so *within noise* cannot be claimed. Three differences are identified, each by a
+measurement below. The first is arm B's divergence, which is the Python index's state: mechanisms 1 and
+2, the latter `timescale/pg_textsearch#573` (divergence source (3)). The second is the one abstention
+mismatch, which is the reranker scoring one identical pair differently (sources (1) and (2) together).
+The third is the two near-tie swaps in arm B that remain on a fresh database, which are mechanism 2,
+`timescale/pg_textsearch#573`, in the Python store's own fresh build (source (3), **The near-tie pairs,
+since explained.**). Three differences are not identified:
 
 - arm C's ref-order changes;
-- how arms D and E split between the index's history and model precision;
-- two near-tie swaps in arm B that remain on a fresh database;
+- how arms D and E split between the index's state and model precision;
 - `q-sd-daemon-lifecycle` dropping out of arm E's top five on the Python side.
 
 Calling the second case would claim more than was measured.
+
+**On the fresh reading.** `### A fresh fixture-catalog reading, both backends as shipped` reads
+`fixture-catalog` again with both backends in the `REINDEX` state, and arm B returns the same ordered
+refs on both sides on every one of its 12 queries. On that reading the backends differ only in arms C to
+E, for which the models, sources (1) and (2), are the measured candidate. Those differences stay
+unexplained, for the reason item 4 of `### Divergence sources, in the order checked` gives for arm C:
+the query vectors and the Python side's HNSW graph were not measured. `self-docs` was not re-read.
 
 ### Divergence sources, in the order checked
 
@@ -27762,9 +27774,16 @@ Calling the second case would claim more than was measured.
      'chunks_bm25')` (`cli/src/retrieval/store.ts` and `docs-retrieval-service/src/harness_docs_retrieval/store.py`
      → `BM25_INDEX_DEFINITION`, `BM25_ORDER_CLAUSE`). `pg_extension.extversion` reads `pg_textsearch`
      1.3.1 on both. The servers are PGlite 0.5.8's PostgreSQL 18.3 and the compose image's
-     PostgreSQL 18.2, and `EXPLAIN` shows both choosing the `chunks_bm25` index scan.
+     PostgreSQL 18.2, and `EXPLAIN` shows both choosing the `chunks_bm25` index scan. These readings
+     were taken on `pg_textsearch` 1.3.1; `chore_docs_retrieval_pg_textsearch_upgrade` has since moved
+     both engines to 1.5.1 (`### The deciding figures on pg_textsearch 1.5.1` → `#### How these were
+     taken, on 1.5.1`).
    - **The probe.** It ran that `ORDER BY` with the score selected, top 8 per query, over
-     `fixture-catalog`'s 12 queries. One side was a freshly built TypeScript index; the TypeScript runner
+     `fixture-catalog`'s 12 queries. The score it selected is the `<@>` operator, not the score the store
+     ranks by: the store ranks by the index scan's own score, `bm25_get_current_score()`, and the two
+     differ while rows sit in the memtable (`### How the probe reads a score, and the setup`, the `scan`
+     and `operator` bullets). Every score this probe recorded, on the compose database and on the empty
+     one alike, is therefore an `operator` score. One side was a freshly built TypeScript index; the TypeScript runner
      builds a fresh in-memory index on every run, as it did for its block. The other side was the Python
      index, built through `indexPythonCorpus`, in two states:
      - **The compose database, after it had held other corpora.** This is the state the Python blocks
@@ -27801,19 +27820,54 @@ Calling the second case would claim more than was measured.
      The probe was a scratch launcher run in a session, as **What was taken in a session.** in
      `### What was compared, and through what` already says. Its scores are not a wall-clock figure: the
      statement returns the same scores whenever it runs against the same database state.
-   - **What it shows.** The recorded arm B divergence comes from the Python database's history: its BM25
-     statistics are not those of the live rows alone. The measured fact is that the scores depend on
-     the history. That the statistics still count rows a refresh deleted is inferred from the refresh's
-     delete-and-insert path, and was not measured.
-   - **What stays unexplained.** On the empty database, two queries order a near-tie pair against the
-     score the operator itself returns, while TypeScript orders both by score. On
+   - **What it shows.** The recorded arm B divergence comes from the Python index's state: its BM25
+     scores are not those of an index built over the live rows alone. The measured fact is that the
+     scores depend on the database's state. Two mechanisms produce that dependence, both defined in
+     `### Whether either mechanism moves relevance`:
+     - **Mechanism 1, dead rows that stay in the index's statistics.** The rows a refresh deletes stay
+       counted in `total_docs` and `total_len`. This bullet first recorded that as an inference that was
+       not measured; it has since been measured. In every `other-corpus` scenario, whose last refresh
+       deleted the other corpus's rows, the before-fix end state, each scenario's `before` reading,
+       differs from a fresh build followed by `REINDEX` on every hit in both columns, on both backends
+       and both corpora (`### The candidate end-state rule, at refresh level`, the `other-corpus` rows).
+     - **Mechanism 2, exact lengths in the memtable against quantized ones in segments.** The index scan
+       scores a memtable row with its exact length and a segment row with a quantized one, so a freshly
+       inserted index ranks its rows by other scores than the same rows in a segment
+       (`### The score each index state ranks by`, the `t0` rows). This is reported upstream as
+       `timescale/pg_textsearch#573`, which the maintainer filed after this diagnosis and which is still
+       open on 1.5.1, cited from the task prompt of `chore_docs_retrieval_backend_comparison_record` and
+       not read on that branch.
+     - **The fresh build is not one state.** The Python store's own fresh build left 116 memtable
+       documents in one run and 276 in another on `self-docs` (`### The candidate end-state rule, at
+       refresh level`, the paragraph after its Python `self-docs` table).
+     - **What shipped.** Both backends now end every refresh that wrote anything, the first build, and
+       any refresh whose index is not marked rebuilt, in `REINDEX INDEX chunks_bm25`
+       (`### The recommendation for the fix branch` → **What shipped.**). Their shipped end states match
+       a fresh build followed by `REINDEX` in 11 of 12 scenarios each (`### Route 2 on the fix branch` →
+       `#### The shipped end state at refresh level`, its TypeScript and Python parts).
+   - **The near-tie pairs, since explained.** On the empty database, two queries order a near-tie pair
+     against the score the operator itself returns, while TypeScript orders both by score. On
      `q-fc-token-lifetime`, `docs/api-auth.md#rotating-a-key` scores −8.307983 and
      `#token-exchange` scores −8.281486. On `q-fc-unreadable-label`,
      `docs/depot-operations.md#inbound-scanning` scores −5.534851 and
-     `docs/labels.md#when-a-label-is-rejected` scores −5.514854.
+     `docs/labels.md#when-a-label-is-rejected` scores −5.514854. Both are mechanism 2,
+     `timescale/pg_textsearch#573`: the store ranks by `scan`, the scores recorded here are `operator`,
+     and the Python store's fresh build on an empty database is the `t0` state that returns both pairs
+     against `operator`'s order (`### The near-tie ordering on an empty database`;
+     `### The recommendation for the fix branch` → **Goal 4's conclusion**). The same inversions recur at
+     `t0` on 1.5.1 (`#### The near-tie ordering, on 1.5.1`). On the fresh reading, arm B returns the same
+     ordered refs on both sides for both queries (`### A fresh fixture-catalog reading, both backends as
+     shipped`).
 4. **Anything else the per-query lists show.**
-   - **Arms D and E** fuse arm B's lexical ranking, so their Python sides carry the database's history
-     as well as (1) and (2). The blocks cannot separate the two, so the split is unexplained.
+   - **Arms D and E** fuse arm B's lexical ranking, so in the 2026-10-08 blocks their Python sides carry
+     arm B's index-state mechanisms, source (3), as well as (1) and (2). Those blocks cannot separate the
+     two, so for them the split stays unexplained. On the fresh reading arm B's top five ordered refs
+     agree on every query, but each backend fuses every arm's top `ARM_CANDIDATES` hits, 50
+     (`cli/src/retrieval/search.ts` and `docs-retrieval-service/src/harness_docs_retrieval/search.py`),
+     and arm B's ranks past five were not compared. On `q-fc-route-choice` arm D differs at rank 5 while
+     arms B and C return the same five refs on both sides, so arms D and E's differences there are not
+     attributed to either arm and stay unexplained (`### A fresh fixture-catalog reading, both backends
+     as shipped`).
    - **Arm C** changes order on 6 `fixture-catalog` queries, none of which moves a positive's rank, and
      on 16 `self-docs` queries, one of which moves a positive's rank (`q-sd-new-subcommand`, 5 → 1).
      Source (1) together with (2) is the measured candidate for those changes, but only for document
@@ -27822,12 +27876,16 @@ Calling the second case would claim more than was measured.
    - **`q-sd-daemon-lifecycle`** drops out of arm E's top five on the Python side, rank 4 → 0. This is
      unexplained for the same reason as the arm D and E split.
 
-**Finding — a defect, recorded and not acted on.** The Python backend's lexical scores depend on what its
-database held before, so the same corpus can rank differently after a re-index. A fresh database removes
-the effect on this corpus. It is named here as work for its own branch, and this branch fixes nothing.
-That branch would decide whether a refresh should rebuild the BM25 index or the eval should index into an
-empty database, and would measure whether the TypeScript backend's persistent index, which is refreshed
-the same way, carries the same dependence. That was not measured here.
+**Finding — a defect, since diagnosed and fixed.** On 2026-10-08 the Python backend's lexical scores
+were found to depend on the database's earlier contents, so the same corpus could rank differently after
+a re-index, and a fresh database removed the effect on this corpus. The dependence was since diagnosed as
+two mechanisms (item 3; `## The BM25 index's state, measured`), mechanism 2 being
+`timescale/pg_textsearch#573`. The question it left open, whether the TypeScript backend's persistent
+index, refreshed the same way, carries the same dependence, was since measured: it does, in the `before`
+readings of `### The candidate end-state rule, at refresh level`'s TypeScript tables. Both backends now
+end every refresh that wrote anything, and the first build, in `REINDEX INDEX chunks_bm25`, on
+`fix_docs_retrieval_bm25_index_state_typescript` and `fix_docs_retrieval_bm25_index_state_python`
+(`### The recommendation for the fix branch` → **What shipped.**).
 
 ### Vector agreement, and the embedder id
 
@@ -27884,6 +27942,137 @@ score is 0.2926, over its own candidates, and that pair is first among them. So 
 pair at least 0.0748 lower. The chunk's
 stored text is the same on both sides. For a negative query, Python's abstention is the correct outcome.
 
+### A fresh fixture-catalog reading, both backends as shipped
+
+**Who reads this, and what it decides.** A maintainer reading whether, with both backends now ending in the
+`REINDEX` state on `pg_textsearch` 1.5.1, arm B returns the same ordered refs on both sides of
+`fixture-catalog`.
+
+**The setup.**
+
+- **When, and at what commit.** 2026-10-22, at commit `002e7c77f9f01217d652dbaaa9b1427165f35b83`, after
+  `npm run build`, with `git status --porcelain` printing nothing. The blocks' `generatedAt` reads
+  2026-10-22T13:22:40.232Z for TypeScript and 2026-10-22T13:23:27.094Z for Python.
+- **The engines, exactly as read.**
+  - **TypeScript, PGlite.** `version()`: `PostgreSQL 18.6 (PGlite 0.5.10) on wasm32-unknown-emscripten,
+    compiled by emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 6.0.5
+    (1db513782be24469589d7cb8a1f1834e9a33f271), 32-bit`. `pg_textsearch.library_version`: `1.5.1`.
+    `extversion`: `pg_textsearch` 1.5.1, `plpgsql` 1.0, `vector` 0.8.7.
+  - **Python, the compose server.** `version()`: `PostgreSQL 18.6 (Debian 18.6-1.pgdg12+2) on
+    aarch64-unknown-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit`.
+    `pg_textsearch.library_version`: `1.5.1`. `extversion`: `pg_textsearch` 1.5.1, `plpgsql` 1.0,
+    `vector` 0.8.7.
+- **The compose database.** It was not emptied: the question is about the shipped end state whatever the
+  database held. Before the Python run, `chunks` held 1454 rows and `meta`'s `index_state` read
+  `rebuilt`. After it, `index_state` read `rebuilt` and `chunks` held 41 rows.
+- **The Python package.** `harness-docs-retrieval` 0.1.0 (`docs-retrieval-service/pyproject.toml`).
+  `self-check` printed `ok` for packages (python 3.14.7) and for weights. Its `FAIL index` line is the
+  expected one for a checkout with no service config, and the Python run's own
+  `assertPythonBackendAvailable` accepted the backend.
+- **What both blocks record.** Host `darwin 24.6.0`, Node `v22.23.2`. TypeScript: embedder
+  `Xenova/bge-small-en-v1.5:q8:cls:384:v1`, reranker `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1`.
+  Python: embedder `py-st/BAAI/bge-small-en-v1.5:fp32:cls:384:v1`, reranker
+  `py-st/cross-encoder/ms-marco-MiniLM-L-6-v2:fp32:sigmoid:v1`. Threshold `0.32`, `k` 5, `--repeat 1`, and
+  the stamp `{ files: 9, chunks: 41 }` on both. `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` was unset, as both
+  blocks record, and `HARNESS_DOCS_RETRIEVAL_DATABASE_URL` was unset, so the Python run used the compose
+  database.
+- **Where the blocks went.** Both were written into a gitignored scratch file holding only the two
+  generated-region markers, and the comparison read that file alone. Neither block is recorded in this
+  document: its generated region and `evals/docs-retrieval/floor.json` are untouched by this reading.
+- **The end state each backend's refresh leaves** is the one `### The recommendation for the fix branch` →
+  **What shipped.** states, for each backend.
+
+**The commands**, each one plain foreground call from the repository root. The compose server's engines
+and state were read in the form below, with `-c "SHOW pg_textsearch.library_version"`,
+`-c "SELECT extname, extversion FROM pg_extension ORDER BY extname"`, `-c "SELECT count(*) FROM chunks"` and
+`-c "SELECT value FROM meta WHERE key = 'index_state'"` in place of the last argument:
+
+```
+docker exec harness-docs-retrieval-postgres-1 psql -U harness -d docs_retrieval -At -c "SELECT version()"
+```
+
+PGlite's were read through `evals/docs-retrieval/bm25-history.mjs` → `openPgliteEngine()`, with these
+statements in order. The two `CREATE EXTENSION` statements come first because a fresh PGlite lists only
+`plpgsql` in `pg_extension` before them:
+
+```
+CREATE EXTENSION IF NOT EXISTS vector
+CREATE EXTENSION IF NOT EXISTS pg_textsearch
+SELECT version()
+SHOW pg_textsearch.library_version
+SELECT extname, extversion FROM pg_extension ORDER BY extname
+```
+
+The two runs, through the launcher `## How to run it` in `docs/retrieval-eval.md` gives, into a file
+created holding only `<!-- eval:generated:start -->` and `<!-- eval:generated:end -->`:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --backend typescript --repeat 1 --out harness-runs/scratch/backend-parity/results.md
+bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --backend python --repeat 1 --out harness-runs/scratch/backend-parity/results.md
+```
+
+The comparison, through `harness-runs/scratch/backend-parity/compare-scratch.mjs`. It is the launcher
+`docs/retrieval-eval.md` → `### Writing the comparison up` gives, reading that file instead of this one,
+with its imports one directory deeper:
+
+```
+import { readFileSync } from 'node:fs';
+import { parseArgs } from '../../../evals/docs-retrieval/args.mjs';
+import { compareBackends, renderBackendComparison } from '../../../evals/docs-retrieval/backend-comparison.mjs';
+const { checkout } = parseArgs([]);
+const resultsText = readFileSync(`${checkout}/harness-runs/scratch/backend-parity/results.md`, 'utf8');
+console.log(renderBackendComparison(compareBackends({ resultsText, corpusId: process.argv[2] })));
+```
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/backend-parity/compare-scratch.mjs fixture-catalog
+```
+
+**The figures**, copied from `renderBackendComparison` over the two blocks. The floor is
+`evals/docs-retrieval/floor.json` at the commit above, graded `>=`. Its arm B and arm D MRR entries were
+recorded on 2026-10-21, so those two floor cells differ from the ones in `### Relevance, side by side`.
+
+| Arm | Backend | recall@1 | recall@3 | recall@5 | MRR | Floor recall@5 | Floor MRR |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| B `lexical` | TypeScript | 0.333 | 0.889 | 1.000 | 0.602 | >= 0.95: met | >= 0.55: met |
+| B `lexical` | Python | 0.333 | 0.889 | 1.000 | 0.602 | >= 0.95: met | >= 0.55: met |
+| C `vector` | TypeScript | 0.778 | 1.000 | 1.000 | 0.889 | >= 0.95: met | >= 0.83: met |
+| C `vector` | Python | 0.778 | 1.000 | 1.000 | 0.889 | >= 0.95: met | >= 0.83: met |
+| D `fused` | TypeScript | 0.444 | 1.000 | 1.000 | 0.704 | >= 0.95: met | >= 0.65: met |
+| D `fused` | Python | 0.444 | 1.000 | 1.000 | 0.704 | >= 0.95: met | >= 0.65: met |
+| E `fused-rerank` | TypeScript | 0.444 | 0.667 | 0.667 | 0.556 | >= 0.61: met | >= 0.5: met |
+| E `fused-rerank` | Python | 0.444 | 0.667 | 0.667 | 0.556 | >= 0.61: met | >= 0.5: met |
+
+**Per-query agreement**, as `### Relevance, side by side` → **Per-query agreement.** defines *same order*
+and the rank changes:
+
+| Arm | `fixture-catalog` same order | `fixture-catalog` rank changes |
+| --- | --- | --- |
+| B | 12 of 12 | none |
+| C | 6 of 12 | none |
+| D | 7 of 12 | none |
+| E | 11 of 12 | none |
+
+**Abstention.** The sets match. Both sides abstain on `q-fc-billable-weight`,
+`q-fc-surcharge-compounding`, `q-fc-verify-callback`, `q-fc-negative-recruitment`,
+`q-fc-negative-lattice` and `q-fc-negative-datastore`, and no entry's abstention disagrees with `0.32`.
+
+**Arm E's rerank scores.** The largest `|typescript − python|` of `bestRerankScore` is 0.0307, on
+`q-fc-webhook-retry` (0.5472 / 0.5779). The median over the 12 queries is 0.0002.
+
+The comparison's p50 and p95 latency columns were taken in a session and are left out.
+
+**The answer: arm B agrees on every query.** All 12 queries return the same five ordered refs on both
+sides, negatives included, and every arm B figure is equal. The remaining differences are in arms C to E
+only: ordered-ref changes on 6, 5 and 1 of the 12 queries, none of which moves a positive's first relevant
+rank. The models, divergence sources (1) and (2) of `### Divergence sources, in the order checked`, are
+the only measured candidate for them, and they stay unexplained for the reason that subsection's
+item 4 gives for arm C: the query vectors and the Python side's HNSW graph were not measured.
+
+This reading is not compared value for value with the 2026-10-08 blocks. Those were taken on
+`pg_textsearch` 1.3.1 before either fix branch. The 1.5.1 upgrade and the fix on both backends both lie
+between them and this reading, so no difference between the two could be attributed to either.
+
 ### Latency: the library call and the MCP round trip
 
 **When and where.** The operator took every figure in this section and the two after it by hand, in one
@@ -27893,7 +28082,8 @@ sitting on 2026-10-08, on the host that `harness-runs/scratch/backend-comparison
 footprint, the cold starts and the TypeScript cold build (`ranAt` 05:35:19.813Z). So the TypeScript side
 is a re-run from the same sitting, not a figure cited from another day. The protocol asks for an idle
 machine. `host.txt`'s `uptime` line reads `load averages: 1.69 1.88 1.84` at the start of the sitting,
-so the host was not idle.
+so the host was not idle. Every wall-clock figure here was taken on `pg_textsearch` 1.3.1, before the BM25
+fixes, and is left as recorded.
 
 **The library call, arm E** (`fused-rerank`, the mode the server runs), copied from the recorded blocks'
 arm E rows:
@@ -27933,7 +28123,8 @@ not restated here.
 **Two senses of *cold*, stated the way `evals/docs-retrieval/cold-build.mjs`'s header states them.**
 *Process cold* is the server process and its model load over an index that already exists. *Index cold*
 is a build into an empty index. Every figure below has a **warm model cache**: no figure includes a
-weight download.
+weight download. Every figure below was taken on `pg_textsearch` 1.3.1 on 2026-10-08, before the BM25
+fixes, and is left as recorded.
 
 **Process and model load, warm index**, from `mcp-*.txt`. `connectMs` is the MCP `connect`. `firstCallMs`
 runs from the same start until the first `search_docs` call returns, so it contains `connectMs` and the
@@ -28152,10 +28343,13 @@ from it: the server never reconnects, and the next session's fresh server recove
 
 The relevance case `### Which case this is` names is *"They disagree, and the reason is not yet
 identified."* The Python backend does not buy relevance. Arm E is identical on `fixture-catalog` and one
-recall@5 step lower on `self-docs` (0.533 against 0.600), and the lexical arm carries the
-database-history defect recorded above. On warm latency it is somewhat faster at arm E and over MCP: a
+recall@5 step lower on `self-docs` (0.533 against 0.600), and the lexical arm's divergence on 2026-10-08
+came from the index-state defect, since fixed on both backends (**Finding — a defect, since diagnosed and
+fixed.**). On warm latency it is somewhat faster at arm E and over MCP: a
 `self-docs` p50 of 499.4 against 551.0 ms at the library and 499.4 against 567.8 ms at the client. That
-is one repetition on a loaded host, so the gap is not shown to exceed run-to-run variation. Its resident
+is one repetition on a loaded host, so the gap is not shown to exceed run-to-run variation. These latency
+figures, like the cold-start ones below, were taken on `pg_textsearch` 1.3.1 on 2026-10-08, before the
+BM25 fixes, and are left as recorded. Its resident
 memory is about half: 1066256 KB for the subtree plus 37.96MiB of Postgres, against 2044608 KB.
 
 What it costs: process cold start rises from 1169.9 to 6864.1 ms. A Postgres container must be kept
@@ -28167,3 +28361,3931 @@ start, disk footprint and operational surface.
 
 **The TypeScript implementation stays the default whatever these numbers say.** Anything this section
 suggests is input to a later decision by the maintainer, not a change made or queued here.
+
+## The BM25 index's state, measured
+
+**Who reads this, and what it decides.** The maintainer deciding the route of the branch that fixes the
+BM25 scores' dependence on the `chunks_bm25` index's state. This section records, in order, how the probe
+reads a score and its setup, the score each index state ranks by, the near-tie ordering on an empty
+database, what still differs after `REINDEX`, the stray index-scan score, the candidate end-state rule at
+refresh level, and whether either mechanism moves relevance; then, under `### The deciding figures on
+pg_textsearch 1.5.1`, the same goals' deciding figures re-taken on `pg_textsearch` 1.5.1; then, under
+`### Route 2 on the fix branch`, the figures the branch implementing route 2 took, with the Python port's
+after-fix and real-catalog figures, taken on `fix_docs_retrieval_bm25_index_state_python`; and last, the
+recommendation for the fix branch. Every `self-docs` figure carries the `{ files, chunks }` stamp of the
+runs that took it, and no comparison here crosses two stamps. The `pg_textsearch` source paths and issue
+numbers cited here, except `#573`, are the leads of the task prompt that opened this work; none was re-read
+on the branch that measured them. `timescale/pg_textsearch#573` is not one of those leads: it reports
+mechanism 2 upstream, was filed by the maintainer after this diagnosis and is still open on 1.5.1; it is
+cited from the task prompt of `chore_docs_retrieval_backend_comparison_record` and was not read on that
+branch.
+
+### How the probe reads a score, and the setup
+
+- **The engines.** PGlite: `PostgreSQL 18.3 (PGlite 0.5.8) on wasm32-unknown-emscripten, compiled by
+  emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 3.1.74
+  (1092ec30a3fb1d46b1782ff1b4db5094d3d06ae5), 32-bit`. The compose Postgres: `PostgreSQL 18.2 (Debian
+  18.2-1.pgdg12+1) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0,
+  64-bit`. `pg_extension.extversion` reads `pg_textsearch` `1.3.1` on both.
+- **The corpora.** `fixture-catalog` at `{ files: 9, chunks: 41 }`, 12 queries, and `self-docs` at
+  `{ files: 71, chunks: 813 }`, 20 queries. Every `self-docs` run below carries that one stamp.
+- **The runs.** 2026-10-20, two runs of the states sequence per engine and corpus, eight in all. Each
+  pair was compared value by value; what the comparison listed is named under **One-run values** below.
+- **The score statement**, run once per query with the query text as `$1` and the corpus's chunk count
+  as `$2`:
+
+  ```
+  SELECT key, bm25_get_current_score() AS scan, round((text <@> to_bm25query($1, 'chunks_bm25'))::numeric, 6) AS operator, (text <@> to_bm25query($1, 'chunks_bm25'))::float8 AS operator_exact FROM chunks ORDER BY text <@> to_bm25query($1, 'chunks_bm25') LIMIT $2
+  ```
+
+  - `scan` is the score the index scan ranked the row by. It is what the store ranks by: the store's
+    lexical statement orders by the same expression (`cli/src/retrieval/store.ts` → `lexicalSearch`).
+    It is a `real`, rounded to six decimals by the probe.
+  - `operator` is the standalone operator over the row's own text, rounded to six decimals on the
+    server. It is the comparison's own probe column (`### Divergence sources, in the order checked`,
+    item 3).
+  - `operator_exact` is the same operator unrounded, as a `float8`. It is diagnostic: it decides
+    whether a hit whose `scan` and `operator` differ differs only because `scan` is the operator stored
+    as a `real` (`Math.fround` of both sides equal), and no comparison reads it.
+
+  A **hit** is a row scoring non-zero in either column. Scores are lower-is-better.
+- **The length statement**, run once per step; the summed lengths are checked against the index's
+  `total_len` at `t0`, and the length-band split below is printed only when they are equal:
+
+  ```
+  SELECT key, (SELECT coalesce(sum(array_length(positions, 1)), 0) FROM unnest(to_tsvector('english', text))) FROM chunks
+  ```
+
+- **The two `EXPLAIN` statements**, each bound to the first query: the probe's own, and the store's at
+  its `LIMIT 50` (`ARM_CANDIDATES`). "Index scan" in the tables below is a plan line reading
+  `Index Scan using chunks_bm25 on public.chunks`; "Seq Scan" is `Seq Scan on public.chunks`.
+
+  ```
+  EXPLAIN (VERBOSE, COSTS OFF) SELECT key, bm25_get_current_score() AS scan, round((text <@> to_bm25query($1, 'chunks_bm25'))::numeric, 6) AS operator, (text <@> to_bm25query($1, 'chunks_bm25'))::float8 AS operator_exact FROM chunks ORDER BY text <@> to_bm25query($1, 'chunks_bm25') LIMIT $2
+  EXPLAIN (VERBOSE, COSTS OFF) SELECT id FROM chunks ORDER BY text <@> to_bm25query($1, 'chunks_bm25') LIMIT $2
+  ```
+
+- **The forced re-score.** A step whose probe plan is not the index scan is scored a second time in the
+  same session under `SET enable_seqscan = off`, then `RESET enable_seqscan`, and both readings are
+  recorded with labels. That forces the index scan rather than disabling it: an index whose statistics
+  describe its rows can fall below the planner's crossover at fixture size, and a disabled index scan
+  would leave no `scan` score to read. In every run below the probe plan was the index scan at every
+  step, so no step was re-scored.
+- **The states.** `t0` a new table and empty index, the corpus inserted; `t1` `SELECT
+  bm25_spill_index('chunks_bm25')`; `t2` the PGlite data directory closed and reopened (PGlite only);
+  `t3` `REINDEX INDEX chunks_bm25`; `t4` a new table, the corpus inserted, then `CREATE INDEX
+  chunks_bm25 ON chunks USING bm25 (text) WITH (text_config='english')`. The index's own figures are
+  read with `SELECT bm25_summarize_index('chunks_bm25')`.
+
+The commands that re-run every figure here are in `docs/retrieval-eval.md` → `### The BM25 index-state
+probe`.
+
+### The score each index state ranks by
+
+**PGlite exposes `bm25_spill_index`.** `SELECT count(*) FROM pg_proc WHERE proname = 'bm25_spill_index'`
+found it on both engines, so `t1` was run on both. `t2` is a PGlite step and has no Postgres row.
+
+Columns: the index's `total_docs`, `total_len` and memtable documents; the probe's and the store's plan;
+hits; hits with `scan` ≠ `operator`; of those, the operator stored as a `real`, and the number differing
+beyond `real` storage; the largest `|scan − operator|` over all hits, from the raw values, with its query
+and key; and the differing-beyond-`real` hits split at 39 tokens.
+
+**PGlite, `fixture-catalog`.**
+
+| Step | total_docs | total_len | Memtable docs | Probe plan | Store plan | Hits | `scan` ≠ `operator` | `real` storage | Beyond `real` | Largest difference | ≤ 39 / > 39 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `t0` | 41 | 2393 | 41 | Index scan | Index scan | 219 | 144 | 1 | 143 | 0.1072685718536377 (`q-fc-barcode-contents`, `docs/labels.md#the-routing-barcode`) | 6 / 137 |
+| `t1` | 41 | 2393 | 0 | Index scan | Index scan | 219 | 17 | 3 | 14 | 6.556510925292969e-7 (`q-fc-route-choice`, `docs/routing.md`) | 5 / 9 |
+| `t2` | 41 | 2393 | 0 | Index scan | Index scan | 219 | 17 | 3 | 14 | 6.556510925292969e-7 (`q-fc-route-choice`, `docs/routing.md`) | 5 / 9 |
+| `t3` | 41 | 2393 | 0 | Index scan | Seq Scan | 219 | 17 | 3 | 14 | 6.556510925292969e-7 (`q-fc-route-choice`, `docs/routing.md`) | 5 / 9 |
+| `t4` | 41 | 2393 | 0 | Index scan | Seq Scan | 219 | 17 | 3 | 14 | 6.556510925292969e-7 (`q-fc-route-choice`, `docs/routing.md`) | 5 / 9 |
+
+**Postgres, `fixture-catalog`.**
+
+| Step | total_docs | total_len | Memtable docs | Probe plan | Store plan | Hits | `scan` ≠ `operator` | `real` storage | Beyond `real` | Largest difference | ≤ 39 / > 39 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `t0` | 41 | 2393 | 41 | Index scan | Index scan | 219 | 144 | 1 | 143 | 0.10726761817932129 (`q-fc-barcode-contents`, `docs/labels.md#the-routing-barcode`) | 5 / 138 |
+| `t1` | 41 | 2393 | 0 | Index scan | Index scan | 219 | 15 | 3 | 12 | 9.5367431640625e-7 (`q-fc-token-lifetime`, `docs/api-auth.md#rotating-a-key`) | 4 / 8 |
+| `t3` | 41 | 2393 | 0 | Index scan | Seq Scan | 219 | 15 | 3 | 12 | 9.5367431640625e-7 (`q-fc-token-lifetime`, `docs/api-auth.md#rotating-a-key`) | 4 / 8 |
+| `t4` | 41 | 2393 | 0 | Index scan | Seq Scan | 219 | 15 | 3 | 12 | 9.5367431640625e-7 (`q-fc-token-lifetime`, `docs/api-auth.md#rotating-a-key`) | 4 / 8 |
+
+On `fixture-catalog` the summed lengths equal `total_len` (2393 / 2393) on both engines, so the split is
+printed.
+
+**PGlite, `self-docs` at `{ files: 71, chunks: 813 }`.**
+
+| Step | total_docs | total_len | Memtable docs | Probe plan | Store plan | Hits | `scan` ≠ `operator` | `real` storage | Beyond `real` | Largest difference | ≤ 39 / > 39 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `t0` | 813 | 340498 | 7 | Index scan | Index scan | 9367 | 1103 | 278 | 825 | 0.05720013380050659 (`q-sd-run-gates`, `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template`) | withheld |
+| `t1` | 813 | 340498 | 0 | Index scan | Index scan | 9367 | 1046 | 278 | 768 | 0.0000015497207641601562 (`q-sd-guard-shell-options`, `docs/guard-verification.md#24-disclosed-residuals-re-confirmed`) | withheld |
+| `t2` | 813 | 340498 | 0 | Index scan | Index scan | 9367 | 1046 | 278 | 768 | 0.0000015497207641601562 (`q-sd-guard-shell-options`, `docs/guard-verification.md#24-disclosed-residuals-re-confirmed`) | withheld |
+| `t3` | 813 | 340498 | 0 | Index scan | Index scan | 9367 | 1047 | 277 | 770 | 0.0000019669532775878906 (`q-sd-usage-limit`, `docs/watcher.md#5-machine-level-usage-lane`) | withheld |
+| `t4` | 813 | 340498 | 0 | Index scan | Index scan | 9367 | 1047 | 277 | 770 | 0.0000019669532775878906 (`q-sd-usage-limit`, `docs/watcher.md#5-machine-level-usage-lane`) | withheld |
+
+**Postgres, `self-docs` at `{ files: 71, chunks: 813 }`.** Where the two runs disagree, the cell reads
+run 1 / run 2, and both are one-run values.
+
+| Step | total_docs | total_len | Memtable docs | Probe plan | Store plan | Hits | `scan` ≠ `operator` | `real` storage | Beyond `real` | Largest difference | ≤ 39 / > 39 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `t0` | 813 | 340498 | 7 | Index scan | Index scan | 9367 | 1156 / 1112 | 259 | 897 / 853 | 0.05719965696334839 (`q-sd-run-gates`, `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template`) | withheld |
+| `t1` | 813 | 340498 | 0 | Index scan | Index scan | 9367 | 1100 | 259 | 841 | 0.0000015497207641601562 (`q-sd-guard-shell-options`, `docs/guard-verification.md#24-disclosed-residuals-re-confirmed`) | withheld |
+| `t3` | 813 | 340498 | 0 | Index scan | Index scan | 9367 | 1099 | 258 | 841 | 0.0000019669532775878906 (`q-sd-usage-limit`, `docs/watcher.md#5-machine-level-usage-lane`) | withheld |
+| `t4` | 813 | 340498 | 0 | Index scan | Index scan | 9367 | 1099 | 258 | 841 | 0.0000019669532775878906 (`q-sd-usage-limit`, `docs/watcher.md#5-machine-level-usage-lane`) | withheld |
+
+On `self-docs` the split is withheld on both engines: the summed lengths are 336038 against a
+`total_len` of 340498, so the length statement's definition of a length is not the index's. The
+`self-docs` fresh-insert index is not all memtable: `bm25_summarize_index` reports 3 segments holding
+806 documents plus the 7 memtable documents at `t0`, 4 segments holding 813 at `t1` and `t2`, and 1
+segment holding 813 at `t3` and `t4`, on both engines. On `fixture-catalog` every state after `t0` is 1
+segment holding 41.
+
+**State against state.** Hits whose score differs between two states, in `scan` and in `operator`. No
+step was forced, so this is the default-plan reading.
+
+| States | `fixture-catalog`, PGlite | `fixture-catalog`, Postgres | `self-docs`, PGlite | `self-docs`, Postgres |
+|---|---|---|---|---|
+| `t0` / `t1` | 137 / 0 | 136 / 0 | 62 / 0 | 62 / 0 (run 2: 13 / 1) |
+| `t0` / `t2` | 137 / 0 | — | 62 / 0 | — |
+| `t0` / `t3` | 137 / 0 | 136 / 0 | 73 / 0 | 73 / 0 (run 2: 24 / 1) |
+| `t0` / `t4` | 137 / 0 | 136 / 0 | 73 / 0 | 73 / 0 (run 2: 24 / 1) |
+| `t1` / `t2` | 0 / 0 | — | 0 / 0 | — |
+| `t1` / `t3` | 0 / 0 | 0 / 0 | 12 / 0 | 12 / 0 |
+| `t1` / `t4` | 0 / 0 | 0 / 0 | 12 / 0 | 12 / 0 |
+| `t2` / `t3` | 0 / 0 | — | 12 / 0 | — |
+| `t2` / `t4` | 0 / 0 | — | 12 / 0 | — |
+| `t3` / `t4` | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
+
+**One-run values, handed to `### The stray index-scan score`.** Every figure above is reproduced by the
+second run of its pair except the Postgres `self-docs` `t0` cells marked run 1 / run 2. Those cells move
+because the comparison of that pair's captures listed 50 values at step `t0`, out of 74936 compared; the
+other three pairs listed none (`fixture-catalog` 2190 and 1752 values compared, PGlite `self-docs`
+93670). All 49 `scan` values are on `docs/work-report-research/user-review-fix-plan-writer.md` chunks, each
+differing from its `operator` in run 1; in run 2, 45 of them equal their `operator` at six decimals. The
+one `operator` value, on `q-sd-run-gates` / `docs/work-report-research/reviews/task-plan-reviewer.md#must-fix`,
+reads −6.070929 in run 2 while that row's own `operator_exact` reads −6.122591853141785 in both runs.
+
+| Query | Key | Column | Run 1 | Run 2 |
+|---|---|---|---|---|
+| `q-sd-run-gates` | `docs/work-report-research/reviews/task-plan-reviewer.md#must-fix` | `operator` | -6.122592 | -6.070929 |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -3.946979 | -3.963867 |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -1.808344 | -1.816325 |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.548666 | -0.551762 |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.514734 | -0.516774 |
+| `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -3.592312 | -3.605958 |
+| `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -1.714378 | -1.720218 |
+| `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -1.514701 | -1.539660 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.229171 | -2.247350 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -2.479785 | -2.489738 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.195607 | -2.211427 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.637454 | -0.640121 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.572122 | -0.575350 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -3.391469 | -3.407665 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.548666 | -0.551762 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.514734 | -0.516774 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.395543 | -0.398769 |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.548666 | -0.551762 |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -0.546421 | -0.549491 |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.514734 | -0.516774 |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.395543 | -0.398769 |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -5.350504 | -5.362087 |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -2.817965 | -2.829133 |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.505383 | -2.530333 |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -1.131494 | -1.150139 |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.077752 | -2.084812 |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.058120 | -2.065047 |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.961397 | -1.965644 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -3.679281 | -3.706814 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -1.820190 | -1.831818 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -0.645757 | -0.647155 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.559044 | -0.562198 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.524469 | -0.526548 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -0.497002 | -0.505191 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -1.051327 | -1.054908 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -1.011000 | -1.013481 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -0.977494 | -0.987626 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.967974 | -0.972025 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -0.948168 | -0.952543 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -0.893587 | -0.896173 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -5.182902 | -5.202586 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.790756 | -2.804495 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -2.692060 | -2.707249 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -2.102166 | -2.136805 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.234223 | -1.237324 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.524469 | -0.526548 |
+| `q-sd-negative-ingress` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.129522 | -2.144821 |
+| `q-sd-negative-tungsten` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.530190 | -1.536865 |
+| `q-sd-negative-grpc` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.077752 | -2.084812 |
+| `q-sd-negative-grpc` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.058120 | -2.065047 |
+
+**Goal 1, state by state.** In no state, on either engine or corpus, does `scan` equal `operator`, and in
+none does it differ only by `real` storage.
+
+- **`t0`, fresh insert.** `scan` differs from `operator` beyond `real` storage on 143 of 219
+  `fixture-catalog` hits on both engines, and on 825 (PGlite) and 897 / 853 (Postgres) of 9367
+  `self-docs` hits, the largest difference 0.1072685718536377 (PGlite) and 0.10726761817932129 (Postgres)
+  on `fixture-catalog` and 0.05720013380050659 and 0.05719965696334839 on `self-docs` (each table's `t0`
+  row). On `fixture-catalog`, 137 (PGlite) and 138 (Postgres) of the beyond-`real` hits are
+  longer than 39 tokens.
+- **`t1`, after `bm25_spill_index`.** `scan` differs beyond `real` storage on 14 (PGlite) and 12
+  (Postgres) `fixture-catalog` hits and on 768 and 841 `self-docs` hits, the largest difference at most
+  0.0000015497207641601562 (each table's `t1` row). `operator` is unchanged from `t0` on every hit (the
+  state-against-state table's `t0` / `t1` row, run 1).
+- **`t2`, PGlite reopen.** Identical to `t1` in every column and in every score (the PGlite tables' `t2`
+  rows; `t1` / `t2` reads 0 / 0 on both corpora).
+- **`t3`, after `REINDEX`.** `scan` differs beyond `real` storage on the same counts as `t1` on
+  `fixture-catalog`, and on 770 (PGlite) and 841 (Postgres) `self-docs` hits, the largest `self-docs`
+  difference 0.0000019669532775878906 (each table's `t3` row). On `fixture-catalog` the store's own `LIMIT 50`
+  statement no longer takes the index scan on either engine: its plan is a Seq Scan whose output column is
+  the operator expression, so the store ranks there by the operator, not by `scan`.
+- **`t4`, `CREATE INDEX` over loaded rows.** Identical to `t3` in every column and in every score, the
+  store's Seq Scan on `fixture-catalog` included (each table's `t4` row; `t3` / `t4` reads 0 / 0
+  everywhere).
+
+**Which build forms score alike in `scan`.** `REINDEX` and `CREATE INDEX` over loaded rows score alike on
+both engines and both corpora: `t3` / `t4` differs on no hit in any run. Fresh insert followed by
+`bm25_spill_index` matches them on `fixture-catalog` only; on `self-docs` it differs from both on 12 hits
+on each engine (`t1` / `t3`, `t1` / `t4`), with 4 segments against their 1. Fresh insert alone matches
+none of the other forms. The reference build form is therefore `CREATE INDEX` over loaded rows, or
+`REINDEX`, which scores the same.
+
+### The near-tie ordering on an empty database
+
+`### Divergence sources, in the order checked`, item 3, **The near-tie pairs, since explained.**, records
+two near-tie pairs that the Python store's freshly built database returned against the operator's own
+order:
+
+- `q-fc-token-lifetime`: `docs/api-auth.md#rotating-a-key` / `#token-exchange`;
+- `q-fc-unreadable-label`: `docs/depot-operations.md#inbound-scanning` /
+  `docs/labels.md#when-a-label-is-rejected`.
+
+The lead is mechanism 2: the store ranks by `scan`, and the recorded scores are `operator`. Diagnostic (f)
+of each `fixture-catalog` run lists every adjacent returned pair whose second row has the lower
+`operator_exact`. Each row below is the pair in returned order, each member as `scan` / `operator` /
+`operator_exact`; both runs of each engine return the same values.
+
+| Query | Engine | State | Returned first | Returned second | Against `operator`'s order |
+|---|---|---|---|---|---|
+| `q-fc-token-lifetime` | PGlite, Postgres | `t0` | `#token-exchange` −8.281486 / −8.281486 / −8.281485974788666 | `#rotating-a-key` −8.264622 / −8.307983 / −8.3079833984375 | Yes |
+| `q-fc-token-lifetime` | PGlite | `t1`, `t2`, `t3`, `t4` | `#rotating-a-key` −8.307983 / −8.307983 / −8.3079833984375 | `#token-exchange` −8.281486 / −8.281486 / −8.281485974788666 | No |
+| `q-fc-token-lifetime` | Postgres | `t1`, `t3`, `t4` | `#rotating-a-key` −8.307984 / −8.307983 / −8.3079833984375 | `#token-exchange` −8.281486 / −8.281486 / −8.281485974788666 | No |
+| `q-fc-unreadable-label` | PGlite, Postgres | `t0` | `docs/labels.md#when-a-label-is-rejected` −5.514854 / −5.514854 / −5.5148544907569885 | `docs/depot-operations.md#inbound-scanning` −5.514000 / −5.534851 / −5.534850656986237 | Yes |
+| `q-fc-unreadable-label` | PGlite | `t1`, `t2`, `t3`, `t4` | `docs/depot-operations.md#inbound-scanning` −5.534851 / −5.534851 / −5.534850656986237 | `docs/labels.md#when-a-label-is-rejected` −5.514854 / −5.514854 / −5.5148544907569885 | No |
+| `q-fc-unreadable-label` | Postgres | `t1`, `t3`, `t4` | `docs/depot-operations.md#inbound-scanning` −5.534851 / −5.534851 / −5.534850656986237 | `docs/labels.md#when-a-label-is-rejected` −5.514854 / −5.514854 / −5.5148544907569885 | No |
+
+At `t0` diagnostic (f) finds 4 inversions against `operator` on each engine: these two pairs, and
+`docs/labels.md` then `docs/tracking.md#event-ordering-and-duplicates` on both `q-fc-verify-callback`
+and `q-fc-token-lifetime`. Diagnostic (g) finds no inversion against `scan` in any state, and (f) none
+against `operator` in any state after `t0`. The `operator` values equal item 3's recorded scores to six
+decimals.
+
+**Explained by mechanism 2, for the probe's states.** Mechanism 2 is the one reported upstream as
+`timescale/pg_textsearch#573`. Both conditions hold on both engines: at `t0` each
+pair is returned in `scan`'s order and against `operator`'s, and in the spilled state, `t1` on both
+engines and `t2` on PGlite, neither pair inverts. Item 3's empty database was the Python store's own fresh
+build, which this probe did not drive; whether that build leaves the index in the `t0` state is observed
+at refresh level.
+
+### What still differs after REINDEX
+
+**The leads.** The branch before this one stopped with three residuals after `REINDEX INDEX chunks_bm25`
+(commit `234162d2`, `harness-runs/task_plans/fix_docs_retrieval_bm25_index_history/task_1_plan.md` →
+`**Deviations from plan:**`): 15–17 of 219 `fixture-catalog` hits whose `scan` differed from `operator`;
+540–563 of 5189 `self-docs` hits; and one `self-docs` hit on which two `REINDEX`es of the same rows
+differed, `q-sd-second-init` → `.claude/context/cli.md#what-this-layer-owns-and-what-it-is-not`, −7.241028
+against −7.241029. Those counts are leads only. They were taken on another `self-docs` stamp, before the
+probe read the raw values that the `real` test below needs, so nothing here sets them against this
+branch's figures.
+
+**The runs.** 2026-10-20, the history sequence (`--sequence history`, the default), with each corpus as A
+and the other as B, on both engines, twice each: eight runs. `fixture-catalog` is at `{ files: 9, chunks:
+41 }`, and `self-docs` is at `{ files: 71, chunks: 818 }` in all eight runs, as A and as B. The engines and
+`pg_textsearch` version are those in `### How the probe reads a score, and the setup`, and so are the
+score, length and `EXPLAIN` statements, the forced re-score and the definition of a hit. The commands are
+the history-sequence commands in `docs/retrieval-eval.md` → `### The BM25 index-state probe`, one per
+engine and A/B pair, each with `--capture`, followed by `--compare` of each pair.
+
+**The steps.** Each step reads every query of A's set. `s0` is a new table and index, A inserted. `s1` is a
+new table and index, A and B inserted. `s2` is `DELETE FROM chunks WHERE key = ANY($1::text[])` with B's
+keys. `s3` closes and reopens the PGlite data directory (PGlite only). `s4` is `VACUUM chunks` and `s5` is
+`REINDEX INDEX chunks_bm25`. `s6` sets A's first row to A's last row's text and back, each with `INSERT INTO
+chunks (key, text, embedding) VALUES ($1, $2, $3::vector) ON CONFLICT (key) DO UPDATE SET text =
+EXCLUDED.text, embedding = EXCLUDED.embedding`. `s7` is `REINDEX INDEX chunks_bm25` again. At `s5` and `s7`,
+every run reads `total_docs` and `total_len` equal to A's own (41 / 2393 for `fixture-catalog`, 818 /
+343527 for `self-docs`), with 0 memtable documents and 1 segment. The probe's plan was the index scan at
+both steps in every run, so neither was re-scored. The store's `LIMIT 50` plan is a Seq Scan on
+`fixture-catalog` at both steps on both engines, and the index scan on `self-docs`.
+
+Columns are as in `### The score each index state ranks by`. Every figure in the four tables below is the
+same in both runs of its pair.
+
+**PGlite, A `fixture-catalog`, B `self-docs`.**
+
+| Step | Hits | `scan` ≠ `operator` | `real` storage | Beyond `real` | Largest difference | ≤ 39 / > 39 |
+|---|---|---|---|---|---|---|
+| `s5` | 219 | 17 | 3 | 14 | 6.556510925292969e-7 (`q-fc-route-choice`, `docs/routing.md`) | 5 / 9 |
+| `s7` | 219 | 17 | 3 | 14 | 6.556510925292969e-7 (`q-fc-route-choice`, `docs/routing.md`) | 5 / 9 |
+
+**Postgres, A `fixture-catalog`, B `self-docs`.**
+
+| Step | Hits | `scan` ≠ `operator` | `real` storage | Beyond `real` | Largest difference | ≤ 39 / > 39 |
+|---|---|---|---|---|---|---|
+| `s5` | 219 | 15 | 3 | 12 | 9.5367431640625e-7 (`q-fc-token-lifetime`, `docs/api-auth.md#rotating-a-key`) | 4 / 8 |
+| `s7` | 219 | 15 | 3 | 12 | 9.5367431640625e-7 (`q-fc-token-lifetime`, `docs/api-auth.md#rotating-a-key`) | 4 / 8 |
+
+On `fixture-catalog` the length verdict at `s0` held on both engines: the summed lengths equal `total_len`
+(2393 / 2393), so the split is printed.
+
+**PGlite, A `self-docs` at `{ files: 71, chunks: 818 }`, B `fixture-catalog`.**
+
+| Step | Hits | `scan` ≠ `operator` | `real` storage | Beyond `real` | Largest difference | ≤ 39 / > 39 |
+|---|---|---|---|---|---|---|
+| `s5` | 9432 | 1096 | 290 | 806 | 0.0000015497207641601562 (`q-sd-run-gates`, `docs/work-report-research/reviews/committer.md#should-fix`) | withheld |
+| `s7` | 9432 | 1097 | 290 | 807 | 0.0000015497207641601562 (`q-sd-run-gates`, `docs/work-report-research/reviews/committer.md#should-fix`) | withheld |
+
+**Postgres, A `self-docs` at `{ files: 71, chunks: 818 }`, B `fixture-catalog`.**
+
+| Step | Hits | `scan` ≠ `operator` | `real` storage | Beyond `real` | Largest difference | ≤ 39 / > 39 |
+|---|---|---|---|---|---|---|
+| `s5` | 9432 | 991 | 295 | 696 | 0.000001430511474609375 (`q-sd-new-subcommand`, `.claude/context/conventions.md#what-accompanies-a-new-unit-of-each-kind`) | withheld |
+| `s7` | 9432 | 992 | 295 | 697 | 0.000001430511474609375 (`q-sd-new-subcommand`, `.claude/context/conventions.md#what-accompanies-a-new-unit-of-each-kind`) | withheld |
+
+On `self-docs` the split is withheld on both engines. At `s0` the summed lengths are 339067 against a
+`total_len` of 343527.
+
+**`s5` against `s7`, hit by hit on the raw `scan` values.** Each capture's `s5` and `s7` score lines were
+matched by query and key. Both steps return the same hits in every run.
+
+| A | Engine | Hits whose raw `scan` differs | Hits whose raw `operator` differs |
+|---|---|---|---|
+| `fixture-catalog` | PGlite, Postgres | 0 | 0 |
+| `self-docs` | PGlite, Postgres | 1 | 0 |
+
+The one `self-docs` hit is the same on both engines and in both runs: `q-sd-run-gates` →
+`.claude/context/cli.md#what-this-layer-owns-and-what-it-is-not`. Its raw `scan` is −4.7870283126831055
+at `s5` and −4.787027359008789 at `s7`, a difference of 9.5367431640625e-7, and it reads −4.787028
+against −4.787027 at six decimals. Its `operator_exact` is −4.787028193473816 at both steps. At `s5`,
+`scan` is that value stored as a `real`. At `s7` it is not. This hit is the one by which `s7`'s counts
+exceed `s5`'s in the two `self-docs` tables. It is not the row that `s6` rewrote, which is
+`.claude/context/cli.md`, the same file's preamble chunk.
+
+The lead's own hit, `q-sd-second-init` → `.claude/context/cli.md#what-this-layer-owns-and-what-it-is-not`,
+is present at both steps in every `self-docs` run. Its raw `scan` is −8.006580352783203 at both, equal to
+its `operator_exact`, so it shows no difference.
+
+**Conclusions, one per lead.**
+
+- **`fixture-catalog`, 15–17 hits after `REINDEX`: unexplained.** Diagnostic (b) covers 3 of the 17
+  (PGlite) and 3 of the 15 (Postgres) differing hits at `s5` and `s7`. That leaves 14 and 12 differing
+  beyond `real` storage, the largest 6.556510925292969e-7 and 9.5367431640625e-7 (the two
+  `fixture-catalog` tables' `s5` rows). The length verdict held, but the remainder is not wholly in the `>
+  39` band: 5 (PGlite) and 4 (Postgres) of those hits are 39 tokens or shorter. So the residual is not
+  consistent with mechanism 2. It matches the `t3` rows for `fixture-catalog` (`### The score each
+  index state ranks by`) in every column on each engine, so the deleted `self-docs` rows leave no trace
+  in it.
+- **`self-docs`, 540–563 hits after `REINDEX`: unexplained.** Diagnostic (b) covers 290 (PGlite) and 295
+  (Postgres) of the 1096 and 991 differing hits at `s5`. That leaves 806 and 696 differing beyond `real`
+  storage, the largest 0.0000015497207641601562 (PGlite) and 0.000001430511474609375 (Postgres). The
+  length split is withheld, so mechanism 2 can be neither supported nor excluded (the two `self-docs`
+  tables' `s5` rows). The two engines' counts differ, while each reads the same `total_docs`, `total_len`
+  and segment at `s5`.
+- **Two `REINDEX`es differ on one hit: unexplained.** The difference is reproduced as a raw difference
+  between two `REINDEX`es, not a rounding effect: 9.5367431640625e-7 on one `self-docs` hit, on both
+  engines and in both runs, with no `fixture-catalog` hit differing (the `s5` against `s7` table). Its
+  `operator` is identical at both steps. Only `s5`'s `scan` is that operator stored as a `real`. The hit
+  this branch measures is `q-sd-run-gates` on the key the lead named. The lead's own `q-sd-second-init`
+  hit on that key does not differ.
+
+**One-run values, handed to `### The stray index-scan score`.** `--compare` listed no value at `s5` or
+`s7` in any pair, and no value at all in the PGlite `fixture-catalog`, Postgres `fixture-catalog` and
+PGlite `self-docs` pairs (12264, 11280 and 151288 values compared). The Postgres `self-docs` pair listed
+236 of 132424 values: 28 at `s0`, 161 at `s1` and 47 at `s2`, 234 of them in `scan` and 2 in `operator`.
+Every one is below, as step, query, key, column and both runs.
+
+| Step | Query | Key | Column | Run 1 | Run 2 |
+|---|---|---|---|---|---|
+| `s0` | `q-sd-stack-detection` | `docs/retrieval-eval-results.md#corpus-self-docs--backend-python` | `operator` | -5.990453 | -5.949055 |
+| `s0` | `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -5.196821 | -5.216510 |
+| `s0` | `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -3.070760 | -3.103732 |
+| `s0` | `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -2.802138 | -2.810374 |
+| `s0` | `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.793100 | -2.806820 |
+| `s0` | `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -2.693476 | -2.708637 |
+| `s0` | `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -2.660836 | -2.668948 |
+| `s0` | `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.483572 | -2.507391 |
+| `s0` | `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -2.112288 | -2.147021 |
+| `s0` | `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -1.959446 | -1.985762 |
+| `s0` | `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.237008 | -1.240109 |
+| `s0` | `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -1.141008 | -1.151208 |
+| `s0` | `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -0.675351 | -0.677585 |
+| `s0` | `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.525702 | -0.527781 |
+| `s0` | `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -0.514224 | -0.516880 |
+| `s0` | `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -0.420298 | -0.421182 |
+| `s0` | `q-sd-negative-ingress` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -2.271584 | -2.276363 |
+| `s0` | `q-sd-negative-ingress` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.139093 | -2.154434 |
+| `s0` | `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -2.034626 | -2.043413 |
+| `s0` | `q-sd-negative-tungsten` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.538434 | -1.545133 |
+| `s0` | `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -1.418509 | -1.444494 |
+| `s0` | `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.255406 | -1.278013 |
+| `s0` | `q-sd-negative-blog` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -2.597971 | -2.603437 |
+| `s0` | `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -2.120784 | -2.134183 |
+| `s0` | `q-sd-negative-grpc` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.054384 | -2.061348 |
+| `s0` | `q-sd-negative-grpc` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.034908 | -2.041741 |
+| `s0` | `q-sd-negative-grpc` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -1.825658 | -1.840858 |
+| `s0` | `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.767712 | -1.785009 |
+| `s1` | `q-sd-cross-asset-reference` | `docs/retrieval-eval-results.md#spread-repetitions-and-what-moved` | `operator` | -4.058823 | -4.220252 |
+| `s1` | `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -4.111679 | -4.041721 |
+| `s1` | `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -3.479045 | -3.461979 |
+| `s1` | `q-sd-daemon-lifecycle` | `docs/rates.md#remote-area-surcharge` | `scan` | -2.861657 | -2.857162 |
+| `s1` | `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -2.592489 | -2.585121 |
+| `s1` | `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -2.538068 | -2.529384 |
+| `s1` | `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.742003 | -1.710493 |
+| `s1` | `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -0.717873 | -0.713323 |
+| `s1` | `q-sd-daemon-lifecycle` | `docs/labels.md#printing-and-label-stock` | `scan` | -0.635196 | -0.634220 |
+| `s1` | `q-sd-daemon-lifecycle` | `docs/routing.md#zone-graph` | `scan` | -0.627470 | -0.624621 |
+| `s1` | `q-sd-daemon-lifecycle` | `docs/routing.md#how-a-route-is-chosen` | `scan` | -0.616226 | -0.613478 |
+| `s1` | `q-sd-daemon-lifecycle` | `docs/routing.md#cut-off-times` | `scan` | -0.616226 | -0.615307 |
+| `s1` | `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.601847 | -0.598356 |
+| `s1` | `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.562472 | -0.560181 |
+| `s1` | `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.430910 | -0.427341 |
+| `s1` | `q-sd-usage-limit` | `docs/watcher.md#5-machine-level-usage-lane` | `scan` | -14.403790 | -14.403791 |
+| `s1` | `q-sd-usage-limit` | `docs/exceptions.md#exception-codes` | `scan` | -3.437225 | -3.426545 |
+| `s1` | `q-sd-usage-limit` | `docs/exceptions.md#claims-for-a-lost-parcel` | `scan` | -3.437225 | -3.426545 |
+| `s1` | `q-sd-usage-limit` | `docs/INDEX.md` | `scan` | -3.006213 | -3.002121 |
+| `s1` | `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -0.717873 | -0.713323 |
+| `s1` | `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -0.668272 | -0.661842 |
+| `s1` | `q-sd-usage-limit` | `docs/labels.md#printing-and-label-stock` | `scan` | -0.635196 | -0.634220 |
+| `s1` | `q-sd-usage-limit` | `docs/routing.md#zone-graph` | `scan` | -0.627470 | -0.624621 |
+| `s1` | `q-sd-usage-limit` | `docs/routing.md#how-a-route-is-chosen` | `scan` | -0.616226 | -0.613478 |
+| `s1` | `q-sd-usage-limit` | `docs/routing.md#cut-off-times` | `scan` | -0.616226 | -0.615307 |
+| `s1` | `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.601847 | -0.598356 |
+| `s1` | `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -0.596186 | -0.592760 |
+| `s1` | `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.562472 | -0.560181 |
+| `s1` | `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.430910 | -0.427341 |
+| `s1` | `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -0.380107 | -0.373231 |
+| `s1` | `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -5.452813 | -5.440645 |
+| `s1` | `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -5.027995 | -4.970340 |
+| `s1` | `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -4.349262 | -4.300858 |
+| `s1` | `q-sd-search-abstains` | `docs/tracking.md#status-codes` | `scan` | -3.387735 | -3.382463 |
+| `s1` | `q-sd-search-abstains` | `docs/depot-operations.md#inbound-scanning` | `scan` | -3.366747 | -3.361541 |
+| `s1` | `q-sd-search-abstains` | `docs/api-auth.md#rotating-a-key` | `scan` | -3.242857 | -3.237842 |
+| `s1` | `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -2.853897 | -2.842275 |
+| `s1` | `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.548651 | -2.523030 |
+| `s1` | `q-sd-search-abstains` | `docs/INDEX.md` | `scan` | -1.628439 | -1.626223 |
+| `s1` | `q-sd-search-abstains` | `docs/labels.md#the-routing-barcode` | `scan` | -1.421517 | -1.414943 |
+| `s1` | `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -1.198732 | -1.178719 |
+| `s1` | `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.100465 | -1.080559 |
+| `s1` | `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -0.958405 | -0.940723 |
+| `s1` | `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -5.792597 | -5.702603 |
+| `s1` | `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -5.525686 | -5.440399 |
+| `s1` | `q-sd-retrieval-network` | `docs/labels.md#printing-and-label-stock` | `scan` | -4.787389 | -4.780032 |
+| `s1` | `q-sd-retrieval-network` | `docs/routing.md#how-a-route-is-chosen` | `scan` | -4.644413 | -4.623701 |
+| `s1` | `q-sd-retrieval-network` | `docs/webhooks.md#replaying-missed-events` | `scan` | -4.175914 | -4.162858 |
+| `s1` | `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -3.760213 | -3.728103 |
+| `s1` | `q-sd-retrieval-network` | `docs/INDEX.md` | `scan` | -3.671202 | -3.667257 |
+| `s1` | `q-sd-retrieval-network` | `docs/rates.md#fuel-surcharge` | `scan` | -2.235847 | -2.233777 |
+| `s1` | `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -2.195442 | -2.181153 |
+| `s1` | `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.117131 | -2.109725 |
+| `s1` | `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.098035 | -2.090763 |
+| `s1` | `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -2.003978 | -1.999507 |
+| `s1` | `q-sd-analyze-writes` | `docs/api-auth.md#api-keys` | `scan` | -5.676341 | -5.655821 |
+| `s1` | `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -4.241153 | -4.170936 |
+| `s1` | `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -3.790864 | -3.762246 |
+| `s1` | `q-sd-analyze-writes` | `docs/exceptions.md#claims-for-a-lost-parcel` | `scan` | -3.045695 | -3.040112 |
+| `s1` | `q-sd-analyze-writes` | `docs/api-auth.md#rotating-a-key` | `scan` | -2.607444 | -2.603411 |
+| `s1` | `q-sd-analyze-writes` | `docs/exceptions.md#redelivery-attempts` | `scan` | -2.600949 | -2.592816 |
+| `s1` | `q-sd-analyze-writes` | `docs/exceptions.md#exception-codes` | `scan` | -2.584735 | -2.576704 |
+| `s1` | `q-sd-analyze-writes` | `docs/webhooks.md#subscribing-to-events` | `scan` | -2.584735 | -2.576704 |
+| `s1` | `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.437184 | -2.406866 |
+| `s1` | `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -1.949261 | -1.937014 |
+| `s1` | `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -0.789776 | -0.784398 |
+| `s1` | `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -0.751510 | -0.750205 |
+| `s1` | `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -0.751510 | -0.746747 |
+| `s1` | `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -0.724619 | -0.723002 |
+| `s1` | `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -0.645101 | -0.642224 |
+| `s1` | `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.630048 | -0.626393 |
+| `s1` | `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.588828 | -0.586430 |
+| `s1` | `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -0.576261 | -0.573202 |
+| `s1` | `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -0.564219 | -0.554799 |
+| `s1` | `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -0.466696 | -0.465690 |
+| `s1` | `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -3.023586 | -3.013835 |
+| `s1` | `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -2.786494 | -2.779790 |
+| `s1` | `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -2.294050 | -2.268533 |
+| `s1` | `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.189034 | -2.161727 |
+| `s1` | `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -1.150361 | -1.142873 |
+| `s1` | `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -1.115701 | -1.111777 |
+| `s1` | `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -1.089495 | -1.080186 |
+| `s1` | `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.085059 | -1.081346 |
+| `s1` | `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -1.070360 | -1.067648 |
+| `s1` | `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -1.056054 | -1.052537 |
+| `s1` | `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -1.042126 | -1.031077 |
+| `s1` | `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -1.041620 | -1.040477 |
+| `s1` | `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -1.023628 | -1.019227 |
+| `s1` | `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -1.001760 | -0.997020 |
+| `s1` | `q-sd-stack-detection` | `docs/exceptions.md#redelivery-attempts` | `scan` | -0.991273 | -0.988174 |
+| `s1` | `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -0.989902 | -0.987583 |
+| `s1` | `q-sd-stack-detection` | `docs/exceptions.md#returns-to-sender` | `scan` | -0.985094 | -0.983561 |
+| `s1` | `q-sd-stack-detection` | `docs/exceptions.md#claims-for-a-lost-parcel` | `scan` | -0.985094 | -0.982033 |
+| `s1` | `q-sd-stack-detection` | `docs/api-auth.md#rotating-a-key` | `scan` | -0.978991 | -0.977477 |
+| `s1` | `q-sd-stack-detection` | `docs/rates.md#rate-cards` | `scan` | -0.967010 | -0.965533 |
+| `s1` | `q-sd-stack-detection` | `docs/routing.md#cut-off-times` | `scan` | -0.943906 | -0.942499 |
+| `s1` | `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -0.942663 | -0.939860 |
+| `s1` | `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -5.417650 | -5.396769 |
+| `s1` | `q-sd-second-init` | `docs/api-auth.md#rotating-a-key` | `scan` | -4.896144 | -4.889050 |
+| `s1` | `q-sd-second-init` | `docs/exceptions.md#exception-codes` | `scan` | -3.296533 | -3.288038 |
+| `s1` | `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -3.252325 | -3.216879 |
+| `s1` | `q-sd-second-init` | `docs/tracking.md#event-ordering-and-duplicates` | `scan` | -3.204303 | -3.195361 |
+| `s1` | `q-sd-second-init` | `docs/webhooks.md#replaying-missed-events` | `scan` | -3.127145 | -3.117368 |
+| `s1` | `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -2.950324 | -2.941273 |
+| `s1` | `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.922719 | -2.908035 |
+| `s1` | `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -2.825040 | -2.808655 |
+| `s1` | `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -2.800838 | -2.792149 |
+| `s1` | `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.637797 | -2.612871 |
+| `s1` | `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -2.245877 | -2.208382 |
+| `s1` | `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -2.081503 | -2.053613 |
+| `s1` | `q-sd-second-init` | `docs/exceptions.md#redelivery-attempts` | `scan` | -1.713066 | -1.707710 |
+| `s1` | `q-sd-second-init` | `docs/tracking.md#status-codes` | `scan` | -1.702387 | -1.699739 |
+| `s1` | `q-sd-second-init` | `docs/labels.md#the-routing-barcode` | `scan` | -1.691841 | -1.684017 |
+| `s1` | `q-sd-second-init` | `docs/INDEX.md` | `scan` | -1.488916 | -1.486889 |
+| `s1` | `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.340034 | -1.336586 |
+| `s1` | `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -1.248900 | -1.237628 |
+| `s1` | `q-sd-second-init` | `docs/api-auth.md#api-keys` | `scan` | -0.805705 | -0.804135 |
+| `s1` | `q-sd-second-init` | `docs/routing.md#cut-off-times` | `scan` | -0.791286 | -0.790780 |
+| `s1` | `q-sd-second-init` | `docs/rates.md#rate-cards` | `scan` | -0.749550 | -0.748870 |
+| `s1` | `q-sd-second-init` | `docs/routing.md#how-a-route-is-chosen` | `scan` | -0.738814 | -0.736836 |
+| `s1` | `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -0.708377 | -0.705954 |
+| `s1` | `q-sd-second-init` | `docs/rates.md#fuel-surcharge` | `scan` | -0.653297 | -0.652264 |
+| `s1` | `q-sd-second-init` | `docs/rates.md#remote-area-surcharge` | `scan` | -0.649186 | -0.648166 |
+| `s1` | `q-sd-second-init` | `docs/exceptions.md#returns-to-sender` | `scan` | -0.643116 | -0.642115 |
+| `s1` | `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.588828 | -0.586430 |
+| `s1` | `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -0.576261 | -0.573202 |
+| `s1` | `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -0.466696 | -0.465690 |
+| `s1` | `q-sd-negative-ingress` | `docs/webhooks.md#replaying-missed-events` | `scan` | -2.774926 | -2.766249 |
+| `s1` | `q-sd-negative-ingress` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -2.293544 | -2.288599 |
+| `s1` | `q-sd-negative-ingress` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.172347 | -2.156463 |
+| `s1` | `q-sd-negative-tungsten` | `docs/exceptions.md#redelivery-attempts` | `scan` | -2.165348 | -2.158578 |
+| `s1` | `q-sd-negative-tungsten` | `docs/exceptions.md#claims-for-a-lost-parcel` | `scan` | -2.151850 | -2.145164 |
+| `s1` | `q-sd-negative-tungsten` | `docs/depot-operations.md#inbound-scanning` | `scan` | -2.138519 | -2.135212 |
+| `s1` | `q-sd-negative-tungsten` | `docs/labels.md#printing-and-label-stock` | `scan` | -2.125352 | -2.122086 |
+| `s1` | `q-sd-negative-tungsten` | `docs/routing.md#rerouting-a-parcel-in-flight` | `scan` | -2.125352 | -2.122086 |
+| `s1` | `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -2.061878 | -2.052683 |
+| `s1` | `q-sd-negative-tungsten` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.545070 | -1.538185 |
+| `s1` | `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -1.441816 | -1.415216 |
+| `s1` | `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.271828 | -1.248822 |
+| `s1` | `q-sd-negative-blog` | `docs/rates.md#fuel-surcharge` | `scan` | -4.872905 | -4.868393 |
+| `s1` | `q-sd-negative-blog` | `docs/routing.md#cut-off-times` | `scan` | -4.707149 | -4.702939 |
+| `s1` | `q-sd-negative-blog` | `docs/rates.md#remote-area-surcharge` | `scan` | -4.136106 | -4.129609 |
+| `s1` | `q-sd-negative-blog` | `docs/tracking.md#status-codes` | `scan` | -4.097431 | -4.091055 |
+| `s1` | `q-sd-negative-blog` | `docs/routing.md#zone-graph` | `scan` | -3.997749 | -3.979596 |
+| `s1` | `q-sd-negative-blog` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -2.615622 | -2.609983 |
+| `s1` | `q-sd-negative-grpc` | `docs/INDEX.md` | `scan` | -7.419269 | -7.410222 |
+| `s1` | `q-sd-negative-grpc` | `docs/tracking.md#estimated-delivery-window` | `scan` | -4.520762 | -4.516569 |
+| `s1` | `q-sd-negative-grpc` | `docs/routing.md#how-a-route-is-chosen` | `scan` | -4.358891 | -4.347217 |
+| `s1` | `q-sd-negative-grpc` | `docs/exceptions.md#claims-for-a-lost-parcel` | `scan` | -3.794283 | -3.782494 |
+| `s1` | `q-sd-negative-grpc` | `docs/labels.md#the-routing-barcode` | `scan` | -3.770777 | -3.753338 |
+| `s1` | `q-sd-negative-grpc` | `docs/routing.md#rerouting-a-parcel-in-flight` | `scan` | -3.747561 | -3.741802 |
+| `s1` | `q-sd-negative-grpc` | `docs/rates.md#rate-cards` | `scan` | -3.724629 | -3.718940 |
+| `s1` | `q-sd-negative-grpc` | `docs/routing.md#zone-graph` | `scan` | -3.701976 | -3.685166 |
+| `s1` | `q-sd-negative-grpc` | `docs/rates.md#fuel-surcharge` | `scan` | -2.235847 | -2.233777 |
+| `s1` | `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -2.195442 | -2.181153 |
+| `s1` | `q-sd-negative-grpc` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.117131 | -2.109725 |
+| `s1` | `q-sd-negative-grpc` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.098035 | -2.090763 |
+| `s1` | `q-sd-negative-grpc` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -1.889210 | -1.873077 |
+| `s1` | `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.827320 | -1.809052 |
+| `s1` | `q-sd-negative-migration` | `docs/tracking.md#status-codes` | `scan` | -3.387735 | -3.382463 |
+| `s1` | `q-sd-negative-migration` | `docs/depot-operations.md#inbound-scanning` | `scan` | -3.366747 | -3.361541 |
+| `s2` | `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -3.938075 | -3.909279 |
+| `s2` | `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -3.556699 | -3.540837 |
+| `s2` | `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -3.097146 | -3.085987 |
+| `s2` | `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -2.665215 | -2.653339 |
+| `s2` | `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -2.371225 | -2.346084 |
+| `s2` | `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -1.832063 | -1.814434 |
+| `s2` | `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -1.649958 | -1.640389 |
+| `s2` | `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -1.612335 | -1.607752 |
+| `s2` | `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -1.181337 | -1.171550 |
+| `s2` | `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.042059 | -1.023210 |
+| `s2` | `q-sd-deny-guard` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -2.322945 | -2.314998 |
+| `s2` | `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -1.731864 | -1.699914 |
+| `s2` | `q-sd-deny-guard` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -1.145201 | -1.133688 |
+| `s2` | `q-sd-new-subcommand` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -2.371225 | -2.346084 |
+| `s2` | `q-sd-new-subcommand` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -1.765728 | -1.752817 |
+| `s2` | `q-sd-new-subcommand` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -1.733556 | -1.727311 |
+| `s2` | `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -8.063778 | -8.004432 |
+| `s2` | `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -7.833021 | -7.749838 |
+| `s2` | `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -4.913178 | -4.869401 |
+| `s2` | `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -4.627807 | -4.572097 |
+| `s2` | `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -4.018846 | -3.971700 |
+| `s2` | `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -3.333325 | -3.305711 |
+| `s2` | `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -3.216464 | -3.211151 |
+| `s2` | `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -3.035534 | -3.003350 |
+| `s2` | `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -2.984195 | -2.979010 |
+| `s2` | `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -1.886801 | -1.879117 |
+| `s2` | `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -1.863066 | -1.859501 |
+| `s2` | `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -1.772437 | -1.768137 |
+| `s2` | `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.601847 | -0.598356 |
+| `s2` | `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -6.858262 | -6.774416 |
+| `s2` | `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -5.087744 | -5.007015 |
+| `s2` | `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -4.134716 | -4.116660 |
+| `s2` | `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -3.579848 | -3.540710 |
+| `s2` | `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -2.601635 | -2.590033 |
+| `s2` | `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -2.290401 | -2.265275 |
+| `s2` | `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -1.928876 | -1.920114 |
+| `s2` | `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -1.227536 | -1.224047 |
+| `s2` | `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -1.148940 | -1.142842 |
+| `s2` | `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.601847 | -0.598356 |
+| `s2` | `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.562472 | -0.560181 |
+| `s2` | `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -4.855611 | -4.788239 |
+| `s2` | `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -3.996561 | -3.985858 |
+| `s2` | `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -3.737357 | -3.722768 |
+| `s2` | `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -1.803939 | -1.797593 |
+| `s2` | `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -1.580668 | -1.554279 |
+| `s2` | `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.578847 | -1.558516 |
+| `s2` | `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -1.458738 | -1.453483 |
+
+### The stray index-scan score
+
+**The lead.** The branch before this one found that the score statement, run as the `chunks_bm25` index
+scan on the compose Postgres, sometimes returned one (query, key) score that no other run returned:
+about one value per 300 queries, and none on PGlite. In five runs of `self-docs` against
+`fixture-catalog`, three runs each had one such value: `q-sd-search-abstains` →
+`docs/analyze.md#8-how-this-is-verified` −0.221485 against −0.735353, `q-sd-cross-asset-reference` →
+`docs/github-run-control.md#5-lifecycle-comments-and-state-labels` −0.341426 against −1.891997, and
+`q-sd-analyze-writes` → `docs/development.md#7-releasing` −1.629181 against −4.567675. That probe read the
+operator column only. Those figures are leads, recorded in that branch's task prompt under `## A second
+defect, found while implementing Task 1` (commit `234162d2`). The task prompt that opened this work
+describes two upstream issues, and neither was read on this branch: `timescale/pg_textsearch#557`, a
+wrong top-N before the memtable is spilled, open on 1.3.1 and 1.5.1; and `#516`, the score changing
+within a statement when the index changes, fixed after 1.4.0.
+
+**The runs.** 2026-10-20, the states sequence with `--repeat 30`, once per engine and corpus, and the
+Postgres `self-docs` run twice; then the history sequence with `self-docs` as A and `fixture-catalog` as
+B on Postgres with `--repeat 15`, the lead's own shape. `fixture-catalog` is at `{ files: 9, chunks: 41
+}` and `self-docs` at `{ files: 71, chunks: 819 }` in every run. The engines, the `pg_textsearch` version,
+the score statement and the states are those in `### How the probe reads a score, and the setup`, and
+the history steps are those in `### What still differs after REINDEX`. Each repetition scores every
+query of the corpus's set once; on Postgres each repetition is its own `psql` process. Every value of a
+later repetition is compared with the first repetition's, per (query, key) and per column, a hit on one
+side only included. `bm25_summarize_index`, and on Postgres `autovacuum_count`, are read before the first
+repetition and after the last. The probe plan was the index scan at every step of every run, so no step
+was re-scored. The commands are in `docs/retrieval-eval.md` → `### The BM25 index-state probe`: the
+states-sequence and history-sequence commands with `--repeat 30` and `--repeat 15`. Every run was taken
+with `--capture` except Postgres `self-docs` run 1, which wrote no capture, as the `not captured` cells
+and "Run 1 wrote no capture" below record.
+
+**Per engine, corpus and state.** Memtable documents are `bm25_summarize_index`'s, before the first
+repetition and after the last. "Disagreeing" counts every (repetition, query, key, column) whose value
+differs from the first repetition's.
+
+| Engine | Corpus | Step | Memtable docs, before → after | Values compared | Disagreeing `scan` | Disagreeing `operator` | Summary and `autovacuum_count` across the repetitions |
+|---|---|---|---|---|---|---|---|
+| PGlite | `fixture-catalog` | `t0` | 41 → 41 | 12702 | 0 | 0 | Summary identical; no `autovacuum_count` on PGlite |
+| PGlite | `fixture-catalog` | `t1`, `t2`, `t3`, `t4` | 0 → 0 | 12702 each | 0 | 0 | Summary identical |
+| Postgres | `fixture-catalog` | `t0` | 41 → 41 | 12702 | 0 | 0 | Both unchanged, `autovacuum_count` 0 |
+| Postgres | `fixture-catalog` | `t1`, `t3`, `t4` | 0 → 0 | 12702 each | 0 | 0 | Both unchanged, 0 |
+| PGlite | `self-docs` | `t0` | 30 → 30 | 548216 | 0 | 0 | Summary differs in one line only, `DSA total size: 1048576 bytes (1.00 MB)` → `DSA total size: 2097152 bytes (2.00 MB)` |
+| PGlite | `self-docs` | `t1`, `t2`, `t3`, `t4` | 0 → 0 | 548216 each | 0 | 0 | Summary identical |
+| Postgres, run 1 | `self-docs` | `t0` | 30 → 0 | 548216 | 7760 | 1 | **Changed:** 3 segments holding 789 documents → 4 segments holding 819; `autovacuum_count` 0 → 0 |
+| Postgres, run 1 | `self-docs` | `t1`, `t3`, `t4` | 0 → 0 | 548216 each | 0 | 0 | Both unchanged, 0 |
+| Postgres, run 2 | `self-docs` | `t0` | 30 → 0 | 548216 | 6583 | 29 | **Changed:** as run 1; `autovacuum_count` 0 → 0 |
+| Postgres, run 2 | `self-docs` | `t1`, `t3`, `t4` | 0 → 0 | 548216 each | 0 | 0 | Both unchanged, 0 |
+| Postgres, history | A `self-docs` | `s0` | 30 → 0 | 264656 | 728 | 0 | **Changed:** 3 segments holding 789 → 4 segments holding 819; `autovacuum_count` 0 → 0 |
+| Postgres, history | A `self-docs` | `s1` | 71 → 0 | 269920 | 5054 | 14 | **Changed:** 3 segments holding 789 → 4 segments holding 860; `autovacuum_count` 0 → 0 |
+| Postgres, history | A `self-docs` | `s2`, `s4`, `s5`, `s7` | 0 → 0 | 264656 each | 0 | 0 | Both unchanged, 0 |
+| Postgres, history | A `self-docs` | `s6` | 2 → 2 | 264656 | 0 | 0 | Both unchanged, 0 |
+
+In each changed block the memtable was emptied into one new segment while the repetitions only read:
+no statement between the two summaries writes, and `autovacuum_count` stayed 0. The probe does not
+identify what triggered it. The resulting segments match `t1`'s, after `SELECT
+bm25_spill_index('chunks_bm25')`: 4 segments, 218 pages, 22953 terms, 819 documents at `t0`.
+
+**Where in the repetitions the index changed.** A disagreeing `scan` value is the same in every
+repetition from the change onward, so the first disagreeing repetition locates it:
+
+- **Run 1, `t0`:** during repetition 3, within `q-sd-deny-guard`, the second query of 20. Its `scan`
+  values are still the first repetition's, and one of its `operator` values is not. From
+  `q-sd-new-subcommand` on, 254 `scan` values move in repetition 3; from repetition 4 on, all 278 move,
+  `q-sd-new-config-key`'s and `q-sd-deny-guard`'s included.
+- **Run 2, `t0`:** during repetition 1, within `q-sd-stack-detection`, the 14th query. Its `scan` values
+  are pre-change, one of its `operator` values is not, and every query after it was already scored
+  after the change. The 227 `scan` values of it and the queries before it move in every repetition
+  from 2 on.
+- **History, `s0`:** during repetition 1, between `q-sd-run-gates` (4th) and `q-sd-state-dir` (5th). No
+  `operator` value moves.
+- **History, `s1`:** during repetition 1, within `q-sd-second-init`, the 15th query, with one `operator`
+  value moving, as in run 2.
+
+**The 278 `scan` values that move are the memtable's rows changing to their segment score.** They are
+on 29 keys: 1 in `docs/watcher.md` and the rest in three `docs/work-report-research/` files. After the
+change each reads exactly the `scan` value that run 2's `t1` reads for the same query and key, on all
+278. Both `t0` runs read the same value before and the same value after on each of the 227 (query, key,
+column) entries they share. Each of the 52 `s0` entries is one of them, with the same two values. This
+is the state difference `### The score each index state ranks by` records between `t0` and `t1`,
+reached here without a write.
+
+**The `operator` values are a different thing: one value per event, wrong within its own row.** The
+probe reads the operator twice in one row: `operator`, rounded on the server, and `operator_exact`,
+unrounded. In the three moved `operator` values the two disagree within one row of one statement:
+
+| Run | Step, repetition | Query | Key | `scan` | `operator` | `operator_exact` | `operator` in every other repetition |
+|---|---|---|---|---|---|---|---|
+| Postgres, run 1 | `t0`, r3 | `q-sd-deny-guard` | `docs/guard-verification.md#22-expansion-bypass-rows` | not captured | −6.303114 | not captured | −6.419051 |
+| Postgres, run 2 | `t0`, r1 | `q-sd-stack-detection` | `docs/guard-verification.md#31-narrowed--allow--silent` | −1.947800 | −1.906893 | −1.947800189256668 | −1.947800 |
+| Postgres, history | `s1`, r1 | `q-sd-second-init` | `docs/work-report-research/README.md#pre-existing-bugs-found-along-the-way-confirmed-by-a-reviewer` | −2.607430 | −2.266997 | −2.6074300408363342 | −2.607430 |
+
+Run 1 wrote no capture, so its stray row's `scan` and `operator_exact` were not read. Run 2's and the
+history run's 29 and 14 `operator` disagreements are each that one first-repetition value, listed
+against every later repetition.
+
+**The one-run values earlier subsections handed here, each placed in its state.** Each was taken on
+Postgres `self-docs` with no `--repeat`. The memtable figure is `bm25_summarize_index`'s at the step,
+from that run's capture.
+
+| Handed by | Stamp | Step | Memtable docs at the step, run 1 / run 2 | Values listed | Of them `operator` | The `operator` value against its row's own reading |
+|---|---|---|---|---|---|---|
+| `### The score each index state ranks by` | `{ files: 71, chunks: 813 }` | `t0` | 7 / 7 | 50 | 1 | `q-sd-run-gates` → `docs/work-report-research/reviews/task-plan-reviewer.md#must-fix`: run 2 `operator` −6.070929, while that row's `scan` reads −6.122592 and its `operator_exact` −6.122591853141785, as run 1's |
+| `### What still differs after REINDEX` | `{ files: 71, chunks: 818 }` | `s0` | 18 / 18 | 28 | 1 | `q-sd-stack-detection` → `docs/retrieval-eval-results.md#corpus-self-docs--backend-python`: run 2 `operator` −5.949055, while that row's `scan` reads −5.990453 and its `operator_exact` −5.990452811121941, as run 1's |
+| `### What still differs after REINDEX` | `{ files: 71, chunks: 818 }` | `s1` | 59 / 59 | 161 | 1 | `q-sd-cross-asset-reference` → `docs/retrieval-eval-results.md#spread-repetitions-and-what-moved`: run 1 `operator` −4.058823, while that row's `scan` reads −4.220252 and its `operator_exact` −4.2202518582344055, as run 2's |
+| `### What still differs after REINDEX` | `{ files: 71, chunks: 818 }` | `s2` | 0 / 59 | 47 | 0 | — |
+
+Every one is in a step whose index held memtable documents at the step, or, for `s2`, in the pair where
+one run's memtable had been emptied before the step and the other's had not. Each `operator` one is the
+same form as the three above: `operator` disagreeing with `scan` and `operator_exact` of its own row.
+
+**Every disagreement of this task's runs.** Only the Postgres `self-docs` blocks marked changed above
+have any. Each row is one (query, key, column): its value in the first repetition, the value every
+disagreeing repetition read, and the repetitions that read it, per run. A row's two values are the same
+in every run that lists it, and no repetition read a third. "none" means that run listed no
+disagreement for it. In run 2 the 51 rows it does not list belong to queries scored after the change
+in its first repetition.
+
+**Postgres `self-docs`, `t0` in both states-sequence runs and `s0` in the history run.**
+
+| Query | Key | Column | `r1` | Later | Run 1 | Run 2 | History `s0` |
+|---|---|---|---|---|---|---|---|
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -4.038979 | -4.057068 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -3.921275 | -3.949205 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -3.495382 | -3.510338 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -3.085175 | -3.095923 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -2.648918 | -2.660371 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -2.346287 | -2.370328 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -1.787785 | -1.804438 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -1.611781 | -1.620772 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -1.581086 | -1.585399 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -1.528569 | -1.557241 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.523073 | -1.535143 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.493712 | -1.519091 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -1.277068 | -1.301377 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -1.165642 | -1.175070 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -1.105758 | -1.138245 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.022129 | -1.040429 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-deny-guard` | `docs/guard-verification.md#22-expansion-bypass-rows` | `operator` | -6.419051 | -6.303114 | r3 | none | none |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -4.695407 | -4.775873 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -2.256407 | -2.263800 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -1.825327 | -1.875379 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -1.816669 | -1.818394 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.810681 | -1.825030 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -1.726287 | -1.757702 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -1.691504 | -1.714217 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -1.127858 | -1.139015 | r4–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-subcommand` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -2.346287 | -2.370328 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-subcommand` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -1.772416 | -1.785041 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-new-subcommand` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -1.740123 | -1.746186 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -7.872875 | -7.930100 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -7.580843 | -7.660351 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -4.917943 | -4.943481 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -4.681727 | -4.722239 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -4.456702 | -4.509297 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -3.893460 | -3.939690 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -3.887132 | -3.968003 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -3.845651 | -3.889642 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -3.364815 | -3.366885 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -3.298122 | -3.306683 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -3.267900 | -3.294330 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -3.210081 | -3.234509 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#review-response` | `scan` | -3.154655 | -3.162781 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -3.079024 | -3.083901 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -2.884174 | -2.888963 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -2.883209 | -2.912751 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -2.492334 | -2.531140 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.839365 | -1.843540 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -1.780524 | -1.787506 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -1.775057 | -1.778296 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -1.754818 | -1.761159 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -1.691869 | -1.695794 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -1.657348 | -1.664897 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -1.507995 | -1.517385 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.544883 | -0.547922 | r3–r30 | r2–r30 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -6.588382 | -6.667645 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -4.939462 | -5.016406 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -3.972713 | -3.989538 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -3.436150 | -3.472824 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -3.326783 | -3.338853 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -2.527913 | -2.538730 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -2.190534 | -2.214180 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -1.965778 | -1.976774 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -1.817723 | -1.825648 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -1.764874 | -1.795383 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -1.476856 | -1.504967 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.373832 | -1.388273 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -1.328134 | -1.336404 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -1.281183 | -1.316314 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -1.275106 | -1.276316 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -1.187180 | -1.197113 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -1.167800 | -1.170986 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -1.093429 | -1.099028 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.544883 | -0.547922 | r3–r30 | r2–r30 | none |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.511542 | -0.513548 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -4.718201 | -4.782929 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -3.947464 | -3.965144 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -3.835649 | -3.845461 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -3.601269 | -3.614798 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -2.914258 | -2.966640 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -1.717821 | -1.723601 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -1.612864 | -1.613922 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -1.534420 | -1.548908 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.529651 | -1.548908 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -1.518806 | -1.543576 | r3–r30 | r2–r30 | none |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -1.423893 | -1.428854 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -6.152997 | -6.293133 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -3.615720 | -3.618346 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -3.138070 | -3.169352 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -2.703303 | -2.777431 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -2.640877 | -2.688937 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.381629 | -2.413382 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.248386 | -2.266571 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.940146 | -1.949620 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -1.701128 | -1.708407 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -1.656431 | -1.670290 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -1.629391 | -1.633836 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -1.425031 | -1.433905 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -1.316085 | -1.341137 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.183756 | -1.203870 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -1.065944 | -1.069658 | r3–r30 | r2–r30 | none |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -1.026734 | -1.031332 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -2.950124 | -2.958771 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -2.792005 | -2.839444 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -2.707504 | -2.761704 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.705741 | -2.734952 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -2.698054 | -2.699939 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#review-response` | `scan` | -2.526953 | -2.537891 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -2.491071 | -2.522892 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -2.483584 | -2.493461 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.201296 | -2.217048 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -1.933774 | -1.957684 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -1.834033 | -1.837866 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -0.675165 | -0.677378 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -0.670644 | -0.678904 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -0.669243 | -0.675439 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.639237 | -0.641883 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -0.635959 | -0.641883 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.573350 | -0.576549 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -0.541795 | -0.546088 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -0.503524 | -0.508478 | r3–r30 | r2–r30 | none |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -0.478468 | -0.480135 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -3.972900 | -4.039831 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -3.397284 | -3.413340 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -2.673551 | -2.684636 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -2.604587 | -2.626379 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -2.562069 | -2.569059 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -2.464310 | -2.472384 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -2.073031 | -2.123060 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.977515 | -1.993187 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.672648 | -1.702594 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -0.649328 | -0.653287 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.544883 | -0.547922 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.511542 | -0.513548 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -0.490008 | -0.494634 | r3–r30 | r2–r30 | none |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.394060 | -0.397247 | r3–r30 | r2–r30 | none |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -0.649328 | -0.653287 | r3–r30 | r2–r30 | none |
+| `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -0.637346 | -0.645195 | r3–r30 | r2–r30 | none |
+| `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -0.604383 | -0.610013 | r3–r30 | r2–r30 | none |
+| `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -0.574138 | -0.575821 | r3–r30 | r2–r30 | none |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.544883 | -0.547922 | r3–r30 | r2–r30 | none |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -0.543620 | -0.546646 | r3–r30 | r2–r30 | none |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.511542 | -0.513548 | r3–r30 | r2–r30 | none |
+| `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -0.490008 | -0.494634 | r3–r30 | r2–r30 | none |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.394060 | -0.397247 | r3–r30 | r2–r30 | none |
+| `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -0.345544 | -0.351730 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -5.316369 | -5.327751 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -5.166443 | -5.217275 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -4.866122 | -4.920241 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -4.218097 | -4.263839 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -3.485568 | -3.522206 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -3.147726 | -3.150715 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -2.835551 | -2.846669 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.532174 | -2.557221 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -1.591199 | -1.621045 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -1.350405 | -1.354362 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -1.329394 | -1.354698 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-reviewer.md#review-response` | `scan` | -1.327622 | -1.333369 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -1.152526 | -1.163408 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -1.140798 | -1.159403 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.064009 | -1.083058 | r3–r30 | r2–r30 | none |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -0.917648 | -0.934347 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -7.083829 | -7.159740 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -5.723363 | -5.811337 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -5.459342 | -5.542094 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -5.429748 | -5.434903 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -3.625957 | -3.655885 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -3.203929 | -3.264027 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -2.676776 | -2.727728 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -2.614764 | -2.626475 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -2.118926 | -2.132189 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.053344 | -2.060244 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -2.052786 | -2.063147 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.033626 | -2.040393 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.938563 | -1.942713 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -1.610613 | -1.642982 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.606932 | -1.619667 | r3–r30 | r2–r30 | none |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -1.473486 | -1.487983 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -5.329547 | -5.468697 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -4.119907 | -4.187735 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -3.704641 | -3.732138 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.316254 | -2.345549 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -1.827316 | -1.838921 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -0.797944 | -0.799190 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -0.741811 | -0.745689 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -0.725799 | -0.726844 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -0.700600 | -0.705185 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -0.676414 | -0.679829 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -0.670705 | -0.671820 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -0.667749 | -0.671820 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -0.647421 | -0.648807 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -0.646646 | -0.653443 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -0.625137 | -0.629029 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -0.625137 | -0.629029 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -0.573870 | -0.576325 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.560341 | -0.563466 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -0.531412 | -0.541380 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -0.529501 | -0.533697 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.526054 | -0.528117 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -0.514664 | -0.517299 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -0.498781 | -0.506916 | r3–r30 | r2–r30 | none |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -0.421295 | -0.422175 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -2.957989 | -2.972433 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -2.887325 | -2.896286 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -2.787729 | -2.805676 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -2.670851 | -2.677025 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -2.622764 | -2.624205 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -2.300957 | -2.320084 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -2.225642 | -2.262023 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -2.186354 | -2.210055 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.092486 | -2.118264 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -2.084782 | -2.132697 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.146170 | -1.153005 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -1.085813 | -1.092609 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#review-response` | `scan` | -1.076242 | -1.079014 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -1.068461 | -1.073328 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -1.053684 | -1.057230 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -1.027128 | -1.035592 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.026153 | -1.029516 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -1.013738 | -1.016197 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -1.000025 | -1.003218 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -0.990954 | -0.991997 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -0.986867 | -0.992713 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -0.980519 | -0.990566 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.971547 | -0.975569 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -0.952102 | -0.956450 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -0.940880 | -0.942998 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -0.918196 | -0.920887 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -0.897219 | -0.899789 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -0.826421 | -0.841922 | r3–r30 | r2–r30 | none |
+| `q-sd-stack-detection` | `docs/guard-verification.md#31-narrowed--allow--silent` | `operator` | -1.906893 | -1.947800 | none | r2–r30 | none |
+| `q-sd-second-init` | `docs/watcher.md#3-the-daemon` | `scan` | -8.229276 | -8.229277 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -5.203752 | -5.223309 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -5.029585 | -5.098451 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -3.247891 | -3.332348 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -3.078114 | -3.110905 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -3.038274 | -3.068618 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -2.806080 | -2.814246 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.794801 | -2.808418 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -2.763785 | -2.789372 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -2.692665 | -2.707685 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -2.667779 | -2.675852 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.485702 | -2.509409 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -2.231076 | -2.247498 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -2.118614 | -2.153166 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -1.994249 | -2.011612 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -1.960750 | -1.986886 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -1.458712 | -1.460097 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -1.329933 | -1.332748 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.237753 | -1.240830 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.177996 | -1.193821 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -1.141828 | -1.151955 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -1.128661 | -1.137508 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.071295 | -1.079785 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -0.675165 | -0.677378 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.526054 | -0.528117 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -0.514664 | -0.517299 | r3–r30 | none | none |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -0.421295 | -0.422175 | r3–r30 | none | none |
+| `q-sd-negative-ingress` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -2.665162 | -2.691384 | r3–r30 | none | none |
+| `q-sd-negative-ingress` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -2.281691 | -2.286459 | r3–r30 | none | none |
+| `q-sd-negative-ingress` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.148859 | -2.164165 | r3–r30 | none | none |
+| `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -2.340610 | -2.345709 | r3–r30 | none | none |
+| `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -2.039244 | -2.047969 | r3–r30 | none | none |
+| `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.845308 | -1.876661 | r3–r30 | none | none |
+| `q-sd-negative-tungsten` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.545407 | -1.552089 | r3–r30 | none | none |
+| `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -1.425717 | -1.451662 | r3–r30 | none | none |
+| `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -1.366036 | -1.406169 | r3–r30 | none | none |
+| `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.262722 | -1.285329 | r3–r30 | none | none |
+| `q-sd-negative-blog` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -2.609341 | -2.614793 | r3–r30 | none | none |
+| `q-sd-negative-blog` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -2.385494 | -2.450907 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -2.118926 | -2.132189 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -2.108057 | -2.117156 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.053344 | -2.060244 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -2.052786 | -2.063147 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.033626 | -2.040393 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -1.825163 | -1.840227 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.768351 | -1.785516 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -1.612731 | -1.642982 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -1.610613 | -1.642982 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.606932 | -1.619667 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -1.347383 | -1.373030 | r3–r30 | none | none |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -1.163320 | -1.164425 | r3–r30 | none | none |
+
+**Postgres `self-docs`, history run, `s1`.**
+
+| Query | Key | Column | `r1` | Later | Repetitions |
+|---|---|---|---|---|---|
+| `q-sd-new-config-key` | `docs/webhooks.md#replaying-missed-events` | `scan` | -5.015410 | -5.030988 | r2–r15 |
+| `q-sd-new-config-key` | `docs/api-auth.md#rotating-a-key` | `scan` | -4.569855 | -4.574067 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -4.070919 | -4.089681 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -3.921550 | -3.950242 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -3.547617 | -3.563364 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -3.088348 | -3.099432 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -2.664542 | -2.676386 | r2–r15 |
+| `q-sd-new-config-key` | `docs/api-auth.md#api-keys` | `scan` | -2.391612 | -2.393494 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -2.343908 | -2.368800 | r2–r15 |
+| `q-sd-new-config-key` | `docs/exceptions.md#returns-to-sender` | `scan` | -2.234335 | -2.237783 | r2–r15 |
+| `q-sd-new-config-key` | `docs/api-auth.md#scopes` | `scan` | -2.061099 | -2.066700 | r2–r15 |
+| `q-sd-new-config-key` | `docs/INDEX.md` | `scan` | -1.912537 | -1.914142 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -1.814531 | -1.832013 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -1.639537 | -1.649015 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -1.607204 | -1.611745 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.546218 | -1.558893 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -1.545872 | -1.575762 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.515412 | -1.542038 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -1.289360 | -1.314615 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -1.173943 | -1.183686 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -1.112150 | -1.145652 | r2–r15 |
+| `q-sd-new-config-key` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.026131 | -1.044926 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -4.781335 | -4.865946 | r2–r15 |
+| `q-sd-deny-guard` | `docs/webhooks.md#subscribing-to-events` | `scan` | -4.687421 | -4.701891 | r2–r15 |
+| `q-sd-deny-guard` | `docs/exceptions.md#claims-for-a-lost-parcel` | `scan` | -3.044040 | -3.049574 | r2–r15 |
+| `q-sd-deny-guard` | `docs/exceptions.md#redelivery-attempts` | `scan` | -2.597098 | -2.605164 | r2–r15 |
+| `q-sd-deny-guard` | `docs/exceptions.md#exception-codes` | `scan` | -2.581113 | -2.589081 | r2–r15 |
+| `q-sd-deny-guard` | `docs/api-auth.md#api-keys` | `scan` | -2.577147 | -2.589081 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -2.319895 | -2.327785 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.855116 | -1.870324 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -1.840775 | -1.892529 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -1.831830 | -1.833612 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -1.708389 | -1.740292 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -1.702747 | -1.726138 | r2–r15 |
+| `q-sd-deny-guard` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -1.140838 | -1.152363 | r2–r15 |
+| `q-sd-new-subcommand` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -2.343908 | -2.368800 | r2–r15 |
+| `q-sd-new-subcommand` | `docs/webhooks.md#replaying-missed-events` | `scan` | -2.244713 | -2.251685 | r2–r15 |
+| `q-sd-new-subcommand` | `docs/exceptions.md#returns-to-sender` | `scan` | -2.234335 | -2.237783 | r2–r15 |
+| `q-sd-new-subcommand` | `docs/api-auth.md#rotating-a-key` | `scan` | -2.220646 | -2.224053 | r2–r15 |
+| `q-sd-new-subcommand` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -1.755141 | -1.767983 | r2–r15 |
+| `q-sd-new-subcommand` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -1.728288 | -1.734491 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -8.036443 | -8.095713 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -7.772997 | -7.855981 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -5.127784 | -5.155220 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -4.877972 | -4.921525 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -4.583892 | -4.639334 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -4.040298 | -4.126500 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -4.031678 | -4.080925 | r2–r15 |
+| `q-sd-run-gates` | `docs/exceptions.md#claims-for-a-lost-parcel` | `scan` | -4.015471 | -4.018232 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -3.980683 | -4.027576 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -3.473871 | -3.476055 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -3.466384 | -3.475674 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -3.322037 | -3.348300 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -3.312985 | -3.340482 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#review-response` | `scan` | -3.268136 | -3.276889 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -3.213977 | -3.219251 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -3.007195 | -3.039130 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -2.986336 | -2.991484 | r2–r15 |
+| `q-sd-run-gates` | `docs/INDEX.md` | `scan` | -2.629519 | -2.633072 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -2.589390 | -2.630825 | r2–r15 |
+| `q-sd-run-gates` | `docs/routing.md#how-a-route-is-chosen` | `scan` | -2.125571 | -2.132315 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.924124 | -1.928668 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -1.879886 | -1.887508 | r2–r15 |
+| `q-sd-run-gates` | `docs/routing.md#cut-off-times` | `scan` | -1.878678 | -1.881458 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -1.856962 | -1.860487 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -1.834943 | -1.841840 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -1.766589 | -1.770845 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -1.729187 | -1.737361 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -1.570478 | -1.580609 | r2–r15 |
+| `q-sd-run-gates` | `docs/webhooks.md#subscribing-to-events` | `scan` | -1.551887 | -1.554708 | r2–r15 |
+| `q-sd-run-gates` | `docs/rates.md#remote-area-surcharge` | `scan` | -1.524469 | -1.526843 | r2–r15 |
+| `q-sd-run-gates` | `docs/labels.md#the-routing-barcode` | `scan` | -1.343816 | -1.350000 | r2–r15 |
+| `q-sd-run-gates` | `docs/tracking.md#estimated-delivery-window` | `scan` | -1.342740 | -1.344851 | r2–r15 |
+| `q-sd-run-gates` | `docs/routing.md#rerouting-a-parcel-in-flight` | `scan` | -1.301859 | -1.303844 | r2–r15 |
+| `q-sd-run-gates` | `docs/rates.md#rate-cards` | `scan` | -1.293980 | -1.295940 | r2–r15 |
+| `q-sd-run-gates` | `docs/labels.md#printing-and-label-stock` | `scan` | -0.634017 | -0.634984 | r2–r15 |
+| `q-sd-run-gates` | `docs/routing.md#zone-graph` | `scan` | -0.624510 | -0.627332 | r2–r15 |
+| `q-sd-run-gates` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.598485 | -0.601945 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -6.788215 | -6.871640 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -5.027122 | -5.107568 | r2–r15 |
+| `q-sd-state-dir` | `docs/labels.md#the-routing-barcode` | `scan` | -4.904999 | -4.927571 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -4.129370 | -4.147341 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -3.554385 | -3.593393 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -3.459427 | -3.472299 | r2–r15 |
+| `q-sd-state-dir` | `docs/api-auth.md#api-keys` | `scan` | -2.907482 | -2.920945 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -2.585481 | -2.596957 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -2.271816 | -2.296833 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -2.087148 | -2.099284 | r2–r15 |
+| `q-sd-state-dir` | `docs/exceptions.md#exception-codes` | `scan` | -2.030779 | -2.037048 | r2–r15 |
+| `q-sd-state-dir` | `docs/depot-operations.md#inbound-scanning` | `scan` | -2.021448 | -2.024549 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -1.925922 | -1.934640 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -1.878684 | -1.912035 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -1.491473 | -1.520688 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.446656 | -1.462431 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -1.396816 | -1.405827 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -1.288998 | -1.325239 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -1.282734 | -1.283982 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -1.249040 | -1.259871 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -1.227926 | -1.231395 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -1.147131 | -1.153201 | r2–r15 |
+| `q-sd-state-dir` | `docs/labels.md#printing-and-label-stock` | `scan` | -0.634017 | -0.634984 | r2–r15 |
+| `q-sd-state-dir` | `docs/routing.md#zone-graph` | `scan` | -0.624510 | -0.627332 | r2–r15 |
+| `q-sd-state-dir` | `docs/routing.md#cut-off-times` | `scan` | -0.615284 | -0.616195 | r2–r15 |
+| `q-sd-state-dir` | `docs/routing.md#how-a-route-is-chosen` | `scan` | -0.613472 | -0.616195 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.598485 | -0.601945 | r2–r15 |
+| `q-sd-state-dir` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.560622 | -0.562895 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -4.798215 | -4.865318 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -4.005941 | -4.024404 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -3.980629 | -3.991214 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -3.722085 | -3.736545 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/exceptions.md#claims-for-a-lost-parcel` | `scan` | -3.044040 | -3.049574 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -3.007852 | -3.063135 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/exceptions.md#redelivery-attempts` | `scan` | -2.597098 | -2.605164 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/exceptions.md#exception-codes` | `scan` | -2.581113 | -2.589081 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/webhooks.md#subscribing-to-events` | `scan` | -2.581113 | -2.589081 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/api-auth.md#api-keys` | `scan` | -2.577147 | -2.589081 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -1.795734 | -1.802012 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -1.647982 | -1.649095 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -1.565537 | -1.580745 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.560532 | -1.580745 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -1.554896 | -1.581083 | r2–r15 |
+| `q-sd-commit-prefix` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -1.454808 | -1.460029 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -6.238745 | -6.384683 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -3.689330 | -3.692073 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -3.196563 | -3.229105 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/exceptions.md#claims-for-a-lost-parcel` | `scan` | -3.044040 | -3.049574 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -2.739339 | -2.816356 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -2.645388 | -2.694788 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/exceptions.md#redelivery-attempts` | `scan` | -2.597098 | -2.605164 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/exceptions.md#exception-codes` | `scan` | -2.581113 | -2.589081 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/webhooks.md#subscribing-to-events` | `scan` | -2.581113 | -2.589081 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/api-auth.md#api-keys` | `scan` | -2.577147 | -2.589081 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.445462 | -2.478895 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.261803 | -2.280576 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -2.011665 | -2.021858 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -1.763253 | -1.771079 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -1.715249 | -1.730124 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -1.686255 | -1.691019 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -1.474266 | -1.483776 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/api-auth.md#scopes` | `scan` | -1.404853 | -1.411318 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/routing.md#zone-graph` | `scan` | -1.379574 | -1.385808 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -1.352778 | -1.379276 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/INDEX.md` | `scan` | -1.241785 | -1.243463 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.221993 | -1.243463 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -1.096720 | -1.100657 | r2–r15 |
+| `q-sd-guard-shell-options` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -1.055211 | -1.060075 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/webhooks.md#subscribing-to-events` | `scan` | -3.517847 | -3.528707 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -3.027691 | -3.036864 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -2.849181 | -2.899241 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.771423 | -2.802143 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -2.748919 | -2.805641 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -2.739036 | -2.741007 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#review-response` | `scan` | -2.576631 | -2.588205 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -2.532943 | -2.566275 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -2.526677 | -2.536994 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.241299 | -2.257535 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -1.968932 | -1.993831 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -1.851016 | -1.854988 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/exceptions.md#exception-codes` | `scan` | -0.830235 | -0.831063 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/api-auth.md#api-keys` | `scan` | -0.803323 | -0.804875 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/routing.md#cut-off-times` | `scan` | -0.790115 | -0.790615 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/api-auth.md#rotating-a-key` | `scan` | -0.753731 | -0.754414 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/tracking.md#event-ordering-and-duplicates` | `scan` | -0.753050 | -0.754414 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/rates.md#rate-cards` | `scan` | -0.748314 | -0.748987 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/routing.md#how-a-route-is-chosen` | `scan` | -0.736406 | -0.738364 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -0.705830 | -0.708231 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -0.699215 | -0.708131 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -0.698270 | -0.704968 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.665894 | -0.668745 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -0.662364 | -0.668745 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/rates.md#fuel-surcharge` | `scan` | -0.651880 | -0.652901 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/rates.md#remote-area-surcharge` | `scan` | -0.647824 | -0.648833 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/webhooks.md#replaying-missed-events` | `scan` | -0.644815 | -0.646818 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/exceptions.md#returns-to-sender` | `scan` | -0.641834 | -0.642824 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.598485 | -0.601945 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -0.564421 | -0.569048 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -0.523290 | -0.528603 | r2–r15 |
+| `q-sd-cross-asset-reference` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -0.496467 | -0.498249 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -4.051659 | -4.121332 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -3.460677 | -3.477602 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/rates.md#remote-area-surcharge` | `scan` | -2.850197 | -2.854637 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -2.730680 | -2.742273 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -2.625580 | -2.648348 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -2.581198 | -2.588490 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -2.534554 | -2.543174 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -2.157012 | -2.209843 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -2.026769 | -2.043385 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.719616 | -1.751114 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -0.713421 | -0.717930 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/labels.md#printing-and-label-stock` | `scan` | -0.634017 | -0.634984 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/routing.md#zone-graph` | `scan` | -0.624510 | -0.627332 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/routing.md#cut-off-times` | `scan` | -0.615284 | -0.616195 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/routing.md#how-a-route-is-chosen` | `scan` | -0.613472 | -0.616195 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.598485 | -0.601945 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.560622 | -0.562895 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -0.534254 | -0.539444 | r2–r15 |
+| `q-sd-daemon-lifecycle` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.428528 | -0.432085 | r2–r15 |
+| `q-sd-usage-limit` | `docs/exceptions.md#exception-codes` | `scan` | -3.415181 | -3.425724 | r2–r15 |
+| `q-sd-usage-limit` | `docs/exceptions.md#claims-for-a-lost-parcel` | `scan` | -3.415181 | -3.425724 | r2–r15 |
+| `q-sd-usage-limit` | `docs/INDEX.md` | `scan` | -2.995718 | -2.999766 | r2–r15 |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -0.713421 | -0.717930 | r2–r15 |
+| `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -0.699215 | -0.708131 | r2–r15 |
+| `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -0.662364 | -0.668745 | r2–r15 |
+| `q-sd-usage-limit` | `docs/labels.md#printing-and-label-stock` | `scan` | -0.634017 | -0.634984 | r2–r15 |
+| `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -0.629071 | -0.630977 | r2–r15 |
+| `q-sd-usage-limit` | `docs/routing.md#zone-graph` | `scan` | -0.624510 | -0.627332 | r2–r15 |
+| `q-sd-usage-limit` | `docs/routing.md#cut-off-times` | `scan` | -0.615284 | -0.616195 | r2–r15 |
+| `q-sd-usage-limit` | `docs/routing.md#how-a-route-is-chosen` | `scan` | -0.613472 | -0.616195 | r2–r15 |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.598485 | -0.601945 | r2–r15 |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -0.593747 | -0.597152 | r2–r15 |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.560622 | -0.562895 | r2–r15 |
+| `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -0.534254 | -0.539444 | r2–r15 |
+| `q-sd-usage-limit` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -0.428528 | -0.432085 | r2–r15 |
+| `q-sd-usage-limit` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -0.374572 | -0.381433 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -5.432780 | -5.444824 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -5.277916 | -5.331506 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -4.965104 | -5.022212 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -4.299001 | -4.347003 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -3.513968 | -3.552287 | r2–r15 |
+| `q-sd-search-abstains` | `docs/tracking.md#status-codes` | `scan` | -3.371508 | -3.376711 | r2–r15 |
+| `q-sd-search-abstains` | `docs/depot-operations.md#inbound-scanning` | `scan` | -3.350852 | -3.355992 | r2–r15 |
+| `q-sd-search-abstains` | `docs/api-auth.md#rotating-a-key` | `scan` | -3.243062 | -3.248037 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -3.182829 | -3.185926 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -2.850176 | -2.861732 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.536280 | -2.561901 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -1.632377 | -1.663939 | r2–r15 |
+| `q-sd-search-abstains` | `docs/INDEX.md` | `scan` | -1.626131 | -1.628328 | r2–r15 |
+| `q-sd-search-abstains` | `docs/labels.md#the-routing-barcode` | `scan` | -1.413776 | -1.420282 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -1.398476 | -1.402713 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-reviewer.md#review-response` | `scan` | -1.380060 | -1.386258 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -1.361511 | -1.388179 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -1.187691 | -1.199228 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -1.179618 | -1.199485 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.083552 | -1.103399 | r2–r15 |
+| `q-sd-search-abstains` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -0.942950 | -0.960559 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -7.028742 | -7.105223 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -5.697534 | -5.786874 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -5.423151 | -5.507486 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -5.383524 | -5.388762 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/labels.md#printing-and-label-stock` | `scan` | -4.746227 | -4.753464 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/routing.md#how-a-route-is-chosen` | `scan` | -4.592425 | -4.612808 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/webhooks.md#replaying-missed-events` | `scan` | -4.168647 | -4.181595 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -3.727578 | -3.759409 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/INDEX.md` | `scan` | -3.665312 | -3.669220 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -3.280612 | -3.344044 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -2.736249 | -2.789845 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -2.596065 | -2.608030 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/rates.md#fuel-surcharge` | `scan` | -2.229805 | -2.231850 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -2.179473 | -2.193621 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -2.115420 | -2.126513 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.108904 | -2.116241 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.089683 | -2.096887 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.998716 | -2.003146 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.648604 | -1.662119 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -1.646005 | -1.680105 | r2–r15 |
+| `q-sd-retrieval-network` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -1.513759 | -1.529129 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/api-auth.md#api-keys` | `scan` | -5.664241 | -5.684592 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -5.422452 | -5.565835 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -4.188251 | -4.258322 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -3.776903 | -3.805449 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/exceptions.md#claims-for-a-lost-parcel` | `scan` | -3.044040 | -3.049574 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/api-auth.md#rotating-a-key` | `scan` | -2.607955 | -2.611956 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/exceptions.md#redelivery-attempts` | `scan` | -2.597098 | -2.605164 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/exceptions.md#exception-codes` | `scan` | -2.581113 | -2.589081 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/webhooks.md#subscribing-to-events` | `scan` | -2.581113 | -2.589081 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.414921 | -2.445215 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -1.939781 | -1.951990 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -0.895841 | -0.897297 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -0.831507 | -0.836025 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -0.813173 | -0.814388 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -0.784307 | -0.789633 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -0.758165 | -0.762141 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -0.750265 | -0.751559 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -0.746838 | -0.751559 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -0.723564 | -0.731454 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -0.723298 | -0.724901 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -0.698636 | -0.703143 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -0.698636 | -0.703143 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -0.642207 | -0.645058 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -0.626519 | -0.630141 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -0.590859 | -0.595703 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -0.590727 | -0.602148 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.586882 | -0.589262 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -0.573753 | -0.576789 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -0.555478 | -0.564833 | r2–r15 |
+| `q-sd-analyze-writes` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -0.466854 | -0.467856 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -3.083539 | -3.099163 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -3.016617 | -3.026293 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -2.909427 | -2.928790 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#verdict` | `scan` | -2.783954 | -2.790611 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -2.718781 | -2.720325 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -2.397556 | -2.418115 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -2.306814 | -2.345597 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -2.274602 | -2.299997 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.168478 | -2.195725 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -2.158120 | -2.208918 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.209399 | -1.216898 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -1.142736 | -1.150154 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#review-response` | `scan` | -1.135816 | -1.138858 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -1.125352 | -1.130671 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -1.111084 | -1.114968 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.080956 | -1.084633 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -1.080245 | -1.089471 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -1.067389 | -1.070075 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -1.052419 | -1.055904 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -1.040875 | -1.042009 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -1.035618 | -1.041962 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -1.031152 | -1.042103 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -1.019796 | -1.024162 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -0.997946 | -1.002652 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -0.988026 | -0.990326 | r2–r15 |
+| `q-sd-stack-detection` | `docs/exceptions.md#redelivery-attempts` | `scan` | -0.987513 | -0.990580 | r2–r15 |
+| `q-sd-stack-detection` | `docs/exceptions.md#returns-to-sender` | `scan` | -0.982948 | -0.984465 | r2–r15 |
+| `q-sd-stack-detection` | `docs/exceptions.md#claims-for-a-lost-parcel` | `scan` | -0.981435 | -0.984465 | r2–r15 |
+| `q-sd-stack-detection` | `docs/api-auth.md#rotating-a-key` | `scan` | -0.976926 | -0.978424 | r2–r15 |
+| `q-sd-stack-detection` | `docs/rates.md#rate-cards` | `scan` | -0.965100 | -0.966563 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -0.963402 | -0.966321 | r2–r15 |
+| `q-sd-stack-detection` | `docs/routing.md#cut-off-times` | `scan` | -0.942288 | -0.943682 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -0.940669 | -0.943452 | r2–r15 |
+| `q-sd-stack-detection` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -0.864199 | -0.880908 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -5.404170 | -5.424913 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -5.221668 | -5.294846 | r2–r15 |
+| `q-sd-second-init` | `docs/api-auth.md#rotating-a-key` | `scan` | -4.882208 | -4.889224 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -3.345634 | -3.434511 | r2–r15 |
+| `q-sd-second-init` | `docs/exceptions.md#exception-codes` | `scan` | -3.282551 | -3.290949 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -3.224588 | -3.259842 | r2–r15 |
+| `q-sd-second-init` | `docs/tracking.md#event-ordering-and-duplicates` | `scan` | -3.190365 | -3.199206 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -3.177669 | -3.210105 | r2–r15 |
+| `q-sd-second-init` | `docs/webhooks.md#replaying-missed-events` | `scan` | -3.112318 | -3.121984 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -2.945280 | -2.954254 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.910202 | -2.924778 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -2.869939 | -2.896364 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#open-questions` | `scan` | -2.808167 | -2.824401 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#risks-and-costs` | `scan` | -2.799407 | -2.808055 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -2.615240 | -2.640052 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/README.md#pre-existing-bugs-found-along-the-way-confirmed-by-a-reviewer` | `operator` | -2.266997 | -2.607430 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -2.336791 | -2.354456 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#risks-and-costs` | `scan` | -2.214974 | -2.252278 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#read-tree` | `scan` | -2.082884 | -2.101446 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#thinning-plan` | `scan` | -2.055184 | -2.082888 | r2–r15 |
+| `q-sd-second-init` | `docs/exceptions.md#redelivery-attempts` | `scan` | -1.705717 | -1.711015 | r2–r15 |
+| `q-sd-second-init` | `docs/tracking.md#status-codes` | `scan` | -1.697831 | -1.700452 | r2–r15 |
+| `q-sd-second-init` | `docs/labels.md#the-routing-barcode` | `scan` | -1.682276 | -1.690018 | r2–r15 |
+| `q-sd-second-init` | `docs/INDEX.md` | `scan` | -1.487007 | -1.489016 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -1.475567 | -1.477002 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -1.442244 | -1.445365 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.337525 | -1.340945 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.276740 | -1.294349 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -1.238616 | -1.249807 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-reviewer.md#word-count-ledger` | `scan` | -1.221925 | -1.231746 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.155279 | -1.164750 | r2–r15 |
+| `q-sd-second-init` | `docs/api-auth.md#api-keys` | `scan` | -0.803323 | -0.804875 | r2–r15 |
+| `q-sd-second-init` | `docs/routing.md#cut-off-times` | `scan` | -0.790115 | -0.790615 | r2–r15 |
+| `q-sd-second-init` | `docs/rates.md#rate-cards` | `scan` | -0.748314 | -0.748987 | r2–r15 |
+| `q-sd-second-init` | `docs/routing.md#how-a-route-is-chosen` | `scan` | -0.736406 | -0.738364 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#dispatch-sites-and-phases` | `scan` | -0.705830 | -0.708231 | r2–r15 |
+| `q-sd-second-init` | `docs/rates.md#fuel-surcharge` | `scan` | -0.651880 | -0.652901 | r2–r15 |
+| `q-sd-second-init` | `docs/rates.md#remote-area-surcharge` | `scan` | -0.647824 | -0.648833 | r2–r15 |
+| `q-sd-second-init` | `docs/exceptions.md#returns-to-sender` | `scan` | -0.641834 | -0.642824 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#word-count-ledger` | `scan` | -0.586882 | -0.589262 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/ui-tests-plan-writer.md#word-count-ledger` | `scan` | -0.573753 | -0.576789 | r2–r15 |
+| `q-sd-second-init` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -0.466854 | -0.467856 | r2–r15 |
+
+**The trace, from the tables above.**
+
+1. **Memtable or segment.** Disagreements appear only in the four blocks whose index held memtable
+   documents at the step and had emptied them by the last repetition: `t0` in both Postgres `self-docs`
+   runs, and `s0` and `s1` of the history run. The segment states compared as many values as `t0` in
+   both runs, 548216 each at `t1`, `t3` and `t4`, and none disagreed. In the history run `s2`, `s4`,
+   `s5` and `s7` compared 264656 each, as many as `s0`, with none disagreeing. So in these runs the
+   stray disappears once the rows are in a segment. Holding a memtable is not enough on its own: at
+   Postgres `fixture-catalog` `t0`, 41 memtable documents, and at `s6`, 2, the memtable was not emptied
+   and nothing disagreed. That is consistent with `#557`'s description as far as the state goes: the
+   stray occurs before the memtable is spilled and not after. The probe's statement takes as many rows
+   as the corpus holds, so it tests no top-N cut, and no hit appeared or vanished in any repetition.
+2. **Column.** Both, and they are two different effects. In `scan`, the memtable's rows move once, to
+   their segment score, and stay there. In `operator`, a single value in the statement during which the
+   index changed differs from every other repetition's. In the two such rows captured, it also
+   disagrees with its own row's `scan` and `operator_exact`.
+3. **A changing index.** The memtable and segments changed under the repetitions in every block with
+   a disagreement, and in no block without one, while `autovacuum_count` read 0 throughout. The only
+   other summary change is PGlite `self-docs` `t0`'s DSA size line, with no disagreement. So `#516`'s
+   described trigger, the index changing within a statement, is ruled out for every Postgres block
+   except those four, and is present in those four. The `operator` stray, two readings of one operator expression differing
+   within one row while the memtable is being emptied, is consistent with `#516`'s description. This
+   is not a finding about `#516` itself, which was not read.
+4. **Engines.** PGlite shows no stray: no value disagreed in any state on either corpus, and its `t0`
+   memtable, 41 and 30 documents, was not emptied during the repetitions.
+
+The lead's three values are consistent in form with the `operator` stray here. Each was a single
+operator value in a run, differing from every other run's, on a probe that read the operator only.
+
+**The reproducible sequence.** On the compose Postgres with `pg_textsearch` 1.3.1, and `self-docs` at `{
+files: 71, chunks: 819 }`:
+
+1. The `t0` statements of `### How the probe reads a score, and the setup` → **The states.**: a new
+   table and empty `chunks_bm25` index, then the corpus inserted. That leaves 30 memtable documents
+   beside 3 segments holding 789.
+2. The score statement of the same subsection, once for each of the 20 `self-docs` queries, repeated 30
+   times, each repetition in its own `psql` process.
+
+The memtable was emptied during the repetitions in both runs of this sequence, and in both history-run
+blocks that began with a memtable of 30 or more. Each time it happened at a different point. The
+`operator` stray rate is 1 in 548216 values compared in each states-sequence run, and 0 in 264656
+(`s0`) and 1 in 269920 (`s1`) in the history run. No (query, key) recurs: the three strays above and
+the three handed here are six different (query, key) pairs. So the sequence reproduces the rate, not a
+fixed value. The `scan` moves do recur, with the same 278 values in both runs.
+
+**Conclusion.** The stray is an `operator` reading that disagrees with the same row's `scan` and
+`operator_exact` within one statement. It occurs only while the index's memtable is emptied under a
+workload that only reads. None of this repository's code sits between the statement and the value, so
+the stray lies in the extension's behaviour: a defect in `pg_textsearch` 1.3.1 as run here, reproduced
+by the sequence above, not worked around; reporting it upstream is the maintainer's. The memtable being
+emptied with no write and no autovacuum also moves 278 `scan` values to their segment score. Those are
+the `t0` / `t1` state difference of `### The score each index state ranks by`. What triggers it is not
+identified by this probe.
+
+### The candidate end-state rule, at refresh level
+
+**The rule**, as the task prompt that opened this work states it:
+
+- after a refresh that left a dead row, `REINDEX INDEX chunks_bm25`;
+- after any other refresh that changed something, `bm25_spill_index('chunks_bm25')`;
+- the first `docs index` build ends in the same state.
+
+The question is whether a refreshed index, after the rule, scores in the `scan` column the same as a
+freshly built index of the final corpus, whatever the database held before. The shipped refresh issues
+neither statement, so each scenario's `before` reading is the shipped code's end state, the before-fix
+figure, and its `after` reading is the state the rule would leave.
+
+**The setup.**
+
+- **The backends.** TypeScript: each refresh is `openPgliteStore` → `refreshIndex` → `close` on a PGlite
+  data directory of its own, as `docs index` refreshes. Python: each refresh is the package's own `index`
+  against a database of its own on the compose Postgres. The engines are those in `### How the probe
+  reads a score, and the setup`: PostgreSQL 18.3 (PGlite 0.5.8) and PostgreSQL 18.2 (Debian
+  18.2-1.pgdg12+1), `pg_textsearch` `1.3.1` on both, and `bm25_spill_index` available on both, so every
+  statement the rule decided was issued.
+- **The corpora.** `fixture-catalog` at `{ files: 9, chunks: 41 }`, 12 queries, and `self-docs` at `{
+  files: 71, chunks: 820 }`, 20 queries, in every run below. With `fixture-catalog` as A, `F` is
+  `docs/webhooks.md` and A without `F` is `{ files: 8, chunks: 36 }`. With `self-docs` as A, `F` is
+  `docs/work-report-research/user-review-fix-plan-writer.md` and A without `F` is `{ files: 70, chunks:
+  809 }`. B is the other corpus.
+- **The scenarios**, each on a new store: `fresh`, empty → A; `other-corpus`, B → A; `file-added`, A
+  without `F` → A; `file-edited`, A with a paragraph appended to `F` → A; `file-removed`, A → A without
+  `F`; `unchanged`, A → A. The prior refresh, where there is one, is the shipped refresh and is not
+  followed by the rule; the rule is applied after the last refresh only.
+- **The rule's inputs**, per scenario: `deleted` and `embedded` from the last refresh's own result;
+  `rebuilt` from it on TypeScript, where it was `false` in every refresh, and taken as `false` on Python,
+  whose `index` does not report it; and `updatedExisting`, the keys stored before and after the last
+  refresh with a different hash, read with `SELECT key, hash FROM chunks`.
+- **The readings.** Each reading is the score statement of `### How the probe reads a score, and the
+  setup`, run once per query with `LIMIT` the final corpus's chunk count, with its summary, its two plan
+  lines and its diagnostics. The probe's plan was the `chunks_bm25` index scan in every reading of every
+  run, so no reading was re-scored under `SET enable_seqscan = off`. On PGlite no route reads the store's
+  own instance, so every reading opens the data directory again after the store closed: each PGlite
+  `before` reading is read after a reopen. On Postgres each reading is a new session on the same database.
+- **The references.** Fresh builds of each final-corpus variant, taken in the same run by the same
+  backend's refresh into an empty store: `reference-insert` is that build as left, `reference-spill` the
+  same store after `SELECT bm25_spill_index('chunks_bm25')`, and `reference-reindex` the same store
+  after `REINDEX INDEX chunks_bm25`. The full variant's build is the `fresh` scenario's. **Every verdict
+  below is graded against `reference-reindex`**, because `### The score each index state ranks by`
+  closes with `REINDEX` and `CREATE INDEX` over loaded rows as the build forms that score alike in `scan`
+  on both engines and both corpora.
+- **The runs.** 2026-10-20: each backend with each corpus as A, once on TypeScript and twice on Python,
+  six runs. Each Python pair was compared value by value with the probe's `--compare`.
+
+**The statements the rule issues**, verbatim:
+
+```
+REINDEX INDEX chunks_bm25
+SELECT bm25_spill_index('chunks_bm25')
+```
+
+`none` issues no statement, and its `after` reading is a second reading of the same state.
+
+Columns: the last refresh's result; the rule's decision with `deleted`, `embedded` and `updatedExisting`;
+the statement issued; the hits whose value differs from `reference-reindex` of the final corpus variant in
+the `before` and `after` readings, as `scan` / `operator`; the largest raw `|after − reference|` in `scan`,
+with its query and key; and the store's `LIMIT 50` plan in the `before` and `after` readings. A hit is a
+row scoring non-zero in either column; the final corpus holds 219 hits on `fixture-catalog` and 198 on
+it without `F`, and 9471 and 9379 on `self-docs`.
+
+**TypeScript (PGlite), A `fixture-catalog`, B `self-docs`.**
+
+| Scenario | Last refresh | Decision | Statement | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 41, unchanged 0, deleted 0 | `spill` (0, 41, 0) | spill | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `other-corpus` | embedded 41, unchanged 0, deleted 820 | `reindex` (820, 41, 0) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 5, unchanged 36, deleted 0 | `spill` (0, 5, 0) | spill | 9 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 40, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `file-removed` | embedded 0, unchanged 36, deleted 5 | `reindex` (5, 0, 0) | `REINDEX` | 198 / 198 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `unchanged` | embedded 0, unchanged 41, deleted 0 | `none` (0, 0, 0) | none | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+
+**Python (Postgres), A `fixture-catalog`, B `self-docs`.** Both runs read the same in every cell, and
+their `--compare` listed no value out of 7674 compared.
+
+| Scenario | Last refresh | Decision | Statement | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 41, unchanged 0, deleted 0 | `spill` (0, 41, 0) | spill | 136 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `other-corpus` | embedded 41, unchanged 0, deleted 820 | `reindex` (820, 41, 0) | `REINDEX` | 219 / 219 | **1** / 0 | 9.5367431640625e-7 (`q-fc-token-lifetime`, `docs/api-auth.md#rotating-a-key`) | Index scan → Index scan |
+| `file-added` | embedded 5, unchanged 36, deleted 0 | `spill` (0, 5, 0) | spill | 136 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 40, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `file-removed` | embedded 0, unchanged 36, deleted 5 | `reindex` (5, 0, 0) | `REINDEX` | 198 / 198 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `unchanged` | embedded 0, unchanged 41, deleted 0 | `none` (0, 0, 0) | none | 136 / 0 | **136** / 0 | 0.1072683334350586 (`q-fc-barcode-contents`, `docs/labels.md#the-routing-barcode`) | Index scan → Index scan |
+
+**TypeScript (PGlite), A `self-docs` at `{ files: 71, chunks: 820 }`, B `fixture-catalog`.**
+
+| Scenario | Last refresh | Decision | Statement | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 820, unchanged 0, deleted 0 | `spill` (0, 820, 0) | spill | 1 / 0 | **1** / 0 | 4.76837158203125e-7 (`q-sd-guard-shell-options`, `.claude/context/cli.md#how-a-module-in-this-layer-is-written`) | Index scan → Index scan |
+| `other-corpus` | embedded 820, unchanged 0, deleted 41 | `reindex` (41, 820, 0) | `REINDEX` | 9471 / 9471 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 11, unchanged 809, deleted 0 | `spill` (0, 11, 0) | spill | 1 / 0 | **1** / 0 | 4.76837158203125e-7 (the same hit) | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 819, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 9470 / 9470 | 0 / 0 | — | Index scan → Index scan |
+| `file-removed` | embedded 0, unchanged 809, deleted 11 | `reindex` (11, 0, 0) | `REINDEX` | 9379 / 9378 | 0 / 0 | — | Index scan → Index scan |
+| `unchanged` | embedded 0, unchanged 820, deleted 0 | `none` (0, 0, 0) | none | 1 / 0 | **1** / 0 | 4.76837158203125e-7 (the same hit) | Index scan → Index scan |
+
+**Python (Postgres), A `self-docs` at `{ files: 71, chunks: 820 }`, B `fixture-catalog`.** Where the two
+runs disagree, the cell reads run 1 / run 2.
+
+| Scenario | Last refresh | Decision | Statement | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 820, unchanged 0, deleted 0 | `spill` (0, 820, 0) | spill | 1053 / 0; 2382 / 0 | **10** / 0; **7** / 0 | 0.0000019073486328125 (`q-sd-search-abstains`, `docs/retrieval-eval-results.md#one-agent-session-through-mcpjson`) / 9.5367431640625e-7 (`q-sd-run-gates`, `docs/typecheck-key-decision.md#5-option-b--an-explicit-none-sentinel`) | Index scan → Index scan |
+| `other-corpus` | embedded 820, unchanged 0, deleted 41 | `reindex` (41, 820, 0) | `REINDEX` | 9471 / 9471 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 11, unchanged 809, deleted 0 | `spill` (0, 11, 0) | spill | 2303 / 0; 158 / 0 | **3** / 0; **8** / 0 | 4.76837158203125e-7 (2 hits tied) / 9.5367431640625e-7 (2 hits tied) | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 819, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 9470 / 9470 | 0 / 0 | — | Index scan → Index scan |
+| `file-removed` | embedded 0, unchanged 809, deleted 11 | `reindex` (11, 0, 0) | `REINDEX` | 9379 / 9378 | 0 / 0 | — | Index scan → Index scan |
+| `unchanged` | embedded 0, unchanged 820, deleted 0 | `none` (0, 0, 0) | none | 568 / 0; 156 / 0 | **109** / 0; **156** / 0 | 0.2904853820800781 (`q-sd-run-gates`, `docs/work-report-research/task-plan-writer.md#draft-work-report-template`) / 0.08703994750976562 (`q-sd-retrieval-network`, `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template`) | Index scan → Index scan |
+
+The pair's `--compare` listed 10311 values out of 340036 compared, every one in `scan`: 1345 in
+`reference-insert` of the full variant, 1133 of A without `F`, 15 and 23 in `reference-spill`, and in the
+scenarios 1345 (`fresh.before`), 15 (`fresh.after`), 1119 (`other-corpus.before`), 2157
+(`file-added.before`), 9 (`file-added.after`), 1609 (`file-edited.before`), 920 (`file-removed.before`),
+418 (`unchanged.before`) and 203 (`unchanged.after`). It listed none in `reference-reindex` of either
+variant, and none in an `after` reading that followed `REINDEX`. The store's own build leaves a different
+split on each run: `fresh.before` reads 116 memtable documents beside 5 segments holding 704 in run 1, and
+276 beside 4 holding 544 in run 2, and the spill of it 6 segments in run 1 and 5 in run 2.
+
+**The verdicts**, against `reference-reindex`:
+
+- **TypeScript, `fixture-catalog`: the rule holds.** Every scenario's `after` reading differs from the
+  reference on 0 hits in `scan` and in `operator` (the first table).
+- **Python, `fixture-catalog`: the rule does not hold, in two scenarios** (the second table), and both
+  runs read them alike:
+  - `other-corpus`, after `REINDEX`: 1 hit, `q-fc-token-lifetime` → `docs/api-auth.md#rotating-a-key`,
+    raw `scan` −8.3079833984375 against the reference's −8.307984352111816. The `after` value equals that
+    row's own `operator_exact`, −8.3079833984375.
+  - `unchanged`, decision `none`: 136 hits, the same 136 as its `before` reading, the largest
+    0.1072683334350586; the first listed are `q-fc-route-choice` → `docs/routing.md#cut-off-times`
+    −3.756243 against −3.773669, `docs/routing.md#how-a-route-is-chosen` −3.574759 against −3.627705, and
+    `docs/routing.md#zone-graph` −3.503895 against −3.564632. The index read 41 memtable documents and no
+    segment before and after, the state the scenario's prior refresh left.
+- **TypeScript, `self-docs`: the rule does not hold, in three scenarios** (the third table): `fresh`,
+  `file-added` and `unchanged`, each on 1 hit, `q-sd-guard-shell-options` →
+  `.claude/context/cli.md#how-a-module-in-this-layer-is-written`, raw `scan` −7.344523906707764 against
+  −7.3445234298706055. Those three end in 4 or 5 segments, the reference in 1. Against `reference-spill`
+  and `reference-insert` the same three `after` readings differ on 0 hits. This backend was run once, so
+  no `--compare` names that hit as a one-run value.
+- **Python, `self-docs`: the rule does not hold, in three scenarios** (the fourth table), in both runs:
+  - `fresh`, after the spill: 10 and 7 hits. The pair's `--compare` names 9 of run 1's and 6 of run 2's
+    as values that differ between the runs. The one hit both runs read alike is the TypeScript run's,
+    `.claude/context/cli.md#how-a-module-in-this-layer-is-written` on `q-sd-guard-shell-options`, with
+    the same two raw values. The first listed in run 1 are `q-sd-run-gates` →
+    `docs/github-integration-research.md#t3-the-api-for-a-users-permission-on-a-repository-what-it-returns-for-an-organisation-member-an-outside-collaborator-and-a-bot-and-the-token-permission-it-needs`
+    −5.998955 against −5.998954, and `q-sd-state-dir` →
+    `docs/work-report-research/reviews/task-plan-writer.md#must-fix` −4.916140 against −4.916141.
+  - `file-added`, after the spill: 3 and 8 hits, of which `--compare` names 2 and 7; the one read alike
+    in both runs is the same `.claude/context/cli.md` hit.
+  - `unchanged`, decision `none`: 109 and 156 hits, of which `--compare` names 78 and 125; 31 are read
+    alike in both runs. The first listed in run 1 are on `q-sd-new-config-key`:
+    `docs/work-report-research/task-plan-writer.md#verdict` −4.728347 against −4.758601,
+    `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` −4.070960 against −4.088864,
+    and `docs/work-report-research/test-fix-plan-writer.md#risks-and-costs` −4.026294 against −4.075341.
+    In run 1 no statement was issued between the `before` reading, 568 hits, and the `after` reading,
+    109; both readings' summaries, read before their scoring, report 57 memtable documents beside 3
+    segments holding 763.
+
+  Every difference above is counted in its scenario's figure; none is set aside as a one-run value.
+
+In every backend and corpus, each `after` reading that followed `REINDEX` differs from the reference on 0
+hits in both columns, except Python `fixture-catalog` `other-corpus`'s 1 hit. Each `after` reading that
+followed the spill differs on 0 hits on `fixture-catalog` and on 1 to 10 on `self-docs`, the largest
+0.0000019073486328125. Each `none` differs from the reference wherever its `before` reading did, in each
+run.
+
+**The before-fix figures** are the `before` columns of the four tables. Every scenario whose last refresh
+left a dead row, `other-corpus`, `file-edited` and `file-removed`, differs from the reference on every hit,
+or on all but one, in each column, on both backends and both corpora. The largest `before` difference in
+`scan` is 16.938354969024658 on TypeScript and 16.924015522003174 on Python (`fixture-catalog` `other-corpus`,
+`q-fc-unreadable-label` → `docs/depot-operations.md#inbound-scanning`). The other scenarios differ in
+`scan` only: on TypeScript, 9 hits at `fixture-catalog` `file-added`, where the index read 5 memtable
+documents after the reopen, and the 1 `self-docs` hit above; on Python, 136 hits on `fixture-catalog` in
+`fresh`, `file-added` and `unchanged`, where the index read 41 memtable documents and no segment, and 156
+to 2382 on `self-docs`.
+
+**Observation 1 — the store's plan.** The store's `LIMIT 50` plan was the `chunks_bm25` index scan in
+every `before` reading on both backends and corpora. On `fixture-catalog`, on both backends, the
+`REINDEX` the rule issued turned it to `Seq Scan on public.chunks`, whose output column is the operator
+expression, in two scenarios: `file-edited` and `file-removed`. `reference-reindex` reads the same Seq
+Scan on both variants and both backends. The `REINDEX` of `other-corpus` left the index scan, as did
+every spill and every `none`. On `self-docs` every reading's store plan is the index scan. `docs/retrieval.md` →
+`## Still open`, the lexical-arm bullet, records a crossover of 63 rows for an index whose statistics
+describe its rows; `fixture-catalog` holds 41 chunks. The `scan` comparisons above read the probe's own
+statement, whose plan was the index scan in every reading.
+
+**Observation 2 — the near-tie on the Python store's own fresh build (goal 4).** The Python `fresh`
+scenario's `before` reading on `fixture-catalog` is the store's own build on an empty database: 41
+memtable documents and no segment. Diagnostic (f) lists 4 inversions against `operator`, the same in both
+runs, among them the two pairs of `### The near-tie ordering on an empty database`, each member as `scan`
+/ `operator` / `operator_exact` in returned order:
+
+| Query | Returned first | Returned second |
+|---|---|---|
+| `q-fc-token-lifetime` | `docs/api-auth.md#token-exchange` −8.281486 / −8.281486 / −8.281485974788666 | `docs/api-auth.md#rotating-a-key` −8.264622 / −8.307983 / −8.3079833984375 |
+| `q-fc-unreadable-label` | `docs/labels.md#when-a-label-is-rejected` −5.514854 / −5.514854 / −5.5148544907569885 | `docs/depot-operations.md#inbound-scanning` −5.514000 / −5.534851 / −5.534850656986237 |
+
+The other two are `docs/labels.md` then `docs/tracking.md#event-ordering-and-duplicates` on
+`q-fc-verify-callback` and on `q-fc-token-lifetime`. Its `after` reading, after the spill, lists no
+inversion against `operator`, so both pairs are gone. The `before` reading matches the Postgres `t0` rows of
+that subsection: 41 memtable documents, and both pairs with the same values. The TypeScript `fresh` `before` reading on `fixture-catalog`, read after a reopen,
+holds no memtable document and 1 segment, and lists no inversion.
+
+**The limit of these figures.** They were taken on two corpora of 41 and 820 chunks, through one
+`pg_textsearch` version on each engine.
+
+The commands that re-run every figure here are in `docs/retrieval-eval.md` → `### The BM25 index-state
+probe`, its closing paragraph.
+
+### Whether either mechanism moves relevance
+
+The question is whether the two mechanisms move the relevance eval's deterministic figures, so that they
+matter for ranking quality, or move scores only. Mechanism 2 is the index scan's exact length on memtable
+rows against the quantized length elsewhere (`timescale/pg_textsearch#573`). Mechanism 1 is the dead
+rows a refresh leaves in `total_docs` and `total_len`.
+
+**The setup.**
+
+- **The runs.** 2026-10-20, through the existing launcher `harness-runs/scratch/eval.mjs` as `docs/retrieval-eval.md`
+  → `## How to run it` gives it, on the TypeScript backend, after `npm run build`. Each corpus's three
+  states were run once each, all six before this subsection was written, so no edit of this document lies
+  between them.
+- **The host and models**, as every block's provenance reads: host `darwin 24.6.0`, Node `v22.23.2`,
+  embedder `Xenova/bge-small-en-v1.5:q8:cls:384:v1`, reranker `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1`,
+  abstention threshold `0.32`.
+- **The corpora.** `fixture-catalog` at `{ files: 9, chunks: 41 }`, 12 queries (9 positive, 3 negative),
+  and `self-docs` at `{ files: 71, chunks: 821 }`, 20 queries. Each corpus's three blocks carry that one
+  stamp.
+- **`k`** is the default, 5, and every run used `--repeat 1`. Arm A awaits a hand run in every block
+  and is not compared.
+- **The output.** Every block was written with `--out` into a scratch file of its own under
+  `harness-runs/scratch/bm25-relevance/`, holding only the two generated-region markers. So the generated
+  region of this document and `evals/docs-retrieval/floor.json` are untouched, and no results file under
+  `docs/` was written. The latency columns were not read.
+
+**The three states.** Each command runs from the repository root. `X` is the corpus measured and `Y` is
+the other one.
+
+- **held-another** is a data directory that held `Y` first. The second run's refresh deletes `Y`'s keys
+  and inserts `X`'s in one store opened over `Y`'s, so the index carries `Y`'s rows as dead rows. Both
+  its rows and the fresh-insert's are newly inserted. The launcher reads no memtable count, so whether
+  `X`'s rows sat in the memtable in both states, and so whether this pair isolates the dead rows from
+  mechanism 2, was not measured.
+
+  ```
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --data-dir harness-runs/scratch/bm25-relevance/held-fixture-catalog --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --data-dir harness-runs/scratch/bm25-relevance/held-fixture-catalog --out harness-runs/scratch/bm25-relevance/fixture-catalog-held-another.md --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --data-dir harness-runs/scratch/bm25-relevance/held-self-docs --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --data-dir harness-runs/scratch/bm25-relevance/held-self-docs --out harness-runs/scratch/bm25-relevance/self-docs-held-another.md --repeat 1
+  ```
+
+- **fresh-insert** is a refresh into an absent data directory, the index as the inserts left it.
+
+  ```
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --data-dir harness-runs/scratch/bm25-relevance/fresh-fixture-catalog --out harness-runs/scratch/bm25-relevance/fixture-catalog-fresh-insert.md --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --data-dir harness-runs/scratch/bm25-relevance/fresh-self-docs --out harness-runs/scratch/bm25-relevance/self-docs-fresh-insert.md --repeat 1
+  ```
+
+- **after-spill** is the same command again against the same directory. The launcher has no spill flag,
+  so this state is the reopened index: the corpus is unchanged, so its refresh writes nothing
+  (`cli/src/retrieval/refresh.ts` → `refreshIndex`, step (5)). The launcher does not print the refresh's
+  counts with `--out`, so "nothing written" rests on that step and on the unchanged stamp, not on a
+  printed reading.
+
+  ```
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --data-dir harness-runs/scratch/bm25-relevance/fresh-fixture-catalog --out harness-runs/scratch/bm25-relevance/fixture-catalog-after-spill.md --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --data-dir harness-runs/scratch/bm25-relevance/fresh-self-docs --out harness-runs/scratch/bm25-relevance/self-docs-after-spill.md --repeat 1
+  ```
+
+  **Why a reopen stands for the spill.** `### The score each index state ranks by` exposes
+  `bm25_spill_index` on PGlite, but the launcher cannot call it. Its `t2` row, the PGlite reopen, reads 0
+  memtable documents and differs from `t1` on 0 hits in `scan` and in `operator`, on both corpora. That
+  row was taken after `t1`'s spill had already emptied the memtable. It therefore shows that a reopen
+  leaves the spilled scores in place, but not that a reopen empties a non-empty memtable. `### The
+  candidate end-state rule, at refresh level` records one reopen that left a memtable non-empty: the
+  TypeScript `fixture-catalog` `file-added` scenario read 5 memtable documents after its reopen. The launcher reads no
+  memtable count, so this run cannot say whether the after-spill index held one.
+
+**`fixture-catalog` at `{ files: 9, chunks: 41 }`.** "Abstained" is the number of the 3 negative queries
+each arm abstained on.
+
+| Arm | State | recall@1 | recall@3 | recall@5 | MRR | Abstained |
+|---|---|---|---|---|---|---|
+| B `lexical` | held-another | 0.444 | 1.000 | 1.000 | 0.704 | 0 |
+| B `lexical` | fresh-insert | 0.444 | 0.889 | 1.000 | 0.657 | 0 |
+| B `lexical` | after-spill | 0.333 | 0.889 | 1.000 | 0.602 | 0 |
+| C `vector` | held-another | 0.778 | 1.000 | 1.000 | 0.889 | 0 |
+| C `vector` | fresh-insert | 0.778 | 1.000 | 1.000 | 0.889 | 0 |
+| C `vector` | after-spill | 0.778 | 1.000 | 1.000 | 0.889 | 0 |
+| D `fused` | held-another | 0.556 | 1.000 | 1.000 | 0.778 | 0 |
+| D `fused` | fresh-insert | 0.556 | 1.000 | 1.000 | 0.759 | 0 |
+| D `fused` | after-spill | 0.444 | 1.000 | 1.000 | 0.704 | 0 |
+| E `fused-rerank` | held-another | 0.444 | 0.667 | 0.667 | 0.556 | 3 |
+| E `fused-rerank` | fresh-insert | 0.444 | 0.667 | 0.667 | 0.556 | 3 |
+| E `fused-rerank` | after-spill | 0.444 | 0.667 | 0.667 | 0.556 | 3 |
+
+**`self-docs` at `{ files: 71, chunks: 821 }`.** "Abstained" is out of 5 negative queries.
+
+| Arm | State | recall@1 | recall@3 | recall@5 | MRR | Abstained |
+|---|---|---|---|---|---|---|
+| B `lexical` | held-another | 0.400 | 0.533 | 0.667 | 0.497 | 0 |
+| B `lexical` | fresh-insert | 0.400 | 0.533 | 0.667 | 0.497 | 0 |
+| B `lexical` | after-spill | 0.400 | 0.533 | 0.667 | 0.497 | 0 |
+| C `vector` | held-another | 0.533 | 0.533 | 0.533 | 0.533 | 0 |
+| C `vector` | fresh-insert | 0.533 | 0.533 | 0.533 | 0.533 | 0 |
+| C `vector` | after-spill | 0.533 | 0.533 | 0.533 | 0.533 | 0 |
+| D `fused` | held-another | 0.533 | 0.533 | 0.733 | 0.583 | 0 |
+| D `fused` | fresh-insert | 0.533 | 0.533 | 0.733 | 0.583 | 0 |
+| D `fused` | after-spill | 0.533 | 0.533 | 0.733 | 0.583 | 0 |
+| E `fused-rerank` | held-another | 0.400 | 0.600 | 0.667 | 0.517 | 4 |
+| E `fused-rerank` | fresh-insert | 0.400 | 0.600 | 0.667 | 0.517 | 4 |
+| E `fused-rerank` | after-spill | 0.400 | 0.600 | 0.667 | 0.517 | 4 |
+
+**The comparisons.** Each pair was compared over arms B to E on every column above, on the strict
+columns (strict recall@1, @3 and @5, strict MRR), and per query on the ordered refs, the first relevant
+rank, the first strictly relevant rank and abstention. That covers 12 queries per arm on `fixture-catalog`
+and 20 on `self-docs`. Values below are unrounded where three decimals hide a difference, and ranks read
+`0` where no relevant ref is in the top 5.
+
+**fresh-insert against after-spill, mechanism 2 alone.**
+
+- **`fixture-catalog` changes, in arms B and D.**
+  - Arm B: recall@1 0.4444 → 0.3333, MRR 0.6574 → 0.6019, strict recall@1 0.4444 → 0.3333, strict
+    recall@3 0.7778 → 0.6667, strict MRR 0.6056 → 0.5407.
+  - Arm D: recall@1 0.5556 → 0.4444, MRR 0.7593 → 0.7037, strict recall@1 0.4444 → 0.3333, strict MRR
+    0.6852 → 0.6296.
+  - Arms C and E: no change.
+
+  | Query | Arm | Rank, fresh → after | Strict rank | What changed |
+  |---|---|---|---|---|
+  | `q-fc-token-lifetime` | B | 1 → 2 | 1 → 2 | positions 1 and 2 swap: `docs/api-auth.md#token-exchange`, `docs/api-auth.md#rotating-a-key` becomes `#rotating-a-key`, `#token-exchange` |
+  | `q-fc-token-lifetime` | D | 1 → 2 | 1 → 2 | the same swap |
+  | `q-fc-unreadable-label` | B | 3 → 3 | 3 → 4 | positions 3 and 4 swap: `docs/labels.md#when-a-label-is-rejected`, `docs/depot-operations.md#inbound-scanning` becomes the reverse |
+  | `q-fc-negative-recruitment` (negative) | D | — | — | positions 3 and 4 swap: `docs/webhooks.md#delivery-and-retries`, `docs/tracking.md#estimated-delivery-window` becomes the reverse; abstained in neither |
+
+  The two positive queries are the two near-tie pairs of `### The near-tie ordering on an empty
+  database`. In fresh-insert each pair is returned in the order that subsection records for `t0`, and in
+  after-spill in the order it records for the spilled states.
+- **`self-docs`: no change.** Every column above, every strict column, and every query's ordered refs,
+  ranks and abstention are equal in all four arms.
+
+**held-another against fresh-insert, which adds mechanism 1's dead rows.**
+
+- **`fixture-catalog` changes, in arms B, C and D.**
+  - Arm B: recall@3 1.0000 → 0.8889, MRR 0.7037 → 0.6574, strict recall@1 0.3333 → 0.4444, strict
+    recall@3 0.8889 → 0.7778, strict MRR 0.5648 → 0.6056.
+  - Arm D: MRR 0.7778 → 0.7593, strict recall@1 0.3333 → 0.4444, strict MRR 0.6481 → 0.6852.
+  - Arm C: no column changes. Arm E: no change in any column or query; the arm made 11 rerank calls
+    held-another and 12 fresh-insert, because arm D's list for `q-fc-negative-lattice` was empty
+    held-another. `q-fc-negative-lattice` abstains in both states.
+
+  "Order only" means the same five refs in a different order. Otherwise the cell names the refs only one
+  state returned.
+
+  | Query | Arm | Rank, held → fresh | Strict rank | What changed |
+  |---|---|---|---|---|
+  | `q-fc-route-choice` | B | 2 → 4 | 3 → 5 | held-another only `docs/routing.md#zone-graph`; fresh-insert only `docs/depot-operations.md` |
+  | `q-fc-late-handin` | B | 1 → 1 | 1 → 1 | held-another only `docs/depot-operations.md#handover-to-a-courier`; fresh-insert only `docs/exceptions.md#redelivery-attempts` |
+  | `q-fc-barcode-contents` | B | 1 → 1 | 1 → 1 | held-another only `docs/INDEX.md`; fresh-insert only `docs/labels.md` |
+  | `q-fc-unreadable-label` | B | 2 → 3 | 4 → 3 | order only |
+  | `q-fc-billable-weight` | B | 2 → 2 | 3 → 3 | held-another only `docs/INDEX.md`, `docs/rates.md#remote-area-surcharge`; fresh-insert only `docs/routing.md#zone-graph`, `docs/routing.md#how-a-route-is-chosen` |
+  | `q-fc-surcharge-compounding` | B | 1 → 2 | 3 → 4 | held-another only `docs/rates.md#rate-cards`; fresh-insert only `docs/labels.md#label-anatomy` |
+  | `q-fc-webhook-retry` | B | 1 → 1 | 1 → 1 | held-another only `docs/webhooks.md#subscribing-to-events`, `docs/webhooks.md#replaying-missed-events`; fresh-insert only `docs/tracking.md`, `docs/labels.md` |
+  | `q-fc-verify-callback` | B | 3 → 3 | 3 → 3 | held-another only `docs/INDEX.md`; fresh-insert only `docs/exceptions.md#exception-codes` |
+  | `q-fc-token-lifetime` | B | 2 → 1 | 2 → 1 | order only |
+  | `q-fc-negative-recruitment` (negative) | B | — | — | held-another only `docs/webhooks.md#signature-verification`, `docs/webhooks.md#delivery-and-retries`, `docs/exceptions.md#exception-codes`; fresh-insert only `docs/rates.md#fuel-surcharge`, `docs/rates.md#remote-area-surcharge`, `docs/labels.md#printing-and-label-stock` |
+  | `q-fc-negative-datastore` (negative) | B | — | — | held-another only `docs/labels.md#when-a-label-is-rejected`, `docs/rates.md#volumetric-weight`; fresh-insert only `docs/api-auth.md#api-keys`, `docs/depot-operations.md#inbound-scanning` |
+  | `q-fc-verify-callback` | C | 2 → 2 | 2 → 2 | held-another returns 3 refs, fresh-insert 5; fresh-insert only `docs/webhooks.md#delivery-and-retries`, `docs/tracking.md#event-ordering-and-duplicates` |
+  | `q-fc-negative-lattice` (negative) | C | — | — | held-another returns 0 refs, fresh-insert 5 |
+  | `q-fc-route-choice` | D | 2 → 3 | 2 → 3 | held-another only `docs/routing.md#zone-graph`; fresh-insert only `docs/labels.md` |
+  | `q-fc-late-handin` | D | 1 → 1 | 1 → 1 | held-another only `docs/depot-operations.md#inbound-scanning`; fresh-insert only `docs/exceptions.md#redelivery-attempts` |
+  | `q-fc-barcode-contents` | D | 1 → 1 | 1 → 1 | order only |
+  | `q-fc-unreadable-label` | D | 1 → 2 | 2 → 2 | order only |
+  | `q-fc-billable-weight` | D | 2 → 2 | 2 → 2 | held-another only `docs/rates.md#fuel-surcharge`; fresh-insert only `docs/routing.md#how-a-route-is-chosen` |
+  | `q-fc-verify-callback` | D | 2 → 2 | 2 → 2 | held-another only `docs/routing.md#zone-graph`; fresh-insert only `docs/tracking.md#event-ordering-and-duplicates` |
+  | `q-fc-token-lifetime` | D | 2 → 1 | 2 → 1 | held-another only `docs/webhooks.md#signature-verification`; fresh-insert only `docs/webhooks.md#replaying-missed-events` |
+  | `q-fc-negative-recruitment` (negative) | D | — | — | order only |
+  | `q-fc-negative-lattice` (negative) | D | — | — | held-another returns 0 refs, fresh-insert 5 |
+  | `q-fc-negative-datastore` (negative) | D | — | — | held-another only `docs/tracking.md#event-ordering-and-duplicates`; fresh-insert only `docs/exceptions.md#returns-to-sender` |
+
+  Arm B's only unchanged query is `q-fc-negative-lattice`. Arm C's two changes are not a BM25
+  mechanism: the vector arm ranks by `embedding <=> $1::vector` over the `chunks_hnsw` index
+  (`cli/src/retrieval/store.ts`), not by `chunks_bm25`. Its short lists are recorded and unexplained;
+  this branch measured no cause for them.
+- **`self-docs`: no column changes**, in any arm, strict columns included, and no query's first relevant
+  rank, first strictly relevant rank or abstention changes. Ordered refs change below the first relevant
+  rank in 8 query-arm pairs:
+
+  | Query | Arm | Rank, held → fresh | Strict rank | What changed |
+  |---|---|---|---|---|
+  | `q-sd-stack-detection` | B | 0 → 0 | 0 → 0 | order only |
+  | `q-sd-second-init` | B | 1 → 1 | 0 → 0 | order only |
+  | `q-sd-negative-ingress` (negative) | B | — | — | order only |
+  | `q-sd-negative-migration` (negative) | B | — | — | held-another only `docs/retrieval-eval-results.md#divergence-sources-in-the-order-checked`; fresh-insert only `docs/retrieval-eval-results.md#one-agent-session-through-mcpjson` |
+  | `q-sd-new-config-key` | D | 1 → 1 | 0 → 0 | order only |
+  | `q-sd-stack-detection` | D | 1 → 1 | 2 → 2 | held-another only `docs/config.md#1-the-three-resolution-classes`; fresh-insert only `docs/watcher.md#2-the-scripts` |
+  | `q-sd-negative-blog` (negative) | D | — | — | order only |
+  | `q-sd-stack-detection` | E | 1 → 1 | 2 → 2 | held-another only `docs/cli.md#3-the-re-run-contract`; fresh-insert only `.claude/context/cli.md#how-a-module-in-this-layer-is-written` |
+
+**The answer.**
+
+- **`fixture-catalog`: ranking quality, through both comparisons.**
+  - Mechanism 2's comparison moves arm B's and arm D's recall@1 by one query each (0.444 → 0.333 and
+    0.556 → 0.444), and their MRR by 0.056. That is the `q-fc-token-lifetime` near-tie pair, whose
+    relevant `#token-exchange` ranks first in fresh-insert and second after the reopen.
+  - The dead-row comparison moves arm B's recall@3 (1.000 held-another, 0.889 fresh-insert) and MRR
+    (0.704, 0.657), and arm D's MRR (0.778, 0.759). It also changes arm B's lists on 11 of 12 queries
+    and arm D's on 10. The held-another figure is the higher one in every moved column except strict
+    recall@1 and strict MRR, which are lower held-another in both arms.
+- **`self-docs`: score parity only, through both comparisons.** No recorded figure moves in any arm.
+  Mechanism 2's comparison changes nothing at all. The dead-row comparison, where 41 rows are dead
+  against 821 live, reorders or swaps refs only below each query's first relevant rank.
+
+The limit of these figures: one run per state, on two corpora of 41 and 821 chunks, on the TypeScript
+backend only.
+
+### The deciding figures on pg_textsearch 1.5.1
+
+**Who reads this, and what it decides.** The maintainer deciding whether the route recommended under
+`### The recommendation for the fix branch` still holds once both engines run `pg_textsearch` 1.5.1.
+This subsection re-takes the deciding figures of this section on 1.5.1; the 1.3.1 subsections above stay
+as they were taken. Every statement, step and column here is the one `### How the probe reads a score,
+and the setup` defines, and is not restated. **The comparison rule.** A `fixture-catalog` figure is
+compared with its 1.3.1 counterpart value for value. A `self-docs` figure is compared value for value
+only when both carry the same `{ files, chunks }` stamp; otherwise only its structural outcome is
+compared (which states score alike, whether a verdict holds), and both stamps are named.
+
+#### How these were taken, on 1.5.1
+
+- **The engines.** PGlite: `PostgreSQL 18.6 (PGlite 0.5.10) on wasm32-unknown-emscripten, compiled by
+  emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 6.0.5
+  (1db513782be24469589d7cb8a1f1834e9a33f271), 32-bit`. The compose Postgres: `PostgreSQL 18.6 (Debian
+  18.6-1.pgdg12+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0,
+  64-bit`. On both, `SHOW pg_textsearch.library_version` reads `1.5.1`, and on a new database
+  `pg_extension.extversion` reads `pg_textsearch` `1.5.1` and `vector` `0.8.7`. The compose server
+  moved from 18.2 with the image's base, which `docs-retrieval-service/postgres/Dockerfile` record 2
+  explains. Every probe run's summary read `pg_textsearch: 1.5.1`.
+- **The corpora.** `fixture-catalog` at `{ files: 9, chunks: 41 }`, 12 queries, and `self-docs` at
+  `{ files: 71, chunks: 825 }`, 20 queries, taken from commit `52d8749c`. Every `self-docs` run below
+  carries that one stamp; the 1.3.1 runs carry `{ files: 71, chunks: 813 }`, so no `self-docs` count
+  here is compared with a 1.3.1 count.
+- **The runs.** 2026-10-21, two runs of the states sequence per engine and corpus, eight in all, each
+  pair compared value by value: 2190 values (PGlite) and 1752 (Postgres) on `fixture-catalog`, 95590
+  and 76472 on `self-docs`. Only the Postgres `self-docs` pair listed any; those are under **One-run
+  values** below.
+- **The plans.** The probe plan was the `chunks_bm25` index scan at every step of every run, so no step
+  was re-scored and every figure below is the default-plan reading.
+
+The commands are in `docs/retrieval-eval.md` → `### The BM25 index-state probe`.
+
+#### The score each index state ranks by, on 1.5.1
+
+`bm25_spill_index` was available on both engines, so `t1` was run on both; `t2` is PGlite-only. The
+columns are those of `### The score each index state ranks by`.
+
+**PGlite, `fixture-catalog`.**
+
+| Step | total_docs | total_len | Memtable docs | Probe plan | Store plan | Hits | `scan` ≠ `operator` | `real` storage | Beyond `real` | Largest difference | ≤ 39 / > 39 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `t0` | 41 | 2393 | 41 | Index scan | Index scan | 219 | 144 | 1 | 143 | 0.1072685718536377 (`q-fc-barcode-contents`, `docs/labels.md#the-routing-barcode`) | 6 / 137 |
+| `t1` | 41 | 2393 | 0 | Index scan | Index scan | 219 | 17 | 3 | 14 | 6.556510925292969e-7 (`q-fc-route-choice`, `docs/routing.md`) | 5 / 9 |
+| `t2` | 41 | 2393 | 0 | Index scan | Index scan | 219 | 17 | 3 | 14 | 6.556510925292969e-7 (`q-fc-route-choice`, `docs/routing.md`) | 5 / 9 |
+| `t3` | 41 | 2393 | 0 | Index scan | Seq Scan | 219 | 17 | 3 | 14 | 6.556510925292969e-7 (`q-fc-route-choice`, `docs/routing.md`) | 5 / 9 |
+| `t4` | 41 | 2393 | 0 | Index scan | Seq Scan | 219 | 17 | 3 | 14 | 6.556510925292969e-7 (`q-fc-route-choice`, `docs/routing.md`) | 5 / 9 |
+
+Against `### The score each index state ranks by` → **PGlite, `fixture-catalog`.**:
+
+- `t0`: unchanged, every cell equal to that table's `t0` row.
+- `t1`: unchanged, every cell equal to its `t1` row.
+- `t2`: unchanged, every cell equal to its `t2` row.
+- `t3`: unchanged, every cell equal to its `t3` row, the store's Seq Scan included.
+- `t4`: unchanged, every cell equal to its `t4` row, the store's Seq Scan included.
+
+**Postgres, `fixture-catalog`.**
+
+| Step | total_docs | total_len | Memtable docs | Probe plan | Store plan | Hits | `scan` ≠ `operator` | `real` storage | Beyond `real` | Largest difference | ≤ 39 / > 39 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `t0` | 41 | 2393 | 41 | Index scan | Index scan | 219 | 144 | 1 | 143 | 0.10726761817932129 (`q-fc-barcode-contents`, `docs/labels.md#the-routing-barcode`) | 5 / 138 |
+| `t1` | 41 | 2393 | 0 | Index scan | Index scan | 219 | 15 | 3 | 12 | 9.5367431640625e-7 (`q-fc-token-lifetime`, `docs/api-auth.md#rotating-a-key`) | 4 / 8 |
+| `t3` | 41 | 2393 | 0 | Index scan | Seq Scan | 219 | 15 | 3 | 12 | 9.5367431640625e-7 (`q-fc-token-lifetime`, `docs/api-auth.md#rotating-a-key`) | 4 / 8 |
+| `t4` | 41 | 2393 | 0 | Index scan | Seq Scan | 219 | 15 | 3 | 12 | 9.5367431640625e-7 (`q-fc-token-lifetime`, `docs/api-auth.md#rotating-a-key`) | 4 / 8 |
+
+Against `### The score each index state ranks by` → **Postgres, `fixture-catalog`.**:
+
+- `t0`: unchanged, every cell equal to that table's `t0` row.
+- `t1`: unchanged, every cell equal to its `t1` row.
+- `t3`: unchanged, every cell equal to its `t3` row, the store's Seq Scan included.
+- `t4`: unchanged, every cell equal to its `t4` row, the store's Seq Scan included.
+- The length split: unchanged, printed on both engines with summed lengths equal to `total_len` (2393 /
+  2393).
+
+**PGlite, `self-docs` at `{ files: 71, chunks: 825 }`.**
+
+| Step | total_docs | total_len | Memtable docs | Probe plan | Store plan | Hits | `scan` ≠ `operator` | `real` storage | Beyond `real` | Largest difference | ≤ 39 / > 39 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `t0` | 825 | 364289 | 57 | Index scan | Index scan | 9559 | 1467 | 245 | 1222 | 0.29028117656707764 (`q-sd-run-gates`, `docs/work-report-research/task-plan-writer.md#draft-work-report-template`) | withheld |
+| `t1` | 825 | 364289 | 0 | Index scan | Index scan | 9559 | 932 | 255 | 677 | 0.0000014901161193847656 (`q-sd-usage-limit`, `docs/team-accounts-research.md#p5-what-happens-to-one-persons-subscription-limits-when-teammates-use-it`) | withheld |
+| `t2` | 825 | 364289 | 0 | Index scan | Index scan | 9559 | 932 | 255 | 677 | 0.0000014901161193847656 (`q-sd-usage-limit`, `docs/team-accounts-research.md#p5-what-happens-to-one-persons-subscription-limits-when-teammates-use-it`) | withheld |
+| `t3` | 825 | 364289 | 0 | Index scan | Index scan | 9559 | 931 | 254 | 677 | 0.0000014901161193847656 (`q-sd-usage-limit`, `docs/team-accounts-research.md#p5-what-happens-to-one-persons-subscription-limits-when-teammates-use-it`) | withheld |
+| `t4` | 825 | 364289 | 0 | Index scan | Index scan | 9559 | 931 | 254 | 677 | 0.0000014901161193847656 (`q-sd-usage-limit`, `docs/team-accounts-research.md#p5-what-happens-to-one-persons-subscription-limits-when-teammates-use-it`) | withheld |
+
+Against `### The score each index state ranks by` → **PGlite, `self-docs` at `{ files: 71, chunks: 813
+}`.**, at `{ files: 71, chunks: 825 }` here, so structurally:
+
+- `t0`: unchanged in outcome. The fresh-insert index still holds memtable documents beside segments, and
+  `scan` still differs from `operator` beyond `real` storage on hundreds of hits, by a largest
+  difference several orders above every spilled state's.
+- `t1`: unchanged in outcome. No memtable documents, and the largest difference stays below 0.000002.
+- `t2`: unchanged, identical to `t1` in every column, as at 1.3.1.
+- `t3`: unchanged in outcome. One segment, and the largest difference below 0.000002.
+- `t4`: unchanged, identical to `t3` in every column, as at 1.3.1.
+
+**Postgres, `self-docs` at `{ files: 71, chunks: 825 }`.** Where the two runs disagree, the cell reads
+run 1 / run 2, and both are one-run values.
+
+| Step | total_docs | total_len | Memtable docs | Probe plan | Store plan | Hits | `scan` ≠ `operator` | `real` storage | Beyond `real` | Largest difference | ≤ 39 / > 39 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `t0` | 825 | 364289 | 57 | Index scan | Index scan | 9559 | 1431 / 1386 | 248 | 1183 / 1138 | 0.29028117656707764 (`q-sd-run-gates`, `docs/work-report-research/task-plan-writer.md#draft-work-report-template`) | withheld |
+| `t1` | 825 | 364289 | 0 | Index scan | Index scan | 9559 | 895 | 255 | 640 | 0.0000014901161193847656 (`q-sd-usage-limit`, `docs/team-accounts-research.md#p5-what-happens-to-one-persons-subscription-limits-when-teammates-use-it`) | withheld |
+| `t3` | 825 | 364289 | 0 | Index scan | Index scan | 9559 | 893 | 255 | 638 | 0.0000014901161193847656 (`q-sd-usage-limit`, `docs/team-accounts-research.md#p5-what-happens-to-one-persons-subscription-limits-when-teammates-use-it`) | withheld |
+| `t4` | 825 | 364289 | 0 | Index scan | Index scan | 9559 | 893 | 255 | 638 | 0.0000014901161193847656 (`q-sd-usage-limit`, `docs/team-accounts-research.md#p5-what-happens-to-one-persons-subscription-limits-when-teammates-use-it`) | withheld |
+
+Against `### The score each index state ranks by` → **Postgres, `self-docs` at `{ files: 71, chunks:
+813 }`.**, at `{ files: 71, chunks: 825 }` here, so structurally:
+
+- `t0`: unchanged in outcome, including that the two runs disagree at `t0` and only there.
+- `t1`: unchanged in outcome. No memtable documents, and the largest difference below 0.000002.
+- `t3`: unchanged in outcome. One segment, and the largest difference below 0.000002.
+- `t4`: unchanged, identical to `t3` in every column, as at 1.3.1.
+- The length split: unchanged in outcome, withheld on both engines, the summed lengths 359829 against a
+  `total_len` of 364289.
+
+The `self-docs` index's layout, from `bm25_summarize_index`, on both engines: 2 segments holding 768
+documents plus the 57 memtable documents at `t0`, 3 segments holding 825 at `t1` and `t2`, and 1
+segment holding 825 at `t3` and `t4`. At 1.3.1 and `{ files: 71, chunks: 813 }` it was 3 segments
+plus 7 memtable documents, 4, and 1. On `fixture-catalog` every state after `t0` is 1 segment holding
+41, unchanged.
+
+**State against state, on 1.5.1.** Hits whose score differs between two states, in `scan` and in
+`operator`.
+
+| States | `fixture-catalog`, PGlite | `fixture-catalog`, Postgres | `self-docs`, PGlite | `self-docs`, Postgres |
+|---|---|---|---|---|
+| `t0` / `t1` | 137 / 0 | 136 / 0 | 565 / 0 | 567 / 0 (run 2: 519 / 0) |
+| `t0` / `t2` | 137 / 0 | — | 565 / 0 | — |
+| `t0` / `t3` | 137 / 0 | 136 / 0 | 566 / 0 | 567 / 0 (run 2: 519 / 0) |
+| `t0` / `t4` | 137 / 0 | 136 / 0 | 566 / 0 | 567 / 0 (run 2: 519 / 0) |
+| `t1` / `t2` | 0 / 0 | — | 0 / 0 | — |
+| `t1` / `t3` | 0 / 0 | 0 / 0 | 1 / 0 | 4 / 0 |
+| `t1` / `t4` | 0 / 0 | 0 / 0 | 1 / 0 | 4 / 0 |
+| `t2` / `t3` | 0 / 0 | — | 1 / 0 | — |
+| `t2` / `t4` | 0 / 0 | — | 1 / 0 | — |
+| `t3` / `t4` | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
+
+Against `### The score each index state ranks by` → **State against state.**:
+
+- Both `fixture-catalog` columns: unchanged, every row equal value for value.
+- `self-docs`, PGlite, at `{ files: 71, chunks: 825 }` against `{ files: 71, chunks: 813 }`: unchanged
+  in outcome. Fresh insert differs from every later state in `scan` and in no `operator`, `t1` / `t2`
+  and `t3` / `t4` differ on no hit, and `t1` still differs from `t3` and `t4`.
+- `self-docs`, Postgres, at the same two stamps: unchanged in outcome, the same four statements holding,
+  and run 2's `t0` rows again lower than run 1's. At 1.3.1 run 2 also differed in one `operator` value
+  (13 / 1, 24 / 1); here no `operator` value differs between states in either run.
+
+**One-run values, handed to `#### The stray index-scan score, on 1.5.1`.** Every figure above is
+reproduced by the second run of its pair except the Postgres `self-docs` `t0` cells marked run 1 / run
+2. The comparison of that pair listed 48 values, all at step `t0`, all `scan`, all on
+`docs/work-report-research/` chunks, and all on the four negative queries `q-sd-negative-tungsten`
+(17), `q-sd-negative-grpc` (26), `q-sd-negative-blog` (4) and `q-sd-negative-migration` (1). Each
+differs from its `operator` in run 1. In run 2, 45 of them equal their `operator` at six decimals, and
+the other three differ from it by one in the sixth decimal. No `operator` value disagrees between the
+runs.
+
+| Query | Key | Column | Run 1 | Run 2 |
+|---|---|---|---|---|
+| `q-sd-negative-tungsten` | `docs/work-report-research/test-fix-plan-writer.md#open-questions` | `scan` | -2.463214 | -2.480974 |
+| `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-reviewer.md#risks-and-costs` | `scan` | -2.350607 | -2.355558 |
+| `q-sd-negative-tungsten` | `docs/work-report-research/test-fix-plan-writer.md#prose-classification` | `scan` | -2.343890 | -2.369026 |
+| `q-sd-negative-tungsten` | `docs/work-report-research/task-plan-writer.md#draft-work-report-template` | `scan` | -2.103359 | -2.150375 |
+| `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-writer.md#open-questions` | `scan` | -2.045954 | -2.054411 |
+| `q-sd-negative-tungsten` | `docs/work-report-research/task-plan-writer.md#risks-and-costs` | `scan` | -2.036437 | -2.070367 |
+| `q-sd-negative-tungsten` | `docs/work-report-research/task-plan-reviewer.md#review-response` | `scan` | -1.983363 | -1.988653 |
+| `q-sd-negative-tungsten` | `docs/work-report-research/test-fix-plan-writer.md#thinning-plan` | `scan` | -1.975725 | -1.982292 |
+| `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-writer.md#verdict` | `scan` | -1.857366 | -1.887938 |
+| `q-sd-negative-tungsten` | `docs/work-report-research/task-plan-writer.md#prose-classification` | `scan` | -1.786371 | -1.791737 |
+| `q-sd-negative-tungsten` | `docs/work-report-research/test-fix-plan-writer.md#draft-work-report-template` | `scan` | -1.771514 | -1.791737 |
+| `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-reviewer.md#read-tree` | `scan` | -1.690968 | -1.714297 |
+| `q-sd-negative-tungsten` | `docs/work-report-research/user-review-fix-plan-writer.md#thinning-plan` | `scan` | -1.563323 | -1.569907 |
+| `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -1.445143 | -1.470802 |
+| `q-sd-negative-tungsten` | `docs/work-report-research/task-plan-writer.md#thinning-plan` | `scan` | -1.410957 | -1.425798 |
+| `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -1.386038 | -1.425798 |
+| `q-sd-negative-tungsten` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.283440 | -1.305921 |
+| `q-sd-negative-blog` | `docs/work-report-research/user-review-fix-plan-writer.md#prose-classification` | `scan` | -2.654309 | -2.659716 |
+| `q-sd-negative-blog` | `docs/work-report-research/task-plan-writer.md#thinning-plan` | `scan` | -2.470961 | -2.496950 |
+| `q-sd-negative-blog` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -2.431842 | -2.496950 |
+| `q-sd-negative-blog` | `docs/work-report-research/task-plan-writer.md#prose-classification` | `scan` | -2.215231 | -2.224667 |
+| `q-sd-negative-grpc` | `docs/work-report-research/test-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.258220 | -2.265897 |
+| `q-sd-negative-grpc` | `docs/work-report-research/task-plan-writer.md#storage-and-lifecycle` | `scan` | -2.198840 | -2.212283 |
+| `q-sd-negative-grpc` | `docs/work-report-research/test-fix-plan-writer.md#risks-and-costs` | `scan` | -2.134820 | -2.150772 |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-writer.md#storage-and-lifecycle` | `scan` | -2.114857 | -2.127647 |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-reviewer.md#draft-work-report-template` | `scan` | -2.105037 | -2.113821 |
+| `q-sd-negative-grpc` | `docs/work-report-research/user-review-fix-plan-writer.md#draft-work-report-template` | `scan` | -2.052169 | -2.058841 |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-reviewer.md#open-questions` | `scan` | -2.045334 | -2.055291 |
+| `q-sd-negative-grpc` | `docs/work-report-research/user-review-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -2.031544 | -2.038082 |
+| `q-sd-negative-grpc` | `docs/work-report-research/test-fix-plan-writer.md#storage-and-lifecycle` | `scan` | -1.964531 | -1.967583 |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-reviewer.md#read-tree` | `scan` | -1.845634 | -1.861914 |
+| `q-sd-negative-grpc` | `docs/work-report-research/user-review-fix-plan-writer.md#read-tree` | `scan` | -1.825680 | -1.840271 |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-writer.md#draft-work-report-template` | `scan` | -1.772942 | -1.789644 |
+| `q-sd-negative-grpc` | `docs/work-report-research/task-plan-writer.md#open-questions` | `scan` | -1.643083 | -1.653811 |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-reviewer.md#prose-classification` | `scan` | -1.619124 | -1.648630 |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-reviewer.md#storage-and-lifecycle` | `scan` | -1.617056 | -1.648630 |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-writer.md#dispatch-sites-and-phases` | `scan` | -1.607627 | -1.619965 |
+| `q-sd-negative-grpc` | `docs/work-report-research/task-plan-writer.md#verdict` | `scan` | -1.593469 | -1.603556 |
+| `q-sd-negative-grpc` | `docs/work-report-research/test-fix-plan-writer.md#verdict` | `scan` | -1.550550 | -1.571716 |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-reviewer.md#verdict` | `scan` | -1.486840 | -1.511685 |
+| `q-sd-negative-grpc` | `docs/work-report-research/task-plan-writer.md#draft-work-report-template` | `scan` | -1.365922 | -1.413169 |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-reviewer.md#thinning-plan` | `scan` | -1.354827 | -1.379921 |
+| `q-sd-negative-grpc` | `docs/work-report-research/task-plan-writer.md#risks-and-costs` | `scan` | -1.300567 | -1.333430 |
+| `q-sd-negative-grpc` | `docs/work-report-research/task-plan-writer.md#thinning-plan` | `scan` | -1.198423 | -1.211028 |
+| `q-sd-negative-grpc` | `docs/work-report-research/test-fix-plan-writer.md#prose-classification` | `scan` | -1.180550 | -1.211028 |
+| `q-sd-negative-grpc` | `docs/work-report-research/ui-tests-plan-writer.md#prose-classification` | `scan` | -1.173984 | -1.175073 |
+| `q-sd-negative-grpc` | `docs/work-report-research/task-plan-writer.md#prose-classification` | `scan` | -1.074394 | -1.078970 |
+| `q-sd-negative-migration` | `docs/work-report-research/task-plan-writer.md#draft-work-report-template` | `scan` | -3.966573 | -4.155484 |
+
+Against `### The score each index state ranks by` → **One-run values, handed to `### The stray
+index-scan score`.**, at the two stamps: unchanged in outcome, the Postgres `self-docs` pair alone
+disagreeing, at `t0` alone, on `docs/work-report-research/` chunks alone, with run 2 mostly equal to
+`operator`. Changed in one respect: at 1.3.1 one `operator` value also disagreed, and here none does.
+
+**Goal 1, state by state, on 1.5.1.** As at 1.3.1, in no state on either engine or corpus does `scan`
+equal `operator` on every hit, and in none does it differ only by `real` storage: every row above has a
+non-zero **Beyond `real`** count. `t0` differs beyond `real` storage by up to 0.1072685718536377
+(PGlite) and 0.10726761817932129 (Postgres) on `fixture-catalog`, and 0.29028117656707764 on
+`self-docs` on both; every later state, `t1` to `t4`, by at most 0.0000014901161193847656.
+`operator` is identical in every state.
+
+**Which build forms score alike in `scan`, on 1.5.1.** `REINDEX` and `CREATE INDEX` over loaded rows
+still score alike on both engines and both corpora: `t3` / `t4` differs on no hit in any run. Fresh
+insert followed by `bm25_spill_index` still matches them on `fixture-catalog` only; on `self-docs` it
+differs from both on 1 hit (PGlite) and 4 (Postgres), with 3 segments against their 1. Fresh insert
+alone still matches none of the other forms. The reference build form is unchanged: `CREATE INDEX`
+over loaded rows, or `REINDEX`, which scores the same.
+
+#### The near-tie ordering, on 1.5.1
+
+The two pairs of `### The near-tie ordering on an empty database`, each member as `scan` / `operator` /
+`operator_exact`, in returned order; both runs of each engine return the same values. Each pair is
+returned adjacently in every state.
+
+| Query | Engine | State | Returned first | Returned second | Against `operator`'s order |
+|---|---|---|---|---|---|
+| `q-fc-token-lifetime` | PGlite, Postgres | `t0` | `#token-exchange` −8.281486 / −8.281486 / −8.281485974788666 | `#rotating-a-key` −8.264622 / −8.307983 / −8.3079833984375 | Yes |
+| `q-fc-token-lifetime` | PGlite | `t1`, `t2`, `t3`, `t4` | `#rotating-a-key` −8.307983 / −8.307983 / −8.3079833984375 | `#token-exchange` −8.281486 / −8.281486 / −8.281485974788666 | No |
+| `q-fc-token-lifetime` | Postgres | `t1`, `t3`, `t4` | `#rotating-a-key` −8.307984 / −8.307983 / −8.3079833984375 | `#token-exchange` −8.281486 / −8.281486 / −8.281485974788666 | No |
+| `q-fc-unreadable-label` | PGlite, Postgres | `t0` | `docs/labels.md#when-a-label-is-rejected` −5.514854 / −5.514854 / −5.5148544907569885 | `docs/depot-operations.md#inbound-scanning` −5.514000 / −5.534851 / −5.534850656986237 | Yes |
+| `q-fc-unreadable-label` | PGlite | `t1`, `t2`, `t3`, `t4` | `docs/depot-operations.md#inbound-scanning` −5.534851 / −5.534851 / −5.534850656986237 | `docs/labels.md#when-a-label-is-rejected` −5.514854 / −5.514854 / −5.5148544907569885 | No |
+| `q-fc-unreadable-label` | Postgres | `t1`, `t3`, `t4` | `docs/depot-operations.md#inbound-scanning` −5.534851 / −5.534851 / −5.534850656986237 | `docs/labels.md#when-a-label-is-rejected` −5.514854 / −5.514854 / −5.5148544907569885 | No |
+
+At `t0` diagnostic (f) finds the same 4 inversions against `operator` on each engine as at 1.3.1:
+these two pairs, and `docs/labels.md` then `docs/tracking.md#event-ordering-and-duplicates` on both
+`q-fc-verify-callback` and `q-fc-token-lifetime`. Diagnostic (g) finds no inversion against `scan` in
+any state, and (f) none against `operator` in any state after `t0`.
+
+Against `### The near-tie ordering on an empty database`:
+
+- Each of the six rows: unchanged, every value equal to the same row there.
+- Diagnostics (f) and (g): unchanged, the same 4 inversions at `t0` and none after it.
+- **Explained by mechanism 2, for the probe's states**: unchanged. On both engines each pair is still
+  returned against `operator`'s order at `t0`, in `scan`'s order, and in no spilled state. That is
+  consistent with `timescale/pg_textsearch#573`, which reports mechanism 2 still present on 1.5.1.
+
+#### The stray index-scan score, on 1.5.1
+
+**The outcome: the stray is gone.** On 1.5.1 no `operator` value disagreed with the first repetition's
+in any block of any run, and no row's `operator` disagreed with its own `operator_exact`. The memtable
+is still emptied while the repetitions only read, and the `scan` values of the rows it held still move
+once, to their segment score. Those moves are the state difference of `#### The score each index state
+ranks by, on 1.5.1`, not the stray.
+
+**The runs.** 2026-10-21, on the compose Postgres, through the commands of `docs/retrieval-eval.md` →
+`### The BM25 index-state probe`, each with `--capture`: the states sequence on `self-docs` with
+`--repeat 30`, twice, and the history sequence with `self-docs` as A and `fixture-catalog` as B with
+`--repeat 15`, once. `SHOW pg_textsearch.library_version` read `1.5.1` before the first run, and every
+run's summary read `pg_textsearch: 1.5.1`. `self-docs` is at `{ files: 71, chunks: 826 }` in all three
+runs, taken from commit `58beee8b`, and `fixture-catalog` at `{ files: 9, chunks: 41 }`. The 1.3.1 runs
+carry `{ files: 71, chunks: 819 }`, so every `self-docs` count here is compared structurally, by the
+comparison rule above. The probe plan was the `chunks_bm25` index scan at every step of every run, so no
+step was re-scored. The repetitions, comparisons and readings are those of `### The stray index-scan
+score` → **The runs.**
+
+**Per engine, corpus and state, on 1.5.1.** The columns are those of `### The stray index-scan score` →
+**Per engine, corpus and state.**
+
+| Engine | Corpus | Step | Memtable docs, before → after | Values compared | Disagreeing `scan` | Disagreeing `operator` | Summary and `autovacuum_count` across the repetitions |
+|---|---|---|---|---|---|---|---|
+| Postgres, run 1 | `self-docs` | `t0` | 61 → 0 | 555466 | 1711 | 0 | **Changed:** 2 segments holding 765 documents → 3 segments holding 826; `autovacuum_count` 0 → 0 |
+| Postgres, run 1 | `self-docs` | `t1`, `t3`, `t4` | 0 → 0 | 555466 each | 0 | 0 | Both unchanged, 0 |
+| Postgres, run 2 | `self-docs` | `t0` | 0 → 0 | 555466 | 0 | 0 | Both unchanged, 0: the memtable was already emptied, 3 segments holding 826, when the step's summary was first read |
+| Postgres, run 2 | `self-docs` | `t1`, `t3`, `t4` | 0 → 0 | 555466 each | 0 | 0 | Both unchanged, 0 |
+| Postgres, history | A `self-docs` | `s0` | 61 → 0 | 268156 | 392 | 0 | **Changed:** 2 segments holding 765 → 3 segments holding 826; `autovacuum_count` 0 → 0 |
+| Postgres, history | A `self-docs` | `s1` | 102 → 0 | 273420 | 7074 | 0 | **Changed:** 2 segments holding 765 → 3 segments holding 867; `autovacuum_count` 0 → 0 |
+| Postgres, history | A `self-docs` | `s2`, `s4`, `s5`, `s7` | 0 → 0 | 268156 each | 0 | 0 | Both unchanged, 0 |
+| Postgres, history | A `self-docs` | `s6` | 2 → 2 | 268156 | 0 | 0 | Both unchanged, 0 |
+
+Against the 1.3.1 table, at `{ files: 71, chunks: 819 }` there and `{ files: 71, chunks: 826 }` here:
+the `operator` strays were 1 in 548216 values compared in each states-sequence run, and 0 in 264656
+(`s0`) and 1 in 269920 (`s1`) in the history run. Here they are 0 in 555466 in each states-sequence run,
+and 0 in 268156 (`s0`) and 0 in 273420 (`s1`).
+
+**Each row against itself.** A reading of the three captures compared every row's `operator` with its
+`operator_exact` rounded to six decimals, in every repetition of every step: no row disagreed. No hit
+appeared or vanished between repetitions in any step.
+
+**The memtable is still emptied during a workload that only reads.** In each changed block no statement
+between the two summaries writes, and `autovacuum_count` stayed 0. The resulting layout matches `t1`'s
+after `SELECT bm25_spill_index('chunks_bm25')`: 3 segments, 215 pages, 22172 terms, 826 documents. Where
+it happened, located by the first repetition in which each query's `scan` values move:
+
+- **Run 1, `t0`:** during repetition 1, between `q-sd-new-subcommand` (3rd of 20) and `q-sd-run-gates`
+  (4th).
+- **Run 2, `t0`:** before the first repetition, between the step's inserts and its first summary
+  reading, so not during the read-only repetitions.
+- **History, `s0`:** during repetition 1, between `q-sd-new-config-key` (1st) and `q-sd-deny-guard`
+  (2nd).
+- **History, `s1`:** during repetition 6, between `q-sd-run-gates` (4th) and `q-sd-state-dir` (5th).
+
+The probe does not identify what triggered it.
+
+**The `scan` values that move are the memtable's rows changing to their segment score.** Each moves
+once and every later repetition reads the same value; no repetition read a third.
+
+- **Run 1, `t0`:** 59 (query, key) values, on 37 keys, all in `docs/work-report-research/`, from the
+  three queries scored before the change: `q-sd-new-config-key` 28, `q-sd-deny-guard` 18,
+  `q-sd-new-subcommand` 13. Each moves from repetition 2 on and then equals run 1's `t1` `scan` for the
+  same query and key, on all 59.
+- **History, `s0`:** 28 values on 28 keys, all `q-sd-new-config-key`'s, all in
+  `docs/work-report-research/`. Each moves from repetition 2 on and equals run 1's `t1` `scan` for the
+  same query and key, on all 28.
+- **History, `s1`:** 721 values on 78 keys, 585 of them in repetition 6 (queries 5 to 20) and all 721
+  from repetition 7 on. 591 are on `self-docs` keys, each equal to `s2`'s `scan` for the same query and
+  key; the other 130 are on `fixture-catalog` keys.
+
+**The one-run values `#### The score each index state ranks by, on 1.5.1` handed here, placed in their
+state.** They were taken at `{ files: 71, chunks: 825 }` with no `--repeat`, at `t0`, where both runs'
+summaries read 57 memtable documents. In run 2 the `scan` values of the last four queries,
+`q-sd-negative-tungsten`, `q-sd-negative-blog`, `q-sd-negative-grpc` and `q-sd-negative-migration`,
+equal run 2's own `t1` `scan` on every hit, while every earlier query's differ from it as run 1's do. So
+in run 2 the memtable was emptied during `t0`'s scoring, between `q-sd-negative-ingress` (16th) and
+`q-sd-negative-tungsten` (17th), and the 48 values are those four queries' rows already at their segment
+score. None is an `operator` value.
+
+**Changed or unchanged.** Against `### The stray index-scan score` → **The trace, from the tables
+above.**:
+
+- **Memtable or segment (item 1):** unchanged in outcome, at `{ files: 71, chunks: 819 }` there and
+  `826` here. Disagreements appear only in blocks whose index held memtable documents at the step and
+  had emptied them by the last repetition; the segment states compared as many values with none
+  disagreeing; and `s6`, holding 2 memtable documents that were not emptied, had none.
+- **Column (item 2):** changed. At 1.3.1 both columns disagreed, `scan` by moving once and `operator` by
+  one wrong value per event. On 1.5.1 only `scan` disagrees; no `operator` value moved and no row
+  disagreed within itself.
+- **A changing index (item 3):** the trigger is unchanged, the index changing under the repetitions in
+  every block with a disagreement and in no block without one, with `autovacuum_count` 0 throughout.
+  Its effect within a statement changed: the `operator` stray that the 1.3.1 trace found consistent with
+  `#516`'s description does not occur. `#516` was closed before `v1.5.0`; this is consistent with it
+  having been fixed there, and is not a finding about `#516` itself, which was not read.
+- **The `scan` moves when the memtable is emptied (278 values at `{ files: 71, chunks: 819 }`):**
+  unchanged in form, each memtable row's `scan` moving once to its segment score. The counts are not
+  compared: they sit at a different stamp, with 61 memtable documents here against 30 there, and each
+  run's change came at a different point, giving 59 (run 1), 0 (run 2), 28 (`s0`) and 721 (`s1`) at
+  `{ files: 71, chunks: 826 }`.
+
+#### The candidate end-state rule, at refresh level, on 1.5.1
+
+**The outcome.** On `fixture-catalog` every 1.3.1 figure re-takes to the same value except one: the
+Python `other-corpus` 1-hit residual after `REINDEX` is gone, so the rule now holds on that corpus on
+both backends. On `self-docs` the verdicts keep their 1.3.1 shape: the rule does not hold on either
+backend, in `fresh`, `file-added` and `unchanged`, and every `after` reading that followed `REINDEX`
+matches the reference.
+
+**The runs.** 2026-10-21, through the four commands of `docs/retrieval-eval.md` → `### The BM25
+index-state probe`, its refresh-level paragraph, each with `--capture`, and each `python` run a second
+time, six runs, with `evals/docs-retrieval/bm25-refresh-rule.mjs` unchanged. `SHOW
+pg_textsearch.library_version` read `1.5.1` on both engines before the first run, and every run's
+summary read `pg_textsearch: 1.5.1`. The engines are those of `#### How these were taken, on 1.5.1`.
+`fixture-catalog` is at `{ files: 9, chunks: 41 }` and without `F` at `{ files: 8, chunks: 36 }`, as at
+1.3.1. `self-docs` is at `{ files: 71, chunks: 826 }` and without `F` at `{ files: 70, chunks: 815 }` in
+all six runs, taken from commit `5cbd2f60`; the 1.3.1 runs carry `{ files: 71, chunks: 820 }` and `{
+files: 70, chunks: 809 }`, so by the comparison rule above every `self-docs` count here is compared
+structurally. The final corpus holds 219 hits on `fixture-catalog` and 198 without `F`, and 9579 and
+9487 on `self-docs`. The probe plan was the `chunks_bm25` index scan in every reading of every run, so
+no reading was re-scored. The scenarios, the rule's inputs, the readings, the references and the
+columns are those of `### The candidate end-state rule, at refresh level`.
+
+**The old-index handling on open issued nothing.** It issues `ALTER EXTENSION <name> UPDATE` only for
+an extension whose installed `extversion` differs from the server's `default_version`. On both engines
+`pg_available_extensions` reads `default_version` `1.5.1` for `pg_textsearch` and `0.8.7` for `vector`,
+and every store here was created on an empty data directory or database, where the extensions install at
+those versions; the run's own `extversion` reading read `1.5.1`. No refresh reported a warning. The
+module does not log the statements a store issues, so this rests on the handling's condition reading
+false, not on a trace of statements.
+
+**TypeScript (PGlite), A `fixture-catalog`, B `self-docs`.**
+
+| Scenario | Last refresh | Decision | Statement | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 41, unchanged 0, deleted 0 | `spill` (0, 41, 0) | spill | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `other-corpus` | embedded 41, unchanged 0, deleted 826 | `reindex` (826, 41, 0) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 5, unchanged 36, deleted 0 | `spill` (0, 5, 0) | spill | 9 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 40, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `file-removed` | embedded 0, unchanged 36, deleted 5 | `reindex` (5, 0, 0) | `REINDEX` | 198 / 198 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `unchanged` | embedded 0, unchanged 41, deleted 0 | `none` (0, 0, 0) | none | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+
+**Python (Postgres), A `fixture-catalog`, B `self-docs`.** Both runs read the same in every cell, and
+their `--compare` listed no value out of 7674 compared.
+
+| Scenario | Last refresh | Decision | Statement | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 41, unchanged 0, deleted 0 | `spill` (0, 41, 0) | spill | 136 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `other-corpus` | embedded 41, unchanged 0, deleted 826 | `reindex` (826, 41, 0) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 5, unchanged 36, deleted 0 | `spill` (0, 5, 0) | spill | 136 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 40, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `file-removed` | embedded 0, unchanged 36, deleted 5 | `reindex` (5, 0, 0) | `REINDEX` | 198 / 198 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `unchanged` | embedded 0, unchanged 41, deleted 0 | `none` (0, 0, 0) | none | 136 / 0 | **136** / 0 | 0.1072683334350586 (`q-fc-barcode-contents`, `docs/labels.md#the-routing-barcode`) | Index scan → Index scan |
+
+**TypeScript (PGlite), A `self-docs` at `{ files: 71, chunks: 826 }`, B `fixture-catalog`.**
+
+| Scenario | Last refresh | Decision | Statement | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 826, unchanged 0, deleted 0 | `spill` (0, 826, 0) | spill | 2 / 0 | **2** / 0 | 4.76837158203125e-7 (2 hits tied: `q-sd-daemon-lifecycle`, `docs/work-report-research/task-plan-reviewer.md#dispatch-sites-and-phases`; `q-sd-second-init`, `docs/github-run-control.md#1-commands-in-a-comment`) | Index scan → Index scan |
+| `other-corpus` | embedded 826, unchanged 0, deleted 41 | `reindex` (41, 826, 0) | `REINDEX` | 9579 / 9579 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 11, unchanged 815, deleted 0 | `spill` (0, 11, 0) | spill | 1 / 0 | **1** / 0 | 4.76837158203125e-7 (`q-sd-second-init`, `docs/github-run-control.md#1-commands-in-a-comment`) | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 825, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 9577 / 9577 | 0 / 0 | — | Index scan → Index scan |
+| `file-removed` | embedded 0, unchanged 815, deleted 11 | `reindex` (11, 0, 0) | `REINDEX` | 9487 / 9487 | 0 / 0 | — | Index scan → Index scan |
+| `unchanged` | embedded 0, unchanged 826, deleted 0 | `none` (0, 0, 0) | none | 2 / 0 | **2** / 0 | 4.76837158203125e-7 (the same 2 hits as `fresh`) | Index scan → Index scan |
+
+**Python (Postgres), A `self-docs` at `{ files: 71, chunks: 826 }`, B `fixture-catalog`.** Where the two
+runs disagree, the cell reads run 1; run 2.
+
+| Scenario | Last refresh | Decision | Statement | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 826, unchanged 0, deleted 0 | `spill` (0, 826, 0) | spill | 1547 / 0; 2117 / 0 | **2** / 0; **1** / 0 | 4.76837158203125e-7 (run 1: 2 hits tied; run 2: `q-sd-second-init`, `docs/github-run-control.md#1-commands-in-a-comment`) | Index scan → Index scan |
+| `other-corpus` | embedded 826, unchanged 0, deleted 41 | `reindex` (41, 826, 0) | `REINDEX` | 9579 / 9579 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 11, unchanged 815, deleted 0 | `spill` (0, 11, 0) | spill | 3187 / 0; 1547 / 0 | **8** / 0; **2** / 0 | 0.0000019073486328125 (`q-sd-second-init`, `docs/cli.md#5-the-wrapper-script-contract`); 4.76837158203125e-7 (2 hits tied) | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 825, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 9577 / 9577 | 0 / 0 | — | Index scan → Index scan |
+| `file-removed` | embedded 0, unchanged 815, deleted 11 | `reindex` (11, 0, 0) | `REINDEX` | 9487 / 9487 | 0 / 0 | — | Index scan → Index scan |
+| `unchanged` | embedded 0, unchanged 826, deleted 0 | `none` (0, 0, 0) | none | 3188 / 0; 1265 / 0 | **1166** / 0; **1262** / 0 | 0.2901477813720703 (`q-sd-run-gates`, `docs/work-report-research/task-plan-writer.md#draft-work-report-template`), in both runs | Index scan → Index scan |
+
+The pair's `--compare` listed 10570 values out of 343924 compared, every one in `scan`: 570 in
+`reference-insert` of the full variant, 2481 of A without `F`, 1 and 8 in `reference-spill`, and in the
+scenarios 570 (`fresh.before`), 1 (`fresh.after`), 306 (`other-corpus.before`), 1640
+(`file-added.before`), 8 (`file-added.after`), 184 (`file-edited.before`), 1392 (`file-removed.before`),
+1923 (`unchanged.before`) and 1486 (`unchanged.after`). It listed none in `reference-reindex` of either
+variant, and none in an `after` reading that followed `REINDEX`. The store's own build leaves a different
+split on each run: `fresh.before` reads 186 memtable documents beside 1 segment holding 640 in run 1, and
+251 beside 1 holding 575 in run 2; the spill of it leaves 2 segments in both.
+
+**The verdicts**, against `reference-reindex`:
+
+- **TypeScript, `fixture-catalog`: the rule holds.** Every scenario's `after` reading differs from the
+  reference on 0 hits in `scan` and in `operator` (the first table).
+- **Python, `fixture-catalog`: the rule holds except under `none`** (the second table), and both runs
+  read alike:
+  - `other-corpus`, after `REINDEX`: 0 hits in both columns.
+  - `unchanged`, decision `none`: 136 hits in `scan`, the same 136 as its `before` reading, the largest
+    0.1072683334350586; the first listed are `q-fc-route-choice` → `docs/routing.md#cut-off-times`
+    −3.756243 against −3.773669, `docs/routing.md#how-a-route-is-chosen` −3.574759 against −3.627705, and
+    `docs/routing.md#zone-graph` −3.503895 against −3.564632. The index read 41 memtable documents and no
+    segment before and after, the state the scenario's prior refresh left.
+- **TypeScript, `self-docs`: the rule does not hold, in three scenarios** (the third table): `fresh` and
+  `unchanged` on 2 hits, `q-sd-daemon-lifecycle` →
+  `docs/work-report-research/task-plan-reviewer.md#dispatch-sites-and-phases`, raw `scan`
+  −5.781850337982178 against −5.781850814819336, and `q-sd-second-init` →
+  `docs/github-run-control.md#1-commands-in-a-comment`, −4.252700328826904 against −4.2527008056640625;
+  `file-added` on the second of those alone. `fresh` and `unchanged` end in 3 segments and `file-added`
+  in 4, the reference in 1. Against `reference-spill` and `reference-insert`, `fresh` and `unchanged`
+  differ on 0 hits and `file-added` on 1. This backend was run once, so no `--compare` names a one-run
+  value.
+- **Python, `self-docs`: the rule does not hold, in three scenarios** (the fourth table), in both runs:
+  - `fresh`, after the spill: 2 and 1 hits. The pair's `--compare` names 1 of run 1's and none of run 2's:
+    `q-sd-run-gates` → `docs/work-report-research/reviews/conventions-reviewer.md#must-fix`, −6.710533 in
+    run 1 against the reference's −6.710534. The one hit both runs read alike is
+    `docs/github-run-control.md#1-commands-in-a-comment` on `q-sd-second-init`, with the TypeScript run's
+    two raw values.
+  - `file-added`, after the spill: 8 and 2 hits, of which `--compare` names 7 and 1; the one read alike in
+    both runs is the same `docs/github-run-control.md` hit. Run 1's largest is `q-sd-second-init` →
+    `docs/cli.md#5-the-wrapper-script-contract`, −10.94384765625 against −10.943849563598633, one of the 7.
+  - `unchanged`, decision `none`: 1166 and 1262 hits, of which `--compare` names 695 and 791; 471 are
+    read alike in both runs. The first listed in run 1 are on `q-sd-new-config-key`:
+    `docs/work-report-research/committer.md#open-questions` −6.972599 against −7.067108,
+    `docs/work-report-research/reviews/task-plan-reviewer.md#must-fix` −6.715343 against −6.738985, and
+    `docs/work-report-research/business-parity-reviewer.md#risks-and-costs` −6.437809 against −6.453379.
+    No statement was issued between the `before` and `after` readings: in run 1 they read 3188 and 1166
+    hits, and both summaries, read before their scoring, report 360 memtable documents beside 2 segments
+    holding 466; in run 2, 1265 and 1262, with 150 beside 1 segment holding 676 in both.
+
+  Every difference above is counted in its scenario's figure; none is set aside as a one-run value.
+
+In every backend and corpus, each `after` reading that followed `REINDEX` differs from the reference on 0
+hits in both columns. Each `after` reading that followed the spill differs on 0 hits on
+`fixture-catalog` and on 1 to 8 on `self-docs`, the largest 0.0000019073486328125. Each `none` differs
+from the reference wherever its `before` reading did, in each run.
+
+**The before-fix figures** are the `before` columns of the four tables. Every scenario whose last
+refresh left a dead row, `other-corpus`, `file-edited` and `file-removed`, differs from the reference on
+every hit in each column, on both backends and both corpora, except `self-docs` `file-edited`, which
+differs on 9577 of 9579. The largest `before` difference in `scan`
+is 16.813740253448486 on TypeScript and 16.799747943878174 on Python, in both runs (`fixture-catalog`
+`other-corpus`, `q-fc-unreadable-label` → `docs/depot-operations.md#inbound-scanning`). The other
+scenarios differ in `scan` only: on TypeScript, 9 hits at `fixture-catalog` `file-added`, where the index
+read 5 memtable documents beside 1 segment after the reopen, and the 1 or 2 `self-docs` hits above; on
+Python, 136 hits on `fixture-catalog` in `fresh`, `file-added` and `unchanged`, where the index read 41
+memtable documents and no segment, and 1265 to 3188 on `self-docs`.
+
+**Observation 1 — the store's plan.** The store's `LIMIT 50` plan was the `chunks_bm25` index scan in
+every `before` reading on both backends and corpora. On `fixture-catalog`, on both backends, the
+`REINDEX` the rule issued turned it to `Seq Scan on public.chunks` in `file-edited` and `file-removed`.
+`reference-reindex` reads the same Seq Scan on both variants and both backends. The `REINDEX` of
+`other-corpus` left the index scan, as did every spill and every `none`. On `self-docs` every reading's
+store plan is the index scan. `docs/retrieval.md` → `## Still open`, the lexical-arm bullet, records the
+crossover at 63 rows; `fixture-catalog` holds 41 chunks.
+
+**Observation 2 — the near-tie on the Python store's own fresh build.** The Python `fresh` scenario's
+`before` reading on `fixture-catalog` is 41 memtable documents and no segment. Diagnostic (f) lists 4
+inversions against `operator`, the same in both runs, among them the two pairs of `### The near-tie
+ordering on an empty database`, each member as `scan` / `operator` / `operator_exact` in returned order:
+
+| Query | Returned first | Returned second |
+|---|---|---|
+| `q-fc-token-lifetime` | `docs/api-auth.md#token-exchange` −8.281486 / −8.281486 / −8.281485974788666 | `docs/api-auth.md#rotating-a-key` −8.264622 / −8.307983 / −8.3079833984375 |
+| `q-fc-unreadable-label` | `docs/labels.md#when-a-label-is-rejected` −5.514854 / −5.514854 / −5.5148544907569885 | `docs/depot-operations.md#inbound-scanning` −5.514000 / −5.534851 / −5.534850656986237 |
+
+The other two are `docs/labels.md` then `docs/tracking.md#event-ordering-and-duplicates` on
+`q-fc-verify-callback` and on `q-fc-token-lifetime`. Its `after` reading, after the spill, lists no
+inversion against `operator`. The TypeScript `fresh` `before` reading on `fixture-catalog`, read after a
+reopen, holds no memtable document and 1 segment, and lists no inversion.
+
+**Changed or unchanged.** Against `### The candidate end-state rule, at refresh level`, `fixture-catalog`
+value for value against the figures that part publishes (its captures are not in this checkout), and
+`self-docs` structurally, at `{ files: 71, chunks: 820 }` there and `826` here:
+
+- **TypeScript, `fixture-catalog` verdict:** unchanged; every count, decision and plan in the first table
+  is the 1.3.1 one, except the `other-corpus` decision's `deleted`, 826 here against 820, which is corpus
+  B's chunk count.
+- **Python, `fixture-catalog` verdict:** changed. The `other-corpus` 1-hit residual after `REINDEX`
+  (`q-fc-token-lifetime` → `docs/api-auth.md#rotating-a-key`, 9.5367431640625e-7 at 1.3.1) is 0 hits in
+  both runs. Every other cell of the second table is the 1.3.1 value, except the `other-corpus`
+  decision's `deleted`, corpus B's chunk count, and the `--compare` pair again listed no value out of
+  7674.
+- **The `unchanged` / `none` scenarios:** unchanged in outcome on every backend and corpus: `none` reads
+  0 hits where its `before` reading did and the same hits where it did not. On `fixture-catalog` the
+  Python figure is the 1.3.1 value: 136 hits, the largest 0.1072683334350586 on the same hit, and the
+  same three first-listed values. The Python `self-docs` `after` reading again differs from its own
+  `before` reading with no statement between them and with the same summary: 3188 then 1166 in run 1
+  here, 568 then 109 in run 1 at 1.3.1.
+- **TypeScript, `self-docs` verdict and its 1-hit spill residual:** unchanged in outcome, changed in
+  hits. The rule still fails in the same three scenarios, `fresh`, `file-added` and `unchanged`, each at
+  4.76837158203125e-7, with no residual after any `REINDEX`. The 1.3.1 hit,
+  `.claude/context/cli.md#how-a-module-in-this-layer-is-written` on `q-sd-guard-shell-options`, does not
+  differ here; the residual is 2, 1 and 2 hits on two other keys. At 1.3.1 those three `after` readings
+  differed from `reference-spill` and `reference-insert` on 0 hits; here `file-added` differs from both
+  on 1. The counts are not compared, by the stamp rule.
+- **Python, `self-docs` verdict:** unchanged in outcome: the same three scenarios fail, in both runs,
+  every `REINDEX` `after` reading matches the reference, and the hit both runs read alike after the spill
+  is again the TypeScript run's. The counts are not compared, by the stamp rule.
+- **The before-fix figures:** unchanged on `fixture-catalog` in every count, and in which scenarios
+  differ on every hit. On `self-docs`, at the other stamp, 1.3.1's `file-edited` differed on all but one
+  hit and `file-removed` on all but one in `operator`; here `file-edited` differs on all but two and
+  `file-removed` on every hit. The largest `before` value moved from
+  16.938354969024658 (TypeScript) and 16.924015522003174 (Python) to 16.813740253448486 and
+  16.799747943878174 on the same hit; that reading is the `other-corpus` store, which held corpus B,
+  `self-docs`, at 820 chunks then and 826 here, so the move is not attributed to 1.5.1.
+- **Observation 1:** unchanged. `REINDEX` still turns the store plan to `Seq Scan` on `fixture-catalog`
+  in `file-edited` and `file-removed` on both backends, and nowhere else.
+- **Observation 2:** unchanged. The Python `fresh` `before` reading lists the same 4 inversions, the two
+  pairs with the same three values each, and the spill removes them; the TypeScript reading lists none.
+
+#### The relevance eval's deterministic figures, on 1.5.1
+
+**The outcome.** On `fixture-catalog` no recorded figure moved: 36 of 36 are equal. Every query's ordered
+refs, first relevant rank, first strictly relevant rank and abstention are equal too, in arms B to E. Every
+row of `evals/docs-retrieval/floor.json` holds. On `self-docs` 23 of 36 figures moved, against a recorded
+block whose corpus stamp is a different corpus. The figures are listed below.
+
+**The setup.**
+
+- **The runs.** 2026-10-21, at commit `5c9b9440` with a clean tree, after `npm run build`. Each run went
+  through the existing launcher `harness-runs/scratch/eval.mjs`, as `docs/retrieval-eval.md` → `## How to
+  run it` gives it, on the TypeScript backend. Each ran once, into a data directory that did not exist yet,
+  so the store was created on 1.5.1 and the old-index handling had nothing to update. Both ran before this
+  part was written, so no edit of this document lies between them.
+
+  ```
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --data-dir harness-runs/scratch/v151-relevance/fresh-fixture-catalog --out harness-runs/scratch/v151-relevance/fixture-catalog.md --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --data-dir harness-runs/scratch/v151-relevance/fresh-self-docs --out harness-runs/scratch/v151-relevance/self-docs.md --repeat 1
+  ```
+
+- **The output.** Each `--out` file was a scratch file that held only the two generated-region markers. So
+  this document's generated region and `evals/docs-retrieval/floor.json` are untouched.
+- **The engine.** A scratch probe opened an in-memory PGlite with both extensions before the runs. It read
+  `version()` `PostgreSQL 18.6 (PGlite 0.5.10) on wasm32-unknown-emscripten`, `SHOW
+  pg_textsearch.library_version` `1.5.1`, and `pg_extension.extversion` `pg_textsearch` `1.5.1` and
+  `vector` `0.8.7`.
+- **The provenance**, as both blocks read: host `darwin 24.6.0`, Node `v22.23.2`, embedder
+  `Xenova/bge-small-en-v1.5:q8:cls:384:v1`, reranker `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1`,
+  abstention threshold `0.32`, `k` 5, `--repeat 1`. The stub was unset.
+- **The stamps.** `fixture-catalog` at `{ files: 9, chunks: 41 }`, 9 positive and 3 negative queries, and
+  `self-docs` at `{ files: 71, chunks: 826 }`, 15 positive and 5 negative.
+- **What they are compared with.** The generated region's unkeyed `fixture-catalog` and `self-docs`
+  blocks, the ones with no `@<backend>` suffix, which take the same in-process route. Both were last written by commit
+  `e0af2712` (`git log -S` on each block's `generatedAt`). Their provenance reads Node `v20.19.5`, the same
+  embedder, reranker and threshold, and stamps `{ files: 9, chunks: 41 }` and `{ files: 14, chunks: 213 }`.
+  That commit's `package-lock.json` pins `@electric-sql/pglite` 0.5.8, `pglite-pg_textsearch` 0.0.10
+  (`pg_textsearch` 1.3.1) and `pglite-pgvector` 0.0.9 (`vector` 0.8.1). `git diff --stat e0af2712 HEAD`
+  shows no change to `evals/docs-retrieval/queries/` or `cli/src/retrieval/search.ts`. It shows changes to
+  `cli/src/retrieval/store.ts`, `refresh.ts`, `models.ts` and `runtime.ts`.
+- **What was compared.** Arms B to E: recall@1, @3 and @5, MRR, strict recall@1, @3 and @5, strict MRR and
+  the count of negative queries abstained on, 9 figures per arm. Arm A awaits a hand run in every block and
+  is not compared. The latency columns were not read.
+
+**`fixture-catalog`, at the same stamp: no figure moved.** Arm B reads 0.444, 0.889, 1.000 and MRR 0.657.
+Arm C reads 0.778, 1.000, 1.000 and MRR 0.889. Arm D reads 0.556, 1.000, 1.000 and MRR 0.759. Arm E reads
+0.444, 0.667, 0.667 and MRR 0.556, and abstains on 3 of 3 negatives. Every value is the recorded one.
+
+**`self-docs`: 23 figures moved, at `{ files: 71, chunks: 826 }` against `{ files: 14, chunks: 213 }`.**
+The recorded block measured a corpus a quarter this size. So every move below can also be the corpus
+moving, and none is a before/after pair (`docs/retrieval-eval.md` → `### Writing the results, and the
+corpus that grows when you do`).
+
+| Arm | Figure | Recorded | 1.5.1 |
+|---|---|---|---|
+| B `lexical` | recall@1 | 0.333 | 0.400 |
+| B `lexical` | recall@3 | 0.600 | 0.533 |
+| B `lexical` | recall@5 | 0.867 | 0.667 |
+| B `lexical` | MRR | 0.501 | 0.497 |
+| B `lexical` | strict recall@5 | 0.600 | 0.467 |
+| B `lexical` | strict MRR | 0.301 | 0.286 |
+| C `vector` | recall@3 | 0.600 | 0.533 |
+| C `vector` | recall@5 | 0.667 | 0.533 |
+| C `vector` | MRR | 0.569 | 0.533 |
+| C `vector` | strict recall@5 | 0.333 | 0.267 |
+| C `vector` | strict MRR | 0.247 | 0.233 |
+| D `fused` | recall@3 | 0.733 | 0.600 |
+| D `fused` | recall@5 | 0.800 | 0.733 |
+| D `fused` | MRR | 0.639 | 0.589 |
+| D `fused` | strict recall@3 | 0.533 | 0.467 |
+| D `fused` | strict recall@5 | 0.667 | 0.600 |
+| D `fused` | strict MRR | 0.363 | 0.333 |
+| E `fused-rerank` | recall@1 | 0.467 | 0.400 |
+| E `fused-rerank` | recall@5 | 0.600 | 0.667 |
+| E `fused-rerank` | MRR | 0.533 | 0.517 |
+| E `fused-rerank` | strict recall@5 | 0.533 | 0.600 |
+| E `fused-rerank` | strict MRR | 0.383 | 0.400 |
+| E `fused-rerank` | abstained, of 5 negatives | 5 | 4 |
+
+The 13 figures not listed are equal. They are arms B to D's abstention count, 0 in both, and these recall
+and MRR figures: B strict recall@1 and @3; C recall@1, strict recall@1 and @3; D recall@1 and strict
+recall@1; E recall@3, strict recall@1 and @3.
+
+**The floor check, by reading.** Every row of `evals/docs-retrieval/floor.json` was compared with this
+`fixture-catalog` run's figure, and none is breached:
+
+| Arm | Metric | Floor | 1.5.1 |
+|---|---|---|---|
+| B | recall@5 | 0.95 | 1.000 |
+| B | MRR | 0.60 | 0.657 |
+| C | recall@5 | 0.95 | 1.000 |
+| C | MRR | 0.83 | 0.889 |
+| D | recall@5 | 0.95 | 1.000 |
+| D | MRR | 0.70 | 0.759 |
+| E | recall@5 | 0.61 | 0.667 |
+| E | MRR | 0.50 | 0.556 |
+
+**The attribution.** On the TypeScript backend three things moved at once: PGlite 0.5.8 to 0.5.10,
+`pg_textsearch` 1.3.1 to 1.5.1, and `vector` 0.8.1 to 0.8.7. Node and four retrieval modules also differ
+from the recorded run. These runs separate none of these, so no moved figure here is attributed to
+`pg_textsearch` alone. On `fixture-catalog` none of them, together, moved a figure.
+
+#### The lexical-plan crossover, on 1.5.1
+
+**The outcome.** The crossover is **63 rows** on 1.5.1, the figure measured on 1.3.1: 1.5.1 did not move
+it. `cli/test/docs-retrieval-store.test.mjs` → `CROSSOVER_ROWS` and `docs/retrieval.md` → `## Still
+open`, the lexical-arm bullet, both read 63.
+
+**The setup.**
+
+- **The statement.** `cli/test/docs-retrieval-store.test.mjs`, case `(b) the index-scan crossover,
+  bisected on a stats-informed plan`: the bisect on a table carrying the store's own BM25 index
+  definition, built after the rows. The case and the suite's header state it; it is not restated here.
+- **The packages.** `@electric-sql/pglite` 0.5.10 with `@electric-sql/pglite-pg_textsearch` 0.0.12
+  (`pg_textsearch` 1.5.1), on 2026-10-21 (`CROSSOVER_ROWS`'s doc comment).
+- **The Node versions.** The case printed 63 on Node 22.23.2 and on Node 20.19.5; the Node 20 reading
+  did not differ.
+- **The previous figure.** 63, on PGlite 0.5.8 with `pg_textsearch` 1.3.1, the value `CROSSOVER_ROWS`
+  carried before this re-take and the one `### The candidate end-state rule, at refresh level`,
+  **Observation 1**, quotes.
+
+**What the figure bounds.** The next branch's fix ends refreshes in the state `REINDEX INDEX chunks_bm25`
+leaves (route 2, `### The recommendation for the fix branch`), which is the statistics-bearing state case
+`(b)` measures, so this figure bounds the corpus size below which the store's lexical plan becomes a `Seq
+Scan`, for that suite's synthetic row width.
+
+### Route 2 on the fix branch
+
+**Who reads this, and what it decides.** The maintainer, and the next reader of the fix that implements
+route 2 (`### The recommendation for the fix branch`). This subsection holds the figures that branch took:
+route 2 measured at refresh level with its statement issued by hand, before any code changed; the
+real-catalog figure; the relevance and vector-arm figures before and after the fix; and the shipped end
+state read at refresh level. It also holds the Python port's after-fix figures, its real-catalog figure
+and its container test's fix-removed record, taken on `fix_docs_retrieval_bm25_index_state_python`, each
+in a **Python** part of the subsection it extends. Its comparison rule is `### The deciding figures on pg_textsearch 1.5.1` →
+**The comparison rule.**, and its probe setup is `### How the probe reads a score, and the setup`; neither
+is restated here.
+
+#### Route 2 at refresh level, issued by hand
+
+**The outcome.** On both backends and both corpora, every scenario's `after` reading, `REINDEX INDEX
+chunks_bm25` issued after its last refresh, differs from `reference-reindex` on 0 hits in `scan` and in
+`operator`, in every run. That includes `unchanged`, where the candidate rule issues nothing, and
+`fresh` and `file-added`, where it issues the spill.
+
+**The setup.**
+
+- **The engines**, read by a scratch probe before the first run, each on a new database: PGlite
+  `PostgreSQL 18.6 (PGlite 0.5.10) on wasm32-unknown-emscripten`, and the compose Postgres `PostgreSQL 18.6
+  (Debian 18.6-1.pgdg12+2) on aarch64-unknown-linux-gnu`. On both, `SHOW pg_textsearch.library_version`
+  read `1.5.1`, and `pg_extension.extversion` read `pg_textsearch` `1.5.1` and `vector` `0.8.7`.
+- **The environment.** `npm run build` ran first. `bash scripts/python-service.sh sync --with-models`
+  synced this checkout's environment, and the Python weights were present under
+  `~/.cache/harness-docs-retrieval/models`; none was fetched. A bare `bash scripts/python-service.sh run
+  self-check` reported `ok` for packages and weights and `FAIL index`, with
+  `HARNESS_DOCS_RETRIEVAL_DATABASE_URL` unset; every `--backend python` run passed the module's own
+  availability check.
+- **The runs.** 2026-10-21, at commit `3dbf4b27` with a clean tree. They were the four refresh-level
+  commands of `docs/retrieval-eval.md` → `### The BM25 index-state probe`, each with `--end-state route-2`
+  added and `--capture` into a scratch file. Each `python` run was taken twice, six runs in all, and
+  `evals/docs-retrieval/bm25-refresh-rule.mjs` was not changed. All six ran before this part was written.
+  Every summary read `pg_textsearch: 1.5.1` and `end state: route-2`.
+- **The corpora.** `fixture-catalog` is at `{ files: 9, chunks: 41 }`, and at `{ files: 8, chunks: 36 }`
+  without `F` (`docs/webhooks.md`). `self-docs` is at `{ files: 71, chunks: 829 }`, and at `{ files: 70,
+  chunks: 818 }` without `F` (`docs/work-report-research/user-review-fix-plan-writer.md`), in all six runs.
+  The final corpus holds 219 hits on `fixture-catalog` and 198 without `F`, and 9636 and 9544 on
+  `self-docs`.
+- **The plans.** The probe plan was the `chunks_bm25` index scan in every reading of every run, so no
+  reading was re-scored.
+- **The columns** are those of `#### The candidate end-state rule, at refresh level, on 1.5.1`.
+  **Candidate decision** is the candidate rule's decision, computed and not issued. **Statement issued**
+  is what the run issued. Each `≠ ref` cell is `scan` / `operator` against `reference-reindex` of the
+  scenario's final-corpus variant.
+
+**TypeScript (PGlite), A `fixture-catalog`, B `self-docs`.**
+
+| Scenario | Last refresh | Candidate decision | Statement issued | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 41, unchanged 0, deleted 0 | `spill` (0, 41, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `other-corpus` | embedded 41, unchanged 0, deleted 829 | `reindex` (829, 41, 0) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 5, unchanged 36, deleted 0 | `spill` (0, 5, 0) | `REINDEX` | 9 / 0 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `file-edited` | embedded 1, unchanged 40, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `file-removed` | embedded 0, unchanged 36, deleted 5 | `reindex` (5, 0, 0) | `REINDEX` | 198 / 198 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `unchanged` | embedded 0, unchanged 41, deleted 0 | `none` (0, 0, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → **Seq Scan** |
+
+**Python (Postgres), A `fixture-catalog`, B `self-docs`.** Both runs read the same in every cell. Their
+`--compare` listed no value out of 7674 compared.
+
+| Scenario | Last refresh | Candidate decision | Statement issued | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 41, unchanged 0, deleted 0 | `spill` (0, 41, 0) | `REINDEX` | 136 / 0 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `other-corpus` | embedded 41, unchanged 0, deleted 829 | `reindex` (829, 41, 0) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 5, unchanged 36, deleted 0 | `spill` (0, 5, 0) | `REINDEX` | 136 / 0 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `file-edited` | embedded 1, unchanged 40, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 219 / 219 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `file-removed` | embedded 0, unchanged 36, deleted 5 | `reindex` (5, 0, 0) | `REINDEX` | 198 / 198 | 0 / 0 | — | Index scan → **Seq Scan** |
+| `unchanged` | embedded 0, unchanged 41, deleted 0 | `none` (0, 0, 0) | `REINDEX` | 136 / 0 | 0 / 0 | — | Index scan → **Seq Scan** |
+
+**TypeScript (PGlite), A `self-docs` at `{ files: 71, chunks: 829 }`, B `fixture-catalog`.** Run once.
+
+| Scenario | Last refresh | Candidate decision | Statement issued | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 829, unchanged 0, deleted 0 | `spill` (0, 829, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `other-corpus` | embedded 829, unchanged 0, deleted 41 | `reindex` (41, 829, 0) | `REINDEX` | 9636 / 9636 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 11, unchanged 818, deleted 0 | `spill` (0, 11, 0) | `REINDEX` | 1 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 828, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 9636 / 9636 | 0 / 0 | — | Index scan → Index scan |
+| `file-removed` | embedded 0, unchanged 818, deleted 11 | `reindex` (11, 0, 0) | `REINDEX` | 9544 / 9542 | 0 / 0 | — | Index scan → Index scan |
+| `unchanged` | embedded 0, unchanged 829, deleted 0 | `none` (0, 0, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+
+**Python (Postgres), A `self-docs` at `{ files: 71, chunks: 829 }`, B `fixture-catalog`.** Where the two
+runs disagree, the cell reads run 1; run 2.
+
+| Scenario | Last refresh | Candidate decision | Statement issued | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 829, unchanged 0, deleted 0 | `spill` (0, 829, 0) | `REINDEX` | 240 / 0; 849 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `other-corpus` | embedded 829, unchanged 0, deleted 41 | `reindex` (41, 829, 0) | `REINDEX` | 9636 / 9636 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 11, unchanged 818, deleted 0 | `spill` (0, 11, 0) | `REINDEX` | 1199 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 828, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 9636 / 9636 | 0 / 0 | — | Index scan → Index scan |
+| `file-removed` | embedded 0, unchanged 818, deleted 11 | `reindex` (11, 0, 0) | `REINDEX` | 9544 / 9542 | 0 / 0 | — | Index scan → Index scan |
+| `unchanged` | embedded 0, unchanged 829, deleted 0 | `none` (0, 0, 0) | `REINDEX` | 849 / 0; 2210 / 0 | 0 / 0 | — | Index scan → Index scan |
+
+The pair's `--compare` listed 5617 values out of 345976 compared, every one in `scan`. They fall in
+`reference-insert` (611 full, 1611 without `F`), in `reference-spill` without `F` (1), and in the `before`
+readings of `fresh` (611), `file-edited` (136), `file-removed` (1282) and `unchanged` (1365). It listed
+none in `reference-reindex` of either variant, and none in any `after` reading. The counts in the
+`file-edited` and `file-removed` cells read alike in both runs even though some of their values moved.
+
+**The verdicts**, against `reference-reindex`:
+
+- **TypeScript, `fixture-catalog`: route 2 holds** in all six scenarios, at 0 hits in `scan` and in
+  `operator` after `REINDEX` (the first table).
+- **Python, `fixture-catalog`: route 2 holds** in all six scenarios, at 0 hits in both columns, in both
+  runs (the second table).
+- **TypeScript, `self-docs`: route 2 holds** in all six scenarios, at 0 hits in both columns (the third
+  table). This backend was run once, so no `--compare` names a one-run value.
+- **Python, `self-docs`: route 2 holds** in all six scenarios, at 0 hits in both columns, in both runs
+  (the fourth table). The values `--compare` lists are all in `before` readings and in references other
+  than `reference-reindex`.
+
+Every `after` reading leaves 1 segment and no memtable document, as `reference-reindex` does. That is 1
+segment of 41 documents on `fixture-catalog` (36 in `file-removed`), and of 829 on `self-docs` (818 in
+`file-removed`).
+
+**The `unchanged` scenario, read as an index the shipped code left.** Its last refresh changed nothing,
+so its `before` reading is the state the shipped refresh that preceded it left:
+
+- **TypeScript, `fixture-catalog`:** 0 memtable documents and 1 segment, read after a reopen. It reads
+  0 / 0 before, and 0 / 0 after `REINDEX`.
+- **TypeScript, `self-docs`:** 0 memtable documents beside 3 segments, read after a reopen. It reads
+  0 / 0 before, and after `REINDEX` 0 / 0 on 1 segment.
+- **Python, `fixture-catalog`:** 41 memtable documents and no segment, in both runs. It reads 136 / 0
+  before. The first listed are `q-fc-route-choice` → `docs/routing.md#cut-off-times` −3.756243 against
+  −3.773669, `docs/routing.md#how-a-route-is-chosen` −3.574759 against −3.627705, and
+  `docs/routing.md#zone-graph` −3.503895 against −3.564632. After `REINDEX` it reads 0 / 0.
+- **Python, `self-docs`:** 88 memtable documents beside 2 segments holding 741 in run 1, and 261 beside 1
+  holding 568 in run 2. It reads 849 / 0 and 2210 / 0 before, and 0 / 0 after `REINDEX` in both runs.
+
+So on every backend and corpus `REINDEX` brought the shipped code's end state to the reference, whatever
+that state held: memtable documents, more than one segment, or neither.
+
+**The store's `LIMIT 50` plan.** It was the `chunks_bm25` index scan in every `before` reading, on both
+backends and corpora. On `fixture-catalog`, on both backends, the `REINDEX` turned it to `Seq Scan on
+public.chunks` in five scenarios: `fresh`, `file-added`, `file-edited`, `file-removed` and `unchanged`.
+`reference-reindex` reads the same Seq Scan on both variants and both backends. The `REINDEX` of
+`other-corpus`, whose table held corpus B's 829 rows before the refresh, left the index scan on both
+backends. On `self-docs` every reading's store plan is the index scan. The crossover is 63 rows (`####
+The lexical-plan crossover, on 1.5.1`). `fixture-catalog` holds 41 chunks, 36 without `F`, and `self-docs`
+829, 818 without `F`.
+
+**Against the candidate rule.** The comparison is with `#### The candidate end-state rule, at refresh
+level, on 1.5.1`: value for value on `fixture-catalog`, at `{ files: 9, chunks: 41 }` in both, and
+structurally on `self-docs`, at `{ files: 71, chunks: 829 }` here and `826` there.
+
+- **`fresh` and `file-added`, where the candidate rule issued the spill:**
+  - On `fixture-catalog`, route 2 differs from the reference where the spill did: nowhere. Both read 0 / 0
+    after, on both backends. The `before` cells are the candidate run's values (TypeScript 0 / 0 and
+    9 / 0, Python 136 / 0 in both). What changes is the store plan after the statement. The spill left
+    the index scan, and `REINDEX` leaves the Seq Scan.
+  - On `self-docs`, the spill left a residual and `REINDEX` leaves none. There, TypeScript differed on 2
+    hits after the spill in `fresh` and 1 in `file-added`, and Python on 2; 1 and 8; 2. Here every one of
+    those cells reads 0 / 0, on both backends, in every run.
+- **`unchanged`, where the candidate rule issued nothing:** there, `none` differed wherever its `before`
+  reading did: Python `fixture-catalog` on 136 hits, TypeScript `self-docs` on 2, and Python `self-docs`
+  on 1166 and 1262. Here `REINDEX` reads 0 / 0 in every one of them.
+- **`other-corpus`, `file-edited` and `file-removed`, where both issue `REINDEX`:** 0 / 0 after, on both
+  backends and corpora, there and here. The `fixture-catalog` cells match value for value, except the
+  `other-corpus` decision's `deleted`. That is corpus B's chunk count, 829 here against 826.
+- **One structural difference in a `before` reading.** TypeScript `self-docs` `fresh` and `unchanged` read
+  0 / 0 before here, on 3 segments, against 2 / 0 there. The stamps differ, so this is recorded and not
+  attributed.
+
+#### The relevance eval's deterministic figures, before the fix
+
+**The outcome.** The fresh `fixture-catalog` run equals `#### The relevance eval's deterministic figures,
+on 1.5.1`: 36 of 36 figures, and every query's ordered refs, ranks and abstention, in arms B to E. Every
+row of `evals/docs-retrieval/floor.json` holds. On the `Seq Scan` plan a `REINDEX` leaves, 9 of the 36
+figures moved, all down: 5 in arm B and 4 in arm D. Arms C and E did not move. Arm B returned five rows,
+every one at score `0`, for the one query that carries no matching term, where the index scan returned
+none. `self-docs`, read from the base commit's snapshot at `{ files: 71, chunks: 829 }`, is the baseline
+the after-fix run compares with.
+
+**The setup.**
+
+- **The code.** 2026-10-21, at commit `625c57b4` with a clean tree, after `npm run build`. `git diff
+  --stat d15e5cc3 HEAD -- cli/src` lists nothing, so `cli/dist` is the base commit's retrieval code. The
+  TypeScript model cache under `~/.cache/autonomous-sdlc-harness/retrieval/models` held both models, and
+  none was fetched.
+- **The engine.** A scratch probe opened an in-memory PGlite with both extensions before the runs. It read
+  `version()` `PostgreSQL 18.6 (PGlite 0.5.10) on wasm32-unknown-emscripten`, `SHOW
+  pg_textsearch.library_version` `1.5.1`, and `pg_extension.extversion` `pg_textsearch` `1.5.1` and
+  `vector` `0.8.7`.
+- **The `self-docs` snapshot.** A scratch program wrote every file of commit `d15e5cc3` under `docs/`,
+  `.claude/context/`, `evals/docs-retrieval/queries/` and `harness.config.json`, 76 files, from `git
+  ls-tree -r --name-only` and `git show`, into a scratch directory, and removed it once the readings
+  below were taken. The runs read it as `--repo`. Its stamp is `{ files: 71, chunks: 829 }`, with 15
+  positive and 5 negative queries.
+- **The runs**, each through the launcher `harness-runs/scratch/eval.mjs` (`docs/retrieval-eval.md` →
+  `## How to run it`), on the TypeScript backend, with `--repeat 1`. Each `--out` file was a scratch file
+  holding only the two generated-region markers, so this document's generated region and
+  `evals/docs-retrieval/floor.json` are untouched. All ran before this part was written.
+
+  ```
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --data-dir harness-runs/scratch/fix-bm25/before-fixture-catalog --out harness-runs/scratch/fix-bm25/before-fixture-catalog.md --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --repo harness-runs/scratch/fix-bm25/base-corpus --corpus self-docs --out ../before-self-docs.md --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --data-dir harness-runs/scratch/fix-bm25/before-fixture-catalog --out harness-runs/scratch/fix-bm25/before-fixture-catalog-seqscan.md --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --repo harness-runs/scratch/fix-bm25/base-corpus --corpus self-docs --data-dir ../before-self-docs-plan --arms B --repeat 1
+  ```
+
+  The first `fixture-catalog` run went into a data directory that did not exist yet. Between it and the
+  second, a scratch program issued `BM25_HISTORY_STATEMENTS.reindex` on that directory
+  (`evals/docs-retrieval/bm25-history.mjs`). The second run's refresh wrote nothing
+  (`cli/src/retrieval/refresh.ts` → `refreshIndex`, step (5)), so it ranks with the shipped
+  `lexicalSearch` on the `REINDEX` state's plan. The `self-docs` run of record was held in memory, so
+  its plan could not be read afterwards. The fourth command, arm B only and with no `--out`, persisted the
+  same snapshot only so that its plan could be read. Its arm B figures equal the in-memory run's.
+- **The provenance**, as every block reads: host `darwin 24.6.0`, Node `v22.23.2`, embedder
+  `Xenova/bge-small-en-v1.5:q8:cls:384:v1`, reranker `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1`,
+  abstention threshold `0.32`, `k` 5, `--repeat 1`. The stub was unset.
+- **The stamps.** `fixture-catalog` at `{ files: 9, chunks: 41 }`, 9 positive and 3 negative queries, in
+  both of its runs (`generatedAt` `2026-10-21T16:46:08.867Z` fresh, `2026-10-21T16:46:51.243Z` on the Seq
+  Scan plan). `self-docs` at `{ files: 71, chunks: 829 }` from `d15e5cc3` (`generatedAt`
+  `2026-10-21T16:47:34.043Z`).
+
+**The plans**, each read by a scratch program through `openPgliteEngine` on the run's data directory, with
+`BM25_HISTORY_STATEMENTS.explainStore` bound to the corpus's first query and `ARM_CANDIDATES` (50), and
+`summarize`:
+
+- **`fixture-catalog`, after the fresh run:** `->  Index Scan using chunks_bm25 on public.chunks`. The
+  summary read `total_docs: 41`, memtable `documents: 0`, `Total: 1 segments, 5 pages (0.0MB), 649 terms,
+  41 docs`, on-disk 73728 bytes.
+- **`fixture-catalog`, after `REINDEX`:** `->  Seq Scan on public.chunks`, under a `Sort` whose key is the
+  operator expression. The summary read the same counts, 1 segment of 41 docs, on-disk 57344 bytes. Read
+  again after the third run, the plan and the counts were the same.
+- **`self-docs`, after the fourth run:** `->  Index Scan using chunks_bm25 on public.chunks`. The summary
+  read `total_docs: 829`, memtable `documents: 0`, `Total: 3 segments, 219 pages (1.7MB), 22658 terms,
+  829 docs`.
+
+**`fixture-catalog`, fresh.** Every value equals the generated region's unkeyed `fixture-catalog` block,
+which `#### The relevance eval's deterministic figures, on 1.5.1` compared with too. Every query's ordered
+refs, rank, strict rank and abstention are equal as well.
+
+| Arm | recall@1 | recall@3 | recall@5 | MRR | strict recall@1 | strict recall@3 | strict recall@5 | strict MRR | abstained, of 3 negatives |
+|---|---|---|---|---|---|---|---|---|---|
+| B `lexical` | 0.444 | 0.889 | 1.000 | 0.657 | 0.444 | 0.778 | 1.000 | 0.606 | 0 |
+| C `vector` | 0.778 | 1.000 | 1.000 | 0.889 | 0.667 | 0.889 | 1.000 | 0.806 | 0 |
+| D `fused` | 0.556 | 1.000 | 1.000 | 0.759 | 0.444 | 1.000 | 1.000 | 0.685 | 0 |
+| E `fused-rerank` | 0.444 | 0.667 | 0.667 | 0.556 | 0.444 | 0.667 | 0.667 | 0.556 | 3 |
+
+**`self-docs`, from the `d15e5cc3` snapshot, at `{ files: 71, chunks: 829 }`.** The 1.5.1 part's run
+carries `{ files: 71, chunks: 826 }`, so these are not compared with it value for value.
+
+| Arm | recall@1 | recall@3 | recall@5 | MRR | strict recall@1 | strict recall@3 | strict recall@5 | strict MRR | abstained, of 5 negatives |
+|---|---|---|---|---|---|---|---|---|---|
+| B `lexical` | 0.400 | 0.533 | 0.667 | 0.497 | 0.200 | 0.333 | 0.467 | 0.286 | 0 |
+| C `vector` | 0.533 | 0.533 | 0.533 | 0.533 | 0.200 | 0.267 | 0.267 | 0.233 | 0 |
+| D `fused` | 0.533 | 0.600 | 0.733 | 0.589 | 0.200 | 0.467 | 0.600 | 0.344 | 0 |
+| E `fused-rerank` | 0.400 | 0.600 | 0.667 | 0.517 | 0.267 | 0.467 | 0.600 | 0.400 | 4 |
+
+**`fixture-catalog` on the Seq Scan plan, beside its fresh run.** Each cell reads fresh → Seq Scan; a
+figure in bold moved.
+
+| Arm | recall@1 | recall@3 | recall@5 | MRR | strict recall@1 | strict recall@3 | strict recall@5 | strict MRR | abstained, of 3 negatives |
+|---|---|---|---|---|---|---|---|---|---|
+| B `lexical` | **0.444 → 0.333** | 0.889 → 0.889 | 1.000 → 1.000 | **0.657 → 0.602** | **0.444 → 0.333** | **0.778 → 0.667** | 1.000 → 1.000 | **0.606 → 0.541** | 0 → 0 |
+| C `vector` | 0.778 → 0.778 | 1.000 → 1.000 | 1.000 → 1.000 | 0.889 → 0.889 | 0.667 → 0.667 | 0.889 → 0.889 | 1.000 → 1.000 | 0.806 → 0.806 | 0 → 0 |
+| D `fused` | **0.556 → 0.444** | 1.000 → 1.000 | 1.000 → 1.000 | **0.759 → 0.704** | **0.444 → 0.333** | 1.000 → 1.000 | 1.000 → 1.000 | **0.685 → 0.630** | 0 → 0 |
+| E `fused-rerank` | 0.444 → 0.444 | 0.667 → 0.667 | 0.667 → 0.667 | 0.556 → 0.556 | 0.444 → 0.444 | 0.667 → 0.667 | 0.667 → 0.667 | 0.556 → 0.556 | 3 → 3 |
+
+Every query whose ordered refs differ between the two runs, of the 12 in each of arms B to E:
+
+| Arm | Query | Fresh refs | Seq Scan refs | Rank, strict rank |
+|---|---|---|---|---|
+| B | `q-fc-unreadable-label` | `docs/labels.md`, `docs/INDEX.md`, `docs/labels.md#when-a-label-is-rejected`, `docs/depot-operations.md#inbound-scanning`, `docs/labels.md#the-routing-barcode` | `docs/labels.md`, `docs/INDEX.md`, `docs/depot-operations.md#inbound-scanning`, `docs/labels.md#when-a-label-is-rejected`, `docs/labels.md#the-routing-barcode` | 3, 3 → 3, 4 |
+| B | `q-fc-token-lifetime` | `docs/api-auth.md#token-exchange`, `#rotating-a-key`, `#scopes`, `#api-keys`, `docs/rates.md#volumetric-weight` | `docs/api-auth.md#rotating-a-key`, `#token-exchange`, `#scopes`, `#api-keys`, `docs/rates.md#volumetric-weight` | 1, 1 → 2, 2 |
+| B | `q-fc-negative-lattice` (negative) | none | `docs/INDEX.md`, `docs/api-auth.md`, `docs/api-auth.md#api-keys`, `#token-exchange`, `#scopes` | — |
+| D | `q-fc-token-lifetime` | `docs/api-auth.md#token-exchange`, `#rotating-a-key`, `#api-keys`, `#scopes`, `docs/webhooks.md#replaying-missed-events` | `docs/api-auth.md#rotating-a-key`, `#token-exchange`, `#api-keys`, `#scopes`, `docs/webhooks.md#replaying-missed-events` | 1, 1 → 2, 2 |
+| D | `q-fc-negative-recruitment` (negative) | `docs/exceptions.md#redelivery-attempts`, `docs/webhooks.md#signature-verification`, `docs/webhooks.md#delivery-and-retries`, `docs/tracking.md#estimated-delivery-window`, `docs/exceptions.md#claims-for-a-lost-parcel` | `docs/exceptions.md#redelivery-attempts`, `docs/webhooks.md#signature-verification`, `docs/tracking.md#estimated-delivery-window`, `docs/webhooks.md#delivery-and-retries`, `docs/exceptions.md#claims-for-a-lost-parcel` | — |
+| D | `q-fc-negative-lattice` (negative) | `docs/labels.md#label-anatomy`, `docs/labels.md#printing-and-label-stock`, `docs/webhooks.md#delivery-and-retries`, `docs/depot-operations.md#bay-numbering`, `docs/rates.md#rate-cards` | `docs/api-auth.md#scopes`, `docs/depot-operations.md#bay-numbering`, `docs/api-auth.md#rotating-a-key`, `docs/INDEX.md`, `docs/labels.md#label-anatomy` | — |
+
+A `#…` entry continues the path of the entry before it. No query's refs differ in arm C or arm E.
+
+**The rows the lexical arm returned for a query carrying no matching term.** `q-fc-negative-lattice`
+(*"quantum chromodynamics lattice spacing"*) returned no row in arm B on the index scan. On the Seq Scan
+plan arm B returned `docs/INDEX.md`, `docs/api-auth.md`, `docs/api-auth.md#api-keys`,
+`docs/api-auth.md#token-exchange` and `docs/api-auth.md#scopes`. On the same data directory, the store's
+ordering expression bound to that query scored all 41 rows `0`, and `count(*) FILTER (WHERE … <> 0)` read
+`0`. The five rows are the first five that ordering returned, so every one is a score-`0` row with no
+query term. Through fusion, they are why arm D's refs for that query changed. The other two negatives
+returned five rows in arm B on both plans, with the same refs.
+
+**The two positive reorderings, read on the Seq Scan state.** There the operator scored
+`docs/api-auth.md#rotating-a-key` `-8.307983` and `docs/api-auth.md#token-exchange` `-8.281486` for
+`q-fc-token-lifetime`. It scored `docs/depot-operations.md#inbound-scanning` `-5.534851` and
+`docs/labels.md#when-a-label-is-rejected` `-5.514854` for `q-fc-unreadable-label`. The fresh index
+scan's scores for those rows were not read before the `REINDEX`, so these swaps are recorded and not
+attributed.
+
+**The floor, by reading.** Each `evals/docs-retrieval/floor.json` row against the fresh `fixture-catalog`
+run, with the Seq Scan run beside it for reference. None is breached in either:
+
+| Arm | Metric | Floor | Fresh | Seq Scan |
+|---|---|---|---|---|
+| B | recall@5 | 0.95 | 1.000 | 1.000 |
+| B | MRR | 0.60 | 0.657 | 0.602 |
+| C | recall@5 | 0.95 | 1.000 | 1.000 |
+| C | MRR | 0.83 | 0.889 | 0.889 |
+| D | recall@5 | 0.95 | 1.000 | 1.000 |
+| D | MRR | 0.70 | 0.759 | 0.704 |
+| E | recall@5 | 0.61 | 0.667 | 0.667 |
+| E | MRR | 0.50 | 0.556 | 0.556 |
+
+#### The vector arm after a refresh with deletes, before the fix
+
+**The outcome.** The diagnosis's two short lists recur in the held-another state as built, on both data
+directories: arm C returned 3 refs for `q-fc-verify-callback` and 0 for `q-fc-negative-lattice`. After
+`REINDEX INDEX chunks_bm25` alone, arm C returned 5 refs on all 12 queries, each query's ordered refs equal
+to the fresh `fixture-catalog` run of `#### The relevance eval's deterministic figures, before the fix`. It
+did the same after `REINDEX INDEX chunks_hnsw` as well, and after `VACUUM chunks` followed by `REINDEX INDEX
+chunks_bm25`. On this corpus those full lists come from the plan, not from the vector index. After every
+statement the planner answered the vector statement with a `Seq Scan on chunks` under a `Sort`. Forced onto
+`chunks_hnsw` after `REINDEX INDEX chunks_bm25` alone, the graph still returned 7 to 32 of the 41 live rows.
+
+**The setup.**
+
+- **The code.** 2026-10-21, at commit `e26228ef` with a clean tree, after `npm run build`. `git diff --stat
+  d15e5cc3 HEAD -- cli/src` lists nothing, so `cli/dist` is the base commit's retrieval code.
+- **The engine.** A scratch probe opened an in-memory PGlite with both extensions before the runs. It read
+  `version()` `PostgreSQL 18.6 (PGlite 0.5.10) on wasm32-unknown-emscripten`, `SHOW
+  pg_textsearch.library_version` `1.5.1`, and `pg_extension.extversion` `pg_textsearch` `1.5.1` and
+  `vector` `0.8.7`.
+- **The states.** Each was built as `### Whether either mechanism moves relevance` built held-another, with
+  the live `self-docs` corpus supplying the dead rows. Every command ran from the repository root through
+  the launcher `harness-runs/scratch/eval.mjs` (`docs/retrieval-eval.md` → `## How to run it`), on the
+  TypeScript backend, with `--repeat 1`. Each `fixture-catalog` `--out` was a scratch file holding only
+  the two generated-region markers, so this document's generated region and
+  `evals/docs-retrieval/floor.json` are untouched. All ran before this part was written.
+
+  ```
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --data-dir harness-runs/scratch/fix-bm25/held-1 --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --data-dir harness-runs/scratch/fix-bm25/held-1 --out harness-runs/scratch/fix-bm25/held-1-a.md --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --data-dir harness-runs/scratch/fix-bm25/held-2 --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --data-dir harness-runs/scratch/fix-bm25/held-2 --out harness-runs/scratch/fix-bm25/held-2-a.md --repeat 1
+  ```
+
+  Each statement was issued through `harness-runs/scratch/fix-bm25/pglite-statement.mjs` as
+  `sql:<statement>`. After each, the `fixture-catalog` command ran again on the same `--data-dir`, into
+  `held-1-b.md`, `held-1-c.md` and `held-2-b.md`. Its refresh wrote nothing (`cli/src/retrieval/refresh.ts`
+  → `refreshIndex`, step (5)), so each run ranks over the state the statement left. `held-2`'s `VACUUM
+  chunks` and `REINDEX INDEX chunks_bm25` were issued back to back, with one eval run after the pair.
+- **The provenance**, as every block reads: host `darwin 24.6.0`, Node `v22.23.2`, embedder
+  `Xenova/bge-small-en-v1.5:q8:cls:384:v1`, reranker `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1`,
+  abstention threshold `0.32`, `k` 5, `--repeat 1`. The stub was unset.
+- **The stamps.** Each `self-docs` run read `{ files: 71, chunks: 830 }`, from the live tree.
+  `fixture-catalog` read `{ files: 9, chunks: 41 }`, 9 positive and 3 negative queries, in every run.
+  The `generatedAt` values were: `held-1` as built `2026-10-21T16:55:19.091Z`, after `REINDEX INDEX
+  chunks_bm25` `16:56:28.529Z`, after `REINDEX INDEX chunks_hnsw` `16:57:13.931Z`; `held-2` as built
+  `16:58:52.896Z`, after the pair `16:59:20.588Z`.
+- **The readings.** A scratch program opened the data directory through `evals/docs-retrieval/bm25-history.mjs`
+  → `openPgliteEngine` before and after each statement, with no eval run between the two. It read:
+  - `SELECT count(*) FROM chunks`;
+  - `pg_relation_size` and `pg_class.relpages` / `reltuples` of `chunks`, `chunks_bm25` and `chunks_hnsw`;
+  - `bm25_summarize_index('chunks_bm25')`;
+  - `SHOW hnsw.ef_search`, which read `40`, and `SHOW hnsw.iterative_scan`, which read `off`, in every
+    reading;
+  - the vector statement's plan, `EXPLAIN (COSTS OFF)` of the store's `vectorSearch` statement
+    (`cli/src/retrieval/store.ts`) with a constant vector and a literal `LIMIT 50`, `ARM_CANDIDATES`;
+  - `BM25_HISTORY_STATEMENTS.explainStore` bound to the first query and `ARM_CANDIDATES`.
+
+  pgvector exposes no index summary, and `pg_stat_user_tables` read `0` in every column of every reading,
+  so the readings carry no dead-tuple count. Two readings were taken again after the eval run that followed
+  them, to add columns, and their other values equal the first reading's: `held-1` after `REINDEX INDEX
+  chunks_bm25` gained the `pg_class` and lexical-plan readings, and `held-1` after `REINDEX INDEX
+  chunks_hnsw` gained the forced count. That eval run's refresh wrote nothing.
+- **The candidate count**, the reading that tests the hypothesis. For each of the 41 live rows, it counts
+  the rows the store's vector statement returns at `LIMIT 50` with that row's own embedding as the query.
+  It was read four ways, each with session-only `SET`s: on the planner's plan, and with `enable_seqscan`
+  and `enable_sort` off, which put the statement on `Index Scan using chunks_hnsw`; each at `ef_search`
+  `40` and `1000`. The eval's own query embeddings were not run through it.
+- **Two readings came from a third directory.** The as-built `held-1` reading predates the `pg_class`,
+  lexical-plan and forced-count readings, which were added after it; `held-2`'s as-built reading carries
+  them. Its eval figures and every query's ordered refs equal `held-1`'s in arms B to E. The forced count
+  after `REINDEX INDEX chunks_bm25` alone was taken on `held-3`. That directory was built with the same two
+  commands, with `--arms B` and no `--out`, and given `REINDEX INDEX chunks_bm25` alone. Every other
+  reading on it equals `held-1`'s after the same statement.
+
+**The readings, per state.** "Forced" is the candidate count with `enable_seqscan` and `enable_sort` off.
+Each count cell gives the range over the 41 queries.
+
+| State | Statement before | `count(*)` | `chunks` relpages / reltuples | `chunks_bm25` summary | `chunks_bm25` / `chunks_hnsw` bytes | Vector plan | Lexical plan | Planner count, ef 40 | Forced count, ef 40 | Forced count, ef 1000 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `held-1` | none, as built | 41 | not read | `total_docs` 871, 4 segments, 871 docs | 4890624 / 1794048 | `Index Scan using chunks_hnsw` | not read | 7–32 | not read | not read |
+| `held-2` | none, as built | 41 | 0 / -1 | `total_docs` 871, 4 segments, 871 docs | 4890624 / 1794048 | `Index Scan using chunks_hnsw` | `Index Scan using chunks_bm25` | 7–32 | 7–32 | 41 |
+| `held-1` | `REINDEX INDEX chunks_bm25` | 41 | 185 / 41 | `total_docs` 41, 1 segment, 41 docs | 57344 / 1794048 | `Seq Scan on chunks`, under `Sort` | `Index Scan using chunks_bm25` | 41 | 7–32, on `held-3` | 41, on `held-3` |
+| `held-1` | then `REINDEX INDEX chunks_hnsw` | 41 | 185 / 41 | unchanged | 57344 / 98304 | `Seq Scan on chunks`, under `Sort` | `Index Scan using chunks_bm25` | 41 | 40 | 41 |
+| `held-2` | `VACUUM chunks` | 41 | 185 / 41 | `total_docs` 428, 2 segments, 428 docs (alive=41, dead=387) | 4890624 / 1794048 | `Seq Scan on chunks`, under `Sort` | `Seq Scan on public.chunks`, under `Sort` | 41 | 40 | 41 |
+| `held-2` | then `REINDEX INDEX chunks_bm25` | 41 | 185 / 41 | `total_docs` 41, 1 segment, 41 docs | 57344 / 1794048 | `Seq Scan on chunks`, under `Sort` | `Index Scan using chunks_bm25` | 41 | 40 | 41 |
+
+The as-built count's distribution, identical on both directories and, forced, on `held-3`: 7 rows for 2
+queries, 9 for 1, 11 for 2, 12 for 1, 13 for 2, 14 for 1, 15 for 3, 16 for 3, 18 for 2, 19 for 2, 20 for 4,
+22 for 3, 24 for 2, 26 for 2, 27 for 4, 28 for 1, 29 for 3, 31 for 2, 32 for 1. `chunks_hnsw`'s relpages /
+reltuples read 2 / 0 until a statement rewrote them: 12 / 41 after its `REINDEX`, 219 / 41 after `VACUUM`.
+
+**Arm C, per state.** Ref counts of the 12 queries, and how many have ordered refs, rank, strict rank and
+abstention equal to the fresh run.
+
+| State | Statement before | `q-fc-verify-callback` refs | `q-fc-negative-lattice` refs | The other 10 queries | Equal to fresh |
+|---|---|---|---|---|---|
+| `held-1` | none, as built | 3 | 0 | 5 each | 10 of 12 |
+| `held-2` | none, as built | 3 | 0 | 5 each | 10 of 12 |
+| `held-1` | `REINDEX INDEX chunks_bm25` | 5 | 5 | 5 each | 12 of 12 |
+| `held-1` | then `REINDEX INDEX chunks_hnsw` | 5 | 5 | 5 each | 12 of 12 |
+| `held-2` | `VACUUM chunks`, then `REINDEX INDEX chunks_bm25` | 5 | 5 | 5 each | 12 of 12 |
+
+As built, `q-fc-verify-callback` returned `docs/webhooks.md#replaying-missed-events`,
+`docs/webhooks.md#signature-verification` and `docs/api-auth.md#rotating-a-key`, the fresh run's first three in
+its order, and its rank and strict rank stayed 2. No arm C figure moved in any state: 0.778, 1.000, 1.000,
+0.889, strict 0.667, 0.889, 1.000, 0.806, 0 abstained.
+
+**The comparison, arms B, D and E, each state against the fresh run.**
+
+- **As built, on both directories**, arms B and D move as the diagnosis's held-another row did:
+  - arm B: recall@3 0.8889 → 1.0000, MRR 0.6574 → 0.7037, strict recall@1 0.4444 → 0.3333, strict recall@3
+    0.7778 → 0.8889, strict MRR 0.6056 → 0.5648, with 11 of 12 queries' refs differing;
+  - arm D: MRR 0.7593 → 0.7778, strict recall@1 0.4444 → 0.3333, strict MRR 0.6852 → 0.6481, with 10 of 12
+    differing, `q-fc-negative-lattice`'s list empty among them.
+
+  Arm E's figures and refs equal the fresh run. It made 11 rerank calls against the fresh run's 12, as
+  arm D's list for `q-fc-negative-lattice` was empty.
+- **After each statement, in all three statement states**, the figures and refs are the same:
+  - arm B: recall@1 0.4444 → 0.3333, MRR 0.6574 → 0.6019, strict recall@1 0.4444 → 0.3333, strict recall@3
+    0.7778 → 0.6667, strict MRR 0.6056 → 0.5407;
+  - arm D: recall@1 0.5556 → 0.4444, MRR 0.7593 → 0.7037, strict recall@1 0.4444 → 0.3333, strict MRR
+    0.6852 → 0.6296.
+
+  Those are the previous part's Seq Scan run's values, equal unrounded. The refs differ from the fresh run on 2
+  queries in each arm, the same pairs that part records:
+  - arm B: the `q-fc-token-lifetime` pair `#token-exchange` / `#rotating-a-key` (rank 1 → 2) and
+    `q-fc-unreadable-label`'s `#when-a-label-is-rejected` / `#inbound-scanning` (strict rank 3 → 4);
+  - arm D: `q-fc-token-lifetime` (rank 1 → 2) and `q-fc-negative-recruitment`'s third and fourth refs.
+
+  Unlike that run, arm B returned no row for `q-fc-negative-lattice`. The lexical plan here read `Index
+  Scan using chunks_bm25` after each `REINDEX INDEX chunks_bm25`, over a heap of 185 pages. Arm E equals the
+  fresh run, with 12 rerank calls. The `held-1` runs before and after `REINDEX INDEX chunks_hnsw` are equal
+  in every arm, figure and ref, as are `held-1` after `REINDEX INDEX chunks_bm25` and `held-2` after the
+  pair.
+
+**The hypothesis: supported.** The task prompt's hypothesis is that the HNSW scan filters out dead tuples
+after its candidate limit. Forced onto `chunks_hnsw` over the 830 dead entries the refresh left, the
+statement returned 7 to 32 of the 41 live rows at `ef_search` 40, and 41 at `ef_search` 1000. After
+`REINDEX INDEX chunks_hnsw`, and after `VACUUM chunks`, it returned 40, the `ef_search` value, for every
+query. After `REINDEX INDEX chunks_bm25` alone it still
+returned 7 to 32. The eval's two short lists were read through the planner's plan only, not through the
+forced count. So the support rests on row-embedding queries, and the 3 and 0 are consistent with it
+rather than reproduced by it. A separate reading, recorded and not acted on: on the `chunks_hnsw` plan
+with `iterative_scan` `off`, the statement returns at most `ef_search` rows, 40, against `ARM_CANDIDATES`
+50, with no dead row present.
+
+**The decision.** No vector-index statement joins the end state on this branch; the end state is `REINDEX
+INDEX chunks_bm25` alone. These states are taken on the 41-chunk `fixture-catalog`. A fixture-sized figure
+justifies no design decision (`harness-runs/lessons.md` → `## Evidence and measurement`, the first rule).
+The real-shape step this branch ships, gate 10's leg (vii), takes no arm C reading after deletes, and
+`--reindex-cost` times the BM25 `REINDEX` only. Arm C already returns full lists after `REINDEX INDEX
+chunks_bm25` alone: on this corpus the shipped end state restores them, and nothing is proposed. That
+restoration comes from the plan. `chunks`' reltuples read -1 as built (on `held-2`) and 41 after `REINDEX
+INDEX chunks_bm25`, and the planner then answered the vector statement with a `Seq Scan`. Forced onto
+`chunks_hnsw` in that state, the count still read 7 to 32. Arm C's lists after deletes on a corpus whose vector statement stays on
+`Index Scan using chunks_hnsw` are therefore unmeasured. That question stays open on the shipped end
+state.
+
+#### Route 2 on the real catalog
+
+**The outcome.** In five of the six scenarios, the `after` reading differs from `reference-reindex` on 0
+hits in `scan` and 0 in `operator`. Those five are `fresh`, `file-added`, `file-edited`, `file-removed` and
+`unchanged`. In `other-corpus` the `after` reading differs on **1 hit in `scan`** and 0 in `operator`. So
+on this catalog, route 2 does not hold value for value in `other-corpus`'s `scan` column. This is gate 10's
+leg (vii) (`docs/development.md` → `## 5. Verifying a change` → **Gate 10**), on the TypeScript backend
+only. The run falls under the leg's ~1,500-chunk floor and is on a different snapshot from the catalog's
+earlier runs. The maintainer accepted both gaps, which **The gaps, as ruled** records. The leg was run
+twice, and the `other-corpus` difference recurred exactly. The maintainer ruled that the fix (Tasks 7–12)
+goes ahead with that hit recorded and not attributed.
+
+**The gaps, as ruled.** Under the leg's own text, *"a run under the floor is invalid"*. The maintainer
+ruled on this run and directed that it be taken as it is, with both gaps recorded:
+
+- **Under the floor.** Corpus A reads `{ files: 105, chunks: 1454 }`, which is under the ~1,500-chunk
+  floor.
+- **A different snapshot.** The catalog is at commit `dce0de74e`, not gate 10's `010c50e`
+  (`{ files: 156, chunks: 1960 }`), and the docs layout has changed. That stamp was taken with `docs.root`
+  `docs` (the `gate10-catalog` corpus block's **Provenance.**). This run takes `--docs-root expause_web/docs`, and every key it
+  prints begins `expause_web/docs/` or `.claude/context/`. Every label in
+  `evals/docs-retrieval/queries/gate10-catalog.jsonl` begins `docs/expause-web/` or `docs/vite/`. The
+  probe scores every hit whatever the labels say, so the query set supplies query text only.
+- **The missing commits.** Neither `010c50e` nor `57a6c25` exists in the local catalog checkout, or in a
+  fresh clone of the catalog's remote, on any branch.
+- **The `other-corpus` hit.** After the first run's 1-hit `scan` difference, the maintainer directed a
+  second run. It recurred exactly, and the maintainer ruled that the fix proceeds with the hit recorded and
+  not attributed.
+
+By the stamp rule, nothing here is compared value for value with any other `gate10-catalog` figure.
+
+**The setup.**
+
+- **Who ran it, and when.** On 2026-10-21, by hand, in an interactive session the maintainer directed,
+  from this checkout's root after `npm run build`. It was run twice with the same command apart from
+  `--capture`. The module printed `ran 2026-10-21T17:08:09.752Z` for run 1 and
+  `ran 2026-10-21T18:19:41.715Z` for run 2. Each exited 0 and raised no collision refusal, so
+  `--other fixture-catalog` stood. No time was taken: this leg reads scores and plans only. The Python
+  backend was not run.
+- **The command.** It is leg (vii)'s TypeScript command, with `--docs-root expause_web/docs` and seven
+  `--conventions`. Those are the seven documents the catalog's own `harness.config.json` names:
+  `.claude/context/data-layer.md`, `domain.md`, `presentation.md`, `tests.md`, `flutter.md`, `backend.md`
+  and `conventions.md`. The captures went to
+  `harness-runs/scratch/fix-bm25/route-2-typescript-gate10-catalog-1.txt` and `…-2.txt`.
+- **The two runs compared.** Their stdout differs only in line 1, the `ran` timestamp: a `diff` of the two
+  with line 1 dropped exits 0. So do the two captures: a `cmp` of the two with line 1 dropped exits 0.
+  Every figure below is therefore both runs' figure.
+- **The host.** `uname -sr` `Darwin 24.6.0`, Node `v22.23.2`.
+- **The engine.** `server: PostgreSQL 18.6 (PGlite 0.5.10) on wasm32-unknown-emscripten`,
+  `pg_textsearch: 1.5.1`, `bm25_spill_index: available`.
+- **The end state.** `end state: route-2, REINDEX INDEX chunks_bm25 issued after every scenario's last
+  refresh; each rule line is the candidate rule's decision, not issued`.
+- **The corpora.** Corpus A is `gate10-catalog` at catalog commit `dce0de74e` with a clean tree: `{ files:
+  105, chunks: 1454 }`, and `{ files: 104, chunks: 1442 }` without `F`. `F` is
+  `expause_web/docs/roadmap/stripe-web-payments.md`. Corpus B is `fixture-catalog` at `{ files: 9, chunks:
+  41 }`. There are 69 queries, from `evals/docs-retrieval/queries/gate10-catalog.jsonl`. The final corpus
+  holds 37281 hits, and 36878 without `F`.
+- **The plans.** The probe plan was the `chunks_bm25` index scan in every reading, so no reading was
+  re-scored.
+- **The columns** are those of `#### Route 2 at refresh level, issued by hand`.
+
+**TypeScript (PGlite), A `gate10-catalog` at `{ files: 105, chunks: 1454 }`, B `fixture-catalog`.** Run
+twice, with identical output.
+
+| Scenario | Last refresh | Candidate decision | Statement issued | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 1454, unchanged 0, deleted 0 | `spill` (0, 1454, 0) | `REINDEX` | 5 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `other-corpus` | embedded 1454, unchanged 0, deleted 41 | `reindex` (41, 1454, 0) | `REINDEX` | 37280 / 37280 | **1 / 0** | `scan`, `q-g10-neg-login-sms-2fa` → `expause_web/docs/INDEX.md#users--social-1`: reference −12.909946, after −12.909947 | Index scan → Index scan |
+| `file-added` | embedded 12, unchanged 1442, deleted 0 | `spill` (0, 12, 0) | `REINDEX` | 7 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 1453, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 37276 / 37276 | 0 / 0 | — | Index scan → Index scan |
+| `file-removed` | embedded 0, unchanged 1442, deleted 12 | `reindex` (12, 0, 0) | `REINDEX` | 36877 / 36877 | 0 / 0 | — | Index scan → Index scan |
+| `unchanged` | embedded 0, unchanged 1454, deleted 0 | `none` (0, 0, 0) | `REINDEX` | 5 / 0 | 0 / 0 | — | Index scan → Index scan |
+
+**The verdicts**, against `reference-reindex`:
+
+- **TypeScript, `gate10-catalog`: route 2 holds in five of the six scenarios**, at 0 hits in `scan` and in
+  `operator` after `REINDEX`.
+- **In `other-corpus` it does not hold value for value.** The `after` reading differs on 1 hit in `scan`
+  and on none in `operator`. The probe printed that hit's values rounded to six places: −12.909946 in the
+  reference, −12.909947 after. `versus reference-spill.full` names the same hit, also at 1 / 0. Beside it,
+  the probe's own count lines differ by one: `other-corpus.after` read `scan != operator 5597, of which the
+  operator stored as a real 950`, and `reference-reindex.full` read `5598` and `951`. Both summaries read
+  the same: `total_docs 1454, total_len 214271, memtable docs 0, segments 1 segments, 209 pages (1.6MB),
+  19409 terms, 1454 docs`. The hit recurred exactly in the second run, so it is deterministic across these
+  two runs. It is recorded and not attributed, and by the maintainer's ruling it does not hold the fix.
+- **Python: not run.**
+
+Every `after` reading leaves 1 segment and no memtable document, as `reference-reindex` does: 1454
+documents, and 1442 in `file-removed`. The `before` readings hold 2 segments in `fresh`, `file-removed`
+and `unchanged`. They hold 3 in `other-corpus` (`total_docs 1495`) and in `file-added`. `file-edited`
+holds 2 segments beside 1 memtable document (`total_docs 1455`).
+
+**The `unchanged` scenario, read as an index the shipped code left.** Its `before` reading, taken after a
+reopen, holds 0 memtable documents beside 2 segments. It reads 5 / 0 before, and 0 / 0 after `REINDEX` on
+1 segment.
+
+**The store's `LIMIT 50` plan** was the `chunks_bm25` index scan in every reading, `before` and `after`,
+in all six scenarios. That includes all six reference readings. The crossover is 63 rows (`#### The
+lexical-plan crossover, on 1.5.1`). This corpus holds 1454 chunks, and 1442 without `F`.
+
+**Against the built-in corpora.** By the stamp rule, this compares structurally with `#### Route 2 at
+refresh level, issued by hand`, TypeScript rows only:
+
+- **The verdict differs in one scenario.** On `fixture-catalog` and `self-docs` every `after` cell read
+  0 / 0. Here `other-corpus` reads 1 / 0. The other five scenarios match: 0 / 0 after.
+- **The store plan matches `self-docs`, not `fixture-catalog`.** Here it is the index scan everywhere, as
+  on `self-docs` (829 chunks). On `fixture-catalog` (41 chunks), `REINDEX` turned it to `Seq Scan` in five
+  scenarios. Both this corpus and `self-docs` are above the 63-row crossover.
+- **The `before` readings.** They are 0 / 0 in `operator` wherever the built-in corpora's are, and they
+  differ in `scan`. `fresh` and `unchanged` read 5 / 0 here, against 0 / 0 on both built-in corpora.
+  `file-added` reads 7 / 0, against 9 / 0 and 1 / 0. In the three scenarios where the candidate rule
+  decides `reindex`, the `before` reading differs on nearly every hit in both columns: 37280 and 37276 of
+  37281, and 36877 of 36878. On the built-in corpora those three differ on every hit, or on all but two.
+
+**Python (Postgres), on `fix_docs_retrieval_bm25_index_state_python`.**
+
+**The outcome.** This is gate 10's leg (vii) on the Python backend, run twice on the code that ships the
+Python port. Its `before` reading is therefore the shipped Python refresh's end state, and every `after`
+reading, read after a hand-issued `REINDEX`, equals its `before` reading in both runs. Against
+`reference-reindex`, `fresh` and `file-edited` differ on 0 hits in both columns in both runs. The other
+scenarios differ in `scan` only, on 1 to 39 hits, and on different scenarios in each run: in run 1,
+`other-corpus` and `unchanged`; in run 2, `other-corpus`, `file-added`, `file-removed` and `unchanged`.
+Every reading differs in `operator` on 0 hits. This is not the ruled one-hit shape. The maintainer ruled
+on this result: it is accepted as a residual, recorded and not attributed. The ruling covers this
+real-catalog Python result only; it loosens nothing else, and no test gains a tolerance.
+
+**The gaps, as ruled.** The two gaps the TypeScript part records hold here unchanged, and this run was
+taken on the same terms:
+
+- **Under the floor.** Corpus A reads `{ files: 105, chunks: 1454 }`, which is under the leg's ~1,500-chunk
+  floor.
+- **A different snapshot.** The catalog is at commit `dce0de74e`, not gate 10's `010c50e`
+  (`{ files: 156, chunks: 1960 }`), the snapshot of the 2026-09-22 catalog runs, which no longer exists
+  (the TypeScript part's **The missing commits.**). The run takes `--docs-root expause_web/docs`, and the
+  query set supplies query text only, as there.
+
+By the stamp rule, nothing here is compared value for value with any `gate10-catalog` figure except the
+TypeScript part's, which is at the same commit and stamp.
+
+**The setup.**
+
+- **Who ran it, and when.** On 2026-10-22, by hand, in an interactive session the maintainer directed,
+  from this checkout's root after `npm run build`, at commit `0a2d8665`. It was run twice with the same
+  command apart from `--capture`. The module printed `ran 2026-10-22T08:02:25.431Z` for run 1 and
+  `ran 2026-10-22T08:49:42.454Z` for run 2. Each exited 0 and raised no collision refusal, so
+  `--other fixture-catalog` stood. No time was taken.
+- **The command.** It is leg (vii)'s Python command, with `--end-state route-2`, `--docs-root
+  expause_web/docs`, the seven `--conventions` the TypeScript part names, `--corpus-id gate10-catalog` and
+  `--other fixture-catalog`.
+- **The engine.** `server: PostgreSQL 18.6 (Debian 18.6-1.pgdg12+2) on aarch64-unknown-linux-gnu`,
+  `pg_textsearch: 1.5.1`, `bm25_spill_index: available`.
+- **The end state.** `end state: route-2, REINDEX INDEX chunks_bm25 issued after every scenario's last
+  refresh; each rule line is the candidate rule's decision, not issued`.
+- **The corpora.** Corpus A is `gate10-catalog` at catalog commit `dce0de74e` with a clean tree: `{ files:
+  105, chunks: 1454 }`, and `{ files: 104, chunks: 1442 }` without `F`. `F` is
+  `expause_web/docs/roadmap/stripe-web-payments.md`. Corpus B is `fixture-catalog` at `{ files: 9, chunks:
+  41 }`. There are 69 queries, from `evals/docs-retrieval/queries/gate10-catalog.jsonl`. The final corpus
+  holds 37281 hits, and 36878 without `F`.
+- **The plans.** The probe plan was the `chunks_bm25` index scan in all 18 readings of each run, so no
+  reading was re-scored.
+- **The two runs compared.** `bm25-history.mjs --compare` of the two captures printed `captures: 2, values
+  compared: 1338086, disagreeing: 141`. All 141 are in `scan` and none in `operator`: 48 each in
+  `other-corpus.before` and `.after`, 15 each in `file-added.before` and `.after`, 2 each in
+  `file-removed.before` and `.after` and in `unchanged.before` and `.after`, and 1 each in `fresh.before`,
+  `fresh.after`, `file-edited.before`, `file-edited.after`, `reference-insert.full`, `reference-spill.full`
+  and `reference-reindex.full`. That one value is the same hit in all seven, `q-g10-ew-tojson-optional-keys`
+  → `expause_web/docs/features/roadmap-comments.md#data`: `scan` `−6.418941` in run 1 and `−6.418940` in
+  run 2. So the reference itself differs between the runs, and the cells below give run 1; run 2 where
+  they differ.
+- **The columns** are those of the TypeScript part.
+
+**Python (Postgres), A `gate10-catalog` at `{ files: 105, chunks: 1454 }`, B `fixture-catalog`.** Run
+twice; where the runs differ, the cell reads run 1; run 2.
+
+| Scenario | Last refresh | Candidate decision | Statement issued | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 1454, unchanged 0, deleted 0 | `spill` (0, 1454, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `other-corpus` | embedded 1454, unchanged 0, deleted 41 | `reindex` (41, 1454, 0) | `REINDEX` | **39** / 0; **18** / 0 | **39** / 0; **18** / 0 | `scan`, 0.0000019073486328125 (`q-g10-ew-sendgift-chat-side-effects`, `expause_web/docs/features/video-call.md#cloud-functions`: reference −23.075117, after −23.075119); 9.5367431640625e-7 (`q-g10-ew-sendgift-chat-side-effects`, `expause_web/docs/product/product-recommendations.md#3-missing-features-make-it-desired-not-just-complete`: reference −9.966702, after −9.966701) | Index scan → Index scan |
+| `file-added` | embedded 12, unchanged 1442, deleted 0 | `spill` (0, 12, 0) | `REINDEX` | 0 / 0; **16** / 0 | 0 / 0; **16** / 0 | —; `scan`, 0.0000019073486328125 (the same `video-call.md#cloud-functions` hit and values as run 1's `other-corpus`) | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 1453, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-removed` | embedded 0, unchanged 1442, deleted 12 | `reindex` (12, 0, 0) | `REINDEX` | 0 / 0; **2** / 0 | 0 / 0; **2** / 0 | —; `scan`, 9.5367431640625e-7 (`q-g10-ew-gift-community-post`, `expause_web/docs/features/gifting.md`: reference −15.702406, after −15.702405) | Index scan → Index scan |
+| `unchanged` | embedded 0, unchanged 1454, deleted 0 | `none` (0, 0, 0) | `REINDEX` | **2** / 0; **1** / 0 | **2** / 0; **1** / 0 | `scan`, 9.5367431640625e-7 (`q-g10-ew-sendgift-chat-side-effects`, `expause_web/docs/features/saved-users.md#cloud-functions`: reference −11.230772, after −11.230773); 4.76837158203125e-7 (`q-g10-ew-tojson-optional-keys`, `expause_web/docs/features/roadmap-comments.md#data`: reference −6.418940, after −6.418941) | Index scan → Index scan |
+
+Each largest difference is the unrounded `scan` difference of the largest of the hits the six-place
+count names.
+
+**The verdicts**, against `reference-reindex`:
+
+- **Python, `gate10-catalog`: route 2 holds value for value in `fresh` and `file-edited` in both runs,**
+  and in `file-added` and `file-removed` in run 1, at 0 hits in `scan` and in `operator`.
+- **Elsewhere it differs in `scan` only.** The largest difference is 0.0000019073486328125, in both runs.
+  Every reading differs from the reference on 0 hits in `operator`, lists no order inversion against
+  `operator`, and reads the reference's index summary: `total_docs 1454, total_len 214271, memtable docs
+  0, segments 1 segments, 209 pages (1.6MB), 19409 terms, 1454 docs`, and in `file-removed` `total_docs
+  1442, total_len 211935`, 1 segment, 207 pages, 19244 terms. The differing hits are not the same in the
+  two runs, and the references differ between the runs on one hit.
+- **By the maintainer's ruling**, this result is a residual, recorded and not attributed.
+
+**The store's `LIMIT 50` plan** was the `chunks_bm25` index scan in every reading, `before` and `after`,
+in all six scenarios and all six reference readings, in both runs.
+
+**Against the TypeScript part.** Same commit, stamp and query set, so value for value, with one
+difference in what `before` is: the TypeScript run's `before` is the refresh before its fix, and this
+run's is the shipped Python refresh's end state.
+
+- **The `after` readings.** TypeScript differs only in `other-corpus`, on 1 hit, recurring exactly
+  across its two runs. Python differs in `other-corpus` on 39 and 18 hits, and in one to three other
+  scenarios, differently in each run. Both read 0 in `operator` everywhere.
+- **The TypeScript hit.** `q-g10-neg-login-sms-2fa` → `expause_web/docs/INDEX.md#users--social-1` is
+  among the Python `other-corpus` differences in both runs, with the same six-place values: reference
+  `−12.909946`, after `−12.909947`.
+- **The index summary and the store plan** are the same on both backends: 1 segment, no memtable
+  document, 1454 documents (1442 in `file-removed`), and the index scan in every reading.
+
+#### The relevance eval's deterministic figures, after the fix
+
+**The outcome.** On `fixture-catalog`, 9 of the 36 figures moved against the fresh run of `#### The
+relevance eval's deterministic figures, before the fix`, all down: 5 in arm B and 4 in arm D. They are the
+9 figures that part's Seq Scan run moved, at the same values unrounded. Arm B's MRR reads `0.602` and arm
+D's `0.704`, and recall@1 fell in both arms through the `q-fc-token-lifetime` near-tie pair, as the task
+prompt's lead expected. Arm B's strict recall@3 and strict MRR moved further through a second swap, in
+`q-fc-unreadable-label`. Against that part's Seq Scan run, unfiltered, all 36 figures are equal. The
+filter's only effect is on `q-fc-negative-lattice`: arm B returns no row where the unfiltered plan
+returned five score-`0` rows, and arm D's refs return to the fresh run's. On `self-docs`, read from the same `d15e5cc3` snapshot, none of the 36
+figures moved. Arm B's refs are equal on all 20 queries; arms C, D and E reorder refs on 2, 4 and 7
+queries. Over that run, the vector statement's plan moved from `Index Scan using chunks_hnsw` to `Seq Scan
+on chunks`. After a refresh with deletes, arm C returns 5 refs on all 12 queries on the shipped code, each
+equal to the fresh run's. Every `evals/docs-retrieval/floor.json` row holds. B `mrr` and D `mrr` hold at the
+values Task 8's commit re-recorded.
+
+**The setup.**
+
+- **The code.** 2026-10-21, at commit `0c4630e5` with a clean tree, after `npm run build`. That commit
+  makes `refreshIndex` call `DocStore.rebuildIndexes()`, which issues `END_STATE_STATEMENTS`, `REINDEX
+  INDEX chunks_bm25` alone (`cli/src/retrieval/store.ts`). The TypeScript model cache under
+  `~/.cache/autonomous-sdlc-harness/retrieval/models` held both models.
+- **The engine.** `harness-runs/scratch/fix-bm25/versions.mjs` opened an in-memory PGlite with both
+  extensions before the runs. It read `version()` `PostgreSQL 18.6 (PGlite 0.5.10) on
+  wasm32-unknown-emscripten`, `SHOW pg_textsearch.library_version` `1.5.1`, and `pg_extension.extversion`
+  `pg_textsearch` `1.5.1` and `vector` `0.8.7`.
+- **The `self-docs` snapshot.** `harness-runs/scratch/fix-bm25/base-corpus.mjs` wrote the 76 files of
+  `d15e5cc3` again, as the before-fix part describes. It was removed once the two runs that read it had
+  finished, and `test ! -e harness-runs/scratch/fix-bm25/base-corpus` exited `0`.
+- **The runs**, each through the launcher `harness-runs/scratch/eval.mjs`, on the TypeScript backend, with
+  `--repeat 1`. Each `--out` file was a scratch file holding only the two generated-region markers, so this
+  document's generated region and `evals/docs-retrieval/floor.json` are untouched. All ran before this part
+  was written.
+
+  ```
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --data-dir harness-runs/scratch/fix-bm25/after-fixture-catalog --out harness-runs/scratch/fix-bm25/after-fixture-catalog.md --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --repo harness-runs/scratch/fix-bm25/base-corpus --corpus self-docs --out ../after-self-docs.md --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --repo harness-runs/scratch/fix-bm25/base-corpus --corpus self-docs --data-dir ../after-self-docs-plan --arms C --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --data-dir harness-runs/scratch/fix-bm25/after-held --repeat 1
+  bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --data-dir harness-runs/scratch/fix-bm25/after-held --out harness-runs/scratch/fix-bm25/after-held.md --repeat 1
+  ```
+
+  The first went into a data directory that did not exist yet. The `self-docs` run of record was held in
+  memory. The third command, arm C only and with no `--out`, persisted the same snapshot so that its plans
+  could be read; its arm C figures equal the in-memory run's. The last two build the held-another state as
+  `#### The vector arm after a refresh with deletes, before the fix` built it, with the live `self-docs`
+  supplying the dead rows. No statement was issued by hand on any directory.
+- **The provenance**, as every block reads: host `darwin 24.6.0`, Node `v22.23.2`, embedder
+  `Xenova/bge-small-en-v1.5:q8:cls:384:v1`, reranker `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1`,
+  abstention threshold `0.32`, `k` 5, `--repeat 1`. The stub was unset.
+- **The stamps.** `fixture-catalog` at `{ files: 9, chunks: 41 }`, 9 positive and 3 negative queries
+  (`generatedAt` `2026-10-21T19:01:48.417Z`; held-another `2026-10-21T19:06:55.573Z`). `self-docs` at
+  `{ files: 71, chunks: 829 }` from `d15e5cc3`, 15 positive and 5 negative (`generatedAt`
+  `2026-10-21T19:02:59.646Z`). Both equal the before-fix part's stamps, so each comparison below is a
+  before/after pair. The held-another state's live `self-docs` read `{ files: 71, chunks: 830 }`.
+- **The comparisons** were read by `harness-runs/scratch/fix-bm25/extract.mjs` and `vector-compare.mjs`
+  from the JSON blocks of each pair of `--out` files: `before-fixture-catalog.md` and
+  `after-fixture-catalog.md`, `before-self-docs.md` and `after-self-docs.md`, and
+  `before-fixture-catalog-seqscan.md` and `after-fixture-catalog.md`. Every metric was compared unrounded.
+
+**The plans**, each read by `harness-runs/scratch/fix-bm25/after-readings.mjs` through `openPgliteEngine`.
+It reads `EXPLAIN (VERBOSE, COSTS OFF)` of `LEXICAL_SEARCH_STATEMENT`, imported from
+`cli/dist/retrieval/store.js` and bound to `fixture-catalog`'s first query and `ARM_CANDIDATES` (50). It
+also reads the vector statement's `EXPLAIN (COSTS OFF)` with a constant vector, as the before-fix vector
+part read it, plus `pg_class`, the `index_state` meta row and `summarize`:
+
+- **`fixture-catalog`, after the fresh run:** `->  Seq Scan on public.chunks`, under a `Sort` whose key is
+  the operator expression. `index_state` read `rebuilt`. The summary read `total_docs: 41`, memtable
+  `documents: 0`, `Total: 1 segments, 5 pages (0.0MB), 649 terms, 41 docs`, on-disk 57344 bytes, as the
+  before-fix part's reading after `REINDEX` did. The vector statement read `Seq Scan on chunks` under a
+  `Sort`.
+- **`self-docs`, after the plan-only run:** `->  Index Scan using chunks_bm25 on public.chunks`.
+  `index_state` read `rebuilt`, and `chunks`' relpages / reltuples read 177 / 829. The vector statement read
+  `Seq Scan on chunks` under a `Sort`. The before-fix part's plan-only directory,
+  `harness-runs/scratch/fix-bm25/before-self-docs-plan`, read by the same program, gave `Index Scan using
+  chunks_hnsw on chunks` for the vector statement. Its `chunks` read 0 / -1, and it had no `index_state`
+  row.
+- **Held-another, after the `fixture-catalog` run:** count 41, `chunks` 185 / 41, `chunks_bm25` 57344
+  bytes, `chunks_hnsw` 1794048 bytes, summary `total_docs: 41`, one segment of 41 docs, `index_state`
+  `rebuilt`. The vector statement read `Seq Scan on chunks`, under a `Sort`. The lexical statement read
+  `Index Scan using chunks_bm25`. Every value equals the `held-1` row after `REINDEX INDEX chunks_bm25` in
+  the before-fix vector part's readings table.
+
+**`fixture-catalog`, fresh, before → after.** Each cell reads before → after; a figure in bold moved.
+
+| Arm | recall@1 | recall@3 | recall@5 | MRR | strict recall@1 | strict recall@3 | strict recall@5 | strict MRR | abstained, of 3 negatives |
+|---|---|---|---|---|---|---|---|---|---|
+| B `lexical` | **0.444 → 0.333** | 0.889 → 0.889 | 1.000 → 1.000 | **0.657 → 0.602** | **0.444 → 0.333** | **0.778 → 0.667** | 1.000 → 1.000 | **0.606 → 0.541** | 0 → 0 |
+| C `vector` | 0.778 → 0.778 | 1.000 → 1.000 | 1.000 → 1.000 | 0.889 → 0.889 | 0.667 → 0.667 | 0.889 → 0.889 | 1.000 → 1.000 | 0.806 → 0.806 | 0 → 0 |
+| D `fused` | **0.556 → 0.444** | 1.000 → 1.000 | 1.000 → 1.000 | **0.759 → 0.704** | **0.444 → 0.333** | 1.000 → 1.000 | 1.000 → 1.000 | **0.685 → 0.630** | 0 → 0 |
+| E `fused-rerank` | 0.444 → 0.444 | 0.667 → 0.667 | 0.667 → 0.667 | 0.556 → 0.556 | 0.444 → 0.444 | 0.667 → 0.667 | 0.667 → 0.667 | 0.556 → 0.556 | 3 → 3 |
+
+Each moved figure, unrounded, with the refs behind it:
+
+| Arm | Figure | Before | After | Behind it |
+|---|---|---|---|---|
+| B | recall@1 | 0.4444444444444444 | 0.3333333333333333 | `q-fc-token-lifetime`, rank 1 → 2 |
+| B | MRR | 0.6574074074074074 | 0.6018518518518519 | `q-fc-token-lifetime`, rank 1 → 2 |
+| B | strict recall@1 | 0.4444444444444444 | 0.3333333333333333 | `q-fc-token-lifetime`, strict rank 1 → 2 |
+| B | strict recall@3 | 0.7777777777777778 | 0.6666666666666666 | `q-fc-unreadable-label`, strict rank 3 → 4 |
+| B | strict MRR | 0.6055555555555556 | 0.5407407407407407 | both of those |
+| D | recall@1 | 0.5555555555555556 | 0.4444444444444444 | `q-fc-token-lifetime`, rank 1 → 2 |
+| D | MRR | 0.7592592592592592 | 0.7037037037037037 | `q-fc-token-lifetime`, rank 1 → 2 |
+| D | strict recall@1 | 0.4444444444444444 | 0.3333333333333333 | `q-fc-token-lifetime`, strict rank 1 → 2 |
+| D | strict MRR | 0.6851851851851851 | 0.6296296296296295 | `q-fc-token-lifetime`, strict rank 1 → 2 |
+
+Every query whose ordered refs differ, of the 12 in each of arms B to E:
+
+| Arm | Query | Before refs | After refs | Rank, strict rank |
+|---|---|---|---|---|
+| B | `q-fc-unreadable-label` | `docs/labels.md`, `docs/INDEX.md`, `docs/labels.md#when-a-label-is-rejected`, `docs/depot-operations.md#inbound-scanning`, `docs/labels.md#the-routing-barcode` | `docs/labels.md`, `docs/INDEX.md`, `docs/depot-operations.md#inbound-scanning`, `docs/labels.md#when-a-label-is-rejected`, `docs/labels.md#the-routing-barcode` | 3, 3 → 3, 4 |
+| B | `q-fc-token-lifetime` | `docs/api-auth.md#token-exchange`, `#rotating-a-key`, `#scopes`, `#api-keys`, `docs/rates.md#volumetric-weight` | `docs/api-auth.md#rotating-a-key`, `#token-exchange`, `#scopes`, `#api-keys`, `docs/rates.md#volumetric-weight` | 1, 1 → 2, 2 |
+| D | `q-fc-token-lifetime` | `docs/api-auth.md#token-exchange`, `#rotating-a-key`, `#api-keys`, `#scopes`, `docs/webhooks.md#replaying-missed-events` | `docs/api-auth.md#rotating-a-key`, `#token-exchange`, `#api-keys`, `#scopes`, `docs/webhooks.md#replaying-missed-events` | 1, 1 → 2, 2 |
+| D | `q-fc-negative-recruitment` (negative) | `docs/exceptions.md#redelivery-attempts`, `docs/webhooks.md#signature-verification`, `docs/webhooks.md#delivery-and-retries`, `docs/tracking.md#estimated-delivery-window`, `docs/exceptions.md#claims-for-a-lost-parcel` | `docs/exceptions.md#redelivery-attempts`, `docs/webhooks.md#signature-verification`, `docs/tracking.md#estimated-delivery-window`, `docs/webhooks.md#delivery-and-retries`, `docs/exceptions.md#claims-for-a-lost-parcel` | — |
+
+A `#…` entry continues the path of the entry before it. No query's refs differ in arm C or arm E.
+`q-fc-negative-lattice` returned no row in arm B, before and after, and its arm D refs are unchanged.
+
+**Against the task prompt's lead.** The lead expected arm B's MRR to move toward `0.602`, arm D's toward
+`0.704`, and recall@1 to fall by the `q-fc-token-lifetime` near-tie pair. All three happened, at those values:
+`#rotating-a-key` now ranks above `#token-exchange` in arms B and D. The lead did not name four of the
+other moves: arm B's strict recall@1, and arm D's strict recall@1 and strict MRR, which come from the same
+pair, and arm B's strict recall@3, which comes from `q-fc-unreadable-label`'s
+`#inbound-scanning` / `#when-a-label-is-rejected` swap. Arm B's strict MRR comes from both.
+
+**`fixture-catalog` after the fix, against the before-fix Seq Scan run, unfiltered.** All 36 figures are
+equal unrounded, so the filter moves no figure on this plan. The refs differ on one query in each of two
+arms, of the 12 in each of arms B to E:
+
+| Arm | Query | Seq Scan, unfiltered | After the fix |
+|---|---|---|---|
+| B | `q-fc-negative-lattice` (negative) | `docs/INDEX.md`, `docs/api-auth.md`, `docs/api-auth.md#api-keys`, `#token-exchange`, `#scopes` | none |
+| D | `q-fc-negative-lattice` (negative) | `docs/api-auth.md#scopes`, `docs/depot-operations.md#bay-numbering`, `docs/api-auth.md#rotating-a-key`, `docs/INDEX.md`, `docs/labels.md#label-anatomy` | `docs/labels.md#label-anatomy`, `docs/labels.md#printing-and-label-stock`, `docs/webhooks.md#delivery-and-retries`, `docs/depot-operations.md#bay-numbering`, `docs/rates.md#rate-cards`, as the before-fix fresh run |
+
+The five unfiltered rows are the score-`0` rows the before-fix part recorded. Neither move changes a
+figure: the query is a negative, and arms B and D abstained on no negative in either run.
+
+**`self-docs`, from the `d15e5cc3` snapshot, at `{ files: 71, chunks: 829 }`, before → after.** No figure
+moved: all 36 are equal unrounded.
+
+| Arm | recall@1 | recall@3 | recall@5 | MRR | strict recall@1 | strict recall@3 | strict recall@5 | strict MRR | abstained, of 5 negatives |
+|---|---|---|---|---|---|---|---|---|---|
+| B `lexical` | 0.400 → 0.400 | 0.533 → 0.533 | 0.667 → 0.667 | 0.497 → 0.497 | 0.200 → 0.200 | 0.333 → 0.333 | 0.467 → 0.467 | 0.286 → 0.286 | 0 → 0 |
+| C `vector` | 0.533 → 0.533 | 0.533 → 0.533 | 0.533 → 0.533 | 0.533 → 0.533 | 0.200 → 0.200 | 0.267 → 0.267 | 0.267 → 0.267 | 0.233 → 0.233 | 0 → 0 |
+| D `fused` | 0.533 → 0.533 | 0.600 → 0.600 | 0.733 → 0.733 | 0.589 → 0.589 | 0.200 → 0.200 | 0.467 → 0.467 | 0.600 → 0.600 | 0.344 → 0.344 | 0 → 0 |
+| E `fused-rerank` | 0.400 → 0.400 | 0.600 → 0.600 | 0.667 → 0.667 | 0.517 → 0.517 | 0.267 → 0.267 | 0.467 → 0.467 | 0.600 → 0.600 | 0.400 → 0.400 | 4 → 4 |
+
+Every query whose ordered refs, rank, strict rank or abstention differ, of the 20 in each arm. None
+moves a figure: every positive's rank and strict rank are unchanged, and no negative's abstention
+changed. Arm B differs on none.
+
+| Arm | Query | Before | After |
+|---|---|---|---|
+| C | `q-sd-negative-blog` (negative) | `docs/work-report-research/docs-writer.md#draft-work-report-template`, `#read-tree`, `docs/work-report-research/task-plan-writer.md#draft-work-report-template`, `docs/work-report-research/conventions-writer.md#draft-work-report-template`, `docs/work-report-research/reviews/task-plan-writer.md#nice-to-have` | `docs/development.md#7-releasing`, `docs/github-integration-research.md#a2-github-marketplace-can-a-reusable-workflow-be-listed-or-only-an-action`, `docs/work-report-research/docs-writer.md#draft-work-report-template`, `docs/github-integration-research.md#c1-pull_request_review-submitted-pull_request_review_comment-and-issue_comment-on-a-pr-which-review-states-exist-in-the-payload-and-how-to-fetch-every-inline-comment-of-one-review-with-its-file-and-line`, `docs/work-report-research/docs-writer.md#read-tree` |
+| C | `q-sd-negative-migration` (negative) | positions 4–5: `docs/cli.md#3-the-re-run-contract`, `docs/work-report-research/conventions-writer.md#storage-and-lifecycle` | positions 4–5: `docs/retrieval.md#what-this-buys-you`, `docs/cli.md#3-the-re-run-contract` |
+| D | `q-sd-stack-detection` | positions 4–5: `docs/cli.md#generator-order-and-why-it-is-load-bearing`, `docs/config.md#1-the-three-resolution-classes` | swapped; rank 1, strict rank 2 both |
+| D | `q-sd-negative-tungsten` (negative) | `docs/work-report-research/layer-reviewer.md#read-tree`, `docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run`, `docs/work-report-research/_review_brief.md#check-in-this-order`, `docs/retrieval-eval-results.md#the-deciding-figures-on-pg_textsearch-151`, `docs/work-report-research/conventions-reviewer.md#review-response` | `docs/retrieval-eval-results.md#the-observed-distributions-quoted`, `#abstention-query-by-query`, `#threshold-calibration`, `docs/work-report-research/layer-reviewer.md#read-tree`, `docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run` |
+| D | `q-sd-negative-blog` (negative) | `docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run`, `docs/work-report-research/docs-writer.md#draft-work-report-template`, `docs/cli.md#generator-order-and-why-it-is-load-bearing`, `docs/work-report-research/docs-writer.md#read-tree`, `docs/development.md#6-the-roadmap-this-tree-defers-to` | `docs/development.md#7-releasing`, `docs/github-integration-research.md#a2-github-marketplace-can-a-reusable-workflow-be-listed-or-only-an-action`, `docs/github-integration-research.md#c1-pull_request_review-submitted-…`, `docs/github-run-control.md#5-lifecycle-comments-and-state-labels`, `#verified-in-gate-12-round-6` |
+| D | `q-sd-negative-migration` (negative) | `docs/watcher.md#migration-both-layouts-until-no-worktree-run-is-left`, `docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run`, `docs/second-runtime-port-decision.md#3-a-checkpointer-would-be-a-second-source-of-truth`, `docs/watcher.md#where-the-family-runs-git-in-a-runs-copy-and-under-what-pins`, `docs/work-report-research/reviews/branch-reviewer.md#must-fix` | `docs/retrieval.md#what-this-buys-you`, `docs/watcher.md#migration-both-layouts-until-no-worktree-run-is-left`, `docs/retrieval.md#turning-on-the-python-backend`, `docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run`, `docs/second-runtime-port-decision.md#3-a-checkpointer-would-be-a-second-source-of-truth` |
+| E | `q-sd-state-dir` | positions 4–5: `.claude/context/conventions.md#configuration-is-the-source-of-truth-and-it-is-read-at-run-time`, `docs/config.md#1-the-three-resolution-classes` | positions 4–5: `docs/config.md#1-the-three-resolution-classes`, `docs/development.md#2-the-one-authoring-rule-that-follows` |
+| E | `q-sd-cross-asset-reference` | position 5: `.claude/context/plugin.md#not-determined` | position 5: `docs/development.md#4-userconfig-reserved` |
+| E | `q-sd-search-abstains` | positions 4–5: `docs/cli.md#11-docs`, `docs/retrieval.md#when-to-turn-it-on` | positions 4–5: `docs/retrieval.md#turning-on-the-python-backend`, `docs/cli.md#11-docs` |
+| E | `q-sd-retrieval-network` | positions 3–5: `docs/retrieval.md#when-to-turn-it-on`, `docs/retrieval-eval-results.md#the-limits-stated-with-the-verdict`, `#the-candidate-end-state-rule-at-refresh-level` | positions 3–5: `docs/retrieval.md#how-it-fits-together`, `docs/retrieval-eval.md#the-decision-rule`, `docs/retrieval.md#when-to-turn-it-on` |
+| E | `q-sd-analyze-writes` | abstained, no refs | not abstained: `docs/work-report-research/conventions-writer.md#verdict`, `docs/analyze.md`, `#9-how-the-offer-reaches-the-command-and-the-naming-hazard`, `#10-what-the-skeletons-say-now-the-offer-exists`, `docs/work-report-research/README.md#pre-existing-bugs-found-along-the-way-confirmed-by-a-reviewer`; rank 0 both |
+| E | `q-sd-stack-detection` | positions 4–5: `.claude/context/cli.md#how-a-module-in-this-layer-is-written`, `docs/cli.md` | positions 4–5: `docs/cli.md`, `docs/retrieval.md#turning-on-the-python-backend` |
+| E | `q-sd-negative-grpc` (negative) | positions 3–5: `docs/retrieval-eval.md#the-bm25-index-state-probe`, `docs/retrieval-eval-results.md#cold-start`, `docs/retrieval.md#when-to-turn-it-on` | positions 3–5: `docs/cli.md#11-docs`, `docs/retrieval-eval.md#the-bm25-index-state-probe`, `docs/retrieval-eval-results.md#cold-start` |
+
+`#c1-pull_request_review-submitted-…` is the same ref as in the arm C row above it, cut. The arm C row for
+`q-sd-negative-migration` keeps its first three refs; so do the E rows that name only later positions.
+
+**Why `self-docs`' arm C moved, as far as the readings go.** Arm B is unchanged, on `Index Scan using
+chunks_bm25` before and after. The vector statement's plan is not: `Index Scan using chunks_hnsw` on the
+before-fix directory, at `chunks` reltuples -1, and `Seq Scan on chunks` under a `Sort` on the after-fix
+one, at 829. The before-fix vector part read the same move on `fixture-catalog` after `REINDEX INDEX
+chunks_bm25`, reltuples -1 → 41. A `Seq Scan` under a `Sort` orders every row exactly, where the HNSW scan
+is approximate. The two arm C reorderings are consistent with that. Arms D and E fuse arm C's list, and E
+reranks the fused list, which is consistent with their reorderings. Neither the eval's own query
+embeddings nor a forced plan was read on this directory, so this is recorded, not attributed. The
+in-memory run of record could not be read, so the plan readings come from the arm-C-only persisted run.
+
+**The vector arm on the shipped end state.** In the held-another state built on the fixed code, arm C
+returned 5 refs on every one of the 12 queries. Each query's ordered refs, rank, strict rank and abstention
+equal the before-fix fresh `fixture-catalog` run. They also equal the before-fix vector part's `REINDEX
+INDEX chunks_bm25` row (`held-1-b.md`) on all 12 queries in arms B to E. The figures equal it too, and that
+row is the shipped end state, since **The decision.** there adopts no vector statement. The diagnosis's two
+short lists, 3 refs for `q-fc-verify-callback` and 0 for `q-fc-negative-lattice`, do not recur on the
+shipped code: 5 and 5. As that part found, the full lists come from the plan: the vector statement reads
+`Seq Scan on chunks` here too. So what that part left open is still open on the shipped code: arm C's lists
+after deletes on a corpus whose vector statement stays on `Index Scan using chunks_hnsw`. Arms B, D and E
+in this state equal the fresh after-fix `fixture-catalog` run on all 36 figures and every query's refs.
+
+**The floor, by reading.** Each `evals/docs-retrieval/floor.json` row against this part's fresh
+`fixture-catalog` run. A breach is a figure below its row's `value`. None is breached, and every `value`
+sits below its figure.
+
+| Arm | Metric | `value` | `recordedAt` | This run |
+|---|---|---|---|---|
+| B | recall@5 | 0.95 | 2026-09-21 | 1.000 |
+| B | MRR | 0.55 | 2026-10-21 | 0.6018518518518519 |
+| C | recall@5 | 0.95 | 2026-09-21 | 1.000 |
+| C | MRR | 0.83 | 2026-09-21 | 0.8888888888888888 |
+| D | recall@5 | 0.95 | 2026-09-21 | 1.000 |
+| D | MRR | 0.65 | 2026-10-21 | 0.7037037037037037 |
+| E | recall@5 | 0.61 | 2026-09-21 | 0.667 |
+| E | MRR | 0.5 | 2026-09-21 | 0.5555555555555556 |
+
+Two rows were re-recorded with Task 8's change, commit `0c4630e5`, the only commit touching `floor.json`
+since `d15e5cc3` (`git log d15e5cc3..HEAD -- evals/docs-retrieval/floor.json`). Its reason line reads:
+*"Re-record fixture-catalog floors: route 2's REINDEX end state puts the 41-chunk corpus on the filtered
+Seq Scan plan, moving B/mrr, D/mrr (docs/retrieval-eval.md → The regression floor)"*. The arithmetic, by
+`docs/retrieval-eval.md` → `## The regression floor` → **The margin, and why there is one.**:
+
+- B `mrr`: 0.6018518518518519 − 0.05 = 0.5518…, truncated to 0.55, was 0.6;
+- D `mrr`: 0.7037037037037037 − 0.05 = 0.6537…, truncated to 0.65, was 0.7.
+
+This run's figures equal the ones those values were taken from. No other row moved, so none was
+re-recorded. `evals/docs-retrieval/check-floor.mjs` was not run; gate 11 grades it at the Run gates phase.
+
+#### The shipped end state at refresh level
+
+**The outcome.** The shipped refresh's end state matches `reference-reindex` in 11 of the 12 TypeScript
+scenarios, at 0 hits in `scan` and in `operator`, `unchanged` included. The exception is `self-docs`
+`file-edited`, whose `before` reading differs on 1 hit in `scan` and 0 in `operator`. The hand-issued
+`REINDEX` that follows leaves the same hit. The maintainer ruled that this hit is recorded and not
+attributed, and that it is not a defect in Task 8's commit, as for Task 6's real-catalog residual in
+`#### Route 2 on the real catalog`. On both corpora the fix moved `other-corpus`, `file-added` and `file-removed` from
+differing to matching. On `fixture-catalog` it also moved `file-edited`. On `self-docs` it took
+`file-edited` from 9636 / 9636 to 1 / 0.
+
+**The setup.**
+
+- **The code.** 2026-10-21, at commit `300b1e04`, after `npm run build`. The tree held this task's two
+  probe edits, neither of which changes a statement the refresh-rule module issues or a reading it takes:
+  `evals/docs-retrieval/bm25-history.mjs` → `STORE_SELECT` is now the store's exported
+  `LEXICAL_SEARCH_STATEMENT`, and `evals/docs-retrieval/bm25-refresh-rule.mjs`'s header is restated. On
+  this commit `refreshIndex` calls `DocStore.rebuildIndexes()`, which issues `END_STATE_STATEMENTS`
+  (`REINDEX INDEX chunks_bm25` alone), after every refresh that wrote anything and after any refresh whose
+  index is not marked rebuilt (`cli/src/retrieval/store.ts`, `cli/src/retrieval/refresh.ts`).
+- **The engine.** `harness-runs/scratch/fix-bm25/versions.mjs`, run before the first run, read `version()`
+  `PostgreSQL 18.6 (PGlite 0.5.10) on wasm32-unknown-emscripten`, `SHOW pg_textsearch.library_version`
+  `1.5.1`, and `pg_extension.extversion` `pg_textsearch` `1.5.1` and `vector` `0.8.7`.
+- **The runs.** These are the two TypeScript refresh-level commands of `docs/retrieval-eval.md` → `### The
+  BM25 index-state probe`, unchanged, at the default `--end-state candidate`, with `--capture` into
+  `harness-runs/scratch/fix-bm25/shipped-typescript-<corpus>-1.txt`. Each was run once, and both exited
+  `0`. The `self-docs` run outlasted the session's 600 s foreground limit and finished in the background.
+  Its capture was read once it had exited, and the maintainer accepted that collection. Both summaries read `pg_textsearch: 1.5.1`. The Python
+  backend's refresh is unchanged on this branch, so it was not run. Its figures in `#### Route 2 at refresh
+  level, issued by hand` and `#### The candidate end-state rule, at refresh level, on 1.5.1` stand. The
+  Python port's after-fix figures are in **Python, on `fix_docs_retrieval_bm25_index_state_python`**
+  below.
+- **The corpora.** `fixture-catalog` is at `{ files: 9, chunks: 41 }`, and at `{ files: 8, chunks: 36 }`
+  without `F` (`docs/webhooks.md`). `self-docs` is at `{ files: 71, chunks: 830 }`, and at `{ files: 70,
+  chunks: 819 }` without `F` (`docs/work-report-research/user-review-fix-plan-writer.md`). Task 2's runs
+  read `829` and `818`. This branch has edited `docs/`, so every `self-docs` count is compared
+  structurally. The final corpus holds 219 hits on `fixture-catalog` and 198 without `F`, and 9656 and 9564
+  on `self-docs`.
+- **The plans.** The probe plan was the `chunks_bm25` index scan in all 18 readings of each run, so no
+  reading was re-scored.
+- **The columns** are those of `#### Route 2 at refresh level, issued by hand`, with one change. **Statement
+  issued** is what the module issued by hand after the shipped refresh, and that refresh had already
+  ended in `REINDEX`.
+
+**TypeScript (PGlite), A `fixture-catalog`, B `self-docs`.**
+
+| Scenario | Last refresh | Candidate decision | Statement issued | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 41, unchanged 0, deleted 0 | `spill` (0, 41, 0) | spill | 0 / 0 | 0 / 0 | — | **Seq Scan** → **Seq Scan** |
+| `other-corpus` | embedded 41, unchanged 0, deleted 830 | `reindex` (830, 41, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 5, unchanged 36, deleted 0 | `spill` (0, 5, 0) | spill | 0 / 0 | 0 / 0 | — | **Seq Scan** → **Seq Scan** |
+| `file-edited` | embedded 1, unchanged 40, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 0 / 0 | 0 / 0 | — | **Seq Scan** → **Seq Scan** |
+| `file-removed` | embedded 0, unchanged 36, deleted 5 | `reindex` (5, 0, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | **Seq Scan** → **Seq Scan** |
+| `unchanged` | embedded 0, unchanged 41, deleted 0 | `none` (0, 0, 0) | none | 0 / 0 | 0 / 0 | — | **Seq Scan** → **Seq Scan** |
+
+**TypeScript (PGlite), A `self-docs` at `{ files: 71, chunks: 830 }`, B `fixture-catalog`.**
+
+| Scenario | Last refresh | Candidate decision | Statement issued | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 830, unchanged 0, deleted 0 | `spill` (0, 830, 0) | spill | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `other-corpus` | embedded 830, unchanged 0, deleted 41 | `reindex` (41, 830, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 11, unchanged 819, deleted 0 | `spill` (0, 11, 0) | spill | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 829, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | **1** / 0 | **1** / 0 | 2.384185791015625e-7, raw (`q-sd-stack-detection`, `docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls`) | Index scan → Index scan |
+| `file-removed` | embedded 0, unchanged 819, deleted 11 | `reindex` (11, 0, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `unchanged` | embedded 0, unchanged 830, deleted 0 | `none` (0, 0, 0) | none | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+
+**The verdict, against `reference-reindex`:**
+
+- **TypeScript, `fixture-catalog`: the shipped end state matches** in all six scenarios, at 0 hits in both
+  columns, `unchanged` included.
+- **TypeScript, `self-docs`: the shipped end state does not match in `file-edited`.** It differs on 1 hit
+  in `scan` and 0 in `operator`. It matches in the other five, `unchanged` included. The run was taken
+  once, so no `--compare` says whether the hit recurs. By the maintainer's ruling the hit is recorded, not
+  attributed, and is not a defect in Task 8's commit.
+
+**The differing hit.** `q-sd-stack-detection` → `docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls`.
+
+- **`scan`:** `file-edited.before` reads `−2.548860`, raw `−2.5488603115081787`, against
+  `reference-reindex.full`'s `−2.548861`, raw `−2.548860549926758`.
+- **`operator`:** `−2.5488604307174683` in both.
+- **Where it shows:** `fresh`, `other-corpus`, `file-added` and `unchanged` all read `reference-reindex`'s
+  raw `scan`. `file-edited.after`, read after the hand-issued `REINDEX`, reads the same
+  `−2.5488603115081787` as `before`.
+- **What was ruled out:** the index summary has the same totals in `before`, `after` and the reference:
+  `total_docs 830`, `total_len 384157`, 1 segment, no memtable document.
+
+So a second `REINDEX` over the same live rows did not reach the reference's value for this hit. That
+`REINDEX` was issued in the same database, whose `chunks` table had one row rewritten by the edit. The
+cause is not attributed here. The difference is 2.384185791015625e-7, one float32 ULP at this
+magnitude. The `operator` reading and the index summary are identical, and a second `REINDEX` leaves the hit.
+The maintainer ruled, as for Task 6's real-catalog residual (`#### Route 2 on the real catalog`), that
+the hit is recorded and not attributed, and that it is not a defect in Task 8's commit.
+
+**The index state left behind.** Every `before` reading leaves 1 segment and no memtable document, read
+after a reopen. That is 41 documents on `fixture-catalog` (36 in `file-removed`), and 830 on `self-docs`
+(819 in `file-removed`).
+
+**The store's `LIMIT 50` plan.** On `fixture-catalog`, the `before` plan is `Seq Scan on public.chunks` in
+five scenarios and the `chunks_bm25` index scan in `other-corpus`. That is the plan Task 2's route-2 run
+read *after* its hand-issued `REINDEX`, scenario for scenario. `other-corpus`'s table held corpus B's 830
+rows before the refresh, and its `REINDEX` leaves the index scan, as in Task 2's run. On `self-docs`
+every reading's store plan is the index scan. Each plan's `Output` lists `id` and the `<@>` operator
+expression, which is `LEXICAL_SEARCH_STATEMENT`'s `score` column.
+
+**Against the two earlier tables.** These are the TypeScript `before` columns of `#### Route 2 at refresh
+level, issued by hand` (Task 2, *route 2*) and `#### The candidate end-state rule, at refresh level, on
+1.5.1` (*candidate*). On `fixture-catalog`, at the same counts, the comparison is value for value. On
+`self-docs` it is structural.
+
+- **Moved from differing to matching:**
+  - **`other-corpus`:** `fixture-catalog` from 219 / 219 in both; `self-docs` from 9636 / 9636 (route 2) and
+    9579 / 9579 (candidate).
+  - **`file-added`:** `fixture-catalog` from 9 / 0 in both; `self-docs` from 1 / 0 in both.
+  - **`file-removed`:** `fixture-catalog` from 198 / 198 in both; `self-docs` from 9544 / 9542 (route 2) and
+    9487 / 9487 (candidate).
+  - **`file-edited` on `fixture-catalog`:** from 219 / 219 in both.
+- **Moved, and still differing:** `file-edited` on `self-docs`, from 9636 / 9636 (route 2) and 9577 /
+  9577 (candidate) to 1 / 0.
+- **Matching before and after the fix:** `fresh` and `unchanged` on `fixture-catalog`, at 0 / 0 in all
+  three.
+- **Shifted with the stamp, not attributed:** `fresh` and `unchanged` on `self-docs` read 0 / 0 in route 2
+  and here, and 2 / 0 in candidate.
+- **The store plan:** on `fixture-catalog`, the `before` plan moved from the index scan to `Seq Scan` in
+  every scenario but `other-corpus`. On `self-docs` it stayed the index scan.
+
+**Python, on `fix_docs_retrieval_bm25_index_state_python`.** The same reading, taken on the Python port
+of the fix (goal 4), and read against the Python rows of `#### The candidate end-state rule, at refresh
+level, on 1.5.1` as its before-fix figures.
+
+**The outcome.** The shipped Python refresh's end state matches `reference-reindex` in 11 of the 12
+scenarios, at 0 hits in `scan` and in `operator`, `unchanged` included. The exception is `self-docs`
+`file-edited`, as on TypeScript: 1 hit in `scan` and 0 in `operator`, on the same query as the TypeScript
+hit and on another key. It has the ruled shape, so it is recorded, not attributed, and is not a defect.
+Each corpus was run twice, and both runs read the same in every cell. On both corpora the fix moved every
+scenario that differed before it to matching, except `self-docs` `file-edited`, which moved from 9577 /
+9577 to 1 / 0.
+
+**The setup.**
+
+- **The code.** 2026-10-22, on `fix_docs_retrieval_bm25_index_state_python`. The runs' `ran` stamps fall
+  after commit `1023cde1` and before `483b56ad`, which changed only the header of
+  `evals/docs-retrieval/bm25-refresh-rule.mjs`. On that code `refresh_index` ends every refresh that wrote
+  anything, and every refresh whose `index_state` is not `rebuilt`, with `DocStore.rebuild_indexes()`,
+  which issues `END_STATE_STATEMENTS` (`docs-retrieval-service/src/harness_docs_retrieval/refresh.py`,
+  `docs-retrieval-service/src/harness_docs_retrieval/store.py`).
+- **The engine.** Read before the first run, on the compose Postgres: `version()` `PostgreSQL 18.6
+  (Debian 18.6-1.pgdg12+2) on aarch64-unknown-linux-gnu`, `SHOW pg_textsearch.library_version` `1.5.1`,
+  and `pg_extension.extversion` `pg_textsearch` `1.5.1` and `vector` `0.8.7`.
+- **The runs.** These are the two Python refresh-level commands of `docs/retrieval-eval.md` → `### The
+  BM25 index-state probe`, at the default `--end-state candidate`, each with `--capture`. Each was run
+  twice, four runs in all, and each pair was then compared with `bm25-history.mjs --compare`. All four
+  exited `0` and raised no collision refusal. Every summary read `pg_textsearch: 1.5.1`.
+- **The two runs of each corpus compared.** `--compare` printed `captures: 2, values compared: 7674,
+  disagreeing: 0` for `fixture-catalog` and `captures: 2, values compared: 346660, disagreeing: 0` for
+  `self-docs`. The stdout of each pair differs only in line 1, the `ran` timestamp, and so do its
+  captures. Every figure below is therefore both runs' figure.
+- **The corpora.** `fixture-catalog` is at `{ files: 9, chunks: 41 }`, and at `{ files: 8, chunks: 36 }`
+  without `F` (`docs/webhooks.md`). `self-docs` is at `{ files: 71, chunks: 830 }`, and at `{ files: 70,
+  chunks: 819 }` without `F` (`docs/work-report-research/user-review-fix-plan-writer.md`), the TypeScript
+  run's stamp above. The final corpus holds 219 hits on `fixture-catalog` and 198 without `F`, and 9655
+  and 9563 on `self-docs`, against the TypeScript run's 9656 and 9564 at the same stamp.
+- **The plans.** The probe plan was the `chunks_bm25` index scan in all 18 readings of each run, so no
+  reading was re-scored.
+- **The columns** are those of the TypeScript tables above.
+
+**Python (Postgres), A `fixture-catalog`, B `self-docs`.** Both runs read the same in every cell.
+
+| Scenario | Last refresh | Candidate decision | Statement issued | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 41, unchanged 0, deleted 0 | `spill` (0, 41, 0) | spill | 0 / 0 | 0 / 0 | — | **Seq Scan** → **Seq Scan** |
+| `other-corpus` | embedded 41, unchanged 0, deleted 830 | `reindex` (830, 41, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 5, unchanged 36, deleted 0 | `spill` (0, 5, 0) | spill | 0 / 0 | 0 / 0 | — | **Seq Scan** → **Seq Scan** |
+| `file-edited` | embedded 1, unchanged 40, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | 0 / 0 | 0 / 0 | — | **Seq Scan** → **Seq Scan** |
+| `file-removed` | embedded 0, unchanged 36, deleted 5 | `reindex` (5, 0, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | **Seq Scan** → **Seq Scan** |
+| `unchanged` | embedded 0, unchanged 41, deleted 0 | `none` (0, 0, 0) | none | 0 / 0 | 0 / 0 | — | **Seq Scan** → **Seq Scan** |
+
+**Python (Postgres), A `self-docs` at `{ files: 71, chunks: 830 }`, B `fixture-catalog`.** Both runs read
+the same in every cell.
+
+| Scenario | Last refresh | Candidate decision | Statement issued | `before` ≠ ref | `after` ≠ ref | Largest `after` difference | Store plan, before → after |
+|---|---|---|---|---|---|---|---|
+| `fresh` | embedded 830, unchanged 0, deleted 0 | `spill` (0, 830, 0) | spill | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `other-corpus` | embedded 830, unchanged 0, deleted 41 | `reindex` (41, 830, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-added` | embedded 11, unchanged 819, deleted 0 | `spill` (0, 11, 0) | spill | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `file-edited` | embedded 1, unchanged 829, deleted 0 | `reindex` (0, 1, 1) | `REINDEX` | **1** / 0 | **1** / 0 | 2.384185791015625e-7, raw (`q-sd-stack-detection`, `docs/team-accounts-research.md#option-b--a-team-organisation-on-the-claude-api`) | Index scan → Index scan |
+| `file-removed` | embedded 0, unchanged 819, deleted 11 | `reindex` (11, 0, 0) | `REINDEX` | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+| `unchanged` | embedded 0, unchanged 830, deleted 0 | `none` (0, 0, 0) | none | 0 / 0 | 0 / 0 | — | Index scan → Index scan |
+
+**The verdict, against `reference-reindex`:**
+
+- **Python, `fixture-catalog`: the shipped end state matches** in all six scenarios, at 0 hits in both
+  columns, `unchanged` included.
+- **Python, `self-docs`: the shipped end state does not match in `file-edited`.** It differs on 1 hit in
+  `scan` and 0 in `operator`, in both runs. It matches in the other five, `unchanged` included. One hit,
+  `operator` identical and the index summary identical is the ruled residual shape: the hit is recorded,
+  not attributed, and is not a defect.
+
+**The differing hit.** `q-sd-stack-detection` →
+`docs/team-accounts-research.md#option-b--a-team-organisation-on-the-claude-api`.
+
+- **`scan`:** `file-edited.before` reads `−3.700792`, raw `−3.7007923126220703`, against
+  `reference-reindex.full`'s `−3.700793`, raw `−3.7007925510406494`.
+- **`operator`:** `−3.700792` in both, `operator_exact` `−3.70079243183136` in both.
+- **Where it shows:** `fresh`, `other-corpus`, `file-added` and `unchanged` all read `reference-reindex`'s
+  raw `scan`. `file-edited.after`, read after the hand-issued `REINDEX`, reads the same
+  `−3.7007923126220703` as `before`.
+- **What was ruled out:** the index summary is the same in `before`, `after` and the reference:
+  `total_docs 830`, `total_len 386472`, 1 segment, no memtable document.
+- **Below the probe's rounding:** the `≠ ref` counts compare six-place values. Read unrounded from the
+  capture, `file-edited` also differs from the reference on a second hit of the same query,
+  `docs/team-accounts-research.md#option-a--each-members-own-credential-selected-by-who-triggered-the-work`,
+  `−4.704884052276611` against `−4.704883575439453`, which round alike. No `operator_exact` value differs
+  from the reference's in any reading of either corpus.
+- **Beside the TypeScript hit:** the same query and the same difference, 2.384185791015625e-7, on another
+  key of the same scenario; the TypeScript hit,
+  `docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls`, does not differ here.
+
+**The index state left behind.** Every `before` reading holds 1 segment and no memtable document. That is
+41 documents on `fixture-catalog` (36 in `file-removed`), and 830 on `self-docs` (819 in `file-removed`).
+
+**The store's `LIMIT 50` plan.** On `fixture-catalog`, the plan is `Seq Scan on public.chunks` in five
+scenarios and the `chunks_bm25` index scan in `other-corpus`, `before` and `after`, scenario for scenario
+the TypeScript table's. On `self-docs` every reading's store plan is the index scan.
+
+**Order inversions.** No `fixture-catalog` reading lists an order inversion against `operator`, the
+`fresh` scenario's `before` reading included.
+
+**Against the before-fix figures.** These are the Python rows of `#### The candidate end-state rule, at
+refresh level, on 1.5.1`. On `fixture-catalog`, at the same counts, the comparison is value for value;
+the one count that differs is the `other-corpus` refresh's `deleted`, corpus B's chunk count, 830 here
+and 826 there. On `self-docs`, at `{ files: 71, chunks: 830 }` here and `826` there, it is structural.
+
+- **Moved from differing to matching, `fixture-catalog`, in both runs:** `fresh`, `file-added` and
+  `unchanged` from 136 / 0; `other-corpus` and `file-edited` from 219 / 219; `file-removed` from 198 /
+  198.
+- **Moved from differing to matching, `self-docs`:** `fresh` from 1547 / 0 and 2117 / 0 (the two
+  before-fix runs); `other-corpus` from 9579 / 9579; `file-added` from 3187 / 0 and 1547 / 0;
+  `file-removed` from 9487 / 9487; `unchanged` from 3188 / 0 and 1265 / 0.
+- **Moved, and still differing:** `self-docs` `file-edited`, from 9577 / 9577 to 1 / 0.
+- **Between the two runs:** the before-fix `self-docs` pair's `--compare` listed 10570 values out of
+  343924; this pair lists none out of 346660. On `fixture-catalog` both pairs list none out of 7674.
+- **The index state:** before the fix, the `fixture-catalog` `fresh`, `file-added` and `unchanged`
+  `before` readings held 41 memtable documents and no segment; here they hold 1 segment and no memtable
+  document.
+- **The store plan:** on `fixture-catalog`, the `before` plan moved from the index scan to `Seq Scan` in
+  every scenario but `other-corpus`. On `self-docs` it stayed the index scan.
+- **Observation 2:** the 4 order inversions against `operator` that the before-fix `fresh` `before`
+  reading listed on `fixture-catalog` are gone.
+
+**The container test, with the fix removed.** `docs-retrieval-service/tests/test_refresh_end_state_postgres.py`
+was run on 2026-10-22 at commit `a161a3d4`, against the compose Postgres (`PostgreSQL 18.6`,
+`pg_textsearch` `1.5.1`), from this checkout's root:
+
+```
+HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL=postgresql://harness:harness@127.0.0.1:5432/docs_retrieval bash scripts/python-service.sh test tests/test_refresh_end_state_postgres.py
+```
+
+- **With step (6) removed**, the `if wrote or index_state != INDEX_STATE_REBUILT:` block of `refresh.py`
+  deleted for the run and nothing else in it changed, it exited `1` with `4 failed`, in each of two runs:
+  - (a) a refresh with deletes, (b) the Python store's own fresh build on an empty database and (c) a
+    database the shipped code left each failed `"how does the planner decide which depots a parcel
+    travels through" ranks differently from a fresh build of the final corpus`. The first difference was
+    `docs/routing.md` at `−8.710104942321777` against `−8.17165470123291` in (a),
+    `docs/routing.md#cut-off-times` at `−3.756242513656616` against `−3.7736687660217285` in (b), and
+    `docs/routing.md` at `−9.169733047485352` against `−9.20033073425293` in (c).
+  - (d) the marker's two other branches failed `a first build did not mark the index rebuilt`, `assert
+    'pending' == 'rebuilt'`.
+- **With the block restored**, `git diff --exit-code` on `refresh.py` exited `0`, and the same command
+  exited `0` with `4 passed` and no case skipped.
+
+**The backend parity case.** The maintainer ran it by hand on 2026-10-22, at commit `0a2d8665`, against
+the same compose Postgres, twice:
+
+```
+HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL=postgresql://harness:harness@127.0.0.1:5432/docs_retrieval bash scripts/python-service.sh test tests/test_backend_parity_e2e.py -v
+```
+
+Both runs reported `test_both_backends_answer_byte_identically PASSED`,
+`test_both_backends_deliver_a_snippet_ending_in_a_lone_surrogate PASSED` and `2 passed`.
+
+### The recommendation for the fix branch
+
+**What this is.** A proposal to the maintainer for the route of the branch that fixes the BM25 scores'
+dependence on the `chunks_bm25` index's state. The fix branch decides. This subsection takes no
+measurement of its own: every figure below is quoted from a subsection above and cited by goal number,
+subsection and row. **The proposed route is route 2, another route: end every refresh that changed
+something, and the first `docs index` build, in the state `REINDEX INDEX chunks_bm25` leaves, in place of
+the candidate rule's `bm25_spill_index` branch.** Goals 5, 1 and 3 decided it, goal 2 qualifies it, and
+goal 6 sets its priority.
+
+**Goal 4's conclusion: explained by mechanism 2** (`timescale/pg_textsearch#573`). On both engines the
+probe's `t0` rows return each `fixture-catalog` near-tie pair in `scan`'s order and against
+`operator`'s, and no spilled state inverts either (`### The near-tie ordering on an empty database`, its
+table's `t0` rows against its `t1`–`t4` rows); and the Python store's own fresh build on an empty database is that `t0` state, with 41 memtable
+documents, no segment and both pairs inverted with the same values, neither of which is inverted after the
+spill (`### The candidate end-state rule, at refresh level`, **Observation 2**).
+
+**How the route was chosen.** The three tests, applied in order.
+
+1. **Route 1, the candidate rule: does not hold.** Its test is that goal 5's verdict holds on both
+   backends and both corpora against `reference-reindex`, and that goal 3's stray appears only in a state
+   the rule leaves behind it. Goal 5's verdicts (`### The candidate end-state rule, at refresh level`,
+   **The verdicts**) meet the first part on one of the four:
+   - TypeScript, `fixture-catalog`: holds, 0 hits in every scenario (the first table).
+   - Python, `fixture-catalog`: fails in `other-corpus`, 1 hit after `REINDEX`, 9.5367431640625e-7; and
+     in `unchanged`, decision `none`, 136 hits, the largest 0.1072683334350586, on an index holding the
+     41 memtable documents the shipped prior refresh left (the second table's `other-corpus` and
+     `unchanged` rows).
+   - TypeScript, `self-docs` at `{ files: 71, chunks: 820 }`: fails in `fresh`, `file-added` and
+     `unchanged`, 1 hit each, 4.76837158203125e-7, on an index of 4 or 5 segments against the
+     reference's 1 (the third table's three rows).
+   - Python, `self-docs` at `{ files: 71, chunks: 820 }`: fails in `fresh` after the spill, 10 and 7 hits,
+     and `file-added` after the spill, 3 and 8, the largest 0.0000019073486328125; and in `unchanged`,
+     decision `none`, 109 and 156 hits, the largest 0.2904853820800781 and 0.08703994750976562 (the fourth
+     table's three rows).
+
+   The second part fails through the `none` branch. Goal 3 finds the stray only while the index's
+   memtable is being emptied, and none once the rows are in a segment (`### The stray index-scan score`,
+   **The trace, from the tables above.**, item 1). The rule's spill and `REINDEX` leave no memtable, but
+   `none` leaves whatever the prior refresh left: in the Python `self-docs` `unchanged` scenario, run 1,
+   57 memtable documents beside 3 segments, and the hits differing from the reference fell from 568 to 109
+   with no statement issued between the two readings (**The verdicts**, the Python `self-docs` `unchanged` bullet).
+2. **Route 3, another lexical engine: does not hold.** Its test is that no `pg_textsearch` state scores
+   stably. One state does, the single segment `REINDEX` and `CREATE INDEX` over loaded rows leave:
+   - goal 1: `t3` and `t4` differ on no hit, in either column, in any run, on both engines and both
+     corpora (`### The score each index state ranks by`, **State against state.**, the `t3` / `t4` row;
+     **Which build forms score alike in `scan`.**);
+   - goal 5: every `after` reading that followed `REINDEX` differs from `reference-reindex` on 0 hits in
+     both columns, except Python `fixture-catalog` `other-corpus`'s 1 hit, and the Python `self-docs`
+     pair's `--compare` listed no value in `reference-reindex` of either variant or in any `after`
+     reading that followed `REINDEX` (`### The candidate end-state rule, at refresh level`, the paragraph
+     after the fourth table, and the paragraph after **The verdicts**);
+   - goal 3: the segment states compared 548216 values each at `t1`, `t3` and `t4`, and the history
+     run's `s2`, `s4`, `s5` and `s7` 264656 each, with none disagreeing (`### The stray index-scan score`,
+     **The trace, from the tables above.**, item 1).
+3. **Route 2, another route: holds.** Its test is that the rule fails, which route 1 above records. The
+   figures point at the single-segment state `REINDEX` leaves rather than at the spill:
+   - **The spill does not reach it on a multi-segment index.** Goal 1: on `self-docs` at `{ files: 71,
+     chunks: 813 }`, fresh insert followed by `bm25_spill_index` leaves 4 segments and differs from `t3`
+     and `t4` on 12 hits on each engine, while on `fixture-catalog` it leaves 1 segment and differs on
+     none (`### The score each index state ranks by`, **State against state.**, the `t1` / `t3` and `t1` /
+     `t4` rows). Goal 5: every `after` reading that followed the spill differs from `reference-reindex` on
+     0 hits on `fixture-catalog` and on 1 to 10 on `self-docs` at `{ files: 71, chunks: 820 }`, the
+     largest 0.0000019073486328125, the Python store's spill leaving 5 or 6 segments (the paragraph after
+     **The verdicts**; the paragraph after the fourth table).
+   - **`REINDEX` reaches it** on both backends and both corpora, with the one exception the route 3
+     test's goal 5 bullet names.
+   - **`none` keeps whatever state it finds.** Goal 5's `unchanged` scenarios differ from the reference
+     wherever their `before` reading did, in each run (the paragraph after **The verdicts**).
+
+   **The qualifications the figures name.**
+   - **The end state is not bit-identical across `REINDEX`es.** Goal 5's Python `fixture-catalog`
+     `other-corpus` hit, `q-fc-token-lifetime` → `docs/api-auth.md#rotating-a-key`, reads raw `scan`
+     −8.3079833984375 after `REINDEX` against the reference's −8.307984352111816, a difference of
+     9.5367431640625e-7 (**The verdicts**, its first sub-bullet). Goal 2 records the same size of difference
+     between two `REINDEX`es of the same rows, and leaves it unexplained (the open items below).
+   - **Below the planner's crossover, the `REINDEX` end state changes the store's plan.** Goal 5: on
+     `fixture-catalog`, on both backends, the `REINDEX` the rule issued turned the store's `LIMIT 50` plan
+     to `Seq Scan on public.chunks` in `file-edited` and `file-removed`, and `reference-reindex` reads the
+     same Seq Scan (`### The candidate end-state rule, at refresh level`, **Observation 1**). Goal 1's
+     `fixture-catalog` `t3` and `t4` rows read the same store plan on both engines. On that plan the store
+     ranks by the operator expression, not by `scan`, and `docs/retrieval.md` → `## Still open`, the
+     lexical-arm bullet, records a 63-row crossover below which an index whose statistics describe its rows
+     can return non-matching rows at score `0`. Ending every refresh in the `REINDEX` state puts a corpus
+     below that crossover on this plan, as the `fixture-catalog` readings show.
+   - **A database the shipped code built is not brought to the end state by an unchanged refresh.** The
+     `none` failures above all start from the state a shipped refresh left.
+
+   **What this branch did not measure, and the measurement the fix branch takes first.** At refresh level,
+   goal 5 issued `REINDEX` after a refresh that left a dead row and, as `reference-reindex`, after a
+   refresh into an empty store. It issued none after a refresh that inserted into a non-empty store
+   (`file-added`), nor after an unchanged refresh over an index holding memtable documents or more than one
+   segment. At probe level, `REINDEX` after a fresh insert scores as `CREATE INDEX` over loaded rows on both
+   engines and corpora (goal 1, the `t3` / `t4` row). The first measurement is goal 5's six scenarios, on both
+   backends and both corpora, with `REINDEX` issued wherever the rule issued the spill and in the
+   `unchanged` scenario, each graded against `reference-reindex`, with the store's `LIMIT 50` plan read as
+   goal 5 read it. How a fix detects an index the shipped code left is the fix branch's to decide; this
+   branch measured no detection. The relevance of the lexical arm on the Seq Scan plan is unmeasured too:
+   goal 6 ran no state after `REINDEX`.
+
+**The deciding goals.** Goal 5, through **The verdicts**, the paragraph after them and **Observation 1**
+of `### The candidate end-state rule, at refresh level`. Goal 1, through **State against state.** and
+**Which build forms score alike in `scan`.** of `### The score each index state ranks by`. Goal 3, through
+item 1 of **The trace, from the tables above.** in `### The stray index-scan score`. Goal 2 qualifies the
+route and decides nothing, and goal 4's conclusion above decides nothing either.
+
+**Goal 6: ranking quality on `fixture-catalog`, score parity only on `self-docs`.** On `fixture-catalog`
+both mechanisms move recorded relevance figures: mechanism 2 moves arm B's recall@1 from 0.444 to 0.333 and
+arm D's from 0.556 to 0.444, and both arms' MRR by 0.056, through the `q-fc-token-lifetime` near-tie pair;
+the held-another comparison, which adds the dead rows, moves arm B's recall@3 (1.000 held-another, 0.889
+fresh-insert) and MRR (0.704, 0.657), and arm D's MRR (0.778, 0.759). On `self-docs` at `{ files: 71, chunks: 821 }` no recorded figure moves in any arm
+(`### Whether either mechanism moves relevance`, **The answer.**). The held-another figure is the higher one
+in most moved columns, so on `fixture-catalog` a fix changes the recorded figures rather than raising them.
+For the route's priority: no figure here shows either mechanism moving relevance on a corpus larger than
+41 chunks, so the fix is a score-parity fix, between runs, refresh histories and backends, whose ranking
+effect is measured on a 41-chunk corpus only.
+
+**The open items, still unexplained.**
+
+- **Goal 2, `fixture-catalog` after `REINDEX`:** 14 (PGlite) and 12 (Postgres) hits whose `scan` differs
+  from `operator` beyond `real` storage, the largest 6.556510925292969e-7 and 9.5367431640625e-7; 5 and 4
+  of them are 39 tokens or shorter, so the residual is not consistent with mechanism 2 (`### What still
+  differs after REINDEX`, **Conclusions, one per lead.**, the first bullet).
+- **Goal 2, `self-docs` at `{ files: 71, chunks: 818 }` after `REINDEX`:** 806 (PGlite) and 696 (Postgres)
+  hits differing beyond `real` storage, the largest 0.0000015497207641601562 and 0.000001430511474609375,
+  with the length split withheld, so mechanism 2 is neither supported nor excluded (the same list, the
+  second bullet).
+- **Goal 2, two `REINDEX`es differing:** 1 hit, `q-sd-run-gates` →
+  `.claude/context/cli.md#what-this-layer-owns-and-what-it-is-not`, by 9.5367431640625e-7, on both engines
+  and in both runs, at `self-docs` `{ files: 71, chunks: 818 }` (the same list, the third bullet).
+- **Goal 3, what empties the memtable under a read-only workload:** not identified. With no write and
+  `autovacuum_count` at 0, it moved 278 `scan` values to their segment score in each `t0` run at `self-docs`
+  `{ files: 71, chunks: 819 }`, and the `operator` stray rate was 1 in 548216 values compared in each
+  states-sequence run, and 0 in 264656 (`s0`) and 1 in 269920 (`s1`) in the history run (`### The stray
+  index-scan score`, **The reproducible sequence.** and **Conclusion.**).
+
+**The limits of this recommendation.**
+
+- **Its figures come from fixture-sized corpora:** `fixture-catalog` at 41 chunks, and `self-docs` at its
+  runs' stamps, `{ files: 71 }` with 813, 818, 819, 820 and 821 chunks. They do not on their own justify
+  the fix's design: a fix branch that adopts the route takes the real-shape figure first
+  (`harness-runs/lessons.md` → `## Evidence and measurement`, the first rule).
+- **The rebuild's wall-clock cost was not measured by this branch.** Only an operator's hand run through
+  the probe's `--reindex-cost` seam may supply it (`docs/retrieval-eval.md` → `### The BM25 index-state
+  probe`).
+- **Every `pg_textsearch` source path and issue number cited in this section but `#573` is a
+  task-prompt lead,** not re-read on this branch; `#573`'s provenance is stated in this section's lead.
+
+**Its standing on pg_textsearch 1.5.1.** Route 2 stands, with one qualification narrowed. Every figure here
+is quoted from `### The deciding figures on pg_textsearch 1.5.1`, whose `self-docs` runs carry `{ files:
+71, chunks: 825 }` and `826`, so its `self-docs` figures are compared with the ones above by outcome only.
+Goal 5 still fails route 1 on `self-docs`: TypeScript in `fresh`, `file-added` and `unchanged` on 2, 1 and
+2 hits at 4.76837158203125e-7, and Python in the same three scenarios in both runs, the largest after the
+spill 0.0000019073486328125; on `fixture-catalog` the rule holds on both backends except Python's
+`unchanged`, decision `none`, on 136 hits, the largest 0.1072683334350586 (`#### The candidate end-state
+rule, at refresh level, on 1.5.1`, **The verdicts**). Goals 5 and 1 still fail route 3: every `after`
+reading that followed `REINDEX` differs from `reference-reindex` on 0 hits in both columns on every backend
+and corpus (the same part, the paragraph after **The verdicts**), and `t3` / `t4` differ on no hit on
+either engine or corpus (`#### The score each index state ranks by, on 1.5.1`, **State against state, on
+1.5.1.**, the `t3` / `t4` row). Goal 1 still points at `REINDEX` rather than the spill: on `self-docs` the
+spill leaves 3 segments and differs from `t3` and `t4` on 1 hit (PGlite) and 4 (Postgres), and on
+`fixture-catalog` on none (the same table, the `t1` / `t3` and `t1` / `t4` rows). Goal 3's stray is gone:
+no `operator` value disagreed, of 555466 compared in each states-sequence run and of 268156 (`s0`) and
+273420 (`s1`) in the history run, while each memtable row's `scan` still moves once to its segment score
+when the memtable is emptied (`#### The stray index-scan score, on 1.5.1`, the paragraph after its table,
+and **Changed or unchanged.**, the column and `scan`-move bullets). The not-bit-identical qualification
+loses its goal-5 instance: Python `fixture-catalog` `other-corpus` after `REINDEX` reads 0 hits in both
+runs, against 1 hit at 9.5367431640625e-7 on 1.3.1 (the refresh-level part, **Changed or unchanged.**, the
+Python `fixture-catalog` bullet); goal 2's two-`REINDEX` difference was not re-taken on 1.5.1 and stands as
+recorded. The Seq Scan qualification stands: `REINDEX` still turns the store's plan to `Seq Scan` on
+`fixture-catalog` in `file-edited` and `file-removed` on both backends (that part, **Observation 1**), and
+the crossover is still 63 rows (`#### The lexical-plan crossover, on 1.5.1`, **The outcome.**). The `none`
+qualification stands on the `unchanged` figures above. Route 2 remains a proposal, and the fix branch
+decides.
+
+**What shipped.** Route 2 shipped on the TypeScript backend, on
+`fix_docs_retrieval_bm25_index_state_typescript`: `refreshIndex` ends every refresh that wrote anything,
+and every refresh whose index is not marked rebuilt, with `DocStore.rebuildIndexes()`, which issues
+`END_STATE_STATEMENTS` — `REINDEX INDEX chunks_bm25` alone (`cli/src/retrieval/store.ts`,
+`cli/src/retrieval/refresh.ts`). An index an earlier version built is detected by the `meta` marker: the
+`index_state` key reads `rebuilt` only once `rebuildIndexes()` has returned over the stored rows, and an
+index without that value is rebuilt by the next refresh. `lexicalSearch` drops every score-`0` row on every
+plan. The figures are in `### Route 2 on the fix branch`, the real-catalog figure in `#### Route 2 on the
+real catalog` and the shipped end state in `#### The shipped end state at refresh level`. The Python
+backend's store is unchanged on this branch. Route 2 then shipped on the Python backend, on
+`fix_docs_retrieval_bm25_index_state_python`: `refresh.py` → `refresh_index` ends every refresh the same
+way through `store.py` → `rebuild_indexes`, with the same `END_STATE_STATEMENTS`, `index_state` marker
+and matching-only lexical filter, and its figures are in the **Python** parts of `#### The shipped end
+state at refresh level` and `#### Route 2 on the real catalog`.

@@ -33,8 +33,10 @@
 #                     an unreadable or invalid one (including one a pre-1.5 `jq`
 #                     cannot parse), `phases.qa` not `true`, `qa.credentialsPath`
 #                     unset, the credentials file absent or empty, no accounts
-#                     configured in it, or the lock directory could not be
-#                     created. The caller reports auth-gated tests blocked.
+#                     configured in it, no main checkout to hold the lock set
+#                     (a bare repository, a submodule, a separate git dir), or
+#                     the lock directory could not be created. The caller
+#                     reports auth-gated tests blocked.
 #   2  bad request  — the requested slot is not a configured account (including
 #                     a non-numeric argument). The caller's rights -> slot
 #                     mapping was wrong; it picks a valid slot.
@@ -68,29 +70,40 @@
 # deliberately defers to the credentials file's header for it. An adopter
 # carrying accounts over from another runner renames the keys, not this reader.
 #
-# WHY THE LOCKS LIVE IN A FIXED `/tmp` DIRECTORY. Not `$TMPDIR`, which differs
-# between an interactive shell and a daemon-started unattended run, and not a
-# path inside the repository or the working copy, because parallel runs live in
-# SEPARATE working copies of the same repository. A fixed `/tmp` path is the one
-# location every concurrent session — however spawned, whichever working copy —
-# shares, which is the whole point: the lock set has to be machine-global or it
-# does not exclude anything. Locks clear on reboot, and a TTL guard reclaims one
-# leaked by a crashed session (a lock directory, unlike a listening socket, does
-# not self-heal, so without the TTL one crash retires an account permanently).
-# The claim is an atomic `mkdir`, so a race between two sessions has exactly one
-# winner.
+# WHY THE LOCKS LIVE IN THE MAIN CHECKOUT'S STATE DIRECTORY. The lock set is
+# `<main>/<stateDir>/qa_user_locks/`, where <main> is the repository's MAIN
+# checkout (`hc_main_root`, from `HARNESS_MAIN_REPO` when the launcher set it,
+# else from `git rev-parse --git-common-dir`, so every run copy names the same
+# one) and <stateDir> is `stateDir` from `harness.config.json` (default
+# `sdlc-harness`), read from the main checkout's configuration when it has one.
+# Parallel runs live in separate run copies of the same repository, so the set has to be one directory they all reach or
+# it excludes nothing — which rules out the working copy's own state directory.
+# It also has to be writable from inside the command sandbox an unattended run
+# executes every Bash call in, which can write only the working copy, a
+# per-user temporary directory and the profile's `sandbox.filesystem.allowWrite`
+# entries — which rules out a fixed `/tmp` path (refused) and `$TMPDIR` (which
+# differs between an interactive shell and a daemon-started run). The main
+# checkout's state directory meets both: every run loads the main checkout's
+# profile, whose `allowWrite` names that absolute directory, and the
+# write-protection set never covers the state directory. That `allowWrite`
+# entry names the stateDir as it stood when `init` last wrote the profile, so a
+# `stateDir` changed without `init --force` leaves the sandboxed `mkdir` refused
+# and this script exiting 1. The set is per
+# repository by construction, so two repositories never block each other's slot
+# numbers without any name-mangling. The locks are empty directories, which git
+# never lists, so the set leaves nothing untracked behind.
 #
-# THE NAMESPACE IS PER REPOSITORY, AND BOTH HALVES OF THE PAIR MUST AGREE.
-# `/tmp/<namespace>_qa_user_locks`, where <namespace> is `projectName` (falling
-# back to the repository directory's basename) with every character outside
-# `[A-Za-z0-9._-]` replaced by `_`. Two different repositories therefore never
-# block each other's slot numbers, while two working copies of the SAME
-# repository share one lock set — that second half is the property that matters,
-# and it is why the name comes from the committed configuration first and the
-# directory name only as a fallback. `release-qa-user.sh` derives it by exactly
-# the same rule: changing the derivation in one file alone silently retires
-# every lock the other half is holding, because each would then look in a
-# directory the other never writes.
+# A LOCK OUTLIVES A REBOOT, so the TTL guard below is the only cleanup. It
+# reclaims a lock leaked by a crashed session — or one left over from before a
+# restart — the next time a reserve asks for that slot (a lock directory, unlike
+# a listening socket, does not self-heal, so without the TTL one crash retires
+# an account permanently). The claim is an atomic `mkdir`, so a race between two
+# sessions has exactly one winner.
+#
+# BOTH HALVES OF THE PAIR MUST AGREE ON THE LOCATION. `release-qa-user.sh`
+# derives it by exactly the same rule: changing the derivation in one file alone
+# silently retires every lock the other half is holding, because each would then
+# look in a directory the other never writes.
 #
 # `QA_USER_LOCK_TTL` (seconds, default 7200) overrides the reclaim age. The
 # default is generous on purpose so a long-but-live test never has its account
@@ -102,7 +115,7 @@
 # WHAT THIS SCRIPT DELIBERATELY NEVER DOES: it never picks an account by any
 # property of its own, never reads or prints a credential value, never waits or
 # retries (a busy slot returns 3 immediately and the caller decides), and never
-# writes anything inside the repository.
+# writes anything but the lock set under the main checkout's state directory.
 #
 # REPRO — reproduce any decision by hand. <repo> is a checkout that has adopted
 # the harness with `phases.qa: true`, `qa.credentialsPath` set, and a
@@ -117,12 +130,18 @@
 #   `9` (not a configured account)  -> no stdout, one stderr line, exit 2
 #   `abc`                           -> no stdout, one stderr line, exit 2
 #   run outside any repository      -> exit 1
+#   a bare repository's worktree, a submodule, a separate git dir -> exit 1
 #   `jq` absent from PATH           -> exit 1
 #   <repo> with no harness.config.json, or `phases.qa` false, or
 #   `qa.credentialsPath` unset, or the credentials file absent/empty -> exit 1
 #
+#   from a `git clone --shared <main> <clone>`, anchored:
+#     cd <clone> && HARNESS_MAIN_REPO=<main> bash <plugin>/scripts/reserve-qa-user.sh
+#                                   -> the slot is parked under
+#                                      <main>/<stateDir>/qa_user_locks, not the clone's
+#
 #   inspect or clear the lock set by hand:
-#     ls /tmp/<namespace>_qa_user_locks
+#     ls <main>/<stateDir>/qa_user_locks
 #     bash <plugin>/scripts/release-qa-user.sh <slot>
 
 set -u
@@ -204,14 +223,18 @@ if [ "${#slots[@]}" -eq 0 ]; then
   exit 1
 fi
 
-# --- the machine-global lock set, namespaced per repository ------------------
+# --- the shared lock set, under the main checkout's state directory ----------
 
-project=$(hc_project_name "$root") || project=""
-[ -n "$project" ] || project="${root##*/}"
-namespace=$(printf '%s' "$project" | tr -c 'A-Za-z0-9._-' '_')
-[ -n "$namespace" ] || namespace="harness"
+main=$(hc_main_root "$root") || main=""
+if [ -z "$main" ]; then
+  echo "reserve-qa-user: cannot resolve the main checkout of $root (bare repository, submodule or separate git dir); no shared lock directory" >&2
+  exit 1
+fi
+cfg_root="$main"
+hc_config_file "$main" >/dev/null || cfg_root="$root"
+state_rel=$(hc_config_dir "$cfg_root" stateDir sdlc-harness) || state_rel="sdlc-harness"
 
-LOCK_DIR="/tmp/${namespace}_qa_user_locks"
+LOCK_DIR="$main/$state_rel/qa_user_locks"
 mkdir -p "$LOCK_DIR" 2>/dev/null || true
 if [ ! -d "$LOCK_DIR" ]; then
   echo "reserve-qa-user: cannot create lock directory $LOCK_DIR" >&2

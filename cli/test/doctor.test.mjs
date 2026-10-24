@@ -702,19 +702,18 @@ const PASTE_HEADING = 'permissions.allow:';
 const WRAPPER_NOT_READABLE = 'is not readable under';
 
 /**
- * The three `permissions.allow` entries one wrapper implies: the repo-relative invocation, its
- * repo-root-absolute twin, and its sibling-worktree twin.
+ * The two `permissions.allow` entries one wrapper implies in the base profile: the repo-relative
+ * invocation and its repo-root-absolute twin. The run copy's exact form is the watcher's per-run
+ * copy's, never the base's.
  *
  * Spelled here rather than read back from the generator the check itself calls — a case that derived
  * its expectation from the producer under test would go on passing against a producer that had
- * changed shape. `init.test.mjs` states the same three forms for the writer's side.
+ * changed shape. `init.test.mjs` states the same two forms for the writer's side.
  */
-function wrapperAllowEntries(dir, projectName, file) {
-  const worktreeGlob = join(dirname(dir), `${projectName}-*`);
+function wrapperAllowEntries(dir, file) {
   return [
     `Bash(bash ${SCRIPTS_DIR}/${file}:*)`,
     `Bash(bash ${join(dir, SCRIPTS_DIR, file)}:*)`,
-    `Bash(bash ${join(worktreeGlob, SCRIPTS_DIR, file)}:*)`,
   ];
 }
 
@@ -768,11 +767,6 @@ async function handFilledFixture(t) {
   return fixture.dir;
 }
 
-/** The `projectName` the generated config carries, which the worktree form of every entry is built on. */
-function projectNameOf(dir) {
-  return readJson(join(dir, CONFIG_FILE)).projectName;
-}
-
 /**
  * The entries a filled `commands.*` key implies are graded, in both directions Finding 41 owes: a
  * repository whose keys were filled after `init` is warned and told what to paste, and a normally
@@ -796,7 +790,7 @@ test('doctor grades the permission entries a filled commands key implies', async
     assert.ok(block, `the report carried no command-permissions warning:\n${stderr}`);
     assert.ok(block.includes(PASTE_HEADING), `the warning named no list to paste into:\n${block}`);
     for (const { file } of HAND_FILLED) {
-      for (const entry of wrapperAllowEntries(dir, projectNameOf(dir), file)) {
+      for (const entry of wrapperAllowEntries(dir, file)) {
         assert.ok(block.includes(entry), `the warning did not name ${entry}:\n${block}`);
       }
     }
@@ -824,7 +818,7 @@ test('doctor grades the permission entries a filled commands key implies', async
     // check having stopped grading the keys it was warning about.
     const { permissions } = readJson(join(dir, PROFILE_FILE));
     for (const { file } of HAND_FILLED) {
-      for (const entry of wrapperAllowEntries(dir, projectNameOf(dir), file)) {
+      for (const entry of wrapperAllowEntries(dir, file)) {
         assert.ok(permissions.allow.includes(entry), `init --force left ${entry} out of ${PROFILE_FILE}`);
       }
     }
@@ -836,7 +830,7 @@ test('doctor grades the permission entries a filled commands key implies', async
     // so a pass is the check finding them rather than finding nothing to grade.
     const { permissions } = readJson(join(dir, PROFILE_FILE));
     for (const { file } of HAND_FILLED) {
-      for (const entry of wrapperAllowEntries(dir, projectNameOf(dir), file)) {
+      for (const entry of wrapperAllowEntries(dir, file)) {
         assert.ok(permissions.allow.includes(entry), `a freshly wired repository does not carry ${entry}`);
       }
     }
@@ -939,6 +933,53 @@ test('a jq whose version string is unrecognizable warns and leaves the exit stat
   assert.equal(status, 0, `doctor exited ${status} on a condition that only warns\n${stdout}\n${stderr}`);
   assert.match(stderr, warnLine('jq'));
   assert.match(stdout, CLEAN_SUMMARY);
+});
+
+/**
+ * A temp directory holding a `git` that prints one chosen line for `git --version` and hands every
+ * other call to the real git, to be put **first** on `PATH` — so the version floor is graded on a
+ * real executable while every repository check keeps answering from the real git.
+ *
+ * @param {import('node:test').TestContext} t
+ * @param {string} line what the stub prints for `git --version`.
+ * @returns {Promise<string>} a `PATH` value with the stub ahead of everything else.
+ */
+async function gitVersionStubPath(t, line) {
+  const real = resolveOnPath('git');
+  assert.ok(real, 'git does not resolve on PATH, so a git version stub cannot be built for this test');
+  const dir = await mkdtemp(join(tmpdir(), 'harness-git-stub-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  writeFileSync(
+    join(dir, 'git'),
+    `#!/bin/sh\nif [ "$#" -eq 1 ] && [ "$1" = --version ]; then printf '%s\\n' ${JSON.stringify(line)}; exit 0; fi\nexec ${JSON.stringify(real)} "$@"\n`,
+    { mode: 0o755 },
+  );
+  return `${dir}${delimiter}${process.env.PATH ?? ''}`;
+}
+
+test('a git at or above the 2.38 floor passes and names the version', async (t) => {
+  const dir = await wiredFixture(t);
+  const PATH = await gitVersionStubPath(t, 'git version 2.38.0');
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor'], { PATH });
+
+  assert.equal(status, 0, `doctor exited ${status} with a git at the floor\n${stdout}\n${stderr}`);
+  assert.match(stdout, passLine('git'));
+  assert.match(stdout, /git 2\.38 answered/);
+});
+
+test('a git below the 2.38 floor warns, names refresh-branch.sh, and leaves the exit status at 0', async (t) => {
+  const dir = await wiredFixture(t);
+  const PATH = await gitVersionStubPath(t, 'git version 2.37.9');
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor'], { PATH });
+
+  // A warning: only the stale-base repair needs the floor, so a run still starts on this git.
+  assert.equal(status, 0, `doctor exited ${status} on a condition that only warns\n${stdout}\n${stderr}`);
+  assert.match(stderr, warnLine('git'));
+  assert.match(stderr, /2\.37/);
+  assert.match(stderr, /refresh-branch\.sh/);
+  assert.match(stderr, /merge-tree --write-tree/);
 });
 
 test('the jq check answers the same in a repository whose config is gone', async (t) => {
@@ -3387,8 +3428,10 @@ test('the daemon-path check grades the installed unit, and never above a warning
     assert.equal(status, 0, `doctor exited ${status} on a condition that only warns\n${stdout}\n${stderr}`);
     assert.match(stderr, warnLine('daemon-path'));
     const line = reportLine(stderr, 'warn', 'daemon-path');
-    assert.ok(line.includes(FIXTURE_AGENT_CLI), `the warning does not name the CLI the unit launches:\n${line}`);
-    assert.ok(!line.includes(DEFAULT_AGENT_CLI), `the warning grades the default the unit overrides:\n${line}`);
+    // The line carries temp paths, and a sandbox's temp directory sits under `claude-<uid>`, so a bare
+    // name match is satisfied by a path alone. Match the `<name> (` entry shape the check writes.
+    assert.ok(line.includes(`${FIXTURE_AGENT_CLI} (`), `the warning does not name the CLI the unit launches:\n${line}`);
+    assert.ok(!line.includes(`${DEFAULT_AGENT_CLI} (`), `the warning grades the default the unit overrides:\n${line}`);
   }));
 
   subtests.push(t.test('a toolchain reached only through a wrapper is graded, and the warning says which wrapper', { skip: NO_BACKEND }, async (subtest) => {
@@ -4742,7 +4785,7 @@ function reportLines(output) {
  *
  * **The pasteable lines are asserted verbatim, as whole lines**, because that is the entire value of
  * the check: an entry whose form drifted by one character matches nothing at run time and costs a
- * silent stall, and a substring assertion would go on passing through exactly that drift.
+ * refusal, and a substring assertion would go on passing through exactly that drift.
  */
 test('the plugin-permissions check prints the entries to paste, and never above a warning', { concurrency: CASE_CONCURRENCY }, async (t) => {
   const subtests = [];
@@ -5115,6 +5158,21 @@ test('the plugin-permissions check prints the entries to paste, and never above 
 });
 
 /**
+ * A `--remote-job` run the case expects clean: exit 0 — or, where this host lacks a sandbox
+ * prerequisite, exit 1 with `sandbox-prerequisites` as its only `FAIL` line, since that check grades
+ * the host rather than the fixture.
+ */
+function assertRemoteJobClean(job) {
+  const failed = job.stderr.split('\n').filter((line) => /^!! FAIL\s/.test(line));
+  if (failLine('sandbox-prerequisites').test(job.stderr)) {
+    assert.equal(failed.length, 1, `a FAIL besides sandbox-prerequisites:\n${job.stdout}\n${job.stderr}`);
+    assert.equal(job.status, 1, `doctor --remote-job exited ${job.status}\n${job.stdout}\n${job.stderr}`);
+    return;
+  }
+  assert.equal(job.status, 0, `doctor --remote-job exited ${job.status}\n${job.stdout}\n${job.stderr}`);
+}
+
+/**
  * `doctor --remote-job`: the remote job's preflight, under which a profile that cannot work on the
  * runner is a `fail` — exit 1, so the job stops before it spends a session — where a default run warns.
  *
@@ -5134,10 +5192,15 @@ test('doctor --remote-job fails an unusable profile where a default run warns', 
     return { root, env: home.env };
   }
 
-  /** Add directories to the generated profile's `permissions.additionalDirectories`. */
+  /**
+   * Add directories to the generated profile's `permissions.additionalDirectories`, write-protected as
+   * `init --plugin-root-entries` writes them, so `profile-write-protection` passes the edit.
+   */
   function grantDirectories(dir, directories) {
     editJson(dir, PROFILE_FILE, (profile) => {
       profile.permissions.additionalDirectories = [...(profile.permissions.additionalDirectories ?? []), ...directories];
+      profile.sandbox.filesystem.denyWrite.push(...directories);
+      profile.permissions.deny.push(...directories.map((root) => `Edit(/${root}/**)`));
     });
   }
 
@@ -5212,7 +5275,7 @@ test('doctor --remote-job fails an unusable profile where a default run warns', 
 
     const job = await runCli(dir, ['doctor', '--remote-job'], env);
 
-    assert.equal(job.status, 0, `doctor --remote-job exited ${job.status}\n${job.stdout}\n${job.stderr}`);
+    assertRemoteJobClean(job);
     assert.match(job.stdout, passLine('plugin-permissions'));
     assert.match(detailLine(job.stdout, passLine('plugin-permissions')), /additionalDirectories/);
     assert.match(job.stdout, passLine('profile-paths'));
@@ -5227,7 +5290,7 @@ test('doctor --remote-job fails an unusable profile where a default run warns', 
 
     // The ignored, untracked profile `init` leaves is the passing state, and the job is otherwise clean.
     const untracked = await runCli(dir, ['doctor', '--remote-job'], env);
-    assert.equal(untracked.status, 0, `doctor --remote-job exited ${untracked.status}\n${untracked.stdout}\n${untracked.stderr}`);
+    assertRemoteJobClean(untracked);
     assert.match(untracked.stdout, passLine('profile-tracked'));
 
     await runGit(dir, ['add', '--force', '--', PROFILE_FILE]);
@@ -5394,15 +5457,16 @@ const PYTHON_INSTALL_REMEDY_TEXT = 'install the package with its `models` extra'
 const COMPOSE_DEFAULT_DATABASE_URL = 'postgresql://harness:harness@127.0.0.1:5432/docs_retrieval';
 const DATABASE_URL_VARIABLE = 'HARNESS_DOCS_RETRIEVAL_DATABASE_URL';
 
-/** The ids `CHECKS` held before `docs.retrievalBackend` existed, frozen so an added id is visible. */
+/** The ids `CHECKS` holds other than the Python backend's, frozen so an added id is visible. */
 const PRE_BRANCH_CHECK_IDS = Object.freeze([
   'git', 'jj-repository', 'default-branch', 'remote', 'base-freshness', 'pre-push-guard', 'protected-set', 'jq',
   'worktrees', 'daemon-backend', 'run-watcher', 'notifications', 'repo-registry', 'machine-footprint', 'daemon-path',
   'remote-execution', 'remote-github', 'forge', 'config', 'command-wrappers', 'command-permissions', 'command-resolves',
   'state-dir', 'artifact-tree', 'setup-analysis', 'task-offer-rules', 'layer-profile', 'layer-drift', 'ignore-rules',
   'plugin-wiring', 'permission-profile', 'profile-paths', 'profile-tracked', 'profile-browser-deny',
-  'profile-deny-floor', 'plugin-permissions', 'browser-wiring', 'retrieval-dependencies', 'retrieval-model-cache',
-  'retrieval-index',
+  'profile-deny-floor', 'profile-main-anchor', 'profile-sandbox', 'profile-write-protection', 'sandbox-prerequisites', 'plugin-permissions',
+  'browser-wiring',
+  'retrieval-dependencies', 'retrieval-model-cache', 'retrieval-index',
 ]);
 
 /** A real `harness-docs-retrieval` on a directory the check always searches, which no case may run. */

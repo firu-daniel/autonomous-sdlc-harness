@@ -43,6 +43,14 @@
 #   cli/src/machine/paths.ts          machineCacheDir, under which the retrieval
 #                                     runtime sits in `retrieval/`
 #   cli/src/retrieval/runtime.ts      RETRIEVAL_CACHE_DIRNAME, that `retrieval/`
+#   cli/src/doctor/sandboxPrerequisites.ts SANDBOX_INSTALLERS' families in its
+#                                     order (apt-get, then dnf),
+#                                     SANDBOX_HOST_BINARIES' packages,
+#                                     APPARMOR_USERNS_SYSCTL_PATH,
+#                                     BWRAP_APPARMOR_PROFILE_PATH,
+#                                     bwrapAppArmorProfile() and
+#                                     APPARMOR_RELOAD_COMMAND, in `Install the
+#                                     sandbox prerequisites`
 #   remote-run.sh (the scriptsDir copy) RUN_JOB_NAME (`run`): the `run` job has no
 #                                     `name:`, so GitHub names it by its key,
 #                                     and the settledness test reads that
@@ -112,17 +120,65 @@
 #   * Resolved before it: the job-level HARNESS_PUSH_URL secret, at job start.
 #     The credential secrets and HARNESS_GIT_TOKEN are read only by later steps.
 #
+# THE JOB'S OWN FILES. `Check out the run's branch` checks out the run's branch,
+# and every later step runs or loads that tree's files: its scriptsDir scripts,
+# harness.config.json, .claude/settings.json and .mcp.json. A previous job's
+# agent can commit any of them. `Refuse a branch that changed the job's own
+# files` runs the pinned CLI's `doctor --job-surfaces=<default branch>`, which
+# reads the trusted configuration from the GitHub default branch, the branch
+# the `collect` job already reads its configuration from, and fails when the
+# branch's own commits changed a job surface, naming each path.
+#   * It runs before `Read the configuration`, the only `run` step that sets
+#     SCRIPTS_DIR: a refusal, or any other failure of the step, leaves it unset,
+#     so no `always()`, `!cancelled()` or `cancelled()` step runs a script from
+#     the refused tree, as with THE RUN-ACTOR GATE.
+#   * A refused job ends `failure`, with one `::error::` annotation over the
+#     doctor report. It saves no state bundle, so `remote-run.sh sync` and
+#     `status` map the run by their no-bundle rule and nothing chains, and it
+#     sends no notification: every notify path is a script in the refused tree.
+#   * `Record the default branch's commit` writes that branch's commit id to
+#     HARNESS_GITHUB_DEFAULT_COMMIT before any session: the session can later
+#     rewrite the checkout's refs/remotes/origin/*, and the watcher's job-mode
+#     watchdog takes its check's configuration from that id. It writes the
+#     configured defaultBranch's commit to HARNESS_DEFAULT_BRANCH_COMMIT, the
+#     merge-base side, which differs from the GitHub default branch's when the
+#     two branches differ.
+#   * Every `run` step running npm or npx runs from $RUNNER_TEMP and names the
+#     checkout with `--cwd "$GITHUB_WORKSPACE"`: a branch's .npmrc or
+#     node_modules/ is not a job surface, and npm would read it from the checkout.
+#   * Stated residuals. This file itself runs as the branch carries it
+#     (docs/remote-execution.md, section 9). `Bootstrap the checkout`'s
+#     configured commands.depInstall and commands.build run against the
+#     branch's own manifest, unsandboxed: a package manager runs a manifest's
+#     lifecycle and script entries by nature, and no out-of-session sandbox
+#     runtime ships. They are the npm runs left in the checkout, so both still
+#     read a branch-written .npmrc or node_modules/.
+#
+# WHY THE RUN JOB CUTS NO RUN COPY. `Run the harness` runs
+# `autonomous-watcher.sh job` in the job's own checkout, $GITHUB_WORKSPACE,
+# which job mode treats as both the main checkout and the run's working copy
+# (that script's anchors comment and its JOB MODE). So no step creates a run
+# copy and none needs the clone layout: on a runner that runs exactly one run, a
+# clone would add a copy and a sync for a checkout nothing else shares.
+#   * The profile `Generate the job's permission profile` writes denies writes to
+#     that checkout's whole .git, and the flows issue no sandboxed git write:
+#     commits and pushes go through the wrappers the sandbox excludes, and
+#     reverts use the file tool. docs/cli.md, section 6, owns that settlement.
+#   * The `git clone` in `Install the pinned plugin` is the marketplace
+#     checkout under $RUNNER_TEMP (THE PLUGIN PIN), not a run copy.
+#
 # ACTION PINS.
-#   actions/checkout          v5.1.0
-#   actions/setup-node        v5.0.0
-#   actions/cache/restore     v5.1.0
-#   actions/cache             v5.1.0
-#   actions/upload-artifact   v6.0.0
+#   actions/checkout          v7.0.1
+#   actions/setup-node        v7.0.0
+#   actions/cache/restore     v6.1.0
+#   actions/cache             v6.1.0
+#   actions/upload-artifact   v7.0.1
 # Each `uses:` names the full commit sha of the release on the comment line
-# above it. Each release is in the lowest major whose own action.yml declares
-# `runs.using: node24`, per a maintainer's lookups of each action's action.yml
-# and release notes on 2026-09-29T08:21Z (UTC). Each of those majors' release
-# notes requires Actions Runner 2.327.1 or newer; a GitHub-hosted runner already
+# above it. Each release's own action.yml declares `runs.using: node24`, per
+# a maintainer's lookups on 2026-10-21 (UTC) of each action's action.yml,
+# release notes and tag: each sha is the commit its release tag names, on the
+# action's default branch. Each release's README requires Actions Runner
+# 2.327.1 or newer; a GitHub-hosted runner already
 # has it, and a self-hosted one must run it (docs/remote-execution.md, section
 # 8). A sha, not a tag: a tag is mutable, and this job holds the Claude
 # credential and write tokens. A pin moves when
@@ -253,6 +309,16 @@
 # the agent-runner CLI was measured to accept is recorded in
 # docs/remote-execution.md, section 6.
 #
+# THE SANDBOX PREREQUISITES. The generated profile sets `failIfUnavailable`, so
+# on a runner without `bubblewrap` or `socat` the agent session would end at
+# startup. `Install the sandbox prerequisites` installs them where the runner
+# lets it (root or passwordless sudo), and writes the `bwrap` AppArmor profile
+# where Ubuntu 24.04's policy would block unprivileged user namespaces. It never
+# fails the job itself: `Preflight with doctor` refuses the job on whatever is
+# still missing, through `sandbox-prerequisites`, unless `sandbox.optOut` is
+# taken. The step has not yet run on GitHub: it runs first in a job whose
+# workflow a CLI carrying it rendered (docs/remote-execution.md, section 8).
+#
 # WHY retention-days IS SET. The `harness-state` bundle is the only remote copy
 # of a run's clarifications, uncommitted planning drafts and carried counts; a
 # run parked or paused longer than its retention cannot be answered and loses
@@ -266,7 +332,7 @@
 # 2026-09-29, observed the cap rather than a rejection on `actions/upload-artifact@v4`:
 # the artifact's `expires_at` fell 90 days after its creation, with the
 # repository's artifact-and-log-retention at {"days":90,"maximum_allowed_days":400}.
-# That was v4; the v6 pinned above has not yet been observed by a gate round.
+# That was v4; the v7 pinned above has not yet been observed by a gate round.
 
 name: harness-run
 run-name: harness ${{ inputs.action }} ${{ inputs.branch }}
@@ -358,6 +424,7 @@ jobs:
       HARNESS_CLI_VERSION: '{{cliVersion}}'
       HARNESS_JOB_MODE: '1'
       HARNESS_REMOTE_SLUG: ${{ github.repository }}
+      HARNESS_GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       HARNESS_INPUT_BRANCH: ${{ inputs.branch }}
       HARNESS_INPUT_ENGINE: ${{ inputs.engine }}
       HARNESS_INPUT_RESUME: ${{ inputs.resume }}
@@ -478,8 +545,8 @@ jobs:
 
       - name: Check out the run's branch
         if: env.HARNESS_STOPPED != '1'
-        # actions/checkout v5.1.0
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ inputs.branch }}
           fetch-depth: 0
@@ -497,6 +564,31 @@ jobs:
             exit 1
           fi
 
+      - name: Set up Node
+        if: env.HARNESS_STOPPED != '1'
+        # actions/setup-node v7.0.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+          # v5 caches by package.json's packageManager; the job installs nothing through npm's cache, and a lockfile-less repository must not fail this step.
+          package-manager-cache: false
+
+      - name: Refuse a branch that changed the job's own files
+        if: env.HARNESS_STOPPED != '1'
+        working-directory: ${{ runner.temp }}
+        run: |
+          npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH" \
+            || { echo "::error::this branch's own commits changed files the job runs or loads, named in this step's doctor report; nothing from it runs in this job."; exit 1; }
+
+      - name: Record the default branch's commit
+        if: env.HARNESS_STOPPED != '1'
+        run: |
+          sha=$(git -C "$GITHUB_WORKSPACE" rev-parse --verify --quiet "refs/remotes/origin/$HARNESS_GITHUB_DEFAULT_BRANCH^{commit}") || { echo "::error::cannot read the default branch's commit from the job's fresh checkout; nothing from this branch runs in this job."; exit 1; }
+          echo "HARNESS_GITHUB_DEFAULT_COMMIT=$sha" >> "$GITHUB_ENV"
+          default_branch=$(git -C "$GITHUB_WORKSPACE" show "$sha:harness.config.json" | jq -r '.defaultBranch // empty') && [ -n "$default_branch" ] || { echo "::error::cannot read defaultBranch from the default branch's harness.config.json; nothing from this branch runs in this job."; exit 1; }
+          base=$(git -C "$GITHUB_WORKSPACE" rev-parse --verify --quiet "refs/remotes/origin/$default_branch^{commit}") || { echo "::error::cannot read origin/$default_branch's commit from the job's fresh checkout; nothing from this branch runs in this job."; exit 1; }
+          echo "HARNESS_DEFAULT_BRANCH_COMMIT=$base" >> "$GITHUB_ENV"
+
       - name: Read the configuration
         id: config
         if: env.HARNESS_STOPPED != '1'
@@ -509,17 +601,9 @@ jobs:
           } >> "$GITHUB_ENV"
           echo "retrieval=$retrieval" >> "$GITHUB_OUTPUT"
 
-      - name: Set up Node
-        if: env.HARNESS_STOPPED != '1'
-        # actions/setup-node v5.0.0
-        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
-        with:
-          node-version: '22'
-          # v5 caches by package.json's packageManager; the job installs nothing through npm's cache, and a lockfile-less repository must not fail this step.
-          package-manager-cache: false
-
       - name: Install the claude CLI when absent
         if: env.HARNESS_STOPPED != '1'
+        working-directory: ${{ runner.temp }}
         run: |
           if ! command -v claude >/dev/null 2>&1; then
             npm install -g @anthropic-ai/claude-code
@@ -568,26 +652,91 @@ jobs:
 
       - name: Restore the docs-retrieval cache
         if: env.HARNESS_STOPPED != '1' && steps.config.outputs.retrieval == 'true'
-        # actions/cache/restore v5.1.0
-        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25
+        # actions/cache/restore v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ${{ env.HARNESS_RETRIEVAL_CACHE }}
           key: harness-retrieval-${{ runner.os }}-${{ env.HARNESS_CLI_VERSION }}
 
       - name: Generate the job's permission profile
         if: env.HARNESS_STOPPED != '1'
+        working-directory: ${{ runner.temp }}
         run: |
-          npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" init --plugin-root-entries
-          changed=$(git status --porcelain --untracked-files=no)
+          npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" --cwd "$GITHUB_WORKSPACE" init --plugin-root-entries
+          changed=$(git -C "$GITHUB_WORKSPACE" status --porcelain --untracked-files=no)
           if [ -n "$changed" ]; then
             printf '%s\n' "$changed"
             echo "::error::init $HARNESS_CLI_VERSION changed tracked files. Run 'npx autonomous-sdlc-harness@$HARNESS_CLI_VERSION init' locally and commit the result."
             exit 1
           fi
 
+      - name: Install the sandbox prerequisites
+        if: env.HARNESS_STOPPED != '1'
+        run: |
+          sysctl_file=/proc/sys/kernel/apparmor_restrict_unprivileged_userns
+          profile=/etc/apparmor.d/bwrap
+          missing=()
+          command -v bwrap >/dev/null 2>&1 || missing+=(bubblewrap)
+          command -v socat >/dev/null 2>&1 || missing+=(socat)
+          needs_profile=0
+          if [ -r "$sysctl_file" ] && [ "$(cat "$sysctl_file")" = 1 ]; then
+            if [ ! -f "$profile" ] || ! grep -q '^[[:space:]]*userns,' "$profile"; then
+              needs_profile=1
+            fi
+          fi
+          if [ "${#missing[@]}" -eq 0 ] && [ "$needs_profile" = 0 ]; then
+            echo "The sandbox prerequisites are present."
+            exit 0
+          fi
+          if [ "$(uname -s)" != Linux ]; then
+            echo "::warning::not a Linux runner, so nothing was installed; missing packages: ${missing[*]:-none}."
+            exit 0
+          fi
+          if [ "$(id -u)" = 0 ]; then
+            as_root=()
+          elif sudo -n true >/dev/null 2>&1; then
+            as_root=(sudo -n)
+          else
+            echo "::warning::no root and no passwordless sudo on this runner, so nothing was installed; missing packages: ${missing[*]:-none}; bwrap AppArmor profile needed: $needs_profile."
+            exit 0
+          fi
+          if [ "${#missing[@]}" -gt 0 ]; then
+            if command -v apt-get >/dev/null 2>&1; then
+              if ! { "${as_root[@]}" apt-get update -qq && "${as_root[@]}" apt-get install -y -qq "${missing[@]}"; }; then
+                echo "::warning::apt-get could not install ${missing[*]}."
+              fi
+            elif command -v dnf >/dev/null 2>&1; then
+              if ! "${as_root[@]}" dnf install -y "${missing[@]}"; then
+                echo "::warning::dnf could not install ${missing[*]}."
+              fi
+            else
+              echo "::warning::neither apt-get nor dnf is on this runner, so ${missing[*]} was not installed."
+            fi
+          fi
+          if [ "$needs_profile" = 1 ]; then
+            if "${as_root[@]}" tee "$profile" >/dev/null <<'PROFILE'
+          abi <abi/4.0>,
+          include <tunables/global>
+
+          profile bwrap /usr/bin/bwrap flags=(unconfined) {
+            userns,
+
+            include if exists <local/bwrap>
+          }
+          PROFILE
+            then
+              if ! "${as_root[@]}" systemctl reload apparmor; then
+                echo "::warning::systemctl could not reload apparmor after writing $profile."
+              fi
+            else
+              echo "::warning::could not write $profile."
+            fi
+          fi
+
       - name: Preflight with doctor
         if: env.HARNESS_STOPPED != '1'
-        run: npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --remote-job
+        working-directory: ${{ runner.temp }}
+        run: npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --remote-job
 
       - name: Bootstrap the checkout
         if: env.HARNESS_STOPPED != '1'
@@ -629,8 +778,8 @@ jobs:
 
       - name: Upload the state bundle
         if: always() && env.SCRIPTS_DIR != ''
-        # actions/upload-artifact v6.0.0
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        # actions/upload-artifact v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: harness-state
           path: ${{ runner.temp }}/harness-state
@@ -722,8 +871,8 @@ jobs:
           exit 1
 
       - name: Check out the default branch for collecting
-        # actions/checkout v5.1.0
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.repository.default_branch }}
           token: ${{ github.token }}
@@ -772,8 +921,8 @@ jobs:
 
       - name: Check out the dispatched ref
         if: env.HARNESS_STOPPED != '1'
-        # actions/checkout v5.1.0
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
@@ -794,8 +943,8 @@ jobs:
 
       - name: Set up Node
         if: env.HARNESS_STOPPED != '1' && steps.config.outputs.retrieval == 'true'
-        # actions/setup-node v5.0.0
-        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        # actions/setup-node v7.0.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22'
           # As in the run job: no npm cache is used, and a lockfile-less repository must not fail this step.
@@ -803,8 +952,8 @@ jobs:
 
       - name: Restore and save the docs-retrieval cache
         if: env.HARNESS_STOPPED != '1' && steps.config.outputs.retrieval == 'true'
-        # actions/cache v5.1.0
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        # actions/cache v6.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ${{ env.HARNESS_RETRIEVAL_CACHE }}
           key: harness-retrieval-${{ runner.os }}-${{ env.HARNESS_CLI_VERSION }}

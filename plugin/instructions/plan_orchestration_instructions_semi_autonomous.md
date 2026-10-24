@@ -27,6 +27,7 @@ One row per binding declared in `plan_orchestration_instructions_core.md` → `#
 | Binding | Value for this flow |
 |---|---|
 | `<escalate>` | Report the blocker and the relevant path(s) in your text output, then stop the session and wait for direction — do not continue. |
+| `<park_answer_lookup>` | `none` — this flow's `<escalate>` reports the blocker and stops, and writes no answer file, so the core's G.0 pending-answer test never holds here. |
 | `<repo_root>` | The supervised checkout root, resolved as `## Resolved values` above states. On a main-repo run that is the main checkout; a worktree run resolves the same way to that worktree's own root. |
 | `<app_root>` | `<repo_root>/<app_dir>`, resolved once at session start. It anchors where the app's source tree sits and is **not** a working directory: every `commands.*` string is repo-relative, so the core's Setup step 3 runs each one from `<repo_root>` — resolving one against this root would resolve a nested `<app_dir>` twice. It is deliberately a different name from the config token `<app_dir>` it is built from: that one is the configured directory, this one is the resolved root. |
 | `<per_unit_review>` | **`on`** — the per-unit `layer-reviewer` step runs between implementer and committer. Its body is `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `### Per-unit review step`, which the unit loop's step 4 enters on this value; that file is its only owner and this fork restates none of it. |

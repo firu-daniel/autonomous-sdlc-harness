@@ -10,7 +10,7 @@
  *
  * `node --test test` loads this file as a test file of its own, so nothing here runs at import time.
  *
- * ## Four non-obvious choices
+ * ## Five non-obvious choices
  *
  * 1. **The stub sleeps before its body runs.** Not for the registry: its writes are serialized, so
  *    the pass's post-spawn `pid` write and the session's exit classification both survive whichever
@@ -24,9 +24,17 @@
  *    process's first pass and acts on worktrees and branches, none of which these suites assert.
  * 4. **`tick` is bounded at {@link TICK_TIMEOUT_MS}**, through `runBash`'s process-group bound
  *    (`fixture.mjs`, choice 6), and by the test's own `t.signal`. A pass plus its `wait` for a stub
- *    that sleeps under a second is far below it; it sits below the suite's `--test-timeout`
- *    (`cli/package.json` → `scripts.test`) so a hung pass fails naming its command, and its session
- *    and `sleep`s are killed with it.
+ *    that sleeps under a second is far below it. A case whose single pass launches more than one
+ *    session may pass a larger bound through `tick`'s `timeoutMs`. Any bound stays below the suite's
+ *    `--test-timeout` (`cli/package.json` → `scripts.test`, 1 800 000 ms) so a hung pass fails naming
+ *    its command, and its session and `sleep`s are killed with it.
+ * 5. **`tick` overrides the sourced sandbox probe** (`hr_sandbox_prereq_probe_var`) with
+ *    {@link DEFAULT_SANDBOX_PROBE}, which reports nothing missing, so a pass launches on any host — a
+ *    Linux host without `bubblewrap` or `socat` included. The override is test-only: the watcher
+ *    carries no environment switch for it, because such a switch would be a bypass of the preflight.
+ *    A suite that runs its own `tick` script instead of this `tick`
+ *    (`cli/test/watcher-stall-reset-payloads.test.mjs` → `localStall`) defines the same override from
+ *    {@link DEFAULT_SANDBOX_PROBE}.
  */
 
 import assert from 'node:assert/strict';
@@ -48,6 +56,9 @@ const PROMPT_DELIMITER = '----- end of prompt -----';
 
 /** One watcher pass's bound (choice 4 in the module header). */
 const TICK_TIMEOUT_MS = 60_000;
+
+/** The body `tick` gives the sourced probe unless a case passes its own (choice 5). */
+export const DEFAULT_SANDBOX_PROBE = 'HR_SANDBOX_HOST=macos; HR_SANDBOX_MISSING=; HR_SANDBOX_REFUSAL=; return 0';
 
 /** The seed `init`'s own tests use: a repository whose stack detection resolves every command. */
 function nodeProjectFiles() {
@@ -184,12 +195,18 @@ export async function createWatcherFixture(t, { branch = 'feat_x' } = {}) {
       await writeFile(join(dir, REGISTRY_PATH), `${JSON.stringify({ runs: { [branch]: record } }, null, 2)}\n`, 'utf8');
     },
     record: () => JSON.parse(readFileSync(join(dir, REGISTRY_PATH), 'utf8')).runs[branch],
-    async tick(env = {}) {
+    /**
+     * One pass; `sandboxProbe` is a shell function body replacing {@link DEFAULT_SANDBOX_PROBE};
+     * `timeoutMs` replaces {@link TICK_TIMEOUT_MS} for a pass that launches more than one session
+     * (choice 4).
+     */
+    async tick(env = {}, { sandboxProbe = DEFAULT_SANDBOX_PROBE, timeoutMs = TICK_TIMEOUT_MS } = {}) {
+      const script = `. "$1" status >/dev/null\nhr_sandbox_prereq_probe_var() {\n${sandboxProbe}\n}\ntick; wait`;
       const result = await runBash(
         dir,
-        ['-c', '. "$1" status >/dev/null; tick; wait', '_', watcherPath],
+        ['-c', script, '_', watcherPath],
         watcherEnv(env),
-        { timeoutMs: TICK_TIMEOUT_MS, signal: t.signal },
+        { timeoutMs, signal: t.signal },
       );
       assert.equal(result.status, 0, `the watcher pass exited ${result.status}\n${result.stdout}\n${result.stderr}`);
       return result;

@@ -35,12 +35,13 @@
  *    lets the cases run concurrently: they sit in one `concurrentSuite` and run `CASE_CONCURRENCY`
  *    at a time (`test/helpers/concurrency.mjs`); `HARNESS_TEST_CONCURRENCY=1` runs them in series.
  * 2. **The wrapper ↔ profile invariant is asserted in both directions**, because the two failures
- *    are different and neither is loud: a written wrapper missing one of its three allow forms
+ *    are different and neither is loud: a written wrapper missing one of its two allow forms
  *    leaves a caller using that spelling matching neither `allow` nor `deny`, which in an unattended
- *    run is a stall; an allow entry naming a wrapper that was never written grants a path to nothing.
+ *    run is a refusal; an allow entry naming a wrapper that was never written grants a path to nothing.
  *    The second direction is checked on each entry's trailing `<scriptsDir>/<name>.sh` segment
- *    rather than by resolving the entry to a file, because the sibling-worktree form is a glob and
- *    resolves to no file in a single-checkout fixture by construction.
+ *    rather than by resolving the entry to a file, so the repo-relative form and the
+ *    repo-root-absolute one are judged by the same rule. The run copy's exact form is the watcher's
+ *    per-run copy's to add, and no base profile carries a wrapper row under the sibling-worktree glob.
  * 3. **Assertions name the contract literally** — `sdlc-harness/`, `version: 1`,
  *    `bash harness-scripts/typecheck.sh`, `.claude/settings.autonomous.json` — rather than importing
  *    the constants the generators wrote them from. Comparing generated output against the constant
@@ -208,7 +209,7 @@ const CONFIG_BACKUP_RULE = `/${CONFIG_BACKUP_PATH}`;
 /** An `appDir` the repository nests its application in, so the rule is asserted somewhere it moves to. */
 const NESTED_APP_DIR = 'packages/storefront';
 
-/** An allow/ask entry that invokes a wrapper script, in any of the three forms the profile emits. */
+/** An allow/ask entry that invokes a wrapper script, in either of the two forms the profile emits. */
 const SCRIPT_ENTRY = /^Bash\(bash (\S+\.sh):\*\)$/;
 
 /**
@@ -282,7 +283,7 @@ const MAKES_FIRST_COMMIT = /so init makes the first commit/;
 
 /**
  * The outer-loop scripts that land in the same `scriptsDir` as the wrappers and reach the profile
- * through the same three forms — excluded everywhere below, because this file's subject is the
+ * through the same two forms — excluded everywhere below, because this file's subject is the
  * WRAPPER family and every assertion here is about `commands.*` ↔ wrapper ↔ profile.
  *
  * Spelled out rather than imported from the shipped table — choice 3 in the module header — and it is
@@ -676,13 +677,12 @@ function scriptPaths(profile, list) {
 /**
  * The wrapper ↔ profile pairing, in both directions — choice 2 in the module header.
  *
- * Forward: each written wrapper contributes exactly the three forms a caller may use — the
- * repo-relative invocation `commands.*` holds, its repo-root-absolute twin, and its
- * sibling-worktree twin.
+ * Forward: each written wrapper contributes exactly the two forms a caller may use in the base
+ * profile — the repo-relative invocation `commands.*` holds and its repo-root-absolute twin — and
+ * no wrapper row under the sibling-worktree glob, whose `*` the guard matches literally.
  *
  * Backward: no script-shaped allow entry names a wrapper that was not written, judged on the
- * entry's trailing `<scriptsDir>/<name>.sh` segment. Resolving the entry to a file instead would
- * fail on a correct implementation, because the worktree form is a glob with no sibling to match.
+ * entry's trailing `<scriptsDir>/<name>.sh` segment, so both forms are judged by one rule.
  */
 async function assertWrapperPairing(dir, config, profile) {
   const written = await writtenWrappers(dir);
@@ -694,13 +694,15 @@ async function assertWrapperPairing(dir, config, profile) {
     const expected = [
       `Bash(bash ${INIT_SCRIPTS_DIR}/${name}:*)`,
       `Bash(bash ${join(dir, INIT_SCRIPTS_DIR, name)}:*)`,
-      `Bash(bash ${join(worktreeGlob, INIT_SCRIPTS_DIR, name)}:*)`,
     ];
     for (const entry of expected) {
       assert.ok(allow.includes(entry), `the profile does not allow-list ${name} as ${entry}`);
     }
     const listed = allow.filter((entry) => entry.endsWith(`/${name}:*)`));
-    assert.equal(listed.length, expected.length, `${name} is allow-listed in ${listed.length} forms, not 3`);
+    assert.equal(listed.length, expected.length, `${name} is allow-listed in ${listed.length} forms, not ${expected.length}`);
+  }
+  for (const entry of [...allow, ...(profile.permissions.ask ?? [])]) {
+    assert.ok(!entry.startsWith(`Bash(bash ${worktreeGlob}`), `the profile carries the glob wrapper row ${entry}`);
   }
 
   for (const path of scriptPaths(profile, 'allow')) {
@@ -1388,7 +1390,8 @@ test('the dev-server wrapper builds before it launches, and only where the deriv
  * and both arms of {@link resolveBody} that reach a written wrapper are covered: a detected raw line,
  * and the unresolved body that runs no command at all. `deploy` is the second arm in the same config:
  * it is selected because `deploy.command` holds its own wrapper's invocation, and no detection ever
- * supplies a deploy line.
+ * supplies a deploy line. Both entries report `carried: false`: this test does not pass
+ * `carryOnDiskCommandLines`, whose arm `cli/test/wrapper-carry-forward.test.mjs` covers.
  */
 test('the command line writeWrapperScripts returns is the one it inlined into the wrapper', async (t) => {
   const dir = await fixtureFor(t, { files: nodeProjectFiles() });
@@ -1430,6 +1433,7 @@ test('the command line writeWrapperScripts returns is the one it inlined into th
     invocation: `bash ${INIT_SCRIPTS_DIR}/typecheck.sh`,
     command: 'npm run typecheck',
     unresolved: false,
+    carried: false,
   });
   assert.deepEqual(byKey.deploy, {
     key: 'deploy',
@@ -1437,6 +1441,7 @@ test('the command line writeWrapperScripts returns is the one it inlined into th
     invocation: `bash ${INIT_SCRIPTS_DIR}/deploy.sh`,
     command: 'harness_fail "harness: put the deploy command line in deploy.sh"',
     unresolved: true,
+    carried: false,
   });
 });
 
@@ -2562,10 +2567,13 @@ test('init writes scriptsDir fresh, keeps it on a kept config, and re-reads it o
       for (const entry of [
         `Bash(bash harness-scripts/${name}:*)`,
         `Bash(bash ${join(dir, 'harness-scripts', name)}:*)`,
-        `Bash(bash ${join(worktreeGlob, 'harness-scripts', name)}:*)`,
       ]) {
         assert.ok(allow.includes(entry), `the profile does not allow-list ${name} as ${entry}`);
       }
+      assert.ok(
+        !allow.includes(`Bash(bash ${join(worktreeGlob, 'harness-scripts', name)}:*)`),
+        `the profile allow-lists ${name} under the sibling-worktree glob, a row the guard matches literally`,
+      );
     }
     assert.equal(await exists(dir, SEEDED_SCRIPTS_DIR), false, `a fresh init created ${SEEDED_SCRIPTS_DIR}/`);
   });
@@ -4594,11 +4602,11 @@ function editConfig(dir, mutate) {
  * run whose stream carries no `permission_denied` for a configured verification command* — is a
  * live-agent-session measurement these tests cannot produce, and nothing here makes it true: the raw
  * line stays in `commands.typecheck` by design until the adopter acts on this report. What is
- * measured instead is its **cause**, deliberately unchanged — the profile carries the wrapper's three
+ * measured instead is its **cause**, deliberately unchanged — the profile carries the wrapper's two
  * forms and no package-manager entry of any kind, so the configured string is still refused.
  *
  * **Case (a) is also what separates this from the neighbouring finding it is not.** The wrapper
- * exists and all three of its allow forms are present, which is the state that finding's fix leaves
+ * exists and both of its allow forms are present, which is the state that finding's fix leaves
  * behind; this warning fires anyway, so nothing here is an existence check on either.
  *
  * **Case (b) is the arm the message used to deny.** With the wrapper already on disk, `create-if-absent`
@@ -4866,7 +4874,7 @@ test('a commands key answered <none> writes no wrapper, allow-lists none, and sa
     const { stdout } = await initOk(dir, ['--force']);
 
     assert.ok((await writtenWrappers(dir)).includes('test.sh'), 'the sentinel withdrew the test gate\'s wrapper');
-    // The three forms, through the pairing rule both directions of which this run has to satisfy.
+    // The two forms, through the pairing rule both directions of which this run has to satisfy.
     await assertWrapperPairing(dir, config, readJson(join(dir, PROFILE_FILE)));
     assert.ok(
       allowEntries(dir).some((entry) => entry.includes('test.sh')),
@@ -6077,7 +6085,7 @@ test('the closing report names both run settings and the verb that sets them', a
  * said that an inbox nobody watches polls nothing, or that the `permissions.allow` entries those
  * helpers need are hand-added. The **consequence** is asserted with each verb, not only the verb,
  * because that is what decides whether an adopter acts before the first unattended run or after one
- * has parked with no error.
+ * has been refused at a helper.
  *
  * The uniqueness assertion rides along: the analyze step is found by being the one numbered line
  * naming the command, and a clause added to another step must not make that two.
@@ -6092,7 +6100,7 @@ test('the closing report names both operator steps when the interactive-test pha
     assert.ok(step.includes(fragment), `the closing step never names ${fragment}:\n${step}`);
   }
   assert.match(step, /inbox/, `the daemon half names no consequence, so it reads as optional:\n${step}`);
-  assert.match(step, /no error/, `the permissions half does not say the run stalls silently:\n${step}`);
+  assert.match(step, /refused/, `the permissions half does not say the run is refused:\n${step}`);
 
   const naming = stdout.split('\n').filter((line) => /^\d+\. /.test(line) && line.includes(ANALYZE_COMMAND));
   assert.equal(naming.length, 1, `${naming.length} numbered steps name ${ANALYZE_COMMAND}, which must identify one:\n${stdout}`);

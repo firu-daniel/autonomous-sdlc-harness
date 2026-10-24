@@ -5,7 +5,9 @@
  * leaves no process of its fixture behind.** One case writes a child test file that runs the
  * written watcher's endless `watch` loop through `runBash`'s bounded form
  * (`helpers/fixture.mjs`, choice 6), runs it in a child `node --test`, and reads the child's TAP
- * and the process table. The child runs under the parent's environment **minus `NODE_TEST_CONTEXT`**:
+ * and the process table. The process-table read is skipped, with `pgrep`'s own status and stderr
+ * quoted, when `pgrep` exits with anything but 0 or 1: it then could not read the table, and its
+ * answer says nothing about survivors. The child runs under the parent's environment **minus `NODE_TEST_CONTEXT`**:
  * the runner sets it in every test-file subprocess, and a nested `node --test` that inherits it does
  * not run as a top-level TAP runner — a probe run outside the runner passes where this case, left
  * inheriting it, fails.
@@ -20,6 +22,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
+import { MAIN_REPO_ANCHOR_VARIABLE } from '../dist/core/mainRepoAnchor.js';
 import { createFixture } from './helpers/fixture.mjs';
 
 const CHILD_TEST_NAME = 'a watch loop that never returns';
@@ -55,7 +58,7 @@ function execResult(command, args, options = {}) {
 /** The parent's environment minus the runner's child marker, plus `extra`. */
 function topLevelRunnerEnv(extra) {
   const { NODE_TEST_CONTEXT: _childMarker, ...env } = process.env;
-  return { ...env, ...extra };
+  return { ...env, [MAIN_REPO_ANCHOR_VARIABLE]: '', ...extra };
 }
 
 function childSource() {
@@ -102,7 +105,15 @@ test('a hung watcher case fails by name with a timeout and leaves no process beh
   const fixtureDir = readFileSync(recordPath, 'utf8');
   assert.notEqual(fixtureDir, '', 'the child never recorded its watcher fixture');
   await new Promise((resolveWait) => setTimeout(resolveWait, REAP_GRACE_MS));
-  // `pgrep` exits 1 when nothing matches, and 0 with the matches listed.
   const left = await execResult('pgrep', ['-f', fixtureDir]);
+  // `pgrep` exits 1 when nothing matches, and 0 with the matches listed. Any other status means it
+  // could not read the process table at all, so the survivor check cannot be made on this machine.
+  if (left.status !== 0 && left.status !== 1) {
+    t.skip(
+      `pgrep cannot read the process table on this machine (exit ${left.status}: ${left.stderr.trim()}), ` +
+        'so the hung fixture cannot be checked for survivors here',
+    );
+    return;
+  }
   assert.equal(left.status, 1, `processes of the hung fixture survived:\n${left.stdout}${left.stderr}`);
 });

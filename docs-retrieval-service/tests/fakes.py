@@ -5,7 +5,8 @@ with the Postgres store's observable contract — ids are ascending integers a k
 upserts and never reused, `get_chunks` answers in the order asked and skips an unknown id, and a
 whitespace-only lexical query ranks nothing. Each arm can be scripted exactly with
 `lexical_ranking` / `vector_ranking`; otherwise a token-overlap order and a cosine order stand in
-for BM25 and pgvector, and neither claims to reproduce their scores.
+for BM25 and pgvector, and neither claims to reproduce their scores. `rebuild_indexes` is counted
+in `rebuilds`, not simulated: there is no index to rebuild.
 
 `FakeSession` is a `RetrievalSession` over an `InMemoryDocStore` and the `hash-v1` stubs whose
 `refresh` returns or raises what it was given, so an entry point's case needs no corpus and no
@@ -74,6 +75,7 @@ class InMemoryDocStore:
         self.meta: dict[str, str] = {}
         self.calls: list[str] = []
         self.closed = False
+        self.rebuilds = 0
         self._rows: dict[str, _Row] = {}
         self._next_id = 1
         self._lexical_ranking = lexical_ranking
@@ -148,6 +150,9 @@ class InMemoryDocStore:
             )
             for row in (by_id[id_] for id_ in ids if id_ in by_id)
         ]
+
+    async def rebuild_indexes(self) -> None:
+        self.rebuilds += 1
 
     async def close(self) -> None:
         self.closed = True

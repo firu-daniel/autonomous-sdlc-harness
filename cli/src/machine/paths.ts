@@ -80,8 +80,10 @@ function resolveMachineDir(variable: string, fallback: string): string {
  * The machine-local **state** directory — `${XDG_STATE_HOME:-$HOME/.local/state}/autonomous-sdlc-harness`.
  *
  * What lives in it is machine-scoped run state that no single repository owns: the usage lane's two
- * artifacts, published by `docs/watcher.md` §5, and the registry of initialized repositories, which
- * that section is explicit is a different artifact defined elsewhere.
+ * artifacts, published by `docs/watcher.md` §5; the watcher's per-run profiles,
+ * `run-profiles/<slug>/<branch>.json`, whose path `hr_run_profile_file` in the generated
+ * `lib/harness-run-lib.sh` owns and `docs/watcher.md` §2 `### The per-run profile` publishes; and the
+ * registry of initialized repositories, which §5 is explicit is a different artifact defined elsewhere.
  */
 export function machineStateDir(): string {
   return resolveMachineDir('XDG_STATE_HOME', '.local/state');

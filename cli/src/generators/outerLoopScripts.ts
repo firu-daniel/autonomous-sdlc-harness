@@ -27,8 +27,9 @@
  *    row is {@link OuterLoopScript.agentInvocable}.
  * 3. **The invocation string comes from `scriptInvocation`, in `generators/scripts.ts`.** That is
  *    the single producer of `bash <scriptsDir>/<file>`, and the permission profile derives its
- *    three allow forms from that exact string. Formatting the same shape here would be a second
- *    producer, and the two would disagree the first time either is corrected.
+ *    two allow forms from that exact string, and the run watcher's per-run copy twins the absolute
+ *    one. Formatting the same shape here would be a second producer, and the two would disagree
+ *    the first time either is corrected.
  *
  * ## Scope this release
  *
@@ -95,6 +96,20 @@ export interface OuterLoopScript {
    * path that resolves to nothing.
    */
   readonly agentInvocable: boolean;
+  /**
+   * The main checkout's copy of this script is a named `sandbox.excludedCommands` entry
+   * (`generators/sandboxProfile.ts`). Absent means it runs sandboxed in every spelling.
+   *
+   * Set on the git wrappers an agent commits, pushes and refreshes through: sandboxed on macOS, a
+   * commit cannot write a linked worktree's record (`docs/sandbox-verification.md` G1, F1) and a push
+   * or fetch cannot reach an SSH remote (P1, F3). Set it only on a script carrying the
+   * excluded-wrapper checks `templates/scripts/lib/harness-run-lib.sh` → the header's `JURISDICTION`
+   * paragraph names (`hr_wrapper_main_of`, `hr_wrapper_target_check_var`,
+   * `hr_worktree_config_check_var`, `hr_pinned_hooks_path`, `hr_wrapper_branch_var`), plus
+   * `hr_git_env_drop` and the main checkout's protected set, as `commit-on-branch.sh`'s header
+   * applies them.
+   */
+  readonly runsUnsandboxed?: true;
 }
 
 /**
@@ -127,6 +142,16 @@ export const NOTIFY_SCRIPT_NAME = 'autonomous-notify.sh';
 export const DOCS_SEARCH_SERVER_SCRIPT_NAME = 'docs-search-server.sh';
 
 /**
+ * The run library's file name, named on its own for the same reason {@link WATCHER_SCRIPT_NAME} is:
+ * `generators/writeProtection.ts` → `libraryDir` looks its row up to take the `subdir` it joins into
+ * the write-protected paths, and a literal there would let a rename here surface only as an `init`
+ * fault.
+ *
+ * The row below is built from it, so the file is renamed here and nowhere else.
+ */
+export const RUN_LIBRARY_SCRIPT_NAME = 'harness-run-lib.sh';
+
+/**
  * The whole outer-loop set, in the order `init` writes it: the shared library first, because every
  * other row sources it, and each further library or data file before the script that sources or
  * reads it.
@@ -135,10 +160,10 @@ export const DOCS_SEARCH_SERVER_SCRIPT_NAME = 'docs-search-server.sh';
  * row — no condition threaded through the writer, no second list to keep in step.
  */
 export const OUTER_LOOP_SCRIPTS: ReadonlyArray<OuterLoopScript> = Object.freeze([
-  Object.freeze({ file: 'harness-run-lib.sh', subdir: 'lib', mode: 0o644, agentInvocable: false }),
-  Object.freeze({ file: 'commit-on-branch.sh', mode: 0o755, agentInvocable: true }),
-  Object.freeze({ file: 'push-branch.sh', mode: 0o755, agentInvocable: true }),
-  Object.freeze({ file: 'refresh-branch.sh', mode: 0o755, agentInvocable: true }),
+  Object.freeze({ file: RUN_LIBRARY_SCRIPT_NAME, subdir: 'lib', mode: 0o644, agentInvocable: false }),
+  Object.freeze({ file: 'commit-on-branch.sh', mode: 0o755, agentInvocable: true, runsUnsandboxed: true }),
+  Object.freeze({ file: 'push-branch.sh', mode: 0o755, agentInvocable: true, runsUnsandboxed: true }),
+  Object.freeze({ file: 'refresh-branch.sh', mode: 0o755, agentInvocable: true, runsUnsandboxed: true }),
   // The one row that executes an ARGUMENT, so its safety is in the script rather than in this flag:
   // it runs a file only from `<state_dir>/scratch/` and refuses every other path. It carries NO
   // `DENY_SCRIPT_BASENAMES` entry in the script-allowlist guard, and that omission is the decision —
@@ -211,9 +236,10 @@ export interface OuterLoopScriptsResult {
 /**
  * A row's path relative to `scriptsDir`, which is also its path under `cli/templates/scripts/`.
  *
- * Exported because the permission profile needs the same answer: its repo-root-absolute and
- * sibling-worktree forms are that path joined to a root, and a row in a subdirectory is the case
- * where re-deriving it from `file` alone would name a file that is not there.
+ * Exported because the permission profile needs the same answer: its repo-root-absolute form is
+ * that path joined to the root, and the run watcher's per-run twin is the same path under the run
+ * copy, and a row in a subdirectory is the case where re-deriving it from `file` alone would name a
+ * file that is not there.
  */
 export function outerLoopRelativePath(script: OuterLoopScript): string {
   return script.subdir === undefined ? script.file : `${script.subdir}/${script.file}`;
