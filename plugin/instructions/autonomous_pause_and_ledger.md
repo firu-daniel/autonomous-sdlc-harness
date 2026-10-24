@@ -286,7 +286,9 @@ should have been `[-]` and was seeded `[ ]` is corrected by fixing the **seeding
 ### 1.6 How to flip / create — direct `commit-on-branch.sh`, NEVER a committer dispatch
 Each flip (and the initial creation) is: **Edit the ledger file, then commit and push via the wrapper** —
 `bash <MAIN_REPO>/<scripts_dir>/commit-on-branch.sh --repo <repo_root> <path>... -- "<subject>"`, then
-`bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>`. Both name `<MAIN_REPO>`'s copy, because that copy
+`bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>`. Call each wrapper once, alone. **Once, alone** means
+its own Bash call holding that one command and nothing else — no `cd`, `;`, `&&`, `||`, pipe, `echo "exit $?"`,
+`$(…)` or shell variable before or after it. Both name `<MAIN_REPO>`'s copy, because that copy
 is the one the unattended permission profile runs outside the sandbox: the run copy's own scripts stay sandboxed,
 where a commit cannot move the main checkout's branch, whose whole `.git` the profile write-denies, and, in a
 legacy worktree run, cannot write the worktree's record. Spell both commands literally — `<MAIN_REPO>`,
@@ -307,7 +309,7 @@ and the commit is never made. No guard rescues it and none refuses it:
 that command names, so a `bash <MAIN_REPO>/<scripts_dir>/commit-on-branch.sh --repo <repo_root> …` piece is outside its scope by construction
 and it stays silent — its own protected-branch `ask`, which quotes the configured set back, is reserved for a
 real `git … commit` on a protected branch. Any
-`if …; then … ; fi` / `for …; do … done` control-flow block trips the same trap; plain and newline-separated
+`if …; then … ; fi` / `for …; do … done` control-flow block trips the same trap; plain
 single statements do not — but the commit and the push carry no `$` at all, since any shell expansion loses
 the profile's literal `allow` entry, so keep expansions out of the command itself and not only out of the
 compound. No exit-0 gate is needed anyway:

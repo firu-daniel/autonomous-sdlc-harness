@@ -97,14 +97,15 @@ The subject **text** — prefix vocabulary, capitalisation, length cap, fixed-fo
      ```
      bash <MAIN_REPO>/<scripts_dir>/commit-on-branch.sh --repo <repo_root> <path1> <path2> ... -- "<subject line>"
      ```
+     **Once, alone** means its own Bash call holding that one command and nothing else — no `cd`, `;`, `&&`, `||`, pipe, `echo "exit $?"`, `$(…)` or shell variable before or after it.
      With a body line: `… -- "<subject line>" "<body line>"`. The wrapper stages and commits: run no separate `git add` or `git commit`, and add no trailer beyond `<commit_conventions>`.
    - Map its exit — no partial commit, no retry:
      - **exit 0** — read `<short_sha>` for `commit_sha:` from its stdout line `commit-on-branch.sh: committed <short_sha> on <branch>`; go to step 5.
      - **exit 1 with a stderr line beginning `commit-on-branch.sh: committed <short_sha> on <branch>, but `** — the commit landed and only the index is stale: read `<short_sha>` from that line, re-sync it with one identical call, not a retry — expect exit 3; any other exit goes on the `index_sync:` line — and go to step 5. Never revert.
      - **exit 3** — return `error: nothing to commit`.
      - **any other non-zero** (2 protected branch; 1 a refusal or a git failure, including a branch that moved under the wrapper) — return `error: <one-line description>` surfacing its stderr.
-5. **Verify:** `git status --short` is clean, and `git log -1 --oneline` matches `<short_sha>`.
-6. **Push:** only when `push == true` and step 4 committed, landed exit 1 included — run `bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>` with both spelled literally; report `pushed: yes`, or `pushed: failed` when the helper reports a failure, which is not a commit failure. Otherwise `pushed: no`.
+5. **Verify:** run `git status --short` and `git log -1 --oneline` as two separate calls, each once, alone: the first shows a clean tree, and the second matches `<short_sha>`.
+6. **Push:** only when `push == true` and step 4 committed, landed exit 1 included — call `bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>` once, alone, with both spelled literally and `<MAIN_REPO>` resolved per `## Resolved values`, never `<repo_root>` in its place; report `pushed: yes`, or `pushed: failed` when the helper reports a failure, which is not a commit failure. Otherwise `pushed: no`.
 
 ### ui_test_pass procedure
 
