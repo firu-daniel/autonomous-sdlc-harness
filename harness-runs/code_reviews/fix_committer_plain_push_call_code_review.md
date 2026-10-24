@@ -12,7 +12,7 @@ The definition sentence matches the story index's wording in both copies once wh
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Make step 6's "never `<repo_root>`" read "never `<repo_root>` in its place" so it cannot forbid the push's own argument _(layer: plugin)_
+1. [x] **Finding 1** — Make step 6's "never `<repo_root>`" read "never `<repo_root>` in its place" so it cannot forbid the push's own argument _(layer: plugin)_
 
 ---
 

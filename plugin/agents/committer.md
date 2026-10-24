@@ -105,7 +105,7 @@ The subject **text** — prefix vocabulary, capitalisation, length cap, fixed-fo
      - **exit 3** — return `error: nothing to commit`.
      - **any other non-zero** (2 protected branch; 1 a refusal or a git failure, including a branch that moved under the wrapper) — return `error: <one-line description>` surfacing its stderr.
 5. **Verify:** run `git status --short` and `git log -1 --oneline` as two separate calls, each once, alone: the first shows a clean tree, and the second matches `<short_sha>`.
-6. **Push:** only when `push == true` and step 4 committed, landed exit 1 included — call `bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>` once, alone, with both spelled literally and `<MAIN_REPO>` resolved per `## Resolved values`, never `<repo_root>`; report `pushed: yes`, or `pushed: failed` when the helper reports a failure, which is not a commit failure. Otherwise `pushed: no`.
+6. **Push:** only when `push == true` and step 4 committed, landed exit 1 included — call `bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>` once, alone, with both spelled literally and `<MAIN_REPO>` resolved per `## Resolved values`, never `<repo_root>` in its place; report `pushed: yes`, or `pushed: failed` when the helper reports a failure, which is not a commit failure. Otherwise `pushed: no`.
 
 ### ui_test_pass procedure
 
