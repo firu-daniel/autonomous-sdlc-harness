@@ -13,7 +13,9 @@
  * Every case's sweep gets its own `XDG_STATE_HOME`, `<root>/state`, so the snapshot covers the
  * profiles and no case touches the real machine state directory; the unanchorable case empties it
  * and `HOME` instead. Not covered: the `FAILED to remove run profile` line, which needs an `rm` that
- * fails on a file the fixture owns.
+ * fails on a file the fixture owns; and the `keep run profile … — the run registry could not be
+ * re-read` line, which needs the registry to turn unreadable between the start-of-sweep read (which
+ * refuses the whole sweep on the same fault) and `profile_remove`'s re-check.
  *
  * Each case builds, under the system temp directory, a bare origin and a main checkout `demo` on
  * `trunk` carrying `harness.config.json`, the template sweep and `lib/harness-run-lib.sh` copied
