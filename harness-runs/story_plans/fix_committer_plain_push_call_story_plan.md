@@ -24,7 +24,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_committer_plain_push_cal
 
 1. [x] **Task 1** — State "once, alone" for the committer's verify and push calls in `committer.md` _(layer: plugin)_ _(points: 10)_
 2. [x] **Task 2** — Copy the "once, alone" rule into `autonomous_pause_and_ledger.md` §1.6 _(layer: plugin)_ _(points: 5)_
-3. [ ] **Task 3** — Pin the "once, alone" wording with a source guard in `cli/test` _(layer: cli)_ _(points: 10)_
+3. [x] **Task 3** — Pin the "once, alone" wording with a source guard in `cli/test` _(layer: cli)_ _(points: 10)_
 
 ## Scope register
 
