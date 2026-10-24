@@ -54,7 +54,7 @@
 - **Each rule is stated once.** A block several agents carry is one wording, copied byte-for-byte into every copy; where copies differ only in a word, keep the difference and nothing else.
 - **Drop rationale the agent does not act on. Keep every edge case.**
 - **Never paraphrase a wire literal or a cited anchor.** A heading another file cites by `→ ## heading`, a string a script or another agent matches, and every `<placeholder>` are carried byte-for-byte — renaming one is an edit to every file that quotes it.
-- **A change to an agent definition never raises its up-front word count** — the definition plus every plugin file or section it reads on every dispatch, excluding `CLAUDE.md` and the adopter's conventions documents.
+- **An agent's growth is paid for by behaviour.** A change to an agent definition adds only the words its new or changed behaviour needs — no rationale, no restatement of a rule another file owns — and a change that adds no behaviour never raises its up-front word count: the definition plus every plugin file or section it reads on every dispatch, excluding `CLAUDE.md` and the adopter's conventions documents.
 
 ## The placeholder vocabulary
 
