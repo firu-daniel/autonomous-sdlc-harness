@@ -22,7 +22,7 @@
 
 1. [x] **Finding 3** — Correct the § 1.4 "What moved" sentence: `cleanup-run-copies.test.mjs` uses a throwaway checkout carrying the template sweep, not an `init`-built fixture _(layer: general)_
 2. [x] **Finding 2** — Add the fail-closed "registry could not be re-read" keep line to `cleanup-run-copies.test.mjs`'s *Not covered* list _(layer: cli)_
-3. [ ] **Finding 1** — Make the "no run profile path" line name the unanchorable state directory too, in the template, its `scripts/` mirror and the test that asserts it _(layer: cli, general)_
+3. [x] **Finding 1** — Make the "no run profile path" line name the unanchorable state directory too, in the template, its `scripts/` mirror and the test that asserts it _(layer: cli, general)_
 
 ---
 

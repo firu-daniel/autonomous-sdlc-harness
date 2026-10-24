@@ -295,7 +295,7 @@ test('an unanchorable state directory: the copy and branch are removed, and no p
   assert.equal(await exists(dir), false, `the clone was not removed:\n${output(r)}`);
   assert.equal(await f.localHas(GONE), false, `${GONE} was not deleted:\n${output(r)}`);
   assert.ok(
-    r.stdout.includes(`${PREFIX}no run profile path for '${GONE}' (hr_run_profile_file refused the repository slug or the branch) — no profile removed`),
+    r.stdout.includes(`${PREFIX}no run profile path for '${GONE}' (no repository slug, a branch hr_run_profile_file refuses, or no machine state directory — XDG_STATE_HOME and HOME both unset) — no profile removed`),
     output(r),
   );
   assert.equal(await readFile(profile, 'utf8'), '{}\n', `the planted profile changed:\n${output(r)}`);

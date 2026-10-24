@@ -548,7 +548,7 @@ profile_remove() {
   local branch="${1-}" file live b bfile pre=""
   [ "$dry_run" -eq 1 ] && pre="[dry-run] "
   if [ -z "$slug" ] || ! file="$(hr_run_profile_file "$slug" "$branch")"; then
-    echo "cleanup-merged-worktrees.sh: ${pre}no run profile path for '$branch' (hr_run_profile_file refused the repository slug or the branch) — no profile removed"
+    echo "cleanup-merged-worktrees.sh: ${pre}no run profile path for '$branch' (no repository slug, a branch hr_run_profile_file refuses, or no machine state directory — XDG_STATE_HOME and HOME both unset) — no profile removed"
     return 0
   fi
   [ -f "$file" ] || [ -L "$file" ] || return 0
