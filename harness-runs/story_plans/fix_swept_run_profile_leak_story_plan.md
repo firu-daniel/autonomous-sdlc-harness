@@ -22,7 +22,7 @@ The work is four single-layer tasks, in ship order. Task 1 changes the sweep tem
 
 Each entry maps 1:1 to `harness-runs/task_plans/fix_swept_run_profile_leak/task_<K>_plan.md`. The entries run bottom-up in ship order, with the catch-all layer last.
 
-1. [ ] **Task 1** — The sweep template removes a removed copy's per-run profile, behind the live-run re-check _(layer: cli)_ _(points: 20)_
+1. [x] **Task 1** — The sweep template removes a removed copy's per-run profile, behind the live-run re-check _(layer: cli)_ _(points: 20)_
 2. [ ] **Task 2** — Extend `cleanup-run-copies.test.mjs` with the per-run profile cases under a temp `XDG_STATE_HOME` _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Isolate the other sweep-running suites' state directory, and prove the watcher-rendered profile is the one swept _(layer: cli)_ _(points: 10)_
 4. [ ] **Task 4** — Mirror the sweep and library into `scripts/`, and document when the per-run profile is removed _(layer: general)_ _(points: 18)_
