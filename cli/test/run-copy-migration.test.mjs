@@ -13,7 +13,8 @@
  * `hr_worktree_dir` made with `git worktree add -b` and pushed, a registry record with no
  * `copy_kind`, and an answered question under its clarification channel. Every fixture directory
  * is a sibling of the fixture under the system temp directory, and every per-run profile lands
- * under the fixture's own `XDG_STATE_HOME` (`watcherEnv`).
+ * under the fixture's own `XDG_STATE_HOME` (`watcherEnv`). The sweep runs under that same
+ * environment and removes the legacy run's profile the watcher rendered.
  */
 
 import assert from 'node:assert/strict';
@@ -208,7 +209,7 @@ test('a new drop beside a legacy run gets a clone, and the sweep removes only th
   await runGit(f.origin, ['branch', '--quiet', '-D', LEGACY]);
   const set = await runBash(f.dir, ['-c', '. "$1"; hr_registry_set "$2" "$3" status completed', '_', f.lib, join(f.dir, REGISTRY_PATH), LEGACY]);
   assert.equal(set.status, 0, output(set));
-  const sweep = (args = []) => runBash(f.dir, [join(f.dir, INIT_SCRIPTS_DIR, 'cleanup-merged-worktrees.sh'), ...args]);
+  const sweep = (args = []) => runBash(f.dir, [join(f.dir, INIT_SCRIPTS_DIR, 'cleanup-merged-worktrees.sh'), ...args], f.watcherEnv());
   const localHas = async (branch) =>
     (await runBash(f.dir, ['-c', 'git show-ref --verify --quiet "refs/heads/$1"', '_', branch])).status === 0;
   const cloneTip = (await runGit(clone, ['rev-parse', 'HEAD'])).stdout.trim();
@@ -222,9 +223,15 @@ test('a new drop beside a legacy run gets a clone, and the sweep removes only th
   assert.ok(!dry.stdout.includes(NEW), `the preview named the new run:\n${output(dry)}`);
   assert.ok(existsSync(f.wt) && (await localHas(LEGACY)), 'the preview removed something');
 
+  // The profile the watcher passed the legacy session, equated with `hr_run_profile_file` by the parked case.
+  const legacySettings = f.settingsArg(f.wt);
+  assert.ok(existsSync(legacySettings), `the legacy run's profile ${legacySettings} is missing before the sweep`);
   const real = await sweep();
   assert.equal(real.status, 0, output(real));
   assert.ok(real.stdout.includes(`removed worktree ${f.wt}`), output(real));
+  assert.ok(real.stdout.includes(`removed run profile ${legacySettings} for '${LEGACY}'`), output(real));
+  assert.ok(!existsSync(legacySettings), `the legacy run's profile survived:\n${output(real)}`);
+  assert.ok(existsSync(newSettings), `the new run's profile was removed:\n${output(real)}`);
   assert.ok(!existsSync(f.wt), `the legacy worktree survived:\n${output(real)}`);
   assert.equal(await localHas(LEGACY), false, `${LEGACY} was not deleted:\n${output(real)}`);
   assert.ok(existsSync(join(clone, '.git')), `the clone was removed:\n${output(real)}`);
