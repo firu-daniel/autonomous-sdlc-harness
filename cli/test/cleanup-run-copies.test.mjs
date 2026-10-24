@@ -5,7 +5,15 @@
  * kind; nothing the registry does not name as the branch's own copy is removed.** A clone goes
  * through `hr_clone_remove_var`, a record with no `copy_kind` through the legacy worktree arm, and a
  * worktree `git worktree list` names with no record is left in place. `--dry-run` prints the same
- * decisions and changes no directory, branch or registry byte.
+ * decisions and changes no directory, branch or registry byte. **A run's per-run profile goes with
+ * its copy and only with it**, at the path the watcher writes — `hr_run_profile_file` over
+ * `hr_repo_slug` of the main checkout, never `HARNESS_REPO_SLUG` — and is kept while any record in
+ * a live status maps to the same file.
+ *
+ * Every case's sweep gets its own `XDG_STATE_HOME`, `<root>/state`, so the snapshot covers the
+ * profiles and no case touches the real machine state directory; the unanchorable case empties it
+ * and `HOME` instead. Not covered: the `FAILED to remove run profile` line, which needs an `rm` that
+ * fails on a file the fixture owns.
  *
  * Each case builds, under the system temp directory, a bare origin and a main checkout `demo` on
  * `trunk` carrying `harness.config.json`, the template sweep and `lib/harness-run-lib.sh` copied
@@ -21,12 +29,14 @@
  * - `parked` dropped from the active-run filter → the `parked` case fails `the clone was removed`.
  * - the legacy arm's `if ! own_worktree_check …` replaced by `if true`, skipping every worktree →
  *   the legacy case fails.
+ * - the clone arm's `profile_remove "$branch"` moved ahead of `if hr_clone_remove_var …` → the
+ *   another-branch's-clone-also-recorded case fails `the preview and the sweep disagree`.
  */
 
 import assert from 'node:assert/strict';
 import { copyFile, lstat, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, relative } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import test from 'node:test';
 
 import { PACKAGE_ROOT, runBash, runGit } from './helpers/fixture.mjs';
@@ -89,16 +99,33 @@ async function fixture(t) {
   await mkdir(logs, { recursive: true });
   const registry = join(logs, 'registry.json');
   const lib = join(main, 'scripts', 'lib', 'harness-run-lib.sh');
+  const state = join(root, 'state');
   const call = async (body, args) => {
-    const r = await runBash(root, ['-c', `. "$1" || exit 99; shift; ${body}`, 'hr', lib, ...args]);
+    const r = await runBash(root, ['-c', `. "$1" || exit 99; shift; ${body}`, 'hr', lib, ...args], { XDG_STATE_HOME: state });
     assert.equal(r.status, 0, `${body}: ${r.stdout}${r.stderr}`);
     return r.stdout;
   };
+  /** The copied library's `hr_repo_slug` of the main checkout. */
+  const slug = async () => (await call('hr_repo_slug "$1"', [main])).trim();
+  const ownSlug = await slug();
+  /** The per-run profile path, built from its documented shape rather than by `hr_run_profile_file`. */
+  const profilePath = (branch, slugValue = ownSlug) =>
+    join(state, 'autonomous-sdlc-harness', 'run-profiles', slugValue, `${branch.replaceAll('/', '-')}.json`);
 
   return {
     root,
     main,
     registry,
+    state,
+    slug,
+    profilePath,
+    /** Write `{}\n` at `branch`'s profile path; returns the path. */
+    plantProfile: async (branch, slugValue = ownSlug) => {
+      const file = profilePath(branch, slugValue);
+      await mkdir(dirname(file), { recursive: true });
+      await writeFile(file, '{}\n');
+      return file;
+    },
     derived: (branch) => join(root, `demo-${branch.replaceAll('/', '-')}`),
     /** `hr_clone_create_var` for `branch`, cut at `trunk`; returns the clone's path. */
     clone: async (branch) =>
@@ -118,7 +145,8 @@ async function fixture(t) {
     worktree: (branch) => runGit(main, ['worktree', 'add', '--quiet', join(root, `demo-${branch}`), branch]),
     localHas: async (branch) =>
       (await runBash(main, ['-c', 'git show-ref --verify --quiet "refs/heads/$1"', '_', branch])).status === 0,
-    sweep: (args = []) => runBash(main, [join(main, 'scripts', 'cleanup-merged-worktrees.sh'), ...args]),
+    sweep: (args = [], env = {}) =>
+      runBash(main, [join(main, 'scripts', 'cleanup-merged-worktrees.sh'), ...args], { XDG_STATE_HOME: state, ...env }),
     /** The registry bytes, the local branches and the temp tree's listing. */
     snapshot: async () => ({
       registry: (await exists(registry)) ? await readFile(registry, 'utf8') : null,
@@ -135,6 +163,7 @@ const PREFIX = 'cleanup-merged-worktrees.sh: ';
  * The sweep's decisions as comparable strings, one per decision, sorted. A preview's
  * `would delete branch 'b' and remove <kind> d` is the real sweep's `removed <kind> d` and
  * `deleted merged branch 'b'`; a branch `git branch -D` then refuses was still a decision to delete.
+ * A preview's `would remove run profile f` is the real sweep's `removed run profile f`.
  */
 function decisions(stdout) {
   const out = [];
@@ -142,7 +171,11 @@ function decisions(stdout) {
     if (!raw.startsWith(PREFIX)) continue;
     const line = raw.slice(PREFIX.length).replace(/^\[dry-run\] (would )?/, '');
     let m;
-    if ((m = line.match(/^delete branch '(.+?)'(?: and remove (clone|worktree) (.+))?$/))) {
+    if ((m = line.match(/^remove(?:d)? run profile (.+) for '.+'$/))) {
+      out.push(`remove profile ${m[1]}`);
+    } else if (/^(keep run profile |no run profile path )/.test(line)) {
+      out.push(line);
+    } else if ((m = line.match(/^delete branch '(.+?)'(?: and remove (clone|worktree) (.+))?$/))) {
       out.push(`delete ${m[1]}`);
       if (m[2]) out.push(`remove ${m[2]} ${m[3]}`);
     } else if ((m = line.match(/^removed (clone|worktree) (.+)$/))) {
@@ -156,61 +189,114 @@ function decisions(stdout) {
   return out.sort();
 }
 
-/** Preview, assert it changed nothing, sweep for real, and assert the decisions match. */
-async function sweepBoth(f) {
+/**
+ * Preview, assert it changed nothing, sweep for real, and assert the decisions match. `env` reaches
+ * both runs; the real run is returned with the preview's stdout as `dryStdout`.
+ */
+async function sweepBoth(f, env = {}) {
   const before = await f.snapshot();
-  const dry = await f.sweep(['--dry-run']);
+  const dry = await f.sweep(['--dry-run'], env);
   assert.equal(dry.status, 0, output(dry));
   assert.deepEqual(await f.snapshot(), before, `--dry-run changed the fixture:\n${output(dry)}`);
-  const real = await f.sweep();
+  const real = await f.sweep([], env);
   assert.equal(real.status, 0, output(real));
   assert.deepEqual(decisions(real.stdout), decisions(dry.stdout), `the preview and the sweep disagree:\n${output(dry)}\n---\n${output(real)}`);
-  return real;
+  return { ...real, dryStdout: dry.stdout };
 }
+
+const profileLine = (verb, file, branch) => `${PREFIX}${verb} run profile ${file} for '${branch}'`;
 
 const skipLine = (dir, branch) => `skip removing ${dir} for '${branch}' — it is not that branch's working copy`;
 
-test('a gone branch with a completed clone record: the clone and the branch are removed', async (t) => {
+test('a gone branch with a completed clone record: the clone, its run profile and the branch are removed', async (t) => {
   const f = await fixture(t);
   const dir = await f.clone(GONE);
   assert.equal(dir, f.derived(GONE));
   await f.record(GONE, 'status', 'completed');
   await f.publish(GONE);
   await f.gone(GONE);
+  const own = await f.plantProfile(GONE);
+  const foreign = await f.plantProfile(GONE, 'other-repo-slug');
 
-  const r = await sweepBoth(f);
+  const r = await sweepBoth(f, { HARNESS_REPO_SLUG: 'other-repo-slug' });
+  assert.ok(r.dryStdout.includes(`${PREFIX}[dry-run] would remove run profile ${own} for '${GONE}'`), r.dryStdout);
   assert.ok(r.stdout.includes(`removed clone ${dir}`), output(r));
+  assert.ok(r.stdout.includes(profileLine('removed', own, GONE)), output(r));
   assert.equal(await exists(dir), false, `the clone was not removed:\n${output(r)}`);
+  assert.equal(await exists(own), false, `the run profile was not removed:\n${output(r)}`);
+  assert.equal(await readFile(foreign, 'utf8'), '{}\n', `the other slug's profile changed:\n${output(r)}`);
   assert.equal(await f.localHas(GONE), false, `${GONE} was not deleted:\n${output(r)}`);
 });
 
-for (const status of ['running', 'parked']) {
+for (const status of ['running', 'parked', 'park_loop', 'paused']) {
   test(`a gone branch with a ${status} clone record: nothing is removed`, async (t) => {
     const f = await fixture(t);
     const dir = await f.clone(GONE);
     await f.record(GONE, 'status', status);
     await f.publish(GONE);
     await f.gone(GONE);
+    const profile = await f.plantProfile(GONE);
 
     const r = await sweepBoth(f);
     assert.ok(r.stdout.includes(`skip '${GONE}' (active run)`), output(r));
     assert.ok(await exists(join(dir, '.git')), `the clone was removed:\n${output(r)}`);
+    assert.ok(await exists(profile), `the run profile was removed:\n${output(r)}`);
     assert.equal(await f.localHas(GONE), true, `${GONE} was deleted:\n${output(r)}`);
   });
 }
 
-test("a clone record naming another branch's clone, also recorded: skipped, and that clone survives", async (t) => {
+test("a clone record naming another branch's clone, also recorded: skipped, and that clone and both profiles survive", async (t) => {
   const f = await fixture(t);
   const other = await f.clone(OTHER);
   await f.publish(GONE);
   await f.record(GONE, 'worktree', other, 'copy_kind', 'clone', 'status', 'completed');
   await f.gone(GONE);
+  const profiles = [await f.plantProfile(GONE), await f.plantProfile(OTHER)];
 
   const r = await sweepBoth(f);
   assert.ok(r.stdout.includes(skipLine(other, GONE)), output(r));
   assert.match(r.stdout, /2 run registry records name a clone at/, output(r));
   assert.ok(await exists(join(other, '.git')), `the other branch's clone was removed:\n${output(r)}`);
+  assert.ok(!r.stdout.includes('removed run profile'), output(r));
+  for (const p of profiles) assert.ok(await exists(p), `${p} was removed:\n${output(r)}`);
   assert.equal(await f.localHas(GONE), false, `${GONE} was not deleted:\n${output(r)}`);
+});
+
+test("a sanitized-name collision: the clone is removed, and the profile a live run maps to is kept", async (t) => {
+  const f = await fixture(t);
+  const COPY = 'feat-x';
+  const LIVE = 'feat/x';
+  const dir = await f.clone(COPY);
+  await f.record(COPY, 'status', 'completed');
+  await f.record(LIVE, 'status', 'running');
+  await f.publish(COPY);
+  await f.gone(COPY);
+  const profile = await f.plantProfile(COPY);
+  assert.equal(profile, f.profilePath(LIVE));
+
+  const r = await sweepBoth(f);
+  assert.ok(r.stdout.includes(`removed clone ${dir}`), output(r));
+  assert.equal(await exists(dir), false, `the clone was not removed:\n${output(r)}`);
+  assert.ok(r.stdout.includes(`${profileLine('keep', profile, COPY)} — the live run '${LIVE}' uses that file`), output(r));
+  assert.ok(await exists(profile), `the run profile was removed:\n${output(r)}`);
+});
+
+test('an unanchorable state directory: the copy and branch are removed, and no profile is', async (t) => {
+  const f = await fixture(t);
+  const dir = await f.clone(GONE);
+  await f.record(GONE, 'status', 'completed');
+  await f.publish(GONE);
+  await f.gone(GONE);
+  const profile = await f.plantProfile(GONE);
+
+  const r = await sweepBoth(f, { XDG_STATE_HOME: '', HOME: '' });
+  assert.equal(await exists(dir), false, `the clone was not removed:\n${output(r)}`);
+  assert.equal(await f.localHas(GONE), false, `${GONE} was not deleted:\n${output(r)}`);
+  assert.ok(
+    r.stdout.includes(`${PREFIX}no run profile path for '${GONE}' (hr_run_profile_file refused the repository slug or the branch) — no profile removed`),
+    output(r),
+  );
+  assert.equal(await readFile(profile, 'utf8'), '{}\n', `the planted profile changed:\n${output(r)}`);
 });
 
 test("a clone record naming another branch's derived path, unrecorded: skipped on the derived path", async (t) => {
@@ -254,9 +340,14 @@ test('legacy: a recorded worktree is removed with its branch; one with no record
   await f.gone(STRAY);
   const listed = (await runGit(f.main, ['worktree', 'list', '--porcelain'])).stdout;
   assert.ok(listed.includes(`worktree ${f.derived(STRAY)}\n`), `worktree list does not name the stray copy:\n${listed}`);
+  const oldProfile = await f.plantProfile(OLD);
+  const strayProfile = await f.plantProfile(STRAY);
 
   const r = await sweepBoth(f);
   assert.ok(r.stdout.includes(`removed worktree ${f.derived(OLD)}`), output(r));
+  assert.ok(r.stdout.includes(profileLine('removed', oldProfile, OLD)), output(r));
+  assert.equal(await exists(oldProfile), false, `the legacy worktree's profile was not removed:\n${output(r)}`);
+  assert.ok(await exists(strayProfile), `the unrecorded branch's profile was removed:\n${output(r)}`);
   assert.equal(await exists(f.derived(OLD)), false, `the legacy worktree was not removed:\n${output(r)}`);
   assert.equal(await f.localHas(OLD), false, `${OLD} was not deleted:\n${output(r)}`);
   assert.ok(await exists(join(f.derived(STRAY), '.git')), `the unrecorded worktree was removed:\n${output(r)}`);
