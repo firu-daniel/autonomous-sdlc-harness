@@ -18,7 +18,8 @@ The tokens below resolve from the adopting repository's `harness.config.json`, e
 | `<layer_names>` | config value | `layers[].name`. **No substitution of the names themselves** — the configured names travel through this file unchanged, because `## Layer routing table` passes the layer as a dispatch argument rather than selecting an agent filename by it. `general` is one of the `layers[]` rows a generated config emits (`{ "name": "general", "path": ".", "conventions": … }`), not an entry beside the array. |
 | `<layer_path_map>` | config value | `layers[].path` together with `layers[].conventions` — the two values `## Layer routing table` passes to the implementer and the reviewer alongside the layer name. |
 | `<test_cmd>` / `<typecheck_cmd>` | config value | `commands.test` / `commands.typecheck` — the full test suite and the type check. Where `commands.typecheck` holds exactly `<none>`, the repository states it has no type check. |
-| `<test_file_cmd>` | conventions document | The single-file test command a conventions document states, read from the dispatched layer's `layers[].conventions` document or from the catch-all layer's — the entry whose `path` is `"."`. Used for a unit's own test files and, on row `G.4`, for the test file(s) its finding names (`## The test-run rule`). |
+| `<test_file_cmd>` | conventions document | The single-file test command a conventions document states, read from the dispatched layer's `layers[].conventions` document or from the catch-all layer's — the entry whose `path` is `"."`. Used for a unit's own test files, for the tree guards `## The test-run rule` point 7 selects and, on row `G.4`, for the test file(s) its finding names (`## The test-run rule`). |
+| `<tree_guards>` | config value | `treeGuards` — a list of `{ test, covers }` entries: `test` is the argument `<test_file_cmd>` takes, `covers` a repo-relative glob. Absent means none. |
 
 ---
 
@@ -139,17 +140,26 @@ A row-`G.4` layer whose return carries `already passing — ` — full form `blo
 
 ## The test-run rule
 
-1. **No unit runs `<test_cmd>`, a gate script it runs, or a test file the unit did not create or edit — except a row `G.4` unit, which may run the test file(s) its finding names, through `<test_file_cmd>` only.** The full suite and the whole-tree `<typecheck_cmd>` run once per Run gates round, through its wrapper, at `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_core.md` → `## Phase G — Run gates`; the suite runs nowhere else in the flow. A targeted test the unit did not write is excluded too. The row-`G.4` exception covers **only** that row and **only** the file(s) the finding names — never `<test_cmd>`, a gate script or any other test file.
+1. **No unit runs `<test_cmd>`, a gate script it runs, or a test file the unit did not create or edit — except a row `G.4` unit's named files and the tree guards point 7 selects, through `<test_file_cmd>` only.** The full suite and the whole-tree `<typecheck_cmd>` run once per Run gates round, through its wrapper, at `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_core.md` → `## Phase G — Run gates`; the suite runs nowhere else in the flow. A targeted test the unit did not write is excluded too, unless point 7 selects it as a tree guard. The row-`G.4` exception covers **only** that row and **only** the file(s) the finding names — never `<test_cmd>`, a gate script or any other test file.
 2. **A unit runs `<typecheck_cmd>`** as written, with no path argument: the whole tree. Where `commands.typecheck` is `<none>`, it runs nothing for that gate and reports it not run.
    - **Every reported failure lies outside the unit's change** — it names no file the unit created or edited and no symbol it defined or changed: an **evidence downgrade**, not a blocker. Phase G's whole-tree run verifies it.
    - **A failure the unit's change caused** is the unit's to fix; one it cannot fix is a transient blocker.
    - **A path-narrowed run**, where the configured line accepts paths, is supplementary evidence, labelled as narrowed, never reported as the whole-tree result.
 
    `${CLAUDE_PLUGIN_ROOT}/agents/layer-implementer.md` → **An evidence downgrade is recorded, in every mode.** owns how the downgrade is recorded.
-3. **A unit that creates or edits a test file runs only those files, through `<test_file_cmd>`.** Where no document states one, or the stated command is refused, the unit skips the run, records the skip in its return, and raises no blocker. The same skip applies to point 1's row-`G.4` run.
-4. **No plan asks for a test run.** No `**Verification:**` bullet, finding fix or sub-step names `<test_cmd>`, a gate script, or a test file the unit neither creates nor edits; naming the unit's own new or edited test file is allowed, subject to (3). This binds every writer of a plan a unit loop walks — the task plan; the business-parity, architecture, code-review and skeptic findings; the user-review fix plan; the test fix plan — and every reviewer of one raises a breach as a **Must Fix**.
+3. **A unit that creates or edits a test file runs those files, through `<test_file_cmd>`; the only other test files it runs are point 7's tree guards.** Where no document states one, or the stated command is refused, the unit skips the run, records the skip in its return, and raises no blocker. The same skip applies to point 1's row-`G.4` run.
+4. **No plan asks for a test run.** No `**Verification:**` bullet, finding fix or sub-step names `<test_cmd>`, a gate script, or a test file the unit neither creates nor edits; naming the unit's own new or edited test file is allowed, subject to (3). No plan names a tree guard the task neither creates nor edits, and no plan sentence limiting a unit's test runs (*"that is the only test file this task runs"*) cancels point 7: the guard run is the loop's, never the plan's. A guard file the task itself creates or edits stays the unit's own test file under (3), and the plan may name it as such. This binds every writer of a plan a unit loop walks — the task plan; the business-parity, architecture, code-review and skeptic findings; the user-review fix plan; the test fix plan — and every reviewer of one raises a breach as a **Must Fix**.
 5. **`<typecheck_cmd>` is not a test run.**
 6. **A unit's run stays in the foreground.** Run `<typecheck_cmd>` and `<test_file_cmd>` each as one foreground command whose output returns to you — never redirected to a file, piped, backgrounded or wrapped in a `cd`, a refusal included. A refusal takes its own route: point 3's skip for a test file; for `<typecheck_cmd>`, the refused-call fallback of `${CLAUDE_PLUGIN_ROOT}/agents/layer-implementer.md` → `## Resolved values`. When the tool layer moves a run to the background itself, do not collect it: no `Monitor` and no `sleep` (`${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_core.md` → `### G.1 Run the gates` forbids both by name), and no loop that reads its output for a completion line. Record the run in your return as moved to the background — not run, never a pass — raise no blocker, and continue.
+7. **A unit runs the tree guards its change selects.**
+   - **When** — after its own test run under point 3, on every row, whether or not the unit wrote a test.
+   - **The changed-path set** — the union of the output of `git diff --name-only HEAD` and `git ls-files --others --exclude-standard`, each run bare from the checkout root, as repo-relative paths; the second is what lists a new, untracked file.
+   - **The match** — a guard is selected when at least one changed path matches its `covers` glob. `**` matches zero or more whole path segments, `*` any run of characters inside one segment, `?` one character inside one segment; every other character is literal, and the glob matches the whole path.
+   - **The run** — each selected guard once, through `<test_file_cmd>` with the entry's `test` value as its argument, verbatim. A guard whose file the unit already ran under point 3 is not run twice. Only `<tree_guards>` entries are guards: never search for or infer another.
+   - **A failure** — handled as a failing own test: the unit's to fix in its own change, then the guard rerun. Never edit the guard file to make it pass unless the unit's detail file assigns that edit. A failure naming no path in the changed-path set is an evidence downgrade, as point 2 grades one.
+   - **A skip** — no command stated, the command refused, or the run moved to the background takes point 3's skip and point 6's foreground rule unchanged.
+
+   No `<tree_guards>` entries, or no selected guard, adds no run.
 
 **Who may cite this.** These documents point at this heading:
 
@@ -170,6 +180,7 @@ A row-`G.4` layer whose return carries `already passing — ` — full form `blo
 - `${CLAUDE_PLUGIN_ROOT}/instructions/code_review_fixes_instructions.md`
 - `${CLAUDE_PLUGIN_ROOT}/instructions/user_review_fixes_instructions.md`
 - `${CLAUDE_PLUGIN_ROOT}/docs/AUTONOMOUS_FLOW.md`
+- `docs/config.md`
 
 A citer **points and never restates**, and **no document beyond this roster may point at this heading.** An edit that rewords or moves the heading updates every roster member in the same change. Pointers from this file's own sections are not roster entries.
 
