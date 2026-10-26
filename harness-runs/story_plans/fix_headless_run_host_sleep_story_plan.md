@@ -34,7 +34,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/fix_headless_run_host_sleep/task
 3. [x] **Task 3** — Test the run library's keep-awake primitives and hold the extracted host classifier to `sandboxHostKind` _(layer: cli)_ _(points: 15)_
 4. [x] **Task 4** — The watcher template holds the host awake for the engine's life, re-checks mains power each pass, and measures stall silence from the last host wake _(layer: cli)_ _(points: 20)_
 5. [x] **Task 5** — Drive the written watcher's keep-awake hold end to end, and give the shared watcher driver a silent default keep-awake probe _(layer: cli)_ _(points: 20)_
-6. [ ] **Task 6** — Pin the stall watchdog's host-sleep discount with a simulated long sleep, and prove it still kills a genuinely hung run _(layer: cli)_ _(points: 15)_
+6. [x] **Task 6** — Pin the stall watchdog's host-sleep discount with a simulated long sleep, and prove it still kills a genuinely hung run _(layer: cli)_ _(points: 15)_
 7. [ ] **Task 7** — The pure keep-awake host assessment module `cli/src/doctor/keepAwake.ts`, and its suite _(layer: cli)_ _(points: 15)_
 8. [ ] **Task 8** — `doctor`'s informational `keep-awake` check, registered after `sandbox-prerequisites`, with a hermetic lock-probe default for the test tree _(layer: cli)_ _(points: 18)_
 9. [ ] **Task 9** — Declare `execution.keepAwake` in the schema and `docs/config.md` §5, and mirror the changed templates into `scripts/` _(layer: general)_ _(points: 10)_

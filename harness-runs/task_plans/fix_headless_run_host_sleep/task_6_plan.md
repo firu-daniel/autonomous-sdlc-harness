@@ -32,3 +32,10 @@
 - `npm test --workspace cli -- test/watcher-stall-host-sleep.test.mjs` passes.
 - Cases (a) and (c) are each other's perturbation. They have the same back-date, the same thresholds and the same hung stub, differing only in the last-pass epoch, and one is killed while the other is not. The header says so, as `docs/outer-loop-verification.md` §2.6 says of its idle and spinning rows.
 - Every case ends its stub through the control file and leaves no stub process behind.
+
+**Deviations from plan:**
+
+- The pass script follows `cli/test/watcher-stall-reset-payloads.test.mjs` → `localStall`'s launch-without-`wait` shape through the go-file loop of `cli/test/watcher-keep-awake.test.mjs` → `session`, which runs each later `tick` alone on request. That loop is the one already used to step a hung session pass by pass, and `localStall` hard-codes exactly two passes. The fixture is pushed to `origin` as that suite's is, because the launch cuts a clone.
+- "The record ends `failed` naming the restart budget": the watcher writes only `status failed` to the record and puts the reason on its `-> failed (…)` log line and in the notification. The case asserts `status` `failed` on the record and `stalled <s>s, exceeded 0 watchdog restarts` on the log line.
+- The stub writes its own pid into `hung`, so every case can assert, after `end`, that no stub process is left (the third Verification bullet).
+- (d) also writes `garbage` into `.host_woke_at` for the kill half, so "neither file being unreadable as an epoch may defer a kill" covers both state files.
