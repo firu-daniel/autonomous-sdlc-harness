@@ -17,7 +17,7 @@ The gate wrapper keeps only each failing case's `not ok` line and the tail of th
 
 Order: the suspected root cause first (Finding 1, the case that tests the new launch head on the shared driver's default path), then the rest of the branch's own new suites, then the existing suites that cross the same pass, one file at a time.
 
-1. [ ] **Finding 1** — The keep-awake default-probe case fails: the shared root-cause check. _(layer: cli, general)_
+1. [x] **Finding 1** — The keep-awake default-probe case fails: the shared root-cause check. _(layer: cli, general)_
 2. [ ] **Finding 2** — Keep-awake (a)(c): the macOS caffeinate hold case fails. _(layer: cli)_
 3. [ ] **Finding 3** — Keep-awake (b)(c): the exit-3 macOS hold case fails. _(layer: cli)_
 4. [ ] **Finding 4** — Keep-awake (d): the keepAwake-false case fails. _(layer: cli)_
