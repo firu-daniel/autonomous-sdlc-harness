@@ -10,7 +10,7 @@
 
 This list is the **single source of truth** for the fix loop. It is walked top to bottom, and the first `[ ]` entry is the next unit. `[ ]` markers anywhere else, including the `- [ ]` sub-step bullets inside the per-finding files, are informational only.
 
-1. [ ] **Finding 1** — Remove the spelled-out home directory from task 9's plan. _(layer: general)_
+1. [x] **Finding 1** — Remove the spelled-out home directory from task 9's plan. _(layer: general)_
 2. [ ] **Finding 2** — Launch commits both analytics files on the clone's branch and syncs them. _(layer: cli, general)_
 3. [ ] **Finding 3** — A resume that adds no session adds no analytics commit. _(layer: cli, general)_
 4. [ ] **Finding 4** — A `run-analytics.sh` that exits 1 changes no outcome. _(layer: cli, general)_
