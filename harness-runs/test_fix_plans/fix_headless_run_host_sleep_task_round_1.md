@@ -21,7 +21,7 @@ Order: the suspected root cause first (Finding 1, the case that tests the new la
 2. [x] **Finding 2** — Keep-awake (a)(c): the macOS caffeinate hold case fails. _(layer: cli)_
 3. [x] **Finding 3** — Keep-awake (b)(c): the exit-3 macOS hold case fails. _(layer: cli)_
 4. [x] **Finding 4** — Keep-awake (d): the keepAwake-false case fails. _(layer: cli)_
-5. [ ] **Finding 5** — Keep-awake (l): the re-taken macOS hold case fails. _(layer: cli)_
+5. [x] **Finding 5** — Keep-awake (l): the re-taken macOS hold case fails. _(layer: cli)_
 6. [ ] **Finding 6** — Keep-awake (e)-(h): the Linux logind session case fails. _(layer: cli)_
 7. [ ] **Finding 7** — Keep-awake (i): the refused Linux lock case fails. _(layer: cli)_
 8. [ ] **Finding 8** — Keep-awake (j): the WSL2 not-holding case fails. _(layer: cli)_
