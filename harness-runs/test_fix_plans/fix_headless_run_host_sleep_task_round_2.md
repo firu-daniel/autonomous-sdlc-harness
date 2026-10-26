@@ -37,7 +37,7 @@ Order:
 Every change is confined to test files.
 
 1. [x] **Finding 1** — Keep-awake (l): the suite's polls and session passes run under unscaled, sub-pass bounds. _(layer: cli)_
-2. [ ] **Finding 2** — Keep-awake (a)(c): the holder-gone poll runs under the unscaled `WAIT_MS`. _(layer: cli)_
+2. [x] **Finding 2** — Keep-awake (a)(c): the holder-gone poll runs under the unscaled `WAIT_MS`. _(layer: cli)_
 3. [ ] **Finding 3** — Keep-awake (b)(c): the holder-gone poll runs under the unscaled `WAIT_MS`. _(layer: cli)_
 4. [ ] **Finding 4** — Keep-awake (e)-(h): the Linux logind session case fails in the full suite. _(layer: cli)_
 5. [ ] **Finding 5** — Keep-awake (i): the refused Linux lock case fails in the full suite. _(layer: cli)_
