@@ -30,3 +30,9 @@ It also captures `resumeBaseline`, which Findings 4 and 5 compare against. If th
 - [ ] If the named subtest passes as the tree stands, edit no code.
 - [ ] If it fails after Finding 2 is resolved, check whether the resume committed a byte-changed `run-analytics.json` or `run-analytics.md` even though no session was added. A likely cause is a non-deterministic field in the rollup or the Markdown, which breaks the script's "nothing written carries a wall-clock value" rule. Fix that in `cli/templates/scripts/run-analytics.sh` or in its `lib/` programs (`run-analytics.jq`, `run-analytics-report.jq`), and make the identical edit in the `scripts/` mirrors.
 - [ ] Do not weaken the test.
+
+## Already passing
+
+- **(a) Named test and file run:** subtest `a resume that adds no session adds no analytics commit` under parent `the session's analytics are committed on the run's branch, and a failing step changes no outcome`, in `cli/test/watcher-run-analytics.test.mjs`, run as the whole file (no name pattern).
+- **(b) Command and result:** `npm test --workspace cli -- test/watcher-run-analytics.test.mjs` from the repository root (pretest build ran first). The named subtest reported `ok 2 - a resume that adds no session adds no analytics commit`. File summary: `# tests 5`, `# pass 5`, `# fail 0`. Its predecessor on the shared fixture, `ok 1 - a launch commits run-analytics.json then run-analytics.md on the branch, synced to the main checkout`, also passed. That is consistent with the suspected shared cause in Finding 2, which was closed already passing in commit `996c1f5a`.
+- **(c) No code file edited:** this detail file is the only write. `git status --short` was empty before this record was appended.

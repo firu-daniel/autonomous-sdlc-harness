@@ -12,7 +12,7 @@ This list is the **single source of truth** for the fix loop. It is walked top t
 
 1. [x] **Finding 1** — Remove the spelled-out home directory from task 9's plan. _(layer: general)_
 2. [x] **Finding 2** — Launch commits both analytics files on the clone's branch and syncs them. _(layer: cli, general)_
-3. [ ] **Finding 3** — A resume that adds no session adds no analytics commit. _(layer: cli, general)_
+3. [x] **Finding 3** — A resume that adds no session adds no analytics commit. _(layer: cli, general)_
 4. [ ] **Finding 4** — A `run-analytics.sh` that exits 1 changes no outcome. _(layer: cli, general)_
 5. [ ] **Finding 5** — A missing `run-analytics.sh` changes no outcome. _(layer: cli, general)_
 6. [ ] **Finding 6** — A clean reused clone launches with the review placed and left uncommitted. _(layer: cli, general)_
