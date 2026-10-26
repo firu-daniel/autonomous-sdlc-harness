@@ -25,3 +25,10 @@
 - `git diff -U0 -- plugin/hooks/autonomous-script-allowlist-guard.sh` shows only lines beginning with `#`.
 - The stay-allowed list in `plugin/hooks/README.md` and the guard comment name the same seven scripts in the same order, `scratch-run.sh` last.
 - `claude plugin validate --strict plugin` passes (`.claude/context/plugin.md` → `## Verifying a change in this layer`); the `branch-status.md` frontmatter is unchanged.
+
+**Deviations from plan:**
+
+- **`cache hit unknown` when `.run.cache_hit_ratio` is `null`.** The plan gives a `null` arm for cost only, but `lib/run-analytics-report.jq` sets `cache_hit_ratio` to `null` when its denominator is 0. Without an arm for that, the digest would have to guess a figure.
+- **`<duration>` is `<h>h<mm>m`, or `<m>m<ss>s` under an hour.** The plan leaves the slowest sub-agent's duration format open, and most sub-agents finish in under an hour. The digest also says that `<session>` is printed as stored, `#<n>` suffix included, per Task 1's deviation.
+- **Evidence downgrade: `claude plugin validate --strict plugin` was not run.** The tool layer refused it ("Permission to use Bash has been denied because Claude Code is running in don't ask mode"). `scripts/run-gates.sh` runs it as gate `1a plugin manifest`, and `scripts/test.sh` invokes that script, so the check is deferred to the Run gates phase. What it currently rests on: no frontmatter, manifest or `plugin.json` file was edited (`git diff` touches only the body of `branch-status.md`, a comment in the guard, a README paragraph and an `AUTONOMOUS_FLOW.md` table row).
+- **The guard diff was checked by reading `git diff -U0 -- plugin/hooks/autonomous-script-allowlist-guard.sh` directly.** A piped `grep` filter over that diff was refused the same way. Every added and removed line in the diff begins with `#`.
