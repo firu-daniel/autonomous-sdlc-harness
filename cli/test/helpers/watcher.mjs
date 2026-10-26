@@ -10,7 +10,7 @@
  *
  * `node --test test` loads this file as a test file of its own, so nothing here runs at import time.
  *
- * ## Five non-obvious choices
+ * ## Six non-obvious choices
  *
  * 1. **The stub sleeps before its body runs.** Not for the registry: its writes are serialized, so
  *    the pass's post-spawn `pid` write and the session's exit classification both survive whichever
@@ -25,7 +25,8 @@
  * 4. **`tick` is bounded at {@link TICK_TIMEOUT_MS}**, through `runBash`'s process-group bound
  *    (`fixture.mjs`, choice 6), and by the test's own `t.signal`. A pass plus its `wait` for a stub
  *    that sleeps under a second is far below it. A case whose single pass launches more than one
- *    session may pass a larger bound through `tick`'s `timeoutMs`. That bound and any `timeoutMs` a
+ *    session, or whose sessions run the real analytics hook (choice 6), may pass a larger bound through
+ *    `tick`'s `timeoutMs`. That bound and any `timeoutMs` a
  *    case passes are scaled by `HARNESS_TEST_TIME_SCALE` (`./timing.mjs`) — `tick` does not scale a
  *    passed `timeoutMs`, so its caller does — and at that variable's cap both stay below the suite's
  *    `--test-timeout` (`cli/package.json` → `scripts.test`, 1 800 000 ms) so a hung pass fails naming
@@ -37,6 +38,12 @@
  *    A suite that runs its own `tick` script instead of this `tick`
  *    (`cli/test/watcher-stall-reset-payloads.test.mjs` → `localStall`) defines the same override from
  *    {@link DEFAULT_SANDBOX_PROBE}.
+ * 6. **The run-analytics hook is off unless a case opts in** (`runAnalytics`). Its two commits add
+ *    seconds to every launch pass, enough to push a pass past its bound under a loaded host, and only
+ *    `cli/test/watcher-run-analytics.test.mjs` asserts them. Off, the installed `run-analytics.sh` is
+ *    replaced by an executable `exit 0` that writes no file: `record_run_analytics` then commits
+ *    nothing and logs nothing, where a non-executable or missing script would add a watcher-log line
+ *    a suite asserting that log could trip on.
  */
 
 import assert from 'node:assert/strict';
@@ -50,6 +57,7 @@ import { scaleBound } from './timing.mjs';
 const STATE_DIR = 'sdlc-harness';
 const WATCHER_PATH = `${INIT_SCRIPTS_DIR}/autonomous-watcher.sh`;
 const NOTIFY_PATH = `${INIT_SCRIPTS_DIR}/autonomous-notify.sh`;
+const RUN_ANALYTICS_PATH = `${INIT_SCRIPTS_DIR}/run-analytics.sh`;
 const REGISTRY_PATH = `${STATE_DIR}/autonomous_logs/registry.json`;
 const WATCHER_LOG_PATH = `${STATE_DIR}/autonomous_logs/watcher.log`;
 
@@ -108,9 +116,9 @@ async function sortedNames(path, exclude) {
  * return `null` when `bash` or `jq` does not resolve — the watcher refuses to start without either.
  *
  * @param {import('node:test').TestContext} t
- * @param {{ branch?: string }} [options]
+ * @param {{ branch?: string, runAnalytics?: boolean }} [options]
  */
-export async function createWatcherFixture(t, { branch = 'feat_x' } = {}) {
+export async function createWatcherFixture(t, { branch = 'feat_x', runAnalytics = false } = {}) {
   for (const tool of ['bash', 'jq']) {
     if (!onPath(tool)) {
       t.skip(`${tool} does not resolve on this process's PATH, so ${WATCHER_PATH} cannot be driven here`);
@@ -123,6 +131,12 @@ export async function createWatcherFixture(t, { branch = 'feat_x' } = {}) {
 
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
+
+  if (!runAnalytics) {
+    const analyticsPath = join(dir, RUN_ANALYTICS_PATH);
+    await writeFile(analyticsPath, '#!/usr/bin/env bash\nexit 0\n', 'utf8');
+    await chmod(analyticsPath, 0o755);
+  }
 
   const clarDir = join(dir, STATE_DIR, 'clarifications', branch);
   const recorderDir = join(dir, RECORDER_DIR);

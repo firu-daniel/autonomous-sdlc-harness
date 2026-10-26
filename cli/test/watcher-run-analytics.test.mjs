@@ -22,7 +22,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import { INIT_SCRIPTS_DIR, runGit } from './helpers/fixture.mjs';
-import { createWatcherFixture } from './helpers/watcher.mjs';
+import { createWatcherFixture, TICK_TIMEOUT_MS } from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
 const IDENTITY = ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid'];
@@ -30,6 +30,11 @@ const SUBJECT = 'chore: Record run analytics for feat_x';
 const OUT_REL = `${STATE_DIR}/run_analytics/feat_x`;
 /** `RUN_ANALYTICS_SUSPEND_SOURCE=none` keeps the host's suspend log out of every pass. */
 const PASS_ENV = { RUN_ANALYTICS_SUSPEND_SOURCE: 'none' };
+/**
+ * Every pass here runs the real hook, whose two commits lengthen it (`./helpers/watcher.mjs`, choice
+ * 6); a ceiling, so a passing pass still returns when it is done. `TICK_TIMEOUT_MS` is already scaled.
+ */
+const PASS_OPTIONS = { timeoutMs: TICK_TIMEOUT_MS * 2 };
 
 /** A stub body printing one complete session, `id`, to stdout — the stream the watcher tees. */
 function sessionStub(id) {
@@ -50,7 +55,7 @@ function sessionStub(id) {
  * @param {import('node:test').TestContext} t
  */
 async function adoptedFixture(t) {
-  const w = await createWatcherFixture(t);
+  const w = await createWatcherFixture(t, { runAnalytics: true });
   if (w === null) return null;
 
   const config = JSON.parse(await readFile(join(w.dir, 'harness.config.json'), 'utf8'));
@@ -104,7 +109,7 @@ test('the session\'s analytics are committed on the run\'s branch, and a failing
   await t.test('a launch commits run-analytics.json then run-analytics.md on the branch, synced to the main checkout', async () => {
     await f.setStub(sessionStub('sess-launch'));
     await f.drop();
-    await f.tick(PASS_ENV);
+    await f.tick(PASS_ENV, PASS_OPTIONS);
 
     assert.equal(f.record().copy_kind, 'clone', f.watcherLog());
     assert.equal(f.record().worktree, f.clone);
@@ -140,7 +145,7 @@ test('the session\'s analytics are committed on the run\'s branch, and a failing
     const notified = f.notifications().length;
     await f.setStub(':');
     await f.parkClone(1);
-    await f.tick(PASS_ENV);
+    await f.tick(PASS_ENV, PASS_OPTIONS);
 
     assert.equal(f.prompts().length, 2, `the parked run was not resumed:\n${f.watcherLog()}`);
     assert.deepEqual(await f.analyticsCommits(f.clone), before, f.watcherLog());
@@ -159,7 +164,7 @@ test('the session\'s analytics are committed on the run\'s branch, and a failing
     const logBefore = f.watcherLog().length;
     await f.setStub(sessionStub(id));
     await f.parkClone(n);
-    await f.tick(PASS_ENV);
+    await f.tick(PASS_ENV, PASS_OPTIONS);
 
     assert.equal(f.prompts().length, n + 1, `the parked run was not resumed:\n${f.watcherLog()}`);
     assert.deepEqual(outcome(f, notified), resumeBaseline);
