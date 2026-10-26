@@ -30,45 +30,45 @@ Order: the suspected root cause first (Finding 1, the case that tests the new la
 11. [x] **Finding 11** — Stall host sleep (c): the genuine-hang case fails. _(layer: cli)_
 12. [x] **Finding 12** — Stall host sleep (d): the missing last-pass file case fails. _(layer: cli)_
 13. [x] **Finding 13** — Sandbox refusal (d): the helper's default-probe launch fails. _(layer: cli)_
-14. [ ] **Finding 14** — Sandbox refusal (b): the taken-optOut launch fails. _(layer: cli)_
-15. [ ] **Finding 15** — Sandbox refusal (e): the GitHub Actions dispatch fails. _(layer: cli)_
-16. [ ] **Finding 16** — Run profile: the per-run copy launch case fails. _(layer: cli)_
-17. [ ] **Finding 17** — Run profile: the other-worktree pointer case fails. _(layer: cli)_
-18. [ ] **Finding 18** — Run profile: the sandbox.enabled-false refusal fails. _(layer: cli)_
-19. [ ] **Finding 19** — Run profile: the failIfUnavailable-false refusal fails. _(layer: cli)_
-20. [ ] **Finding 20** — Run profile: the empty-base refusal fails. _(layer: cli)_
-21. [ ] **Finding 21** — Run profile: the two-document base refusal fails. _(layer: cli)_
-22. [ ] **Finding 22** — Run profile: the opt-out profile launch fails. _(layer: cli)_
-23. [ ] **Finding 23** — Run profile: the clone exit sync case fails. _(layer: cli)_
-24. [ ] **Finding 24** — Remote dispatch: the remote task drop case fails. _(layer: cli)_
-25. [ ] **Finding 25** — Remote dispatch: the usage-hold and kill-switch case fails. _(layer: cli)_
-26. [ ] **Finding 26** — Remote dispatch: the failed-dispatch case fails. _(layer: cli)_
-27. [ ] **Finding 27** — Remote dispatch: the refused-push case fails. _(layer: cli)_
-28. [ ] **Finding 28** — Remote dispatch: the one-live-copy re-drop case fails. _(layer: cli)_
-29. [ ] **Finding 29** — Remote dispatch: the identical re-drop case fails. _(layer: cli)_
-30. [ ] **Finding 30** — Remote dispatch: the remote review drop case fails. _(layer: cli)_
-31. [ ] **Finding 31** — Remote dispatch: the key-absent launch case fails. _(layer: cli)_
-32. [ ] **Finding 32** — Remote dispatch: the key-absent library routing case fails. _(layer: cli)_
-33. [ ] **Finding 33** — Remote dispatch: the running remote record case fails. _(layer: cli)_
-34. [ ] **Finding 34** — Remote park sequence: the stop-then-resume case fails. _(layer: cli)_
-35. [ ] **Finding 35** — Review drop: the clean reused clone launch fails. _(layer: cli)_
-36. [ ] **Finding 36** — Review drop (L2): the nested-repository fsmonitor case fails. _(layer: cli)_
-37. [ ] **Finding 37** — Review drop (L3): the submodule fsmonitor case fails. _(layer: cli)_
-38. [ ] **Finding 38** — Review drop (L5): the committed settings change refusal fails. _(layer: cli)_
-39. [ ] **Finding 39** — Review drop (L6): the untracked post-checkout refusal fails. _(layer: cli)_
-40. [ ] **Finding 40** — Review drop (L8): the symlinked user_reviews refusal fails. _(layer: cli)_
-41. [ ] **Finding 41** — Review drop (L9): the forged-base case fails. _(layer: cli)_
-42. [ ] **Finding 42** — Review drop (L10): the skip-worktree settings refusal fails. _(layer: cli)_
-43. [ ] **Finding 43** — Review drop (L1): the planted config.worktree refusal fails. _(layer: cli)_
-44. [ ] **Finding 44** — Review drop (L1c): the off-allow-list fsmonitor refusal fails. _(layer: cli)_
-45. [ ] **Finding 45** — Stall reset: the honest hung run resume fails. _(layer: cli)_
-46. [ ] **Finding 46** — Stall reset (S1): the reference-transaction refusal fails. _(layer: cli)_
-47. [ ] **Finding 47** — Stall reset (S2): the committed settings hook refusal fails. _(layer: cli)_
-48. [ ] **Finding 48** — Stall reset (S3): the nested-repository resume fails. _(layer: cli)_
-49. [ ] **Finding 49** — Stall reset (S5): the symlinked PAUSE_PROGRESS.md refusal fails. _(layer: cli)_
-50. [ ] **Finding 50** — Stall reset (S6): the forged-base case fails. _(layer: cli)_
-51. [ ] **Finding 51** — Stall reset (S7): the skip-worktree settings refusal fails. _(layer: cli)_
-52. [ ] **Finding 52** — Run-copy migration: the new drop beside a legacy run fails. _(layer: cli)_
+14. [x] **Finding 14** — Sandbox refusal (b): the taken-optOut launch fails. _(layer: cli)_
+15. [x] **Finding 15** — Sandbox refusal (e): the GitHub Actions dispatch fails. _(layer: cli)_
+16. [x] **Finding 16** — Run profile: the per-run copy launch case fails. _(layer: cli)_
+17. [x] **Finding 17** — Run profile: the other-worktree pointer case fails. _(layer: cli)_
+18. [x] **Finding 18** — Run profile: the sandbox.enabled-false refusal fails. _(layer: cli)_
+19. [x] **Finding 19** — Run profile: the failIfUnavailable-false refusal fails. _(layer: cli)_
+20. [x] **Finding 20** — Run profile: the empty-base refusal fails. _(layer: cli)_
+21. [x] **Finding 21** — Run profile: the two-document base refusal fails. _(layer: cli)_
+22. [x] **Finding 22** — Run profile: the opt-out profile launch fails. _(layer: cli)_
+23. [x] **Finding 23** — Run profile: the clone exit sync case fails. _(layer: cli)_
+24. [x] **Finding 24** — Remote dispatch: the remote task drop case fails. _(layer: cli)_
+25. [x] **Finding 25** — Remote dispatch: the usage-hold and kill-switch case fails. _(layer: cli)_
+26. [x] **Finding 26** — Remote dispatch: the failed-dispatch case fails. _(layer: cli)_
+27. [x] **Finding 27** — Remote dispatch: the refused-push case fails. _(layer: cli)_
+28. [x] **Finding 28** — Remote dispatch: the one-live-copy re-drop case fails. _(layer: cli)_
+29. [x] **Finding 29** — Remote dispatch: the identical re-drop case fails. _(layer: cli)_
+30. [x] **Finding 30** — Remote dispatch: the remote review drop case fails. _(layer: cli)_
+31. [x] **Finding 31** — Remote dispatch: the key-absent launch case fails. _(layer: cli)_
+32. [x] **Finding 32** — Remote dispatch: the key-absent library routing case fails. _(layer: cli)_
+33. [x] **Finding 33** — Remote dispatch: the running remote record case fails. _(layer: cli)_
+34. [x] **Finding 34** — Remote park sequence: the stop-then-resume case fails. _(layer: cli)_
+35. [x] **Finding 35** — Review drop: the clean reused clone launch fails. _(layer: cli)_
+36. [x] **Finding 36** — Review drop (L2): the nested-repository fsmonitor case fails. _(layer: cli)_
+37. [x] **Finding 37** — Review drop (L3): the submodule fsmonitor case fails. _(layer: cli)_
+38. [x] **Finding 38** — Review drop (L5): the committed settings change refusal fails. _(layer: cli)_
+39. [x] **Finding 39** — Review drop (L6): the untracked post-checkout refusal fails. _(layer: cli)_
+40. [x] **Finding 40** — Review drop (L8): the symlinked user_reviews refusal fails. _(layer: cli)_
+41. [x] **Finding 41** — Review drop (L9): the forged-base case fails. _(layer: cli)_
+42. [x] **Finding 42** — Review drop (L10): the skip-worktree settings refusal fails. _(layer: cli)_
+43. [x] **Finding 43** — Review drop (L1): the planted config.worktree refusal fails. _(layer: cli)_
+44. [x] **Finding 44** — Review drop (L1c): the off-allow-list fsmonitor refusal fails. _(layer: cli)_
+45. [x] **Finding 45** — Stall reset: the honest hung run resume fails. _(layer: cli)_
+46. [x] **Finding 46** — Stall reset (S1): the reference-transaction refusal fails. _(layer: cli)_
+47. [x] **Finding 47** — Stall reset (S2): the committed settings hook refusal fails. _(layer: cli)_
+48. [x] **Finding 48** — Stall reset (S3): the nested-repository resume fails. _(layer: cli)_
+49. [x] **Finding 49** — Stall reset (S5): the symlinked PAUSE_PROGRESS.md refusal fails. _(layer: cli)_
+50. [x] **Finding 50** — Stall reset (S6): the forged-base case fails. _(layer: cli)_
+51. [x] **Finding 51** — Stall reset (S7): the skip-worktree settings refusal fails. _(layer: cli)_
+52. [x] **Finding 52** — Run-copy migration: the new drop beside a legacy run fails. _(layer: cli)_
 
 ---
 
