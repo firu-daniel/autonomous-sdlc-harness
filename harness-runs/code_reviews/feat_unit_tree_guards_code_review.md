@@ -35,7 +35,7 @@
 1. [x] **Finding 7** — Re-wrap the `check.ts` header's filesystem bullet _(layer: cli)_
 2. [x] **Finding 2** — Add `docs/cli.md` to `## The test-run rule`'s citer roster _(layer: plugin)_
 3. [x] **Finding 1** — Make point 7's downgrade clause match guard-relative paths and require point 2's symbol condition _(layer: plugin)_
-4. [ ] **Finding 4** — Align the adopter conventions template's registration rule with point 8's later-task allowance _(layer: cli)_
+4. [x] **Finding 4** — Align the adopter conventions template's registration rule with point 8's later-task allowance _(layer: cli)_
 5. [ ] **Finding 6** — Add the absolute-`test` case to `doctor-tree-guards.test.mjs` _(layer: cli)_
 6. [ ] **Finding 3** — Re-point the `docs/config.md` §5 `treeGuards` row at points 7 and 8 instead of restating them _(layer: general)_
 7. [ ] **Finding 5** — Try `appDir` as a base in the `tree-guards` doctor check _(layer: cli, general)_
