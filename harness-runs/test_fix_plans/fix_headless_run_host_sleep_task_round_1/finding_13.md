@@ -28,3 +28,9 @@ The likely cause is a transient condition on the gate host during part of the ru
   - **The watcher's record, a log line or the launch:** the fault is in `cli/templates/scripts/autonomous-watcher.sh` (or `cli/templates/scripts/lib/harness-run-lib.sh`). Fix it there, and record under **Deviations from plan:** that the `general`-layer mirror (`scripts/autonomous-watcher.sh`, `scripts/lib/harness-run-lib.sh`) needs the same edit until `cmp` exits 0.
   - **A bare `runBash timed out after …`:** record it under **Deviations from plan:** as the next round's evidence, and change nothing.
 - [ ] If the case passes against the current tree, the finding closes through `unit_loop_core.md` → `#### The already-passing close`.
+
+## Already passing
+
+- **(a) Named test and file run:** `(d) the helper's default probe launches the stub`, in `cli/test/watcher-sandbox-refusal.test.mjs`, run on `930050c7`.
+- **(b) Command and result:** `npm test --workspace cli -- test/watcher-sandbox-refusal.test.mjs`, from the repository root, in the foreground: `ok 4 - (d) the helper's default probe launches the stub` (`duration_ms: 16477.310375`); file totals `# tests 5`, `# pass 5`, `# fail 0`.
+- **(c) No code file edited:** neither `cli/templates/scripts/autonomous-watcher.sh`, `cli/templates/scripts/lib/harness-run-lib.sh` nor their `scripts/` mirrors, nor any other code file, was changed; this record is the only write.

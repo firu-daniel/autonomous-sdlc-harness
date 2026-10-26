@@ -29,7 +29,7 @@ Order: the suspected root cause first (Finding 1, the case that tests the new la
 10. [x] **Finding 10** — Stall host sleep (a)(b): the long-sleep case fails. _(layer: cli)_
 11. [x] **Finding 11** — Stall host sleep (c): the genuine-hang case fails. _(layer: cli)_
 12. [x] **Finding 12** — Stall host sleep (d): the missing last-pass file case fails. _(layer: cli)_
-13. [ ] **Finding 13** — Sandbox refusal (d): the helper's default-probe launch fails. _(layer: cli)_
+13. [x] **Finding 13** — Sandbox refusal (d): the helper's default-probe launch fails. _(layer: cli)_
 14. [ ] **Finding 14** — Sandbox refusal (b): the taken-optOut launch fails. _(layer: cli)_
 15. [ ] **Finding 15** — Sandbox refusal (e): the GitHub Actions dispatch fails. _(layer: cli)_
 16. [ ] **Finding 16** — Run profile: the per-run copy launch case fails. _(layer: cli)_
