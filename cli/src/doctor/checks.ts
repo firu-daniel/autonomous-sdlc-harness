@@ -4404,14 +4404,14 @@ const LAYER_DRIFT_CHECK: Check = {
  * Whether a `treeGuards[].test` value names a regular file this repository has.
  *
  * `test` is the single-file test command's argument verbatim, not necessarily repo-relative, so it
- * resolves when a regular file exists at it joined to the repository root **or** to any configured
- * `layers[].path`, in config order — no other base. An absolute value, or one carrying a `..`
+ * resolves when a regular file exists at it joined to the repository root, to `appDir`, **or** to any
+ * configured `layers[].path`, in config order — no other base. An absolute value, or one carrying a `..`
  * segment, is resolved against nothing and counts as missing: the unit loop hands it to a command
  * that runs from inside the repository. Never throws.
  */
-function treeGuardTestResolves(test: unknown, repoRoot: string, layerPaths: readonly string[]): boolean {
+function treeGuardTestResolves(test: unknown, repoRoot: string, bases: readonly string[]): boolean {
   if (typeof test !== 'string' || test === '' || isAbsolute(test) || test.split(/[\\/]/).includes('..')) return false;
-  return [repoRoot, ...layerPaths.map((path) => join(repoRoot, path))].some((base) => {
+  return [repoRoot, ...bases.map((path) => join(repoRoot, path))].some((base) => {
     try {
       return statSync(join(base, test)).isFile();
     } catch {
@@ -4440,18 +4440,19 @@ const TREE_GUARDS_CHECK: Check = {
     }
     if (guards.length === 0) return pass('no treeGuards are configured, so a unit runs no tree guard');
 
+    const appDir = typeof ctx.config.appDir === 'string' ? ctx.config.appDir : DEFAULTS.appDir;
     const layers: unknown = ctx.config.layers;
     const layerPaths = Array.isArray(layers)
       ? layers.map((layer: unknown) => (isJsonObject(layer) ? layer['path'] : undefined)).filter((path): path is string => typeof path === 'string')
       : [];
     const tests = guards.map((guard: unknown) => (isJsonObject(guard) ? guard['test'] : undefined));
     const missing = tests
-      .filter((test) => !treeGuardTestResolves(test, repoRoot, layerPaths))
+      .filter((test) => !treeGuardTestResolves(test, repoRoot, [appDir, ...layerPaths]))
       .map((test) => (typeof test === 'string' ? test : JSON.stringify(test ?? null)));
 
     if (missing.length > 0) {
       return warn(
-        `${missing.length} of the ${guards.length} treeGuards ${missing.length === 1 ? 'entry names a test that resolves' : 'entries name tests that resolve'} to no file under the repository root or any layers[].path: ${nameList(missing)} — a guard whose file is missing is never run, so the rule it enforces goes unchecked until Run gates. Correct or remove ${missing.length === 1 ? 'the entry' : 'those entries'} with \`${CLI} config set treeGuards '<json>'\``,
+        `${missing.length} of the ${guards.length} treeGuards ${missing.length === 1 ? 'entry names a test that resolves' : 'entries name tests that resolve'} to no file under the repository root, appDir or any layers[].path: ${nameList(missing)} — a guard whose file is missing is never run, so the rule it enforces goes unchecked until Run gates. Correct or remove ${missing.length === 1 ? 'the entry' : 'those entries'} with \`${CLI} config set treeGuards '<json>'\``,
       );
     }
     return pass(`all ${guards.length} configured ${guards.length === 1 ? 'tree guard names a file' : 'tree guards name a file'} this repository has`);

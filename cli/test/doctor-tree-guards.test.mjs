@@ -2,7 +2,7 @@
  * `doctor`'s `tree-guards` line, against the compiled CLI on repositories `init` wired.
  *
  * **The rule this suite enforces: every `treeGuards` entry whose `test` resolves to no regular file —
- * joined to the repository root or to any `layers[].path` — is reported as a `warn` naming that
+ * joined to the repository root, to `appDir` or to any `layers[].path` — is reported as a `warn` naming that
  * `test`, and a warning never moves the exit status.** An absolute `test`, or one carrying a `..`
  * segment, resolves against nothing. No case reaches the network.
  */
@@ -99,6 +99,18 @@ test('the tree-guards check warns on a test that names no file', async (t) => {
     writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
     plant(dir, 'app/test/layer-guard.test.mjs');
     await setGuards(dir, [{ test: 'test/layer-guard.test.mjs', covers: 'app/src/**' }]);
+
+    await doctorLine(dir, 'PASS');
+  });
+
+  await t.test('a test that exists only under the configured appDir passes', async (subtest) => {
+    const dir = await wiredFixture(subtest);
+    const path = join(dir, CONFIG_FILE);
+    const config = JSON.parse(readFileSync(path, 'utf8'));
+    config.appDir = 'pkg';
+    writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+    plant(dir, 'pkg/test/app-guard.test.mjs');
+    await setGuards(dir, [{ test: 'test/app-guard.test.mjs', covers: 'pkg/src/**' }]);
 
     await doctorLine(dir, 'PASS');
   });
