@@ -111,6 +111,10 @@ case "$cmd" in
     if declare -F sp_snapshot_check >/dev/null; then
       sp_snapshot_check
     fi
+    # preflight alone runs no teardown, so the snapshot's temp area is released here.
+    if declare -F sp_snapshot_release >/dev/null; then
+      sp_snapshot_release
+    fi
     sp_finish
     ;;
   run)
