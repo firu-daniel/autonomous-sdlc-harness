@@ -30,3 +30,9 @@ The case's assertions about the hold (the two recorded `systemd-inhibit` calls, 
 - [ ] Make sure `cli/test/watcher-keep-awake.test.mjs` has all of these: `WAIT_MS = scaleBound(20_000)`, `session()`'s `reached(n)` and launch wait under `TICK_TIMEOUT_MS` (imported from `./helpers/watcher.mjs`, already scaled), and `SESSION_TIMEOUT_MS = scaleBound(240_000)`. If Finding 1 has landed, they are already in place: confirm them with a grep and change nothing more for this case.
 - [ ] A single-file run that passes before that change lands is not evidence that this finding is cleared.
 - [ ] Do not change the power-supply stubs or the recorded-argv assertions, and add no retry.
+
+## Already passing
+
+- **(a)** Named test `(e)-(h) Linux: the logind hold waits on the engine, follows mains power pass by pass, and ends with the session`, in `cli/test/watcher-keep-awake.test.mjs`. I ran the file after Finding 1's commit `d2acb123`. I also read the fix site: `const WAIT_MS = scaleBound(20_000);`, `const SESSION_TIMEOUT_MS = scaleBound(240_000);`, and `session()`'s `reached(n)` and the launch `waitFor` both passing `TICK_TIMEOUT_MS`, imported from `./helpers/watcher.mjs` (`export const TICK_TIMEOUT_MS = scaleBound(60_000);`). `f.holderGone` runs under the scaled `WAIT_MS` default of `waitFor`. The last commit touching the file is `d2acb123`.
+- **(b)** `npm test --workspace cli -- test/watcher-keep-awake.test.mjs`, run from the repository root: `ok 6 - (e)-(h) Linux: …` (duration_ms 23393); file summary `# tests 9`, `# pass 9`, `# fail 0`. Because the run came after `d2acb123`, it is evidence under this finding's second Fix bullet.
+- **(c)** No code file was edited; the power-supply stubs and recorded-argv assertions were left untouched, and no retry was added.
