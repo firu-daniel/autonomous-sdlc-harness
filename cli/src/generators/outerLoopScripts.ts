@@ -189,8 +189,9 @@ export const OUTER_LOOP_SCRIPTS: ReadonlyArray<OuterLoopScript> = Object.freeze(
   Object.freeze({ file: 'autonomous-format-stream.sh', mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: 'run-analytics.jq', subdir: 'lib', mode: 0o644, agentInvocable: false }),
   Object.freeze({ file: 'run-analytics-report.jq', subdir: 'lib', mode: 0o644, agentInvocable: false }),
-  // Run by the watcher after each session; an agent reaching it through the script-allowlist guard
-  // writes only its own branch's analytics files, so `false` is a calling convention and it carries no
+  // Run by the watcher after each session. An agent reaching it through the script-allowlist guard
+  // can only append sessions to `<state_dir>/run_analytics/<branch>/` for the branch and checkout it
+  // names, and never rewrites a recorded one, so `false` is a calling convention and it carries no
   // `DENY_SCRIPT_BASENAMES` entry.
   Object.freeze({ file: 'run-analytics.sh', mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: NOTIFY_SCRIPT_NAME, mode: 0o755, agentInvocable: false }),

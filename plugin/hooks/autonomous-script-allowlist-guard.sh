@@ -674,7 +674,9 @@ esac
 # narrowing past a measured need is a change nothing has justified.
 # `docs-search-server.sh` is started by the agent runner from `.mcp.json`, not by
 # a dispatched agent, and reaches only the read-only `docs serve`.
-# `run-analytics.sh` writes only its own branch's analytics files. The last one
+# `run-analytics.sh` only appends sessions to `<state_dir>/run_analytics/<branch>/`
+# for the branch and checkout it is given, and never rewrites a recorded one.
+# The last one
 # executes an ARGUMENT,
 # and is allowed on a narrower ground: it runs only a file under the
 # run-artifact tree's `scratch/` directory, which that script enforces rather
