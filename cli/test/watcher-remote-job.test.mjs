@@ -28,18 +28,20 @@
  * the stub's pull request, its opt-out, and the invocation count read off the watcher log.
  *
  * **Every watcher this file starts is bounded and reaped, so a hang fails by name.** Each `runBash`
- * call carries `timeoutMs: WATCHER_RUN_TIMEOUT_MS` and `t.signal`. The value sits below the per-test
- * timeout (`--test-timeout=1800000`), because that expiry kills this file's process and leaves the
- * watcher's detached group running (`helpers/fixture.mjs` → choice 6); and far above the longest
- * honest run here, a few one-second poll intervals, so only a hang reaches it. The case *"a job
- * killed mid-run leaves running / continue"* spawns and kills its own group, and is not bounded here.
+ * call carries `timeoutMs: WATCHER_RUN_TIMEOUT_MS` and `t.signal`. The value is scaled by
+ * `HARNESS_TEST_TIME_SCALE` (`helpers/timing.mjs`) and sits below the per-test timeout
+ * (`--test-timeout=1800000`) even at the scale's cap, because that expiry kills this file's process
+ * and leaves the watcher's detached group running (`helpers/fixture.mjs` → choice 6); and far above
+ * the longest honest run here, a few one-second poll intervals, so only a hang reaches it. The case
+ * *"a job killed mid-run leaves running / continue"* spawns and kills its own group, and is not
+ * bounded here.
  *
  * **`HARNESS_JOB_USAGE_REPEAT` repeats the case *"a reset 2 seconds ahead"* concurrently.** Unset is
  * 1 and runs the case once; a positive integer N runs N independent job fixtures at once and fails
  * naming the repetition; anything else fails the file's load naming the variable. At N > 1 each
- * repetition's reset is `REPEAT_RESET_AHEAD_SECS` ahead and its stub waits `REPEAT_PAUSE_WAIT_TENTHS`
- * for PAUSE: under that load a watcher's pass outlasts 2 seconds, the gate then reads an elapsed
- * window and downgrades it (the watcher's usage-gate invariant 1), and the run completes unpaused on
+ * repetition's reset is `REPEAT_RESET_AHEAD_SECS` ahead and its stub waits `REPEAT_PAUSE_WAIT_TENTHS`,
+ * scaled by `HARNESS_TEST_TIME_SCALE`, for PAUSE: under that load a watcher's pass outlasts 2
+ * seconds, the gate then reads an elapsed window and downgrades it (the watcher's usage-gate invariant 1), and the run completes unpaused on
  * one prompt — a failure of the fixture's timing, not of the race. The race window, a tag written
  * after its PAUSE, does not depend on the lead. It is off by
  * default because N concurrent watchers multiply the suite's load for evidence only a maintainer
@@ -61,13 +63,14 @@ import test from 'node:test';
 import { MAIN_REPO_ANCHOR_VARIABLE } from '../dist/core/mainRepoAnchor.js';
 import { SANDBOX_OPT_OUT_MARKER } from '../dist/generators/sandboxProfile.js';
 import { INIT_SCRIPTS_DIR, runBash, runGit } from './helpers/fixture.mjs';
+import { scaleBound } from './helpers/timing.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
 const PROMPT_DELIMITER = '----- end of prompt -----';
 
 /** The bound on one watcher run — the header argues the value. */
-const WATCHER_RUN_TIMEOUT_MS = 120_000;
+const WATCHER_RUN_TIMEOUT_MS = scaleBound(120_000);
 
 /** The environment variable naming how many times the repeatable usage case runs at once. */
 const JOB_USAGE_REPEAT_VARIABLE = 'HARNESS_JOB_USAGE_REPEAT';
@@ -89,7 +92,13 @@ const JOB_USAGE_REPEAT = jobUsageRepeat();
  * The lost-`usage_resume_at` and held-off-relaunch cases take them too, for the same reason.
  */
 const REPEAT_RESET_AHEAD_SECS = 15;
-const REPEAT_PAUSE_WAIT_TENTHS = 600;
+const REPEAT_PAUSE_WAIT_TENTHS = scaleBound(600);
+
+/** The stub's ceiling, in tenths of a second, for a PAUSE the case expects. */
+const PAUSE_WAIT_TENTHS = scaleBound(100);
+
+/** How many 100 ms polls the killed-job case makes for its job's start record and launch, before failing. */
+const START_WAIT_POLLS = scaleBound(100);
 
 function shellQuote(value) {
   return `'${value.replaceAll("'", `'\\''`)}'`;
@@ -591,7 +600,7 @@ test('a job killed mid-run leaves running / continue', async (t) => {
   const exited = new Promise((resolve) => child.once('exit', resolve));
   try {
     let seen = false;
-    for (let i = 0; i < 100 && !seen; i += 1) {
+    for (let i = 0; i < START_WAIT_POLLS && !seen; i += 1) {
       await delay(100);
       seen = existsSync(j.remoteStatus) && j.argv() !== null;
     }
@@ -612,7 +621,7 @@ test('control poll: a harness pause run newer than the start pauses the run for 
   if (j === null) return;
 
   const start = nowSecs() - 10;
-  await j.setStub(HONOUR_PAUSE(100));
+  await j.setStub(HONOUR_PAUSE(PAUSE_WAIT_TENTHS));
   const result = await j.job([j.branch, 'task', 'none'], {
     HARNESS_JOB_STARTED_EPOCH: String(start),
     STUB_RUN_LIST: pauseRunList(start + 5),
@@ -650,7 +659,7 @@ test('control poll: a pause the listing shows only after a poll that missed it i
   if (j === null) return;
 
   const start = nowSecs() - 10;
-  await j.setStub(HONOUR_PAUSE(100));
+  await j.setStub(HONOUR_PAUSE(PAUSE_WAIT_TENTHS));
   const result = await j.job([j.branch, 'task', 'none'], {
     HARNESS_JOB_STARTED_EPOCH: String(start),
     STUB_RUN_LIST: '[]',
@@ -693,7 +702,7 @@ test('control poll: the lower bound is never the job start alone', async (t) => 
     const j = await createJobFixture(t);
     if (j === null) return;
     const start = nowSecs();
-    await j.setStub(HONOUR_PAUSE(100));
+    await j.setStub(HONOUR_PAUSE(PAUSE_WAIT_TENTHS));
     const result = await j.job([j.branch, 'task', 'none'], {
       HARNESS_INPUT_CHAIN: '0',
       HARNESS_JOB_STARTED_EPOCH: String(start),
@@ -712,7 +721,7 @@ test('control poll: the lower bound is never the job start alone', async (t) => 
     if (j === null) return;
     const start = nowSecs();
     await j.restoreStatus({ control_polled_at: String(start - 20), pause_reason: 'budget' });
-    await j.setStub(HONOUR_PAUSE(100));
+    await j.setStub(HONOUR_PAUSE(PAUSE_WAIT_TENTHS));
     const result = await j.job([j.branch, 'task', 'pause'], {
       HARNESS_INPUT_CHAIN: '1',
       HARNESS_JOB_STARTED_EPOCH: String(start),
@@ -746,7 +755,7 @@ test('budget: a hosted self-pause continues, silently', async (t) => {
   if (j === null) return;
 
   await t.test('REMOTE_SELF_PAUSE_AFTER_SECS=1 -> paused / budget / continue, no paused notification', async () => {
-    await j.setStub(HONOUR_PAUSE(100));
+    await j.setStub(HONOUR_PAUSE(PAUSE_WAIT_TENTHS));
     const result = await j.job([j.branch, 'task', 'none'], {
       HARNESS_JOB_STARTED_EPOCH: String(nowSecs()),
       REMOTE_SELF_PAUSE_AFTER_SECS: '1',
@@ -761,7 +770,7 @@ test('budget: a hosted self-pause continues, silently', async (t) => {
   await t.test('a failed exit after the budget PAUSE -> the auto-resume re-drops it, paused / budget / continue', async (t) => {
     const j = await createJobFixture(t);
     if (j === null) return;
-    await j.setStub(`${COUNT_LAUNCH}\nif [ "$n" = 1 ]; then ${FAIL_AFTER_PAUSE(100)}; fi\n${HONOUR_PAUSE(100)}`);
+    await j.setStub(`${COUNT_LAUNCH}\nif [ "$n" = 1 ]; then ${FAIL_AFTER_PAUSE(PAUSE_WAIT_TENTHS)}; fi\n${HONOUR_PAUSE(PAUSE_WAIT_TENTHS)}`);
     const result = await j.job([j.branch, 'task', 'none'], {
       HARNESS_JOB_STARTED_EPOCH: String(nowSecs()),
       REMOTE_SELF_PAUSE_AFTER_SECS: '1',
@@ -803,7 +812,7 @@ test('usage: a short reset is waited out in the job, a reset past the deadline g
       assert.equal(j.status().pause_reason, '', label);
     };
     if (JOB_USAGE_REPEAT === 1) {
-      await runOnce('', 2, 100);
+      await runOnce('', 2, PAUSE_WAIT_TENTHS);
       return;
     }
     // Settled rather than `Promise.all`, so no watcher outlives the case and every failure is named.
@@ -819,7 +828,7 @@ test('usage: a short reset is waited out in the job, a reset past the deadline g
   await t.test('a reset beyond the deadline -> paused / usage / wait-poller', async (t) => {
     const j = await createJobFixture(t);
     if (j === null) return;
-    await j.setStub(`${rateLimitRejected(100)}; ${HONOUR_PAUSE(100)}`);
+    await j.setStub(`${rateLimitRejected(100)}; ${HONOUR_PAUSE(PAUSE_WAIT_TENTHS)}`);
     const result = await j.job([j.branch, 'task', 'none'], {
       USAGE_CHECK_INTERVAL_SECS: '1',
       USAGE_RESUME_MARGIN_SECS: '0',

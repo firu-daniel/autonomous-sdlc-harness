@@ -89,6 +89,7 @@ import {
   snapshotTree,
   PACKAGE_ROOT,
 } from './helpers/fixture.mjs';
+import { scaleBound } from './helpers/timing.mjs';
 
 /** The `scriptsDir` a configless `init` writes, and the library's path under it — the contract, spelled out once. */
 const SCRIPTS_DIR = INIT_SCRIPTS_DIR;
@@ -1826,14 +1827,15 @@ test('the launcher passes an INT on to the Python backend as TERM', async (t) =>
       child.kill('SIGINT');
     }
   });
+  const exitBoundMs = scaleBound(10_000);
   let timer;
   const status = await Promise.race([
     new Promise((resolve) => child.on('close', (code) => resolve(code))),
     new Promise((_, reject) => {
       timer = setTimeout(() => {
         child.kill('SIGKILL');
-        reject(new Error(`the launcher did not exit within 10 s of an INT:\n${stderr}`));
-      }, 10_000);
+        reject(new Error(`the launcher did not exit within ${exitBoundMs / 1000} s of an INT:\n${stderr}`));
+      }, exitBoundMs);
     }),
   ]).finally(() => clearTimeout(timer));
 
@@ -1931,9 +1933,11 @@ test('the sweep bounds a hanging fetch and releases its output pipe', async (t) 
     `the sweep did not report the bounded fetch:\n${stdout}`,
   );
   // The ceiling plus the TERM→KILL escalation, and generous room over that for a loaded machine.
-  // A child-only kill does not come in under this; it waits for the orphan.
+  // The slack is scaled by HARNESS_TEST_TIME_SCALE; `ceiling` is not, being the bound under test. At
+  // the cap the slack is 100 s and the bound 103 s, still below HANGING_GIT's `sleep 300` and the
+  // 144 s child-only kill recorded above, so a child-only kill still fails here: it waits for the orphan.
   assert.ok(
-    elapsed < ceiling + 20,
+    elapsed < ceiling + scaleBound(20),
     `the sweep took ${elapsed.toFixed(1)}s against a ${ceiling}s ceiling — the fetch's transport is still holding the pipe`,
   );
 });

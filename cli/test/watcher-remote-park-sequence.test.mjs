@@ -19,12 +19,13 @@
  * its `answer_1.md` written as `remote-run.sh restore --resume answer` would write it.
  *
  * **Every watcher this file starts is bounded and reaped, so a hang fails by name.** Each `runBash` call
- * carries `timeoutMs: RUN_TIMEOUT_MS` and `t.signal`; the value sits below the per-test timeout
- * (`--test-timeout=1800000`) for the reason `watcher-remote-job.test.mjs`'s header gives. Every fixture
+ * carries `timeoutMs: RUN_TIMEOUT_MS` and `t.signal`; the value is scaled by `HARNESS_TEST_TIME_SCALE`
+ * (`helpers/timing.mjs`) and sits below the per-test timeout (`--test-timeout=1800000`) even at the
+ * scale's cap, for the reason `watcher-remote-job.test.mjs`'s header gives. Every fixture
  * is torn down in process by `createWatcherFixture`'s `t.after`. No case reaches the network: `gh` is a
  * stub reached through `HARNESS_GH_CLI`. The stop case's killed job is the exception to `runBash`: it is
- * spawned as its own detached group, which the case waits on for at most `KILL_WAIT_TENTHS` and then
- * kills and reaps whether or not the session was seen to start.
+ * spawned as its own detached group, which the case waits on for at most `KILL_WAIT_TENTHS`, scaled
+ * likewise, and then kills and reaps whether or not the session was seen to start.
  */
 
 import assert from 'node:assert/strict';
@@ -37,6 +38,7 @@ import test from 'node:test';
 
 import { MAIN_REPO_ANCHOR_VARIABLE } from '../dist/core/mainRepoAnchor.js';
 import { INIT_SCRIPTS_DIR, runBash, runGit } from './helpers/fixture.mjs';
+import { scaleBound } from './helpers/timing.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
@@ -45,10 +47,13 @@ const ISSUE = 7;
 const PR_URL = `https://github.com/${REPOSITORY}/pull/12`;
 
 /** The bound on one script run — the header argues the value. */
-const RUN_TIMEOUT_MS = 120_000;
+const RUN_TIMEOUT_MS = scaleBound(120_000);
 
 /** How long, in tenths of a second, the stop case waits for its job's session to start before killing it. */
-const KILL_WAIT_TENTHS = 100;
+const KILL_WAIT_TENTHS = scaleBound(100);
+
+/** The stub's ceiling, in tenths of a second, for a PAUSE the case expects. */
+const PAUSE_WAIT_TENTHS = scaleBound(100);
 
 function shellQuote(value) {
   return `'${value.replaceAll("'", `'\\''`)}'`;
@@ -297,7 +302,7 @@ async function createSequenceFixture(t) {
  * `job2Expect` says — or, with `killJob2`, is killed once its session has started), then job 3
  * (`pause`, completes) and `deliver`, asserting the rule in the header after job 3 and after deliver.
  */
-async function playSequence(t, { job2Env = () => ({}), job2Stub = HONOUR_PAUSE(100), job2Expect, killJob2 = false, job3Env = {} }) {
+async function playSequence(t, { job2Env = () => ({}), job2Stub = HONOUR_PAUSE(PAUSE_WAIT_TENTHS), job2Expect, killJob2 = false, job3Env = {} }) {
   const s = await createSequenceFixture(t);
   if (s === null) return;
 
@@ -380,7 +385,7 @@ test('usage pause: park, answer, a reset past the deadline, then the poller\'s p
       USAGE_RESUME_MARGIN_SECS: '0',
       HARNESS_JOB_DEADLINE_EPOCH: String(nowSecs() + 50),
     }),
-    job2Stub: `${rateLimitRejected(100)}; ${HONOUR_PAUSE(100)}`,
+    job2Stub: `${rateLimitRejected(100)}; ${HONOUR_PAUSE(PAUSE_WAIT_TENTHS)}`,
     job2Expect: { decision: 'wait-poller', reason: 'usage' },
   });
 });
