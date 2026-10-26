@@ -415,6 +415,28 @@
           }
         }
       }
+    },
+    "treeGuards": {
+      "type": "array",
+      "default": [],
+      "description": "Tree guards: tests that each enforce a rule over every file under a path. Read by the unit loop, which after a unit's own test run runs, through the single-file test command, every guard whose covers matches a path the unit's change touched; and by doctor's tree-guards check. Optional, and no generator writes it.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["test", "covers"],
+        "properties": {
+          "test": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The argument the single-file test command takes, spelled exactly as that command takes it, and therefore not necessarily repo-relative: in a workspace whose command runs from a package directory, it is relative to that directory."
+          },
+          "covers": {
+            "type": "string",
+            "minLength": 1,
+            "description": "A repo-relative glob over the files the guard reads, matched against the whole path: ** matches zero or more whole path segments, * any run of characters inside one segment, ? one character inside one segment."
+          }
+        }
+      }
     }
   }
 }
