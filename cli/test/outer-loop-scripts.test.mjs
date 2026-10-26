@@ -1145,6 +1145,40 @@ test('the flow walker, its gate library and its graph land verbatim under script
   }
 });
 
+/**
+ * The run-analytics script and the two `jq` programs it reads from its own `lib/`, as paths under
+ * `scriptsDir` with the mode each must land with: the script is run, the programs are data.
+ */
+const RUN_ANALYTICS_FILES = [
+  ['run-analytics.sh', 0o755],
+  ['lib/run-analytics.jq', 0o644],
+  ['lib/run-analytics-report.jq', 0o644],
+];
+
+test('the run-analytics script and its two jq programs land verbatim under scriptsDir, and a re-run keeps an edited copy', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+
+  await initOk(dir);
+  const first = await snapshotTree(dir);
+
+  for (const [relative, expectedMode] of RUN_ANALYTICS_FILES) {
+    const path = `${SCRIPTS_DIR}/${relative}`;
+    const template = readFileSync(join(TEMPLATE_SCRIPTS, ...relative.split('/')), 'utf8');
+    assert.equal(text(dir, path), template, `${path} is not the template's bytes`);
+    assert.deepEqual(copiesOf(first, relative.split('/').pop()), [path], `${relative} was written somewhere other than ${SCRIPTS_DIR}/`);
+    const mode = (await lstat(join(dir, path))).mode & 0o777;
+    assert.equal(mode, expectedMode, `${path} is mode ${mode.toString(8)}, not ${expectedMode.toString(8)}`);
+  }
+
+  const scriptPath = `${SCRIPTS_DIR}/${RUN_ANALYTICS_FILES[0][0]}`;
+  appendFileSync(join(dir, scriptPath), '\n# This line was added by hand.\n', 'utf8');
+  const edited = text(dir, scriptPath);
+
+  await initOk(dir);
+
+  assert.equal(text(dir, scriptPath), edited, `a second init rewrote the edited ${scriptPath}`);
+});
+
 /** The Run gates phase's test-suite runner: run by the orchestrating session, so executable. */
 const TEST_SUITE_RUNNER = 'run-test-suite.sh';
 const TEST_SUITE_RUNNER_MODE = 0o755;

@@ -140,7 +140,7 @@ const QA_DRIVER_CHOSEN = 'mobile-maestro';
 const QA_DRIVER_UNKNOWN = 'appium';
 
 /** Artifact directories the flow writes whatever the phases are, and the two long-lived ledgers. */
-const ALWAYS_ON_DIRS = ['task_plans', 'code_reviews', 'flow_progress', 'branch_statistics', 'clarifications'];
+const ALWAYS_ON_DIRS = ['task_plans', 'code_reviews', 'flow_progress', 'branch_statistics', 'run_analytics', 'clarifications'];
 const LEDGERS = ['lessons.md', 'improvement_suggestions.md'];
 
 /** Directories that belong to a phase, so their presence is the phase toggle made visible. */
@@ -307,6 +307,7 @@ const OUTER_LOOP_SCRIPT_FILES = [
   'docs-search-server.sh',
   'flow-walker.sh',
   'run-test-suite.sh',
+  'run-analytics.sh',
 ];
 
 /** A left-over template token — none may survive into a generated file. */

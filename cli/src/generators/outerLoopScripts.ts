@@ -1,7 +1,7 @@
 /**
  * Generator: the outer-loop scripts — the run watcher, the git wrappers, the worktree tooling, the
- * flow walker with its gate library and flow graph, the test-suite runner, and the shared library
- * they all source —
+ * flow walker with its gate library and flow graph, the test-suite runner, the run-analytics script
+ * with its two `jq` programs, and the shared library they all source —
  * written into the adopter's configured `scriptsDir`.
  *
  * **The rule this module exists to enforce: {@link OUTER_LOOP_SCRIPTS} is the single declaration of
@@ -87,7 +87,7 @@ export interface OuterLoopScript {
    * that carry that entry are `autonomous-watcher.sh`, `restart-watcher.sh`,
    * `cleanup-merged-worktrees.sh` and `remote-run.sh` — the last because a run that could dispatch
    * runs could start runs about itself (the guard is `plugin/hooks/autonomous-script-allowlist-guard.sh`).
-   * For the worktree scripts, the notifier, the stream formatter and
+   * For the worktree scripts, the notifier, the stream formatter, the run-analytics script and
    * the docs-retrieval server launcher — which the agent runner starts from `.mcp.json` —
    * `false` is a calling convention rather than a gate: the guard auto-allows them, deliberately.
    *
@@ -187,6 +187,12 @@ export const OUTER_LOOP_SCRIPTS: ReadonlyArray<OuterLoopScript> = Object.freeze(
   Object.freeze({ file: DOCS_SEARCH_SERVER_SCRIPT_NAME, mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: 'cleanup-merged-worktrees.sh', mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: 'autonomous-format-stream.sh', mode: 0o755, agentInvocable: false }),
+  Object.freeze({ file: 'run-analytics.jq', subdir: 'lib', mode: 0o644, agentInvocable: false }),
+  Object.freeze({ file: 'run-analytics-report.jq', subdir: 'lib', mode: 0o644, agentInvocable: false }),
+  // Run by the watcher after each session; an agent reaching it through the script-allowlist guard
+  // writes only its own branch's analytics files, so `false` is a calling convention and it carries no
+  // `DENY_SCRIPT_BASENAMES` entry.
+  Object.freeze({ file: 'run-analytics.sh', mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: NOTIFY_SCRIPT_NAME, mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: WATCHER_SCRIPT_NAME, mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: 'restart-watcher.sh', mode: 0o755, agentInvocable: false }),
