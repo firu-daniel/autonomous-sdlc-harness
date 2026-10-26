@@ -101,6 +101,7 @@ test('hr_keep_awake_mode_var takes each arm in order with its exact reason and q
     ['GITHUB_ACTIONS=true', { githubActions: 'true' }, ['off', `GITHUB_ACTIONS is true — ${RUNNER_SLEEPS}`, '1']],
     ['key false', { config: { defaultBranch: 'main', execution: { keepAwake: false } } }, ['off', 'execution.keepAwake is false', '1']],
     ['key "yes"', { config: { defaultBranch: 'main', execution: { keepAwake: 'yes' } } }, ['off', 'execution.keepAwake is not a boolean', '']],
+    ['config unreadable (no defaultBranch)', { config: { execution: { keepAwake: true } } }, ['off', 'harness.config.json could not be read', '']],
     ['macos + caffeinate', { host: 'macos', tool: 'caffeinate' }, ['caffeinate', '', '']],
     ['macos, no tool', { host: 'macos', tool: '' }, ['off', 'caffeinate does not resolve on PATH', '']],
     ['linux + systemd-inhibit', { host: 'linux', tool: 'systemd-inhibit' }, ['logind', '', '']],

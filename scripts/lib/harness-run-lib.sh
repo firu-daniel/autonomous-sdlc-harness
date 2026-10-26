@@ -2217,6 +2217,10 @@ hr_keep_awake_mode_var() {
     HR_KEEP_AWAKE_REASON='GITHUB_ACTIONS is true — a GitHub Actions runner does not sleep'
     return 0
   fi
+  if ! hr_config_load "$root"; then
+    HR_KEEP_AWAKE_REASON='harness.config.json could not be read'
+    return 0
+  fi
   hr_keep_awake "$root" || rc=$?
   case "$rc" in
     1)
