@@ -146,6 +146,7 @@ export function assessKeepAwake(facts: KeepAwakeHostFacts): KeepAwakeAssessment 
         'Inside WSL2 nothing can keep Windows awake — set the Windows power plan\'s "When I close the lid" action to "Do nothing" for "Plugged in"; the Windows setup is the branch `feat_wsl2_support`\'s (#160).',
       );
     case 'wsl1':
+      return result('cannot-hold', 'No sleep hold on this platform (WSL1); a run launches unheld.');
     case 'unsupported':
       return result('cannot-hold', `No sleep hold on this platform (\`${facts.platform}\`); a run launches unheld.`);
   }

@@ -51,7 +51,7 @@ const ROWS = [
   ['Linux lock taken from this shell', facts('linux', { systemdInhibitPath: '/usr/bin/systemd-inhibit', lock: { taken: true, context: 'this-shell', detail: '' } }), 'can-hold', 'linux', ["from this shell, not the watcher's service — the watcher's launch line is the authority there", 'only on mains power']],
   ['Linux lock refused', facts('linux', { systemdInhibitPath: '/usr/bin/systemd-inhibit', lock: { taken: false, context: 'user-manager', detail: 'Access denied' } }), 'cannot-hold', 'linux', ['Access denied', 'logind refused or did not answer', 'active local session', ...LOGIND_POLKIT_ACTIONS, 'logs one line']],
   ['WSL2', facts('wsl2', { systemdInhibitPath: '/usr/bin/systemd-inhibit' }), 'cannot-hold', 'wsl2', ['nothing can keep Windows awake', '"When I close the lid"', '"Do nothing"', '"Plugged in"', '`feat_wsl2_support`', '#160']],
-  ['WSL1', facts('wsl1'), 'cannot-hold', 'wsl1', ['No sleep hold on this platform']],
+  ['WSL1', facts('wsl1'), 'cannot-hold', 'wsl1', ['No sleep hold on this platform (WSL1)']],
   ['unsupported platform', facts('unsupported'), 'cannot-hold', 'unsupported', ['No sleep hold on this platform']],
 ];
 
