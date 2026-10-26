@@ -14,7 +14,7 @@ Round 1 closed Findings 2–8 on a one-file run of each named test, and Findings
 This list is the **single source of truth** for the fix loop. It is walked top to bottom, and the first `[ ]` entry is the next unit. `[ ]` markers anywhere else, including the `- [ ]` sub-step bullets inside the per-finding files, are informational only.
 
 1. [x] **Finding 1** — Launch commits both analytics files on the clone's branch and syncs them, under a full-suite load. _(layer: cli, general)_
-2. [ ] **Finding 2** — A resume that adds no session adds no analytics commit. _(layer: cli, general)_
+2. [x] **Finding 2** — A resume that adds no session adds no analytics commit. _(layer: cli, general)_
 3. [ ] **Finding 3** — A `run-analytics.sh` that exits 1 changes no outcome. _(layer: cli, general)_
 4. [ ] **Finding 4** — A missing `run-analytics.sh` changes no outcome. _(layer: cli, general)_
 5. [ ] **Finding 5** — (d) The helper's default probe launches the stub and the record ends `completed`. _(layer: cli, general)_

@@ -23,3 +23,9 @@ If subtest 1's pass left the fixture in an unexpected state, this subtest fails 
 - [ ] Address Finding 1 first. Then run the named test's file on its own and read this subtest's assertion message.
 - [ ] If this subtest still fails, fix the cause its message names. A likely one: the resume's hook commits something on a session that adds nothing. In that case, make `record_run_analytics()` commit only what this session's `run-analytics.sh` run changed. Edit `cli/templates/scripts/autonomous-watcher.sh` and make the identical edit in `scripts/autonomous-watcher.sh`.
 - [ ] Do not weaken, skip or delete any assertion in the test.
+
+## Already passing
+
+- **(a)** Named test: subtest `a resume that adds no session adds no analytics commit` under parent `the session's analytics are committed on the run's branch, and a failing step changes no outcome`. File run: `cli/test/watcher-run-analytics.test.mjs`.
+- **(b)** Command: `npm test --workspace cli -- test/watcher-run-analytics.test.mjs`, from the repository root, after Finding 1's fix (`ea4a69a1`). The named test's result: `ok 2 - a resume that adds no session adds no analytics commit` (duration_ms 5819.304625). Subtests 1, 3 and 4 and the parent also reported `ok`; summary `# tests 5`, `# pass 5`, `# fail 0`. This is consistent with the finding's `**Suspected shared cause:**` (Finding 1). That note is not the basis for this close; the run result is. Re-run on a later dispatch of this unit, same command, same tree: `ok 2 - a resume that adds no session adds no analytics commit` (duration_ms 6837.643167); summary `# tests 5`, `# pass 5`, `# fail 0`.
+- **(c)** No code file was edited: neither `cli/templates/scripts/autonomous-watcher.sh` nor its mirror `scripts/autonomous-watcher.sh`, nor `run-analytics.sh`. Only this detail file was written.
