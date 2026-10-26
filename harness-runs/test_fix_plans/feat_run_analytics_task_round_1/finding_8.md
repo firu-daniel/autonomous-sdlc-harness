@@ -21,3 +21,9 @@ The log has no assertion message for it.
 - [ ] If the named test passes as the tree stands, edit no code.
 - [ ] If it fails because the payload ran, harden the git call that reached it, in the same way and in the same files as Finding 7's fix, keeping the `scripts/` mirror byte-identical. For any other assertion, fix the code it names.
 - [ ] Do not weaken the test.
+
+## Already passing
+
+- **(a) Named test and file run:** `(L3) a core.fsmonitor in the clone's submodule config is never run: the drop launches`, in `cli/test/watcher-review-drop-payloads.test.mjs`.
+- **(b) Command and result:** `npm test --workspace cli -- test/watcher-review-drop-payloads.test.mjs`, from the repository root, foreground. Output: `ok 3 - (L3) a core.fsmonitor in the clone's submodule config is never run: the drop launches`; file summary `# tests 23`, `# pass 23`, `# fail 0`.
+- **(c) No code file was edited:** this file is the only write.

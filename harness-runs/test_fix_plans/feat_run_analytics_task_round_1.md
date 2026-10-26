@@ -17,7 +17,7 @@ This list is the **single source of truth** for the fix loop. It is walked top t
 5. [x] **Finding 5** — A missing `run-analytics.sh` changes no outcome. _(layer: cli, general)_
 6. [x] **Finding 6** — A clean reused clone launches with the review placed and left uncommitted. _(layer: cli, general)_
 7. [x] **Finding 7** — (L2) A nested repository's `core.fsmonitor` behind a gitlink: the drop launches. _(layer: cli, general)_
-8. [ ] **Finding 8** — (L3) A `core.fsmonitor` in the clone's submodule config: the drop launches. _(layer: cli, general)_
+8. [x] **Finding 8** — (L3) A `core.fsmonitor` in the clone's submodule config: the drop launches. _(layer: cli, general)_
 9. [ ] **Finding 9** — A task drop launches on a per-run profile copy. _(layer: cli, general)_
 10. [ ] **Finding 10** — Another linked worktree's `.git` pointer is in the clone run's per-run copy. _(layer: cli, general)_
 11. [ ] **Finding 11** — (b) A taken `sandbox.optOut` exempts the drop and the stub launches. _(layer: cli, general)_
