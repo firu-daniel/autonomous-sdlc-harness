@@ -34,3 +34,9 @@ The likely cause is a transient condition on the gate host during part of the ru
 
   Fix it there. Record under **Deviations from plan:** that the `general`-layer mirror `scripts/autonomous-watcher.sh` needs the same edit until `cmp` exits 0. A bare `runBash timed out after …` is recorded under **Deviations from plan:** as the next round's evidence, and nothing is changed.
 - [ ] If the case passes against the current tree, the finding closes through `unit_loop_core.md` → `#### The already-passing close`.
+
+## Already passing
+
+- **(a) Named test and file run:** `(b)(c) macOS: an engine exiting 3 is classified failed under a hold, and the stream carries no keep-awake text`, in `cli/test/watcher-keep-awake.test.mjs`, on `70e40468` (`cli` layer dispatch).
+- **(b) Command and result:** `npm test --workspace cli -- test/watcher-keep-awake.test.mjs`, from the repository root, foreground. The named test reported `ok 2 - (b)(c) macOS: an engine exiting 3 is classified failed under a hold, and the stream carries no keep-awake text` (`duration_ms: 10093.829083`). The file summary was `# tests 9`, `# pass 9`, `# fail 0`, `# duration_ms 95502.834208`. This agrees with the finding's diagnosis: a transient condition on the gate host, not a defect in the tree.
+- **(c) No code file edited:** this section is the only change. `cli/templates/scripts/autonomous-watcher.sh` and its `scripts/` mirror are untouched, so the `general` layer has nothing to copy.
