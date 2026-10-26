@@ -47,3 +47,8 @@
 - **added:** `context_notes:`
 - **verbatim:** `context_notes: This unit's readiness tag is `cli, plugin`; its `cli` layer dispatch already reworded the comment above the `run-analytics.sh` row in cli/src/generators/outerLoopScripts.ts (uncommitted in the working tree; the unit's single commit lands after this layer, per plugin/instructions/unit_loop_core.md → ## Layer routing table).`
 - **why the agent could not derive it:** the sibling `cli` layer's uncommitted edit exists only in the working tree and the orchestrator session; finding_4.md does not record which layers already ran
+
+## [C2 · Item 1 · general · iter 0] → layer-implementer  (#38)
+- **added:** `context_notes:`
+- **verbatim:** `context_notes: Task 9's implementer reported that `chmod 755 scripts/run-analytics.sh` and `cp` were both refused by this session's permission profile (source: the `**Deviations from plan:**` section of harness-runs/task_plans/feat_run_analytics/task_9_plan.md, commit 2fbfcbcd).`
+- **why the agent could not derive it:** task_9_plan.md is a sibling detail file outside the skeptic finding's read set; finding_1.md does not mention the earlier refusal
