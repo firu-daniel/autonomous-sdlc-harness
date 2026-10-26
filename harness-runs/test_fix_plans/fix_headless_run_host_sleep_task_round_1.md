@@ -27,7 +27,7 @@ Order: the suspected root cause first (Finding 1, the case that tests the new la
 8. [x] **Finding 8** — Keep-awake (j): the WSL2 not-holding case fails. _(layer: cli)_
 9. [x] **Finding 9** — Keep-awake (k): the kill-switch battery release case fails. _(layer: cli)_
 10. [x] **Finding 10** — Stall host sleep (a)(b): the long-sleep case fails. _(layer: cli)_
-11. [ ] **Finding 11** — Stall host sleep (c): the genuine-hang case fails. _(layer: cli)_
+11. [x] **Finding 11** — Stall host sleep (c): the genuine-hang case fails. _(layer: cli)_
 12. [ ] **Finding 12** — Stall host sleep (d): the missing last-pass file case fails. _(layer: cli)_
 13. [ ] **Finding 13** — Sandbox refusal (d): the helper's default-probe launch fails. _(layer: cli)_
 14. [ ] **Finding 14** — Sandbox refusal (b): the taken-optOut launch fails. _(layer: cli)_
