@@ -42,3 +42,5 @@ This task gathers the facts and grades. It writes no sentence of its own, becaus
 - `npm test --workspace cli -- test/doctor.test.mjs` passes with the extended id list.
 - `grep -rn 'AUTONOMOUS_SDLC_HARNESS_KEEP_AWAKE_LOCK_PROBE' cli/src cli/templates scripts` hits only the constant's declaration in `cli/src/doctor/checks.ts`, which shows no shipped path sets it. `grep -n 'KEEP_AWAKE_LOCK_PROBE_ENV' cli/test/helpers/fixture.mjs` hits the import and the `ISOLATED_ENV` entry.
 - `grep -n "'keep-awake'" cli/src/doctor/checks.ts` names the check's `id` once. Reading `KEEP_AWAKE_CHECK`'s body shows no call to `fail(` or `unevaluated(`.
+
+- **Deviations from plan:** The lock probe's failure detail adds one arm the plan does not name: a child that ends with neither a numeric exit status nor a timeout (killed by a signal, or a spawn error) reports `exited without a status` rather than `exited null`. The fixture-helper grep also hits the two `ISOLATED_ENV` doc-comment lines the plan itself requires, beside the import and the entry.

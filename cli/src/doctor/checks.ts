@@ -62,7 +62,8 @@
  *    its agent's alone. The registry query is behind a flag for the neighbouring reason: a default run
  *    reaches no network, so it answers the same in CI, in an `&&` chain and offline — and the run that
  *    did not ask says so, rather than leaving an adopter to read a pass as a promise the packages can
- *    be fetched.
+ *    be fetched. The one host-side effect is {@link probeKeepAwakeHost}'s logind test lock, bounded by
+ *    {@link KEEP_AWAKE_PROBE_TIMEOUT_MS} and released the moment its `true` exits.
  *
  *    **Remote setup keeps the same line: it is graded from local evidence by default and asks GitHub
  *    only under `--check-github`.** {@link REMOTE_EXECUTION_CHECK} and {@link FORGE_CHECK} read files,
@@ -107,6 +108,7 @@ import {
   FORGE_KINDS,
   forgeTriggerApplies,
   isPlaceholder,
+  keepAwakeEnabled,
   LAYER_CATCH_ALL_PATH,
   pythonRetrievalApplies,
   remoteExecutionApplies,
@@ -310,6 +312,14 @@ import {
   retrievalRuntimeState,
 } from '../retrieval/runtime.js';
 import { DOCS_SERVER_NAME } from '../retrieval/server.js';
+import {
+  assessKeepAwake,
+  KEEP_AWAKE_WHAT,
+  KEEP_AWAKE_WHO,
+  needsLockProbe,
+  type KeepAwakeHostFacts,
+  type KeepAwakeLockProbe,
+} from './keepAwake.js';
 import {
   APPARMOR_USERNS_SYSCTL_PATH,
   assessSandboxHost,
@@ -700,6 +710,76 @@ function probeSandboxHost(): SandboxHostFacts {
     appArmorRestrict: readHostFile(APPARMOR_USERNS_SYSCTL_PATH),
     bwrapProfile: readHostFile(BWRAP_APPARMOR_PROFILE_PATH),
   };
+}
+
+/** How long {@link probeKeepAwakeHost}'s test lock may take before it is reported as not taken. */
+const KEEP_AWAKE_PROBE_TIMEOUT_MS = 10_000;
+
+/**
+ * The environment variable that turns {@link probeKeepAwakeHost}'s test lock off; this constant is its
+ * only spelling in `cli/src`, and it is read through this constant alone
+ * (`.claude/context/conventions.md` → *"An environment-variable name is a constant with an owner
+ * too"*). It exists so the test tree never takes a real logind lock unasked
+ * (`.claude/context/cli.md` → `## What "done" means here`). **No shipped path ever sets it.**
+ */
+export const KEEP_AWAKE_LOCK_PROBE_ENV = 'AUTONOMOUS_SDLC_HARNESS_KEEP_AWAKE_LOCK_PROBE';
+
+/**
+ * The host facts {@link KEEP_AWAKE_CHECK} grades through `doctor/keepAwake.ts`'s {@link assessKeepAwake}.
+ *
+ * **The only probe in this module that takes something from the host**: where {@link needsLockProbe}
+ * holds, one logind block lock, released the moment its `true` exits. `systemd-run --user` is
+ * preferred because it is the user manager the watcher's unit runs under, where polkit can answer
+ * differently from an interactive shell. The watcher's own launch line remains the authority for a run.
+ * {@link KEEP_AWAKE_LOCK_PROBE_ENV}` = off` skips the lock and reports it not taken.
+ */
+function probeKeepAwakeHost(ctx: CheckContext): KeepAwakeHostFacts {
+  const searchPath = process.env['PATH'] ?? '';
+  const located = (command: string): string | undefined => {
+    const directory = locateOnPath(command, searchPath);
+    return directory === undefined ? undefined : join(directory, command);
+  };
+  const caffeinatePath = located('caffeinate');
+  const systemdInhibitPath = located('systemd-inhibit');
+  const facts: KeepAwakeHostFacts = {
+    platform: process.platform,
+    kernelRelease: kernelRelease(),
+    enabled: ctx.config === undefined ? true : keepAwakeEnabled(ctx.config),
+    githubActions: process.env['GITHUB_ACTIONS'] === 'true' || ctx.remoteJob,
+    ...(caffeinatePath === undefined ? {} : { caffeinatePath }),
+    ...(systemdInhibitPath === undefined ? {} : { systemdInhibitPath }),
+  };
+  if (!needsLockProbe(facts)) return facts;
+  if (process.env[KEEP_AWAKE_LOCK_PROBE_ENV] === 'off') {
+    return {
+      ...facts,
+      lock: { taken: false, context: 'this-shell', detail: `lock probe disabled by ${KEEP_AWAKE_LOCK_PROBE_ENV}=off` },
+    };
+  }
+  const inhibit = [
+    'systemd-inhibit',
+    `--what=${KEEP_AWAKE_WHAT}`,
+    '--mode=block',
+    `--who=${KEEP_AWAKE_WHO}`,
+    '--why=doctor keep-awake probe',
+    'true',
+  ];
+  const viaUserManager = resolvesOnPath('systemd-run');
+  const [command = '', ...args] = viaUserManager
+    ? ['systemd-run', '--user', '--wait', '--quiet', '--collect', '--', ...inhibit]
+    : inhibit;
+  const context: KeepAwakeLockProbe['context'] = viaUserManager ? 'user-manager' : 'this-shell';
+  try {
+    execFileSync(command, args, { stdio: 'ignore', timeout: KEEP_AWAKE_PROBE_TIMEOUT_MS, windowsHide: true });
+    return { ...facts, lock: { taken: true, context, detail: 'exited 0' } };
+  } catch (error) {
+    const failure = error as { code?: unknown; status?: unknown } | null;
+    const detail =
+      failure?.code === 'ETIMEDOUT'
+        ? `timed out after ${KEEP_AWAKE_PROBE_TIMEOUT_MS / 1000} s`
+        : `exited ${typeof failure?.status === 'number' ? String(failure.status) : 'without a status'}`;
+    return { ...facts, lock: { taken: false, context, detail } };
+  }
 }
 
 /** One permission list's string entries, or none when the profile does not carry it as a list. */
@@ -5069,6 +5149,24 @@ const SANDBOX_PREREQUISITES_CHECK: Check = {
 };
 
 /**
+ * Can this host hold a sleep assertion for a run? Graded from {@link probeKeepAwakeHost}'s facts by
+ * {@link assessKeepAwake}, whose sentence is printed as is.
+ *
+ * - `can-hold`, `off` and `not-applicable` are a `pass`.
+ * - `cannot-hold` is a `warn`, under `--remote-job` too.
+ *
+ * **It never fails**: no hold is a precondition for a run to begin, and the run launches unheld.
+ */
+const KEEP_AWAKE_CHECK: Check = {
+  id: 'keep-awake',
+  title: 'this host can hold a sleep assertion for the life of a run',
+  run: (ctx) => {
+    const { answer, sentence } = assessKeepAwake(probeKeepAwakeHost(ctx));
+    return answer === 'cannot-hold' ? warn(sentence) : pass(sentence);
+  },
+};
+
+/**
  * A `permissions.allow` entry a run needs, paired with what it does when the profile does not carry
  * it. The symptom travels with the entry so a report describes the consequence of the entries that
  * are **actually** missing rather than one selected by the phase: a helper entry and a read entry
@@ -5972,7 +6070,8 @@ const RETRIEVAL_PYTHON_INDEX_CHECK: Check = {
  * does not belong, and a committed profile is the usual reason a job's `profile-paths` fails.
  *
  * `sandbox-prerequisites` sits under `profile-write-protection` because the two profile checks above it
- * grade the sandbox a run asks for, and this one whether the host can start it.
+ * grade the sandbox a run asks for, and this one whether the host can start it. `keep-awake` follows
+ * it because it is the second host question, asked right after whether the host can start the sandbox.
  *
  * `plugin-permissions` closes the profile block for the same shape of reason: it is the only profile
  * question whose other half is not in the repository at all — the plugin's machine-local install
@@ -6024,6 +6123,7 @@ export const CHECKS: readonly Check[] = Object.freeze([
   PROFILE_SANDBOX_CHECK,
   PROFILE_WRITE_PROTECTION_CHECK,
   SANDBOX_PREREQUISITES_CHECK,
+  KEEP_AWAKE_CHECK,
   PLUGIN_PERMISSIONS_CHECK,
   BROWSER_WIRING_CHECK,
   RETRIEVAL_DEPENDENCIES_CHECK,

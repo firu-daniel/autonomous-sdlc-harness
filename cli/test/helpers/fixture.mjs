@@ -66,6 +66,7 @@ import { cp, mkdir, mkdtemp, readdir, readFile, lstat, realpath, rm, writeFile }
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { MAIN_REPO_ANCHOR_VARIABLE } from '../../dist/core/mainRepoAnchor.js';
+import { KEEP_AWAKE_LOCK_PROBE_ENV } from '../../dist/doctor/checks.js';
 
 /**
  * The directory a fresh `init` writes its scripts into. A suite addressing scripts that an `init`
@@ -124,6 +125,10 @@ const MAX_BUFFER = 16 * 1024 * 1024;
  * {@link MAIN_REPO_ANCHOR_VARIABLE} is blanked because the plugin's readers act on the main checkout
  * it names, and the watcher exports it to every session it launches, a session's gate runs
  * included; a case whose subject is the anchor passes it explicitly.
+ *
+ * {@link KEEP_AWAKE_LOCK_PROBE_ENV} is set to `off` because `doctor`'s `keep-awake` check otherwise
+ * takes a real logind lock on a Linux host, and no test takes one unasked; no shipped path ever sets
+ * it, and a case whose subject is the real lock passes `{ [KEEP_AWAKE_LOCK_PROBE_ENV]: '' }` explicitly.
  */
 const ISOLATED_ENV = Object.freeze({
   GIT_CONFIG_GLOBAL: '/dev/null',
@@ -132,6 +137,7 @@ const ISOLATED_ENV = Object.freeze({
   GIT_TERMINAL_PROMPT: '0',
   HARNESS_GITHUB_DEFAULT_COMMIT: '',
   [MAIN_REPO_ANCHOR_VARIABLE]: '',
+  [KEEP_AWAKE_LOCK_PROBE_ENV]: 'off',
 });
 
 /**
