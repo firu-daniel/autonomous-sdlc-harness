@@ -34,7 +34,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_run_an
 7. [x] **Task 7** — Pin the watcher hook in `cli/test/watcher-run-analytics.test.mjs`: committed after a session, never changing the outcome _(layer: cli)_ _(points: 15)_
 8. [x] **Task 8** — Show the run-analytics digest in `/autonomous-sdlc-harness:branch-status` and name the new script in the plugin's script lists _(layer: plugin)_ _(points: 15)_
 9. [x] **Task 9** — Mirror the shipped run-analytics files into this repository's `scripts/` and `harness-runs/` _(layer: general)_ _(points: 10)_
-10. [ ] **Task 10** — Document run analytics in `docs/watcher.md`, `docs/cli.md`, `docs/remote-execution.md` and `ARCHITECTURE.md` _(layer: general)_ _(points: 15)_
+10. [x] **Task 10** — Document run analytics in `docs/watcher.md`, `docs/cli.md`, `docs/remote-execution.md` and `ARCHITECTURE.md` _(layer: general)_ _(points: 15)_
 
 ## Scope register
 
