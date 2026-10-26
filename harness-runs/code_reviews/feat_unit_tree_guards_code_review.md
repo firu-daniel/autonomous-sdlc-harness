@@ -32,7 +32,7 @@
 
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below from top to bottom. The committing role flips each one to `[x]` when that fix's commit lands. `[ ]` markers anywhere else are informational only.
 
-1. [ ] **Finding 7** — Re-wrap the `check.ts` header's filesystem bullet _(layer: cli)_
+1. [x] **Finding 7** — Re-wrap the `check.ts` header's filesystem bullet _(layer: cli)_
 2. [ ] **Finding 2** — Add `docs/cli.md` to `## The test-run rule`'s citer roster _(layer: plugin)_
 3. [ ] **Finding 1** — Make point 7's downgrade clause match guard-relative paths and require point 2's symbol condition _(layer: plugin)_
 4. [ ] **Finding 4** — Align the adopter conventions template's registration rule with point 8's later-task allowance _(layer: cli)_

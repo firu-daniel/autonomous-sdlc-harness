@@ -51,8 +51,8 @@
  *   CLI never dereferences it.
  * - **Anything about the filesystem** — whether a configured directory exists, is writable, or
  *   whether a `conventions` document or a `treeGuards[].test` file is really there. That is
- *   `doctor`'s job, not a shape check's,
- *   and a shape check that touched the disk could not be run against a config held in memory.
+ *   `doctor`'s job, not a shape check's, and a shape check that touched the disk could not be run
+ *   against a config held in memory.
  */
 
 import {
