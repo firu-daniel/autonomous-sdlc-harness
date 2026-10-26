@@ -114,7 +114,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_unattended_sandbox_meas
 3. [x] **Task 3** — Add the probe's judge: stream-json calls, the refusing layer, pushes by `ls-remote`, commits by ref _(layer: general)_ _(points: 20)_
 4. [x] **Task 4** — Add the probe clone, its per-run profile, the session launcher, scratch profiles and the every-exit teardown _(layer: general)_ _(points: 20)_
 5. [x] **Task 19** — Add the probe's positive controls: the control clone, the control calls and the `not run` gate _(layer: general)_ _(points: 15)_
-6. [ ] **Task 5** — Add the gates, mktemp, scratch and retrieval legs _(layer: general)_ _(points: 15)_
+6. [x] **Task 5** — Add the gates, mktemp, scratch and retrieval legs _(layer: general)_ _(points: 15)_
 7. [ ] **Task 6** — Add the wrappers leg: commit, push, the clone's own copies, the compound and the assignment prefix _(layer: general)_ _(points: 20)_
 8. [ ] **Task 7** — Add the wrappers-refresh leg: fast-forward, two-parent merge and conflict fixtures on the clone arm _(layer: general)_ _(points: 15)_
 9. [ ] **Task 8** — Add the planted-configuration leg: scratch repositories and the clone's `.git/config` _(layer: general)_ _(points: 15)_
