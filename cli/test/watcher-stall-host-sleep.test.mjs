@@ -18,6 +18,9 @@
  * Cases (a) and (c) are each other's perturbation: the same back-date, thresholds and hung stub,
  * differing only in the last-pass epoch — 4000 s ago in (a), 5 s ago in (c) — and (a) is not killed
  * while (c) is.
+ *
+ * Every ceiling here is scaled by `HARNESS_TEST_TIME_SCALE` (`helpers/timing.mjs`), and `session()`
+ * waits for each pass under `TICK_TIMEOUT_MS`.
  */
 
 import assert from 'node:assert/strict';
@@ -28,17 +31,21 @@ import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { runBash, runGit } from './helpers/fixture.mjs';
-import { createWatcherFixture, DEFAULT_KEEP_AWAKE_PROBE, DEFAULT_SANDBOX_PROBE } from './helpers/watcher.mjs';
+import { scaleBound } from './helpers/timing.mjs';
+import { createWatcherFixture, DEFAULT_KEEP_AWAKE_PROBE, DEFAULT_SANDBOX_PROBE, TICK_TIMEOUT_MS } from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
 const INBOX = `${STATE_DIR}/autonomous_inbox`;
 const LOGS = `${STATE_DIR}/autonomous_logs`;
 const IDENTITY = ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid'];
 
-/** Bounds every poll for a state the watcher reaches asynchronously. */
-const WAIT_MS = 30_000;
-/** Bounds the multi-pass session script; below the suite's `--test-timeout`. */
-const SESSION_TIMEOUT_MS = 180_000;
+/** The default `waitFor` ceiling, scaled; a wait for a watcher pass takes `TICK_TIMEOUT_MS` instead. */
+const WAIT_MS = scaleBound(30_000);
+/**
+ * Bounds the multi-pass session script, scaled: (a)(b)'s three 60 000 ms passes plus its polls. At
+ * `timing.mjs`'s cap it stays below the suite's `--test-timeout` (choice 3).
+ */
+const SESSION_TIMEOUT_MS = scaleBound(240_000);
 /** How far back a case dates the liveness files and, in (a), the last pass. */
 const SLEPT_SECS = 4000;
 
@@ -101,9 +108,9 @@ async function sleepFixture(t) {
     [`printf '%s\\n' "$$" > ${shellQuote(hungPath)}`, `until [ -e ${shellQuote(endPath)} ]; do sleep 0.1; done`].join('\n'),
   );
 
-  /** Poll `predicate` until it holds, failing with `label` and the watcher log past {@link WAIT_MS}. */
-  const waitFor = async (predicate, label) => {
-    const deadline = Date.now() + WAIT_MS;
+  /** Poll `predicate` until it holds, failing with `label` and the watcher log past `budget` ms. */
+  const waitFor = async (predicate, label, budget = WAIT_MS) => {
+    const deadline = Date.now() + budget;
     for (;;) {
       let held = false;
       try {
@@ -112,7 +119,7 @@ async function sleepFixture(t) {
         // A registry or pid file read mid-write; ask again.
       }
       if (held) return;
-      assert.ok(Date.now() < deadline, `${label} within ${WAIT_MS} ms\n${w.watcherLog()}`);
+      assert.ok(Date.now() < deadline, `${label} within ${budget} ms\n${w.watcherLog()}`);
       await delay(100);
     }
   };
@@ -192,10 +199,18 @@ async function sleepFixture(t) {
         waitFor(() => {
           if (settled !== null) assert.fail(`the session script ended early\n${settled.stdout}\n${settled.stderr}`);
           return existsSync(join(control, `pass-${n}`));
-        }, `pass ${n} did not return`);
+        }, `pass ${n} did not return`, TICK_TIMEOUT_MS);
       await reached(1);
-      await waitFor(() => existsSync(hungPath) && readFileSync(hungPath, 'utf8').trim() !== '', 'the session did not hang');
-      await waitFor(() => w.record().status === 'running' && Boolean(w.record().pid), 'the record is not running with a pid');
+      await waitFor(
+        () => existsSync(hungPath) && readFileSync(hungPath, 'utf8').trim() !== '',
+        'the session did not hang',
+        TICK_TIMEOUT_MS,
+      );
+      await waitFor(
+        () => w.record().status === 'running' && Boolean(w.record().pid),
+        'the record is not running with a pid',
+        TICK_TIMEOUT_MS,
+      );
       let n = 1;
       return {
         async next() {
