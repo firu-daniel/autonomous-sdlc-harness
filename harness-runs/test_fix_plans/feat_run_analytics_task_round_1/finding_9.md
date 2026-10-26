@@ -29,3 +29,9 @@ This branch changed nothing in profile rendering. `cli/src/generators/outerLoopS
 - [ ] If the named test passes as the tree stands, edit no code.
 - [ ] If it fails on a profile entry (an extra or missing wrapper rule for `run-analytics.sh`), reconcile the base profile's wrapper rules with the `OUTER_LOOP_SCRIPTS` row in `cli/src/generators/outerLoopScripts.ts` and with the test's `cloneEntries` expectation. Fix whichever side the branch's change left inconsistent, and never the test's assertion to fit a wrong profile. For any other assertion, fix the code it names.
 - [ ] Do not weaken the test.
+
+## Already passing
+
+- **Closed by the operator, not by a unit.** This finding's named test was **not** run on its own. The round-1 failures were caused by a second run's gate suite running on the same host at the same time (`fix_headless_run_host_sleep`). Findings 2–8 of this index, closed one by one, each passed on its own with no code change.
+- **Verification:** the round-2 gate run, which runs the whole suite. If this test fails there, round 2's test fix plan lists it again.
+- **No code file edited:** this section is the only change, on `d17b3335`.

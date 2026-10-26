@@ -28,3 +28,9 @@ On a stall-killed session the hook returns at once on `stall_killing`, so it nei
 - [ ] If the named test passes as the tree stands, edit no code.
 - [ ] If it fails on `${f.ref} moved`, there are two likely causes: the hook committed after a stall-killed or resumed session, or the stall teardown's ordering lets `stall_killing` clear before the hook reads it. Make the hook skip, and commit nothing, whenever the watchdog owns the teardown. Edit `record_run_analytics()` in `cli/templates/scripts/autonomous-watcher.sh` and make the identical edit in `scripts/autonomous-watcher.sh`. For any other assertion, fix the code it names.
 - [ ] Do not weaken the test.
+
+## Already passing
+
+- **Closed by the operator, not by a unit.** This finding's named test was **not** run on its own. The round-1 failures were caused by a second run's gate suite running on the same host at the same time (`fix_headless_run_host_sleep`). Findings 2–8 of this index, closed one by one, each passed on its own with no code change.
+- **Verification:** the round-2 gate run, which runs the whole suite. If this test fails there, round 2's test fix plan lists it again.
+- **No code file edited:** this section is the only change, on `d17b3335`.

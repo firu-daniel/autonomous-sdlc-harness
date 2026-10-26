@@ -32,3 +32,9 @@ In the same run, `cli/test/watcher-sandbox-refusal.test.mjs` → `(e) a drop sen
 - [ ] If it fails, take the failing assertion from its message and fix the code it names, in `launch_remote_run()` / `remote_commit_and_push()` or in the library function they call. Make the identical edit in the `scripts/` mirror so the two copies stay byte-identical.
 - [ ] If the newly committed `run_analytics/` README or the new scripts turn out to trip a placement or trust check on the remote arm, fix that check's handling of them. Do not drop the files from `init`'s output.
 - [ ] Do not weaken the test.
+
+## Already passing
+
+- **Closed by the operator, not by a unit.** This finding's named test was **not** run on its own. The round-1 failures were caused by a second run's gate suite running on the same host at the same time (`fix_headless_run_host_sleep`). Findings 2–8 of this index, closed one by one, each passed on its own with no code change.
+- **Verification:** the round-2 gate run, which runs the whole suite. If this test fails there, round 2's test fix plan lists it again.
+- **No code file edited:** this section is the only change, on `d17b3335`.

@@ -18,15 +18,15 @@ This list is the **single source of truth** for the fix loop. It is walked top t
 6. [x] **Finding 6** — A clean reused clone launches with the review placed and left uncommitted. _(layer: cli, general)_
 7. [x] **Finding 7** — (L2) A nested repository's `core.fsmonitor` behind a gitlink: the drop launches. _(layer: cli, general)_
 8. [x] **Finding 8** — (L3) A `core.fsmonitor` in the clone's submodule config: the drop launches. _(layer: cli, general)_
-9. [ ] **Finding 9** — A task drop launches on a per-run profile copy. _(layer: cli, general)_
-10. [ ] **Finding 10** — Another linked worktree's `.git` pointer is in the clone run's per-run copy. _(layer: cli, general)_
-11. [ ] **Finding 11** — (b) A taken `sandbox.optOut` exempts the drop and the stub launches. _(layer: cli, general)_
-12. [ ] **Finding 12** — (d) The helper's default probe launches the stub. _(layer: cli, general)_
-13. [ ] **Finding 13** — An honest hung run resumes with the branch unmoved. _(layer: cli, general)_
-14. [ ] **Finding 14** — A remote task drop is committed, pushed and dispatched, never spawned. _(layer: cli, general)_
-15. [ ] **Finding 15** — The usage hold and the cap do not gate a remote drop. _(layer: cli, general)_
-16. [ ] **Finding 16** — A failed dispatch leaves the record failed with one failed notification. _(layer: cli, general)_
-17. [ ] **Finding 17** — A push that origin refuses blocks the dispatch. _(layer: cli, general)_
+9. [x] **Finding 9** — A task drop launches on a per-run profile copy. _(layer: cli, general)_
+10. [x] **Finding 10** — Another linked worktree's `.git` pointer is in the clone run's per-run copy. _(layer: cli, general)_
+11. [x] **Finding 11** — (b) A taken `sandbox.optOut` exempts the drop and the stub launches. _(layer: cli, general)_
+12. [x] **Finding 12** — (d) The helper's default probe launches the stub. _(layer: cli, general)_
+13. [x] **Finding 13** — An honest hung run resumes with the branch unmoved. _(layer: cli, general)_
+14. [x] **Finding 14** — A remote task drop is committed, pushed and dispatched, never spawned. _(layer: cli, general)_
+15. [x] **Finding 15** — The usage hold and the cap do not gate a remote drop. _(layer: cli, general)_
+16. [x] **Finding 16** — A failed dispatch leaves the record failed with one failed notification. _(layer: cli, general)_
+17. [x] **Finding 17** — A push that origin refuses blocks the dispatch. _(layer: cli, general)_
 
 ## Must Fix
 

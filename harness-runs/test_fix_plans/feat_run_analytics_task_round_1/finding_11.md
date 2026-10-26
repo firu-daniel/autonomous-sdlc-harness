@@ -23,3 +23,9 @@ In this file, the two failures are exactly the two cases that launch a local clo
 - [ ] If the named test passes as the tree stands, edit no code.
 - [ ] If it fails, the assertion message shows whether the stub was never called (the inbox pass, before the hook) or a `not launching` line appeared (the preflight). Fix the code that message names. If the cause is the hook, make the identical edit in `cli/templates/scripts/autonomous-watcher.sh` and `scripts/autonomous-watcher.sh`.
 - [ ] Do not weaken the test.
+
+## Already passing
+
+- **Closed by the operator, not by a unit.** This finding's named test was **not** run on its own. The round-1 failures were caused by a second run's gate suite running on the same host at the same time (`fix_headless_run_host_sleep`). Findings 2–8 of this index, closed one by one, each passed on its own with no code change.
+- **Verification:** the round-2 gate run, which runs the whole suite. If this test fails there, round 2's test fix plan lists it again.
+- **No code file edited:** this section is the only change, on `d17b3335`.

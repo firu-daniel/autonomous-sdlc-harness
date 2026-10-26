@@ -21,3 +21,9 @@ The log has no assertion message for it.
 - [ ] If the named test passes as the tree stands, edit no code.
 - [ ] If it fails on `status`, there are two likely causes: something in `record_run_analytics()` ends or stalls the subshell before `classify_run_exit` (for example a `set -e`-style exit in a sourced helper, or an unbounded git call), or `run-analytics.sh` blocks on a host reader. Make the hook fail closed and return 0 within bounded time. Edit `cli/templates/scripts/autonomous-watcher.sh` (or `cli/templates/scripts/run-analytics.sh`) and make the identical edit in the `scripts/` mirror. For any other assertion, fix the code it names.
 - [ ] Do not weaken the test.
+
+## Already passing
+
+- **Closed by the operator, not by a unit.** This finding's named test was **not** run on its own. The round-1 failures were caused by a second run's gate suite running on the same host at the same time (`fix_headless_run_host_sleep`). Findings 2–8 of this index, closed one by one, each passed on its own with no code change.
+- **Verification:** the round-2 gate run, which runs the whole suite. If this test fails there, round 2's test fix plan lists it again.
+- **No code file edited:** this section is the only change, on `d17b3335`.
