@@ -34,7 +34,7 @@
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 2** — Name the killed-job case's start-wait budget `START_WAIT_POLLS` instead of calling `scaleBound(100)` in the loop condition _(layer: cli)_
-2. [ ] **Finding 1** — Give `init.test.mjs`'s post-signal pid poll a fixed `PID_GONE_ATTEMPTS` budget and list it among `timing.mjs`'s fixed bounds _(layer: cli)_
+2. [x] **Finding 1** — Give `init.test.mjs`'s post-signal pid poll a fixed `PID_GONE_ATTEMPTS` budget and list it among `timing.mjs`'s fixed bounds _(layer: cli)_
 
 ---
 

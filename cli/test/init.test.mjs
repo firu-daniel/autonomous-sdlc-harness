@@ -555,11 +555,19 @@ function alive(pid) {
 const EVENTUALLY_ATTEMPTS = scaleBound(100);
 
 /**
- * Poll a predicate for up to two seconds times `HARNESS_TEST_TIME_SCALE`: the observable belongs to
- * another process.
+ * The post-signal pid poll's attempt budget at its 20 ms cadence — fixed, not scaled. The pid is
+ * `DEV_SERVER_STUB`'s `exec sleep ${DEV_SERVER_STUB_SECONDS}`, which dies by itself 5 s after it
+ * starts, so a pid that ignored the signal is only caught if this budget ends well inside that
+ * lifetime; scaled, it would not (`helpers/timing.mjs`, choice 4).
  */
-async function eventually(check, describe) {
-  for (let attempt = 0; attempt < EVENTUALLY_ATTEMPTS; attempt += 1) {
+const PID_GONE_ATTEMPTS = 100;
+
+/**
+ * Poll a predicate for up to `attempts` × 20 ms — by default two seconds times
+ * `HARNESS_TEST_TIME_SCALE`: the observable belongs to another process.
+ */
+async function eventually(check, describe, attempts = EVENTUALLY_ATTEMPTS) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     if (check()) return;
     await sleep(20);
   }
@@ -9055,5 +9063,5 @@ test('the dev-server wrapper starts the server detached and prints a live pid an
 
   // And the pid is the whole of what was started: signalling it leaves no orphan behind.
   process.kill(pid);
-  await eventually(() => !alive(pid), 'the process the wrapper printed outlived the signal sent to it');
+  await eventually(() => !alive(pid), 'the process the wrapper printed outlived the signal sent to it', PID_GONE_ATTEMPTS);
 });

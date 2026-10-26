@@ -34,6 +34,8 @@
  *    - `init.test.mjs` → `RETURNS_PROMPTLY_MS`: a discriminating bound. Above
  *      `DEV_SERVER_STUB_SECONDS` (5 s) a wrapper that waited for the server would pass, so a scale
  *      of about 1.67 or more would stop the case from failing.
+ *    - `init.test.mjs` → `PID_GONE_ATTEMPTS`: the post-signal pid poll, discriminating against the
+ *      same 5 s stub lifetime; scaled, a pid that ignored the signal would die by itself inside it.
  *    - `outer-loop-scripts.test.mjs`, the sweep case's `ceiling = 3` (`HARNESS_FETCH_TIMEOUT`) and
  *      `HANGING_GIT`'s `sleep 300`: the bound under test and the simulated hang.
  *    - `run-test-suite.test.mjs` → `sleep(10000)`, `sleep(5000)` and `sleep(1000)`: windows waited
