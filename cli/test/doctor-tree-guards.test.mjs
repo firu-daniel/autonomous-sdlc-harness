@@ -122,4 +122,14 @@ test('the tree-guards check warns on a test that names no file', async (t) => {
     const { line } = await doctorLine(dir, 'WARN');
     assert.ok(line.includes('app/../test/escape-guard.test.mjs'), line);
   });
+
+  await t.test('an absolute test warns even where the file exists', async (subtest) => {
+    const dir = await wiredFixture(subtest);
+    plant(dir, 'test/absolute-guard.test.mjs');
+    const absolute = join(dir, 'test/absolute-guard.test.mjs');
+    await setGuards(dir, [{ test: absolute, covers: 'src/**' }]);
+
+    const { line } = await doctorLine(dir, 'WARN');
+    assert.ok(line.includes(absolute), line);
+  });
 });
