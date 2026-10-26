@@ -25,7 +25,7 @@ This branch adds a measurement script, `run-analytics.sh`, that turns each headl
 
 Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_run_analytics/task_<K>_plan.md` file. Ordered bottom-up by ship sequence in the configured layer order — `cli`, then `plugin`, then the catch-all `general` last.
 
-1. [ ] **Task 1** — Compute per-session records from the event stream in `lib/run-analytics.jq` _(layer: cli)_ _(points: 20)_
+1. [x] **Task 1** — Compute per-session records from the event stream in `lib/run-analytics.jq` _(layer: cli)_ _(points: 20)_
 2. [ ] **Task 2** — Roll sessions up and render `run-analytics.md` in `lib/run-analytics-report.jq` _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Drive the two programs from `run-analytics.sh`: paths, suspend intervals, idempotent merge, byte-stable write _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Ship the three files through `OUTER_LOOP_SCRIPTS` and add the `run_analytics` artifact directory _(layer: cli)_ _(points: 20)_
