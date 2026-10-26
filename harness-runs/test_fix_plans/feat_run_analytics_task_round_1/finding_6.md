@@ -29,3 +29,9 @@ In the same run, the same clone-launch path passed in `cli/test/watcher-remote-d
 - [ ] If the named test passes as the tree stands, edit no code.
 - [ ] If it fails, take the failing assertion from its message. If the cause is the post-session hook (the tip moved by a `chore: Record run analytics for feat_x` commit, or a stray staged path), fix `record_run_analytics()` in `cli/templates/scripts/autonomous-watcher.sh` so a session-less stream commits and stages nothing, and make the identical edit in `scripts/autonomous-watcher.sh`. If the cause is elsewhere, fix it at the code the assertion names.
 - [ ] Do not weaken the test.
+
+## Already passing
+
+- **(a)** Named test: `a clean reused clone launches, with the review placed and left uncommitted`; file run: `cli/test/watcher-review-drop-payloads.test.mjs`.
+- **(b)** Command: `npm test --workspace cli -- test/watcher-review-drop-payloads.test.mjs`, run from the repository root as one foreground command. Named test result: `ok 1 - a clean reused clone launches, with the review placed and left uncommitted` (duration_ms 25887.8 on the latest run). File summary: `# tests 23`, `# pass 23`, `# fail 0`, exit 0.
+- **(c)** No code file was edited. This record is the only write.
