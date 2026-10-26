@@ -30,3 +30,9 @@ The likely cause is a transient condition on the gate host during part of the ru
   - **The hold's argv, record, log line or holder lifetime:** the fault is in `cli/templates/scripts/autonomous-watcher.sh` → `keep_awake_start` / the launch head, or in `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_keep_awake_hold_var`. Fix it there. Record under **Deviations from plan:** that the `general`-layer mirror (`scripts/autonomous-watcher.sh`, `scripts/lib/harness-run-lib.sh`) needs the same edit until `cmp` exits 0.
   - **A bare `runBash timed out after …`:** record it under **Deviations from plan:** as the next round's evidence, and change nothing.
 - [ ] If the case passes against the current tree, the finding closes through `unit_loop_core.md` → `#### The already-passing close`.
+
+## Already passing
+
+- **(a) Named test and file run:** `(a)(c) macOS: caffeinate waits on the engine's own pid, is gone once the session is, and stays off the stream`, in `cli/test/watcher-keep-awake.test.mjs`, on `8c80061c` (`cli` layer dispatch).
+- **(b) Command and result:** `npm test --workspace cli -- test/watcher-keep-awake.test.mjs`, from the repository root, foreground. The named test reported `ok 1 - (a)(c) macOS: caffeinate waits on the engine's own pid, is gone once the session is, and stays off the stream` (`duration_ms: 10425.409417`). The file summary was `# tests 9`, `# pass 9`, `# fail 0`, `# duration_ms 91981.445666`. This agrees with the finding's diagnosis: a transient condition on the gate host, not a defect in the tree.
+- **(c) No code file edited:** this section is the only change. `cli/templates/scripts/autonomous-watcher.sh`, `cli/templates/scripts/lib/harness-run-lib.sh` and their `scripts/` mirrors are untouched, so the `general` layer has nothing to copy.
