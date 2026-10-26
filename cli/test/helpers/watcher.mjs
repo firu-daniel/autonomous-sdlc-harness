@@ -35,6 +35,10 @@
  *    A suite that runs its own `tick` script instead of this `tick`
  *    (`cli/test/watcher-stall-reset-payloads.test.mjs` → `localStall`) defines the same override from
  *    {@link DEFAULT_SANDBOX_PROBE}.
+ *    It overrides the keep-awake probe (`hr_keep_awake_probe_var`) the same way, with
+ *    {@link DEFAULT_KEEP_AWAKE_PROBE}: an unsupported host is the silent `off` arm, so no suite built
+ *    here starts a real `caffeinate` or `systemd-inhibit` or gains a `keep-awake:` log line. A suite
+ *    running its own pass script (`localStall` above among them) is not covered by this override.
  */
 
 import assert from 'node:assert/strict';
@@ -59,6 +63,9 @@ const TICK_TIMEOUT_MS = 60_000;
 
 /** The body `tick` gives the sourced probe unless a case passes its own (choice 5). */
 export const DEFAULT_SANDBOX_PROBE = 'HR_SANDBOX_HOST=macos; HR_SANDBOX_MISSING=; HR_SANDBOX_REFUSAL=; return 0';
+
+/** The keep-awake probe body `tick` defines unless a case passes its own (choice 5). */
+export const DEFAULT_KEEP_AWAKE_PROBE = 'HR_KEEP_AWAKE_HOST=unsupported; HR_KEEP_AWAKE_TOOL=; return 0';
 
 /** The seed `init`'s own tests use: a repository whose stack detection resolves every command. */
 function nodeProjectFiles() {
@@ -196,12 +203,15 @@ export async function createWatcherFixture(t, { branch = 'feat_x' } = {}) {
     },
     record: () => JSON.parse(readFileSync(join(dir, REGISTRY_PATH), 'utf8')).runs[branch],
     /**
-     * One pass; `sandboxProbe` is a shell function body replacing {@link DEFAULT_SANDBOX_PROBE};
-     * `timeoutMs` replaces {@link TICK_TIMEOUT_MS} for a pass that launches more than one session
-     * (choice 4).
+     * One pass; `sandboxProbe` and `keepAwakeProbe` are shell function bodies replacing
+     * {@link DEFAULT_SANDBOX_PROBE} and {@link DEFAULT_KEEP_AWAKE_PROBE}; `timeoutMs` replaces
+     * {@link TICK_TIMEOUT_MS} for a pass that launches more than one session (choice 4).
      */
-    async tick(env = {}, { sandboxProbe = DEFAULT_SANDBOX_PROBE, timeoutMs = TICK_TIMEOUT_MS } = {}) {
-      const script = `. "$1" status >/dev/null\nhr_sandbox_prereq_probe_var() {\n${sandboxProbe}\n}\ntick; wait`;
+    async tick(
+      env = {},
+      { sandboxProbe = DEFAULT_SANDBOX_PROBE, keepAwakeProbe = DEFAULT_KEEP_AWAKE_PROBE, timeoutMs = TICK_TIMEOUT_MS } = {},
+    ) {
+      const script = `. "$1" status >/dev/null\nhr_sandbox_prereq_probe_var() {\n${sandboxProbe}\n}\nhr_keep_awake_probe_var() {\n${keepAwakeProbe}\n}\ntick; wait`;
       const result = await runBash(
         dir,
         ['-c', script, '_', watcherPath],

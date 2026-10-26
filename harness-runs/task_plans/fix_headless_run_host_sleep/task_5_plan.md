@@ -42,3 +42,9 @@ Task 2's library supplies the probe seam this suite overrides: `hr_keep_awake_pr
 - `npm test --workspace cli -- test/watcher-keep-awake.test.mjs` passes.
 - After the suite, no `caffeinate`, `systemd-inhibit` or `keep-awake-wait` stub process survives. Every case asserts its holder gone before it ends.
 - The driver is used by suites this task does not run. Its edit is confined to the new export, the new option and the header choice, and `git diff cli/test/helpers/watcher.mjs` shows no other change.
+
+**Deviations from plan:**
+
+- Evidence downgrade, *no stub process survives the suite*: the post-suite `ps -ax` sweep was refused by the tool layer (don't-ask mode), so the claim rests only on each case's own in-suite assertion. Every case asserts its holder gone before ending, through `holderGone`, which polls `kill -0` plus `ps -o stat=`, counting a zombie as gone. The refused and WSL2 cases take no holder, and assert the stubs' invocation counts instead.
+- The `tick` doc comment in `cli/test/helpers/watcher.mjs` names the new `keepAwakeProbe` option beside `sandboxProbe`. That edit belongs to the new option and is the only diff line outside the export and header choice 5.
+- (b)'s "exactly as it does without a hold" is checked in the default-probe case. That case runs the same `exit 3` body with keep-awake `off` and asserts `failed` too.
