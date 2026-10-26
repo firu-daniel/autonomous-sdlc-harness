@@ -26,6 +26,7 @@ import test from 'node:test';
 
 import { COPY_GIT_PATHS } from '../dist/generators/writeProtection.js';
 import { INIT_SCRIPTS_DIR, runBash, runGit } from './helpers/fixture.mjs';
+import { scaleBound } from './helpers/timing.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
@@ -187,7 +188,7 @@ test('a new drop beside a legacy run gets a clone, and the sweep removes only th
   await writeFile(join(f.dir, STATE_DIR, 'autonomous_inbox', `${NEW}_task_prompt.md`), 'do it\n', 'utf8');
 
   // This pass resumes one run (commit and push) and launches a second, so it takes the larger bound.
-  await f.tick({}, { timeoutMs: 180_000 });
+  await f.tick({}, { timeoutMs: scaleBound(180_000) });
 
   // New beside old, in one pass.
   assertLegacyProfile(f, f.settingsArg(f.wt));

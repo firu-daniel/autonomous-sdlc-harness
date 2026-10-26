@@ -98,6 +98,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 
 import { CLI_ENTRY, INIT_SCRIPTS_DIR, runBash, runGit } from './helpers/fixture.mjs';
+import { scaleBound } from './helpers/timing.mjs';
 import { createWatcherFixture, DEFAULT_SANDBOX_PROBE } from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
@@ -108,11 +109,17 @@ const PIN = ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c
 const AUTHOR = ['-c', 'user.name=Harness Fixture', '-c', 'user.email=fixture@example.invalid'];
 const CLI_VERSION = JSON.parse(readFileSync(join(dirname(CLI_ENTRY), '..', 'package.json'), 'utf8')).version;
 
-/** One stalled pass's bound: a hang fails naming its command, below the suite's `--test-timeout`. */
-const RUN_TIMEOUT_MS = 180_000;
+/**
+ * One stalled pass's bound: a hang fails naming its command, below the suite's `--test-timeout`.
+ * Scaled by `HARNESS_TEST_TIME_SCALE` (`helpers/timing.mjs`).
+ */
+const RUN_TIMEOUT_MS = scaleBound(180_000);
 
-/** How long the test waits for the hung session to report itself. */
-const HUNG_WAIT_MS = 60_000;
+/**
+ * How long the test waits for the hung session to report itself.
+ * Scaled by `HARNESS_TEST_TIME_SCALE` (`helpers/timing.mjs`).
+ */
+const HUNG_WAIT_MS = scaleBound(60_000);
 
 /** The session: hung on its first launch (see the header), a registry snapshot on a relaunch. */
 const HUNG_BODY = [
