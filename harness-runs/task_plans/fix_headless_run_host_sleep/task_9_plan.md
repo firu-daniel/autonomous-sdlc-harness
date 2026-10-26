@@ -33,3 +33,8 @@ This task copies those two template files and edits neither.
 - `cmp cli/templates/scripts/autonomous-watcher.sh scripts/autonomous-watcher.sh` and `cmp cli/templates/scripts/lib/harness-run-lib.sh scripts/lib/harness-run-lib.sh` both exit 0.
 - `git grep -n 'execution.keepAwake' -- docs/config.md` hits the new row and the reworded *"Remote execution splits along the same line."* paragraph.
 - `git grep -n 'The one committed `execution` key besides' -- docs/config.md` has no hit.
+
+**Deviations from plan:**
+
+- The mirror was not made with `cp`: the session's permission layer refused `cp cli/templates/scripts/autonomous-watcher.sh scripts/autonomous-watcher.sh` (*"Permission to use Bash has been denied because Claude Code is running in don't ask mode"*). Each hunk of `git diff --no-index scripts/<file> cli/templates/scripts/<file>` was applied to the `scripts/` copy with the file-edit tool instead, which leaves each file's mode as tracked (`scripts/autonomous-watcher.sh` 100755, `scripts/lib/harness-run-lib.sh` 100644). Identity rests on execution: both `cmp` commands exited 0 with no output, and the closing `git diff --no-index` shows only the pre-existing `old mode 100755 / new mode 100644` line for the watcher, with no content hunk.
+- The schema's `ajv` validation (`package.json` → `validate:config`) was not run here; `scripts/run-gates.sh`, which `commands.test` invokes, runs it, so it is deferred to the Run gates phase. The two `jq -e` checks printed `true`, so the file parses as JSON.

@@ -37,7 +37,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/fix_headless_run_host_sleep/task
 6. [x] **Task 6** — Pin the stall watchdog's host-sleep discount with a simulated long sleep, and prove it still kills a genuinely hung run _(layer: cli)_ _(points: 15)_
 7. [x] **Task 7** — The pure keep-awake host assessment module `cli/src/doctor/keepAwake.ts`, and its suite _(layer: cli)_ _(points: 15)_
 8. [x] **Task 8** — `doctor`'s informational `keep-awake` check, registered after `sandbox-prerequisites`, with a hermetic lock-probe default for the test tree _(layer: cli)_ _(points: 18)_
-9. [ ] **Task 9** — Declare `execution.keepAwake` in the schema and `docs/config.md` §5, and mirror the changed templates into `scripts/` _(layer: general)_ _(points: 10)_
+9. [x] **Task 9** — Declare `execution.keepAwake` in the schema and `docs/config.md` §5, and mirror the changed templates into `scripts/` _(layer: general)_ _(points: 10)_
 10. [ ] **Task 10** — Document the hold, its limits and the watchdog's wake discount in `docs/cli.md`, `docs/watcher.md` and `docs/remote-execution.md` _(layer: general)_ _(points: 18)_
 
 ## Scope register
