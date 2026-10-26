@@ -32,3 +32,9 @@ The likely cause is a transient condition on the gate host during part of the ru
   - **The WSL2 line, its count or a tool invocation:** the fault is in `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_keep_awake_mode_var`'s `wsl2)` reason, or in `cli/templates/scripts/autonomous-watcher.sh` → `keep_awake_start`. Fix it there, and record under **Deviations from plan:** that the `general`-layer mirror (`scripts/autonomous-watcher.sh`, `scripts/lib/harness-run-lib.sh`) needs the same edit until `cmp` exits 0.
   - **A bare `runBash timed out after …`:** record it under **Deviations from plan:** as the next round's evidence, and change nothing.
 - [ ] If the case passes against the current tree, the finding closes through `unit_loop_core.md` → `#### The already-passing close`.
+
+## Already passing
+
+- **(a) Named test and file run:** `(j) WSL2: one not-holding line naming WSL2, and no tool invoked`, in `cli/test/watcher-keep-awake.test.mjs`, on `5ec52a2a` (`cli` layer dispatch).
+- **(b) Command and result:** `npm test --workspace cli -- test/watcher-keep-awake.test.mjs`, from the repository root, foreground. The named test reported `ok 8 - (j) WSL2: one not-holding line naming WSL2, and no tool invoked` (`duration_ms: 16604.091625`). The file summary was `# tests 9`, `# pass 9`, `# fail 0`, `# duration_ms 155628.432958`. This agrees with the finding's diagnosis: a transient condition on the gate host, not a defect in the tree.
+- **(c) No code file edited:** this section is the only change. `cli/templates/scripts/autonomous-watcher.sh`, `cli/templates/scripts/lib/harness-run-lib.sh` and their `scripts/` mirrors are untouched, so the `general` layer has nothing to copy.
