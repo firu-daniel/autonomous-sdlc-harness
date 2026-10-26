@@ -389,7 +389,7 @@ WSL1, which is detected from the kernel release, is unsupported: the agent CLI r
 npx autonomous-sdlc-harness config set execution.keepAwake false
 ```
 
-The watcher reads the key from the main checkout on its next pass, with no restart, and releases any hold a running engine carries. Its `status` output then reports `KEEP_AWAKE=off` on the `tunables:` line and `keep-awake: off — execution.keepAwake is false` beneath it.
+The watcher reads the key from the main checkout on its next pass, with no restart, and releases any hold a running engine carries, and takes the hold again for a running engine when the key is turned back on. Its `status` output then reports `KEEP_AWAKE=off` on the `tunables:` line and `keep-awake: off — execution.keepAwake is false` beneath it.
 
 **The permission mode is `dontAsk`.** The profile's `permissions.defaultMode` is `"dontAsk"`, and the run watcher passes `--permission-mode` from its `PERMISSION_MODE` tunable, which defaults to `dontAsk` too and overrides `defaultMode`. Under it a call that matches no `allow` or `deny` entry, or that matches an `ask` rule — the profile's or a hook's — is refused at once rather than prompting a session nobody can answer; that is the refusal every other sentence of this document means. A `deny` entry holds in every mode.
 

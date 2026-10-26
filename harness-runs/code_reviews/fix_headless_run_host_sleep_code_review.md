@@ -22,7 +22,7 @@ The main defect is Finding 1. Once a running record's hold has been released to 
 2. [x] **Finding 5** — Name WSL1 rather than `linux` in the `keep-awake` sentence for a WSL1 host _(layer: cli)_
 3. [x] **Finding 4** — Give `localStall` the silent keep-awake probe override so no suite takes a real logind lock _(layer: cli)_
 4. [x] **Finding 3** — Report an unreadable configuration as unreadable, not as "`execution.keepAwake` is not a boolean" _(layer: cli, general)_
-5. [ ] **Finding 1** — Re-take the hold on a running record whose hold was released to `off` once the mode holds again _(layer: cli, general)_
+5. [x] **Finding 1** — Re-take the hold on a running record whose hold was released to `off` once the mode holds again _(layer: cli, general)_
 
 ---
 

@@ -131,8 +131,10 @@
 #     before the `exec`, so it is the engine's child and in the descendant set
 #     captured before the kill. A usage-gate pause ends the session itself.
 #   * LINUX RE-CHECKS MAINS POWER EVERY PASS (keep_awake_pass): on battery the
-#     hold is released, on AC it is taken again, and when the key turns
-#     `off` every live holder is dropped. It runs ahead of the kill-switch
+#     hold is released, on AC it is taken again, when the mode turns `off`
+#     every live holder is dropped, and when it holds again — the key turned
+#     back on, or a configuration that reads again — a released record is held
+#     again, on either platform. It runs ahead of the kill-switch
 #     return, because the brake stops launches and resumes, not runs in flight,
 #     and the hold those runs carry must still follow power and the key. A
 #     `refused` or `failed` hold is never retried.
@@ -2385,22 +2387,27 @@ keep_awake_start() {
   esac
 }
 
-# keep_awake_retake <branch> <engine_pid> — the Linux hold taken again by the
-# pass below once mains power is back.
+# keep_awake_retake <branch> <engine_pid> <mode> — the hold taken again by the
+# pass below: on `logind` once mains power is back, and on either mode once the
+# mode holds again after a release to `off`.
 keep_awake_retake() {
-  local b="$1" epid="$2"
-  hr_keep_awake_hold_var logind "$epid" "$b" || :
+  local b="$1" epid="$2" mode="$3" tool="caffeinate"
+  [ "$mode" != "logind" ] || tool="systemd-inhibit"
+  hr_keep_awake_hold_var "$mode" "$epid" "$b" || :
   registry_set "$b" keep_awake "$HR_KEEP_AWAKE_STATE" keep_awake_pid "$HR_KEEP_AWAKE_PID"
-  if [ "$HR_KEEP_AWAKE_STATE" = "held" ]; then
-    log "keep-awake: mains power — holding the host awake for '$b' again (systemd-inhibit pid $HR_KEEP_AWAKE_PID)"
+  if [ "$HR_KEEP_AWAKE_STATE" = "held" ] && [ "$mode" = "logind" ]; then
+    log "keep-awake: mains power — holding the host awake for '$b' again ($tool pid $HR_KEEP_AWAKE_PID)"
+  elif [ "$HR_KEEP_AWAKE_STATE" = "held" ]; then
+    log "keep-awake: holding the host awake for '$b' again ($tool pid $HR_KEEP_AWAKE_PID)"
   else
     log "keep-awake: not holding for '$b' — $HR_KEEP_AWAKE_DETAIL"
   fi
 }
 
 # One pass over the local `running` records whose engine is alive: release every
-# hold when the mode is `off`, and on `logind` follow mains power. `caffeinate`
-# needs nothing, because `-s` already lapses on battery. `refused` and `failed`
+# hold when the mode is `off`, take it again on a record released to `off` once
+# the mode holds, and on `logind` follow mains power. `caffeinate` needs nothing
+# more, because `-s` already lapses on battery. `refused` and `failed`
 # are never retried, so no automatic retry here is unbounded. It only reads
 # records and signals holders, and a record with a dead engine is skipped — its
 # holder has exited by its own `-w` or waiter — so running ahead of
@@ -2423,6 +2430,11 @@ keep_awake_pass() {
           log "keep-awake: released '$b' — $KEEP_AWAKE_REASON"
         fi
         ;;
+      caffeinate)
+        if [ "$state" = "off" ] && ! { [ -n "$hpid" ] && kill -0 "$hpid" 2>/dev/null; }; then
+          keep_awake_retake "$b" "$epid" caffeinate
+        fi
+        ;;
       logind)
         if [ "$state" = "held" ] && [ -n "$hpid" ] && kill -0 "$hpid" 2>/dev/null; then
           hr_on_mains_power && continue
@@ -2430,13 +2442,16 @@ keep_awake_pass() {
           # The power state is read again after the release: power that came
           # back in between must not leave the run unheld until the next pass.
           if hr_on_mains_power; then
-            keep_awake_retake "$b" "$epid"
+            keep_awake_retake "$b" "$epid" logind
           else
             registry_set "$b" keep_awake battery keep_awake_pid ""
             log "keep-awake: on battery — released the hold for '$b'"
           fi
-        elif { [ "$state" = "held" ] || [ "$state" = "battery" ]; } && hr_on_mains_power; then
-          keep_awake_retake "$b" "$epid"
+        elif { [ "$state" = "held" ] || [ "$state" = "battery" ] || [ "$state" = "off" ]; } && hr_on_mains_power; then
+          keep_awake_retake "$b" "$epid" logind
+        elif [ "$state" = "off" ]; then
+          registry_set "$b" keep_awake battery keep_awake_pid ""
+          log "keep-awake: on battery — no hold for '$b' until mains power returns"
         fi
         ;;
     esac

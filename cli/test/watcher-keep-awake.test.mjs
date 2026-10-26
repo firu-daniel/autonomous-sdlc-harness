@@ -315,6 +315,44 @@ test('(d) execution.keepAwake false takes no hold, logs nothing, and status name
   assert.equal(lines[at + 1], 'keep-awake: off — execution.keepAwake is false');
 });
 
+test('(l) macOS: a hold released by execution.keepAwake false is taken again once the key is true', async (t) => {
+  const f = await keepAwakeFixture(t);
+  if (f === null) return;
+
+  const configPath = join(f.dir, 'harness.config.json');
+  const setKeepAwake = async (keepAwake) => {
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.execution = { ...(config.execution ?? {}), keepAwake };
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+  };
+
+  const session = await f.session(MACOS_PROBE);
+  const engine = f.enginePid();
+  let record = f.record();
+  assert.equal(record.keep_awake, 'held');
+  const first = record.keep_awake_pid;
+
+  await setKeepAwake(false);
+  await session.next();
+  record = f.record();
+  assert.equal(record.keep_awake, 'off');
+  assert.ok(f.watcherLog().includes("keep-awake: released 'feat_x' — execution.keepAwake is false"), f.watcherLog());
+  await f.holderGone(first);
+  assert.ok(await f.alive(engine), 'the engine ended with the hold');
+
+  await setKeepAwake(true);
+  await session.next();
+  record = f.record();
+  assert.equal(record.keep_awake, 'held');
+  const second = record.keep_awake_pid;
+  assert.notEqual(second, first);
+  assert.ok(await f.alive(second), 'the retaken holder is not alive');
+  assert.deepEqual(f.recorded('caffeinate').at(-1), ['-s', '-i', '-w', engine]);
+
+  await session.end();
+  await f.holderGone(second);
+});
+
 test('(e)-(h) Linux: the logind hold waits on the engine, follows mains power pass by pass, and ends with the session', async (t) => {
   const f = await keepAwakeFixture(t);
   if (f === null) return;
