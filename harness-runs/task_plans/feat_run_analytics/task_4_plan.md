@@ -1,0 +1,30 @@
+### Task 4 — Ship the three files through `OUTER_LOOP_SCRIPTS` and add the `run_analytics` artifact directory
+
+**Goal:** Make `init` write the run-analytics script and its two `jq` programs into every adopter's `scriptsDir`, and create the `run_analytics/` artifact directory with its contract README — the generator rows, their test coverage, and the two READMEs that enumerate the outer-loop family.
+
+**Depends on:** Task 1 (`cli/templates/scripts/lib/run-analytics.jq`), Task 2 (`cli/templates/scripts/lib/run-analytics-report.jq`) and Task 3 (`cli/templates/scripts/run-analytics.sh`), which must all exist before their rows do — `cli/src/generators/outerLoopScripts.ts` → *Scope this release*: *"a row arrives in the same change as its template, never before it"*. This task changes none of the three files.
+
+**Where this task stops.** It ships files and a directory; nothing here runs the script. Calling it after each session is **Task 5's**; the suite exercising the script's behaviour is **Task 6's**.
+
+### Targets
+
+- `cli/src/generators/outerLoopScripts.ts` — three rows in `OUTER_LOOP_SCRIPTS`.
+- `cli/src/generators/stateDir.ts` — one row in `STATE_DIR_ENTRIES`.
+- `cli/templates/state-dir/run_analytics/README.md` (new) — the directory's contract.
+- `cli/templates/state-dir/README.md` — its opening paragraph's enumeration of the tree's artifact families (scope register row 28).
+- `cli/test/init.test.mjs` — `OUTER_LOOP_SCRIPT_FILES` and `ALWAYS_ON_DIRS`.
+- `cli/test/outer-loop-scripts.test.mjs` — a case for the three new files.
+- `cli/templates/scripts/README.md` and `cli/README.md` — the outer-loop family enumerations (scope register rows 3 and 5).
+
+**Work:**
+
+- [ ] `outerLoopScripts.ts`: add three consecutive rows directly after the `autonomous-format-stream.sh` row — `{ file: 'run-analytics.jq', subdir: 'lib', mode: 0o644, agentInvocable: false }` and `{ file: 'run-analytics-report.jq', subdir: 'lib', mode: 0o644, agentInvocable: false }` first (read as data by `run-analytics.sh`, never run — the `0o644` reason the `mode` doc comment states; before the script that reads them, the order `OUTER_LOOP_SCRIPTS`'s own doc comment requires), then `{ file: 'run-analytics.sh', mode: 0o755, agentInvocable: false }`, with a one-line comment: run by the watcher after each session, and an agent reaching it through the script-allowlist guard writes only its own branch's analytics files, so `false` is a calling convention and it carries no `DENY_SCRIPT_BASENAMES` entry. Extend the module header's first sentence to name the run-analytics script. `writeProtection.ts` and the permission profile derive from the table and need no edit.
+- [ ] `stateDir.ts`: add `Object.freeze({ dir: 'run_analytics' })` to the always-written group beside `branch_statistics`, and write `cli/templates/state-dir/run_analytics/README.md` in the shape of `cli/templates/state-dir/branch_statistics/README.md`: one `<branch>/run-analytics.json` (one record per headless session, the source of truth, keyed by `session_id`) and `<branch>/run-analytics.md` (regenerated from the JSON every time: whole-run summary, then one section per session, oldest first) per branch; written by `run-analytics.sh`, committed by the run watcher after every headless session — locally and in a GitHub Actions job — and read by the operator and `/autonomous-sdlc-harness:branch-status`; committed with the branch, since no ignore rule reaches it; and the mistake worth naming — reading host-suspended or idle time as the run's fault: it is measurement only, nothing acts on it, and the raw `<state_dir>/autonomous_logs/<branch>.stream.jsonl` stays the deep-debug copy it was derived from. Then, in `cli/templates/state-dir/README.md`'s opening paragraph (*"The run-artifact tree `init` materializes at the configured `stateDir`: …"*), add *the per-branch run analytics* to the always-written families directly after *the branch statistics*, so the enumeration names every row `STATE_DIR_ENTRIES` now holds; the phase-gated sentence after it is unchanged.
+- [ ] `init.test.mjs`: add `'run-analytics.sh'` to `OUTER_LOOP_SCRIPT_FILES` (the subtraction list its header describes), so the wrapper-family assertions keep excluding the outer-loop set. Add `'run_analytics'` to `ALWAYS_ON_DIRS` (after `'branch_statistics'`), so the existing *"a first init materialises the always-on state tree, its READMEs and both ledgers"* case asserts that `init` creates `<state_dir>/run_analytics/`, and its README loop over the written directories asserts `<state_dir>/run_analytics/README.md` lands. Then grep `cli/test/` for any other literal list of outer-loop file names (`git grep -n "'run-test-suite.sh'" -- cli/test`) and extend each that must carry the new rows, editing only files this task then runs.
+- [ ] `outer-loop-scripts.test.mjs`: one case, in the shape of the existing walker-files case, asserting that after `init` the three files land at `scripts/run-analytics.sh` (mode `0755`), `scripts/lib/run-analytics.jq` and `scripts/lib/run-analytics-report.jq` (mode `0644`) byte-for-byte equal to their templates, and that a second `init` leaves an edited copy of `run-analytics.sh` untouched (the `create-if-absent` contract).
+- [ ] `cli/templates/scripts/README.md` → **The other family in this directory is not generated.** and `cli/README.md`'s outer-loop enumeration: name the run-analytics script with its two `jq` programs under `lib/` — *the run-analytics script (`run-analytics.sh`, with `lib/run-analytics.jq` and `lib/run-analytics-report.jq`), which the watcher runs after every headless session to record that session's time, cost and reliability under `<state_dir>/run_analytics/`*.
+
+**Verification:**
+
+- `npm test --workspace cli -- test/outer-loop-scripts.test.mjs` and `npm test --workspace cli -- test/init.test.mjs`, each as one plain foreground command from the repository root, pass.
+- `git grep -n "run-analytics" -- cli/src` names the three rows and the header line only — no second spelling of a file name anywhere in `cli/src` (`.claude/context/cli.md` → **One string, one producer.**).
