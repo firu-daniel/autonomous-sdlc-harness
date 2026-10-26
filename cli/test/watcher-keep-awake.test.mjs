@@ -11,6 +11,8 @@
  * runs with `GITHUB_ACTIONS` empty, so a CI run does not take the runner arm. A Linux case's session
  * outlives a pass: one script launches without `wait`, runs each later `tick` when the case asks for
  * it, and a control file ends the stub (`watcher-stall-reset-payloads.test.mjs` → `localStall`).
+ * Every bound here is scaled by `HARNESS_TEST_TIME_SCALE` (`helpers/timing.mjs`), and `session()`
+ * waits for each pass under the shared driver's `TICK_TIMEOUT_MS`.
  */
 
 import assert from 'node:assert/strict';
@@ -21,7 +23,8 @@ import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { runBash, runGit } from './helpers/fixture.mjs';
-import { createWatcherFixture, DEFAULT_SANDBOX_PROBE } from './helpers/watcher.mjs';
+import { scaleBound } from './helpers/timing.mjs';
+import { createWatcherFixture, DEFAULT_SANDBOX_PROBE, TICK_TIMEOUT_MS } from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
 const INBOX = `${STATE_DIR}/autonomous_inbox`;
@@ -32,10 +35,16 @@ const MACOS_PROBE = 'HR_KEEP_AWAKE_HOST=macos; HR_KEEP_AWAKE_TOOL=caffeinate; re
 const LINUX_PROBE = 'HR_KEEP_AWAKE_HOST=linux; HR_KEEP_AWAKE_TOOL=systemd-inhibit; return 0';
 const WSL2_PROBE = 'HR_KEEP_AWAKE_HOST=wsl2; HR_KEEP_AWAKE_TOOL=; return 0';
 
-/** Bounds every poll a case makes for a state the watcher reaches asynchronously. */
-const WAIT_MS = 20_000;
-/** Bounds a multi-pass session script; below the suite's `--test-timeout`. */
-const SESSION_TIMEOUT_MS = 180_000;
+/**
+ * Bounds every poll a case makes for a state the watcher reaches asynchronously.
+ * Scaled by `HARNESS_TEST_TIME_SCALE` (`helpers/timing.mjs`).
+ */
+const WAIT_MS = scaleBound(20_000);
+/**
+ * Bounds a multi-pass session script: three passes and two holder polls, below the suite's
+ * `--test-timeout` at the scale cap. Scaled by `HARNESS_TEST_TIME_SCALE` (`helpers/timing.mjs`).
+ */
+const SESSION_TIMEOUT_MS = scaleBound(240_000);
 
 /** Separates one recorded argument from the next in a stub's record file. */
 const ARG_SEP = '\u001f';
@@ -143,9 +152,9 @@ async function keepAwakeFixture(t, { keepAwake } = {}) {
       .map((line) => line.split(ARG_SEP).slice(0, -1));
   };
 
-  /** Poll `predicate` until it holds, failing with `label` and the watcher log past {@link WAIT_MS}. */
-  const waitFor = async (predicate, label) => {
-    const deadline = Date.now() + WAIT_MS;
+  /** Poll `predicate` until it holds, failing with `label` and the watcher log past `budget` ms. */
+  const waitFor = async (predicate, label, budget = WAIT_MS) => {
+    const deadline = Date.now() + budget;
     for (;;) {
       let held = false;
       try {
@@ -154,7 +163,7 @@ async function keepAwakeFixture(t, { keepAwake } = {}) {
         // A registry read mid-write; ask again.
       }
       if (held) return;
-      assert.ok(Date.now() < deadline, `${label} within ${WAIT_MS} ms\n${w.watcherLog()}`);
+      assert.ok(Date.now() < deadline, `${label} within ${budget} ms\n${w.watcherLog()}`);
       await delay(100);
     }
   };
@@ -221,12 +230,20 @@ async function keepAwakeFixture(t, { keepAwake } = {}) {
         return result;
       });
       const reached = (n) =>
-        waitFor(() => {
-          if (settled !== null) assert.fail(`the session script ended early\n${settled.stdout}\n${settled.stderr}`);
-          return existsSync(join(control, `pass-${n}`));
-        }, `pass ${n} did not return`);
+        waitFor(
+          () => {
+            if (settled !== null) assert.fail(`the session script ended early\n${settled.stdout}\n${settled.stderr}`);
+            return existsSync(join(control, `pass-${n}`));
+          },
+          `pass ${n} did not return`,
+          TICK_TIMEOUT_MS,
+        );
       await reached(1);
-      await waitFor(() => existsSync(enginePidPath) && w.record().keep_awake !== undefined, 'the launch recorded no keep_awake');
+      await waitFor(
+        () => existsSync(enginePidPath) && w.record().keep_awake !== undefined,
+        'the launch recorded no keep_awake',
+        TICK_TIMEOUT_MS,
+      );
       let n = 1;
       return {
         async next() {
