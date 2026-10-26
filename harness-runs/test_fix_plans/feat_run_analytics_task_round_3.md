@@ -13,7 +13,7 @@ All six round-2 failures (the `watcher-run-analytics`, `watcher-sandbox-refusal`
 
 This list is the **single source of truth** for the fix loop. It is walked top to bottom, and the first `[ ]` entry is the next unit. `[ ]` markers anywhere else, including the `- [ ]` sub-step bullets inside the per-finding files, are informational only.
 
-1. [ ] **Finding 1** — run-test-suite: a non-zero command collects exactly `fail <log path>` with exit 1. _(layer: cli)_
+1. [x] **Finding 1** — run-test-suite: a non-zero command collects exactly `fail <log path>` with exit 1. _(layer: cli)_
 
 ## Must Fix
 

@@ -40,3 +40,9 @@ The log has no assertion message, `actual`/`expected` pair or stack for this tes
   - **`result.stdout` is `pending\n` after `collect`, or `collect` reports `never observed: --wait task_round_1 to stop printing \`pending\``.** The worker did not finish within the poll budget. Look in the fixture's log for whether the `gate test exited 3` marker was written. If it was, the defect is in the wrapper's verdict write: fix `cli/templates/scripts/run-test-suite.sh` so that `.verdict` is renamed into place before `.running` is removed for every non-zero gate status. If it was not written, apply the same scaled-bound treatment to `collect`.
   - **Any other assertion fails** (the verdict text, the exit status, stderr, the log markers, or the run counter). The cause is deterministic and lies in the wrapper. Fix it in `cli/templates/scripts/run-test-suite.sh` and keep the test's assertions as they are.
 - [ ] Do not delete, skip or weaken this test or any of its assertions.
+
+## Already passing
+
+- **(a) Test and file run:** ``a non-zero command collects exactly `fail <log path>` with exit 1``, in `cli/test/run-test-suite.test.mjs`, run on its own.
+- **(b) Command and result:** `npm test --workspace cli -- test/run-test-suite.test.mjs`, from the repository root, in the foreground. The named subtest reported ``ok 2 - a non-zero command collects exactly `fail <log path>` with exit 1`` (`duration_ms: 2687.385333`). The file summary was `# tests 35` / `# pass 35` / `# fail 0`. This matches the finding's diagnosis that the round-3 failure was a timing bound under full-suite load, not a defect in the code. The fix bullets conditioned on a failing run therefore do not apply.
+- **(c) Code files:** none edited. `bash scripts/typecheck.sh` printed `PASS: typecheck`.
