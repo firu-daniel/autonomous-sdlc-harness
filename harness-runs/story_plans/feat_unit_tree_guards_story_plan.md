@@ -27,7 +27,7 @@ This repository's own conventions document `.claude/context/conventions.md` → 
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_unit_tree_guards/task_<K>_plan.md`. Ordered by the configured layer order (`cli`, `plugin`, then the catch-all `general` last).
 
 1. [x] **Task 1** — Add the `treeGuards` key to the config model and the shape check _(layer: cli)_ _(points: 20)_
-2. [ ] **Task 2** — Add the `tree-guards` doctor check that warns on a `test` naming no file _(layer: cli)_ _(points: 20)_
+2. [x] **Task 2** — Add the `tree-guards` doctor check that warns on a `test` naming no file _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Teach the adopter conventions templates the tree-guard run and the self-registration rule _(layer: cli)_ _(points: 10)_
 4. [ ] **Task 4** — State the tree-guard run in the test-run rule and wire it into the layer implementer _(layer: plugin)_ _(points: 20)_
 5. [ ] **Task 5** — Keep planners out of the guard list and have reviewers police registration _(layer: plugin)_ _(points: 15)_

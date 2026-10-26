@@ -94,7 +94,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { accessSync, constants as fsConstants, existsSync, readFileSync, statSync } from 'node:fs';
 import { release as kernelRelease } from 'node:os';
-import { delimiter, join, posix, resolve as resolvePath } from 'node:path';
+import { delimiter, isAbsolute, join, posix, resolve as resolvePath } from 'node:path';
 
 import { formatProblem, hasErrors, type ConfigProblem } from '../config/check.js';
 import { loadConfig, loadConfigText } from '../config/io.js';
@@ -103,6 +103,7 @@ import {
   browserWiringApplies,
   COMMAND_NONE_SENTINEL,
   CONFIG_FILENAME,
+  configuredTreeGuards,
   DEFAULTS,
   FALLBACK_PRESET,
   FORGE_KINDS,
@@ -4400,6 +4401,64 @@ const LAYER_DRIFT_CHECK: Check = {
 };
 
 /**
+ * Whether a `treeGuards[].test` value names a regular file this repository has.
+ *
+ * `test` is the single-file test command's argument verbatim, not necessarily repo-relative, so it
+ * resolves when a regular file exists at it joined to the repository root **or** to any configured
+ * `layers[].path`, in config order — no other base. An absolute value, or one carrying a `..`
+ * segment, is resolved against nothing and counts as missing: the unit loop hands it to a command
+ * that runs from inside the repository. Never throws.
+ */
+function treeGuardTestResolves(test: unknown, repoRoot: string, layerPaths: readonly string[]): boolean {
+  if (typeof test !== 'string' || test === '' || isAbsolute(test) || test.split(/[\\/]/).includes('..')) return false;
+  return [repoRoot, ...layerPaths.map((path) => join(repoRoot, path))].some((base) => {
+    try {
+      return statSync(join(base, test)).isFile();
+    } catch {
+      return false;
+    }
+  });
+}
+
+/**
+ * Whether every `treeGuards` entry's `test` names a file, by {@link treeGuardTestResolves}'s rule.
+ *
+ * Whether a `covers` glob matches anything is not graded. **A `warn`, never a `fail`**: a guard whose
+ * file is missing is never run, so the rule it enforces goes unchecked until Run gates, and nothing
+ * stops a run.
+ */
+const TREE_GUARDS_CHECK: Check = {
+  id: 'tree-guards',
+  title: 'every treeGuards test names a file this repository has',
+  run: (ctx) => {
+    if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
+    if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
+    const repoRoot = ctx.repoRoot;
+    const guards: unknown = configuredTreeGuards(ctx.config);
+    if (!Array.isArray(guards)) {
+      return unevaluated('treeGuards does not list entries, so no test path can be read from it (see the config check)');
+    }
+    if (guards.length === 0) return pass('no treeGuards are configured, so a unit runs no tree guard');
+
+    const layers: unknown = ctx.config.layers;
+    const layerPaths = Array.isArray(layers)
+      ? layers.map((layer: unknown) => (isJsonObject(layer) ? layer['path'] : undefined)).filter((path): path is string => typeof path === 'string')
+      : [];
+    const tests = guards.map((guard: unknown) => (isJsonObject(guard) ? guard['test'] : undefined));
+    const missing = tests
+      .filter((test) => !treeGuardTestResolves(test, repoRoot, layerPaths))
+      .map((test) => (typeof test === 'string' ? test : JSON.stringify(test ?? null)));
+
+    if (missing.length > 0) {
+      return warn(
+        `${missing.length} of the ${guards.length} treeGuards ${missing.length === 1 ? 'entry names a test that resolves' : 'entries name tests that resolve'} to no file under the repository root or any layers[].path: ${nameList(missing)} — a guard whose file is missing is never run, so the rule it enforces goes unchecked until Run gates. Correct or remove ${missing.length === 1 ? 'the entry' : 'those entries'} with \`${CLI} config set treeGuards '<json>'\``,
+      );
+    }
+    return pass(`all ${guards.length} configured ${guards.length === 1 ? 'tree guard names a file' : 'tree guards name a file'} this repository has`);
+  },
+};
+
+/**
  * The comment lines an earlier release wrote above the whole-directory rule, identified by a phrase
  * from each rather than by their full text.
  *
@@ -6049,7 +6108,9 @@ const RETRIEVAL_PYTHON_INDEX_CHECK: Check = {
  * distinguish. `layer-drift` closes that block, under the check whose subject it is gated on: the two
  * partition the repositories between them, one grading the profile that carries no row scoped below
  * the repository root and the other grading only the profiles that carry one, so no repository is
- * reported twice.
+ * reported twice. `tree-guards` follows `layer-drift` because it is the other check that grades what
+ * the configuration points at in the tree — there, directories a layer should cover; here, the test
+ * files a guard names, resolved against those same `layers[].path` values.
  *
  * `notifications` sits directly under `run-watcher` because the two are about the same thing from an
  * operator's side: whether an unattended run can be started unattended and then be *heard from*. The
@@ -6115,6 +6176,7 @@ export const CHECKS: readonly Check[] = Object.freeze([
   TASK_OFFER_RULES_CHECK,
   LAYER_PROFILE_CHECK,
   LAYER_DRIFT_CHECK,
+  TREE_GUARDS_CHECK,
   IGNORE_RULES_CHECK,
   PLUGIN_WIRING_CHECK,
   PROFILE_CHECK,
