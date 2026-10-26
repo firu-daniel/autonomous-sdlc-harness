@@ -32,3 +32,9 @@ The likely cause is a transient condition on the gate host during part of the ru
   - **The refusal line, the record or a retry:** the fault is in `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_keep_awake_hold_var`, or in `cli/templates/scripts/autonomous-watcher.sh` → `keep_awake_start` / `keep_awake_pass`. Fix it there, and record under **Deviations from plan:** that the `general`-layer mirror (`scripts/autonomous-watcher.sh`, `scripts/lib/harness-run-lib.sh`) needs the same edit until `cmp` exits 0.
   - **A bare timeout:** record it under **Deviations from plan:** as the next round's evidence, and change nothing.
 - [ ] If the case passes against the current tree, the finding closes through `unit_loop_core.md` → `#### The already-passing close`.
+
+## Already passing
+
+- **(a) Named test and file run:** `(i) Linux: a refused lock logs once, still launches, and is never retried on mains`, in `cli/test/watcher-keep-awake.test.mjs`, on `b6ff577b` (`cli` layer dispatch).
+- **(b) Command and result:** `npm test --workspace cli -- test/watcher-keep-awake.test.mjs`, from the repository root, foreground. The named test reported `ok 7 - (i) Linux: a refused lock logs once, still launches, and is never retried on mains` (`duration_ms: 18866.320042`). The file summary was `# tests 9`, `# pass 9`, `# fail 0`, `# duration_ms 138752.657416`. This agrees with the finding's diagnosis: a transient condition on the gate host, not a defect in the tree.
+- **(c) No code file edited:** this section is the only change. `cli/templates/scripts/autonomous-watcher.sh`, `cli/templates/scripts/lib/harness-run-lib.sh` and their `scripts/` mirrors are untouched, so the `general` layer has nothing to copy.
