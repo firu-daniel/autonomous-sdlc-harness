@@ -97,6 +97,9 @@ const REPEAT_PAUSE_WAIT_TENTHS = scaleBound(600);
 /** The stub's ceiling, in tenths of a second, for a PAUSE the case expects. */
 const PAUSE_WAIT_TENTHS = scaleBound(100);
 
+/** How many 100 ms polls the killed-job case makes for its job's start record and launch, before failing. */
+const START_WAIT_POLLS = scaleBound(100);
+
 function shellQuote(value) {
   return `'${value.replaceAll("'", `'\\''`)}'`;
 }
@@ -597,7 +600,7 @@ test('a job killed mid-run leaves running / continue', async (t) => {
   const exited = new Promise((resolve) => child.once('exit', resolve));
   try {
     let seen = false;
-    for (let i = 0; i < scaleBound(100) && !seen; i += 1) {
+    for (let i = 0; i < START_WAIT_POLLS && !seen; i += 1) {
       await delay(100);
       seen = existsSync(j.remoteStatus) && j.argv() !== null;
     }
