@@ -34,3 +34,9 @@ The likely cause is a transient condition on the gate host during part of the ru
   - **A `host-wake:` or `measuring silence from the wake` line, a premature kill, or a missing kill on the second pass:** the fault is in `cli/templates/scripts/autonomous-watcher.sh` → `host_wake_pass` or `check_stalled_runs`'s `since` / `staleness` arithmetic. Fix it there, and record under **Deviations from plan:** that the `general`-layer mirror `scripts/autonomous-watcher.sh` needs the same edit until `cmp` exits 0.
   - **A bare timeout:** record it under **Deviations from plan:** as the next round's evidence, and change nothing.
 - [ ] If the case passes against the current tree, the finding closes through `unit_loop_core.md` → `#### The already-passing close`.
+
+## Already passing
+
+- **(a) Named test and file run:** `(a)(b) a long host sleep is not silence at the first pass after wake; a full awake window after it still kills`, in `cli/test/watcher-stall-host-sleep.test.mjs`, run against `fb680bd9`.
+- **(b) Command and result:** `npm test --workspace cli -- test/watcher-stall-host-sleep.test.mjs` from the repository root, in the foreground. The named test reported `ok 1 - (a)(b) a long host sleep is not silence at the first pass after wake; a full awake window after it still kills` (`duration_ms: 16761.069917`). The whole file reported `# tests 3`, `# pass 3`, `# fail 0`.
+- **(c) No code file was edited.** This record is the only write.
