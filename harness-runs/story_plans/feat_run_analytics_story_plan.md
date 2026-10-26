@@ -30,7 +30,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_run_an
 3. [x] **Task 3** — Drive the two programs from `run-analytics.sh`: paths, suspend intervals, idempotent merge, byte-stable write _(layer: cli)_ _(points: 20)_
 4. [x] **Task 4** — Ship the three files through `OUTER_LOOP_SCRIPTS` and add the `run_analytics` artifact directory _(layer: cli)_ _(points: 20)_
 5. [x] **Task 5** — Record and commit run analytics after every session in `autonomous-watcher.sh` → `spawn_engine` _(layer: cli)_ _(points: 15)_
-6. [ ] **Task 6** — Pin the script's metrics and idempotence in `cli/test/run-analytics.test.mjs` over a two-session fixture stream _(layer: cli)_ _(points: 20)_
+6. [x] **Task 6** — Pin the script's metrics and idempotence in `cli/test/run-analytics.test.mjs` over a two-session fixture stream _(layer: cli)_ _(points: 20)_
 7. [ ] **Task 7** — Pin the watcher hook in `cli/test/watcher-run-analytics.test.mjs`: committed after a session, never changing the outcome _(layer: cli)_ _(points: 15)_
 8. [ ] **Task 8** — Show the run-analytics digest in `/autonomous-sdlc-harness:branch-status` and name the new script in the plugin's script lists _(layer: plugin)_ _(points: 15)_
 9. [ ] **Task 9** — Mirror the shipped run-analytics files into this repository's `scripts/` and `harness-runs/` _(layer: general)_ _(points: 10)_

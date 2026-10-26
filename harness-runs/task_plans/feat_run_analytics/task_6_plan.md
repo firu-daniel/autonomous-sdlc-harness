@@ -23,3 +23,9 @@
 
 - `npm test --workspace cli -- test/run-analytics.test.mjs`, as one plain foreground command from the repository root, passes, and its captured counts show every case ran (`# fail 0`, a non-zero `# pass`).
 - `grep -nE '/(Users|home|private|tmp|var)/' cli/test/fixtures/run-analytics-two-sessions.jsonl` finds nothing.
+
+**Deviations from plan:**
+
+- **The main-checkout `Bash` call is issued three times, not once.** A session record carries a Bash command only in `tools.polling` (`lib/run-analytics.jq` → `finalize`: `tools.items` has no `command` key), and the Markdown renders commands only from `polling` (`lib/run-analytics-report.jq`, the polling table). A single `@MAIN_REPO@/scripts/y.sh` call would therefore appear in neither output, and the plan's assertion that it shows as `<main_repo>/scripts/y.sh` could not be made. With three calls it forms a second polling entry (`count: 3`, `total_ms: 3000`), and the suite asserts it in both files.
+- **The `api_retry` event carries no timestamp**, as no `system` event does in the measured streams (Task 1's deviation note). This keeps the next request's `latency_ms` measured from the last timestamped event (00:05:11 → 00:05:15 = 4 000 ms) rather than from the retry.
+- **Session 1's result is at 00:20:00**, so its wall span (1 200 000 ms) can exceed `duration_ms` by 600 000. That makes a second idle gap (00:05:22, 878 000 ms, class `unknown`). The suite asserts it, and also asserts that the suspend interval leaves it as `unknown`.
