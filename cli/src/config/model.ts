@@ -14,8 +14,9 @@
  * `docs/config.md` §5's key reference — those four are one contract in four places.
  *
  * Paths: every string path in this model is **repo-relative** (`docs/config.md` §5), except
- * `$schema`, which resolves relative to the config file's own location, and
- * `parity.referenceImplPath`, which may be absolute. Both say so in their own doc comment.
+ * `$schema`, which resolves relative to the config file's own location,
+ * `parity.referenceImplPath`, which may be absolute, and `treeGuards[].test`, which is the argument
+ * the single-file test command takes. Each says so in its own doc comment.
  */
 
 /** The config file's name, at the adopting repository's root. */
@@ -171,6 +172,14 @@ export interface HarnessSandbox {
   readonly optOut?: HarnessSandboxOptOut;
 }
 
+/** One test file a change under a glob must run. Read through {@link configuredTreeGuards}. */
+export interface HarnessTreeGuard {
+  /** The argument the single-file test command takes, verbatim — **not necessarily** repo-relative. */
+  readonly test: string;
+  /** Repo-relative glob of the paths this test guards: `**` zero or more whole segments, `*` within one segment, `?` one character within one segment. */
+  readonly covers: string;
+}
+
 /**
  * `harness.config.json`, in memory.
  *
@@ -230,6 +239,8 @@ export interface HarnessConfig {
   execution?: HarnessExecution;
   /** Unattended-run Bash-sandbox settings. */
   sandbox?: HarnessSandbox;
+  /** Test files a change touching a covered path must run; absent means none. */
+  treeGuards?: readonly HarnessTreeGuard[];
 }
 
 /**
@@ -250,8 +261,9 @@ export interface HarnessConfig {
  *
  * `execution` is the one section here that no generator seeds: `buildConfig` writes no `execution`
  * key, so a fresh `init` file is unchanged, and {@link remoteExecutionApplies} falls back to
- * `execution.target` below instead. `sandbox` is the same: no generator seeds it, and
- * {@link sandboxAllowedDomains} falls back to `sandbox.allowedDomains` below.
+ * `execution.target` below instead. `sandbox` and `treeGuards` are the same: no generator seeds
+ * either, and {@link sandboxAllowedDomains} and {@link configuredTreeGuards} fall back to
+ * `sandbox.allowedDomains` and `treeGuards` below.
  *
  * `scriptsDir` is the one key whose generated value differs from its default: `init` writes
  * {@link INIT_SCRIPTS_DIR}, while the value here stays the absent-key meaning every reader falls
@@ -275,6 +287,7 @@ export const DEFAULTS = {
   qa: { driver: 'web-playwright', portSeed: 3001 },
   execution: { target: 'local', progressComments: true, keepAwake: true },
   sandbox: { allowedDomains: [] },
+  treeGuards: [],
 } as const;
 
 /**
@@ -727,6 +740,11 @@ export function sandboxOptedOut(config: HarnessConfig): boolean {
  */
 export function sandboxAllowedDomains(config: HarnessConfig): readonly HarnessSandboxDomain[] {
   return config.sandbox?.allowedDomains ?? DEFAULTS.sandbox.allowedDomains;
+}
+
+/** The configured tree guards; an absent key is none. Import it; do not re-spell the fallback. */
+export function configuredTreeGuards(config: HarnessConfig): readonly HarnessTreeGuard[] {
+  return config.treeGuards ?? DEFAULTS.treeGuards;
 }
 
 /** The schema's `qa.portSeed` bounds, mirrored verbatim. */
