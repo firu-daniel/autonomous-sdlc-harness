@@ -34,7 +34,7 @@ The other claims checked out:
 
 Each entry resolves to a self-contained `harness-runs/skeptic_reviews/feat_run_analytics_skeptic_review/finding_<K>.md` file via its `**Finding K**` reference. Sorted lowest blast-radius first; the leading `N.` is the fix order and `K` is the finding's stable number.
 
-1. [ ] **Finding 1** — Commit this repository's `scripts/run-analytics.sh` mirror with its executable bit (`100755`) _(layer: general)_
+1. [x] **Finding 1** — Commit this repository's `scripts/run-analytics.sh` mirror with its executable bit (`100755`) _(layer: general)_
 2. [ ] **Finding 2** — Rewrite the `branch-status` digest's lead-in so each arm reads its own source, and strip the trailing `/` from `<state_dir>` in the `git show` path _(layer: plugin)_
 
 ---
