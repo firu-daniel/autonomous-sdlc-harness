@@ -27,3 +27,10 @@ The hook as written emits that line once and returns 0.
 - [ ] If the named subtest passes as the tree stands, edit no code.
 - [ ] If it still fails once Findings 2 and 3 pass, there are two likely causes. One is a second matching log line, for example the `log` text repeated by a retry. The other is an outcome difference: the failed analytics step changed the record or a notification. Correct `record_run_analytics()` in `cli/templates/scripts/autonomous-watcher.sh` so it logs exactly one line, returns 0 and leaves `rc` untouched, and make the identical edit in `scripts/autonomous-watcher.sh`.
 - [ ] Do not weaken the test.
+
+## Already passing
+
+- **(a) Named test and file run:** subtest `a run-analytics.sh that exits 1 changes neither the status nor the notifications` under parent `the session's analytics are committed on the run's branch, and a failing step changes no outcome`, in `cli/test/watcher-run-analytics.test.mjs`, run as the whole file (no name pattern).
+- **(b) Command and result:** `npm test --workspace cli -- test/watcher-run-analytics.test.mjs` from the repository root (pretest build ran first). The named subtest reported `ok 3 - a run-analytics.sh that exits 1 changes neither the status nor the notifications`. File summary: `# tests 5`, `# pass 5`, `# fail 0`. The two subtests before it on the shared fixture, `ok 1` (launch) and `ok 2` (resume, which sets `resumeBaseline`), also passed. That fits the suspected shared cause with Findings 2 and 3, which were closed already passing in commits `996c1f5a` and `73766b86`.
+- **(c) No code file edited:** this detail file is the only write. `git status --short` was empty before this record was appended.
+- **Re-verified on re-dispatch:** the same command, run again, again reported `ok 3 - a run-analytics.sh that exits 1 changes neither the status nor the notifications`, with `# tests 5`, `# pass 5`, `# fail 0`. `git status --short` listed only this file.
