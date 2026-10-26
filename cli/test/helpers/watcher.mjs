@@ -25,7 +25,9 @@
  * 4. **`tick` is bounded at {@link TICK_TIMEOUT_MS}**, through `runBash`'s process-group bound
  *    (`fixture.mjs`, choice 6), and by the test's own `t.signal`. A pass plus its `wait` for a stub
  *    that sleeps under a second is far below it. A case whose single pass launches more than one
- *    session may pass a larger bound through `tick`'s `timeoutMs`. Any bound stays below the suite's
+ *    session may pass a larger bound through `tick`'s `timeoutMs`. That bound and any `timeoutMs` a
+ *    case passes are scaled by `HARNESS_TEST_TIME_SCALE` (`./timing.mjs`) — `tick` does not scale a
+ *    passed `timeoutMs`, so its caller does — and at that variable's cap both stay below the suite's
  *    `--test-timeout` (`cli/package.json` → `scripts.test`, 1 800 000 ms) so a hung pass fails naming
  *    its command, and its session and `sleep`s are killed with it.
  * 5. **`tick` overrides the sourced sandbox probe** (`hr_sandbox_prereq_probe_var`) with
@@ -48,6 +50,7 @@ import { chmod, mkdir, readdir, writeFile } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
 
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli } from './fixture.mjs';
+import { scaleBound } from './timing.mjs';
 
 const STATE_DIR = 'sdlc-harness';
 const WATCHER_PATH = `${INIT_SCRIPTS_DIR}/autonomous-watcher.sh`;
@@ -59,8 +62,8 @@ const WATCHER_LOG_PATH = `${STATE_DIR}/autonomous_logs/watcher.log`;
 const RECORDER_DIR = 'watcher-test';
 const PROMPT_DELIMITER = '----- end of prompt -----';
 
-/** One watcher pass's bound (choice 4 in the module header). */
-const TICK_TIMEOUT_MS = 60_000;
+/** One watcher pass's bound, scaled (choice 4 in the module header). */
+export const TICK_TIMEOUT_MS = scaleBound(60_000);
 
 /** The body `tick` gives the sourced probe unless a case passes its own (choice 5). */
 export const DEFAULT_SANDBOX_PROBE = 'HR_SANDBOX_HOST=macos; HR_SANDBOX_MISSING=; HR_SANDBOX_REFUSAL=; return 0';
