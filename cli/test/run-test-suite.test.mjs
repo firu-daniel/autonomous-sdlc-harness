@@ -28,6 +28,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import { createFixture, runBash, runCli, runGit, snapshotTree } from './helpers/fixture.mjs';
+import { scaleBound } from './helpers/timing.mjs';
 
 const STATE_DIR = 'sdlc-harness';
 /** Stays `scripts` on purpose: `seededConfig()` omits `scriptsDir`, so `init` writes there, the absent key's value. */
@@ -88,8 +89,11 @@ const GATE_MARKER = Object.freeze({
   testExited: (status) => `== run-test-suite.sh: gate test exited ${status} ==`,
 });
 
-/** How many times a case re-checks for a state the wrapper is expected to reach, before failing. */
-const POLL_LIMIT = 600;
+/**
+ * How many times a case re-checks for a state the wrapper is expected to reach, before failing — in
+ * both `pollUntil` and `drainWorker`. The attempt budget is scaled by `HARNESS_TEST_TIME_SCALE`.
+ */
+const POLL_LIMIT = scaleBound(600);
 
 function seededConfig({ typecheck = 'echo typecheck' } = {}) {
   return {

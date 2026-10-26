@@ -38,7 +38,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_run_gates_flake_resilie
 
 1. [x] **Task 1** — Add the `HARNESS_TEST_TIME_SCALE` helper `cli/test/helpers/timing.mjs`, scale and export `TICK_TIMEOUT_MS`, and test the helper _(layer: cli)_ _(points: 20)_
 2. [x] **Task 2** — Scale the watcher suites' ceilings through `scaleBound` _(layer: cli)_ _(points: 20)_
-3. [ ] **Task 3** — Scale the remaining suites' ceilings through `scaleBound` _(layer: cli)_ _(points: 15)_
+3. [x] **Task 3** — Scale the remaining suites' ceilings through `scaleBound` _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — Document `HARNESS_TEST_TIME_SCALE` in `docs/development.md` → Gate 4 _(layer: general)_ _(points: 10)_
 
 ## Scope register

@@ -95,6 +95,7 @@ import {
   PACKAGE_ROOT,
   WORKSPACE_ROOT,
 } from './helpers/fixture.mjs';
+import { scaleBound } from './helpers/timing.mjs';
 import { PUSH_DESTINATION_FORMS } from '../dist/generators/notifications.js';
 
 /** The generated artifacts this file addresses by name — the contract, spelled out once. */
@@ -550,9 +551,15 @@ function alive(pid) {
   }
 }
 
-/** Poll a predicate for up to two seconds: the observable belongs to another process. */
+/** `eventually`'s attempt budget at its 20 ms cadence. */
+const EVENTUALLY_ATTEMPTS = scaleBound(100);
+
+/**
+ * Poll a predicate for up to two seconds times `HARNESS_TEST_TIME_SCALE`: the observable belongs to
+ * another process.
+ */
 async function eventually(check, describe) {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  for (let attempt = 0; attempt < EVENTUALLY_ATTEMPTS; attempt += 1) {
     if (check()) return;
     await sleep(20);
   }

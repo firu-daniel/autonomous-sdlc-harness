@@ -32,6 +32,10 @@ import {
   snapshotTree,
   writeRetrievalConfig,
 } from './helpers/fixture.mjs';
+import { scaleBound } from './helpers/timing.mjs';
+
+/** `waitForStderr`'s attempt budget at its 20 ms cadence. */
+const STDERR_WAIT_ATTEMPTS = scaleBound(100);
 
 const FENCE = '```';
 
@@ -300,7 +304,7 @@ async function withServer(fixture, body, extraEnv = {}) {
 
 /** Poll `read` until it matches `pattern` or the budget runs out; the server's stderr is a second pipe. */
 async function waitForStderr(read, pattern) {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  for (let attempt = 0; attempt < STDERR_WAIT_ATTEMPTS; attempt += 1) {
     if (pattern.test(read())) return read();
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
