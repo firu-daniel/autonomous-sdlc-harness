@@ -30,3 +30,9 @@ The likely cause is a transient condition on the gate host during part of the ru
   - **A `host-wake:` line from an absent or non-integer file, or a deferred kill:** the fault is in `cli/templates/scripts/autonomous-watcher.sh` → `host_wake_pass`'s or `check_stalled_runs`'s integer screens. Fix it there, and record under **Deviations from plan:** that the `general`-layer mirror `scripts/autonomous-watcher.sh` needs the same edit until `cmp` exits 0.
   - **A bare timeout:** record it under **Deviations from plan:** as the next round's evidence, and change nothing.
 - [ ] If the case passes against the current tree, the finding closes through `unit_loop_core.md` → `#### The already-passing close`.
+
+## Already passing
+
+- **(a) Named test and file run:** `(d) a missing or non-integer last-pass file records no wake and never defers a kill`, in `cli/test/watcher-stall-host-sleep.test.mjs`, run on `79aa5c3f`.
+- **(b) Command and result:** `npm test --workspace cli -- test/watcher-stall-host-sleep.test.mjs`, from the repository root, in the foreground: `ok 3 - (d) a missing or non-integer last-pass file records no wake and never defers a kill` (`duration_ms: 12545.233583`); file totals `# tests 3`, `# pass 3`, `# fail 0`.
+- **(c) No code file edited:** neither `cli/templates/scripts/autonomous-watcher.sh` nor its mirror `scripts/autonomous-watcher.sh`, nor any other code file, was changed; this record is the only write.
