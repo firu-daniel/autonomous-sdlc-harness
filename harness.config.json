@@ -64,6 +64,10 @@
     {
       "test": "test/retrieval-loading.test.mjs",
       "covers": "cli/src/**/*.ts"
+    },
+    {
+      "test": "test/watcher-main-anchor.test.mjs",
+      "covers": "cli/templates/scripts/**"
     }
   ]
 }

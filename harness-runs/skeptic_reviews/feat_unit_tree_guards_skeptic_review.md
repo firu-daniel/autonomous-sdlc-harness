@@ -24,7 +24,7 @@ No parity review exists, because `phases.parity` is `false`.
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Register `watcher-main-anchor.test.mjs` as a fourth tree guard over `cli/templates/scripts/**` _(layer: general)_
+1. [x] **Finding 1** — Register `watcher-main-anchor.test.mjs` as a fourth tree guard over `cli/templates/scripts/**` _(layer: general)_
 
 ---
 
