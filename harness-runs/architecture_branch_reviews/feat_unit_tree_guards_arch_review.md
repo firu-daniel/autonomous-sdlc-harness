@@ -9,7 +9,7 @@ Headline: the CLI half is placed correctly. The new key lands in the schema, mod
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 1** — The tree-guard registration rule has no owner; four agents restate it and cite a point that does not carry it _(layer: plugin)_
-2. [ ] **Finding 2** — `docs/config.md` §5's repo-relative paragraph still lists two exceptions, not three _(layer: general)_
+2. [x] **Finding 2** — `docs/config.md` §5's repo-relative paragraph still lists two exceptions, not three _(layer: general)_
 
 ## Must Fix
 
