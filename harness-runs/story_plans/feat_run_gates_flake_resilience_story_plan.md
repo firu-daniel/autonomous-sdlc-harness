@@ -36,7 +36,7 @@ Once `fix_headless_run_host_sleep` is rebased, its suites adopt the multiplier t
 
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_run_gates_flake_resilience/task_<K>_plan.md`. The entries are ordered bottom-up by ship sequence, with the catch-all layer last.
 
-1. [ ] **Task 1** — Add the `HARNESS_TEST_TIME_SCALE` helper `cli/test/helpers/timing.mjs`, scale and export `TICK_TIMEOUT_MS`, and test the helper _(layer: cli)_ _(points: 20)_
+1. [x] **Task 1** — Add the `HARNESS_TEST_TIME_SCALE` helper `cli/test/helpers/timing.mjs`, scale and export `TICK_TIMEOUT_MS`, and test the helper _(layer: cli)_ _(points: 20)_
 2. [ ] **Task 2** — Scale the watcher suites' ceilings through `scaleBound` _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Scale the remaining suites' ceilings through `scaleBound` _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — Document `HARNESS_TEST_TIME_SCALE` in `docs/development.md` → Gate 4 _(layer: general)_ _(points: 10)_
