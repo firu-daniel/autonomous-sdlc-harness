@@ -1,0 +1,41 @@
+### Task 5 — Add the gates, mktemp, scratch and retrieval legs
+
+**Goal:** Add the four simplest legs. Each measures what a sandboxed session in the probe clone does and prints one result line per row.
+
+**Depends on:**
+- **Task 1** — `SP_LEGS`, `sp_result_line`.
+- **Task 3** — `sp_judge_call`, `sp_judge_mcp`, which set `SP_VERDICT`/`SP_LAYER`/`SP_EVIDENCE`.
+- **Task 4** — `sp_session`, `sp_prompt_new`/`sp_prompt_bash`, `sp_departures`, and `SP_CLONE`, `SP_RUN_PROFILE`, `SP_MAIN`.
+- **Task 2** — which sources the run library `scripts/lib/harness-run-lib.sh` from `<root>/scripts/lib/`; this leg calls its `hr_state_dir <root>`, which prints `stateDir` normalized with no trailing slash.
+- **Task 19** — for SR2, the one refusal row in this file: `sp_ctl_prepare <tag>` (used without a control clone, it only clears the session's control list), `sp_ctl_add <prompt file> written <exact command> <path>` (holds when `sp_judge_call … ran` passes and `<path>` exists afterwards; it passes `<path>` to `sp_track`), `sp_ctl_held <stream>`, which sets `SP_CTL_OK` / `SP_CTL_EVIDENCE`, and `sp_row_result [--direct] <leg> <row> <verdict> <evidence> <departure>`, which prints `not run` with evidence `control did not succeed: …` when the session's control did not hold, and with `--direct` prints a `fail` whatever the control did. This task never calls `sp_ctl_clone`.
+
+### Targets
+
+- `scripts/lib/sandbox-probe/legs-local.sh` (new) — `sp_leg_gates`, `sp_leg_mktemp`, `sp_leg_scratch`, `sp_leg_retrieval`. It opens with `#!/usr/bin/env bash` and a `# legs-local.sh — …` header, and sets no shell option (no `set`, no `shopt`): the entry point owns `set -u` (Task 1; `.claude/context/conventions.md` → `## Shell assets`, *"A sourced library sets no shell options at all"*).
+
+**Work:**
+
+- [ ] **`sp_leg_gates` (T2, W7).**
+  - T2: one session, cwd `SP_CLONE`, one exact call `bash scripts/test.sh`. Expect `ran`, judged by `sp_judge_call`. The evidence is the result's first line; a line containing `mkstemp failed` or `Operation not permitted` is a `fail`.
+  - W7: the gates leg also measures the script-allowlist twin. Through `--allowedTools` for none (these are auto-allowed), issue `bash <clone>/scripts/typecheck.sh` and `bash <clone>/scripts/test.sh` three times each — no argument, one plain argument, and the single argument `'<probe>'` (the literal four characters), exactly as row W7 prescribes. Expect `ran` with no permission denial; a denial on a `'<probe>'` call alone is a `fail`. Name in the evidence that the first two of each are guard-granted and only the `'<probe>'` call tests the per-run twin.
+- [ ] **`sp_leg_mktemp` (TD2).** One session through `--allowedTools "Bash(mktemp:*)"`, four exact calls:
+  - `mktemp`, `mktemp -d`, `mktemp -t harness-gates`, and the explicit `mktemp "${TMPDIR:-/tmp}/harness-gates.XXXXXX"`.
+
+  Expect the bare, `-d` and `-t` forms refused at the `sandbox` layer with `mkstemp failed … Operation not permitted`; the explicit form `ran`, writing under the session's `TMPDIR`. One result line for TD2, `pass` only when all four match. The `--allowedTools` rule is the departure.
+- [ ] **`sp_leg_scratch` (SR1, SR2).**
+  - **Where the scratch file goes.** The scratch root is `<stateDir>/scratch/`, and `stateDir` is resolved by the run library, never written as a literal here (`.claude/context/conventions.md` → `## Configuration is the source of truth, and it is read at run time`). Inside the leg, compute the file's repo-relative path once, `scratch_rel="$(hr_state_dir "$SP_CLONE")/scratch/sbx_probe.sh"`, and its absolute path `"$SP_CLONE/$scratch_rel"`. A non-zero status from `hr_state_dir` prints `not run` for SR1 and SR2 with the evidence `stateDir unresolvable in the clone`. The session's call text carries the **resolved** path; the leg file carries no state-directory literal.
+  - **The file's body**, written by the probe before the session (outside any session) at `"$SP_CLONE/$scratch_rel"`, and passed to `sp_track`. In this order: print the marker line `sbx_sr1_ran`; write the in-root marker `<SP_CLONE>/sbx_sr1_marker` (the clone path written into the body as a resolved literal when the probe writes the file); then attempt the write outside the allowed roots, `: > "$HOME/sbx_probe_scratch_marker"`. `sp_track "$HOME/sbx_probe_scratch_marker"`.
+  - **One session, one exact call, which is SR1's measurement and SR2's positive control at once.** Before the session, `sp_ctl_prepare scratch`. The call is added with `sp_ctl_add <prompt> written "bash scripts/scratch-run.sh <scratch_rel>" "$SP_CLONE/sbx_sr1_marker"`, built from the resolved value. That control holds only when the call ran and the in-root marker exists afterwards, so it holds exactly when the scratch file itself ran. After the session, `sp_ctl_held "$SP_STREAM"`.
+  - SR1: expect `ran`, and the call's result carrying the line `sbx_sr1_ran`; the evidence is that line. SR1 is not a refusal row and is printed through `sp_result_line`.
+  - SR2: the mutation check. Expect the outside write refused from inside the file. The verdict is `fail` when `$HOME/sbx_probe_scratch_marker` exists afterwards (a write that landed), `pass` when it does not. It is printed through `sp_row_result --direct scratch SR2 …`: an outside marker that exists is direct evidence and prints `fail` whatever the control did, while a `pass` prints only when the control held, and otherwise SR2 prints `not run` with `control did not succeed: …`. So a session that never issued the scratch call, a `scratch-run.sh` that refused the path, or a broken launch can never read as SR2 `pass`.
+- [ ] **`sp_leg_retrieval` (MC1).** The docs-retrieval MCP server runs outside the sandbox by design; record that it started and answered.
+  - If neither `<clone>/.mcp.json` nor `<main>/.mcp.json` names a `harness-docs` server, print `not run` with evidence `no harness-docs server in .mcp.json (docs retrieval is not wired in this repository)`. This is the state of this repository (`harness.config.json` → `phases.docs` is `false`), so the leg is a no-op here and the row stays *not yet measured*.
+  - Otherwise one session issuing one `mcp__harness-docs__search_docs` call, judged by `sp_judge_mcp`. Expect it started and answered.
+
+**Verification:**
+
+- Grep `legs-local.sh`: each `sp_leg_*` ends by printing exactly its table rows, and names its `--allowedTools` departures in the line. T2, W7, TD2, SR1 and MC1 print through `sp_result_line`; SR2 prints through `sp_row_result --direct`, after an `sp_ctl_held` over the scratch session's stream.
+- Read `sp_leg_scratch`: the scratch call is the session's `sp_ctl_add … written` control, its `<path>` is the in-root marker the file writes, and no branch prints SR2 `pass` except through `sp_row_result`.
+- `grep -n 'harness-runs' scripts/lib/sandbox-probe/legs-local.sh` finds no match: the scratch path is derived from `hr_state_dir "$SP_CLONE"` at run time.
+- `bash scripts/sandbox-probe.sh --list` still lists `gates`, `mktemp`, `scratch`, `retrieval` with the rows above (unchanged from Task 1).
+- No session is launched here. These legs are exercised only when a person runs the probe.
