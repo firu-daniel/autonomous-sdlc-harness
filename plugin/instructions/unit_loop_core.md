@@ -160,6 +160,11 @@ A row-`G.4` layer whose return carries `already passing — ` — full form `blo
    - **A skip** — no command stated, the command refused, or the run moved to the background takes point 3's skip and point 6's foreground rule unchanged.
 
    No `<tree_guards>` entries, or no selected guard, adds no run.
+8. **A tree-reading test registers itself.**
+   - **The rule** — a test that reads a tree of repository files as text, rather than one module or one fixed file, has its `<tree_guards>` entry added to `harness.config.json` in the same change, or by a later catch-all-layer task the adding task names.
+   - **The boundary** — a test reading one fixed file is not a tree guard and owes no entry.
+   - **The plan** — the task that adds such a test names, in its own file, the task that adds its entry.
+   - **The grading** — a missing registration is a **Must Fix** for every reviewer: a plan whose adding task names no registering task, a unit whose diff adds no entry and whose task file names no registering task, a branch whose diff adds no entry.
 
 **Who may cite this.** These documents point at this heading:
 

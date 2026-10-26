@@ -102,7 +102,7 @@ Read the file the dispatched `layers[].conventions` value names and review again
 
 **Architecture** — a responsibility in a layer the conventions document does not put it in; a boundary it draws crossed; a shared component, helper or constant hand-rolled when the project ships one (`<convention_symbols>`); a unit doing more than its layer's contract allows.
 
-**Testing** — a new unit of behaviour landing without the test the conventions document requires (**Must Fix — no exceptions**); a test the unit adds that reads a tree of repository files as text (rather than one module or one fixed file) when neither the unit's own diff adds its `treeGuards` entry nor `<task_file>` names the task that registers it (**Should Fix**, `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule` point 7); a test off the `<impl_stack>` test-runner and mocking idiom that document states.
+**Testing** — a new unit of behaviour landing without the test the conventions document requires (**Must Fix — no exceptions**); a tree-reading test the unit adds with no registration in its own diff or `<task_file>` (**Must Fix**, `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule` point 8); a test off the `<impl_stack>` test-runner and mocking idiom that document states.
 
 **Required-set completeness** — where the conventions document defines a set that must accompany a change (a new page's touch-points, a module's registry entries, a string's localization files), **each missing item is its own Must Fix**, not one aggregate finding.
 
