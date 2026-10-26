@@ -10,7 +10,11 @@
 # as through (`hr_ledger_phases`), answers whether the sandbox opt-out is taken
 # (`hr_sandbox_opted_out`) and whether this host has a definite missing sandbox
 # prerequisite (`hr_sandbox_prereq_probe_var`, judged by
-# `hr_sandbox_prereq_judge_var`), places a dropped
+# `hr_sandbox_prereq_judge_var`, which classifies through `hr_host_kind_var`),
+# answers whether a launch holds the host awake (`hr_keep_awake`,
+# `hr_keep_awake_probe_var`, `hr_keep_awake_mode_var`), whether it is on mains
+# power (`hr_on_mains_power`) and starts that hold (`hr_keep_awake_hold_var`),
+# places a dropped
 # artifact in a working copy and commits and pushes it, and derives the
 # anchors (main checkout, work root, worktree directory, repo slug,
 # state-dir paths) the scripts would otherwise each re-derive slightly
@@ -219,8 +223,9 @@
 #
 # MIRROR OF `cli/src/doctor/sandboxPrerequisites.ts` → `sandboxHostKind`,
 # `SANDBOX_HOST_BINARIES`, the missing-piece order, `SANDBOX_INSTALLERS` and
-# `WSL1_AGENT_MESSAGE`; `hr_sandbox_prereq_judge_var` codes them, the last two
-# into `HR_SANDBOX_REFUSAL`. AppArmor is not mirrored: no shell decision reads
+# `WSL1_AGENT_MESSAGE`; `hr_host_kind_var` codes the first, and
+# `hr_sandbox_prereq_judge_var` the rest, the last two into
+# `HR_SANDBOX_REFUSAL`. AppArmor is not mirrored: no shell decision reads
 # it.
 #
 # MIRROR OF `cli/src/doctor/checks.ts` → `probeSandboxHost`;
@@ -252,8 +257,12 @@
 # named where it is used. `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`,
 # `HOME` and `PWD` are also read, as location anchors only, and `PATH` is read by
 # `hr_path_with_fallbacks` alone — as that function's input, which it prints back
-# transformed and never assigns — beside `hr_sandbox_prereq_probe_var`'s
-# `command -v`, which resolves against it and never assigns it. `GITHUB_RUN_ID`, `GITHUB_SERVER_URL`,
+# transformed and never assigns — beside the `command -v` of
+# `hr_sandbox_prereq_probe_var`, `hr_keep_awake_probe_var` and
+# `hr_keep_awake_hold_var`, which resolves against it and never assigns it.
+# `GITHUB_ACTIONS` is read by `hr_keep_awake_mode_var` alone, to take no hold on
+# a runner, and `HR_POWER_SUPPLY_DIR` by `hr_on_mains_power` alone, as a test
+# seam no shipped script sets. `GITHUB_RUN_ID`, `GITHUB_SERVER_URL`,
 # `GITHUB_REPOSITORY` and `HARNESS_INPUT_CHAIN` are read by
 # `hr_remote_status_write` alone, as provenance values copied into
 # `status.json` — never a configured value and never policy.
@@ -389,7 +398,11 @@
 # `HR_CLONE_CONFIG_REFUSAL` and `HR_CLONE_RULE`, the watcher family's
 # `HR_RUN_COPY_KIND`, and the clone arm's sync's `HR_SYNC_TIP` and
 # `HR_SYNC_REFUSAL`, and the clone creation's `HR_CLONE_DIR` and
-# `HR_CLONE_REFUSAL`.
+# `HR_CLONE_REFUSAL`, and the host classifier's `HR_HOST_KIND`, and the
+# keep-awake section's `HR_KEEP_AWAKE_WHO` and `HR_KEEP_AWAKE_WHAT` (assigned
+# at source time), `HR_KEEP_AWAKE_HOST`, `HR_KEEP_AWAKE_TOOL`,
+# `HR_KEEP_AWAKE_MODE`, `HR_KEEP_AWAKE_REASON`, `HR_KEEP_AWAKE_QUIET`,
+# `HR_KEEP_AWAKE_STATE`, `HR_KEEP_AWAKE_PID` and `HR_KEEP_AWAKE_DETAIL`.
 # Every one of them is assigned
 # before it is read by the function that owns it, so an inherited value from a
 # parent process is overwritten rather than believed — except
@@ -1639,11 +1652,11 @@ hr_config_load() {
   # which is what lets an explicitly EMPTY list read as a configured set rather
   # than as an absent one.
   #
-  # A `phases.*`, `docs.retrieval` or `execution.progressComments` value that is
-  # not a boolean is emitted as `invalid`, so the string `"true"` — which
-  # `tostring` would otherwise make indistinguishable from `true` — reaches
-  # `hr_phase_enabled`, `hr_docs_retrieval_applies` or `hr_progress_comments` as
-  # a value it refuses (2).
+  # A `phases.*`, `docs.retrieval`, `execution.progressComments` or
+  # `execution.keepAwake` value that is not a boolean is emitted as `invalid`, so
+  # the string `"true"` — which `tostring` would otherwise make indistinguishable
+  # from `true` — reaches `hr_phase_enabled`, `hr_docs_retrieval_applies`,
+  # `hr_progress_comments` or `hr_keep_awake` as a value it refuses (2).
   #
   # `sandbox.optedOut` is a computed flag rather than the raw `reason`, because
   # `s()` drops `"null"` and `""` and the string `"null"` is a taken opt-out. Its
@@ -1685,6 +1698,8 @@ hr_config_load() {
       s("execution.target";      try .execution.target     catch null),
       s("execution.progressComments";
         try (.execution.progressComments | if type == "boolean" or . == null then . else "invalid" end) catch null),
+      s("execution.keepAwake";
+        try (.execution.keepAwake | if type == "boolean" or . == null then . else "invalid" end) catch null),
       s("docs.retrievalBackend"; try .docs.retrievalBackend catch null),
       s("docs.retrieval";        try (.docs.retrieval | if type == "boolean" or . == null then . else "invalid" end) catch null),
       s("forge";                 try .forge                catch null),
@@ -1995,6 +2010,24 @@ hr_progress_comments() {
   return 2
 }
 
+# `execution.keepAwake` — whether a run the local watcher launches holds this
+# host awake for its engine's life. THE ONE READER OF THE KEY IN THIS FAMILY,
+# and the shell mirror of `cli/src/config/model.ts` → `keepAwakeEnabled`.
+# PRINTS NOTHING: 0 = `true` or absent (the schema default); 1 = `false`; 2 =
+# the configuration is unresolvable or the value is not a boolean. The watcher
+# passes the MAIN checkout, never a run copy, whose `harness.config.json` the
+# sandbox can rewrite.
+hr_keep_awake() {
+  local root="${1-}"
+  hr_config_load "$root" || return 2
+  hr_cfg_scalar_var "execution.keepAwake" || return 0
+  case "$HR_CFG_VALUE" in
+    true) return 0 ;;
+    false) return 1 ;;
+  esac
+  return 2
+}
+
 # ---------------------------------------------------------------------------
 # The sandbox: the opt-out, and whether this host has a definite missing piece.
 # Mirrors of `sandboxOptedOut`, `sandboxPrerequisites.ts` and `probeSandboxHost`;
@@ -2015,6 +2048,32 @@ hr_sandbox_opted_out() {
   return 0
 }
 
+# Classify a host from <uname_s> <uname_r> into `HR_HOST_KIND`: `macos`,
+# `linux`, `wsl2`, `wsl1` or `unsupported`. Always 0. The shell mirror of
+# `cli/src/doctor/sandboxPrerequisites.ts` → `sandboxHostKind`, and the one WSL
+# detection in this file: the sandbox judge and the keep-awake probe both call it.
+hr_host_kind_var() {
+  local uname_s="${1-}" uname_r="${2-}"
+  HR_HOST_KIND=""
+  case "$uname_s" in
+    Darwin) HR_HOST_KIND="macos" ;;
+    Linux)
+      case "$uname_r" in
+        *[Mm][Ii][Cc][Rr][Oo][Ss][Oo][Ff][Tt]*)
+          case "$uname_r" in
+            *[Mm][Ii][Cc][Rr][Oo][Ss][Oo][Ff][Tt]-[Ss][Tt][Aa][Nn][Dd][Aa][Rr][Dd]*|*[Ww][Ss][Ll]2*)
+              HR_HOST_KIND="wsl2" ;;
+            *) HR_HOST_KIND="wsl1" ;;
+          esac
+          ;;
+        *) HR_HOST_KIND="linux" ;;
+      esac
+      ;;
+    *) HR_HOST_KIND="unsupported" ;;
+  esac
+  return 0
+}
+
 # Judge a host's facts: <uname_s> <uname_r> <bwrap> <socat>, each binary `1`
 # when it resolves and `0` when it does not. Pure and bash-3.2-safe. Sets
 # `HR_SANDBOX_HOST` (`macos`, `linux`, `wsl2`, `wsl1`, `unsupported`),
@@ -2027,22 +2086,8 @@ hr_sandbox_prereq_judge_var() {
   HR_SANDBOX_HOST=""
   HR_SANDBOX_MISSING=""
   HR_SANDBOX_REFUSAL=""
-  case "$uname_s" in
-    Darwin) HR_SANDBOX_HOST="macos" ;;
-    Linux)
-      case "$uname_r" in
-        *[Mm][Ii][Cc][Rr][Oo][Ss][Oo][Ff][Tt]*)
-          case "$uname_r" in
-            *[Mm][Ii][Cc][Rr][Oo][Ss][Oo][Ff][Tt]-[Ss][Tt][Aa][Nn][Dd][Aa][Rr][Dd]*|*[Ww][Ss][Ll]2*)
-              HR_SANDBOX_HOST="wsl2" ;;
-            *) HR_SANDBOX_HOST="wsl1" ;;
-          esac
-          ;;
-        *) HR_SANDBOX_HOST="linux" ;;
-      esac
-      ;;
-    *) HR_SANDBOX_HOST="unsupported" ;;
-  esac
+  hr_host_kind_var "$uname_s" "$uname_r"
+  HR_SANDBOX_HOST="$HR_HOST_KIND"
   case "$HR_SANDBOX_HOST" in
     unsupported)
       HR_SANDBOX_MISSING="unsupported-platform"
@@ -2086,6 +2131,221 @@ hr_sandbox_prereq_probe_var() {
   if command -v bwrap >/dev/null 2>&1; then have_bwrap=1; fi
   if command -v socat >/dev/null 2>&1; then have_socat=1; fi
   hr_sandbox_prereq_judge_var "$uname_s" "$uname_r" "$have_bwrap" "$have_socat"
+}
+
+# ---------------------------------------------------------------------------
+# KEEP AWAKE — which sleep hold a launch takes, whether this host is on mains
+# power, and the holder itself. Every function here sets variables or answers
+# through its status and logs nothing; the caller owns every line logged and
+# every registry field.
+#
+# THE HOLD WAITS ON ONE PID AND ENDS WITH IT, so it can never outlive the run:
+# `caffeinate -w <pid>` exits when that pid does, and the logind holder's
+# command is a loop that exits when `kill -0 <pid>` first fails, releasing the
+# lock with it.
+#
+# EVERY HOLDER'S STDIO IS DETACHED (`</dev/null >/dev/null 2>&1`), so a holder
+# can never keep the launch pipe open after the engine has exited.
+#
+# `-s` IS AC-ONLY, by `man caffeinate`, so the macOS hold takes no power probe:
+# on battery its system-sleep assertion lapses by itself.
+#
+# BOTH LOGIND LOCK KINDS ARE NEEDED. `sleep` alone does not stop a lid close
+# where `LidSwitchIgnoreInhibited=yes` (`man logind.conf`), which makes a closed
+# lid ignore a plain `sleep` lock; `handle-lid-switch` is the lock that covers
+# it. `hr_on_mains_power` gates the Linux hold so a laptop on battery still
+# sleeps on a closed lid.
+#
+# THE WAITER IS A POSIX LOOP, NOT GNU `tail --pid`, because the same code runs
+# under macOS's BSD userland in tests.
+#
+# A REFUSED LOCK IS NEVER RETRIED HERE. A probe that exits non-zero — logind not
+# answering inside `timeout 10`, or polkit refusing the lock — is `refused`, and
+# whether to try again is the caller's.
+#
+# `HR_KEEP_AWAKE_WHO` and `HR_KEEP_AWAKE_WHAT` mirror `KEEP_AWAKE_WHO` and
+# `KEEP_AWAKE_WHAT` in `cli/src/doctor/keepAwake.ts`; a change to either is an
+# edit there.
+# ---------------------------------------------------------------------------
+
+HR_KEEP_AWAKE_WHO='autonomous-sdlc-harness'
+HR_KEEP_AWAKE_WHAT='sleep:handle-lid-switch'
+
+# Probe this host for the keep-awake decision. Sets `HR_KEEP_AWAKE_HOST` (an
+# `HR_HOST_KIND` value; `unsupported` when `uname -s` or `uname -r` fails) and
+# `HR_KEEP_AWAKE_TOOL`: `caffeinate` on `macos` when it resolves on `PATH`,
+# `systemd-inhibit` on `linux` when it resolves, empty otherwise. `wsl2` gets no
+# tool on purpose: nothing inside WSL can hold Windows awake. Always 0. THE SEAM
+# TESTS OVERRIDE, as they override `hr_sandbox_prereq_probe_var`.
+hr_keep_awake_probe_var() {
+  local uname_s uname_r
+  HR_KEEP_AWAKE_HOST="unsupported"
+  HR_KEEP_AWAKE_TOOL=""
+  uname_s=$(uname -s 2>/dev/null) || return 0
+  uname_r=$(uname -r 2>/dev/null) || return 0
+  hr_host_kind_var "$uname_s" "$uname_r"
+  HR_KEEP_AWAKE_HOST="$HR_HOST_KIND"
+  case "$HR_KEEP_AWAKE_HOST" in
+    macos)
+      if command -v caffeinate >/dev/null 2>&1; then HR_KEEP_AWAKE_TOOL="caffeinate"; fi
+      ;;
+    linux)
+      if command -v systemd-inhibit >/dev/null 2>&1; then HR_KEEP_AWAKE_TOOL="systemd-inhibit"; fi
+      ;;
+  esac
+  return 0
+}
+
+# Decide which hold a launch takes: <repo_root> (the MAIN checkout) and
+# <job_mode> (`1` inside a GitHub Actions job). Sets `HR_KEEP_AWAKE_MODE`
+# (`caffeinate`, `logind` or `off`), `HR_KEEP_AWAKE_REASON` (empty when
+# holding) and `HR_KEEP_AWAKE_QUIET` (`1` when an `off` needs no per-launch
+# line, else empty). First match wins; the reason strings are matched byte for
+# byte by the watcher's tests. Always 0.
+hr_keep_awake_mode_var() {
+  local root="${1-}" job_mode="${2-}" rc=0
+  HR_KEEP_AWAKE_MODE="off"
+  HR_KEEP_AWAKE_REASON=""
+  HR_KEEP_AWAKE_QUIET=""
+  if [ "$job_mode" = "1" ]; then
+    HR_KEEP_AWAKE_QUIET="1"
+    HR_KEEP_AWAKE_REASON='job mode — a GitHub Actions runner does not sleep'
+    return 0
+  fi
+  if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+    HR_KEEP_AWAKE_QUIET="1"
+    HR_KEEP_AWAKE_REASON='GITHUB_ACTIONS is true — a GitHub Actions runner does not sleep'
+    return 0
+  fi
+  hr_keep_awake "$root" || rc=$?
+  case "$rc" in
+    1)
+      HR_KEEP_AWAKE_QUIET="1"
+      HR_KEEP_AWAKE_REASON='execution.keepAwake is false'
+      return 0
+      ;;
+    2)
+      HR_KEEP_AWAKE_REASON='execution.keepAwake is not a boolean'
+      return 0
+      ;;
+  esac
+  hr_keep_awake_probe_var
+  case "${HR_KEEP_AWAKE_HOST-}" in
+    macos)
+      if [ "${HR_KEEP_AWAKE_TOOL-}" = "caffeinate" ]; then
+        HR_KEEP_AWAKE_MODE="caffeinate"
+      else
+        HR_KEEP_AWAKE_REASON='caffeinate does not resolve on PATH'
+      fi
+      ;;
+    linux)
+      if [ "${HR_KEEP_AWAKE_TOOL-}" = "systemd-inhibit" ]; then
+        HR_KEEP_AWAKE_MODE="logind"
+      else
+        HR_KEEP_AWAKE_REASON='systemd-inhibit does not resolve on PATH'
+      fi
+      ;;
+    wsl2)
+      HR_KEEP_AWAKE_REASON="WSL2 — nothing inside WSL can keep Windows awake; set the Windows power plan's lid action to Do nothing on AC (#160 feat_wsl2_support)"
+      ;;
+    *)
+      HR_KEEP_AWAKE_QUIET="1"
+      HR_KEEP_AWAKE_REASON='no sleep hold on this platform'
+      ;;
+  esac
+  return 0
+}
+
+# 0 when this host is on mains power, 1 on battery. Walks the entries of
+# `${HR_POWER_SUPPLY_DIR:-/sys/class/power_supply}/*/` and reads no other file.
+# `HR_POWER_SUPPLY_DIR` is a test seam; nothing in a shipped script sets it. An
+# entry is COUNTED only when its `type` reads, trimmed, `Mains`, `USB` or
+# `USB_*` (older kernels report USB chargers that way); its `scope` is absent or
+# not `Device`; and its `online` file is readable. An entry with no `type` file
+# is skipped, and so is every `scope` = `Device` supply — a wireless mouse's
+# `hidpp_battery_*` reports `online` = `1` while connected and must never read
+# as mains on a laptop on battery. Any counted entry whose trimmed `online` is
+# `1` → 0; counted entries with none at `1` → 1; no counted entry → 0, because a
+# desktop or server with no mains-class entry is on AC. A literal unmatched glob
+# is skipped, never read.
+hr_on_mains_power() {
+  local dir="${HR_POWER_SUPPLY_DIR:-/sys/class/power_supply}" entry kind scope online counted=0
+  for entry in "$dir"/*/; do
+    [ -d "$entry" ] || continue
+    [ -f "${entry}type" ] || continue
+    kind=""
+    IFS=$' \t\n' read -r kind 2>/dev/null <"${entry}type" || :
+    case "$kind" in
+      Mains|USB|USB_*) ;;
+      *) continue ;;
+    esac
+    if [ -f "${entry}scope" ]; then
+      scope=""
+      IFS=$' \t\n' read -r scope 2>/dev/null <"${entry}scope" || :
+      [ "$scope" != "Device" ] || continue
+    fi
+    [ -r "${entry}online" ] || continue
+    counted=1
+    online=""
+    IFS=$' \t\n' read -r online 2>/dev/null <"${entry}online" || :
+    [ "$online" != "1" ] || return 0
+  done
+  [ "$counted" = "1" ] && return 1
+  return 0
+}
+
+# Start the hold for one pid: <mode> (`caffeinate` or `logind`, from
+# `hr_keep_awake_mode_var`), <pid> (the engine's) and <branch> (named in the
+# logind lock's `--why`). Sets `HR_KEEP_AWAKE_STATE` (`held`, `battery`,
+# `refused` or `failed`), `HR_KEEP_AWAKE_PID` (the holder's pid when `held`,
+# else empty) and `HR_KEEP_AWAKE_DETAIL` (one line when not `held`). 0 only when
+# `held`. The rules it relies on are the KEEP AWAKE block above.
+hr_keep_awake_hold_var() {
+  local mode="${1-}" pid="${2-}" branch="${3-}" rc=0
+  HR_KEEP_AWAKE_STATE=""
+  HR_KEEP_AWAKE_PID=""
+  HR_KEEP_AWAKE_DETAIL=""
+  case "$mode" in
+    caffeinate|logind) ;;
+    *)
+      HR_KEEP_AWAKE_STATE="failed"
+      HR_KEEP_AWAKE_DETAIL="no hold for mode '$mode'"
+      return 1
+      ;;
+  esac
+  case "$pid" in
+    ''|*[!0-9]*)
+      HR_KEEP_AWAKE_STATE="failed"
+      HR_KEEP_AWAKE_DETAIL="no engine pid"
+      return 1
+      ;;
+  esac
+  if [ "$mode" = "caffeinate" ]; then
+    caffeinate -s -i -w "$pid" </dev/null >/dev/null 2>&1 &
+    HR_KEEP_AWAKE_PID=$!
+    HR_KEEP_AWAKE_STATE="held"
+    return 0
+  fi
+  if ! hr_on_mains_power; then
+    HR_KEEP_AWAKE_STATE="battery"
+    HR_KEEP_AWAKE_DETAIL="on battery power"
+    return 1
+  fi
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 10 systemd-inhibit --what="$HR_KEEP_AWAKE_WHAT" --mode=block --who="$HR_KEEP_AWAKE_WHO" --why="run $branch" true </dev/null >/dev/null 2>&1 || rc=$?
+  else
+    systemd-inhibit --what="$HR_KEEP_AWAKE_WHAT" --mode=block --who="$HR_KEEP_AWAKE_WHO" --why="run $branch" true </dev/null >/dev/null 2>&1 || rc=$?
+  fi
+  if [ "$rc" != "0" ]; then
+    HR_KEEP_AWAKE_STATE="refused"
+    HR_KEEP_AWAKE_DETAIL="systemd-inhibit exited $rc — logind did not answer, or polkit refused the lock"
+    return 1
+  fi
+  systemd-inhibit --what="$HR_KEEP_AWAKE_WHAT" --mode=block --who="$HR_KEEP_AWAKE_WHO" --why="run $branch" \
+    sh -c 'while kill -0 "$1" 2>/dev/null; do sleep 1; done' keep-awake-wait "$pid" </dev/null >/dev/null 2>&1 &
+  HR_KEEP_AWAKE_PID=$!
+  HR_KEEP_AWAKE_STATE="held"
+  return 0
 }
 
 # ---------------------------------------------------------------------------

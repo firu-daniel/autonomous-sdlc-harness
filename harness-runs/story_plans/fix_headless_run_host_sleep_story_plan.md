@@ -30,7 +30,7 @@ Today nothing in the harness holds a sleep assertion. `cli/templates/scripts/aut
 Each entry maps 1:1 to `harness-runs/task_plans/fix_headless_run_host_sleep/task_<K>_plan.md`. The entries run bottom-up in ship order, with the catch-all layer last.
 
 1. [x] **Task 1** — Add `execution.keepAwake` to the configuration model and its structural check _(layer: cli)_ _(points: 10)_
-2. [ ] **Task 2** — The run library's keep-awake primitives: the key's reader, the shared host classifier, the mode decision, the mains-power probe and the holder _(layer: cli)_ _(points: 20)_
+2. [x] **Task 2** — The run library's keep-awake primitives: the key's reader, the shared host classifier, the mode decision, the mains-power probe and the holder _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Test the run library's keep-awake primitives and hold the extracted host classifier to `sandboxHostKind` _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — The watcher template holds the host awake for the engine's life, re-checks mains power each pass, and measures stall silence from the last host wake _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 5** — Drive the written watcher's keep-awake hold end to end, and give the shared watcher driver a silent default keep-awake probe _(layer: cli)_ _(points: 20)_
