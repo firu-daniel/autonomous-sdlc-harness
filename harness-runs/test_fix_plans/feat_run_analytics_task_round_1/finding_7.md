@@ -21,3 +21,9 @@ The log has no assertion message for it.
 - [ ] If the named test passes as the tree stands, edit no code.
 - [ ] If it fails because the payload ran, the most likely cause is a git call the hook or `run-analytics.sh` makes in the clone without the harness's hardening. Route that call through the library's hardened git invocation, the same one `hr_commit_placed` uses, in `cli/templates/scripts/run-analytics.sh` or `cli/templates/scripts/autonomous-watcher.sh`, and make the identical edit in the `scripts/` mirror. For any other assertion, fix the code it names.
 - [ ] Do not weaken the test.
+
+## Already passing
+
+- **(a)** Named test: `(L2) a nested repository's own core.fsmonitor behind a gitlink is never run: the drop launches`, in `cli/test/watcher-review-drop-payloads.test.mjs` (the only file run).
+- **(b)** Ran `npm test --workspace cli -- test/watcher-review-drop-payloads.test.mjs` from the repository root: `ok 2 - (L2) a nested repository's own core.fsmonitor behind a gitlink is never run: the drop launches`; file totals `# tests 23`, `# pass 23`, `# fail 0`.
+- **(c)** No code file was edited.
