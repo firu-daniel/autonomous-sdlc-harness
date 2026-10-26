@@ -35,7 +35,7 @@
 
 Each entry resolves to a self-contained `harness-runs/code_reviews/feat_run_analytics_code_review/finding_<K>.md` file via its `**Finding K**` reference. Sorted lowest blast-radius first; the leading `N.` is the fix order and `K` is the finding's stable number.
 
-1. [ ] **Finding 3** — Drop the claim about this repository's conventions document from the shipped watcher's `run_analytics_subject` comment, in the template and its `scripts/` mirror _(layer: cli, general)_
+1. [x] **Finding 3** — Drop the claim about this repository's conventions document from the shipped watcher's `run_analytics_subject` comment, in the template and its `scripts/` mirror _(layer: cli, general)_
 2. [ ] **Finding 2** — Correct the `branch-status` digest's description of `slowest_subagent.session`, which is a 1-based position, never a `#<n>`-suffixed id _(layer: plugin)_
 3. [ ] **Finding 4** — Restate the allow justification for `run-analytics.sh` in `OUTER_LOOP_SCRIPTS` and the script-allowlist guard so that it matches what the script can write _(layer: cli, plugin)_
 4. [ ] **Finding 1** — Read a remote record's analytics digest from `origin/<branch>`, not from the mirror that `sync` never refreshes _(layer: plugin)_

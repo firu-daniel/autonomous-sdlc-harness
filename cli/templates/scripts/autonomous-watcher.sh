@@ -1003,8 +1003,6 @@ FORMAT_STREAM="$SCRIPT_DIR/autonomous-format-stream.sh"
 RUN_ANALYTICS="$SCRIPT_DIR/run-analytics.sh"
 
 # run_analytics_subject <branch> — the one producer of this fixed-form subject.
-# `.claude/context/conventions.md` → `## Commit-message policy` does not list it
-# yet and owes it a line.
 run_analytics_subject() { printf 'chore: Record run analytics for %s\n' "$1"; }
 
 # The working-copy lifecycle scripts and the push wrapper, resolved as
