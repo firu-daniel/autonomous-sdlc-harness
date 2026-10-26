@@ -36,3 +36,13 @@ This task also depends on Task 4, which makes `init` write `run-analytics.sh` an
 **Verification:**
 
 - `npm test --workspace cli -- test/watcher-run-analytics.test.mjs`, as one plain foreground command from the repository root, passes, and its captured counts show `# fail 0` with a non-zero `# pass`.
+
+**Deviations from plan:**
+
+- **A launch notifies two lines, not one.** The first run showed `launched` (detail `engine=task`) followed by `completed`. The commit case asserts that `launched` comes first, that exactly one outcome follows it, and that the status is not `failed`.
+- **The failure cases are compared with the re-run case's outcome, not the launch's.** A resume adds its own `resumed` notification, which a launch does not send, so the launch's lines can never match a resume's. Both failure cases are resumes. Each is held to the successful resume's `{status, new notification events}`.
+- **The re-run case's stub prints no session, instead of the launch's session again.** Task 1's program records a `session_id` it sees again as a resume occurrence (`sess-launch#2`, "A resume of an earlier session" in the `.md`). A reprinted session is therefore new data, and the plan's version committed two more files. A resume that adds no session runs the script to `unchanged…`, so `watcher_commit` sees identical blobs and commits nothing. That is the skip the plan meant to pin.
+- **The failure cases print a session the record has never seen** (`sess-fail`, `sess-missing`). A working step would then commit, so "no analytics commit was added" can actually fail.
+- **The clarification pair is written under the clone's state directory, not with `writeQuestion` / `writeAnswer`.** Those helpers write under the main checkout. `resume_parked_run` reads `<worktree>/<state_rel>/clarifications/<branch>`, so a clone run never sees them there. The suite's local `parkClone` writes the pair into the clone and calls `seedRecord` as the plan says.
+- **Every pass sets `RUN_ANALYTICS_SUSPEND_SOURCE=none`**, so the host's suspend log is never read. The stub's sessions also have wall time equal to `duration_ms`, so a read would not be triggered anyway.
+- **The four cases are subtests of one test sharing one fixture.** The re-run and failure cases re-seed the clone that the commit case's launch created.
