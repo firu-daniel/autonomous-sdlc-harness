@@ -44,7 +44,7 @@ Every change is confined to test files.
 6. [x] **Finding 6** — Keep-awake (k): the kill-switch battery release case fails in the full suite. _(layer: cli)_
 7. [x] **Finding 7** — Stall host sleep (a)(b): the suite's polls and session passes run under unscaled, sub-pass bounds. _(layer: cli)_
 8. [x] **Finding 8** — Stall host sleep (c): the genuine-hang case fails in the full suite. _(layer: cli)_
-9. [ ] **Finding 9** — Stall host sleep (d): the missing last-pass file case fails in the full suite. _(layer: cli)_
+9. [x] **Finding 9** — Stall host sleep (d): the missing last-pass file case fails in the full suite. _(layer: cli)_
 10. [ ] **Finding 10** — Run profile: the per-run copy launch case fails, with no cause in the log or the tree. _(layer: cli)_
 
 ---

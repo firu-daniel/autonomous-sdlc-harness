@@ -25,3 +25,12 @@ Its `.host_last_tick` and `.host_woke_at` are written as `garbage` before the ki
 - [ ] Make sure `cli/test/watcher-stall-host-sleep.test.mjs` has all three: `WAIT_MS = scaleBound(30_000)`, `session()`'s pass and launch waits under `TICK_TIMEOUT_MS`, and `SESSION_TIMEOUT_MS = scaleBound(240_000)`. If Finding 7 has landed, they are already in place: confirm them with a grep and change nothing more for this case.
 - [ ] A single-file run that passes before that change lands is not evidence that this finding is cleared.
 - [ ] Do not change the `garbage` state writes or the `/^\d+\n$/` assertions, and add no retry.
+
+## Already passing
+
+- **(a) Test and fix site:** `cli/test/watcher-stall-host-sleep.test.mjs` — `(d) a missing or non-integer last-pass file records no wake and never defers a kill`; that file was run, and its fix site was read. Finding 7's commit `ba5f0802` had already put all three required bounds in place, as `grep -n "WAIT_MS\|SESSION_TIMEOUT_MS\|TICK_TIMEOUT_MS\|scaleBound"` shows:
+  - `const WAIT_MS = scaleBound(30_000);`
+  - `const SESSION_TIMEOUT_MS = scaleBound(240_000);`, passed as `timeoutMs: SESSION_TIMEOUT_MS` in `session()`
+  - `session()`'s `reached(n)` pass wait, its `the session did not hang` launch wait and its `the record is not running with a pid` launch wait, each with budget `TICK_TIMEOUT_MS`
+- **(b) Command and result:** `npm test --workspace cli -- test/watcher-stall-host-sleep.test.mjs` was run after `ba5f0802`. The named test reported `ok 3 - (d) a missing or non-integer last-pass file records no wake and never defers a kill` (14801 ms). The file reported `# tests 3`, `# pass 3`, `# fail 0`.
+- **(c) No code edited:** no code file was edited. The `garbage` state writes and the `/^\d+\n$/` assertions are unchanged, and no retry was added.
