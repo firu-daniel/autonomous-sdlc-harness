@@ -24,5 +24,5 @@ Source: harness-runs/task_prompts/feat_run_analytics_task_prompt.md → `### Run
 - [x] C2m.    Skeptic meta-review PASS — or not owed (C2.1 returned PASS, so C2.2 never ran)
 - [x] C2f.    Skeptic findings fixed (findings index all [x] — or no index, the review having passed clean)
 - [-] E.      QA passed (UI-test index all [x], or only blocked tests left / no_ui)
-- [ ] G.      Run gates passed (the Run gates wrapper printed pass: test passed, typecheck passed or not run for <none>)
+- [x] G.      Run gates passed (the Run gates wrapper printed pass: test passed, typecheck passed or not run for <none>)
 - [ ] D.      Branch statistics committed & pushed
