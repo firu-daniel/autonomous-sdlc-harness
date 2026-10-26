@@ -52,3 +52,8 @@
 - **added:** `context_notes:`
 - **verbatim:** `context_notes: Task 9's implementer reported that `chmod 755 scripts/run-analytics.sh` and `cp` were both refused by this session's permission profile (source: the `**Deviations from plan:**` section of harness-runs/task_plans/feat_run_analytics/task_9_plan.md, commit 2fbfcbcd).`
 - **why the agent could not derive it:** task_9_plan.md is a sibling detail file outside the skeptic finding's read set; finding_1.md does not mention the earlier refusal
+
+## [C2 · Item 1 · general · iter 0] → layer-implementer  (#1)
+- **added:** `context_notes:`
+- **verbatim:** `context_notes: Park 1 answer (harness-runs/clarifications/feat_run_analytics/answer_1.md) to question_1.md Q1 is option (a): the user ran `chmod 755 scripts/run-analytics.sh` in this run copy and left it uncommitted — `git diff scripts/run-analytics.sh` shows `old mode 100644` / `new mode 100755`, index entry still 100644.`
+- **why the agent could not derive it:** the park's answer lives in the machine-local clarification channel, outside finding_1.md and the implementer's read set; the working-tree mode change does not record who made it or which option was chosen
