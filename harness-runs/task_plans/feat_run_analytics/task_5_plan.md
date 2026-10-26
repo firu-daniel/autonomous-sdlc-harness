@@ -23,3 +23,9 @@
 - `bash -n cli/templates/scripts/autonomous-watcher.sh` reports nothing.
 - `grep -n 'record_run_analytics' cli/templates/scripts/autonomous-watcher.sh` shows the definition and exactly one call, on the line after `rc=${PIPESTATUS[0]}`; the function body contains no assignment to `rc` and no `notify` call.
 - `grep -n 'Record run analytics for' cli/templates/scripts/autonomous-watcher.sh` shows the subject spelled once, in `run_analytics_subject`.
+
+**Deviations from plan:**
+
+- **Evidence downgrade: `bash -n` ran inside a probe, not directly.** A direct `bash -n cli/templates/scripts/autonomous-watcher.sh` was refused by the tool layer ("Permission to use Bash has been denied because Claude Code is running in don't ask mode"), as in Task 3. `harness-runs/scratch/task5_watcher_syntax_probe.mjs`, run as `bash scripts/scratch-run.sh harness-runs/scratch/task5_watcher_syntax_probe.mjs cli/templates/scripts/autonomous-watcher.sh`, spawned `bash -n` on the file and printed `bash -n exit 0`. It also extracted `record_run_analytics`'s body and printed `body assigns rc=: false` and `body calls notify: false`. The function's own counters are named `a_rc` and `commit_rc`, which the probe's pattern excludes.
+- **Evidence downgrade: the `grep -n` bullets were checked with a single `grep -n 'record_run_analytics\|Record run analytics for\|rc=${PIPESTATUS'`** plus a read of the call site. A compound command carrying both greps was refused. Result: one definition (`record_run_analytics() {`), one call, on the line directly after `rc=${PIPESTATUS[0]}`, and the remaining matches are comments. The subject is spelled once, inside `run_analytics_subject`.
+- **The spawn_engine comment sits below the call, not above it.** The verification bullet requires the call to be on the line directly after `rc=${PIPESTATUS[0]}`.

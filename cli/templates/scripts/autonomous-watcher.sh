@@ -57,6 +57,11 @@
 # gate publishes into and every start consults, described below them.
 # `classify_run_exit` is only ever called from inside the subshell `spawn_engine`
 # spawns, which is the one place the engine's real exit code exists.
+# Before it, after every session, that subshell's `record_run_analytics` runs
+# run-analytics.sh over the run's stream and commits the per-session record it
+# writes under `<state_dir>/run_analytics/<branch>/` on the run's branch by
+# plumbing — best-effort: a failure is one watcher-log line and changes no
+# classification, exit code or notification.
 #
 # THE STALENESS WATCHDOG HEALS WHAT THE RECONCILE PASS CANNOT SEE. That pass
 # heals a run whose PROCESS IS ALREADY GONE. A run whose process is alive but
@@ -494,6 +499,10 @@
 #     and skip Phase E / R4, and a `completed` run's one notification names the
 #     skip and `/autonomous-sdlc-harness:branch-qa-test <branch>` as the local
 #     route. The docs engine has no such phase; a local launch gets no clause.
+#   * RUN ANALYTICS: after every session, auto-resumes included, the same
+#     `record_run_analytics` a local run gets records it under
+#     `<state_dir>/run_analytics/<branch>/` and commits it on the branch by
+#     plumbing, best-effort; the workflow's `Push the branch` step pushes it.
 #
 # Subcommands:
 #   autonomous-watcher.sh            # the watch loop (the default; the unit uses this)
@@ -989,6 +998,14 @@ USAGE_HOLD="$LOGS_DIR/.usage_hold"
 # must cost output quality, never the run.
 NOTIFY="$SCRIPT_DIR/autonomous-notify.sh"
 FORMAT_STREAM="$SCRIPT_DIR/autonomous-format-stream.sh"
+# The run-analytics recorder, a sibling on the same terms: a missing one costs
+# the record, never the run (record_run_analytics).
+RUN_ANALYTICS="$SCRIPT_DIR/run-analytics.sh"
+
+# run_analytics_subject <branch> — the one producer of this fixed-form subject.
+# `.claude/context/conventions.md` → `## Commit-message policy` does not list it
+# yet and owes it a line.
+run_analytics_subject() { printf 'chore: Record run analytics for %s\n' "$1"; }
 
 # The working-copy lifecycle scripts and the push wrapper, resolved as
 # siblings for the same reason: they are written into the same configured
@@ -2591,6 +2608,12 @@ EOF
       tee -a "${log_path%.log}.stream.jsonl" |
       "$formatter" >>"$log_path"
     rc=${PIPESTATUS[0]}
+    record_run_analytics "$branch" "$worktree" "$log_path"
+    # The record above runs BEFORE the classification so it is on the branch
+    # before any notification names the run's outcome — on a clone,
+    # hr_commit_paths_var moves the clone's ref and then the main checkout's, so
+    # classify_run_exit's own sync finds them equal. It can neither change rc nor
+    # notify. Job mode reaches this same line.
     # Classify and notify HERE, where rc is the engine's real exit code.
     classify_run_exit "$branch" "$worktree" "$log_path" "$rc"
   ) &
@@ -2763,6 +2786,59 @@ max_question_index() {
     fi
   done
   printf '%s\n' "$max"
+}
+
+# record_run_analytics <branch> <worktree> <log_path>
+#
+# Record the session that just ended: run run-analytics.sh over the run's
+# stream, then commit each file it wrote on the run's branch. Called from INSIDE
+# the spawn_engine subshell, after every session and before classify_run_exit.
+#
+# BEST-EFFORT BY CONTRACT: it ALWAYS returns 0, never reads or writes the
+# caller's rc and never notifies, so it cannot change the classification, the
+# exit code or any notification. Each failure is one `log` line, which lands in
+# the watcher log; the script's and the commits' own output goes to the run's
+# log. It pushes nothing: locally the commit rides the run's next push, and in a
+# job the workflow's `Push the branch` step pushes it.
+#
+# --main-repo is passed because run-analytics.sh reads no HARNESS_MAIN_REPO
+# (see the header above spawn_engine); it is the same value.
+record_run_analytics() {
+  local branch="$1" worktree="$2" log_path="$3"
+  local state_rel file commit_rc subject a_rc=0
+
+  # The watchdog owns this run's teardown, as in classify_run_exit's first test.
+  if [ "$(registry_get "$branch" stall_killing)" = "1" ]; then
+    return 0
+  fi
+  if [ ! -x "$RUN_ANALYTICS" ]; then
+    log "run analytics: '$RUN_ANALYTICS' is not executable — '$branch' not recorded (\`autonomous-sdlc-harness init --force\` rewrites it)"
+    return 0
+  fi
+  if ! state_rel="$(run_state_dir "$worktree")"; then
+    log "run analytics: the state directory in '$worktree' is unresolvable — '$branch' not recorded"
+    return 0
+  fi
+
+  "$RUN_ANALYTICS" "${log_path%.log}.stream.jsonl" "$branch" \
+    --repo "$worktree" --main-repo "$MAIN_REPO" >>"$log_path" 2>&1 || a_rc=$?
+  if [ "$a_rc" -ne 0 ]; then
+    log "run analytics: '$branch' not recorded (exit $a_rc) — see $log_path"
+    return 0
+  fi
+
+  subject="$(run_analytics_subject "$branch")"
+  for file in run-analytics.json run-analytics.md; do
+    [ -f "$worktree/$state_rel/run_analytics/$branch/$file" ] || continue
+    commit_rc=0
+    watcher_commit "$worktree" "$state_rel/run_analytics/$branch/$file" "$subject" >>"$log_path" 2>&1 || commit_rc=$?
+    case "$commit_rc" in
+      0) log "run analytics: committed $file for '$branch' ($subject)" ;;
+      3) ;;
+      *) log "run analytics: could not commit $file for '$branch' (exit $commit_rc) — see $log_path" ;;
+    esac
+  done
+  return 0
 }
 
 # classify_run_exit <branch> <worktree> <log_path> <rc>
