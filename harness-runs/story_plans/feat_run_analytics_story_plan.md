@@ -27,7 +27,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_run_an
 
 1. [x] **Task 1** — Compute per-session records from the event stream in `lib/run-analytics.jq` _(layer: cli)_ _(points: 20)_
 2. [x] **Task 2** — Roll sessions up and render `run-analytics.md` in `lib/run-analytics-report.jq` _(layer: cli)_ _(points: 15)_
-3. [ ] **Task 3** — Drive the two programs from `run-analytics.sh`: paths, suspend intervals, idempotent merge, byte-stable write _(layer: cli)_ _(points: 20)_
+3. [x] **Task 3** — Drive the two programs from `run-analytics.sh`: paths, suspend intervals, idempotent merge, byte-stable write _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Ship the three files through `OUTER_LOOP_SCRIPTS` and add the `run_analytics` artifact directory _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 5** — Record and commit run analytics after every session in `autonomous-watcher.sh` → `spawn_engine` _(layer: cli)_ _(points: 15)_
 6. [ ] **Task 6** — Pin the script's metrics and idempotence in `cli/test/run-analytics.test.mjs` over a two-session fixture stream _(layer: cli)_ _(points: 20)_
