@@ -38,7 +38,8 @@
  *    It overrides the keep-awake probe (`hr_keep_awake_probe_var`) the same way, with
  *    {@link DEFAULT_KEEP_AWAKE_PROBE}: an unsupported host is the silent `off` arm, so no suite built
  *    here starts a real `caffeinate` or `systemd-inhibit` or gains a `keep-awake:` log line. A suite
- *    running its own pass script (`localStall` above among them) is not covered by this override.
+ *    running its own pass script defines the same override from {@link DEFAULT_KEEP_AWAKE_PROBE}, as
+ *    `localStall` above does.
  */
 
 import assert from 'node:assert/strict';
