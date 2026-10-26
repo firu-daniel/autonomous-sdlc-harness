@@ -45,7 +45,7 @@ import { FORBIDDEN_IN_ENTRY } from '../dist/generators/profileEntries.js';
 import { COPY_GIT_PATHS, copySurfacePaths, fileToolDenyRules } from '../dist/generators/writeProtection.js';
 import { SANDBOX_OPT_OUT_MARKER, shippedSandboxSettings } from '../dist/generators/sandboxProfile.js';
 import { INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
-import { createWatcherFixture } from './helpers/watcher.mjs';
+import { TICK_TIMEOUT_MS, createWatcherFixture } from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
 const BASE_PROFILE = '.claude/settings.autonomous.json';
@@ -138,6 +138,7 @@ async function adoptedFixture(t, { optOut = false } = {}) {
         w.dir,
         ['-c', '. "$1"; hr_run_profile_file "$(hr_repo_slug "$2")" "$3"', '_', join(w.dir, LIB_PATH), w.dir, branch],
         w.watcherEnv(),
+        { timeoutMs: TICK_TIMEOUT_MS, signal: t.signal },
       );
       assert.equal(printed.status, 0, printed.stderr);
       return printed.stdout.trim();
@@ -202,10 +203,11 @@ test('a task drop launches on a per-run copy at hr_run_profile_file: the base pl
 
   const settings = f.settingsArg();
   assert.ok(settings, `the stub was never called:\n${f.watcherLog()}`);
-  assert.equal(settings, await f.profileFileFor(f.branch));
+  const launchState = () => `record: ${JSON.stringify(f.record())}\nlog:\n${f.watcherLog()}`;
+  assert.equal(settings, await f.profileFileFor(f.branch), `--settings is not hr_run_profile_file's path\n${launchState()}`);
   assert.ok(settings.startsWith(`${f.watcherEnv().XDG_STATE_HOME}/autonomous-sdlc-harness/run-profiles/`), settings);
-  assert.equal(f.record().copy_kind, 'clone');
-  assert.equal(f.record().worktree, f.clone);
+  assert.equal(f.record().copy_kind, 'clone', `copy_kind is not clone\n${launchState()}`);
+  assert.equal(f.record().worktree, f.clone, `worktree is not the clone\n${launchState()}`);
 
   const profile = JSON.parse(readFileSync(settings, 'utf8'));
   const base = f.base();
