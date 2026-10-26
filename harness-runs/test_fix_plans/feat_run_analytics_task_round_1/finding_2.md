@@ -38,3 +38,9 @@ There is a caveat. In this same run, other tests that take the same clone-launch
 - [ ] If it fails, take the cause from its assertion message and the fixture's watcher log, using the candidates above. Fix it in `record_run_analytics()` (or in `run-analytics.sh` if the script is what exits non-zero) in `cli/templates/scripts/`, and make the identical edit in the `scripts/` mirror so the two copies stay byte-identical.
 - [ ] Keep the hook's best-effort contract: it always returns 0, never touches `rc`, and never notifies.
 - [ ] Do not weaken, skip or delete any assertion in the test.
+
+## Already passing
+
+- **(a)** Named test: `cli/test/watcher-run-analytics.test.mjs` → `the session's analytics are committed on the run's branch, and a failing step changes no outcome` → subtest `a launch commits run-analytics.json then run-analytics.md on the branch, synced to the main checkout`. File run: `cli/test/watcher-run-analytics.test.mjs`.
+- **(b)** Command: `npm test --workspace cli -- test/watcher-run-analytics.test.mjs`, from the repository root. Result: `ok 1 - a launch commits run-analytics.json then run-analytics.md on the branch, synced to the main checkout` (13189 ms in the latest run; 14134 ms in an earlier one), parent `ok 1`; file totals `# tests 5`, `# pass 5`, `# fail 0`. This matches the fix plan's flake reading: the subtest passes on the tree as it stands.
+- **(c)** No code file was edited. Neither `cli/templates/scripts/autonomous-watcher.sh` nor `cli/templates/scripts/run-analytics.sh` was touched, and neither were their `scripts/` mirrors.
