@@ -149,7 +149,7 @@ def new_session($key; $skip):
    tmin: null, tmax: null, at_min: null, at_max: null,
    prev_t: null, prev_at: null, prev_ckey: "",
    ctx: {"": {last_t: null, last_seq: 0, retry: false, awaiting: true}},
-   dispatch: {}, dorder: [], reqidx: {}, reqs: [],
+   dispatch: {}, dispatch_order: [], reqidx: {}, reqs: [],
    calls: {}, corder: [], open: {},
    gaps: [], retries: 0, retry_errors: {}, denied: {}, rl: {}};
 
@@ -191,7 +191,7 @@ def add_call($u; $ck; $t; $at):
         .dispatch[$u.id] = {type: ($u.input.subagent_type // "subagent"),
                             description: ($u.input.description // null | redact),
                             start_t: $st, started_at: $sat}
-        | .dorder += [$u.id]
+        | .dispatch_order += [$u.id]
       else . end
   end;
 
@@ -280,7 +280,7 @@ def finalize:
                      | map(select(length >= polling_min_repeats)
                            | {context: .[0].context, command: .[0].command, count: length,
                               total_ms: (durs | add // 0)}))},
-   subagents: [.dorder[] as $id | .dispatch[$id] as $d | .calls[$id].duration_ms as $dur
+   subagents: [.dispatch_order[] as $id | .dispatch[$id] as $d | .calls[$id].duration_ms as $dur
                | ($byp[$id] // []) as $rq
                | {type: $d.type, description: $d.description, started_at: $d.started_at,
                   duration_ms: $dur, requests: ($rq | length),
