@@ -22,3 +22,32 @@
 - A probe under `<state_dir>/scratch/` run through `bash <scripts_dir>/scratch-run.sh` builds a two-session document by hand, runs `rollup` then `markdown`, and shows: `.run.wall_ms` equal to the two sessions' sum; `slowest_subagent.session` pointing at the right session; the Markdown opening with `## Whole run` before `## Session 1`, and `## Session 1` before `## Session 2`.
 - Running both modes twice over the same document gives byte-identical output (`cmp`).
 - A document with `schema: 2` is refused with a message naming the schema.
+
+**Deviations from plan:**
+
+- **A resumed session's cumulative figures count once.** The plan says the program "computes nothing per session" and sums over sessions. But a resume's `result` event repeats earlier totals. Measured on the main checkout's `harness-runs/autonomous_logs/feat_unattended_sandbox_preflight.stream.jsonl`: the three results for `2651f418-…` (Task 1 records `2651f418-…`, `…#2`, `…#3`) report:
+  - `total_cost_usd` and `modelUsage` cost of 2.11 / 5.67 / 7.62, which is cumulative.
+  - `duration_api_ms` of 187698 / 609343 / 792440, which is cumulative. The third is larger than its own wall time of 203522.
+  - `subagent_stats.spawned` of 0 / 7 / 8, which is cumulative. Task 1 counted 0 / 7 / 1 `Agent` dispatches, and `by_type` grows by one entry.
+  - `usage` tokens (in 68 / 44 / 48, out 13805 / 8958 / 12901), `duration_ms`, `num_turns` and `permission_denials`, which are per occurrence.
+
+  So both modes take, for `total_cost_usd`, `by_model`, `duration_api_ms` and `subagents_spawned` / `failed` / `killed`, each record's value minus the nearest earlier record with the same base id (the part before `#`) that has a value. Shares are rounded to 6 decimals. Summing as written gives $15.40 for that session instead of $7.62, and the whole stream gives $211.64 instead of $203.86. The per-session Markdown shows the share and says so. The roll-up's key names are unchanged.
+- **Durations under a minute render as `S.Ds`** (for example `3.8s`). The plan gives only `XhYYm` and `Ym SSs`. With `0m 03s`, the latency columns lose most of what they report: the real stream's pooled p50 / p90 are 3834 / 8267 ms.
+- **Table cells also turn newlines into spaces**, as well as escaping `|`. An unescaped newline would also break a table row.
+- **`markdown` recomputes the roll-up and never reads `.run`.** As a result, a stale `.run` cannot make the Markdown disagree with the sessions. The probe showed byte-identical output for a document with `run: null` and for its rolled-up form.
+- **Byte-identity was checked in the probe with `Buffer.compare` on two runs' stdout, not with `cmp`.** It is the same byte comparison. `cmp` is not on this run's command allowlist as a compound command.
+- **Evidence downgrade: the jq 1.5 floor is reasoned, not executed.** The only `jq` on this host is 1.8.2. The program uses no regex, `ceil`, `round`, `abs`, unary minus, `$__loc__`, `$ENV`, `walk`, `IN` or `--rawfile`. Nothing has run it under 1.5.
+- **Probe evidence** (`bash scripts/scratch-run.sh harness-runs/scratch/<probe>.mjs <repo_root> [<stream>]`, the probe stays in the gitignored scratch directory because deleting it was refused) printed `ALL PASS`:
+  - `.run.wall_ms` = 5400000, the two sessions' sum.
+  - `slowest_subagent.session` = 2, the session holding the longer dispatch.
+  - `## Whole run` came before `## Session 1`, which came before `## Session 2`.
+  - Both modes, run twice, gave byte-identical output.
+  - `schema: 2` was refused in both modes with `document schema 2 is not supported; expected 1`.
+  - `|` in a description and in a polling command was escaped.
+  - An incomplete session got its heading suffix.
+  - A three-occurrence resume summed to its last cumulative cost.
+  - Over Task 1's records for the real stream above (4 sessions), `rollup` finished in 58 ms with:
+    - `total_cost_usd` 203.860041
+    - `cache_hit_ratio` 0.9988
+    - pooled requests 2609, p50 3834 ms, p90 8267 ms, p99 27400 ms
+    - slowest sub-agent `task-plan-writer`, 918600 ms, session 1
