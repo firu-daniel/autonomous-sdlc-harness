@@ -27,3 +27,9 @@ The guard as written matches all three and returns 0.
 - [ ] If the named subtest passes as the tree stands, edit no code.
 - [ ] If it still fails once Findings 2–4 pass, read the added watcher-log lines from the assertion message. Make the missing-script path emit exactly one line carrying all three substrings, return 0 and change no outcome. Edit `record_run_analytics()` in `cli/templates/scripts/autonomous-watcher.sh` and make the identical edit in `scripts/autonomous-watcher.sh`.
 - [ ] Do not weaken the test.
+
+## Already passing
+
+- **(a) Named test and file run:** subtest `a missing run-analytics.sh changes neither the status nor the notifications` under parent `the session's analytics are committed on the run's branch, and a failing step changes no outcome`, in `cli/test/watcher-run-analytics.test.mjs`, run as the whole file (no name pattern).
+- **(b) Command and result:** `npm test --workspace cli -- test/watcher-run-analytics.test.mjs` from the repository root (pretest build ran first). The named subtest reported `ok 4 - a missing run-analytics.sh changes neither the status nor the notifications`. File summary: `# tests 5`, `# pass 5`, `# fail 0`. Subtests `ok 1` (launch), `ok 2` (resume, which sets `resumeBaseline`) and `ok 3` also passed, consistent with the suspected shared cause with Findings 2–4, closed already passing in commits `996c1f5a`, `73766b86` and `c4056b32`.
+- **(c) No code file edited:** this detail file is the only write. `git status --short` was empty before this record was appended.
