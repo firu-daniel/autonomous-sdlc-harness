@@ -55,3 +55,8 @@
 - Grep `judge.sh`: `sp_judge_allowed_domains` has three arms — absent-parameter `not run`, refusal `pass`, host-answer `fail` with the follow-up-finding sentence — and never a bare "not refused → pass".
 - `bash scripts/sandbox-probe.sh judge allowed-domains harness-runs/scratch/<file> "dd if=/dev/null of=/x conv=notrunc"` on the two-event stream above (no `allowed_domains` in its input) prints `result="not run"`.
 - The full fixture-driven coverage is Task 13's, and the git judges' is Task 15's; this file names no test run.
+- **Deviations from plan:**
+  - The plan leaves a matched call with no `tool_result` unstated. Implemented as `not run`, evidence `no tool_result for the matched call`, in `sp_judge_call`, `sp_judge_tool`, `sp_judge_mcp` and `sp_judge_allowed_domains`. Reason: a missing result is no evidence of `ran`, so it cannot be judged `pass` or `fail`.
+  - `sp_layer_of` sets `SP_LAYER` and `SP_LAYER_EVIDENCE` and prints nothing. The judges read the evidence line from the same call, and printing would pollute the result-line stdout.
+  - In the `ran` arm of `sp_judge_allowed_domains`, the follow-up-finding sentence is joined to the response's first line with ` — `.
+  - The git judges (`sp_remote_tip`, `sp_judge_push`, `sp_judge_ref`) were not executed in this unit. The plan's verification names no run for them, and they are left to Task 15. They rest on reading the code only.

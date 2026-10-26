@@ -111,7 +111,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_unattended_sandbox_meas
 
 1. [x] **Task 1** — Add the probe's entry point `scripts/sandbox-probe.sh` and its core library: leg table, result line, exit codes _(layer: general)_ _(points: 15)_
 2. [x] **Task 2** — Add the probe's preflight refusals and the `shasum` guard over the main checkout's three files _(layer: general)_ _(points: 15)_
-3. [ ] **Task 3** — Add the probe's judge: stream-json calls, the refusing layer, pushes by `ls-remote`, commits by ref _(layer: general)_ _(points: 20)_
+3. [x] **Task 3** — Add the probe's judge: stream-json calls, the refusing layer, pushes by `ls-remote`, commits by ref _(layer: general)_ _(points: 20)_
 4. [ ] **Task 4** — Add the probe clone, its per-run profile, the session launcher, scratch profiles and the every-exit teardown _(layer: general)_ _(points: 20)_
 5. [ ] **Task 19** — Add the probe's positive controls: the control clone, the control calls and the `not run` gate _(layer: general)_ _(points: 15)_
 6. [ ] **Task 5** — Add the gates, mktemp, scratch and retrieval legs _(layer: general)_ _(points: 15)_
