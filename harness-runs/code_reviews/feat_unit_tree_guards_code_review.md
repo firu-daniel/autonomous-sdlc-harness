@@ -37,7 +37,7 @@
 3. [x] **Finding 1** — Make point 7's downgrade clause match guard-relative paths and require point 2's symbol condition _(layer: plugin)_
 4. [x] **Finding 4** — Align the adopter conventions template's registration rule with point 8's later-task allowance _(layer: cli)_
 5. [x] **Finding 6** — Add the absolute-`test` case to `doctor-tree-guards.test.mjs` _(layer: cli)_
-6. [ ] **Finding 3** — Re-point the `docs/config.md` §5 `treeGuards` row at points 7 and 8 instead of restating them _(layer: general)_
+6. [x] **Finding 3** — Re-point the `docs/config.md` §5 `treeGuards` row at points 7 and 8 instead of restating them _(layer: general)_
 7. [ ] **Finding 5** — Try `appDir` as a base in the `tree-guards` doctor check _(layer: cli, general)_
 
 ---
