@@ -17,7 +17,7 @@ This list is the **single source of truth** for the fix loop. It is walked top t
 2. [x] **Finding 2** — A resume that adds no session adds no analytics commit. _(layer: cli, general)_
 3. [x] **Finding 3** — A `run-analytics.sh` that exits 1 changes no outcome. _(layer: cli, general)_
 4. [x] **Finding 4** — A missing `run-analytics.sh` changes no outcome. _(layer: cli, general)_
-5. [ ] **Finding 5** — (d) The helper's default probe launches the stub and the record ends `completed`. _(layer: cli, general)_
+5. [x] **Finding 5** — (d) The helper's default probe launches the stub and the record ends `completed`. _(layer: cli, general)_
 6. [ ] **Finding 6** — (L2) A nested repository's `core.fsmonitor` behind a gitlink: the review drop launches. _(layer: cli, general)_
 
 ## Must Fix
