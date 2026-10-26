@@ -30,7 +30,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_unit_tree_guards/task_<
 2. [x] **Task 2** — Add the `tree-guards` doctor check that warns on a `test` naming no file _(layer: cli)_ _(points: 20)_
 3. [x] **Task 3** — Teach the adopter conventions templates the tree-guard run and the self-registration rule _(layer: cli)_ _(points: 10)_
 4. [x] **Task 4** — State the tree-guard run in the test-run rule and wire it into the layer implementer _(layer: plugin)_ _(points: 20)_
-5. [ ] **Task 5** — Keep planners out of the guard list and have reviewers police registration _(layer: plugin)_ _(points: 15)_
+5. [x] **Task 5** — Keep planners out of the guard list and have reviewers police registration _(layer: plugin)_ _(points: 15)_
 6. [ ] **Task 6** — Declare `treeGuards` in the schema with a negative fixture _(layer: general)_ _(points: 15)_
 7. [ ] **Task 7** — Document `treeGuards` and the `tree-guards` check in the documents of record _(layer: general)_ _(points: 15)_
 8. [ ] **Task 8** — Seed this repository's `harness.config.json` with its three tree guards _(layer: general)_ _(points: 5)_

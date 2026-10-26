@@ -161,6 +161,7 @@ The groups below are the *shape* the checks take. Where a group says *replace wi
 - A numeric timing or ratio literal instead of the shared constant owner the document names.
 - A unit-local constant duplicating a shared owner's page size, limit or length cap.
 - A required accompanying test missing or skipped (**Must Fix — no exceptions**).
+- A test the branch adds that reads a tree of repository files as text (rather than one module or one fixed file), with no `treeGuards` entry for it in `harness.config.json` anywhere in the branch diff (**Must Fix**, `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule` point 7).
 - An error path written to the language console instead of the mandated logger.
 - A write to application-level state made directly instead of through the mandated store-and-listener path the document defines.
 - A new unit missing an item of the required set that must accompany it — the lifecycle hook, the route registry entry, the screen registry entry, the localization entries — **each missing item its own finding**, not one aggregate.
