@@ -715,6 +715,9 @@ function probeSandboxHost(): SandboxHostFacts {
 /** How long {@link probeKeepAwakeHost}'s test lock may take before it is reported as not taken. */
 const KEEP_AWAKE_PROBE_TIMEOUT_MS = 10_000;
 
+/** The variable GitHub Actions sets to `true` on every runner; `keep-awake` reads it to report a runner as not applicable. Read through this constant alone. */
+const GITHUB_ACTIONS_VARIABLE = 'GITHUB_ACTIONS';
+
 /**
  * The environment variable that turns {@link probeKeepAwakeHost}'s test lock off; this constant is its
  * only spelling in `cli/src`, and it is read through this constant alone
@@ -745,7 +748,7 @@ function probeKeepAwakeHost(ctx: CheckContext): KeepAwakeHostFacts {
     platform: process.platform,
     kernelRelease: kernelRelease(),
     enabled: ctx.config === undefined ? true : keepAwakeEnabled(ctx.config),
-    githubActions: process.env['GITHUB_ACTIONS'] === 'true' || ctx.remoteJob,
+    githubActions: process.env[GITHUB_ACTIONS_VARIABLE] === 'true' || ctx.remoteJob,
     ...(caffeinatePath === undefined ? {} : { caffeinatePath }),
     ...(systemdInhibitPath === undefined ? {} : { systemdInhibitPath }),
   };
