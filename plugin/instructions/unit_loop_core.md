@@ -186,6 +186,7 @@ A row-`G.4` layer whose return carries `already passing — ` — full form `blo
 - `${CLAUDE_PLUGIN_ROOT}/instructions/user_review_fixes_instructions.md`
 - `${CLAUDE_PLUGIN_ROOT}/docs/AUTONOMOUS_FLOW.md`
 - `docs/config.md`
+- `docs/cli.md`
 
 A citer **points and never restates**, and **no document beyond this roster may point at this heading.** An edit that rewords or moves the heading updates every roster member in the same change. Pointers from this file's own sections are not roster entries.
 
