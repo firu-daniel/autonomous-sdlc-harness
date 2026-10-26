@@ -1,0 +1,63 @@
+### Task 4 — The watcher template holds the host awake for the engine's life, re-checks mains power each pass, and measures stall silence from the last host wake
+
+**Goal:** `cli/templates/scripts/autonomous-watcher.sh` starts the hold from inside the launch pipeline's head, for the pid the engine then `exec`s into. On Linux each pass releases the hold on battery and takes it again on mains power. `status` and the start-up log line report the mode. The stall watchdog measures silence from the later of the newest liveness mtime and the last detected host wake.
+
+**Depends on:** Task 2, which defines these in `lib/harness-run-lib.sh`. Restated exactly so this task does not open that file's plan:
+
+- `hr_keep_awake_mode_var <repo_root> <job_mode>` sets `HR_KEEP_AWAKE_MODE` ∈ `caffeinate`|`logind`|`off`, `HR_KEEP_AWAKE_REASON` (empty when holding) and `HR_KEEP_AWAKE_QUIET` (`1` = an `off` that needs no per-launch line). It reads the key from `<repo_root>` and calls `hr_keep_awake_probe_var`.
+- `hr_keep_awake_hold_var <mode> <pid> <branch>` sets `HR_KEEP_AWAKE_STATE` ∈ `held`|`battery`|`refused`|`failed`, `HR_KEEP_AWAKE_PID` (the holder) and `HR_KEEP_AWAKE_DETAIL`. It returns 0 only when `held`. It starts the holder detached from stdio and backgrounded.
+- `hr_on_mains_power` → status `0` mains, `1` battery.
+
+Those functions log nothing, and every line below is this file's. **Where this task stops:** this task edits only the watcher **template**. **Task 9** mirrors it into `scripts/` byte for byte. **Task 5** drives the hold and **Task 6** the wake discount, both against the log lines and registry fields fixed here. Carry them byte for byte. `classify_run_exit`, the registry `pid` (still the outer subshell's `$!`) and the launch flag set are unchanged.
+
+**Wire fixed here.**
+
+- Registry fields per local run: `engine_pid`, `keep_awake` (`held`|`battery`|`refused`|`failed`|`off`), `keep_awake_pid`, and the watchdog's `stall_wake_noted`.
+- State files: `$LOGS_DIR/.host_last_tick` and `$LOGS_DIR/.host_woke_at`, each one epoch integer. A non-integer is read as absent.
+- Log lines:
+  - `keep-awake: holding the host awake for '<branch>' (<caffeinate|systemd-inhibit> pid <h>, engine pid <e>)`
+  - `keep-awake: '<branch>' launched on battery — no hold until mains power returns`
+  - `keep-awake: not holding for '<branch>' — <detail or reason>`
+  - `keep-awake: mains power — holding the host awake for '<branch>' again (systemd-inhibit pid <h>)`
+  - `keep-awake: on battery — released the hold for '<branch>'`
+  - `keep-awake: released '<branch>' — <reason>`
+  - `host-wake: <gap>s since the last pass (over POLL_INTERVAL_SECS + STALL_WAKE_GAP_SECS) — the host slept or the watcher was not running; the stall watchdog measures silence from <time>`
+  - `stall-watchdog: '<b>' silent <raw>s, but the host woke at <time> — measuring silence from the wake`
+
+### Targets
+
+- `cli/templates/scripts/autonomous-watcher.sh` — tunables, `print_status`, `watch_loop`, `tick`, `spawn_engine`, `check_stalled_runs`, `run_job`'s loop, two new passes, the header, and the `Registry helpers.` block's documented field set.
+
+**Work:**
+
+- [ ] **Resolution and the two status lines.** Add the tunable `STALL_WAKE_GAP_SECS="${STALL_WAKE_GAP_SECS:-300}"` beside the other `STALL_*` defaults, with a comment: a pass that starts more than `POLL_INTERVAL_SECS + STALL_WAKE_GAP_SECS` after the previous one reads as a host wake. Add a helper `keep_awake_resolve` that calls `hr_keep_awake_mode_var "$MAIN_REPO" "$JOB_MODE"` and copies the result into `KEEP_AWAKE_MODE`, `KEEP_AWAKE_REASON` and `KEEP_AWAKE_QUIET`. Call it once after `JOB_MODE` is assigned and the library is loaded, so `status` has it, and again at the top of `tick` right after its `hr_config_load`, so a key edit takes effect next pass. `print_status`'s `tunables:` line appends ` STALL_WAKE_GAP_SECS=$STALL_WAKE_GAP_SECS KEEP_AWAKE=$KEEP_AWAKE_MODE`. The next line prints `keep-awake: <mode>`, followed by ` — <reason>` when the mode is `off`. `watch_loop`'s `watcher starting (…)` line gains `, keep-awake=<mode>`, plus ` (<reason>)` when `off`.
+- [ ] **The launch hold, in the pipe's head.** Replace the pipeline's first element in `spawn_engine` with a group: `{ keep_awake_start "$branch" "$(exec sh -c 'echo "$PPID"')" </dev/null >/dev/null 2>&1; exec "$AGENT_CLI" -p "$launch_prompt" … (every existing argument and array expansion unchanged) 2>>"$log_path"; } | tee -a … | "$formatter" >>"$log_path"`. Keep `rc=${PIPESTATUS[0]}` and its comment, and add one sentence: the head now `exec`s into the engine, so `PIPESTATUS[0]` is the engine's own status, and the `$(exec sh -c …)` pid is the engine's pid, because bash 3.2 has no `$BASHPID`. `keep_awake_start <branch> <engine_pid>` does four things:
+  1. It records `engine_pid`.
+  2. On `off`, it records `keep_awake` `off`, and logs the `not holding … — <reason>` line unless `KEEP_AWAKE_QUIET` is `1`.
+  3. Otherwise it calls `hr_keep_awake_hold_var "$KEEP_AWAKE_MODE" <engine_pid> <branch>` and records `keep_awake` and `keep_awake_pid`.
+  4. It logs the `holding`, `launched on battery` or `not holding … — <detail>` line.
+
+  Its stdout **must** be `/dev/null`. `log` tees to stdout, and inside the head stdout is the stream pipe, so one stray line would corrupt `<branch>.stream.jsonl`. A comment says so.
+- [ ] **`keep_awake_pass`**, called in `tick` right after the `keep_awake_resolve` that follows `hr_config_load`, and therefore **ahead of the kill-switch early return** (`if kill_switch_active; then … lane_release_if_idle; return 0; fi`), so it runs on every local pass, braked passes included. It is not called a second time after `check_stalled_runs`, and never in `run_job`. The reason, stated in a comment at the call: the kill switch stops launches and resumes only, and runs already in flight keep running under it, so the hold they carry must still follow mains power and a switch of `execution.keepAwake` to `false` made while braked must still be applied. The pass only reads records and signals holders, and it skips a record whose `engine_pid` is dead, so running it before `reconcile_stale_runs` touches nothing that pass heals. For each local `running` record (`record_is_remote` skips) with a live `engine_pid`:
+  - **mode `off`**: when `keep_awake_pid` is alive, kill it, record `off`, and log `released … — <reason>`.
+  - **mode `logind`**:
+    - When the record is `held` but its holder is dead and `hr_on_mains_power`, or the record is `battery` and on mains: call `hr_keep_awake_hold_var logind …`, record the result, and log `mains power — holding … again` or `not holding … — <detail>`.
+    - When the record is `held`, its holder is alive and the host is on battery: kill the holder and **re-read the power state** (the ledger's *"must check the enabling condition again after switching it off"*). If power is back, take the hold again. Otherwise record `battery` and log `on battery — released …`.
+  - **mode `caffeinate`**: nothing, because `-s` already lets a battery-powered Mac sleep.
+  - `refused` and `failed` are never retried (ledger: *"Every automatic retry in an unattended path is bounded"*).
+  - A record whose `engine_pid` is dead is skipped. Its holder has already exited by its own `-w` or waiter.
+- [ ] **Wake detection and the watchdog's discount.** `host_wake_pass` reads `.host_last_tick`. When it holds an integer and `now - last > POLL_INTERVAL_SECS + STALL_WAKE_GAP_SECS`, it writes `now` to `.host_woke_at` and logs the `host-wake:` line, with `<time>` from `stall_human_time`. It always writes `now` to `.host_last_tick`. A missing file — the first pass ever — detects nothing. Call it **first** in `tick`, before the kill-switch return, so a braked watcher still tracks its passes. Also call it in `run_job`'s `running` arm right before `check_stalled_runs`. In `check_stalled_runs`, read `woke` from `.host_woke_at` once per pass (0 when absent). For each run, keep `raw=$((now - newest))`, take `since` as the later of `newest` and `woke`, and set `staleness=$((now - since))`. When `woke` is the later one, `raw ≥ STALL_WARN_SECS`, and the record's `stall_wake_noted` differs from `woke`, log the `measuring silence from the wake` line and record `stall_wake_noted` = `woke`. Every tier below (warn, CPU guard, kill, the recovery note) reads the discounted `staleness`, with the code unchanged after that line. The kill-tier log keeps printing the discounted seconds.
+- [ ] **The header.** Add a **KEEP AWAKE** block beside the STALL block. Cover what holds on each host and why, the engine-pid mechanism and why not `$BASHPID`, why the hold cannot outlive the run (`-w`, and the waiter that polls `kill -0`), and the end cases: a normal exit, a crash, the watchdog's `kill -9` (the holder is the engine's child, so it is in the descendant set captured before the kill) and a usage-gate pause (the session ends itself). Also cover why `rc` is unchanged, the per-pass Linux power check and why it runs ahead of the kill-switch return (the brake stops launches and resumes, not in-flight runs, so the hold those runs carry must still be released on battery, taken again on AC, and dropped when the key turns `off`), the quiet versus per-launch `off` lines, and that job mode and `GITHUB_ACTIONS=true` hold nothing. Amend the stall paragraph: silence is measured from the later of the liveness mtime and the last detected wake. A gap also reads as a wake after the watcher was stopped, which costs at most one deferred `STALL_KILL_SECS` window. A genuinely hung run with no gap is killed exactly as before. Add two REPRO rows: a stub `caffeinate` first on `PATH` → `keep-awake: holding …` and the stub's argv `-s -i -w <engine pid>`; and `echo $(( $(date +%s) - 4000 )) > <logs>/.host_last_tick` with both liveness files back-dated → `host-wake:` and `measuring silence from the wake`, with no kill. Add `STALL_WAKE_GAP_SECS` to the usage block's tunables list. Extend the `Registry helpers.` block's *"The documented field set:"* list with the four new fields, in its column layout, each giving its writer, values and lifetime as the neighbouring `stall_*` entries do:
+  - `engine_pid`: the engine's own pid, the one the launch pipe's head `exec`s into. Written by `keep_awake_start` at every local launch. Distinct from `pid`, which stays the outer subshell. Overwritten by the next launch, and never cleared.
+  - `keep_awake`: `held` | `battery` | `refused` | `failed` | `off`. Written by `keep_awake_start` at launch and rewritten by `keep_awake_pass` on a Linux power transition or a switch to `off`. Describes the current session only. Never written in job mode.
+  - `keep_awake_pid`: the holder's pid (`caffeinate` or `systemd-inhibit`) while `keep_awake` is `held`. Written by `keep_awake_start` and `keep_awake_pass`. Empty in every other state.
+  - `stall_wake_noted`: the `.host_woke_at` epoch for which `check_stalled_runs` last logged `measuring silence from the wake`, so one wake is logged once per run. Written by `check_stalled_runs` only. Left in place across launches, since a later wake carries a different epoch.
+
+**Verification:**
+
+- `bash -n cli/templates/scripts/autonomous-watcher.sh` exits 0.
+- Run the header's two new REPRO rows by hand against a throwaway `init`-wired fixture under `$TMPDIR`, with a recording agent stub and a stub `caffeinate`, never this checkout. The first row's lines and argv appear, and the stub's `$$` equals the recorded `-w` pid. In the second, the run is still `running` with no `is hung` line.
+- `grep -n 'PIPESTATUS\[0\]' cli/templates/scripts/autonomous-watcher.sh` still names the one `rc=` line in `spawn_engine`. `grep -c '"$AGENT_CLI" -p' cli/templates/scripts/autonomous-watcher.sh` is unchanged from before the edit, because the launch line moved behind `exec` and was not duplicated.
+- `grep -nE 'BASHPID|wait -n' cli/templates/scripts/autonomous-watcher.sh` has no hit.
+- `grep -nE '^\s+(keep_awake_pass|kill_switch_active; then)' cli/templates/scripts/autonomous-watcher.sh`, read within `tick`'s body: the `keep_awake_pass` call line precedes `tick`'s `kill_switch_active` line, and `tick` has exactly one `keep_awake_pass` call.
+- `grep -nE '^#   (engine_pid|keep_awake|keep_awake_pid|stall_wake_noted) ' cli/templates/scripts/autonomous-watcher.sh` hits each of the four fields inside the `Registry helpers.` block.
