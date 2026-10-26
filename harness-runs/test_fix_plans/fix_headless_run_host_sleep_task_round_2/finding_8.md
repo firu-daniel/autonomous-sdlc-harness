@@ -36,3 +36,9 @@ The case is also exposed to the coupling Finding 7 records. Its `.host_last_tick
 - [ ] Make sure `cli/test/watcher-stall-host-sleep.test.mjs` has all three: `WAIT_MS = scaleBound(30_000)`, `session()`'s pass and launch waits under `TICK_TIMEOUT_MS` (from `./helpers/watcher.mjs`, already scaled), and `SESSION_TIMEOUT_MS = scaleBound(240_000)`. If Finding 7 has landed, they are already in place: confirm them with a grep and change nothing more for this case.
 - [ ] A single-file run that passes before that change lands is not evidence that this finding is cleared.
 - [ ] Leave the `epoch() - 5` offset and `STALL_ENV` unchanged, because they are the behaviour under test. Add no retry.
+
+## Already passing
+
+- **(a) Named test and fix site:** `cli/test/watcher-stall-host-sleep.test.mjs` — `(c) a genuinely hung run with no host sleep is killed on the pass, as before`; fix site read after Finding 7's commit `ba5f0802` landed. Grep of that file shows `const WAIT_MS = scaleBound(30_000);`, `const SESSION_TIMEOUT_MS = scaleBound(240_000);`, `TICK_TIMEOUT_MS` imported from `./helpers/watcher.mjs`, and `session()`'s `reached(n)` pass wait and both launch waits (`the session did not hang`, `the record is not running with a pid`) passing `TICK_TIMEOUT_MS`. The `epoch() - 5` offset and `STALL_ENV` are unchanged.
+- **(b) Command and result:** `npm test --workspace cli -- test/watcher-stall-host-sleep.test.mjs`, run after `ba5f0802` — `ok 2 - (c) a genuinely hung run with no host sleep is killed on the pass, as before` (duration_ms 17733); file totals `# tests 3`, `# pass 3`, `# fail 0`. This run postdates the Fix bullet's required change, so it is not the pre-change single-file pass the second Fix bullet rules out. `bash scripts/typecheck.sh`: `PASS: typecheck`.
+- **(c) No code file was edited.**
