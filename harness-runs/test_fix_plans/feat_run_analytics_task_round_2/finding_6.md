@@ -23,6 +23,10 @@ There are two ways this branch's code could matter:
 
 **Fix:**
 
+**Maintainer ruling (Park 2, 2026-10-26).** This case does not test analytics, but it paid the hook's ~3.2 s on its launch pass under full-suite load. Finding 1's item 1 (analytics off by default in the shared watcher fixture) is this finding's fix. Do not lengthen this case's bounds.
+
+- [ ] Covered by Findings 1 and 5's fixture change. Confirm this case's fixture does not opt in to the hook, run its file on its own once to show it still passes, and close this finding with that change; the round-3 gate run verifies it. The steps below apply only if the file fails on its own after that change.
+
 - [ ] Address Findings 1 and 5 first. Then run the named test's file on its own and read the assertion message. **Do not close on a lone pass alone**: this test has failed in two full-suite runs.
 - [ ] If the message is `a planted payload ran`, holding `L2-fsmonitor`: find the git call in `record_run_analytics()` or `run-analytics.sh` that ran unhardened in the clone. Route it through the library's pinned invocation (`hr_run_copy_git` / `hr_run_main_git`, which `hr_commit_paths_var` already uses), in `cli/templates/scripts/autonomous-watcher.sh` or `cli/templates/scripts/run-analytics.sh`, with the identical edit in the `scripts/` mirror.
 - [ ] If the status is not `completed`, apply Finding 5's fix. If that fix is already in, find what else overwrites the record.

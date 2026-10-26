@@ -20,6 +20,10 @@ The stub prints no session, so `run-analytics.sh` stops at `no session in …` a
 
 **Fix:**
 
+**Maintainer ruling (Park 2, 2026-10-26).** This case does not test analytics, but it paid the hook's ~3.2 s on its launch pass under full-suite load. Finding 1's item 1 (analytics off by default in the shared watcher fixture) is this finding's fix. Do not lengthen this case's bounds.
+
+- [ ] Covered by Finding 1's fixture change. Confirm this case's fixture does not opt in to the hook, run its file on its own once to show it still passes, and close this finding with that change; the round-3 gate run verifies it. The steps below apply only if the file fails on its own after that change.
+
 - [ ] Address Finding 1 first. Then run the named test's file on its own and read the assertion message and the watcher log it prints. **Do not close on a lone pass alone**: this test has failed in two full-suite runs.
 - [ ] If the record is not `completed`, find what stops `classify_run_exit` from writing `completed` or what overwrites it. Make `record_run_analytics()` unable to end the subshell, and keep it bounded in time and fail-closed, returning 0. If the overlap with the foreground pass is the cause, apply the same serialization Finding 1 settles on. Edit `cli/templates/scripts/autonomous-watcher.sh` (or `cli/templates/scripts/run-analytics.sh`), with the identical edit in the `scripts/` mirror.
 - [ ] For any other assertion, fix the code its message names.
