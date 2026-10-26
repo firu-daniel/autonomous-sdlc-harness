@@ -32,3 +32,18 @@
 - **added:** `context_notes:`
 - **verbatim:** `context_notes: Tasks 1–9 landed with recorded deviations from plan — see the `**Deviations from plan:**` sections of the per-task files under harness-runs/task_plans/feat_run_analytics/ (commits 628c1814 … 2fbfcbcd).`
 - **why the agent could not derive it:** task_10_plan.md predates Tasks 1–9's implementation; the deviations live only in sibling task files
+
+## [C · Item 1 · general · iter 0] → layer-implementer  (#26)
+- **added:** `context_notes:`
+- **verbatim:** `context_notes: This unit's readiness tag is `cli, general`; its `cli` layer dispatch made no edit and returned `blocker: finding 3 requires a byte-identical edit to scripts/autonomous-watcher.sh, which lies outside the cli layer path; the unit needs splitting into a cli part and a general part` (source: harness-runs/code_reviews/feat_run_analytics_code_review.md readiness entry 1; the unit's single commit lands after its last layer per plugin/instructions/unit_loop_core.md → ## Layer routing table).`
+- **why the agent could not derive it:** the sibling `cli` layer's return exists only in the orchestrator session; finding_3.md does not record which layers of the unit already ran
+
+## [C · Item 3 · cli · iter 0] → layer-implementer  (#30)
+- **added:** `context_notes:`
+- **verbatim:** `context_notes: This unit's readiness tag is `cli, plugin`; a `plugin` layer dispatch of the same unit follows this one, and the unit's single commit lands after its last layer (source: harness-runs/code_reviews/feat_run_analytics_code_review.md readiness entry 3; plugin/instructions/unit_loop_core.md → ## Layer routing table).`
+- **why the agent could not derive it:** the readiness tag lives in the code-review index, which the implementer is not given; finding_4.md names both files without saying which layer dispatch owns each
+
+## [C · Item 3 · plugin · iter 0] → layer-implementer  (#31)
+- **added:** `context_notes:`
+- **verbatim:** `context_notes: This unit's readiness tag is `cli, plugin`; its `cli` layer dispatch already reworded the comment above the `run-analytics.sh` row in cli/src/generators/outerLoopScripts.ts (uncommitted in the working tree; the unit's single commit lands after this layer, per plugin/instructions/unit_loop_core.md → ## Layer routing table).`
+- **why the agent could not derive it:** the sibling `cli` layer's uncommitted edit exists only in the working tree and the orchestrator session; finding_4.md does not record which layers already ran
