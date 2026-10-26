@@ -33,7 +33,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_unit_tree_guards/task_<
 5. [x] **Task 5** — Keep planners out of the guard list and have reviewers police registration _(layer: plugin)_ _(points: 15)_
 6. [x] **Task 6** — Declare `treeGuards` in the schema with a negative fixture _(layer: general)_ _(points: 15)_
 7. [x] **Task 7** — Document `treeGuards` and the `tree-guards` check in the documents of record _(layer: general)_ _(points: 15)_
-8. [ ] **Task 8** — Seed this repository's `harness.config.json` with its three tree guards _(layer: general)_ _(points: 5)_
+8. [x] **Task 8** — Seed this repository's `harness.config.json` with its three tree guards _(layer: general)_ _(points: 5)_
 
 ## Scope register
 

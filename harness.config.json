@@ -51,5 +51,19 @@
     "qa": false,
     "docs": false,
     "parity": false
-  }
+  },
+  "treeGuards": [
+    {
+      "test": "test/main-anchor-isolation.test.mjs",
+      "covers": "cli/test/**/*.mjs"
+    },
+    {
+      "test": "test/shipped-scripts-mktemp.test.mjs",
+      "covers": "cli/templates/scripts/**/*.sh"
+    },
+    {
+      "test": "test/retrieval-loading.test.mjs",
+      "covers": "cli/src/**/*.ts"
+    }
+  ]
 }
