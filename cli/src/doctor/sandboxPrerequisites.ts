@@ -8,12 +8,14 @@
  *
  * This module reads nothing: every host fact reaches {@link assessSandboxHost} as an argument. The
  * live probe that gathers them is `cli/src/doctor/checks.ts` → `probeSandboxHost`, which imports
- * this module; this module never imports it.
+ * this module; this module never imports it. `cli/src/doctor/keepAwake.ts` is the second reader of
+ * {@link sandboxHostKind}, and takes its WSL detection from it.
  *
  * **DECLARED MIRRORS** — a rename on either side is an edit to both.
  *
- * - `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_sandbox_prereq_judge_var` mirrors
- *   {@link sandboxHostKind}, {@link SANDBOX_HOST_BINARIES} and the missing-piece order, and codes
+ * - `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_host_kind_var`, extracted from
+ *   `hr_sandbox_prereq_judge_var` and called by it, mirrors {@link sandboxHostKind}; the judge
+ *   mirrors {@link SANDBOX_HOST_BINARIES} and the missing-piece order, and codes
  *   {@link SANDBOX_INSTALLERS} (each family's command, as {@link installCommands} renders it) and
  *   {@link WSL1_AGENT_MESSAGE} into its `HR_SANDBOX_REFUSAL` sentence. Held equal by
  *   `cli/test/sandbox-prerequisites-shell-mirror.test.mjs`. That library's

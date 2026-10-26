@@ -1,6 +1,7 @@
 /**
- * The run library's sandbox mirrors — `hr_sandbox_prereq_judge_var`, `hr_sandbox_prereq_probe_var`
- * and `hr_sandbox_opted_out` in `cli/templates/scripts/lib/harness-run-lib.sh`.
+ * The run library's sandbox mirrors — `hr_host_kind_var`, `hr_sandbox_prereq_judge_var`,
+ * `hr_sandbox_prereq_probe_var` and `hr_sandbox_opted_out` in
+ * `cli/templates/scripts/lib/harness-run-lib.sh`.
  *
  * **The rule this suite enforces: each shell mirror answers as its owner does over the same
  * inputs.** The judge is held to `cli/src/doctor/sandboxPrerequisites.ts` → `sandboxHostKind` and
@@ -65,6 +66,16 @@ const NO_JQ = JQ_RESOLVES ? false : 'jq does not resolve on this process\'s PATH
 function libCall(script, args = []) {
   return runBash(PACKAGE_ROOT, ['-c', `. "$1"; shift; ${script}`, '_', LIB_PATH, ...args]);
 }
+
+test('hr_host_kind_var answers as sandboxHostKind does', async () => {
+  const pairs = PLATFORMS.flatMap(([platform, unameS]) => RELEASES.map((kernelRelease) => ({ platform, unameS, kernelRelease })));
+  await Promise.all(
+    pairs.map(async ({ platform, unameS, kernelRelease }) => {
+      const result = await libCall('hr_host_kind_var "$@"; printf "%s\\n" "$HR_HOST_KIND"', [unameS, kernelRelease]);
+      assert.equal(result.stdout.trim(), sandboxHostKind(platform, kernelRelease), `${platform}/${unameS} ${kernelRelease}`);
+    }),
+  );
+});
 
 /** Run the judge and return its status and the three variables it sets. */
 async function judge(unameS, unameR, present) {

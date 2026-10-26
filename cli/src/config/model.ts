@@ -145,6 +145,8 @@ export interface HarnessExecution {
   target?: HarnessExecutionTarget;
   /** Whether a run on GitHub Actions with `forge` `github` keeps one phase-progress comment on its pull request; read at run time by `hr_progress_comments` in the run library, and by nothing in this package. */
   progressComments?: boolean;
+  /** Whether a run the local watcher launches holds this host awake for its engine's life (macOS on AC power, Linux on mains power); read at run time by `hr_keep_awake_mode_var` in the run library and by `doctor`'s `keep-awake` check through {@link keepAwakeEnabled}. */
+  keepAwake?: boolean;
 }
 
 /** One domain an unattended run's sandboxed commands may reach, and why. */
@@ -271,7 +273,7 @@ export const DEFAULTS = {
   clientEnvPrefix: null,
   phases: { qa: false, docs: false, parity: false },
   qa: { driver: 'web-playwright', portSeed: 3001 },
-  execution: { target: 'local', progressComments: true },
+  execution: { target: 'local', progressComments: true, keepAwake: true },
   sandbox: { allowedDomains: [] },
 } as const;
 
@@ -659,6 +661,17 @@ export function pythonRetrievalApplies(config: HarnessConfig): boolean {
  */
 export function remoteExecutionApplies(config: HarnessConfig): boolean {
   return (config.execution?.target ?? DEFAULTS.execution.target) === 'github-actions';
+}
+
+/**
+ * Does a run the local watcher launches hold this host awake?
+ *
+ * The one TypeScript reader of `execution.keepAwake`; its shell mirror is `hr_keep_awake` in
+ * `cli/templates/scripts/lib/harness-run-lib.sh`, and both read an absent key as `true`. Import it;
+ * do not re-spell it.
+ */
+export function keepAwakeEnabled(config: HarnessConfig): boolean {
+  return config.execution?.keepAwake !== false;
 }
 
 /**

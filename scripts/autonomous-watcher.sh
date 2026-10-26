@@ -104,6 +104,45 @@
 #     written only to a state directory reached without a symbolic link.
 #   * IT IS SKIPPED ENTIRELY WHILE A USAGE HOLD IS IN EFFECT, because the usage
 #     machinery owns run state for as long as that marker is there.
+#   * SILENCE IS MEASURED FROM THE LATER OF THE LIVENESS MTIME AND THE LAST
+#     DETECTED HOST WAKE. A pass that starts more than POLL_INTERVAL_SECS +
+#     STALL_WAKE_GAP_SECS after the previous one records a wake
+#     (`<logs>/.host_last_tick`, `<logs>/.host_woke_at`), so a run that was
+#     silent only because the host slept is not killed on waking. A gap also
+#     reads as a wake after the watcher was stopped, which costs at most one
+#     deferred STALL_KILL_SECS window. A genuinely hung run with no gap is
+#     killed exactly as before.
+#
+# KEEP AWAKE. Every local launch holds the host awake for the engine's life, so
+# an unattended run is not frozen by idle sleep or a closed lid.
+#
+#   * WHAT HOLDS. macOS: `caffeinate -s -i -w <engine pid>` — `-s` is AC-only,
+#     so a Mac on battery still sleeps. Linux: a logind `sleep` plus
+#     `handle-lid-switch` block lock through `systemd-inhibit`, taken only on
+#     mains power. WSL2 and every other host hold nothing, and say why. Job
+#     mode and GITHUB_ACTIONS=true hold nothing, silently: a runner does not
+#     sleep. `execution.keepAwake` false is also silent (`status` still names
+#     it); a non-boolean value, a missing tool and WSL2 log one
+#     `keep-awake: not holding …` line per launch.
+#   * THE HOLD IS TAKEN FOR THE ENGINE'S OWN PID. The launch pipe's head runs
+#     keep_awake_start and then `exec`s into the engine, so the pid it read
+#     with `$(exec sh -c 'echo "$PPID"')` is the engine's — bash 3.2 has no
+#     per-subshell pid variable. `rc` is unchanged: PIPESTATUS[0] is now the
+#     engine's own status rather than a subshell's carrying it.
+#   * THE HOLD CANNOT OUTLIVE THE RUN. `caffeinate -w` exits with the engine,
+#     and the logind holder's command is a waiter polling `kill -0` on it. A
+#     normal exit and a crash end the engine, and the hold with it. The
+#     watchdog's `kill -9` reaches the holder too: it was started by the head
+#     before the `exec`, so it is the engine's child and in the descendant set
+#     captured before the kill. A usage-gate pause ends the session itself.
+#   * LINUX RE-CHECKS MAINS POWER EVERY PASS (keep_awake_pass): on battery the
+#     hold is released, on AC it is taken again, when the mode turns `off`
+#     every live holder is dropped, and when it holds again — the key turned
+#     back on, or a configuration that reads again — a released record is held
+#     again, on either platform. It runs ahead of the kill-switch
+#     return, because the brake stops launches and resumes, not runs in flight,
+#     and the hold those runs carry must still follow power and the key. A
+#     `refused` or `failed` hold is never retried.
 #
 # THE USAGE GATE ACTS ON THE ONE SIGNAL NO RUN CAN OBSERVE ABOUT ITSELF. The
 # rate limits it exists for are ACCOUNT-GLOBAL, and they are reported as
@@ -702,6 +741,20 @@
 #                    `touch "$d/sdlc-harness/autonomous_logs/.usage_hold"` ->
 #                    the whole pass is skipped even past the kill threshold, and
 #                    STALL_CHECK_ENABLED=0 does the same
+#   a hold        put a stub `caffeinate` that saves its "$@" and its own $$
+#                 first on PATH, then launch as `a launch` does with a stub that
+#                 SLEEPS
+#                 -> watcher.log carries `keep-awake: holding the host awake for
+#                    'feat_x' (caffeinate pid <h>, engine pid <e>)`, the stub's
+#                    saved argv is `-s -i -w <e>`, its $$ is <h>, and the record
+#                    carries engine_pid <e>, keep_awake held, keep_awake_pid <h>
+#   a wake        with `a stall`'s back-dated liveness files and its sleeping
+#                 stub, back-date the last pass:
+#                   echo $(( $(date +%s) - 4000 )) > \
+#                     "$d/sdlc-harness/autonomous_logs/.host_last_tick"
+#                 -> STALL_WARN_SECS=1 STALL_KILL_SECS=2 bash …/autonomous-watcher.sh
+#                    tick logs `host-wake:` and `measuring silence from the wake`,
+#                    no `is hung` line, and the run is still `running`
 #   the usage     with a LIVE `running` record (the sleeping stub above), append
 #   gate          one event to its stream and read the gate without acting:
 #                   printf '{"type":"rate_limit_event","rate_limit_info":{"status":"allowed_warning","rateLimitType":"five_hour","resetsAt":%s,"isUsingOverage":false}}\n' \
@@ -1173,6 +1226,10 @@ STALL_MAX_RESTARTS="${STALL_MAX_RESTARTS:-2}"
 # instantaneous sample, which is what makes it usable as evidence at all. A small
 # non-zero floor is right because idle interpreter and shell noise rounds to ~0.
 STALL_BUSY_CPU_PCT="${STALL_BUSY_CPU_PCT:-1}"
+# A pass that starts more than POLL_INTERVAL_SECS + this many seconds after the
+# previous one reads as a host wake (host_wake_pass), and the watchdog measures
+# silence from that wake rather than across the sleep.
+STALL_WAKE_GAP_SECS="${STALL_WAKE_GAP_SECS:-300}"
 
 # The park-loop guard (classify_run_exit; clear_park_loops). How many CONSECUTIVE
 # park-resumes that made no progress mark the run `park_loop`, after which it is
@@ -1334,6 +1391,18 @@ if [ "${1:-}" = "job" ]; then
   fi
 fi
 
+# The keep-awake decision (KEEP AWAKE in the header), copied out of the
+# library's result variables. Resolved here, after JOB_MODE, so `status` reports
+# it, and again by every tick after its config reload, so an edit to
+# `execution.keepAwake` takes effect on the next pass.
+keep_awake_resolve() {
+  hr_keep_awake_mode_var "$MAIN_REPO" "$JOB_MODE"
+  KEEP_AWAKE_MODE="$HR_KEEP_AWAKE_MODE"
+  KEEP_AWAKE_REASON="$HR_KEEP_AWAKE_REASON"
+  KEEP_AWAKE_QUIET="$HR_KEEP_AWAKE_QUIET"
+}
+keep_awake_resolve
+
 mkdir -p "$INBOX_DIR" "$LOGS_DIR" "$ARCHIVE_DIR" ||
   fatal "could not create the state directories under '$MAIN_REPO' — refusing to start"
 
@@ -1463,6 +1532,23 @@ job_report() {
 #                       dying under the kill would otherwise fire a spurious
 #                       `failed` over the status this pass sets. Cleared on every
 #                       arm of the teardown, including the give-up one.
+#   stall_wake_noted    the `.host_woke_at` epoch for which check_stalled_runs
+#                       last logged `measuring silence from the wake`, so one
+#                       wake is logged once per run. Written by
+#                       check_stalled_runs only. Left in place across launches,
+#                       since a later wake carries a different epoch.
+#   engine_pid          the engine's own pid, the one the launch pipe's head
+#                       `exec`s into. Written by keep_awake_start at every local
+#                       launch. Distinct from `pid`, which stays the outer
+#                       subshell. Overwritten by the next launch, never cleared.
+#   keep_awake          held | battery | refused | failed | off. Written by
+#                       keep_awake_start at launch and rewritten by
+#                       keep_awake_pass on a Linux power transition or a switch
+#                       to `off`. Describes the current session only. Never
+#                       written in job mode.
+#   keep_awake_pid      the holder's pid (`caffeinate` or `systemd-inhibit`)
+#                       while `keep_awake` is `held`. Written by keep_awake_start
+#                       and keep_awake_pass. Empty in every other state.
 #   paused_by           `usage` while THIS run's pause was requested by the usage
 #                       gate, and empty otherwise — which is the whole of how a
 #                       gate pause is told apart from a hand-dropped one. A hand
@@ -1793,7 +1879,12 @@ print_status() {
   ' "$REGISTRY"
   # The resolved tunables, names and values only — the override channel made
   # observable. Nothing else the override file may have set is printed.
-  echo "tunables: MAX_PARALLEL_RUNS=$MAX_PARALLEL_RUNS POLL_INTERVAL_SECS=$POLL_INTERVAL_SECS PERMISSION_MODE=$PERMISSION_MODE CLEANUP_INTERVAL_SECS=$CLEANUP_INTERVAL_SECS AUTO_TAIL_TERMINAL=$AUTO_TAIL_TERMINAL STALL_CHECK_ENABLED=$STALL_CHECK_ENABLED STALL_WARN_SECS=$STALL_WARN_SECS STALL_KILL_SECS=$STALL_KILL_SECS STALL_MAX_RESTARTS=$STALL_MAX_RESTARTS STALL_BUSY_CPU_PCT=$STALL_BUSY_CPU_PCT PARK_LOOP_MAX_CYCLES=$PARK_LOOP_MAX_CYCLES PARK_LOOP_WINDOW_SECS=$PARK_LOOP_WINDOW_SECS USAGE_CHECK_ENABLED=$USAGE_CHECK_ENABLED USAGE_CHECK_INTERVAL_SECS=$USAGE_CHECK_INTERVAL_SECS USAGE_PAUSE_TRIGGER=$USAGE_PAUSE_TRIGGER USAGE_WARNING_DEBOUNCE=$USAGE_WARNING_DEBOUNCE USAGE_RESUME_MARGIN_SECS=$USAGE_RESUME_MARGIN_SECS USAGE_SEVEN_DAY_PAUSE_PCT=$USAGE_SEVEN_DAY_PAUSE_PCT USAGE_LANE_STATE_ENABLED=$USAGE_LANE_STATE_ENABLED USAGE_LANE_LOCK_ENABLED=$USAGE_LANE_LOCK_ENABLED REMOTE_CONTROL_POLL_SECS=$REMOTE_CONTROL_POLL_SECS REMOTE_WAIT_MAX_SECS=$REMOTE_WAIT_MAX_SECS REMOTE_AUTO_RESUME_MAX=$REMOTE_AUTO_RESUME_MAX REMOTE_AUTO_RESUME_DELAY_SECS=$REMOTE_AUTO_RESUME_DELAY_SECS"
+  echo "tunables: MAX_PARALLEL_RUNS=$MAX_PARALLEL_RUNS POLL_INTERVAL_SECS=$POLL_INTERVAL_SECS PERMISSION_MODE=$PERMISSION_MODE CLEANUP_INTERVAL_SECS=$CLEANUP_INTERVAL_SECS AUTO_TAIL_TERMINAL=$AUTO_TAIL_TERMINAL STALL_CHECK_ENABLED=$STALL_CHECK_ENABLED STALL_WARN_SECS=$STALL_WARN_SECS STALL_KILL_SECS=$STALL_KILL_SECS STALL_MAX_RESTARTS=$STALL_MAX_RESTARTS STALL_BUSY_CPU_PCT=$STALL_BUSY_CPU_PCT PARK_LOOP_MAX_CYCLES=$PARK_LOOP_MAX_CYCLES PARK_LOOP_WINDOW_SECS=$PARK_LOOP_WINDOW_SECS USAGE_CHECK_ENABLED=$USAGE_CHECK_ENABLED USAGE_CHECK_INTERVAL_SECS=$USAGE_CHECK_INTERVAL_SECS USAGE_PAUSE_TRIGGER=$USAGE_PAUSE_TRIGGER USAGE_WARNING_DEBOUNCE=$USAGE_WARNING_DEBOUNCE USAGE_RESUME_MARGIN_SECS=$USAGE_RESUME_MARGIN_SECS USAGE_SEVEN_DAY_PAUSE_PCT=$USAGE_SEVEN_DAY_PAUSE_PCT USAGE_LANE_STATE_ENABLED=$USAGE_LANE_STATE_ENABLED USAGE_LANE_LOCK_ENABLED=$USAGE_LANE_LOCK_ENABLED REMOTE_CONTROL_POLL_SECS=$REMOTE_CONTROL_POLL_SECS REMOTE_WAIT_MAX_SECS=$REMOTE_WAIT_MAX_SECS REMOTE_AUTO_RESUME_MAX=$REMOTE_AUTO_RESUME_MAX REMOTE_AUTO_RESUME_DELAY_SECS=$REMOTE_AUTO_RESUME_DELAY_SECS STALL_WAKE_GAP_SECS=$STALL_WAKE_GAP_SECS KEEP_AWAKE=$KEEP_AWAKE_MODE"
+  if [ "$KEEP_AWAKE_MODE" = "off" ]; then
+    echo "keep-awake: $KEEP_AWAKE_MODE — $KEEP_AWAKE_REASON"
+  else
+    echo "keep-awake: $KEEP_AWAKE_MODE"
+  fi
   # Advisory tail: the other repositories armed on this machine. It decides
   # nothing — see the block above print_status.
   machine_footprint_report
@@ -2281,6 +2372,110 @@ spawn_refused() {
 }
 
 # -----------------------------------------------------------------------------
+# KEEP AWAKE, watcher side. The header's KEEP AWAKE block states what holds on
+# each host, why the hold cannot outlive the run, and why the per-pass check
+# runs under the kill switch. The library's hr_keep_awake_* functions decide and
+# start; every log line and registry write is here.
+# -----------------------------------------------------------------------------
+
+# keep_awake_start <branch> <engine_pid> — called from INSIDE the launch pipe's
+# head, just before it `exec`s into the engine. ITS CALLER MUST SEND ITS STDOUT
+# TO /dev/null: `log` tees to stdout, and inside the head stdout is the stream
+# pipe, so one stray line would corrupt `<branch>.stream.jsonl`. Job mode writes
+# nothing: a runner does not sleep, and those fields are local-only.
+keep_awake_start() {
+  local branch="$1" engine_pid="$2" tool="caffeinate"
+  [ "$JOB_MODE" != "1" ] || return 0
+  if [ "$KEEP_AWAKE_MODE" = "off" ]; then
+    registry_set "$branch" engine_pid "$engine_pid" keep_awake off keep_awake_pid ""
+    [ "$KEEP_AWAKE_QUIET" = "1" ] || log "keep-awake: not holding for '$branch' — $KEEP_AWAKE_REASON"
+    return 0
+  fi
+  hr_keep_awake_hold_var "$KEEP_AWAKE_MODE" "$engine_pid" "$branch" || :
+  registry_set "$branch" engine_pid "$engine_pid" \
+    keep_awake "$HR_KEEP_AWAKE_STATE" keep_awake_pid "$HR_KEEP_AWAKE_PID"
+  [ "$KEEP_AWAKE_MODE" != "logind" ] || tool="systemd-inhibit"
+  case "$HR_KEEP_AWAKE_STATE" in
+    held) log "keep-awake: holding the host awake for '$branch' ($tool pid $HR_KEEP_AWAKE_PID, engine pid $engine_pid)" ;;
+    battery) log "keep-awake: '$branch' launched on battery — no hold until mains power returns" ;;
+    *) log "keep-awake: not holding for '$branch' — $HR_KEEP_AWAKE_DETAIL" ;;
+  esac
+}
+
+# keep_awake_retake <branch> <engine_pid> <mode> — the hold taken again by the
+# pass below: on `logind` once mains power is back, and on either mode once the
+# mode holds again after a release to `off`.
+keep_awake_retake() {
+  local b="$1" epid="$2" mode="$3" tool="caffeinate"
+  [ "$mode" != "logind" ] || tool="systemd-inhibit"
+  hr_keep_awake_hold_var "$mode" "$epid" "$b" || :
+  registry_set "$b" keep_awake "$HR_KEEP_AWAKE_STATE" keep_awake_pid "$HR_KEEP_AWAKE_PID"
+  if [ "$HR_KEEP_AWAKE_STATE" = "held" ] && [ "$mode" = "logind" ]; then
+    log "keep-awake: mains power — holding the host awake for '$b' again ($tool pid $HR_KEEP_AWAKE_PID)"
+  elif [ "$HR_KEEP_AWAKE_STATE" = "held" ]; then
+    log "keep-awake: holding the host awake for '$b' again ($tool pid $HR_KEEP_AWAKE_PID)"
+  else
+    log "keep-awake: not holding for '$b' — $HR_KEEP_AWAKE_DETAIL"
+  fi
+}
+
+# One pass over the local `running` records whose engine is alive: release every
+# hold when the mode is `off`, take it again on a record released to `off` once
+# the mode holds, and on `logind` follow mains power. `caffeinate` needs nothing
+# more, because `-s` already lapses on battery. `refused` and `failed`
+# are never retried, so no automatic retry here is unbounded. It only reads
+# records and signals holders, and a record with a dead engine is skipped — its
+# holder has exited by its own `-w` or waiter — so running ahead of
+# reconcile_stale_runs touches nothing that pass heals.
+keep_awake_pass() {
+  local b epid state hpid
+  while IFS= read -r b; do
+    [ -n "$b" ] || continue
+    record_is_remote "$b" && continue
+    [ "$(registry_get "$b" status)" = "running" ] || continue
+    epid="$(registry_get "$b" engine_pid)"
+    { [ -n "$epid" ] && kill -0 "$epid" 2>/dev/null; } || continue
+    state="$(registry_get "$b" keep_awake)"
+    hpid="$(registry_get "$b" keep_awake_pid)"
+    case "$KEEP_AWAKE_MODE" in
+      off)
+        if [ -n "$hpid" ] && kill -0 "$hpid" 2>/dev/null; then
+          kill "$hpid" 2>/dev/null || :
+          registry_set "$b" keep_awake off keep_awake_pid ""
+          log "keep-awake: released '$b' — $KEEP_AWAKE_REASON"
+        fi
+        ;;
+      caffeinate)
+        if [ "$state" = "off" ] && ! { [ -n "$hpid" ] && kill -0 "$hpid" 2>/dev/null; }; then
+          keep_awake_retake "$b" "$epid" caffeinate
+        fi
+        ;;
+      logind)
+        if [ "$state" = "held" ] && [ -n "$hpid" ] && kill -0 "$hpid" 2>/dev/null; then
+          hr_on_mains_power && continue
+          kill "$hpid" 2>/dev/null || :
+          # The power state is read again after the release: power that came
+          # back in between must not leave the run unheld until the next pass.
+          if hr_on_mains_power; then
+            keep_awake_retake "$b" "$epid" logind
+          else
+            registry_set "$b" keep_awake battery keep_awake_pid ""
+            log "keep-awake: on battery — released the hold for '$b'"
+          fi
+        elif { [ "$state" = "held" ] || [ "$state" = "battery" ] || [ "$state" = "off" ]; } && hr_on_mains_power; then
+          keep_awake_retake "$b" "$epid" logind
+        elif [ "$state" = "off" ]; then
+          registry_set "$b" keep_awake battery keep_awake_pid ""
+          log "keep-awake: on battery — no hold for '$b' until mains power returns"
+        fi
+        ;;
+    esac
+  done <<EOF
+$(registry_branches)
+EOF
+}
+
+# -----------------------------------------------------------------------------
 # Headless launch. It DELIMITS THE UNTRUSTED PROMPT CONTENT: the launch prompt
 # references the dropped artifact's FILE PATH for the engine to read — it never
 # concatenates that artifact's text into the trusted instruction layer. The
@@ -2593,16 +2788,23 @@ EOF
     # `<log>.stream.jsonl` — the deep-debug copy, and what the usage gate parses
     # for a rate-limit event — and then formatted into the log. rc MUST come from
     # PIPESTATUS[0], NEVER from the end of the pipe, or classify_run_exit would
-    # read the formatter's status instead of the engine's.
-    "$AGENT_CLI" -p "$launch_prompt" \
-      --settings "$settings_file" \
-      --permission-mode "$PERMISSION_MODE" \
-      ${model_args[@]+"${model_args[@]}"} \
-      ${effort_args[@]+"${effort_args[@]}"} \
-      --output-format stream-json --verbose \
-      --add-dir "$worktree" \
-      --add-dir "$main_state" \
-      ${extra_dir_args[@]+"${extra_dir_args[@]}"} 2>>"$log_path" |
+    # read the formatter's status instead of the engine's. The head now `exec`s
+    # into the engine, so PIPESTATUS[0] is the engine's own status, and the
+    # `$(exec sh -c …)` pid is the engine's pid, because bash 3.2 has no
+    # per-subshell pid variable. keep_awake_start's stdio is detached because its
+    # stdout here is the stream pipe.
+    {
+      keep_awake_start "$branch" "$(exec sh -c 'echo "$PPID"')" </dev/null >/dev/null 2>&1
+      exec "$AGENT_CLI" -p "$launch_prompt" \
+        --settings "$settings_file" \
+        --permission-mode "$PERMISSION_MODE" \
+        ${model_args[@]+"${model_args[@]}"} \
+        ${effort_args[@]+"${effort_args[@]}"} \
+        --output-format stream-json --verbose \
+        --add-dir "$worktree" \
+        --add-dir "$main_state" \
+        ${extra_dir_args[@]+"${extra_dir_args[@]}"} 2>>"$log_path"
+    } |
       tee -a "${log_path%.log}.stream.jsonl" |
       "$formatter" >>"$log_path"
     rc=${PIPESTATUS[0]}
@@ -3496,6 +3698,28 @@ stall_job_surfaces_ok() {
   return "$rc"
 }
 
+# host_wake_pass — a pass that starts more than POLL_INTERVAL_SECS +
+# STALL_WAKE_GAP_SECS after the one before it reads as a host wake, recorded in
+# `.host_woke_at` for check_stalled_runs. Both state files hold one epoch
+# integer, and anything else reads as absent, so the first pass ever detects
+# nothing.
+host_wake_pass() {
+  local now last="" gap tick_file="$LOGS_DIR/.host_last_tick"
+  now="$(date +%s)"
+  if [ -f "$tick_file" ]; then
+    IFS=$' \t\n' read -r last 2>/dev/null <"$tick_file" || :
+  fi
+  case "$last" in '' | *[!0-9]*) last="" ;; esac
+  if [ -n "$last" ]; then
+    gap=$((now - 10#$last))
+    if [ "$gap" -gt $((POLL_INTERVAL_SECS + STALL_WAKE_GAP_SECS)) ]; then
+      printf '%s\n' "$now" >"$LOGS_DIR/.host_woke_at" 2>/dev/null || :
+      log "host-wake: ${gap}s since the last pass (over POLL_INTERVAL_SECS + STALL_WAKE_GAP_SECS) — the host slept or the watcher was not running; the stall watchdog measures silence from $(stall_human_time "$now")"
+    fi
+  fi
+  printf '%s\n' "$now" >"$tick_file" 2>/dev/null || :
+}
+
 check_stalled_runs() {
   [ "$STALL_CHECK_ENABLED" = "1" ] || return 0
   # Skipped WHOLE while a usage hold is up: the usage gate owns run state for as
@@ -3504,7 +3728,15 @@ check_stalled_runs() {
   [ -f "$USAGE_HOLD" ] && return 0
 
   local now b pid log_path stream_path newest m f staleness tree_cpu descendants restarts worktree state_rel why reset_rc note_rel
+  local raw since woke=""
   now="$(date +%s)"
+  # The last detected host wake, read once per pass; 0 when absent or not an
+  # integer.
+  if [ -f "$LOGS_DIR/.host_woke_at" ]; then
+    IFS=$' \t\n' read -r woke 2>/dev/null <"$LOGS_DIR/.host_woke_at" || :
+  fi
+  case "$woke" in '' | *[!0-9]*) woke=0 ;; esac
+  woke=$((10#$woke))
   while IFS= read -r b; do
     [ -n "$b" ] || continue
     # A remote run's mirror logs are not its liveness, and its job runs its own
@@ -3533,7 +3765,18 @@ check_stalled_runs() {
     # Nothing written yet — a run launched moments ago. Not assessable, not a
     # stall; look again next pass.
     [ "$newest" -gt 0 ] || continue
-    staleness=$((now - newest))
+    # Silence is measured from the later of the newest output and the last
+    # host wake, so a sleep is never read as a hang. Every tier below reads the
+    # discounted `staleness`.
+    raw=$((now - newest))
+    since="$newest"
+    [ "$woke" -gt "$since" ] && since="$woke"
+    staleness=$((now - since))
+    if [ "$woke" -gt "$newest" ] && [ "$raw" -ge "$STALL_WARN_SECS" ] &&
+      [ "$(registry_get "$b" stall_wake_noted)" != "$woke" ]; then
+      log "stall-watchdog: '$b' silent ${raw}s, but the host woke at $(stall_human_time "$woke") — measuring silence from the wake"
+      registry_set "$b" stall_wake_noted "$woke"
+    fi
 
     if [ "$staleness" -lt "$STALL_WARN_SECS" ]; then
       # Output is flowing. Clear any warn flag, which is what makes a LATER
@@ -4669,12 +4912,23 @@ EOF
 # else, then the reconcile that frees capacity for the passes that read the cap.
 # -----------------------------------------------------------------------------
 tick() {
+  # First, ahead of the kill-switch return, so a braked watcher still records
+  # its passes and a wake is never mistaken for silence.
+  host_wake_pass
+
   # Drop the library's per-process cache so an edit to `harness.config.json` is
   # picked up without restarting the daemon. The anchors above are start-up
   # values and stay as they are for this process's life — moving the state
   # directory under a live watcher needs a restart, by design.
   hr_config_reset
   hr_config_load "$MAIN_REPO" || :
+  keep_awake_resolve
+
+  # Ahead of the kill-switch return: the brake stops launches and resumes only,
+  # and runs in flight keep running under it, so the hold they carry must still
+  # follow mains power and a switch of `execution.keepAwake` to false made while
+  # braked must still be applied. Once per pass, and never in run_job.
+  keep_awake_pass
 
   if kill_switch_active; then
     log "global kill switch active — not launching or resuming runs this pass"
@@ -4750,7 +5004,9 @@ tick() {
 }
 
 watch_loop() {
-  log "watcher starting (inbox=$INBOX_DIR, cap=$MAX_PARALLEL_RUNS, poll=${POLL_INTERVAL_SECS}s)"
+  local keep_awake_note="$KEEP_AWAKE_MODE"
+  [ "$KEEP_AWAKE_MODE" != "off" ] || keep_awake_note="$KEEP_AWAKE_MODE ($KEEP_AWAKE_REASON)"
+  log "watcher starting (inbox=$INBOX_DIR, cap=$MAX_PARALLEL_RUNS, poll=${POLL_INTERVAL_SECS}s, keep-awake=$keep_awake_note)"
   registry_init
   while true; do
     tick
@@ -5089,6 +5345,7 @@ run_job() {
         usage_waiting=0
         sleep "$POLL_INTERVAL_SECS"
         reconcile_stale_runs
+        host_wake_pass
         check_stalled_runs
         usage_gate
         [ "$(registry_get "$branch" status)" = "running" ] || continue
