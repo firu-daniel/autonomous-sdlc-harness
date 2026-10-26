@@ -21,3 +21,9 @@ The log has no assertion message for it.
 - [ ] Address Findings 1 and 2 first. Then run the named test's file on its own and read this subtest's assertion message.
 - [ ] If it still fails past the `resumeBaseline` check, fix the cause the message names in `record_run_analytics()` in `cli/templates/scripts/autonomous-watcher.sh`, with the identical edit in `scripts/autonomous-watcher.sh`.
 - [ ] Do not weaken, skip or delete any assertion in the test.
+
+## Already passing
+
+- **(a)** Named test: `a missing run-analytics.sh changes neither the status nor the notifications`, under parent `the session's analytics are committed on the run's branch, and a failing step changes no outcome`. File run: `cli/test/watcher-run-analytics.test.mjs`, after Finding 1's commit `ea4a69a1` and the already-passing closes of Findings 2 (`67d80417`) and 3 (`dc862d2a`).
+- **(b)** Command: `npm test --workspace cli -- test/watcher-run-analytics.test.mjs`, from the repository root. Result for the named test: `ok 4 - a missing run-analytics.sh changes neither the status nor the notifications`. It therefore got past the `resumeBaseline` check and passed every later assertion. The file's summary was `# tests 5`, `# pass 5`, `# fail 0`. Subtests 1, 2 and 3 also reported `ok`.
+- **(c)** No code file was edited. `record_run_analytics()` in `cli/templates/scripts/autonomous-watcher.sh` and in `scripts/autonomous-watcher.sh` is unchanged.
