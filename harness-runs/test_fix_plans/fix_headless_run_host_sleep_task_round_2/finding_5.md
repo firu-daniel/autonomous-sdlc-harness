@@ -25,3 +25,9 @@ Each of these waits for a full watcher pass. The shared driver bounds such a pas
 - [ ] Make sure `session()` in `cli/test/watcher-keep-awake.test.mjs` waits for `reached(n)` and for the launch under `TICK_TIMEOUT_MS`, and that `SESSION_TIMEOUT_MS` is `scaleBound(240_000)`. If Finding 1 has landed, both are already in place: confirm them with a grep and change nothing more for this case.
 - [ ] A single-file run that passes before that change lands is not evidence that this finding is cleared.
 - [ ] Do not change the `probe-status` control or the once-only log-line assertion, and add no retry.
+
+## Already passing
+
+- **(a) Test and fix site:** `(i) Linux: a refused lock logs once, still launches, and is never retried on mains` in `cli/test/watcher-keep-awake.test.mjs`; fix site `session()` in the same file, read after Finding 1's commit `d2acb123` (the latest commit touching the file).
+- **(b) Evidence:** grep of the fix site shows `const WAIT_MS = scaleBound(20_000);`, `const SESSION_TIMEOUT_MS = scaleBound(240_000);`, `reached(n)` waiting under `TICK_TIMEOUT_MS`, and the `'the launch recorded no keep_awake'` wait under `TICK_TIMEOUT_MS`. `npm test --workspace cli -- test/watcher-keep-awake.test.mjs`, run after `d2acb123` landed: `ok 7 - (i) Linux: a refused lock logs once, still launches, and is never retried on mains`; file totals `# tests 9`, `# pass 9`, `# fail 0`. The full-suite contention the finding diagnoses is verified by the Run gates phase's `commands.test` run.
+- **(c)** No code file was edited.
