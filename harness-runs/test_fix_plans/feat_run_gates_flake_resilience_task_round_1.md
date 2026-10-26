@@ -12,7 +12,7 @@ The log's SKIPPED lines (6f typos, 13d container tests, 14d zizmor) and BLOCKED 
 
 This list is the **single source of truth** for the fix loop. Any `[ ]` markers elsewhere in this plan or its per-finding files are informational only.
 
-1. [ ] **Finding 1** — Blank the main-repo anchor in `test-time-scale.test.mjs`'s child environment. _(layer: cli)_
+1. [x] **Finding 1** — Blank the main-repo anchor in `test-time-scale.test.mjs`'s child environment. _(layer: cli)_
 
 ## Must Fix
 

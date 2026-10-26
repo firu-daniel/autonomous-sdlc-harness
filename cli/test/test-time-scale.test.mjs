@@ -6,8 +6,9 @@
  * `parseTimeScale` directly. The load-time cases import `helpers/timing.mjs` and
  * `helpers/watcher.mjs` in a child `node`, because the variable is read once at load; the child's
  * environment drops `HARNESS_TEST_TIME_SCALE` and `NODE_TEST_CONTEXT` before adding the case's own
- * value, so a parent run that exports the variable cannot decide the result. No case measures wall
- * time.
+ * value, so a parent run that exports the variable cannot decide the result, and blanks
+ * `HARNESS_MAIN_REPO` so a watcher-launched run's anchor does not leak into the child. No case
+ * measures wall time.
  */
 
 import assert from 'node:assert/strict';
@@ -16,6 +17,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 
+import { MAIN_REPO_ANCHOR_VARIABLE } from '../dist/core/mainRepoAnchor.js';
 import { DEFAULT_TIME_SCALE, MAX_TIME_SCALE, parseTimeScale, TIME_SCALE_VARIABLE } from './helpers/timing.mjs';
 
 const HELPERS_DIR = join(import.meta.dirname, 'helpers');
@@ -34,7 +36,7 @@ const CHILD_SOURCE = [
  * @returns {Promise<{ status: number, stdout: string, stderr: string }>}
  */
 function loadWith(value) {
-  const env = { ...process.env };
+  const env = { ...process.env, [MAIN_REPO_ANCHOR_VARIABLE]: '' };
   delete env[TIME_SCALE_VARIABLE];
   delete env.NODE_TEST_CONTEXT;
   if (value !== undefined) env[TIME_SCALE_VARIABLE] = value;
