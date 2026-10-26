@@ -34,3 +34,9 @@ The likely cause is a transient condition on the gate host during part of the ru
 
   Fix it there. Record under **Deviations from plan:** that the `general`-layer mirror (`scripts/autonomous-watcher.sh`, `scripts/lib/harness-run-lib.sh`) needs the same edit until `cmp` exits 0. A bare `runBash timed out after …` is recorded under **Deviations from plan:** as the next round's evidence, and nothing is changed.
 - [ ] If the case passes against the current tree, the finding closes through `unit_loop_core.md` → `#### The already-passing close`.
+
+## Already passing
+
+- **(a) Named test and file run:** `(d) execution.keepAwake false takes no hold, logs nothing, and status names it`, in `cli/test/watcher-keep-awake.test.mjs`, on `fedb50ec` (`cli` layer dispatch).
+- **(b) Command and result:** `npm test --workspace cli -- test/watcher-keep-awake.test.mjs`, from the repository root, foreground. The named test reported `ok 4 - (d) execution.keepAwake false takes no hold, logs nothing, and status names it` (`duration_ms: 19356.366666`). The file summary was `# tests 9`, `# pass 9`, `# fail 0`, `# duration_ms 171352.72925`. This agrees with the finding's diagnosis: a transient condition on the gate host, not a defect in the tree.
+- **(c) No code file edited:** this section is the only change. `cli/templates/scripts/autonomous-watcher.sh`, `cli/templates/scripts/lib/harness-run-lib.sh` and their `scripts/` mirrors are untouched, so the `general` layer has nothing to copy.
