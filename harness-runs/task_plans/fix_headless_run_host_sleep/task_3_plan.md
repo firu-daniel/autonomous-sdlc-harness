@@ -31,3 +31,9 @@
 - `npm test --workspace cli -- test/keep-awake-lib.test.mjs` passes.
 - `npm test --workspace cli -- test/sandbox-prerequisites-shell-mirror.test.mjs` passes, the new matrix test included.
 - Neither suite leaves a `caffeinate`, `systemd-inhibit`, `sleep` or `keep-awake-wait` process behind. Each hold case waits for its holder to exit before it ends, so the suite's own completion shows it.
+
+**Deviations from plan:**
+
+- Probe cases' `PATH` is the stub directory plus a second temp directory of symlinks to `bash`, `sh` and `jq`, not the directories holding them: on macOS `jq` can live in `/usr/bin` beside `caffeinate`, so adding its directory would let the host's own `caffeinate` resolve. No coreutil is needed by the probe.
+- The holder argv's `sh -c` script is asserted by `kill -0 "$1"` pattern rather than byte for byte; the four flags, `sh`, `-c`, `keep-awake-wait` and the pid are exact.
+- Evidence downgrade: an external check for leftover processes (`pgrep -fl "keep-awake-wait|keep-awake-hold-"`) was refused by the sandbox (`sysmon request failed with error: sysmond service not found`). The no-leftover claim rests on each hold case's own assertion that its holder is gone within 5 s of the target exiting (a holder still alive is killed by the case script), and on both suites completing: `keep-awake-lib.test.mjs` tests 9 / pass 9, `sandbox-prerequisites-shell-mirror.test.mjs` tests 6 / pass 6.
