@@ -32,3 +32,9 @@ The likely cause is a transient condition on the gate host during part of the ru
   - **A hold state, a holder pid or a `keep-awake:` line:** the fault is in `cli/templates/scripts/autonomous-watcher.sh` → `keep_awake_pass`'s `logind)` arm / `keep_awake_retake`, or in `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_keep_awake_hold_var` / `hr_on_mains_power`. Fix it there, and record under **Deviations from plan:** that the `general`-layer mirror (`scripts/autonomous-watcher.sh`, `scripts/lib/harness-run-lib.sh`) needs the same edit until `cmp` exits 0.
   - **A bare timeout:** record it under **Deviations from plan:** as the next round's evidence, and change nothing.
 - [ ] If the case passes against the current tree, the finding closes through `unit_loop_core.md` → `#### The already-passing close`.
+
+## Already passing
+
+- **(a) Named test and file run:** `(e)-(h) Linux: the logind hold waits on the engine, follows mains power pass by pass, and ends with the session`, in `cli/test/watcher-keep-awake.test.mjs`, on `f0667886` (`cli` layer dispatch).
+- **(b) Command and result:** `npm test --workspace cli -- test/watcher-keep-awake.test.mjs`, from the repository root, foreground. The named test reported `ok 6 - (e)-(h) Linux: the logind hold waits on the engine, follows mains power pass by pass, and ends with the session` (`duration_ms: 19140.882875`). The file summary was `# tests 9`, `# pass 9`, `# fail 0`, `# duration_ms 163800.836375`. This agrees with the finding's diagnosis: a transient condition on the gate host, not a defect in the tree.
+- **(c) No code file edited:** this section is the only change. `cli/templates/scripts/autonomous-watcher.sh`, `cli/templates/scripts/lib/harness-run-lib.sh` and their `scripts/` mirrors are untouched, so the `general` layer has nothing to copy.
