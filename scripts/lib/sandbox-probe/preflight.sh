@@ -5,7 +5,7 @@
 # THE REFUSALS, IN ORDER. Each prints one line `sandbox-probe: refusing to start: <reason>` on stderr and
 # makes `sp_preflight` return 2. Nothing is created before check 1 passes; the snapshot's temp directory
 # (SP_TMP) is the only thing created after it, and a later refusal re-checks the snapshot and removes
-# that directory before returning, so a refusal leaves nothing behind.
+# that directory before returning, so a refusal, an interrupt or an early exit leaves nothing behind.
 #   1. The probe's own checkout is not the main checkout: create-worktree.sh's own placement predicate
 #      (hr_repo_root, hr_main_repo, hr_wrapper_main_of compared canonically, then hr_run_main_set_var),
 #      plus a checkout carrying .git/objects/info/alternates, which is a `git clone --shared` run copy
@@ -213,6 +213,10 @@ sp_snapshot_take() {
     SP_SNAPSHOT_REFUSAL="cannot create a temp directory under '${TMPDIR:-/tmp}'"
     return 1
   fi
+  # Until sp_setup's sp__install_trap replaces these, an interrupt or an early exit still releases SP_TMP.
+  trap 'sp_snapshot_release' EXIT
+  trap 'sp_snapshot_release; exit 130' INT
+  trap 'sp_snapshot_release; exit 143' TERM
   while IFS= read -r path; do
     if ! line="$(sp_snapshot_line "$path")"; then
       SP_SNAPSHOT_REFUSAL="cannot hash '$path' with 'shasum -a 256'"

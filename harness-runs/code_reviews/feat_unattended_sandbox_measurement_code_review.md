@@ -26,7 +26,7 @@ Pass 2 ran against `harness-runs/task_plan_point_reviews/feat_unattended_sandbox
 6. [x] **Finding 2** — Read the SSH proxy refusal `This proxy requires authentication` as the network layer, so R4 is not failed on its expected outcome _(layer: cli, general)_
 7. [x] **Finding 8** — Assert that Gate 15's leg table matches `sandbox-probe.sh --list` _(layer: cli)_
 8. [x] **Finding 1** — Keep the probe clone and its profiles alive for the headless-parity script, and run its network step on the network scratch profile _(layer: general)_
-9. [ ] **Finding 9** — Release the probe's temp area on an interrupt or early exit before `sp_setup` installs its teardown trap _(layer: general)_
+9. [x] **Finding 9** — Release the probe's temp area on an interrupt or early exit before `sp_setup` installs its teardown trap _(layer: general)_
 
 ---
 
