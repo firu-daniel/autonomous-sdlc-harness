@@ -206,8 +206,9 @@ sp_call_input() {
     | .[0] | select(. != null) | .input[$key]? | select(. != null)' "${1:-}" 2>/dev/null
 }
 
-# sp_judge_allowed_domains <stream> <exact command> — N5's decision rule. `pass` needs a refusal layer
-# and `fail` needs layer `ran`: a call that was merely not refused is never a pass.
+# sp_judge_allowed_domains <stream> <exact command> — N5's decision rule. `pass` needs a refusal layer,
+# and `fail` needs layer `ran` on a result that is not an error: a call that was merely not refused is
+# never a pass, and one that errored without a refusal is never a fail.
 sp_judge_allowed_domains() {
   local stream="${1:-}" cmd="${2:-}" domains
   SP_LAYER=""
@@ -236,10 +237,15 @@ sp_judge_allowed_domains() {
       SP_VERDICT=pass
       SP_EVIDENCE="$SP_LAYER_EVIDENCE"
       ;;
-    # Arm 3: the host answered.
+    # Arm 3: the host answered — a result that is not an error and carries no refusal string.
     ran)
-      SP_VERDICT=fail
-      SP_EVIDENCE="$SP_LAYER_EVIDENCE — finding: allowed_domains widened a sandboxed call; this needs its own follow-up task prompt, not a doc edit"
+      if [ "$SP__STATUS" = error ]; then
+        SP_VERDICT="not run"
+        SP_EVIDENCE="the call returned an error carrying no refusal string, so neither a refusal nor an answer from the host: $SP_LAYER_EVIDENCE"
+      else
+        SP_VERDICT=fail
+        SP_EVIDENCE="$SP_LAYER_EVIDENCE — finding: allowed_domains widened a sandboxed call; this needs its own follow-up task prompt, not a doc edit"
+      fi
       ;;
     *)
       SP_VERDICT=fail
