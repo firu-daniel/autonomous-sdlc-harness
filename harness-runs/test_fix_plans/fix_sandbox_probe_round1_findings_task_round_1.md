@@ -12,7 +12,7 @@
 
 **This section is the single source of truth for the fix loop.** The loop walks the `[ ]` entries below top-to-bottom; only the committing role flips a marker. `[ ]` markers anywhere else (sub-step bullets inside the per-finding files) are informational only — never the iteration source.
 
-1. [ ] **Finding 1** — Stop the 10,000-object seed commit in the `sp__wp_tracked` test from starting a detached auto-gc that races the case directory's teardown. _(layer: cli)_
+1. [x] **Finding 1** — Stop the 10,000-object seed commit in the `sp__wp_tracked` test from starting a detached auto-gc that races the case directory's teardown. _(layer: cli)_
 
 ---
 
