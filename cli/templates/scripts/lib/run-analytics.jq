@@ -1,15 +1,16 @@
 # run-analytics.jq — per-session records from one headless stream file.
 #
 # Owns: turning one `<state_dir>/autonomous_logs/<branch>.stream.jsonl`'s raw
-# `stream-json` events into one record per headless session, and re-classing
-# those records' idle gaps against host suspend intervals. It reads no file of
+# `stream-json` events into one record per headless session, re-classing
+# those records' idle gaps against host suspend intervals, and turning sub-agent
+# transcripts into final per-request and per-dispatch token figures. It reads no file of
 # its own, resolves no path, consults no host and merges nothing: the roll-up and
 # the Markdown are lib/run-analytics-report.jq's; locating files, reading suspend
 # intervals, merging and writing are run-analytics.sh's, its only caller.
 #
 # Floor: jq 1.5 — no utf8bytelength, no --rawfile, no $ARGS.named, no regex.
 #
-# BOTH MODES TAKE EVERY VARIABLE: $mode, $idle_threshold_s, $known, $redact,
+# EVERY MODE TAKES EVERY VARIABLE: $mode, $idle_threshold_s, $known, $redact,
 # $suspend, $suspend_source. jq resolves every $name the program references at
 # compile time, not when the branch holding it runs, so a call omitting one
 # aborts with `$<name> is not defined` whatever its mode. Each mode ignores the
@@ -47,6 +48,26 @@
 #   Per record: sets time.suspend_source, and re-classes as host_asleep (context
 #   kept) every idle gap overlapping an interval. host_asleep outranks every class.
 #
+# Mode `transcripts`:
+#   jq -n -R -c -S -f run-analytics.jq --arg mode transcripts
+#      --argjson idle_threshold_s 1 --argjson known '[]' --argjson redact '[]'
+#      --argjson suspend '[]' --arg suspend_source none < <concatenated transcripts>
+#   Raw lines, `inputs | fromjson?`. A line {"run_analytics_transcript":"<agent_id>"}
+#   starts that agent's transcript; lines before the first marker are ignored.
+#   Per agent, each assistant line with a string message.id and an object
+#   message.usage counts; the LAST such line per message.id wins.
+#   Output: {"<agent_id>": {output_tokens, input_tokens, cache_read_tokens,
+#            cache_write_tokens, requests: {"<message_id>": {the same four}}}};
+#   the four totals are sums over requests. An agent with no such line is omitted.
+#
+# Mode `attach`:
+#   jq -c -S -f run-analytics.jq --arg mode attach (same neutral variables)
+#      < {"records": [<session record>, …], "transcripts": <transcripts output>}
+#   Output: the records array. A subagents[] entry whose agent_id is a key of
+#   transcripts takes its four totals and token_source "transcript"; a
+#   requests.items[] entry whose message_id is in any agent's requests takes those
+#   four values. Nothing else changes.
+#
 # Record (top-level keys exactly these):
 #   session_id, complete, first_at, last_at  (ISO timestamps, verbatim)
 #   time: {wall_ms, duration_ms, duration_api_ms, host_suspended_ms, idle_ms,
@@ -59,26 +80,41 @@
 #     event is a user event or the init, with no assistant event after it; context
 #     = the most recently active such) > tool_running (an open tool call; context
 #     = the latest-started's) > unknown (context = the last event's).
-#   requests: {items: [{started_at, context, latency_ms, output_tokens,
+#   requests: {items: [{started_at, context, message_id, latency_ms, output_tokens,
 #              input_tokens, cache_read_tokens, cache_write_tokens, after_retry}],
 #              overall, by_context: {<context>: rollup}}
 #     rollup = {count, p50_ms, p90_ms, p99_ms, max_ms, over_threshold}; count is
 #     every request, percentiles (nearest rank) over those with a latency.
-#     A request is one message.id within a context; usage from its last event.
+#     A request is one message.id within a context. An orchestrator request's
+#     usage is from its last event; a sub-agent request's four token fields are
+#     null, because the stream's sub-agent usage is in-progress (mode attach
+#     fills them from the transcript). message_id: message.id, or null.
 #     latency_ms: from the last timestamped event in the same context to the
 #     request's first event; a sub-agent's first request with no earlier event in
 #     its context measures from its dispatching tool_use. after_retry: a
 #     system/api_retry of the same context lies between those two points.
 #   tools: {items: [{tool, context, started_at, duration_ms, result_bytes,
 #           is_error, permission_denied}], by_tool: [{tool, context, count,
-#           total_ms, max_ms}], slowest: <top 10 items>, polling: [{context,
-#           command, count, total_ms}]}
-#   subagents: [{type, description, started_at, duration_ms, requests,
-#               output_tokens, input_tokens, cache_read_tokens,
+#           total_ms, max_ms}], slowest: <top 10 items, Agent/Task excluded>,
+#           polling: [{context, command, count, total_ms}]}
+#     items and by_tool keep every call, Agent/Task dispatches included.
+#   subagents: [{type, description, started_at, duration_ms, requests, agent_id,
+#               token_source, output_tokens, input_tokens, cache_read_tokens,
 #               cache_write_tokens, wall_share}]
-#   cost: {total_cost_usd, by_model, input_tokens, output_tokens, thinking_tokens,
-#          cache_read_tokens, cache_write_5m_tokens, cache_write_1h_tokens,
-#          cache_hit_ratio}  (every value null when complete is false)
+#     agent_id: the dispatch's transcript id, from the closing tool_result's
+#     tool_use_result.agentId or a system task_* event's task_id; never redacted.
+#     token_source and the four token fields are null here (mode attach fills them).
+#     requests is counted from the stream.
+#   cost: {total_cost_usd, by_model, token_source, input_tokens, output_tokens,
+#          cache_read_tokens, cache_write_tokens, cache_hit_ratio, thinking_tokens,
+#          cache_write_5m_tokens, cache_write_1h_tokens}
+#          (every value null when complete is false)
+#     token_source "model_usage": the four token totals are sums over
+#     result.modelUsage's models; "usage": result.usage, only for a session that
+#     dispatched nothing and has no modelUsage; otherwise null with the four null.
+#     cache_hit_ratio = cache_read / (cache_read + cache_write + input) over those.
+#     thinking_tokens and the 5m/1h cache-write split are main-thread figures
+#     from result.usage.
 #   reliability: {api_retries, api_retry_errors, permission_denials,
 #                 subagents_spawned, subagents_failed, subagents_killed,
 #                 terminal_reason, stop_reason, num_turns, ttft_ms,
@@ -190,20 +226,23 @@ def add_call($u; $ck; $t; $at):
     | if $u.name == "Agent" or $u.name == "Task" then
         .dispatch[$u.id] = {type: ($u.input.subagent_type // "subagent"),
                             description: ($u.input.description // null | redact),
-                            start_t: $st, started_at: $sat}
+                            start_t: $st, started_at: $sat, agent_id: null}
         | .dispatch_order += [$u.id]
       else . end
   end;
 
 def on_assistant($e; $t; $at; $ck):
   ($ck + "|" + ($e.message.id // $e.uuid // "" | tostring)) as $rk
-  | (($e.message.usage // {}) | req_usage) as $u
+  | (if $ck != "" then
+       {output_tokens: null, input_tokens: null, cache_read_tokens: null, cache_write_tokens: null}
+     else ($e.message.usage // {}) | req_usage end) as $u
   | (if .reqidx[$rk] == null then
        (if $t == null then null
         elif .ctx[$ck].last_t != null then $t - .ctx[$ck].last_t
         elif $ck != "" and .dispatch[$ck].start_t != null then $t - .dispatch[$ck].start_t
         else null end) as $lat
        | {started_at: $at, context: ctx_name($ck), latency_ms: $lat,
+          message_id: ($e.message.id | if type == "string" then . else null end),
           after_retry: (.ctx[$ck].retry == true), _parent: $ck} as $req
        | .reqidx[$rk] = (.reqs | length)
        | .reqs += [$req + $u]
@@ -218,9 +257,14 @@ def on_assistant($e; $t; $at; $ck):
 
 def on_user($e; $t; $ck):
   (if $t != null then $t else .prev_t end) as $et
-  | reduce ($e.message.content
-            | if type == "array" then .[] else empty end
-            | select(type == "object" and .type == "tool_result" and (.tool_use_id | type) == "string")) as $r
+  | [$e.message.content
+     | if type == "array" then .[] else empty end
+     | select(type == "object" and .type == "tool_result" and (.tool_use_id | type) == "string")] as $results
+  # tool_use_result is one value per event, so it names a dispatch only when the event closes one call.
+  | ($e.tool_use_result
+     | if type == "object" and (.agentId | type) == "string" and ($results | length) == 1
+       then .agentId else null end) as $aid
+  | reduce $results[] as $r
       (.;
        $r.tool_use_id as $id
        | if .calls[$id] == null or .calls[$id].duration_ms != null then .
@@ -231,6 +275,8 @@ def on_user($e; $t; $ck):
            | .calls[$id].is_error = ($r.is_error == true)
            | del(.open[$id])
            | if .dispatch[$id] != null and .ctx[$id] != null then .ctx[$id].awaiting = false else . end
+           | if .dispatch[$id] != null and .dispatch[$id].agent_id == null and $aid != null
+             then .dispatch[$id].agent_id = $aid else . end
          end)
   | .ctx[$ck].awaiting = true;
 
@@ -274,7 +320,8 @@ def finalize:
            by_tool: ($items | group_by([.tool, .context])
                      | map({tool: .[0].tool, context: .[0].context, count: length,
                             total_ms: (durs | add // 0), max_ms: (durs | max)})),
-           slowest: ([$items[] | select(.duration_ms != null)] | sort_by(0 - .duration_ms) | .[0:slowest_limit]),
+           slowest: ([$items[] | select(.duration_ms != null and .tool != "Agent" and .tool != "Task")]
+                     | sort_by(0 - .duration_ms) | .[0:slowest_limit]),
            polling: ([.corder[] as $id | .calls[$id] | select(.tool == "Bash" and .command != null)]
                      | group_by([.context, .command])
                      | map(select(length >= polling_min_repeats)
@@ -284,33 +331,49 @@ def finalize:
                | ($byp[$id] // []) as $rq
                | {type: $d.type, description: $d.description, started_at: $d.started_at,
                   duration_ms: $dur, requests: ($rq | length),
-                  output_tokens: ([$rq[].output_tokens] | add // 0),
-                  input_tokens: ([$rq[].input_tokens] | add // 0),
-                  cache_read_tokens: ([$rq[].cache_read_tokens] | add // 0),
-                  cache_write_tokens: ([$rq[].cache_write_tokens] | add // 0),
+                  agent_id: $d.agent_id, token_source: null,
+                  output_tokens: null, input_tokens: null,
+                  cache_read_tokens: null, cache_write_tokens: null,
                   wall_share: (if $dur != null and $wall != null and $wall > 0
                                then ($dur / $wall | round4) else null end)}],
    cost: (if $r == null then
-            {total_cost_usd: null, by_model: null, input_tokens: null, output_tokens: null,
-             thinking_tokens: null, cache_read_tokens: null, cache_write_5m_tokens: null,
-             cache_write_1h_tokens: null, cache_hit_ratio: null}
+            {total_cost_usd: null, by_model: null, token_source: null,
+             input_tokens: null, output_tokens: null, cache_read_tokens: null,
+             cache_write_tokens: null, cache_hit_ratio: null, thinking_tokens: null,
+             cache_write_5m_tokens: null, cache_write_1h_tokens: null}
           else
             ($r.usage // {}) as $u
-            | (($u.cache_read_input_tokens // 0) + ($u.cache_creation_input_tokens // 0)
-               + ($u.input_tokens // 0)) as $den_t
-            | {total_cost_usd: $r.total_cost_usd,
-               by_model: ((if ($r.modelUsage | type) == "object" and ($r.modelUsage | length) > 0
-                           then $r.modelUsage else ($r.model_usage_since_last_result // {}) end)
-                          | map_values(.costUSD)),
-               input_tokens: $u.input_tokens,
-               output_tokens: $u.output_tokens,
-               thinking_tokens: $u.output_tokens_details.thinking_tokens,
-               cache_read_tokens: $u.cache_read_input_tokens,
-               cache_write_5m_tokens: $u.cache_creation.ephemeral_5m_input_tokens,
-               cache_write_1h_tokens: $u.cache_creation.ephemeral_1h_input_tokens,
-               cache_hit_ratio: (if $den_t > 0
-                                 then (($u.cache_read_input_tokens // 0) / $den_t | round4)
-                                 else null end)}
+            | (($r.modelUsage | type) == "object" and ($r.modelUsage | length) > 0) as $has_mu
+            | (if $has_mu then
+                 [$r.modelUsage[] | objects] as $m
+                 | {token_source: "model_usage",
+                    input_tokens: ([$m[] | .inputTokens // 0] | add // 0),
+                    output_tokens: ([$m[] | .outputTokens // 0] | add // 0),
+                    cache_read_tokens: ([$m[] | .cacheReadInputTokens // 0] | add // 0),
+                    cache_write_tokens: ([$m[] | .cacheCreationInputTokens // 0] | add // 0)}
+               elif (.dispatch_order | length) == 0 then
+                 {token_source: "usage",
+                  input_tokens: $u.input_tokens,
+                  output_tokens: $u.output_tokens,
+                  cache_read_tokens: $u.cache_read_input_tokens,
+                  cache_write_tokens: $u.cache_creation_input_tokens}
+               else
+                 {token_source: null, input_tokens: null, output_tokens: null,
+                  cache_read_tokens: null, cache_write_tokens: null}
+               end) as $tok
+            | (($tok.cache_read_tokens // 0) + ($tok.cache_write_tokens // 0)
+               + ($tok.input_tokens // 0)) as $den_t
+            | $tok
+              + {total_cost_usd: $r.total_cost_usd,
+                 by_model: ((if $has_mu
+                             then $r.modelUsage else ($r.model_usage_since_last_result // {}) end)
+                            | map_values(.costUSD)),
+                 thinking_tokens: $u.output_tokens_details.thinking_tokens,
+                 cache_write_5m_tokens: $u.cache_creation.ephemeral_5m_input_tokens,
+                 cache_write_1h_tokens: $u.cache_creation.ephemeral_1h_input_tokens,
+                 cache_hit_ratio: (if $tok.token_source != null and $den_t > 0
+                                   then (($tok.cache_read_tokens // 0) / $den_t | round4)
+                                   else null end)}
           end),
    reliability: {api_retries: .retries,
                  api_retry_errors: .retry_errors,
@@ -356,6 +419,10 @@ def step($e):
         | .retry_errors[$e.error_status | tostring] += 1
       elif $e.type == "system" and $e.subtype == "permission_denied" then
         if ($e.tool_use_id | type) == "string" then .denied[$e.tool_use_id] = true else . end
+      elif $e.type == "system" and ($e.subtype | type) == "string" and ($e.subtype | startswith("task_"))
+           and ($e.task_id | type) == "string" and ($e.tool_use_id | type) == "string" then
+        if .dispatch[$e.tool_use_id] != null and .dispatch[$e.tool_use_id].agent_id == null
+        then .dispatch[$e.tool_use_id].agent_id = $e.task_id else . end
       elif $e.type == "rate_limit_event" then
         ($e.rate_limit_info // {}) as $i
         | reduce ([$i.rateLimitType, $i.utilization],
@@ -382,6 +449,42 @@ def overlay:
                   | if $s != null and ([$iv[] | select(.[0] < ($s + $len) and $s < .[1])] | length) > 0
                     then .class = "host_asleep" else . end)));
 
+def tok_sum($rq):
+  {output_tokens: ([$rq[].output_tokens] | add // 0),
+   input_tokens: ([$rq[].input_tokens] | add // 0),
+   cache_read_tokens: ([$rq[].cache_read_tokens] | add // 0),
+   cache_write_tokens: ([$rq[].cache_write_tokens] | add // 0)};
+
+def transcripts:
+  reduce (inputs | fromjson? | select(type == "object")) as $e
+    ({cur: null, agents: {}};
+     if ($e.run_analytics_transcript | type) == "string" then .cur = $e.run_analytics_transcript
+     elif .cur != null and $e.type == "assistant" and ($e.message.id | type) == "string"
+          and ($e.message.usage | type) == "object" then
+       .agents[.cur][$e.message.id] = ($e.message.usage | req_usage)
+     else . end)
+  | .agents | to_entries
+  | map(select((.value | length) > 0)
+        | {key, value: (tok_sum([.value[]]) + {requests: .value})})
+  | from_entries;
+
+def attach:
+  (.transcripts // {} | if type == "object" then . else {} end) as $tr
+  | (reduce ($tr[] | objects | .requests | objects | to_entries[]) as $q
+       ({}; .[$q.key] = $q.value)) as $bymsg
+  | (.records // [])
+  | map((if (.subagents | type) == "array" then
+          .subagents |= map(if (.agent_id | type) == "string" and ($tr[.agent_id] | type) == "object"
+                            then . + ($tr[.agent_id] | {output_tokens, input_tokens, cache_read_tokens,
+                                                        cache_write_tokens})
+                                   + {token_source: "transcript"}
+                            else . end)
+        else . end)
+        | (if (.requests.items | type) == "array" then
+             .requests.items |= map(if (.message_id | type) == "string" and $bymsg[.message_id] != null
+                                    then . + $bymsg[.message_id] else . end)
+           else . end));
+
 if $mode == "sessions" then
   reduce (inputs | fromjson? | select(type == "object")) as $e
     ({out: [], emitted: {}, seen: {}, active: false,
@@ -391,6 +494,10 @@ if $mode == "sessions" then
   | .out
 elif $mode == "overlay" then
   overlay
+elif $mode == "transcripts" then
+  transcripts
+elif $mode == "attach" then
+  attach
 else
-  error("run-analytics.jq: unknown --arg mode \"\($mode)\"; expected sessions or overlay")
+  error("run-analytics.jq: unknown --arg mode \"\($mode)\"; expected sessions, overlay, transcripts or attach")
 end

@@ -58,7 +58,7 @@ So Tasks 1–3 edit the templates, and every test drives the templates through a
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_run_analytics_token_accounting/task_<K>_plan.md`. They are ordered bottom-up by ship sequence, with the catch-all layer last.
 
-1. [ ] **Task 1** — Record true token sources, transcript links and dispatch-free slowest calls in `lib/run-analytics.jq` _(layer: cli)_ _(points: 20)_
+1. [x] **Task 1** — Record true token sources, transcript links and dispatch-free slowest calls in `lib/run-analytics.jq` _(layer: cli)_ _(points: 20)_
 2. [ ] **Task 2** — Roll up and render true tokens, the token attribution check and the relabelled `Agent` rows in `lib/run-analytics-report.jq` _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Locate sub-agent transcripts in `run-analytics.sh` and feed them through the `transcripts` and `attach` modes _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — Fixture streams, transcripts and cases proving the token and tool-time fixes, each with its red-turning mutation _(layer: cli)_ _(points: 20)_
