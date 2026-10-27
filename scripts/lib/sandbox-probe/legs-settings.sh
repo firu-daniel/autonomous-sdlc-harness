@@ -324,7 +324,17 @@ sp_leg_invalid_profile() {
   local bad helper hcmd marker pfile ctl_ok=0 ctl_ev departure ev launch_err
   local note="CS8 (b), the watcher's launch refusal, stays a hand/record row"
   helper="$SP_TMP/cs8-helper.sh"
-  marker="$SP_TMP/sbx_cs8_marker"
+  # CS8's row names this path: $HOME is outside every write root in every start mode, where SP_TMP can
+  # sit under a session's writable temp root. A marker already there would read as the helper having run.
+  marker="$HOME/sbx_cs8_marker"
+  if [ -e "$marker" ] || [ -L "$marker" ]; then
+    sp_result_line invalid-profile CS8 "not run" "$marker exists before the session; remove it and re-run; $note" ""
+    return 0
+  fi
+  if ! sp__ctl_literal marker "$marker"; then
+    sp_result_line invalid-profile CS8 "not run" "'$marker' is not spellable as one literal word; $note" ""
+    return 0
+  fi
   hcmd="bash $helper"
   if ! sp__ctl_literal "temp area" "$SP_TMP"; then
     sp_result_line invalid-profile CS8 "not run" "the temp area is not spellable as one literal word; $note" ""

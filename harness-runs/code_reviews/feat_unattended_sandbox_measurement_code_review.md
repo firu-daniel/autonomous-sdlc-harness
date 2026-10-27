@@ -22,7 +22,7 @@ Pass 2 ran against `harness-runs/task_plan_point_reviews/feat_unattended_sandbox
 2. [x] **Finding 4** — Make SR2 pass only on its `sbx_sr2_refused` line, and fail on an `sbx_sr2_written` line _(layer: general)_
 3. [x] **Finding 3** — Grade S1's permission-layer refusal as the pass its row records, not `not run` _(layer: general)_
 4. [x] **Finding 6** — Count only a permission-layer answer as a W7 failure _(layer: general)_
-5. [ ] **Finding 7** — Put CS8's marker at the row's `$HOME/sbx_cs8_marker`, not under the probe's temp area _(layer: general)_
+5. [x] **Finding 7** — Put CS8's marker at the row's `$HOME/sbx_cs8_marker`, not under the probe's temp area _(layer: general)_
 6. [ ] **Finding 2** — Read the SSH proxy refusal `This proxy requires authentication` as the network layer, so R4 is not failed on its expected outcome _(layer: cli, general)_
 7. [ ] **Finding 8** — Assert that Gate 15's leg table matches `sandbox-probe.sh --list` _(layer: cli)_
 8. [ ] **Finding 1** — Keep the probe clone and its profiles alive for the headless-parity script, and run its network step on the network scratch profile _(layer: general)_
