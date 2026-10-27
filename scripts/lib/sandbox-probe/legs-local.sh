@@ -5,8 +5,8 @@
 # T2 takes the Run gates phase's route (docs/sandbox-verification.md §7 OR6): one session issues
 # `run-test-suite.sh sbx_probe_t2`, then `run-test-suite.sh --wait sbx_probe_t2`, repeated while it
 # prints `pending`, up to SP_T2_MAX_WAITS times. T2 is graded from the lane's .verdict and .log, never
-# from a call's output. A worker still running after the session is polled for up to
-# SP_T2_COLLECT_SECONDS, so teardown never removes the clone under it.
+# from a call's output. A worker still running after the session is tracked for teardown and polled for
+# up to SP_T2_COLLECT_SECONDS, so teardown never removes the clone under it, interrupted or not.
 #
 # W7's session carries `--debug-file`, a departure from the watcher's line; its path is exported as
 # SP_W7_DEBUG once that session has launched, for the write-protection leg's W8.
@@ -196,6 +196,11 @@ sp_leg_gates() {
     departure="$(sp_departures)"
     note=""
     if [ ! -f "$lane.verdict" ] && [ -f "$lane.running" ]; then
+      # Tracked before the wait, so the EXIT/INT/TERM teardown stops a live worker before it removes the
+      # clone under it on every exit path, not only when the wait runs out.
+      pid=""
+      IFS= read -r pid <"$lane.running" || true
+      case "$pid" in '' | *[!0-9]*) pid="" ;; *) sp_track_pid "$pid" ;; esac
       waited=0
       while [ ! -f "$lane.verdict" ] && [ -f "$lane.running" ] && [ "$waited" -lt "$SP_T2_COLLECT_SECONDS" ]; do
         sleep "$SP_T2_POLL_SECONDS"
@@ -203,14 +208,12 @@ sp_leg_gates() {
       done
       if [ -f "$lane.verdict" ]; then
         note="the verdict was collected by the probe after the session, ${waited}s later"
+        [ -z "$pid" ] || sp_untrack_pid "$pid"
       elif [ -f "$lane.running" ]; then
         note="no verdict ${waited}s after the session and the gate worker still holds .running"
-        # Teardown stops it rather than removing the clone under it.
-        pid=""
-        IFS= read -r pid <"$lane.running" || true
-        case "$pid" in '' | *[!0-9]*) ;; *) sp_track_pid "$pid" ;; esac
       else
         note="the gate worker removed .running ${waited}s after the session without a verdict"
+        [ -z "$pid" ] || sp_untrack_pid "$pid"
       fi
     fi
     if [ -f "$lane.log" ] && cp -- "$lane.log" "$SP_TMP/gates-t2.lane.log" 2>/dev/null; then

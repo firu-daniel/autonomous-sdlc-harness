@@ -15,6 +15,7 @@
 #   sp_track <path> / sp_track_branch <name>              register for teardown
 #   sp_keep_file <path>      add <path> to the current leg's (SP_CURRENT_LEG) evidence record
 #   sp_track_pid <pid>       register a process the probe started, for teardown to stop
+#   sp_untrack_pid <pid>     drop a tracked process that ended on its own, so teardown never stops a reused PID
 #   sp_stop_pid <pid>        TERM <pid> and wait up to SP__PID_POLLS polls of 0.1 s; status 1 when it is
 #                            still running, 0 when it ended or was already gone; prints nothing
 #   sp_teardown              first move the recorded files of every leg sp_leg_nonpass names into a
@@ -332,6 +333,18 @@ sp_track_pid() {
     "" | *[!0-9]*) sp_refuse "sp_track_pid: '${1:-}' is not a process id"; return 1 ;;
   esac
   SP__PIDS="$SP__PIDS$1"$'\n'
+}
+
+# sp_untrack_pid <pid> — teardown no longer stops this process: it has ended on its own, and its PID
+# may be reused before teardown runs.
+sp_untrack_pid() {
+  local p rest=""
+  while IFS= read -r p; do
+    [ -n "$p" ] && [ "$p" != "${1:-}" ] && rest="$rest$p"$'\n'
+  done <<EOF
+$SP__PIDS
+EOF
+  SP__PIDS="$rest"
 }
 
 # sp_stop_pid <pid> — the one place the probe stops a process it started: TERM, then up to SP__PID_POLLS
