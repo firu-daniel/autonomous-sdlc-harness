@@ -6,7 +6,8 @@
  *
  * **The rule these tests exist to enforce: the probe's git judges read refs, never exit statuses —
  * a push by `ls-remote` on origin, a commit by `rev-parse` before and after — and its leg table is
- * the single declaration `--list` prints, every row id in exactly one leg.**
+ * the single declaration `--list` prints, every row id in exactly one leg, and Gate 15 in
+ * `docs/development.md` restates it row for row.**
  *
  * The judges run in a `bash -c` that sources `core.sh` and `judge.sh` from `WORKSPACE_ROOT`, with the
  * fixture (or `os.tmpdir()`) as its working directory; every repository argument names a `seedRepository` fixture and
@@ -19,6 +20,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -280,6 +282,31 @@ test('--list prints the leg table', async (t) => {
     const unknown = await sourced(tmpdir(), 'sp_leg_rows no-such-leg; printf "|%s" "$?"');
     assert.equal(unknown.stdout, '|1');
   });
+});
+
+test("Gate 15's restated leg table matches --list, row for row", async () => {
+  const doc = readFileSync(join(WORKSPACE_ROOT, 'docs', 'development.md'), 'utf8').split('\n');
+  const header = doc.indexOf('| Leg | Rows | Expected | Recorded in |');
+  assert.notEqual(header, -1, 'the leg table header is in docs/development.md');
+  const end = doc.indexOf('', header);
+  const restated = doc
+    .slice(header + 2, end === -1 ? undefined : end)
+    .map((line) => {
+      const cells = line
+        .replace(/^\|/, '')
+        .replace(/\|$/, '')
+        .split('|')
+        .map((cell) => cell.replaceAll('`', '').trim());
+      assert.equal(cells.length, 4, `not four cells: ${JSON.stringify(line)}`);
+      const [leg, rows, expected, recorded] = cells;
+      return [leg, rows.replaceAll(', ', ','), expected, recorded].join('\t');
+    });
+
+  const run = await runBash(WORKSPACE_ROOT, [PROBE, '--list']);
+  assert.equal(run.status, 0, run.stderr);
+  const listed = run.stdout.split('\n');
+  if (listed.at(-1) === '') listed.pop();
+  assert.deepEqual(restated, listed);
 });
 
 test('sp_result_line: fixed field order, double-quoted values', async (t) => {
