@@ -11,12 +11,13 @@
 | Host-suspended | 0.0s |
 | Idle | 0.0s |
 | Cost | $34.61 |
-| Input tokens | 370 |
-| Output tokens | 47331 |
-| Thinking tokens | 3071 |
-| Cache read tokens | 41117137 |
-| Cache write tokens (5m / 1h) | 0 / 305132 |
-| Cache hit ratio | 0.9926 |
+| Input tokens | 1342 |
+| Output tokens | 383522 |
+| Thinking tokens (main thread) | 3071 |
+| Cache read tokens | 74109350 |
+| Cache write tokens | 2238658 |
+| Cache write tokens, main thread (5m / 1h) | 0 / 305132 |
+| Cache hit ratio | 0.9707 |
 | Requests | 640 |
 | Request latency p50 / p90 / p99 / max | 1.9s / 7.5s / 59.6s / 1m 41s |
 | Requests over the idle threshold | 0 |
@@ -60,7 +61,7 @@ None.
 
 | Tool | Context | Calls | Total | Max |
 |---|---|---|---|---|
-| Agent | orchestrator | 31 | 53m 28s | 10m 27s |
+| Agent — sub-agent wall time | orchestrator | 31 | 53m 28s | 10m 27s |
 | Bash | autonomous-sdlc-harness:architecture-reviewer | 21 | 2.8s | 0.1s |
 | Bash | autonomous-sdlc-harness:branch-reviewer | 18 | 2.6s | 0.2s |
 | Bash | autonomous-sdlc-harness:committer | 124 | 1m 08s | 4.6s |
@@ -93,20 +94,22 @@ None.
 | Write | autonomous-sdlc-harness:task-plan-writer | 6 | 0.1s | 0.0s |
 | Write | orchestrator | 2 | 0.0s | 0.0s |
 
-#### Slowest calls
+`Agent` / `Task` rows are sub-agent wall time: how long the orchestrator was blocked on each dispatch, which `### Sub-agents` breaks down per dispatch. They are not time spent in a tool.
+
+#### Slowest calls (sub-agent dispatches excluded)
 
 | Tool | Context | Started | Duration | Result bytes | Error | Permission denied |
 |---|---|---|---|---|---|---|
-| Agent | orchestrator | 2026-10-27T09:53:04.811Z | 10m 27s | 4829 | false | false |
-| Agent | orchestrator | 2026-10-27T10:24:41.381Z | 4m 58s | 3906 | false | false |
-| Agent | orchestrator | 2026-10-27T10:04:52.302Z | 4m 20s | 690 | false | false |
-| Agent | orchestrator | 2026-10-27T10:19:51.492Z | 4m 11s | 4640 | false | false |
-| Agent | orchestrator | 2026-10-27T10:44:19.937Z | 3m 37s | 896 | false | false |
-| Agent | orchestrator | 2026-10-27T10:31:59.867Z | 3m 11s | 3453 | false | false |
-| Agent | orchestrator | 2026-10-27T10:10:00.006Z | 3m 04s | 5352 | false | false |
-| Agent | orchestrator | 2026-10-27T10:13:47.277Z | 2m 52s | 4606 | false | false |
-| Agent | orchestrator | 2026-10-27T10:17:17.513Z | 1m 56s | 4619 | false | false |
-| Agent | orchestrator | 2026-10-27T10:40:51.126Z | 1m 39s | 3642 | false | false |
+| Bash | orchestrator | 2026-10-27T10:55:30.980Z | 1m 02s | 19 | true | false |
+| Bash | orchestrator | 2026-10-27T11:05:00.371Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-10-27T10:53:23.087Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-10-27T11:01:50.288Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-10-27T11:06:04.646Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-10-27T11:00:46.915Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-10-27T11:03:57.004Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-10-27T10:52:19.857Z | 1m 00s | 19 | true | false |
+| Bash | orchestrator | 2026-10-27T11:08:10.774Z | 1m 00s | 19 | true | false |
+| Bash | orchestrator | 2026-10-27T10:59:43.737Z | 1m 00s | 19 | true | false |
 
 #### Polling loops
 
@@ -138,37 +141,37 @@ None.
 
 | Type | Description | Duration | Requests | Output tokens | Input tokens | Cache read tokens | Cache write tokens | Wall share |
 |---|---|---|---|---|---|---|---|---|
-| autonomous-sdlc-harness:task-plan-writer | Write task plan | 10m 27s | 44 | 443 | 88 | 6437877 | 225789 | 0.1075 |
-| autonomous-sdlc-harness:architecture-reviewer | Architecture review of plan | 1m 06s | 8 | 84 | 16 | 353052 | 96912 | 0.0114 |
-| autonomous-sdlc-harness:task-plan-reviewer | Task plan review | 4m 20s | 38 | 316 | 76 | 3921553 | 147470 | 0.0446 |
-| autonomous-sdlc-harness:layer-implementer | Implement Task 1 | 3m 04s | 23 | 205 | 46 | 1286324 | 74034 | 0.0316 |
-| autonomous-sdlc-harness:committer | Commit Task 1 | 30.9s | 8 | 117 | 16 | 168751 | 27473 | 0.0053 |
-| autonomous-sdlc-harness:layer-implementer | Implement Task 2 | 2m 52s | 25 | 286 | 50 | 1412968 | 61171 | 0.0296 |
-| autonomous-sdlc-harness:committer | Commit Task 2 | 25.8s | 6 | 79 | 12 | 131653 | 13318 | 0.0044 |
-| autonomous-sdlc-harness:layer-implementer | Implement Task 3 | 1m 56s | 17 | 210 | 34 | 801843 | 52732 | 0.0199 |
-| autonomous-sdlc-harness:committer | Commit Task 3 | 26.2s | 8 | 105 | 16 | 177604 | 12804 | 0.0045 |
-| autonomous-sdlc-harness:layer-implementer | Implement Task 4 | 4m 11s | 30 | 552 | 60 | 2965606 | 122496 | 0.0431 |
-| autonomous-sdlc-harness:committer | Commit Task 4 | 26.4s | 8 | 102 | 16 | 176513 | 13022 | 0.0045 |
-| autonomous-sdlc-harness:layer-implementer | Implement Task 5 | 4m 58s | 29 | 387 | 58 | 2530137 | 136968 | 0.0511 |
-| autonomous-sdlc-harness:committer | Commit Task 5 | 26.7s | 9 | 109 | 18 | 193930 | 28001 | 0.0046 |
-| autonomous-sdlc-harness:architecture-reviewer | Branch architecture review | 1m 03s | 15 | 138 | 30 | 1284599 | 112278 | 0.0109 |
-| autonomous-sdlc-harness:branch-reviewer | End-of-branch code review | 3m 11s | 23 | 184 | 46 | 2130681 | 132768 | 0.0327 |
-| autonomous-sdlc-harness:review-plan-reviewer | Meta-review code review | 1m 08s | 15 | 129 | 30 | 572866 | 62154 | 0.0118 |
-| autonomous-sdlc-harness:committer | Commit code review file | 20.8s | 6 | 102 | 12 | 115740 | 25506 | 0.0036 |
-| autonomous-sdlc-harness:layer-implementer | Fix code-review Finding 3 | 23.5s | 7 | 96 | 14 | 177396 | 36093 | 0.004 |
-| autonomous-sdlc-harness:committer | Commit Finding 3 fix | 26.1s | 7 | 105 | 14 | 151578 | 12864 | 0.0045 |
-| autonomous-sdlc-harness:layer-implementer | Fix Finding 2 (cli layer) | 1m 01s | 13 | 152 | 26 | 473849 | 34339 | 0.0106 |
-| autonomous-sdlc-harness:layer-implementer | Fix Finding 2 (general layer) | 42.2s | 9 | 123 | 18 | 329535 | 33096 | 0.0072 |
-| autonomous-sdlc-harness:committer | Commit Finding 2 fix | 29.3s | 8 | 116 | 16 | 176907 | 13094 | 0.005 |
-| autonomous-sdlc-harness:layer-implementer | Fix Finding 1 (cli layer) | 1m 39s | 17 | 231 | 34 | 845376 | 55943 | 0.017 |
-| autonomous-sdlc-harness:layer-implementer | Fix Finding 1 (general layer) | 56.8s | 9 | 117 | 18 | 357234 | 40753 | 0.0097 |
-| autonomous-sdlc-harness:committer | Commit Finding 1 fix | 25.8s | 8 | 92 | 16 | 174140 | 12710 | 0.0044 |
-| autonomous-sdlc-harness:skeptic-reviewer | Adversarial skeptic review | 3m 37s | 27 | 250 | 54 | 2373616 | 148868 | 0.0372 |
-| autonomous-sdlc-harness:review-plan-reviewer | Meta-review skeptic review | 41.1s | 8 | 71 | 16 | 284153 | 81952 | 0.0071 |
-| autonomous-sdlc-harness:committer | Commit skeptic review file | 19.4s | 5 | 57 | 10 | 101677 | 10888 | 0.0033 |
-| autonomous-sdlc-harness:layer-implementer | Fix skeptic Finding 1 | 49.2s | 12 | 261 | 24 | 448439 | 36477 | 0.0084 |
-| autonomous-sdlc-harness:committer | Commit skeptic Finding 1 fix | 29.3s | 8 | 105 | 16 | 177059 | 12816 | 0.005 |
-| autonomous-sdlc-harness:statistics-plan-writer | Write branch statistics | 29.9s | 5 | 58 | 10 | 99012 | 26442 | 0.0051 |
+| autonomous-sdlc-harness:task-plan-writer | Write task plan | 10m 27s | 44 | 65812 | 90 | 6663666 | 226117 | 0.1075 |
+| autonomous-sdlc-harness:architecture-reviewer | Architecture review of plan | 1m 06s | 8 | 7153 | 18 | 449964 | 100655 | 0.0114 |
+| autonomous-sdlc-harness:task-plan-reviewer | Task plan review | 4m 20s | 38 | 24912 | 78 | 4071921 | 148479 | 0.0446 |
+| autonomous-sdlc-harness:layer-implementer | Implement Task 1 | 3m 04s | 23 | 20745 | 48 | 1363604 | 75174 | 0.0316 |
+| autonomous-sdlc-harness:committer | Commit Task 1 | 30.9s | 8 | 2700 | 18 | 196224 | 27834 | 0.0053 |
+| autonomous-sdlc-harness:layer-implementer | Implement Task 2 | 2m 52s | 25 | 19915 | 52 | 1488203 | 61556 | 0.0296 |
+| autonomous-sdlc-harness:committer | Commit Task 2 | 25.8s | 6 | 2201 | 14 | 157645 | 13680 | 0.0044 |
+| autonomous-sdlc-harness:layer-implementer | Implement Task 3 | 1m 56s | 17 | 12204 | 36 | 868639 | 53695 | 0.0199 |
+| autonomous-sdlc-harness:committer | Commit Task 3 | 26.2s | 8 | 2204 | 18 | 203082 | 13166 | 0.0045 |
+| autonomous-sdlc-harness:layer-implementer | Implement Task 4 | 4m 11s | 30 | 24874 | 62 | 3102166 | 123129 | 0.0431 |
+| autonomous-sdlc-harness:committer | Commit Task 4 | 26.4s | 8 | 2180 | 18 | 202209 | 13384 | 0.0045 |
+| autonomous-sdlc-harness:layer-implementer | Implement Task 5 | 4m 58s | 29 | 41131 | 60 | 2681169 | 137631 | 0.0511 |
+| autonomous-sdlc-harness:committer | Commit Task 5 | 26.7s | 9 | 2235 | 20 | 221931 | 28364 | 0.0046 |
+| autonomous-sdlc-harness:architecture-reviewer | Branch architecture review | 1m 03s | 15 | 6480 | 32 | 1410139 | 114002 | 0.0109 |
+| autonomous-sdlc-harness:branch-reviewer | End-of-branch code review | 3m 11s | 23 | 19994 | 48 | 2266347 | 134450 | 0.0327 |
+| autonomous-sdlc-harness:review-plan-reviewer | Meta-review code review | 1m 08s | 15 | 6890 | 32 | 637918 | 67382 | 0.0118 |
+| autonomous-sdlc-harness:committer | Commit code review file | 20.8s | 6 | 1638 | 14 | 141246 | 25870 | 0.0036 |
+| autonomous-sdlc-harness:layer-implementer | Fix code-review Finding 3 | 23.5s | 7 | 2256 | 16 | 213489 | 36385 | 0.004 |
+| autonomous-sdlc-harness:committer | Commit Finding 3 fix | 26.1s | 7 | 2363 | 16 | 177116 | 13227 | 0.0045 |
+| autonomous-sdlc-harness:layer-implementer | Fix Finding 2 (cli layer) | 1m 01s | 13 | 5793 | 28 | 522252 | 35116 | 0.0106 |
+| autonomous-sdlc-harness:layer-implementer | Fix Finding 2 (general layer) | 42.2s | 9 | 4474 | 20 | 376695 | 33739 | 0.0072 |
+| autonomous-sdlc-harness:committer | Commit Finding 2 fix | 29.3s | 8 | 2637 | 18 | 202675 | 13459 | 0.005 |
+| autonomous-sdlc-harness:layer-implementer | Fix Finding 1 (cli layer) | 1m 39s | 17 | 9847 | 36 | 915383 | 57014 | 0.017 |
+| autonomous-sdlc-harness:layer-implementer | Fix Finding 1 (general layer) | 56.8s | 9 | 4462 | 20 | 412051 | 43509 | 0.0097 |
+| autonomous-sdlc-harness:committer | Commit Finding 1 fix | 25.8s | 8 | 2166 | 18 | 199524 | 13076 | 0.0044 |
+| autonomous-sdlc-harness:skeptic-reviewer | Adversarial skeptic review | 3m 37s | 27 | 22170 | 56 | 2522484 | 150460 | 0.0372 |
+| autonomous-sdlc-harness:review-plan-reviewer | Meta-review skeptic review | 41.1s | 8 | 4286 | 18 | 369003 | 82478 | 0.0071 |
+| autonomous-sdlc-harness:committer | Commit skeptic review file | 19.4s | 5 | 1445 | 12 | 125239 | 11249 | 0.0033 |
+| autonomous-sdlc-harness:layer-implementer | Fix skeptic Finding 1 | 49.2s | 12 | 4492 | 26 | 498980 | 37175 | 0.0084 |
+| autonomous-sdlc-harness:committer | Commit skeptic Finding 1 fix | 29.3s | 8 | 2520 | 18 | 202549 | 13178 | 0.005 |
+| autonomous-sdlc-harness:statistics-plan-writer | Write branch statistics | 29.9s | 5 | 4012 | 12 | 128700 | 28893 | 0.0051 |
 
 ### Cost and tokens
 
@@ -176,12 +179,24 @@ None.
 |---|---|
 | Cost | $34.61 |
 | Cost — claude-opus-5-5 | $34.61 |
-| Input tokens | 370 |
-| Output tokens | 47331 |
-| Thinking tokens | 3071 |
-| Cache read tokens | 41117137 |
-| Cache write tokens (5m / 1h) | 0 / 305132 |
-| Cache hit ratio | 0.9926 |
+| Input tokens | 1342 |
+| Output tokens | 383522 |
+| Thinking tokens (main thread) | 3071 |
+| Cache read tokens | 74109350 |
+| Cache write tokens | 2238658 |
+| Cache write tokens, main thread (5m / 1h) | 0 / 305132 |
+| Cache hit ratio | 0.9707 |
+| Token source | result.modelUsage |
+
+#### Token attribution
+
+| Context | Input tokens | Output tokens | Cache read tokens | Cache write tokens |
+|---|---|---|---|---|
+| orchestrator | 370 | 4423 | 41117137 | 305132 |
+| sub-agents | 972 | 336191 | 32992213 | 1933526 |
+| remainder | 0 | 42908 | 0 | 0 |
+
+Remainder: tokens the session total holds that neither the orchestrator's requests nor the dispatches' transcripts account for.
 
 ### Reliability
 
