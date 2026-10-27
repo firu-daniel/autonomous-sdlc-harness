@@ -60,8 +60,9 @@
 # Before it, after every session, that subshell's `record_run_analytics` runs
 # run-analytics.sh over the run's stream and commits the per-session record it
 # writes under `<state_dir>/run_analytics/<branch>/` on the run's branch by
-# plumbing — best-effort: a failure is one watcher-log line and changes no
-# classification, exit code or notification.
+# plumbing, then, outside a job, pushes the branch when it committed —
+# best-effort: a failure, a push that did not land on origin included, is one
+# watcher-log line and changes no classification, exit code or notification.
 #
 # THE STALENESS WATCHDOG HEALS WHAT THE RECONCILE PASS CANNOT SEE. That pass
 # heals a run whose PROCESS IS ALREADY GONE. A run whose process is alive but
@@ -541,7 +542,9 @@
 #   * RUN ANALYTICS: after every session, auto-resumes included, the same
 #     `record_run_analytics` a local run gets records it under
 #     `<state_dir>/run_analytics/<branch>/` and commits it on the branch by
-#     plumbing, best-effort; the workflow's `Push the branch` step pushes it.
+#     plumbing, best-effort, but does not push it: the workflow's `Push the
+#     branch` step, which runs under always() after the job's last session,
+#     pushes it.
 #
 # Subcommands:
 #   autonomous-watcher.sh            # the watch loop (the default; the unit uses this)
@@ -2809,11 +2812,11 @@ EOF
       "$formatter" >>"$log_path"
     rc=${PIPESTATUS[0]}
     record_run_analytics "$branch" "$worktree" "$log_path"
-    # The record above runs BEFORE the classification so it is on the branch
-    # before any notification names the run's outcome — on a clone,
-    # hr_commit_paths_var moves the clone's ref and then the main checkout's, so
-    # classify_run_exit's own sync finds them equal. It can neither change rc nor
-    # notify. Job mode reaches this same line.
+    # The record above runs BEFORE the classification so it is on the branch,
+    # and locally on origin, before any notification names the run's outcome —
+    # on a clone, hr_commit_paths_var moves the clone's ref and then the main
+    # checkout's, so classify_run_exit's own sync finds them equal. It can
+    # neither change rc nor notify. Job mode reaches this same line.
     # Classify and notify HERE, where rc is the engine's real exit code.
     classify_run_exit "$branch" "$worktree" "$log_path" "$rc"
   ) &
@@ -2997,15 +3000,35 @@ max_question_index() {
 # BEST-EFFORT BY CONTRACT: it ALWAYS returns 0, never reads or writes the
 # caller's rc and never notifies, so it cannot change the classification, the
 # exit code or any notification. Each failure is one `log` line, which lands in
-# the watcher log; the script's and the commits' own output goes to the run's
-# log. It pushes nothing: locally the commit rides the run's next push, and in a
-# job the workflow's `Push the branch` step pushes it.
+# the watcher log; the script's, the commits' and the push's own output goes to
+# the run's log.
+#
+# THE PUSH. Locally, once both files are handled and only when at least one was
+# committed, the run's branch is pushed through push-branch.sh — once per call,
+# not once per file. Without it the final session's record would reach origin
+# only with a push nothing makes, because no session follows it. The push is a
+# SEPARATE statement from the commits, as at the task-prompt commit, and the
+# function still returns 0 whatever it does. push-branch.sh exits 0 on every
+# path, failures included, so its exit status says nothing: the push runs
+# through `hr_push_landed` (lib/harness-run-lib.sh), the remote arm's landed
+# test, which reads the answer in the main checkout — `refs/heads/<branch>`
+# equal to `refs/remotes/origin/<branch>`, fetching that ref once when they
+# differ. Any non-zero answer — the push refused or skipped, origin naming no
+# URL, the fetch failing, or origin moved past the branch — is one watcher-log
+# WARNING; the push's and the fetch's own output go to the run's log. That
+# reading holds for a clone and a legacy worktree alike: on a clone the commit
+# has already moved the main checkout's ref with the clone's, so push-branch.sh's
+# sync-in is a no-op, the push runs from the main checkout, and
+# classify_run_exit's sync after it finds the two equal.
+# In a job (JOB_MODE=1) it pushes nothing: the workflow's `Push the branch` step
+# runs under always() after the job's last session and pushes every commit the
+# job made, this one included, so a push here would only repeat it.
 #
 # --main-repo is passed because run-analytics.sh reads no HARNESS_MAIN_REPO
 # (see the header above spawn_engine); it is the same value.
 record_run_analytics() {
   local branch="$1" worktree="$2" log_path="$3"
-  local state_rel file commit_rc subject a_rc=0
+  local state_rel file commit_rc subject a_rc=0 committed=0
 
   # The watchdog owns this run's teardown, as in classify_run_exit's first test.
   if [ "$(registry_get "$branch" stall_killing)" = "1" ]; then
@@ -3033,11 +3056,18 @@ record_run_analytics() {
     commit_rc=0
     watcher_commit "$worktree" "$state_rel/run_analytics/$branch/$file" "$subject" >>"$log_path" 2>&1 || commit_rc=$?
     case "$commit_rc" in
-      0) log "run analytics: committed $file for '$branch' ($subject)" ;;
+      0)
+        log "run analytics: committed $file for '$branch' ($subject)"
+        committed=1
+        ;;
       3) ;;
       *) log "run analytics: could not commit $file for '$branch' (exit $commit_rc) — see $log_path" ;;
     esac
   done
+  if [ "$committed" = 1 ] && [ "$JOB_MODE" != "1" ]; then
+    hr_push_landed "$PUSH_BRANCH" "$worktree" "$branch" >>"$log_path" 2>&1 ||
+      log "WARNING: push-branch.sh did not bring origin/$branch to '$branch' after the run-analytics commit — continuing (see $log_path)"
+  fi
   return 0
 }
 

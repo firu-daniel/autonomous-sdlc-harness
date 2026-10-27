@@ -4,20 +4,24 @@
  * passes of the `init`-written watcher against a fixture whose stub agent prints a stream.
  *
  * **The rule these tests exist to enforce: the session's analytics are committed on the run's branch
- * after every session, and the analytics step never changes the run's status, exit handling or
- * notifications.**
+ * after every session and the branch is pushed once when they were, and the analytics step never
+ * changes the run's status, exit handling or notifications.**
  *
- * Not covered here: job mode, which reaches the same `spawn_engine` line and is driven elsewhere
- * (`cli/test/watcher-remote-job.test.mjs`); and the metrics themselves (`cli/test/run-analytics.test.mjs`).
+ * Not covered here: job mode, which reaches the same `spawn_engine` line and is driven elsewhere —
+ * that a job commits the record and leaves the push to the workflow is asserted in
+ * `cli/test/watcher-remote-job.test.mjs`; and the metrics themselves (`cli/test/run-analytics.test.mjs`).
  *
- * The cases share one fixture and run in order: the launch commits and sets the baseline, a resume
- * over the same session commits nothing, and two failing resumes are held to the successful resume's
- * outcome. A resume's outcome is compared with a resume's, because a resume adds its own `resumed`
- * notification that a launch does not.
+ * The cases share one fixture and run in order: the launch commits and pushes through the real
+ * `push-branch.sh`, a resume over the same session commits nothing and pushes nothing, a resume whose
+ * push the fixture's `origin` refuses commits, logs the one WARNING and is held to that resume's
+ * outcome, and two failing resumes are held to it too. From the second case on, `push-branch.sh` is a
+ * recorder that counts its calls and then runs the real script, so the refused push is a real one and
+ * the real script exits 0 on it, as it does on every path. A resume's outcome is compared with a
+ * resume's, because a resume adds its own `resumed` notification that a launch does not.
  */
 
 import assert from 'node:assert/strict';
-import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -42,6 +46,10 @@ const PASS_ENV = {
  * 6); a ceiling, so a passing pass still returns when it is done. `TICK_TIMEOUT_MS` is already scaled.
  */
 const PASS_OPTIONS = { timeoutMs: TICK_TIMEOUT_MS * 2 };
+
+/** The watcher-log WARNING `record_run_analytics` writes when its push did not land on `origin`. */
+const pushWarning = (branch) =>
+  `WARNING: push-branch.sh did not bring origin/${branch} to '${branch}' after the run-analytics commit — continuing`;
 
 /** A stub body printing one complete session, `id`, to stdout — the stream the watcher tees. */
 function sessionStub(id) {
@@ -75,11 +83,50 @@ async function adoptedFixture(t) {
   t.after(() => rm(clone, { recursive: true, force: true }));
   const ref = `refs/heads/${w.branch}`;
   const cloneClar = join(clone, STATE_DIR, 'clarifications', w.branch);
+  const pushCalls = `${w.dir}-push-calls.txt`;
+  t.after(() => rm(pushCalls, { force: true }));
+  const pushScript = join(w.dir, INIT_SCRIPTS_DIR, 'push-branch.sh');
+  const realPushScript = join(w.dir, INIT_SCRIPTS_DIR, 'push-branch-real.sh');
+  // The fixture's bare `origin` (`./helpers/fixture.mjs` → `seedOrigin`), and the lock file that
+  // makes it refuse an update of the run's branch.
+  const originLock = join(`${w.dir}-origin.git`, 'refs', 'heads', `${w.branch}.lock`);
 
   return {
     ...w,
     clone,
     scriptPath: join(w.dir, INIT_SCRIPTS_DIR, 'run-analytics.sh'),
+    /**
+     * Replace `push-branch.sh` with a recorder that appends its first argument to a file outside the
+     * repository, then runs the real script, moved beside it so the main checkout it derives from its
+     * own location is unchanged, with the same arguments and exit status.
+     */
+    async stubPush() {
+      await rename(pushScript, realPushScript);
+      await writeFile(
+        pushScript,
+        `#!/usr/bin/env bash\nprintf '%s\\n' "$1" >> '${pushCalls}'\nexec '${realPushScript}' "$@"\n`,
+        'utf8',
+      );
+      await chmod(pushScript, 0o755);
+    },
+    /**
+     * Make `origin` refuse every update of `refs/heads/<branch>` — a held ref lock, which the real
+     * push reports as `! [remote rejected]` and then exits 0 on — or, `false`, accept them again.
+     */
+    async refusePushes(on) {
+      if (on) await writeFile(originLock, '', 'utf8');
+      else await rm(originLock, { force: true });
+    },
+    /** The working copies the recorder was handed, one per call, oldest first. */
+    async pushCalls() {
+      const text = await readFile(pushCalls, 'utf8').catch(() => '');
+      return text.split('\n').filter(Boolean);
+    },
+    /** `refs/heads/<branch>` on the fixture's `origin`, or `''`. */
+    async originTip() {
+      const out = (await runGit(w.dir, ['ls-remote', 'origin', ref])).stdout.trim();
+      return out.split('\t')[0] ?? '';
+    },
     drop: () => writeFile(join(w.dir, STATE_DIR, 'autonomous_inbox', `${w.branch}_task_prompt.md`), 'do it\n', 'utf8'),
     /** `[sha, subject]` of every analytics commit on the branch in `repo`, newest first. */
     async analyticsCommits(repo) {
@@ -109,11 +156,11 @@ function outcome(f, notificationsBefore) {
   return { status: f.record().status, events: f.notifications().slice(notificationsBefore).map((n) => n.event) };
 }
 
-test('the session\'s analytics are committed on the run\'s branch, and a failing step changes no outcome', async (t) => {
+test('the session\'s analytics are committed and pushed on the run\'s branch, and a failing step changes no outcome', async (t) => {
   const f = await adoptedFixture(t);
   if (f === null) return;
 
-  await t.test('a launch commits run-analytics.json then run-analytics.md on the branch, synced to the main checkout', async () => {
+  await t.test('a launch commits run-analytics.json then run-analytics.md on the branch, synced to the main checkout and pushed', async () => {
     await f.setStub(sessionStub('sess-launch'));
     await f.drop();
     await f.tick(PASS_ENV, PASS_OPTIONS);
@@ -132,6 +179,8 @@ test('the session\'s analytics are committed on the run\'s branch, and a failing
 
     assert.deepEqual(await f.analyticsCommits(f.dir), commits, `the main checkout lags:\n${f.watcherLog()}`);
     assert.equal(await f.tip(f.dir), await f.tip(f.clone));
+    assert.equal(await f.originTip(), commits[0][0], `origin lacks the analytics commits:\n${f.watcherLog()}`);
+    assert.ok(!f.watcherLog().includes(pushWarning(f.branch)), f.watcherLog());
 
     // A launch notifies `launched`, then the one outcome `classify_run_exit` names.
     const launch = outcome(f, 0);
@@ -147,7 +196,8 @@ test('the session\'s analytics are committed on the run\'s branch, and a failing
 
   // A session_id seen again is recorded as a resume occurrence, so a resume reprinting the launch's
   // session is new data; only a session that adds nothing leaves both blobs identical.
-  await t.test('a resume that adds no session adds no analytics commit', async () => {
+  await t.test('a resume that adds no session adds no analytics commit and pushes nothing', async () => {
+    await f.stubPush();
     const before = await f.analyticsCommits(f.clone);
     const notified = f.notifications().length;
     await f.setStub(':');
@@ -156,8 +206,37 @@ test('the session\'s analytics are committed on the run\'s branch, and a failing
 
     assert.equal(f.prompts().length, 2, `the parked run was not resumed:\n${f.watcherLog()}`);
     assert.deepEqual(await f.analyticsCommits(f.clone), before, f.watcherLog());
+    assert.deepEqual(await f.pushCalls(), [], f.watcherLog());
     resumeBaseline = outcome(f, notified);
     assert.notEqual(resumeBaseline.status, 'failed', f.watcherLog());
+  });
+
+  // The real push-branch.sh exits 0 on a refused push, so only a landed test sees the failure.
+  await t.test('a push origin refuses after the commits is one watcher-log line and changes no outcome', async (t) => {
+    assert.ok(resumeBaseline, 'the resume case did not run');
+    const before = await f.analyticsCommits(f.clone);
+    const originBefore = await f.originTip();
+    const notified = f.notifications().length;
+    const logBefore = f.watcherLog().length;
+    await f.refusePushes(true);
+    t.after(() => f.refusePushes(false));
+    await f.setStub(sessionStub('sess-push-fail'));
+    await f.parkClone(2);
+    await f.tick({ ...PASS_ENV, PUSH_RETRY_DELAY_SECS: '0' }, PASS_OPTIONS);
+
+    assert.equal(f.prompts().length, 3, `the parked run was not resumed:\n${f.watcherLog()}`);
+    assert.deepEqual(outcome(f, notified), resumeBaseline);
+    const after = await f.analyticsCommits(f.clone);
+    assert.ok(after.length > before.length, `no analytics commit was added:\n${f.watcherLog()}`);
+    // One push for the call, however many of the two files it committed, handed the run's copy.
+    assert.deepEqual(await f.pushCalls(), [f.clone], f.watcherLog());
+    assert.equal(await f.originTip(), originBefore, 'origin accepted the push the lock refuses');
+    // The refusal is origin's own, reported by the real push in the run's log.
+    const runLog = await readFile(join(f.dir, STATE_DIR, 'autonomous_logs', `${f.branch}.log`), 'utf8');
+    assert.match(runLog, /\[remote rejected\]/, runLog);
+    const added = f.watcherLog().slice(logBefore);
+    const warned = added.split('\n').filter((line) => line.includes(pushWarning(f.branch)));
+    assert.equal(warned.length, 1, added);
   });
 
   /**
@@ -167,6 +246,7 @@ test('the session\'s analytics are committed on the run\'s branch, and a failing
   async function failingResume(n, id, logged) {
     assert.ok(resumeBaseline, 'the resume case did not run');
     const before = await f.analyticsCommits(f.clone);
+    const pushedBefore = (await f.pushCalls()).length;
     const notified = f.notifications().length;
     const logBefore = f.watcherLog().length;
     await f.setStub(sessionStub(id));
@@ -176,6 +256,7 @@ test('the session\'s analytics are committed on the run\'s branch, and a failing
     assert.equal(f.prompts().length, n + 1, `the parked run was not resumed:\n${f.watcherLog()}`);
     assert.deepEqual(outcome(f, notified), resumeBaseline);
     assert.deepEqual(await f.analyticsCommits(f.clone), before);
+    assert.equal((await f.pushCalls()).length, pushedBefore, 'a resume that committed nothing pushed');
     const added = f.watcherLog().slice(logBefore).split('\n').filter(logged);
     assert.equal(added.length, 1, f.watcherLog().slice(logBefore));
   }
@@ -183,13 +264,13 @@ test('the session\'s analytics are committed on the run\'s branch, and a failing
   await t.test('a run-analytics.sh that exits 1 changes neither the status nor the notifications', async () => {
     await writeFile(f.scriptPath, '#!/usr/bin/env bash\nexit 1\n', 'utf8');
     await chmod(f.scriptPath, 0o755);
-    await failingResume(2, 'sess-fail', (line) => line.includes(`run analytics: '${f.branch}' not recorded (exit 1)`));
+    await failingResume(3, 'sess-fail', (line) => line.includes(`run analytics: '${f.branch}' not recorded (exit 1)`));
   });
 
   await t.test('a missing run-analytics.sh changes neither the status nor the notifications', async () => {
     await rm(f.scriptPath);
     await failingResume(
-      3,
+      4,
       'sess-missing',
       (line) => line.includes('run analytics: ') && line.includes('run-analytics.sh') && line.includes('init --force'),
     );

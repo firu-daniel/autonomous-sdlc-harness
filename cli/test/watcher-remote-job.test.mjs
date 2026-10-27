@@ -27,6 +27,10 @@
  * ledger once at the first pass and once at the end:** the `progress:` cases assert the comment on
  * the stub's pull request, its opt-out, and the invocation count read off the watcher log.
  *
+ * **A job commits each session's run analytics on its branch and pushes nothing for them:** the
+ * workflow's `Push the branch` step does. The `run analytics:` case drives a job with the real
+ * `run-analytics.sh` and a recording `push-branch.sh`, and asserts the two commits and no push call.
+ *
  * **Every watcher this file starts is bounded and reaped, so a hang fails by name.** Each `runBash`
  * call carries `timeoutMs: WATCHER_RUN_TIMEOUT_MS` and `t.signal`. The value is scaled by
  * `HARNESS_TEST_TIME_SCALE` (`helpers/timing.mjs`) and sits below the per-test timeout
@@ -156,12 +160,13 @@ const rateLimitRejected = (aheadSecs) =>
 
 /**
  * A watcher fixture plus this suite's own stub, which — unlike the shared one — saves its whole
- * argument vector, and a `job` driver.
+ * argument vector, and a `job` driver. `runAnalytics` is passed to `createWatcherFixture`.
  *
  * @param {import('node:test').TestContext} t
+ * @param {{ runAnalytics?: boolean }} [options]
  */
-async function createJobFixture(t) {
-  const w = await createWatcherFixture(t);
+async function createJobFixture(t, { runAnalytics = false } = {}) {
+  const w = await createWatcherFixture(t, { runAnalytics });
   if (w === null) return null;
 
   const recorder = join(w.dir, 'job-test');
@@ -1248,6 +1253,47 @@ test('runner wait: logged from the run createdAt, and noted on a resumed comment
     assert.match(result.stdout, /job: this run's createdAt could not be read — the runner wait is unknown/);
     assert.equal(j.ghCalls().some((c) => c.startsWith('run view')), false, j.ghCalls().join('\n'));
   });
+});
+
+test("run analytics: a job commits the session's record on its branch and leaves the push to the workflow", async (t) => {
+  const j = await createJobFixture(t, { runAnalytics: true });
+  if (j === null) return;
+
+  // The job's copy is the main checkout, so it needs the run's branch with a commit for
+  // `hr_commit_placed` to commit on; the fixture's own directories stay out of that commit.
+  await writeFile(join(j.dir, '.git', 'info', 'exclude'), '/job-test/\n/xdg-state/\n/home/\n/watcher-test/\n', {
+    flag: 'a',
+  });
+  const identity = ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid'];
+  await runGit(j.dir, ['checkout', '--quiet', '-b', j.branch]);
+  await runGit(j.dir, ['add', '-A']);
+  await runGit(j.dir, [...identity, 'commit', '--quiet', '--no-verify', '-m', 'fixture: adopt the harness']);
+
+  const pushCalls = join(j.dir, 'job-test', 'push-calls.txt');
+  const pushScript = join(j.dir, INIT_SCRIPTS_DIR, 'push-branch.sh');
+  await writeFile(pushScript, `#!/usr/bin/env bash\nprintf '%s\\n' "$1" >> ${shellQuote(pushCalls)}\nexit 0\n`, 'utf8');
+  await chmod(pushScript, 0o755);
+
+  const session = [
+    { type: 'system', subtype: 'init', session_id: 'sess-job' },
+    { type: 'user', timestamp: '2026-01-01T00:00:00.000Z', message: { role: 'user', content: 'Go.' } },
+    { type: 'assistant', timestamp: '2026-01-01T00:00:01.000Z', message: { id: 'sess-job-m1', content: [] } },
+    { type: 'result', subtype: 'success', timestamp: '2026-01-01T00:00:02.000Z', duration_ms: 2000 },
+  ];
+  await j.setStub(session.map((line) => `printf '%s\\n' ${shellQuote(JSON.stringify(line))}`).join('\n'));
+
+  const result = await j.job([j.branch, 'task', 'none'], {
+    RUN_ANALYTICS_SUSPEND_SOURCE: 'none',
+    CLAUDE_CONFIG_DIR: join(j.dir, 'home', 'no-claude-config'),
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(lastLine(result.stdout), 'job: completed stop');
+
+  const subject = `chore: Record run analytics for ${j.branch}`;
+  const subjects = (await runGit(j.dir, ['log', '--format=%s', `refs/heads/${j.branch}`])).stdout.split('\n');
+  assert.equal(subjects.filter((line) => line === subject).length, 2, `${subjects.join('\n')}\n${j.watcherLog()}`);
+  assert.equal(existsSync(pushCalls), false, `push-branch.sh was called in job mode:\n${j.watcherLog()}`);
+  assert.doesNotMatch(j.watcherLog(), /after the run-analytics commit/);
 });
 
 test('status prints the four job-mode tunables with their defaults', async (t) => {

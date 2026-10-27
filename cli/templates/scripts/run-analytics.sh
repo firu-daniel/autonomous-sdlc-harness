@@ -28,7 +28,8 @@
 # WHERE IT STOPS. It writes those two files in the named checkout and nothing
 # else: it commits nothing, pushes nothing, notifies nothing and never touches
 # the stream. It reads the agent runner's sub-agent transcripts, never writes
-# there. The watcher commits the result after each session.
+# there. The watcher commits the result after each session, and outside a job
+# pushes it.
 #
 # THE MERGE. A recorded session is never rewritten, reordered or re-derived:
 # new records are appended in stream order, then `.run` and the Markdown are

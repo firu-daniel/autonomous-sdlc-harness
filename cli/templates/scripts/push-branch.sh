@@ -5,8 +5,9 @@
 # WHAT IT IS FOR. This is the single mechanism every unattended commit point
 # calls right after a commit lands, so the remote branch reflects the local
 # commit chain no matter where the run stops — the watcher after its task-prompt
-# commit, the `committer` agent's opt-in push, and the task, user-review-fix and
-# planning orchestrators. It is invoked as a SEPARATE statement from the commit
+# commit and, outside a job, after a session's run-analytics commits, the
+# `committer` agent's opt-in push, and the task, user-review-fix and planning
+# orchestrators. It is invoked as a SEPARATE statement from the commit
 # (never `if commit-on-branch.sh …; then push-branch.sh; fi`: that compound is
 # not covered by the guards, and an unattended run refuses it), which works because a
 # push with nothing new to send is a harmless no-op — so callers may run it
