@@ -128,6 +128,8 @@ const CLAUDE_HOME_FALLBACK = '.claude';
  *
  * Same three properties as the two directories above: the variable when it holds something, the
  * fallback otherwise, one trailing slash stripped, and no filesystem touch.
+ * `cli/templates/scripts/run-analytics.sh` mirrors this resolution in shell to read sub-agent
+ * transcripts, so a change to either resolution is an edit to both.
  */
 export function claudeHome(): string {
   const configured = process.env[CLAUDE_HOME_VARIABLE];
