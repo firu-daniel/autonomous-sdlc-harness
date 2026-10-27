@@ -4,7 +4,9 @@
 # rows of docs/sandbox-verification.md. Hand-written for this repository, like probe-plugin-cli.sh:
 # not in the set `init --force` regenerates, and not a cli/templates/ file.
 #
-# It changes nothing outside its own temp area, the probe clone and the probe branch.
+# It changes nothing outside its own temp area, the probe clone and the probe branch, but one evidence directory:
+# a sandbox-probe-evidence.* directory under TMPDIR, kept only when a leg does not pass.
+# The directory that keeps the evidence of non-passing legs is printed last on stderr.
 # macOS only; the Linux legs are owed under roadmap item 21 (docs/development.md §6).
 #
 # A person starts it from a terminal, because auto mode refuses a `claude -p` launch carrying
@@ -57,6 +59,7 @@ Usage: sandbox-probe.sh [--help] | --list | preflight | run [--leg <name>]... | 
 
 Start it from a terminal: auto mode refuses a `claude -p` launch carrying `--allowedTools`.
 From a session, `! bash <main>/scripts/sandbox-probe.sh run` works.
+The directory that keeps the evidence of non-passing legs is printed last on stderr.
 
 Exit: 0 every leg pass or not run; 1 usage or a library function not yet present;
 2 a preflight refusal, nothing created; 3 a protected main-checkout file changed;
@@ -143,11 +146,13 @@ case "$cmd" in
           case "$sp_selected" in *" $sp_leg "*) ;; *) continue ;; esac
         fi
         sp_leg_fn="sp_leg_${sp_leg//-/_}"
+        SP_CURRENT_LEG="$sp_leg"
         if declare -F "$sp_leg_fn" >/dev/null; then
           "$sp_leg_fn"
         else
           sp_leg_missing "$sp_leg"
         fi
+        SP_CURRENT_LEG=""
       done
     else
       sp_exit_raise 2

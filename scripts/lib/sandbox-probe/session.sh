@@ -13,7 +13,12 @@
 #   sp_scratch_profile <name> <jq filter> [<base>]        a derived profile under SP_TMP
 #   sp_extra_clone <branch> [--no-bootstrap] [--existing] another clone; sets SP_EXTRA_CLONE, SP_EXTRA_PROFILE
 #   sp_track <path> / sp_track_branch <name>              register for teardown
-#   sp_teardown              remove exactly what was registered; idempotent
+#   sp_keep_file <path>      add <path> to the current leg's (SP_CURRENT_LEG) evidence record
+#   sp_track_pid <pid>       register a process the probe started, for teardown to stop
+#   sp_teardown              first move the recorded files of every leg sp_leg_nonpass names into a
+#                            new ${TMPDIR:-/tmp}/sandbox-probe-evidence.XXXXXX/<leg>/, printed last on
+#                            stderr; then stop the tracked processes; then remove exactly what was
+#                            registered; idempotent
 #
 # THE POSITIVE-CONTROL RULE (docs/sandbox-verification.md → `## 0. Method`: "a positive control in the
 # same session for every refusal"). Every session that measures a refusal row also issues a positive
@@ -47,6 +52,15 @@ SP__CLONE_PATHS=()
 # Newline-separated registrations.
 SP__TRACKED=""
 SP__TRACKED_BRANCHES=""
+SP__PIDS=""
+# One record per sp_session launch or sp_keep_file, tab-separated:
+# <leg> <stream> <stderr> <prompt file> <debug file, or empty>; an sp_keep_file record is <leg> <path>.
+SP__SESSIONS=""
+SP__EVIDENCE_DIR=""
+# Set by the entry point's run loop around each leg; `-` in a record when unset.
+SP_CURRENT_LEG="${SP_CURRENT_LEG:-}"
+# Teardown's bound on waiting for a TERMed process: this many polls, 0.1 s apart.
+SP__PID_POLLS=50
 SP__RENDERED=""
 SP__RENDER_REFUSAL=""
 SP__CREATE_LINE=""
@@ -244,10 +258,13 @@ sp_extra_clone() {
   done
   [ -n "$branch" ] || { sp_refuse "sp_extra_clone: no branch"; return 1; }
   if [ "$existing" -eq 1 ]; then
-    if ! printf '%s' "$SP__TRACKED_BRANCHES" | grep -qxF -- "$branch"; then
-      sp_refuse "sp_extra_clone: '$branch' was not registered with sp_track_branch, so --existing will not adopt it"
-      return 1
-    fi
+    case $'\n'"$SP__TRACKED_BRANCHES" in
+      *$'\n'"$branch"$'\n'*) ;;
+      *)
+        sp_refuse "sp_extra_clone: '$branch' was not registered with sp_track_branch, so --existing will not adopt it"
+        return 1
+        ;;
+    esac
   elif sp__branch_taken "$branch"; then
     sp_refuse "sp_extra_clone: '$branch' already exists locally or on origin"
     return 1
@@ -297,6 +314,22 @@ sp_track_branch() {
     return 1
   fi
   SP__TRACKED_BRANCHES="$SP__TRACKED_BRANCHES$1"$'\n'
+}
+
+# sp_keep_file <path> — keep <path> with the current leg's session files if that leg does not pass.
+sp_keep_file() {
+  case "${1:-}" in
+    "" | *$'\n'*) sp_refuse "sp_keep_file: empty path, or one carrying a newline"; return 1 ;;
+  esac
+  SP__SESSIONS="$SP__SESSIONS${SP_CURRENT_LEG:--}"$'\t'"$1"$'\n'
+}
+
+# sp_track_pid <pid> — stop this process at teardown.
+sp_track_pid() {
+  case "${1:-}" in
+    "" | *[!0-9]*) sp_refuse "sp_track_pid: '${1:-}' is not a process id"; return 1 ;;
+  esac
+  SP__PIDS="$SP__PIDS$1"$'\n'
 }
 
 # sp_session <name> <settings file> <prompt file> [--mode dontAsk|acceptEdits] [--allowed <rule>]...
@@ -364,6 +397,8 @@ sp_session() {
   cli="${SANDBOX_PROBE_AGENT_CLI:-}"
   [ -n "$cli" ] || cli=claude
   SP_STREAM="$SP_TMP/$name.stream.jsonl"
+  # Recorded before the launch, so a session that crashes is kept too.
+  SP__SESSIONS="$SP__SESSIONS${SP_CURRENT_LEG:--}"$'\t'"$SP_STREAM"$'\t'"$SP_TMP/$name.stderr"$'\t'"$pfile"$'\t'"$debug"$'\n'
   (
     cd "$cwd" || exit 97
     export HARNESS_MAIN_REPO="$SP_MAIN"
@@ -510,14 +545,113 @@ sp_rm_tree() {
   return 0
 }
 
-# sp_teardown — remove every registered clone (last created first) with its record, per-run profile and
-# branch; then tracked branches, tracked files and directories, and SP_TMP; then sp_snapshot_check. Every
-# step runs after a failed one; each failure is named on stderr and raises exit 5. Idempotent.
+# sp__canon <dir> — the directory's canonical path; status 1 when it has none.
+sp__canon() {
+  (CDPATH= cd -P -- "$1" 2>/dev/null && pwd -P)
+}
+
+# sp__td_keep_evidence — teardown's first step: move each existing file recorded for a leg sp_leg_nonpass
+# names into SP__EVIDENCE_DIR/<leg>/. SP__EVIDENCE_DIR stays empty when nothing was kept. A failure is
+# named on stderr and leaves the exit code alone; SP_TMP's removal still takes the file.
+sp__td_keep_evidence() {
+  local leg a b c d f dir="" cdir root rootc dest n kept=0 refused=0
+  SP__EVIDENCE_DIR=""
+  while IFS=$'\t' read -r leg a b c d; do
+    [ -n "$leg" ] || continue
+    case "$leg" in - | . | .. | */*) continue ;; esac
+    sp_leg_nonpass "$leg" || continue
+    [ "$refused" -eq 0 ] || continue
+    if [ -z "$dir" ]; then
+      # An explicit template: macOS mktemp ignores TMPDIR otherwise (docs/sandbox-verification.md §5 F2).
+      dir="$(mktemp -d "${TMPDIR:-/tmp}/sandbox-probe-evidence.XXXXXX")" || dir=""
+      if [ -z "$dir" ]; then
+        sp_refuse "teardown: cannot create an evidence directory under '${TMPDIR:-/tmp}'; no evidence is kept"
+        refused=1
+        continue
+      fi
+      cdir="$(sp__canon "$dir")" || cdir=""
+      if [ -z "$cdir" ]; then
+        sp_refuse "teardown: the evidence directory '$dir' has no canonical path; no evidence is kept"
+        refused=1
+      fi
+      for root in "${SP_MAIN:-}" "${SP_CLONE:-}"; do
+        [ -n "$root" ] && [ "$refused" -eq 0 ] || continue
+        rootc="$(sp__canon "$root")" || continue
+        case "$cdir" in
+          "$rootc" | "$rootc"/*)
+            sp_refuse "teardown: the evidence directory '$cdir' is inside '$rootc'; no evidence is kept"
+            refused=1
+            ;;
+        esac
+      done
+      if [ "$refused" -eq 1 ]; then
+        rmdir -- "$dir" 2>/dev/null
+        dir=""
+        continue
+      fi
+    fi
+    for f in "$a" "$b" "$c" "$d"; do
+      [ -n "$f" ] || continue
+      [ -f "$f" ] || [ -L "$f" ] || continue
+      mkdir -p -- "$dir/$leg" 2>/dev/null
+      dest="$dir/$leg/${f##*/}"
+      n=2
+      while [ -e "$dest" ] || [ -L "$dest" ]; do
+        dest="$dir/$leg/${f##*/}.$n"
+        n=$((n + 1))
+      done
+      if mv -- "$f" "$dest" 2>/dev/null; then
+        kept=$((kept + 1))
+      else
+        sp_refuse "teardown: could not keep '$f' in '$dir/$leg/'; it is removed with SP_TMP"
+        rmdir -- "$dir/$leg" 2>/dev/null
+      fi
+    done
+  done <<EOF
+$SP__SESSIONS
+EOF
+  [ -n "$dir" ] || return 0
+  if [ "$kept" -eq 0 ]; then
+    rmdir -- "$dir" 2>/dev/null
+    return 0
+  fi
+  SP__EVIDENCE_DIR="$dir"
+}
+
+# sp__td_stop_pids — TERM each tracked process and wait up to SP__PID_POLLS polls for it to end.
+sp__td_stop_pids() {
+  local pid n
+  while IFS= read -r pid; do
+    [ -n "$pid" ] || continue
+    # A process already gone is not an error.
+    kill "$pid" 2>/dev/null || continue
+    n=0
+    while kill -0 "$pid" 2>/dev/null && [ "$n" -lt "$SP__PID_POLLS" ]; do
+      sleep 0.1
+      n=$((n + 1))
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+      sp__td_fail "process $pid the probe started is still running after TERM; stop it with: kill -9 $pid"
+    fi
+  done <<EOF
+$SP__PIDS
+EOF
+}
+
+# sp_teardown — keep the evidence of every leg that did not pass; stop the tracked processes; remove every
+# registered clone (last created first) with its record, per-run profile and branch; then tracked
+# branches, tracked files and directories, and SP_TMP; then sp_snapshot_check; then name the evidence
+# directory, as the last stderr line. Every step runs after a failed one; each removal or stop failure is
+# named on stderr and raises exit 5. Idempotent.
 sp_teardown() {
   [ "$SP__TEARDOWN_DONE" -eq 1 ] && return 0
   SP__TEARDOWN_DONE=1
   trap '' INT TERM
   local i b path profile p
+
+  # Before the clones and the tracked-files pass, both of which can hold a kept file.
+  sp__td_keep_evidence
+  sp__td_stop_pids
 
   i=$((${#SP__CLONE_BRANCHES[@]} - 1))
   while [ "$i" -ge 0 ]; do
@@ -586,6 +720,11 @@ EOF
   SP__CLONE_PATHS=()
   SP__TRACKED=""
   SP__TRACKED_BRANCHES=""
+  SP__SESSIONS=""
+  SP__PIDS=""
   sp_snapshot_check
+  if [ -n "$SP__EVIDENCE_DIR" ]; then
+    sp_refuse "evidence of the legs that did not pass kept in $SP__EVIDENCE_DIR"
+  fi
   return 0
 }

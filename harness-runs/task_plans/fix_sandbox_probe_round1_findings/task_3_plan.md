@@ -48,3 +48,11 @@
 - The only recursive removal in the probe is still `sp_rm_tree`'s: `grep -n 'rm -rf' scripts/lib/sandbox-probe/*.sh` shows that one line.
 - `bash scripts/sandbox-probe.sh --help` prints the new line, and its exit-code lines are unchanged.
 - `grep -n 'nothing outside its own temp area' scripts/sandbox-probe.sh` shows the header sentence naming the kept evidence directory as its one exception.
+
+**Deviations from plan:**
+
+- The header's amended sentence and its new "printed last on stderr" line are written as one three-line comment, so that the grepped line names the evidence directory itself (`…, but one evidence directory:`).
+- Things the plan leaves open, and how they were settled. An `sp_keep_file` record is `<leg>\t<path>`. Records whose leg is `-`, `.`, `..` or carries a `/` are never kept. A file whose name is already taken in `<dir>/<leg>/` is moved as `<name>.2`, `<name>.3` and so on. If no file was moved, the evidence directory is removed with `rmdir` and nothing is printed. When the directory is refused (no canonical path, or inside `SP_MAIN` / `SP_CLONE`), it is removed with `rmdir` and nothing is moved. A `kill` that fails (the process is already gone, or is not ours) counts as gone. The wait bound is `SP__PID_POLLS=50` polls, 0.1 s apart.
+- Evidence downgrade, `bash -n` on `session.sh`: the plain command was refused by the tool layer. Parse evidence comes from two runs. `bash scripts/typecheck.sh` printed `check-shell-parse: 89 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed` and `PASS: typecheck`. `bash scripts/sandbox-probe.sh --help` sources `session.sh` and printed the full usage, including the new line.
+- Evidence downgrade, `kill -0` after TERM: a `bash -c` check of whether `kill -0` succeeds on a TERMed background child that bash has not yet reaped was refused by the tool layer. The PID step rests on bash reaping its children through its SIGCHLD handler, and nothing in this unit ran to confirm that. Task 12's tracked-PID case is the behavioural test.
+- Evidence downgrade, evidence step and PID step: neither has been run. The plan's `**Verification:**` bullet on step order was checked by reading the line numbers `grep -nE` reported (`sp__td_keep_evidence` and `sp__td_stop_pids` come before `hr_clone_remove_var` and the tracked-files `rm -f`). Behaviour is Task 12's.
