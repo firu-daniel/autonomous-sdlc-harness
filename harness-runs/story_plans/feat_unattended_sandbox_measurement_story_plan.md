@@ -118,7 +118,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_unattended_sandbox_meas
 7. [x] **Task 6** — Add the wrappers leg: commit, push, the clone's own copies, the compound and the assignment prefix _(layer: general)_ _(points: 20)_
 8. [x] **Task 7** — Add the wrappers-refresh leg: fast-forward, two-parent merge and conflict fixtures on the clone arm _(layer: general)_ _(points: 15)_
 9. [x] **Task 8** — Add the planted-configuration leg: scratch repositories and the clone's `.git/config` _(layer: general)_ _(points: 15)_
-10. [ ] **Task 9** — Add the planted-files leg: the clone's `.git` files and the dash-leading names _(layer: general)_ _(points: 15)_
+10. [x] **Task 9** — Add the planted-files leg: the clone's `.git` files and the dash-leading names _(layer: general)_ _(points: 15)_
 11. [ ] **Task 10** — Add the write-protection and git-in-the-clone legs _(layer: general)_ _(points: 20)_
 12. [ ] **Task 11** — Add the network and retry legs, `allowed_domains` included _(layer: general)_ _(points: 15)_
 13. [ ] **Task 12** — Add the repo-settings, credentials, invalid-profile and headless-parity legs _(layer: general)_ _(points: 20)_

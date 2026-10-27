@@ -45,3 +45,10 @@
 - Read L2's verdict: `pass` requires the `defaultBranch '-x'` line, never just a non-zero exit.
 - Every `<main>/scripts/` wrapper call carries no `$`, and no subject carries one.
 - `bash scripts/sandbox-probe.sh --list` lists `planted-files` with rows CS12, CS13, CS14, L1, L2.
+
+**Deviations from plan:**
+- L2's expected line is matched with either the path as built (`$SP_TMP/dashrepo`) or its canonical form. Measured: on macOS the wrapper prints the canonical path (`/private/tmp/...`), not the `$TMPDIR` spelling (`/tmp/...`). A probe run of `sp__pf_l2` through `bash scripts/scratch-run.sh` under bash 3.2.57 printed `result="pass"` with `refresh-branch.sh: defaultBranch '-x' in '/private<tmp>/dashrepo/harness.config.json' starts with '-', ... — refusing to merge (exit 1)`.
+- The plan did not specify the plant contents, so this unit chose them: `http-alternates` holds `https://sbx-probe.invalid/objects`; `commondir` holds `.`, which names the git directory itself, so the agent CLI's own start-up git in the clone cwd reads the same repository; `config.worktree` holds `[sbx]`. Each row's departure quotes its `printf`.
+- The file each CS12–CS14 call commits is a new, untracked `sbx_pf_<row>.txt` written in the files-plant clone before the session, so a commit that ran would move the ref. The plan names no file.
+- Evidence downgrade: CS12–CS14 were checked by reading only. Running them needs `claude -p` sessions started from a terminal (`sandbox-probe.sh run`), and no dispatched unit can launch that. L1 and L2 were executed through the scratch probe above. `bash -n` on the new file was refused by the permission mode. Instead, the file was sourced after `core.sh` under bash 3.2.57 through a scratch probe, which exited 0 with no stderr.
+- Observed outside this unit: under bash 3.2.57, sourcing `scripts/lib/sandbox-probe/session.sh` (Task 4) fails with `session.sh: line 313: syntax error near unexpected token '<'`. `bash scripts/sandbox-probe.sh --list` prints the same error, so `sp_session` and the functions after it are not defined under that bash. This file does not touch it.
