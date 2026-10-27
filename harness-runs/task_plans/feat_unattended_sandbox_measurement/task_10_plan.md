@@ -52,3 +52,18 @@
 - CS3's git calls are judged by ref, stash and branch state, never by exit status.
 - CS1, CS2, CS7, W6 and CL5 are printed through `sp_row_result`, each after an `sp_ctl_held` over its own session's stream.
 - `bash scripts/sandbox-probe.sh --list` lists `write-protection` with CS1, CS2, CS7, W6, W8, and `git` with CS3, CL5.
+
+**Deviations from plan:**
+
+- **CS3 edits two tracked files, not one.** The calls run add, then commit, then stash push. Once the commit lands, a single edited file leaves nothing for the stash. So `<a>` (README.md when tracked) carries the add/commit change, and a second tracked file `<b>` stays modified for the stash push and pop. The stash is judged by `<b>` still carrying the marker and the `git stash list` count being unchanged, plus the push's `Saved working directory` line and the pop's `Dropped` line.
+- **CS3 adds `git remote get-url origin` beside the fetch.** `docs/sandbox-verification.md` → CS3's row asks for it. Its output goes into CS3's evidence only.
+- **Every staged sibling goes in `<clone>/.git/`.** CL5 measured new files writable there. The base `<main>` paths, the per-run profile and the plugin root have no writable sibling of their own. A new-name target stages an empty file instead of a `cp -p` copy.
+- **The runtime's `.git` carve-out covers every path inside a `.git` directory**, `<main>/.git` and `scripts/.git` included, not only the clone's three. The reason is CL6 (a): the permission layer guards writes into any repository's `.git/` on its own. A `… don't ask mode` refusal on such a path goes into W6's evidence as the runtime's. It is neither a pass nor a fail of the profile.
+- **The plugin install record has one entry per project path.** The probe takes the entry for `SP_CLONE` first, then the one for `SP_MAIN`, then the `user`-scope one. Any other case is `plugin root unresolved`.
+- **The per-run profile and the plugin root get only `dd` and the rename, never a file-tool call.** W6's set is exactly the `Edit(…)` deny half, and neither of those two paths carries an `Edit` rule.
+- **Evidence downgrade: the two legs were not run against a real session.** The story forbids a test that launches `claude`, and the probe is started by a person. What was executed instead:
+  - `bash scripts/sandbox-probe.sh --list` prints both legs with their rows.
+  - `bash -n` passes under `/bin/bash` 3.2.57.
+  - A scratch probe (`bash scripts/scratch-run.sh harness-runs/scratch/legs_protection_probe.py`) ran `sp_protected_set` against a fixture profile. It covered glob re-rooting, a glob the clone does not match (reported, not dropped), the three CS2 names, CS7, the plugin root from a fixture install record, and the `Edit`-half Edit/Write split. It also ran the generated rename helper on scratch targets.
+  - The session-dependent judging is verified only by reading it: `sp_leg_write_protection` and `sp_leg_git` after `sp_session`.
+- **Found outside this task: `scripts/lib/sandbox-probe/session.sh` does not parse under bash 3.2.** Running `/bin/bash -n` on it gives `line 313: syntax error near unexpected token '<'`. `--list` prints the same error when it sources the file, so `sp_session` and the rest of that file are not defined on macOS `/bin/bash`. That file is Task 4's and is not edited here.
