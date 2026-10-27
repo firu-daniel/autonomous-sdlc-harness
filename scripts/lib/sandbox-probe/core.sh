@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# core.sh — the sandbox probe's leg table, its result line, the `not run — leg not implemented`
-# fallback, the shared refusal printer and the exit-code accumulator. scripts/sandbox-probe.sh sources
-# it first, before every other file under scripts/lib/sandbox-probe/.
+# core.sh — the sandbox probe's leg table, its result line (which refuses a row not in its leg's
+# rows), the non-pass record (SP_NONPASS_LEGS, read through sp_leg_nonpass), the `not run — leg not
+# implemented` fallback, the shared refusal printer and the exit-code accumulator.
+# scripts/sandbox-probe.sh sources it first, before every other file under scripts/lib/sandbox-probe/.
 #
 # SP_LEGS is the single declaration of leg -> rows -> expected -> recorded in. Gate 15 in
 # docs/development.md restates it from `sandbox-probe.sh --list`, so edit it here and re-derive there.
@@ -14,6 +15,7 @@
 
 SP_LEGS=""
 SP_FAIL_COUNT=0
+SP_NONPASS_LEGS=""
 SP_EXIT=0
 
 sp_leg_declare() {
@@ -21,10 +23,10 @@ sp_leg_declare() {
 }
 
 sp_leg_declare gates "T2,W7" \
-  "the gates run in the clone with no gate failing on its temporary file, and each of W7's six wrapper calls runs with no permission denial" \
+  "the gates, started in the clone through run-test-suite.sh and collected with --wait, reach a pass verdict with no gate failing on its temporary file, and each of W7's six wrapper calls runs with no permission denial" \
   "§5 Failures and their follow-ups (T2); §4 The profile's denials (W7)"
 sp_leg_declare mktemp "TD2" \
-  "the bare, -d and -t mktemp forms are refused with mkstemp failed, and the explicit form under the session's TMPDIR is written" \
+  "the bare, -d and -t mktemp forms are refused with mkstemp failed, the explicit form spelled with the session's TMPDIR as a literal path is written, and a call refused at the permission layer is not run" \
   "§5 Failures and their follow-ups"
 sp_leg_declare scratch "SR1,SR2" \
   "scratch-run.sh runs a probe file sandboxed, and a write outside the allowed roots from inside that file is refused" \
@@ -33,10 +35,10 @@ sp_leg_declare retrieval "MC1" \
   "the harness-docs MCP server answers a search_docs call outside the sandbox, or the leg is not run where no .mcp.json wires it" \
   "§4 The profile's denials"
 sp_leg_declare wrappers "CS4,P3,CW2,P1c,CW5,P1b,CW6" \
-  "the main checkout's wrappers run outside the sandbox and land on the clone, while the clone's own copies, the compound and the assignment prefix stay sandboxed or are neutralised" \
+  "the main checkout's wrappers run outside the sandbox and land on the clone, while the clone's own copies, the compound and the assignment prefix stay sandboxed or are neutralised, the prefix allowed through --allowedTools so a permission-layer refusal of it is not run" \
   "§2 The clone layout (owed) (CS4); §3 The wrappers (P3, CW2, P1c, CW5, P1b, CW6)"
 sp_leg_declare wrappers-refresh "R0,R1,R2,R3,R4" \
-  "refresh-branch.sh on the clone arm runs outside the sandbox: fixture (a) fast-forwards, (b) writes a two-parent merge, (c) exits 4 with nothing written, and the clone's own copy stays sandboxed" \
+  "refresh-branch.sh on the clone arm runs outside the sandbox: fixture (a) fast-forwards, (b) writes a two-parent merge, (c) exits 4 with nothing written, and the clone's own copy stays sandboxed for its fetch while its --local merge runs in the clone" \
   "§3 The wrappers"
 sp_leg_declare planted-config "C1,CW3,C2,K2,CW4,CS15" \
   "each wrapper refuses a scratch repository or a clone whose .git/config carries a planted key before any git call, and no marker is created" \
@@ -45,13 +47,13 @@ sp_leg_declare planted-files "CS12,CS13,CS14,L1,L2" \
   "commit-on-branch.sh refuses a clone carrying a planted http-alternates, commondir or config.worktree, refresh-branch.sh refuses a dash-leading defaultBranch, and L1 is not run — unreachable on the clone layout" \
   "§2 The clone layout (owed) (CS12, CS13, CS14); §3 The wrappers (L1, L2)"
 sp_leg_declare write-protection "CS1,CS2,CS7,W6,W8" \
-  "every write to the clone's protected paths, to <main>/.git and to the per-run profile is refused while its control is written, and the debug log carries no unmatched-rule line" \
+  "every write to the clone's protected paths, to <main>/.git and to the per-run profile, the per-run profile's Edit included, is refused while its control is written, and neither this leg's debug log nor W7's carries an unmatched-rule line" \
   "§2 The clone layout (owed) (CS1, CS2, CS7); §4 The profile's denials (W6, W8)"
 sp_leg_declare git "CS3,CL5" \
-  "ordinary git in the clone succeeds under the real per-run profile, and each CL5 write is refused or written as recorded" \
+  "ordinary git in the clone succeeds under the real per-run profile, git fetch origin is refused by the network allowlist as the clone layout intends, and each CL5 write is refused or written as recorded" \
   "§2 The clone layout (owed) (CS3); §2 The per-run clone (2026-10-19) (CL5)"
 sp_leg_declare network "N1,N2,N3,N4,N5" \
-  "hosts off the allowlist, a loopback-only host and a link-local-only host are refused, and a call carrying allowed_domains does not reach its host" \
+  "hosts off the allowlist are refused, a loopback listener the probe owns returns no body to the session, a link-local host's curl error line is recorded and is not run where it cannot tell a refusal from an unreachable host, and a call carrying allowed_domains does not reach its host" \
   "§4 The profile's denials"
 sp_leg_declare retry "RT1" \
   "dangerouslyDisableSandbox: true does not run the call unsandboxed under allowUnsandboxedCommands: false" \
@@ -60,7 +62,7 @@ sp_leg_declare repo-settings "RS1" \
   "a planted <clone>/.claude/settings.local.json loosening changes none of the network, retry and write-protection results" \
   "§4 The profile's denials"
 sp_leg_declare credentials "S1,S2,S4,S5" \
-  "reads of ~/.ssh are refused, the token variables the profile unsets are absent, and whether the SSH agent socket is reachable is recorded" \
+  "reads of ~/.ssh are refused, the token variables the profile unsets are absent by a check that prints presence only, whether the SSH agent socket is reachable is recorded, and the leg is not run when its session issued no calls" \
   "§4 The profile's denials"
 sp_leg_declare invalid-profile "CS8" \
   "the control's call is refused, and on the invalid profile the marker is recorded as written or refused" \
@@ -110,18 +112,47 @@ sp_exit_final() {
   fi
 }
 
+# sp_leg_nonpass <leg> — status 0 when the leg printed a fail or not run line, or had a line refused.
+sp_leg_nonpass() {
+  case $'\n'"$SP_NONPASS_LEGS" in
+    *$'\n'"${1:-}"$'\n'*) return 0 ;;
+  esac
+  return 1
+}
+
+sp__nonpass_add() {
+  sp_leg_nonpass "$1" || SP_NONPASS_LEGS="${SP_NONPASS_LEGS}$1"$'\n'
+}
+
 sp_result_line() {
   local leg="${1:-}" row="${2:-}" verdict="${3:-}" evidence="${4:-}" departure="${5:-}"
+  local rows
+  # The judge subcommand's line carries no row (judge.sh -> sp_judge_cli).
+  if [ "$leg" != judge ] || [ "$row" != - ]; then
+    rows="$(sp_leg_rows "$leg")" || rows="none"
+    case ",$rows," in
+      *",$row,"*) ;;
+      *)
+        # Whole-row match, so a row fused with its verdict (T2fail) is refused at its source.
+        sp_refuse "sp_result_line: row '$row' is not a row of leg '$leg' ($rows)"
+        SP_FAIL_COUNT=$((SP_FAIL_COUNT + 1))
+        sp__nonpass_add "$leg"
+        return 1
+        ;;
+    esac
+  fi
   case "$verdict" in
     pass | fail | "not run") ;;
     *)
       # A malformed verdict counts as a fail, so a caller's bug can never read as a pass.
       sp_refuse "sp_result_line: verdict '$verdict' for $leg $row is not pass, fail or not run"
       SP_FAIL_COUNT=$((SP_FAIL_COUNT + 1))
+      sp__nonpass_add "$leg"
       return 1
       ;;
   esac
   [ "$verdict" = fail ] && SP_FAIL_COUNT=$((SP_FAIL_COUNT + 1))
+  [ "$verdict" = pass ] || sp__nonpass_add "$leg"
   # Bash 3.2 keeps the backslash of an escaped quote in a replacement; a variable does not.
   local sq="'"
   evidence="${evidence%%$'\n'*}"

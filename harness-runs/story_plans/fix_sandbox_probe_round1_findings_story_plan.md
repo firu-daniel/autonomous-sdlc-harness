@@ -92,7 +92,7 @@ Task 1 ships first because the leg table in `core.sh` is the probe's single decl
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_sandbox_probe_round1_findings/task_<K>_plan.md`.
 
-1. [ ] **Task 1** — Refuse a result line whose row is not its leg's, record non-passing legs, and restate the changed legs' expected results in the leg table and Gate 15 _(layer: general)_ _(points: 20)_
+1. [x] **Task 1** — Refuse a result line whose row is not its leg's, record non-passing legs, and restate the changed legs' expected results in the leg table and Gate 15 _(layer: general)_ _(points: 20)_
 2. [ ] **Task 2** — Judge the denied-directory text before `permission_denials`, and grade N5's `allowed_domains cannot widen` refusal as a pass _(layer: general)_ _(points: 10)_
 3. [ ] **Task 3** — Keep the evidence of every leg that did not pass, stop the probe's own processes at teardown, and drop the pipe in `sp_extra_clone` _(layer: general)_ _(points: 20)_
 4. [ ] **Task 4** — Fix T2's result line and run the gates through `run-test-suite.sh`, give W7 a debug log, and spell TD2's control as a literal _(layer: general)_ _(points: 20)_
