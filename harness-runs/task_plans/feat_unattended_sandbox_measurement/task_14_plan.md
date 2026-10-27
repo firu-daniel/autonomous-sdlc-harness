@@ -39,3 +39,9 @@ Every fixture is a throwaway git repository under `os.tmpdir()`, built by `creat
 - Every fixture is built under `os.tmpdir()` and removed in process; grep the suite for any path under this checkout used as a fixture and find none.
 - Grep the suite for `WORKSPACE_ROOT` and read each hit: it appears only as the copy source of the probe files. No case invokes the probe, or sources its libraries, at `WORKSPACE_ROOT`.
 - No case launches `claude`.
+
+**Deviations from plan:**
+- The fixture's scripts directory is `INIT_SCRIPTS_DIR`, whose value is `harness-scripts` (`cli/src/config/model.ts`), not a literal `scripts/`; the probe copy is placed and invoked at `join(fixtureDir, INIT_SCRIPTS_DIR, 'sandbox-probe.sh')`.
+- The preflight cases assert the probe's own `sandbox-probe: `-prefixed stderr lines (exactly one refusal line, or none on the passing case), not the whole stderr. Under the `bash` on this host's PATH, sourcing the copied `scripts/lib/sandbox-probe/session.sh` prints `session.sh: line 313: syntax error near unexpected token '<'` on every invocation of the entry point; that file is outside this task's targets and the `cli` layer, so the defect is reported rather than fixed. `cli/test/sandbox-probe-judge.test.mjs` → `assertRefusal` already tolerates library-sourcing noise the same way. The `shasum` guard cases source only `core.sh` and `preflight.sh` and still assert the whole stderr.
+- Added beyond the plan: the worktree case also sets `SANDBOX_PROBE_UNAME=Linux`, so refusal 1 is shown to precede refusal 2; and a case where every check passes (exit 0, no probe line, no `sandbox-probe.*` left). Refusal 4 (a watcher run in flight) is not listed by the plan and is not covered.
+- Each case's `TMPDIR` is its own `mkdtemp` under `os.tmpdir()`, read for a leftover `sandbox-probe.*` on every refusal, not only refusal 1, since `sp_preflight_refuse` releases the snapshot on the later ones too.

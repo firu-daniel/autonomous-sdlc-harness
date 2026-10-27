@@ -123,7 +123,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_unattended_sandbox_meas
 12. [x] **Task 11** — Add the network and retry legs, `allowed_domains` included _(layer: general)_ _(points: 15)_
 13. [x] **Task 12** — Add the repo-settings, credentials, invalid-profile and headless-parity legs _(layer: general)_ _(points: 20)_
 14. [x] **Task 13** — Test the probe's judge against recorded stream fixtures _(layer: cli)_ _(points: 20)_
-15. [ ] **Task 14** — Test the probe's preflight refusals and its `shasum` guard _(layer: cli)_ _(points: 15)_
+15. [x] **Task 14** — Test the probe's preflight refusals and its `shasum` guard _(layer: cli)_ _(points: 15)_
 16. [ ] **Task 15** — Test the probe's git judges and its leg table _(layer: cli)_ _(points: 15)_
 17. [ ] **Task 16** — Add the probe's new rows to `docs/sandbox-verification.md`, re-target C2, K2 and CW4, and name the probe in §0 _(layer: general)_ _(points: 20)_
 18. [ ] **Task 17** — Document Gate 15 in `docs/development.md` §5 _(layer: general)_ _(points: 20)_
