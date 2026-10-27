@@ -12,7 +12,7 @@ Gate 13a–13c are reported `BLOCKED` and gate 13d `SKIPPED` (`python-service: n
 
 This list is the **single source of truth** for the fix loop. `[ ]` markers anywhere else in this plan or its per-finding files are informational only.
 
-1. [ ] **Finding 1** — Remove the absolute checkout path from the skeptic-review finding_4 implementer record. _(layer: general)_
+1. [x] **Finding 1** — Remove the absolute checkout path from the skeptic-review finding_4 implementer record. _(layer: general)_
 
 ## Must Fix
 
