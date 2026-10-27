@@ -56,3 +56,9 @@
 
 - `npm test --workspace cli -- test/sandbox-probe-protection-legs.test.mjs` passes.
 - The `sp__wp_tracked` cases assert an empty stderr, which is the defect's observable: `printf: write error: Broken pipe`.
+
+**Deviations from plan:**
+
+- Plan specified 5,000 tracked files; `f0.txt` … `f4999.txt` plus `README.md` print about 48.9 KB, under a 64 KiB pipe buffer. Implemented as 10,000 files (about 98.9 KB), so the list exceeds the buffer on Linux and macOS alike.
+- Plan did not say how the `sp__wp_tracked` cases run their shell. With SIGPIPE at its default, the pre-Task-5 pipe (`printf '%s\n' "$list" | grep -qxF README.md`, from `214efebe`) dies silently and the suite passed against it: measured by a mutation script under `harness-runs/scratch/` that restored that line, after which all 11 cases passed. The two cases therefore prefix `trap '' PIPE; ` to the sourced body. Re-run against the same mutation: `README.md first` failed on stderr `legs-protection.sh: line 705: printf: write error: Broken pipe`. Mutation reverted (`git diff --stat HEAD` empty) before the final run: 11 of 11 pass.
+- The second `sp__wp_tracked` case asserts the exact file `f0.txt\n`, not just "one non-dot tracked file". `git ls-files` sorts by bytes, so `f0.txt` comes right after `README.md`.

@@ -105,7 +105,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_sandbox_probe_round1_fin
 11. [x] **Task 11** — Test that a fused or foreign row is refused and that non-passing legs are recorded _(layer: cli)_ _(points: 10)_
 12. [x] **Task 12** — Test teardown's evidence keeping and its stopping of tracked processes _(layer: cli)_ _(points: 15)_
 13. [x] **Task 13** — Test T2's and TD2's grading against recorded streams _(layer: cli)_ _(points: 15)_
-14. [ ] **Task 14** — Test W8, CS7's `Edit`, CS3's fetch and `sp__wp_tracked` against recorded streams and logs _(layer: cli)_ _(points: 15)_
+14. [x] **Task 14** — Test W8, CS7's `Edit`, CS3's fetch and `sp__wp_tracked` against recorded streams and logs _(layer: cli)_ _(points: 15)_
 15. [ ] **Task 15** — Test N3, N4, the credentials no-calls check, P1b's permission screen and R4's `--local` grading against recorded streams _(layer: cli)_ _(points: 20)_
 16. [ ] **Task 16** — Amend the rows whose call or expected result the probe now names: T2, TD2, CS3, CS4, P1b, R4, N3, N4, N5, S4, W7 _(layer: general)_ _(points: 20)_
 
