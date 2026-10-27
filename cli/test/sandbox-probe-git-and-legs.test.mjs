@@ -1,13 +1,14 @@
 /**
  * The sandbox probe's git judges (`sp_remote_tip`, `sp_judge_push`, `sp_judge_ref` in
  * `scripts/lib/sandbox-probe/judge.sh`), its leg table (`SP_LEGS`, printed by
- * `scripts/sandbox-probe.sh --list`) and its result line (`sp_result_line` in
- * `scripts/lib/sandbox-probe/core.sh`).
+ * `scripts/sandbox-probe.sh --list`), its result line (`sp_result_line` in
+ * `scripts/lib/sandbox-probe/core.sh`) and its non-pass record (`sp_leg_nonpass`, same file).
  *
  * **The rule these tests exist to enforce: the probe's git judges read refs, never exit statuses —
  * a push by `ls-remote` on origin, a commit by `rev-parse` before and after — and its leg table is
  * the single declaration `--list` prints, every row id in exactly one leg, and Gate 15 in
- * `docs/development.md` restates it row for row.**
+ * `docs/development.md` restates it row for row. A result line's row must be one of its leg's rows,
+ * so an argument shift that fuses the row with the verdict is refused at its source.**
  *
  * The judges run in a `bash -c` that sources `core.sh` and `judge.sh` from `WORKSPACE_ROOT`, with the
  * fixture (or `os.tmpdir()`) as its working directory; every repository argument names a `seedRepository` fixture and
@@ -361,5 +362,59 @@ test('sp_result_line: fixed field order, double-quoted values', async (t) => {
     ]);
     assert.equal(run.stdout, '|1|1');
     assert.equal(run.stderr, "sandbox-probe: sp_result_line: verdict 'passed' for git CS3 is not pass, fail or not run\n");
+  });
+
+  await t.test("a row fused with its verdict is refused, naming the leg's rows", async () => {
+    const run = await sourced(tmpdir(), 'sp_result_line "$@"; printf "|%s|%s" "$?" "$SP_FAIL_COUNT"', [
+      'gates',
+      'T2fail',
+      '<sandbox_violations>',
+      'x',
+      '',
+    ]);
+    assert.equal(run.stdout, '|1|1');
+    assert.equal(run.stderr, "sandbox-probe: sp_result_line: row 'T2fail' is not a row of leg 'gates' (T2,W7)\n");
+  });
+
+  await t.test('a foreign row is refused, the match is on whole rows, and judge takes row -', async () => {
+    const foreign = await sourced(tmpdir(), 'sp_result_line "$@"; printf "|%s|%s" "$?" "$SP_FAIL_COUNT"', [
+      'gates',
+      'CS3',
+      'pass',
+      'x',
+      '',
+    ]);
+    assert.equal(foreign.stdout, '|1|1');
+    assert.equal(foreign.stderr, "sandbox-probe: sp_result_line: row 'CS3' is not a row of leg 'gates' (T2,W7)\n");
+
+    const prefix = await sourced(tmpdir(), 'sp_result_line "$@"; printf "|%s|%s" "$?" "$SP_FAIL_COUNT"', [
+      'planted-files',
+      'CS1',
+      'pass',
+      'x',
+      '',
+    ]);
+    assert.equal(prefix.stdout, '|1|1');
+    assert.equal(
+      prefix.stderr,
+      "sandbox-probe: sp_result_line: row 'CS1' is not a row of leg 'planted-files' (CS12,CS13,CS14,L1,L2)\n",
+    );
+
+    const judge = await sourced(tmpdir(), 'sp_result_line "$@"', ['judge', '-', 'pass', 'x', '']);
+    assert.equal(judge.stdout, 'leg="judge" row="-" result="pass" evidence="x" departure="none" claude="unknown"\n', judge.stderr);
+  });
+
+  await t.test('sp_leg_nonpass records the leg of a not run line and of a refused line, not of a pass', async () => {
+    const run = await sourced(
+      tmpdir(),
+      [
+        "{ sp_result_line network N1 pass x ''; sp_result_line git CS3 'not run' x ''; sp_result_line gates T2fail fail x ''; } >/dev/null 2>&1",
+        'sp_leg_nonpass network; a=$?',
+        'sp_leg_nonpass git; b=$?',
+        'sp_leg_nonpass gates; c=$?',
+        'printf "%s,%s,%s" "$a" "$b" "$c"',
+      ].join('; '),
+    );
+    assert.equal(run.stdout, '1,0,0', run.stderr);
   });
 });
