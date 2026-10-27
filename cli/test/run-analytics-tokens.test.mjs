@@ -57,7 +57,8 @@
  *     fix_run_analytics_token_accounting; separately, `lib/run-analytics.jq` `slowest` stops
  *     excluding `Agent` — run red once on fix_run_analytics_token_accounting.
  *   - E: `lib/run-analytics-report.jq` renders the stored sub-agent tokens again — run red once on
- *     fix_run_analytics_token_accounting.
+ *     fix_run_analytics_token_accounting; separately, `session_md`'s `Cache hit ratio` row reads
+ *     `$c.cache_hit_ratio` again — run red once on fix_run_analytics_token_accounting.
  */
 
 import assert from 'node:assert/strict';
@@ -241,6 +242,7 @@ test('E: a record from before token accounting shows no sub-agent tokens, and sa
   assert.ok(subagents.includes('| task-plan-writer | Write the plan | 9.0s | 2 | — | — | — | — |'), subagents);
   assert.ok(subagents.includes('this session was recorded before token accounting'), subagents);
   assert.ok(!subagents.includes('no transcript was found'), subagents);
+  assert.ok(sessionMd(md, 1).includes('| Cache hit ratio | — |'), sessionMd(md, 1));
 });
 
 test('B: with an empty claude home, the transcript-backed dispatch records null tokens too', async (t) => {

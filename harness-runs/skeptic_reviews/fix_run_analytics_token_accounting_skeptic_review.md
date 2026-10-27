@@ -28,7 +28,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Assert the legacy record's `| Cache hit ratio | — |` in case E and record its red-turning mutation _(layer: cli)_
+1. [x] **Finding 1** — Assert the legacy record's `| Cache hit ratio | — |` in case E and record its red-turning mutation _(layer: cli)_
 
 ---
 
