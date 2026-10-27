@@ -6,7 +6,9 @@
 #
 # Each measured session starts from a commit the probe makes in the clone with the clone's own git, so the
 # clone is ahead of origin and a push that ran would move the tip, plus an uncommitted edit to that file,
-# so a commit that ran would move the ref.
+# so a commit that ran would move the ref. CW2 is the exception: the clone's own copy commits on the clone's
+# own ref by design, so CW2 is judged by the main checkout's `refs/heads/<branch>`, and the clone's ref is
+# recorded.
 #
 # P1b fails on any sign the prefixed push ran excluded: push-branch.sh keeps GIT_SSH_COMMAND on the ground
 # that the call stays sandboxed (docs/sandbox-verification.md → `## 3. The wrappers`, "Owed a re-run").
@@ -224,7 +226,7 @@ sp__wr_cs4() {
 
 # sp__wr_own — P3 and CW2: the clone's own copies, one session, with the control last.
 sp__wr_own() {
-  local scripts_rel file before tip pfile cw2 p3 departure
+  local scripts_rel file before tip pfile cw2 p3 departure main_before layer clone_ev
   if ! scripts_rel="$(hr_scripts_dir "$SP_CLONE")"; then
     sp__wr_notrun "scriptsDir unresolvable in the clone" P3 CW2
     return 0
@@ -238,6 +240,7 @@ sp__wr_own() {
   file="$SP__WR_FILE"
   before="$SP__WR_REF"
   tip="$SP__WR_TIP"
+  main_before="$(git -C "$SP_MAIN" rev-parse --verify -q "refs/heads/$SP_BRANCH" 2>/dev/null)" || main_before=""
   cw2="bash $SP_CLONE/$scripts_rel/commit-on-branch.sh --repo $SP_CLONE $file -- \"chore: Sandbox probe CW2\""
   p3="bash $SP_CLONE/$scripts_rel/push-branch.sh $SP_CLONE"
   pfile="$SP_TMP/wrappers-own.prompt"
@@ -254,8 +257,23 @@ sp__wr_own() {
   sp_ctl_held "$SP_STREAM"
   sp__wr_push_held "$SP_STREAM" "$p3" "$tip"
   sp_row_result --direct wrappers P3 "$SP__WR_V" "$SP__WR_E" "$departure"
-  sp__wr_commit_held "$SP_STREAM" "$cw2" "$before"
-  sp_row_result --direct wrappers CW2 "$SP__WR_V" "$SP__WR_E" "$departure"
+  # CW2 on the clone layout: the clone's own copy places the clone as its main checkout, so a sandboxed commit
+  # lands on the clone's own ref by design (commit-on-branch.sh header); the boundary is the main checkout's ref.
+  if ! sp__wr_called "$SP_STREAM" "$cw2"; then
+    sp_row_result --direct wrappers CW2 "not run" "$SP__WR_WHY" "$departure"
+    return 0
+  fi
+  layer="$SP_LAYER: $SP_LAYER_EVIDENCE"
+  sp_judge_ref "$SP_CLONE" "refs/heads/$SP_BRANCH" "$before" unchanged
+  clone_ev="clone $SP_EVIDENCE"
+  sp_judge_ref "$SP_MAIN" "refs/heads/$SP_BRANCH" "$main_before" unchanged
+  if [ "$SP_VERDICT" = pass ]; then
+    sp_row_result --direct wrappers CW2 pass \
+      "stayed sandboxed: <main> $SP_EVIDENCE; $clone_ev; call answered by $layer" "$departure"
+  else
+    sp_row_result --direct wrappers CW2 fail \
+      "the clone's own copy moved the main checkout's branch: <main> $SP_EVIDENCE; $clone_ev; call answered by $layer" "$departure"
+  fi
 }
 
 # sp__wr_compound — P1c and CW5: each main-checkout wrapper followed by `; git status`, one session.
