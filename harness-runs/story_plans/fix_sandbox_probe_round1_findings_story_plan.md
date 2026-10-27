@@ -99,7 +99,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_sandbox_probe_round1_fin
 5. [x] **Task 5** — Take CS7's `Edit` and W7's debug log, grade CS3's fetch as an expected refusal, and drop the pipe in `sp__wp_tracked` _(layer: general)_ _(points: 20)_
 6. [x] **Task 6** — Aim N3 at a loopback listener the probe owns, and grade N4 on curl's full error line _(layer: general)_ _(points: 15)_
 7. [x] **Task 7** — Make the credentials session follow its prompt, check presence only, and grade a session that issued no calls as not run _(layer: general)_ _(points: 10)_
-8. [ ] **Task 8** — Allow P1b's prefixed call and grade a permission-layer refusal of it as not run _(layer: general)_ _(points: 10)_
+8. [x] **Task 8** — Allow P1b's prefixed call and grade a permission-layer refusal of it as not run _(layer: general)_ _(points: 10)_
 9. [ ] **Task 9** — Take R4's `--local` half in a session of its own _(layer: general)_ _(points: 15)_
 10. [ ] **Task 10** — Test the judge's file-tool precedence and N5's `cannot widen` refusal against recorded streams _(layer: cli)_ _(points: 15)_
 11. [ ] **Task 11** — Test that a fused or foreign row is refused and that non-passing legs are recorded _(layer: cli)_ _(points: 10)_

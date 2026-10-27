@@ -12,6 +12,9 @@
 #
 # P1b fails on any sign the prefixed push ran excluded: push-branch.sh keeps GIT_SSH_COMMAND on the ground
 # that the call stays sandboxed (docs/sandbox-verification.md → `## 3. The wrappers`, "Owed a re-run").
+# Its call is allowed through `--allowedTools` for exactly that command, so it reaches the sandbox; a
+# permission-layer refusal of it is `not run`, because that layer is not the one the row measures
+# (sp__wr_permission_screen <stream> <command>).
 #
 # SOURCED, NEVER EXECUTED. It sets no shell option: the entry point owns `set -u`. Bash 3.2 floor.
 
@@ -20,11 +23,14 @@ SP__WR_REF=""
 SP__WR_TIP=""
 SP__WR_WHY=""
 
-# sp__wr_session <name> <prompt file> — launch on SP_RUN_PROFILE; status 1 when no stream was written.
+# sp__wr_session <name> <prompt file> [sp_session option]... — launch on SP_RUN_PROFILE, passing the options
+# through; status 1 when no stream was written.
 sp__wr_session() {
-  sp_session "$1" "$SP_RUN_PROFILE" "$2"
+  local name="$1" pfile="$2"
+  shift 2
+  sp_session "$name" "$SP_RUN_PROFILE" "$pfile" "$@"
   if [ -z "$SP_STREAM" ] || [ ! -f "$SP_STREAM" ]; then
-    SP__WR_WHY="session $1 did not launch; see $SP_TMP/$1.stderr"
+    SP__WR_WHY="session $name did not launch; see $SP_TMP/$name.stderr"
     sp_refuse "$SP__WR_WHY"
     return 1
   fi
@@ -123,6 +129,18 @@ sp__wr_commit_held() {
     SP__WR_V=fail
     SP__WR_E="the commit landed: $SP_EVIDENCE; call answered by $layer"
   fi
+}
+
+# sp__wr_permission_screen <stream> <exact command> — status 0, with SP__WR_V `not run` and SP__WR_E, when
+# the call is matched and refused at the permission layer; status 1, setting nothing, otherwise.
+sp__wr_permission_screen() {
+  sp_judge_call "$1" ran "$2"
+  if [ "$SP_VERDICT" = "not run" ] || [ "$SP_LAYER" != permission ]; then
+    return 1
+  fi
+  SP__WR_V="not run"
+  SP__WR_E="refused at the permission layer, so it never reached the sandbox or the excludedCommands match: $SP_LAYER_EVIDENCE"
+  return 0
 }
 
 # sp__wr_notrun <why> <row>... — one `not run` line per row.
@@ -350,7 +368,7 @@ sp__wr_prefix() {
   sp_prompt_bash "$pfile" "$cw6"
   sp_ctl_add "$pfile" commit wr_prefix
   sp_ctl_add "$pfile" push
-  if ! sp__wr_session wrappers-prefix "$pfile"; then
+  if ! sp__wr_session wrappers-prefix "$pfile" --allowed "Bash($p1b)"; then
     sp__wr_notrun "$SP__WR_WHY" P1b CW6
     return 0
   fi
@@ -358,16 +376,20 @@ sp__wr_prefix() {
   sp_ctl_held "$SP_STREAM"
 
   # P1b: sandboxed is the pass; a helper that ran or a push that landed is the prefix running excluded.
-  sp__wr_push_held "$SP_STREAM" "$p1b" "$tip"
-  if [ "$SP__WR_V" = "not run" ]; then
-    sp_row_result --direct wrappers P1b "not run" "$SP__WR_E" "$departure"
-  elif [ -e "$marker" ]; then
-    sp_row_result --direct wrappers P1b fail \
-      "ran excluded: $marker exists, so GIT_SSH_COMMAND ran unsandboxed; $SP__WR_E" "$departure"
-  elif [ "$SP__WR_V" = fail ]; then
-    sp_row_result --direct wrappers P1b fail "ran excluded, marker absent: $SP__WR_E" "$departure"
+  if sp__wr_permission_screen "$SP_STREAM" "$p1b"; then
+    sp_row_result --direct wrappers P1b "$SP__WR_V" "$SP__WR_E" "$departure"
   else
-    sp_row_result --direct wrappers P1b pass "stayed sandboxed, marker absent: $SP__WR_E" "$departure"
+    sp__wr_push_held "$SP_STREAM" "$p1b" "$tip"
+    if [ "$SP__WR_V" = "not run" ]; then
+      sp_row_result --direct wrappers P1b "not run" "$SP__WR_E" "$departure"
+    elif [ -e "$marker" ]; then
+      sp_row_result --direct wrappers P1b fail \
+        "ran excluded: $marker exists, so GIT_SSH_COMMAND ran unsandboxed; $SP__WR_E" "$departure"
+    elif [ "$SP__WR_V" = fail ]; then
+      sp_row_result --direct wrappers P1b fail "ran excluded, marker absent: $SP__WR_E" "$departure"
+    else
+      sp_row_result --direct wrappers P1b pass "stayed sandboxed, marker absent: $SP__WR_E" "$departure"
+    fi
   fi
 
   # CW6: sandboxed (neither ref moved) or excluded and neutralised (the clone's moved, <x>'s did not).
