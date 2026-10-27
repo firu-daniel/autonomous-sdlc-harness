@@ -123,7 +123,8 @@ sp__render() {
   rc=$?
   out="${out%%$'\n'*}"
   if [ "$rc" -ne 0 ] || [ -z "$out" ]; then
-    SP__RENDER_REFUSAL="the per-run profile for '$1' was refused: ${out:-the watcher's render printed nothing}"
+    [ -n "$out" ] || out="the watcher's render printed nothing"
+    SP__RENDER_REFUSAL="the per-run profile for '$1' was refused: $out"
     return 1
   fi
   SP__RENDERED="$out"

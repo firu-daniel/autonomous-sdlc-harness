@@ -30,7 +30,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 4** — Make `session.sh` parse under bash 3.2.57 by taking the apostrophe out of `sp__render`'s `${out:-…}` default _(layer: general)_
+1. [x] **Finding 4** — Make `session.sh` parse under bash 3.2.57 by taking the apostrophe out of `sp__render`'s `${out:-…}` default _(layer: general)_
 2. [ ] **Finding 3** — Grade T2 on `scripts/test.sh`'s own `PASS: test` / `FAIL: test` verdict line, not on the absence of two refusal strings _(layer: general)_
 3. [ ] **Finding 2** — Judge CW2 by the main checkout's `refs/heads/<branch>` and record the clone's, since the clone's own copy commits on the clone's ref by design _(layer: general)_
 4. [ ] **Finding 1** — Make N5's `fail` need a non-error result, so a rejected or errored `allowed_domains` call is `not run`, not a widening finding _(layer: cli, general)_
