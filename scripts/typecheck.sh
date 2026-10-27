@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Written by `autonomous-sdlc-harness init`, and yours from there on: edit it freely, a re-run
-# keeps your copy. It is what `commands.typecheck` invokes: it runs the raw type-check command
-# line below from the repository root, forwards whatever arguments it was given to it, and
-# prints one verdict line.
+# keeps your copy. It is what `commands.typecheck` invokes: it runs this repository's shell parse
+# check and then the raw type-check command line below from the repository root, forwards whatever
+# arguments it was given to that command line alone, and prints one verdict line covering both.
 
-# Deliberately no `-e`: this script has to outlive its own command's failure long enough to
-# print the verdict line below.
+# Deliberately no `-e`: this script has to outlive either step's failure long enough to run the
+# other and print the verdict line below.
 set -uo pipefail
 
 # Exit with a diagnostic and no verdict line: nothing ran, so there is no result to report. A
@@ -37,8 +37,21 @@ fi
 # test runner usually does, a line ending in a sub-command's own flags does not (`ctest` needs
 # `-R <regex>`, `cmake --build` needs `--target <name>`, a `cargo clippy … -- <flags>` line
 # forwards into the compiler's arguments). Read the line below before passing any.
+#
+# Hand-added in this repository, above the command line so that line stays the last one carrying
+# the caller's arguments: `bash -n` over every shell script git lists, the check `scripts/run-gates.sh`
+# runs as gate 16 (`docs/development.md` §5). Every unit runs `commands.typecheck` over the whole
+# tree, so a script that does not parse fails the unit that wrote it rather than a later gate run.
+# Its output is not redirected: its failure lines name each file, and its summary names the
+# interpreter. Both steps always run; the exit is the build's status when the build failed, else
+# the parse check's.
+bash scripts/check-shell-parse.sh
+parse_status=$?
 npm run build "$@"
 status=$?
+if [ "$status" -eq 0 ]; then
+  status=$parse_status
+fi
 
 # Exactly one verdict line, so no caller ever appends an exit-code probe to this script. That
 # compound form is what an unattended run's permission mode refuses.

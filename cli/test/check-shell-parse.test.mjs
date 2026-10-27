@@ -12,6 +12,12 @@
  * inside a throwaway repository under `os.tmpdir()`. `WORKSPACE_ROOT` is only the copy
  * source; no case runs the check there.
  *
+ * This repository's own `scripts/typecheck.sh` runs the check too, and the last case below runs a
+ * copy of it beside the check, with a `package.json` whose `build` script exits with a status the
+ * case chooses, so its verdict rule is graded without a real build. That copy is this repository's,
+ * hand-edited; the template `init` renders, `cli/templates/scripts/typecheck.sh`, carries no parse
+ * step, and the suites that render it are untouched by this one.
+ *
  * Deliberately not covered:
  * - `run-gates.sh` itself. A run of it is every automatable gate, `npm test` included, so a case
  *   driving it would run this suite inside itself. Its gate-16 block is a `gate` call on this
@@ -196,4 +202,44 @@ test('a listing with no shell script in it fails rather than passing on nothing 
   assert.equal(run.status, 1);
   assert.match(run.stderr, /listed no shell script, so nothing was checked/);
   assert.equal(summary(run.stdout).checked, 0);
+});
+
+test("this repository's typecheck.sh runs the check, and its verdict fails when either step fails", async (t) => {
+  const TYPECHECK = join('scripts', 'typecheck.sh');
+  // Prints the arguments it was handed, so the case can see where a caller's argument lands.
+  const BUILD =
+    'node -e "console.log(\'build-args:\' + process.argv.slice(1).join(\',\')); process.exit(Number(process.env.FIXTURE_BUILD_STATUS || 0))"';
+  const dir = await repoWith(t, {
+    tracked: {
+      'package.json': `${JSON.stringify({ name: 'fixture', private: true, scripts: { build: BUILD } })}\n`,
+      'lib/clean.sh': CLEAN_SH,
+    },
+  });
+  await cp(join(WORKSPACE_ROOT, TYPECHECK), join(dir, TYPECHECK));
+  const typecheck = (status, args = []) =>
+    runBash(dir, [TYPECHECK, ...args], { FIXTURE_BUILD_STATUS: String(status) });
+
+  const clean = await typecheck(0);
+  assert.equal(clean.status, 0, `${clean.stdout}\n${clean.stderr}`);
+  assert.match(clean.stdout, /^check-shell-parse: \d+ files checked with .*, 0 failed$/m);
+  assert.match(clean.stdout, /^PASS: typecheck$/m);
+
+  // A caller's argument reaches the build line alone: the parse check, which refuses any argument,
+  // never sees it.
+  const forwarded = await typecheck(0, ['x']);
+  assert.equal(forwarded.status, 0, `${forwarded.stdout}\n${forwarded.stderr}`);
+  assert.match(forwarded.stdout, /^PASS: typecheck$/m);
+  assert.match(forwarded.stdout, /^build-args:x$/m);
+  assert.ok(!forwarded.stderr.includes('expected no arguments'), forwarded.stderr);
+
+  await writeFile(join(dir, 'lib/broken.sh'), BROKEN_SH, 'utf8');
+  const parseOnly = await typecheck(0);
+  assert.equal(parseOnly.status, 1, parseOnly.stdout);
+  assert.ok(parseOnly.stderr.includes('check-shell-parse: lib/broken.sh does not parse'), parseOnly.stderr);
+  assert.match(parseOnly.stdout, /^FAIL: typecheck \(exit 1\)$/m);
+
+  // Both failed: the build's status wins.
+  const both = await typecheck(3);
+  assert.equal(both.status, 3, both.stdout);
+  assert.match(both.stdout, /^FAIL: typecheck \(exit 3\)$/m);
 });

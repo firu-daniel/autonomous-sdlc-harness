@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # check-shell-parse.sh — fail when a shell script git lists does not parse under the repository's bash
-# floor. Hand-written for this repository, like run-gates.sh, which runs it as gate 16;
-# `docs/development.md` §5 gate 16 states the contract in prose.
+# floor. Hand-written for this repository, like run-gates.sh, which runs it as gate 16, and run by
+# typecheck.sh before its type-check line; `docs/development.md` §5 gate 16 states the contract in
+# prose.
 #
 # WHY IT EXISTS. An unattended run refuses a free-standing `bash -n`, and the permission profile does
-# not allow one, while `bash scripts/run-gates.sh` is allowed. A library that does not parse still lets
-# a suite that sources it pass — sourcing a file with a syntax error only prints to stderr — so a
-# parse failure under macOS's `/bin/bash` 3.2 reached a branch with every suite green. This script is
-# the parse check, reached through run-gates.sh, over a file set the caller cannot steer.
+# not allow one, while `bash scripts/typecheck.sh` and `bash scripts/run-gates.sh` are allowed. A
+# library that does not parse still lets a suite that sources it pass — sourcing a file with a syntax
+# error only prints to stderr — so a parse failure under macOS's `/bin/bash` 3.2 reached a branch
+# with every suite green. This script is the parse check, reached through typecheck.sh in every unit
+# and through run-gates.sh, over a file set the caller cannot steer.
 #
 # THE CONTRACT.
 #   1. File set: every path `git ls-files --cached --others --exclude-standard` lists from the
