@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The harness's own verification, as one command.
 #
-# `docs/development.md` §5 defines fourteen gates. This script runs the eight a process can run
-# unattended — gates 1, 2, 3, 4, 6, 11, 13 and 14 — and reports the six it cannot, so that a
+# `docs/development.md` §5 defines fifteen gates. This script runs the eight a process can run
+# unattended — gates 1, 2, 3, 4, 6, 11, 13 and 14 — and reports the seven it cannot, so that a
 # reviewer — human or agent — reading a green result has read the whole automatable half rather than
 # one suite of it. Gate 14 depends on gate 2a's build. Three legs are SKIPPED where their tool cannot
 # be resolved: 6f where neither PATH nor `uvx` provides `typos` 1.51.1, 14c where `actionlint` is not
@@ -310,6 +310,7 @@ echo "  8  /autonomous-sdlc-harness:harness-analyze, which is judgement and runs
 echo "  9  examples/notes-app, which installs dependencies inside the checkout"
 echo "  10 docs retrieval with the real models, which downloads them and needs a network"
 echo "  12 remote execution, against a real GitHub repository with a runner, a credential and minutes"
+echo "  15 the unattended sandbox probe, which launches claude -p with --allowedTools and a person starts"
 if [ "$floor_blocked" -eq 1 ]; then
   echo "  11 the docs-retrieval relevance floor, reported BLOCKED above: it runs unattended where the"
   echo "     retrieval model cache is provisioned and the workspace's retrieval packages are installed,"
@@ -335,7 +336,7 @@ fi
 echo "     -> docs/development.md §5"
 
 # The same conditionals the block above states, in the line a caller reads off a green run.
-hand_run="gates 5, 7, 8, 9, 10 and 12 remain hand-run"
+hand_run="gates 5, 7, 8, 9, 10, 12 and 15 remain hand-run"
 if [ "$floor_blocked" -eq 1 ]; then
   hand_run="$hand_run, and gate 11 with them — it runs unattended only where the model cache is provisioned and the workspace's retrieval packages are installed"
 fi
