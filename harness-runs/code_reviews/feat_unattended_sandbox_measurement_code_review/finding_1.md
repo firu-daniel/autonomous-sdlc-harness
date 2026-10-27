@@ -26,3 +26,9 @@
   - Replace *"`headless-parity` is run by hand in an interactive session from the script `print-parity-script` prints"* with *"`headless-parity` is run with `run --leg headless-parity`, which prints the parity script with the live clone and profile paths and holds them until Enter is pressed"*.
   - Add `bash scripts/sandbox-probe.sh run --leg headless-parity` as its own line in the fenced block, and update the sentence before that block that counts and names its lines.
 - In `scripts/sandbox-probe.sh` → `usage`: change the `print-parity-script` line to `print the headless-parity script with placeholders; run --leg headless-parity prints it live`.
+
+**Deviations from plan:**
+
+- `sp_print_parity_script` takes the four values as optional positional arguments (the finding's second option) rather than a `sed` pass, so a path carrying `|` cannot break the substitution; with no argument it prints the placeholders.
+- Step 1 keeps one command per fenced block (`cd <clone>`, then one block per `claude --settings` line) and tells the reader to run the `cd` in each of the two terminals; steps 3 and 4 also name the `<run profile>` session.
+- Evidence downgrade: a preview run of `bash scripts/sandbox-probe.sh print-parity-script` and a `bash -n` syntax check of `scripts/lib/sandbox-probe/legs-settings.sh` were refused by the tool layer ("Permission to use Bash has been denied because Claude Code is running in don't ask mode"). The script text rests on reading the edited function only; `run --leg headless-parity` needs a live probe run started by a person and was not exercised.

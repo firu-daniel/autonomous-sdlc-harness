@@ -53,7 +53,7 @@ Usage: sandbox-probe.sh [--help] | --list | preflight | run [--leg <name>]... | 
   preflight              run the refusals and the shasum guard; create nothing
   run [--leg <name>]...  run the named legs, or every leg but headless-parity, in table order
   judge <kind> <args>    judge a recorded stream (the test suite's entry)
-  print-parity-script    print the headless-parity script to run in an interactive session
+  print-parity-script    print the headless-parity script with placeholders; run --leg headless-parity prints it live
 
 Start it from a terminal: auto mode refuses a `claude -p` launch carrying `--allowedTools`.
 From a session, `! bash <main>/scripts/sandbox-probe.sh run` works.

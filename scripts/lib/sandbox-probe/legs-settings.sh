@@ -398,8 +398,21 @@ sp_leg_invalid_profile() {
   sp_result_line invalid-profile CS8 pass "recorded (a): $ev; $ctl_ev; $note" "$departure"
 }
 
+# Holds the terminal until Enter: teardown follows the leg, and the interactive sessions need the clone
+# and both profiles on disk.
 sp_leg_headless_parity() {
-  sp_result_line headless-parity HP1 "not run" "interactive; run: bash scripts/sandbox-probe.sh print-parity-script" ""
+  if ! declare -F sp__net_profile >/dev/null; then
+    sp_result_line headless-parity HP1 "not run" "legs-network.sh is not present: no network scratch profile" ""
+    return 0
+  fi
+  if ! sp__net_profile; then
+    sp_result_line headless-parity HP1 "not run" "$SP__NET_PROFILE_WHY" ""
+    return 0
+  fi
+  sp_print_parity_script "$SP_CLONE" "$SP_RUN_PROFILE" "$SP__NET_PROFILE" "$SP_MAIN"
+  echo "sandbox-probe: the clone and profiles above stay until you press Enter; teardown follows" >&2
+  read -r _ </dev/tty
+  sp_result_line headless-parity HP1 "not run" "interactive; recorded by hand from the parity script printed above" ""
 }
 
 # sp__parity_block <command> — one command in its own fenced block.
@@ -411,28 +424,30 @@ sp__parity_step() {
   printf '%s\n\n' "$1"
 }
 
+# sp_print_parity_script [<clone> <run profile> <net profile> <main>] — with no arguments it prints the
+# placeholders, as a preview; sp_leg_headless_parity passes the live paths.
 sp_print_parity_script() {
   local host="${SP__NET_UNLISTED_HOST:-example.com}"
+  local clone="${1:-<clone>}" run_profile="${2:-<run profile>}" net_profile="${3:-<net profile>}"
+  local main="${4:-<main>}"
   cat <<'EOF'
-Headless parity (HP1): re-run the network, retry and write-protection legs' representative calls in an
-interactive session on the run profile, and record any difference from the headless result lines.
-<clone> is a probe clone, <run profile> its per-run profile (a headless run's departure names it), <main>
-the main checkout.
-
-1. From a terminal, start an interactive session in the clone on the run profile:
-
+Headless parity (HP1): re-run the network, retry and write-protection legs' representative calls in
+interactive sessions, and record any difference from the headless result lines.
 EOF
-  sp__parity_block "cd <clone>"
-  sp__parity_block "claude --settings <run profile>"
-  sp__parity_step "2. Network (N1): ask the session to run this Bash call exactly; expect a <sandbox_violations> refusal:"
+  printf '%s\n\n' "Clone: $clone. Run profile: $run_profile. Network scratch profile: $net_profile. Main checkout: $main."
+  sp__parity_step "1. In each of two terminals, change to the clone, then start one interactive session: the first on the network scratch profile, for step 2 only; the second on the run profile, for steps 3 and 4:"
+  sp__parity_block "cd $clone"
+  sp__parity_block "claude --settings $net_profile"
+  sp__parity_block "claude --settings $run_profile"
+  sp__parity_step "2. Network (N1): in the $net_profile session (the run profile without its \`Bash(curl:*)\` deny, as the headless N1 ran), ask for this Bash call exactly; expect a <sandbox_violations> refusal:"
   sp__parity_block "curl -sS https://$host/"
-  sp__parity_step "3. Retry (RT1): ask for this Bash call exactly, with dangerouslyDisableSandbox set to true; expect it refused and the file absent:"
+  sp__parity_step "3. Retry (RT1): in the $run_profile session, ask for this Bash call exactly, with dangerouslyDisableSandbox set to true; expect it refused and the file absent:"
   sp__parity_block 'dd if=/dev/null of=$HOME/sbx_probe_rt1_marker conv=notrunc'
-  sp__parity_step "4. Write protection (CS2): ask for this Bash call exactly; expect Operation not permitted:"
-  sp__parity_block "dd if=/dev/null of=<main>/.git/sbx_cs2_new conv=notrunc"
+  sp__parity_step "4. Write protection (CS2): in the $run_profile session, ask for this Bash call exactly; expect Operation not permitted:"
+  sp__parity_block "dd if=/dev/null of=$main/.git/sbx_cs2_new conv=notrunc"
   sp__parity_step "5. From the terminal, check that neither file landed; each must print No such file:"
   sp__parity_block 'ls -l $HOME/sbx_probe_rt1_marker'
-  sp__parity_block "ls -l <main>/.git/sbx_cs2_new"
+  sp__parity_block "ls -l $main/.git/sbx_cs2_new"
   printf '%s\n' "6. Record each call's outcome beside the headless leg line for the same row, and any difference, in docs/sandbox-verification.md → HP1."
   return 0
 }
