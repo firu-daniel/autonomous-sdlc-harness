@@ -4,11 +4,13 @@
  *
  * **The rule these tests exist to enforce: the judge's verdict and quoted evidence are fixed by the
  * stream alone** — by the four refusal shapes of `judge.sh`'s layer table (permission, file-tool,
- * network, sandbox; anything else is `ran`), taken in that table's precedence, and by the exact-match
- * rule, under which a command with anything appended is a different call. N5's three arms
- * (`sp_judge_allowed_domains`) are held here too: refused is `pass`, answered is `fail` carrying the
- * follow-up finding, a call with no `allowed_domains` parameter is `not run`, and an error result
- * carrying no refusal string is `not run`. No case launches
+ * network, sandbox; anything else is `ran`), taken in that table's precedence — the file-tool text
+ * outranks a `permission_denials` listing of the same call — and by the exact-match rule, under which
+ * a command with anything appended is a different call. N5's three arms (`sp_judge_allowed_domains`)
+ * are held here too: refused is `pass`, the Bash tool's own `allowed_domains cannot widen network
+ * access` refusal included; answered is `fail` carrying the follow-up finding; a call with no
+ * `allowed_domains` parameter is `not run`, and an error result carrying no refusal string is
+ * `not run`. No case launches
  * `claude`, loads a model or reaches the network: the subcommand reads a fixture file and prints one
  * result line, and every assertion compares that printed line verbatim.
  *
@@ -198,6 +200,29 @@ test('judge tool: Edit, Write and Read are matched by file_path', async (t) => {
       "no Edit call on '@FIXTURE_ROOT@/.claude/hooks/probe.sh' in the session",
     );
   });
+
+  const deniedWrapped = `<tool_use_error>${denied}</tool_use_error>`;
+  const listed = [
+    { tool: 'Edit', path: '@FIXTURE_ROOT@/scripts/push-branch.sh' },
+    { tool: 'Write', path: '@FIXTURE_ROOT@/.git/sbx_w6_new' },
+  ];
+  for (const { tool, path } of listed) {
+    await t.test(`${tool} refused by the file tool and listed in permission_denials reads file-tool`, async () => {
+      assertJudged(
+        await judge('tool', fixture('file-tool-in-denials'), 'file-tool', tool, path),
+        'pass',
+        deniedWrapped,
+      );
+    });
+
+    await t.test(`${tool} refused by the file tool and listed in permission_denials fails an expected permission`, async () => {
+      assertJudged(
+        await judge('tool', fixture('file-tool-in-denials'), 'permission', tool, path),
+        'fail',
+        deniedWrapped,
+      );
+    });
+  }
 });
 
 test('judge mcp: pass, fail and not run', async (t) => {
@@ -220,6 +245,14 @@ test('judge allowed-domains: N5’s three arms', async (t) => {
       await judge('allowed-domains', fixture('n5-refused'), N5_COMMAND),
       'pass',
       '<sandbox_violations>n5.example.invalid:443 refused: host is not on the allow list</sandbox_violations>',
+    );
+  });
+
+  await t.test('a call whose allowed_domains the Bash tool refused as cannot widen passes', async () => {
+    assertJudged(
+      await judge('allowed-domains', fixture('n5-cannot-widen'), N5_COMMAND),
+      'pass',
+      '<tool_use_error>allowed_domains cannot widen network access in this session: the configured sandbox allowlist is the whole allowlist here (a managed-domains-only or strictAllowlist policy, or a confined evaluation run). Remove allowed_domains and use a host the configured allowlist already covers.</tool_use_error>',
     );
   });
 

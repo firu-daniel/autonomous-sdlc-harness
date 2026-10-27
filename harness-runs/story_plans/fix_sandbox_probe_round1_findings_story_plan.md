@@ -101,7 +101,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_sandbox_probe_round1_fin
 7. [x] **Task 7** — Make the credentials session follow its prompt, check presence only, and grade a session that issued no calls as not run _(layer: general)_ _(points: 10)_
 8. [x] **Task 8** — Allow P1b's prefixed call and grade a permission-layer refusal of it as not run _(layer: general)_ _(points: 10)_
 9. [x] **Task 9** — Take R4's `--local` half in a session of its own _(layer: general)_ _(points: 15)_
-10. [ ] **Task 10** — Test the judge's file-tool precedence and N5's `cannot widen` refusal against recorded streams _(layer: cli)_ _(points: 15)_
+10. [x] **Task 10** — Test the judge's file-tool precedence and N5's `cannot widen` refusal against recorded streams _(layer: cli)_ _(points: 15)_
 11. [ ] **Task 11** — Test that a fused or foreign row is refused and that non-passing legs are recorded _(layer: cli)_ _(points: 10)_
 12. [ ] **Task 12** — Test teardown's evidence keeping and its stopping of tracked processes _(layer: cli)_ _(points: 15)_
 13. [ ] **Task 13** — Test T2's and TD2's grading against recorded streams _(layer: cli)_ _(points: 15)_
