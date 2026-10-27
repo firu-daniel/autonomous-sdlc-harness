@@ -56,3 +56,8 @@
 
 - `npm test --workspace cli -- test/sandbox-probe-gates-legs.test.mjs` passes.
 - No case starts a session or a gate. The suite sources libraries and reads fixtures only.
+
+**Deviations from plan:**
+
+- The `td2-forms.jsonl` / `td2-control-permission.jsonl` refusals quote `mkstemp failed on @FIXTURE_ROOT@/system-tmp/…` (and `mkdtemp failed on …` for `-d`) rather than row TD2's `/var/folders/…`: the plan's fixture-hygiene bullet requires `@FIXTURE_ROOT@` for every path and no machine path, and the grade reads only the `mkstemp failed` / `mkdtemp failed` substring, so the verdict is unchanged.
+- The fixtures were written with the file tools: a heredoc `Bash` call to write them was refused at the permission layer (don't ask mode). No verification claim rests on that call.

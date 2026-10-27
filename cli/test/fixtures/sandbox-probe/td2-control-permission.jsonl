@@ -1,0 +1,11 @@
+{"type":"system","subtype":"init","session_id":"sp-td2-control-permission","cwd":"@FIXTURE_ROOT@"}
+{"type":"user","timestamp":"2026-01-01T00:00:00.000Z","message":{"role":"user","content":"Run the commands."}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:01.000Z","message":{"id":"m1","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"mktemp"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","is_error":true,"content":"mktemp: mkstemp failed on @FIXTURE_ROOT@/system-tmp/tmp.XXXXXXXXXX: Operation not permitted"}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:03.000Z","message":{"id":"m2","content":[{"type":"tool_use","id":"tu2","name":"Bash","input":{"command":"mktemp -d"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:04.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu2","is_error":true,"content":"mktemp: mkdtemp failed on @FIXTURE_ROOT@/system-tmp/tmp.XXXXXXXXXX: Operation not permitted"}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:05.000Z","message":{"id":"m3","content":[{"type":"tool_use","id":"tu3","name":"Bash","input":{"command":"mktemp -t harness-gates"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:06.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu3","is_error":true,"content":"mktemp: mkstemp failed on @FIXTURE_ROOT@/system-tmp/harness-gates.XXXXXXXX: Operation not permitted"}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:07.000Z","message":{"id":"m4","content":[{"type":"tool_use","id":"tu4","name":"Bash","input":{"command":"mktemp @FIXTURE_ROOT@/claude-tmp/harness-gates.XXXXXX"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:08.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu4","is_error":true,"content":[{"type":"text","text":"Permission to use Bash with command mktemp @FIXTURE_ROOT@/claude-tmp/harness-gates.XXXXXX has been denied because Claude Code is running in don't ask mode."}]}]}}
+{"type":"result","subtype":"success","timestamp":"2026-01-01T00:00:09.000Z","duration_ms":9000,"permission_denials":[]}
