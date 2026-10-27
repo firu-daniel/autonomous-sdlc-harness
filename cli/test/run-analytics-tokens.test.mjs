@@ -25,12 +25,15 @@
  *     3500, write 200 — equal to `result.usage`.
  *   - `modelUsage` summed: in 17+100 = 117, out 897+20 = 917, read 13800, write 500;
  *     cache_hit_ratio 13800 / (13800+500+117) = 13800 / 14417 = 0.9572.
- *   - attribution: remainder = total − orchestrator − sub-agents = 100 / 20 / 0 / 0.
+ *   - attribution: remainder = total − orchestrator − sub-agents = 100 / 20 / 0 / 0; total input
+ *     (in + read + write): orchestrator 3713, sub-agents 10604, session 14417, remainder 100.
  *   - Agent ag1 :01 → :10 = 9 000 ms; Bash tb1 :11 → :12 = 1 000 ms.
  * Session `sess-bare`, linked by a `task_started` event only, no transcript anywhere:
  *   - sub-agent tokens all null; orchestrator m4 + m5 = in 3, out 12; total out 300.
  *   - Agent ag2 :01 → :08 = 7 000 ms of a 10 000 ms wall: wall_share 0.7.
- * Whole run: output_tokens 917 + 300 = 1217, token_sessions 2.
+ *   - session totals from `modelUsage`: in 50, read 0, write 0, so total input 50.
+ * Whole run: output_tokens 917 + 300 = 1217, token_sessions 2; input 117 + 50 = 167, total input
+ * 14417 + 50 = 14467.
  *
  * Assumptions each fixture encodes that are unverifiable here, from no measured stream:
  *   - the two link carriers: `tool_use_result.agentId` on the closing tool_result (`sess-tok`) and a
@@ -59,6 +62,8 @@
  *   - E: `lib/run-analytics-report.jq` renders the stored sub-agent tokens again — run red once on
  *     fix_run_analytics_token_accounting; separately, `session_md`'s `Cache hit ratio` row reads
  *     `$c.cache_hit_ratio` again — run red once on fix_run_analytics_token_accounting.
+ *   - F: `in_total` in `lib/run-analytics-report.jq` treats a null component as 0 — run red once
+ *     on fix_run_analytics_token_accounting.
  */
 
 import assert from 'node:assert/strict';
@@ -175,14 +180,14 @@ test('token and tool-time figures over a transcript-backed and a transcript-less
     const s2 = sessionMd(md, 2);
     const subagents = section(s2, '### Sub-agents');
     assert.ok(
-      subagents.includes('| code-reviewer | Review the code | 7.0s | 1 | — | — | — | — | 0.7 |'),
+      subagents.includes('| code-reviewer | Review the code | 7.0s | 1 | — | — | — | — | — | 0.7 |'),
       subagents,
     );
     assert.ok(subagents.includes('— in a token column: no transcript was found for this dispatch, '), subagents);
     const attribution = section(s2, '#### Token attribution');
-    assert.ok(attribution.includes('| orchestrator | 3 | 12 | 0 | 0 |'), attribution);
-    assert.ok(attribution.includes('| sub-agents | — | — | — | — |'), attribution);
-    assert.ok(attribution.includes('| remainder | — | — | — | — |'), attribution);
+    assert.ok(attribution.includes('| orchestrator | 3 | 3 | 12 | 0 | 0 |'), attribution);
+    assert.ok(attribution.includes('| sub-agents | — | — | — | — | — |'), attribution);
+    assert.ok(attribution.includes('| remainder | — | — | — | — | — |'), attribution);
     assert.ok(
       attribution.includes('1 of 1 sub-agent dispatches have no transcript; their tokens are in the session total only.'),
       attribution,
@@ -198,9 +203,20 @@ test('token and tool-time figures over a transcript-backed and a transcript-less
 
     const s1 = sessionMd(md, 1);
     const attribution = section(s1, '#### Token attribution');
-    assert.ok(attribution.includes('| orchestrator | 13 | 55 | 3500 | 200 |'), attribution);
-    assert.ok(attribution.includes('| sub-agents | 4 | 842 | 10300 | 300 |'), attribution);
-    assert.ok(attribution.includes('| remainder | 100 | 20 | 0 | 0 |'), attribution);
+    assert.ok(
+      attribution.includes(
+        '| Context | Input tokens (uncached) | Total input tokens (incl. cache) | Output tokens | Cache read tokens | Cache write tokens |',
+      ),
+      attribution,
+    );
+    assert.ok(attribution.includes('| orchestrator | 13 | 3713 | 55 | 3500 | 200 |'), attribution);
+    assert.ok(attribution.includes('| sub-agents | 4 | 10604 | 842 | 10300 | 300 |'), attribution);
+    assert.ok(attribution.includes('| remainder | 100 | 100 | 20 | 0 | 0 |'), attribution);
+    const subagents = section(s1, '### Sub-agents');
+    assert.ok(subagents.includes('| task-plan-writer | Write the plan | 9.0s | 2 | 842 | 4 | 10604 | 10300 | 300 |'), subagents);
+    assert.ok(s1.includes('| Input tokens (uncached) | 117 |\n| Total input tokens (incl. cache) | 14417 |\n'), s1);
+    assert.ok(!/^\| Input tokens \|/m.test(md), md);
+    assert.ok(md.includes('| Input tokens (uncached) | 167 |\n| Total input tokens (incl. cache) | 14467 |\n'), md);
     assert.ok(s1.includes('| Token source | result.modelUsage |'), s1);
     assert.ok(s1.includes('| Cache hit ratio | 0.9572 |'), s1);
 
@@ -243,6 +259,26 @@ test('E: a record from before token accounting shows no sub-agent tokens, and sa
   assert.ok(subagents.includes('this session was recorded before token accounting'), subagents);
   assert.ok(!subagents.includes('no transcript was found'), subagents);
   assert.ok(sessionMd(md, 1).includes('| Cache hit ratio | — |'), sessionMd(md, 1));
+  assert.ok(sessionMd(md, 1).includes('| Total input tokens (incl. cache) | — |'), sessionMd(md, 1));
+  assert.ok(md.includes('| Total input tokens (incl. cache) | — |'), md);
+});
+
+test('F: a total input with any null component renders —, never a partial sum', async (t) => {
+  const { doc, dir } = await recordedRun(t, { transcript: true });
+  const [tok, bare] = structuredClone(doc.sessions);
+  bare.cost.cache_write_tokens = null;
+  const document = { schema: 1, branch: BRANCH, sessions: [tok, bare], run: {} };
+
+  const md = execFileSync(
+    'jq',
+    ['-r', '-f', join(dir, INIT_SCRIPTS_DIR, 'lib', 'run-analytics-report.jq'), '--arg', 'mode', 'markdown'],
+    { input: JSON.stringify(document), encoding: 'utf8' },
+  );
+  const s2 = sessionMd(md, 2);
+  assert.ok(s2.includes('| Input tokens (uncached) | 50 |\n| Total input tokens (incl. cache) | — |\n'), s2);
+  assert.ok(section(s2, '#### Token attribution').includes('| remainder | — | — | — | — | — |'), s2);
+  // The whole-run total counts only the session whose total is known, and says so.
+  assert.ok(md.includes('| Total input tokens (incl. cache) | 14417 (1 of 2 sessions) |'), md);
 });
 
 test('B: with an empty claude home, the transcript-backed dispatch records null tokens too', async (t) => {

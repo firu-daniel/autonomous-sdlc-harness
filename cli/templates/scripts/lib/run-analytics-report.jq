@@ -39,9 +39,15 @@
 #   document in -> Markdown text: `## Whole run`, then `## Session <k>` per
 #   session, oldest first. `.run` is recomputed, never read. Nothing in the text
 #   varies between two renders of one document.
+#   - Input tokens are labelled (uncached): the API's input_tokens counts only
+#     the uncached tail of each request. Wherever an input-token row or column
+#     is rendered, `Total input tokens (incl. cache)` follows it: input + cache
+#     read + cache write, — when any of the three is null, never a partial sum.
 #   - Whole-run Input / Output / Cache read / Cache write tokens: the sum, then
 #     " (<token_sessions> of <sessions> sessions)" when token_sessions is less
-#     than sessions, or — when it is 0.
+#     than sessions, or — when it is 0. Whole-run Total input tokens sums the
+#     sessions' totals the same way, counting the sessions whose total is a
+#     number in place of token_sessions.
 #   - Thinking tokens and the 5m / 1h split are labelled main thread.
 #   - Per session, the four token totals are the share's, and Cache hit ratio is
 #     computed from them (— when any is null); `Token source` reads
@@ -53,7 +59,7 @@
 #     remainder = share total - both, — when an operand is null, negative as is.
 #   - A sub-agent row whose token_source is not "transcript" (a missing
 #     transcript, or a record from before token accounting) renders — in its
-#     four token cells.
+#     five token cells.
 #   - A by_tool row for Agent / Task is labelled sub-agent wall time, with a
 #     line saying so; `#### Slowest calls` drops Agent / Task from
 #     tools.slowest, so records written before slowest excluded them match.
@@ -234,6 +240,12 @@ def run_tokens($r):
 
 def is_dispatch: . == "Agent" or . == "Task";
 
+# Total input tokens: input + cache read + cache write; null unless all three
+# are numbers, so a missing figure never renders as a partial sum.
+def in_total($i; $r; $w):
+  if ($i | type) == "number" and ($r | type) == "number" and ($w | type) == "number"
+  then $i + $r + $w else null end;
+
 # $a - $b - $c; null unless all three are numbers.
 def diff3($a; $b; $c):
   if ($a | type) == "number" and ($b | type) == "number" and ($c | type) == "number"
@@ -241,6 +253,7 @@ def diff3($a; $b; $c):
 
 def whole_run($b):
   run_of as $r
+  | [shares[] | in_total(.input_tokens; .cache_read_tokens; .cache_write_tokens)] as $tots
   | ["# Run analytics — \($b | fmt)", "", "## Whole run", ""]
     + table(["Measure", "Value"]; [
         ["Sessions", "\($r.sessions) (\($r.sessions - $r.complete_sessions) incomplete)"],
@@ -250,7 +263,10 @@ def whole_run($b):
         ["Host-suspended", ($r.host_suspended_ms | fmt_dur)],
         ["Idle", ($r.idle_ms | fmt_dur)],
         ["Cost", ($r.total_cost_usd | fmt_usd)],
-        ["Input tokens", ($r.input_tokens | run_tokens($r))],
+        ["Input tokens (uncached)", ($r.input_tokens | run_tokens($r))],
+        ["Total input tokens (incl. cache)",
+         ($tots | num_sum(.)
+          | run_tokens({sessions: $r.sessions, token_sessions: ([$tots[] | numbers] | length)}))],
         ["Output tokens", ($r.output_tokens | run_tokens($r))],
         ["Thinking tokens (main thread)", $r.thinking_tokens],
         ["Cache read tokens", ($r.cache_read_tokens | run_tokens($r))],
@@ -315,14 +331,15 @@ def session_md($k; $sh):
     + table(["Context", "Command", "Count", "Total"];
             [($tl.polling // [])[] | [.context, .command, .count, (.total_ms | fmt_dur)]])
     + ["", "### Sub-agents", ""]
-    + table(["Type", "Description", "Duration", "Requests", "Output tokens", "Input tokens",
-             "Cache read tokens", "Cache write tokens", "Wall share"];
+    + table(["Type", "Description", "Duration", "Requests", "Output tokens", "Input tokens (uncached)",
+             "Total input tokens (incl. cache)", "Cache read tokens", "Cache write tokens", "Wall share"];
             [$sa[] | (if .token_source == "transcript" then .
                       else .output_tokens = null | .input_tokens = null
                            | .cache_read_tokens = null | .cache_write_tokens = null end)
                    | [.type, .description, (.duration_ms | fmt_dur), .requests,
-                      .output_tokens, .input_tokens, .cache_read_tokens,
-                      .cache_write_tokens, .wall_share]])
+                      .output_tokens, .input_tokens,
+                      in_total(.input_tokens; .cache_read_tokens; .cache_write_tokens),
+                      .cache_read_tokens, .cache_write_tokens, .wall_share]])
     + (if $untracked == 0 then []
        elif $sh.token_source == "legacy" then
          ["", "— in a token column: this session was recorded before token accounting, and its stream-derived sub-agent figures are partial, so none is shown."]
@@ -333,7 +350,9 @@ def session_md($k; $sh):
     + table(["Measure", "Value"];
             [["Cost", ($sh.total_cost_usd | fmt_usd)]]
             + [($sh.by_model // {}) as $bm | $bm | keys[] as $m | ["Cost — \($m)", ($bm[$m] | fmt_usd)]]
-            + [["Input tokens", $sh.input_tokens],
+            + [["Input tokens (uncached)", $sh.input_tokens],
+               ["Total input tokens (incl. cache)",
+                in_total($sh.input_tokens; $sh.cache_read_tokens; $sh.cache_write_tokens)],
                ["Output tokens", $sh.output_tokens],
                ["Thinking tokens (main thread)", $c.thinking_tokens],
                ["Cache read tokens", $sh.cache_read_tokens],
@@ -355,10 +374,16 @@ def session_md($k; $sh):
        | [$f[] as $x | if ($sa | length) == 0 then 0
                        elif $untracked > 0 then null
                        else ($sa | num_sum(.[$x])) end] as $s
-       | table(["Context", "Input tokens", "Output tokens", "Cache read tokens", "Cache write tokens"];
-               [["orchestrator"] + $o,
-                ["sub-agents"] + $s,
-                ["remainder"] + [range(0; 4) as $j | diff3($sh[$f[$j]]; $o[$j]; $s[$j])]]))
+       | ($o + [in_total($o[0]; $o[2]; $o[3])]) as $o
+       | ($s + [in_total($s[0]; $s[2]; $s[3])]) as $s
+       | ($sh + {total_input_tokens: in_total($sh.input_tokens; $sh.cache_read_tokens; $sh.cache_write_tokens)}) as $st
+       | ($f + ["total_input_tokens"]) as $f
+       | [0, 4, 1, 2, 3] as $cols
+       | table(["Context", "Input tokens (uncached)", "Total input tokens (incl. cache)", "Output tokens",
+                "Cache read tokens", "Cache write tokens"];
+               [["orchestrator"] + [$cols[] as $j | $o[$j]],
+                ["sub-agents"] + [$cols[] as $j | $s[$j]],
+                ["remainder"] + [$cols[] as $j | diff3($st[$f[$j]]; $o[$j]; $s[$j])]]))
     + (if $untracked == 0 then []
        elif $sh.token_source == "legacy" then
          ["", "Recorded before token accounting: no sub-agent or session token total is available."]
