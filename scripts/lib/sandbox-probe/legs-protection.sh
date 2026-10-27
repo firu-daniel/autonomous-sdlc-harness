@@ -836,6 +836,8 @@ sp_leg_write_protection() {
   sp_row_result --direct write-protection W6 "$SP__WP_RV" "$SP__WP_RE" "$departure"
 
   # W8 reads logs, not a refusal: no control gates it.
+  # W8 grades W7's log too, which sp_session recorded under the gates leg: keep it with this leg as well.
+  [ -z "${SP_W7_DEBUG:-}" ] || sp_keep_file "$SP_W7_DEBUG"
   sp__wp_w8 "$departure" "$dbg" "${SP_W7_DEBUG:-}"
 }
 
