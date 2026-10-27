@@ -50,10 +50,19 @@ sp_leg_gates() {
       verdict=fail
       evidence="$line"
     elif [ "$verdict" = pass ]; then
-      evidence="$(sp__first_line "$text")"
+      # test.sh prints exactly one verdict line; a sandboxed FAIL is what T2's second sentence files.
+      if line="$(sp__line_with "$text" "FAIL: test")"; then
+        verdict=fail
+        evidence="$line; compare with the same call unsandboxed on the same tree before filing its row"
+      elif line="$(sp__line_with "$text" "PASS: test")"; then
+        evidence="$line"
+      else
+        verdict="not run"
+        evidence="no PASS: test or FAIL: test verdict line in the result (the output may be truncated): $(sp__first_line "$text")"
+      fi
     fi
   fi
-  sp_result_line gates T2 "$verdict" "$evidence" "$departure"
+  sp_result_line gates T2"$verdict" "$evidence" "$departure"
 
   # --- W7: six wrapper calls by absolute path, no --allowedTools. Only the `'<probe>'` call withdraws
   # the script-allowlist guard's permit, so only it reaches the per-run twin.

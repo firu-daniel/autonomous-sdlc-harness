@@ -32,3 +32,5 @@ with
 ```
 
 `line` is already a `local` of `sp_leg_gates`. No test drives `sp_leg_gates`, because it launches `claude`. This fix edits no test file and runs none.
+
+- **Deviations from plan:** None to the fix text, which landed verbatim. One evidence downgrade: a `bash -n` syntax check of `scripts/lib/sandbox-probe/legs-local.sh` was refused by the permission layer (don't-ask mode), so the edited branch's syntax rests on reading it, not on a parse; `bash scripts/typecheck.sh` (which compiles `cli/` only and does not parse this script) printed `PASS: typecheck`. The verdict strings matched were read off `scripts/test.sh` (`echo "PASS: test"`, `echo "FAIL: test (exit $status)"`).
