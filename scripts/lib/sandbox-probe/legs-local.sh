@@ -102,6 +102,11 @@ sp__t2_grade() {
   else
     SP_EVIDENCE="$SP_EVIDENCE; network denials in the log, recorded and not graded: no log to count them in"
   fi
+  # Claude Code annotates a sandboxed call's denials on that call's tool_result, so the session stream is
+  # where they appear (docs/sandbox-verification.md row T2, the 2026-10-27 run); the lane log rarely holds one.
+  n="$(grep -c -F -e '<sandbox_violations>' -e 'host is not on the allow list' -- "$stream" 2>/dev/null)" || true
+  case "$n" in '' | *[!0-9]*) n=0 ;; esac
+  SP_EVIDENCE="$SP_EVIDENCE; network denials in the session stream, recorded and not graded: $n event(s)"
 }
 
 # sp__td2_tmpdir <stream> <command> — print the TMPDIR the call printed, without a trailing slash;

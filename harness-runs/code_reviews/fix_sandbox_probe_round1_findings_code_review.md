@@ -53,7 +53,7 @@ What remains:
 1. [x] **Finding 3** — Reword the credentials measurement paragraph so it no longer says every call is refused or prints nothing _(layer: general)_
 2. [x] **Finding 2** — Keep W7's debug log with the write-protection leg, whose W8 row grades it _(layer: general)_
 3. [x] **Finding 4** — Track T2's gate worker for teardown before the collect wait, and untrack it once it ends on its own _(layer: general)_
-4. [ ] **Finding 1** — Count T2's network denials in the session stream as well as the lane log, with its test case and row wording _(layer: cli, general)_
+4. [x] **Finding 1** — Count T2's network denials in the session stream as well as the lane log, with its test case and row wording _(layer: cli, general)_
 
 ---
 

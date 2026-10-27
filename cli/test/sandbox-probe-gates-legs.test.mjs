@@ -34,6 +34,7 @@ const FIXTURES = join(PACKAGE_ROOT, 'test', 'fixtures', 'sandbox-probe');
 const T2_COMMAND = 'bash scripts/run-test-suite.sh sbx_probe_t2';
 const COMPARE = 'compare with the same call unsandboxed on the same tree before filing its row';
 const DENIALS = 'network denials in the log, recorded and not graded';
+const STREAM_DENIALS = 'network denials in the session stream, recorded and not graded';
 
 function fixture(name) {
   return join(FIXTURES, `${name}.jsonl`);
@@ -81,7 +82,7 @@ test('sp__t2_grade: graded from the lane verdict and log', async (t) => {
         join(dir, 'sbx_probe_t2.verdict'),
         join(dir, 'sbx_probe_t2.log'),
       ]),
-      `pass|run-test-suite.sh verdict pass; ${DENIALS}: 1, first: ${violation}`,
+      `pass|run-test-suite.sh verdict pass; ${DENIALS}: 1, first: ${violation}; ${STREAM_DENIALS}: 0 event(s)`,
     );
   });
 
@@ -93,7 +94,7 @@ test('sp__t2_grade: graded from the lane verdict and log', async (t) => {
     await writeFile(log, `== run-test-suite.sh: gate test exited 1 ==\n${mkstemp}\n`);
     assert.equal(
       await graded(dir, 'sp__t2_grade', [fixture('t2-run-form'), T2_COMMAND, join(dir, 'sbx_probe_t2.verdict'), log]),
-      `fail|${mkstemp}; ${COMPARE}; ${DENIALS}: 0`,
+      `fail|${mkstemp}; ${COMPARE}; ${DENIALS}: 0; ${STREAM_DENIALS}: 0 event(s)`,
     );
   });
 
@@ -104,7 +105,7 @@ test('sp__t2_grade: graded from the lane verdict and log', async (t) => {
     await writeFile(log, '== run-test-suite.sh: gate test exited 0 ==\n');
     assert.equal(
       await graded(dir, 'sp__t2_grade', [fixture('t2-run-form'), T2_COMMAND, verdict, log]),
-      `not run|no verdict for the gate run: ${verdict} is absent, and the log ${log} exists; ${DENIALS}: 0`,
+      `not run|no verdict for the gate run: ${verdict} is absent, and the log ${log} exists; ${DENIALS}: 0; ${STREAM_DENIALS}: 0 event(s)`,
     );
   });
 
@@ -120,7 +121,24 @@ test('sp__t2_grade: graded from the lane verdict and log', async (t) => {
         join(dir, 'sbx_probe_t2.verdict'),
         log,
       ]),
-      `not run|the run form did not reach the gates: Permission to use Bash with command ${T2_COMMAND} has been denied because Claude Code is running in don't ask mode.; ${DENIALS}: 0`,
+      `not run|the run form did not reach the gates: Permission to use Bash with command ${T2_COMMAND} has been denied because Claude Code is running in don't ask mode.; ${DENIALS}: 0; ${STREAM_DENIALS}: 0 event(s)`,
+    );
+  });
+
+  await t.test('a denial annotated on a session tool_result is counted from the stream, not graded', async (t) => {
+    const dir = await caseDir(t);
+    const stream = join(dir, 't2-violation.jsonl');
+    const log = join(dir, 'sbx_probe_t2.log');
+    const text = readFileSync(fixture('t2-run-form'), 'utf8').replace(
+      '"text":"pending"',
+      '"text":"pending\\n<sandbox_violations>api.anthropic.com:443 refused: host is not on the allow list</sandbox_violations>"',
+    );
+    await writeFile(stream, text);
+    await writeFile(join(dir, 'sbx_probe_t2.verdict'), 'pass\n');
+    await writeFile(log, '== run-test-suite.sh: gate test exited 0 ==\n');
+    assert.equal(
+      await graded(dir, 'sp__t2_grade', [stream, T2_COMMAND, join(dir, 'sbx_probe_t2.verdict'), log]),
+      `pass|run-test-suite.sh verdict pass; ${DENIALS}: 0; ${STREAM_DENIALS}: 1 event(s)`,
     );
   });
 });
