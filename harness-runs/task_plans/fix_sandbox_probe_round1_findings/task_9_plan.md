@@ -42,3 +42,10 @@
 - R4 is printed exactly once on every path through `sp__rf_r4` (`grep -c 'wrappers-refresh R4' …` counts the call sites; each early return prints once, and the two-session path prints once at the end).
 - The `--local` command carries no `$` other than the two literal-checked paths `sp_leg_wrappers_refresh` already screens with `sp__ctl_literal`.
 - `sp__rf_r4_local_grade` calls no `git`, `sp_session` or `hr_` function.
+
+**Deviations from plan:**
+
+- The `--local` call spells `<scripts_rel>` as well as `$SP_CLONE`, and `sp_leg_wrappers_refresh` screens only `SP_SCRIPTS` and `SP_CLONE`. So `sp__rf_r4` now also screens `scripts_rel` with `sp__ctl_literal` at its existing `scriptsDir` early return, which prints R4 `not run` with `scriptsDir unresolvable in the clone, or not spellable as a literal`. No new print site was added.
+- In `sp__rf_r4_local_grade`, "answered at the permission layer" also covers the `file-tool` layer, which `sp_layer_of` reports for a permission-settings refusal. The case for any other error quotes the first line as `--local errored: <first line>`.
+- When the `--local` half could not run (the local base ref could not be created, or the session did not launch), its control counts as not held, with that cause as `SP_CTL_EVIDENCE`. A pass on the fetch half then prints as `not run`, but a `fail` still prints through `--direct`.
+- Evidence downgrade: the verification bullets were checked by reading the code, plus `grep -n 'wrappers-refresh R4'` (five sites: four early returns and the closing one), and `bash scripts/typecheck.sh` (`check-shell-parse: 89 files checked … 0 failed`, `PASS: typecheck`). No stream was replayed through `sp__rf_r4_local_grade`, because Task 15 owns that test, and no live probe session was run.

@@ -5,6 +5,13 @@
 # probe clone's own copy. Each refresh is judged by the ref and the working copy; R3's exit 4 is read only
 # together with its no-write comparison.
 #
+# R4 is two sessions on SP_RUN_PROFILE, printed as one line gated on both sessions' controls:
+# wrappers-refresh-r4 (the fetch, judged by the branch staying unchanged) and then
+# wrappers-refresh-r4-local (`refresh-branch.sh --local <clone>`), so the merge cannot disturb the fetch's
+# judgement. Before the second, the probe ensures the clone has refs/heads/<default>, creating it at
+# refs/remotes/origin/<default> where absent. `sp__rf_r4_local_grade <stream> <command>` grades the --local
+# half from its arguments and the stream alone.
+#
 # A fixture is a branch at the default's tip~1 (plus, for R2 and R3, one commit of its own) built in a
 # scratch clone under SP_TMP and fetched into <main> as refs/heads/<fx> — the leg's only write to <main> —
 # then cut as its own clone with `sp_extra_clone <fx> --existing`, because create-worktree.sh's default
@@ -420,11 +427,49 @@ sp__rf_r3() {
     "$departure"
 }
 
-# sp__rf_r4 — the probe clone's own copy: the fetch stays sandboxed, with the refresh control last.
+# sp__rf_r4_local_grade <stream> <command> — R4's --local half: sets SP_VERDICT and SP_EVIDENCE from the
+# stream alone.
+sp__rf_r4_local_grade() {
+  local stream="${1:-}" cmd="${2:-}" line
+  sp_judge_call "$stream" ran "$cmd"
+  [ "$SP_VERDICT" = "not run" ] && return 0
+  case "$SP_LAYER" in
+    permission | file-tool)
+      SP_VERDICT="not run"
+      SP_EVIDENCE="answered at the $SP_LAYER layer: $SP_LAYER_EVIDENCE"
+      return 0
+      ;;
+    sandbox)
+      SP_VERDICT=fail
+      SP_EVIDENCE="the --local merge was refused sandboxed in the clone: $SP_EVIDENCE"
+      return 0
+      ;;
+  esac
+  if [ "$SP__STATUS" = ok ]; then
+    SP_VERDICT=pass
+    SP_EVIDENCE="--local exit 0: $(sp__first_line "$SP__TEXT")"
+    return 0
+  fi
+  line="$(sp__line_with "$SP__TEXT" "Exit code")" || line=""
+  case "$line" in
+    *"Exit code 3")
+      line="$(sp__line_with "$SP__TEXT" "refresh-branch.sh:")" || line="$(sp__first_line "$SP__TEXT")"
+      SP_VERDICT=pass
+      SP_EVIDENCE="--local exit 3, nothing to do: $line"
+      return 0
+      ;;
+  esac
+  SP_VERDICT="not run"
+  SP_EVIDENCE="--local errored: $(sp__first_line "$SP__TEXT")"
+}
+
+# sp__rf_r4 — the probe clone's own copy, in the two sessions the header names; each ends with its own
+# refresh control.
 sp__rf_r4() {
-  local scripts_rel before pfile call departure layer dirty out
-  if ! scripts_rel="$(hr_scripts_dir "$SP_CLONE")"; then
-    sp_result_line wrappers-refresh R4 "not run" "scriptsDir unresolvable in the clone" ""
+  local scripts_rel before pfile call lcall departure ldeparture layer dirty out
+  local fverdict fevidence fctl_ok fctl_evidence lverdict levidence lctl_ok lctl_evidence lnote="" verdict
+  if ! scripts_rel="$(hr_scripts_dir "$SP_CLONE")" || ! sp__ctl_literal "clone scriptsDir" "$scripts_rel"; then
+    sp_result_line wrappers-refresh R4 "not run" "scriptsDir unresolvable in the clone, or not spellable as a literal" ""
     return 0
   fi
   # The wrappers leg leaves uncommitted edits in the probe clone, and refresh-branch.sh refuses a dirty
@@ -455,25 +500,91 @@ sp__rf_r4() {
   sp_ctl_held "$SP_STREAM"
   sp_judge_call "$SP_STREAM" network "$call"
   if [ "$SP_VERDICT" = "not run" ]; then
-    sp_row_result --direct wrappers-refresh R4 "not run" "$SP_EVIDENCE" "$departure"
-    return 0
-  fi
-  layer="$SP_LAYER: $SP_LAYER_EVIDENCE"
-  case "$SP_LAYER" in
-    network | sandbox) ;;
-    *)
-      sp_judge_ref "$SP_CLONE" "refs/heads/$SP_BRANCH" "$before" unchanged
-      sp_row_result --direct wrappers-refresh R4 fail \
-        "the fetch was not refused sandboxed: answered by $layer; $SP_EVIDENCE" "$departure"
-      return 0
-      ;;
-  esac
-  sp_judge_ref "$SP_CLONE" "refs/heads/$SP_BRANCH" "$before" unchanged
-  if [ "$SP_VERDICT" = pass ]; then
-    sp_row_result --direct wrappers-refresh R4 pass "$SP_EVIDENCE; call answered by $layer" "$departure"
+    fverdict="not run"
+    fevidence="$SP_EVIDENCE"
   else
-    sp_row_result --direct wrappers-refresh R4 fail "the branch moved: $SP_EVIDENCE; call answered by $layer" "$departure"
+    layer="$SP_LAYER: $SP_LAYER_EVIDENCE"
+    case "$SP_LAYER" in
+      network | sandbox)
+        sp_judge_ref "$SP_CLONE" "refs/heads/$SP_BRANCH" "$before" unchanged
+        if [ "$SP_VERDICT" = pass ]; then
+          fverdict=pass
+          fevidence="$SP_EVIDENCE; call answered by $layer"
+        else
+          fverdict=fail
+          fevidence="the branch moved: $SP_EVIDENCE; call answered by $layer"
+        fi
+        ;;
+      *)
+        sp_judge_ref "$SP_CLONE" "refs/heads/$SP_BRANCH" "$before" unchanged
+        fverdict=fail
+        fevidence="the fetch was not refused sandboxed: answered by $layer; $SP_EVIDENCE"
+        ;;
+    esac
   fi
+  fctl_ok="${SP_CTL_OK:-}"
+  fctl_evidence="$SP_CTL_EVIDENCE"
+
+  # The --local half, after the fetch half is judged, so its merge cannot move what that judged.
+  lcall="bash $SP_CLONE/$scripts_rel/refresh-branch.sh --local $SP_CLONE"
+  ldeparture=""
+  lctl_ok=0
+  lctl_evidence=""
+  lverdict=""
+  if ! git -C "$SP_CLONE" rev-parse --verify -q "refs/heads/$SP_DEFAULT_BRANCH" >/dev/null 2>&1; then
+    if out="$(git -C "$SP_CLONE" -c core.hooksPath=/dev/null branch "$SP_DEFAULT_BRANCH" \
+      "refs/remotes/origin/$SP_DEFAULT_BRANCH" 2>&1)"; then
+      lnote="local $SP_DEFAULT_BRANCH created by the probe at origin/$SP_DEFAULT_BRANCH; "
+    else
+      lverdict="not run"
+      levidence="could not create a local $SP_DEFAULT_BRANCH at origin/$SP_DEFAULT_BRANCH: ${out%%$'\n'*}"
+      lctl_evidence="$levidence"
+    fi
+  fi
+  if [ -z "$lverdict" ]; then
+    sp_ctl_prepare refresh_own_local
+    pfile="$SP_TMP/wrappers-refresh-r4-local.prompt"
+    sp_prompt_new "$pfile"
+    sp_prompt_bash "$pfile" "$lcall"
+    sp_ctl_add "$pfile" refresh
+    if sp__rf_session wrappers-refresh-r4-local "$SP_RUN_PROFILE" "$pfile" "$SP_CLONE"; then
+      ldeparture="$(sp_departures)"
+      sp_ctl_held "$SP_STREAM"
+      lctl_ok="${SP_CTL_OK:-}"
+      lctl_evidence="$SP_CTL_EVIDENCE"
+      sp__rf_r4_local_grade "$SP_STREAM" "$lcall"
+      lverdict="$SP_VERDICT"
+      levidence="$lnote$SP_EVIDENCE"
+    else
+      lverdict="not run"
+      levidence="$lnote$SP__RF_WHY"
+      lctl_evidence="$SP__RF_WHY"
+    fi
+  fi
+
+  if [ "$fverdict" = fail ] || [ "$lverdict" = fail ]; then
+    verdict=fail
+  elif [ "$fverdict" = "not run" ] || [ "$lverdict" = "not run" ]; then
+    verdict="not run"
+  else
+    verdict=pass
+  fi
+  if [ "$fctl_ok" != 1 ]; then
+    SP_CTL_OK=0
+    SP_CTL_EVIDENCE="wrappers-refresh-r4: ${fctl_evidence:-no positive control in the session}"
+  elif [ "$lctl_ok" != 1 ]; then
+    SP_CTL_OK=0
+    SP_CTL_EVIDENCE="wrappers-refresh-r4-local: ${lctl_evidence:-no positive control in the session}"
+  else
+    SP_CTL_OK=1
+    SP_CTL_EVIDENCE=""
+  fi
+  if [ -n "$departure" ] && [ -n "$ldeparture" ]; then
+    departure="$departure; $ldeparture"
+  else
+    departure="$departure$ldeparture"
+  fi
+  sp_row_result --direct wrappers-refresh R4 "$verdict" "fetch: $fevidence; --local: $levidence" "$departure"
 }
 
 sp_leg_wrappers_refresh() {
