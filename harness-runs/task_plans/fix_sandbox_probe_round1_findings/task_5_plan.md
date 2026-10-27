@@ -59,3 +59,9 @@
 - The write-protection prompt's CS7 `Edit` sentence names `$SP_RUN_PROFILE`, and CS7's `sp_row_result` evidence carries both the dd/rename clause and the `Edit` clause.
 - `sp__wp_w8` is called once, with three arguments, the third `"${SP_W7_DEBUG:-}"`.
 - `$c_fetch` no longer appears in the `for cmd in …` judging loop, and appears in exactly one `sp__git_cs3_fetch` call.
+
+**Deviations from plan:**
+
+- `sp__wp_cs7_edit`: the plan named layers `file-tool`/`permission`, `ran` and no match. A refusal at any other layer (`sandbox`, `network`) is graded `not run`, naming the layer, the way the plan grades `sp__git_cs3_fetch`'s other layers. The `ran` evidence also quotes the judge's line after `the Edit of <run profile> was not refused`.
+- `sp__wp_w8`: the not-run evidence keeps the per-log counts of any log that was read. The per-log scan moved into a helper, `sp__wp_w8_scan <log> <rules>`, which reads only its arguments.
+- Verification: a bare `bash -n` on the file was refused at the permission layer (`don't ask mode`). Syntax rests on `bash scripts/typecheck.sh` instead (`check-shell-parse: 89 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`; `PASS: typecheck`). Behaviour rests on a scratch probe run through `scripts/scratch-run.sh`. It sourced `core.sh`, `judge.sh`, `controls.sh` and this file against synthetic streams, and covered `sp__wp_tracked`, all three `sp__wp_cs7_edit` and `sp__git_cs3_fetch` branches, and W8's fail-in-W7, missing-W7 and pass cases. Each printed the expected verdict, with nothing on stderr. The probe stays at `harness-runs/scratch/task5_probe.py` and is not to be committed, because the `rm` of it was refused (`don't ask mode`).

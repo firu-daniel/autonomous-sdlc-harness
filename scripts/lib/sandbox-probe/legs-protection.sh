@@ -15,6 +15,23 @@
 # Every new file name a probe call could create is passed to sp_track, and one that landed is removed as
 # soon as the session ends, because the git leg runs in the same clone afterwards.
 #
+# CS7 has two halves on one line: the dd / rename of SP_RUN_PROFILE, and an `Edit` (after a `Read`) of
+# it, which must be refused at the file-tool or permission layer. The profile's shasum, taken after the
+# session, covers both.
+#
+# W8 reads two --debug-file logs: this leg's own, and W7's, whose path the gates leg (legs-local.sh)
+# leaves in SP_W7_DEBUG once W7's session has launched, empty otherwise.
+#
+# CS3's `git fetch origin` is an expected refusal: the clone layout has no network route to origin
+# (docs/sandbox-verification.md §7 OR2), so it passes at layer `network` and fails at layer `ran`.
+#
+# THE GRADING FUNCTIONS read only their arguments, the stream and (W8) SP_RUN_PROFILE, and call only
+# core.sh, judge.sh, controls.sh and this file's functions:
+#   sp__wp_tracked [<exclude>]                         a tracked regular file in the clone, or nothing
+#   sp__wp_cs7_edit <stream> <run profile>             CS7's Edit half: SP__WP_EDIT_V, SP__WP_EDIT_E
+#   sp__wp_w8 <departure> <write-protection log> <W7 log, or empty>    W8's result line
+#   sp__git_cs3_fetch <stream> <command>               CS3's fetch: SP__GIT_FETCH_V, SP__GIT_FETCH_E
+#
 # SOURCED, NEVER EXECUTED. It sets no shell option: the entry point owns `set -u`. Bash 3.2 floor.
 
 SP__WP_PLUGIN_NAME="autonomous-sdlc-harness"
@@ -49,6 +66,10 @@ SP__WP_OUT_LIST=""
 SP__WP_PLUGIN=""
 SP__WP_PLUGIN_WHY=""
 SP__WP_PLUGIN_LISTED=0
+SP__WP_EDIT_V=""
+SP__WP_EDIT_E=""
+SP__GIT_FETCH_V=""
+SP__GIT_FETCH_E=""
 
 # sp__wp_expand <path> — print <path> with a sibling-copy glob re-rooted at SP_CLONE. Status 1 when the
 # clone does not match the glob, 2 when the path carries more than one `*` segment.
@@ -588,21 +609,15 @@ sp__wp_w6() {
   fi
 }
 
-# sp__wp_w8 <debug file> — W8's line.
-sp__wp_w8() {
-  local dbg="$1" rules hits line rule bad="" other=0 total departure="$2" tail=""
-  if [ ! -s "$dbg" ]; then
-    sp_result_line write-protection W8 "not run" "the --debug-file log $dbg is missing or empty" "$departure"
-    return 0
-  fi
-  rules="$(jq -r '[.permissions.allow[]?, .permissions.deny[]?, .permissions.ask[]?] | .[] | select(type == "string")' \
-    "$SP_RUN_PROFILE" 2>/dev/null)" || rules=""
-  if [ -z "$rules" ]; then
-    sp_result_line write-protection W8 "not run" "no permission rule read from $SP_RUN_PROFILE" "$departure"
-    return 0
-  fi
+# sp__wp_w8_scan <log> <rules> — the unmatched-rule / mixed-prefix test over one log: SP__W8_BAD (the
+# first such line naming a rule in <rules>, or empty), SP__W8_OTHER (such lines naming none) and
+# SP__W8_TOTAL (the log's line count).
+sp__wp_w8_scan() {
+  local log="$1" rules="$2" hits line rule
+  SP__W8_BAD=""
+  SP__W8_OTHER=0
   hits="$(grep -F -e 'is not matched by file permission checks' -e 'mixes * with the trailing :* prefix syntax' \
-    -- "$dbg" 2>/dev/null)"
+    -- "$log" 2>/dev/null)"
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     rule=""
@@ -614,29 +629,80 @@ sp__wp_w8() {
 $rules
 EOF
     if [ -n "$rule" ]; then
-      [ -n "$bad" ] || bad="$line"
+      [ -n "$SP__W8_BAD" ] || SP__W8_BAD="$line"
     else
-      other=$((other + 1))
+      SP__W8_OTHER=$((SP__W8_OTHER + 1))
     fi
   done <<EOF
 $hits
 EOF
-  total="$(wc -l <"$dbg" 2>/dev/null | tr -d ' ')"
-  [ "$other" -eq 0 ] || tail="; $other such line(s) for a rule the profile does not carry"
+  SP__W8_TOTAL="$(wc -l <"$log" 2>/dev/null)"
+  SP__W8_TOTAL="${SP__W8_TOTAL//[[:space:]]/}"
+}
+
+# sp__wp_w8 <departure> <write-protection log> <W7 log, or empty> — W8's line.
+sp__wp_w8() {
+  local departure="$1" rules name log bad="" missing="" counts=""
+  rules="$(jq -r '[.permissions.allow[]?, .permissions.deny[]?, .permissions.ask[]?] | .[] | select(type == "string")' \
+    "$SP_RUN_PROFILE" 2>/dev/null)" || rules=""
+  if [ -z "$rules" ]; then
+    sp_result_line write-protection W8 "not run" "no permission rule read from $SP_RUN_PROFILE" "$departure"
+    return 0
+  fi
+  for name in write-protection W7; do
+    if [ "$name" = W7 ]; then log="${3:-}"; else log="${2:-}"; fi
+    if [ -z "$log" ] || [ ! -s "$log" ]; then
+      if [ "$name" = W7 ]; then
+        missing="${missing:+$missing; }W7's --debug-file log is missing or empty (the gates leg did not run its W7 session in this run)"
+      else
+        missing="${missing:+$missing; }the write-protection session's --debug-file log ${log:-(not given)} is missing or empty"
+      fi
+      continue
+    fi
+    sp__wp_w8_scan "$log" "$rules"
+    [ -n "$bad" ] || [ -z "$SP__W8_BAD" ] || bad="$name log: $SP__W8_BAD"
+    counts="${counts:+$counts; }$name log: ${SP__W8_TOTAL:-?} line(s), $SP__W8_OTHER unmatched-rule or mixed-prefix line(s) for a rule the profile does not carry"
+  done
   if [ -n "$bad" ]; then
-    sp_result_line write-protection W8 fail "$bad$tail" "$departure"
+    sp_result_line write-protection W8 fail "$bad" "$departure"
+  elif [ -n "$missing" ]; then
+    sp_result_line write-protection W8 "not run" "$missing${counts:+; $counts}" "$departure"
   else
     sp_result_line write-protection W8 pass \
-      "${total:-?} log line(s): no unmatched-rule or mixed-prefix line for any per-run profile rule$tail" \
-      "$departure"
+      "no unmatched-rule or mixed-prefix line for any per-run profile rule in either log; $counts" "$departure"
   fi
 }
 
-# sp__wp_tracked <exclude> — a tracked regular file in the clone, README.md first; nothing when none.
+# sp__wp_cs7_edit <stream> <run profile> — CS7's Edit half: SP__WP_EDIT_V and SP__WP_EDIT_E.
+sp__wp_cs7_edit() {
+  local stream="$1" prof="$2"
+  sp_judge_tool "$stream" file-tool Edit "$prof"
+  case "$SP_LAYER" in
+    file-tool | permission)
+      SP__WP_EDIT_V=pass
+      SP__WP_EDIT_E="Edit refused at the $SP_LAYER layer: $SP_EVIDENCE"
+      ;;
+    ran)
+      SP__WP_EDIT_V=fail
+      SP__WP_EDIT_E="the Edit of $prof was not refused: $SP_EVIDENCE"
+      ;;
+    "")
+      SP__WP_EDIT_V="not run"
+      SP__WP_EDIT_E="Edit: $SP_EVIDENCE"
+      ;;
+    *)
+      SP__WP_EDIT_V="not run"
+      SP__WP_EDIT_E="Edit refused at the $SP_LAYER layer, not the file-tool or permission layer: $SP_EVIDENCE"
+      ;;
+  esac
+}
+
+# sp__wp_tracked [<exclude>] — a tracked regular file in the clone, README.md first; nothing when none.
 sp__wp_tracked() {
   local f list
   list="$(git -C "$SP_CLONE" ls-files 2>/dev/null)" || return 0
-  if [ "${1:-}" != README.md ] && printf '%s\n' "$list" | grep -qxF README.md &&
+  if [ "${1:-}" != README.md ] &&
+    case $'\n'"$list"$'\n' in *$'\n'README.md$'\n'*) true ;; *) false ;; esac &&
     [ -f "$SP_CLONE/README.md" ] && [ ! -L "$SP_CLONE/README.md" ]; then
     printf '%s\n' README.md
     return 0
@@ -661,7 +727,7 @@ sp__wp_all() {
 }
 
 sp_leg_write_protection() {
-  local pfile helper hcmd dbg tracked i n t departure plugin_clause init_clause ev
+  local pfile helper hcmd dbg tracked i n t departure plugin_clause init_clause ev v
   if ! sp__ctl_literal "clone" "$SP_CLONE" || ! sp__ctl_literal "temp area" "$SP_TMP"; then
     sp__wp_all "not run" "the clone or the temp area is not spellable as a literal"
     return 0
@@ -713,6 +779,7 @@ sp_leg_write_protection() {
     fi
     i=$((i + 1))
   done
+  sp_prompt_tool "$pfile" "Edit, with file_path set to exactly $SP_RUN_PROFILE (after a Read of that same path), appending the line: sandbox probe CS7"
   sp_ctl_add "$pfile" written "dd if=/dev/null of=$SP_CLONE/.git/sbx_wp_ctl conv=notrunc" "$SP_CLONE/.git/sbx_wp_ctl"
   sp_ctl_add "$pfile" ran "dd if=/dev/null of=$SP_CLONE/$tracked conv=notrunc"
   sp_ctl_add "$pfile" tool Write "$SP_CLONE/sbx_wp_tool_ctl.txt"
@@ -754,13 +821,22 @@ sp_leg_write_protection() {
   sp_row_result --direct write-protection CS2 "$SP__WP_RV" "<main>/.git: $SP__WP_RE" "$departure"
 
   sp__wp_judge_row CS7 "$SP_STREAM" "$hcmd"
-  sp_row_result --direct write-protection CS7 "$SP__WP_RV" "$SP_RUN_PROFILE: $SP__WP_RE" "$departure"
+  sp__wp_cs7_edit "$SP_STREAM" "$SP_RUN_PROFILE"
+  if [ "$SP__WP_RV" = fail ] || [ "$SP__WP_EDIT_V" = fail ]; then
+    v=fail
+  elif [ "$SP__WP_RV" = "not run" ] || [ "$SP__WP_EDIT_V" = "not run" ]; then
+    v="not run"
+  else
+    v=pass
+  fi
+  sp_row_result --direct write-protection CS7 "$v" \
+    "$SP_RUN_PROFILE: dd and rename: $SP__WP_RE; $SP__WP_EDIT_E" "$departure"
 
   sp__wp_w6 "$SP_STREAM"
   sp_row_result --direct write-protection W6 "$SP__WP_RV" "$SP__WP_RE" "$departure"
 
-  # W8 reads a log, not a refusal: no control gates it.
-  sp__wp_w8 "$dbg" "$departure"
+  # W8 reads logs, not a refusal: no control gates it.
+  sp__wp_w8 "$departure" "$dbg" "${SP_W7_DEBUG:-}"
 }
 
 # sp__git_rule <prefix> — status 0 when SP_RUN_PROFILE's allow list carries `Bash(<prefix>:*)`.
@@ -771,6 +847,30 @@ sp__git_rule() {
 # sp__git_probe <git argument>... — the probe's own git in the clone: no hook, no fsmonitor.
 sp__git_probe() {
   git -C "$SP_CLONE" -c core.hooksPath=/dev/null -c core.fsmonitor=false "$@"
+}
+
+# sp__git_cs3_fetch <stream> <command> — CS3's fetch, an expected network refusal: SP__GIT_FETCH_V and
+# SP__GIT_FETCH_E.
+sp__git_cs3_fetch() {
+  sp_judge_call "$1" network "$2"
+  case "$SP_LAYER" in
+    network)
+      SP__GIT_FETCH_V=pass
+      SP__GIT_FETCH_E="refused by the network allowlist, as the clone layout intends (§7 OR2): $SP_EVIDENCE"
+      ;;
+    ran)
+      SP__GIT_FETCH_V=fail
+      SP__GIT_FETCH_E="git fetch origin reached origin from inside the sandbox: $SP_EVIDENCE"
+      ;;
+    "")
+      SP__GIT_FETCH_V="not run"
+      SP__GIT_FETCH_E="$SP_EVIDENCE"
+      ;;
+    *)
+      SP__GIT_FETCH_V="not run"
+      SP__GIT_FETCH_E="refused at the $SP_LAYER layer, not the network allowlist: $SP_EVIDENCE"
+      ;;
+  esac
 }
 
 sp_leg_git() {
@@ -846,7 +946,7 @@ sp_leg_git() {
   fi
 
   # --- CS3, judged by ref, stash and branch state; the tool results only name the layer.
-  for cmd in "$c_add" "$c_commit" "$c_url" "$c_fetch" "$c_push" "$c_pop" "$c_switch"; do
+  for cmd in "$c_add" "$c_commit" "$c_url" "$c_push" "$c_pop" "$c_switch"; do
     sp_judge_call "$SP_STREAM" ran "$cmd"
     case "$SP_VERDICT" in
       "not run") notrun="${notrun:+$notrun; }$cmd: $SP_EVIDENCE" ;;
@@ -855,11 +955,6 @@ sp_leg_git() {
         text="${SP__TEXT:-}"
         case "$cmd" in
           "$c_url") url="$(sp__first_line "$text")" ;;
-          "$c_fetch")
-            if got="$(sp__line_with "$text" "fatal:" "error:")"; then
-              fails="${fails:+$fails; }$cmd: $got"
-            fi
-            ;;
           "$c_push")
             sp__line_with "$text" "Saved working directory" >/dev/null ||
               fails="${fails:+$fails; }$cmd: no 'Saved working directory' line: $(sp__first_line "$text")"
@@ -872,6 +967,11 @@ sp_leg_git() {
         ;;
     esac
   done
+  sp__git_cs3_fetch "$SP_STREAM" "$c_fetch"
+  case "$SP__GIT_FETCH_V" in
+    fail) fails="${fails:+$fails; }$c_fetch: $SP__GIT_FETCH_E" ;;
+    "not run") notrun="${notrun:+$notrun; }$c_fetch: $SP__GIT_FETCH_E" ;;
+  esac
   sp_judge_ref "$SP_CLONE" "refs/heads/$SP_BRANCH" "$ref" moved
   parts="commit: $SP_EVIDENCE"
   if [ "$SP_VERDICT" != pass ]; then
@@ -897,6 +997,7 @@ sp_leg_git() {
     fails="${fails:+$fails; }switch: HEAD is '${head:-unreadable}', not $x"
   fi
   parts="$parts; origin: ${url:-not read}"
+  [ "$SP__GIT_FETCH_V" != pass ] || parts="$parts; fetch: $SP__GIT_FETCH_E"
   if [ -n "$fails" ]; then
     sp_result_line git CS3 fail "$fails; $parts" "$departure"
   elif [ -n "$notrun" ]; then
