@@ -10,10 +10,11 @@
 #
 # THE LAYER TABLE (sp_layer_of), first match wins. Its strings are the ones §0 → **Reading a refusal.**
 # and §4's N1 row quote:
-#   permission  the result text carries `Permission to use ` and `has been denied`, or the call is in
-#               the `result` event's `permission_denials`
-#   file-tool   `File is in a directory that is denied by your permission settings.`
-#   network     `<sandbox_violations>`, `CONNECT tunnel failed`, `host is not on the allow list`, or
+#   permission  the result text carries `Permission to use ` and `has been denied`
+#   file-tool   `File is in a directory that is denied by your permission settings.` — ahead of
+#               `permission_denials`, because Claude Code 2.1.311 lists file-tool refusals there too
+#   permission  the call is in the `result` event's `permission_denials`
+#   network    `<sandbox_violations>`, `CONNECT tunnel failed`, `host is not on the allow list`, or
 #               `This proxy requires authentication` (an SSH call through the proxy,
 #               docs/sandbox-verification.md row P1)
 #   sandbox     `Operation not permitted`
@@ -28,6 +29,7 @@ SP_VERDICT=""
 SP_EVIDENCE=""
 SP_LAYER=""
 SP_LAYER_EVIDENCE=""
+SP_N5_CANNOT_WIDEN="allowed_domains cannot widen network access"
 
 # sp__match <stream> <tool name> <input key, or empty for any> <input value> — prints the match count,
 # then `none` / `error` / `ok` for the first match's tool_result, then that result's text.
@@ -97,10 +99,6 @@ sp__issued() {
 # sp__layer <text> <input key> <input value> <stream> — sets SP_LAYER and SP_LAYER_EVIDENCE.
 sp__layer() {
   local text="$1" key="$2" val="$3" stream="$4" line denied
-  denied="$(jq -n -R -r --arg key "$key" --arg val "$val" '
-    [inputs | fromjson? | select(type == "object" and .type == "result")
-     | .permission_denials[]? | select(type == "object" and .tool_input[$key]? == $val)]
-    | length' "$stream" 2>/dev/null)"
   case "$text" in *"Permission to use "*)
     case "$text" in *"has been denied"*)
       SP_LAYER=permission
@@ -110,14 +108,21 @@ sp__layer() {
     esac
     ;;
   esac
+  if line="$(sp__line_with "$text" "File is in a directory that is denied by your permission settings.")"; then
+    SP_LAYER=file-tool
+    SP_LAYER_EVIDENCE="$line"
+    return 0
+  fi
+  denied="$(jq -n -R -r --arg key "$key" --arg val "$val" '
+    [inputs | fromjson? | select(type == "object" and .type == "result")
+     | .permission_denials[]? | select(type == "object" and .tool_input[$key]? == $val)]
+    | length' "$stream" 2>/dev/null)"
   if [ "${denied:-0}" != 0 ] && [ -n "$denied" ]; then
     SP_LAYER=permission
     SP_LAYER_EVIDENCE="$(sp__first_line "$text") (in permission_denials)"
     return 0
   fi
-  if line="$(sp__line_with "$text" "File is in a directory that is denied by your permission settings.")"; then
-    SP_LAYER=file-tool
-  elif line="$(sp__line_with "$text" "<sandbox_violations>" "CONNECT tunnel failed" "host is not on the allow list" "This proxy requires authentication")"; then
+  if line="$(sp__line_with "$text" "<sandbox_violations>" "CONNECT tunnel failed" "host is not on the allow list" "This proxy requires authentication")"; then
     SP_LAYER=network
   elif line="$(sp__line_with "$text" "Operation not permitted")"; then
     SP_LAYER=sandbox
@@ -206,9 +211,10 @@ sp_call_input() {
     | .[0] | select(. != null) | .input[$key]? | select(. != null)' "${1:-}" 2>/dev/null
 }
 
-# sp_judge_allowed_domains <stream> <exact command> — N5's decision rule. `pass` needs a refusal layer,
-# and `fail` needs layer `ran` on a result that is not an error: a call that was merely not refused is
-# never a pass, and one that errored without a refusal is never a fail.
+# sp_judge_allowed_domains <stream> <exact command> — N5's decision rule. `pass` needs a refusal: a
+# refusal layer, or the Bash tool's own refusal of the parameter, whose text carries the prefix
+# SP_N5_CANNOT_WIDEN holds. `fail` needs layer `ran` on a result that is not an error: a call that was
+# merely not refused is never a pass, and one that errored without a refusal is never a fail.
 sp_judge_allowed_domains() {
   local stream="${1:-}" cmd="${2:-}" domains
   SP_LAYER=""
@@ -228,6 +234,11 @@ sp_judge_allowed_domains() {
   if [ "$SP__STATUS" = none ]; then
     SP_VERDICT="not run"
     SP_EVIDENCE="no tool_result for the matched call$(sp__issued "$SP__COUNT")"
+    return 0
+  fi
+  # Arm 2, second form: the Bash tool refused the parameter itself.
+  if SP_EVIDENCE="$(sp__line_with "$SP__TEXT" "$SP_N5_CANNOT_WIDEN")"; then
+    SP_VERDICT=pass
     return 0
   fi
   sp_layer_of "$SP__TEXT" "$cmd" "$stream"
