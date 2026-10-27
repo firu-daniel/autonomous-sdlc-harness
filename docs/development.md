@@ -2312,6 +2312,38 @@ pipx install zizmor==1.30.1
 
 **The audit it stands over, measured.** Before, on 2026-10-09 over a copy of the 0.6.5 templates: `uvx zizmor@1.30.1 --offline --no-config --format=plain .github` printed `59 findings (34 suppressed, 6 unsafe fixes): 0 informational, 2 low, 6 medium, 17 high` and exited `14`. After, on 2026-10-09 over a copy of this branch's four templates at commit `4c1e6bf`, the same command under `zizmor 1.30.1` printed `32 findings (25 suppressed, 5 unsafe fixes): 0 informational, 2 low, 5 medium, 0 high` and exited `13`; the seven unsuppressed findings are `artipacked` and `adhoc-packages` alone, the residual set above.
 
+**Gate 15 — the unattended sandbox probe (macOS).** `scripts/sandbox-probe.sh` measures what Claude Code's own sandbox does to an unattended run under this repository's profile: it cuts a throwaway probe clone, renders that clone's per-run profile with the watcher's own render and check, launches sandboxed headless sessions on the watcher's launch line, and prints one result line per row of each leg below. It is hand-run because a person has to start it: auto mode refuses a `claude -p` launch carrying `--allowedTools`, which several legs need. It can be started from a terminal at the main checkout or from a Claude Code session, where the `!` prefix runs it as the user's own shell command; the commands are in the block below. **It changes nothing outside its own temp area, the probe clone and the probe branch**, and a `shasum` guard over `harness.config.json`, `.git/config` and `.claude/settings.autonomous.json` exits `3` if any of the three changed. **It refuses to start, creating nothing, with exit `2`**, unless the main checkout is on its `defaultBranch`, the watcher has no run in flight, and the live profile is the one `doctor` grades: `doctor` passes `profile-sandbox`, `profile-write-protection`, `profile-main-anchor` and `sandbox-prerequisites`, and the watcher's `SETTINGS_PROFILE` is `<main>/.claude/settings.autonomous.json`. `run` takes every leg but `headless-parity`, in table order; `headless-parity` is run by hand in an interactive session from the script `print-parity-script` prints. **The legs**, one per line of `--list`, with the rows each measures in `docs/sandbox-verification.md`:
+
+| Leg | Rows | Expected | Recorded in |
+|---|---|---|---|
+| `gates` | T2, W7 | the gates run in the clone with no gate failing on its temporary file, and each of W7's six wrapper calls runs with no permission denial | §5 Failures and their follow-ups (T2); §4 The profile's denials (W7) |
+| `mktemp` | TD2 | the bare, -d and -t mktemp forms are refused with mkstemp failed, and the explicit form under the session's TMPDIR is written | §5 Failures and their follow-ups |
+| `scratch` | SR1, SR2 | scratch-run.sh runs a probe file sandboxed, and a write outside the allowed roots from inside that file is refused | §4 The profile's denials |
+| `retrieval` | MC1 | the harness-docs MCP server answers a search_docs call outside the sandbox, or the leg is not run where no .mcp.json wires it | §4 The profile's denials |
+| `wrappers` | CS4, P3, CW2, P1c, CW5, P1b, CW6 | the main checkout's wrappers run outside the sandbox and land on the clone, while the clone's own copies, the compound and the assignment prefix stay sandboxed or are neutralised | §2 The clone layout (owed) (CS4); §3 The wrappers (P3, CW2, P1c, CW5, P1b, CW6) |
+| `wrappers-refresh` | R0, R1, R2, R3, R4 | refresh-branch.sh on the clone arm runs outside the sandbox: fixture (a) fast-forwards, (b) writes a two-parent merge, (c) exits 4 with nothing written, and the clone's own copy stays sandboxed | §3 The wrappers |
+| `planted-config` | C1, CW3, C2, K2, CW4, CS15 | each wrapper refuses a scratch repository or a clone whose .git/config carries a planted key before any git call, and no marker is created | §3 The wrappers (C1, CW3, C2, K2, CW4); §2 The clone layout (owed) (CS15) |
+| `planted-files` | CS12, CS13, CS14, L1, L2 | commit-on-branch.sh refuses a clone carrying a planted http-alternates, commondir or config.worktree, refresh-branch.sh refuses a dash-leading defaultBranch, and L1 is not run — unreachable on the clone layout | §2 The clone layout (owed) (CS12, CS13, CS14); §3 The wrappers (L1, L2) |
+| `write-protection` | CS1, CS2, CS7, W6, W8 | every write to the clone's protected paths, to `<main>/.git` and to the per-run profile is refused while its control is written, and the debug log carries no unmatched-rule line | §2 The clone layout (owed) (CS1, CS2, CS7); §4 The profile's denials (W6, W8) |
+| `git` | CS3, CL5 | ordinary git in the clone succeeds under the real per-run profile, and each CL5 write is refused or written as recorded | §2 The clone layout (owed) (CS3); §2 The per-run clone (2026-10-19) (CL5) |
+| `network` | N1, N2, N3, N4, N5 | hosts off the allowlist, a loopback-only host and a link-local-only host are refused, and a call carrying allowed_domains does not reach its host | §4 The profile's denials |
+| `retry` | RT1 | dangerouslyDisableSandbox: true does not run the call unsandboxed under allowUnsandboxedCommands: false | §4 The profile's denials |
+| `repo-settings` | RS1 | a planted `<clone>/.claude/settings.local.json` loosening changes none of the network, retry and write-protection results | §4 The profile's denials |
+| `credentials` | S1, S2, S4, S5 | reads of ~/.ssh are refused, the token variables the profile unsets are absent, and whether the SSH agent socket is reachable is recorded | §4 The profile's denials |
+| `invalid-profile` | CS8 | the control's call is refused, and on the invalid profile the marker is recorded as written or refused | §2 The clone layout (owed) |
+| `headless-parity` | HP1 | the network, retry and write-protection legs give the same results in an interactive session, from the printed parity script | §4 The profile's denials |
+
+CS1's probe set includes the installed plugin root, resolved from the plugin install record, and CS1's evidence records whether the per-run profile lists that root or only the runtime's write roots refused it. **Every result is recorded by the person who ran the probe**, into the named row of `docs/sandbox-verification.md`; the probe writes none, and the branch that shipped it recorded none. From the repository root of the main checkout, the first line prints the table above, the second is the terminal form, the third the form typed into a Claude Code session, and the fourth prints `headless-parity`'s script:
+
+```
+bash scripts/sandbox-probe.sh --list
+bash scripts/sandbox-probe.sh run
+! bash scripts/sandbox-probe.sh run
+bash scripts/sandbox-probe.sh print-parity-script
+```
+
+**The rows this probe does not take, named so the list is complete.** The Linux legs — a local container and a GitHub-hosted runner — and the Linux-only legs are sandbox3b's, `feat_sandbox_probe_linux_legs`, and this probe refuses to start off macOS. Three clone-layout rows stay **hand rows**, each measured by hand as its row in `docs/sandbox-verification.md` describes: **CS5**, which needs a legacy worktree run, one whose registry record carries no `copy_kind`, resumed by the watcher; **CS6**, which needs a job-mode clone outside the sibling glob, adopted with `init --force`, on the base profile; and **CS8 (b)**, which needs the base profile edited and a watcher tick. The `invalid-profile` leg takes CS8 (a) only.
+
 ---
 
 ## 6. The roadmap this tree defers to

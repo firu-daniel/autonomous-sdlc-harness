@@ -126,7 +126,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_unattended_sandbox_meas
 15. [x] **Task 14** — Test the probe's preflight refusals and its `shasum` guard _(layer: cli)_ _(points: 15)_
 16. [x] **Task 15** — Test the probe's git judges and its leg table _(layer: cli)_ _(points: 15)_
 17. [x] **Task 16** — Add the probe's new rows to `docs/sandbox-verification.md`, re-target C2, K2 and CW4, and name the probe in §0 _(layer: general)_ _(points: 20)_
-18. [ ] **Task 17** — Document Gate 15 in `docs/development.md` §5 _(layer: general)_ _(points: 20)_
+18. [x] **Task 17** — Document Gate 15 in `docs/development.md` §5 _(layer: general)_ _(points: 20)_
 19. [ ] **Task 18** — Bring every gate count and hand-run list in line with fifteen gates _(layer: general)_ _(points: 10)_
 
 ## Scope register
