@@ -11,7 +11,7 @@
 #      plus a checkout carrying .git/objects/info/alternates, which is a `git clone --shared` run copy
 #      that predicate accepts as a main checkout. Sets SP_MAIN.
 #      -> sp_snapshot_take runs here, before check 2.
-#   2. Not macOS (`uname -s` is not Darwin). The Linux legs are sandbox3b's.
+#   2. Not macOS (`uname -s` is not Darwin). The Linux legs are owed under roadmap item 21 (docs/development.md §6).
 #   3. <main> is not on `defaultBranch` (hr_default_branch; sets SP_DEFAULT_BRANCH).
 #   4. The watcher has a run in flight (its running_count, in a child shell that sourced
 #      `<main>/<scriptsDir>/autonomous-watcher.sh status`).
@@ -90,7 +90,7 @@ sp_preflight() {
   uname_s="${SANDBOX_PROBE_UNAME:-}"
   [ -n "$uname_s" ] || uname_s="$(uname -s 2>/dev/null)"
   if [ "$uname_s" != Darwin ]; then
-    sp_preflight_refuse "this probe measures the macOS sandbox and 'uname -s' is '$uname_s'; the Linux legs are sandbox3b's"
+    sp_preflight_refuse "this probe measures the macOS sandbox and 'uname -s' is '$uname_s'; the Linux legs are owed under roadmap item 21 (docs/development.md §6)"
     return 2
   fi
 

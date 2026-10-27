@@ -5,7 +5,7 @@
 # not in the set `init --force` regenerates, and not a cli/templates/ file.
 #
 # It changes nothing outside its own temp area, the probe clone and the probe branch.
-# macOS only on this branch; the Linux legs are sandbox3b's.
+# macOS only; the Linux legs are owed under roadmap item 21 (docs/development.md §6).
 #
 # A person starts it from a terminal, because auto mode refuses a `claude -p` launch carrying
 # `--allowedTools`. From a session, `! bash <main>/scripts/sandbox-probe.sh run` works.

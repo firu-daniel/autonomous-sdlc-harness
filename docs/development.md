@@ -2342,7 +2342,7 @@ bash scripts/sandbox-probe.sh run
 bash scripts/sandbox-probe.sh print-parity-script
 ```
 
-**The rows this probe does not take, named so the list is complete.** The Linux legs — a local container and a GitHub-hosted runner — and the Linux-only legs are sandbox3b's, `feat_sandbox_probe_linux_legs`, and this probe refuses to start off macOS. Three clone-layout rows stay **hand rows**, each measured by hand as its row in `docs/sandbox-verification.md` describes: **CS5**, which needs a legacy worktree run, one whose registry record carries no `copy_kind`, resumed by the watcher; **CS6**, which needs a job-mode clone outside the sibling glob, adopted with `init --force`, on the base profile; and **CS8 (b)**, which needs the base profile edited and a watcher tick. The `invalid-profile` leg takes CS8 (a) only.
+**The rows this probe does not take, named so the list is complete.** The Linux legs — a local container and a GitHub-hosted runner — and the Linux-only legs are owed under roadmap item 21 (§6), on the branch `feat_sandbox_probe_linux_legs`, and this probe refuses to start off macOS. Three clone-layout rows stay **hand rows**, each measured by hand as its row in `docs/sandbox-verification.md` describes: **CS5**, which needs a legacy worktree run, one whose registry record carries no `copy_kind`, resumed by the watcher; **CS6**, which needs a job-mode clone outside the sibling glob, adopted with `init --force`, on the base profile; and **CS8 (b)**, which needs the base profile edited and a watcher tick. The `invalid-profile` leg takes CS8 (a) only.
 
 ---
 

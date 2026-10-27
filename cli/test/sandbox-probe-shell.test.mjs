@@ -141,7 +141,7 @@ test('preflight refuses in order, exit 2, leaving nothing behind', async (t) => 
   await t.test('2. a host that is not macOS', async (t) => {
     const tmp = await caseTmp(t);
     const run = await preflight(f, probe, tmp, { SANDBOX_PROBE_UNAME: 'Linux', ...agentPass });
-    assertRefused(run, "this probe measures the macOS sandbox and 'uname -s' is 'Linux'; the Linux legs are sandbox3b's");
+    assertRefused(run, "this probe measures the macOS sandbox and 'uname -s' is 'Linux'; the Linux legs are owed under roadmap item 21 (docs/development.md §6)");
     assert.deepEqual(await probeLeftovers(tmp), []);
   });
 
