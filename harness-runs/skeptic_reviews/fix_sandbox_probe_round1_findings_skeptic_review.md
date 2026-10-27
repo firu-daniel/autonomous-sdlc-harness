@@ -30,7 +30,7 @@ The diff includes the fix commits for the code review's Findings 1–4 and the a
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Untrack N3's loopback listener once `sp__net_listener_stop` has stopped it _(layer: general)_
+1. [x] **Finding 1** — Untrack N3's loopback listener once `sp__net_listener_stop` has stopped it _(layer: general)_
 
 ---
 

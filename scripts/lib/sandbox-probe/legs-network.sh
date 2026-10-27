@@ -179,6 +179,8 @@ sp__net_listener_stop() {
     sp_refuse "N3's loopback listener $pid is still running after TERM; teardown stops it"
     return 1
   fi
+  # Gone: untracked, so teardown never TERMs this PID again once another process may hold it.
+  sp_untrack_pid "$pid"
   return 0
 }
 
