@@ -15,8 +15,9 @@
 #
 # N3 aims at a loopback listener the probe owns for the session's duration (sp__net_listener_start):
 # `python3 -u -m http.server` bound to 127.0.0.1 on a free port, serving one token file, its port read
-# from its startup line within SP__NET_LISTENER_POLLS polls of 0.1 s. Without python3, or without that
-# line, N3 is `not run` naming why. With nothing listening, curl's exit 7 cannot tell a refused connect
+# from its startup line within SP__NET_LISTENER_START_POLLS polls of 0.1 s. Without python3, or without
+# that line, N3 is `not run` naming why. The listener is stopped mid-leg, before N3 is graded, through
+# session.sh's sp_stop_pid, so its stop wait is SP__PID_POLLS. With nothing listening, curl's exit 7 cannot tell a refused connect
 # from a reached-but-closed port, so N3 is graded on the body: `fail` when the token reaches the
 # session, `pass` only when it does not while the listener answered the probe's own request after the
 # session. N4's link-local host cannot be bound without root, so N4 is graded on curl's full error line
@@ -36,7 +37,7 @@ SP__NET_PROFILE_WHY=""
 SP__NET_TRIED=0
 SP__NET_WHY=""
 SP__NET_SECONDS=0
-SP__NET_LISTENER_POLLS=50
+SP__NET_LISTENER_START_POLLS=50
 SP__NET_LISTENER_WHY=""
 SP__NET_LISTENER_PID=""
 SP__NET_PORT=""
@@ -145,7 +146,7 @@ sp__net_listener_start() {
   # Out of the job table, so stopping it prints no `Terminated` notice into the probe's stderr.
   disown "$SP__NET_LISTENER_PID" 2>/dev/null
   sp_keep_file "$log"
-  while [ "$n" -lt "$SP__NET_LISTENER_POLLS" ]; do
+  while [ "$n" -lt "$SP__NET_LISTENER_START_POLLS" ]; do
     while IFS= read -r line; do
       case "$line" in "Serving HTTP on $SP__NET_LOOPBACK_HOST port "*)
         port="${line#"Serving HTTP on $SP__NET_LOOPBACK_HOST port "}"
@@ -160,7 +161,7 @@ sp__net_listener_start() {
     n=$((n + 1))
   done
   if [ -z "$port" ]; then
-    SP__NET_LISTENER_WHY="the loopback listener printed no 'Serving HTTP on $SP__NET_LOOPBACK_HOST port <n>' line within $SP__NET_LISTENER_POLLS polls of 0.1 s; see $log"
+    SP__NET_LISTENER_WHY="the loopback listener printed no 'Serving HTTP on $SP__NET_LOOPBACK_HOST port <n>' line within $SP__NET_LISTENER_START_POLLS polls of 0.1 s; see $log"
     sp__net_listener_stop
     return 1
   fi
@@ -168,18 +169,13 @@ sp__net_listener_start() {
   return 0
 }
 
-# sp__net_listener_stop — TERM the listener and wait up to SP__NET_LISTENER_POLLS polls; teardown is the
+# sp__net_listener_stop — stop the listener mid-leg through session.sh's sp_stop_pid; teardown is the
 # backstop for one that survives.
 sp__net_listener_stop() {
-  local pid="$SP__NET_LISTENER_PID" n=0
+  local pid="$SP__NET_LISTENER_PID"
   SP__NET_LISTENER_PID=""
   [ -n "$pid" ] || return 0
-  kill "$pid" 2>/dev/null || return 0
-  while kill -0 "$pid" 2>/dev/null && [ "$n" -lt "$SP__NET_LISTENER_POLLS" ]; do
-    sleep 0.1
-    n=$((n + 1))
-  done
-  if kill -0 "$pid" 2>/dev/null; then
+  if ! sp_stop_pid "$pid"; then
     sp_refuse "N3's loopback listener $pid is still running after TERM; teardown stops it"
     return 1
   fi

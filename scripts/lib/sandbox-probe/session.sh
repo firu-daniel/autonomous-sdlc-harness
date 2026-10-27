@@ -15,6 +15,8 @@
 #   sp_track <path> / sp_track_branch <name>              register for teardown
 #   sp_keep_file <path>      add <path> to the current leg's (SP_CURRENT_LEG) evidence record
 #   sp_track_pid <pid>       register a process the probe started, for teardown to stop
+#   sp_stop_pid <pid>        TERM <pid> and wait up to SP__PID_POLLS polls of 0.1 s; status 1 when it is
+#                            still running, 0 when it ended or was already gone; prints nothing
 #   sp_teardown              first move the recorded files of every leg sp_leg_nonpass names into a
 #                            new ${TMPDIR:-/tmp}/sandbox-probe-evidence.XXXXXX/<leg>/, printed last on
 #                            stderr; then stop the tracked processes; then remove exactly what was
@@ -59,7 +61,7 @@ SP__SESSIONS=""
 SP__EVIDENCE_DIR=""
 # Set by the entry point's run loop around each leg; `-` in a record when unset.
 SP_CURRENT_LEG="${SP_CURRENT_LEG:-}"
-# Teardown's bound on waiting for a TERMed process: this many polls, 0.1 s apart.
+# sp_stop_pid's bound on waiting for a TERMed process: this many polls, 0.1 s apart.
 SP__PID_POLLS=50
 SP__RENDERED=""
 SP__RENDER_REFUSAL=""
@@ -330,6 +332,20 @@ sp_track_pid() {
     "" | *[!0-9]*) sp_refuse "sp_track_pid: '${1:-}' is not a process id"; return 1 ;;
   esac
   SP__PIDS="$SP__PIDS$1"$'\n'
+}
+
+# sp_stop_pid <pid> — the one place the probe stops a process it started: TERM, then up to SP__PID_POLLS
+# polls of 0.1 s. Status 0 when it ended or was already gone, 1 when it is still running; prints nothing,
+# so each caller reports in its own way.
+sp_stop_pid() {
+  local pid="${1:-}" n=0
+  kill "$pid" 2>/dev/null || return 0
+  while kill -0 "$pid" 2>/dev/null && [ "$n" -lt "$SP__PID_POLLS" ]; do
+    sleep 0.1
+    n=$((n + 1))
+  done
+  kill -0 "$pid" 2>/dev/null && return 1
+  return 0
 }
 
 # sp_session <name> <settings file> <prompt file> [--mode dontAsk|acceptEdits] [--allowed <rule>]...
@@ -618,19 +634,12 @@ EOF
   SP__EVIDENCE_DIR="$dir"
 }
 
-# sp__td_stop_pids — TERM each tracked process and wait up to SP__PID_POLLS polls for it to end.
+# sp__td_stop_pids — sp_stop_pid each tracked process; one still running is a teardown failure.
 sp__td_stop_pids() {
-  local pid n
+  local pid
   while IFS= read -r pid; do
     [ -n "$pid" ] || continue
-    # A process already gone is not an error.
-    kill "$pid" 2>/dev/null || continue
-    n=0
-    while kill -0 "$pid" 2>/dev/null && [ "$n" -lt "$SP__PID_POLLS" ]; do
-      sleep 0.1
-      n=$((n + 1))
-    done
-    if kill -0 "$pid" 2>/dev/null; then
+    if ! sp_stop_pid "$pid"; then
       sp__td_fail "process $pid the probe started is still running after TERM; stop it with: kill -9 $pid"
     fi
   done <<EOF

@@ -14,7 +14,7 @@ One responsibility added on this branch has two homes: stopping a process the pr
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Give stopping a probe-owned process one home in `session.sh` _(layer: general)_
+1. [x] **Finding 1** — Give stopping a probe-owned process one home in `session.sh` _(layer: general)_
 
 ## Must Fix
 
