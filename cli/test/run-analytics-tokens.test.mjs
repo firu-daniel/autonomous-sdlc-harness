@@ -198,6 +198,7 @@ test('token and tool-time figures over a transcript-backed and a transcript-less
     assert.ok(attribution.includes('| sub-agents | 4 | 842 | 10300 | 300 |'), attribution);
     assert.ok(attribution.includes('| remainder | 100 | 20 | 0 | 0 |'), attribution);
     assert.ok(s1.includes('| Token source | result.modelUsage |'), s1);
+    assert.ok(s1.includes('| Cache hit ratio | 0.9572 |'), s1);
 
     assert.equal(doc.run.output_tokens, 1217);
     assert.equal(doc.run.token_sessions, 2);

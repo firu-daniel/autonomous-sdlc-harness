@@ -25,7 +25,7 @@ The branch handles records written before it inconsistently, and that is what mo
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 3** — Move the `claudeHome()` shell-mirror declaration into the `paths.ts` module header's point 2 _(layer: cli)_
-2. [ ] **Finding 2** — Compute the per-session `Cache hit ratio` from the share, not the stored record value _(layer: cli, general)_
+2. [x] **Finding 2** — Compute the per-session `Cache hit ratio` from the share, not the stored record value _(layer: cli, general)_
 3. [ ] **Finding 1** — Render `—` for every non-transcript sub-agent token cell, name the legacy cause in both notes, and cover a legacy record with a case _(layer: cli, general)_
 
 ---

@@ -43,7 +43,8 @@
 #     " (<token_sessions> of <sessions> sessions)" when token_sessions is less
 #     than sessions, or — when it is 0.
 #   - Thinking tokens and the 5m / 1h split are labelled main thread.
-#   - Per session, the four token totals are the share's; `Token source` reads
+#   - Per session, the four token totals are the share's, and Cache hit ratio is
+#     computed from them (— when any is null); `Token source` reads
 #     result.modelUsage, result.usage (no sub-agent dispatched), not available
 #     (null) or recorded before token accounting (no token_source key).
 #   - `#### Token attribution`: orchestrator = requests.items of context
@@ -329,7 +330,11 @@ def session_md($k; $sh):
                ["Cache read tokens", $sh.cache_read_tokens],
                ["Cache write tokens", $sh.cache_write_tokens],
                ["Cache write tokens, main thread (5m / 1h)", "\($c.cache_write_5m_tokens | fmt) / \($c.cache_write_1h_tokens | fmt)"],
-               ["Cache hit ratio", $c.cache_hit_ratio],
+               ["Cache hit ratio",
+                (if ([$sh.cache_read_tokens, $sh.cache_write_tokens, $sh.input_tokens] | map(type == "number") | all)
+                    and ($sh.cache_read_tokens + $sh.cache_write_tokens + $sh.input_tokens) > 0
+                 then ($sh.cache_read_tokens / ($sh.cache_read_tokens + $sh.cache_write_tokens + $sh.input_tokens) | round4)
+                 else null end)],
                ["Token source",
                 ({"model_usage": "result.modelUsage",
                   "usage": "result.usage (no sub-agent dispatched)",
