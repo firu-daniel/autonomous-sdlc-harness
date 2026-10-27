@@ -51,6 +51,9 @@
 #     orchestrator summed; sub-agents = subagents[] summed, 0 when there are
 #     none, every cell — when any entry's token_source is not "transcript";
 #     remainder = share total - both, — when an operand is null, negative as is.
+#   - A sub-agent row whose token_source is not "transcript" (a missing
+#     transcript, or a record from before token accounting) renders — in its
+#     four token cells.
 #   - A by_tool row for Agent / Task is labelled sub-agent wall time, with a
 #     line saying so; `#### Slowest calls` drops Agent / Task from
 #     tools.slowest, so records written before slowest excluded them match.
@@ -314,12 +317,18 @@ def session_md($k; $sh):
     + ["", "### Sub-agents", ""]
     + table(["Type", "Description", "Duration", "Requests", "Output tokens", "Input tokens",
              "Cache read tokens", "Cache write tokens", "Wall share"];
-            [$sa[] | [.type, .description, (.duration_ms | fmt_dur), .requests,
+            [$sa[] | (if .token_source == "transcript" then .
+                      else .output_tokens = null | .input_tokens = null
+                           | .cache_read_tokens = null | .cache_write_tokens = null end)
+                   | [.type, .description, (.duration_ms | fmt_dur), .requests,
                       .output_tokens, .input_tokens, .cache_read_tokens,
                       .cache_write_tokens, .wall_share]])
-    + (if $untracked > 0 then
+    + (if $untracked == 0 then []
+       elif $sh.token_source == "legacy" then
+         ["", "— in a token column: this session was recorded before token accounting, and its stream-derived sub-agent figures are partial, so none is shown."]
+       else
          ["", "— in a token column: no transcript was found for this dispatch, and the stream's own sub-agent usage is partial, so none is shown."]
-       else [] end)
+       end)
     + ["", "### Cost and tokens", ""]
     + table(["Measure", "Value"];
             [["Cost", ($sh.total_cost_usd | fmt_usd)]]
@@ -350,9 +359,12 @@ def session_md($k; $sh):
                [["orchestrator"] + $o,
                 ["sub-agents"] + $s,
                 ["remainder"] + [range(0; 4) as $j | diff3($sh[$f[$j]]; $o[$j]; $s[$j])]]))
-    + (if $untracked > 0 then
+    + (if $untracked == 0 then []
+       elif $sh.token_source == "legacy" then
+         ["", "Recorded before token accounting: no sub-agent or session token total is available."]
+       else
          ["", "\($untracked) of \($sa | length) sub-agent dispatches have no transcript; their tokens are in the session total only."]
-       else [] end)
+       end)
     + ["", "Remainder: tokens the session total holds that neither the orchestrator's requests nor the dispatches' transcripts account for."]
     + ["", "### Reliability", ""]
     + table(["Measure", "Value"];

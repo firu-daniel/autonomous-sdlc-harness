@@ -56,9 +56,12 @@
  *   - D: `lib/run-analytics-report.jq` drops the `— sub-agent wall time` relabel — run red once on
  *     fix_run_analytics_token_accounting; separately, `lib/run-analytics.jq` `slowest` stops
  *     excluding `Agent` — run red once on fix_run_analytics_token_accounting.
+ *   - E: `lib/run-analytics-report.jq` renders the stored sub-agent tokens again — run red once on
+ *     fix_run_analytics_token_accounting.
  */
 
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { copyFile, mkdir, mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -117,7 +120,7 @@ async function recordedRun(t, { transcript }) {
   const doc = readJson(join(outDir, 'run-analytics.json'));
   const md = readFileSync(join(outDir, 'run-analytics.md'), 'utf8');
   assert.deepEqual(doc.sessions.map((s) => s.session_id), ['sess-tok', 'sess-bare']);
-  return { doc, md };
+  return { doc, md, dir };
 }
 
 /** The Markdown of session `k` (1-based), up to the next session heading. */
@@ -219,6 +222,25 @@ test('token and tool-time figures over a transcript-backed and a transcript-less
     assert.ok(slowest.includes('| Bash | orchestrator |'), slowest);
     assert.ok(!/^\| Agent \|/m.test(slowest), slowest);
   });
+});
+
+test('E: a record from before token accounting shows no sub-agent tokens, and says why', async (t) => {
+  const { doc, dir } = await recordedRun(t, { transcript: true });
+  const legacy = structuredClone(doc.sessions[0]);
+  delete legacy.cost.token_source;
+  for (const s of legacy.subagents) delete s.token_source;
+  Object.assign(legacy.subagents[0], { output_tokens: 16, input_tokens: 4, cache_read_tokens: 0, cache_write_tokens: 0 });
+  const document = { schema: 1, branch: BRANCH, sessions: [legacy], run: {} };
+
+  const md = execFileSync(
+    'jq',
+    ['-r', '-f', join(dir, INIT_SCRIPTS_DIR, 'lib', 'run-analytics-report.jq'), '--arg', 'mode', 'markdown'],
+    { input: JSON.stringify(document), encoding: 'utf8' },
+  );
+  const subagents = section(sessionMd(md, 1), '### Sub-agents');
+  assert.ok(subagents.includes('| task-plan-writer | Write the plan | 9.0s | 2 | — | — | — | — |'), subagents);
+  assert.ok(subagents.includes('this session was recorded before token accounting'), subagents);
+  assert.ok(!subagents.includes('no transcript was found'), subagents);
 });
 
 test('B: with an empty claude home, the transcript-backed dispatch records null tokens too', async (t) => {
