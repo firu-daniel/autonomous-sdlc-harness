@@ -256,9 +256,13 @@ EOF
   sp_ctl_held "$SP_STREAM"
   if [ -e "$out_marker" ]; then
     sp_row_result --direct scratch SR2 fail "$out_marker exists: the outside write from the scratch file landed" "$departure"
-  else
-    line="$(sp__line_with "$text" sbx_sr2_refused)" || line="no sbx_sr2_refused line"
+  elif line="$(sp__line_with "$text" sbx_sr2_written)"; then
+    sp_row_result --direct scratch SR2 fail "the outside write landed: $line" "$departure"
+  elif line="$(sp__line_with "$text" sbx_sr2_refused)"; then
     sp_row_result --direct scratch SR2 pass "$out_marker absent; $line" "$departure"
+  else
+    sp_row_result --direct scratch SR2 "not run" \
+      "no sbx_sr2_refused or sbx_sr2_written line, so the outside write was never attempted: $(sp__first_line "$text")" "$departure"
   fi
 }
 

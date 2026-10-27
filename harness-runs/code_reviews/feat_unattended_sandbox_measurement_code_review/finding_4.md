@@ -26,3 +26,5 @@ The second is exactly the outcome the row exists to catch, and the probe does no
       "no sbx_sr2_refused or sbx_sr2_written line, so the outside write was never attempted: $(sp__first_line "$text")" "$departure"
   fi
 ```
+
+- **Deviations from plan:** None to the fix itself; applied as written. Evidence downgrade: a `bash -n scripts/lib/sandbox-probe/legs-local.sh` syntax check was refused by the tool layer ("Permission to use Bash has been denied because Claude Code is running in don't ask mode"), so the edited branch's shell syntax rests on reading the diff, not on execution. `bash scripts/typecheck.sh` passed (`PASS: typecheck`) but compiles `cli/` only and does not parse this script. No test file covers `sp_leg_scratch`, and no `treeGuards` entry's `covers` glob matches `scripts/lib/sandbox-probe/legs-local.sh`.
