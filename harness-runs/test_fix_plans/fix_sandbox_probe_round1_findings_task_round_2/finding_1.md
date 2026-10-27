@@ -46,3 +46,8 @@
 - [ ] Leave `TRACKED_COUNT` at `10_000` and keep the `IGNORE_SIGPIPE` prefix and both subtests' assertions (`status`, exact `stdout`, empty `stderr`) as they are. The list longer than 64 KiB is the regression this test exists to guard, so do not shrink or weaken it.
 - [ ] Add one sentence to the file header paragraph beginning `The \`sp__wp_tracked\` repository commits 10,000 files`: the clone disables automatic gc so that the seed commit leaves no background writer behind.
 - [ ] Land the change as a real edit. This finding persists because the round-1 fix was drafted, passed in isolation and then discarded. Do not discard it again on the strength of another isolated pass.
+
+**Deviations from plan:**
+
+- The row-`G.4` check ran the named test in isolation before any edit (`npm test --workspace cli -- test/sandbox-probe-protection-legs.test.mjs`: `ok 4`, `# pass 11`, `# fail 0`). Its "passes → close as already passing" route was **not** taken: this finding's own diagnosis says an isolated pass is not evidence for a load-dependent race, and its last fix step forbids closing on one. The finding file wins, so all four code sub-steps landed as a real edit in `cli/test/sandbox-probe-protection-legs.test.mjs`.
+- Evidence downgrade: the after-fix run is again isolated (`# pass 11`, `# fail 0`). It shows that the change breaks nothing. It does not show that the race is gone. That rests on the Run gates phase's full-suite run.

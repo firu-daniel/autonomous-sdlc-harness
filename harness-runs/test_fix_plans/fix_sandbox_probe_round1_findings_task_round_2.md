@@ -13,7 +13,7 @@
 
 **This section is the single source of truth for the fix loop.** The loop walks the `[ ]` entries below from top to bottom, and only the committing role flips a marker. `[ ]` markers anywhere else, such as the sub-step bullets inside the per-finding files, are informational only and never the iteration source.
 
-1. [ ] **Finding 1** — Disable auto-gc in the `sp__wp_tracked` seed clone and make the case teardown retry. _(layer: cli)_
+1. [x] **Finding 1** — Disable auto-gc in the `sp__wp_tracked` seed clone and make the case teardown retry. _(layer: cli)_
 
 ---
 

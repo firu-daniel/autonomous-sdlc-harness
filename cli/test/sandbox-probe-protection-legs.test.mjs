@@ -13,7 +13,8 @@
  * pipe buffer, and runs it with SIGPIPE ignored, as a caller may launch the probe: a pipe whose reader
  * exits at the first match then fails its writer with `printf: write error: Broken pipe`, the defect's
  * observable, which the empty-stderr assertions catch. With SIGPIPE at its default the writer dies
- * silently and the defect is invisible.
+ * silently and the defect is invisible. The clone disables automatic gc so that the seed commit leaves no
+ * background writer behind.
  */
 
 import assert from 'node:assert/strict';
@@ -51,7 +52,7 @@ function sourced(cwd, body, args = [], env = {}) {
 
 async function caseDir(t) {
   const dir = await mkdtemp(join(tmpdir(), 'harness-sp-protection-legs-'));
-  t.after(() => rm(dir, { recursive: true, force: true }));
+  t.after(() => rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
   return dir;
 }
 
@@ -153,6 +154,9 @@ test('sp__wp_tracked: one tracked file, and nothing on stderr however long the l
   const clone = join(dir, 'clone');
   await mkdir(clone);
   await seedRepository(clone, { remote: false });
+  // 10,000 loose objects exceed `gc.auto`; the detached gc the commit would start races the case directory's removal.
+  await runGit(clone, ['config', 'gc.auto', '0']);
+  await runGit(clone, ['config', 'maintenance.auto', 'false']);
   await writeFile(join(clone, 'README.md'), '# fixture\n');
   for (let n = 0; n < TRACKED_COUNT; n += 1) {
     await writeFile(join(clone, `f${n}.txt`), `${n}\n`);
