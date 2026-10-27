@@ -36,6 +36,10 @@
  *     wall_share 10 000 / 20 000 = 0.5.
  *   - its two requests sa1 (01:00:05, 2 000 ms after its prompt at :03) and sa2 (01:00:09,
  *     4 000 ms after sa1).
+ *   - its tokens are null, token_source null: the stream's sub-agent usage (7 + 9) is partial,
+ *     and every run's `CLAUDE_CONFIG_DIR` is an empty directory, so no transcript is found. The
+ *     session dispatched and its result has no `modelUsage`, so its cost token_source is null;
+ *     `sess-one` dispatched nothing, so its is `usage`.
  */
 
 import assert from 'node:assert/strict';
@@ -74,6 +78,9 @@ async function adopted(t, { dropLastLine = false } = {}) {
   const mainLogical = await mkdtemp(join(tmpdir(), 'run-analytics-main-'));
   const main = await realpath(mainLogical);
   t.after(() => rm(main, { recursive: true, force: true }));
+  // An empty claude home, so no case reads the real account's transcripts.
+  const claudeHome = await mkdtemp(join(tmpdir(), 'run-analytics-home-'));
+  t.after(() => rm(claudeHome, { recursive: true, force: true }));
 
   const { stateDir } = readJson(join(dir, 'harness.config.json'));
   const streamRel = join(stateDir, 'autonomous_logs', `${BRANCH}.stream.jsonl`);
@@ -98,6 +105,7 @@ async function adopted(t, { dropLastLine = false } = {}) {
     run: (env = {}) =>
       runBash(dir, [join(dir, SCRIPT), streamRel, BRANCH, '--main-repo', main], {
         RUN_ANALYTICS_SUSPEND_SOURCE: 'none',
+        CLAUDE_CONFIG_DIR: claudeHome,
         ...env,
       }),
     doc: () => readJson(jsonPath),
@@ -156,11 +164,14 @@ test('metrics: each value equals the one computed by hand from the fixture', asy
     assert.equal(agent.description, 'Write the plan');
     assert.equal(agent.duration_ms, 10000);
     assert.equal(agent.requests, 2);
-    assert.equal(agent.output_tokens, 16);
+    assert.equal(agent.output_tokens, null);
+    assert.equal(agent.token_source, null);
     assert.equal(agent.wall_share, 0.5);
     const inAgent = two.requests.items.filter((r) => r.context === 'task-plan-writer');
     assert.deepEqual(inAgent.map((r) => r.latency_ms), [2000, 4000]);
     assert.equal(two.requests.by_context['task-plan-writer'].count, 2);
+    assert.equal(two.cost.token_source, null);
+    assert.equal(one.cost.token_source, 'usage');
   });
 
   await t.test('a tool call: duration, UTF-8 result bytes, one polling entry of three', () => {

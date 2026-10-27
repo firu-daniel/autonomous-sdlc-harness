@@ -18,6 +18,7 @@
 
 import assert from 'node:assert/strict';
 import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -28,8 +29,14 @@ const STATE_DIR = 'sdlc-harness';
 const IDENTITY = ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid'];
 const SUBJECT = 'chore: Record run analytics for feat_x';
 const OUT_REL = `${STATE_DIR}/run_analytics/feat_x`;
-/** `RUN_ANALYTICS_SUSPEND_SOURCE=none` keeps the host's suspend log out of every pass. */
-const PASS_ENV = { RUN_ANALYTICS_SUSPEND_SOURCE: 'none' };
+/**
+ * `RUN_ANALYTICS_SUSPEND_SOURCE=none` keeps the host's suspend log out of every pass, and a
+ * `CLAUDE_CONFIG_DIR` that is never created keeps the real account's transcripts out of it.
+ */
+const PASS_ENV = {
+  RUN_ANALYTICS_SUSPEND_SOURCE: 'none',
+  CLAUDE_CONFIG_DIR: join(tmpdir(), `watcher-run-analytics-no-home-${process.pid}`),
+};
 /**
  * Every pass here runs the real hook, whose two commits lengthen it (`./helpers/watcher.mjs`, choice
  * 6); a ceiling, so a passing pass still returns when it is done. `TICK_TIMEOUT_MS` is already scaled.

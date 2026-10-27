@@ -104,3 +104,5 @@ This task edits no template and no `cli/src` file. A mutation run edits a templa
 - `npm test --workspace cli -- test/watcher-run-analytics.test.mjs` passes, as one plain foreground command from the repository root.
 - Each of the five mutations above was run once against `test/run-analytics-tokens.test.mjs` and turned it red, and each red run is recorded in that file's header.
 - After the mutation runs, `git diff --exit-code -- cli/templates/scripts` exits 0, so no mutation survives.
+
+- **Deviations from plan:** The plan restores each mutated template with `git restore --source=HEAD -- <file>`. The permission profile refused that command, both bare and with a `cd` in front. Each mutation was reverted with an exact Edit instead. Before every red run, `git diff -- cli/templates/scripts` showed only that run's mutation. After the last revert, `git diff --exit-code -- cli/templates/scripts` exited 0. One slip happened along the way: the first refused restore left mutation A in place when B was applied. A was reverted by Edit and the diff checked before the B run, so every recorded red run had exactly one mutation live.
