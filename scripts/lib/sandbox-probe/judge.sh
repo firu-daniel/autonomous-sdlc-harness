@@ -13,7 +13,9 @@
 #   permission  the result text carries `Permission to use ` and `has been denied`, or the call is in
 #               the `result` event's `permission_denials`
 #   file-tool   `File is in a directory that is denied by your permission settings.`
-#   network     `<sandbox_violations>`, `CONNECT tunnel failed` or `host is not on the allow list`
+#   network     `<sandbox_violations>`, `CONNECT tunnel failed`, `host is not on the allow list`, or
+#               `This proxy requires authentication` (an SSH call through the proxy,
+#               docs/sandbox-verification.md row P1)
 #   sandbox     `Operation not permitted`
 #   ran         none of the above
 #
@@ -115,7 +117,7 @@ sp__layer() {
   fi
   if line="$(sp__line_with "$text" "File is in a directory that is denied by your permission settings.")"; then
     SP_LAYER=file-tool
-  elif line="$(sp__line_with "$text" "<sandbox_violations>" "CONNECT tunnel failed" "host is not on the allow list")"; then
+  elif line="$(sp__line_with "$text" "<sandbox_violations>" "CONNECT tunnel failed" "host is not on the allow list" "This proxy requires authentication")"; then
     SP_LAYER=network
   elif line="$(sp__line_with "$text" "Operation not permitted")"; then
     SP_LAYER=sandbox

@@ -129,6 +129,13 @@ test('judge call: each refusal layer maps to its verdict', async (t) => {
       evidence: 'curl: (56) CONNECT tunnel failed, response 403',
     },
     {
+      name: 'network: an SSH call refused by the proxy (This proxy requires authentication)',
+      stream: 'network-ssh-proxy',
+      layer: 'network',
+      command: 'git -C @FIXTURE_ROOT@ fetch origin',
+      evidence: 'Received disconnect from UNKNOWN port 65535:1: This proxy requires authentication',
+    },
+    {
       name: 'ran: none of the refusal shapes',
       stream: 'ran',
       layer: 'ran',
