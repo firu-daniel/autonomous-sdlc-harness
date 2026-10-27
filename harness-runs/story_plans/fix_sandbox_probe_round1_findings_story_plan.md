@@ -97,7 +97,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_sandbox_probe_round1_fin
 3. [x] **Task 3** — Keep the evidence of every leg that did not pass, stop the probe's own processes at teardown, and drop the pipe in `sp_extra_clone` _(layer: general)_ _(points: 20)_
 4. [x] **Task 4** — Fix T2's result line and run the gates through `run-test-suite.sh`, give W7 a debug log, and spell TD2's control as a literal _(layer: general)_ _(points: 20)_
 5. [x] **Task 5** — Take CS7's `Edit` and W7's debug log, grade CS3's fetch as an expected refusal, and drop the pipe in `sp__wp_tracked` _(layer: general)_ _(points: 20)_
-6. [ ] **Task 6** — Aim N3 at a loopback listener the probe owns, and grade N4 on curl's full error line _(layer: general)_ _(points: 15)_
+6. [x] **Task 6** — Aim N3 at a loopback listener the probe owns, and grade N4 on curl's full error line _(layer: general)_ _(points: 15)_
 7. [ ] **Task 7** — Make the credentials session follow its prompt, check presence only, and grade a session that issued no calls as not run _(layer: general)_ _(points: 10)_
 8. [ ] **Task 8** — Allow P1b's prefixed call and grade a permission-layer refusal of it as not run _(layer: general)_ _(points: 10)_
 9. [ ] **Task 9** — Take R4's `--local` half in a session of its own _(layer: general)_ _(points: 15)_

@@ -50,3 +50,11 @@
 - `grep -n 'http://127.0.0.1/' scripts/lib/sandbox-probe/legs-network.sh` finds nothing: N3 always names the listener's port.
 - The listener's PID reaches `sp_track_pid` on the line after its start, before any poll that could return early.
 - Neither grading function calls `curl`, `python3`, `sp_session` or `sp_track_pid` (`grep -n` within each body).
+
+**Deviations from plan:**
+
+- `sp__net_n3_grade` returns `not run` (`no listener token to look for in the result`) on an empty `<token>`, ahead of the token test: `sp__line_with` with an empty substring matches every line, so an empty token would grade every result `fail`.
+- `sp__net_listener_start` creates `$SP_TMP/n3-listener.log` before it starts the listener. Without that, the first poll can read the log before the background redirection opens it. The scratch probe saw this as `n3-listener.log: No such file or directory` on stderr. The function also passes the log to `sp_keep_file`, so a non-passing leg keeps it.
+- The listener's PID reaches `sp_track_pid "$!"` on the line after its start. The job is then `disown`ed, so stopping it prints no `Terminated` notice, which the scratch probe saw on stderr before the change. `sp__net_listener_stop` therefore polls `kill -0` and does not call `wait`.
+- `sp__net_refusal` is kept: `scripts/lib/sandbox-probe/legs-settings.sh` still calls it (`grep -rn 'sp__net_refusal ' scripts`).
+- The checks of the two grading functions and the listener rest on `harness-runs/scratch/task6_probe.py`, run through `bash scripts/scratch-run.sh`. It ran six synthetic N3 streams, six N4 streams, a live listener start, reply and stop, and a start with no `python3` on `PATH`, and every case gave the verdict this plan specifies. No test file was written; Task 15 owns those tests.

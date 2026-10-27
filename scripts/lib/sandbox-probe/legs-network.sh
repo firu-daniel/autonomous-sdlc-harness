@@ -13,7 +13,17 @@
 # `--allowedTools` for exactly that command. Both departures are named on every row's line. RT1 runs on
 # the real SP_RUN_PROFILE, as its row requires.
 #
-# N3 and N4 use IP literals, which resolve to themselves without DNS.
+# N3 aims at a loopback listener the probe owns for the session's duration (sp__net_listener_start):
+# `python3 -u -m http.server` bound to 127.0.0.1 on a free port, serving one token file, its port read
+# from its startup line within SP__NET_LISTENER_POLLS polls of 0.1 s. Without python3, or without that
+# line, N3 is `not run` naming why. With nothing listening, curl's exit 7 cannot tell a refused connect
+# from a reached-but-closed port, so N3 is graded on the body: `fail` when the token reaches the
+# session, `pass` only when it does not while the listener answered the probe's own request after the
+# session. N4's link-local host cannot be bound without root, so N4 is graded on curl's full error line
+# and is `not run` where that line cannot tell a refusal from an unreachable host. The two grades read
+# only their arguments and the stream:
+#   sp__net_n3_grade <stream> <command> <token> <listener answered: 1|0>
+#   sp__net_n4_grade <stream> <command>
 #
 # SOURCED, NEVER EXECUTED. It sets no shell option: the entry point owns `set -u`. Bash 3.2 floor.
 
@@ -26,6 +36,11 @@ SP__NET_PROFILE_WHY=""
 SP__NET_TRIED=0
 SP__NET_WHY=""
 SP__NET_SECONDS=0
+SP__NET_LISTENER_POLLS=50
+SP__NET_LISTENER_WHY=""
+SP__NET_LISTENER_PID=""
+SP__NET_PORT=""
+SP__NET_TOKEN=""
 
 # sp__net_profile — cut SP__NET_PROFILE once; status 1 with SP__NET_PROFILE_WHY when it could not be cut.
 sp__net_profile() {
@@ -100,6 +115,156 @@ sp__net_refusal() {
   esac
 }
 
+# sp__net_listener_start — serve $SP_TMP/n3-www/sbx_n3.txt on loopback; sets SP__NET_TOKEN,
+# SP__NET_LISTENER_PID and SP__NET_PORT. Status 1 with SP__NET_LISTENER_WHY when it did not start.
+sp__net_listener_start() {
+  local dir log line port="" n=0
+  SP__NET_LISTENER_WHY=""
+  SP__NET_LISTENER_PID=""
+  SP__NET_PORT=""
+  SP__NET_TOKEN=""
+  if ! command -v python3 >/dev/null 2>&1; then
+    SP__NET_LISTENER_WHY="python3 does not resolve on PATH, so the probe cannot start N3's loopback listener"
+    return 1
+  fi
+  if [ -z "${SP_TMP:-}" ] || [ ! -d "$SP_TMP" ]; then
+    SP__NET_LISTENER_WHY="no probe temporary directory to serve N3's token from"
+    return 1
+  fi
+  dir="$SP_TMP/n3-www"
+  log="$SP_TMP/n3-listener.log"
+  SP__NET_TOKEN="sbx_n3_$(date +%s)_$$"
+  # The log is created here: the first poll can run before the background redirection opens it.
+  if ! mkdir -p -- "$dir" || ! printf '%s\n' "$SP__NET_TOKEN" >"$dir/sbx_n3.txt" || ! : >"$log"; then
+    SP__NET_LISTENER_WHY="could not write N3's token file under '$dir' or its log '$log'"
+    return 1
+  fi
+  python3 -u -m http.server --bind "$SP__NET_LOOPBACK_HOST" --directory "$dir" 0 >"$log" 2>&1 &
+  sp_track_pid "$!"
+  SP__NET_LISTENER_PID=$!
+  # Out of the job table, so stopping it prints no `Terminated` notice into the probe's stderr.
+  disown "$SP__NET_LISTENER_PID" 2>/dev/null
+  sp_keep_file "$log"
+  while [ "$n" -lt "$SP__NET_LISTENER_POLLS" ]; do
+    while IFS= read -r line; do
+      case "$line" in "Serving HTTP on $SP__NET_LOOPBACK_HOST port "*)
+        port="${line#"Serving HTTP on $SP__NET_LOOPBACK_HOST port "}"
+        port="${port%% *}"
+        break
+        ;;
+      esac
+    done <"$log"
+    case "$port" in '' | *[!0-9]*) port="" ;; *) break ;; esac
+    kill -0 "$SP__NET_LISTENER_PID" 2>/dev/null || break
+    sleep 0.1
+    n=$((n + 1))
+  done
+  if [ -z "$port" ]; then
+    SP__NET_LISTENER_WHY="the loopback listener printed no 'Serving HTTP on $SP__NET_LOOPBACK_HOST port <n>' line within $SP__NET_LISTENER_POLLS polls of 0.1 s; see $log"
+    sp__net_listener_stop
+    return 1
+  fi
+  SP__NET_PORT="$port"
+  return 0
+}
+
+# sp__net_listener_stop — TERM the listener and wait up to SP__NET_LISTENER_POLLS polls; teardown is the
+# backstop for one that survives.
+sp__net_listener_stop() {
+  local pid="$SP__NET_LISTENER_PID" n=0
+  SP__NET_LISTENER_PID=""
+  [ -n "$pid" ] || return 0
+  kill "$pid" 2>/dev/null || return 0
+  while kill -0 "$pid" 2>/dev/null && [ "$n" -lt "$SP__NET_LISTENER_POLLS" ]; do
+    sleep 0.1
+    n=$((n + 1))
+  done
+  if kill -0 "$pid" 2>/dev/null; then
+    sp_refuse "N3's loopback listener $pid is still running after TERM; teardown stops it"
+    return 1
+  fi
+  return 0
+}
+
+# sp__net_curl_line <text> — the first line starting `curl: (`; status 1 when none does.
+sp__net_curl_line() {
+  local line
+  while IFS= read -r line; do
+    case "$line" in "curl: ("*)
+      printf '%s' "$line"
+      return 0
+      ;;
+    esac
+  done <<<"${1:-}"
+  return 1
+}
+
+# sp__net_n3_grade <stream> <command> <token> <listener answered: 1|0> — sets SP_VERDICT and SP_EVIDENCE.
+sp__net_n3_grade() {
+  local stream="${1:-}" cmd="${2:-}" token="${3:-}" answered="${4:-0}" line
+  sp_judge_call "$stream" network "$cmd"
+  [ "$SP_VERDICT" = "not run" ] && return 0
+  case "$SP_LAYER" in permission | file-tool)
+    SP_VERDICT="not run"
+    SP_EVIDENCE="refused at the $SP_LAYER layer, so it never reached the sandbox: $SP_EVIDENCE"
+    return 0
+    ;;
+  esac
+  # An empty token would match every line.
+  if [ -z "$token" ]; then
+    SP_VERDICT="not run"
+    SP_EVIDENCE="no listener token to look for in the result"
+    return 0
+  fi
+  if line="$(sp__line_with "$SP__TEXT" "$token")"; then
+    SP_VERDICT=fail
+    SP_EVIDENCE="the listener's body came back to the sandboxed session: $line"
+    return 0
+  fi
+  if [ "$answered" != 1 ]; then
+    SP_VERDICT="not run"
+    SP_EVIDENCE="the listener did not answer the probe's own request, so no body proves nothing"
+    return 0
+  fi
+  if ! line="$(sp__net_curl_line "$SP__TEXT")"; then
+    case "$SP_LAYER" in
+      network | sandbox) line="$SP_LAYER_EVIDENCE" ;;
+      *) line="$(sp__first_line "$SP__TEXT")" ;;
+    esac
+  fi
+  SP_VERDICT=pass
+  SP_EVIDENCE="no body came back while the listener answered the probe: $line"
+}
+
+# sp__net_n4_grade <stream> <command> — sets SP_VERDICT and SP_EVIDENCE.
+sp__net_n4_grade() {
+  local stream="${1:-}" cmd="${2:-}" host line
+  sp_judge_call "$stream" network "$cmd"
+  [ "$SP_VERDICT" = "not run" ] && return 0
+  host="${cmd#*://}"
+  host="${host%%/*}"
+  case "$SP_LAYER" in
+    permission | file-tool)
+      SP_VERDICT="not run"
+      SP_EVIDENCE="refused at the $SP_LAYER layer, so it never reached the sandbox: $SP_EVIDENCE"
+      ;;
+    network | sandbox)
+      SP_VERDICT=pass
+      SP_EVIDENCE="$SP_LAYER_EVIDENCE"
+      ;;
+    *)
+      if [ "$SP__STATUS" != error ]; then
+        SP_VERDICT=fail
+        SP_EVIDENCE="a response came back from $host: $(sp__first_line "$SP__TEXT")"
+      else
+        line="$(sp__net_curl_line "$SP__TEXT")" || line="$(sp__first_line "$SP__TEXT")"
+        SP_VERDICT="not run"
+        SP_EVIDENCE="curl's error line cannot tell a refused connect from an unreachable host: $line"
+      fi
+      ;;
+  esac
+}
+
 # sp__net_unlisted <row> <mode> — N1 or N2: one session, one call to the unlisted host, then the control.
 sp__net_unlisted() {
   local row="$1" mode="$2" tag pfile cmd departure denials
@@ -149,7 +314,7 @@ sp__net_unlisted() {
 }
 
 sp_leg_network() {
-  local pfile c3 c4 c5 departure row
+  local pfile c3 c4 c5 departure row answered launched reply allowed
   if ! sp__net_profile; then
     for row in N1 N2 N3 N4 N5; do
       sp_result_line network "$row" "not run" "$SP__NET_PROFILE_WHY" ""
@@ -161,26 +326,51 @@ sp_leg_network() {
   sp__net_unlisted N1 dontAsk
   sp__net_unlisted N2 acceptEdits
 
-  # --- N3, N4: one session, loopback then link-local, then the control.
-  c3="curl -sS --max-time 5 http://$SP__NET_LOOPBACK_HOST/"
+  # --- N3, N4: one session, the probe's loopback listener then link-local, then the control.
+  c3=""
+  answered=0
+  if sp__net_listener_start; then
+    c3="curl -sS --max-time 5 http://$SP__NET_LOOPBACK_HOST:$SP__NET_PORT/sbx_n3.txt"
+  else
+    sp_result_line network N3 "not run" "$SP__NET_LISTENER_WHY" ""
+  fi
   c4="curl -sS --max-time 5 http://$SP__NET_LINKLOCAL_HOST/"
   sp_ctl_prepare n3n4
   pfile="$SP_TMP/network-n3n4.prompt"
   sp_prompt_new "$pfile"
-  sp_prompt_bash "$pfile" "$c3"
+  allowed=()
+  if [ -n "$c3" ]; then
+    sp_prompt_bash "$pfile" "$c3"
+    allowed[${#allowed[@]}]=--allowed
+    allowed[${#allowed[@]}]="Bash($c3)"
+  fi
   sp_prompt_bash "$pfile" "$c4"
   sp_ctl_add "$pfile" ran "$SP_NET_CONTROL"
-  if ! sp__net_session network-n3n4 "$SP__NET_PROFILE" "$pfile" \
-    --allowed "Bash($c3)" --allowed "Bash($c4)" --allowed "Bash($SP_NET_CONTROL)"; then
-    sp_result_line network N3 "not run" "$SP__NET_WHY" ""
+  if sp__net_session network-n3n4 "$SP__NET_PROFILE" "$pfile" \
+    ${allowed[@]+"${allowed[@]}"} --allowed "Bash($c4)" --allowed "Bash($SP_NET_CONTROL)"; then
+    launched=1
+  else
+    launched=0
+  fi
+  if [ -n "$c3" ]; then
+    # The probe's own request, before the stop: a body withheld by a listener that never answered
+    # proves nothing.
+    reply="$(curl -sS --max-time 5 "http://$SP__NET_LOOPBACK_HOST:$SP__NET_PORT/sbx_n3.txt" 2>/dev/null)"
+    case "$reply" in *"$SP__NET_TOKEN"*) answered=1 ;; esac
+    sp__net_listener_stop
+  fi
+  if [ "$launched" -eq 0 ]; then
+    [ -z "$c3" ] || sp_result_line network N3 "not run" "$SP__NET_WHY" ""
     sp_result_line network N4 "not run" "$SP__NET_WHY" ""
   else
     departure="$(sp__net_departure)"
     sp_ctl_held "$SP_STREAM"
-    sp__net_refusal "$SP_STREAM" "$c3"
-    sp_row_result --direct network N3 "$SP_VERDICT" \
-      "$SP__NET_LOOPBACK_HOST: $SP_EVIDENCE; control in the same session: $SP_NET_CONTROL" "$departure"
-    sp__net_refusal "$SP_STREAM" "$c4"
+    if [ -n "$c3" ]; then
+      sp__net_n3_grade "$SP_STREAM" "$c3" "$SP__NET_TOKEN" "$answered"
+      sp_row_result --direct network N3 "$SP_VERDICT" \
+        "$SP__NET_LOOPBACK_HOST:$SP__NET_PORT (probe-owned listener): $SP_EVIDENCE; control in the same session: $SP_NET_CONTROL" "$departure"
+    fi
+    sp__net_n4_grade "$SP_STREAM" "$c4"
     sp_row_result --direct network N4 "$SP_VERDICT" \
       "$SP__NET_LINKLOCAL_HOST: $SP_EVIDENCE; control in the same session: $SP_NET_CONTROL" "$departure"
   fi
