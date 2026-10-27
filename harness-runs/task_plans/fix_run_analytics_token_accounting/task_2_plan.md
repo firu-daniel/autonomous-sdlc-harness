@@ -59,3 +59,9 @@ This task changes nothing in `lib/run-analytics.jq` (Task 1's), in `run-analytic
 
   Its `## Whole run` `Output tokens` row carries ` (1 of 2 sessions)`. The second session's `Token source` row reads `result.modelUsage`. Its attribution `sub-agents` and `remainder` cells are `—`, with the `1 of 1 sub-agent dispatches` line. Delete the scratch file afterwards.
 - The literal labels above are the contract Task 4 asserts. Keep them byte-for-byte.
+
+**Deviations from plan:**
+
+- Evidence downgrade: the by-hand `--arg mode markdown` run over `harness-runs/scratch/t2_doc.json` (legacy session + `model_usage` session with one `token_source: null` sub-agent) ran under jq 1.8.2 and met every expected line: `Output tokens | 500 (1 of 2 sessions)`, `Token source | result.modelUsage`, attribution `sub-agents` / `remainder` all `—`, and `1 of 1 sub-agent dispatches have no transcript; …`. A second scratch run covering the `"transcript"` sum, the no-sub-agents `0` row, a negative remainder and a `null`-source resume (`t2_doc2.json`) was refused by the tool layer in don't-ask mode. Those paths rest on reading the code only. The Task 4 tests verify them.
+- The scratch files `harness-runs/scratch/t2_doc.json` and `t2_doc2.json` were not deleted, because `rm` on them was refused. They are untracked and absent from `git status --short`, so nothing commits them. An operator can delete them.
+- No run used jq 1.5; only jq 1.8.2 was run. The floor rests on the plan's `git grep` (no output) plus the absence of 1.6+ builtins in the added code; the new code uses only `has`, `type`, `select`, `range`, object indexing and binary `-`.
