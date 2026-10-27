@@ -27,7 +27,10 @@
  *    edit to both. `cli/templates/github/workflows/harness-run.yml` mirrors {@link machineCacheDir}'s
  *    resolution too — `XDG_CACHE_HOME`, else `$HOME/.cache`, then {@link MACHINE_DIR_NAME} — in its
  *    retrieval-cache path, so a change to that resolution or to {@link MACHINE_DIR_NAME} is an edit
- *    to the workflow template as well. A variable holding a relative path yields a relative directory here exactly as it
+ *    to the workflow template as well. `cli/templates/scripts/run-analytics.sh` mirrors
+ *    {@link claudeHome} — `CLAUDE_CONFIG_DIR` when non-empty, else `$HOME/.claude`, one trailing
+ *    slash stripped — to locate sub-agent transcripts, so a change to that resolution is an edit to
+ *    the script as well. A variable holding a relative path yields a relative directory here exactly as it
  *    does there. Only a target on a `WritePlan` is refused for that, and of these two directories
  *    the one that goes on a plan is {@link machineConfigDir} — `generators/notifications.ts`
  *    enqueues it under `allowOutsideRepo`. `machine/registry.ts` writes {@link machineStateDir}
@@ -128,8 +131,6 @@ const CLAUDE_HOME_FALLBACK = '.claude';
  *
  * Same three properties as the two directories above: the variable when it holds something, the
  * fallback otherwise, one trailing slash stripped, and no filesystem touch.
- * `cli/templates/scripts/run-analytics.sh` mirrors this resolution in shell to read sub-agent
- * transcripts, so a change to either resolution is an edit to both.
  */
 export function claudeHome(): string {
   const configured = process.env[CLAUDE_HOME_VARIABLE];
