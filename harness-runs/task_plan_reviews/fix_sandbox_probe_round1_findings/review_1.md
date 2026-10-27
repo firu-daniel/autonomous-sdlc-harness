@@ -1,0 +1,19 @@
+# Task plan review — iteration 1
+
+## Must Fix
+
+1. **TD2's TMPDIR case cannot pass against Task 4's contract** — `task_13_plan.md` (consumer side), against `task_4_plan.md` (producer side).
+   Task 4 defines `sp__td2_tmpdir <stream> <command>` to return status 1 when *"its first line is not an absolute path"*. Task 13 records the call's answer as `@FIXTURE_ROOT@/claude-tmp/` in `td2-tmpdir.jsonl`, and its case expects *"`sp__td2_tmpdir td2-tmpdir.jsonl 'printenv TMPDIR'` prints `@FIXTURE_ROOT@/claude-tmp` (no trailing slash)"*. `@FIXTURE_ROOT@/…` does not begin with `/`, so by Task 4's rule the function returns 1 and prints nothing.
+   Nothing in the plan substitutes the token. The sandbox-probe suites pass fixtures unsubstituted: `cli/test/sandbox-probe-judge.test.mjs`'s header says *"`@FIXTURE_ROOT@` stands in for every path and is passed to the judge unsubstituted"*, and Task 13 sources the libraries over the fixture files the same way. As written, either Task 13's case fails, or its implementer loosens a function in a file Task 4 owns. The `td2-forms.jsonl` / `td2-control-permission.jsonl` cases do not hit this problem, because `sp__td2_grade` has no absolute-path test. But they have to agree with whatever `<tmpdir>` the TMPDIR case produces.
+   **Fix:** In `task_13_plan.md`, have the TD2 cases write a copy of `td2-tmpdir.jsonl`, `td2-forms.jsonl` and `td2-control-permission.jsonl` into the case directory, with `@FIXTURE_ROOT@` replaced by that directory (the `.split('@FIXTURE_ROOT@').join(dir)` form `cli/test/run-analytics.test.mjs` already uses). Then expect `sp__td2_tmpdir` to print `<case dir>/claude-tmp` and pass that same path to `sp__td2_grade`. State in the suite header that these three fixtures are substituted, unlike the judge suite's, and say why: the function under test requires an absolute path. Leave Task 4's absolute-path rule as it is. (If you would rather relax Task 4 instead, change `task_4_plan.md` and restate the relaxed rule in `task_13_plan.md`. Do not leave the two files disagreeing.)
+
+## Should Fix
+
+1. **`td2-forms.jsonl` still carries `/var/folders/…`, while the same task requires `@FIXTURE_ROOT@` for every path** (`task_13_plan.md`). This was raised in iteration 0. It is not resolved, and it is not recorded under `## Rejected findings`. The bare, `-d` and `-t` refusals are specified as *"`mktemp: mkstemp failed on /var/folders/…: Operation not permitted`"*, and the `**Fixture hygiene.**` bullet says every fixture *"holds no machine path"*. Either spell the refused paths under `@FIXTURE_ROOT@` (or the substituted case directory, per Must Fix 1), or state in `**Fixture hygiene.**` that the elided `/var/folders/…` is quoted refusal text and names no machine path.
+
+## Nice to Have
+
+1. **The `sp__wp_tracked` case may still not reproduce the defect** (`task_14_plan.md`). This was raised in iteration 0 and the plan is unchanged. 5,000 names of the form `f<n>.txt` come to about 45 KB of `git ls-files` output. That is under a 64 KiB pipe buffer, and `README.md` sorts first, so the old `printf | grep -qxF` may never see `Broken pipe`. Make the list larger than 64 KiB, so the case fails against the old code.
+2. **TD2's amended check could name the new session's `--allowedTools "Bash(printenv TMPDIR)"` departure** (`task_16_plan.md`), as the other amended rows name theirs. Raised in iteration 0.
+3. **Contradiction in `task_5_plan.md`**: *"Task 16 amends no row this task touches"* is followed at once by *"CS3's expected column is Task 16's"*. Raised in iteration 0.
+4. **T2's collection bound** (`task_4_plan.md`). The task says the bounded poll means *"teardown never removes the clone under a live gate worker"*. That holds only until `SP_T2_COLLECT_SECONDS` runs out. Say what happens to a worker still holding `.running` after the bound: for example, register the PID from `.running` with `sp_track_pid`, or name it on stderr.
