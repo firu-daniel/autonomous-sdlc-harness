@@ -49,3 +49,7 @@ This task copies them and changes not one byte of any of them. It restates what 
 - `git diff --name-only HEAD -- cli/templates` prints nothing, because this task changed no template.
 - `git diff --summary HEAD -- scripts/run-analytics.sh` reports no mode change.
 - Re-run both corpus derivation commands in the story index's `## Scope register` verbatim. Every file they print appears as a row there.
+
+**Deviations from plan:**
+
+- The work bullet's `cp <template> <mirror>` was refused by the session's permission layer (`Permission to use Bash has been denied because Claude Code is running in don't ask mode`), in both absolute-path and repo-relative spellings. Each mirror was instead overwritten with the template's content through the file-write tool. The byte-copy claim rests on the three `cmp` verification commands, each run as its own command and each exiting 0. `git diff --summary HEAD -- scripts/run-analytics.sh` printed nothing, and the working-tree file keeps mode `100755`.

@@ -16,12 +16,18 @@
 #   {sessions, complete_sessions, first_at, last_at, span_ms, wall_ms,
 #    duration_ms, duration_api_ms, host_suspended_ms, idle_ms, active_ms,
 #    total_cost_usd, input_tokens, output_tokens, thinking_tokens,
-#    cache_read_tokens, cache_write_5m_tokens, cache_write_1h_tokens,
-#    cache_hit_ratio, requests, api_retries, permission_denials,
-#    subagents_failed, subagents_killed, slowest_subagent, rate_limit_peak}
+#    cache_read_tokens, cache_write_tokens, cache_write_5m_tokens,
+#    cache_write_1h_tokens, token_sessions, cache_hit_ratio, requests,
+#    api_retries, permission_denials, subagents_failed, subagents_killed,
+#    slowest_subagent, rate_limit_peak}
 #   Sums skip null (null when every session's value is null). span_ms = last
-#   session's last_at - first session's first_at. cache_hit_ratio = read /
-#   (read + write_5m + write_1h + input), 4 decimals, null on zero. requests =
+#   session's last_at - first session's first_at. input_tokens, output_tokens,
+#   cache_read_tokens and cache_write_tokens sum the sessions' shares; a record
+#   whose cost has no token_source key predates true token accounting and
+#   contributes null. token_sessions = shares whose output_tokens is a number.
+#   thinking_tokens and the 5m / 1h split sum the records (main thread only).
+#   cache_hit_ratio = read / (read + cache_write_tokens + input) over the share
+#   sums, 4 decimals, null on zero. requests =
 #   {count, p50_ms, p90_ms, p99_ms, max_ms, over_threshold} over every session's
 #   requests.items pooled, nearest rank, each item against its own session's
 #   idle_threshold_s. slowest_subagent = {type, description, duration_ms,
@@ -33,12 +39,28 @@
 #   document in -> Markdown text: `## Whole run`, then `## Session <k>` per
 #   session, oldest first. `.run` is recomputed, never read. Nothing in the text
 #   varies between two renders of one document.
+#   - Whole-run Input / Output / Cache read / Cache write tokens: the sum, then
+#     " (<token_sessions> of <sessions> sessions)" when token_sessions is less
+#     than sessions, or — when it is 0.
+#   - Thinking tokens and the 5m / 1h split are labelled main thread.
+#   - Per session, the four token totals are the share's; `Token source` reads
+#     result.modelUsage, result.usage (no sub-agent dispatched), not available
+#     (null) or recorded before token accounting (no token_source key).
+#   - `#### Token attribution`: orchestrator = requests.items of context
+#     orchestrator summed; sub-agents = subagents[] summed, 0 when there are
+#     none, every cell — when any entry's token_source is not "transcript";
+#     remainder = share total - both, — when an operand is null, negative as is.
+#   - A by_tool row for Agent / Task is labelled sub-agent wall time, with a
+#     line saying so; `#### Slowest calls` drops Agent / Task from
+#     tools.slowest, so records written before slowest excluded them match.
 #
 # RESUMED SESSIONS. A record keyed "<session_id>#<N>" is a resume, and its result
 # event reports total_cost_usd, by_model cost, duration_api_ms and the sub-agent
 # spawned/failed/killed counts cumulatively over the earlier occurrences
 # (measured: 2.11, 5.67, 7.62 USD over one session's three results). Both modes
 # use each occurrence's share: its value minus the nearest earlier occurrence's.
+# The four modelUsage token totals are taken as cumulative the same way, because
+# they share the object costUSD is computed from — unverifiable here.
 
 def round4: (. * 10000 + 0.5 | floor) / 10000;
 def round6: (. * 1000000 + 0.5 | floor) / 1000000;
@@ -65,20 +87,33 @@ def less($prev):
   else . end;
 
 # Input: .sessions. Output: one {total_cost_usd, by_model, duration_api_ms,
-# subagents_spawned, subagents_failed, subagents_killed} per session, its own share.
+# subagents_spawned, subagents_failed, subagents_killed, input_tokens,
+# output_tokens, cache_read_tokens, cache_write_tokens, token_source} per
+# session, its own share; token_source is the record's, or "legacy".
 def shares:
   . as $ss
   | reduce range(0; $ss | length) as $i ({prev: {}, out: []};
       $ss[$i] as $s
       | ($s.session_id | tostring | split("#")[0]) as $b
       | (.prev[$b] // {}) as $p
+      | (($s.cost | type) == "object" and ($s.cost | has("token_source"))) as $tracked
+      | (if $tracked then $s.cost else {} end) as $tc
       | {total_cost_usd: $s.cost.total_cost_usd,
          by_model: $s.cost.by_model,
          duration_api_ms: $s.time.duration_api_ms,
          subagents_spawned: $s.reliability.subagents_spawned,
          subagents_failed: $s.reliability.subagents_failed,
-         subagents_killed: $s.reliability.subagents_killed} as $v
+         subagents_killed: $s.reliability.subagents_killed,
+         input_tokens: $tc.input_tokens,
+         output_tokens: $tc.output_tokens,
+         cache_read_tokens: $tc.cache_read_tokens,
+         cache_write_tokens: $tc.cache_write_tokens} as $v
       | .out += [{
+          token_source: (if $tracked then $s.cost.token_source else "legacy" end),
+          input_tokens: ($v.input_tokens | less($p.input_tokens)),
+          output_tokens: ($v.output_tokens | less($p.output_tokens)),
+          cache_read_tokens: ($v.cache_read_tokens | less($p.cache_read_tokens)),
+          cache_write_tokens: ($v.cache_write_tokens | less($p.cache_write_tokens)),
           total_cost_usd: ($v.total_cost_usd | less($p.total_cost_usd) | if . == null then . else round6 end),
           by_model: ($v.by_model
                      | if type != "object" then null
@@ -105,11 +140,10 @@ def pooled_requests:
 def run_of:
   . as $ss
   | shares as $sh
-  | ($ss | num_sum(.cost.input_tokens)) as $in
-  | ($ss | num_sum(.cost.cache_read_tokens)) as $cr
-  | ($ss | num_sum(.cost.cache_write_5m_tokens)) as $w5
-  | ($ss | num_sum(.cost.cache_write_1h_tokens)) as $w1
-  | (($cr // 0) + ($w5 // 0) + ($w1 // 0) + ($in // 0)) as $den
+  | ($sh | num_sum(.input_tokens)) as $in
+  | ($sh | num_sum(.cache_read_tokens)) as $cr
+  | ($sh | num_sum(.cache_write_tokens)) as $cw
+  | (($cr // 0) + ($cw // 0) + ($in // 0)) as $den
   | ($ss | if length == 0 then null else .[0].first_at end) as $first
   | ($ss | if length == 0 then null else .[-1].last_at end) as $last
   | {sessions: ($ss | length),
@@ -126,11 +160,13 @@ def run_of:
      active_ms: ($ss | num_sum(.time.active_ms)),
      total_cost_usd: ($sh | num_sum(.total_cost_usd) | if . == null then . else round6 end),
      input_tokens: $in,
-     output_tokens: ($ss | num_sum(.cost.output_tokens)),
+     output_tokens: ($sh | num_sum(.output_tokens)),
      thinking_tokens: ($ss | num_sum(.cost.thinking_tokens)),
      cache_read_tokens: $cr,
-     cache_write_5m_tokens: $w5,
-     cache_write_1h_tokens: $w1,
+     cache_write_tokens: $cw,
+     cache_write_5m_tokens: ($ss | num_sum(.cost.cache_write_5m_tokens)),
+     cache_write_1h_tokens: ($ss | num_sum(.cost.cache_write_1h_tokens)),
+     token_sessions: ([$sh[] | select((.output_tokens | type) == "number")] | length),
      cache_hit_ratio: (if $den > 0 then (($cr // 0) / $den | round4) else null end),
      requests: ($ss | pooled_requests),
      api_retries: ($ss | num_sum(.reliability.api_retries)),
@@ -187,6 +223,18 @@ def table($head; $rows):
 def latency_row($label): [$label, .count, (.p50_ms | fmt_dur), (.p90_ms | fmt_dur),
                           (.p99_ms | fmt_dur), (.max_ms | fmt_dur), .over_threshold];
 
+def run_tokens($r):
+  if $r.token_sessions == 0 then "—"
+  elif $r.token_sessions < $r.sessions then "\(fmt) (\($r.token_sessions) of \($r.sessions) sessions)"
+  else . end;
+
+def is_dispatch: . == "Agent" or . == "Task";
+
+# $a - $b - $c; null unless all three are numbers.
+def diff3($a; $b; $c):
+  if ($a | type) == "number" and ($b | type) == "number" and ($c | type) == "number"
+  then $a - $b - $c else null end;
+
 def whole_run($b):
   run_of as $r
   | ["# Run analytics — \($b | fmt)", "", "## Whole run", ""]
@@ -198,11 +246,12 @@ def whole_run($b):
         ["Host-suspended", ($r.host_suspended_ms | fmt_dur)],
         ["Idle", ($r.idle_ms | fmt_dur)],
         ["Cost", ($r.total_cost_usd | fmt_usd)],
-        ["Input tokens", $r.input_tokens],
-        ["Output tokens", $r.output_tokens],
-        ["Thinking tokens", $r.thinking_tokens],
-        ["Cache read tokens", $r.cache_read_tokens],
-        ["Cache write tokens (5m / 1h)", "\($r.cache_write_5m_tokens | fmt) / \($r.cache_write_1h_tokens | fmt)"],
+        ["Input tokens", ($r.input_tokens | run_tokens($r))],
+        ["Output tokens", ($r.output_tokens | run_tokens($r))],
+        ["Thinking tokens (main thread)", $r.thinking_tokens],
+        ["Cache read tokens", ($r.cache_read_tokens | run_tokens($r))],
+        ["Cache write tokens", ($r.cache_write_tokens | run_tokens($r))],
+        ["Cache write tokens, main thread (5m / 1h)", "\($r.cache_write_5m_tokens | fmt) / \($r.cache_write_1h_tokens | fmt)"],
         ["Cache hit ratio", $r.cache_hit_ratio],
         ["Requests", $r.requests.count],
         ["Request latency p50 / p90 / p99 / max",
@@ -223,6 +272,9 @@ def session_md($k; $sh):
   | .tools as $tl
   | .cost as $c
   | .reliability as $rl
+  | (.subagents // []) as $sa
+  | ([$sa[] | select(.token_source != "transcript")] | length) as $untracked
+  | ([($q.items // [])[] | select(.context == "orchestrator")]) as $oi
   | (.session_id | tostring | split("#") | length > 1) as $resumed
   | ["## Session \($k) — \(.first_at | fmt) → \(.last_at | fmt)"
        + (if .complete == false then " (incomplete — no result event)" else "" end),
@@ -244,30 +296,59 @@ def session_md($k; $sh):
              + [($q.by_context // {}) as $bc | $bc | keys[] as $x | $bc[$x] | latency_row($x)]))
     + ["", "### Tool time", ""]
     + table(["Tool", "Context", "Calls", "Total", "Max"];
-            [($tl.by_tool // [])[] | [.tool, .context, .count, (.total_ms | fmt_dur), (.max_ms | fmt_dur)]])
-    + ["", "#### Slowest calls", ""]
+            [($tl.by_tool // [])[]
+             | [(if .tool | is_dispatch then "\(.tool) — sub-agent wall time" else .tool end),
+                .context, .count, (.total_ms | fmt_dur), (.max_ms | fmt_dur)]])
+    + (if [($tl.by_tool // [])[] | select(.tool | is_dispatch)] | length > 0 then
+         ["", "`Agent` / `Task` rows are sub-agent wall time: how long the orchestrator was blocked on each dispatch, which `### Sub-agents` breaks down per dispatch. They are not time spent in a tool."]
+       else [] end)
+    + ["", "#### Slowest calls (sub-agent dispatches excluded)", ""]
     + table(["Tool", "Context", "Started", "Duration", "Result bytes", "Error", "Permission denied"];
-            [($tl.slowest // [])[] | [.tool, .context, .started_at, (.duration_ms | fmt_dur),
-                                       .result_bytes, .is_error, .permission_denied]])
+            [($tl.slowest // [])[] | select(.tool | is_dispatch | not)
+             | [.tool, .context, .started_at, (.duration_ms | fmt_dur),
+                .result_bytes, .is_error, .permission_denied]])
     + ["", "#### Polling loops", ""]
     + table(["Context", "Command", "Count", "Total"];
             [($tl.polling // [])[] | [.context, .command, .count, (.total_ms | fmt_dur)]])
     + ["", "### Sub-agents", ""]
     + table(["Type", "Description", "Duration", "Requests", "Output tokens", "Input tokens",
              "Cache read tokens", "Cache write tokens", "Wall share"];
-            [(.subagents // [])[] | [.type, .description, (.duration_ms | fmt_dur), .requests,
-                                     .output_tokens, .input_tokens, .cache_read_tokens,
-                                     .cache_write_tokens, .wall_share]])
+            [$sa[] | [.type, .description, (.duration_ms | fmt_dur), .requests,
+                      .output_tokens, .input_tokens, .cache_read_tokens,
+                      .cache_write_tokens, .wall_share]])
+    + (if $untracked > 0 then
+         ["", "— in a token column: no transcript was found for this dispatch, and the stream's own sub-agent usage is partial, so none is shown."]
+       else [] end)
     + ["", "### Cost and tokens", ""]
     + table(["Measure", "Value"];
             [["Cost", ($sh.total_cost_usd | fmt_usd)]]
             + [($sh.by_model // {}) as $bm | $bm | keys[] as $m | ["Cost — \($m)", ($bm[$m] | fmt_usd)]]
-            + [["Input tokens", $c.input_tokens],
-               ["Output tokens", $c.output_tokens],
-               ["Thinking tokens", $c.thinking_tokens],
-               ["Cache read tokens", $c.cache_read_tokens],
-               ["Cache write tokens (5m / 1h)", "\($c.cache_write_5m_tokens | fmt) / \($c.cache_write_1h_tokens | fmt)"],
-               ["Cache hit ratio", $c.cache_hit_ratio]])
+            + [["Input tokens", $sh.input_tokens],
+               ["Output tokens", $sh.output_tokens],
+               ["Thinking tokens (main thread)", $c.thinking_tokens],
+               ["Cache read tokens", $sh.cache_read_tokens],
+               ["Cache write tokens", $sh.cache_write_tokens],
+               ["Cache write tokens, main thread (5m / 1h)", "\($c.cache_write_5m_tokens | fmt) / \($c.cache_write_1h_tokens | fmt)"],
+               ["Cache hit ratio", $c.cache_hit_ratio],
+               ["Token source",
+                ({"model_usage": "result.modelUsage",
+                  "usage": "result.usage (no sub-agent dispatched)",
+                  "legacy": "recorded before token accounting"} as $ts
+                 | $ts[$sh.token_source | tostring] // "not available")]])
+    + ["", "#### Token attribution", ""]
+    + (["input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens"] as $f
+       | [$f[] as $x | if ($oi | length) == 0 then 0 else ($oi | num_sum(.[$x])) end] as $o
+       | [$f[] as $x | if ($sa | length) == 0 then 0
+                       elif $untracked > 0 then null
+                       else ($sa | num_sum(.[$x])) end] as $s
+       | table(["Context", "Input tokens", "Output tokens", "Cache read tokens", "Cache write tokens"];
+               [["orchestrator"] + $o,
+                ["sub-agents"] + $s,
+                ["remainder"] + [range(0; 4) as $j | diff3($sh[$f[$j]]; $o[$j]; $s[$j])]]))
+    + (if $untracked > 0 then
+         ["", "\($untracked) of \($sa | length) sub-agent dispatches have no transcript; their tokens are in the session total only."]
+       else [] end)
+    + ["", "Remainder: tokens the session total holds that neither the orchestrator's requests nor the dispatches' transcripts account for."]
     + ["", "### Reliability", ""]
     + table(["Measure", "Value"];
             [["API retries", "\($rl.api_retries | fmt)"

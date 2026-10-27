@@ -62,7 +62,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_run_analytics_token_acco
 2. [x] **Task 2** — Roll up and render true tokens, the token attribution check and the relabelled `Agent` rows in `lib/run-analytics-report.jq` _(layer: cli)_ _(points: 20)_
 3. [x] **Task 3** — Locate sub-agent transcripts in `run-analytics.sh` and feed them through the `transcripts` and `attach` modes _(layer: cli)_ _(points: 15)_
 4. [x] **Task 4** — Fixture streams, transcripts and cases proving the token and tool-time fixes, each with its red-turning mutation _(layer: cli)_ _(points: 20)_
-5. [ ] **Task 5** — Mirror the three run-analytics files into `scripts/` and document the token sources _(layer: general)_ _(points: 15)_
+5. [x] **Task 5** — Mirror the three run-analytics files into `scripts/` and document the token sources _(layer: general)_ _(points: 15)_
 
 ## Scope register
 

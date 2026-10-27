@@ -6,14 +6,29 @@
 # reading, and whether either file's bytes changed.
 #
 # THREE FILES, ONE DRIVER. `lib/run-analytics.jq` computes the session records
-# (`sessions` mode) and re-classes idle gaps against suspend intervals
-# (`overlay`); `lib/run-analytics-report.jq` recomputes `.run` (`rollup`) and
-# renders the Markdown (`markdown`). Both headers state their calls; this script
-# makes them as stated and resolves both beside itself under `lib/`.
+# (`sessions` mode), re-classes idle gaps against suspend intervals
+# (`overlay`), sums sub-agent transcripts per agent id (`transcripts`) and
+# attaches those sums to the new records (`attach`); `lib/run-analytics-report.jq`
+# recomputes `.run` (`rollup`) and renders the Markdown (`markdown`). Both
+# headers state their calls; this script makes them as stated and resolves both
+# beside itself under `lib/`.
+#
+# SUB-AGENT TRANSCRIPTS. A dispatch's final token figures are read from
+# `<claude_home>/projects/*/<session_id>/subagents/agent-<agent_id>.jsonl`, where
+# `<claude_home>` is `${CLAUDE_CONFIG_DIR}` when non-empty, else `$HOME/.claude`,
+# one trailing slash stripped — a shell mirror of `claudeHome()` in
+# `cli/src/machine/paths.ts`, so a change to either is an edit to both. The file
+# is located by `session_id` (a resume's `#<N>` stripped) and `agentId` only; the
+# project slug is the glob's `*`, never derived. A token outside `A-Za-z0-9_-`
+# is skipped. A run without them — a later job on a fresh runner, or removed
+# transcripts — records `null` tokens rather than stream figures. The engine
+# launch in the watcher's `spawn_engine` carries no `--no-session-persistence`;
+# only `remote-run.sh`'s mention session sets it.
 #
 # WHERE IT STOPS. It writes those two files in the named checkout and nothing
 # else: it commits nothing, pushes nothing, notifies nothing and never touches
-# the stream. The watcher commits the result after each session.
+# the stream. It reads the agent runner's sub-agent transcripts, never writes
+# there. The watcher commits the result after each session.
 #
 # THE MERGE. A recorded session is never rewritten, reordered or re-derived:
 # new records are appended in stream order, then `.run` and the Markdown are
@@ -77,6 +92,11 @@
 #   nothing    a stream with no init event, no record -> `no session in …`, no file
 #   corrupt    printf x > …/run-analytics.json; same call -> exit 1, file still `x`
 #   usage      RUN_ANALYTICS_IDLE_SECS=0, same call     -> exit 2
+#   transcript no record yet, s.jsonl carrying a sub-agent dispatch whose agentId
+#              is a1, its transcript at $d/home/projects/x/s1/subagents/agent-a1.jsonl;
+#              CLAUDE_CONFIG_DIR=$d/home, same call
+#                -> that dispatch's subagents[] entry carries the transcript's four
+#                   token totals and token_source `transcript`
 
 # Deliberately no `-e`: every failure below is an explicit exit with its line.
 set -uo pipefail
@@ -256,6 +276,51 @@ n=$(jq 'length' "$work/new.json") || die "lib/run-analytics.jq wrote no array"
 if [ "$n" -eq 0 ] && [ "$have_record" -eq 0 ]; then
   printf 'no session in %s\n' "$stream"
   exit 0
+fi
+
+# --- Sub-agent transcripts, located by session_id + agent_id; absent ones are skipped.
+claude_home="${CLAUDE_CONFIG_DIR-}"
+if [ -z "$claude_home" ]; then
+  if [ -n "${HOME-}" ]; then claude_home="$HOME/.claude"; else claude_home=""; fi
+fi
+claude_home="${claude_home%/}"
+if [ "$n" -gt 0 ] && [ -n "$claude_home" ]; then
+  pairs=$(jq -r '.[] | ((.session_id // "") | tostring | split("#")[0]) as $s
+           | (.subagents // [])[]? | select((.agent_id | type) == "string")
+           | "\($s) \(.agent_id)"' "$work/new.json") || die "cannot read the new sessions' agent ids"
+  : > "$work/transcripts.jsonl" || die "cannot write the working copy"
+  while IFS=' ' read -r sid aid rest; do
+    [ -z "$rest" ] || continue
+    case "$sid" in '' | *[!A-Za-z0-9_-]*) continue ;; esac
+    case "$aid" in '' | *[!A-Za-z0-9_-]*) continue ;; esac
+    for t in "$claude_home"/projects/*/"$sid"/subagents/agent-"$aid".jsonl; do
+      if [ -f "$t" ] && [ -r "$t" ]; then
+        { printf '{"run_analytics_transcript":"%s"}\n' "$aid" && cat "$t" && printf '\n'; } \
+          >> "$work/transcripts.jsonl" || die "cannot write the working copy"
+        break
+      fi
+    done
+  done <<EOF
+$pairs
+EOF
+  if [ -s "$work/transcripts.jsonl" ]; then
+    if ! jq -n -R -c -S -f "$sessions_jq" --arg mode transcripts --argjson idle_threshold_s "$idle" \
+         --argjson known '[]' --argjson redact '[]' --argjson suspend '[]' \
+         --arg suspend_source none < "$work/transcripts.jsonl" > "$work/transcripts.json" 2> "$work/err"; then
+      IFS= read -r why < "$work/err" || why=""
+      die "lib/run-analytics.jq transcripts failed: ${why:-no message}"
+    fi
+    jq -n -c --slurpfile r "$work/new.json" --slurpfile t "$work/transcripts.json" \
+      '{records: $r[0], transcripts: $t[0]}' > "$work/attach_in.json" 2> "$work/err" \
+      || die "cannot build the attach input"
+    if ! jq -c -S -f "$sessions_jq" --arg mode attach --argjson idle_threshold_s "$idle" \
+         --argjson known '[]' --argjson redact '[]' --argjson suspend '[]' \
+         --arg suspend_source none < "$work/attach_in.json" > "$work/attached.json" 2> "$work/err"; then
+      IFS= read -r why < "$work/err" || why=""
+      die "lib/run-analytics.jq attach failed: ${why:-no message}"
+    fi
+    mv "$work/attached.json" "$work/new.json" || die "cannot replace the working copy"
+  fi
 fi
 
 # --- Host suspend intervals, only when they can change a gap's class.

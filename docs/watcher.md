@@ -202,6 +202,8 @@ Never `export` it in a shell you go on using: every later session in that termin
 
 **Measurement only.** Nothing kills, retries or delays a request, a tool call or a session on these numbers, and `<branch>.stream.jsonl` stays where and as it is.
 
+**Where the token figures come from.** A session's token totals are the `result` event's `modelUsage`, summed across its models. A sub-agent's figures, and each of its requests', come from that sub-agent's own transcript, found by `session_id` and `agentId` under the agent runner's home (`${CLAUDE_CONFIG_DIR:-$HOME/.claude}`), which the script reads and never writes. A run with no transcript to find — a session recorded by a later job on a fresh runner, or transcripts since removed — shows `—` for those figures rather than the stream's partial sub-agent usage. Each session's `#### Token attribution` shows how the orchestrator's requests, the sub-agents and the remainder add up to the session total, and the `Agent` / `Task` rows of `### Tool time` are sub-agent wall time, not time spent in a tool. The format of record is `lib/run-analytics.jq` → *Record*.
+
 **It supersedes the self-pause measurement's `jq`.** A sub-agent dispatch's duration is timed from its `Agent` or `Task` `tool_use` to its `tool_result`, the rule `harness-run.yml` → `THE SELF-PAUSE POINT, MEASURED` used. A later re-measure of that margin reads `subagents[].duration_ms` from each run's `run-analytics.json` instead of re-running that `jq` over the streams.
 
 **By hand.** Run it from the checkout the record should be written in, with `<scripts_dir>` and `<state_dir>` your configured values; it writes the two files there and commits nothing:
