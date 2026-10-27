@@ -58,3 +58,8 @@
 - Each check cell names the exact command its leg file now builds. Compare against `scripts/lib/sandbox-probe/legs-*.sh` for T2, TD2, N3, N4, S4, P1b and R4.
 - No line number appears in any edited cell.
 - The scope register's derivation entries 1 and 3, re-run, reach no row outside the register.
+
+- **Deviations from plan:**
+  - T2's check names the lane directory `<state_dir>/test_run_logs/<sanitized branch>/` rather than `<branch>/`: `scripts/run-test-suite.sh`'s header and `legs-local.sh` (`hr_sanitize_branch`) both build it from the sanitized branch.
+  - R4's check opens on *"The copy's own"* rather than *"The worktree's own"*, because its first form is now the clone's; the 2026-10-14 worktree form on fixture (d) is kept as the row's second sentence.
+  - Derivation entry 3, run verbatim as a direct Bash call (`git grep` with backticks in the pattern), was refused at the permission layer, so it and the cell comparison ran as probes under `harness-runs/scratch/` through `scripts/scratch-run.sh`: every changed row's Observed and Verdict cells matched `HEAD`'s, the changed rows were exactly the eleven, and entries 1 and 3 reached only rows the register lists (entry 3: development.md's Gate 15 paragraph, CS3, N4, S4, F2, PD3, PD13, TD1, TD2, §6 loopback). The two probe files, `t16_cells.py` and `t16_entries.py`, are left uncommitted there: their `rm` was refused at the permission layer.
