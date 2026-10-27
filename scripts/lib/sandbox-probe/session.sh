@@ -34,6 +34,16 @@
 #
 # SOURCED, NEVER EXECUTED. It sets no shell option: the entry point owns `set -u`. Bash 3.2 floor.
 
+# SP_DD_RULE — the `--allowedTools` rule every run-profile session that writes through `dd` carries
+# (write-protection, retry, repo-settings), and the one legs-settings.sh's parity checklist prints on its
+# run-profile launch line, so the interactive session departs exactly as the headless ones do.
+SP_DD_RULE="Bash(dd:*)"
+
+# sp_dd_cmd <path> — the probe's one write call: `dd if=/dev/null of=<path> conv=notrunc`.
+sp_dd_cmd() {
+  printf 'dd if=/dev/null of=%s conv=notrunc' "$1"
+}
+
 SP_BRANCH=""
 SP_CLONE=""
 SP_RUN_PROFILE=""
@@ -361,13 +371,26 @@ sp_stop_pid() {
   return 0
 }
 
+# sp_launch_args <settings> <mode> <cwd> <main> <state dir> — set the array SP_LAUNCH_ARGS to the
+# flags of the watcher's launch line that a headless and an interactive session share: --settings,
+# --permission-mode, --model and --effort when the configuration names them (SP_AGENT_MODEL,
+# SP_AGENT_EFFORT), and the two --add-dir entries. sp_session launches with them, and legs-settings.sh's
+# parity checklist prints them, so the two launch lines cannot drift.
+SP_LAUNCH_ARGS=()
+sp_launch_args() {
+  SP_LAUNCH_ARGS=(--settings "$1" --permission-mode "$2")
+  [ -z "$SP_AGENT_MODEL" ] || SP_LAUNCH_ARGS=("${SP_LAUNCH_ARGS[@]}" --model "$SP_AGENT_MODEL")
+  [ -z "$SP_AGENT_EFFORT" ] || SP_LAUNCH_ARGS=("${SP_LAUNCH_ARGS[@]}" --effort "$SP_AGENT_EFFORT")
+  SP_LAUNCH_ARGS=("${SP_LAUNCH_ARGS[@]}" --add-dir "$3" --add-dir "$4/$5")
+}
+
 # sp_session <name> <settings file> <prompt file> [--mode dontAsk|acceptEdits] [--allowed <rule>]...
 #            [--debug-file <f>] [--cwd <dir>]
 # The watcher's launch line (autonomous-watcher.sh → spawn_engine), departing only by the --allowedTools
 # and --debug-file flags named. Status is the agent CLI's.
 sp_session() {
   local name="${1:-}" settings="${2:-}" pfile="${3:-}" mode=dontAsk cwd="$SP_CLONE" debug="" prompt cli rc
-  local allowed_args model_args effort_args debug_args
+  local allowed_args debug_args
   allowed_args=()
   debug_args=()
   SP_SESSION_ALLOWED=""
@@ -414,14 +437,7 @@ sp_session() {
     return 1
   fi
   [ -z "$debug" ] || debug_args=(--debug-file "$debug")
-  model_args=()
-  effort_args=()
-  if [ -n "$SP_AGENT_MODEL" ]; then
-    model_args=(--model "$SP_AGENT_MODEL")
-  fi
-  if [ -n "$SP_AGENT_EFFORT" ]; then
-    effort_args=(--effort "$SP_AGENT_EFFORT")
-  fi
+  sp_launch_args "$settings" "$mode" "$cwd" "$SP_MAIN" "$SP_STATE_DIR"
   prompt="$(cat -- "$pfile")"
   cli="${SANDBOX_PROBE_AGENT_CLI:-}"
   [ -n "$cli" ] || cli=claude
@@ -432,13 +448,8 @@ sp_session() {
     cd "$cwd" || exit 97
     export HARNESS_MAIN_REPO="$SP_MAIN"
     exec "$cli" -p "$prompt" \
-      --settings "$settings" \
-      --permission-mode "$mode" \
-      ${model_args[@]+"${model_args[@]}"} \
-      ${effort_args[@]+"${effort_args[@]}"} \
+      "${SP_LAUNCH_ARGS[@]}" \
       --output-format stream-json --verbose \
-      --add-dir "$cwd" \
-      --add-dir "$SP_MAIN/$SP_STATE_DIR" \
       ${allowed_args[@]+"${allowed_args[@]}"} \
       ${debug_args[@]+"${debug_args[@]}"}
   ) </dev/null >"$SP_STREAM" 2>"$SP_TMP/$name.stderr"

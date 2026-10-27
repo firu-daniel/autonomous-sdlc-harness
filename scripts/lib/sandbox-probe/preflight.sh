@@ -15,10 +15,16 @@
 #   3. <main> is not on `defaultBranch` (hr_default_branch; sets SP_DEFAULT_BRANCH).
 #   4. The watcher has a run in flight (its running_count, in a child shell that sourced
 #      `<main>/<scriptsDir>/autonomous-watcher.sh status`).
-#   5. doctor prints no PASS line for one of profile-sandbox, profile-write-protection,
+#   5. The watcher's cleanup sweep (cleanup-merged-worktrees.sh) has a branch to delete: a local branch
+#      of <main> whose upstream is gone, or would be after the sweep's fetch
+#      (sp_preflight_cleanup_pending). The sweep's `git branch -D` removes that branch's
+#      `[branch "<b>"]` section from <main>/.git/config, which trips the guard mid-run although no
+#      session wrote the file (2026-10-27, run 2). Also refused when the remote the
+#      sweep fetches cannot be listed.
+#   6. doctor prints no PASS line for one of profile-sandbox, profile-write-protection,
 #      profile-main-anchor, sandbox-prerequisites (its exit status is ignored), or the watcher's
 #      SETTINGS_PROFILE is not <main>/.claude/settings.autonomous.json, the file doctor grades.
-#   6. The agent CLI does not resolve on PATH. Sets SP_VERSION from one `<agent cli> --version`.
+#   7. The agent CLI does not resolve on PATH. Sets SP_VERSION from one `<agent cli> --version`.
 #
 # TEST-ONLY SEAMS. An unset or empty value means the default.
 #   SANDBOX_PROBE_UNAME      replaces the output of `uname -s`
@@ -106,7 +112,7 @@ sp_preflight() {
     return 2
   fi
 
-  # --- 4. No watcher run in flight; SETTINGS_PROFILE read in the same child shell for check 5.
+  # --- 4. No watcher run in flight; SETTINGS_PROFILE read in the same child shell for check 6.
   watcher="$probe_scripts/autonomous-watcher.sh"
   if [ ! -r "$watcher" ]; then
     sp_preflight_refuse "cannot read the watcher at '$watcher'"
@@ -127,7 +133,17 @@ sp_preflight() {
     return 2
   fi
 
-  # --- 5. The profile doctor grades is the live one.
+  # --- 5. Nothing for the cleanup sweep to delete while the probe runs.
+  if ! sp_preflight_cleanup_pending "$SP_MAIN"; then
+    sp_preflight_refuse "$SP__PENDING_WHY"
+    return 2
+  fi
+  if [ -n "$SP__PENDING" ]; then
+    sp_preflight_refuse "the main checkout '$SP_MAIN' has local branch(es) whose upstream is gone, which the watcher's cleanup sweep would delete mid-run, changing .git/config: $SP__PENDING; wait for the watcher's next cleanup pass, or run 'bash $probe_scripts/cleanup-merged-worktrees.sh' from the main checkout, then retry"
+    return 2
+  fi
+
+  # --- 6. The profile doctor grades is the live one.
   if [ -n "${SANDBOX_PROBE_DOCTOR:-}" ]; then
     doctor_out="$(cd "$SP_MAIN" && bash -c "$SANDBOX_PROBE_DOCTOR" 2>&1)"
   else
@@ -171,7 +187,7 @@ sp_preflight() {
     fi
   fi
 
-  # --- 6. The agent CLI resolves on PATH.
+  # --- 7. The agent CLI resolves on PATH.
   cli="${SANDBOX_PROBE_AGENT_CLI:-}"
   [ -n "$cli" ] || cli=claude
   if ! command -v "$cli" >/dev/null 2>&1; then
@@ -180,6 +196,103 @@ sp_preflight() {
   fi
   SP_VERSION="$("$cli" --version 2>/dev/null)" || SP_VERSION=""
   SP_VERSION="${SP_VERSION%%$'\n'*}"
+  return 0
+}
+
+# sp_preflight_cleanup_pending <main> — set SP__PENDING to the local branches of <main> that
+# cleanup-merged-worktrees.sh would delete on its next pass, as `'<b>' (upstream <upstream> gone)`
+# joined by `, `; empty when there are none. Status 1 with SP__PENDING_WHY when the remote the sweep
+# fetches cannot be listed.
+#
+# THE SWEEP'S DECISION, MIRRORED. It runs `git fetch --prune` with no remote, which refreshes the remote
+# of the branch <main> has checked out (the default branch, check 3): `branch.<defaultBranch>.remote`, or
+# `origin` when that is unset. Then it deletes every local branch whose `%(upstream:track)` reads
+# `[gone]`, whatever the upstream's remote (a branch tracking a deleted local branch, remote `.`,
+# included), except a protected branch (hr_branch_is_protected), the branch <main> has checked out, and a
+# branch whose run-registry record is in a live status. Those three exclusions are applied first here.
+#
+# WHAT IS PENDING. A branch already reading `[gone]` is pending. A branch whose upstream is on the
+# fetched remote is also pending when its upstream ref is not among that remote's heads: the fetch would
+# turn it `[gone]`, and the stale local tracking state alone misses a branch deleted on the remote since
+# the last fetch, which is the case that tripped the guard. A branch tracking any other remote, or none,
+# is pending only on a local `[gone]`, since the fetch does not touch its tracking ref.
+#
+# READ-ONLY, SO NO FETCH. A `fetch --prune` would delete remote-tracking refs and write FETCH_HEAD in the
+# main checkout; `git ls-remote --heads <remote>` asks the same question and writes nothing. It runs once,
+# only when a candidate tracks the fetched remote. A remote that cannot be listed refuses rather than
+# passes, because the sweep runs again while the probe does. It cannot prompt: GIT_TERMINAL_PROMPT=0 for
+# HTTPS, and for SSH `BatchMode=yes` and `ConnectTimeout=15` appended to the user's own GIT_SSH_COMMAND,
+# or core.sshCommand, or `ssh` (left alone when only GIT_SSH is set, which GIT_SSH_COMMAND would
+# override); an HTTPS transfer slower than 1 byte/s for 30 s is aborted. The person who started the probe
+# is watching, so it carries no wall-clock bound of its own.
+SP__PENDING=""
+SP__PENDING_WHY=""
+sp_preflight_cleanup_pending() {
+  local main="$1" refs line branch track remote rref up current registry live="" out head
+  local default fetched ssh_cmd heads="" listed=0 tab=$'\t'
+  SP__PENDING=""
+  SP__PENDING_WHY=""
+  refs="$(git -C "$main" for-each-ref \
+    --format='%(refname:short)%09%(upstream:track)%09%(upstream:remotename)%09%(upstream:remoteref)%09%(upstream:short)' \
+    refs/heads/ 2>/dev/null)" || refs=""
+  current="$(git -C "$main" symbolic-ref --short HEAD 2>/dev/null)" || current=""
+  default="${SP_DEFAULT_BRANCH:-$current}"
+  fetched="$(git -C "$main" config --get "branch.$default.remote" 2>/dev/null)" || fetched=""
+  [ -n "$fetched" ] || fetched=origin
+  registry="$(hr_state_path "$main" autonomous_logs/registry.json 2>/dev/null)" || registry=""
+  if [ -n "$registry" ] && [ -r "$registry" ]; then
+    # A mirror of cleanup-merged-worktrees.sh → live_runs: keep the status list in step with it.
+    live="$(jq -r '.runs | to_entries[] | select(.value.status == "running" or .value.status == "parked" or .value.status == "park_loop" or .value.status == "paused") | .key' "$registry" 2>/dev/null)" || live=""
+  fi
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    branch="${line%%"$tab"*}"
+    line="${line#*"$tab"}"
+    track="${line%%"$tab"*}"
+    line="${line#*"$tab"}"
+    remote="${line%%"$tab"*}"
+    line="${line#*"$tab"}"
+    rref="${line%%"$tab"*}"
+    up="${line#*"$tab"}"
+    # The sweep's three exclusions, first.
+    [ "$branch" != "$current" ] || continue
+    hr_branch_is_protected "$main" "$branch" && continue
+    case $'\n'"$live"$'\n' in *$'\n'"$branch"$'\n'*) continue ;; esac
+    if [ "$track" != "[gone]" ]; then
+      # Not gone yet: only the fetched remote can turn it so.
+      [ "$remote" = "$fetched" ] && [ -n "$rref" ] || continue
+      if [ "$listed" -eq 0 ]; then
+        if [ -n "${GIT_SSH_COMMAND:-}" ]; then
+          ssh_cmd="$GIT_SSH_COMMAND"
+        else
+          ssh_cmd="$(git -C "$main" config --get core.sshCommand 2>/dev/null)" || ssh_cmd=""
+          [ -n "$ssh_cmd" ] || ssh_cmd=ssh
+        fi
+        if [ -n "${GIT_SSH:-}" ] && [ -z "${GIT_SSH_COMMAND:-}" ]; then
+          out="$(GIT_TERMINAL_PROMPT=0 git -C "$main" -c http.lowSpeedLimit=1 -c http.lowSpeedTime=30 \
+            ls-remote --heads "$fetched" 2>/dev/null)"
+        else
+          out="$(GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="$ssh_cmd -o BatchMode=yes -o ConnectTimeout=15" \
+            git -C "$main" -c http.lowSpeedLimit=1 -c http.lowSpeedTime=30 ls-remote --heads "$fetched" 2>/dev/null)"
+        fi
+        # $? is the status of the ls-remote substitution in whichever arm ran.
+        if [ $? -ne 0 ]; then
+          SP__PENDING_WHY="cannot list the branches on remote '$fetched', the one the watcher's cleanup sweep fetches ('git ls-remote --heads $fetched' failed), so whether it would delete '$branch' mid-run cannot be told"
+          return 1
+        fi
+        listed=1
+        while IFS= read -r head; do
+          [ -n "$head" ] && heads="$heads${head#*"$tab"}"$'\n'
+        done <<EOF
+$out
+EOF
+      fi
+      case $'\n'"$heads" in *$'\n'"$rref"$'\n'*) continue ;; esac
+    fi
+    SP__PENDING="${SP__PENDING:+$SP__PENDING, }'$branch' (upstream ${up:-$remote/${rref#refs/heads/}} gone)"
+  done <<EOF
+$refs
+EOF
   return 0
 }
 

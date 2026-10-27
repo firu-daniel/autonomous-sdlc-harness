@@ -418,3 +418,91 @@ test('sp_result_line: fixed field order, double-quoted values', async (t) => {
     assert.equal(run.stdout, '1,0,0', run.stderr);
   });
 });
+
+/**
+ * The headless-parity checklist (`sp_print_parity_script` in `legs-settings.sh`). Its launch lines must
+ * carry the flags the headless sessions launch with (`HARNESS_MAIN_REPO`, `--settings`,
+ * `--permission-mode dontAsk`, `--model`/`--effort` when configured, both `--add-dir`s) and the
+ * `--allowedTools` departures the headless N1, RT1 and CS2 sessions run with — both profiles set
+ * `defaultMode: dontAsk`, so a bare `claude --settings <profile>` refuses every call at the permission
+ * layer (2026-10-27) — and each step must print the exact prompt to paste, RT1's asking for the flag.
+ * Every path is absolute and one shell word: a home directory with a space is single-quoted.
+ */
+test('print-parity-script: launch lines carry the headless flags and departures, steps carry the prompts', async (t) => {
+  const n1 = 'curl -sS https://example.com/';
+
+  /** `blocks` expected for the given (already shell-spelled) words. */
+  function expected({ clone, run, net, main, state, home, cs2, model = '' }) {
+    const launch = (settings, rule) =>
+      `HARNESS_MAIN_REPO=${main} claude --settings ${settings} --permission-mode dontAsk${model} ` +
+      `--add-dir ${clone} --add-dir ${state} --allowedTools ${rule}`;
+    return [
+      `cd ${clone}`,
+      launch(net, `'Bash(${n1})'`),
+      launch(run, "'Bash(dd:*)'"),
+      `Run this Bash call exactly: ${n1}`,
+      `Run this Bash call exactly, with dangerouslyDisableSandbox set to true: dd if=/dev/null of=${home} conv=notrunc`,
+      `Run this Bash call exactly: dd if=/dev/null of=${cs2} conv=notrunc`,
+      `ls -l ${home}`,
+      `ls -l ${cs2}`,
+    ];
+  }
+
+  function assertScript(stdout, blocks) {
+    assert.deepEqual([...stdout.matchAll(/```\n(.*)\n```/g)].map((m) => m[1]), blocks);
+    assert.match(stdout, /note the prompt's text in the record, and answer No to any offer to run the call unsandboxed/);
+    assert.doesNotMatch(stdout, /~|\$HOME/, 'every path is spelled absolute');
+  }
+
+  await t.test('the placeholder form, through the entry point', async () => {
+    const run = await runBash(WORKSPACE_ROOT, [PROBE, 'print-parity-script'], { HOME: '/probe-home' });
+    assert.equal(run.status, 0, run.stderr);
+    assertScript(
+      run.stdout,
+      expected({
+        clone: "'<clone>'",
+        run: "'<run profile>'",
+        net: "'<net profile>'",
+        main: "'<main>'",
+        state: "'<main>/<stateDir>'",
+        home: '/probe-home/sbx_probe_rt1_marker',
+        cs2: "'<main>/.git/sbx_cs2_new'",
+      }),
+    );
+  });
+
+  await t.test('the live form the leg prints, a home with a space quoted, model and effort mirrored', async () => {
+    const libs = ['core.sh', 'session.sh', 'legs-protection.sh', 'legs-network.sh', 'legs-settings.sh'].map((f) =>
+      join(PROBE_LIB, f),
+    );
+    const run = await runBash(
+      tmpdir(),
+      [
+        '-c',
+        'for f in "$1" "$2" "$3" "$4" "$5"; do . "$f"; done; shift 5; ' +
+          'SP_STATE_DIR=sdlc-harness SP_AGENT_MODEL=opus SP_AGENT_EFFORT=high; sp_print_parity_script "$@"',
+        '_',
+        ...libs,
+        '/w/clone',
+        '/s/run.json',
+        '/t/sbx_net.json',
+        '/w/main',
+      ],
+      { HOME: '/Users/a b', SP_VERSION: '' },
+    );
+    assert.equal(run.status, 0, run.stderr);
+    assertScript(
+      run.stdout,
+      expected({
+        clone: '/w/clone',
+        run: '/s/run.json',
+        net: '/t/sbx_net.json',
+        main: '/w/main',
+        state: '/w/main/sdlc-harness',
+        home: "'/Users/a b/sbx_probe_rt1_marker'",
+        cs2: '/w/main/.git/sbx_cs2_new',
+        model: ' --model opus --effort high',
+      }),
+    );
+  });
+});

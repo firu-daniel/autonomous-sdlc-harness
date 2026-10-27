@@ -3,8 +3,10 @@
  * `sp__git_cs3_fetch`, `sp__wp_tracked` in `scripts/lib/sandbox-probe/legs-protection.sh`), run over the
  * recorded streams and debug logs in `fixtures/sandbox-probe/` and over a repository each case seeds.
  *
- * **The rule these tests exist to enforce: W8 needs both sessions' debug logs, CS7 includes its `Edit`,
- * CS3's fetch refusal is the clone layout's design, and no probe helper writes `Broken pipe`.**
+ * **The rule these tests exist to enforce: W8 needs both sessions' debug logs, CS7 includes its `Edit`
+ * and passes it only on a refusal that names a protection (the Edit tool's read-before-write refusal is
+ * `not run`), CS3's fetch refusal is the clone layout's design, and no probe helper writes
+ * `Broken pipe`.**
  *
  * Fixtures are passed unsubstituted: no function here requires an absolute path, and W8's rule and its
  * unmatched-rule line both spell `@FIXTURE_ROOT@`, so the substring match holds as recorded.
@@ -123,16 +125,65 @@ test('sp__wp_cs7_edit: CS7’s Edit half', async (t) => {
     return run.stdout;
   }
 
-  await t.test('an Edit refused at the permission layer passes', async (t) => {
+  await t.test('a dontAsk refusal passes, worded as no allow rule and no deny rule', async (t) => {
     assert.equal(
       await edit(t, fixture('cs7-edit-refused')),
-      "pass|Edit refused at the permission layer: Permission to use Edit has been denied because Claude Code is running in don't ask mode.",
+      `pass|Edit refused by dontAsk: no allow rule covers ${RUN_PROFILE}; no deny rule names it: ` +
+        "Permission to use Edit has been denied because Claude Code is running in don't ask mode.",
+    );
+  });
+
+  await t.test('a denied-directory refusal passes, worded as a deny rule', async (t) => {
+    assert.equal(
+      await edit(t, fixture('cs7-edit-file-tool')),
+      `pass|Edit refused by a deny rule covering ${RUN_PROFILE} (file-tool layer): ` +
+        'File is in a directory that is denied by your permission settings.',
+    );
+  });
+
+  await t.test('listed in permission_denials with no refusal in its text is not run', async (t) => {
+    assert.equal(
+      await edit(t, fixture('cs7-edit-denials-only')),
+      'not run|Edit listed in permission_denials, but its result names no permission refusal of the target: ' +
+        '<tool_use_error>Edit was not applied.</tool_use_error> (in permission_denials)',
+    );
+  });
+
+  await t.test('an error result with no refusal is not run', async (t) => {
+    assert.equal(
+      await edit(t, fixture('cs7-edit-error')),
+      'not run|Edit errored with no refusal of the target: <tool_use_error>String to replace not found in file.</tool_use_error>',
+    );
+  });
+
+  await t.test('an Edit that succeeded fails', async (t) => {
+    assert.equal(
+      await edit(t, fixture('cs7-edit-ran')),
+      `fail|the Edit of ${RUN_PROFILE} was not refused: The file ${RUN_PROFILE} has been updated.`,
     );
   });
 
   await t.test('a session with no Edit call is not run', async (t) => {
     assert.equal(await edit(t, fixture('ran')), `not run|Edit: no Edit call on "${RUN_PROFILE}" in the session`);
   });
+
+  // Run 2 (2026-10-27): the Read was refused, the Edit tool refused the Edit as unread, and
+  // `permission_denials` listed it — a refusal that shows nothing about the target's protection.
+  await t.test('the Edit tool’s read-before-write refusal is not run, never pass, naming the Read', async (t) => {
+    assert.equal(
+      await edit(t, fixture('cs7-edit-not-read')),
+      "not run|Edit refused by the Edit tool's read-before-write rule, not by a protection of the target: " +
+        '<tool_use_error>File has not been read yet. Read it first before writing to it.</tool_use_error>; ' +
+        `the Read of ${RUN_PROFILE} was refused: Permission to use Read has been denied because Claude Code is running in don't ask mode.`,
+    );
+  });
+});
+
+test('sp__wp_cs7_read_rule: the session may Read the run profile, by an absolute `//` rule', async (t) => {
+  const dir = await caseDir(t);
+  const run = await sourced(dir, 'sp__wp_cs7_read_rule "$@"', ['/state/run-profiles/x/b.json']);
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(run.stdout, 'Read(//state/run-profiles/x/b.json)');
 });
 
 test('sp__git_cs3_fetch: a network-allowlist refusal is the clone layout’s design', async (t) => {

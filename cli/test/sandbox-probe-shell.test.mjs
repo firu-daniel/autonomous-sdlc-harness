@@ -19,10 +19,10 @@
  */
 
 import assert from 'node:assert/strict';
-import { readFileSync, realpathSync } from 'node:fs';
-import { chmod, cp, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { chmod, cp, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
 
 import { MAIN_REPO_ANCHOR_VARIABLE } from '../dist/core/mainRepoAnchor.js';
@@ -159,7 +159,135 @@ test('preflight refuses in order, exit 2, leaving nothing behind', async (t) => 
     assert.deepEqual(await probeLeftovers(tmp), []);
   });
 
-  await t.test('5. doctor printing a non-PASS line for one of its four checks', async (t) => {
+  /**
+   * A branch of the main checkout pushed to the fixture's local bare `origin` with an upstream, as
+   * `create-worktree.sh` leaves one; removed, with its `[branch]` section, when the case ends.
+   */
+  async function trackedBranch(t, name) {
+    await runGit(f.dir, ['branch', '--quiet', name]);
+    await runGit(f.dir, ['push', '--quiet', '--set-upstream', 'origin', name]);
+    const origin = (await runGit(f.dir, ['remote', 'get-url', 'origin'])).stdout.trim();
+    t.after(async () => {
+      await runGit(f.dir, ['branch', '--quiet', '-D', name]);
+      await runBash(f.dir, ['-c', 'git -C "$1" branch -q -D "$2" 2>/dev/null; :', '_', origin, name]);
+    });
+    return origin;
+  }
+
+  await t.test('5. a local branch whose remote branch was deleted, pending the cleanup sweep', async (t) => {
+    const origin = await trackedBranch(t, 'merged_gone');
+    // Deleted on the remote only, as a merged pull request's branch is: the local tracking ref is stale,
+    // so `for-each-ref` does not read `[gone]` yet and only the remote listing can tell.
+    await runGit(origin, ['branch', '--quiet', '-D', 'merged_gone']);
+    const tmp = await caseTmp(t);
+
+    const run = await preflight(f, probe, tmp, agentPass);
+
+    assertRefused(
+      run,
+      `the main checkout '${f.dir}' has local branch(es) whose upstream is gone, which the watcher's cleanup sweep would delete mid-run, changing .git/config: 'merged_gone' (upstream origin/merged_gone gone); wait for the watcher's next cleanup pass, or run 'bash ${f.scripts}/cleanup-merged-worktrees.sh' from the main checkout, then retry`,
+    );
+    assert.deepEqual(await probeLeftovers(tmp), []);
+  });
+
+  await t.test('5. a local branch whose upstream is still on origin is not refused', async (t) => {
+    await trackedBranch(t, 'still_open');
+    const tmp = await caseTmp(t);
+
+    const run = await preflight(f, probe, tmp, agentPass);
+
+    assert.equal(run.status, 0, run.stderr);
+    assert.deepEqual(probeLines(run.stderr), [], run.stderr);
+    assert.deepEqual(await probeLeftovers(tmp), []);
+  });
+
+  const pendingRefusal = (list) =>
+    `the main checkout '${f.dir}' has local branch(es) whose upstream is gone, which the watcher's cleanup sweep would delete mid-run, changing .git/config: ${list}; wait for the watcher's next cleanup pass, or run 'bash ${f.scripts}/cleanup-merged-worktrees.sh' from the main checkout, then retry`;
+
+  /** `<fn> <args>` from the fixture's run library, in the fixture; its stdout, trimmed. */
+  async function runLib(fn, ...args) {
+    const run = await runBash(f.dir, ['-c', `. "$1"; shift; ${fn} "$@"`, '_', join(f.scripts, 'lib', 'harness-run-lib.sh'), ...args]);
+    assert.equal(run.status, 0, run.stderr);
+    return run.stdout.trim();
+  }
+
+  await t.test('5. a branch tracking a deleted local branch reads [gone], whatever the remote', async (t) => {
+    await runGit(f.dir, ['branch', '--quiet', 'base_local']);
+    await runGit(f.dir, ['branch', '--quiet', '--track', 'dep_local', 'base_local']);
+    await runGit(f.dir, ['branch', '--quiet', '-D', 'base_local']);
+    t.after(() => runGit(f.dir, ['branch', '--quiet', '-D', 'dep_local']));
+    const tmp = await caseTmp(t);
+
+    const run = await preflight(f, probe, tmp, agentPass);
+
+    assertRefused(run, pendingRefusal("'dep_local' (upstream base_local gone)"));
+    assert.deepEqual(await probeLeftovers(tmp), []);
+  });
+
+  await t.test('5. a remote-tracking ref already pruned reads [gone] and is refused', async (t) => {
+    await trackedBranch(t, 'pruned_here');
+    await runGit(f.dir, ['update-ref', '-d', 'refs/remotes/origin/pruned_here']);
+    const tmp = await caseTmp(t);
+
+    const run = await preflight(f, probe, tmp, agentPass);
+
+    assertRefused(run, pendingRefusal("'pruned_here' (upstream origin/pruned_here gone)"));
+    assert.deepEqual(await probeLeftovers(tmp), []);
+  });
+
+  // `paused`, not `running`: a `running` record is check 4's, which refuses first.
+  await t.test('5. a [gone] branch whose run is in a live status is the sweep’s to keep, not refused', async (t) => {
+    await trackedBranch(t, 'paused_run');
+    await runGit(f.dir, ['update-ref', '-d', 'refs/remotes/origin/paused_run']);
+    const registry = await runLib('hr_state_path', f.dir, 'autonomous_logs/registry.json');
+    const before = existsSync(registry) ? readFileSync(registry) : null;
+    await mkdir(dirname(registry), { recursive: true });
+    await writeFile(registry, `${JSON.stringify({ runs: { paused_run: { status: 'paused' } } })}\n`);
+    t.after(() => (before === null ? rm(registry, { force: true }) : writeFile(registry, before)));
+    const tmp = await caseTmp(t);
+
+    const run = await preflight(f, probe, tmp, agentPass);
+
+    assert.equal(run.status, 0, run.stderr);
+    assert.deepEqual(probeLines(run.stderr), [], run.stderr);
+  });
+
+  await t.test('5. a [gone] branch matching a protected pattern is the sweep’s to keep, not refused', async (t) => {
+    // The fixture protects only its checked-out default branch, so a glob is added for the case.
+    const configPath = join(f.dir, 'harness.config.json');
+    const original = readFileSync(configPath);
+    const config = JSON.parse(original.toString('utf8'));
+    config.protectedBranches = [...(config.protectedBranches ?? []), 'release/*'];
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+    t.after(() => writeFile(configPath, original));
+    assert.ok((await runLib('hr_protected_patterns', f.dir)).split('\n').includes('release/*'));
+    const name = 'release/x';
+    await trackedBranch(t, name);
+    await runGit(f.dir, ['update-ref', '-d', `refs/remotes/origin/${name}`]);
+    const tmp = await caseTmp(t);
+
+    const run = await preflight(f, probe, tmp, agentPass);
+
+    assert.equal(run.status, 0, run.stderr);
+    assert.deepEqual(probeLines(run.stderr), [], run.stderr);
+  });
+
+  await t.test('5. the remote the sweep fetches cannot be listed', async (t) => {
+    const origin = await trackedBranch(t, 'cannot_list');
+    await runGit(f.dir, ['remote', 'set-url', 'origin', join(f.dir, 'watcher-test', 'no-such-origin.git')]);
+    t.after(() => runGit(f.dir, ['remote', 'set-url', 'origin', origin]));
+    const tmp = await caseTmp(t);
+
+    const run = await preflight(f, probe, tmp, agentPass);
+
+    assertRefused(
+      run,
+      "cannot list the branches on remote 'origin', the one the watcher's cleanup sweep fetches ('git ls-remote --heads origin' failed), so whether it would delete 'cannot_list' mid-run cannot be told",
+    );
+    assert.deepEqual(await probeLeftovers(tmp), []);
+  });
+
+  await t.test('6. doctor printing a non-PASS line for one of its four checks', async (t) => {
     const tmp = await caseTmp(t);
     const warn = '! WARN  profile-write-protection  not strict';
     const lines = DOCTOR_IDS.map((id) => (id === 'profile-write-protection' ? warn : `PASS  ${id}  ok`));
@@ -170,7 +298,7 @@ test('preflight refuses in order, exit 2, leaving nothing behind', async (t) => 
     assert.deepEqual(await probeLeftovers(tmp), []);
   });
 
-  await t.test('6. an agent CLI that does not resolve on PATH', async (t) => {
+  await t.test('7. an agent CLI that does not resolve on PATH', async (t) => {
     const tmp = await caseTmp(t);
     const missing = join(f.dir, 'watcher-test', 'no-such-agent');
     const run = await preflight(f, probe, tmp, { SANDBOX_PROBE_AGENT_CLI: missing });
