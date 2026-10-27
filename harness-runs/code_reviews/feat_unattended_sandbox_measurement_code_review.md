@@ -20,7 +20,7 @@ Pass 2 ran against `harness-runs/task_plan_point_reviews/feat_unattended_sandbox
 
 1. [x] **Finding 5** — Cite roadmap item 21 instead of the in-tree-unresolvable "sandbox3b" wherever the Linux legs are deferred _(layer: cli, general)_
 2. [x] **Finding 4** — Make SR2 pass only on its `sbx_sr2_refused` line, and fail on an `sbx_sr2_written` line _(layer: general)_
-3. [ ] **Finding 3** — Grade S1's permission-layer refusal as the pass its row records, not `not run` _(layer: general)_
+3. [x] **Finding 3** — Grade S1's permission-layer refusal as the pass its row records, not `not run` _(layer: general)_
 4. [ ] **Finding 6** — Count only a permission-layer answer as a W7 failure _(layer: general)_
 5. [ ] **Finding 7** — Put CS8's marker at the row's `$HOME/sbx_cs8_marker`, not under the probe's temp area _(layer: general)_
 6. [ ] **Finding 2** — Read the SSH proxy refusal `This proxy requires authentication` as the network layer, so R4 is not failed on its expected outcome _(layer: cli, general)_

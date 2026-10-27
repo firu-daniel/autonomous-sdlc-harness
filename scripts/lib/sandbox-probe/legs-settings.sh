@@ -235,9 +235,10 @@ EOF
       sp_row_result credentials S1 "not run" "$SP_EVIDENCE" "$departure"
     else
       case "$SP_LAYER" in
-        sandbox) sp_row_result credentials S1 pass "$s1_cmd: refused at the sandbox layer: $SP_EVIDENCE" "$departure" ;;
+        sandbox | permission | file-tool | network)
+          sp_row_result credentials S1 pass "$s1_cmd: refused at the $SP_LAYER layer: $SP_EVIDENCE" "$departure" ;;
         ran) sp_row_result credentials S1 fail "$s1_cmd: not refused (output withheld)" "$departure" ;;
-        *) sp_row_result credentials S1 "not run" "$s1_cmd: refused at the $SP_LAYER layer, so it never reached the sandbox: $SP_EVIDENCE" "$departure" ;;
+        *) sp_row_result credentials S1 "not run" "$s1_cmd: unrecognised layer '$SP_LAYER': $SP_EVIDENCE" "$departure" ;;
       esac
     fi
   fi
