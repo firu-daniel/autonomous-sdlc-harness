@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"sp-n4-curl-error","cwd":"@FIXTURE_ROOT@"}
+{"type":"user","timestamp":"2026-01-01T00:00:00.000Z","message":{"role":"user","content":"Run the command."}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:01.000Z","message":{"id":"m1","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"curl -sS --max-time 5 http://169.254.169.254/"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","is_error":true,"content":"Exit code 7\ncurl: (7) Failed to connect to 169.254.169.254 port 80 after 2 ms: Couldn't connect to server"}]}}
+{"type":"result","subtype":"success","timestamp":"2026-01-01T00:00:03.000Z","duration_ms":3000,"permission_denials":[]}
