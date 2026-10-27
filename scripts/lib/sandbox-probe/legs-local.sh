@@ -80,10 +80,13 @@ sp_leg_gates() {
       case "$SP_VERDICT" in
         pass) label="$label ran" ;;
         fail)
-          n_fail=$((n_fail + 1))
-          label="$label $SP_LAYER"
+          # W7 grades permission denials only; any other layer is the gate's own output once granted.
           if [ "$SP_LAYER" = permission ]; then
+            n_fail=$((n_fail + 1))
+            label="$label permission"
             if [ "$arg" = "'<probe>'" ]; then probe_denied=1; else other_denied=1; fi
+          else
+            label="$label ran ($SP_LAYER in its output)"
           fi
           ;;
         *)
