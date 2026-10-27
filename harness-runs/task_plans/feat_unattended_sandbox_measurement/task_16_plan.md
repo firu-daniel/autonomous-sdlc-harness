@@ -36,3 +36,13 @@
 - Every new row id matches the leg table `bash scripts/sandbox-probe.sh --list` prints.
 - No probe invocation appears inline in the new §0 prose: `bash scripts/sandbox-probe.sh run` and `! bash scripts/sandbox-probe.sh run` each appear only as a line of the fenced block below the paragraph.
 - The §0 paragraph names the plugin root as a CS1 target and says CS1's evidence records which layer refused it.
+
+**Deviations from plan:**
+
+- P1b's Expected follows the probe's judge, not the plan's "either stays sandboxed or is neutralised": `scripts/lib/sandbox-probe/legs-wrappers.sh` → `sp__wr_prefix` passes P1b only when the call stays sandboxed (marker absent, `ls-remote` unchanged) and fails any sign it ran excluded, since `push-branch.sh` keeps `GIT_SSH_COMMAND` rather than neutralising it. The row says so.
+- P1c is described as its own session shared with CW5, as `sp__wr_compound` runs it, not as P1b's session.
+- CW4 had no 2026-10-14 worktree result (its Observed was already `not run — owed`), so its re-target sentence says "the row had no prior result" instead of keeping one.
+- N3, N4, N5 and RS1 name the scratch-profile departure the network leg takes (`legs-network.sh` → `sp__net_profile`: the run profile minus its `Bash(curl:*)` deny), because the probe's sessions run that way; §0's existing scratch-profile departure covers it.
+- Verification "each new row id appears exactly once" holds for table rows (`grep -c -E '^\| (P1b|…|CS15) \|' docs/sandbox-verification.md` → 17). P1b and P1c are also named in the §3 *Owed a re-run.* paragraph and CS12–CS15 in the §2 opener, as the Work bullets require.
+- Verification "every new row id matches `--list`": `bash scripts/sandbox-probe.sh --list` was run and every new id is in its table, but the run also printed `scripts/lib/sandbox-probe/session.sh: line 313: syntax error near unexpected token '<'` on stderr. That file is outside this task; flagged to the orchestrator.
+- RT1, SR1, SR2, MC1, RS1 and HP1 sit in a new `**The probe's further rows.**` table in §4, after W6–W8, because none of §4's existing tables has their columns' subject.
