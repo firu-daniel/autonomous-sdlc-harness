@@ -1,12 +1,14 @@
 /**
  * The sandbox probe's write-protection and git-leg helpers (`sp__wp_w8`, `sp__wp_cs7_edit`,
- * `sp__git_cs3_fetch`, `sp__wp_tracked` in `scripts/lib/sandbox-probe/legs-protection.sh`), run over the
- * recorded streams and debug logs in `fixtures/sandbox-probe/` and over a repository each case seeds.
+ * `sp__git_cs3_fetch`, `sp__wp_dd_grade`, `sp__git_cs3_call`, `sp__git_cl5_grade`, `sp__wp_tracked` in
+ * `scripts/lib/sandbox-probe/legs-protection.sh`), run over the recorded streams and debug logs in
+ * `fixtures/sandbox-probe/` and over a repository each case seeds.
  *
  * **The rule these tests exist to enforce: W8 needs both sessions' debug logs, CS7 includes its `Edit`
  * and passes it only on a refusal that names a protection (the Edit tool's read-before-write refusal is
- * `not run`), CS3's fetch refusal is the clone layout's design, and no probe helper writes
- * `Broken pipe`.**
+ * `not run`), CS3's fetch refusal is the clone layout's design, a call refused at the permission layer
+ * never reached the layer CS1, CS2, CS7, CS3 and CL5 measure, and is `not run`, and no probe helper
+ * writes `Broken pipe`.**
  *
  * Fixtures are passed unsubstituted: no function here requires an absolute path, and W8's rule and its
  * unmatched-rule line both spell `@FIXTURE_ROOT@`, so the substring match holds as recorded.
@@ -198,6 +200,74 @@ test('sp__git_cs3_fetch: a network-allowlist refusal is the clone layout’s des
     run.stdout,
     'pass|refused by the network allowlist, as the clone layout intends (§7 OR2): sandbox proxy: github-firu:22: 403 host is not on the allow list',
   );
+});
+
+/** Runs `fn <stream> <cmd>` and returns `<$v>|<$e>`. */
+async function graded(t, fn, v, e, stream, cmd) {
+  const dir = await caseDir(t);
+  const run = await sourced(dir, `${fn} "$@"; printf '%s|%s' "$${v}" "$${e}"`, [stream, cmd]);
+  assert.equal(run.status, 0, run.stderr);
+  return run.stdout;
+}
+
+const SANDBOX_DD = 'dd if=/dev/zero of=@FIXTURE_ROOT@/outside/probe bs=1 count=1';
+const PERMISSION_DD = 'dd if=/dev/null of=@FIXTURE_ROOT@/clone/.git/config conv=notrunc';
+const CL5_CMD = 'git config sbx.probe true';
+const DONT_ASK = "Permission to use Bash has been denied because Claude Code is running in don't ask mode.";
+const NEVER_REACHED = `refused at the permission layer, so it never reached the sandbox: ${DONT_ASK}`;
+
+test('sp__wp_dd_grade: a permission-layer refusal of a dd is not run', async (t) => {
+  const dd = (t, stream, cmd) => graded(t, 'sp__wp_dd_grade', 'SP__WP_DD_V', 'SP__WP_DD_E', stream, cmd);
+
+  await t.test('a sandbox refusal passes', async (t) => {
+    assert.equal(
+      await dd(t, fixture('sandbox-dd'), SANDBOX_DD),
+      'pass|dd: @FIXTURE_ROOT@/outside/probe: Operation not permitted',
+    );
+  });
+
+  await t.test('a permission-layer refusal is not run, never pass', async (t) => {
+    assert.equal(await dd(t, fixture('wp-dd-permission'), PERMISSION_DD), `not run|${NEVER_REACHED}`);
+  });
+
+  await t.test('a session with no such dd is not run', async (t) => {
+    assert.equal(await dd(t, fixture('ran'), PERMISSION_DD), `not run|no Bash call "${PERMISSION_DD}" in the session`);
+  });
+});
+
+test('sp__git_cs3_call: a permission-layer refusal of a CS3 call is not run', async (t) => {
+  const call = (t, cmd) =>
+    graded(t, 'sp__git_cs3_call', 'SP__GIT_CALL_V', 'SP__GIT_CALL_E', fixture('git-permission'), cmd);
+
+  await t.test('a permission-layer refusal is not run, never fail', async (t) => {
+    assert.equal(
+      await call(t, 'git add sbx_a.txt'),
+      `not run|refused at the permission layer, so it never ran: ${DONT_ASK}`,
+    );
+  });
+
+  await t.test('a call that ran passes', async (t) => {
+    assert.equal(await call(t, 'git status --porcelain'), 'pass|(empty tool_result)');
+  });
+});
+
+test('sp__git_cl5_grade: a permission-layer refusal of CL5’s git config is not run', async (t) => {
+  const cl5 = (t, stream) => graded(t, 'sp__git_cl5_grade', 'SP_VERDICT', 'SP_EVIDENCE', stream, CL5_CMD);
+
+  await t.test('a sandbox refusal with a could-not-lock line passes', async (t) => {
+    assert.equal(
+      await cl5(t, fixture('cl5-sandbox')),
+      'pass|error: could not lock config file .git/config: Operation not permitted',
+    );
+  });
+
+  await t.test('a permission-layer refusal is not run, never pass', async (t) => {
+    assert.equal(await cl5(t, fixture('git-permission')), `not run|${NEVER_REACHED}`);
+  });
+
+  await t.test('a session with no git config is not run', async (t) => {
+    assert.equal(await cl5(t, fixture('sandbox-dd')), `not run|no Bash call "${CL5_CMD}" in the session`);
+  });
 });
 
 test('sp__wp_tracked: one tracked file, and nothing on stderr however long the list is', async (t) => {

@@ -124,7 +124,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_sandbox_probe_round3_fin
 6. [x] **Task 6** — Add CS8 (b) as a probe-graded half through the watcher's own `run_profile_check`, and grade CS8 (a)'s unreached call as not run _(layer: general)_ _(points: 20)_
 7. [x] **Task 7** — Test the wrappers leg's permission screen and CW6's grading against recorded streams _(layer: cli)_ _(points: 20)_
 8. [x] **Task 8** — Test N4's grading against its unsandboxed control _(layer: cli)_ _(points: 10)_
-9. [ ] **Task 9** — Test the write-protection and git legs' permission-layer grading against recorded streams _(layer: cli)_ _(points: 15)_
+9. [x] **Task 9** — Test the write-protection and git legs' permission-layer grading against recorded streams _(layer: cli)_ _(points: 15)_
 10. [ ] **Task 10** — Test the planted-config refusal's permission-layer grading against a recorded stream _(layer: cli)_ _(points: 10)_
 11. [ ] **Task 11** — Test CS8 (a)'s and CS8 (b)'s grading against recorded streams and a stub watcher _(layer: cli)_ _(points: 15)_
 12. [ ] **Task 12** — Amend the call and Expected columns of the rows whose grading this branch changes _(layer: general)_ _(points: 20)_
