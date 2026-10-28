@@ -6,7 +6,8 @@
  *
  * **The rule these tests exist to enforce: a refusal is graded only at the layer the row measures — a
  * permission-layer refusal is `not run`; N3 fails only on a body that came back; N4 never fails on an error
- * line that cannot tell; a session that issued no calls grades nothing.**
+ * line that cannot tell; N4 passes only where its curl error differs from the same call issued unsandboxed from
+ * the probe's own shell; a session that issued no calls grades nothing.**
  *
  * Every case sources libraries and reads a fixture: none starts a listener, a session or a network call.
  * Port `8765` and token `sbx_n3_fixture` are fixture literals. Fixtures are passed unsubstituted, since
@@ -80,8 +81,9 @@ test('sp__net_n3_grade: N3 fails only on a body that came back', async (t) => {
   });
 });
 
-test('sp__net_n4_grade: N4 never fails on an error line that cannot tell', async (t) => {
-  const n4 = (t, stream) => graded(t, 'legs-network.sh', 'sp__net_n4_grade', [fixture(stream), N4_CMD]);
+test('sp__net_n4_grade: N4 never fails on an error line that cannot tell, and passes only on a difference from its unsandboxed control', async (t) => {
+  const n4 = (t, stream, ...control) =>
+    graded(t, 'legs-network.sh', 'sp__net_n4_grade', [fixture(stream), N4_CMD, ...control]);
 
   await t.test('a curl error is not run, carrying the whole curl line', async (t) => {
     assert.equal(
@@ -94,6 +96,32 @@ test('sp__net_n4_grade: N4 never fails on an error line that cannot tell', async
     assert.equal(
       await n4(t, 'n4-refused'),
       'pass|curl: (7) Failed to connect to 169.254.169.254 port 80 after 0 ms: Operation not permitted',
+    );
+  });
+
+  await t.test('a control that ended differently passes', async (t) => {
+    assert.equal(
+      await n4(t, 'n4-curl-error', '28', 'curl: (28) Connection timed out after 5001 milliseconds'),
+      "pass|the session's connect ended differently from the same call issued unsandboxed from the probe's own shell: session: curl: (7) Failed to connect to 169.254.169.254 port 80 after 2 ms: Couldn't connect to server; unsandboxed control: curl: (28) Connection timed out after 5001 milliseconds",
+    );
+  });
+
+  await t.test('a control that ended the same way is not run', async (t) => {
+    assert.equal(
+      await n4(
+        t,
+        'n4-curl-error',
+        '7',
+        "curl: (7) Failed to connect to 169.254.169.254 port 80 after 0 ms: Couldn't connect to server",
+      ),
+      "not run|curl's error line cannot tell a refused connect from an unreachable host, and the same call issued unsandboxed from the probe's own shell ended the same way: session: curl: (7) Failed to connect to 169.254.169.254 port 80 after 2 ms: Couldn't connect to server; unsandboxed control: curl: (7) Failed to connect to 169.254.169.254 port 80 after 0 ms: Couldn't connect to server",
+    );
+  });
+
+  await t.test('a control that got a response passes', async (t) => {
+    assert.equal(
+      await n4(t, 'n4-curl-error', '0', 'a response (12 bytes)'),
+      "pass|refused in the session while the same call, unsandboxed from the probe's own shell, got a response: session: curl: (7) Failed to connect to 169.254.169.254 port 80 after 2 ms: Couldn't connect to server; unsandboxed control: a response (12 bytes)",
     );
   });
 });
