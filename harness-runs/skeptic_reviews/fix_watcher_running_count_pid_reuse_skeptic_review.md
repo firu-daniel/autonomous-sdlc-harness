@@ -16,7 +16,7 @@ The one net-new finding is in the tests. The two cases titled "drops its pid", w
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Make the resumed-run pid-drop tests fail when `classify_run_exit`'s `pid ""` is reverted _(layer: cli)_
+1. [x] **Finding 1** — Make the resumed-run pid-drop tests fail when `classify_run_exit`'s `pid ""` is reverted _(layer: cli)_
 
 ---
 

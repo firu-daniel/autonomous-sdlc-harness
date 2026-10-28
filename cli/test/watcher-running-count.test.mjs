@@ -11,8 +11,8 @@
  * as the `classify_run_exit` and `reconcile_stale_runs` arms these cases drive.
  *
  * A session's terminal write can land before `spawn_engine`'s parent writes `pid "$!"`, leaving the
- * session's own dead subshell pid on the record, so a session-written terminal record is asserted to
- * hold `''` or a pid that no longer answers `kill -0`, never `''` alone.
+ * session's own dead subshell pid on the record. The resume cases' stubs sleep first so the parent's
+ * write lands before the session's, and the cases assert `''` strictly.
  */
 
 import assert from 'node:assert/strict';
@@ -58,11 +58,6 @@ async function runningCount(t, f) {
   );
   assert.equal(result.status, 0, `running_count exited ${result.status}\n${result.stderr}`);
   return result.stdout;
-}
-
-/** A session-written terminal record's pid: dropped, or the session's own exited subshell. */
-function assertPidDropped(pid) {
-  if (pid !== '') assert.throws(() => process.kill(Number(pid), 0), { code: 'ESRCH' });
 }
 
 test('a completed and a failed record holding a live pid count 0', async (t) => {
@@ -114,8 +109,8 @@ test('a running record whose process is gone is reconciled to failed with its pi
 });
 
 for (const [label, stub, status] of [
-  ['completed', ':', 'completed'],
-  ['failed', 'exit 3', 'failed'],
+  ['completed', 'sleep 1; :', 'completed'],
+  ['failed', 'sleep 1; exit 3', 'failed'],
 ]) {
   test(`a parked run resumed on its answer ends ${label} and drops its pid`, async (t) => {
     const f = await createWatcherFixture(t);
@@ -130,7 +125,8 @@ for (const [label, stub, status] of [
     assert.equal(f.prompts().length, 1, `expected one resume:\n${f.watcherLog()}`);
     const record = f.record();
     assert.equal(record.status, status, f.watcherLog());
-    assertPidDropped(record.pid);
+    // The stub sleeps past spawn_engine's `pid "$!"` write, so the session's terminal write lands last.
+    assert.equal(record.pid, '', f.watcherLog());
     assert.equal(await runningCount(t, f), '0\n');
   });
 }
