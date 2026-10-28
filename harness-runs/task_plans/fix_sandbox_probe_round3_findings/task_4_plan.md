@@ -17,12 +17,14 @@ Every other non-`ran` layer (sandbox, network, file-tool) stays `fail` with toda
 
 **Work:**
 
-- [ ] In `sp__pc_refusal`, ahead of the `if [ "$SP_LAYER" != ran ]` block, add the permission-layer arm specified above.
-- [ ] The comment above `sp__pc_refusal` gains one clause: a permission-layer refusal is `not run`.
-- [ ] Check every caller of `sp__pc_refusal` (`sp__pc_c1`, `sp__pc_cw3`, `sp__pc_clone_row`, `sp__pc_cs15`) for a branch that would treat `not run` differently from today's `fail`. None should need an edit. If one does, make it read `not run` as its callers already do for an unissued call.
+- [x] In `sp__pc_refusal`, ahead of the `if [ "$SP_LAYER" != ran ]` block, add the permission-layer arm specified above.
+- [x] The comment above `sp__pc_refusal` gains one clause: a permission-layer refusal is `not run`.
+- [x] Check every caller of `sp__pc_refusal` (`sp__pc_c1`, `sp__pc_cw3`, `sp__pc_clone_row`, `sp__pc_cs15`) for a branch that would treat `not run` differently from today's `fail`. None should need an edit. If one does, make it read `not run` as its callers already do for an unissued call.
 
 **Verification:**
 
 - `grep -n 'refused at the permission layer, so it never reached the wrapper' scripts/lib/sandbox-probe/legs-planted.sh` returns the one new line.
 - By hand, from a temp directory: in a `bash -c` that sources `core.sh`, `judge.sh`, `controls.sh` and this file, call `sp__pc_refusal` on the existing `cli/test/fixtures/sandbox-probe/p1b-permission.jsonl` with P1b's fixture command. It sets `not run` and the new text. (Task 10 adds the CS15-shaped fixture.)
 - The type check (`bash scripts/typecheck.sh`) parses the file.
+  - **Deviations from plan:** The by-hand check's direct `bash -c` from `$TMPDIR` was refused by the permission profile (*"Permission to use Bash has been denied because Claude Code is running in don't ask mode."*). It was run instead through the probe route, `bash scripts/scratch-run.sh harness-runs/scratch/task4_pc_refusal.mjs`, which spawns the same `bash -c` (sourcing `core.sh`, `judge.sh`, `controls.sh`, `legs-planted.sh`) with `cwd` set to `os.tmpdir()`. On `p1b-permission.jsonl` with P1b's fixture command it printed `not run|refused at the permission layer, so it never reached the wrapper: Permission to use Bash has been denied because Claude Code is running in don't ask mode.|layer=permission`. As a control, `sandbox-dd.jsonl` still printed `fail|the wrapper did not run: refused at sandbox: dd: @FIXTURE_ROOT@/outside/probe: Operation not permitted|layer=sandbox`. A first draft, `harness-runs/scratch/task4_pc_refusal.sh`, stays in the scratch directory because the `rm` was refused too. Nothing in the scratch directory is committed.
+  - **Callers checked:** `sp__pc_c1` (line 263), `sp__pc_cw3` (line 299), `sp__pc_clone_row` (line 448) and `sp__pc_cs15` (lines 512, 516, 519–525) all branch on `"not run"` already, so none was edited. `sp__pc_print`'s marker check is independent of the verdict and still fails a row whose marker exists.

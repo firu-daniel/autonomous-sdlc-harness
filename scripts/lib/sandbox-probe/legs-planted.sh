@@ -179,7 +179,8 @@ sp__pc_session() {
 }
 
 # sp__pc_refusal <stream> <exact command> <prefix> <wanted text> — pass when the wrapper ran and printed a
-# line carrying <prefix> and then <wanted text>, compared case-insensitively. Sets SP__PC_RV and SP__PC_RE.
+# line carrying <prefix> and then <wanted text>, compared case-insensitively; not run when the call was refused
+# at the permission layer. Sets SP__PC_RV and SP__PC_RE.
 sp__pc_refusal() {
   local stream="$1" cmd="$2" prefix want text line low
   prefix="$(sp__pc_lower "$3")"
@@ -191,6 +192,11 @@ sp__pc_refusal() {
     return 0
   fi
   text="${SP__TEXT:-}"
+  if [ "$SP_LAYER" = permission ]; then
+    SP__PC_RV="not run"
+    SP__PC_RE="refused at the permission layer, so it never reached the wrapper: $SP_EVIDENCE"
+    return 0
+  fi
   if [ "$SP_LAYER" != ran ]; then
     SP__PC_RV=fail
     SP__PC_RE="the wrapper did not run: refused at $SP_LAYER: $SP_EVIDENCE"
