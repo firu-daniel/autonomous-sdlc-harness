@@ -21,7 +21,7 @@ This review ran no suite. Whether the tests pass is for the Run gates phase to e
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Put `spawn_refused`'s `status failed` and `pid ""` into one `registry_set` call, in the template and the root copy _(layer: cli, general)_
+1. [x] **Finding 1** — Put `spawn_refused`'s `status failed` and `pid ""` into one `registry_set` call, in the template and the root copy _(layer: cli, general)_
 
 ---
 

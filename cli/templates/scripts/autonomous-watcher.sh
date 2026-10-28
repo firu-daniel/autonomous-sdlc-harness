@@ -2385,8 +2385,7 @@ spawn_refuse() {
 # when it returns 1: the record goes to `failed`, with one `failed`
 # notification naming the reason, and no pid stays attached.
 spawn_refused() {
-  registry_set "$1" status failed
-  registry_set "$1" pid ""
+  registry_set "$1" status failed pid ""
   notify failed "$1" "$2" "not launched: ${SPAWN_REFUSAL:-the launch was refused}"
 }
 
