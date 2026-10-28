@@ -118,7 +118,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_sandbox_probe_round3_fin
 
 1. [x] **Task 1** — Restate the changed legs' expectations in the leg table and Gate 15, and make CS8 (b) a probe half there _(layer: general)_ _(points: 15)_
 2. [x] **Task 2** — Allow and screen CW6's prefixed call, name its answering layer, and screen every measured wrapper call for a permission-layer refusal _(layer: general)_ _(points: 20)_
-3. [ ] **Task 3** — Grade a `dd`, a CS3 call or CL5's `git config` refused at the permission layer as not run _(layer: general)_ _(points: 18)_
+3. [x] **Task 3** — Grade a `dd`, a CS3 call or CL5's `git config` refused at the permission layer as not run _(layer: general)_ _(points: 18)_
 4. [ ] **Task 4** — Grade a planted-config wrapper call refused at the permission layer as not run _(layer: general)_ _(points: 8)_
 5. [ ] **Task 5** — Grade N4 against the same call issued unsandboxed from the probe's own shell _(layer: general)_ _(points: 15)_
 6. [ ] **Task 6** — Add CS8 (b) as a probe-graded half through the watcher's own `run_profile_check`, and grade CS8 (a)'s unreached call as not run _(layer: general)_ _(points: 20)_

@@ -28,12 +28,21 @@
 # CS3's `git fetch origin` is an expected refusal: the clone layout has no network route to origin
 # (docs/sandbox-verification.md §7 OR2), so it passes at layer `network` and fails at layer `ran`.
 #
-# THE GRADING FUNCTIONS read only their arguments, the stream and (W8) SP_RUN_PROFILE, and call only
-# core.sh, judge.sh, controls.sh and this file's functions:
+# THE GRADING FUNCTIONS read only their arguments, the stream, (W8) SP_RUN_PROFILE and (sp__git_cs3_state)
+# the clone's git state through SP_CLONE and SP_BRANCH, and call only core.sh, judge.sh, controls.sh and
+# this file's functions:
 #   sp__wp_tracked [<exclude>]                         a tracked regular file in the clone, or nothing
+#   sp__wp_dd_grade <stream> <exact dd command>        one dd: SP__WP_DD_V, SP__WP_DD_E
 #   sp__wp_cs7_edit <stream> <run profile>             CS7's Edit half: SP__WP_EDIT_V, SP__WP_EDIT_E
 #   sp__wp_w8 <departure> <write-protection log> <W7 log, or empty>    W8's result line
 #   sp__git_cs3_fetch <stream> <command>               CS3's fetch: SP__GIT_FETCH_V, SP__GIT_FETCH_E
+#   sp__git_cs3_call <stream> <exact command>          one CS3 call: SP__GIT_CALL_V, SP__GIT_CALL_E
+#   sp__git_cs3_state <ref before> <a> <b> <marker> <x> <stash count before> <unrun>
+#                                                      CS3's state checks: SP__GIT_STATE_F, SP__GIT_STATE_P
+#   sp__git_cl5_grade <stream> <exact command>         CL5's git config: SP_VERDICT, SP_EVIDENCE
+# A call refused at the permission layer is `not run`, never `fail`; CS3 is `fail` on any failure from a
+# call that ran, the fetch or a state check whose calls all ran, else `not run` when any call did not
+# run, else `pass`.
 #
 # SOURCED, NEVER EXECUTED. It sets no shell option: the entry point owns `set -u`. Bash 3.2 floor.
 
@@ -75,6 +84,12 @@ SP__WP_EDIT_V=""
 SP__WP_EDIT_E=""
 SP__GIT_FETCH_V=""
 SP__GIT_FETCH_E=""
+SP__WP_DD_V=""
+SP__WP_DD_E=""
+SP__GIT_CALL_V=""
+SP__GIT_CALL_E=""
+SP__GIT_STATE_F=""
+SP__GIT_STATE_P=""
 
 # sp__wp_expand <path> — print <path> with a sibling-copy glob re-rooted at SP_CLONE. Status 1 when the
 # clone does not match the glob, 2 when the path carries more than one `*` segment.
@@ -465,10 +480,34 @@ sp__wp_cleanup() {
   done
 }
 
+# sp__wp_dd_grade <stream> <exact dd command> — one dd: SP__WP_DD_V and SP__WP_DD_E. A permission-layer
+# refusal never reached the sandbox the row measures, so it is `not run`.
+sp__wp_dd_grade() {
+  sp_judge_call "$1" sandbox "$2"
+  case "$SP_LAYER" in
+    sandbox)
+      SP__WP_DD_V=pass
+      SP__WP_DD_E="$SP_EVIDENCE"
+      ;;
+    "")
+      SP__WP_DD_V="not run"
+      SP__WP_DD_E="$SP_EVIDENCE"
+      ;;
+    permission)
+      SP__WP_DD_V="not run"
+      SP__WP_DD_E="refused at the permission layer, so it never reached the sandbox: $SP_EVIDENCE"
+      ;;
+    *)
+      SP__WP_DD_V=fail
+      SP__WP_DD_E="$SP_LAYER: $SP_EVIDENCE"
+      ;;
+  esac
+}
+
 # sp__wp_judge_row <row> <stream> <helper command> — sets SP__WP_RV and SP__WP_RE from every dd and
 # rename target of <row>.
 sp__wp_judge_row() {
-  local row="$1" stream="$2" hcmd="$3" i=0 n=${#SP__WP_T[@]} t cmd mv_text="" mv_seen=0 line ino sum
+  local row="$1" stream="$2" hcmd="$3" i=0 n=${#SP__WP_T[@]} t mv_text="" mv_seen=0 line ino sum
   local fails="" notrun="" passed=0 why
   sp_judge_call "$stream" sandbox "$hcmd"
   if [ "$SP__COUNT" -gt 0 ] && [ "$SP__STATUS" != none ]; then
@@ -488,11 +527,10 @@ sp__wp_judge_row() {
     fi
     why=""
     # The dd.
-    cmd="$(sp__wp_dd "$t")"
-    sp_judge_call "$stream" sandbox "$cmd"
-    case "$SP_VERDICT" in
-      fail) why="dd $t: $SP_LAYER: $SP_EVIDENCE" ;;
-      "not run") notrun="${notrun:+$notrun; }dd $t: $SP_EVIDENCE" ;;
+    sp__wp_dd_grade "$stream" "$(sp__wp_dd "$t")"
+    case "$SP__WP_DD_V" in
+      fail) why="dd $t: $SP__WP_DD_E" ;;
+      "not run") notrun="${notrun:+$notrun; }dd $t: $SP__WP_DD_E" ;;
     esac
     # The rename.
     if [ "$mv_seen" -eq 0 ]; then
@@ -942,10 +980,107 @@ sp__git_cs3_fetch() {
   esac
 }
 
+# sp__git_cs3_call <stream> <exact command> — one CS3 call expected to run: SP__GIT_CALL_V and
+# SP__GIT_CALL_E. SP__TEXT is left as sp_judge_call set it: the CS3 loop reads it next.
+sp__git_cs3_call() {
+  sp_judge_call "$1" ran "$2"
+  case "$SP_LAYER" in
+    ran)
+      SP__GIT_CALL_V=pass
+      SP__GIT_CALL_E="$SP_EVIDENCE"
+      ;;
+    "")
+      SP__GIT_CALL_V="not run"
+      SP__GIT_CALL_E="$SP_EVIDENCE"
+      ;;
+    permission)
+      SP__GIT_CALL_V="not run"
+      SP__GIT_CALL_E="refused at the permission layer, so it never ran: $SP_EVIDENCE"
+      ;;
+    *)
+      SP__GIT_CALL_V=fail
+      SP__GIT_CALL_E="$SP_LAYER: $SP_EVIDENCE"
+      ;;
+  esac
+}
+
+# sp__git_cs3_state <ref before> <a> <b> <marker> <x> <stash count before> <unrun> — CS3's commit, stash
+# and HEAD checks against SP_CLONE: SP__GIT_STATE_F (failures, `; `-joined) and SP__GIT_STATE_P (evidence
+# parts). <unrun> holds the words add, commit, push, pop, switch of calls graded `not run`; a check
+# depending on one of them is skipped rather than failed on state its call never changed.
+sp__git_cs3_state() {
+  local ref="$1" a="$2" b="$3" marker="$4" x="$5" before_stash="$6" unrun=" $7 " after after_stash head
+  SP__GIT_STATE_F=""
+  SP__GIT_STATE_P=""
+  case "$unrun" in
+    *" add "* | *" commit "*)
+      SP__GIT_STATE_P="commit: not checked, git add or git commit did not run"
+      ;;
+    *)
+      sp_judge_ref "$SP_CLONE" "refs/heads/$SP_BRANCH" "$ref" moved
+      SP__GIT_STATE_P="commit: $SP_EVIDENCE"
+      if [ "$SP_VERDICT" != pass ]; then
+        SP__GIT_STATE_F="commit: $SP_EVIDENCE"
+      else
+        after="$(git -C "$SP_CLONE" rev-parse --verify -q "refs/heads/$SP_BRANCH" 2>/dev/null)" || after=""
+        if [ -z "$(git -C "$SP_CLONE" diff --name-only "$ref" "$after" -- "$a" 2>/dev/null)" ]; then
+          SP__GIT_STATE_F="the commit does not carry $a"
+        fi
+      fi
+      ;;
+  esac
+  case "$unrun" in
+    *" push "* | *" pop "*)
+      SP__GIT_STATE_P="$SP__GIT_STATE_P; stash: not checked, git stash push or git stash pop did not run"
+      ;;
+    *)
+      after_stash="$(git -C "$SP_CLONE" stash list 2>/dev/null | wc -l | tr -d ' ')"
+      if [ "$after_stash" != "$before_stash" ]; then
+        SP__GIT_STATE_F="${SP__GIT_STATE_F:+$SP__GIT_STATE_F; }stash list $before_stash..$after_stash entries"
+      elif ! grep -qxF -- "$marker" "$SP_CLONE/$b" 2>/dev/null; then
+        SP__GIT_STATE_F="${SP__GIT_STATE_F:+$SP__GIT_STATE_F; }the stash pop did not restore the change to $b"
+      else
+        SP__GIT_STATE_P="$SP__GIT_STATE_P; stash: the change to $b restored, stash list $after_stash entries"
+      fi
+      ;;
+  esac
+  case "$unrun" in
+    *" switch "*)
+      SP__GIT_STATE_P="$SP__GIT_STATE_P; switch: not checked, git switch -c did not run"
+      ;;
+    *)
+      head="$(git -C "$SP_CLONE" rev-parse --abbrev-ref HEAD 2>/dev/null)" || head=""
+      if [ "$head" = "$x" ]; then
+        SP__GIT_STATE_P="$SP__GIT_STATE_P; switch: HEAD is $x"
+      else
+        SP__GIT_STATE_F="${SP__GIT_STATE_F:+$SP__GIT_STATE_F; }switch: HEAD is '${head:-unreadable}', not $x"
+      fi
+      ;;
+  esac
+}
+
+# sp__git_cl5_grade <stream> <exact command> — CL5's `git config` when the key did not land: SP_VERDICT
+# and SP_EVIDENCE. A permission-layer refusal never reached the sandbox CL5 measures, so it is `not run`.
+sp__git_cl5_grade() {
+  sp_judge_call "$1" sandbox "$2"
+  case "$SP_LAYER" in
+    sandbox)
+      if ! sp__line_with "${SP__TEXT:-}" "could not lock config file" >/dev/null; then
+        SP_VERDICT=fail
+        SP_EVIDENCE="refused, but with no 'could not lock config file' line: $SP_EVIDENCE"
+      fi
+      ;;
+    permission)
+      SP_VERDICT="not run"
+      SP_EVIDENCE="refused at the permission layer, so it never reached the sandbox: $SP_EVIDENCE"
+      ;;
+  esac
+}
+
 sp_leg_git() {
-  local a b x marker ref before_stash after_stash pfile departure prefix cmd text
+  local a b x marker ref before_stash pfile departure prefix cmd text
   local c_add c_commit c_url c_fetch c_push c_pop c_switch c_cl5 c_ctl
-  local allowed parts="" fails="" notrun="" url="" head after got
+  local allowed parts="" fails="" notrun="" unrun="" url="" got
   allowed=()
   x="sbx_cs3_switch"
   marker="sandbox probe CS3"
@@ -1016,10 +1151,19 @@ sp_leg_git() {
 
   # --- CS3, judged by ref, stash and branch state; the tool results only name the layer.
   for cmd in "$c_add" "$c_commit" "$c_url" "$c_push" "$c_pop" "$c_switch"; do
-    sp_judge_call "$SP_STREAM" ran "$cmd"
-    case "$SP_VERDICT" in
-      "not run") notrun="${notrun:+$notrun; }$cmd: $SP_EVIDENCE" ;;
-      fail) fails="${fails:+$fails; }$cmd: $SP_LAYER: $SP_EVIDENCE" ;;
+    sp__git_cs3_call "$SP_STREAM" "$cmd"
+    case "$SP__GIT_CALL_V" in
+      "not run")
+        notrun="${notrun:+$notrun; }$cmd: $SP__GIT_CALL_E"
+        case "$cmd" in
+          "$c_add") unrun="${unrun:+$unrun }add" ;;
+          "$c_commit") unrun="${unrun:+$unrun }commit" ;;
+          "$c_push") unrun="${unrun:+$unrun }push" ;;
+          "$c_pop") unrun="${unrun:+$unrun }pop" ;;
+          "$c_switch") unrun="${unrun:+$unrun }switch" ;;
+        esac
+        ;;
+      fail) fails="${fails:+$fails; }$cmd: $SP__GIT_CALL_E" ;;
       pass)
         text="${SP__TEXT:-}"
         case "$cmd" in
@@ -1041,30 +1185,9 @@ sp_leg_git() {
     fail) fails="${fails:+$fails; }$c_fetch: $SP__GIT_FETCH_E" ;;
     "not run") notrun="${notrun:+$notrun; }$c_fetch: $SP__GIT_FETCH_E" ;;
   esac
-  sp_judge_ref "$SP_CLONE" "refs/heads/$SP_BRANCH" "$ref" moved
-  parts="commit: $SP_EVIDENCE"
-  if [ "$SP_VERDICT" != pass ]; then
-    fails="${fails:+$fails; }commit: $SP_EVIDENCE"
-  else
-    after="$(git -C "$SP_CLONE" rev-parse --verify -q "refs/heads/$SP_BRANCH" 2>/dev/null)" || after=""
-    if [ -z "$(git -C "$SP_CLONE" diff --name-only "$ref" "$after" -- "$a" 2>/dev/null)" ]; then
-      fails="${fails:+$fails; }the commit does not carry $a"
-    fi
-  fi
-  after_stash="$(git -C "$SP_CLONE" stash list 2>/dev/null | wc -l | tr -d ' ')"
-  if [ "$after_stash" != "$before_stash" ]; then
-    fails="${fails:+$fails; }stash list $before_stash..$after_stash entries"
-  elif ! grep -qxF -- "$marker" "$SP_CLONE/$b" 2>/dev/null; then
-    fails="${fails:+$fails; }the stash pop did not restore the change to $b"
-  else
-    parts="$parts; stash: the change to $b restored, stash list $after_stash entries"
-  fi
-  head="$(git -C "$SP_CLONE" rev-parse --abbrev-ref HEAD 2>/dev/null)" || head=""
-  if [ "$head" = "$x" ]; then
-    parts="$parts; switch: HEAD is $x"
-  else
-    fails="${fails:+$fails; }switch: HEAD is '${head:-unreadable}', not $x"
-  fi
+  sp__git_cs3_state "$ref" "$a" "$b" "$marker" "$x" "$before_stash" "$unrun"
+  [ -z "$SP__GIT_STATE_F" ] || fails="${fails:+$fails; }$SP__GIT_STATE_F"
+  parts="$SP__GIT_STATE_P"
   parts="$parts; origin: ${url:-not read}"
   [ "$SP__GIT_FETCH_V" != pass ] || parts="$parts; fetch: $SP__GIT_FETCH_E"
   if [ -n "$fails" ]; then
@@ -1084,11 +1207,7 @@ sp_leg_git() {
     sp_row_result --direct git CL5 fail "sbx.probe=$got landed in $SP_CLONE/.git/config (unset after the session)" \
       "$departure"
   else
-    sp_judge_call "$SP_STREAM" sandbox "$c_cl5"
-    if [ "$SP_VERDICT" = pass ] && ! sp__line_with "${SP__TEXT:-}" "could not lock config file" >/dev/null; then
-      SP_VERDICT=fail
-      SP_EVIDENCE="refused, but with no 'could not lock config file' line: $SP_EVIDENCE"
-    fi
+    sp__git_cl5_grade "$SP_STREAM" "$c_cl5"
     sp_row_result --direct git CL5 "$SP_VERDICT" "$SP_EVIDENCE" "$departure"
   fi
 
