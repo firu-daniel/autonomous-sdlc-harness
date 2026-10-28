@@ -1,14 +1,15 @@
 /**
  * The sandbox probe's write-protection and git-leg helpers (`sp__wp_w8`, `sp__wp_cs7_edit`,
- * `sp__git_cs3_fetch`, `sp__wp_dd_grade`, `sp__git_cs3_call`, `sp__git_cl5_grade`, `sp__wp_tracked` in
+ * `sp__git_cs3_fetch`, `sp__wp_dd_grade`, `sp__git_cs3_call`, `sp__git_cs3_state`, `sp__git_cl5_grade`,
+ * `sp__wp_tracked` in
  * `scripts/lib/sandbox-probe/legs-protection.sh`), run over the recorded streams and debug logs in
  * `fixtures/sandbox-probe/` and over a repository each case seeds.
  *
  * **The rule these tests exist to enforce: W8 needs both sessions' debug logs, CS7 includes its `Edit`
  * and passes it only on a refusal that names a protection (the Edit tool's read-before-write refusal is
  * `not run`), CS3's fetch refusal is the clone layout's design, a call refused at the permission layer
- * never reached the layer CS1, CS2, CS7, CS3 and CL5 measure, and is `not run`, and no probe helper
- * writes `Broken pipe`.**
+ * never reached the layer CS1, CS2, CS7, CS3 and CL5 measure, and is `not run`, and a CS3 state check
+ * depending on such a call is skipped rather than failed, and no probe helper writes `Broken pipe`.**
  *
  * Fixtures are passed unsubstituted: no function here requires an absolute path, and W8's rule and its
  * unmatched-rule line both spell `@FIXTURE_ROOT@`, so the substring match holds as recorded.
@@ -267,6 +268,54 @@ test('sp__git_cl5_grade: a permission-layer refusal of CL5’s git config is not
 
   await t.test('a session with no git config is not run', async (t) => {
     assert.equal(await cl5(t, fixture('sandbox-dd')), `not run|no Bash call "${CL5_CMD}" in the session`);
+  });
+});
+
+test('sp__git_cs3_state: a state check whose call did not run is skipped, never failed', async (t) => {
+  /** Runs `sp__git_cs3_state` over a clone whose state no CS3 call changed; returns `[F, P]`. */
+  async function state(t, unrun) {
+    const dir = await caseDir(t);
+    const clone = join(dir, 'clone');
+    await mkdir(clone);
+    await seedRepository(clone, { remote: false });
+    await runGit(clone, ['checkout', '-q', '-b', 'sbx_probe']);
+    await writeFile(join(clone, 'b.txt'), 'seed\n');
+    await runGit(clone, ['add', 'b.txt']);
+    await runGit(clone, ['commit', '--quiet', '-m', 'seed']);
+    const ref = (await runGit(clone, ['rev-parse', 'refs/heads/sbx_probe'])).stdout.trim();
+    const run = await sourced(
+      dir,
+      'sp__git_cs3_state "$@"; printf \'%s|%s\' "$SP__GIT_STATE_F" "$SP__GIT_STATE_P"',
+      [ref, 'b.txt', 'b.txt', 'sandbox probe CS3', 'sbx_cs3_switch', '0', unrun],
+      { SP_CLONE: clone, SP_BRANCH: 'sbx_probe' },
+    );
+    assert.equal(run.status, 0, run.stderr);
+    return run.stdout.split('|');
+  }
+
+  await t.test('every dependent call not run: no failure, three not-checked parts', async (t) => {
+    const [fails, parts] = await state(t, 'add commit push pop switch');
+    assert.equal(fails, '');
+    assert.equal(
+      parts,
+      'commit: not checked, git add or git commit did not run; ' +
+        'stash: not checked, git stash push or git stash pop did not run; ' +
+        'switch: not checked, git switch -c did not run',
+    );
+  });
+
+  await t.test('every call ran: the unchanged state is three failures', async (t) => {
+    const [fails] = await state(t, '');
+    assert.match(
+      fails,
+      /^commit: .*; the stash pop did not restore the change to b\.txt; switch: HEAD is 'sbx_probe', not sbx_cs3_switch$/,
+    );
+  });
+
+  await t.test('only switch not run: the commit and stash failures stay, no switch failure', async (t) => {
+    const [fails] = await state(t, 'switch');
+    assert.match(fails, /^commit: .*; the stash pop did not restore the change to b\.txt$/);
+    assert.doesNotMatch(fails, /switch:/);
   });
 });
 
