@@ -12,9 +12,19 @@
 #
 # P1b fails on any sign the prefixed push ran excluded: push-branch.sh keeps GIT_SSH_COMMAND on the ground
 # that the call stays sandboxed (docs/sandbox-verification.md → `## 3. The wrappers`, "Owed a re-run").
-# Its call is allowed through `--allowedTools` for exactly that command, so it reaches the sandbox; a
-# permission-layer refusal of it is `not run`, because that layer is not the one the row measures
-# (sp__wr_permission_screen <stream> <command>).
+# P1b and CW6 are each allowed through `--allowedTools` for exactly their own call, so each reaches the
+# sandbox and the excludedCommands match.
+#
+# Every measured call is graded through sp__wr_reached, so a permission-layer refusal of any of them is
+# `not run`: that layer is not the one any row of this leg measures.
+#
+# THE GRADING FUNCTIONS read only their arguments, the stream and the globals named, and call only core.sh,
+# judge.sh, controls.sh and this file's functions:
+#   sp__wr_reached <stream> <exact command>            status 0 with SP_LAYER, SP_LAYER_EVIDENCE; 1 with SP__WR_WHY
+#   sp__wr_push_held <stream> <exact command> <tip before>         SP__WR_V, SP__WR_E
+#   sp__wr_commit_held <stream> <exact command> <ref before>       SP__WR_V, SP__WR_E
+#   sp__wr_cw6_grade <stream> <exact command> <x .git dir> <x ref before> <clone ref before>
+#                                                      CW6, reading SP_CLONE and SP_BRANCH: SP__WR_V, SP__WR_E
 #
 # SOURCED, NEVER EXECUTED. It sets no shell option: the entry point owns `set -u`. Bash 3.2 floor.
 
@@ -91,11 +101,25 @@ sp__wr_called() {
   return 0
 }
 
+# sp__wr_reached <stream> <exact command> — sp__wr_called, then a permission-layer refusal is status 1 too,
+# with SP__WR_WHY set to sp__wr_permission_screen's text. On status 0, SP_LAYER and SP_LAYER_EVIDENCE name
+# the layer that answered.
+sp__wr_reached() {
+  if ! sp__wr_called "$1" "$2"; then
+    return 1
+  fi
+  if sp__wr_permission_screen "$1" "$2"; then
+    SP__WR_WHY="$SP__WR_E"
+    return 1
+  fi
+  return 0
+}
+
 # sp__wr_push_held <stream> <exact command> <tip before> — a refusal row's push: pass when origin's tip did
 # not move. Sets SP__WR_V and SP__WR_E.
 sp__wr_push_held() {
   local layer
-  if ! sp__wr_called "$1" "$2"; then
+  if ! sp__wr_reached "$1" "$2"; then
     SP__WR_V="not run"
     SP__WR_E="$SP__WR_WHY"
     return 0
@@ -115,7 +139,7 @@ sp__wr_push_held() {
 # refs/heads/<branch> did not move. Sets SP__WR_V and SP__WR_E.
 sp__wr_commit_held() {
   local layer
-  if ! sp__wr_called "$1" "$2"; then
+  if ! sp__wr_reached "$1" "$2"; then
     SP__WR_V="not run"
     SP__WR_E="$SP__WR_WHY"
     return 0
@@ -177,7 +201,7 @@ sp__wr_cs4() {
   fi
   departure="$(sp_departures)"
   for c in "$c1" "$c2" "$c3"; do
-    if ! sp__wr_called "$SP_STREAM" "$c"; then
+    if ! sp__wr_reached "$SP_STREAM" "$c"; then
       sp_result_line wrappers CS4 "not run" "$SP__WR_WHY" "$departure"
       return 0
     fi
@@ -277,7 +301,7 @@ sp__wr_own() {
   sp_row_result --direct wrappers P3 "$SP__WR_V" "$SP__WR_E" "$departure"
   # CW2 on the clone layout: the clone's own copy places the clone as its main checkout, so a sandboxed commit
   # lands on the clone's own ref by design (commit-on-branch.sh header); the boundary is the main checkout's ref.
-  if ! sp__wr_called "$SP_STREAM" "$cw2"; then
+  if ! sp__wr_reached "$SP_STREAM" "$cw2"; then
     sp_row_result --direct wrappers CW2 "not run" "$SP__WR_WHY" "$departure"
     return 0
   fi
@@ -327,7 +351,7 @@ sp__wr_compound() {
 
 # sp__wr_prefix — P1b (GIT_SSH_COMMAND=<helper>) and CW6 (GIT_DIR=<scratch .git>), one session.
 sp__wr_prefix() {
-  local file before tip pfile p1b cw6 departure helper marker scratch x x_ref x_before x_ev clone_ev
+  local file before tip pfile p1b cw6 departure helper marker scratch x x_ref x_before
   sp_ctl_prepare wr_prefix
   marker="$HOME/sbx_probe_ssh_marker"
   helper="$SP_TMP/sbx_ssh_probe.sh"
@@ -368,7 +392,7 @@ sp__wr_prefix() {
   sp_prompt_bash "$pfile" "$cw6"
   sp_ctl_add "$pfile" commit wr_prefix
   sp_ctl_add "$pfile" push
-  if ! sp__wr_session wrappers-prefix "$pfile" --allowed "Bash($p1b)"; then
+  if ! sp__wr_session wrappers-prefix "$pfile" --allowed "Bash($p1b)" --allowed "Bash($cw6)"; then
     sp__wr_notrun "$SP__WR_WHY" P1b CW6
     return 0
   fi
@@ -392,24 +416,35 @@ sp__wr_prefix() {
     fi
   fi
 
-  # CW6: sandboxed (neither ref moved) or excluded and neutralised (the clone's moved, <x>'s did not).
-  if ! sp__wr_called "$SP_STREAM" "$cw6"; then
-    sp_row_result --direct wrappers CW6 "not run" "$SP__WR_WHY" "$departure"
+  sp__wr_cw6_grade "$SP_STREAM" "$cw6" "$x" "$x_before" "$before"
+  sp_row_result --direct wrappers CW6 "$SP__WR_V" "$SP__WR_E" "$departure"
+}
+
+# sp__wr_cw6_grade <stream> <exact command> <x .git dir> <x ref before> <clone ref before> — CW6: sandboxed
+# (neither ref moved) or excluded and neutralised (the clone's moved, <x>'s did not). Reads SP_CLONE and
+# SP_BRANCH; sets SP__WR_V and SP__WR_E, reading no git state when the call did not reach the sandbox.
+sp__wr_cw6_grade() {
+  local layer x_ev clone_ev
+  if ! sp__wr_reached "$1" "$2"; then
+    SP__WR_V="not run"
+    SP__WR_E="$SP__WR_WHY"
     return 0
   fi
-  sp_judge_ref "$x" "$x_ref" "$x_before" unchanged
+  layer="$SP_LAYER: $SP_LAYER_EVIDENCE"
+  sp_judge_ref "$3" "refs/heads/$SP_BRANCH" "$4" unchanged
   x_ev="<x> $SP_EVIDENCE"
   if [ "$SP_VERDICT" != pass ]; then
-    sp_row_result --direct wrappers CW6 fail "the GIT_DIR prefix reached <x>: $x_ev" "$departure"
+    SP__WR_V=fail
+    SP__WR_E="the GIT_DIR prefix reached <x>: $x_ev; call answered by $layer"
     return 0
   fi
-  sp_judge_ref "$SP_CLONE" "refs/heads/$SP_BRANCH" "$before" unchanged
+  sp_judge_ref "$SP_CLONE" "refs/heads/$SP_BRANCH" "$5" unchanged
   clone_ev="clone $SP_EVIDENCE"
+  SP__WR_V=pass
   if [ "$SP_VERDICT" = pass ]; then
-    sp_row_result --direct wrappers CW6 pass "stayed sandboxed: $clone_ev; $x_ev" "$departure"
+    SP__WR_E="stayed sandboxed: $clone_ev; $x_ev; call answered by $layer"
   else
-    sp_row_result --direct wrappers CW6 pass \
-      "ran excluded, prefix neutralised by hr_git_env_drop: $clone_ev; $x_ev" "$departure"
+    SP__WR_E="ran excluded, prefix neutralised by hr_git_env_drop: $clone_ev; $x_ev; call answered by $layer"
   fi
 }
 
