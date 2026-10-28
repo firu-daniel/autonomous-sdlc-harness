@@ -20,11 +20,16 @@
 # session.sh's sp_stop_pid, so its stop wait is SP__PID_POLLS. With nothing listening, curl's exit 7 cannot tell a refused connect
 # from a reached-but-closed port, so N3 is graded on the body: `fail` when the token reaches the
 # session, `pass` only when it does not while the listener answered the probe's own request after the
-# session. N4's link-local host cannot be bound without root, so N4 is graded on curl's full error line
-# and is `not run` where that line cannot tell a refusal from an unreachable host. The two grades read
-# only their arguments and the stream:
+# session. N4's link-local host cannot be bound without root, and curl's error line alone cannot tell a
+# refusal from an unreachable host, so right after the session the probe issues the same call itself,
+# unsandboxed from its own shell (sp__net_n4_control), and N4 is graded against it: `pass` when the
+# control got a response or ended on a different curl exit code than the session's `curl: (<n>)` line,
+# `not run` when the session's line carries no code or the two ended the same way, curl being off PATH
+# included. Elapsed time is not compared: a host with no link-local route also fails at once. The two
+# grades read only their arguments and the stream:
 #   sp__net_n3_grade <stream> <command> <token> <listener answered: 1|0>
-#   sp__net_n4_grade <stream> <command>
+#   sp__net_n4_grade <stream> <command> [<control exit> <control line>]
+#   sp__net_n4_control <command> — sets SP__NET_N4_CTL_RC and SP__NET_N4_CTL_LINE
 #
 # SOURCED, NEVER EXECUTED. It sets no shell option: the entry point owns `set -u`. Bash 3.2 floor.
 
@@ -46,6 +51,8 @@ SP__NET_LISTENER_WHY=""
 SP__NET_LISTENER_PID=""
 SP__NET_PORT=""
 SP__NET_TOKEN=""
+SP__NET_N4_CTL_RC=""
+SP__NET_N4_CTL_LINE=""
 
 # sp__net_profile — cut SP__NET_PROFILE once; status 1 with SP__NET_PROFILE_WHY when it could not be cut.
 sp__net_profile() {
@@ -238,9 +245,32 @@ sp__net_n3_grade() {
   SP_EVIDENCE="no body came back while the listener answered the probe: $line"
 }
 
-# sp__net_n4_grade <stream> <command> — sets SP_VERDICT and SP_EVIDENCE.
+# sp__net_n4_control <command> — issue <command>'s URL once, unsandboxed, from the probe's own shell. Sets
+# SP__NET_N4_CTL_RC (empty when curl is not on PATH) and SP__NET_N4_CTL_LINE. Never retries, and never
+# quotes the body: on a cloud host it is instance metadata.
+sp__net_n4_control() {
+  local cmd="${1:-}" url out rc
+  SP__NET_N4_CTL_RC=""
+  SP__NET_N4_CTL_LINE=""
+  command -v curl >/dev/null 2>&1 || return 0
+  url="${cmd##* }"
+  out="$(curl -sS --max-time 5 "$url" 2>&1)"
+  rc=$?
+  SP__NET_N4_CTL_RC="$rc"
+  if [ "$rc" -eq 0 ]; then
+    SP__NET_N4_CTL_LINE="a response ($(printf '%s' "$out" | wc -c | tr -d ' ') bytes)"
+  else
+    SP__NET_N4_CTL_LINE="$(sp__net_curl_line "$out")" || SP__NET_N4_CTL_LINE="curl exit $rc with no 'curl: (' line"
+  fi
+  return 0
+}
+
+# sp__net_n4_grade <stream> <command> [<control exit> <control line>] — sets SP_VERDICT and SP_EVIDENCE.
 sp__net_n4_grade() {
-  local stream="${1:-}" cmd="${2:-}" host line
+  local stream="${1:-}" cmd="${2:-}" host line code ctl_rc ctl_line have_ctl=0
+  [ "$#" -ge 3 ] && have_ctl=1
+  ctl_rc="${3:-}"
+  ctl_line="${4:-}"
   sp_judge_call "$stream" network "$cmd"
   [ "$SP_VERDICT" = "not run" ] && return 0
   host="${cmd#*://}"
@@ -259,9 +289,31 @@ sp__net_n4_grade() {
         SP_VERDICT=fail
         SP_EVIDENCE="a response came back from $host: $(sp__first_line "$SP__TEXT")"
       else
-        line="$(sp__net_curl_line "$SP__TEXT")" || line="$(sp__first_line "$SP__TEXT")"
-        SP_VERDICT="not run"
-        SP_EVIDENCE="curl's error line cannot tell a refused connect from an unreachable host: $line"
+        code=""
+        if line="$(sp__net_curl_line "$SP__TEXT")"; then
+          code="${line#curl: (}"
+          code="${code%%)*}"
+          case "$code" in '' | *[!0-9]*) code="" ;; esac
+        else
+          line="$(sp__first_line "$SP__TEXT")"
+        fi
+        if [ "$have_ctl" -eq 0 ]; then
+          SP_VERDICT="not run"
+          SP_EVIDENCE="curl's error line cannot tell a refused connect from an unreachable host: $line"
+        elif [ "$ctl_rc" = 0 ]; then
+          SP_VERDICT=pass
+          SP_EVIDENCE="refused in the session while the same call, unsandboxed from the probe's own shell, got a response: session: $line; unsandboxed control: $ctl_line"
+        elif [ -z "$code" ]; then
+          SP_VERDICT="not run"
+          SP_EVIDENCE="no curl exit code in the session's error line to compare: $line"
+        elif [ -n "$ctl_rc" ] && [ "$ctl_rc" != "$code" ]; then
+          SP_VERDICT=pass
+          SP_EVIDENCE="the session's connect ended differently from the same call issued unsandboxed from the probe's own shell: session: $line; unsandboxed control: $ctl_line"
+        else
+          [ -n "$ctl_rc" ] || ctl_line="curl not on PATH"
+          SP_VERDICT="not run"
+          SP_EVIDENCE="curl's error line cannot tell a refused connect from an unreachable host, and the same call issued unsandboxed from the probe's own shell ended the same way: session: $line; unsandboxed control: $ctl_line"
+        fi
       fi
       ;;
   esac
@@ -372,7 +424,8 @@ sp_leg_network() {
       sp_row_result --direct network N3 "$SP_VERDICT" \
         "$SP__NET_LOOPBACK_HOST:$SP__NET_PORT (probe-owned listener): $SP_EVIDENCE; control in the same session: $SP_NET_CONTROL" "$departure"
     fi
-    sp__net_n4_grade "$SP_STREAM" "$c4"
+    sp__net_n4_control "$c4"
+    sp__net_n4_grade "$SP_STREAM" "$c4" "$SP__NET_N4_CTL_RC" "$SP__NET_N4_CTL_LINE"
     sp_row_result --direct network N4 "$SP_VERDICT" \
       "$SP__NET_LINKLOCAL_HOST: $SP_EVIDENCE; control in the same session: $SP_NET_CONTROL" "$departure"
   fi
