@@ -1207,7 +1207,9 @@
 # no job to stop and may complete before its cancel lands — trying every one even
 # after a failure. (3) Only when (1) and (2) all succeeded, and only when a
 # local registry record exists, it writes `remote_stopped_at` and sets `status`
-# to `failed` in one `hr_registry_set` call; a partial stop leaves the record alone
+# to `failed` in one `hr_registry_set` call, which also clears `pid`: a stopped
+# run holds no slot, and a local record's saved pid could otherwise be reused by
+# an unrelated process and read as live; a partial stop leaves the record alone
 # and exits 3, so running `stop` again is the remedy. (4) A complete stop is then
 # reported as `report stopped` with the note `--note <text>` when given, else
 # `Stopped by @<actor>.` under `--actor` (a login, the trigger's shape plus an
@@ -2276,7 +2278,7 @@ verb_stop() {
 
   registry=$(hr_state_path "$root" autonomous_logs/registry.json) || registry=""
   if [ -n "$registry" ] && [ -f "$registry" ] && [ -n "$(hr_registry_get "$registry" "$branch" branch)" ]; then
-    hr_registry_set "$registry" "$branch" remote_stopped_at "$stopped_at" status failed \
+    hr_registry_set "$registry" "$branch" remote_stopped_at "$stopped_at" status failed pid "" \
       || echo "remote-run.sh: stopped on GitHub, but the local record of $branch could not be updated" >&2
   fi
   echo "remote-run.sh: stopped $branch"

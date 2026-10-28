@@ -46,3 +46,9 @@ The verb gate's `status|sync)` arm refuses a record that does not carry `executi
 - `bash -n cli/templates/scripts/remote-run.sh` parses clean. `git diff -- cli/templates/scripts/remote-run.sh` changes only `verb_stop`'s `hr_registry_set` line and the header paragraph that describes it, and `git diff --summary -- cli/templates/scripts/remote-run.sh` reports no mode change.
 - The unit's whole-tree type check (`commands.typecheck`) passes. `git diff -- cli/src/doctor/checks.ts` touches only lines inside the `liveRunCount` doc comment.
 - `git grep -n 'running_count' -- cli/src cli/test` finds no remaining text claiming `running_count` has no status filter.
+
+**Deviations from plan:**
+
+- The two refusal-4 subtests share a suite-local `seedRuns(t, runs)` helper (and a `liveChild(t)` helper spawning `sleep 300`, killed `SIGKILL` in `t.after`) that does the `paused_run` case's seed-and-restore steps unchanged; the `paused_run` case itself was left as it was.
+- Evidence downgrade: the bare `bash -n cli/templates/scripts/remote-run.sh` call was refused by the tool layer. The parse claim rests on the whole-tree `bash scripts/typecheck.sh` run instead, whose `check-shell-parse` step parses every `.sh` that `git ls-files --cached --others --exclude-standard` lists (this file among them) and reported `90 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`.
+- `git grep -n running_count -- cli/src cli/test` still matches `cli/test/watcher-running-count.test.mjs`'s header, which says in the past tense that `running_count` "tested only the pid". That is Task 1's account of the defect, not a claim about the current watcher, so it was left alone.

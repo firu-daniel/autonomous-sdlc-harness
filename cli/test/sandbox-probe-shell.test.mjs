@@ -19,6 +19,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { chmod, cp, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -210,6 +211,47 @@ test('preflight refuses in order, exit 2, leaving nothing behind', async (t) => 
     assert.equal(run.status, 0, run.stderr);
     return run.stdout.trim();
   }
+
+  /** `runs` written as the fixture's run registry, restored when the case ends. */
+  async function seedRuns(t, runs) {
+    const registry = await runLib('hr_state_path', f.dir, 'autonomous_logs/registry.json');
+    const before = existsSync(registry) ? readFileSync(registry) : null;
+    await mkdir(dirname(registry), { recursive: true });
+    await writeFile(registry, `${JSON.stringify({ runs })}\n`);
+    t.after(() => (before === null ? rm(registry, { force: true }) : writeFile(registry, before)));
+  }
+
+  /** The pid of a `sleep` child that lives until the case ends. */
+  function liveChild(t) {
+    const child = spawn('sleep', ['300'], { stdio: 'ignore' });
+    t.after(() => child.kill('SIGKILL'));
+    return String(child.pid);
+  }
+
+  await t.test('4. a completed and a failed run whose pid is a live process are not in flight', async (t) => {
+    const pid = liveChild(t);
+    await seedRuns(t, {
+      done_run: { branch: 'done_run', status: 'completed', pid },
+      lost_run: { branch: 'lost_run', status: 'failed', pid },
+    });
+    const tmp = await caseTmp(t);
+
+    const run = await preflight(f, probe, tmp, agentPass);
+
+    assert.equal(run.status, 0, run.stderr);
+    assert.deepEqual(probeLines(run.stderr), [], run.stderr);
+    assert.deepEqual(await probeLeftovers(tmp), []);
+  });
+
+  await t.test('4. a running record whose pid is live is refused', async (t) => {
+    await seedRuns(t, { live_run: { branch: 'live_run', status: 'running', pid: liveChild(t) } });
+    const tmp = await caseTmp(t);
+
+    const run = await preflight(f, probe, tmp, agentPass);
+
+    assertRefused(run, 'the watcher has 1 run(s) in flight; wait for them or stop them first');
+    assert.deepEqual(await probeLeftovers(tmp), []);
+  });
 
   await t.test('5. a branch tracking a deleted local branch reads [gone], whatever the remote', async (t) => {
     await runGit(f.dir, ['branch', '--quiet', 'base_local']);

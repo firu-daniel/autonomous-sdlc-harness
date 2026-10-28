@@ -358,6 +358,20 @@ test('stop sends the marker first, cancels exactly the active runs, and flips an
   assert.ok(Number(record.remote_stopped_at) >= before, `remote_stopped_at is ${record.remote_stopped_at}`);
 });
 
+test('stop on a local record that still holds a pid flips it to failed and drops the pid', async (t) => {
+  const fx = await remoteFixture(t);
+  mkdirSync(join(fx.dir, STATE_DIR, 'autonomous_logs'), { recursive: true });
+  // No `execution` field: a local record, which the verb gate's `*)` arm lets `stop` reach.
+  writeFileSync(join(fx.dir, REGISTRY), JSON.stringify({ runs: { feat_x: { branch: 'feat_x', status: 'running', pid: '12345' } } }));
+
+  const result = await remoteRun(fx, ['stop', 'feat_x'], { STUB_RUN_LIST: ACTIVE_RUNS });
+  assert.equal(result.status, 0, result.stderr);
+
+  const record = JSON.parse(readFileSync(join(fx.dir, REGISTRY), 'utf8')).runs.feat_x;
+  assert.equal(record.status, 'failed');
+  assert.equal(record.pid, '');
+});
+
 test('stop with no queued, waiting or in-progress run still sends the marker and cancels nothing', async (t) => {
   const fx = await remoteFixture(t);
   const result = await remoteRun(fx, ['stop', 'feat_x'], {
