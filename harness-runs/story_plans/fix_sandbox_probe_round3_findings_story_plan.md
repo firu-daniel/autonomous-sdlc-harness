@@ -122,7 +122,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_sandbox_probe_round3_fin
 4. [x] **Task 4** — Grade a planted-config wrapper call refused at the permission layer as not run _(layer: general)_ _(points: 8)_
 5. [x] **Task 5** — Grade N4 against the same call issued unsandboxed from the probe's own shell _(layer: general)_ _(points: 15)_
 6. [x] **Task 6** — Add CS8 (b) as a probe-graded half through the watcher's own `run_profile_check`, and grade CS8 (a)'s unreached call as not run _(layer: general)_ _(points: 20)_
-7. [ ] **Task 7** — Test the wrappers leg's permission screen and CW6's grading against recorded streams _(layer: cli)_ _(points: 20)_
+7. [x] **Task 7** — Test the wrappers leg's permission screen and CW6's grading against recorded streams _(layer: cli)_ _(points: 20)_
 8. [ ] **Task 8** — Test N4's grading against its unsandboxed control _(layer: cli)_ _(points: 10)_
 9. [ ] **Task 9** — Test the write-protection and git legs' permission-layer grading against recorded streams _(layer: cli)_ _(points: 15)_
 10. [ ] **Task 10** — Test the planted-config refusal's permission-layer grading against a recorded stream _(layer: cli)_ _(points: 10)_
