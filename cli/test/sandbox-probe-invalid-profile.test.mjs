@@ -1,11 +1,13 @@
 /**
- * The sandbox probe's `invalid-profile` leg grading (`sp__cs8a_grade`, `sp__cs8b_check`, `sp__cs8b_grade` in
- * `legs-settings.sh`), run over the recorded streams in `fixtures/sandbox-probe/` and a stub watcher.
+ * The sandbox probe's `invalid-profile` leg grading (`sp__cs8a_grade`, `sp__cs8b_check`, `sp__cs8b_grade`,
+ * `sp__cs8_line` in `legs-settings.sh`), run over the recorded streams in `fixtures/sandbox-probe/` and a stub
+ * watcher.
  *
  * **The rule these tests exist to enforce: CS8 (a) records only a call that reached the sandbox or wrote the
  * marker; CS8 (b) passes only on the watcher check's sandbox-clause refusal of a profile whose
  * `failIfUnavailable` is a string, fails on its acceptance, and is not run when the unmodified profile's control
- * is refused.**
+ * is refused. CS8's one line fails when (b) fails, is `not run` when either half is `not run` or (b) was not
+ * taken, and passes otherwise.**
  *
  * No case launches a session or sources the real watcher (`autonomous-watcher.sh`): `sp__cs8b_check` is aimed
  * at `fixtures/sandbox-probe/cs8b-watcher-stub.sh`, whose `run_profile_check` answers from `CS8B_STUB_RC` and
@@ -156,5 +158,38 @@ test('sp__cs8b_check: reads the check through a sourced watcher and discards the
 
   await t.test('acceptance sets status 0 and an empty refusal', async (t) => {
     assert.equal(await check(t, { CS8B_STUB_RC: '0', CS8B_STUB_REFUSAL: '' }), '0|');
+  });
+});
+
+test('sp__cs8_line: (b) failing fails the row, either half not run is not run, otherwise pass', async (t) => {
+  async function line(t, ...args) {
+    const run = await sourced(await caseDir(t), 'sp__cs8_line "$@"', args);
+    assert.equal(run.status, 0, run.stderr);
+    return run.stdout;
+  }
+  const expected = (result, evidence) =>
+    `leg="invalid-profile" row="CS8" result="${result}" evidence="${evidence}" departure="none" claude="unknown"\n`;
+
+  await t.test('both halves pass', async (t) => {
+    assert.equal(
+      await line(t, 'pass', 'A', 'CTL', 'pass', 'B', ''),
+      expected('pass', '(a) recorded: A; CTL; (b) B'),
+    );
+  });
+
+  await t.test('(b) failing fails the row even with (a) not run', async (t) => {
+    assert.equal(await line(t, 'not run', 'A', '', 'fail', 'B', ''), expected('fail', '(a) not run: A; (b) B'));
+  });
+
+  await t.test('(a) not run with (b) passing is not run', async (t) => {
+    assert.equal(await line(t, 'not run', 'A', '', 'pass', 'B', ''), expected('not run', '(a) not run: A; (b) B'));
+  });
+
+  await t.test('(b) not run with (a) recorded is not run', async (t) => {
+    assert.equal(await line(t, 'pass', 'A', '', 'not run', 'B', ''), expected('not run', '(a) recorded: A; (b) B'));
+  });
+
+  await t.test('(b) not taken is not run', async (t) => {
+    assert.equal(await line(t, 'pass', 'A', '', '', '', ''), expected('not run', '(a) recorded: A; (b) not taken'));
   });
 });

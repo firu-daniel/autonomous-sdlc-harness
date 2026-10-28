@@ -13,7 +13,7 @@ Headline: the four defects the prompt names are addressed in code. CW6 now has i
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 2** — Narrow the `wrappers` leg's "every result names the layer that answered" to the rows whose lines name one, in `core.sh` and Gate 15 together _(layer: general)_
-2. [ ] **Finding 3** — Add a case driving `sp__cs8_line`'s combination of CS8 (a) and (b) into one verdict _(layer: cli)_
+2. [x] **Finding 3** — Add a case driving `sp__cs8_line`'s combination of CS8 (a) and (b) into one verdict _(layer: cli)_
 3. [ ] **Finding 1** — Add a case driving `sp__git_cs3_state`'s skip of a state check whose call did not run _(layer: cli)_
 
 ---
