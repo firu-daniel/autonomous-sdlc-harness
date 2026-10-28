@@ -43,7 +43,7 @@ The other `kill -0` sites in the tree do not read a registry `pid`. They are `ha
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_watcher_running_count_pid_reuse/task_<K>_plan.md`. The entries are ordered bottom-up by ship sequence, with the catch-all layer last.
 
-1. [ ] **Task 1** — Count only `running` records in `running_count` and drop the `pid` on every terminal write, in the watcher template _(layer: cli)_ _(points: 20)_
+1. [x] **Task 1** — Count only `running` records in `running_count` and drop the `pid` on every terminal write, in the watcher template _(layer: cli)_ _(points: 20)_
 2. [ ] **Task 2** — Cover the probe's refusal 4 against a finished run's live pid, drop the pid on `remote-run.sh stop`, and correct the two doctor comments the fix falsifies _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Bring the root watcher and `remote-run.sh` level with their templates and name this branch in PD19's follow-up cell _(layer: general)_ _(points: 10)_
 
