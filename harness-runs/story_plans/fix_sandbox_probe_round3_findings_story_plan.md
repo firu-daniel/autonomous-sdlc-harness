@@ -127,7 +127,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_sandbox_probe_round3_fin
 9. [x] **Task 9** — Test the write-protection and git legs' permission-layer grading against recorded streams _(layer: cli)_ _(points: 15)_
 10. [x] **Task 10** — Test the planted-config refusal's permission-layer grading against a recorded stream _(layer: cli)_ _(points: 10)_
 11. [x] **Task 11** — Test CS8 (a)'s and CS8 (b)'s grading against recorded streams and a stub watcher _(layer: cli)_ _(points: 15)_
-12. [ ] **Task 12** — Amend the call and Expected columns of the rows whose grading this branch changes _(layer: general)_ _(points: 20)_
+12. [x] **Task 12** — Amend the call and Expected columns of the rows whose grading this branch changes _(layer: general)_ _(points: 20)_
 
 ## Scope register
 

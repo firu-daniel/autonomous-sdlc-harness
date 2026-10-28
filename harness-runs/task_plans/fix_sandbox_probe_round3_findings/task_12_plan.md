@@ -42,3 +42,9 @@
 - `git diff --stat -- docs/sandbox-verification.md` changes exactly as many lines as the rows listed under Targets, and no other line.
 - `grep -nE '^\| (CS1|CS2|CS3|CS4|CS7|CS8|CS15|C1|C2|K2|CW2|CW3|CW4|CW5|CW6|P3|P1c|CL5|N4) \|' docs/sandbox-verification.md` lists each amended row once, and each amended row still splits into exactly five cells.
 - No new line coordinate, measured value, date or Claude Code version appears in an amended cell.
+
+**Deviations from plan:**
+
+- P1c and CW5: the permission clause uses the rows' own noun, *"A compound call refused at the permission layer …"*, and is appended to P1c as well as CW5, so that removing P1c's counts-as-sandboxed clause does not leave a permission-layer refusal ungraded.
+- CW5: removing *"or the call is refused at the permission layer; record which"* word for word would have left *"fails as CW2, and whether …"* with no verb. The kept requirement now reads *"the wrapper fails as CW2; record whether `refs/heads/<branch>` moved."*
+- The verification bullets were run by a scratch script (`harness-runs/scratch/t12_verify.py`, through `scripts/scratch-run.sh`) that splits each `-`/`+` pair of `git diff -U0` on ` | `. All 19 pairs split into 5 cells on both sides, with the id, Observed and Verdict cells equal. `git diff --stat` shows 19 insertions and 19 deletions, one line per Targets row, and the anchor `grep -cE` returns 19.
