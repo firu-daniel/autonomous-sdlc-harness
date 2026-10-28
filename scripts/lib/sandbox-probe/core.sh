@@ -35,25 +35,25 @@ sp_leg_declare retrieval "MC1" \
   "the harness-docs MCP server answers a search_docs call outside the sandbox, or the leg is not run where no .mcp.json wires it" \
   "§4 The profile's denials"
 sp_leg_declare wrappers "CS4,P3,CW2,P1c,CW5,P1b,CW6" \
-  "the main checkout's wrappers run outside the sandbox and land on the clone, while the clone's own copies, the compound and the assignment prefix stay sandboxed or are neutralised, the prefix allowed through --allowedTools so a permission-layer refusal of it is not run" \
+  "the main checkout's wrappers run outside the sandbox and land on the clone, while the clone's own copies, the compound and both assignment prefixes stay sandboxed or are neutralised, each prefixed call allowed through --allowedTools; a measured call refused at the permission layer is not run, and every result names the layer that answered" \
   "§2 The clone layout (owed) (CS4); §3 The wrappers (P3, CW2, P1c, CW5, P1b, CW6)"
 sp_leg_declare wrappers-refresh "R0,R1,R2,R3,R4" \
   "refresh-branch.sh on the clone arm runs outside the sandbox: fixture (a) fast-forwards, (b) writes a two-parent merge, (c) exits 4 with nothing written, and the clone's own copy stays sandboxed for its fetch while its --local merge runs in the clone" \
   "§3 The wrappers"
 sp_leg_declare planted-config "C1,CW3,C2,K2,CW4,CS15" \
-  "each wrapper refuses a scratch repository or a clone whose .git/config carries a planted key before any git call, and no marker is created" \
+  "each wrapper refuses a scratch repository or a clone whose .git/config carries a planted key before any git call, and no marker is created; a wrapper call refused at the permission layer is not run" \
   "§3 The wrappers (C1, CW3, C2, K2, CW4); §2 The clone layout (owed) (CS15)"
 sp_leg_declare planted-files "CS12,CS13,CS14,L1,L2" \
   "commit-on-branch.sh refuses a clone carrying a planted http-alternates, commondir or config.worktree, refresh-branch.sh refuses a dash-leading defaultBranch, and L1 is not run — unreachable on the clone layout" \
   "§2 The clone layout (owed) (CS12, CS13, CS14); §3 The wrappers (L1, L2)"
 sp_leg_declare write-protection "CS1,CS2,CS7,W6,W8" \
-  "every write to the clone's protected paths, to <main>/.git and to the per-run profile, the per-run profile's Edit included, is refused while its control is written, and neither this leg's debug log nor W7's carries an unmatched-rule line" \
+  "every write to the clone's protected paths, to <main>/.git and to the per-run profile, the per-run profile's Edit included, is refused while its control is written, a dd refused at the permission layer is not run, and neither this leg's debug log nor W7's carries an unmatched-rule line" \
   "§2 The clone layout (owed) (CS1, CS2, CS7); §4 The profile's denials (W6, W8)"
 sp_leg_declare git "CS3,CL5" \
-  "ordinary git in the clone succeeds under the real per-run profile, git fetch origin is refused by the network allowlist as the clone layout intends, and each CL5 write is refused or written as recorded" \
+  "ordinary git in the clone succeeds under the real per-run profile, git fetch origin is refused by the network allowlist as the clone layout intends, each CL5 write is refused or written as recorded, and a call refused at the permission layer is not run" \
   "§2 The clone layout (owed) (CS3); §2 The per-run clone (2026-10-19) (CL5)"
 sp_leg_declare network "N1,N2,N3,N4,N5" \
-  "hosts off the allowlist are refused, a loopback listener the probe owns returns no body to the session, a link-local host's curl error line is recorded and is not run where it cannot tell a refusal from an unreachable host, and a call carrying allowed_domains does not reach its host" \
+  "hosts off the allowlist are refused, a loopback listener the probe owns returns no body to the session, a link-local host's curl error line is graded against the same call issued unsandboxed from the probe's own shell and is not run where the two cannot be told apart, and a call carrying allowed_domains does not reach its host" \
   "§4 The profile's denials"
 sp_leg_declare retry "RT1" \
   "dangerouslyDisableSandbox: true does not run the call unsandboxed under allowUnsandboxedCommands: false" \
@@ -65,7 +65,7 @@ sp_leg_declare credentials "S1,S2,S4,S5" \
   "reads of ~/.ssh are refused, the token variables the profile unsets are absent by a check that prints presence only, whether the SSH agent socket is reachable is recorded, and the leg is not run when its session issued no calls" \
   "§4 The profile's denials"
 sp_leg_declare invalid-profile "CS8" \
-  "the control's call is refused, and on the invalid profile the marker is recorded as written or refused" \
+  "the control's call is refused, on the invalid profile the marker is recorded as written or refused, and the watcher's own run_profile_check refuses a scratch per-run copy whose sandbox.failIfUnavailable is a string while it accepts the unmodified one" \
   "§2 The clone layout (owed)"
 sp_leg_declare headless-parity "HP1" \
   "the network, retry and write-protection legs give the same results in an interactive session, from the printed parity script" \

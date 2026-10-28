@@ -116,7 +116,7 @@ Task 1 ships first because the leg table is the probe's one declaration of what 
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_sandbox_probe_round3_findings/task_<K>_plan.md`.
 
-1. [ ] **Task 1** — Restate the changed legs' expectations in the leg table and Gate 15, and make CS8 (b) a probe half there _(layer: general)_ _(points: 15)_
+1. [x] **Task 1** — Restate the changed legs' expectations in the leg table and Gate 15, and make CS8 (b) a probe half there _(layer: general)_ _(points: 15)_
 2. [ ] **Task 2** — Allow and screen CW6's prefixed call, name its answering layer, and screen every measured wrapper call for a permission-layer refusal _(layer: general)_ _(points: 20)_
 3. [ ] **Task 3** — Grade a `dd`, a CS3 call or CL5's `git config` refused at the permission layer as not run _(layer: general)_ _(points: 18)_
 4. [ ] **Task 4** — Grade a planted-config wrapper call refused at the permission layer as not run _(layer: general)_ _(points: 8)_
