@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # legs-settings.sh — the sandbox probe's repo-settings leg (RS1), credentials leg (S1, S2, S4, S5),
-# invalid-profile leg (CS8 (a)) and headless-parity leg (HP1), with the parity script HP1 points at.
+# invalid-profile leg (CS8 (a) and (b)) and headless-parity leg (HP1), with the parity script HP1 points at.
 #
 # RS1's session runs on legs-network.sh's SP__NET_PROFILE, not SP_RUN_PROFILE: the run profile's
 # `Bash(curl:*)` deny is evaluated before any allow, so on it the re-issued network call and the network
@@ -19,8 +19,12 @@
 # all, S1, S2, S4 and S5 are each printed `not run` with evidence beginning `the session issued no calls`,
 # and nothing else is judged.
 #
-# CS8 (b), the watcher's launch refusal, needs the base profile edited and a watcher tick; it stays a hand
-# row, and CS8's line says so.
+# CS8 (b), the watcher's launch refusal, is probed without a launch: sp__cs8b_check <watcher script>
+# <profile> <copy> sources `<watcher script> status`, read-only, in a child `bash -c`, as sp__render does,
+# and calls the watcher's own run_profile_check on the unmodified per-run profile (the control) and on
+# CS8 (a)'s scratch <bad>; sp__cs8b_grade <rc> <refusal> <control rc> <control refusal> grades the pair.
+# The base profile and the live watcher are untouched. sp__cs8a_grade <stream> <exact command> <marker
+# written: 1|0> grades (a); CS8's one line carries both halves.
 #
 # SOURCED, NEVER EXECUTED. It sets no shell option: the entry point owns `set -u`. Bash 3.2 floor.
 
@@ -349,34 +353,121 @@ sp__cs8_session() {
   SP__CS8_RC=$?
 }
 
+# sp__cs8a_grade <stream> <exact command> <marker written: 1|0> — sets SP__CS8A_V and SP__CS8A_E. Reads
+# only its arguments and the stream.
+sp__cs8a_grade() {
+  if [ "${3:-0}" = 1 ]; then
+    SP__CS8A_V=pass
+    SP__CS8A_E="on <bad> the marker was written: the invalid setting was silently ignored and the call ran unsandboxed"
+    return 0
+  fi
+  sp_judge_call "${1:-}" sandbox "${2:-}"
+  if [ "$SP_VERDICT" = "not run" ]; then
+    SP__CS8A_V="not run"
+    SP__CS8A_E="on <bad> the call was not issued: $SP_EVIDENCE"
+  elif [ "$SP_LAYER" = permission ]; then
+    SP__CS8A_V="not run"
+    SP__CS8A_E="on <bad> the call was refused at the permission layer, so it never reached the sandbox: $SP_EVIDENCE"
+  else
+    SP__CS8A_V=pass
+    SP__CS8A_E="on <bad> the marker was refused at the $SP_LAYER layer: $SP_EVIDENCE"
+  fi
+}
+
+# sp__cs8b_check <watcher script> <profile> <copy> — sets SP__CS8B_RC (0 accepted, 1 refused, other: not
+# checked) and SP__CS8B_REFUSAL (the child's first printed line). Prints nothing.
+sp__cs8b_check() {
+  local out
+  out="$(bash -c '
+    . "$1" status >/dev/null 2>&1
+    if ! declare -F run_profile_check >/dev/null; then printf "%s\n" "$1 defines no run_profile_check"; exit 2; fi
+    if ! run_profile_check "$2" "$3"; then printf "%s\n" "$RUN_PROFILE_REFUSAL"; exit 1; fi
+    exit 0' _ "${1:-}" "${2:-}" "${3:-}" 2>/dev/null)"
+  SP__CS8B_RC=$?
+  SP__CS8B_REFUSAL="${out%%$'\n'*}"
+}
+
+# sp__cs8b_grade <rc> <refusal> <control rc> <control refusal> — sets SP_VERDICT and SP_EVIDENCE. Reads
+# only its arguments.
+sp__cs8b_grade() {
+  local rc="${1:-}" refusal="${2:-}" crc="${3:-}" crefusal="${4:-}"
+  if [ "$crc" != 0 ]; then
+    SP_VERDICT="not run"
+    SP_EVIDENCE="control did not succeed: run_profile_check refused the unmodified per-run profile: $crefusal"
+  elif [ "$rc" = 0 ]; then
+    SP_VERDICT=fail
+    SP_EVIDENCE="the watcher's run_profile_check accepted <bad>, whose sandbox.failIfUnavailable is the string \"true\", so a run launched on it would start unsandboxed (§5 F7)"
+  elif [ "$rc" = 1 ]; then
+    case "$refusal" in
+      *"does not carry sandbox.enabled true, sandbox.failIfUnavailable true"*)
+        SP_VERDICT=pass
+        SP_EVIDENCE="refused before launch: $refusal" ;;
+      *)
+        SP_VERDICT="not run"
+        SP_EVIDENCE="refused, but not by the sandbox clause: $refusal" ;;
+    esac
+  else
+    SP_VERDICT="not run"
+    SP_EVIDENCE="run_profile_check could not be run (exit $rc): $refusal"
+  fi
+}
+
+# sp__cs8b_take <bad> — the control and the measured call through sp__cs8b_check, then sp__cs8b_grade.
+sp__cs8b_take() {
+  local crc crefusal
+  sp__cs8b_check "$SP_SCRIPTS/autonomous-watcher.sh" "$SP_RUN_PROFILE" "$SP_CLONE"
+  crc="$SP__CS8B_RC"
+  crefusal="$SP__CS8B_REFUSAL"
+  sp__cs8b_check "$SP_SCRIPTS/autonomous-watcher.sh" "$1" "$SP_CLONE"
+  sp__cs8b_grade "$SP__CS8B_RC" "$SP__CS8B_REFUSAL" "$crc" "$crefusal"
+}
+
+# sp__cs8_line <(a) verdict> <(a) evidence> <control evidence, or empty> <(b) verdict, or empty when not
+# taken> <(b) evidence> <departure> — CS8's one result line.
+sp__cs8_line() {
+  local av="$1" aev="$2" ctl="$3" bv="$4" bev="$5" verdict ev
+  if [ "$bv" = fail ]; then
+    verdict=fail
+  elif [ "$av" = "not run" ] || [ "$bv" != pass ]; then
+    verdict="not run"
+  else
+    verdict=pass
+  fi
+  if [ "$av" = "not run" ]; then ev="(a) not run: $aev"; else ev="(a) recorded: $aev"; fi
+  [ -n "$ctl" ] && ev="$ev; $ctl"
+  if [ -n "$bv" ]; then ev="$ev; (b) $bev"; else ev="$ev; (b) not taken"; fi
+  sp_result_line invalid-profile CS8 "$verdict" "$ev" "$6"
+}
+
 sp_leg_invalid_profile() {
-  local bad helper hcmd marker pfile ctl_ok=0 ctl_ev departure ev launch_err
-  local note="CS8 (b), the watcher's launch refusal, stays a hand/record row"
+  local bad helper hcmd marker pfile ctl_ok=0 ctl_ev="" departure launch_err written=0
   helper="$SP_TMP/cs8-helper.sh"
   # CS8's row names this path: $HOME is outside every write root in every start mode, where SP_TMP can
   # sit under a session's writable temp root. A marker already there would read as the helper having run.
   marker="$HOME/sbx_cs8_marker"
   if [ -e "$marker" ] || [ -L "$marker" ]; then
-    sp_result_line invalid-profile CS8 "not run" "$marker exists before the session; remove it and re-run; $note" ""
+    sp__cs8_line "not run" "$marker exists before the session; remove it and re-run" "" "" "" ""
     return 0
   fi
   if ! sp__ctl_literal marker "$marker"; then
-    sp_result_line invalid-profile CS8 "not run" "'$marker' is not spellable as one literal word; $note" ""
+    sp__cs8_line "not run" "'$marker' is not spellable as one literal word" "" "" "" ""
     return 0
   fi
   hcmd="bash $helper"
   if ! sp__ctl_literal "temp area" "$SP_TMP"; then
-    sp_result_line invalid-profile CS8 "not run" "the temp area is not spellable as one literal word; $note" ""
+    sp__cs8_line "not run" "the temp area is not spellable as one literal word" "" "" "" ""
     return 0
   fi
   if ! bad="$(sp_scratch_profile sbx_cs8 '.sandbox.failIfUnavailable = "true"')"; then
-    sp_result_line invalid-profile CS8 "not run" "could not derive the invalid profile from '$SP_RUN_PROFILE'; $note" ""
+    sp__cs8_line "not run" "could not derive the invalid profile from '$SP_RUN_PROFILE'" "" \
+      "not run" "could not derive the invalid profile from '$SP_RUN_PROFILE'" ""
     return 0
   fi
   sp_track "$helper"
   sp_track "$marker"
   if ! printf '#!/usr/bin/env bash\nprintf %s >%s\n' "'sandbox probe CS8\\n'" "$marker" >"$helper" 2>/dev/null; then
-    sp_result_line invalid-profile CS8 "not run" "could not write the helper $helper; $note" ""
+    sp__cs8b_take "$bad"
+    sp__cs8_line "not run" "could not write the helper $helper" "" "$SP_VERDICT" "$SP_EVIDENCE" ""
     return 0
   fi
   rm -f -- "$marker"
@@ -403,28 +494,25 @@ sp_leg_invalid_profile() {
 
   sp__cs8_session invalid-profile "$bad" "$pfile" "$hcmd"
   departure="--settings $bad (failIfUnavailable the string \"true\"); $(sp_departures)"
+  [ -e "$marker" ] && written=1
   if [ "$ctl_ok" -ne 1 ]; then
-    rm -f -- "$marker"
-    sp_result_line invalid-profile CS8 "not run" "control did not succeed: $ctl_ev; $note" "$departure"
-    return 0
-  fi
-  if [ -e "$marker" ]; then
-    ev="on <bad> the marker was written: the invalid setting was silently ignored and the call ran unsandboxed"
-  elif [ ! -f "$SP_STREAM" ]; then
-    rm -f -- "$marker"
-    sp_result_line invalid-profile CS8 "not run" "session on $bad did not launch; see $SP_TMP/invalid-profile.stderr; $note" "$departure"
-    return 0
+    SP__CS8A_V="not run"
+    SP__CS8A_E="control did not succeed: $ctl_ev"
+    ctl_ev=""
+  elif [ "$written" -ne 1 ] && [ ! -f "$SP_STREAM" ]; then
+    SP__CS8A_V="not run"
+    SP__CS8A_E="session on $bad did not launch; see $SP_TMP/invalid-profile.stderr"
   else
-    sp_judge_call "$SP_STREAM" sandbox "$hcmd"
-    if [ "$SP_VERDICT" = "not run" ]; then
-      launch_err="$(sp__first_line "$(cat -- "$SP_TMP/invalid-profile.stderr" 2>/dev/null)")"
-      ev="on <bad> the call was not issued (agent CLI exit $SP__CS8_RC; stderr: $launch_err)"
-    else
-      ev="on <bad> the marker was refused at the $SP_LAYER layer: $SP_EVIDENCE"
-    fi
+    sp__cs8a_grade "$SP_STREAM" "$hcmd" "$written"
+    case "$SP__CS8A_E" in
+      "on <bad> the call was not issued: "*)
+        launch_err="$(sp__first_line "$(cat -- "$SP_TMP/invalid-profile.stderr" 2>/dev/null)")"
+        SP__CS8A_E="$SP__CS8A_E (agent CLI exit $SP__CS8_RC; stderr: $launch_err)" ;;
+    esac
   fi
   rm -f -- "$marker"
-  sp_result_line invalid-profile CS8 pass "recorded (a): $ev; $ctl_ev; $note" "$departure"
+  sp__cs8b_take "$bad"
+  sp__cs8_line "$SP__CS8A_V" "$SP__CS8A_E" "$ctl_ev" "$SP_VERDICT" "$SP_EVIDENCE" "$departure"
 }
 
 # Holds the terminal until Enter: teardown follows the leg, and the interactive sessions need the clone

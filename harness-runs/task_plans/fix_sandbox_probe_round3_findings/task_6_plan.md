@@ -63,3 +63,10 @@
   
   (Task 11 turns these into test cases and drives `sp__cs8b_check` against a stub watcher.)
 - The type check (`bash scripts/typecheck.sh`) parses the file.
+
+- **Deviations from plan:**
+  - Evidence downgrade: the by-hand `sp__cs8b_grade` calls (`1 '<…> does not carry sandbox.enabled true, sandbox.failIfUnavailable true …' 0 ''` → `pass`; `0 '' 0 ''` → `fail`) were not executed. The `bash -c` that sources `core.sh`, `judge.sh`, `controls.sh` and `legs-settings.sh` was refused at the permission layer (`Permission to use Bash has been denied because Claude Code is running in don't ask mode`). Both claims rest on reading `sp__cs8b_grade`'s arms; Task 11's test cases execute them.
+  - Evidence downgrade: "the leg writes nothing outside `SP_TMP`" rests on reading. The only new write is `sp__cs8b_check`'s child shell, which sources `autonomous-watcher.sh status` with stdout and stderr discarded, as `sp__render` already does, and runs `run_profile_check`. That function reads its two files and writes nothing. The scratch profile is the `sbx_cs8.json` that `sp_scratch_profile` already wrote.
+  - The plan named three functions. The implementation adds two leg-local helpers: `sp__cs8b_take <bad>`, which runs the control and the measured `sp__cs8b_check` and then `sp__cs8b_grade`, and `sp__cs8_line`, which builds the one final line. They exist because (b) is taken at two exits, the helper-write failure and the normal path. On the `<bad>`-not-derived exit, (a) and (b) each carry `could not derive the invalid profile from '<SP_RUN_PROFILE>'`.
+  - When (a)'s control fails, the control evidence is carried once, inside `(a) not run: control did not succeed: …`, and is not repeated as a separate segment.
+  - `sp__cs8b_check`'s child exits `2`, printing `<watcher> defines no run_profile_check`, when sourcing does not define the function. Without that, the child would exit `1` with an empty refusal, and the grade would read that as a refusal by some other clause.
