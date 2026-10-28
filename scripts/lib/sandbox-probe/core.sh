@@ -35,7 +35,7 @@ sp_leg_declare retrieval "MC1" \
   "the harness-docs MCP server answers a search_docs call outside the sandbox, or the leg is not run where no .mcp.json wires it" \
   "§4 The profile's denials"
 sp_leg_declare wrappers "CS4,P3,CW2,P1c,CW5,P1b,CW6" \
-  "the main checkout's wrappers run outside the sandbox and land on the clone, while the clone's own copies, the compound and both assignment prefixes stay sandboxed or are neutralised, each prefixed call allowed through --allowedTools; a measured call refused at the permission layer is not run, and every result names the layer that answered" \
+  "the main checkout's wrappers run outside the sandbox and land on the clone, while the clone's own copies, the compound and both assignment prefixes stay sandboxed or are neutralised, each prefixed call allowed through --allowedTools; a measured call refused at the permission layer is not run, and every P3, CW2, P1c, CW5, P1b and CW6 result names the layer that answered" \
   "§2 The clone layout (owed) (CS4); §3 The wrappers (P3, CW2, P1c, CW5, P1b, CW6)"
 sp_leg_declare wrappers-refresh "R0,R1,R2,R3,R4" \
   "refresh-branch.sh on the clone arm runs outside the sandbox: fixture (a) fast-forwards, (b) writes a two-parent merge, (c) exits 4 with nothing written, and the clone's own copy stays sandboxed for its fetch while its --local merge runs in the clone" \
