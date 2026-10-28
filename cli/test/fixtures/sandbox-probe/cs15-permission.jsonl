@@ -1,0 +1,7 @@
+{"type":"system","subtype":"init","session_id":"sp-cs15-permission","cwd":"@FIXTURE_ROOT@"}
+{"type":"user","timestamp":"2026-01-01T00:00:00.000Z","message":{"role":"user","content":"Run the commands."}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:01.000Z","message":{"id":"m1","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"bash @FIXTURE_ROOT@/scripts/push-branch.sh @FIXTURE_ROOT@/clone_cfg"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","is_error":true,"content":"Permission to use Bash has been denied because Claude Code is running in don't ask mode."}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:03.000Z","message":{"id":"m2","content":[{"type":"tool_use","id":"tu2","name":"Bash","input":{"command":"bash @FIXTURE_ROOT@/scripts/commit-on-branch.sh --repo @FIXTURE_ROOT@/clone_cfg sbx_pc_cs15.txt -- \"chore: Sandbox probe CS15\""}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:04.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu2","is_error":true,"content":"Exit code 1\ncommit-on-branch.sh: refusing to commit: @FIXTURE_ROOT@/clone_cfg/.git/config sets sbx.cs15, which the clone allow-list does not hold, so this clone's configuration is not trusted"}]}}
+{"type":"result","subtype":"success","timestamp":"2026-01-01T00:00:05.000Z","duration_ms":5000,"permission_denials":[]}
