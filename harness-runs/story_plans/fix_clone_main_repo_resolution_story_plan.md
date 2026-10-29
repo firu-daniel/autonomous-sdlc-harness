@@ -60,7 +60,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_clone_main_repo_resoluti
 
 1. [x] **Task 1** — Resolve the main checkout from a clone in the change-request fence and in the task offer's answer 4 _(layer: cli)_ _(points: 15)_
 2. [x] **Task 2** — Add `plugin/instructions/main_repo_resolution.md`, the single home of the `<MAIN_REPO>` fallback _(layer: plugin)_ _(points: 15)_
-3. [ ] **Task 3** — Give `hc_main_root` the clone arm and a refusal sentence, and print it from the QA-lock helpers _(layer: plugin)_ _(points: 20)_
+3. [x] **Task 3** — Give `hc_main_root` the clone arm and a refusal sentence, and print it from the QA-lock helpers _(layer: plugin)_ _(points: 20)_
 4. [ ] **Task 4** — Point all 22 `<MAIN_REPO>` resolution clauses at the module, in one pass _(layer: plugin)_ _(points: 15)_
 5. [ ] **Task 5** — Say what the fallback now does in the `profile-main-anchor` check and the profile's `_README` line _(layer: cli)_ _(points: 10)_
 6. [ ] **Task 6** — Prove `hc_main_root` in every run-copy layout, with and without the anchor, and move QA-lock case (f) to fail closed _(layer: cli)_ _(points: 20)_

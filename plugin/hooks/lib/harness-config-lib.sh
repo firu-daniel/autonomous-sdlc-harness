@@ -81,7 +81,8 @@
 # they exist to return a value WITHOUT a command substitution — a `$(…)` forks a
 # subshell, and these run per piece on a hook that fires for every Bash call:
 # `HC_GIT_DIR` / `HC_GIT_REST` (`hc_git_piece_parts`), `HC_PAYLOAD_CMD` /
-# `HC_PAYLOAD_CWD` (`hc_payload_fields`), and the cache's own `HC_CFG_*`.
+# `HC_PAYLOAD_CWD` (`hc_payload_fields`), `HC_MAIN_ROOT` /
+# `HC_MAIN_ROOT_REFUSAL` (`hc_main_root_var`), and the cache's own `HC_CFG_*`.
 #
 # BASH 3.2 IS THE FLOOR. macOS ships `/bin/bash` 3.2, so nothing here may use an
 # associative array, `${var^^}`, `mapfile` or `local -n`. The cache below is a
@@ -123,7 +124,11 @@
 #   main checkout      HARNESS_MAIN_REPO=<a main checkout> bash -c '. <lib>; hc_main_root <any checkout>'
 #                      -> the anchor's physical path; with the anchor unset, or set
 #                         to a directory that is not a main checkout, today's
-#                         common-dir answer for <any checkout>
+#                         common-dir answer for <any checkout> that is not a clone
+#                      bash -c '. <lib>; hc_main_root <registered run clone>; echo $?'
+#                      -> with the anchor unset, the main checkout, then 0
+#                      bash -c '. <lib>; hc_main_root_var <unregistered clone>; echo $?; echo "$HC_MAIN_ROOT_REFUSAL"'
+#                      -> 1, then the sentence naming the run registry
 
 # ---------------------------------------------------------------------------
 # Payload readers. Each takes the raw hook payload as its argument and prints
@@ -647,43 +652,154 @@ hc_repo_root() {
   printf '%s\n' "$top"
 }
 
-# Print the MAIN checkout's root for the repository <root> belongs to — <root>
-# itself in an ordinary checkout, the checkout every worktree hangs off in a
-# linked worktree. Read from the shared git directory (`--git-common-dir`),
-# never from `$PWD` or a sibling-directory guess, so it answers the same from any
-# working copy of one repository. The common directory is asked of <root>
-# itself, where a relative answer is relative to <root> on every git version —
-# which is why <root> MUST be a checkout's toplevel, as `hc_repo_root` returns
-# it: from a subdirectory the relative `.git` would be joined to the wrong
-# directory. The answer is printed as a physical path (`pwd -P`), so a symlinked
-# spelling of <root> and the toplevel git reports name the same main checkout.
-# Return 1 when <root> is not in a repository or the common directory is not
-# `<dir>/.git` — a bare repository, a submodule, or a `--separate-git-dir`
-# layout, none of which has a main checkout this can name.
+# Set `HC_MAIN_ROOT` to the MAIN checkout's root for the repository whose
+# toplevel is <root>, as a physical path (`pwd -P`), and return 0; return 1 with
+# `HC_MAIN_ROOT` empty and `HC_MAIN_ROOT_REFUSAL` one sentence naming the
+# condition and the path, never a file's contents. Prints nothing; call it
+# directly, never inside `$(…)`, or the two variables are lost with the
+# subshell. Three arms, the first that applies deciding:
 #
-# `HARNESS_MAIN_REPO`, the anchor the launcher sets, is read first, for the
-# QA-lock helpers, which run sandboxed: a run copy made by `git clone` has its
-# own git directory, so the common-dir answer alone would name the clone. No
-# guard calls this function, so no guard's decision depends on the variable. An
-# absent or unusable value — empty, relative, not a directory, or one whose
-# `.git` is not a directory free of `commondir` — falls back to the common-dir
-# answer below.
-hc_main_root() {
-  local root="${1-}" common anchor="${HARNESS_MAIN_REPO-}"
-  [ -n "$root" ] || return 1
+#   1. THE ANCHOR. `HARNESS_MAIN_REPO`, which the launcher sets, when it is an
+#      absolute directory whose `.git` is a directory free of `commondir`: that
+#      directory, for any <root>. An absent or unusable value falls through.
+#   2. THE CLONE ARM, taken when `<root>/.git` is a real directory and
+#      `<root>/.git/objects/info/alternates` exists. A run copy made by
+#      `git clone --shared` has its own git directory, so the common-dir answer
+#      would name the copy. The answer is the <candidate> the alternates file
+#      names (its one line, joined to `<root>/.git/objects/` when relative, must
+#      canonicalise to `<candidate>/.git/objects`), when <candidate> is not
+#      <root>, `<candidate>/.git` is a real directory with no `commondir`,
+#      `<root>/.git/HEAD` is one line `ref: refs/heads/<branch>`, the run
+#      registry `<candidate>/<stateDir>/autonomous_logs/registry.json` gives
+#      `.runs[<branch>]` `copy_kind` `clone` and a `worktree` that is <root>,
+#      and <root> is `<work root of candidate>/<projectName>-<branch, / to ->`
+#      — `hr_worktree_dir`'s derivation. Every comparison is canonical. Any
+#      failure is a refusal; this arm never answers <root> itself. A main
+#      checkout that itself borrows objects through `alternates` (made with
+#      `--shared` or `--reference`) takes this arm and is refused: it sets the
+#      anchor instead.
+#   3. THE COMMON-DIR ARM, for every other <root>: the shared git directory
+#      (`--git-common-dir`) with its `/.git` removed — <root> itself in an
+#      ordinary checkout, the checkout every worktree hangs off in a linked
+#      worktree. A common directory that is not `<dir>/.git` — a bare
+#      repository, a submodule, a `--separate-git-dir` layout — is a refusal.
+#      The common directory is asked of <root> itself, where a relative answer
+#      is relative to <root> on every git version — which is why <root> MUST be
+#      a checkout's toplevel, as `hc_repo_root` returns it.
+#
+# THE CLONE ARM'S READS. It runs no `git` command and reads only <root>'s
+# `objects/info/alternates` and `HEAD`, and <candidate>'s `harness.config.json`
+# and run registry — the records `hr_clone_target_check_var`
+# (`cli/templates/scripts/lib/harness-run-lib.sh`) already trusts. It never
+# reads the clone's `.git/config` or hooks, and never creates the registry or
+# its directory. The registry is the main checkout's and write-protected, so a
+# sandboxed command cannot add the record; a rewritten `HEAD` or alternates file
+# can only name a branch or candidate the registry or the derived path then
+# fails to match, so the arm fails closed.
+#
+# No guard calls this function or `hc_main_root`, so no guard's decision
+# depends on the anchor or the registry; the QA-lock helpers do.
+hc_main_root_var() {
+  local root="${1-}" common="" anchor="${HARNESS_MAIN_REPO-}" root_c="" gd=""
+  local alt="" alt_line="" extra="" alt_c="" cand="" hf="" head_line="" branch=""
+  local state_rel="" registry="" out="" kind="" wt="" wt_c="" want="" want_c=""
+  HC_MAIN_ROOT=""
+  HC_MAIN_ROOT_REFUSAL=""
+  if [ -z "$root" ]; then
+    HC_MAIN_ROOT_REFUSAL="no checkout root was given"
+    return 1
+  fi
   case "$anchor" in
     /*)
       if [ -d "$anchor" ] && [ -d "$anchor/.git" ] && [ ! -e "$anchor/.git/commondir" ]; then
         anchor=$(cd "$anchor" 2>/dev/null && pwd -P) || anchor=""
         if [ -n "$anchor" ]; then
-          printf '%s\n' "$anchor"
+          HC_MAIN_ROOT=$anchor
           return 0
         fi
       fi
       ;;
   esac
-  common=$(git -C "$root" rev-parse --git-common-dir 2>/dev/null) || return 1
-  [ -n "$common" ] || return 1
+
+  gd="$root/.git"
+  alt="$gd/objects/info/alternates"
+  if [ -d "$gd" ] && [ ! -L "$gd" ] && { [ -e "$alt" ] || [ -L "$alt" ]; }; then
+    root_c=$(cd -P "$root" 2>/dev/null && pwd -P) || root_c=""
+    if [ -z "$root_c" ]; then
+      HC_MAIN_ROOT_REFUSAL="$root is not a directory this can resolve"
+      return 1
+    fi
+    if [ -f "$alt" ] && [ ! -L "$alt" ] && [ -r "$alt" ]; then
+      { IFS= read -r alt_line || :; IFS= read -r extra || :; } <"$alt" 2>/dev/null
+      if [ -n "$alt_line" ] && [ -z "$extra" ]; then
+        case "$alt_line" in /*) ;; *) alt_line="$gd/objects/$alt_line" ;; esac
+        alt_c=$(cd -P "$alt_line" 2>/dev/null && pwd -P) || alt_c=""
+      fi
+    fi
+    case "$alt_c" in
+      ?*/.git/objects) cand=${alt_c%/.git/objects} ;;
+    esac
+    if [ -z "$cand" ]; then
+      HC_MAIN_ROOT_REFUSAL="$alt is not a regular file holding one line naming an existing <checkout>/.git/objects directory"
+      return 1
+    fi
+    if [ "$cand" = "$root_c" ] || [ ! -d "$cand/.git" ] || [ -L "$cand/.git" ] \
+      || [ -e "$cand/.git/commondir" ] || [ -L "$cand/.git/commondir" ]; then
+      HC_MAIN_ROOT_REFUSAL="$alt names $cand, which is not a main checkout other than this clone"
+      return 1
+    fi
+    hf="$gd/HEAD"
+    extra=""
+    if [ -f "$hf" ] && [ ! -L "$hf" ] && [ -r "$hf" ]; then
+      { IFS= read -r head_line || :; IFS= read -r extra || :; } <"$hf" 2>/dev/null
+    fi
+    if [ -z "$extra" ]; then
+      case "$head_line" in
+        'ref: refs/heads/'?*) branch=${head_line#ref: refs/heads/} ;;
+      esac
+    fi
+    if [ -z "$branch" ]; then
+      HC_MAIN_ROOT_REFUSAL="$hf is not a regular file holding one line naming a checked-out branch"
+      return 1
+    fi
+    state_rel=$(hc_config_dir "$cand" stateDir sdlc-harness) || state_rel="sdlc-harness"
+    registry="$cand/$state_rel/autonomous_logs/registry.json"
+    if ! hc_have_jq; then
+      HC_MAIN_ROOT_REFUSAL="jq is not on PATH, so the run registry $registry cannot be read"
+      return 1
+    fi
+    if [ -f "$registry" ] && [ -r "$registry" ] \
+      && out=$(jq -r --arg b "$branch" '
+        .runs[$b] | if type == "object"
+          then (.copy_kind // "" | tostring) as $k | (.worktree // "" | tostring) as $w
+            | if ($k | contains("\n")) or ($w | contains("\n")) then error("newline") else $k, $w end
+          else error("absent") end
+      ' "$registry" 2>/dev/null); then
+      { IFS= read -r kind || :; IFS= read -r wt || :; } <<EOF
+$out
+EOF
+      if [ -n "$wt" ]; then
+        wt_c=$(cd -P "$wt" 2>/dev/null && pwd -P) || wt_c=""
+      fi
+    fi
+    if [ "$kind" != clone ] || [ "$wt_c" != "$root_c" ]; then
+      HC_MAIN_ROOT_REFUSAL="the run registry $registry records no clone of branch $branch at $root_c"
+      return 1
+    fi
+    want="$(hc_work_root "$cand")/$(hc_project_name "$cand")-${branch//\//-}"
+    want_c=$(cd -P "$want" 2>/dev/null && pwd -P) || want_c=""
+    if [ -z "$want_c" ] || [ "$want_c" != "$root_c" ]; then
+      HC_MAIN_ROOT_REFUSAL="$root_c is not $want, the run-copy path derived from $cand for branch $branch"
+      return 1
+    fi
+    HC_MAIN_ROOT=$cand
+    return 0
+  fi
+
+  if ! common=$(git -C "$root" rev-parse --git-common-dir 2>/dev/null) || [ -z "$common" ]; then
+    HC_MAIN_ROOT_REFUSAL="$root is not inside a git repository"
+    return 1
+  fi
   case "$common" in
     /*) ;;
     *) common="$root/$common" ;;
@@ -691,12 +807,29 @@ hc_main_root() {
   common=${common%/}
   case "$common" in
     */.git) common=${common%/.git} ;;
-    *) return 1 ;;
+    *)
+      HC_MAIN_ROOT_REFUSAL="its git common directory is not a checkout's .git — a bare repository, a submodule or a separate git dir"
+      return 1
+      ;;
   esac
-  [ -n "$common" ] && [ -d "$common" ] || return 1
-  common=$(cd "$common" 2>/dev/null && pwd -P) || return 1
-  [ -n "$common" ] || return 1
-  printf '%s\n' "$common"
+  if [ -n "$common" ] && [ -d "$common" ]; then
+    common=$(cd "$common" 2>/dev/null && pwd -P) || common=""
+  else
+    common=""
+  fi
+  if [ -z "$common" ]; then
+    HC_MAIN_ROOT_REFUSAL="the checkout its git common directory belongs to is not a directory this can resolve"
+    return 1
+  fi
+  HC_MAIN_ROOT=$common
+  return 0
+}
+
+# Print `hc_main_root_var`'s `HC_MAIN_ROOT`; return 1, printing nothing, on its
+# refusal.
+hc_main_root() {
+  hc_main_root_var "${1-}" || return 1
+  printf '%s\n' "$HC_MAIN_ROOT"
 }
 
 # Apply the settled order to a command plus the payload's cwd, and print the

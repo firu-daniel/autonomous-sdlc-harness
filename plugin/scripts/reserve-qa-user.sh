@@ -34,7 +34,9 @@
 #                     cannot parse), `phases.qa` not `true`, `qa.credentialsPath`
 #                     unset, the credentials file absent or empty, no accounts
 #                     configured in it, no main checkout to hold the lock set
-#                     (a bare repository, a submodule, a separate git dir), or
+#                     (a bare repository, a submodule, a separate git dir, or a
+#                     clone whose main checkout and registry record cannot be
+#                     established), or
 #                     the lock directory could not be created. The caller
 #                     reports auth-gated tests blocked.
 #   2  bad request  — the requested slot is not a configured account (including
@@ -72,9 +74,12 @@
 #
 # WHY THE LOCKS LIVE IN THE MAIN CHECKOUT'S STATE DIRECTORY. The lock set is
 # `<main>/<stateDir>/qa_user_locks/`, where <main> is the repository's MAIN
-# checkout (`hc_main_root`, from `HARNESS_MAIN_REPO` when the launcher set it,
-# else from `git rev-parse --git-common-dir`, so every run copy names the same
-# one) and <stateDir> is `stateDir` from `harness.config.json` (default
+# checkout (`hc_main_root_var`: the `HARNESS_MAIN_REPO` anchor when it is set
+# and usable; else, in a run clone, the main checkout its
+# `objects/info/alternates` names and whose run registry records this clone at
+# this path, or a refusal; else the `git rev-parse --git-common-dir` answer —
+# so every run copy names the same one) and <stateDir> is `stateDir` from
+# `harness.config.json` (default
 # `sdlc-harness`), read from the main checkout's configuration when it has one.
 # Parallel runs live in separate run copies of the same repository, so the set has to be one directory they all reach or
 # it excludes nothing — which rules out the working copy's own state directory.
@@ -139,6 +144,10 @@
 #     cd <clone> && HARNESS_MAIN_REPO=<main> bash <plugin>/scripts/reserve-qa-user.sh
 #                                   -> the slot is parked under
 #                                      <main>/<stateDir>/qa_user_locks, not the clone's
+#   the same clone, anchor unset    -> parked under <main>'s lock set when <main>'s
+#                                      run registry records the clone at its
+#                                      derived path; otherwise one stderr line
+#                                      naming why, exit 1
 #
 #   inspect or clear the lock set by hand:
 #     ls <main>/<stateDir>/qa_user_locks
@@ -225,9 +234,10 @@ fi
 
 # --- the shared lock set, under the main checkout's state directory ----------
 
-main=$(hc_main_root "$root") || main=""
+main=""
+hc_main_root_var "$root" && main=$HC_MAIN_ROOT
 if [ -z "$main" ]; then
-  echo "reserve-qa-user: cannot resolve the main checkout of $root (bare repository, submodule or separate git dir); no shared lock directory" >&2
+  echo "reserve-qa-user: cannot resolve the main checkout of $root: ${HC_MAIN_ROOT_REFUSAL-}" >&2
   exit 1
 fi
 cfg_root="$main"

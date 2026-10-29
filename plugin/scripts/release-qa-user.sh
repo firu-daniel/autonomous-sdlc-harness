@@ -19,15 +19,18 @@
 #
 # THE LOCK SET IS THE ONE `reserve-qa-user.sh` DOCUMENTS:
 # `<main>/<stateDir>/qa_user_locks/`, where <main> is the repository's main
-# checkout (`hc_main_root`, from `HARNESS_MAIN_REPO` when the launcher set it,
-# else from `git rev-parse --git-common-dir`, so every run copy names the same
-# one) and <stateDir> is `stateDir` from the main checkout's
+# checkout (`hc_main_root_var`: the `HARNESS_MAIN_REPO` anchor when it is set
+# and usable; else, in a run clone, the main checkout its
+# `objects/info/alternates` names and whose run registry records this clone at
+# this path, or a refusal; else the `git rev-parse --git-common-dir` answer —
+# so every run copy names the same one) and <stateDir> is `stateDir` from the
+# main checkout's
 # `harness.config.json` when it has one, else this working copy's, defaulting to
 # `sdlc-harness`. THE TWO HALVES OF THE
 # PAIR MUST AGREE ON THAT DERIVATION: change it in one file alone and every lock
 # the other half is holding is silently retired, because each would then look in
 # a directory the other never writes. The repository is resolved from `$PWD` and
-# the main checkout from the anchor or its shared git directory, so a reserve and
+# the main checkout by that same three-arm rule, so a reserve and
 # a release issued from different directories inside one repository — or from
 # two run copies of it — agree on the same lock. Read that file's header for why the set
 # lives there, why the sandbox can write it, and for the TTL guard.
@@ -52,6 +55,10 @@
 #     cd <clone> && HARNESS_MAIN_REPO=<main> bash <plugin>/scripts/release-qa-user.sh <slot>
 #                              -> releases <main>/<stateDir>/qa_user_locks/<slot>,
 #                                 not the clone's
+#   the same clone, anchor unset
+#                              -> the same release when <main>'s run registry
+#                                 records the clone at its derived path;
+#                                 otherwise one stderr line naming why, exit 0
 #
 #   see what is still parked:  ls <main>/<stateDir>/qa_user_locks
 
@@ -77,9 +84,10 @@ if [ -z "$root" ]; then
 fi
 
 # Same location derivation as reserve-qa-user.sh, step for step.
-main=$(hc_main_root "$root") || main=""
+main=""
+hc_main_root_var "$root" && main=$HC_MAIN_ROOT
 if [ -z "$main" ]; then
-  echo "release-qa-user: cannot resolve the main checkout of $root; no lock set to release from" >&2
+  echo "release-qa-user: cannot resolve the main checkout of $root: ${HC_MAIN_ROOT_REFUSAL-}" >&2
   exit 0
 fi
 cfg_root="$main"
