@@ -12,6 +12,8 @@
  * to stderr and exits non-zero.
  *
  *   corpus <fixture-catalog|self-docs>     the eval's corpus, enumerated and chunked
+ *   corpus-at <repoRoot> (stdin)           `corpusFiles` of the stdin config at `repoRoot`, which is
+ *                                          passed as given, so an alias spelling reaches it unchanged
  *   constants                              the exported constants of search, store, server, models
  *   render (stdin)                         `renderResults` of a `SearchResult`
  *   stub-models (stdin)                    the stub embedder's vectors and the stub reranker's scores
@@ -90,6 +92,14 @@ function corpus(id) {
   return { repoRoot, config, files, warnings, chunks };
 }
 
+function corpusAt(repoRoot) {
+  if (repoRoot === undefined) {
+    throw new Error('corpus-at needs <repoRoot>');
+  }
+  const { files, warnings } = corpusFiles(repoRoot, readStdinJson());
+  return { files, warnings };
+}
+
 function constants() {
   return {
     search: {
@@ -166,6 +176,8 @@ async function answer(subCommand, args) {
   switch (subCommand) {
     case 'corpus':
       return corpus(args[0]);
+    case 'corpus-at':
+      return corpusAt(args[0]);
     case 'constants':
       return constants();
     case 'render':
@@ -177,7 +189,7 @@ async function answer(subCommand, args) {
     default:
       throw new Error(
         `unknown sub-command ${JSON.stringify(subCommand)}; ` +
-          'expected corpus, constants, render, stub-models or prepare-ts-fixture',
+          'expected corpus, corpus-at, constants, render, stub-models or prepare-ts-fixture',
       );
   }
 }
