@@ -58,7 +58,7 @@ Run copies are clones now (`cli/templates/scripts/lib/harness-run-lib.sh` → `h
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_clone_main_repo_resolution/task_<K>_plan.md`.
 
-1. [ ] **Task 1** — Resolve the main checkout from a clone in the change-request fence and in the task offer's answer 4 _(layer: cli)_ _(points: 15)_
+1. [x] **Task 1** — Resolve the main checkout from a clone in the change-request fence and in the task offer's answer 4 _(layer: cli)_ _(points: 15)_
 2. [ ] **Task 2** — Add `plugin/instructions/main_repo_resolution.md`, the single home of the `<MAIN_REPO>` fallback _(layer: plugin)_ _(points: 15)_
 3. [ ] **Task 3** — Give `hc_main_root` the clone arm and a refusal sentence, and print it from the QA-lock helpers _(layer: plugin)_ _(points: 20)_
 4. [ ] **Task 4** — Point all 22 `<MAIN_REPO>` resolution clauses at the module, in one pass _(layer: plugin)_ _(points: 15)_

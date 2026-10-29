@@ -2,7 +2,7 @@
 
 Read this file only after the fence in `.claude/CLAUDE.md` → `## Where a change request runs` has passed; from there on it owns the whole dialogue — the question, the four options, what each answer does, and the two rules that govern the rest of the conversation.
 
-Written once by `autonomous-sdlc-harness init` and yours from there on. The fence fails closed: an agent that cannot read this file makes no offer and carries out the request in the session. That is a safety property, not the off-switch — deleting this file makes `doctor` warn and the next `init` writes it back. To stop being asked, answer **Don't ask again**, which writes the `.claude/harness-no-offer` marker at the main worktree's root; removing the `## Where a change request runs` section from `.claude/CLAUDE.md` turns the offer off for the repository.
+Written once by `autonomous-sdlc-harness init` and yours from there on. The fence fails closed: an agent that cannot read this file makes no offer and carries out the request in the session. That is a safety property, not the off-switch — deleting this file makes `doctor` warn and the next `init` writes it back. To stop being asked, answer **Don't ask again**, which writes the `.claude/harness-no-offer` marker at the main checkout's root; removing the `## Where a change request runs` section from `.claude/CLAUDE.md` turns the offer off for the repository.
 
 ## The question
 
@@ -33,10 +33,10 @@ Question: `How would you like this handled?` — with `header` set to `Task offe
 
 ## Answer 4 — write the marker, then do the work
 
-- Create `.claude/harness-no-offer` at the **main worktree's** root — `git worktree list | head -1 | awk '{print $1}'` resolves it from any worktree, and it is the checkout itself in an ordinary single-checkout repository. Create that `.claude/` if it is absent, write an empty file, and read, parse or rewrite no other file in that directory. The fence tests that same path, so writing it anywhere else silences nothing.
-- **Confirm it is there before you report it.** `.claude/**` is a namespace the tool layer can refuse ahead of any permission grant, so the write can be declined or left un-approved without an error. If the file is not there at that resolved main-worktree path afterwards, say so plainly — the preference was **not** saved, the offer will fire again next session, and creating an empty `.claude/harness-no-offer` by hand is the one-line way to set it — then carry out the request as answer 2 does regardless.
+- Create `.claude/harness-no-offer` under the **path the fence's opt-out command printed** — the main checkout, never a run copy. Create that `.claude/` if it is absent, write an empty file, and read, parse or rewrite no other file in that directory. The fence tests that same path, so writing it anywhere else silences nothing.
+- **Confirm it is there before you report it.** `.claude/**` is a namespace the tool layer can refuse ahead of any permission grant, so the write can be declined or left un-approved without an error. Confirm with `test -e "<that path>/.claude/harness-no-offer"`. If the file is not there afterwards, say so plainly — the preference was **not** saved, the offer will fire again next session, and creating an empty `.claude/harness-no-offer` by hand is the one-line way to set it — then carry out the request as answer 2 does regardless.
 - Then carry out the request in this session exactly as answer 2 does.
-- Say that the marker is gitignored and never committed, so it silences the offer for this project on this machine — every worktree of this checkout included, since they all resolve to the same main worktree — and that **deleting it re-arms the offer**.
+- Say that the marker is gitignored and never committed, so it silences the offer for this project on this machine — every worktree and run copy of this checkout included, since they all resolve to the same main checkout — and that **deleting it re-arms the offer**.
 
 ## Scope — one offer per conversation
 
