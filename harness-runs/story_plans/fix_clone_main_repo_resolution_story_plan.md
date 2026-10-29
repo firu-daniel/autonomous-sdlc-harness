@@ -69,7 +69,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_clone_main_repo_resoluti
 9. [x] **Task 9** — State the new fallback in `docs/watcher.md` and `docs/cli.md` _(layer: general)_ _(points: 10)_
 10. [x] **Task 10** — Record the library change in `docs/guard-verification.md` and add the owed rows AN5–AN6 to `docs/sandbox-verification.md` _(layer: general)_ _(points: 10)_
 11. [x] **Task 11** — Register the corpus check as a tree guard in `harness.config.json` _(layer: general)_ _(points: 5)_
-12. [ ] **Task 12** — Re-render the worked example's fence, task offer and profile `_README` line _(layer: general)_ _(points: 10)_
+12. [x] **Task 12** — Re-render the worked example's fence, task offer and profile `_README` line _(layer: general)_ _(points: 10)_
 
 ## Scope register
 
