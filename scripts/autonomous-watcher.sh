@@ -1016,9 +1016,26 @@ fi
 # removed count, logged once `log` exists. Leaves the configuration cache
 # reset, so the anchors below load their own.
 PLACEHOLDER_START_REMOVED=""
+
+# placeholder_manifests_var <repo slug> — set PLACEHOLDER_MANIFESTS to the lines
+# `hr_run_profile_absent_files` prints for <slug>; 1, leaving it empty, when
+# that refuses. Its callers: placeholder_start_recover and
+# placeholder_sweep_pass.
+PLACEHOLDER_MANIFESTS=()
+placeholder_manifests_var() {
+  local list m
+  PLACEHOLDER_MANIFESTS=()
+  list="$(hr_run_profile_absent_files "${1-}")" || return 1
+  while IFS= read -r m; do
+    [ -n "$m" ] && PLACEHOLDER_MANIFESTS+=("$m")
+  done <<EOF
+$list
+EOF
+  return 0
+}
+
 placeholder_start_recover() {
-  local main logs live slug manifest m line removed=0 n=0
-  local -a manifests
+  local main logs live slug line removed=0
   [ "${HARNESS_JOB_MODE:-}" != "1" ] || return 0
   hr_main_repo "$SCRIPT_DIR" >/dev/null && return 0
   main="$(hr_main_checkout_past_leftovers_nogit "$SCRIPT_DIR")" || return 0
@@ -1030,14 +1047,8 @@ placeholder_start_recover() {
     { [ ! -e "$logs/registry.json" ] || live="$(hr_registry_live_count "$logs/registry.json")"; } &&
     [ "$live" = "0" ] &&
     slug="$(hr_repo_slug "$main")" &&
-    manifest="$(hr_run_profile_absent_file "$slug" x)"; then
-    manifests=()
-    for m in "${manifest%/*}"/*.absent; do
-      [ -f "$m" ] || continue
-      manifests+=("$m")
-      n=$((n + 1))
-    done
-    if [ "$n" -gt 0 ] && hr_placeholder_sweep_var "${manifests[@]}"; then
+    placeholder_manifests_var "$slug"; then
+    if [ "${#PLACEHOLDER_MANIFESTS[@]}" -gt 0 ] && hr_placeholder_sweep_var "${PLACEHOLDER_MANIFESTS[@]}"; then
       while IFS= read -r line; do
         [ -n "$line" ] || continue
         echo "$self: placeholder sweep at start: removed $line" >&2
@@ -1792,8 +1803,7 @@ running_count() { hr_registry_live_count "$REGISTRY" "${1-}"; }
 # per kept path. A live session's placeholders are its own mounts, so a live
 # run skips the sweep, logged unless <quiet> is 1. Returns 0.
 placeholder_sweep_pass() {
-  local exclude="${1-}" quiet="${2-0}" live manifest m line n=0
-  local -a manifests
+  local exclude="${1-}" quiet="${2-0}" live line
   [ "$JOB_MODE" != "1" ] || return 0
   hr_placeholder_host_probe_var
   [ "$HR_PLACEHOLDER_HOST" = "1" ] || return 0
@@ -1802,15 +1812,9 @@ placeholder_sweep_pass() {
     [ "$quiet" = "1" ] || log "placeholder sweep: skipped, $live run(s) of this repository live"
     return 0
   fi
-  manifest="$(hr_run_profile_absent_file "$HARNESS_REPO_SLUG" x)" || return 0
-  manifests=()
-  for m in "${manifest%/*}"/*.absent; do
-    [ -f "$m" ] || continue
-    manifests+=("$m")
-    n=$((n + 1))
-  done
-  [ "$n" -gt 0 ] || return 0
-  hr_placeholder_sweep_var "${manifests[@]}" || return 0
+  placeholder_manifests_var "$HARNESS_REPO_SLUG" || return 0
+  [ "${#PLACEHOLDER_MANIFESTS[@]}" -gt 0 ] || return 0
+  hr_placeholder_sweep_var "${PLACEHOLDER_MANIFESTS[@]}" || return 0
   while IFS= read -r line; do
     [ -n "$line" ] && log "placeholder sweep: removed $line"
   done <<EOF

@@ -1,7 +1,7 @@
 /**
  * The run library's placeholder primitives — `hr_placeholder_host_probe_var`,
- * `hr_placeholder_manifest_write`, `hr_placeholder_leftover_var` and `hr_placeholder_sweep_var` in
- * `cli/templates/scripts/lib/harness-run-lib.sh`.
+ * `hr_placeholder_manifest_write`, `hr_run_profile_absent_files`, `hr_placeholder_leftover_var` and
+ * `hr_placeholder_sweep_var` in `cli/templates/scripts/lib/harness-run-lib.sh`.
  *
  * **The rule this suite enforces: the sweep removes only a 0-byte, read-only regular file owned by
  * this user at a path a manifest recorded as absent.** Every keep case is asserted on the bytes and
@@ -93,6 +93,36 @@ test('hr_placeholder_manifest_write lists only the absent arguments, at mode 600
   const again = await f.call('hr_placeholder_manifest_write "$@"; echo "status=$?"', [manifest, present]);
   assert.equal(again.stdout.trim(), 'status=0', again.stderr);
   assert.equal(await readFile(manifest, 'utf8'), '', 'a rewrite with no absent argument did not replace the manifest');
+});
+
+test('hr_run_profile_absent_files lists only the regular .absent files, and refuses an unanchorable lane', async (t) => {
+  const f = await fixture(t);
+  const state = join(f.root, 'state');
+  const env = { XDG_STATE_HOME: state };
+  const list = (slug, extra = env) => f.call('hr_run_profile_absent_files "$1"; printf "status=%s\\n" "$?"', [slug], extra);
+
+  const missing = await list('slug');
+  assert.equal(missing.stdout, 'status=0\n', `no directory yet: ${missing.stderr}`);
+  assert.equal(await exists(join(state, 'autonomous-sdlc-harness')), false, 'the enumerator created the lane');
+
+  const dir = join(state, 'autonomous-sdlc-harness', 'run-profiles', 'slug');
+  await mkdir(dir, { recursive: true });
+  const empty = await list('slug');
+  assert.equal(empty.stdout, 'status=0\n', `empty directory: ${empty.stderr}`);
+
+  const a = await plant(join(dir, 'feat-a.absent'), '', 0o600);
+  const b = await plant(join(dir, 'main.absent'), '/x\n', 0o600);
+  await plant(join(dir, 'feat-a.json'), '{}', 0o600);
+  await symlink(a, join(dir, 'linked.absent'));
+  await mkdir(join(dir, 'a-dir.absent'));
+  const mixed = await list('slug');
+  assert.equal(mixed.stderr, '');
+  assert.deepEqual(mixed.stdout.split('\n').filter(Boolean).sort(), [a, b, 'status=0'].sort());
+
+  const unanchored = await list('slug', { XDG_STATE_HOME: '', HOME: '' });
+  assert.equal(unanchored.stdout, 'status=1\n', `unanchorable lane: ${unanchored.stderr}`);
+  const noSlug = await list('');
+  assert.equal(noSlug.stdout, 'status=1\n', `empty slug: ${noSlug.stderr}`);
 });
 
 /** The four non-leftover shapes of the predicate, each with the reason it must report. */

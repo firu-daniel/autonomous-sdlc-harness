@@ -5843,7 +5843,8 @@ EOF
 #                     the absent-path manifest beside it: one protected path per
 #                     line that did not exist before the session, so the sweep
 #                     may remove a placeholder left there. Named by
-#                     `hr_run_profile_absent_file`, written by
+#                     `hr_run_profile_absent_file`, listed by
+#                     `hr_run_profile_absent_files`, written by
 #                     `hr_placeholder_manifest_write`, read by
 #                     `hr_placeholder_sweep_var`, and removed with the profile.
 #
@@ -5958,6 +5959,28 @@ hr_run_profile_absent_file() {
   local file
   file=$(hr_run_profile_file "${1-}" "${2-}") || return 1
   printf '%s.absent\n' "${file%.json}"
+}
+
+# hr_run_profile_absent_files <repo slug> — print every existing manifest
+# `hr_run_profile_absent_file` names for <slug>, one per line: a regular file,
+# never a symbolic link. 0, printing nothing for an absent directory; 1,
+# printing nothing, whenever `hr_run_profile_absent_file` refuses. Creates
+# nothing. The directory and the suffix are that function's answer for the
+# branch `*`, split at its last `/`, so neither is spelled here. Its callers:
+# `autonomous-watcher.sh`'s `placeholder_manifests_var`, for
+# `placeholder_start_recover` and `placeholder_sweep_pass`.
+hr_run_profile_absent_files() {
+  local pattern dir leaf m
+  pattern=$(hr_run_profile_absent_file "${1-}" '*') || return 1
+  dir="${pattern%/*}"
+  leaf="${pattern##*/}"
+  [ -d "$dir" ] || return 0
+  # `$leaf` is unquoted so it globs; it holds no whitespace.
+  for m in "$dir"/$leaf; do
+    [ -f "$m" ] && [ ! -L "$m" ] || continue
+    printf '%s\n' "$m"
+  done
+  return 0
 }
 
 # hr_placeholder_manifest_write <manifest> <path>... — write <manifest> with one
