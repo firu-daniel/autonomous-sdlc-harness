@@ -42,3 +42,9 @@
 - `git diff docs/sandbox-verification.md docs/guard-verification.md` adds lines and changes no existing row or dated entry. Read it to confirm.
 - The guard-verification entry quotes a command and a result you ran, with the commit it ran against.
 - The text after the AN table names AN5–AN6 as owed measurements, cites the G4–G7 precedent in the same file, and contains no `item <N>` citation (`grep -n -E 'items? [0-9]+'` over the added lines finds nothing).
+
+**Deviations from plan:**
+
+- The plan says CL5 shows the sandbox "refuses to open" `objects/info/alternates`; CL5's probe was a zero-byte `dd … conv=notrunc`, a write-open. The paragraph says the sandbox refuses a sandboxed command's write-open of that file, which is what CL5 measured.
+- The registry's write protection is cited to RG1–RG3 (§4), the rows that measured it; the plan stated it without a row.
+- The dated paragraph sits after the section's existing `**Clean-up.**` paragraph, which belongs to AN1–AN4 and stays adjacent to them.

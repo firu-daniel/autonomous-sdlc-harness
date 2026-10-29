@@ -180,6 +180,8 @@ git diff --stat <merge-base>..HEAD -- plugin/hooks
 
 No guard code moved, so no §1.2 latency row is re-taken. The layout the guards are judged in did move: every new run copy is now a `git clone --shared`, whose `.git` is a directory, where a linked worktree's is a pointer file. A guard's own `git` calls from a session in a run copy now resolve the clone's `.git`, not a worktree's pointer. §2's standing decision matrices were taken with the payload's `cwd` at §0's primary fixture, and §2.1 adds a real sibling **linked worktree** for the `<work_root>/<project_name>-*` arms. None of them was taken from a clone, so they are owed a re-run with the `cwd`, and §2.1's sibling, in a clone. The measured rows below stand as the record of their date until that re-run.
 
+**2026-10-29: `hc_main_root` changed again, `hc_main_root_var` was added, and no guard calls either.** `fix_clone_main_repo_resolution` gave `hc_main_root` in `plugin/hooks/lib/harness-config-lib.sh` a clone arm, moved its body into the new `hc_main_root_var`, and changed nothing else in the library beyond the header comments describing those two functions. `git log --format='%h %s' 74618b02..6436ad77 -- plugin/hooks`, from the branch's merge base with `origin/dev` to its tip, listed one commit, `1d03a74a`. `grep -n 'hc_main_root' plugin/hooks/*.sh`, run against `6436ad77`, printed nothing and exited 1. The per-Bash-call path the §1.2 composite measures is therefore unchanged, and no latency row is re-taken.
+
 ---
 
 ## 2. Standing decision matrices
