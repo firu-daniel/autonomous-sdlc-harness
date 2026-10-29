@@ -26,12 +26,14 @@
 # is published.
 #
 # HOW IT REACHES MAIN, AND WHY NOT BY PUSH. `main` is protected by a ruleset that requires a pull
-# request and grants NO bypass actor, deliberately: main is the branch adopters install the plugin
-# from, so nothing automated may write to it — a bypass actor cannot be scoped to one workflow, so
-# granting one would hand every future workflow in this repository a direct write to the
-# distribution branch. This script therefore force-updates the `publish` branch to the publication
-# commit and stops. A human opens the pull request and merges it; the commit's parent is already
-# main's tip, so that pull request is a fast-forward.
+# request and restricts updates to its one bypass actor, the repository admin role, which may
+# bypass through a pull request only. That is deliberate: main is the branch adopters install the
+# plugin from, so nothing automated may write to it — a workflow's token holds no repository role,
+# and a bypass actor cannot be scoped to one workflow, so granting one to an app would hand every
+# future workflow in this repository a direct write to the distribution branch. This script
+# therefore force-updates the `publish` branch to the publication commit and stops. A human opens
+# the pull request and merges it as the admin; the commit's parent is already main's tip, so that
+# pull request is a fast-forward.
 #
 # MERGE IT WITH "REBASE AND MERGE". The guard below finds the last publication by walking main's
 # FIRST-PARENT line for the `Published-from` trailer. A merge commit would put the publication on

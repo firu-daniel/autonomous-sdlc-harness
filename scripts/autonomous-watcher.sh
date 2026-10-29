@@ -601,6 +601,7 @@
 #                    leaves the functions defined, which is how a pure reader is
 #                    reached at all; `bash -c` because another shell need not pass
 #                    a positional argument to a sourced file the same way
+#                 -> the live-pid record with "status":"completed" gives exactly `0`
 #   overrides     printf 'POLL_INTERVAL_SECS=99\n' > \
 #                   "${XDG_CONFIG_HOME:-$HOME/.config}/autonomous-sdlc-harness/watcher.env"
 #                 -> the tunables line shows 99, and POLL_INTERVAL_SECS=7 in the
@@ -1470,7 +1471,15 @@ job_report() {
 # run on the same branch (a user-review fix after a completed task run) reuse the
 # record rather than shadow it. The documented field set:
 #
-#   pid                 the launched process
+#   pid                 the launch subshell's pid, written by spawn_engine after
+#                       `status running`; cleared in the same write that sets
+#                       `completed` or `failed`, and cleared again by a fresh
+#                       launch. A session that ends before the parent's pid write
+#                       can leave a terminal record holding its own dead
+#                       subshell's pid, which the status filter ignores. A
+#                       `parked`, `paused` or `park_loop` record keeps it until
+#                       the next spawn overwrites it. No reader trusts it on a
+#                       record that is not `running`
 #   branch              the key, stamped into the record so it travels with it
 #   worktree            the working copy the run executes in
 #   status              running | parked | park_loop | paused | completed | failed.
@@ -1669,7 +1678,7 @@ reconcile_stale_runs() {
     if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
       if [ "$(registry_get "$b" status)" = "running" ]; then
         log "reconcile: run '$b' (pid ${pid:-?}) is gone but still marked running -> failed"
-        registry_set "$b" status failed
+        registry_set "$b" status failed pid ""
         notify failed "$b" "$(registry_get "$b" log_path)" "(process vanished)"
       fi
     fi
@@ -1681,12 +1690,20 @@ EOF
 # Runs marked `running` whose process is still alive. A PURE READER: its ONLY
 # stdout is the final integer, because the cap check captures it with `$(…)`.
 # Healing a vanished process belongs to reconcile_stale_runs(), above.
+# `running` is the only status that holds a slot. The status filter is what keeps
+# a finished record's pid, once the OS reuses it, from holding one — a terminal
+# write drops the pid, but a session that exits before spawn_engine's parent
+# writes `pid "$!"` leaves its own dead subshell's pid on a terminal record. The
+# filter cannot count out a run being launched: every launch and resume path
+# writes `status running` before spawn_engine writes the pid, and the watcher
+# runs each spawn to completion before its next capacity read.
 running_count() {
   local n=0 b pid
   while IFS= read -r b; do
     [ -n "$b" ] || continue
     # A remote run holds no local slot: the job gates itself.
     record_is_remote "$b" && continue
+    [ "$(registry_get "$b" status)" = "running" ] || continue
     pid="$(registry_get "$b" pid)"
     if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
       n=$((n + 1))
@@ -1772,11 +1789,10 @@ footprint_grade() {
 }
 
 # Live runs at a foreign root: records whose `status` is `running` AND whose pid
-# answers `kill -0`. THE STATUS FILTER IS THIS REPORT'S OWN. running_count tests
-# only the pid, which is sound locally because reconcile_stale_runs demotes a
-# dead `running` record first on every pass — but no reconcile pass ever runs
-# against a foreign root, so a bare pid walk there would count a `parked`,
-# `paused` or `failed` record whose pid happens to be live. `doctor` applies the
+# answers `kill -0`. running_count applies the same status filter, and this
+# report needs it for a further reason: no reconcile pass ever runs against a
+# foreign root, so a bare pid walk there would count a `parked`, `paused` or
+# `failed` record whose pid happens to be live. `doctor` applies the
 # same STATUS filter. Its liveness test additionally counts a process this
 # account may not signal (EPERM), which `kill -0` here cannot distinguish from a
 # process that is gone — so on a machine whose daemons run under more than one
@@ -2369,8 +2385,7 @@ spawn_refuse() {
 # when it returns 1: the record goes to `failed`, with one `failed`
 # notification naming the reason, and no pid stays attached.
 spawn_refused() {
-  registry_set "$1" status failed
-  registry_set "$1" pid ""
+  registry_set "$1" status failed pid ""
   notify failed "$1" "$2" "not launched: ${SPAWN_REFUSAL:-the launch was refused}"
 }
 
@@ -3277,7 +3292,7 @@ classify_run_exit() {
       notify parked "$branch" "$log_path" "See $clar_dir"
     fi
   elif [ "$rc" -eq 0 ]; then
-    registry_set "$branch" status completed
+    registry_set "$branch" status completed pid ""
     # Clear the watchdog counters so a reused branch key starts clean.
     registry_set "$branch" stall_restarts 0
     registry_set "$branch" stall_warned ""
@@ -3289,7 +3304,7 @@ classify_run_exit() {
       notify completed "$branch" "$log_path"
     fi
   else
-    registry_set "$branch" status failed
+    registry_set "$branch" status failed pid ""
     registry_set "$branch" park_loop_cycles 0
     log "run '$branch' failed — rc=$rc"
     notify failed "$branch" "$log_path" "(exit $rc)"
@@ -3885,7 +3900,7 @@ check_stalled_runs() {
     fi
     if [ -n "$why" ]; then
       log "stall-watchdog: '$b' -> failed ($why)"
-      registry_set "$b" status failed
+      registry_set "$b" status failed pid ""
       notify failed "$b" "$log_path" "(stall-watchdog: $why)"
       registry_set "$b" stall_killing ""
       continue
@@ -3933,7 +3948,7 @@ check_stalled_runs() {
     fi
     if [ -n "$why" ]; then
       log "stall-watchdog: '$b' -> failed ($why)"
-      registry_set "$b" status failed
+      registry_set "$b" status failed pid ""
       notify failed "$b" "$log_path" "(stall-watchdog: $why)"
       registry_set "$b" stall_killing ""
       continue
@@ -3974,7 +3989,7 @@ EOF
 # again.
 fail_before_launch() {
   local branch="$1" file="$2" fname="$3" reason="$4"
-  registry_set "$branch" status failed
+  registry_set "$branch" status failed pid ""
   mv "$file" "$ARCHIVE_DIR/failed_$(date '+%Y%m%d%H%M%S')_$fname" 2>/dev/null || rm -f "$file"
   notify failed "$branch" "$LOGS_DIR/$branch.log" "$reason"
 }

@@ -2003,9 +2003,9 @@ function pidIsAlive(pid: JsonValue | undefined): boolean {
  * `autonomous-watcher.sh`'s `footprint_live_runs` applies. The liveness half is NOT identical: this
  * side counts `EPERM` as alive (see {@link pidIsAlive}) and the shell's `kill -0 … 2>/dev/null`
  * cannot, so the two can differ by a run owned by another account on a shared machine. That is the
- * only case, and it is named rather than papered over. The watcher's `running_count` tests only the
- * pid, which is sound in the repository it runs in because `reconcile_stale_runs` demotes a dead
- * `running` record first on every pass; **no reconcile pass ever runs against a foreign root**, so a
+ * only case, and it is named rather than papered over. The watcher's `running_count` applies the
+ * same `status` filter, so a finished record's reused pid holds no slot there either. The filter is
+ * needed here whatever the watcher does: **no reconcile pass ever runs against a foreign root**, so a
  * bare pid walk there would count a `parked`, `paused` or `failed` record whose pid happens to have
  * been reused.
  *

@@ -363,7 +363,8 @@ test('with the key absent the same drop launches the agent and sends nothing to 
   assert.equal(record.engine, 'task');
   assert.equal(record.worktree, f.worktree);
   assertClone(f);
-  assert.match(String(record.pid), /^\d+$/);
+  // A completed run drops its pid, unless the session ended before spawn_engine's pid write landed.
+  if (record.pid !== '') assert.throws(() => process.kill(Number(record.pid), 0), { code: 'ESRCH' });
   assert.equal('execution' in record, false);
   assert.equal('remote_dispatched_at' in record, false);
   const launched = f.notifications().filter((n) => n.event === 'launched');

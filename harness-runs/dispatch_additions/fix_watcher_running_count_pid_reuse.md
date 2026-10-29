@@ -1,0 +1,4 @@
+## [C · Item 1 · cli · iter 0] → layer-implementer  (#24)
+- **added:** `context_notes:`
+- **verbatim:** `context_notes: this unit's readiness entry is tagged `_(layer: cli, general)_` (harness-runs/code_reviews/fix_watcher_running_count_pid_reuse_code_review.md line 24); per unit_loop_core.md → `## Layer routing table`, a `general` layer-implementer dispatch for this same unit follows this one, before the unit's single commit (source: plugin/instructions/unit_loop_core.md).`
+- **why the agent could not derive it:** the layer-implementer receives only its own layer, path and conventions document; the unit's multi-layer tag and the loop's per-layer dispatch order live in the review index and `unit_loop_core.md`, neither of which is in its read set. Dispatch #23 (same block, no addition) returned an unmarked blocker asking for the unit to be re-dispatched as `general` alone, because it could not see that a `general` dispatch follows.

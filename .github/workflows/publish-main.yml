@@ -10,7 +10,7 @@ on:
     branches: [dev]
 
 # contents: write reaches the `publish` branch and nothing more — main takes no push from here,
-# by ruleset and with no bypass actor. pull-requests: write is for opening the publication pull
+# by ruleset, whose only bypass actor is the admin role. pull-requests: write is for opening the publication pull
 # request, which succeeds only if "Allow GitHub Actions to create and approve pull requests" is on;
 # it is off here, so the script prints the link instead and the job still passes.
 permissions:

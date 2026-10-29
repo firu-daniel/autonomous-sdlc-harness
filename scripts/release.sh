@@ -20,10 +20,12 @@
 #      publishing; this waits for that run and then for the registry to list the version. Skipped
 #      when the registry already lists it.
 #
-# WHO RUNS IT. The operator, at a terminal, with `gh` logged in as an account that may merge onto
-# dev and main. Merging through `gh` is the same pull-request route the rulesets require of the web
-# UI — nothing here pushes to a protected branch, which githooks/pre-push would refuse anyway.
-# Without --dry-run it refuses unless stdin is a terminal, for the reason tag-release.sh gives.
+# WHO RUNS IT. The operator, at a terminal, with `gh` logged in as the repository admin. Both merges
+# use `gh pr merge --admin`: dev-protection requires an approval the pull request's own author
+# cannot give, and main-protection restricts updates to the admin role — both rulesets let that role
+# bypass through a pull request only, which is the route taken here. Nothing pushes to a protected
+# branch, which githooks/pre-push would refuse anyway. Without --dry-run it refuses unless stdin is
+# a terminal, for the reason tag-release.sh gives.
 #
 # Usage: release.sh <version> [--dry-run] [--yes]
 #   --dry-run  report which steps are done and which would run; change nothing
@@ -195,7 +197,7 @@ if [ "$bump_done" -eq 0 ]; then
     [ -n "$pr" ] || fail "opened the bump pull request but could not find it"
   fi
   say "squash-merging the bump, #${pr}, onto dev"
-  gh pr merge "$pr" --repo "$slug" --squash --delete-branch >/dev/null \
+  gh pr merge "$pr" --repo "$slug" --squash --admin --delete-branch >/dev/null \
     || fail "could not merge #${pr} onto dev"
   fetch
   [ "$(version_at refs/remotes/origin/dev)" = "$version" ] \
@@ -227,7 +229,7 @@ if [ "$publish_done" -eq 0 ]; then
   fi
   # Rebase and merge, never anything else: publish-main.sh → MERGE IT WITH "REBASE AND MERGE".
   say "rebase-merging the publication, #${pr}, onto main"
-  gh pr merge "$pr" --repo "$slug" --rebase >/dev/null || fail "could not merge #${pr} onto main"
+  gh pr merge "$pr" --repo "$slug" --rebase --admin >/dev/null || fail "could not merge #${pr} onto main"
   fetch
   [ "$(version_at refs/remotes/origin/main)" = "$version" ] \
     || fail "#${pr} is merged but origin/main does not carry ${version}"

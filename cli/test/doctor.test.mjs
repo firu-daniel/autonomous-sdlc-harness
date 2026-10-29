@@ -3124,9 +3124,9 @@ test('the machine-footprint check reports the machine, and never fails or writes
     const dir = await wiredFixture(subtest);
     const machine = await footprintMachine(subtest, { cap: FOOTPRINT_CAP });
     const unitPath = await seededUnitFile(subtest);
-    // Three records, one live. The third is what makes the case discriminate: a bare `kill -0` walk
-    // — the watcher's own `running_count`, which applies no status filter — would report 2, so this
-    // fails if either half of the predicate drops the `status === 'running'` condition.
+    // Three records, one live. The third is what makes the case discriminate: a bare `kill -0` walk,
+    // one with no status filter, would report 2, so this fails if either half of the predicate drops
+    // the `status === 'running'` condition.
     seedRunRegistry(dir, {
       'run-alive-and-running': { status: 'running', pid: process.pid },
       'run-running-but-dead': { status: 'running', pid: DEAD_PID },
