@@ -22,7 +22,7 @@
 **What was checked and held:**
 
 - **Check 1 (wiring).** `hc_main_root_var` has both QA-lock helpers as callers. `hc_work_root`, `hc_project_name` and `hc_config_dir` exist and are keyed per root. All 22 clause sites carry the new pointer. The fence test reads its command out of the template at run time.
-- **Check 2 (runtime address).** This clone's own `.git/objects/info/alternates` is the single line `/Users/daniel/Work/autonomous-sdlc-harness/.git/objects`. The main checkout's registry records `fix_clone_main_repo_resolution` as `copy_kind` `clone` at exactly this checkout's toplevel. `hr_worktree_dir`'s `<work_root>/<projectName>-<branch with / → ->` composes to the same path. So F3, F6 and F7 compose to a valid answer here.
+- **Check 2 (runtime address).** This clone's own `.git/objects/info/alternates` is a single line naming the main checkout's own `.git/objects` directory. The main checkout's registry records `fix_clone_main_repo_resolution` as `copy_kind` `clone` at exactly this checkout's toplevel. `hr_worktree_dir`'s `<work_root>/<projectName>-<branch with / → ->` composes to the same path. So F3, F6 and F7 compose to a valid answer here.
 - **Check 3 (citations).** These were opened and confirmed:
   - CL5 and its `blocked: F9` Linux row;
   - RG1;

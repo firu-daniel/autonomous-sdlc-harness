@@ -10,7 +10,7 @@
 
 This list is the **single source of truth** for the fix loop. Any `[ ]` markers elsewhere in this plan or its per-finding files are informational only.
 
-1. [ ] **Finding 1** — Remove the absolute home path from the skeptic review's Check 2 line. _(layer: general)_
+1. [x] **Finding 1** — Remove the absolute home path from the skeptic review's Check 2 line. _(layer: general)_
 
 ## Must Fix
 
