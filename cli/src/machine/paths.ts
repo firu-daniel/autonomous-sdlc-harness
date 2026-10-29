@@ -85,7 +85,9 @@ function resolveMachineDir(variable: string, fallback: string): string {
  * What lives in it is machine-scoped run state that no single repository owns: the usage lane's two
  * artifacts, published by `docs/watcher.md` §5; the watcher's per-run profiles,
  * `run-profiles/<slug>/<branch>.json`, whose path `hr_run_profile_file` in the generated
- * `lib/harness-run-lib.sh` owns and `docs/watcher.md` §2 `### The per-run profile` publishes; and the
+ * `lib/harness-run-lib.sh` owns and `docs/watcher.md` §2 `### The per-run profile` publishes; beside
+ * each, on a bubblewrap host, its absent-path manifest, `run-profiles/<slug>/<branch>.absent`, whose
+ * path `hr_run_profile_absent_file` in the same library owns and the same section publishes; and the
  * registry of initialized repositories, which §5 is explicit is a different artifact defined elsewhere.
  */
 export function machineStateDir(): string {

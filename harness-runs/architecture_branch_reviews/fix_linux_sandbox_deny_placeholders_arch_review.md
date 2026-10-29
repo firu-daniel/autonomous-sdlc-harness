@@ -8,7 +8,7 @@ Headline: the layering holds. The new `bubblewrapDenyWrite` column extends `COPY
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 2** — List the absent-path manifest among the machine state directory's contents in `machineStateDir`'s header _(layer: cli)_
+1. [x] **Finding 2** — List the absent-path manifest among the machine state directory's contents in `machineStateDir`'s header _(layer: cli)_
 2. [ ] **Finding 3** — Resolve the state directory in `sandbox-absent-path-check.sh` through the run library, not a `harness-runs` literal _(layer: general)_
 3. [ ] **Finding 1** — Move manifest enumeration into the run library instead of globbing `*.absent` twice in the watcher _(layer: cli, general)_
 
