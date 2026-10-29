@@ -8,7 +8,10 @@
  * a push by `ls-remote` on origin, a commit by `rev-parse` before and after — and its leg table is
  * the single declaration `--list` prints, every row id in exactly one leg, and Gate 15 in
  * `docs/development.md` restates it row for row. A result line's row must be one of its leg's rows,
- * so an argument shift that fuses the row with the verdict is refused at its source.**
+ * so an argument shift that fuses the row with the verdict is refused at its source. The Linux-only
+ * legs (`SP_LINUX_ONLY_LEGS`) are recorded `not run` row by row off Linux, a leg whose row differs by
+ * platform takes the one `sp_leg_row_for` picks from `SP_PLATFORM`, and the parity script's text
+ * changes on Linux in its two expectation endings only.**
  *
  * The judges run in a `bash -c` that sources `core.sh` and `judge.sh` from `WORKSPACE_ROOT`, with the
  * fixture (or `os.tmpdir()`) as its working directory; every repository argument names a `seedRepository` fixture and
@@ -34,7 +37,7 @@ const PROBE_LIB = join(WORKSPACE_ROOT, 'scripts', 'lib', 'sandbox-probe');
 const CORE = join(PROBE_LIB, 'core.sh');
 const JUDGE = join(PROBE_LIB, 'judge.sh');
 
-/** Task 1's run order. */
+/** The run order, the Linux legs placed before `headless-parity` and `refusal` last. */
 const LEG_ORDER = [
   'gates',
   'mktemp',
@@ -51,10 +54,15 @@ const LEG_ORDER = [
   'repo-settings',
   'credentials',
   'invalid-profile',
+  'glob-deny',
+  'registry',
+  'detached',
+  'loopback',
   'headless-parity',
+  'refusal',
 ];
 
-/** The story index's new-row table, `CS12–CS14` expanded. */
+/** The rows the probe's branches added to the table, ranges expanded. */
 const NEW_ROWS = [
   'P1b',
   'P1c',
@@ -73,6 +81,23 @@ const NEW_ROWS = [
   'S5',
   'RS1',
   'HP1',
+  'T3',
+  'TD4',
+  'GW1',
+  'GW2',
+  'RG1',
+  'RG2',
+  'RG3',
+  'BG9',
+  'WF5',
+  'LB1',
+  'LB2',
+  'LB3',
+  'LB4',
+  'LB5',
+  'RF1',
+  'RF2',
+  'RF3',
 ];
 
 /**
@@ -283,6 +308,52 @@ test('--list prints the leg table', async (t) => {
     const unknown = await sourced(tmpdir(), 'sp_leg_rows no-such-leg; printf "|%s" "$?"');
     assert.equal(unknown.stdout, '|1');
   });
+
+  await t.test("run --leg refusal is a usage error, raised before preflight", async () => {
+    const run = await runBash(WORKSPACE_ROOT, [PROBE, 'run', '--leg', 'refusal']);
+    assert.equal(run.status, 1, run.stderr);
+    assert.ok(
+      run.stderr.split('\n').includes("sandbox-probe: the refusal leg runs only through 'sandbox-probe.sh refusal'"),
+      run.stderr,
+    );
+  });
+});
+
+test('the Linux-only legs and the per-platform rows', async (t) => {
+  await t.test('sp_leg_linux_only answers 0 for exactly the Linux-only legs', async () => {
+    const legs = ['glob-deny', 'registry', 'detached', 'loopback', 'refusal', 'gates', 'headless-parity'];
+    const run = await sourced(tmpdir(), 'for leg in "$@"; do sp_leg_linux_only "$leg"; printf "%s=%s\\n" "$leg" "$?"; done', legs);
+    assert.equal(
+      run.stdout,
+      'glob-deny=0\nregistry=0\ndetached=0\nloopback=0\nrefusal=0\ngates=1\nheadless-parity=1\n',
+      run.stderr,
+    );
+  });
+
+  await t.test('sp_leg_platform_skip records each row not run, naming the host', async () => {
+    const run = await sourced(tmpdir(), 'sp_leg_platform_skip loopback', [], { SP_PLATFORM: 'macos' });
+    assert.equal(
+      run.stdout,
+      ['LB1', 'LB2', 'LB3', 'LB4', 'LB5']
+        .map(
+          (row) =>
+            `leg="loopback" row="${row}" result="not run" evidence="Linux only: this host is macos" departure="none" claude="unknown"\n`,
+        )
+        .join(''),
+      run.stderr,
+    );
+  });
+
+  await t.test('sp_leg_row_for takes the Linux row on linux and the macOS row otherwise', async () => {
+    for (const [platform, row] of [
+      ['linux', 'TD4'],
+      ['macos', 'TD2'],
+      ['', 'TD2'],
+    ]) {
+      const run = await sourced(tmpdir(), 'sp_leg_row_for TD2 TD4', [], { SP_PLATFORM: platform });
+      assert.equal(run.stdout, `${row}\n`, `SP_PLATFORM=${platform}: ${run.stderr}`);
+    }
+  });
 });
 
 test("Gate 15's restated leg table matches --list, row for row", async () => {
@@ -373,7 +444,7 @@ test('sp_result_line: fixed field order, double-quoted values', async (t) => {
       '',
     ]);
     assert.equal(run.stdout, '|1|1');
-    assert.equal(run.stderr, "sandbox-probe: sp_result_line: row 'T2fail' is not a row of leg 'gates' (T2,W7)\n");
+    assert.equal(run.stderr, "sandbox-probe: sp_result_line: row 'T2fail' is not a row of leg 'gates' (T2,W7,T3)\n");
   });
 
   await t.test('a foreign row is refused, the match is on whole rows, and judge takes row -', async () => {
@@ -385,7 +456,7 @@ test('sp_result_line: fixed field order, double-quoted values', async (t) => {
       '',
     ]);
     assert.equal(foreign.stdout, '|1|1');
-    assert.equal(foreign.stderr, "sandbox-probe: sp_result_line: row 'CS3' is not a row of leg 'gates' (T2,W7)\n");
+    assert.equal(foreign.stderr, "sandbox-probe: sp_result_line: row 'CS3' is not a row of leg 'gates' (T2,W7,T3)\n");
 
     const prefix = await sourced(tmpdir(), 'sp_result_line "$@"; printf "|%s|%s" "$?" "$SP_FAIL_COUNT"', [
       'planted-files',
@@ -454,20 +525,41 @@ test('print-parity-script: launch lines carry the headless flags and departures,
     assert.doesNotMatch(stdout, /~|\$HOME/, 'every path is spelled absolute');
   }
 
+  const placeholders = {
+    clone: "'<clone>'",
+    run: "'<run profile>'",
+    net: "'<net profile>'",
+    main: "'<main>'",
+    state: "'<main>/<stateDir>'",
+    home: '/probe-home/sbx_probe_rt1_marker',
+    cs2: "'<main>/.git/sbx_cs2_new'",
+  };
+  const darwin = await runBash(WORKSPACE_ROOT, [PROBE, 'print-parity-script'], {
+    HOME: '/probe-home',
+    SANDBOX_PROBE_UNAME: 'Darwin',
+  });
+
   await t.test('the placeholder form, through the entry point', async () => {
-    const run = await runBash(WORKSPACE_ROOT, [PROBE, 'print-parity-script'], { HOME: '/probe-home' });
+    assert.equal(darwin.status, 0, darwin.stderr);
+    assertScript(darwin.stdout, expected(placeholders));
+  });
+
+  await t.test('the placeholder form on Linux differs in the two expectation endings only', async () => {
+    const run = await runBash(WORKSPACE_ROOT, [PROBE, 'print-parity-script'], {
+      HOME: '/probe-home',
+      SANDBOX_PROBE_UNAME: 'Linux',
+    });
     assert.equal(run.status, 0, run.stderr);
-    assertScript(
+    assertScript(run.stdout, expected(placeholders));
+    const n1 = "; expect a <sandbox_violations> refusal:\n";
+    const cs2 = '; expect Operation not permitted:\n';
+    assert.equal(darwin.stdout.split(n1).length, 2, 'step 2 ends with the macOS expectation once');
+    assert.equal(darwin.stdout.split(cs2).length, 2, 'step 4 ends with the macOS expectation once');
+    assert.equal(
       run.stdout,
-      expected({
-        clone: "'<clone>'",
-        run: "'<run profile>'",
-        net: "'<net profile>'",
-        main: "'<main>'",
-        state: "'<main>/<stateDir>'",
-        home: '/probe-home/sbx_probe_rt1_marker',
-        cs2: "'<main>/.git/sbx_cs2_new'",
-      }),
+      darwin.stdout
+        .replace(n1, '; expect a network refusal: CONNECT tunnel failed, response 403, or a <sandbox_violations> line:\n')
+        .replace(cs2, '; expect a sandbox refusal: Read-only file system, or Operation not permitted:\n'),
     );
   });
 

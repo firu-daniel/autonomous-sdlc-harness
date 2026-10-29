@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # legs-local.sh — the sandbox probe's gates, mktemp, scratch and retrieval legs (rows T2, W7, TD2, SR1,
-# SR2, MC1): each launches its sessions in the probe clone and prints one result line per row.
+# SR2, MC1; on Linux T3 in place of T2 and TD4 in place of TD2): each launches its sessions in the probe
+# clone and prints one result line per row.
 #
 # T2 takes the Run gates phase's route (docs/sandbox-verification.md §7 OR6): one session issues
 # `run-test-suite.sh sbx_probe_t2`, then `run-test-suite.sh --wait sbx_probe_t2`, repeated while it
 # prints `pending`, up to SP_T2_MAX_WAITS times. T2 is graded from the lane's .verdict and .log, never
 # from a call's output. A worker still running after the session is tracked for teardown and polled for
 # up to SP_T2_COLLECT_SECONDS, so teardown never removes the clone under it, interrupted or not.
+# T3 runs and is graded the same way; on Linux the log search also quotes `Read-only file system` and
+# `failed to create file via template`.
 #
 # W7's session carries `--debug-file`, a departure from the watcher's line; its path is exported as
 # SP_W7_DEBUG once that session has launched, for the write-protection leg's W8.
@@ -16,11 +19,17 @@
 # one spelled with that TMPDIR as a literal path, so `Bash(mktemp:*)` matches every call. A call refused
 # at the permission layer never reached the sandbox and is `not run`, never `fail`.
 #
+# TD4 is TD2's sessions on Linux, graded against TD3 (docs/sandbox-verification.md §5, the unsandboxed
+# GNU coreutils record), never against TD2: bare and -d written under that TMPDIR, -t an error carrying
+# `too few X's`, explicit written. A form erroring with neither its expected text nor a known refusal
+# is `not run`.
+#
 # THE GRADING FUNCTIONS read only their arguments and the stream, and call only core.sh, judge.sh,
 # controls.sh and this file's functions:
-#   sp__t2_grade <stream> <run command> <verdict file> <log file>   T2's verdict
+#   sp__t2_grade <stream> <run command> <verdict file> <log file>   T2's and T3's verdict
 #   sp__td2_tmpdir <stream> <command>    the printed TMPDIR, no trailing slash; status 1, printing nothing
 #   sp__td2_grade <stream> <tmpdir>      TD2's verdict
+#   sp__td4_grade <stream> <tmpdir>      TD4's verdict
 #
 # The scratch file is `.mjs`, not the `.sh` the task plan named: scripts/scratch-run.sh refuses a `.sh`
 # file with exit 66, so a shell probe would measure that refusal rather than the sandbox.
@@ -55,6 +64,11 @@ sp__local_text() {
 # sp__t2_grade <stream> <run command> <verdict file> <log file> — sets SP_VERDICT and SP_EVIDENCE.
 sp__t2_grade() {
   local stream="${1:-}" cmd="${2:-}" vfile="${3:-}" log="${4:-}" vline="" line n
+  local pats=(-e 'mkstemp failed' -e 'Operation not permitted') named="mkstemp failed, Operation not permitted"
+  if [ "${SP_PLATFORM:-}" = linux ]; then
+    pats+=(-e 'Read-only file system' -e 'failed to create file via template')
+    named="$named, Read-only file system, failed to create file via template"
+  fi
   sp_judge_call "$stream" ran "$cmd"
   if [ "${SP__COUNT:-0}" -eq 0 ] || [ "$SP_LAYER" = permission ]; then
     SP_VERDICT="not run"
@@ -77,11 +91,11 @@ sp__t2_grade() {
         SP_VERDICT=fail
         line=""
         if [ -f "$log" ]; then
-          line="$(grep -m 1 -F -e 'mkstemp failed' -e 'Operation not permitted' -- "$log" 2>/dev/null)" ||
+          line="$(grep -m 1 -F "${pats[@]}" -- "$log" 2>/dev/null)" ||
             line="$(grep -m 1 -E '^== run-test-suite\.sh: gate .* exited [1-9][0-9]* ==$' -- "$log" 2>/dev/null)" ||
             line=""
         fi
-        [ -n "$line" ] || line="$vline (no mkstemp failed, Operation not permitted or non-zero gate exit line in the log)"
+        [ -n "$line" ] || line="$vline (no $named or non-zero gate exit line in the log)"
         SP_EVIDENCE="$line; compare with the same call unsandboxed on the same tree before filing its row"
         ;;
       *)
@@ -176,18 +190,78 @@ sp__td2_grade() {
   SP_EVIDENCE="$summary"
 }
 
+# sp__td4_grade <stream> <tmpdir> — sets SP_VERDICT and SP_EVIDENCE from TD4's four forms, each against
+# TD3's unsandboxed result.
+sp__td4_grade() {
+  local stream="${1:-}" tmpdir="${2:-}" form cmd first want clause summary="" notrun=0 bad=0
+  local differs=" — differs from TD3"
+  for form in bare -d -t explicit; do
+    case "$form" in
+      bare) cmd="mktemp" want="$tmpdir/" ;;
+      -d) cmd="mktemp -d" want="$tmpdir/" ;;
+      -t) cmd="mktemp -t harness-gates" want="" ;;
+      explicit) cmd="mktemp $tmpdir/harness-gates.XXXXXX" want="$tmpdir/harness-gates." ;;
+    esac
+    sp_judge_call "$stream" ran "$cmd"
+    if [ "${SP__COUNT:-0}" -eq 0 ] || [ -z "$SP_LAYER" ]; then
+      notrun=1
+      clause="$form: $SP_EVIDENCE"
+    elif [ "$SP_LAYER" = permission ]; then
+      notrun=1
+      clause="$form: refused ($SP_LAYER) $SP_LAYER_EVIDENCE"
+    elif [ "$SP_LAYER" != ran ]; then
+      bad=1
+      clause="$form: refused ($SP_LAYER) $SP_LAYER_EVIDENCE$differs"
+    elif [ "${SP__STATUS:-}" = error ]; then
+      # judge.sh's unrecognised arm needs an expected refusal; TD4 expects `ran`, so it is applied here.
+      if [ "$form" = -t ] && sp__line_with "$(sp__local_text)" "too few X's" >/dev/null; then
+        clause="$form: $SP_LAYER_EVIDENCE"
+      else
+        notrun=1
+        clause="$form: no refusal string this judge knows on Linux, so not graded: $SP_LAYER_EVIDENCE"
+      fi
+    else
+      first="$(sp__first_line "$(sp__local_text)")"
+      clause="$form: written $first"
+      if [ -z "$want" ]; then
+        bad=1
+        clause="$clause$differs"
+      else
+        case "$first" in
+          "$want"?*) ;;
+          *)
+            bad=1
+            clause="$clause$differs"
+            ;;
+        esac
+      fi
+    fi
+    [ -z "$summary" ] || summary="$summary; "
+    summary="$summary$clause"
+  done
+  if [ "$notrun" -eq 1 ]; then
+    SP_VERDICT="not run"
+  elif [ "$bad" -eq 1 ]; then
+    SP_VERDICT=fail
+  else
+    SP_VERDICT=pass
+  fi
+  SP_EVIDENCE="$summary"
+}
+
 sp_leg_gates() {
-  local scripts_rel state_rel lane pfile cmd wait_cmd verdict evidence departure waited pid note
+  local scripts_rel state_rel lane pfile cmd wait_cmd verdict evidence departure waited pid note row
+  row="$(sp_leg_row_for T2 T3)"
   SP_W7_DEBUG=""
   if ! scripts_rel="$(hr_scripts_dir "$SP_CLONE")"; then
-    sp_result_line gates T2 "not run" "scriptsDir unresolvable in the clone" ""
+    sp_result_line gates "$row" "not run" "scriptsDir unresolvable in the clone" ""
     sp_result_line gates W7 "not run" "scriptsDir unresolvable in the clone" ""
     return 0
   fi
 
-  # --- T2: the gates through run-test-suite.sh, cwd = the clone.
+  # --- T2 (T3 on Linux): the gates through run-test-suite.sh, cwd = the clone.
   if ! state_rel="$(hr_state_dir "$SP_CLONE")"; then
-    sp_result_line gates T2 "not run" "stateDir unresolvable in the clone" ""
+    sp_result_line gates "$row" "not run" "stateDir unresolvable in the clone" ""
   else
     lane="$SP_CLONE/$state_rel/test_run_logs/$(hr_sanitize_branch "$SP_BRANCH")/$SP_T2_LABEL"
     cmd="bash $scripts_rel/run-test-suite.sh $SP_T2_LABEL"
@@ -228,7 +302,7 @@ sp_leg_gates() {
     verdict="$SP_VERDICT"
     evidence="$SP_EVIDENCE"
     [ -z "$note" ] || evidence="$evidence; $note"
-    sp_result_line gates T2 "$verdict" "$evidence" "$departure"
+    sp_result_line gates "$row" "$verdict" "$evidence" "$departure"
   fi
 
   # --- W7: six wrapper calls by absolute path, no --allowedTools. Only the `'<probe>'` call withdraws
@@ -292,7 +366,8 @@ sp_leg_gates() {
 }
 
 sp_leg_mktemp() {
-  local pfile departure tdep cmd tmpdir line verdict evidence
+  local pfile departure tdep cmd tmpdir line verdict evidence row
+  row="$(sp_leg_row_for TD2 TD4)"
   # --- Session mktemp-tmpdir: the session's TMPDIR, read so TD2's explicit form can carry it as a literal.
   cmd="printenv TMPDIR"
   pfile="$SP_TMP/mktemp-tmpdir.prompt"
@@ -304,7 +379,7 @@ sp_leg_mktemp() {
     sp_judge_call "$SP_STREAM" ran "$cmd"
     line="$SP_EVIDENCE"
     [ -z "$SP_LAYER" ] || line="$SP_LAYER $line"
-    sp_result_line mktemp TD2 "not run" \
+    sp_result_line mktemp "$row" "not run" \
       "the session's TMPDIR could not be read as a literal path: $cmd: $line" "$tdep"
     return 0
   fi
@@ -319,7 +394,11 @@ sp_leg_mktemp() {
   departure="$(sp_departures)"
   departure="${tdep:+$tdep; }$departure"
 
-  sp__td2_grade "$SP_STREAM" "$tmpdir"
+  if [ "${SP_PLATFORM:-}" = linux ]; then
+    sp__td4_grade "$SP_STREAM" "$tmpdir"
+  else
+    sp__td2_grade "$SP_STREAM" "$tmpdir"
+  fi
   verdict="$SP_VERDICT"
   evidence="$SP_EVIDENCE"
 
@@ -339,7 +418,7 @@ sp_leg_mktemp() {
         ;;
     esac
   done
-  sp_result_line mktemp TD2 "$verdict" "$evidence" "$departure"
+  sp_result_line mktemp "$row" "$verdict" "$evidence" "$departure"
 }
 
 sp_leg_scratch() {

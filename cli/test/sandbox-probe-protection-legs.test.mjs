@@ -1,7 +1,7 @@
 /**
  * The sandbox probe's write-protection and git-leg helpers (`sp__wp_w8`, `sp__wp_cs7_edit`,
  * `sp__git_cs3_fetch`, `sp__wp_dd_grade`, `sp__git_cs3_call`, `sp__git_cs3_state`, `sp__git_cl5_grade`,
- * `sp__wp_tracked` in
+ * `sp__wp_tracked`, `sp__wp_mv_class` in
  * `scripts/lib/sandbox-probe/legs-protection.sh`), run over the recorded streams and debug logs in
  * `fixtures/sandbox-probe/` and over a repository each case seeds.
  *
@@ -9,10 +9,14 @@
  * and passes it only on a refusal that names a protection (the Edit tool's read-before-write refusal is
  * `not run`), CS3's fetch refusal is the clone layout's design, a call refused at the permission layer
  * never reached the layer CS1, CS2, CS7, CS3 and CL5 measure, and is `not run`, and a CS3 state check
- * depending on such a call is skipped rather than failed, and no probe helper writes `Broken pipe`.**
+ * depending on such a call is skipped rather than failed, and no probe helper writes `Broken pipe`. On
+ * Linux, `Read-only file system` is a dd and rename refusal beside `Operation not permitted`, and a dd,
+ * rename or CS3 fetch error carrying no refusal string the judge knows is `not run`, never `fail`; with
+ * SP_PLATFORM empty each of those cases keeps its macOS verdict.**
  *
  * Fixtures are passed unsubstituted: no function here requires an absolute path, and W8's rule and its
- * unmatched-rule line both spell `@FIXTURE_ROOT@`, so the substring match holds as recorded.
+ * unmatched-rule line both spell `@FIXTURE_ROOT@`, so the substring match holds as recorded. A case
+ * setting SP_PLATFORM also sources `platform.sh` and sets it afterwards, since that file empties it.
  *
  * The `sp__wp_tracked` repository commits 10,000 files so that `git ls-files` prints more than a 64 KiB
  * pipe buffer, and runs it with SIGPIPE ignored, as a caller may launch the probe: a pipe whose reader
@@ -32,6 +36,7 @@ import { PACKAGE_ROOT, runBash, runGit, seedRepository, WORKSPACE_ROOT } from '.
 
 const PROBE_LIB = join(WORKSPACE_ROOT, 'scripts', 'lib', 'sandbox-probe');
 const LIBS = ['core.sh', 'judge.sh', 'controls.sh', 'legs-protection.sh'].map((f) => join(PROBE_LIB, f));
+const PLATFORM_LIB = join(PROBE_LIB, 'platform.sh');
 const FIXTURES = join(PACKAGE_ROOT, 'test', 'fixtures', 'sandbox-probe');
 const RUN_PROFILE = '@FIXTURE_ROOT@/run-profiles/sbx.json';
 const W8_RULE = 'Edit(@FIXTURE_ROOT@/scripts/**)';
@@ -53,6 +58,23 @@ function sourced(cwd, body, args = [], env = {}) {
     SP_VERSION: '',
     ...env,
   });
+}
+
+/** As {@link sourced}, with `platform.sh` sourced too and SP_PLATFORM set to `platform` after it. */
+function sourcedOn(cwd, platform, body, args = []) {
+  return runBash(
+    cwd,
+    [
+      '-c',
+      `. "$1"; . "$2"; . "$3"; . "$4"; . "$5"; SP_PLATFORM="$6"; shift 6; ${body}`,
+      '_',
+      ...LIBS,
+      PLATFORM_LIB,
+      platform,
+      ...args,
+    ],
+    { SP_VERSION: '' },
+  );
 }
 
 async function caseDir(t) {
@@ -234,6 +256,97 @@ test('sp__wp_dd_grade: a permission-layer refusal of a dd is not run', async (t)
   await t.test('a session with no such dd is not run', async (t) => {
     assert.equal(await dd(t, fixture('ran'), PERMISSION_DD), `not run|no Bash call "${PERMISSION_DD}" in the session`);
   });
+});
+
+/** As {@link graded}, on `platform`; returns `[<$v>, <$e>]`. */
+async function gradedOn(t, platform, fn, v, e, stream, cmd) {
+  const dir = await caseDir(t);
+  const run = await sourcedOn(dir, platform, `${fn} "$@"; printf '%s|%s' "$${v}" "$${e}"`, [stream, cmd]);
+  assert.equal(run.status, 0, run.stderr);
+  const bar = run.stdout.indexOf('|');
+  return [run.stdout.slice(0, bar), run.stdout.slice(bar + 1)];
+}
+
+const EROFS_LINE = "dd: failed to open '@FIXTURE_ROOT@/clone/.git/config': Read-only file system";
+const LINUX_UNRECOGNISED = 'no refusal string this judge knows on Linux';
+
+test('sp__wp_dd_grade on Linux: Read-only file system passes, an unknown error is not run', async (t) => {
+  const dd = (t, platform, name) =>
+    gradedOn(t, platform, 'sp__wp_dd_grade', 'SP__WP_DD_V', 'SP__WP_DD_E', fixture(name), PERMISSION_DD);
+
+  await t.test('Read-only file system on Linux passes, quoting the line', async (t) => {
+    assert.deepEqual(await dd(t, 'linux', 'wp-dd-erofs'), ['pass', EROFS_LINE]);
+  });
+
+  await t.test('Read-only file system with SP_PLATFORM empty fails as a call that ran', async (t) => {
+    const [v, e] = await dd(t, '', 'wp-dd-erofs');
+    assert.equal(v, 'fail');
+    assert.ok(e.startsWith('ran:'), e);
+  });
+
+  await t.test('an unknown error on Linux is not run, never fail', async (t) => {
+    const [v, e] = await dd(t, 'linux', 'wp-dd-unrecognised');
+    assert.equal(v, 'not run');
+    assert.ok(e.startsWith(LINUX_UNRECOGNISED), e);
+  });
+
+  await t.test('an unknown error with SP_PLATFORM empty fails', async (t) => {
+    const [v] = await dd(t, '', 'wp-dd-unrecognised');
+    assert.equal(v, 'fail');
+  });
+
+  for (const platform of ['linux', '']) {
+    await t.test(`a permission-layer refusal is not run with SP_PLATFORM '${platform}'`, async (t) => {
+      assert.deepEqual(await dd(t, platform, 'wp-dd-permission'), ['not run', NEVER_REACHED]);
+    });
+  }
+});
+
+test('sp__wp_mv_class: one rename helper line’s class, by platform', async (t) => {
+  async function cls(t, platform, line) {
+    const dir = await caseDir(t);
+    const run = await sourcedOn(dir, platform, 'sp__wp_mv_class "$@"', [line]);
+    assert.equal(run.status, 0, run.stderr);
+    return run.stdout;
+  }
+  const cases = [
+    ['sbx_wp_mv 0 landed', 'landed\n', 'landed\n'],
+    ['sbx_wp_mv 0 stage failed: cp: x', 'stage-failed\n', 'stage-failed\n'],
+    ['sbx_wp_mv 0 mv: rename a to b: Operation not permitted', 'refused\n', 'refused\n'],
+    ["sbx_wp_mv 0 mv: cannot move 'a' to 'b': Read-only file system", 'refused\n', 'other\n'],
+    ["sbx_wp_mv 0 mv: cannot move 'a' to 'b': Device or resource busy", 'unrecognised\n', 'other\n'],
+  ];
+  for (const [line, linux, empty] of cases) {
+    await t.test(line, async (t) => {
+      assert.equal(await cls(t, 'linux', line), linux, 'SP_PLATFORM=linux');
+      assert.equal(await cls(t, '', line), empty, 'SP_PLATFORM empty');
+    });
+  }
+});
+
+test('sp__git_cs3_fetch by platform: an unknown error is not run on Linux only', async (t) => {
+  const fetch = (t, platform, name) =>
+    gradedOn(t, platform, 'sp__git_cs3_fetch', 'SP__GIT_FETCH_V', 'SP__GIT_FETCH_E', fixture(name), 'git fetch origin');
+
+  await t.test('an unknown error on Linux is not run', async (t) => {
+    const [v, e] = await fetch(t, 'linux', 'cs3-fetch-unrecognised');
+    assert.equal(v, 'not run');
+    assert.ok(e.startsWith(LINUX_UNRECOGNISED), e);
+  });
+
+  await t.test('an unknown error with SP_PLATFORM empty fails as reaching origin', async (t) => {
+    const [v, e] = await fetch(t, '', 'cs3-fetch-unrecognised');
+    assert.equal(v, 'fail');
+    assert.ok(e.startsWith('git fetch origin reached origin from inside the sandbox: '), e);
+  });
+
+  for (const platform of ['linux', '']) {
+    await t.test(`a network-allowlist refusal passes with SP_PLATFORM '${platform}'`, async (t) => {
+      const [v, e] = await fetch(t, platform, 'cs3-fetch-refused');
+      assert.equal(v, 'pass');
+      assert.ok(e.startsWith('refused by the network allowlist, as the clone layout intends (§7 OR2): '), e);
+    });
+  }
 });
 
 test('sp__git_cs3_call: a permission-layer refusal of a CS3 call is not run', async (t) => {

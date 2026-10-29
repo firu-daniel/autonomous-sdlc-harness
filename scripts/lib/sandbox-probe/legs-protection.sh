@@ -40,9 +40,15 @@
 #   sp__git_cs3_state <ref before> <a> <b> <marker> <x> <stash count before> <unrun>
 #                                                      CS3's state checks: SP__GIT_STATE_F, SP__GIT_STATE_P
 #   sp__git_cl5_grade <stream> <exact command>         CL5's git config: SP_VERDICT, SP_EVIDENCE
+#   sp__wp_mv_class <helper line>                      one rename line's class, printed
 # A call refused at the permission layer is `not run`, never `fail`; CS3 is `fail` on any failure from a
 # call that ran, the fetch or a state check whose calls all ran, else `not run` when any call did not
 # run, else `pass`.
+#
+# ON LINUX (SP_PLATFORM `linux`): a dd or the CS3 fetch the judge files under layer `unrecognised` is
+# `not run`, and so is a rename line sp__wp_mv_class classes `unrecognised`; `Read-only file system` is a
+# rename refusal beside `Operation not permitted`, and the row's pass sentence names both. With
+# SP_PLATFORM empty or `macos`, every verdict and evidence string is unchanged.
 #
 # SOURCED, NEVER EXECUTED. It sets no shell option: the entry point owns `set -u`. Bash 3.2 floor.
 
@@ -453,6 +459,33 @@ EOF
   return 1
 }
 
+# sp__wp_mv_class <helper line> — print the line's class: landed, stage-failed, refused, or, when no
+# refusal string matches, unrecognised on Linux and other on macOS. Reads only its argument.
+sp__wp_mv_class() {
+  case "$1" in
+    *" landed")
+      printf '%s\n' landed
+      return 0
+      ;;
+    *" stage failed: "*)
+      printf '%s\n' stage-failed
+      return 0
+      ;;
+    *"Operation not permitted"*)
+      printf '%s\n' refused
+      return 0
+      ;;
+  esac
+  if [ "${SP_PLATFORM:-}" = linux ]; then
+    case "$1" in
+      *"Read-only file system"*) printf '%s\n' refused ;;
+      *) printf '%s\n' unrecognised ;;
+    esac
+    return 0
+  fi
+  printf '%s\n' other
+}
+
 # sp__wp_cleanup — remove at once every new name a probe call landed, and every staged sibling, so the
 # git leg in the same clone is not run against a planted file.
 sp__wp_cleanup() {
@@ -497,6 +530,10 @@ sp__wp_dd_grade() {
       SP__WP_DD_V="not run"
       SP__WP_DD_E="refused at the permission layer, so it never reached the sandbox: $SP_EVIDENCE"
       ;;
+    unrecognised)
+      SP__WP_DD_V="not run"
+      SP__WP_DD_E="$SP_EVIDENCE"
+      ;;
     *)
       SP__WP_DD_V=fail
       SP__WP_DD_E="$SP_LAYER: $SP_EVIDENCE"
@@ -538,10 +575,13 @@ sp__wp_judge_row() {
     elif ! line="$(sp__wp_mv_line "$mv_text" "$i")"; then
       notrun="${notrun:+$notrun; }rename onto $t: no sbx_wp_mv $i line in the helper's output"
     else
-      case "$line" in
-        *" landed") why="${why:+$why; }rename onto $t landed" ;;
-        *" stage failed: "*) notrun="${notrun:+$notrun; }rename onto $t: ${line#* stage failed: }" ;;
-        *"Operation not permitted"*) ;;
+      case "$(sp__wp_mv_class "$line")" in
+        landed) why="${why:+$why; }rename onto $t landed" ;;
+        stage-failed) notrun="${notrun:+$notrun; }rename onto $t: ${line#* stage failed: }" ;;
+        refused) ;;
+        unrecognised)
+          notrun="${notrun:+$notrun; }rename onto $t: no refusal string this judge knows on Linux: ${line#sbx_wp_mv $i }"
+          ;;
         *) why="${why:+$why; }rename onto $t: not a sandbox refusal: ${line#sbx_wp_mv $i }" ;;
       esac
     fi
@@ -570,6 +610,9 @@ sp__wp_judge_row() {
   elif [ "$passed" -eq 0 ]; then
     SP__WP_RV="not run"
     SP__WP_RE="no target for $row in the per-run profile"
+  elif [ "${SP_PLATFORM:-}" = linux ]; then
+    SP__WP_RV=pass
+    SP__WP_RE="$passed target(s): every dd and rename refused by the sandbox (Operation not permitted or Read-only file system), every inode and shasum unchanged, no new name created"
   else
     SP__WP_RV=pass
     SP__WP_RE="$passed target(s): every dd and rename refused with Operation not permitted, every inode and shasum unchanged, no new name created"
@@ -970,6 +1013,10 @@ sp__git_cs3_fetch() {
       SP__GIT_FETCH_E="git fetch origin reached origin from inside the sandbox: $SP_EVIDENCE"
       ;;
     "")
+      SP__GIT_FETCH_V="not run"
+      SP__GIT_FETCH_E="$SP_EVIDENCE"
+      ;;
+    unrecognised)
       SP__GIT_FETCH_V="not run"
       SP__GIT_FETCH_E="$SP_EVIDENCE"
       ;;

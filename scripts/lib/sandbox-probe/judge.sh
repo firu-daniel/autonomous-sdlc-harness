@@ -18,7 +18,16 @@
 #               `This proxy requires authentication` (an SSH call through the proxy,
 #               docs/sandbox-verification.md row P1)
 #   sandbox     `Operation not permitted`
-#   ran         none of the above
+#   sandbox     Linux only: `Read-only file system` (EROFS, a write into a bubblewrap read-only bind)
+#   ran         none of the above. Its evidence is the result's first line, except that a bare
+#               `Exit code <n>` first line is quoted as `Exit code <n>: <first later non-empty line>`
+#               (docs/sandbox-verification.md §5 PD18; sp__message_line)
+#
+# UNRECOGNISED. sp__judge_matched sets SP_LAYER=unrecognised and SP_VERDICT `not run`, never `fail`, when
+# all four hold: SP_PLATFORM is `linux`, the expected layer is `sandbox` or `network`, sp__layer said
+# `ran`, and the result is an error. A `ran` result that is not an error still fails against an expected
+# refusal. No caller may expect `unrecognised`. A Linux refusal string is added to the table above only
+# from a Linux run's kept evidence, never guessed. With SP_PLATFORM empty or `macos`, no Linux arm applies.
 #
 # A call is matched byte-equal: a command with anything appended is a different call. Every jq read
 # skips a stream line that is not JSON.
@@ -75,6 +84,33 @@ sp__first_line() {
   printf '%s' "$line"
 }
 
+# sp__message_line <text> — the `ran` arm's evidence (PD18): `Exit code <n>: <first later non-empty
+# line>` when the text opens on the Bash tool's bare `Exit code <n>` header and a message follows it;
+# otherwise what sp__first_line prints.
+sp__message_line() {
+  local text="$1" first="${1%%$'\n'*}" n line
+  case "$first" in
+    "Exit code "*)
+      n="${first#Exit code }"
+      case "$n" in
+        '' | *[!0-9]*) ;;
+        *)
+          case "$text" in *$'\n'*)
+            while IFS= read -r line; do
+              if [ -n "$line" ]; then
+                printf '%s: %s' "$first" "$line"
+                return 0
+              fi
+            done <<<"${text#*$'\n'}"
+            ;;
+          esac
+          ;;
+      esac
+      ;;
+  esac
+  sp__first_line "$text"
+}
+
 # sp__line_with <text> <substring>... — the first line carrying any substring; status 1 when none does.
 sp__line_with() {
   local text="$1" line sub
@@ -126,9 +162,11 @@ sp__layer() {
     SP_LAYER=network
   elif line="$(sp__line_with "$text" "Operation not permitted")"; then
     SP_LAYER=sandbox
+  elif [ "${SP_PLATFORM:-}" = linux ] && line="$(sp__line_with "$text" "Read-only file system")"; then
+    SP_LAYER=sandbox
   else
     SP_LAYER=ran
-    line="$(sp__first_line "$text")"
+    line="$(sp__message_line "$text")"
   fi
   SP_LAYER_EVIDENCE="$line"
 }
@@ -163,6 +201,16 @@ sp__judge_matched() {
       return 1
       ;;
   esac
+  if [ "${SP_PLATFORM:-}" = linux ] && [ "$SP_LAYER" = ran ] && [ "$SP__STATUS" = error ]; then
+    case "$expect" in
+      sandbox | network)
+        SP_LAYER=unrecognised
+        SP_VERDICT="not run"
+        SP_EVIDENCE="no refusal string this judge knows on Linux, so not graded: $SP_LAYER_EVIDENCE$(sp__issued "$SP__COUNT")"
+        return 0
+        ;;
+    esac
+  fi
   if [ "$SP_LAYER" = "$expect" ]; then
     SP_VERDICT=pass
   else

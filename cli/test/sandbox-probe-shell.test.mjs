@@ -5,7 +5,9 @@
  * **The rule these tests exist to enforce: the probe refuses before creating anything, in the order
  * `preflight.sh`'s header lists, with exit 2 and one `refusing to start: <reason>` line; and its
  * `shasum` guard fires, with exit 3 and one `FAILED: <path> changed` line, on any change to the three
- * main-checkout files it snapshots.**
+ * main-checkout files it snapshots. The `refusal` subcommand's narrower preflight refuses, the same way,
+ * a host it does not measure — not Linux, `sandbox-prerequisites` passing, or both `bwrap` and `socat`
+ * resolving — and its `absent` mode never reaches `run`, whose refusal 6 is not weakened.**
  *
  * The probe places its main checkout from its own location, and the `SANDBOX_PROBE_*` seams replace
  * `uname`, `doctor` and the agent CLI only, never that root. So every case runs a **copy** of the
@@ -14,7 +16,8 @@
  * source; no case invokes the probe, or sources its libraries, there.
  *
  * Left out deliberately: the sandboxed sessions, which only a hand-run `sandbox-probe.sh run`
- * reaches, so no case launches `claude`; and the git judges and the leg table, which
+ * reaches, so no case launches `claude`; the `refusal` subcommand past its preflight, which would cut a
+ * clone through `create-worktree.sh`; and the git judges and the leg table, which
  * `cli/test/sandbox-probe-git-and-legs.test.mjs` covers.
  */
 
@@ -47,6 +50,10 @@ function doctorPrinting(lines) {
 }
 
 const DOCTOR_PASS = doctorPrinting(DOCTOR_IDS.map((id) => `PASS  ${id}  ok`));
+const PREREQ_WARN = '! WARN  sandbox-prerequisites  bwrap missing';
+const DOCTOR_PREREQ_WARN = doctorPrinting(
+  DOCTOR_IDS.map((id) => (id === 'sandbox-prerequisites' ? PREREQ_WARN : `PASS  ${id}  ok`)),
+);
 
 /** A fresh `TMPDIR` under `os.tmpdir()`, removed when the case ends. */
 async function caseTmp(t) {
@@ -84,11 +91,11 @@ async function probeFixture(t) {
   return { ...w, scripts, defaultBranch: config.defaultBranch, libDir: join(scripts, PROBE_LIB) };
 }
 
-/** `preflight` through the probe copy at `probe`, under `tmp`, with `seams` over the doctor pass. */
-function preflight(f, probe, tmp, seams = {}) {
+/** `<subcommand>` through the probe copy at `probe`, under `tmp`, with `seams` over the doctor pass. */
+function probeSubcommand(subcommand, f, probe, tmp, seams = {}) {
   return runBash(
     f.dir,
-    [probe, 'preflight'],
+    [probe, subcommand],
     f.watcherEnv({
       TMPDIR: tmp,
       SANDBOX_PROBE_UNAME: 'Darwin',
@@ -100,6 +107,9 @@ function preflight(f, probe, tmp, seams = {}) {
     }),
   );
 }
+
+const preflight = (...args) => probeSubcommand('preflight', ...args);
+const refusalPreflight = (...args) => probeSubcommand('refusal', ...args);
 
 /**
  * The probe's own stderr lines, those carrying its `sandbox-probe: ` prefix. The rest is whatever
@@ -139,10 +149,19 @@ test('preflight refuses in order, exit 2, leaving nothing behind', async (t) => 
     assert.deepEqual(await probeLeftovers(tmp), []);
   });
 
-  await t.test('2. a host that is not macOS', async (t) => {
+  await t.test('2. a host that is neither macOS nor Linux', async (t) => {
+    const tmp = await caseTmp(t);
+    const run = await preflight(f, probe, tmp, { SANDBOX_PROBE_UNAME: 'FreeBSD', ...agentPass });
+    assertRefused(run, "this probe measures the macOS and Linux sandboxes and 'uname -s' is 'FreeBSD'");
+    assert.deepEqual(await probeLeftovers(tmp), []);
+  });
+
+  await t.test('2. a Linux host gets past check 2, as a Darwin one does', async (t) => {
     const tmp = await caseTmp(t);
     const run = await preflight(f, probe, tmp, { SANDBOX_PROBE_UNAME: 'Linux', ...agentPass });
-    assertRefused(run, "this probe measures the macOS sandbox and 'uname -s' is 'Linux'; the Linux legs are owed under roadmap item 21 (docs/development.md §6)");
+    assert.equal(run.status, 0, run.stderr);
+    assert.deepEqual(probeLines(run.stderr), [], run.stderr);
+    assert.equal(run.stdout, '');
     assert.deepEqual(await probeLeftovers(tmp), []);
   });
 
@@ -355,6 +374,101 @@ test('preflight refuses in order, exit 2, leaving nothing behind', async (t) => 
     assert.deepEqual(probeLines(run.stderr), [], run.stderr);
     assert.equal(run.stdout, '');
     assert.deepEqual(await probeLeftovers(tmp), []);
+  });
+});
+
+test('the refusal subcommand refuses a host it does not measure', async (t) => {
+  const f = await probeFixture(t);
+  if (f === null) return;
+  const probe = join(f.scripts, PROBE_FILE);
+  const stubs = join(f.dir, 'watcher-test');
+  const bin = join(stubs, 'bin');
+  await mkdir(bin, { recursive: true });
+  const agentStub = join(stubs, 'agent-version.sh');
+  await writeFile(agentStub, "#!/usr/bin/env bash\nprintf 'stub 0.0.0\\n'\n", 'utf8');
+  await chmod(agentStub, 0o755);
+  const bwrapStub = 'sandbox-probe-stub-bwrap';
+  const socatStub = 'sandbox-probe-stub-socat';
+  for (const name of [bwrapStub, socatStub]) {
+    await writeFile(join(bin, name), '#!/usr/bin/env bash\nexit 0\n', 'utf8');
+    await chmod(join(bin, name), 0o755);
+  }
+  const bothResolve = {
+    SANDBOX_PROBE_UNAME: 'Linux',
+    SANDBOX_PROBE_DOCTOR: DOCTOR_PREREQ_WARN,
+    SANDBOX_PROBE_AGENT_CLI: agentStub,
+    SANDBOX_PROBE_BWRAP: bwrapStub,
+    SANDBOX_PROBE_SOCAT: socatStub,
+    PATH: `${bin}:${process.env.PATH}`,
+  };
+
+  await t.test('(a) a host that is not Linux', async (t) => {
+    const tmp = await caseTmp(t);
+    const run = await refusalPreflight(f, probe, tmp, { SANDBOX_PROBE_UNAME: 'Darwin', SANDBOX_PROBE_AGENT_CLI: agentStub });
+    assertRefused(run, "the refusal subcommand measures a Linux host lacking bwrap or socat, and 'uname -s' is 'Darwin'");
+    assert.deepEqual(await probeLeftovers(tmp), []);
+  });
+
+  await t.test('(b) a Linux host where doctor passes sandbox-prerequisites', async (t) => {
+    const tmp = await caseTmp(t);
+    const run = await refusalPreflight(f, probe, tmp, { SANDBOX_PROBE_UNAME: 'Linux', SANDBOX_PROBE_AGENT_CLI: agentStub });
+    assertRefused(
+      run,
+      'doctor passes sandbox-prerequisites, so this host can start the sandbox and the refusal subcommand has nothing to measure: PASS  sandbox-prerequisites  ok',
+    );
+    assert.deepEqual(await probeLeftovers(tmp), []);
+  });
+
+  await t.test('(c) a Linux host where both bwrap and socat resolve', async (t) => {
+    const tmp = await caseTmp(t);
+    const run = await refusalPreflight(f, probe, tmp, bothResolve);
+    assertRefused(run, 'the refusal subcommand needs bwrap or socat missing from PATH, and both resolve');
+    assert.deepEqual(await probeLeftovers(tmp), []);
+  });
+
+  await t.test('an exported SP_PREFLIGHT_PREREQ=absent does not reach preflight', async (t) => {
+    const tmp = await caseTmp(t);
+    const run = await preflight(f, probe, tmp, { ...bothResolve, SP_PREFLIGHT_PREREQ: 'absent' });
+    assertRefused(run, `doctor does not pass sandbox-prerequisites: ${PREREQ_WARN}`);
+    assert.deepEqual(await probeLeftovers(tmp), []);
+  });
+
+  /**
+   * `sp_preflight` with SP_PREFLIGHT_PREREQ set to `mode`, in a shell that sourced the fixture's copies
+   * of the libraries it needs: check 6 under `absent` passing, short of the subcommand's clone.
+   */
+  const directPreflight = (tmp, mode, seams) =>
+    runBash(
+      f.libDir,
+      [
+        '-c',
+        [
+          '. "$1/core.sh"; . "$1/platform.sh"; . "$1/preflight.sh"',
+          'SP_PREFLIGHT_PREREQ="$2"',
+          'sp_preflight; rc=$?',
+          'sp_snapshot_release',
+          'exit "$rc"',
+        ].join('\n'),
+        '_',
+        f.libDir,
+        mode,
+      ],
+      f.watcherEnv({ TMPDIR: tmp, ...seams, [MAIN_REPO_ANCHOR_VARIABLE]: '' }),
+    );
+
+  await t.test('check 6 passes under absent on a host lacking bwrap; refuses under present', async (t) => {
+    const lacking = { ...bothResolve, SANDBOX_PROBE_BWRAP: 'sandbox-probe-no-such-bwrap' };
+
+    const tmp = await caseTmp(t);
+    const absent = await directPreflight(tmp, 'absent', lacking);
+    assert.equal(absent.status, 0, absent.stderr);
+    assert.deepEqual(probeLines(absent.stderr), [], absent.stderr);
+    assert.deepEqual(await probeLeftovers(tmp), []);
+
+    const controlTmp = await caseTmp(t);
+    const present = await directPreflight(controlTmp, 'present', lacking);
+    assertRefused(present, `doctor does not pass sandbox-prerequisites: ${PREREQ_WARN}`);
+    assert.deepEqual(await probeLeftovers(controlTmp), []);
   });
 });
 

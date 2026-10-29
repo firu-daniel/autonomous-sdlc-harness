@@ -18,10 +18,13 @@
 #   sp_untrack_pid <pid>     drop a tracked process that ended on its own, so teardown never stops a reused PID
 #   sp_stop_pid <pid>        TERM <pid> and wait up to SP__PID_POLLS polls of 0.1 s; status 1 when it is
 #                            still running, 0 when it ended or was already gone; prints nothing
+#   sp_restore_register <function> <arg>  the one pending-restore slot: teardown runs `<function> <arg>`
+#   sp_restore_clear         empty the pending-restore slot
 #   sp_teardown              first move the recorded files of every leg sp_leg_nonpass names into a
 #                            new ${TMPDIR:-/tmp}/sandbox-probe-evidence.XXXXXX/<leg>/, printed last on
-#                            stderr; then stop the tracked processes; then remove exactly what was
-#                            registered; idempotent
+#                            stderr; then stop the tracked processes; then run the pending restore, if
+#                            one is registered, before the clone loop reads SP_REGISTRY; then remove
+#                            exactly what was registered; idempotent
 #
 # THE POSITIVE-CONTROL RULE (docs/sandbox-verification.md → `## 0. Method`: "a positive control in the
 # same session for every refusal"). Every session that measures a refusal row also issues a positive
@@ -66,6 +69,9 @@ SP__CLONE_PATHS=()
 SP__TRACKED=""
 SP__TRACKED_BRANCHES=""
 SP__PIDS=""
+# The pending-restore slot (sp_restore_register): a function name and its one argument.
+SP__RESTORE_FN=""
+SP__RESTORE_ARG=""
 # One record per sp_session launch or sp_keep_file, tab-separated:
 # <leg> <stream> <stderr> <prompt file> <debug file, or empty>; an sp_keep_file record is <leg> <path>.
 SP__SESSIONS=""
@@ -355,6 +361,21 @@ sp_untrack_pid() {
 $SP__PIDS
 EOF
   SP__PIDS="$rest"
+}
+
+# sp_restore_register <function> <arg> — teardown runs `<function> <arg>` on every exit path until
+# sp_restore_clear; a second registration replaces the first.
+sp_restore_register() {
+  case "${1:-}" in
+    "" | *[!A-Za-z0-9_]*) sp_refuse "sp_restore_register: '${1:-}' is not a function name"; return 1 ;;
+  esac
+  SP__RESTORE_FN="$1"
+  SP__RESTORE_ARG="${2:-}"
+}
+
+sp_restore_clear() {
+  SP__RESTORE_FN=""
+  SP__RESTORE_ARG=""
 }
 
 # sp_stop_pid <pid> — the one place the probe stops a process it started: TERM, then up to SP__PID_POLLS
@@ -685,6 +706,16 @@ sp_teardown() {
   # Before the clones and the tracked-files pass, both of which can hold a kept file.
   sp__td_keep_evidence
   sp__td_stop_pids
+
+  # The pending restore, before the clone loop reads SP_REGISTRY through hr_registry_peek.
+  if [ -n "$SP__RESTORE_FN" ]; then
+    if ! declare -F "$SP__RESTORE_FN" >/dev/null; then
+      sp__td_fail "the pending restore '$SP__RESTORE_FN $SP__RESTORE_ARG' names no defined function"
+    elif ! "$SP__RESTORE_FN" "$SP__RESTORE_ARG"; then
+      sp__td_fail "the pending restore '$SP__RESTORE_FN $SP__RESTORE_ARG' did not complete"
+    fi
+  fi
+  sp_restore_clear
 
   i=$((${#SP__CLONE_BRANCHES[@]} - 1))
   while [ "$i" -ge 0 ]; do

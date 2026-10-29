@@ -10,7 +10,11 @@
  * are held here too: refused is `pass`, the Bash tool's own `allowed_domains cannot widen network
  * access` refusal included; answered is `fail` carrying the follow-up finding; a call with no
  * `allowed_domains` parameter is `not run`, and an error result carrying no refusal string is
- * `not run`. No case launches
+ * `not run`. PD18: the `ran` arm quotes `Exit code <n>: <first later non-empty line>` when a message
+ * follows the bare `Exit code` line. The Linux layers apply only under `SANDBOX_PROBE_UNAME=Linux`:
+ * `Read-only file system` is a sandbox refusal, and an error result carrying no refusal string,
+ * judged against an expected `sandbox` or `network`, is `not run` (layer `unrecognised`), never
+ * `fail`; each Linux case has a twin with no platform holding the macOS verdict. No case launches
  * `claude`, loads a model or reaches the network: the subcommand reads a fixture file and prints one
  * result line, and every assertion compares that printed line verbatim.
  *
@@ -37,9 +41,16 @@ const N5_COMMAND = 'curl -sS -o /dev/null https://n5.example.invalid/';
 const N5_FINDING =
   'finding: allowed_domains widened a sandboxed call; this needs its own follow-up task prompt, not a doc edit';
 
-/** `SP_VERSION` is blanked so the line's `claude=` field reads `unknown` whatever the caller exported. */
+/**
+ * `SP_VERSION` is blanked so the line's `claude=` field reads `unknown` whatever the caller exported;
+ * `SANDBOX_PROBE_UNAME` is blanked so a case is on macOS unless {@link judgeOnLinux} says otherwise.
+ */
 function judge(...args) {
-  return runBash(WORKSPACE_ROOT, [PROBE, 'judge', ...args], { SP_VERSION: '' });
+  return runBash(WORKSPACE_ROOT, [PROBE, 'judge', ...args], { SP_VERSION: '', SANDBOX_PROBE_UNAME: '' });
+}
+
+function judgeOnLinux(...args) {
+  return runBash(WORKSPACE_ROOT, [PROBE, 'judge', ...args], { SP_VERSION: '', SANDBOX_PROBE_UNAME: 'Linux' });
 }
 
 function fixture(name) {
@@ -163,6 +174,54 @@ test('judge call: each refusal layer maps to its verdict', async (t) => {
       'fail',
       'dd: @FIXTURE_ROOT@/outside/probe: Operation not permitted',
     );
+  });
+});
+
+test('PD18: the ran arm quotes the message under the Exit code line', async (t) => {
+  await t.test('Exit code 2, a blank line, then the message', async () => {
+    assertJudged(
+      await judge('call', fixture('exit-code-message'), 'ran', 'git status'),
+      'pass',
+      'Exit code 2: sbx: a message after a blank line',
+    );
+  });
+
+  await t.test('a result with no Exit code line keeps its first line', async () => {
+    assertJudged(await judge('call', fixture('ran'), 'ran', 'ls @FIXTURE_ROOT@'), 'pass', 'README.md');
+  });
+});
+
+test('the Linux refusal string and the unrecognised layer, on Linux only', async (t) => {
+  const dd = 'dd if=/dev/null of=@FIXTURE_ROOT@/clone/.mcp.json conv=notrunc';
+  const erofs = "dd: failed to open '@FIXTURE_ROOT@/clone/.mcp.json': Read-only file system";
+  const busy = "Exit code 1: dd: failed to open '@FIXTURE_ROOT@/clone/.mcp.json': Device or resource busy";
+
+  await t.test('Linux: Read-only file system is a sandbox refusal', async () => {
+    assertJudged(await judgeOnLinux('call', fixture('linux-erofs'), 'sandbox', dd), 'pass', erofs);
+  });
+
+  await t.test('no platform: Read-only file system is ran, so an expected sandbox fails', async () => {
+    assertJudged(await judge('call', fixture('linux-erofs'), 'sandbox', dd), 'fail', `Exit code 1: ${erofs}`);
+  });
+
+  await t.test('Linux: an error carrying no known refusal string is not run, never fail', async () => {
+    assertJudged(
+      await judgeOnLinux('call', fixture('linux-unrecognised'), 'sandbox', dd),
+      'not run',
+      `no refusal string this judge knows on Linux, so not graded: ${busy}`,
+    );
+  });
+
+  await t.test('no platform: the same error fails an expected sandbox', async () => {
+    assertJudged(await judge('call', fixture('linux-unrecognised'), 'sandbox', dd), 'fail', busy);
+  });
+
+  await t.test('Linux: an expected ran is never re-graded', async () => {
+    assertJudged(await judgeOnLinux('call', fixture('linux-unrecognised'), 'ran', dd), 'pass', busy);
+  });
+
+  await t.test('Linux: a non-error result judged against sandbox still fails', async () => {
+    assertJudged(await judgeOnLinux('call', fixture('ran'), 'sandbox', 'ls @FIXTURE_ROOT@'), 'fail', 'README.md');
   });
 });
 

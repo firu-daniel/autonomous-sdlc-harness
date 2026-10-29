@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"sp-lb-permission","cwd":"@FIXTURE_ROOT@/proj-sbx"}
+{"type":"user","timestamp":"2026-01-01T00:00:00.000Z","message":{"role":"user","content":"Run the command."}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:01.000Z","message":{"id":"m1","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"curl -sS --max-time 5 http://127.0.0.1:8765/sbx_n3.txt"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","is_error":true,"content":"Permission to use Bash has been denied because Claude Code is running in don't ask mode."}]}}
+{"type":"result","subtype":"success","timestamp":"2026-01-01T00:00:03.000Z","duration_ms":3000,"permission_denials":[]}

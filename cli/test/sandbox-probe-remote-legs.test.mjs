@@ -7,7 +7,8 @@
  * **The rule these tests exist to enforce: a refusal is graded only at the layer the row measures — a
  * permission-layer refusal is `not run`; N3 fails only on a body that came back; N4 never fails on an error
  * line that cannot tell; N4 passes only where its curl error differs from the same call issued unsandboxed from
- * the probe's own shell; a session that issued no calls grades nothing.**
+ * the probe's own shell; a session that issued no calls grades nothing; on Linux an `unrecognised` curl error
+ * is N3's and N4's data, graded exactly as on macOS.**
  *
  * Every case sources libraries and reads a fixture: none starts a listener, a session or a network call.
  * Port `8765` and token `sbx_n3_fixture` are fixture literals. Fixtures are passed unsubstituted, since
@@ -40,12 +41,18 @@ function fixture(name) {
   return join(FIXTURES, `${name}.jsonl`);
 }
 
-/** `body` run after sourcing the base libraries and `leg`, its own arguments in `"$@"`. */
-function sourced(cwd, leg, body, args) {
+/**
+ * `body` run after sourcing the base libraries and `leg`, its own arguments in `"$@"`; with `platform`,
+ * SP_PLATFORM is set to it after sourcing and before `body`.
+ */
+function sourced(cwd, leg, body, args, platform) {
   const libs = [...BASE_LIBS, leg].map((f) => join(PROBE_LIB, f));
-  return runBash(cwd, ['-c', `. "$1"; . "$2"; . "$3"; . "$4"; shift 4; ${body}`, '_', ...libs, ...args], {
-    SP_VERSION: '',
-  });
+  const setPlatform = platform === undefined ? '' : `SP_PLATFORM=${platform}; `;
+  return runBash(
+    cwd,
+    ['-c', `. "$1"; . "$2"; . "$3"; . "$4"; shift 4; ${setPlatform}${body}`, '_', ...libs, ...args],
+    { SP_VERSION: '' },
+  );
 }
 
 async function caseDir(t) {
@@ -55,8 +62,8 @@ async function caseDir(t) {
 }
 
 /** Runs `fn "$@"` from `leg` and returns `<SP_VERDICT>|<SP_EVIDENCE>`. */
-async function graded(t, leg, fn, args) {
-  const run = await sourced(await caseDir(t), leg, `${fn} "$@"; ${VERDICT}`, args);
+async function graded(t, leg, fn, args, platform) {
+  const run = await sourced(await caseDir(t), leg, `${fn} "$@"; ${VERDICT}`, args, platform);
   assert.equal(run.status, 0, run.stderr);
   return run.stdout;
 }
@@ -122,6 +129,79 @@ test('sp__net_n4_grade: N4 never fails on an error line that cannot tell, and pa
     assert.equal(
       await n4(t, 'n4-curl-error', '0', 'a response (12 bytes)'),
       "pass|refused in the session while the same call, unsandboxed from the probe's own shell, got a response: session: curl: (7) Failed to connect to 169.254.169.254 port 80 after 2 ms: Couldn't connect to server; unsandboxed control: a response (12 bytes)",
+    );
+  });
+});
+
+test('on Linux, N3 and N4 grade an unrecognised curl error exactly as their macOS twins do', async (t) => {
+  const N3_NO_BODY_PASS =
+    "pass|no body came back while the listener answered the probe: curl: (7) Failed to connect to 127.0.0.1 port 8765 after 0 ms: Couldn't connect to server";
+  const N4_SESSION = "curl: (7) Failed to connect to 169.254.169.254 port 80 after 2 ms: Couldn't connect to server";
+  const N4_SAME_CODE = "curl: (7) Failed to connect to 169.254.169.254 port 80 after 0 ms: Couldn't connect to server";
+
+  async function layer(t, stream, cmd, platform) {
+    const run = await sourced(
+      await caseDir(t),
+      'legs-network.sh',
+      'sp_judge_call "$@"; printf %s "$SP_LAYER"',
+      [fixture(stream), 'network', cmd],
+      platform,
+    );
+    assert.equal(run.status, 0, run.stderr);
+    return run.stdout;
+  }
+
+  await t.test('precondition: both fixtures are layer unrecognised on Linux and ran without a platform', async (t) => {
+    assert.equal(await layer(t, 'n3-no-body', N3_CMD, 'linux'), 'unrecognised');
+    assert.equal(await layer(t, 'n4-curl-error', N4_CMD, 'linux'), 'unrecognised');
+    assert.equal(await layer(t, 'n3-no-body', N3_CMD), 'ran');
+    assert.equal(await layer(t, 'n4-curl-error', N4_CMD), 'ran');
+  });
+
+  /** The grader's output with `linux` and with no platform, asserted equal; returns the one string. */
+  async function twins(t, fn, args) {
+    const linux = await graded(t, 'legs-network.sh', fn, args, 'linux');
+    const macos = await graded(t, 'legs-network.sh', fn, args);
+    assert.equal(linux, macos);
+    return linux;
+  }
+
+  await t.test('N3 with the listener answering passes on the curl line', async (t) => {
+    assert.equal(await twins(t, 'sp__net_n3_grade', [fixture('n3-no-body'), N3_CMD, N3_TOKEN, '1']), N3_NO_BODY_PASS);
+  });
+
+  await t.test('N3 with the listener not answering is not run', async (t) => {
+    assert.match(await twins(t, 'sp__net_n3_grade', [fixture('n3-no-body'), N3_CMD, N3_TOKEN, '0']), /^not run\|/);
+  });
+
+  const n4 = (t, ...control) => twins(t, 'sp__net_n4_grade', [fixture('n4-curl-error'), N4_CMD, ...control]);
+
+  await t.test('N4 with no control is not run', async (t) => {
+    assert.equal(
+      await n4(t),
+      `not run|curl's error line cannot tell a refused connect from an unreachable host: ${N4_SESSION}`,
+    );
+  });
+
+  await t.test('N4 with a control that ended differently passes', async (t) => {
+    const control = 'curl: (28) Connection timed out after 5001 milliseconds';
+    assert.equal(
+      await n4(t, '28', control),
+      `pass|the session's connect ended differently from the same call issued unsandboxed from the probe's own shell: session: ${N4_SESSION}; unsandboxed control: ${control}`,
+    );
+  });
+
+  await t.test('N4 with a control that ended the same way is not run', async (t) => {
+    assert.equal(
+      await n4(t, '7', N4_SAME_CODE),
+      `not run|curl's error line cannot tell a refused connect from an unreachable host, and the same call issued unsandboxed from the probe's own shell ended the same way: session: ${N4_SESSION}; unsandboxed control: ${N4_SAME_CODE}`,
+    );
+  });
+
+  await t.test('N4 with a control that got a response passes', async (t) => {
+    assert.equal(
+      await n4(t, '0', 'a response (12 bytes)'),
+      `pass|refused in the session while the same call, unsandboxed from the probe's own shell, got a response: session: ${N4_SESSION}; unsandboxed control: a response (12 bytes)`,
     );
   });
 });

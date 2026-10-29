@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
-# sandbox-probe.sh — measure the unattended sandbox on macOS: cut a throwaway probe clone, launch
+# sandbox-probe.sh — measure the unattended sandbox on macOS and Linux: cut a throwaway probe clone, launch
 # sandboxed headless sessions on the watcher's launch line, and print one result line per leg for the
 # rows of docs/sandbox-verification.md. Hand-written for this repository, like probe-plugin-cli.sh:
 # not in the set `init --force` regenerates, and not a cli/templates/ file.
 #
 # It changes nothing outside its own temp area, the probe clone and the probe branch, but one evidence directory:
 # a sandbox-probe-evidence.* directory under TMPDIR, kept only when a leg does not pass.
+# On Linux the registry leg is the exception: it writes beside <main>/<stateDir>/autonomous_logs/registry.json
+# and RG3 may move that directory aside; it removes what it wrote and restores the directory
+# (lib/sandbox-probe/legs-registry.sh → THE RESTORE RULE), so take a Linux run only in the throwaway container.
 # The directory that keeps the evidence of non-passing legs is printed last on stderr.
-# macOS only; the Linux legs are owed under roadmap item 21 (docs/development.md §6).
+# macOS, and Linux in a local container (docs/development.md → Gate 15); the GitHub-hosted runner legs are owed
+# under roadmap item 21 (docs/development.md §6).
 #
 # A person starts it from a terminal, because auto mode refuses a `claude -p` launch carrying
 # `--allowedTools`. From a session, `! bash <main>/scripts/sandbox-probe.sh run` works.
 #
-# Usage: sandbox-probe.sh [--help] | --list | preflight | run [--leg <name>]... | judge <kind> <args> | print-parity-script
+# Usage: sandbox-probe.sh [--help] | --list | preflight | run [--leg <name>]... | judge <kind> <args> | print-parity-script | refusal
 # Exit (several apply: the highest wins):
 #   0 every leg printed pass or not run · 1 usage, or a library function not yet present
 #   2 a preflight refusal, nothing created · 3 a protected main-checkout file changed
@@ -36,9 +40,10 @@ if [ ! -f "$SP_LIB/core.sh" ]; then
   echo "sandbox-probe: '$SP_LIB/core.sh' is missing" >&2
   exit 1
 fi
-for sp_lib_file in core.sh preflight.sh judge.sh session.sh controls.sh legs-local.sh \
+for sp_lib_file in core.sh platform.sh preflight.sh judge.sh session.sh controls.sh legs-local.sh \
   legs-wrappers.sh legs-refresh.sh legs-planted.sh legs-planted-files.sh legs-protection.sh \
-  legs-network.sh legs-settings.sh; do
+  legs-network.sh legs-settings.sh legs-glob.sh legs-registry.sh legs-detached.sh legs-loopback.sh \
+  legs-refusal.sh; do
   if [ -f "$SP_LIB/$sp_lib_file" ]; then
     # shellcheck source=/dev/null
     . "$SP_LIB/$sp_lib_file"
@@ -48,7 +53,7 @@ unset sp_lib_file
 
 usage() {
   cat <<'EOF'
-Usage: sandbox-probe.sh [--help] | --list | preflight | run [--leg <name>]... | judge <kind> <args> | print-parity-script
+Usage: sandbox-probe.sh [--help] | --list | preflight | run [--leg <name>]... | judge <kind> <args> | print-parity-script | refusal
 
   --help                 print this text
   --list                 print the leg table: leg, rows, expected, recorded in (tab-separated)
@@ -56,6 +61,7 @@ Usage: sandbox-probe.sh [--help] | --list | preflight | run [--leg <name>]... | 
   run [--leg <name>]...  run the named legs, or every leg but headless-parity, in table order
   judge <kind> <args>    judge a recorded stream (the test suite's entry)
   print-parity-script    print the headless-parity script with placeholders; run --leg headless-parity prints it live
+  refusal                on a Linux host lacking bwrap or socat: the refusal leg, behind its own preflight
 
 Start it from a terminal: auto mode refuses a `claude -p` launch carrying `--allowedTools`.
 From a session, `! bash <main>/scripts/sandbox-probe.sh run` works.
@@ -107,6 +113,7 @@ case "$cmd" in
   preflight)
     [ $# -eq 0 ] || usage_error "preflight takes no argument"
     sp_need sp_preflight
+    SP_PREFLIGHT_PREREQ=present
     if ! sp_preflight; then
       sp_exit_raise 2
       sp_finish
@@ -127,6 +134,7 @@ case "$cmd" in
         --leg)
           [ $# -ge 2 ] || usage_error "--leg needs a leg name (see --list)"
           sp_leg_rows "$2" >/dev/null || usage_error "unknown leg '$2' (see --list)"
+          [ "$2" != refusal ] || usage_error "the refusal leg runs only through 'sandbox-probe.sh refusal'"
           sp_selected="$sp_selected $2 "
           shift 2
           ;;
@@ -134,20 +142,30 @@ case "$cmd" in
       esac
     done
     sp_need sp_preflight sp_setup sp_teardown
+    SP_PREFLIGHT_PREREQ=present
     if ! sp_preflight; then
       sp_exit_raise 2
       sp_finish
     fi
+    if declare -F sp_stamp >/dev/null; then
+      sp_stamp
+    fi
     if sp_setup; then
       for sp_leg in $(sp_leg_names); do
+        [ "$sp_leg" = refusal ] && continue
         if [ -z "$sp_selected" ]; then
           [ "$sp_leg" = headless-parity ] && continue
+          if sp_leg_linux_only "$sp_leg" && [ "${SP_PLATFORM:-}" != linux ]; then
+            continue
+          fi
         else
           case "$sp_selected" in *" $sp_leg "*) ;; *) continue ;; esac
         fi
         sp_leg_fn="sp_leg_${sp_leg//-/_}"
         SP_CURRENT_LEG="$sp_leg"
-        if declare -F "$sp_leg_fn" >/dev/null; then
+        if sp_leg_linux_only "$sp_leg" && [ "${SP_PLATFORM:-}" != linux ]; then
+          sp_leg_platform_skip "$sp_leg"
+        elif declare -F "$sp_leg_fn" >/dev/null; then
           "$sp_leg_fn"
         else
           sp_leg_missing "$sp_leg"
@@ -162,6 +180,8 @@ case "$cmd" in
     ;;
   judge)
     sp_need sp_judge_cli
+    # No preflight runs here, so without the seam the judge grades as on macOS on any host.
+    SP_PLATFORM="$(sp_platform_of "${SANDBOX_PROBE_UNAME:-Darwin}")"
     sp_judge_cli "$@"
     sp_rc=$?
     sp_exit_raise "$sp_rc"
@@ -170,8 +190,31 @@ case "$cmd" in
   print-parity-script)
     [ $# -eq 0 ] || usage_error "print-parity-script takes no argument"
     sp_need sp_print_parity_script
+    SP_PLATFORM="$(sp_platform_of "${SANDBOX_PROBE_UNAME:-Darwin}")"
     sp_print_parity_script
     sp_exit_raise $?
+    sp_finish
+    ;;
+  refusal)
+    [ $# -eq 0 ] || usage_error "refusal takes no argument"
+    # Assigned here, never inherited: an exported value must not reach run's refusal 6.
+    SP_PREFLIGHT_PREREQ=absent
+    sp_need sp_preflight sp_setup sp_teardown sp_leg_refusal
+    if ! sp_preflight; then
+      sp_exit_raise 2
+      sp_finish
+    fi
+    if declare -F sp_stamp >/dev/null; then
+      sp_stamp
+    fi
+    if sp_setup; then
+      SP_CURRENT_LEG=refusal
+      sp_leg_refusal
+      SP_CURRENT_LEG=""
+    else
+      sp_exit_raise 2
+    fi
+    sp_teardown
     sp_finish
     ;;
   *)

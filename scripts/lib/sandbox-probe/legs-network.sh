@@ -25,7 +25,9 @@
 # unsandboxed from its own shell (sp__net_n4_control), and N4 is graded against it: `pass` when the
 # control got a response or ended on a different curl exit code than the session's `curl: (<n>)` line,
 # `not run` when the session's line carries no code or the two ended the same way, curl being off PATH
-# included. Elapsed time is not compared: a host with no link-local route also fails at once. The two
+# included. Elapsed time is not compared: a host with no link-local route also fails at once. On Linux a
+# curl error with no known refusal string is layer `unrecognised`, and N3 and N4 read it as their data, as
+# they read a `ran` error on macOS; every other row here keeps the judge's `not run` for it. The two
 # grades read only their arguments and the stream:
 #   sp__net_n3_grade <stream> <command> <token> <listener answered: 1|0>
 #   sp__net_n4_grade <stream> <command> [<control exit> <control line>]
@@ -212,7 +214,7 @@ sp__net_curl_line() {
 sp__net_n3_grade() {
   local stream="${1:-}" cmd="${2:-}" token="${3:-}" answered="${4:-0}" line
   sp_judge_call "$stream" network "$cmd"
-  [ "$SP_VERDICT" = "not run" ] && return 0
+  [ "$SP_VERDICT" = "not run" ] && [ "$SP_LAYER" != unrecognised ] && return 0
   case "$SP_LAYER" in permission | file-tool)
     SP_VERDICT="not run"
     SP_EVIDENCE="refused at the $SP_LAYER layer, so it never reached the sandbox: $SP_EVIDENCE"
@@ -237,7 +239,7 @@ sp__net_n3_grade() {
   fi
   if ! line="$(sp__net_curl_line "$SP__TEXT")"; then
     case "$SP_LAYER" in
-      network | sandbox) line="$SP_LAYER_EVIDENCE" ;;
+      network | sandbox | unrecognised) line="$SP_LAYER_EVIDENCE" ;;
       *) line="$(sp__first_line "$SP__TEXT")" ;;
     esac
   fi
@@ -272,7 +274,7 @@ sp__net_n4_grade() {
   ctl_rc="${3:-}"
   ctl_line="${4:-}"
   sp_judge_call "$stream" network "$cmd"
-  [ "$SP_VERDICT" = "not run" ] && return 0
+  [ "$SP_VERDICT" = "not run" ] && [ "$SP_LAYER" != unrecognised ] && return 0
   host="${cmd#*://}"
   host="${host%%/*}"
   case "$SP_LAYER" in

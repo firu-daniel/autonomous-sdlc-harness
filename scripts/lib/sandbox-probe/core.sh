@@ -8,7 +8,13 @@
 # docs/development.md restates it from `sandbox-probe.sh --list`, so edit it here and re-derive there.
 # One line per leg, in run order, tab-separated:
 #   <leg> <rows, comma-joined> <expected, one sentence> <recorded in: docs/sandbox-verification.md section>
-# A leg runs through `sp_leg_<leg>`, each `-` read as `_`.
+# A leg runs through `sp_leg_<leg>`, each `-` read as `_`. Gate 15 restates every field as a Markdown
+# table cell, so no field carries a `|`, a tab, a double quote or a backtick.
+#
+#   SP_LINUX_ONLY_LEGS                the legs that run only where SP_PLATFORM (platform.sh) is `linux`;
+#   sp_leg_linux_only <leg>           status 0 for a leg in that list
+#   sp_leg_platform_skip <leg>        one `not run` line per row of <leg>, naming the host's platform
+#   sp_leg_row_for <macOS row> <Linux row>  prints the Linux row when SP_PLATFORM is `linux`, else the macOS one
 #
 # SOURCED, NEVER EXECUTED. It sets no shell option: the entry point owns `set -u`.
 # Bash 3.2 is the floor (macOS /bin/bash): no associative array.
@@ -22,11 +28,11 @@ sp_leg_declare() {
   SP_LEGS="${SP_LEGS}$1"$'\t'"$2"$'\t'"$3"$'\t'"$4"$'\n'
 }
 
-sp_leg_declare gates "T2,W7" \
-  "the gates, started in the clone through run-test-suite.sh and collected with --wait, reach a pass verdict with no gate failing on its temporary file, and each of W7's six wrapper calls runs with no permission denial" \
-  "§5 Failures and their follow-ups (T2); §4 The profile's denials (W7)"
-sp_leg_declare mktemp "TD2" \
-  "the bare, -d and -t mktemp forms are refused with mkstemp failed, the explicit form spelled with the session's TMPDIR as a literal path is written, and a call refused at the permission layer is not run" \
+sp_leg_declare gates "T2,W7,T3" \
+  "the gates, started in the clone through run-test-suite.sh and collected with --wait, reach a pass verdict with no gate failing on its temporary file (T2 on macOS, T3 on Linux), and each of W7's six wrapper calls runs with no permission denial" \
+  "§5 Failures and their follow-ups (T2, T3); §4 The profile's denials (W7)"
+sp_leg_declare mktemp "TD2,TD4" \
+  "on macOS (TD2) the bare, -d and -t mktemp forms are refused with mkstemp failed; on Linux (TD4) the bare and -d forms are written under the session's TMPDIR and -t fails with too few X's, as TD3 found unsandboxed; on both the explicit form spelled with the session's TMPDIR as a literal path is written, and a call refused at the permission layer is not run" \
   "§5 Failures and their follow-ups"
 sp_leg_declare scratch "SR1,SR2" \
   "scratch-run.sh runs a probe file sandboxed, and a write outside the allowed roots from inside that file is refused" \
@@ -67,9 +73,24 @@ sp_leg_declare credentials "S1,S2,S4,S5" \
 sp_leg_declare invalid-profile "CS8" \
   "the control's call is refused, on the invalid profile the marker is recorded as written or refused, and the watcher's own run_profile_check refuses a scratch per-run copy whose sandbox.failIfUnavailable is a string while it accepts the unmodified one" \
   "§2 The clone layout (owed)"
+sp_leg_declare glob-deny "GW1,GW2" \
+  "Linux only: on a scratch per-run profile without the clone's exact entries, a sandboxed dd onto a clone path that only a denyWrite entry containing a star covers is recorded as refused or written, for a path that exists when the session starts (GW1) and one that does not (GW2), while its control is written" \
+  "§8 The Linux legs (owed)"
+sp_leg_declare registry "RG1,RG2,RG3" \
+  "Linux only: a sandboxed dd onto the run registry is refused while a new file beside it is written and an Edit of it is refused (RG1), a rename onto it leaves its inode and shasum unchanged (RG2), and moving its directory aside is refused, the probe restoring it at once if not (RG3)" \
+  "§8 The Linux legs (owed)"
+sp_leg_declare detached "BG9,WF5" \
+  "Linux only: a process started with nohup and disown inside one sandboxed call outlives the call and the session (BG9), and hr_lane_mtime, read in that process through the GNU stat arm, advances (WF5)" \
+  "§5 Failures and their follow-ups"
+sp_leg_declare loopback "LB1,LB2,LB3,LB4,LB5" \
+  "Linux only: the probe's loopback listener is called by 127.0.0.1 and by localhost, each also with --noproxy, on the network scratch profile as generated (LB1, LB2) and with 127.0.0.1 listed (LB3, LB4), and a listener a sandboxed call starts is called from outside the sandbox (LB5); once the listener answered the probe's own request, each row records whether the token came back and the proxy variables' host and port, and grades neither outcome" \
+  "§8 The Linux legs (owed)"
 sp_leg_declare headless-parity "HP1" \
   "the network, retry and write-protection legs give the same results in an interactive session, from the printed parity script" \
   "§4 The profile's denials"
+sp_leg_declare refusal "RF1,RF2,RF3" \
+  "Linux only, through the refusal subcommand on a host lacking bwrap or socat: Claude Code's own startup refusal under failIfUnavailable is quoted (RF1), the watcher's launch-time prerequisite probe refuses naming the missing package (RF2), and a session on CS8's invalid profile is recorded as refused at startup or run unsandboxed (RF3)" \
+  "§8 The Linux legs (owed)"
 
 sp_legs_print() {
   printf '%s' "$SP_LEGS"
@@ -172,4 +193,35 @@ sp_leg_missing() {
   for row in $rows; do
     sp_result_line "$1" "$row" "not run" "leg not implemented" ""
   done
+}
+
+SP_LINUX_ONLY_LEGS="glob-deny registry detached loopback refusal"
+
+sp_leg_linux_only() {
+  case " $SP_LINUX_ONLY_LEGS " in
+    *" ${1:-} "*) [ -n "${1:-}" ] ;;
+    *) return 1 ;;
+  esac
+}
+
+sp_leg_platform_skip() {
+  local rows row evidence
+  rows="$(sp_leg_rows "${1:-}")" || return 1
+  if [ -n "${SP_PLATFORM:-}" ]; then
+    evidence="Linux only: this host is ${SP_PLATFORM}"
+  else
+    evidence="Linux only: this host is not macOS or Linux"
+  fi
+  local IFS=,
+  for row in $rows; do
+    sp_result_line "$1" "$row" "not run" "$evidence" ""
+  done
+}
+
+sp_leg_row_for() {
+  if [ "${SP_PLATFORM:-}" = linux ]; then
+    printf '%s\n' "${2:-}"
+  else
+    printf '%s\n' "${1:-}"
+  fi
 }

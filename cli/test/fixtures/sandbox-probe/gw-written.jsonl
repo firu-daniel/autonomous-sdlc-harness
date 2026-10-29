@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"sp-gw-written","cwd":"@FIXTURE_ROOT@/proj-sbx"}
+{"type":"user","timestamp":"2026-01-01T00:00:00.000Z","message":{"role":"user","content":"Run the command."}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:01.000Z","message":{"id":"m1","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"dd if=/dev/null of=@FIXTURE_ROOT@/proj-sbx/githooks/sbx_gw1_new conv=notrunc"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"0+0 records in\n0+0 records out\n0 bytes copied"}]}}
+{"type":"result","subtype":"success","timestamp":"2026-01-01T00:00:03.000Z","duration_ms":3000,"permission_denials":[]}

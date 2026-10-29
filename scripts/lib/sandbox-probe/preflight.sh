@@ -11,7 +11,8 @@
 #      plus a checkout carrying .git/objects/info/alternates, which is a `git clone --shared` run copy
 #      that predicate accepts as a main checkout. Sets SP_MAIN.
 #      -> sp_snapshot_take runs here, before check 2.
-#   2. Not macOS (`uname -s` is not Darwin). The Linux legs are owed under roadmap item 21 (docs/development.md §6).
+#   2. Neither macOS nor Linux (`uname -s` is not Darwin or Linux; sets SP_PLATFORM through sp_platform_of).
+#      Under SP_PREFLIGHT_PREREQ=absent, also anything but Linux.
 #   3. <main> is not on `defaultBranch` (hr_default_branch; sets SP_DEFAULT_BRANCH).
 #   4. The watcher has a run in flight (its running_count, in a child shell that sourced
 #      `<main>/<scriptsDir>/autonomous-watcher.sh status`).
@@ -24,13 +25,22 @@
 #   6. doctor prints no PASS line for one of profile-sandbox, profile-write-protection,
 #      profile-main-anchor, sandbox-prerequisites (its exit status is ignored), or the watcher's
 #      SETTINGS_PROFILE is not <main>/.claude/settings.autonomous.json, the file doctor grades.
+#      Under SP_PREFLIGHT_PREREQ=absent, sandbox-prerequisites must print a line that is not PASS
+#      instead, and the check also refuses when both `sp_prereq_cmd bwrap` and `sp_prereq_cmd socat`
+#      resolve on PATH.
 #   7. The agent CLI does not resolve on PATH. Sets SP_VERSION from one `<agent cli> --version`.
+#
+# SP_PREFLIGHT_PREREQ selects checks 2 and 6: `present` (also when empty or unset) for preflight and run,
+# `absent` for the refusal subcommand, which measures a Linux host lacking bwrap or socat. The entry
+# point assigns it before every sp_preflight call; it is never read from the caller's environment.
 #
 # TEST-ONLY SEAMS. An unset or empty value means the default.
 #   SANDBOX_PROBE_UNAME      replaces the output of `uname -s`
 #   SANDBOX_PROBE_DOCTOR     a command line run by `bash -c` in <main>, replacing
 #                            `node <main>/cli/dist/cli.js doctor`
 #   SANDBOX_PROBE_AGENT_CLI  replaces `claude`, as HARNESS_AGENT_CLI does for the watcher
+#   SANDBOX_PROBE_BWRAP      replaces `bwrap` in check 6 under `absent` (platform.sh → sp_prereq_cmd)
+#   SANDBOX_PROBE_SOCAT      replaces `socat` likewise
 #
 # The probe never edits <main>/.claude/settings.autonomous.json; the guard exists to prove it.
 #
@@ -92,11 +102,16 @@ sp_preflight() {
     return 2
   fi
 
-  # --- 2. macOS.
+  # --- 2. macOS or Linux; Linux alone under `absent`.
   uname_s="${SANDBOX_PROBE_UNAME:-}"
   [ -n "$uname_s" ] || uname_s="$(uname -s 2>/dev/null)"
-  if [ "$uname_s" != Darwin ]; then
-    sp_preflight_refuse "this probe measures the macOS sandbox and 'uname -s' is '$uname_s'; the Linux legs are owed under roadmap item 21 (docs/development.md §6)"
+  SP_PLATFORM="$(sp_platform_of "$uname_s")" || SP_PLATFORM=""
+  if [ -z "$SP_PLATFORM" ]; then
+    sp_preflight_refuse "this probe measures the macOS and Linux sandboxes and 'uname -s' is '$uname_s'"
+    return 2
+  fi
+  if [ "${SP_PREFLIGHT_PREREQ:-present}" = absent ] && [ "$SP_PLATFORM" != linux ]; then
+    sp_preflight_refuse "the refusal subcommand measures a Linux host lacking bwrap or socat, and 'uname -s' is '$uname_s'"
     return 2
   fi
 
@@ -168,6 +183,17 @@ sp_preflight() {
         break
       fi
     done <<<"$doctor_out"
+    if [ "${SP_PREFLIGHT_PREREQ:-present}" = absent ] && [ "$want" = sandbox-prerequisites ]; then
+      if [ -z "$status" ]; then
+        sp_preflight_refuse "doctor printed no line for $want"
+        return 2
+      fi
+      if [ "$status" = PASS ]; then
+        sp_preflight_refuse "doctor passes sandbox-prerequisites, so this host can start the sandbox and the refusal subcommand has nothing to measure: $line"
+        return 2
+      fi
+      continue
+    fi
     if [ "$status" != PASS ]; then
       if [ -n "$status" ]; then
         sp_preflight_refuse "doctor does not pass $want: $line"
@@ -177,6 +203,12 @@ sp_preflight() {
       return 2
     fi
   done
+  if [ "${SP_PREFLIGHT_PREREQ:-present}" = absent ] \
+    && command -v "$(sp_prereq_cmd bwrap)" >/dev/null 2>&1 \
+    && command -v "$(sp_prereq_cmd socat)" >/dev/null 2>&1; then
+    sp_preflight_refuse "the refusal subcommand needs bwrap or socat missing from PATH, and both resolve"
+    return 2
+  fi
   want="$SP_MAIN/.claude/settings.autonomous.json"
   if [ "$settings" != "$want" ]; then
     # MAIN_REPO in the watcher need not be spelled canonically; compare the directory canonically.
