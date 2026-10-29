@@ -58,6 +58,7 @@
   - Keep the closing statement: no document beyond these 24 points at `## The fallback`.
 
   Add one sentence saying why the module is its own file rather than a row of `dispatch_discipline_instructions.md`: that file's `## Activation` closes the set of documents that may point at it.
+  - **Deviations from plan:** The `dispatch_discipline_instructions.md` → `## Activation` sentence sits in the module's lead, not under `## Who may cite this`. `## Who may cite this` is the module's last section, so the verification's `sed -n '/^## Who may cite this$/,/^## /p'` range runs to end of file, and a `${CLAUDE_PLUGIN_ROOT}` path there would count as a 22nd roster entry.
 - [ ] **`plugin/instructions/README.md`.**
   - *"twenty-four of the twenty-eight instruction files"* becomes *"twenty-four of the twenty-nine"*.
   - Add *"main-checkout resolution"* to the parenthesised *"came later"* list.
