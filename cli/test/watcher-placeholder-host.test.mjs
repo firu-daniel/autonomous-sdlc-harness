@@ -541,3 +541,18 @@ test('(7) with the seam off the recorded leftovers of cases 1 and 2 are left in 
     assert.ok(!log.includes('placeholder sweep'), log);
   });
 });
+
+test('(8) a kept path is not logged by the quiet pass-start sweep', async (t) => {
+  const f = await adoptedFixture(t);
+  if (f === null) return;
+  const path = join(f.dir, '.mcp.json');
+  await f.recordAbsent(path);
+  await writeFile(path, '{}\n', 'utf8');
+
+  await f.tick({}, { placeholderHost: true });
+  await f.tick({}, { placeholderHost: true });
+
+  const log = f.watcherLog();
+  assert.ok(!log.includes(`placeholder sweep: kept ${path}`), log);
+  assert.equal(readFileSync(path, 'utf8'), '{}\n');
+});

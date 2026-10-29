@@ -1799,9 +1799,11 @@ running_count() { hr_registry_live_count "$REGISTRY" "${1-}"; }
 # placeholder_sweep_pass <exclude_branch> <quiet> — on a placeholder host
 # outside job mode, and only while no run of this repository but
 # <exclude_branch> is live, sweep every manifest in the run-profile directory
-# (lib/harness-run-lib.sh, PLACEHOLDER LEFTOVERS), one log line per removed and
-# per kept path. A live session's placeholders are its own mounts, so a live
-# run skips the sweep, logged unless <quiet> is 1. Returns 0.
+# (lib/harness-run-lib.sh, PLACEHOLDER LEFTOVERS), one log line per removed
+# path, and per kept path unless <quiet> is 1: a kept path stays in its
+# manifest, so a pass-start sweep would log it again on every poll. A live
+# session's placeholders are its own mounts, so a live run skips the sweep,
+# logged unless <quiet> is 1. Returns 0.
 placeholder_sweep_pass() {
   local exclude="${1-}" quiet="${2-0}" live line
   [ "$JOB_MODE" != "1" ] || return 0
@@ -1820,11 +1822,13 @@ placeholder_sweep_pass() {
   done <<EOF
 $HR_PLACEHOLDER_REMOVED
 EOF
-  while IFS= read -r line; do
-    [ -n "$line" ] && log "placeholder sweep: kept $line"
-  done <<EOF
+  if [ "$quiet" != "1" ]; then
+    while IFS= read -r line; do
+      [ -n "$line" ] && log "placeholder sweep: kept $line"
+    done <<EOF
 $HR_PLACEHOLDER_KEPT
 EOF
+  fi
   return 0
 }
 
@@ -5193,7 +5197,7 @@ tick() {
   reconcile_stale_runs
 
   # Ahead of every reader below that a placeholder leftover breaks. Quiet: a
-  # live run would otherwise log its skip on every poll.
+  # live run's skip, and every kept path, would otherwise be logged on every poll.
   placeholder_sweep_pass "" 1
 
   # Then its alive-but-stuck sibling, in the same stretch and for the same

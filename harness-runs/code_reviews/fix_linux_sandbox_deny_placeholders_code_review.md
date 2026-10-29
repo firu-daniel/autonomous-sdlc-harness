@@ -31,7 +31,7 @@ Branch `fix_linux_sandbox_deny_placeholders`, reviewed 2026-10-29. The configure
 
 1. [x] **Finding 3** — Remove "this branch" and the run-artifact citation from `docs/cli.md` §6 residual 12 _(layer: general)_
 2. [x] **Finding 2** — Re-render the notes-app profile's write-protection `_README` line, which still says the per-run copy's exact entries hold on Linux _(layer: general)_
-3. [ ] **Finding 1** — Stop the quiet pass-start sweep from logging every kept path on every poll _(layer: cli, general)_
+3. [x] **Finding 1** — Stop the quiet pass-start sweep from logging every kept path on every poll _(layer: cli, general)_
 
 ## Must Fix
 
