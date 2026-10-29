@@ -1179,6 +1179,31 @@ AGENT_EFFORT="$(hr_agent_effort "$MAIN_REPO")" || AGENT_EFFORT=""
 # inherits when the machine-local `watcher.env` sets none, so the two may not drift.
 MAX_PARALLEL_RUNS_DEFAULT=5
 MAX_PARALLEL_RUNS="${MAX_PARALLEL_RUNS:-$MAX_PARALLEL_RUNS_DEFAULT}"
+# The cap every capacity comparison and every printed `cap` reads. Set from
+# effective_max_parallel_runs at the start of each tick and in print_status,
+# never here, so a test's override of the probe seam takes effect.
+RUN_CAP="$MAX_PARALLEL_RUNS"
+RUN_CAP_CLAMP_LOGGED=0
+
+# effective_max_parallel_runs — print 1 on a placeholder host when
+# MAX_PARALLEL_RUNS is above 1, else MAX_PARALLEL_RUNS unchanged: concurrent
+# runs of one repository share the main checkout's sandbox placeholders
+# (docs/cli.md §6). Job mode runs one run and is never clamped.
+effective_max_parallel_runs() {
+  if [ "$JOB_MODE" != "1" ]; then
+    case "$MAX_PARALLEL_RUNS" in
+      '' | *[!0-9]*) ;;
+      *)
+        hr_placeholder_host_probe_var
+        if [ "$HR_PLACEHOLDER_HOST" = "1" ] && [ "$MAX_PARALLEL_RUNS" -gt 1 ]; then
+          printf '1\n'
+          return 0
+        fi
+        ;;
+    esac
+  fi
+  printf '%s\n' "$MAX_PARALLEL_RUNS"
+}
 # How often the watch loop takes a pass.
 POLL_INTERVAL_SECS="${POLL_INTERVAL_SECS:-15}"
 # The permission mode an unattended run is launched with. Deliberately NOT a
@@ -1873,7 +1898,7 @@ machine_footprint_report() {
     # The cap is PER REPOSITORY, so it is carried per row and never collapsed
     # into one machine-scoped line.
     if [ "${root%/}" = "${MAIN_REPO%/}" ]; then
-      cap_note="cap=$MAX_PARALLEL_RUNS (this repository's own resolved value)"
+      cap_note="cap=$RUN_CAP (this repository's own resolved value)"
     else
       cap_note="cap=$machine_cap (machine default; this entry's own daemon environment may override, not derivable from here)"
     fi
@@ -1897,12 +1922,18 @@ print_status() {
       end
   ' "$REGISTRY"
   # The resolved tunables, names and values only — the override channel made
-  # observable. Nothing else the override file may have set is printed.
-  echo "tunables: MAX_PARALLEL_RUNS=$MAX_PARALLEL_RUNS POLL_INTERVAL_SECS=$POLL_INTERVAL_SECS PERMISSION_MODE=$PERMISSION_MODE CLEANUP_INTERVAL_SECS=$CLEANUP_INTERVAL_SECS AUTO_TAIL_TERMINAL=$AUTO_TAIL_TERMINAL STALL_CHECK_ENABLED=$STALL_CHECK_ENABLED STALL_WARN_SECS=$STALL_WARN_SECS STALL_KILL_SECS=$STALL_KILL_SECS STALL_MAX_RESTARTS=$STALL_MAX_RESTARTS STALL_BUSY_CPU_PCT=$STALL_BUSY_CPU_PCT PARK_LOOP_MAX_CYCLES=$PARK_LOOP_MAX_CYCLES PARK_LOOP_WINDOW_SECS=$PARK_LOOP_WINDOW_SECS USAGE_CHECK_ENABLED=$USAGE_CHECK_ENABLED USAGE_CHECK_INTERVAL_SECS=$USAGE_CHECK_INTERVAL_SECS USAGE_PAUSE_TRIGGER=$USAGE_PAUSE_TRIGGER USAGE_WARNING_DEBOUNCE=$USAGE_WARNING_DEBOUNCE USAGE_RESUME_MARGIN_SECS=$USAGE_RESUME_MARGIN_SECS USAGE_SEVEN_DAY_PAUSE_PCT=$USAGE_SEVEN_DAY_PAUSE_PCT USAGE_LANE_STATE_ENABLED=$USAGE_LANE_STATE_ENABLED USAGE_LANE_LOCK_ENABLED=$USAGE_LANE_LOCK_ENABLED REMOTE_CONTROL_POLL_SECS=$REMOTE_CONTROL_POLL_SECS REMOTE_WAIT_MAX_SECS=$REMOTE_WAIT_MAX_SECS REMOTE_AUTO_RESUME_MAX=$REMOTE_AUTO_RESUME_MAX REMOTE_AUTO_RESUME_DELAY_SECS=$REMOTE_AUTO_RESUME_DELAY_SECS STALL_WAKE_GAP_SECS=$STALL_WAKE_GAP_SECS KEEP_AWAKE=$KEEP_AWAKE_MODE"
+  # observable. Nothing else the override file may have set is printed. The cap
+  # printed is the one enforced.
+  RUN_CAP="$(effective_max_parallel_runs)"
+  echo "tunables: MAX_PARALLEL_RUNS=$RUN_CAP POLL_INTERVAL_SECS=$POLL_INTERVAL_SECS PERMISSION_MODE=$PERMISSION_MODE CLEANUP_INTERVAL_SECS=$CLEANUP_INTERVAL_SECS AUTO_TAIL_TERMINAL=$AUTO_TAIL_TERMINAL STALL_CHECK_ENABLED=$STALL_CHECK_ENABLED STALL_WARN_SECS=$STALL_WARN_SECS STALL_KILL_SECS=$STALL_KILL_SECS STALL_MAX_RESTARTS=$STALL_MAX_RESTARTS STALL_BUSY_CPU_PCT=$STALL_BUSY_CPU_PCT PARK_LOOP_MAX_CYCLES=$PARK_LOOP_MAX_CYCLES PARK_LOOP_WINDOW_SECS=$PARK_LOOP_WINDOW_SECS USAGE_CHECK_ENABLED=$USAGE_CHECK_ENABLED USAGE_CHECK_INTERVAL_SECS=$USAGE_CHECK_INTERVAL_SECS USAGE_PAUSE_TRIGGER=$USAGE_PAUSE_TRIGGER USAGE_WARNING_DEBOUNCE=$USAGE_WARNING_DEBOUNCE USAGE_RESUME_MARGIN_SECS=$USAGE_RESUME_MARGIN_SECS USAGE_SEVEN_DAY_PAUSE_PCT=$USAGE_SEVEN_DAY_PAUSE_PCT USAGE_LANE_STATE_ENABLED=$USAGE_LANE_STATE_ENABLED USAGE_LANE_LOCK_ENABLED=$USAGE_LANE_LOCK_ENABLED REMOTE_CONTROL_POLL_SECS=$REMOTE_CONTROL_POLL_SECS REMOTE_WAIT_MAX_SECS=$REMOTE_WAIT_MAX_SECS REMOTE_AUTO_RESUME_MAX=$REMOTE_AUTO_RESUME_MAX REMOTE_AUTO_RESUME_DELAY_SECS=$REMOTE_AUTO_RESUME_DELAY_SECS STALL_WAKE_GAP_SECS=$STALL_WAKE_GAP_SECS KEEP_AWAKE=$KEEP_AWAKE_MODE"
   if [ "$KEEP_AWAKE_MODE" = "off" ]; then
     echo "keep-awake: $KEEP_AWAKE_MODE — $KEEP_AWAKE_REASON"
   else
     echo "keep-awake: $KEEP_AWAKE_MODE"
+  fi
+  # After the keep-awake line, never between it and `tunables:`.
+  if [ "$RUN_CAP" != "$MAX_PARALLEL_RUNS" ]; then
+    echo "cap: $RUN_CAP (MAX_PARALLEL_RUNS=$MAX_PARALLEL_RUNS clamped on a bubblewrap host; docs/cli.md §6)"
   fi
   # Advisory tail: the other repositories armed on this machine. It decides
   # nothing — see the block above print_status.
@@ -2067,15 +2098,16 @@ lane_release_if_idle() {
 # -----------------------------------------------------------------------------
 
 # A declared mirror of cli/src/generators/writeProtection.ts → COPY_GIT_PATHS:
-# each row's run-copy-relative path and kind, in order, held equal by
+# each row's run-copy-relative path, kind and bubblewrapDenyWrite (`deny` for
+# true, `omit` for false), in order, held equal by
 # cli/test/watcher-run-profile.test.mjs. A change to that table is an edit here
 # in the same change.
-RUN_PROFILE_COPY_GIT_PATHS='.git/config file
-.git/hooks directory
-.git/objects/info/alternates file
-.git/commondir entry
-.git/config.worktree entry
-.git/objects/info/http-alternates entry'
+RUN_PROFILE_COPY_GIT_PATHS='.git/config file deny
+.git/hooks directory deny
+.git/objects/info/alternates file deny
+.git/commondir entry omit
+.git/config.worktree entry omit
+.git/objects/info/http-alternates entry omit'
 
 # Declared mirrors of cli/src/generators/sandboxProfile.ts, held equal by
 # cli/test/watcher-run-profile.test.mjs; a change to either owner is an edit
@@ -2125,10 +2157,13 @@ run_profile_one_object() {
   [ "$(jq -s 'length == 1 and (.[0] | type) == "object"' "$1" 2>/dev/null)" = "true" ]
 }
 
-# run_profile_entries <copy> <kind> — print one `<absolute path><TAB><kind>`
-# line per entry the per-run profile adds for the run copy <copy> of <kind>
-# (`clone` or `worktree`), kind being `file`, `directory` or `entry` as
-# writeProtection.ts → ProtectedKind means them:
+# run_profile_entries <copy> <kind> — print one
+# `<absolute path><TAB><kind><TAB><deny|omit>` line per entry the per-run
+# profile adds for the run copy <copy> of <kind> (`clone` or `worktree`), kind
+# being `file`, `directory` or `entry` as writeProtection.ts → ProtectedKind
+# means them. The third column is `omit` only for a clone row marked `omit`
+# while HR_PLACEHOLDER_HOST is `1` (bubblewrap would plant a placeholder at that
+# absent path), `deny` for every other line:
 #   * each `hr_run_protected_rel_paths` line re-rooted at <copy>, as `entry`;
 #   * on a clone, each RUN_PROFILE_COPY_GIT_PATHS row re-rooted at <copy>;
 #   * on a legacy worktree, <copy>/.git as `file`;
@@ -2145,26 +2180,27 @@ run_profile_one_object() {
 # is unreadable, 2 the worktree list failed, 3 a path was refused, 4 <kind> is
 # neither kind; nothing useful is printed on a non-zero exit.
 run_profile_entries() {
-  local copy="${1%/}" kind="${2-}" rel p k list line first=1 out=""
+  local copy="${1%/}" kind="${2-}" rel p k a list line first=1 out=""
   case "$kind" in clone | worktree) ;; *) return 4 ;; esac
   list="$(hr_run_protected_rel_paths "$MAIN_REPO")" || return 1
   while IFS= read -r rel; do
     [ -n "$rel" ] || continue
-    out="${out}${copy}/${rel}	entry
+    out="${out}${copy}/${rel}	entry	deny
 "
   done <<EOF
 $list
 EOF
   if [ "$kind" = clone ]; then
-    while IFS=' ' read -r p k; do
+    while IFS=' ' read -r p k a; do
       [ -n "$p" ] || continue
-      out="${out}${copy}/${p}	${k}
+      [ "$a" = omit ] && [ "${HR_PLACEHOLDER_HOST:-0}" = 1 ] || a=deny
+      out="${out}${copy}/${p}	${k}	${a}
 "
     done <<EOF
 $RUN_PROFILE_COPY_GIT_PATHS
 EOF
   else
-    out="${out}${copy}/.git	file
+    out="${out}${copy}/.git	file	deny
 "
   fi
   list="$(git -C "$MAIN_REPO" worktree list --porcelain 2>/dev/null)" || return 2
@@ -2180,7 +2216,7 @@ EOF
     fi
     p="${line#worktree }"
     [ "${p%/}" = "$copy" ] && continue
-    out="${out}${p%/}/.git	file
+    out="${out}${p%/}/.git	file	deny
 "
   done <<EOF
 $list
@@ -2188,6 +2224,7 @@ EOF
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     p="${line%	*}"
+    p="${p%	*}"
     case "$p" in
       *\"* | *\'* | *\** | *'	'*) return 3 ;;
     esac
@@ -2204,8 +2241,9 @@ EOF
 # <branch> to the path `hr_run_profile_file "$HARNESS_REPO_SLUG" <branch>`
 # prints, through a temporary file in its directory and `mv`, the directory
 # created at mode 700, and set RUN_PROFILE_FILE to it. The content is
-# $SETTINGS_PROFILE with each run_profile_entries path appended to
-# `.sandbox.filesystem.denyWrite` and its Edit rules to `.permissions.deny`,
+# $SETTINGS_PROFILE with each run_profile_entries path not marked `omit`
+# appended to `.sandbox.filesystem.denyWrite`, the Edit rules of every line to
+# `.permissions.deny`,
 # and the run copy's twins of the base's main-checkout wrapper rules appended
 # to `.permissions.allow` and `.permissions.ask`: each base entry of that list
 # starting with RUN_PROFILE_MAIN_PREFIX, that prefix replaced by
@@ -2264,9 +2302,9 @@ run_profile_render() {
         end;
       def add_absent($xs): reduce $xs[] as $x (.; if any(.[]; . == $x) then . else . + [$x] end);
       def add_twins: add_absent([.[] | select(type == "string" and startswith($main)) | $twin + .[($main | length):]]);
-      [split("\n")[] | select(length > 0) | split("\t") | {path: .[0], kind: .[1]}] as $e
+      [split("\n")[] | select(length > 0) | split("\t") | {path: .[0], kind: .[1], action: .[2]}] as $e
       | $base[0]
-      | .sandbox.filesystem.denyWrite |= add_absent([$e[].path])
+      | .sandbox.filesystem.denyWrite |= add_absent([$e[] | select(.action != "omit") | .path])
       | .permissions.deny |= add_absent([$e[] | rules[]])
       | if (.permissions.allow | type) == "array" then .permissions.allow |= add_twins else . end
       | if (.permissions.ask | type) == "array" then .permissions.ask |= add_twins else . end
@@ -2582,6 +2620,23 @@ spawn_engine() {
   else
     copy_kind="$(registry_get "$branch" copy_kind)"
     [ -n "$copy_kind" ] || copy_kind="worktree"
+    # Read by run_profile_entries, and by the manifest write below.
+    hr_placeholder_host_probe_var
+    if [ "$HR_PLACEHOLDER_HOST" = "1" ]; then
+      # The launch check: the render omits a clone's commondir, config.worktree
+      # and http-alternates, so a planted one is refused here, before Claude
+      # Code's own startup git reads the copy.
+      if [ "$copy_kind" = "clone" ]; then
+        if [ -z "$RUN_MAIN" ]; then
+          spawn_refuse "$branch" "$RUN_MAIN_REFUSAL"
+          return 1
+        fi
+        if ! hr_run_copy_check_var "$RUN_MAIN" "$worktree"; then
+          spawn_refuse "$branch" "the run copy failed its trust check before launch: $HR_RUN_REFUSAL"
+          return 1
+        fi
+      fi
+    fi
     if ! run_profile_render "$branch" "$worktree" "$copy_kind"; then
       spawn_refuse "$branch" "$RUN_PROFILE_REFUSAL"
       return 1
@@ -2593,6 +2648,28 @@ spawn_engine() {
   if ! run_profile_check "$settings_file" "$check_copy"; then
     spawn_refuse "$branch" "$RUN_PROFILE_REFUSAL"
     return 1
+  fi
+
+  # What was absent before this session: every exact denyWrite path, where
+  # bubblewrap may plant a placeholder, and `.mcp.json` under each --add-dir
+  # root. Without a manifest the next sweep removes nothing, so a failed write
+  # does not refuse the launch.
+  if [ "$JOB_MODE" != "1" ] && [ "$HR_PLACEHOLDER_HOST" = "1" ]; then
+    local manifest exact_paths line
+    exact_paths=()
+    if manifest="$(hr_run_profile_absent_file "$HARNESS_REPO_SLUG" "$branch")"; then
+      while IFS= read -r line; do
+        [ -n "$line" ] && exact_paths+=("$line")
+      done <<EOF
+$(jq -r '.sandbox.filesystem.denyWrite[]? | select(type == "string" and (contains("*") | not))' "$settings_file" 2>/dev/null)
+EOF
+      if ! hr_placeholder_manifest_write "$manifest" ${exact_paths[@]+"${exact_paths[@]}"} \
+        "${worktree%/}/.mcp.json" "${main_state%/}/.mcp.json"; then
+        log "placeholder manifest: could not write $manifest for '$branch' — the next sweep removes nothing for this session"
+      fi
+    else
+      log "placeholder manifest: no path for '$branch' — the next sweep removes nothing for this session"
+    fi
   fi
 
   # Trusted instruction layer. It NAMES the artifact's path; it never inlines the
@@ -3450,8 +3527,8 @@ resume_parked_run() {
 
   local current
   current="$(running_count)"
-  if [ "$current" -ge "$MAX_PARALLEL_RUNS" ]; then
-    log "at cap ($current/$MAX_PARALLEL_RUNS) — deferring resume of '$branch'"
+  if [ "$current" -ge "$RUN_CAP" ]; then
+    log "at cap ($current/$RUN_CAP) — deferring resume of '$branch'"
     return 10
   fi
 
@@ -3615,8 +3692,8 @@ resume_paused_run() {
 
   local current
   current="$(running_count)"
-  if [ "$current" -ge "$MAX_PARALLEL_RUNS" ]; then
-    log "at cap ($current/$MAX_PARALLEL_RUNS) — deferring pause-resume of '$branch'"
+  if [ "$current" -ge "$RUN_CAP" ]; then
+    log "at cap ($current/$RUN_CAP) — deferring pause-resume of '$branch'"
     return 10
   fi
 
@@ -4147,8 +4224,8 @@ process_inbox_file() {
   local current
   if [ "$remote" != 1 ]; then
     current="$(running_count)"
-    if [ "$current" -ge "$MAX_PARALLEL_RUNS" ]; then
-      log "at the cap ($current/$MAX_PARALLEL_RUNS runs) — deferring '$branch' (leaving it in the inbox)"
+    if [ "$current" -ge "$RUN_CAP" ]; then
+      log "at the cap ($current/$RUN_CAP runs) — deferring '$branch' (leaving it in the inbox)"
       return 10
     fi
   fi
@@ -4969,6 +5046,12 @@ tick() {
   hr_config_load "$MAIN_REPO" || :
   keep_awake_resolve
 
+  RUN_CAP="$(effective_max_parallel_runs)"
+  if [ "$RUN_CAP" != "$MAX_PARALLEL_RUNS" ] && [ "$RUN_CAP_CLAMP_LOGGED" != "1" ]; then
+    RUN_CAP_CLAMP_LOGGED=1
+    log "bubblewrap host: at most one live run per repository (concurrent runs share the main checkout's sandbox placeholders; docs/cli.md §6)"
+  fi
+
   # Ahead of the kill-switch return: the brake stops launches and resumes only,
   # and runs in flight keep running under it, so the hold they carry must still
   # follow mains power and a switch of `execution.keepAwake` to false made while
@@ -5051,7 +5134,8 @@ tick() {
 watch_loop() {
   local keep_awake_note="$KEEP_AWAKE_MODE"
   [ "$KEEP_AWAKE_MODE" != "off" ] || keep_awake_note="$KEEP_AWAKE_MODE ($KEEP_AWAKE_REASON)"
-  log "watcher starting (inbox=$INBOX_DIR, cap=$MAX_PARALLEL_RUNS, poll=${POLL_INTERVAL_SECS}s, keep-awake=$keep_awake_note)"
+  RUN_CAP="$(effective_max_parallel_runs)"
+  log "watcher starting (inbox=$INBOX_DIR, cap=$RUN_CAP, poll=${POLL_INTERVAL_SECS}s, keep-awake=$keep_awake_note)"
   registry_init
   while true; do
     tick
