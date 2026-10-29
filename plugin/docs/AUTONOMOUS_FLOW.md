@@ -22,7 +22,7 @@ The tokens below are neither Mode-contract **bindings** (this document declares 
 | `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory `init` writes the outer-loop scripts into. This document names those scripts by that destination rather than by a path inside the plugin, because they do not ship inside it. |
 | `<githooks_dir>` | config value | `githooksDir` — the repo-relative directory holding the committed git hooks, including the pre-push backstop. |
 | `<docs_root>` | config value | `docs.root` — the documentation corpus the documentation run and the docs phase write into. Read **only** when `phases.docs` is `true`. |
-| `<MAIN_REPO>` | derived at runtime | The main checkout — the path a bare `printenv HARNESS_MAIN_REPO` prints, else the first `worktree ` line of a bare `git worktree list --porcelain`. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
+| `<MAIN_REPO>` | derived at runtime | The main checkout — the path a bare `printenv HARNESS_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
 
 This document uses it for the global kill switch in `## Safety / reversibility` and for the git wrappers' spelling in `## The wiring table`.
 

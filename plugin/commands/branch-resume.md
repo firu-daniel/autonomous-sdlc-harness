@@ -43,7 +43,7 @@ it ends. The only scripts it invokes are `<scripts_dir>/remote-run.sh sync`, for
 
 ## Steps
 
-1. Resolve `<MAIN_REPO>` as the path a bare `printenv HARNESS_MAIN_REPO` prints, else the first `worktree ` line of a bare `git worktree list --porcelain`; the registry is
+1. Resolve `<MAIN_REPO>` as the path a bare `printenv HARNESS_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none; the registry is
    `<MAIN_REPO>/<state_dir>/autonomous_logs/registry.json` (shaped `{"runs": {"<branch>": {...}}}`).
 2. **Which-branch resolution.** If `$ARGUMENTS` starts with `<branch>:` (or is just a bare `<branch>`),
    parse it. Otherwise read the registry: if **exactly one** run has `status: "paused"`, target it;
