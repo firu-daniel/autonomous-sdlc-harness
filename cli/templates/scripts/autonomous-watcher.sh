@@ -313,6 +313,17 @@
 # The rules every hardened call holds are lib/harness-run-lib.sh's, in the
 # section THE WATCHER FAMILY'S GIT IN A RUN'S COPY.
 #
+# On a placeholder host a killed session's leftovers break these reads — a
+# 0-byte `<scriptsDir>/.git` fails `hr_main_repo` and `create-worktree.sh`, a
+# 0-byte `.git/commondir` fails the copy check — so `placeholder_sweep_pass`
+# removes the recorded ones (lib/harness-run-lib.sh, PLACEHOLDER LEFTOVERS)
+# ahead of each reader: in `tick` before the stall watchdog, quietly; in the
+# watchdog's KILL tier once the killed tree has exited; in `process_inbox_file`
+# before the working-copy step; and first in `spawn_engine`'s placeholder-host
+# block, ahead of the launch check. Before all of them, when `hr_main_repo`
+# fails at start-up, `placeholder_start_recover` finds the main checkout
+# without git and sweeps there, so a leftover does not refuse the start.
+#
 # THE AGENT BINARY IS REACHED THROUGH ONE VARIABLE, `${HARNESS_AGENT_CLI:-claude}`,
 # resolved once below. It defaults to the real CLI, so an operator sees no
 # difference. It exists so the launch and exit-classification paths can be
@@ -994,6 +1005,59 @@ elif [ -s "${HOME-}/.asdf/asdf.sh" ]; then
   . "${HOME-}/.asdf/asdf.sh" >/dev/null 2>&1 || true
 fi
 
+# placeholder_start_recover — when `hr_main_repo` cannot place this script
+# outside job mode, sweep the recorded placeholder leftovers of the main
+# checkout `hr_main_checkout_past_leftovers_nogit` finds, provided its registry
+# holds no live run (`hr_registry_live_count`); a leftover `.git` in the
+# scripts directory would otherwise refuse the start. Not gated on the
+# placeholder-host probe: a manifest exists only where one is written, on a
+# placeholder host. Any step that cannot be resolved sweeps nothing. One stderr
+# line per removed and per kept path; PLACEHOLDER_START_REMOVED holds the
+# removed count, logged once `log` exists. Leaves the configuration cache
+# reset, so the anchors below load their own.
+PLACEHOLDER_START_REMOVED=""
+placeholder_start_recover() {
+  local main logs live slug manifest m line removed=0 n=0
+  local -a manifests
+  [ "${HARNESS_JOB_MODE:-}" != "1" ] || return 0
+  hr_main_repo "$SCRIPT_DIR" >/dev/null && return 0
+  main="$(hr_main_checkout_past_leftovers_nogit "$SCRIPT_DIR")" || return 0
+  # An absent registry holds no live run, and is not created here: a start
+  # that still refuses below creates nothing.
+  live=0
+  if hr_config_load "$main" &&
+    logs="$(hr_state_path "$main" autonomous_logs)" &&
+    { [ ! -e "$logs/registry.json" ] || live="$(hr_registry_live_count "$logs/registry.json")"; } &&
+    [ "$live" = "0" ] &&
+    slug="$(hr_repo_slug "$main")" &&
+    manifest="$(hr_run_profile_absent_file "$slug" x)"; then
+    manifests=()
+    for m in "${manifest%/*}"/*.absent; do
+      [ -f "$m" ] || continue
+      manifests+=("$m")
+      n=$((n + 1))
+    done
+    if [ "$n" -gt 0 ] && hr_placeholder_sweep_var "${manifests[@]}"; then
+      while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        echo "$self: placeholder sweep at start: removed $line" >&2
+        removed=$((removed + 1))
+      done <<EOF
+$HR_PLACEHOLDER_REMOVED
+EOF
+      while IFS= read -r line; do
+        [ -n "$line" ] && echo "$self: placeholder sweep at start: kept $line" >&2
+      done <<EOF
+$HR_PLACEHOLDER_KEPT
+EOF
+      PLACEHOLDER_START_REMOVED="$removed"
+    fi
+  fi
+  hr_config_reset
+  return 0
+}
+placeholder_start_recover
+
 # -----------------------------------------------------------------------------
 # Anchors. All central state lives in the MAIN checkout; a run executes in a
 # sibling clone, or a legacy linked worktree for a run started before clones —
@@ -1437,6 +1501,9 @@ mkdir -p "$INBOX_DIR" "$LOGS_DIR" "$ARCHIVE_DIR" ||
 
 log() { printf '%s [watcher] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" | tee -a "$WATCHER_LOG"; }
 
+[ -z "$PLACEHOLDER_START_REMOVED" ] ||
+  log "placeholder sweep at start: removed $PLACEHOLDER_START_REMOVED path(s)"
+
 # The tunable shape-checked above announces itself when its value was replaced,
 # because a silent correction is its own small surprise: the operator's file says
 # one thing and `status` reports another. Deferred to here only because `log` does
@@ -1681,8 +1748,7 @@ registry_get() { hr_registry_get "$REGISTRY" "$@"; }
 registry_branches() { hr_registry_branches "$REGISTRY"; }
 
 # True iff <branch>'s record carries `execution: github-actions` — the record's
-# field, never `execution.target` (see REMOTE DISPATCH). Silent: running_count
-# calls it inside a command substitution.
+# field, never `execution.target` (see REMOTE DISPATCH). Silent.
 record_is_remote() {
   [ "$(registry_get "$1" execution)" = "github-actions" ]
 }
@@ -1712,31 +1778,50 @@ $(registry_branches)
 EOF
 }
 
-# Runs marked `running` whose process is still alive. A PURE READER: its ONLY
-# stdout is the final integer, because the cap check captures it with `$(…)`.
-# Healing a vanished process belongs to reconcile_stale_runs(), above.
-# `running` is the only status that holds a slot. The status filter is what keeps
-# a finished record's pid, once the OS reuses it, from holding one — a terminal
-# write drops the pid, but a session that exits before spawn_engine's parent
-# writes `pid "$!"` leaves its own dead subshell's pid on a terminal record. The
-# filter cannot count out a run being launched: every launch and resume path
-# writes `status running` before spawn_engine writes the pid, and the watcher
-# runs each spawn to completion before its next capacity read.
-running_count() {
-  local n=0 b pid
-  while IFS= read -r b; do
-    [ -n "$b" ] || continue
-    # A remote run holds no local slot: the job gates itself.
-    record_is_remote "$b" && continue
-    [ "$(registry_get "$b" status)" = "running" ] || continue
-    pid="$(registry_get "$b" pid)"
-    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-      n=$((n + 1))
-    fi
+# running_count [exclude_branch] — the live runs of this repository, that
+# branch left out. A PURE READER: its ONLY stdout is the integer, because the
+# cap check captures it with `$(…)`. Healing a vanished process belongs to
+# reconcile_stale_runs(), above. The rule's one home is the library's
+# `hr_registry_live_count`.
+running_count() { hr_registry_live_count "$REGISTRY" "${1-}"; }
+
+# placeholder_sweep_pass <exclude_branch> <quiet> — on a placeholder host
+# outside job mode, and only while no run of this repository but
+# <exclude_branch> is live, sweep every manifest in the run-profile directory
+# (lib/harness-run-lib.sh, PLACEHOLDER LEFTOVERS), one log line per removed and
+# per kept path. A live session's placeholders are its own mounts, so a live
+# run skips the sweep, logged unless <quiet> is 1. Returns 0.
+placeholder_sweep_pass() {
+  local exclude="${1-}" quiet="${2-0}" live manifest m line n=0
+  local -a manifests
+  [ "$JOB_MODE" != "1" ] || return 0
+  hr_placeholder_host_probe_var
+  [ "$HR_PLACEHOLDER_HOST" = "1" ] || return 0
+  live="$(running_count "$exclude")"
+  if [ "$live" != "0" ]; then
+    [ "$quiet" = "1" ] || log "placeholder sweep: skipped, $live run(s) of this repository live"
+    return 0
+  fi
+  manifest="$(hr_run_profile_absent_file "$HARNESS_REPO_SLUG" x)" || return 0
+  manifests=()
+  for m in "${manifest%/*}"/*.absent; do
+    [ -f "$m" ] || continue
+    manifests+=("$m")
+    n=$((n + 1))
+  done
+  [ "$n" -gt 0 ] || return 0
+  hr_placeholder_sweep_var "${manifests[@]}" || return 0
+  while IFS= read -r line; do
+    [ -n "$line" ] && log "placeholder sweep: removed $line"
   done <<EOF
-$(registry_branches)
+$HR_PLACEHOLDER_REMOVED
 EOF
-  echo "$n"
+  while IFS= read -r line; do
+    [ -n "$line" ] && log "placeholder sweep: kept $line"
+  done <<EOF
+$HR_PLACEHOLDER_KEPT
+EOF
+  return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -2623,6 +2708,7 @@ spawn_engine() {
     # Read by run_profile_entries, and by the manifest write below.
     hr_placeholder_host_probe_var
     if [ "$HR_PLACEHOLDER_HOST" = "1" ]; then
+      placeholder_sweep_pass "$branch" 0
       # The launch check: the render omits a clone's commondir, config.worktree
       # and http-alternates, so a planted one is refused here, before Claude
       # Code's own startup git reads the copy.
@@ -3850,7 +3936,7 @@ check_stalled_runs() {
   [ -f "$USAGE_HOLD" ] && return 0
 
   local now b pid log_path stream_path newest m f staleness tree_cpu descendants restarts worktree state_rel why reset_rc note_rel
-  local raw since woke=""
+  local raw since woke="" tree_left tree_waits tree_pid
   now="$(date +%s)"
   # The last detected host wake, read once per pass; 0 when absent or not an
   # integer.
@@ -3946,6 +4032,34 @@ check_stalled_runs() {
     kill -9 "$pid" 2>/dev/null
     # shellcheck disable=SC2086 # one signal to the whole captured list
     [ -n "$descendants" ] && kill -9 $descendants 2>/dev/null
+
+    # A tree killed by `-9` leaves its placeholders on disk, and this is the one
+    # point between the kill and the copy check below. Swept only once the
+    # tree has exited: 1 check, then at most 10 more a second apart.
+    if [ "$JOB_MODE" != "1" ]; then
+      hr_placeholder_host_probe_var
+      if [ "$HR_PLACEHOLDER_HOST" = "1" ]; then
+        tree_waits=0
+        while :; do
+          tree_left=0
+          # shellcheck disable=SC2086 # the captured list MUST word-split
+          for tree_pid in $pid $descendants; do
+            if kill -0 "$tree_pid" 2>/dev/null; then
+              tree_left=1
+              break
+            fi
+          done
+          [ "$tree_left" = "1" ] && [ "$tree_waits" -lt 10 ] || break
+          sleep 1
+          tree_waits=$((tree_waits + 1))
+        done
+        if [ "$tree_left" = "0" ]; then
+          placeholder_sweep_pass "$b" 0
+        else
+          log "placeholder sweep: skipped, '$b''s process tree has not exited"
+        fi
+      fi
+    fi
 
     restarts="$(registry_get "$b" stall_restarts)"
     case "$restarts" in
@@ -4228,6 +4342,9 @@ process_inbox_file() {
       log "at the cap ($current/$RUN_CAP runs) — deferring '$branch' (leaving it in the inbox)"
       return 10
     fi
+    # Ahead of the working-copy step, which a leftover refuses: a run that died
+    # after this pass's opening sweep was skipped left its placeholders since.
+    placeholder_sweep_pass "" 0
   fi
 
   # This branch already has a LIVE run: the drop is a duplicate (a re-drop, or a
@@ -5070,6 +5187,10 @@ tick() {
   # Heal records whose process has vanished BEFORE anything reads the cap, so a
   # reconciled run frees capacity in the same pass.
   reconcile_stale_runs
+
+  # Ahead of every reader below that a placeholder leftover breaks. Quiet: a
+  # live run would otherwise log its skip on every poll.
+  placeholder_sweep_pass "" 1
 
   # Then its alive-but-stuck sibling, in the same stretch and for the same
   # reason: a run this pass tears down and restarts, or gives up on, must have

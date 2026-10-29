@@ -79,3 +79,12 @@
 - `git grep -n 'hr_main_checkout_past_leftovers_nogit\|hr_placeholder_leftover_var' -- cli/templates/scripts` shows the library definitions, the walk's call to `hr_placeholder_leftover_var`, and in `autonomous-watcher.sh` only the call in `placeholder_start_recover`.
 - `git grep -nE '/\.git"? *\]|\.git/\.\.|cd -P' -- cli/templates/scripts/autonomous-watcher.sh` shows no line inside `placeholder_start_recover`: the watcher carries no `.git` walk of its own.
 - `git diff --name-only` lists no `commit-on-branch.sh`, `push-branch.sh`, `refresh-branch.sh` or `create-worktree.sh`.
+
+**Deviations from plan:**
+
+- Call site 2: the KILL tier's wait-for-exit loop runs only outside job mode and only when `hr_placeholder_host_probe_var` answers `1`. The plan put the wait ahead of `placeholder_sweep_pass`, which does both checks itself, so the wait would otherwise add up to 10 s to every watchdog kill on a host that sweeps nothing, and in job mode. The sweep's own gates stay as specified.
+- `placeholder_start_recover`: when `<logs>/registry.json` does not exist, the live count is taken as 0 without calling `hr_registry_live_count`. Through `hr_registry_branches` → `hr_registry_init` that call would create the registry, and a start that still ends in the `fatal` must create nothing (header: IT REFUSES TO START … before anything is created). The gate is otherwise as specified.
+- `placeholder_start_recover` logs `placeholder sweep at start: removed <n> path(s)` whenever the start-up sweep ran, `0` included. It logs nothing when the sweep did not run.
+- Test case 6 calls `process_inbox_file` directly from a pass script with `RUN_CAP=5`. On a placeholder host the cap is clamped to 1, so with another run live, `tick` defers the drop at the cap check, before the sweep call can be reached. The test file's header says so.
+- Test case 1 shows the launch through the stub's recorded prompt and the record's `copy_kind` `clone` / `worktree`. It does not read `status` `running`, because `tick; wait` returns only after the stub has exited and been classified.
+- Evidence note: both stall cases (case 2 and case 7's stall half) take about 70 s each. The seam-off half shows that time without the new wait loop. It comes from the hung stub's `sleep 60` and the shared `wait`, not from this change. Not investigated further, because the test-run rule keeps this unit to its own test files and the tree guards.

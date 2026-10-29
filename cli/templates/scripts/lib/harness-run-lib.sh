@@ -747,6 +747,29 @@ hr_checkout_top_nogit() {
   done
 }
 
+# Print the main checkout holding <dir>, found past placeholder leftovers:
+# `hr_checkout_top_nogit <dir>`, then, while that checkout's `.git` is a
+# leftover (`hr_placeholder_leftover_var`) and it is not `/`,
+# `hr_checkout_top_nogit` of its parent. 0 only when the final `.git` is a real
+# directory, not a symbolic link; otherwise 1, printing nothing. Runs no git
+# and removes nothing.
+#
+# It exists because a leftover `<main>/<scriptsDir>/.git` hides the main
+# checkout from `hr_main_repo` and `hr_checkout_top_nogit` alike, so the
+# watcher's start-up sweep could not otherwise find the manifests that list it.
+# It carries no leftover test of its own.
+hr_main_checkout_past_leftovers_nogit() {
+  local top parent
+  top=$(hr_checkout_top_nogit "${1-}") || return 1
+  while [ "$top" != / ] && hr_placeholder_leftover_var "$top/.git"; do
+    parent=${top%/*}
+    [ -n "$parent" ] || parent=/
+    top=$(hr_checkout_top_nogit "$parent") || return 1
+  done
+  [ -d "$top/.git" ] && [ ! -L "$top/.git" ] || return 1
+  printf '%s\n' "$top"
+}
+
 # Print the canonical gitdir of the checkout at <top>: `<top>/.git` when that is
 # a directory; when it is a file whose first line is `gitdir: <p>`, `<p>`
 # (resolved against <top> when relative). Return 1 otherwise.
@@ -3124,6 +3147,39 @@ hr_registry_branches() {
   local file="${1-}"
   hr_registry_init "$file" || :
   jq -r '.runs | keys[]' "$file" 2>/dev/null
+}
+
+# hr_registry_live_count <file> [exclude_branch] — print how many runs of the
+# registry at <file>, <exclude_branch> left out, hold a slot: a record whose
+# `execution` is not `github-actions`, whose `status` is `running`, and whose
+# `pid` is non-empty and answers `kill -0`. Prints the integer only; returns 0.
+# THE ONE HOME of the live-run rule: the watcher's `running_count` and its
+# start-up sweep's gate both call it.
+#
+# `running` is the only status that holds a slot. The status filter is what
+# keeps a finished record's pid, once the OS reuses it, from holding one — a
+# terminal write drops the pid, but a session that exits before
+# `spawn_engine`'s parent writes `pid "$!"` leaves its own dead subshell's pid
+# on a terminal record. The filter cannot count out a run being launched: every
+# launch and resume path writes `status running` before `spawn_engine` writes
+# the pid, and the watcher runs each spawn to completion before its next
+# capacity read. A remote run holds no local slot: its job gates itself.
+hr_registry_live_count() {
+  local file="${1-}" exclude="${2-}" n=0 b pid
+  while IFS= read -r b; do
+    [ -n "$b" ] || continue
+    [ -z "$exclude" ] || [ "$b" != "$exclude" ] || continue
+    [ "$(hr_registry_get "$file" "$b" execution)" != "github-actions" ] || continue
+    [ "$(hr_registry_get "$file" "$b" status)" = "running" ] || continue
+    pid="$(hr_registry_get "$file" "$b" pid)"
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+      n=$((n + 1))
+    fi
+  done <<EOF
+$(hr_registry_branches "$file")
+EOF
+  printf '%s\n' "$n"
+  return 0
 }
 
 # hr_registry_peek <file> <branch> <key> — print `.runs[<branch>][<key>]`

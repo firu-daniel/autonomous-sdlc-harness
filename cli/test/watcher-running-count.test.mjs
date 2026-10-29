@@ -4,7 +4,8 @@
  * **The rule these tests exist to enforce: a record holds a slot only while its status is `running`
  * and its pid is alive, and a run that reaches `completed` or `failed` drops its pid.** The defect
  * they replay: `running_count` tested only the pid, so a finished record whose pid the OS had reused
- * held a slot against the cap.
+ * held a slot against the cap. `running_count` delegates to the library's `hr_registry_live_count`,
+ * so these cases grade that function, the rule the watcher's start-up sweep gate also calls.
  *
  * Not driven here: the stall watchdog's two give-up arms and `fail_before_launch`, which need the
  * watchdog's timing or a failed working-copy build. Their edit is the same one-write `pid ""` pair
@@ -48,11 +49,11 @@ async function seedRuns(f, runs) {
   await writeFile(path, `${JSON.stringify({ runs }, null, 2)}\n`, 'utf8');
 }
 
-/** `running_count`'s stdout, reached the way the watcher header's REPRO reaches it. */
-async function runningCount(t, f) {
+/** `running_count`'s stdout for `args`, reached the way the watcher header's REPRO reaches it. */
+async function runningCount(t, f, ...args) {
   const result = await runBash(
     f.dir,
-    ['-c', '. "$1" status >/dev/null; running_count', '_', f.watcherPath],
+    ['-c', '. "$1" status >/dev/null; shift; running_count "$@"', '_', f.watcherPath, ...args],
     f.watcherEnv(),
     { timeoutMs: TICK_TIMEOUT_MS, signal: t.signal },
   );
@@ -92,6 +93,17 @@ test('a running record holding a live pid counts 1, beside terminal records or a
     broke: { status: 'failed', pid },
   });
   assert.equal(await runningCount(t, f), '1\n');
+});
+
+test('the optional branch argument leaves that live run out of the count', async (t) => {
+  const f = await createWatcherFixture(t);
+  if (f === null) return;
+  const pid = liveChild(t);
+
+  await seedRuns(f, { live: { status: 'running', pid }, other: { status: 'running', pid } });
+  assert.equal(await runningCount(t, f), '2\n');
+  assert.equal(await runningCount(t, f, 'live'), '1\n');
+  assert.equal(await runningCount(t, f, 'absent'), '2\n');
 });
 
 test('a running record whose process is gone is reconciled to failed with its pid dropped', async (t) => {
