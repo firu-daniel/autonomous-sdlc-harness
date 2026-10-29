@@ -143,13 +143,17 @@ sp__clone_path() {
 }
 
 # sp__render <branch> <clone> — the watcher's own render and check, in a child shell that sourced
-# `autonomous-watcher.sh status`. Sets SP__RENDERED, or SP__RENDER_REFUSAL quoting RUN_PROFILE_REFUSAL.
+# `autonomous-watcher.sh status` and then took the placeholder-host answer
+# (`hr_placeholder_host_probe_var`) as `spawn_engine` does before its render, so on a bubblewrap host
+# the clone's commondir, config.worktree and http-alternates are left out of denyWrite as in a real
+# launch. Sets SP__RENDERED, or SP__RENDER_REFUSAL quoting RUN_PROFILE_REFUSAL.
 sp__render() {
   local out rc
   SP__RENDERED=""
   SP__RENDER_REFUSAL=""
   out="$(bash -c '
     . "$1" status >/dev/null 2>&1
+    hr_placeholder_host_probe_var
     if ! run_profile_render "$2" "$3" clone; then printf "%s\n" "$RUN_PROFILE_REFUSAL"; exit 1; fi
     if ! run_profile_check "$RUN_PROFILE_FILE" "$3"; then printf "%s\n" "$RUN_PROFILE_REFUSAL"; exit 1; fi
     printf "%s\n" "$RUN_PROFILE_FILE"' _ "$SP_SCRIPTS/autonomous-watcher.sh" "$1" "$2" 2>/dev/null)"

@@ -21,7 +21,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Take the placeholder-host answer in `sp__render` before it renders the probe's per-run profile _(layer: general)_
+1. [x] **Finding 1** — Take the placeholder-host answer in `sp__render` before it renders the probe's per-run profile _(layer: general)_
 
 ## Must Fix
 
