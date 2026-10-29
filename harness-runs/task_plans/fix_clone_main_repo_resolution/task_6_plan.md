@@ -26,7 +26,7 @@
 
 **Work:**
 
-- [ ] **`helpers/run-copy-layouts.mjs`.** Export `buildRunCopyLayouts(t)`, which returns the absolute physical paths of these layouts. Build them under one `realpath(mkdtemp(join(tmpdir(), …)))` root, removed in `t.after`, and never inside this checkout.
+- [x] **`helpers/run-copy-layouts.mjs`.** Export `buildRunCopyLayouts(t)`, which returns the absolute physical paths of these layouts. Build them under one `realpath(mkdtemp(join(tmpdir(), …)))` root, removed in `t.after`, and never inside this checkout.
   - **`main`**: a `git init -b trunk` checkout with a committed `harness.config.json` (`version`, `defaultBranch: "trunk"`, a non-default `stateDir`), and `<stateDir>/autonomous_logs/` created.
   - **`worktree`**: `git worktree add` of `main`.
   - **`registeredClone`**: made by sourcing `cli/templates/scripts/lib/harness-run-lib.sh` from `WORKSPACE_ROOT` and calling `hr_clone_create_var "$main" feat_reg trunk`, which writes the registry record. Follow how `cli/test/cleanup-run-copies.test.mjs` calls that function.
@@ -36,7 +36,7 @@
   - **`plain`**: an unrelated `git init` repository.
 
   Each fixture changes exactly one condition, so a refusal is the work of the check that case targets. Run every child through `runBash` / `runGit` from `cli/test/helpers/fixture.mjs`. Spread no `process.env`; where a spread is unavoidable, blank `MAIN_REPO_ANCHOR_VARIABLE` in the same object, as `cli/test/helpers/fixture.mjs`'s isolated environment does.
-- [ ] **`main-root-fallback.test.mjs` — the cases.**
+- [x] **`main-root-fallback.test.mjs` — the cases.**
   - **The header** states the rule it enforces and the behaviour it does not cover, and why: the prose rule, which Task 10's rows AN5–AN6 measure by hand.
   - **The anchor.** Each layout is run twice: once with `[MAIN_REPO_ANCHOR_VARIABLE]: ''`, and once with it set to `main`. The variable name is imported from `../dist/core/mainRepoAnchor.js`.
   - **Expected without the anchor:**
@@ -45,7 +45,7 @@
     - `unregisteredClone`, `twoLineClone` and `selfClone` print nothing and exit 1, and a `hc_main_root_var` call leaves `HC_MAIN_ROOT_REFUSAL` naming the registry, the alternates file and the alternates file respectively. Match a stable fragment of the path or word, not the whole sentence.
   - **Expected with the anchor:** every layout prints `main`, which is today's behaviour.
   - **Call shape.** Call the library as `bash -c '. "$1"; hc_main_root "$2"' _ <lib> <dir>`, and print the variables after a `hc_main_root_var` call the same way.
-- [ ] **`qa-user-locks.test.mjs`.**
+- [x] **`qa-user-locks.test.mjs`.**
   - **Rename and rewrite case (f):** *"A reserve in an unregistered clone with no anchor refuses: exits 1, and no lock lands in the clone's or the main checkout's state dir"*. Assert:
     - `status` 1;
     - stderr matching `/cannot resolve the main checkout/`;
@@ -59,7 +59,7 @@
     Add the registry directory the function needs to the fixture's main checkout, if `lockFixture` does not create it.
   - **Rewrite the header's rule paragraph**, which now says *"the same reserve with no anchor lands in the clone's own"*. A reserve with no anchor lands in the main checkout's set from a registered clone, and is refused from an unregistered one.
   - **Leave every other case and assertion byte-identical.**
-- [ ] **Mutations, recorded in each header.** Each changed test file names, in its header, the mutation of `hc_main_root_var` that turns it red, and states that it was run red once:
+- [x] **Mutations, recorded in each header.** Each changed test file names, in its header, the mutation of `hc_main_root_var` that turns it red, and states that it was run red once:
   - `main-root-fallback.test.mjs`: make the clone arm skip the registry check, which turns `unregisteredClone` red.
   - `qa-user-locks.test.mjs` (f) and (f2): make the clone arm return `<root>`. That one mutation turns both red: (f) because the reserve then exits 0 and the lock lands in `cloneLockSet`, and (f2) because the lock lands in the clone's state dir rather than under `f.lockSet`. Record both failing case names against it.
 
