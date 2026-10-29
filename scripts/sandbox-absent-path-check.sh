@@ -35,7 +35,7 @@
 # Sessions run on a COPY of the per-run profile, with one entry added to `excludedCommands` for the
 # excluded inspector. Everything else it writes, the inspector included, is under <out>.
 #
-# Exit: 0 done · 1 usage, or the run library is missing · 2 not Linux, no held clone or profile, or
+# Exit: 0 done · 1 usage, the run library is missing, or the state directory is unresolvable · 2 not Linux, no held clone or profile, or
 # `sweep` before `run`.
 #
 # Linux only by purpose: the inspector reads `stat -c`, `date -Is` and `/proc/self/mountinfo`. Any
@@ -60,7 +60,6 @@ if [ "$host" != "Linux" ]; then
 fi
 
 M=$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
-S="$M/harness-runs"
 O=${SBX_ABSENT_OUT:-${TMPDIR:-/tmp}/sbx-absent-path}
 O=${O%/}
 MODEL=${MODEL:-opus}
@@ -72,6 +71,11 @@ if [ ! -f "$M/scripts/lib/harness-run-lib.sh" ]; then
 fi
 # shellcheck source=/dev/null
 . "$M/scripts/lib/harness-run-lib.sh"
+# The watcher's `spawn_engine` resolves its `--add-dir` state root the same way.
+if ! S=$(hr_state_path "$M"); then
+  echo "sandbox-absent-path-check: the state directory under '$M' is unresolvable from harness.config.json" >&2
+  exit 1
+fi
 
 resolve() {
   local lane
