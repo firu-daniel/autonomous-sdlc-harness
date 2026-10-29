@@ -77,7 +77,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_linux_sandbox_deny_place
 8. [x] **Task 7** — Write the upstream report for anthropics/claude-code _(layer: general)_ _(points: 10)_
 9. [x] **Task 8** — Record the absent-path check, the route and the owed re-take in `docs/sandbox-verification.md` _(layer: general)_ _(points: 20)_
 10. [x] **Task 9** — Bring `docs/cli.md`'s and `docs/watcher.md`'s Linux statements into line, state the interim position, and add the check to Gate 15 _(layer: general)_ _(points: 20)_
-11. [ ] **Task 10** — Re-render the notes-app profile's write-protection `_README` line _(layer: general)_ _(points: 8)_
+11. [x] **Task 10** — Re-render the notes-app profile's write-protection `_README` line _(layer: general)_ _(points: 8)_
 
 ## Scope register
 
