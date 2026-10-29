@@ -39,7 +39,7 @@
 2. [x] **Finding 2** — Add `docs/sandbox-verification.md` and `cli/test/main-root-fallback.test.mjs` to the module's `## Who may cite this` roster, 24 → 26 _(layer: plugin)_
 3. [x] **Finding 5** — Say "write-open" where the module's platform posture cites CL5 _(layer: plugin)_
 4. [x] **Finding 3** — Replace `docs/watcher.md` → **Read.**'s restatement of the fallback with a repo-relative pointer _(layer: general)_
-5. [ ] **Finding 4** — Record the worked example's owed re-render (Task 12) under the story's **Manual setup required** _(layer: general)_
+5. [x] **Finding 4** — Record the worked example's owed re-render (Task 12) under the story's **Manual setup required** _(layer: general)_
 
 ---
 
