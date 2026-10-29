@@ -35,7 +35,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Treat an `ENOTDIR` answer as absence in the module's **Reading a file.** paragraph, so a linked worktree keeps today's answer _(layer: plugin)_
+1. [x] **Finding 1** — Treat an `ENOTDIR` answer as absence in the module's **Reading a file.** paragraph, so a linked worktree keeps today's answer _(layer: plugin)_
 2. [ ] **Finding 2** — Add `docs/sandbox-verification.md` and `cli/test/main-root-fallback.test.mjs` to the module's `## Who may cite this` roster, 24 → 26 _(layer: plugin)_
 3. [ ] **Finding 5** — Say "write-open" where the module's platform posture cites CL5 _(layer: plugin)_
 4. [ ] **Finding 3** — Replace `docs/watcher.md` → **Read.**'s restatement of the fallback with a repo-relative pointer _(layer: general)_

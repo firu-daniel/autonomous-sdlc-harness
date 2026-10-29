@@ -16,7 +16,7 @@ This rule is its own file rather than a section of `${CLAUDE_PLUGIN_ROOT}/instru
 
 Run every command **bare and literal**: no substitution, no variable, no pipe, no wrapping command. The only commands are `git rev-parse --show-toplevel`, `git rev-parse --abbrev-ref HEAD` and `git worktree list --porcelain`, each run in the checkout you are in; read every file with the `Read` tool, never with a shell command.
 
-**Reading a file.** A `Read` answer that the file does not exist means the file is absent. A file the `Read` tool cannot read for any other reason — refused, denied, a directory, an error — is a stop, never an absence.
+**Reading a file.** A `Read` answer that the file does not exist means the file is absent, and so does an `ENOTDIR` / "not a directory" answer — which is what F2's read returns in a linked worktree, whose `<copy>/.git` is a pointer file. A file the `Read` tool cannot read for any other reason — refused, denied, a directory, any other error — is a stop, never an absence.
 
 **Comparing.** Every comparison below is a literal string comparison of the paths as written. A spelling mismatch stops you; it never gives a wrong answer.
 
