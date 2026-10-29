@@ -226,6 +226,7 @@ import {
   shippedSandboxSettings,
 } from '../generators/sandboxProfile.js';
 import {
+  COPY_GIT_PATHS,
   fileToolDenyRules,
   jobSurfacePaths,
   protectedPaths,
@@ -5081,7 +5082,8 @@ const PROFILE_SANDBOX_CHECK: Check = {
  * because the runtime never consults a `Write(path)` rule (`docs/sandbox-verification.md` → F4), so an
  * earlier release's leftover `Write` rules are neither missing nor stale. Under a taken opt-out
  * ({@link sandboxOptedOut}) only the file-tool rules are graded: with the sandbox off a `denyWrite`
- * entry protects nothing.
+ * entry protects nothing. The base it grades is the same on every host; only the watcher's per-run
+ * copy on a bubblewrap host differs.
  *
  * A `warn` rather than a `fail`, on {@link PROFILE_DENY_FLOOR_CHECK}'s terms: the profile is a file the
  * adopter owns and may deliberately have restructured, a run missing an entry is worse-defended
@@ -5148,7 +5150,9 @@ const PROFILE_WRITE_PROTECTION_CHECK: Check = {
           `${PROFILE_PATH} carries an Edit deny rule for each of the ${expected.length} paths that run outside the sandbox${notGraded}`,
         )
       : pass(
-          `${PROFILE_PATH} write-protects each of the ${expected.length} paths that run outside the sandbox on both sides: a ${denyWritePath} entry, and an Edit deny rule. How the Linux sandbox treats a ${denyWritePath} entry containing * is unverified, so on Linux only the file-tool side is relied on for the globbed paths`,
+          `${PROFILE_PATH} write-protects each of the ${expected.length} paths that run outside the sandbox on both sides: a ${denyWritePath} entry, and an Edit deny rule. How the Linux sandbox treats a ${denyWritePath} entry containing * is unverified, so on Linux only the file-tool side is relied on for the globbed paths. On Linux an exact entry for a path that does not exist is enforced by a placeholder at that path (measured 2026-10-29 on Claude Code 2.1.312 with bubblewrap 0.8.0), so the run watcher's per-run copy there leaves a run copy's ${nameList(
+            COPY_GIT_PATHS.filter(({ bubblewrapDenyWrite }) => bubblewrapDenyWrite === false).map(({ path }) => path),
+          )} out of ${denyWritePath} and refuses a run copy carrying one`,
         );
   },
 };

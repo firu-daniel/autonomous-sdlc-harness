@@ -1198,6 +1198,24 @@ test('every path that runs outside the sandbox is write-protected on both sides'
     profile._README.some((line) => line.startsWith('WHAT RUNS OUTSIDE THE SANDBOX CANNOT BE WRITTEN') && line.includes('Linux')),
     'no _README line names the write-protected set and its Linux residual',
   );
+  // The per-run copy on a bubblewrap host leaves these rows out of denyWrite; the base keeps all six.
+  assert.deepEqual(
+    COPY_GIT_PATHS.filter(({ bubblewrapDenyWrite }) => bubblewrapDenyWrite === false).map(({ path }) => path),
+    ['.git/commondir', '.git/config.worktree', '.git/objects/info/http-alternates'],
+  );
+  const protectionLine = profile._README.find((line) => line.startsWith('WHAT RUNS OUTSIDE THE SANDBOX CANNOT BE WRITTEN'));
+  const omitted = COPY_GIT_PATHS.filter(({ bubblewrapDenyWrite }) => bubblewrapDenyWrite === false).map(({ path }) => path).join(', ');
+  assert.ok(
+    protectionLine.includes(
+      'On a host sandboxed by bubblewrap, Claude Code enforces an exact entry for a path that does not exist by mounting a placeholder at that path',
+    ),
+    `the write-protection _README line lacks the placeholder clause: ${protectionLine}`,
+  );
+  assert.ok(
+    protectionLine.includes(`leaves the run copy's ${omitted} out of \`denyWrite\``),
+    `the write-protection _README line does not name the rows the per-run copy omits: ${protectionLine}`,
+  );
+  assert.ok(!protectionLine.includes('which holds on Linux too'), 'the _README line still claims an exact entry holds on Linux');
   assertEntriesRunnable(profile);
 });
 

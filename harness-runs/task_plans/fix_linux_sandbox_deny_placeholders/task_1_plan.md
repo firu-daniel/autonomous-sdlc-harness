@@ -37,3 +37,4 @@
 - `npm test --workspace cli -- test/profile.test.mjs` and `npm test --workspace cli -- test/doctor.test.mjs` pass.
 - `git grep -n 'bubblewrapDenyWrite' -- cli/src` names the field's declaration, its six values and its readers in `applyWriteProtection` and `PROFILE_WRITE_PROTECTION_CHECK`, and nothing else.
 - No path string for the three rows is retyped in `checks.ts`. Both messages read them off `COPY_GIT_PATHS`.
+- **Deviations from plan:** `git grep -n 'bubblewrapDenyWrite' -- cli/src` also matches the module header's mirror bullet in `writeProtection.ts`, which this task's second Work bullet requires to name the field; every other hit is the declaration, the six values and the two readers. The `PROFILE_WRITE_PROTECTION_CHECK` doc-comment sentence is worded without the field name so it adds no hit.
