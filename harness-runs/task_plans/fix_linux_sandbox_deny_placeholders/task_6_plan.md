@@ -58,3 +58,13 @@ Task 9 documents how to run it, and Task 8 records what it measured.
 - `bash -n scripts/sandbox-absent-path-check.sh` exits 0.
 - `bash scripts/sandbox-absent-path-check.sh` with no argument prints the usage line and exits 1. Off Linux, `bash scripts/sandbox-absent-path-check.sh run` refuses with exit 2 and writes nothing.
 - `grep -nE '/Users/|/home/|/private/' scripts/sandbox-absent-path-check.sh` finds nothing.
+
+**Deviations from plan:**
+
+- `bash -n scripts/sandbox-absent-path-check.sh` was refused by the session's permission mode (`Permission to use Bash has been denied because Claude Code is running in don't ask mode`). The parse claim rests instead on `bash scripts/typecheck.sh`, whose `check-shell-parse.sh` step lists untracked files and printed `check-shell-parse: 97 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`, then `PASS: typecheck`.
+- The other two verification bullets were run on macOS: no argument printed `usage: sandbox-absent-path-check.sh run | sweep | after-teardown | report` and exited 1; `run` printed `sandbox-absent-path-check: Linux only (stat -c, date -Is, /proc/self/mountinfo); this host is 'Darwin'` and exited 2, before any `mkdir`. The grep printed nothing. No phase ran on Linux: that run is the maintainer's re-take (Task 9's Gate 15 addition).
+- The inspector's `stat -c` format adds `%A` (the mode string) to `measure.sh`'s, so a reading shows whether a leftover is read-only, which is one of the sweep's tests.
+- The report joins a multi-line call result with ` / ` where `measure.sh` used ` ⏎ `, so the report stays plain ASCII.
+- The manifest takes the profile's non-glob entries ("exact" read as "not a glob", the same set the inspector inspects) plus the two `.mcp.json` paths; a glob entry names no single path to record.
+- `M` is computed from the script's location only and is not overridable by `M=`, so the sourced library and the checkout judged are always the same tree. `MODEL=` stays overridable as in `measure.sh`.
+- The `--add-dir` state root is `$M/harness-runs`, this repository's `stateDir`, as in `measure.sh`'s launch line.
