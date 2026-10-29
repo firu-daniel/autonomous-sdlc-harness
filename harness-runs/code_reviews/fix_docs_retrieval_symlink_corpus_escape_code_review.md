@@ -25,7 +25,7 @@ One Nice to Have is left.
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Name the corpus files-and-warnings comparison in the README's `test_chunk_parity.py` byte-parity bullet _(layer: general)_
+1. [x] **Finding 1** — Name the corpus files-and-warnings comparison in the README's `test_chunk_parity.py` byte-parity bullet _(layer: general)_
 
 ---
 

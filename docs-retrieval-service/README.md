@@ -154,7 +154,7 @@ The `DocStore` contract carried over method for method, `rebuildIndexes` include
 
 **Where byte parity is asserted.** These five run without a container, against the TypeScript code through `cli/dist`:
 
-- `tests/test_chunk_parity.py`: chunk keys and hashes;
+- `tests/test_chunk_parity.py`: corpus files and warnings, a symlinked fixture corpus included, and chunk keys and hashes;
 - `tests/test_stubs.py`: stub vectors and scores;
 - `tests/test_render_parity.py`: rendering;
 - `tests/test_store_statements.py`: the store's constants and statements, `LEXICAL_SEARCH_STATEMENT`, `END_STATE_STATEMENTS` and the `index_state` constants among them, with the vector arm's ordering and the width-change `DELETE FROM meta` read from `cli/src/retrieval/store.ts`'s source because `store.ts` does not export them;
