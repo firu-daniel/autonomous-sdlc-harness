@@ -28,7 +28,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_docs_retrieval_symlink_c
 1. [x] **Task 1** — Apply the physical inside-repository check in `corpus.ts`, with its own test suite _(layer: cli)_ _(points: 20)_
 2. [x] **Task 2** — Port the physical check to `corpus.py` and rewrite its symlink cases in `test_corpus.py` _(layer: general)_ _(points: 20)_
 3. [x] **Task 3** — Add a `corpus-at` bridge sub-command and a symlink corpus parity case _(layer: general)_ _(points: 10)_
-4. [ ] **Task 4** — State the symlink rule in `docs/retrieval.md` → `**Corpus.**` _(layer: general)_ _(points: 5)_
+4. [x] **Task 4** — State the symlink rule in `docs/retrieval.md` → `**Corpus.**` _(layer: general)_ _(points: 5)_
 
 ## Scope register
 
