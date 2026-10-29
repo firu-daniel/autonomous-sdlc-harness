@@ -371,7 +371,7 @@ for (const [name, stubExit, line, expectedStatus] of [
     assert.equal(run.stdout, line);
 
     assert.equal(text(dir, VERDICT), line);
-    assert.equal(existsSync(join(dir, RUNNING)), false, '.running outlived the run');
+    await pollUntil(() => !existsSync(join(dir, RUNNING)), '.running removed after the verdict');
 
     const waited = await wrapper(dir, ['--wait', 'task_round_1']);
     assert.equal(waited.stdout, line);
@@ -558,7 +558,7 @@ test('a run form finding a stale heartbeat of its label starts a fresh run', asy
   assert.equal(result.status, 0);
   assert.deepEqual(counterLines(dir), ['ran']);
   assert.doesNotMatch(text(dir, LOG), /PLANTED-LOG-SENTINEL/, 'the re-run did not truncate the log');
-  assert.equal(existsSync(join(dir, RUNNING)), false, '.running outlived the run');
+  await pollUntil(() => !existsSync(join(dir, RUNNING)), '.running removed after the verdict');
 });
 
 test('a run killed without a verdict reads as no run in flight once its heartbeat is stale', async (t) => {
@@ -682,7 +682,7 @@ test('a SIGINT to the calling shell\'s process group stops neither the worker no
   assert.equal(waited.stdout, 'pass\n');
   assert.equal(waited.status, 0);
   assert.equal(text(dir, VERDICT), 'pass\n');
-  assert.equal(existsSync(join(dir, RUNNING)), false, '.running outlived the run');
+  await pollUntil(() => !existsSync(join(dir, RUNNING)), '.running removed after the verdict');
   assert.deepEqual(counterLines(dir), ['ran'], 'the command did not run exactly once');
 });
 

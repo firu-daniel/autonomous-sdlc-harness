@@ -6,8 +6,13 @@ here throws on a missing path. An absent `docs.root`, a missing conventions docu
 resolving outside the repository becomes a warning line and the rest of the corpus is still
 returned. No gate is applied here.
 
-Paths follow Node's `path` module, not `pathlib`: a join concatenates and normalizes lexically, and
-nothing resolves a symlink (`Path.resolve` does, so it is never used).
+Paths follow Node's `path` module, not `pathlib`: a join concatenates and normalizes lexically.
+`os.path.realpath` is used only for the physical check: after symlink resolution a path must still
+lie inside the repository's real root, so a symlink whose target is outside is skipped with a
+warning, while one resolving inside is kept under its own repo-relative spelling. `Path.resolve` is
+never used. Walk warnings are sorted, so their order matches the TypeScript backend's whatever
+`os.scandir`'s order is. Residual: the check runs at enumeration; a link retargeted between
+enumeration and the read is not checked again.
 """
 
 import os
@@ -37,7 +42,10 @@ def normalize_repo_dir(value: str) -> str:
 
 
 def inside_repo(repo_root: str, candidate: str) -> bool:
-    """`insideRepo` (`cli/src/core/paths.ts`): lexical, so a symlink is not followed."""
+    """`insideRepo` (`cli/src/core/paths.ts`): lexical, so a symlink is not followed.
+
+    `corpus_files` follows it with the physical check, `_physically_inside`.
+    """
     root = os.path.abspath(repo_root)
     target = os.path.abspath(candidate)
     if root == target:
@@ -50,6 +58,15 @@ def inside_repo(repo_root: str, candidate: str) -> bool:
     if os.path.isabs(rel):
         return False
     return rel != ".." and not rel.startswith(".." + os.sep)
+
+
+def _physically_inside(real_root: str, candidate: str) -> bool | None:
+    # `None` when `candidate` cannot be resolved: dangling, a loop, or unreadable.
+    try:
+        real = os.path.realpath(candidate, strict=True)
+    except OSError:
+        return None
+    return inside_repo(real_root, real)
 
 
 def _node_join(base: str, tail: str) -> str:
@@ -90,6 +107,11 @@ def _conventions_outside_warning(p: str, n: str) -> str:
     return f"conventions document {p} of layer {n} resolves outside the repository and was skipped"
 
 
+def _docs_root_file_outside_warning(rel: str) -> str:
+    # Hoisted only so the literal fits on one line under the line-length limit.
+    return f"docs.root file {rel} resolves outside the repository and was skipped"
+
+
 _MISSING = object()
 
 
@@ -97,6 +119,7 @@ def corpus_files(repo_root: str, config: Mapping[str, Any]) -> CorpusFiles:
     """The corpus of `config`, which carries `harness.config.json`'s own keys, at `repo_root`."""
     absolute: list[str] = []
     warnings: list[str] = []
+    real_root = os.path.realpath(repo_root)
 
     # Each warning is kept on one line so a grep of `corpus.ts` finds it verbatim.
     docs = config.get("docs")
@@ -112,8 +135,20 @@ def corpus_files(repo_root: str, config: Mapping[str, Any]) -> CorpusFiles:
             warnings.append(
                 f"docs.root {d} is not a directory, so no documentation directory is indexed"
             )
+        elif _physically_inside(real_root, full) is not True:
+            warnings.append(f"docs.root {d} resolves outside the repository and was skipped")
         else:
-            _markdown_under(full, absolute)
+            walked: list[str] = []
+            _markdown_under(full, walked)
+            escaped: list[str] = []
+            for candidate in walked:
+                inside = _physically_inside(real_root, candidate)
+                if inside is True:
+                    absolute.append(candidate)
+                elif inside is False:
+                    escaped.append(_to_repo_relative(repo_root, candidate))
+            for rel in sorted(escaped, key=utf16_sort_key):
+                warnings.append(_docs_root_file_outside_warning(rel))
 
     for layer in config.get("layers") or []:
         conventions = layer.get("conventions")
@@ -122,9 +157,11 @@ def corpus_files(repo_root: str, config: Mapping[str, Any]) -> CorpusFiles:
         p = normalize_repo_dir(conventions)
         full = _node_join(repo_root, p)
         n = _js_template_value(layer["name"]) if "name" in layer else "undefined"
-        if not inside_repo(repo_root, full):
+        lexical = inside_repo(repo_root, full)
+        physical = _physically_inside(real_root, full) if lexical and os.path.isfile(full) else None
+        if not lexical or physical is False:
             warnings.append(_conventions_outside_warning(p, n))
-        elif not os.path.isfile(full):
+        elif physical is None:
             warnings.append(f"conventions document {p} of layer {n} is missing and was skipped")
         else:
             absolute.append(full)
