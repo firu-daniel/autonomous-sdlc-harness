@@ -72,5 +72,7 @@ These documents point at `## The fallback`:
 - `cli/src/doctor/checks.ts` — the `PROFILE_MAIN_ANCHOR_CHECK` doc comment and `warn(…)` message
 - `docs/watcher.md` — `### The main-checkout anchor`, **Read.**
 - `docs/cli.md` — the main-checkout anchor-rule bullet
+- `docs/sandbox-verification.md` — the dated note **2026-10-29: AN5–AN6 are owed measurements, not results, …**
+- `cli/test/main-root-fallback.test.mjs` — the header's *Not covered* paragraph
 
-A citer **points and never restates**, and **no document beyond these 24 points at `## The fallback`.** A document not on this list does not point here. An edit that rewords or moves the heading updates every roster member in the same change.
+A citer **points and never restates**, and **no document beyond these 26 points at `## The fallback`.** A document not on this list does not point here. An edit that rewords or moves the heading updates every roster member in the same change.
