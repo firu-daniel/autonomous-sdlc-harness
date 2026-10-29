@@ -313,6 +313,17 @@
 # The rules every hardened call holds are lib/harness-run-lib.sh's, in the
 # section THE WATCHER FAMILY'S GIT IN A RUN'S COPY.
 #
+# On a placeholder host a killed session's leftovers break these reads — a
+# 0-byte `<scriptsDir>/.git` fails `hr_main_repo` and `create-worktree.sh`, a
+# 0-byte `.git/commondir` fails the copy check — so `placeholder_sweep_pass`
+# removes the recorded ones (lib/harness-run-lib.sh, PLACEHOLDER LEFTOVERS)
+# ahead of each reader: in `tick` before the stall watchdog, quietly; in the
+# watchdog's KILL tier once the killed tree has exited; in `process_inbox_file`
+# before the working-copy step; and first in `spawn_engine`'s placeholder-host
+# block, ahead of the launch check. Before all of them, when `hr_main_repo`
+# fails at start-up, `placeholder_start_recover` finds the main checkout
+# without git and sweeps there, so a leftover does not refuse the start.
+#
 # THE AGENT BINARY IS REACHED THROUGH ONE VARIABLE, `${HARNESS_AGENT_CLI:-claude}`,
 # resolved once below. It defaults to the real CLI, so an operator sees no
 # difference. It exists so the launch and exit-classification paths can be
@@ -994,6 +1005,59 @@ elif [ -s "${HOME-}/.asdf/asdf.sh" ]; then
   . "${HOME-}/.asdf/asdf.sh" >/dev/null 2>&1 || true
 fi
 
+# placeholder_start_recover — when `hr_main_repo` cannot place this script
+# outside job mode, sweep the recorded placeholder leftovers of the main
+# checkout `hr_main_checkout_past_leftovers_nogit` finds, provided its registry
+# holds no live run (`hr_registry_live_count`); a leftover `.git` in the
+# scripts directory would otherwise refuse the start. Not gated on the
+# placeholder-host probe: a manifest exists only where one is written, on a
+# placeholder host. Any step that cannot be resolved sweeps nothing. One stderr
+# line per removed and per kept path; PLACEHOLDER_START_REMOVED holds the
+# removed count, logged once `log` exists. Leaves the configuration cache
+# reset, so the anchors below load their own.
+PLACEHOLDER_START_REMOVED=""
+placeholder_start_recover() {
+  local main logs live slug manifest m line removed=0 n=0
+  local -a manifests
+  [ "${HARNESS_JOB_MODE:-}" != "1" ] || return 0
+  hr_main_repo "$SCRIPT_DIR" >/dev/null && return 0
+  main="$(hr_main_checkout_past_leftovers_nogit "$SCRIPT_DIR")" || return 0
+  # An absent registry holds no live run, and is not created here: a start
+  # that still refuses below creates nothing.
+  live=0
+  if hr_config_load "$main" &&
+    logs="$(hr_state_path "$main" autonomous_logs)" &&
+    { [ ! -e "$logs/registry.json" ] || live="$(hr_registry_live_count "$logs/registry.json")"; } &&
+    [ "$live" = "0" ] &&
+    slug="$(hr_repo_slug "$main")" &&
+    manifest="$(hr_run_profile_absent_file "$slug" x)"; then
+    manifests=()
+    for m in "${manifest%/*}"/*.absent; do
+      [ -f "$m" ] || continue
+      manifests+=("$m")
+      n=$((n + 1))
+    done
+    if [ "$n" -gt 0 ] && hr_placeholder_sweep_var "${manifests[@]}"; then
+      while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        echo "$self: placeholder sweep at start: removed $line" >&2
+        removed=$((removed + 1))
+      done <<EOF
+$HR_PLACEHOLDER_REMOVED
+EOF
+      while IFS= read -r line; do
+        [ -n "$line" ] && echo "$self: placeholder sweep at start: kept $line" >&2
+      done <<EOF
+$HR_PLACEHOLDER_KEPT
+EOF
+      PLACEHOLDER_START_REMOVED="$removed"
+    fi
+  fi
+  hr_config_reset
+  return 0
+}
+placeholder_start_recover
+
 # -----------------------------------------------------------------------------
 # Anchors. All central state lives in the MAIN checkout; a run executes in a
 # sibling clone, or a legacy linked worktree for a run started before clones —
@@ -1179,6 +1243,31 @@ AGENT_EFFORT="$(hr_agent_effort "$MAIN_REPO")" || AGENT_EFFORT=""
 # inherits when the machine-local `watcher.env` sets none, so the two may not drift.
 MAX_PARALLEL_RUNS_DEFAULT=5
 MAX_PARALLEL_RUNS="${MAX_PARALLEL_RUNS:-$MAX_PARALLEL_RUNS_DEFAULT}"
+# The cap every capacity comparison and every printed `cap` reads. Set from
+# effective_max_parallel_runs at the start of each tick and in print_status,
+# never here, so a test's override of the probe seam takes effect.
+RUN_CAP="$MAX_PARALLEL_RUNS"
+RUN_CAP_CLAMP_LOGGED=0
+
+# effective_max_parallel_runs — print 1 on a placeholder host when
+# MAX_PARALLEL_RUNS is above 1, else MAX_PARALLEL_RUNS unchanged: concurrent
+# runs of one repository share the main checkout's sandbox placeholders
+# (docs/cli.md §6). Job mode runs one run and is never clamped.
+effective_max_parallel_runs() {
+  if [ "$JOB_MODE" != "1" ]; then
+    case "$MAX_PARALLEL_RUNS" in
+      '' | *[!0-9]*) ;;
+      *)
+        hr_placeholder_host_probe_var
+        if [ "$HR_PLACEHOLDER_HOST" = "1" ] && [ "$MAX_PARALLEL_RUNS" -gt 1 ]; then
+          printf '1\n'
+          return 0
+        fi
+        ;;
+    esac
+  fi
+  printf '%s\n' "$MAX_PARALLEL_RUNS"
+}
 # How often the watch loop takes a pass.
 POLL_INTERVAL_SECS="${POLL_INTERVAL_SECS:-15}"
 # The permission mode an unattended run is launched with. Deliberately NOT a
@@ -1411,6 +1500,9 @@ mkdir -p "$INBOX_DIR" "$LOGS_DIR" "$ARCHIVE_DIR" ||
   fatal "could not create the state directories under '$MAIN_REPO' — refusing to start"
 
 log() { printf '%s [watcher] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" | tee -a "$WATCHER_LOG"; }
+
+[ -z "$PLACEHOLDER_START_REMOVED" ] ||
+  log "placeholder sweep at start: removed $PLACEHOLDER_START_REMOVED path(s)"
 
 # The tunable shape-checked above announces itself when its value was replaced,
 # because a silent correction is its own small surprise: the operator's file says
@@ -1656,8 +1748,7 @@ registry_get() { hr_registry_get "$REGISTRY" "$@"; }
 registry_branches() { hr_registry_branches "$REGISTRY"; }
 
 # True iff <branch>'s record carries `execution: github-actions` — the record's
-# field, never `execution.target` (see REMOTE DISPATCH). Silent: running_count
-# calls it inside a command substitution.
+# field, never `execution.target` (see REMOTE DISPATCH). Silent.
 record_is_remote() {
   [ "$(registry_get "$1" execution)" = "github-actions" ]
 }
@@ -1687,31 +1778,50 @@ $(registry_branches)
 EOF
 }
 
-# Runs marked `running` whose process is still alive. A PURE READER: its ONLY
-# stdout is the final integer, because the cap check captures it with `$(…)`.
-# Healing a vanished process belongs to reconcile_stale_runs(), above.
-# `running` is the only status that holds a slot. The status filter is what keeps
-# a finished record's pid, once the OS reuses it, from holding one — a terminal
-# write drops the pid, but a session that exits before spawn_engine's parent
-# writes `pid "$!"` leaves its own dead subshell's pid on a terminal record. The
-# filter cannot count out a run being launched: every launch and resume path
-# writes `status running` before spawn_engine writes the pid, and the watcher
-# runs each spawn to completion before its next capacity read.
-running_count() {
-  local n=0 b pid
-  while IFS= read -r b; do
-    [ -n "$b" ] || continue
-    # A remote run holds no local slot: the job gates itself.
-    record_is_remote "$b" && continue
-    [ "$(registry_get "$b" status)" = "running" ] || continue
-    pid="$(registry_get "$b" pid)"
-    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-      n=$((n + 1))
-    fi
+# running_count [exclude_branch] — the live runs of this repository, that
+# branch left out. A PURE READER: its ONLY stdout is the integer, because the
+# cap check captures it with `$(…)`. Healing a vanished process belongs to
+# reconcile_stale_runs(), above. The rule's one home is the library's
+# `hr_registry_live_count`.
+running_count() { hr_registry_live_count "$REGISTRY" "${1-}"; }
+
+# placeholder_sweep_pass <exclude_branch> <quiet> — on a placeholder host
+# outside job mode, and only while no run of this repository but
+# <exclude_branch> is live, sweep every manifest in the run-profile directory
+# (lib/harness-run-lib.sh, PLACEHOLDER LEFTOVERS), one log line per removed and
+# per kept path. A live session's placeholders are its own mounts, so a live
+# run skips the sweep, logged unless <quiet> is 1. Returns 0.
+placeholder_sweep_pass() {
+  local exclude="${1-}" quiet="${2-0}" live manifest m line n=0
+  local -a manifests
+  [ "$JOB_MODE" != "1" ] || return 0
+  hr_placeholder_host_probe_var
+  [ "$HR_PLACEHOLDER_HOST" = "1" ] || return 0
+  live="$(running_count "$exclude")"
+  if [ "$live" != "0" ]; then
+    [ "$quiet" = "1" ] || log "placeholder sweep: skipped, $live run(s) of this repository live"
+    return 0
+  fi
+  manifest="$(hr_run_profile_absent_file "$HARNESS_REPO_SLUG" x)" || return 0
+  manifests=()
+  for m in "${manifest%/*}"/*.absent; do
+    [ -f "$m" ] || continue
+    manifests+=("$m")
+    n=$((n + 1))
+  done
+  [ "$n" -gt 0 ] || return 0
+  hr_placeholder_sweep_var "${manifests[@]}" || return 0
+  while IFS= read -r line; do
+    [ -n "$line" ] && log "placeholder sweep: removed $line"
   done <<EOF
-$(registry_branches)
+$HR_PLACEHOLDER_REMOVED
 EOF
-  echo "$n"
+  while IFS= read -r line; do
+    [ -n "$line" ] && log "placeholder sweep: kept $line"
+  done <<EOF
+$HR_PLACEHOLDER_KEPT
+EOF
+  return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -1873,7 +1983,7 @@ machine_footprint_report() {
     # The cap is PER REPOSITORY, so it is carried per row and never collapsed
     # into one machine-scoped line.
     if [ "${root%/}" = "${MAIN_REPO%/}" ]; then
-      cap_note="cap=$MAX_PARALLEL_RUNS (this repository's own resolved value)"
+      cap_note="cap=$RUN_CAP (this repository's own resolved value)"
     else
       cap_note="cap=$machine_cap (machine default; this entry's own daemon environment may override, not derivable from here)"
     fi
@@ -1897,12 +2007,18 @@ print_status() {
       end
   ' "$REGISTRY"
   # The resolved tunables, names and values only — the override channel made
-  # observable. Nothing else the override file may have set is printed.
-  echo "tunables: MAX_PARALLEL_RUNS=$MAX_PARALLEL_RUNS POLL_INTERVAL_SECS=$POLL_INTERVAL_SECS PERMISSION_MODE=$PERMISSION_MODE CLEANUP_INTERVAL_SECS=$CLEANUP_INTERVAL_SECS AUTO_TAIL_TERMINAL=$AUTO_TAIL_TERMINAL STALL_CHECK_ENABLED=$STALL_CHECK_ENABLED STALL_WARN_SECS=$STALL_WARN_SECS STALL_KILL_SECS=$STALL_KILL_SECS STALL_MAX_RESTARTS=$STALL_MAX_RESTARTS STALL_BUSY_CPU_PCT=$STALL_BUSY_CPU_PCT PARK_LOOP_MAX_CYCLES=$PARK_LOOP_MAX_CYCLES PARK_LOOP_WINDOW_SECS=$PARK_LOOP_WINDOW_SECS USAGE_CHECK_ENABLED=$USAGE_CHECK_ENABLED USAGE_CHECK_INTERVAL_SECS=$USAGE_CHECK_INTERVAL_SECS USAGE_PAUSE_TRIGGER=$USAGE_PAUSE_TRIGGER USAGE_WARNING_DEBOUNCE=$USAGE_WARNING_DEBOUNCE USAGE_RESUME_MARGIN_SECS=$USAGE_RESUME_MARGIN_SECS USAGE_SEVEN_DAY_PAUSE_PCT=$USAGE_SEVEN_DAY_PAUSE_PCT USAGE_LANE_STATE_ENABLED=$USAGE_LANE_STATE_ENABLED USAGE_LANE_LOCK_ENABLED=$USAGE_LANE_LOCK_ENABLED REMOTE_CONTROL_POLL_SECS=$REMOTE_CONTROL_POLL_SECS REMOTE_WAIT_MAX_SECS=$REMOTE_WAIT_MAX_SECS REMOTE_AUTO_RESUME_MAX=$REMOTE_AUTO_RESUME_MAX REMOTE_AUTO_RESUME_DELAY_SECS=$REMOTE_AUTO_RESUME_DELAY_SECS STALL_WAKE_GAP_SECS=$STALL_WAKE_GAP_SECS KEEP_AWAKE=$KEEP_AWAKE_MODE"
+  # observable. Nothing else the override file may have set is printed. The cap
+  # printed is the one enforced.
+  RUN_CAP="$(effective_max_parallel_runs)"
+  echo "tunables: MAX_PARALLEL_RUNS=$RUN_CAP POLL_INTERVAL_SECS=$POLL_INTERVAL_SECS PERMISSION_MODE=$PERMISSION_MODE CLEANUP_INTERVAL_SECS=$CLEANUP_INTERVAL_SECS AUTO_TAIL_TERMINAL=$AUTO_TAIL_TERMINAL STALL_CHECK_ENABLED=$STALL_CHECK_ENABLED STALL_WARN_SECS=$STALL_WARN_SECS STALL_KILL_SECS=$STALL_KILL_SECS STALL_MAX_RESTARTS=$STALL_MAX_RESTARTS STALL_BUSY_CPU_PCT=$STALL_BUSY_CPU_PCT PARK_LOOP_MAX_CYCLES=$PARK_LOOP_MAX_CYCLES PARK_LOOP_WINDOW_SECS=$PARK_LOOP_WINDOW_SECS USAGE_CHECK_ENABLED=$USAGE_CHECK_ENABLED USAGE_CHECK_INTERVAL_SECS=$USAGE_CHECK_INTERVAL_SECS USAGE_PAUSE_TRIGGER=$USAGE_PAUSE_TRIGGER USAGE_WARNING_DEBOUNCE=$USAGE_WARNING_DEBOUNCE USAGE_RESUME_MARGIN_SECS=$USAGE_RESUME_MARGIN_SECS USAGE_SEVEN_DAY_PAUSE_PCT=$USAGE_SEVEN_DAY_PAUSE_PCT USAGE_LANE_STATE_ENABLED=$USAGE_LANE_STATE_ENABLED USAGE_LANE_LOCK_ENABLED=$USAGE_LANE_LOCK_ENABLED REMOTE_CONTROL_POLL_SECS=$REMOTE_CONTROL_POLL_SECS REMOTE_WAIT_MAX_SECS=$REMOTE_WAIT_MAX_SECS REMOTE_AUTO_RESUME_MAX=$REMOTE_AUTO_RESUME_MAX REMOTE_AUTO_RESUME_DELAY_SECS=$REMOTE_AUTO_RESUME_DELAY_SECS STALL_WAKE_GAP_SECS=$STALL_WAKE_GAP_SECS KEEP_AWAKE=$KEEP_AWAKE_MODE"
   if [ "$KEEP_AWAKE_MODE" = "off" ]; then
     echo "keep-awake: $KEEP_AWAKE_MODE — $KEEP_AWAKE_REASON"
   else
     echo "keep-awake: $KEEP_AWAKE_MODE"
+  fi
+  # After the keep-awake line, never between it and `tunables:`.
+  if [ "$RUN_CAP" != "$MAX_PARALLEL_RUNS" ]; then
+    echo "cap: $RUN_CAP (MAX_PARALLEL_RUNS=$MAX_PARALLEL_RUNS clamped on a bubblewrap host; docs/cli.md §6)"
   fi
   # Advisory tail: the other repositories armed on this machine. It decides
   # nothing — see the block above print_status.
@@ -2067,15 +2183,16 @@ lane_release_if_idle() {
 # -----------------------------------------------------------------------------
 
 # A declared mirror of cli/src/generators/writeProtection.ts → COPY_GIT_PATHS:
-# each row's run-copy-relative path and kind, in order, held equal by
+# each row's run-copy-relative path, kind and bubblewrapDenyWrite (`deny` for
+# true, `omit` for false), in order, held equal by
 # cli/test/watcher-run-profile.test.mjs. A change to that table is an edit here
 # in the same change.
-RUN_PROFILE_COPY_GIT_PATHS='.git/config file
-.git/hooks directory
-.git/objects/info/alternates file
-.git/commondir entry
-.git/config.worktree entry
-.git/objects/info/http-alternates entry'
+RUN_PROFILE_COPY_GIT_PATHS='.git/config file deny
+.git/hooks directory deny
+.git/objects/info/alternates file deny
+.git/commondir entry omit
+.git/config.worktree entry omit
+.git/objects/info/http-alternates entry omit'
 
 # Declared mirrors of cli/src/generators/sandboxProfile.ts, held equal by
 # cli/test/watcher-run-profile.test.mjs; a change to either owner is an edit
@@ -2125,10 +2242,13 @@ run_profile_one_object() {
   [ "$(jq -s 'length == 1 and (.[0] | type) == "object"' "$1" 2>/dev/null)" = "true" ]
 }
 
-# run_profile_entries <copy> <kind> — print one `<absolute path><TAB><kind>`
-# line per entry the per-run profile adds for the run copy <copy> of <kind>
-# (`clone` or `worktree`), kind being `file`, `directory` or `entry` as
-# writeProtection.ts → ProtectedKind means them:
+# run_profile_entries <copy> <kind> — print one
+# `<absolute path><TAB><kind><TAB><deny|omit>` line per entry the per-run
+# profile adds for the run copy <copy> of <kind> (`clone` or `worktree`), kind
+# being `file`, `directory` or `entry` as writeProtection.ts → ProtectedKind
+# means them. The third column is `omit` only for a clone row marked `omit`
+# while HR_PLACEHOLDER_HOST is `1` (bubblewrap would plant a placeholder at that
+# absent path), `deny` for every other line:
 #   * each `hr_run_protected_rel_paths` line re-rooted at <copy>, as `entry`;
 #   * on a clone, each RUN_PROFILE_COPY_GIT_PATHS row re-rooted at <copy>;
 #   * on a legacy worktree, <copy>/.git as `file`;
@@ -2145,26 +2265,27 @@ run_profile_one_object() {
 # is unreadable, 2 the worktree list failed, 3 a path was refused, 4 <kind> is
 # neither kind; nothing useful is printed on a non-zero exit.
 run_profile_entries() {
-  local copy="${1%/}" kind="${2-}" rel p k list line first=1 out=""
+  local copy="${1%/}" kind="${2-}" rel p k a list line first=1 out=""
   case "$kind" in clone | worktree) ;; *) return 4 ;; esac
   list="$(hr_run_protected_rel_paths "$MAIN_REPO")" || return 1
   while IFS= read -r rel; do
     [ -n "$rel" ] || continue
-    out="${out}${copy}/${rel}	entry
+    out="${out}${copy}/${rel}	entry	deny
 "
   done <<EOF
 $list
 EOF
   if [ "$kind" = clone ]; then
-    while IFS=' ' read -r p k; do
+    while IFS=' ' read -r p k a; do
       [ -n "$p" ] || continue
-      out="${out}${copy}/${p}	${k}
+      [ "$a" = omit ] && [ "${HR_PLACEHOLDER_HOST:-0}" = 1 ] || a=deny
+      out="${out}${copy}/${p}	${k}	${a}
 "
     done <<EOF
 $RUN_PROFILE_COPY_GIT_PATHS
 EOF
   else
-    out="${out}${copy}/.git	file
+    out="${out}${copy}/.git	file	deny
 "
   fi
   list="$(git -C "$MAIN_REPO" worktree list --porcelain 2>/dev/null)" || return 2
@@ -2180,7 +2301,7 @@ EOF
     fi
     p="${line#worktree }"
     [ "${p%/}" = "$copy" ] && continue
-    out="${out}${p%/}/.git	file
+    out="${out}${p%/}/.git	file	deny
 "
   done <<EOF
 $list
@@ -2188,6 +2309,7 @@ EOF
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     p="${line%	*}"
+    p="${p%	*}"
     case "$p" in
       *\"* | *\'* | *\** | *'	'*) return 3 ;;
     esac
@@ -2204,8 +2326,9 @@ EOF
 # <branch> to the path `hr_run_profile_file "$HARNESS_REPO_SLUG" <branch>`
 # prints, through a temporary file in its directory and `mv`, the directory
 # created at mode 700, and set RUN_PROFILE_FILE to it. The content is
-# $SETTINGS_PROFILE with each run_profile_entries path appended to
-# `.sandbox.filesystem.denyWrite` and its Edit rules to `.permissions.deny`,
+# $SETTINGS_PROFILE with each run_profile_entries path not marked `omit`
+# appended to `.sandbox.filesystem.denyWrite`, the Edit rules of every line to
+# `.permissions.deny`,
 # and the run copy's twins of the base's main-checkout wrapper rules appended
 # to `.permissions.allow` and `.permissions.ask`: each base entry of that list
 # starting with RUN_PROFILE_MAIN_PREFIX, that prefix replaced by
@@ -2264,9 +2387,9 @@ run_profile_render() {
         end;
       def add_absent($xs): reduce $xs[] as $x (.; if any(.[]; . == $x) then . else . + [$x] end);
       def add_twins: add_absent([.[] | select(type == "string" and startswith($main)) | $twin + .[($main | length):]]);
-      [split("\n")[] | select(length > 0) | split("\t") | {path: .[0], kind: .[1]}] as $e
+      [split("\n")[] | select(length > 0) | split("\t") | {path: .[0], kind: .[1], action: .[2]}] as $e
       | $base[0]
-      | .sandbox.filesystem.denyWrite |= add_absent([$e[].path])
+      | .sandbox.filesystem.denyWrite |= add_absent([$e[] | select(.action != "omit") | .path])
       | .permissions.deny |= add_absent([$e[] | rules[]])
       | if (.permissions.allow | type) == "array" then .permissions.allow |= add_twins else . end
       | if (.permissions.ask | type) == "array" then .permissions.ask |= add_twins else . end
@@ -2582,6 +2705,24 @@ spawn_engine() {
   else
     copy_kind="$(registry_get "$branch" copy_kind)"
     [ -n "$copy_kind" ] || copy_kind="worktree"
+    # Read by run_profile_entries, and by the manifest write below.
+    hr_placeholder_host_probe_var
+    if [ "$HR_PLACEHOLDER_HOST" = "1" ]; then
+      placeholder_sweep_pass "$branch" 0
+      # The launch check: the render omits a clone's commondir, config.worktree
+      # and http-alternates, so a planted one is refused here, before Claude
+      # Code's own startup git reads the copy.
+      if [ "$copy_kind" = "clone" ]; then
+        if [ -z "$RUN_MAIN" ]; then
+          spawn_refuse "$branch" "$RUN_MAIN_REFUSAL"
+          return 1
+        fi
+        if ! hr_run_copy_check_var "$RUN_MAIN" "$worktree"; then
+          spawn_refuse "$branch" "the run copy failed its trust check before launch: $HR_RUN_REFUSAL"
+          return 1
+        fi
+      fi
+    fi
     if ! run_profile_render "$branch" "$worktree" "$copy_kind"; then
       spawn_refuse "$branch" "$RUN_PROFILE_REFUSAL"
       return 1
@@ -2593,6 +2734,28 @@ spawn_engine() {
   if ! run_profile_check "$settings_file" "$check_copy"; then
     spawn_refuse "$branch" "$RUN_PROFILE_REFUSAL"
     return 1
+  fi
+
+  # What was absent before this session: every exact denyWrite path, where
+  # bubblewrap may plant a placeholder, and `.mcp.json` under each --add-dir
+  # root. Without a manifest the next sweep removes nothing, so a failed write
+  # does not refuse the launch.
+  if [ "$JOB_MODE" != "1" ] && [ "$HR_PLACEHOLDER_HOST" = "1" ]; then
+    local manifest exact_paths line
+    exact_paths=()
+    if manifest="$(hr_run_profile_absent_file "$HARNESS_REPO_SLUG" "$branch")"; then
+      while IFS= read -r line; do
+        [ -n "$line" ] && exact_paths+=("$line")
+      done <<EOF
+$(jq -r '.sandbox.filesystem.denyWrite[]? | select(type == "string" and (contains("*") | not))' "$settings_file" 2>/dev/null)
+EOF
+      if ! hr_placeholder_manifest_write "$manifest" ${exact_paths[@]+"${exact_paths[@]}"} \
+        "${worktree%/}/.mcp.json" "${main_state%/}/.mcp.json"; then
+        log "placeholder manifest: could not write $manifest for '$branch' — the next sweep removes nothing for this session"
+      fi
+    else
+      log "placeholder manifest: no path for '$branch' — the next sweep removes nothing for this session"
+    fi
   fi
 
   # Trusted instruction layer. It NAMES the artifact's path; it never inlines the
@@ -3450,8 +3613,8 @@ resume_parked_run() {
 
   local current
   current="$(running_count)"
-  if [ "$current" -ge "$MAX_PARALLEL_RUNS" ]; then
-    log "at cap ($current/$MAX_PARALLEL_RUNS) — deferring resume of '$branch'"
+  if [ "$current" -ge "$RUN_CAP" ]; then
+    log "at cap ($current/$RUN_CAP) — deferring resume of '$branch'"
     return 10
   fi
 
@@ -3615,8 +3778,8 @@ resume_paused_run() {
 
   local current
   current="$(running_count)"
-  if [ "$current" -ge "$MAX_PARALLEL_RUNS" ]; then
-    log "at cap ($current/$MAX_PARALLEL_RUNS) — deferring pause-resume of '$branch'"
+  if [ "$current" -ge "$RUN_CAP" ]; then
+    log "at cap ($current/$RUN_CAP) — deferring pause-resume of '$branch'"
     return 10
   fi
 
@@ -3773,7 +3936,7 @@ check_stalled_runs() {
   [ -f "$USAGE_HOLD" ] && return 0
 
   local now b pid log_path stream_path newest m f staleness tree_cpu descendants restarts worktree state_rel why reset_rc note_rel
-  local raw since woke=""
+  local raw since woke="" tree_left tree_waits tree_pid
   now="$(date +%s)"
   # The last detected host wake, read once per pass; 0 when absent or not an
   # integer.
@@ -3869,6 +4032,34 @@ check_stalled_runs() {
     kill -9 "$pid" 2>/dev/null
     # shellcheck disable=SC2086 # one signal to the whole captured list
     [ -n "$descendants" ] && kill -9 $descendants 2>/dev/null
+
+    # A tree killed by `-9` leaves its placeholders on disk, and this is the one
+    # point between the kill and the copy check below. Swept only once the
+    # tree has exited: 1 check, then at most 10 more a second apart.
+    if [ "$JOB_MODE" != "1" ]; then
+      hr_placeholder_host_probe_var
+      if [ "$HR_PLACEHOLDER_HOST" = "1" ]; then
+        tree_waits=0
+        while :; do
+          tree_left=0
+          # shellcheck disable=SC2086 # the captured list MUST word-split
+          for tree_pid in $pid $descendants; do
+            if kill -0 "$tree_pid" 2>/dev/null; then
+              tree_left=1
+              break
+            fi
+          done
+          [ "$tree_left" = "1" ] && [ "$tree_waits" -lt 10 ] || break
+          sleep 1
+          tree_waits=$((tree_waits + 1))
+        done
+        if [ "$tree_left" = "0" ]; then
+          placeholder_sweep_pass "$b" 0
+        else
+          log "placeholder sweep: skipped, '$b''s process tree has not exited"
+        fi
+      fi
+    fi
 
     restarts="$(registry_get "$b" stall_restarts)"
     case "$restarts" in
@@ -4147,10 +4338,13 @@ process_inbox_file() {
   local current
   if [ "$remote" != 1 ]; then
     current="$(running_count)"
-    if [ "$current" -ge "$MAX_PARALLEL_RUNS" ]; then
-      log "at the cap ($current/$MAX_PARALLEL_RUNS runs) — deferring '$branch' (leaving it in the inbox)"
+    if [ "$current" -ge "$RUN_CAP" ]; then
+      log "at the cap ($current/$RUN_CAP runs) — deferring '$branch' (leaving it in the inbox)"
       return 10
     fi
+    # Ahead of the working-copy step, which a leftover refuses: a run that died
+    # after this pass's opening sweep was skipped left its placeholders since.
+    placeholder_sweep_pass "" 0
   fi
 
   # This branch already has a LIVE run: the drop is a duplicate (a re-drop, or a
@@ -4969,6 +5163,12 @@ tick() {
   hr_config_load "$MAIN_REPO" || :
   keep_awake_resolve
 
+  RUN_CAP="$(effective_max_parallel_runs)"
+  if [ "$RUN_CAP" != "$MAX_PARALLEL_RUNS" ] && [ "$RUN_CAP_CLAMP_LOGGED" != "1" ]; then
+    RUN_CAP_CLAMP_LOGGED=1
+    log "bubblewrap host: at most one live run per repository (concurrent runs share the main checkout's sandbox placeholders; docs/cli.md §6)"
+  fi
+
   # Ahead of the kill-switch return: the brake stops launches and resumes only,
   # and runs in flight keep running under it, so the hold they carry must still
   # follow mains power and a switch of `execution.keepAwake` to false made while
@@ -4987,6 +5187,10 @@ tick() {
   # Heal records whose process has vanished BEFORE anything reads the cap, so a
   # reconciled run frees capacity in the same pass.
   reconcile_stale_runs
+
+  # Ahead of every reader below that a placeholder leftover breaks. Quiet: a
+  # live run would otherwise log its skip on every poll.
+  placeholder_sweep_pass "" 1
 
   # Then its alive-but-stuck sibling, in the same stretch and for the same
   # reason: a run this pass tears down and restarts, or gives up on, must have
@@ -5051,7 +5255,8 @@ tick() {
 watch_loop() {
   local keep_awake_note="$KEEP_AWAKE_MODE"
   [ "$KEEP_AWAKE_MODE" != "off" ] || keep_awake_note="$KEEP_AWAKE_MODE ($KEEP_AWAKE_REASON)"
-  log "watcher starting (inbox=$INBOX_DIR, cap=$MAX_PARALLEL_RUNS, poll=${POLL_INTERVAL_SECS}s, keep-awake=$keep_awake_note)"
+  RUN_CAP="$(effective_max_parallel_runs)"
+  log "watcher starting (inbox=$INBOX_DIR, cap=$RUN_CAP, poll=${POLL_INTERVAL_SECS}s, keep-awake=$keep_awake_note)"
   registry_init
   while true; do
     tick

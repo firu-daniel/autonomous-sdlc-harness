@@ -72,7 +72,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_linux_sandbox_deny_place
 3. [x] **Task 3** — Default the placeholder-host seam to off in every watcher test pass, with a `placeholderHost` option to turn it on _(layer: cli)_ _(points: 10)_
 4. [x] **Task 4** — On a bubblewrap host, omit the trio from the per-run copy, check the run copy and write the manifest at every spawn, and cap the watcher at one run _(layer: cli)_ _(points: 20)_
 5. [x] **Task 11** — Sweep recorded leftovers ahead of every reader that a leftover breaks, including the watcher's own start _(layer: cli)_ _(points: 20)_
-6. [ ] **Task 5** — Refresh the self-adopted outer-loop scripts from their templates _(layer: general)_ _(points: 5)_
+6. [x] **Task 5** — Refresh the self-adopted outer-loop scripts from their templates _(layer: general)_ _(points: 5)_
 7. [ ] **Task 6** — Ship the absent-path check as `scripts/sandbox-absent-path-check.sh`, with the trio and a sweep phase _(layer: general)_ _(points: 15)_
 8. [ ] **Task 7** — Write the upstream report for anthropics/claude-code _(layer: general)_ _(points: 10)_
 9. [ ] **Task 8** — Record the absent-path check, the route and the owed re-take in `docs/sandbox-verification.md` _(layer: general)_ _(points: 20)_
