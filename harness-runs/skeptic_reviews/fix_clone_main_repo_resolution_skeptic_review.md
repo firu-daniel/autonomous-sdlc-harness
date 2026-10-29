@@ -36,7 +36,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Replace `docs/watcher.md` → **A session no launcher started.**'s "in a clone it is the clone itself" with the branch's outcome, pointing at **Read.** _(layer: general)_
+1. [x] **Finding 1** — Replace `docs/watcher.md` → **A session no launcher started.**'s "in a clone it is the clone itself" with the branch's outcome, pointing at **Read.** _(layer: general)_
 
 ---
 

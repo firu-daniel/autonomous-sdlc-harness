@@ -180,7 +180,7 @@ The worktree arm's removal, in a later release, waits for that list to be empty:
 
 **Graded.** `doctor`'s `profile-main-anchor` warns, and never fails, when the rule is missing from `permissions.allow` or sits in `ask` or `deny` (`docs/cli.md` §7).
 
-**A session no launcher started.** A supervised session, a `claude` started by hand in a run copy, or a session whose profile lacks the rule gets no path from the read and resolves the fallback: from the main checkout or a linked worktree that is the main checkout, as before; in a clone it is the clone itself. Every run copy the launchers now make is a clone, so a session started by hand in one sets the variable on that one launch, from that clone, naming the main checkout with no trailing slash:
+**A session no launcher started.** A supervised session, a `claude` started by hand in a run copy, or a session whose profile lacks the rule gets no path from the read and resolves the fallback the **Read.** paragraph above points at: the main checkout from the main checkout, from a linked worktree, and from a run clone the main checkout's run registry records; a stop sentence from any other clone, never the clone itself. A session started by hand in a clone the registry does not record can still reach the main checkout by setting the variable on that one launch, from that clone, naming the main checkout with no trailing slash:
 
 ```bash
 HARNESS_MAIN_REPO=/absolute/path/to/main/checkout claude
