@@ -14,7 +14,7 @@
 
 Each entry resolves to a self-contained `harness-runs/test_fix_plans/fix_docs_retrieval_symlink_corpus_escape_task_round_1/finding_<K>.md` via its `**Finding K**` reference. Sorted lowest blast-radius first.
 
-1. [ ] **Finding 1** — Replace the home-directory path in `task_2_plan.md` and `task_3_plan.md` with a machine-neutral form. _(layer: general)_
+1. [x] **Finding 1** — Replace the home-directory path in `task_2_plan.md` and `task_3_plan.md` with a machine-neutral form. _(layer: general)_
 2. [ ] **Finding 2** — Make `run-test-suite.test.mjs` wait for `.running`'s removal instead of asserting it the instant the verdict appears. _(layer: cli)_
 
 ---
