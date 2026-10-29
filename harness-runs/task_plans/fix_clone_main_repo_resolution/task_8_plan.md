@@ -73,3 +73,4 @@ The suite is built as a **table of cases**, so that `fix_docs_flow_main_repo_bin
 - Read the suite and confirm two things. The first row's `expected` keys are exactly the file list under **Depends on:** above, with `branch-start-user-review-fix-autonomous.md` at `2` and every other file at `1`. The runner asserts no total of its own.
 - The header names Task 11 as the registering task and records both red runs, one per mutation.
 - `git status --short -- plugin` is empty before the commit: both mutated files are restored.
+  - **Deviations from plan:** The row's `needle` and `forbidden` checks are one `assert.deepEqual` on `{ needle, forbidden }`, not two assertions. With two, the first mutation's red run (measured 2026-10-29) failed only the `needle` assertion, and the `forbidden` one never ran. Combined, one run reports the file missing from `needle` and lists it under `forbidden`, which is the result the first mutation is meant to show.

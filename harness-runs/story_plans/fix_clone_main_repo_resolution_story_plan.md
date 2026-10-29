@@ -65,7 +65,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_clone_main_repo_resoluti
 5. [x] **Task 5** — Say what the fallback now does in the `profile-main-anchor` check and the profile's `_README` line _(layer: cli)_ _(points: 10)_
 6. [x] **Task 6** — Prove `hc_main_root` in every run-copy layout, with and without the anchor, and move QA-lock case (f) to fail closed _(layer: cli)_ _(points: 20)_
 7. [x] **Task 7** — Run the template fence's own command in every layout, under bash and zsh _(layer: cli)_ _(points: 15)_
-8. [ ] **Task 8** — Add the extensible corpus check that every `<MAIN_REPO>` site carries the one clause _(layer: cli)_ _(points: 15)_
+8. [x] **Task 8** — Add the extensible corpus check that every `<MAIN_REPO>` site carries the one clause _(layer: cli)_ _(points: 15)_
 9. [ ] **Task 9** — State the new fallback in `docs/watcher.md` and `docs/cli.md` _(layer: general)_ _(points: 10)_
 10. [ ] **Task 10** — Record the library change in `docs/guard-verification.md` and add the owed rows AN5–AN6 to `docs/sandbox-verification.md` _(layer: general)_ _(points: 10)_
 11. [ ] **Task 11** — Register the corpus check as a tree guard in `harness.config.json` _(layer: general)_ _(points: 5)_
