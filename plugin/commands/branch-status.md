@@ -25,7 +25,7 @@ A **read-only, on-demand** digest of autonomous runs. It reads the run registry 
 
 ## Steps
 
-1. Resolve `<MAIN_REPO>` as the path a bare `printenv HARNESS_MAIN_REPO` prints, else the first `worktree ` line of a bare `git worktree list --porcelain`; registry = `<MAIN_REPO>/<state_dir>/autonomous_logs/registry.json`; logs dir = `<MAIN_REPO>/<state_dir>/autonomous_logs/`.
+1. Resolve `<MAIN_REPO>` as the path a bare `printenv HARNESS_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none; registry = `<MAIN_REPO>/<state_dir>/autonomous_logs/registry.json`; logs dir = `<MAIN_REPO>/<state_dir>/autonomous_logs/`.
 2. Selection: if `$ARGUMENTS` names a branch, focus on that run's record; with no argument, summarize **all** records in the registry (the registry is the live set — do not invent an archive filter beyond what it contains). The registry is shaped `{"runs": {"<branch>": {...}}}`, so records live under the `.runs` wrapper — enumerate with `jq -r '.runs | to_entries[] | …'` and read one with `jq -r '.runs["<branch>"].status'` (the same `.runs["<branch>"]` form `/autonomous-sdlc-harness:branch-prompt` uses); a bare `.["<branch>"]` or top-level `to_entries` returns empty.
    - **Runs started on GitHub, no local record.** With no argument, run `bash <scripts_dir>/remote-run.sh list` **once**. It reads GitHub and writes nothing. Handle its exit status as follows:
      - exit 0: print a short *Started on GitHub, no local record* section, one line per `on GitHub, no local record: <branch> <url>` line with that branch and its run URL, and nothing when it printed `no run on GitHub without a local record`;

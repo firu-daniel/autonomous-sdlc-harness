@@ -68,6 +68,10 @@
     {
       "test": "test/watcher-main-anchor.test.mjs",
       "covers": "cli/templates/scripts/**"
+    },
+    {
+      "test": "test/main-repo-resolution-corpus.test.mjs",
+      "covers": "plugin/**/*.md"
     }
   ]
 }

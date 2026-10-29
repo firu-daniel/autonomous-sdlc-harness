@@ -4920,10 +4920,14 @@ const PROFILE_DENY_FLOOR_CHECK: Check = {
  * Does the profile let an unattended run read the main checkout's anchor — is
  * {@link MAIN_REPO_ANCHOR_RULE} in `permissions.allow`, and in neither `ask` nor `deny`?
  *
- * Without it every plugin reader's {@link MAIN_REPO_ANCHOR_READ} is refused and the reader falls
- * back to the first `git worktree list` entry: right in the main checkout and in a linked worktree,
- * but the copy itself in a clone. `ask` is evaluated before `allow` and refuses under `dontAsk`, and
- * `deny` cannot be overridden, so the rule in either is as good as absent.
+ * Without it every plugin reader's {@link MAIN_REPO_ANCHOR_READ} is refused and the reader takes the
+ * fallback in `plugin/instructions/main_repo_resolution.md` → `## The fallback`: in a run clone, the
+ * main checkout its one-line `.git/objects/info/alternates` names, only if that checkout's run
+ * registry records this clone at this path, and otherwise a stop sentence rather than the copy;
+ * elsewhere, the first `git worktree list` entry. Its reads are already allowed by
+ * `Bash(git rev-parse:*)`, `Bash(git worktree:*)` and the profile's `Read(…/**)` rules, so a run
+ * without the rule makes more reads but is not stopped. `ask` is evaluated before `allow` and refuses
+ * under `dontAsk`, and `deny` cannot be overridden, so the rule in either is as good as absent.
  *
  * A `warn` on {@link PROFILE_DENY_FLOOR_CHECK}'s terms — an adopter-owned file a run is
  * worse-served by rather than stopped by — and, unlike that family's `--remote-job` escalations,
@@ -4947,7 +4951,7 @@ const PROFILE_MAIN_ANCHOR_CHECK: Check = {
     }
     if (faults.length > 0) {
       return warn(
-        `the rule for reading ${MAIN_REPO_ANCHOR_VARIABLE} ${faults.join(' and ')} in ${PROFILE_PATH}, so each plugin reader's \`${MAIN_REPO_ANCHOR_READ}\` is refused and it falls back to the first \`git worktree list\` entry — right in the main checkout and in a linked worktree, but the copy itself in a clone. Allow it with this permissions.allow entry (and remove it from ask and deny), or regenerate the profile with \`${CLI} init --force\`, which writes a .bak sibling first:\n${MAIN_REPO_ANCHOR_RULE}`,
+        `the rule for reading ${MAIN_REPO_ANCHOR_VARIABLE} ${faults.join(' and ')} in ${PROFILE_PATH}, so each plugin reader's \`${MAIN_REPO_ANCHOR_READ}\` is refused and it falls back to the rule in plugin/instructions/main_repo_resolution.md, which reaches the main checkout from a run clone through its alternates file and the run registry, at the cost of extra reads on every resolution. Allow it with this permissions.allow entry (and remove it from ask and deny), or regenerate the profile with \`${CLI} init --force\`, which writes a .bak sibling first:\n${MAIN_REPO_ANCHOR_RULE}`,
       );
     }
     return pass(`${PROFILE_PATH} allows ${MAIN_REPO_ANCHOR_RULE}, and neither asks about nor denies it`);

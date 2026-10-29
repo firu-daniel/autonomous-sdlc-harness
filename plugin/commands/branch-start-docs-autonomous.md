@@ -46,7 +46,7 @@ You are the **orchestrator** for the whole session. You do not write docs and yo
 1. **Derive anchors once, at session start — never hardcode an absolute machine path:**
    - `REPO_ROOT=$(git rev-parse --show-toplevel)` — the current checkout (the run copy, or the main repo in the manual entry point). Obtain it with a **bare** `git rev-parse --show-toplevel` and build every literal path from the result; never embed the `$(…)` substitution inside another shell command, and never stash it in a shell variable across separate Bash calls — separate calls do not share shell state.
 
-2. **Global kill switch — check at session start.** If `<MAIN_REPO>/<state_dir>/AUTONOMOUS_STOP` exists (the global switch in the **main** repo — `<MAIN_REPO>` is the path a bare `printenv HARNESS_MAIN_REPO` prints, else the first `worktree ` line of a bare `git worktree list --porcelain`), halt immediately and report it. Do NOT delete it.
+2. **Global kill switch — check at session start.** If `<MAIN_REPO>/<state_dir>/AUTONOMOUS_STOP` exists (the global switch in the **main** repo — `<MAIN_REPO>` is the path a bare `printenv HARNESS_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none), halt immediately and report it. Do NOT delete it.
 
 3. **Determine the current git branch** with `git branch --show-current` → `<branch>`.
 

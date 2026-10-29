@@ -1573,7 +1573,7 @@ export function renderProfile({
   appendAllow(profile, [MAIN_REPO_ANCHOR_RULE]);
   appendReadme(
     profile,
-    `THE MAIN CHECKOUT IS READ FROM ONE ENVIRONMENT VARIABLE: the plugin's readers find the main checkout with a bare ${MAIN_REPO_ANCHOR_READ}, which the watcher sets for every session it launches, and fall back to the first git worktree list entry when it prints nothing, so removing the ${MAIN_REPO_ANCHOR_RULE} entry costs only that fallback.`,
+    `THE MAIN CHECKOUT IS READ FROM ONE ENVIRONMENT VARIABLE: the plugin's readers find the main checkout with a bare ${MAIN_REPO_ANCHOR_READ}, which the watcher sets for every session it launches, and when it prints nothing fall back to the main checkout a run clone's alternates file names and its run registry confirms, or else to the first git worktree list entry, so removing the ${MAIN_REPO_ANCHOR_RULE} entry costs only that fallback.`,
   );
 
   // Before the toolchain entries and after the fragment, which is the window in which every `.sh`

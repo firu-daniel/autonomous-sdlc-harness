@@ -45,7 +45,7 @@ written and the reason is not sent.
 
 ## Steps
 
-1. Resolve `<MAIN_REPO>` as the path a bare `printenv HARNESS_MAIN_REPO` prints, else the first `worktree ` line of a bare `git worktree list --porcelain`; the registry is
+1. Resolve `<MAIN_REPO>` as the path a bare `printenv HARNESS_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none; the registry is
    `<MAIN_REPO>/<state_dir>/autonomous_logs/registry.json` (shaped `{"runs": {"<branch>": {...}}}`).
 2. **Which-branch resolution.** If `$ARGUMENTS` starts with `<branch>: `, parse it and strip the prefix
    (the remainder is the optional reason). Otherwise read the registry: if **exactly one** run has
