@@ -57,3 +57,10 @@
 - The keep cases are asserted on the bytes on disk. Each kept file still exists with its content and mode unchanged.
 - `git grep -n 'rm -rf\|rm -r ' -- cli/templates/scripts/lib/harness-run-lib.sh` finds no new line. The sweep removes one file per call.
 - `git grep -n 'perm -u+w\|perm -g+w\|perm -o+w' -- cli/templates/scripts/lib/harness-run-lib.sh` shows hits only inside `hr_placeholder_leftover_var`'s body: the sweep carries no copy of the test.
+
+- **Deviations from plan:**
+  - `hr_placeholder_sweep_var`: a path that passes the predicate but whose `rm -f` fails (or is still there after it) goes into `HR_PLACEHOLDER_KEPT` as `<path>: could not be removed`, a fifth reason the plan does not list, so a failed removal is never silently dropped from both lists.
+  - `hr_placeholder_leftover_var`: a `find` that itself fails reads as `writable` (fail closed: an unreadable mode never licenses a removal).
+  - `hr_placeholder_leftover_var`'s comment names its second caller as "the no-git main-checkout walk" without a function name, since Task 11 has not defined it yet; Task 11 should put the name there.
+  - `cleanup-merged-worktrees.sh`: the two files are reported by a new helper `profile_say`, one line per file present, labelled `run profile` / `absent-path manifest`; the lane-layout comment's count changed from `THREE ARTIFACTS` to `FOUR ARTIFACTS`.
+  - `cleanup-run-copies.test.mjs`: the sanitized-name collision case also asserts the manifest's `keep` line and its survival, beyond the one case the plan names; `decisions()` now pairs the manifest's preview and sweep lines too.

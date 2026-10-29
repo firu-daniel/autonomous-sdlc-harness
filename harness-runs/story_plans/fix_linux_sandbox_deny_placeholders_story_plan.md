@@ -68,7 +68,7 @@ So something other than the bubblewrap placeholder path created it before the sa
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_linux_sandbox_deny_placeholders/task_<K>_plan.md`. The entries are ordered bottom-up by ship sequence, with the catch-all layer last. Task 11 was split out of Task 4 in revision round 1, and it ships right after Task 4, so the entry number and the task number differ from that point on.
 
 1. [x] **Task 1** — Mark the three run-copy `.git` trust files `bubblewrapDenyWrite: false` and state the Linux placeholder finding in the profile's `_README` and `doctor`'s note _(layer: cli)_ _(points: 15)_
-2. [ ] **Task 2** — Add the run library's placeholder-host seam, absent-path manifest and leftover sweep, and delete the manifest with its per-run profile _(layer: cli)_ _(points: 20)_
+2. [x] **Task 2** — Add the run library's placeholder-host seam, absent-path manifest and leftover sweep, and delete the manifest with its per-run profile _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Default the placeholder-host seam to off in every watcher test pass, with a `placeholderHost` option to turn it on _(layer: cli)_ _(points: 10)_
 4. [ ] **Task 4** — On a bubblewrap host, omit the trio from the per-run copy, check the run copy and write the manifest at every spawn, and cap the watcher at one run _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 11** — Sweep recorded leftovers ahead of every reader that a leftover breaks, including the watcher's own start _(layer: cli)_ _(points: 20)_
