@@ -2998,8 +2998,9 @@ spawn_engine() {
       # The launch check: the render omits a clone's commondir, config.worktree
       # and http-alternates from denyWrite and their `Edit` rules, exact and
       # glob, from permissions.deny (THE PER-RUN PROFILE, above), so a planted
-      # one is refused here, before Claude Code's own startup git reads the
-      # copy.
+      # commondir, or a non-empty or non-regular config.worktree or
+      # http-alternates, is refused here, before Claude Code's own startup git
+      # reads the copy.
       if [ "$copy_kind" = "clone" ]; then
         if [ -z "$RUN_MAIN" ]; then
           spawn_refuse "$branch" "$RUN_MAIN_REFUSAL"

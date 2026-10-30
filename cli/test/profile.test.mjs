@@ -1246,6 +1246,12 @@ test('every path that runs outside the sandbox is write-protected on both sides'
     `the write-protection _README line does not state each other sibling keeps its Edit rules: ${protectionLine}`,
   );
   assert.ok(!protectionLine.includes('`Edit` rules stay'), `the write-protection _README line still says the trio Edit rules stay: ${protectionLine}`);
+  assert.ok(
+    protectionLine.includes(
+      'the watcher refuses to launch or resume a run copy carrying a `commondir`, or a `config.worktree` or `http-alternates` that is not an empty regular file',
+    ),
+    `the write-protection _README line does not state the launch check's accepted shape: ${protectionLine}`,
+  );
   assertEntriesRunnable(profile);
 });
 

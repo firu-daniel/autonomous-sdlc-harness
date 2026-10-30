@@ -277,6 +277,11 @@ concurrentSuite('doctor profile-write-protection', () => {
       line,
     );
     assert.ok(line.includes('while each other sibling run copy keeps them by exact path'), line);
+    assert.ok(
+      line.includes('refuses a run copy carrying a commondir, or a config.worktree or http-alternates that is not an empty regular file'),
+      line,
+    );
+    assert.ok(!line.includes('refuses a run copy carrying one'), line);
   });
 
   it("(b) warns when the main checkout's push wrapper has no denyWrite entry, naming the path and the side", async (t) => {

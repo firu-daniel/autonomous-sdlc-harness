@@ -176,8 +176,9 @@
 #
 # A CLONE IS A TARGET TOO. The target may also be a run copy made as a clone,
 # accepted only on the library's clone conditions (`lib/harness-run-lib.sh` →
-# `hr_clone_target_check_var`). Those conditions already refuse a
-# `config.worktree` and hold `.git/config` to an allow-list, so
+# `hr_clone_target_check_var`). Those conditions accept only an empty, regular
+# `config.worktree` with `extensions.worktreeConfig` off, which git never
+# reads, and hold `.git/config` to an allow-list, so
 # `hr_worktree_config_check_var` is skipped on that arm alone. The push goes
 # sync-in, operate, sync-out: after the protected-branch decision, and before
 # the deleted-on-its-remote check, the main checkout takes the clone's

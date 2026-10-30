@@ -233,6 +233,37 @@ test('a planted .git/commondir in the clone refuses the resume', async (t) => {
   assert.ok(failed[0].detail.includes('.git/commondir'), failed[0].detail);
 });
 
+test('an empty 0644 .git/config.worktree in the clone passes the launch check, and the resume launches', async (t) => {
+  const f = await adoptedFixture(t);
+  if (f === null) return;
+
+  await f.drop();
+  await f.tick({}, { placeholderHost: true });
+  assert.equal(f.prompts().length, 1, `the first launch did not run:\n${f.watcherLog()}`);
+
+  const registry = f.registry();
+  const record = registry.runs[f.branch];
+  assert.equal(record.copy_kind, 'clone');
+  record.status = 'parked';
+  record.pid = '';
+  await f.writeRegistry(registry);
+  const clar = join(f.clone, STATE_DIR, 'clarifications', f.branch);
+  await runBash(f.clone, ['-c', 'mkdir -p "$1" && printf "## Q1\\n" > "$1/question_1.md" && printf "a1\\n" > "$1/answer_1.md"', '_', clar]);
+  const created = join(f.clone, '.git', 'config.worktree');
+  await writeFile(created, '', { mode: 0o644 });
+  await chmod(created, 0o644);
+
+  await f.tick({}, { placeholderHost: true });
+
+  assert.equal(f.prompts().length, 2, `the clone was not relaunched:\n${f.watcherLog()}`);
+  assert.ok(!f.watcherLog().includes('failed its trust check before launch'), f.watcherLog());
+  assert.deepEqual(
+    f.notifications().filter((n) => n.event === 'failed'),
+    [],
+    JSON.stringify(f.notifications()),
+  );
+});
+
 /**
  * Every path `profile`'s denyWrite list yields, as `hr_profile_deny_paths` lists it: each exact
  * string, then each `<parent>/<stem>*<suffix>` glob as `<parent>/<name><suffix>` for each

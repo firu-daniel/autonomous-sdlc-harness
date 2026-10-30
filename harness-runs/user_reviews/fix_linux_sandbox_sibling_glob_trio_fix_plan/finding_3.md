@@ -58,3 +58,9 @@ Both 2026-10-30 sessions show the clone's `config.worktree` created at session A
 5. **The self-adopted copies.** Copy each changed template onto its root twin byte for byte and `cmp` each pair: `scripts/lib/harness-run-lib.sh`, `scripts/commit-on-branch.sh`, `scripts/push-branch.sh`, `scripts/refresh-branch.sh` and `scripts/autonomous-watcher.sh`.
 
 macOS is unaffected in behaviour. A clone there never carries these files, and the accepted shape is the same on every host. The fixtures run on either host.
+
+- **Deviations from plan:**
+  - Step 5's root twins under `scripts/` lie outside the dispatched `cli` path. They were written because this unit's text assigns them, as Findings 1 and 2 did. `cp` was refused by the tool layer, so each template edit was applied to its twin with the file tools, and `cmp` exits 0 with no output for all five pairs.
+  - The condition-3 refusal for a non-inert `config.worktree` / `http-alternates` keeps the existing sentence and appends ` but an empty regular file`. Both `plantedFile` regexes are unanchored at the end and still match, so neither payload suite was edited or run. The `extensions.worktreeConfig` refusal is a separate sentence: `… config.worktree exists while … config does not hold extensions.worktreeConfig off …`.
+  - Case `(h)`'s title was narrowed to "A planted commondir, or a config.worktree or http-alternates carrying content, is refused", because the old title read as covering the now-accepted empty shape.
+  - The `_README` clause keeps backticks around the three names and the doctor pass message does not, matching each string's existing style. The words are otherwise identical, and each suite asserts its own spelling literally.

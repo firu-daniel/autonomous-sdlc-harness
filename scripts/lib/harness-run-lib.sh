@@ -988,9 +988,13 @@ hr_wrapper_target_check_var() {
 #      registry at `hr_state_path <main> autonomous_logs/registry.json` gives
 #      `copy_kind` `clone` for <branch> and a `worktree` that is <target>;
 #   2. <target> is `hr_worktree_dir <main> <branch>`;
-#   3. `.git/commondir`, `.git/config.worktree` and
-#      `.git/objects/info/http-alternates` are absent, symbolic links included,
-#      and `.git/objects` and `.git/objects/info` are real directories;
+#   3. `.git/commondir` is absent, symbolic links included;
+#      `.git/config.worktree` and `.git/objects/info/http-alternates` are each
+#      absent or a regular file, not a symbolic link, of 0 bytes; a present
+#      `config.worktree` additionally needs `git config --bool --get
+#      extensions.worktreeConfig` on `.git/config` to exit 1 (key absent) or to
+#      exit 0 printing `false`; and `.git/objects` and `.git/objects/info` are
+#      real directories;
 #   4. `.git/objects/info/alternates` is a regular file holding one line,
 #      `<main>/.git/objects`;
 #   5. `hr_clone_config_check_var <main> <target>` passes.
@@ -1004,10 +1008,19 @@ hr_wrapper_target_check_var() {
 # (`docs/sandbox-verification.md`, row CL5), so a sandboxed command could plant
 # a `commondir` that redirects git's ref store, a `config.worktree` git layers
 # over `.git/config`, or an `http-alternates` that borrows objects from a host.
+# Any `commondir` is refused, an empty one included: it breaks git itself. The
+# one accepted shape of the other two is safe because an empty file carries
+# nothing, git reads `config.worktree` only while `extensions.worktreeConfig`
+# is on (and `.git/config` is write-protected and held to an allow-list by
+# condition 5), and only a client fetching from this repository over dumb HTTP
+# reads `http-alternates` — local git never does. That shape is accepted
+# because something no profile entry controls creates an empty
+# `config.worktree` at every session start on Linux (both 2026-10-30
+# sessions); its cause stays open in `docs/sandbox-placeholder-upstream-report.md`.
 hr_clone_target_check_var() {
   local main="${1-}" target="${2-}" refused="${3-}" gd hf head_line="" extra=""
   local branch="" registry kind wt wt_c want name alt alt_line="" alt_c main_obj
-  local line="" tab=$'\t'
+  local line="" tab=$'\t' wtc_rc=0 wtc_val=""
   gd="$target/.git"
   hf="$gd/HEAD"
   if [ -f "$hf" ] && [ ! -L "$hf" ] && [ -r "$hf" ]; then
@@ -1046,12 +1059,25 @@ hr_clone_target_check_var() {
     return 1
   fi
 
-  for name in commondir config.worktree objects/info/http-alternates; do
+  if [ -e "$gd/commondir" ] || [ -L "$gd/commondir" ]; then
+    HR_TARGET_REFUSAL="'$target' is a clone, but $gd/commondir exists, and a clone the harness made has none"
+    return 1
+  fi
+  for name in config.worktree objects/info/http-alternates; do
     if [ -e "$gd/$name" ] || [ -L "$gd/$name" ]; then
-      HR_TARGET_REFUSAL="'$target' is a clone, but $gd/$name exists, and a clone the harness made has none"
-      return 1
+      if [ ! -f "$gd/$name" ] || [ -L "$gd/$name" ] || [ -s "$gd/$name" ]; then
+        HR_TARGET_REFUSAL="'$target' is a clone, but $gd/$name exists, and a clone the harness made has none but an empty regular file"
+        return 1
+      fi
     fi
   done
+  if [ -e "$gd/config.worktree" ]; then
+    wtc_val=$(git -C / config --file "$gd/config" --bool --get extensions.worktreeConfig 2>/dev/null) || wtc_rc=$?
+    if [ "$wtc_rc" -ne 1 ] && { [ "$wtc_rc" -ne 0 ] || [ "$wtc_val" != false ]; }; then
+      HR_TARGET_REFUSAL="'$target' is a clone, but $gd/config.worktree exists while $gd/config does not hold extensions.worktreeConfig off, and a clone the harness made has none that git reads"
+      return 1
+    fi
+  fi
   for name in objects objects/info; do
     if [ ! -d "$gd/$name" ] || [ -L "$gd/$name" ]; then
       HR_TARGET_REFUSAL="'$target' is a clone, but $gd/$name is not a real directory"
