@@ -553,7 +553,8 @@
 #     in `wait-poller` with one notification, on every runner; with no pause
 #     requested — the run's own API-overload
 #     self-pause (`overload`) -> auto-resume, else `stop`; a zero exit over an
-#     unfinished ledger (`unfinished`) -> auto-resume, else `stop`. `failed` ->
+#     unfinished ledger (`unfinished`, written only when no `user`, `usage` or
+#     `budget` pause was pending) -> auto-resume, else `stop`. `failed` ->
 #     auto-resume unless the stall watchdog gave up, else `stop`. Every other
 #     status -> `stop`. An empty HARNESS_JOB_DEADLINE_EPOCH bounds nothing.
 #   * THE BOUNDED AUTO-RESUME: an `overload` pause, an `unfinished` pause and a
@@ -1817,15 +1818,15 @@ job_report() {
 #                       0 before its ledger finished (task / user_review: the
 #                       flow-progress ledger, with engine and round matching;
 #                       docs: the checklist), written by classify_run_exit in
-#                       both modes. In job mode it never replaces a `user`
-#                       reason already recorded; see JOB MODE. Locally it waits
-#                       for /autonomous-sdlc-harness:branch-resume, unless the
-#                       usage gate had already tagged the run `paused_by=usage`,
-#                       in which case the gate resumes it at the recorded reset.
-#                       That arm is the only local writer of this field; the
-#                       local pause arm, launch_run and begin_pause_resume clear
-#                       it, so a hand or usage pause never shows a stale
-#                       `unfinished`.
+#                       both modes. In job mode it never replaces a pending
+#                       `user`, `usage` or `budget` pause; see JOB MODE. Locally
+#                       it waits for /autonomous-sdlc-harness:branch-resume,
+#                       unless the usage gate had already tagged the run
+#                       `paused_by=usage`, in which case the gate resumes it at
+#                       the recorded reset. That arm is the only local writer of
+#                       this field; the local pause arm, launch_run and
+#                       begin_pause_resume clear it, so a hand or usage pause
+#                       never shows a stale `unfinished`.
 #                       `user` and `budget` are written
 #                       before the PAUSE is dropped, while still `running`;
 #                       classify_run_exit settles the reason as the run pauses,
@@ -3518,7 +3519,8 @@ record_run_analytics() {
 # THE LEDGER SPLITS ONLY THE ZERO-EXIT ARM, after every test above it: a zero
 # exit is `completed` only when lib/harness-run-lib.sh's `hr_run_ledger_state`
 # answers `finished`; `unfinished` makes it a `paused` record with pause_reason
-# `unfinished` (in job mode a `user` reason already recorded is kept instead).
+# `unfinished` (in job mode a pending `user`, `usage` or `budget` pause is kept
+# instead).
 # An absent or unreadable ledger keeps `completed`, with one log line: planner
 # and fix-plan Setup create the ledger before the first dispatch, and the
 # watcher commits the docs checklist before launch, so a session cut short
@@ -3716,14 +3718,30 @@ classify_run_exit() {
     fi
     if [ "$ledger_state" = "unfinished" ]; then
       # pid and the watchdog counters are left as the pause arm leaves them.
-      if [ "$JOB_MODE" = "1" ] && [ "$(registry_get "$branch" pause_reason)" = "user" ]; then
-        # The user's pause request outranks `unfinished`: overwriting it would
-        # send the record to job mode's auto-resume, whose begin_pause_resume
-        # deletes the user's PAUSE.
-        registry_set "$branch" status paused
-        log "run '$branch' paused (unfinished) — the session exited 0 before its ledger finished ($ledger_detail); resume with /autonomous-sdlc-harness:branch-resume $branch"
-        notify paused "$branch" "$log_path" "paused as you asked — run /autonomous-sdlc-harness:branch-resume $branch to continue; $(hr_github_resume_route "$branch" "$(registry_get "$branch" engine)")"
-        return 0
+      if [ "$JOB_MODE" = "1" ]; then
+        # A pause another actor already requested outranks `unfinished`, in the
+        # PAUSE_ACK arm's order — `user`, then `usage`, then `budget`. Writing
+        # `unfinished` over it would send the record to job_auto_resume, whose
+        # begin_pause_resume deletes that actor's PAUSE.
+        local held_reason
+        held_reason="$(registry_get "$branch" pause_reason)"
+        if [ "$held_reason" != "user" ]; then
+          if [ "$(registry_get "$branch" paused_by)" = "usage" ]; then
+            held_reason=usage
+          elif [ "$held_reason" != "budget" ]; then
+            held_reason=""
+          fi
+        fi
+        if [ -n "$held_reason" ]; then
+          registry_set "$branch" pause_reason "$held_reason" status paused
+          log "run '$branch' paused (unfinished) — the session exited 0 before its ledger finished ($ledger_detail); the pending $held_reason pause is kept"
+          # run_job's `user)` arm notifies nothing, so this is that pause's one
+          # notification; run_job's `usage)` and `budget)` arms own theirs.
+          if [ "$held_reason" = "user" ]; then
+            notify paused "$branch" "$log_path" "paused as you asked — run /autonomous-sdlc-harness:branch-resume $branch to continue; $(hr_github_resume_route "$branch" "$(registry_get "$branch" engine)")"
+          fi
+          return 0
+        fi
       fi
       registry_set "$branch" status paused pause_reason unfinished
       log "run '$branch' paused (unfinished) — the session exited 0 before its ledger finished ($ledger_detail); resume with /autonomous-sdlc-harness:branch-resume $branch"

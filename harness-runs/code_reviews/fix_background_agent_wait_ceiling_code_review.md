@@ -25,7 +25,7 @@ Two findings are Must Fix:
 2. [x] **Finding 4** — Drop "until a human resumes it" / "awaiting human resume" from the five autonomous forks and the plan core's G.1 clause (c) _(layer: plugin)_
 3. [x] **Finding 2** — Add the zero-exit ledger read to `ARCHITECTURE.md`'s `classify_run_exit` row, its negative-result paragraph and operation 7 _(layer: general)_
 4. [x] **Finding 3** — Correct the "carries no `paused_by` / only `branch-resume` resumes it" statements for a local `unfinished` pause the usage gate had requested _(layer: cli, plugin, general)_
-5. [ ] **Finding 1** — Keep a pending `usage` or `budget` pause over `unfinished` in job mode, in the `PAUSE_ACK` arm's order, with two `watcher-remote-job` cases _(layer: cli, general)_
+5. [x] **Finding 1** — Keep a pending `usage` or `budget` pause over `unfinished` in job mode, in the `PAUSE_ACK` arm's order, with two `watcher-remote-job` cases _(layer: cli, general)_
 
 ---
 

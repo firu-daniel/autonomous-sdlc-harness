@@ -31,14 +31,16 @@
  * the stub's pull request, its opt-out, and the invocation count read off the watcher log.
  *
  * **A job ends `completed` only over a finished ledger. An unfinished one is auto-resumed under its
- * own name, bounded, then reported, unless the user asked for the pause, which outranks it.** The
+ * own name, bounded, then reported, unless a `user`, `usage` or `budget` pause is pending, which
+ * outranks it.** The
  * `unfinished:` cases assert the decision, the prompt count, `pause_reason` and the notifications.
  * RED ONCE, each against the fixture's installed copy of the watcher or its library, never the
  * tracked template: `run_job`'s `unfinished)` arm removed -> the exhausted pause's notification
  * reads *paused itself on API overload*; `unfinished` left out of `hr_remote_status_write`'s
  * `pause_reason` vocabulary -> `pause_reason` written empty; `classify_run_exit`'s `unfinished`
  * write made unconditional, overwriting `user` -> the user-pause case shows `pause_reason`
- * `unfinished`.
+ * `unfinished`; the usage / budget precedence removed from `classify_run_exit`'s `unfinished` arm
+ * -> both cases show `pause_reason` `unfinished` and two prompts.
  *
  * **A job commits each session's run analytics on its branch and pushes nothing for them:** the
  * workflow's `Push the branch` step does. The `run analytics:` case drives a job with the real
@@ -1261,6 +1263,44 @@ test('unfinished: a zero exit over an unfinished ledger is resumed, bounded, the
     assert.match(paused[0].detail, /\/autonomous-sdlc-harness:branch-resume feat_x/);
     assert.equal(notes.some((n) => n.event === 'completed'), false, JSON.stringify(notes));
     assert.match(j.watcherLog(), /paused \(unfinished\)/);
+  });
+
+  await t.test('a usage pause pending at an unfinished exit -> paused / usage / wait-poller, no auto-resume', async (t) => {
+    const j = await createJobFixture(t);
+    if (j === null) return;
+    const copy = await stageLedger(j, taskLedger(j.branch, []));
+    await j.setStub(
+      `${rateLimitRejected(100)}; for i in $(seq 1 ${PAUSE_WAIT_TENTHS}); do if [ -f "$STATE/PAUSE" ]; then break; fi; sleep 0.1; done\n${copy}\nexit 0`,
+    );
+    const result = await j.job([j.branch, 'task', 'none'], {
+      USAGE_CHECK_INTERVAL_SECS: '1',
+      USAGE_RESUME_MARGIN_SECS: '0',
+      HARNESS_JOB_DEADLINE_EPOCH: String(nowSecs() + 50),
+      REMOTE_AUTO_RESUME_DELAY_SECS: '0',
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(lastLine(result.stdout), 'job: paused wait-poller');
+    assert.equal(j.status().pause_reason, 'usage');
+    assert.equal(j.prompts().length, 1);
+    assert.match(j.watcherLog(), /paused \(unfinished\)/);
+  });
+
+  await t.test('a budget pause pending at an unfinished exit -> paused / budget / continue, no auto-resume', async (t) => {
+    const j = await createJobFixture(t);
+    if (j === null) return;
+    const copy = await stageLedger(j, taskLedger(j.branch, []));
+    await j.setStub(
+      `for i in $(seq 1 ${PAUSE_WAIT_TENTHS}); do if [ -f "$STATE/PAUSE" ]; then break; fi; sleep 0.1; done\n${copy}\nexit 0`,
+    );
+    const result = await j.job([j.branch, 'task', 'none'], {
+      HARNESS_JOB_STARTED_EPOCH: String(nowSecs()),
+      REMOTE_SELF_PAUSE_AFTER_SECS: '1',
+      REMOTE_AUTO_RESUME_DELAY_SECS: '0',
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(lastLine(result.stdout), 'job: paused continue');
+    assert.equal(j.status().pause_reason, 'budget');
+    assert.equal(j.prompts().length, 1);
   });
 });
 

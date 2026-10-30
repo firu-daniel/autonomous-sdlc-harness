@@ -263,7 +263,7 @@ The defaults are sized from this repository's own `watcher.log`, read on 2026-09
 /autonomous-sdlc-harness:branch-resume <branch>
 ```
 
-If the setting ever fails to reach a session, the CLI's stop line appears again in that session's part of the run log, and `watcher.log` gets `run '<branch>': the agent CLI stopped background tasks still running after the session's last turn — CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 did not take: <line>`, whatever the exit is classified as; that line is evidence the setting did not take. In a job, an `unfinished` pause is resumed automatically a bounded number of times instead, and a pause the user already asked for keeps its `user` reason: [`remote-execution.md`](remote-execution.md) → `### API errors`.
+If the setting ever fails to reach a session, the CLI's stop line appears again in that session's part of the run log, and `watcher.log` gets `run '<branch>': the agent CLI stopped background tasks still running after the session's last turn — CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 did not take: <line>`, whatever the exit is classified as; that line is evidence the setting did not take. In a job, an `unfinished` pause is resumed automatically a bounded number of times instead, and a pause already pending — the user's, the usage gate's or the hosted budget's — keeps its own reason: [`remote-execution.md`](remote-execution.md) → `### API errors`.
 
 The per-run brake `<state_dir>/STOP` inside one working copy is read by the run itself, not by the watcher; the watcher's brake is the global `<state_dir>/AUTONOMOUS_STOP` in the main checkout, which it honors before launching or resuming anything and **never removes** — a watcher that cleared its own brake would restart the very runs it was told to stop.
 
