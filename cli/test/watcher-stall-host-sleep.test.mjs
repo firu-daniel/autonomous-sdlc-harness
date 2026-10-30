@@ -32,7 +32,13 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { runBash, runGit } from './helpers/fixture.mjs';
 import { scaleBound } from './helpers/timing.mjs';
-import { createWatcherFixture, DEFAULT_KEEP_AWAKE_PROBE, DEFAULT_SANDBOX_PROBE, TICK_TIMEOUT_MS } from './helpers/watcher.mjs';
+import {
+  createWatcherFixture,
+  DEFAULT_KEEP_AWAKE_PROBE,
+  DEFAULT_PLACEHOLDER_HOST_PROBE,
+  DEFAULT_SANDBOX_PROBE,
+  TICK_TIMEOUT_MS,
+} from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
 const INBOX = `${STATE_DIR}/autonomous_inbox`;
@@ -173,6 +179,7 @@ async function sleepFixture(t) {
         '. "$1" status >/dev/null',
         `hr_sandbox_prereq_probe_var() {\n${DEFAULT_SANDBOX_PROBE}\n}`,
         `hr_keep_awake_probe_var() {\n${DEFAULT_KEEP_AWAKE_PROBE}\n}`,
+        `hr_placeholder_host_probe_var() {\n${DEFAULT_PLACEHOLDER_HOST_PROBE}\n}`,
         'tick',
         ': > "$2/pass-1"',
         'n=2',

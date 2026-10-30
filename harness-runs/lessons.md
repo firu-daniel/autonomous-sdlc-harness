@@ -46,6 +46,8 @@ _[Add headings of your own as themes emerge — one per recurring theme — and 
 
 - **A new execution environment must state, for every configurable phase, whether that phase runs there. A phase switched off in this repository is not thereby unsupported for every adopter.** _(taught by: feat_remote_execution_github_actions)_
 
+- **A recovery for an unattended run's failure covers every execution mode the failure reaches, the local watcher and the remote job alike. Leaving a mode out is a question to the user before the plan ships, never a documented residual.** _(taught by: fix_linux_sandbox_deny_placeholders)_
+
 ## Remote and branch-scoped operations
 
 - **A command scoped to one branch reads and writes that branch's state only: never create a working copy, record or sync for any other branch as a side effect.** _(taught by: feat_forge_run_triggers)_

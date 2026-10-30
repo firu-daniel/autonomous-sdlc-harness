@@ -110,6 +110,9 @@ const { readProtectedCaseLabel } = await loadCompiled('generators/githooks.js');
  */
 const { DEFAULTS } = await loadCompiled('config/model.js');
 
+/** The run-copy `.git` rows, for the rows a bubblewrap host's per-run copy leaves out of `denyWrite`. */
+const { COPY_GIT_PATHS } = await loadCompiled('generators/writeProtection.js');
+
 /**
  * What this host can install a daemon into, and a skip reason when it can install one nowhere.
  *
@@ -307,6 +310,23 @@ test('doctor exits 0 on a freshly wired repository, warnings and all, and writes
   assert.match(stdout, passLine('run-watcher'));
   assert.doesNotMatch(stderr, warnLine('run-watcher'));
   assert.deepEqual(await snapshotTree(dir), before, 'doctor wrote to the repository it was asked about');
+});
+
+test('a passing profile-write-protection line names the Linux placeholder finding and the rows the per-run copy omits', async (t) => {
+  const dir = await wiredFixture(t);
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor']);
+
+  assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+  assert.match(stdout, passLine('profile-write-protection'));
+  const line = reportLine(stdout, 'pass', 'profile-write-protection');
+  assert.ok(
+    line.includes('On Linux an exact entry for a path that does not exist is enforced by a placeholder at that path'),
+    `the pass does not carry the placeholder clause:\n${line}`,
+  );
+  const omitted = COPY_GIT_PATHS.filter(({ bubblewrapDenyWrite }) => bubblewrapDenyWrite === false).map(({ path }) => path);
+  assert.deepEqual(omitted, ['.git/commondir', '.git/config.worktree', '.git/objects/info/http-alternates']);
+  for (const path of omitted) assert.ok(line.includes(path), `the pass does not name ${path}:\n${line}`);
 });
 
 test('the run-watcher check follows a custom scriptsDir', async (t) => {

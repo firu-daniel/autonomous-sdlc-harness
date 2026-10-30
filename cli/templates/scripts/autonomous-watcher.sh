@@ -313,6 +313,24 @@
 # The rules every hardened call holds are lib/harness-run-lib.sh's, in the
 # section THE WATCHER FAMILY'S GIT IN A RUN'S COPY.
 #
+# On a placeholder host a killed session's leftovers break these reads — a
+# 0-byte `<scriptsDir>/.git` fails `hr_main_repo` and `create-worktree.sh`, a
+# 0-byte `.git/commondir` fails the copy check — so `placeholder_sweep_pass`
+# removes the recorded ones (lib/harness-run-lib.sh, PLACEHOLDER LEFTOVERS)
+# ahead of each reader: in `tick` before the stall watchdog, quietly; in the
+# watchdog's KILL tier once the killed tree has exited; in `process_inbox_file`
+# before the working-copy step; and first in `spawn_engine`'s placeholder-host
+# block, ahead of the launch check. Before all of them, when `hr_main_repo`
+# fails at start-up, `placeholder_start_recover` finds the main checkout
+# without git and sweeps there, so a leftover does not refuse the start.
+# In job mode the same sweep runs at the head of `spawn_engine`'s job arm, in
+# the KILL tier ahead of the copy check and the reset (an untracked leftover
+# `.claude/settings.local.json` makes `hr_run_reset_var` refuse), at
+# `run_job`'s exit ahead of the workflow's `Push the branch` step, in the
+# job-mode start-up recovery, and in `job-sweep` (JOB MODE); its manifest is `hr_job_absent_file`'s, under
+# `$RUNNER_TEMP`, because the machine lane is off in a job and a hosted
+# runner's lane directory would not outlive it.
+#
 # THE AGENT BINARY IS REACHED THROUGH ONE VARIABLE, `${HARNESS_AGENT_CLI:-claude}`,
 # resolved once below. It defaults to the real CLI, so an operator sees no
 # difference. It exists so the launch and exit-classification paths can be
@@ -398,8 +416,8 @@
 #
 # WHO RUNS IT. The service manager (`daemon install` renders the unit), or a
 # person by hand for a single `tick` or a `status` — and one other runner, the
-# remote workflow's harness step, invoking `job` with HARNESS_JOB_MODE=1 (see
-# JOB MODE). NEVER a dispatched agent:
+# remote workflow's harness step, invoking `job` with HARNESS_JOB_MODE=1, and its
+# sweep step, invoking `job-sweep` (see JOB MODE). NEVER a dispatched agent:
 # its basename is on the script-allowlist guard's `DENY_SCRIPT_BASENAMES`, so
 # that guard withholds the permit rather than granting one, and the generated
 # permission profile emits no rule for it either — an agent that could start runs
@@ -433,6 +451,19 @@
 #     a local run's per-run copy gets, and renders no per-run copy — the lane is
 #     off, and the copy would equal the base: the run copy is the main checkout,
 #     and the job's fresh checkout has no other linked worktree.
+#   * PLACEHOLDER LEFTOVERS ARE RECORDED AND SWEPT, on a placeholder host as
+#     locally, without the clone launch check — the job's checkout is a main
+#     one, whose whole `.git` is an existing `denyWrite` directory — and
+#     without the one-run cap, which a single-run job never needs. A stall
+#     kill's leftovers would otherwise refuse the watchdog's reset and every
+#     later wrapper call of the job.
+#   * `job-sweep <branch>`, also refused unless HARNESS_JOB_MODE=1, is the
+#     workflow's `Sweep the sandbox placeholders` step: a cancel or a step
+#     timeout kills this watcher with its session, so `run_job`'s exit sweep
+#     never runs and `push-branch.sh` would refuse the leftovers. It runs the
+#     start-up recovery and one manifest sweep, not probe-gated, keeping
+#     everything while a run is live, and exits 0. Its basename's place on
+#     `DENY_SCRIPT_BASENAMES` (WHO RUNS IT) keeps every session from it.
 #   * THE REGISTRY is the checkout's gitignored one, ephemeral by construction;
 #     what must cross a job boundary rides in the remote state bundle's
 #     `status.json`, restored to `autonomous_logs/remote_status.json` before the
@@ -563,18 +594,24 @@
 #                                    # HARNESS_JOB_DEADLINE_EPOCH,
 #                                    # RUNNER_ENVIRONMENT, GITHUB_RUN_ID and
 #                                    # REMOTE_SELF_PAUSE_AFTER_SECS
+#   HARNESS_JOB_MODE=1 autonomous-watcher.sh job-sweep <branch>
+#                                    # the workflow's post-session placeholder
+#                                    # sweep (JOB MODE). Also reads RUNNER_TEMP
 #
 # Exit map a caller can switch on:
 #
 #   0  the subcommand ran (the watch loop only returns this way on a signal).
 #      For `job`: the run reached a state the job stops in, and
-#      <state_dir>/autonomous_logs/remote_status.json says which, with its decision
+#      <state_dir>/autonomous_logs/remote_status.json says which, with its decision.
+#      For `job-sweep`: the sweep ran or was skipped for a live run, as logged
 #   1  refused to start: the library, the repository or the configuration could
 #      not be resolved. Nothing was created and no run was touched
 #   2  usage error: an unrecognized subcommand; for `job`, also bad arguments,
 #      HARNESS_JOB_MODE not 1, HARNESS_INPUT_CHAIN neither empty nor a
 #      non-negative integer, or a <branch> hr_branch_is_protected answers
-#      protected or unresolvable for. Nothing is launched
+#      protected or unresolvable for; for `job-sweep`, also HARNESS_JOB_MODE
+#      not 1 or other than one argument, refused before any sweep. Nothing is
+#      launched
 #
 # REPRO — reproduce any decision by hand, against a throwaway fixture:
 #
@@ -937,6 +974,20 @@ fatal() {
   exit 1
 }
 
+# job_usage <job|job-sweep> <reason> — a job-mode subcommand's exit-2 refusal:
+# one line on stderr and that subcommand's usage, nothing launched. Defined
+# here because `job-sweep` is refused before the start-up recovery.
+job_usage() {
+  local verb="${1-job}"
+  shift
+  echo "$self: $verb: $*" >&2
+  case "$verb" in
+    job-sweep) echo "usage: HARNESS_JOB_MODE=1 $self job-sweep <branch>" >&2 ;;
+    *) echo "usage: HARNESS_JOB_MODE=1 $self job <branch> <task|user_review|docs> <none|answer|pause>" >&2 ;;
+  esac
+  exit 2
+}
+
 # -----------------------------------------------------------------------------
 # The shared library, reached by a path computed from this script's own location —
 # no session root and no runtime-substituted token is assumed. It is sourced
@@ -993,6 +1044,89 @@ elif [ -s "${HOME-}/.asdf/asdf.sh" ]; then
   # shellcheck source=/dev/null
   . "${HOME-}/.asdf/asdf.sh" >/dev/null 2>&1 || true
 fi
+
+# placeholder_start_recover <subcommand> — when `hr_main_repo` cannot place
+# this script, sweep the recorded placeholder leftovers of the main
+# checkout `hr_main_checkout_past_leftovers_nogit` finds, provided its registry
+# holds no live run (`hr_registry_live_count`); a leftover `.git` in the
+# scripts directory would otherwise refuse the start. Under HARNESS_JOB_MODE=1
+# it runs only for a job-mode <subcommand>, and reads `hr_job_absent_files`
+# rather than the slug's run-profile directory. Not gated on the
+# placeholder-host probe: a manifest exists only where one is written, on a
+# placeholder host. Any step that cannot be resolved sweeps nothing. One stderr
+# line per removed and per kept path; PLACEHOLDER_START_REMOVED holds the
+# removed count, logged once `log` exists. Leaves the configuration cache
+# reset, so the anchors below load their own.
+PLACEHOLDER_START_REMOVED=""
+
+# placeholder_manifests_var <job 0|1> <repo slug> — set PLACEHOLDER_MANIFESTS
+# to the lines `hr_job_absent_files` prints when <job> is 1, else those
+# `hr_run_profile_absent_files` prints for <slug>; 1, leaving it empty, when
+# that refuses. <job> is an argument because placeholder_start_recover runs
+# before JOB_MODE is assigned. Its callers: placeholder_start_recover and
+# placeholder_sweep_pass.
+PLACEHOLDER_MANIFESTS=()
+placeholder_manifests_var() {
+  local list m
+  PLACEHOLDER_MANIFESTS=()
+  if [ "${1-}" = "1" ]; then
+    list="$(hr_job_absent_files)" || return 1
+  else
+    list="$(hr_run_profile_absent_files "${2-}")" || return 1
+  fi
+  while IFS= read -r m; do
+    [ -n "$m" ] && PLACEHOLDER_MANIFESTS+=("$m")
+  done <<EOF
+$list
+EOF
+  return 0
+}
+
+placeholder_start_recover() {
+  local main logs live slug="" line removed=0 job=0
+  if [ "${HARNESS_JOB_MODE:-}" = "1" ]; then
+    case "${1-}" in
+      job | job-sweep) job=1 ;;
+      *) return 0 ;;
+    esac
+  fi
+  hr_main_repo "$SCRIPT_DIR" >/dev/null && return 0
+  main="$(hr_main_checkout_past_leftovers_nogit "$SCRIPT_DIR")" || return 0
+  # An absent registry holds no live run, and is not created here: a start
+  # that still refuses below creates nothing.
+  live=0
+  if hr_config_load "$main" &&
+    logs="$(hr_state_path "$main" autonomous_logs)" &&
+    { [ ! -e "$logs/registry.json" ] || live="$(hr_registry_live_count "$logs/registry.json")"; } &&
+    [ "$live" = "0" ] &&
+    { [ "$job" = "1" ] || slug="$(hr_repo_slug "$main")"; } &&
+    placeholder_manifests_var "$job" "$slug"; then
+    if [ "${#PLACEHOLDER_MANIFESTS[@]}" -gt 0 ] && hr_placeholder_sweep_var "${PLACEHOLDER_MANIFESTS[@]}"; then
+      while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        echo "$self: placeholder sweep at start: removed $line" >&2
+        removed=$((removed + 1))
+      done <<EOF
+$HR_PLACEHOLDER_REMOVED
+EOF
+      while IFS= read -r line; do
+        [ -n "$line" ] && echo "$self: placeholder sweep at start: kept $line" >&2
+      done <<EOF
+$HR_PLACEHOLDER_KEPT
+EOF
+      PLACEHOLDER_START_REMOVED="$removed"
+    fi
+  fi
+  hr_config_reset
+  return 0
+}
+# `job-sweep` is refused ahead of the recovery, which would otherwise sweep the
+# slug's local manifests for it outside job mode.
+if [ "${1-}" = "job-sweep" ]; then
+  [ "${HARNESS_JOB_MODE:-}" = "1" ] || job_usage job-sweep "refused: HARNESS_JOB_MODE is not 1 — it sweeps the job's checkout"
+  [ "$#" -eq 2 ] || job_usage job-sweep "expected <branch>"
+fi
+placeholder_start_recover "${1-}"
 
 # -----------------------------------------------------------------------------
 # Anchors. All central state lives in the MAIN checkout; a run executes in a
@@ -1179,6 +1313,31 @@ AGENT_EFFORT="$(hr_agent_effort "$MAIN_REPO")" || AGENT_EFFORT=""
 # inherits when the machine-local `watcher.env` sets none, so the two may not drift.
 MAX_PARALLEL_RUNS_DEFAULT=5
 MAX_PARALLEL_RUNS="${MAX_PARALLEL_RUNS:-$MAX_PARALLEL_RUNS_DEFAULT}"
+# The cap every capacity comparison and every printed `cap` reads. Set from
+# effective_max_parallel_runs at the start of each tick and in print_status,
+# never here, so a test's override of the probe seam takes effect.
+RUN_CAP="$MAX_PARALLEL_RUNS"
+RUN_CAP_CLAMP_LOGGED=0
+
+# effective_max_parallel_runs — print 1 on a placeholder host when
+# MAX_PARALLEL_RUNS is above 1, else MAX_PARALLEL_RUNS unchanged: concurrent
+# runs of one repository share the main checkout's sandbox placeholders
+# (docs/cli.md §6). Job mode runs one run and is never clamped.
+effective_max_parallel_runs() {
+  if [ "$JOB_MODE" != "1" ]; then
+    case "$MAX_PARALLEL_RUNS" in
+      '' | *[!0-9]*) ;;
+      *)
+        hr_placeholder_host_probe_var
+        if [ "$HR_PLACEHOLDER_HOST" = "1" ] && [ "$MAX_PARALLEL_RUNS" -gt 1 ]; then
+          printf '1\n'
+          return 0
+        fi
+        ;;
+    esac
+  fi
+  printf '%s\n' "$MAX_PARALLEL_RUNS"
+}
 # How often the watch loop takes a pass.
 POLL_INTERVAL_SECS="${POLL_INTERVAL_SECS:-15}"
 # The permission mode an unattended run is launched with. Deliberately NOT a
@@ -1384,7 +1543,9 @@ LAST_CONTROL_POLL=0
 JOB_PROGRESS_LAST=""
 JOB_USER_PAUSE_DROPPED=0
 JOB_BUDGET_PAUSE_DROPPED=0
-if [ "${1:-}" = "job" ]; then
+# job_mode_enter — the `job` and `job-sweep` entries' switch into job mode, and
+# the one copy of its forced-off list, which a test sourcing this script calls too.
+job_mode_enter() {
   JOB_MODE=1
   AUTO_TAIL_TERMINAL=0
   USAGE_LANE_STATE_ENABLED=0
@@ -1393,7 +1554,10 @@ if [ "${1:-}" = "job" ]; then
     HARNESS_REPO_SLUG="$HARNESS_REMOTE_SLUG"
     export HARNESS_REPO_SLUG
   fi
-fi
+}
+case "${1:-}" in
+  job | job-sweep) job_mode_enter ;;
+esac
 
 # The keep-awake decision (KEEP AWAKE in the header), copied out of the
 # library's result variables. Resolved here, after JOB_MODE, so `status` reports
@@ -1411,6 +1575,9 @@ mkdir -p "$INBOX_DIR" "$LOGS_DIR" "$ARCHIVE_DIR" ||
   fatal "could not create the state directories under '$MAIN_REPO' — refusing to start"
 
 log() { printf '%s [watcher] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" | tee -a "$WATCHER_LOG"; }
+
+[ -z "$PLACEHOLDER_START_REMOVED" ] ||
+  log "placeholder sweep at start: removed $PLACEHOLDER_START_REMOVED path(s)"
 
 # The tunable shape-checked above announces itself when its value was replaced,
 # because a silent correction is its own small surprise: the operator's file says
@@ -1656,8 +1823,7 @@ registry_get() { hr_registry_get "$REGISTRY" "$@"; }
 registry_branches() { hr_registry_branches "$REGISTRY"; }
 
 # True iff <branch>'s record carries `execution: github-actions` — the record's
-# field, never `execution.target` (see REMOTE DISPATCH). Silent: running_count
-# calls it inside a command substitution.
+# field, never `execution.target` (see REMOTE DISPATCH). Silent.
 record_is_remote() {
   [ "$(registry_get "$1" execution)" = "github-actions" ]
 }
@@ -1687,31 +1853,92 @@ $(registry_branches)
 EOF
 }
 
-# Runs marked `running` whose process is still alive. A PURE READER: its ONLY
-# stdout is the final integer, because the cap check captures it with `$(…)`.
-# Healing a vanished process belongs to reconcile_stale_runs(), above.
-# `running` is the only status that holds a slot. The status filter is what keeps
-# a finished record's pid, once the OS reuses it, from holding one — a terminal
-# write drops the pid, but a session that exits before spawn_engine's parent
-# writes `pid "$!"` leaves its own dead subshell's pid on a terminal record. The
-# filter cannot count out a run being launched: every launch and resume path
-# writes `status running` before spawn_engine writes the pid, and the watcher
-# runs each spawn to completion before its next capacity read.
-running_count() {
-  local n=0 b pid
-  while IFS= read -r b; do
-    [ -n "$b" ] || continue
-    # A remote run holds no local slot: the job gates itself.
-    record_is_remote "$b" && continue
-    [ "$(registry_get "$b" status)" = "running" ] || continue
-    pid="$(registry_get "$b" pid)"
-    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-      n=$((n + 1))
+# running_count [exclude_branch] — the live runs of this repository, that
+# branch left out. A PURE READER: its ONLY stdout is the integer, because the
+# cap check captures it with `$(…)`. Healing a vanished process belongs to
+# reconcile_stale_runs(), above. The rule's one home is the library's
+# `hr_registry_live_count`.
+running_count() { hr_registry_live_count "$REGISTRY" "${1-}"; }
+
+# placeholder_manifest_writable_root <manifest> <cwd> <root>... — print the
+# first of <cwd> and the <root>s that <manifest> lies at or under, both
+# canonical (`hr_canonical_path_nogit`), and return 0; 1, printing nothing,
+# when it lies under none. A `~/` root is taken under HOME and another relative
+# one under <cwd>, as the session resolves an --add-dir. A path that cannot be
+# made canonical counts as under the root, so an unplaceable manifest is never
+# written. Its caller: spawn_engine.
+placeholder_manifest_writable_root() {
+  local m r root abs cwd="${2-}"
+  m="$(hr_canonical_path_nogit "${1-}")" || {
+    printf '%s\n' "${1-}"
+    return 0
+  }
+  shift
+  for root in "$@"; do
+    [ -n "$root" ] || continue
+    case "$root" in
+      /*) abs="$root" ;;
+      "~/"*) abs="${HOME-}/${root#\~/}" ;;
+      *) abs="${cwd%/}/$root" ;;
+    esac
+    r="$(hr_canonical_path_nogit "$abs")" || {
+      printf '%s\n' "$root"
+      return 0
+    }
+    if [ "$r" = "/" ]; then
+      printf '%s\n' "$root"
+      return 0
     fi
+    case "$m" in
+      "$r" | "$r"/*)
+        printf '%s\n' "$root"
+        return 0
+        ;;
+    esac
+  done
+  return 1
+}
+
+# placeholder_sweep_pass <exclude_branch> <quiet> — on a placeholder host, and
+# only while no run of this repository but <exclude_branch> is live, sweep
+# every manifest in the run-profile directory, or in job mode every
+# `hr_job_absent_files` one, where the registry holds the job's record alone
+# (lib/harness-run-lib.sh, PLACEHOLDER LEFTOVERS), one log line per removed
+# path, and per kept path unless <quiet> is 1: a kept path stays in its
+# manifest, so a pass-start sweep would log it again on every poll. A live
+# session's placeholders are its own mounts, so a live run skips the sweep,
+# logged unless <quiet> is 1. Returns 0.
+placeholder_sweep_pass() {
+  hr_placeholder_host_probe_var
+  [ "$HR_PLACEHOLDER_HOST" = "1" ] || return 0
+  placeholder_sweep_unprobed "${1-}" "${2-0}"
+}
+
+# placeholder_sweep_unprobed <exclude_branch> <quiet> — placeholder_sweep_pass
+# on any host. Its other caller: job_sweep.
+placeholder_sweep_unprobed() {
+  local exclude="${1-}" quiet="${2-0}" live line
+  live="$(running_count "$exclude")"
+  if [ "$live" != "0" ]; then
+    [ "$quiet" = "1" ] || log "placeholder sweep: skipped, $live run(s) of this repository live"
+    return 0
+  fi
+  placeholder_manifests_var "$JOB_MODE" "$HARNESS_REPO_SLUG" || return 0
+  [ "${#PLACEHOLDER_MANIFESTS[@]}" -gt 0 ] || return 0
+  hr_placeholder_sweep_var "${PLACEHOLDER_MANIFESTS[@]}" || return 0
+  while IFS= read -r line; do
+    [ -n "$line" ] && log "placeholder sweep: removed $line"
   done <<EOF
-$(registry_branches)
+$HR_PLACEHOLDER_REMOVED
 EOF
-  echo "$n"
+  if [ "$quiet" != "1" ]; then
+    while IFS= read -r line; do
+      [ -n "$line" ] && log "placeholder sweep: kept $line"
+    done <<EOF
+$HR_PLACEHOLDER_KEPT
+EOF
+  fi
+  return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -1873,7 +2100,7 @@ machine_footprint_report() {
     # The cap is PER REPOSITORY, so it is carried per row and never collapsed
     # into one machine-scoped line.
     if [ "${root%/}" = "${MAIN_REPO%/}" ]; then
-      cap_note="cap=$MAX_PARALLEL_RUNS (this repository's own resolved value)"
+      cap_note="cap=$RUN_CAP (this repository's own resolved value)"
     else
       cap_note="cap=$machine_cap (machine default; this entry's own daemon environment may override, not derivable from here)"
     fi
@@ -1897,12 +2124,18 @@ print_status() {
       end
   ' "$REGISTRY"
   # The resolved tunables, names and values only — the override channel made
-  # observable. Nothing else the override file may have set is printed.
-  echo "tunables: MAX_PARALLEL_RUNS=$MAX_PARALLEL_RUNS POLL_INTERVAL_SECS=$POLL_INTERVAL_SECS PERMISSION_MODE=$PERMISSION_MODE CLEANUP_INTERVAL_SECS=$CLEANUP_INTERVAL_SECS AUTO_TAIL_TERMINAL=$AUTO_TAIL_TERMINAL STALL_CHECK_ENABLED=$STALL_CHECK_ENABLED STALL_WARN_SECS=$STALL_WARN_SECS STALL_KILL_SECS=$STALL_KILL_SECS STALL_MAX_RESTARTS=$STALL_MAX_RESTARTS STALL_BUSY_CPU_PCT=$STALL_BUSY_CPU_PCT PARK_LOOP_MAX_CYCLES=$PARK_LOOP_MAX_CYCLES PARK_LOOP_WINDOW_SECS=$PARK_LOOP_WINDOW_SECS USAGE_CHECK_ENABLED=$USAGE_CHECK_ENABLED USAGE_CHECK_INTERVAL_SECS=$USAGE_CHECK_INTERVAL_SECS USAGE_PAUSE_TRIGGER=$USAGE_PAUSE_TRIGGER USAGE_WARNING_DEBOUNCE=$USAGE_WARNING_DEBOUNCE USAGE_RESUME_MARGIN_SECS=$USAGE_RESUME_MARGIN_SECS USAGE_SEVEN_DAY_PAUSE_PCT=$USAGE_SEVEN_DAY_PAUSE_PCT USAGE_LANE_STATE_ENABLED=$USAGE_LANE_STATE_ENABLED USAGE_LANE_LOCK_ENABLED=$USAGE_LANE_LOCK_ENABLED REMOTE_CONTROL_POLL_SECS=$REMOTE_CONTROL_POLL_SECS REMOTE_WAIT_MAX_SECS=$REMOTE_WAIT_MAX_SECS REMOTE_AUTO_RESUME_MAX=$REMOTE_AUTO_RESUME_MAX REMOTE_AUTO_RESUME_DELAY_SECS=$REMOTE_AUTO_RESUME_DELAY_SECS STALL_WAKE_GAP_SECS=$STALL_WAKE_GAP_SECS KEEP_AWAKE=$KEEP_AWAKE_MODE"
+  # observable. Nothing else the override file may have set is printed. The cap
+  # printed is the one enforced.
+  RUN_CAP="$(effective_max_parallel_runs)"
+  echo "tunables: MAX_PARALLEL_RUNS=$RUN_CAP POLL_INTERVAL_SECS=$POLL_INTERVAL_SECS PERMISSION_MODE=$PERMISSION_MODE CLEANUP_INTERVAL_SECS=$CLEANUP_INTERVAL_SECS AUTO_TAIL_TERMINAL=$AUTO_TAIL_TERMINAL STALL_CHECK_ENABLED=$STALL_CHECK_ENABLED STALL_WARN_SECS=$STALL_WARN_SECS STALL_KILL_SECS=$STALL_KILL_SECS STALL_MAX_RESTARTS=$STALL_MAX_RESTARTS STALL_BUSY_CPU_PCT=$STALL_BUSY_CPU_PCT PARK_LOOP_MAX_CYCLES=$PARK_LOOP_MAX_CYCLES PARK_LOOP_WINDOW_SECS=$PARK_LOOP_WINDOW_SECS USAGE_CHECK_ENABLED=$USAGE_CHECK_ENABLED USAGE_CHECK_INTERVAL_SECS=$USAGE_CHECK_INTERVAL_SECS USAGE_PAUSE_TRIGGER=$USAGE_PAUSE_TRIGGER USAGE_WARNING_DEBOUNCE=$USAGE_WARNING_DEBOUNCE USAGE_RESUME_MARGIN_SECS=$USAGE_RESUME_MARGIN_SECS USAGE_SEVEN_DAY_PAUSE_PCT=$USAGE_SEVEN_DAY_PAUSE_PCT USAGE_LANE_STATE_ENABLED=$USAGE_LANE_STATE_ENABLED USAGE_LANE_LOCK_ENABLED=$USAGE_LANE_LOCK_ENABLED REMOTE_CONTROL_POLL_SECS=$REMOTE_CONTROL_POLL_SECS REMOTE_WAIT_MAX_SECS=$REMOTE_WAIT_MAX_SECS REMOTE_AUTO_RESUME_MAX=$REMOTE_AUTO_RESUME_MAX REMOTE_AUTO_RESUME_DELAY_SECS=$REMOTE_AUTO_RESUME_DELAY_SECS STALL_WAKE_GAP_SECS=$STALL_WAKE_GAP_SECS KEEP_AWAKE=$KEEP_AWAKE_MODE"
   if [ "$KEEP_AWAKE_MODE" = "off" ]; then
     echo "keep-awake: $KEEP_AWAKE_MODE — $KEEP_AWAKE_REASON"
   else
     echo "keep-awake: $KEEP_AWAKE_MODE"
+  fi
+  # After the keep-awake line, never between it and `tunables:`.
+  if [ "$RUN_CAP" != "$MAX_PARALLEL_RUNS" ]; then
+    echo "cap: $RUN_CAP (MAX_PARALLEL_RUNS=$MAX_PARALLEL_RUNS clamped on a bubblewrap host; docs/cli.md §6)"
   fi
   # Advisory tail: the other repositories armed on this machine. It decides
   # nothing — see the block above print_status.
@@ -2067,15 +2300,16 @@ lane_release_if_idle() {
 # -----------------------------------------------------------------------------
 
 # A declared mirror of cli/src/generators/writeProtection.ts → COPY_GIT_PATHS:
-# each row's run-copy-relative path and kind, in order, held equal by
+# each row's run-copy-relative path, kind and bubblewrapDenyWrite (`deny` for
+# true, `omit` for false), in order, held equal by
 # cli/test/watcher-run-profile.test.mjs. A change to that table is an edit here
 # in the same change.
-RUN_PROFILE_COPY_GIT_PATHS='.git/config file
-.git/hooks directory
-.git/objects/info/alternates file
-.git/commondir entry
-.git/config.worktree entry
-.git/objects/info/http-alternates entry'
+RUN_PROFILE_COPY_GIT_PATHS='.git/config file deny
+.git/hooks directory deny
+.git/objects/info/alternates file deny
+.git/commondir entry omit
+.git/config.worktree entry omit
+.git/objects/info/http-alternates entry omit'
 
 # Declared mirrors of cli/src/generators/sandboxProfile.ts, held equal by
 # cli/test/watcher-run-profile.test.mjs; a change to either owner is an edit
@@ -2125,10 +2359,13 @@ run_profile_one_object() {
   [ "$(jq -s 'length == 1 and (.[0] | type) == "object"' "$1" 2>/dev/null)" = "true" ]
 }
 
-# run_profile_entries <copy> <kind> — print one `<absolute path><TAB><kind>`
-# line per entry the per-run profile adds for the run copy <copy> of <kind>
-# (`clone` or `worktree`), kind being `file`, `directory` or `entry` as
-# writeProtection.ts → ProtectedKind means them:
+# run_profile_entries <copy> <kind> — print one
+# `<absolute path><TAB><kind><TAB><deny|omit>` line per entry the per-run
+# profile adds for the run copy <copy> of <kind> (`clone` or `worktree`), kind
+# being `file`, `directory` or `entry` as writeProtection.ts → ProtectedKind
+# means them. The third column is `omit` only for a clone row marked `omit`
+# while HR_PLACEHOLDER_HOST is `1` (bubblewrap would plant a placeholder at that
+# absent path), `deny` for every other line:
 #   * each `hr_run_protected_rel_paths` line re-rooted at <copy>, as `entry`;
 #   * on a clone, each RUN_PROFILE_COPY_GIT_PATHS row re-rooted at <copy>;
 #   * on a legacy worktree, <copy>/.git as `file`;
@@ -2145,26 +2382,27 @@ run_profile_one_object() {
 # is unreadable, 2 the worktree list failed, 3 a path was refused, 4 <kind> is
 # neither kind; nothing useful is printed on a non-zero exit.
 run_profile_entries() {
-  local copy="${1%/}" kind="${2-}" rel p k list line first=1 out=""
+  local copy="${1%/}" kind="${2-}" rel p k a list line first=1 out=""
   case "$kind" in clone | worktree) ;; *) return 4 ;; esac
   list="$(hr_run_protected_rel_paths "$MAIN_REPO")" || return 1
   while IFS= read -r rel; do
     [ -n "$rel" ] || continue
-    out="${out}${copy}/${rel}	entry
+    out="${out}${copy}/${rel}	entry	deny
 "
   done <<EOF
 $list
 EOF
   if [ "$kind" = clone ]; then
-    while IFS=' ' read -r p k; do
+    while IFS=' ' read -r p k a; do
       [ -n "$p" ] || continue
-      out="${out}${copy}/${p}	${k}
+      [ "$a" = omit ] && [ "${HR_PLACEHOLDER_HOST:-0}" = 1 ] || a=deny
+      out="${out}${copy}/${p}	${k}	${a}
 "
     done <<EOF
 $RUN_PROFILE_COPY_GIT_PATHS
 EOF
   else
-    out="${out}${copy}/.git	file
+    out="${out}${copy}/.git	file	deny
 "
   fi
   list="$(git -C "$MAIN_REPO" worktree list --porcelain 2>/dev/null)" || return 2
@@ -2180,7 +2418,7 @@ EOF
     fi
     p="${line#worktree }"
     [ "${p%/}" = "$copy" ] && continue
-    out="${out}${p%/}/.git	file
+    out="${out}${p%/}/.git	file	deny
 "
   done <<EOF
 $list
@@ -2188,6 +2426,7 @@ EOF
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     p="${line%	*}"
+    p="${p%	*}"
     case "$p" in
       *\"* | *\'* | *\** | *'	'*) return 3 ;;
     esac
@@ -2204,8 +2443,9 @@ EOF
 # <branch> to the path `hr_run_profile_file "$HARNESS_REPO_SLUG" <branch>`
 # prints, through a temporary file in its directory and `mv`, the directory
 # created at mode 700, and set RUN_PROFILE_FILE to it. The content is
-# $SETTINGS_PROFILE with each run_profile_entries path appended to
-# `.sandbox.filesystem.denyWrite` and its Edit rules to `.permissions.deny`,
+# $SETTINGS_PROFILE with each run_profile_entries path not marked `omit`
+# appended to `.sandbox.filesystem.denyWrite`, the Edit rules of every line to
+# `.permissions.deny`,
 # and the run copy's twins of the base's main-checkout wrapper rules appended
 # to `.permissions.allow` and `.permissions.ask`: each base entry of that list
 # starting with RUN_PROFILE_MAIN_PREFIX, that prefix replaced by
@@ -2264,9 +2504,9 @@ run_profile_render() {
         end;
       def add_absent($xs): reduce $xs[] as $x (.; if any(.[]; . == $x) then . else . + [$x] end);
       def add_twins: add_absent([.[] | select(type == "string" and startswith($main)) | $twin + .[($main | length):]]);
-      [split("\n")[] | select(length > 0) | split("\t") | {path: .[0], kind: .[1]}] as $e
+      [split("\n")[] | select(length > 0) | split("\t") | {path: .[0], kind: .[1], action: .[2]}] as $e
       | $base[0]
-      | .sandbox.filesystem.denyWrite |= add_absent([$e[].path])
+      | .sandbox.filesystem.denyWrite |= add_absent([$e[] | select(.action != "omit") | .path])
       | .permissions.deny |= add_absent([$e[] | rules[]])
       | if (.permissions.allow | type) == "array" then .permissions.allow |= add_twins else . end
       | if (.permissions.ask | type) == "array" then .permissions.ask |= add_twins else . end
@@ -2578,10 +2818,34 @@ spawn_engine() {
   # under the machine lane there.
   local settings_file copy_kind
   if [ "$JOB_MODE" = "1" ]; then
+    # Read by the manifest write below. No launch check: the job's checkout is
+    # a main one, whose `.git` is an existing denyWrite directory.
+    hr_placeholder_host_probe_var
+    if [ "$HR_PLACEHOLDER_HOST" = "1" ]; then
+      placeholder_sweep_pass "$branch" 0
+    fi
     settings_file="$SETTINGS_PROFILE"
   else
     copy_kind="$(registry_get "$branch" copy_kind)"
     [ -n "$copy_kind" ] || copy_kind="worktree"
+    # Read by run_profile_entries, and by the manifest write below.
+    hr_placeholder_host_probe_var
+    if [ "$HR_PLACEHOLDER_HOST" = "1" ]; then
+      placeholder_sweep_pass "$branch" 0
+      # The launch check: the render omits a clone's commondir, config.worktree
+      # and http-alternates, so a planted one is refused here, before Claude
+      # Code's own startup git reads the copy.
+      if [ "$copy_kind" = "clone" ]; then
+        if [ -z "$RUN_MAIN" ]; then
+          spawn_refuse "$branch" "$RUN_MAIN_REFUSAL"
+          return 1
+        fi
+        if ! hr_run_copy_check_var "$RUN_MAIN" "$worktree"; then
+          spawn_refuse "$branch" "the run copy failed its trust check before launch: $HR_RUN_REFUSAL"
+          return 1
+        fi
+      fi
+    fi
     if ! run_profile_render "$branch" "$worktree" "$copy_kind"; then
       spawn_refuse "$branch" "$RUN_PROFILE_REFUSAL"
       return 1
@@ -2733,8 +2997,9 @@ ${GLOBAL_STOP}. End at 'branch ready for review' — never merge, never push to 
   # an empty entry and one equal to the two directories already passed are
   # skipped. An absent, unparsable or keyless profile adds nothing and never
   # blocks the launch — `doctor --remote-job` refuses an unusable profile earlier.
-  local extra_dir_args extra_dirs_logged
+  local extra_dir_args extra_dirs extra_dirs_logged
   extra_dir_args=()
+  extra_dirs=()
   extra_dirs_logged=""
   if [ "$JOB_MODE" = "1" ]; then
     local profile_dirs profile_dir
@@ -2745,11 +3010,45 @@ ${GLOBAL_STOP}. End at 'branch ready for review' — never merge, never push to 
         "${worktree%/}" | "${main_state%/}") continue ;;
       esac
       extra_dir_args+=(--add-dir "$profile_dir")
+      extra_dirs+=("$profile_dir")
       extra_dirs_logged="${extra_dirs_logged} '${profile_dir}'"
     done <<EOF
 $profile_dirs
 EOF
     [ -z "$extra_dirs_logged" ] || log "job mode: '$branch' also gets --add-dir from the profile's additionalDirectories:${extra_dirs_logged}"
+  fi
+
+  # What was absent before this session: every exact denyWrite path, where
+  # bubblewrap may plant a placeholder, and `.mcp.json` under each --add-dir
+  # root. Without a manifest the next sweep removes nothing, so a failed or
+  # refused write does not refuse the launch. A manifest the session could
+  # write is never written, so the sweep never reads one.
+  if [ "$HR_PLACEHOLDER_HOST" = "1" ]; then
+    local manifest="" exact_paths line add_root mcp_paths
+    exact_paths=()
+    mcp_paths=()
+    for add_root in "$worktree" "$main_state" ${extra_dirs[@]+"${extra_dirs[@]}"}; do
+      mcp_paths+=("${add_root%/}/.mcp.json")
+    done
+    if [ "$JOB_MODE" = "1" ]; then
+      manifest="$(hr_job_absent_file "$branch")" || manifest=""
+    else
+      manifest="$(hr_run_profile_absent_file "$HARNESS_REPO_SLUG" "$branch")" || manifest=""
+    fi
+    if [ -z "$manifest" ]; then
+      log "placeholder manifest: no path for '$branch' — the next sweep removes nothing for this session"
+    elif add_root="$(placeholder_manifest_writable_root "$manifest" "$worktree" "$main_state" ${extra_dirs[@]+"${extra_dirs[@]}"})"; then
+      log "placeholder manifest: not writing $manifest for '$branch', under the session-writable root $add_root — the next sweep removes nothing for this session"
+    else
+      while IFS= read -r line; do
+        [ -n "$line" ] && exact_paths+=("$line")
+      done <<EOF
+$(jq -r '.sandbox.filesystem.denyWrite[]? | select(type == "string" and (contains("*") | not))' "$settings_file" 2>/dev/null)
+EOF
+      if ! hr_placeholder_manifest_write "$manifest" ${exact_paths[@]+"${exact_paths[@]}"} "${mcp_paths[@]}"; then
+        log "placeholder manifest: could not write $manifest for '$branch' — the next sweep removes nothing for this session"
+      fi
+    fi
   fi
 
   # The formatter is the tail of the pipeline; a passthrough keeps the raw events
@@ -3450,8 +3749,8 @@ resume_parked_run() {
 
   local current
   current="$(running_count)"
-  if [ "$current" -ge "$MAX_PARALLEL_RUNS" ]; then
-    log "at cap ($current/$MAX_PARALLEL_RUNS) — deferring resume of '$branch'"
+  if [ "$current" -ge "$RUN_CAP" ]; then
+    log "at cap ($current/$RUN_CAP) — deferring resume of '$branch'"
     return 10
   fi
 
@@ -3615,8 +3914,8 @@ resume_paused_run() {
 
   local current
   current="$(running_count)"
-  if [ "$current" -ge "$MAX_PARALLEL_RUNS" ]; then
-    log "at cap ($current/$MAX_PARALLEL_RUNS) — deferring pause-resume of '$branch'"
+  if [ "$current" -ge "$RUN_CAP" ]; then
+    log "at cap ($current/$RUN_CAP) — deferring pause-resume of '$branch'"
     return 10
   fi
 
@@ -3773,7 +4072,7 @@ check_stalled_runs() {
   [ -f "$USAGE_HOLD" ] && return 0
 
   local now b pid log_path stream_path newest m f staleness tree_cpu descendants restarts worktree state_rel why reset_rc note_rel
-  local raw since woke=""
+  local raw since woke="" tree_left tree_waits tree_pid
   now="$(date +%s)"
   # The last detected host wake, read once per pass; 0 when absent or not an
   # integer.
@@ -3869,6 +4168,33 @@ check_stalled_runs() {
     kill -9 "$pid" 2>/dev/null
     # shellcheck disable=SC2086 # one signal to the whole captured list
     [ -n "$descendants" ] && kill -9 $descendants 2>/dev/null
+
+    # A tree killed by `-9` leaves its placeholders on disk, and this is the one
+    # point between the kill and the copy check below. Swept only once the
+    # tree has exited: 1 check, then at most 10 more a second apart. In job
+    # mode too: there an untracked leftover makes the reset below refuse.
+    hr_placeholder_host_probe_var
+    if [ "$HR_PLACEHOLDER_HOST" = "1" ]; then
+      tree_waits=0
+      while :; do
+        tree_left=0
+        # shellcheck disable=SC2086 # the captured list MUST word-split
+        for tree_pid in $pid $descendants; do
+          if kill -0 "$tree_pid" 2>/dev/null; then
+            tree_left=1
+            break
+          fi
+        done
+        [ "$tree_left" = "1" ] && [ "$tree_waits" -lt 10 ] || break
+        sleep 1
+        tree_waits=$((tree_waits + 1))
+      done
+      if [ "$tree_left" = "0" ]; then
+        placeholder_sweep_pass "$b" 0
+      else
+        log "placeholder sweep: skipped, '$b''s process tree has not exited"
+      fi
+    fi
 
     restarts="$(registry_get "$b" stall_restarts)"
     case "$restarts" in
@@ -4147,10 +4473,13 @@ process_inbox_file() {
   local current
   if [ "$remote" != 1 ]; then
     current="$(running_count)"
-    if [ "$current" -ge "$MAX_PARALLEL_RUNS" ]; then
-      log "at the cap ($current/$MAX_PARALLEL_RUNS runs) — deferring '$branch' (leaving it in the inbox)"
+    if [ "$current" -ge "$RUN_CAP" ]; then
+      log "at the cap ($current/$RUN_CAP runs) — deferring '$branch' (leaving it in the inbox)"
       return 10
     fi
+    # Ahead of the working-copy step, which a leftover refuses: a run that died
+    # after this pass's opening sweep was skipped left its placeholders since.
+    placeholder_sweep_pass "" 0
   fi
 
   # This branch already has a LIVE run: the drop is a duplicate (a re-drop, or a
@@ -4969,6 +5298,12 @@ tick() {
   hr_config_load "$MAIN_REPO" || :
   keep_awake_resolve
 
+  RUN_CAP="$(effective_max_parallel_runs)"
+  if [ "$RUN_CAP" != "$MAX_PARALLEL_RUNS" ] && [ "$RUN_CAP_CLAMP_LOGGED" != "1" ]; then
+    RUN_CAP_CLAMP_LOGGED=1
+    log "bubblewrap host: at most one live run per repository (concurrent runs share the main checkout's sandbox placeholders; docs/cli.md §6)"
+  fi
+
   # Ahead of the kill-switch return: the brake stops launches and resumes only,
   # and runs in flight keep running under it, so the hold they carry must still
   # follow mains power and a switch of `execution.keepAwake` to false made while
@@ -4987,6 +5322,10 @@ tick() {
   # Heal records whose process has vanished BEFORE anything reads the cap, so a
   # reconciled run frees capacity in the same pass.
   reconcile_stale_runs
+
+  # Ahead of every reader below that a placeholder leftover breaks. Quiet: a
+  # live run's skip, and every kept path, would otherwise be logged on every poll.
+  placeholder_sweep_pass "" 1
 
   # Then its alive-but-stuck sibling, in the same stretch and for the same
   # reason: a run this pass tears down and restarts, or gives up on, must have
@@ -5051,7 +5390,8 @@ tick() {
 watch_loop() {
   local keep_awake_note="$KEEP_AWAKE_MODE"
   [ "$KEEP_AWAKE_MODE" != "off" ] || keep_awake_note="$KEEP_AWAKE_MODE ($KEEP_AWAKE_REASON)"
-  log "watcher starting (inbox=$INBOX_DIR, cap=$MAX_PARALLEL_RUNS, poll=${POLL_INTERVAL_SECS}s, keep-awake=$keep_awake_note)"
+  RUN_CAP="$(effective_max_parallel_runs)"
+  log "watcher starting (inbox=$INBOX_DIR, cap=$RUN_CAP, poll=${POLL_INTERVAL_SECS}s, keep-awake=$keep_awake_note)"
   registry_init
   while true; do
     tick
@@ -5064,13 +5404,6 @@ watch_loop() {
 # header's JOB MODE block states what runs, what is off and why. Reached only
 # through the `job` arm below, which has already refused a bad invocation.
 # -----------------------------------------------------------------------------
-
-# job_usage <reason> — the exit-2 refusal: one line on stderr, nothing launched.
-job_usage() {
-  echo "$self: job: $*" >&2
-  echo "usage: HARNESS_JOB_MODE=1 $self job <branch> <task|user_review|docs> <none|answer|pause>" >&2
-  exit 2
-}
 
 # The job's name in a `resumed` notification: its GitHub run when known.
 job_label() {
@@ -5487,6 +5820,10 @@ run_job() {
   # Reap every session subshell this job spawned, so its exit notification has
   # gone out before the job reports.
   wait
+  # What a session the watchdog gave up on, or one that crashed, left behind
+  # would refuse the workflow's `Push the branch` step. Reaped above, so no
+  # session of this job is live.
+  placeholder_sweep_pass "" 0
 
   local final
   final="$(registry_get "$branch" status)"
@@ -5497,6 +5834,18 @@ run_job() {
   job_progress_pass "$branch" "$state_abs" final
   job_write_status "$branch" "$remote_status" "$decision" "$detail"
   echo "job: $final $decision"
+  exit 0
+}
+
+# job_sweep <branch> — the `job-sweep` entry, the workflow's `Sweep the sandbox
+# placeholders` step: one job-mode manifest sweep after a `Run the harness` step
+# whose watcher was killed with its session, so `run_job`'s exit sweep never
+# ran. A leftover `<scriptsDir>/.git` was already swept by the start-up
+# recovery; this pass takes what does not stop `hr_main_repo`. Not gated on the
+# probe, as `placeholder_start_recover` is not. Exits 0.
+job_sweep() {
+  log "job-sweep: '${1-}': sweeping this job's recorded placeholder leftovers"
+  placeholder_sweep_unprobed "" 0
   exit 0
 }
 
@@ -5534,13 +5883,13 @@ watch | "")
 job)
   # Every refusal comes before anything is launched or recorded; see the header's
   # JOB MODE block for why HARNESS_JOB_MODE is the first of them.
-  [ "${HARNESS_JOB_MODE:-}" = "1" ] || job_usage "refused: HARNESS_JOB_MODE is not 1 — job mode resets the checkout it runs in"
-  [ "$#" -eq 4 ] || job_usage "expected <branch> <engine> <resume>"
-  case "$3" in task | user_review | docs) ;; *) job_usage "unknown engine '$3'" ;; esac
-  case "$4" in none | answer | pause) ;; *) job_usage "unknown resume '$4'" ;; esac
+  [ "${HARNESS_JOB_MODE:-}" = "1" ] || job_usage job "refused: HARNESS_JOB_MODE is not 1 — job mode resets the checkout it runs in"
+  [ "$#" -eq 4 ] || job_usage job "expected <branch> <engine> <resume>"
+  case "$3" in task | user_review | docs) ;; *) job_usage job "unknown engine '$3'" ;; esac
+  case "$4" in none | answer | pause) ;; *) job_usage job "unknown resume '$4'" ;; esac
   HARNESS_INPUT_CHAIN="${HARNESS_INPUT_CHAIN:-0}"
   case "$HARNESS_INPUT_CHAIN" in
-    *[!0-9]*) job_usage "HARNESS_INPUT_CHAIN must be empty or a non-negative integer" ;;
+    *[!0-9]*) job_usage job "HARNESS_INPUT_CHAIN must be empty or a non-negative integer" ;;
   esac
   HARNESS_INPUT_CHAIN="$((10#$HARNESS_INPUT_CHAIN))"
   export HARNESS_INPUT_CHAIN
@@ -5549,12 +5898,16 @@ job)
   hr_branch_is_protected "$MAIN_REPO" "$2"
   case "$?" in
     1) ;;
-    *) job_usage "refused: '$2' is a protected branch, or its protection is unresolvable" ;;
+    *) job_usage job "refused: '$2' is a protected branch, or its protection is unresolvable" ;;
   esac
   run_job "$2" "$3" "$4"
   ;;
+job-sweep)
+  # Refused before the start-up recovery unless HARNESS_JOB_MODE=1 with one argument.
+  job_sweep "$2"
+  ;;
 *)
-  echo "usage: $self [watch|tick|status|usage|job]" >&2
+  echo "usage: $self [watch|tick|status|usage|job|job-sweep]" >&2
   exit 2
   ;;
 esac

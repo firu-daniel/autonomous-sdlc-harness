@@ -30,7 +30,10 @@
 #      record removes no profile); the path is the one the watcher writes; and
 #      no record in a live status maps to that same file — the registry is
 #      re-read just before the `rm`, and a second branch `hr_sanitize_branch`
-#      folds onto the same name keeps it too. Leftovers from earlier releases
+#      folds onto the same name keeps it too. The absent-path manifest beside
+#      it, `hr_run_profile_absent_file "$slug" "$branch"` (`<sanitized
+#      branch>.absent`), is deleted with it under the same three gates, each
+#      file on its own line. Leftovers from earlier releases
 #      are not migrated: `docs/watcher.md` → `### The per-run profile`. Then it
 #   3. force-deletes the local branch (`git branch -D`),
 #
@@ -184,6 +187,14 @@
 #                 -> `$XDG_STATE_HOME/autonomous-sdlc-harness/run-profiles/
 #                    <slug>/feat_gone.json`; the preview names it, the sweep
 #                    removes it
+#   manifest      likewise plant its absent-path manifest:
+#                 bash -c '. "$1/scripts/lib/harness-run-lib.sh"
+#                   f=$(hr_run_profile_absent_file "$(hr_repo_slug "$1")" feat_gone)
+#                   mkdir -p "${f%/*}" && : > "$f"' _ "$d"
+#                 -> `<slug>/feat_gone.absent` beside the profile; the preview
+#                    prints `[dry-run] would remove absent-path manifest <file>
+#                    for 'feat_gone'`, the sweep `removed absent-path manifest
+#                    <file> for 'feat_gone'`, and the file is gone
 #   preview       bash "$d/scripts/cleanup-merged-worktrees.sh" --dry-run
 #                 -> `would delete branch … and remove clone "$w/demo-feat_gone"`
 #                    then `[dry-run] would remove run profile <file> for
@@ -538,41 +549,61 @@ say_skip() {
   fi
 }
 
-# profile_remove <branch> — delete <branch>'s per-run profile, in this run's
-# mode. Call it only once <branch>'s copy has been removed (or, under --dry-run,
-# would be). The registry is re-read here rather than trusting `active`: a sweep
-# run by hand can race a watcher launch, and a live branch whose sanitized name
-# folds onto the same file keeps it too. Prints at most one line; never stops
-# the sweep.
+# profile_remove <branch> — delete <branch>'s per-run profile and its
+# absent-path manifest, in this run's mode. Call it only once <branch>'s copy
+# has been removed (or, under --dry-run, would be). The registry is re-read here
+# rather than trusting `active`: a sweep run by hand can race a watcher launch,
+# and a live branch whose sanitized name folds onto the same profile keeps both
+# files too. Prints at most one line per file; never stops the sweep.
 profile_remove() {
-  local branch="${1-}" file live b bfile pre=""
+  local branch="${1-}" file absent live b bfile pre="" any=0
   [ "$dry_run" -eq 1 ] && pre="[dry-run] "
   if [ -z "$slug" ] || ! file="$(hr_run_profile_file "$slug" "$branch")"; then
     echo "cleanup-merged-worktrees.sh: ${pre}no run profile path for '$branch' (no repository slug, a branch hr_run_profile_file refuses, or no machine state directory — XDG_STATE_HOME and HOME both unset) — no profile removed"
     return 0
   fi
-  [ -f "$file" ] || [ -L "$file" ] || return 0
+  absent="$(hr_run_profile_absent_file "$slug" "$branch")" || absent=""
+  if [ -f "$file" ] || [ -L "$file" ]; then any=1; fi
+  if [ -n "$absent" ] && { [ -f "$absent" ] || [ -L "$absent" ]; }; then any=1; fi
+  [ "$any" -eq 1 ] || return 0
   if ! live="$(live_runs "$registry")"; then
-    echo "cleanup-merged-worktrees.sh: ${pre}keep run profile $file for '$branch' — the run registry could not be re-read"
+    profile_say keep "$file" "$absent" "$branch" "the run registry could not be re-read"
     return 0
   fi
   while IFS= read -r b; do
     [ -n "$b" ] || continue
     bfile="$(hr_run_profile_file "$slug" "$b")" || continue
     if [ "$bfile" = "$file" ]; then
-      echo "cleanup-merged-worktrees.sh: ${pre}keep run profile $file for '$branch' — the live run '$b' uses that file"
+      profile_say keep "$file" "$absent" "$branch" "the live run '$b' uses that file"
       return 0
     fi
   done <<EOF
 $live
 EOF
-  if [ "$dry_run" -eq 1 ]; then
-    echo "cleanup-merged-worktrees.sh: [dry-run] would remove run profile $file for '$branch'"
-  elif rm -f -- "$file"; then
-    echo "cleanup-merged-worktrees.sh: removed run profile $file for '$branch'"
-  else
-    echo "cleanup-merged-worktrees.sh: FAILED to remove run profile $file for '$branch' — remove it by hand"
-  fi
+  profile_say remove "$file" "$absent" "$branch"
+  return 0
+}
+
+# profile_say keep|remove <profile> <manifest> <branch> [<reason>] — for each of
+# the two files that is there, print its keep line (with <reason>) or remove it
+# in this run's mode and print what happened. An empty <manifest> is skipped.
+profile_say() {
+  local act="$1" branch="$4" reason="${5-}" f label pre=""
+  [ "$dry_run" -eq 1 ] && pre="[dry-run] "
+  for f in "$2" "$3"; do
+    [ -n "$f" ] || continue
+    [ -f "$f" ] || [ -L "$f" ] || continue
+    if [ "$f" = "$2" ]; then label="run profile"; else label="absent-path manifest"; fi
+    if [ "$act" = "keep" ]; then
+      echo "cleanup-merged-worktrees.sh: ${pre}keep $label $f for '$branch' — $reason"
+    elif [ "$dry_run" -eq 1 ]; then
+      echo "cleanup-merged-worktrees.sh: [dry-run] would remove $label $f for '$branch'"
+    elif rm -f -- "$f"; then
+      echo "cleanup-merged-worktrees.sh: removed $label $f for '$branch'"
+    else
+      echo "cleanup-merged-worktrees.sh: FAILED to remove $label $f for '$branch' — remove it by hand"
+    fi
+  done
   return 0
 }
 

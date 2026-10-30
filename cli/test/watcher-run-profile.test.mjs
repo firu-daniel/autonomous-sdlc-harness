@@ -12,7 +12,8 @@
  *
  * The watcher holds declared mirrors of TypeScript owners; the last test holds each equal to its
  * owner, imported from `cli/dist`:
- * - `RUN_PROFILE_COPY_GIT_PATHS` (read through `run_profile_entries`) — `COPY_GIT_PATHS`, and the
+ * - `RUN_PROFILE_COPY_GIT_PATHS` (read through `run_profile_entries`) — `COPY_GIT_PATHS`, each row's
+ *   path, kind and `bubblewrapDenyWrite` as a third column (`deny` for true, `omit` for false), and the
  *   kind → rule map inside `run_profile_render` — `fileToolDenyRules`, both in
  *   `cli/src/generators/writeProtection.ts`;
  * - `run_profile_wrapper_prefixes`' main prefix — the `{{repoRoot}}` wrapper rows
@@ -146,23 +147,31 @@ async function adoptedFixture(t, { optOut = false } = {}) {
   };
 }
 
-/** The entries `run_profile_entries` should print for a clone at `copy`, then `others`' pointers. */
-function cloneEntries(config, copy, others = []) {
+/**
+ * The entries `run_profile_entries` should print for a clone at `copy`, then `others`' pointers;
+ * `placeholderHost` marks each `COPY_GIT_PATHS` row whose `bubblewrapDenyWrite` is false `omit`.
+ */
+function cloneEntries(config, copy, others = [], { placeholderHost = false } = {}) {
   return [
-    ...copySurfacePaths(config).map((rel) => ({ path: `${copy}/${rel}`, kind: 'entry' })),
-    ...COPY_GIT_PATHS.map((row) => ({ path: `${copy}/${row.path}`, kind: row.kind })),
-    ...others.map((other) => ({ path: `${other}/.git`, kind: 'file' })),
+    ...copySurfacePaths(config).map((rel) => ({ path: `${copy}/${rel}`, kind: 'entry', action: 'deny' })),
+    ...COPY_GIT_PATHS.map((row) => ({
+      path: `${copy}/${row.path}`,
+      kind: row.kind,
+      action: placeholderHost && !row.bubblewrapDenyWrite ? 'omit' : 'deny',
+    })),
+    ...others.map((other) => ({ path: `${other}/.git`, kind: 'file', action: 'deny' })),
   ];
 }
 
 /**
- * Assert `profile` is `base` with exactly `entries` appended to the deny lists and the `copy` twins of
- * `main`'s wrapper rules to `allow` and `ask`, in order, each only when absent.
+ * Assert `profile` is `base` with exactly `entries` appended to the deny lists — an `omit` entry's
+ * path to `denyWrite` excepted — and the `copy` twins of `main`'s wrapper rules to `allow` and
+ * `ask`, in order, each only when absent.
  */
 function assertBasePlus(profile, base, entries, { main, copy }) {
   assert.deepEqual(
     profile.sandbox.filesystem.denyWrite,
-    addAbsent(base.sandbox.filesystem.denyWrite, entries.map((e) => e.path)),
+    addAbsent(base.sandbox.filesystem.denyWrite, entries.filter((e) => e.action !== 'omit').map((e) => e.path)),
   );
   assert.deepEqual(profile.permissions.deny, addAbsent(base.permissions.deny, entries.flatMap((e) => fileToolDenyRules(e))));
   for (const list of ['allow', 'ask']) {
@@ -269,6 +278,39 @@ test('another live linked worktree\'s .git pointer is in the clone run\'s per-ru
     main: f.dir,
     copy: f.clone,
   });
+});
+
+test('on a placeholder host a clone\'s per-run copy omits the exact denyWrite of each omit row and keeps its Edit rules', async (t) => {
+  const f = await adoptedFixture(t);
+  if (f === null) return;
+
+  await f.drop();
+  await f.tick({}, { placeholderHost: true });
+
+  const settings = f.settingsArg();
+  assert.ok(settings, `the stub was never called:\n${f.watcherLog()}`);
+  const profile = JSON.parse(readFileSync(settings, 'utf8'));
+  const entries = cloneEntries(f.config, f.clone, [], { placeholderHost: true });
+  assertBasePlus(profile, f.base(), entries, { main: f.dir, copy: f.clone });
+
+  const denyWrite = profile.sandbox.filesystem.denyWrite;
+  const omitted = COPY_GIT_PATHS.filter((row) => !row.bubblewrapDenyWrite);
+  const kept = COPY_GIT_PATHS.filter((row) => row.bubblewrapDenyWrite);
+  assert.equal(omitted.length, 3);
+  assert.equal(kept.length, 3);
+  for (const row of omitted) {
+    const path = `${f.clone}/${row.path}`;
+    assert.ok(!denyWrite.includes(path), `${path} is in denyWrite`);
+    for (const rule of fileToolDenyRules({ path, kind: row.kind })) {
+      assert.ok(profile.permissions.deny.includes(rule), `${rule} is not in deny`);
+    }
+  }
+  for (const row of kept) {
+    assert.ok(denyWrite.includes(`${f.clone}/${row.path}`), `${row.path} is not in denyWrite`);
+  }
+
+  const check = await f.watcherCall('run_profile_check "$1" "$2"; printf "%s|%s" "$?" "$RUN_PROFILE_REFUSAL"', [settings, f.clone]);
+  assert.equal(check.stdout, '0|');
 });
 
 // --- Refusal ------------------------------------------------------------------------------------
@@ -425,10 +467,24 @@ test('the watcher\'s mirrors equal their TypeScript owners', async (t) => {
 
   await t.test('run_profile_entries on a clone is the surface, then COPY_GIT_PATHS in order', async () => {
     const copy = `${f.dir}-mirror`;
-    const printed = await f.watcherCall('run_profile_entries "$1" clone', [copy]);
-    assert.equal(printed.status, 0, printed.stderr);
-    const lines = printed.stdout.split('\n').filter((line) => line !== '');
-    assert.deepEqual(lines, cloneEntries(f.config, copy).map((e) => `${e.path}\t${e.kind}`));
+    for (const placeholderHost of [false, true]) {
+      const printed = await f.watcherCall(`HR_PLACEHOLDER_HOST=${placeholderHost ? 1 : 0}; run_profile_entries "$1" clone`, [copy]);
+      assert.equal(printed.status, 0, printed.stderr);
+      const lines = printed.stdout.split('\n').filter((line) => line !== '');
+      assert.deepEqual(
+        lines,
+        cloneEntries(f.config, copy, [], { placeholderHost }).map((e) => `${e.path}\t${e.kind}\t${e.action}`),
+        `HR_PLACEHOLDER_HOST=${placeholderHost ? 1 : 0}`,
+      );
+    }
+  });
+
+  await t.test('RUN_PROFILE_COPY_GIT_PATHS\' third column is bubblewrapDenyWrite, true as deny', async () => {
+    const printed = await f.watcherCall('printf "%s" "$RUN_PROFILE_COPY_GIT_PATHS"');
+    assert.deepEqual(
+      printed.stdout.split('\n'),
+      COPY_GIT_PATHS.map((row) => `${row.path} ${row.kind} ${row.bubblewrapDenyWrite ? 'deny' : 'omit'}`),
+    );
   });
 
   await t.test('run_profile_render appends fileToolDenyRules for each kind', async () => {

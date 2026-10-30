@@ -1,0 +1,346 @@
+#!/usr/bin/env bash
+# sandbox-absent-path-check.sh — what the Linux sandbox does with each absent path a per-run profile
+# denies (#212; docs/sandbox-verification.md → §5 F9). Hand-written for this repository, like
+# sandbox-probe.sh: not in the set `init --force` regenerates, and not a cli/templates/ file.
+#
+# Run as `probe` in Gate 15's container, while `bash scripts/sandbox-probe.sh run --leg headless-parity`
+# holds its clone and per-run profile in another terminal. For every `sandbox.filesystem.denyWrite`
+# entry of that profile, plus the clone's `.git/commondir`, `.git/config.worktree` and
+# `.git/objects/info/http-alternates` and the `.mcp.json` of each `--add-dir` root wherever the profile
+# does not name them, it records, per phase, what a plain shell sees outside any sandbox, and in
+# phases A and B also what a sandboxed call and an excluded call see:
+#
+#   before  plain shell, before any session
+#   A       one headless session: git status, then the inspector sandboxed, then as an excluded command
+#   B       a second session, the same calls: do A's leftovers persist into B, and does B add more
+#   C       two sessions at once, each issuing six short calls (#94008's cross-process cleanup race)
+#   D       one session killed with SIGKILL in the middle of a call: what a killed session leaves
+#   sweep   the run library's placeholder sweep over what D left, then one more plain-shell reading
+#
+# Usage, as `probe`:
+#   bash scripts/sandbox-absent-path-check.sh run              phases before, A, B, C and D
+#   bash scripts/sandbox-absent-path-check.sh sweep            the sweep phase, after `run`
+#   bash scripts/sandbox-absent-path-check.sh after-teardown   one more plain-shell reading after the probe tears down
+#   bash scripts/sandbox-absent-path-check.sh report           writes <out>/report.md
+#   Run `sweep` only on a disposable probe clone and a main checkout whose probe branch may move.
+#
+#   <main> is the checkout two levels above this script. The clone is the first `<main>-chore_sbx_probe_*`
+#   sibling and the profile the first `run-profiles/*/*.json` in the run lane's directory; set C= and P=
+#   to name others. <out> is ${SBX_ABSENT_OUT:-${TMPDIR:-/tmp}/sbx-absent-path}.
+#
+# `run`, `after-teardown` and `report` write nothing into the clone or the main checkout. `sweep`
+# changes both: it deletes each manifest-recorded 0-byte, read-only leftover in the clone and in the
+# main checkout, <main>/<scriptsDir>/.git included, and its `hr_run_copy_check_var <main> <clone>`
+# syncs the clone's branch into <main> (`hr_copy_sync_in_var`), moving that branch's ref there.
+# Sessions run on a COPY of the per-run profile, with one entry added to `excludedCommands` for the
+# excluded inspector. Everything else it writes, the inspector included, is under <out>.
+#
+# Exit: 0 done · 1 usage, the run library is missing, or the state directory is unresolvable · 2 not Linux, no held clone or profile, or
+# `sweep` before `run`.
+#
+# Linux only by purpose: the inspector reads `stat -c`, `date -Is` and `/proc/self/mountinfo`. Any
+# other `uname -s` is refused with exit 2 and one line, before anything is written.
+# A standalone script: `set -u` and no `-e`, because a failing call is a result to record.
+set -u
+
+usage_line="usage: sandbox-absent-path-check.sh run | sweep | after-teardown | report"
+
+case "${1:-}" in
+  run | sweep | after-teardown | report) ;;
+  *)
+    echo "$usage_line" >&2
+    exit 1
+    ;;
+esac
+
+host=$(uname -s 2>/dev/null)
+if [ "$host" != "Linux" ]; then
+  echo "sandbox-absent-path-check: Linux only (stat -c, date -Is, /proc/self/mountinfo); this host is '${host}'" >&2
+  exit 2
+fi
+
+M=$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
+O=${SBX_ABSENT_OUT:-${TMPDIR:-/tmp}/sbx-absent-path}
+O=${O%/}
+MODEL=${MODEL:-opus}
+SELF="bash $M/scripts/sandbox-absent-path-check.sh"
+
+if [ ! -f "$M/scripts/lib/harness-run-lib.sh" ]; then
+  echo "sandbox-absent-path-check: '$M/scripts/lib/harness-run-lib.sh' is missing" >&2
+  exit 1
+fi
+# shellcheck source=/dev/null
+. "$M/scripts/lib/harness-run-lib.sh"
+# The watcher's `spawn_engine` resolves its `--add-dir` state root the same way.
+if ! S=$(hr_state_path "$M"); then
+  echo "sandbox-absent-path-check: the state directory under '$M' is unresolvable from harness.config.json" >&2
+  exit 1
+fi
+
+resolve() {
+  local lane
+  lane=$(hr_lane_dir) || lane=""
+  C=${C:-$(ls -d "$M"-chore_sbx_probe_* 2>/dev/null | head -1)}
+  if [ -z "$P" ] && [ -n "$lane" ]; then
+    P=$(ls "$lane"/run-profiles/*/*.json 2>/dev/null | head -1)
+  fi
+  if [ -z "$C" ] || [ ! -d "$C" ] || [ -z "$P" ] || [ ! -f "$P" ]; then
+    echo "sandbox-absent-path-check: no held probe clone or per-run profile; start 'bash scripts/sandbox-probe.sh run --leg headless-parity' first, or set C= and P=" >&2
+    exit 2
+  fi
+  C=$(cd -P "$C" && pwd -P)
+}
+C=${C:-}
+P=${P:-}
+
+# The inspector: one line per inspected path, `<label>\t<path>\t<state>`, then the namespace and git lines.
+write_inspector() {
+  cat >"$O/inspect.sh" <<'EOF'
+#!/usr/bin/env bash
+label=$1; list=$2; c=$3; m=$4
+printf '#\t%s\tmntns %s\n' "$label" "$(readlink /proc/self/ns/mnt)"
+while IFS= read -r p; do
+  case $p in *'*'*) continue ;; esac
+  if [ -e "$p" ] || [ -L "$p" ]; then
+    st=$(stat -c '%F, %s B, %A, %U, mtime %y' "$p" 2>&1)
+  else
+    st=absent
+  fi
+  mnt=$(awk -v p="$p" '$5 == p { src = $4; for (i = 7; i <= NF; i++) if ($i == "-") { src = src " (" $(i + 1) ", " $6 ")"; break } print src; exit }' /proc/self/mountinfo)
+  [ -n "$mnt" ] && st="$st; mount: $mnt"
+  printf '%s\t%s\t%s\n' "$label" "$p" "$st"
+done < "$list"
+for r in "$c" "$m"; do
+  out=$(git -C "$r" status --short --branch 2>&1); rc=$?
+  printf 'git\t%s\t%s\texit %s: %s\n' "$label" "$r" "$rc" "$(printf '%s' "$out" | tr '\n' ' ' | cut -c1-240)"
+done
+EOF
+  cp "$O/inspect.sh" "$O/inspect-ex.sh"
+  cat >"$O/tick.sh" <<'EOF'
+#!/usr/bin/env bash
+sleep "${3:-2}"; echo "tick $1 $2 ok"
+EOF
+}
+
+outside() { bash "$O/inspect.sh" "$1" "$O/entries.txt" "$C" "$M" >"$O/outside-$1.tsv" 2>&1; }
+
+# Starts one headless session in the background on the watcher's launch line (the profile copy as
+# --settings) and leaves its pid in SESSION_PID, a child of this shell so `wait` can reap it.
+session() { # <name> <prompt>
+  local name=$1 prompt=$2
+  (cd "$C" && exec env HARNESS_MAIN_REPO="$M" claude -p "$prompt" \
+    --settings "$O/profile.json" --permission-mode dontAsk --model "$MODEL" \
+    --add-dir "$C" --add-dir "$S" \
+    --allowedTools "Bash(git status:*)" \
+    --allowedTools "Bash(bash $O/inspect.sh:*)" \
+    --allowedTools "Bash(bash $O/inspect-ex.sh:*)" \
+    --allowedTools "Bash(bash $O/tick.sh:*)" \
+    --output-format stream-json --verbose) >"$O/session-$name.jsonl" 2>"$O/session-$name.stderr" </dev/null &
+  SESSION_PID=$!
+}
+
+prompt_calls() { # numbered calls from the arguments
+  local i=1 c
+  printf 'Issue each call below exactly as written, one Bash tool call per call, in this order. Do not retry a call, do not work around a refusal, do not add any command or tool call of your own, and do not append anything to a command. A refused call is a result. Stop after the last call.\n'
+  for c in "$@"; do
+    printf '\nCall %s. Bash, with the command parameter set to exactly: %s\n' "$i" "$c"
+    i=$((i + 1))
+  done
+}
+
+inspect_calls() { # <phase>
+  prompt_calls "git status --short --branch" \
+    "bash $O/inspect.sh $1-sandboxed $O/entries.txt $C $M" \
+    "bash $O/inspect-ex.sh $1-excluded $O/entries.txt $C $M"
+}
+
+# The profile's denyWrite entries verbatim, then each extra path the profile does not already name.
+write_entries() {
+  local x
+  jq -r '.sandbox.filesystem.denyWrite[]' "$P" >"$O/profile-entries.txt"
+  cp "$O/profile-entries.txt" "$O/entries.txt"
+  for x in "$C/.git/commondir" "$C/.git/config.worktree" "$C/.git/objects/info/http-alternates" \
+    "$C/.mcp.json" "$S/.mcp.json"; do
+    grep -Fxq -- "$x" "$O/profile-entries.txt" || printf '%s\n' "$x" >>"$O/entries.txt"
+  done
+}
+
+# The manifest over the profile's exact (non-glob) entries and the two --add-dir `.mcp.json` paths.
+write_manifest() {
+  local p
+  set --
+  while IFS= read -r p || [ -n "$p" ]; do
+    case $p in '' | *'*'*) continue ;; esac
+    set -- "$@" "$p"
+  done <"$O/profile-entries.txt"
+  set -- "$@" "$C/.mcp.json" "$S/.mcp.json"
+  if ! hr_placeholder_manifest_write "$O/manifest.absent" "$@"; then
+    echo "sandbox-absent-path-check: could not write $O/manifest.absent" >&2
+    return 1
+  fi
+  echo "sandbox-absent-path-check: manifest records $(wc -l <"$O/manifest.absent") absent paths"
+}
+
+run() {
+  resolve
+  mkdir -p "$O"
+  write_inspector
+  {
+    echo "date: $(date -Is)"
+    echo "clone: $C"
+    echo "profile: $P"
+    echo "main: $M"
+    echo "main head: $(git -C "$M" rev-parse HEAD 2>&1)"
+    echo "git: $(git --version 2>&1)"
+    echo "claude: $(claude --version 2>&1)"
+    echo "bwrap: $(bwrap --version 2>&1)"
+    echo "uname: $(uname -a)"
+    echo "apparmor_restrict_unprivileged_userns: $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>&1)"
+  } >"$O/stamp.txt"
+  write_entries
+  jq --arg e "bash $O/inspect-ex.sh:*" '.sandbox.excludedCommands += [$e]' "$P" >"$O/profile.json"
+  echo "sandbox-absent-path-check: $(wc -l <"$O/profile-entries.txt") denyWrite entries, $(grep -c '\*' "$O/profile-entries.txt") of them globs (not inspected), $(wc -l <"$O/entries.txt") inspected lines in all"
+  write_manifest || exit 1
+
+  outside before
+  echo "sandbox-absent-path-check: phase A"; session A "$(inspect_calls A)"; wait "$SESSION_PID"; outside after-A
+  echo "sandbox-absent-path-check: phase B"; session B "$(inspect_calls B)"; wait "$SESSION_PID"; outside after-B
+
+  echo "sandbox-absent-path-check: phase C (two sessions at once)"
+  local calls1=() calls2=() i p1 p2
+  for i in 1 2 3 4 5 6; do
+    calls1+=("bash $O/tick.sh C1 $i 2")
+    calls2+=("bash $O/tick.sh C2 $i 2")
+  done
+  session C1 "$(prompt_calls "${calls1[@]}")"; p1=$SESSION_PID
+  session C2 "$(prompt_calls "${calls2[@]}")"; p2=$SESSION_PID
+  wait "$p1" "$p2"; outside after-C
+
+  echo "sandbox-absent-path-check: phase D (a session killed mid-call)"
+  local n=0
+  session D "$(prompt_calls "bash $O/tick.sh D 1 90")"
+  until grep -q '"tool_use"' "$O/session-D.jsonl" 2>/dev/null || [ $n -ge 120 ]; do
+    sleep 1
+    n=$((n + 1))
+  done
+  sleep 5
+  kill -9 "$SESSION_PID" 2>/dev/null # the session's own process: `exec` made the subshell claude itself
+  wait "$SESSION_PID" 2>/dev/null
+  sleep 1; outside after-D-kill
+  sleep 10; outside after-D-10s
+
+  echo "sandbox-absent-path-check: done. Next: $SELF sweep, then, when the probe has torn down, $SELF after-teardown"
+}
+
+sweep() {
+  local rc out line
+  resolve
+  if [ ! -f "$O/manifest.absent" ] || [ ! -f "$O/entries.txt" ] || [ ! -f "$O/inspect.sh" ]; then
+    echo "sandbox-absent-path-check: no manifest under $O; run '$SELF run' first" >&2
+    exit 2
+  fi
+  hr_placeholder_sweep_var "$O/manifest.absent"
+  rc=$?
+  {
+    printf 'sweep\texit %s\n' "$rc"
+    if [ -n "$HR_PLACEHOLDER_REMOVED" ]; then
+      printf '%s\n' "$HR_PLACEHOLDER_REMOVED" | while IFS= read -r line; do printf 'removed\t%s\n' "$line"; done
+    fi
+    if [ -n "$HR_PLACEHOLDER_KEPT" ]; then
+      printf '%s\n' "$HR_PLACEHOLDER_KEPT" | while IFS= read -r line; do printf 'kept\t%s\n' "$line"; done
+    fi
+  } >"$O/sweep.txt"
+  outside after-sweep
+
+  out=$(hr_wrapper_main_of "$M/scripts" 2>&1)
+  rc=$?
+  printf 'hr_wrapper_main_of\texit %s\t%s\n' "$rc" "$out" >>"$O/sweep.txt"
+  HR_RUN_REFUSAL=""
+  hr_run_copy_check_var "$M" "$C"
+  rc=$?
+  printf 'hr_run_copy_check_var\texit %s\t%s\n' "$rc" "${HR_RUN_REFUSAL-}" >>"$O/sweep.txt"
+  git -C "$C" status --short --branch >/dev/null 2>&1
+  rc=$?
+  printf 'git status (clone)\texit %s\n' "$rc" >>"$O/sweep.txt"
+
+  echo "sandbox-absent-path-check: sweep recorded in $O/sweep.txt; when the probe has torn down, run: $SELF after-teardown"
+}
+
+# After teardown the clone is gone, so resolve() would refuse; the entry list from `run` still names it.
+after_teardown() {
+  C=/nonexistent
+  outside after-teardown
+  echo "sandbox-absent-path-check: recorded; now run: $SELF report"
+}
+
+report() {
+  python3 - "$O" <<'EOF'
+import json, os, sys, glob
+O = sys.argv[1]
+rows, cols, git, ns = {}, [], [], []
+def take(label, path, st):
+    if label not in cols: cols.append(label)
+    rows.setdefault(path, {})[label] = st
+order = ["before", "after-A", "after-B", "after-C", "after-D-kill", "after-D-10s", "after-sweep", "after-teardown"]
+for ph in order:
+    f = f"{O}/outside-{ph}.tsv"
+    if not os.path.exists(f): continue
+    for line in open(f):
+        parts = line.rstrip("\n").split("\t")
+        if parts[0] == "#": ns.append(f"{ph}: {parts[2]}")
+        elif parts[0] == "git": git.append(f"{ph}: {parts[2]} {parts[3]}")
+        elif len(parts) == 3: take(f"outside {ph}", parts[1], parts[2])
+calls = {}
+for f in sorted(glob.glob(f"{O}/session-*.jsonl")):
+    name = os.path.basename(f)[8:-6]
+    out = []
+    for line in open(f):
+        try: e = json.loads(line)
+        except ValueError: continue
+        for c in (e.get("message") or {}).get("content") or []:
+            if isinstance(c, dict) and c.get("type") == "tool_use":
+                out.append(["call", c["input"].get("command", "")])
+            if isinstance(c, dict) and c.get("type") == "tool_result":
+                t = c.get("content")
+                t = "".join(x.get("text", "") for x in t) if isinstance(t, list) else str(t)
+                out.append(["result" + (" ERROR" if c.get("is_error") else ""), t])
+                for l in t.splitlines():
+                    p = l.split("\t")
+                    if len(p) == 3 and p[0].endswith(("-sandboxed", "-excluded")): take(p[0], p[1], p[2])
+                    elif p[0] == "#" and len(p) == 3: ns.append(f"{p[1]}: {p[2]}")
+                    elif p[0] == "git" and len(p) == 4: git.append(f"{p[1]}: {p[2]} {p[3]}")
+        if e.get("type") == "result":
+            out.append(["end", f"{e.get('subtype')} denials={len(e.get('permission_denials') or [])}"])
+    calls[name] = out
+with open(f"{O}/report.md", "w") as r:
+    r.write("# Absent-path placeholders\n\n" + open(f"{O}/stamp.txt").read() + "\n")
+    r.write("## Per entry\n\n")
+    for p in rows:
+        r.write(f"### {p}\n\n")
+        for c in cols:
+            if c in rows[p]: r.write(f"- {c}: {rows[p][c]}\n")
+        r.write("\n")
+    r.write("## Sweep\n\n")
+    sw = f"{O}/sweep.txt"
+    if os.path.exists(sw):
+        r.write("".join("- " + l.rstrip("\n").replace("\t", " | ") + "\n" for l in open(sw) if l.strip()) + "\n")
+    else:
+        r.write("- not run\n\n")
+    r.write("## Mount namespaces\n\n" + "".join(f"- {x}\n" for x in ns) + "\n")
+    r.write("## git status\n\n" + "".join(f"- {x}\n" for x in git) + "\n")
+    r.write("## Sessions\n\n")
+    for n, out in calls.items():
+        r.write(f"### {n}\n\n")
+        for k, t in out:
+            r.write(f"- {k}: " + t.replace("\n", " / ")[:600] + "\n")
+        r.write("\n")
+print(f"{O}/report.md")
+EOF
+}
+
+case "$1" in
+  run) run ;;
+  sweep) sweep ;;
+  after-teardown) after_teardown ;;
+  report) report ;;
+esac

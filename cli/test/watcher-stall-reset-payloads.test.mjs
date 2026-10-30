@@ -99,7 +99,12 @@ import test from 'node:test';
 
 import { CLI_ENTRY, INIT_SCRIPTS_DIR, runBash, runGit } from './helpers/fixture.mjs';
 import { scaleBound } from './helpers/timing.mjs';
-import { createWatcherFixture, DEFAULT_KEEP_AWAKE_PROBE, DEFAULT_SANDBOX_PROBE } from './helpers/watcher.mjs';
+import {
+  createWatcherFixture,
+  DEFAULT_KEEP_AWAKE_PROBE,
+  DEFAULT_PLACEHOLDER_HOST_PROBE,
+  DEFAULT_SANDBOX_PROBE,
+} from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
 const REGISTRY_PATH = `${STATE_DIR}/autonomous_logs/registry.json`;
@@ -270,6 +275,7 @@ async function createStallFixture(t, { job = false, legacy = false } = {}) {
         '. "$1" status >/dev/null',
         `hr_sandbox_prereq_probe_var() {\n${DEFAULT_SANDBOX_PROBE}\n}`,
         `hr_keep_awake_probe_var() {\n${DEFAULT_KEEP_AWAKE_PROBE}\n}`,
+        `hr_placeholder_host_probe_var() {\n${DEFAULT_PLACEHOLDER_HOST_PROBE}\n}`,
         'tick',
         'until [ -e "$2" ]; do sleep 0.1; done',
         'touch -t 202001010000 "$3" "$4"',

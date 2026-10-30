@@ -255,7 +255,8 @@
 # lane's ceilings are the only environment values here that carry policy, because
 # the lane is machine-scoped and has no configuration key to carry them; each is
 # named where it is used. `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`,
-# `HOME` and `PWD` are also read, as location anchors only, and `PATH` is read by
+# `HOME`, `PWD` and, by `hr_job_absent_file` alone, which only job mode calls,
+# `RUNNER_TEMP` are also read, as location anchors only, and `PATH` is read by
 # `hr_path_with_fallbacks` alone — as that function's input, which it prints back
 # transformed and never assigns — beside the `command -v` of
 # `hr_sandbox_prereq_probe_var`, `hr_keep_awake_probe_var` and
@@ -745,6 +746,29 @@ hr_checkout_top_nogit() {
     d=${d%/*}
     [ -n "$d" ] || d=/
   done
+}
+
+# Print the main checkout holding <dir>, found past placeholder leftovers:
+# `hr_checkout_top_nogit <dir>`, then, while that checkout's `.git` is a
+# leftover (`hr_placeholder_leftover_var`) and it is not `/`,
+# `hr_checkout_top_nogit` of its parent. 0 only when the final `.git` is a real
+# directory, not a symbolic link; otherwise 1, printing nothing. Runs no git
+# and removes nothing.
+#
+# It exists because a leftover `<main>/<scriptsDir>/.git` hides the main
+# checkout from `hr_main_repo` and `hr_checkout_top_nogit` alike, so the
+# watcher's start-up sweep could not otherwise find the manifests that list it.
+# It carries no leftover test of its own.
+hr_main_checkout_past_leftovers_nogit() {
+  local top parent
+  top=$(hr_checkout_top_nogit "${1-}") || return 1
+  while [ "$top" != / ] && hr_placeholder_leftover_var "$top/.git"; do
+    parent=${top%/*}
+    [ -n "$parent" ] || parent=/
+    top=$(hr_checkout_top_nogit "$parent") || return 1
+  done
+  [ -d "$top/.git" ] && [ ! -L "$top/.git" ] || return 1
+  printf '%s\n' "$top"
 }
 
 # Print the canonical gitdir of the checkout at <top>: `<top>/.git` when that is
@@ -2196,6 +2220,24 @@ hr_keep_awake_probe_var() {
   return 0
 }
 
+# Answer whether this host's sandbox is bubblewrap: `HR_PLACEHOLDER_HOST` is `1`
+# on `linux` and `wsl2`, `0` otherwise, including when `uname -s` or `uname -r`
+# fails. Bubblewrap enforces a `denyWrite` entry for an absent path by planting a
+# placeholder there, which a killed session can leave on disk; Seatbelt plants
+# nothing (`docs/sandbox-verification.md` → §5 F9). Always 0. THE SEAM TESTS
+# OVERRIDE, as they override `hr_keep_awake_probe_var`.
+hr_placeholder_host_probe_var() {
+  local uname_s uname_r
+  HR_PLACEHOLDER_HOST=0
+  uname_s=$(uname -s 2>/dev/null) || return 0
+  uname_r=$(uname -r 2>/dev/null) || return 0
+  hr_host_kind_var "$uname_s" "$uname_r"
+  case "$HR_HOST_KIND" in
+    linux | wsl2) HR_PLACEHOLDER_HOST=1 ;;
+  esac
+  return 0
+}
+
 # Decide which hold a launch takes: <repo_root> (the MAIN checkout) and
 # <job_mode> (`1` inside a GitHub Actions job). Sets `HR_KEEP_AWAKE_MODE`
 # (`caffeinate`, `logind` or `off`), `HR_KEEP_AWAKE_REASON` (empty when
@@ -3106,6 +3148,39 @@ hr_registry_branches() {
   local file="${1-}"
   hr_registry_init "$file" || :
   jq -r '.runs | keys[]' "$file" 2>/dev/null
+}
+
+# hr_registry_live_count <file> [exclude_branch] — print how many runs of the
+# registry at <file>, <exclude_branch> left out, hold a slot: a record whose
+# `execution` is not `github-actions`, whose `status` is `running`, and whose
+# `pid` is non-empty and answers `kill -0`. Prints the integer only; returns 0.
+# THE ONE HOME of the live-run rule: the watcher's `running_count` and its
+# start-up sweep's gate both call it.
+#
+# `running` is the only status that holds a slot. The status filter is what
+# keeps a finished record's pid, once the OS reuses it, from holding one — a
+# terminal write drops the pid, but a session that exits before
+# `spawn_engine`'s parent writes `pid "$!"` leaves its own dead subshell's pid
+# on a terminal record. The filter cannot count out a run being launched: every
+# launch and resume path writes `status running` before `spawn_engine` writes
+# the pid, and the watcher runs each spawn to completion before its next
+# capacity read. A remote run holds no local slot: its job gates itself.
+hr_registry_live_count() {
+  local file="${1-}" exclude="${2-}" n=0 b pid
+  while IFS= read -r b; do
+    [ -n "$b" ] || continue
+    [ -z "$exclude" ] || [ "$b" != "$exclude" ] || continue
+    [ "$(hr_registry_get "$file" "$b" execution)" != "github-actions" ] || continue
+    [ "$(hr_registry_get "$file" "$b" status)" = "running" ] || continue
+    pid="$(hr_registry_get "$file" "$b" pid)"
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+      n=$((n + 1))
+    fi
+  done <<EOF
+$(hr_registry_branches "$file")
+EOF
+  printf '%s\n' "$n"
+  return 0
 }
 
 # hr_registry_peek <file> <branch> <key> — print `.runs[<branch>][<key>]`
@@ -5747,7 +5822,7 @@ EOF
 # this library reads neither, and reads no environment variable in place of a
 # configured value.
 #
-# THREE ARTIFACTS, ALL UNDER `hr_lane_dir` (created 0700, outside every
+# FOUR ARTIFACTS, ALL UNDER `hr_lane_dir` (created 0700, outside every
 # repository):
 #
 #   usage-state.json  the worst assessment any watcher has published:
@@ -5765,6 +5840,14 @@ EOF
 #                     `cleanup-merged-worktrees.sh` with its run's copy. This
 #                     library only names it (`hr_run_profile_file`); it writes
 #                     none.
+#   run-profiles/<slug>/<branch>.absent
+#                     the absent-path manifest beside it: one protected path per
+#                     line that did not exist before the session, so the sweep
+#                     may remove a placeholder left there. Named by
+#                     `hr_run_profile_absent_file`, listed by
+#                     `hr_run_profile_absent_files`, written by
+#                     `hr_placeholder_manifest_write`, read by
+#                     `hr_placeholder_sweep_var`, and removed with the profile.
 #
 # THE LOCK IS A DIRECTORY BECAUSE `mkdir` IS THE ATOMIC PRIMITIVE AVAILABLE HERE.
 # `flock(1)` is a util-linux program and is absent on macOS; the shell's own
@@ -5806,7 +5889,8 @@ EOF
 # THE THREE CEILINGS ARE THE ONLY ENVIRONMENT VALUES THAT CARRY POLICY HERE. The
 # file's other environment reads are location anchors, not policy:
 # `XDG_STATE_HOME` and `HOME` in `hr_lane_dir`, `XDG_CONFIG_HOME` and `HOME` in
-# `hr_machine_config_dir`, `XDG_CACHE_HOME` and `HOME` in `hr_cache_dir`, `PWD` in `hr_repo_root` and `hr_main_repo`. The
+# `hr_machine_config_dir`, `XDG_CACHE_HOME` and `HOME` in `hr_cache_dir`, `PWD` in `hr_repo_root` and `hr_main_repo`,
+# and `RUNNER_TEMP` in `hr_job_absent_file`, which only job mode calls. The
 # ceilings are machine-scoped policy with no configuration key:
 #
 #   HR_LANE_STATE_MAX_AGE_SECS   21600  when a PUBLISHED RECORD THAT NAMED NO
@@ -5858,16 +5942,198 @@ hr_lane_lock_dir() {
 # hr_run_profile_file <repo slug> <branch> — print
 # `<hr_lane_dir>/run-profiles/<slug>/<hr_sanitize_branch branch>.json`; return
 # 1, printing nothing, when `hr_lane_dir` cannot anchor or an argument is
-# empty. Creates nothing. Its two callers: `autonomous-watcher.sh`'s
-# `run_profile_render`, which writes the file and makes its directory, and
+# empty. Creates nothing. Its callers: `autonomous-watcher.sh`'s
+# `run_profile_render`, which writes the file and makes its directory,
 # `cleanup-merged-worktrees.sh`'s `profile_remove`, which deletes it after the
-# run's copy is removed.
+# run's copy is removed, and `hr_run_profile_absent_file` below.
 hr_run_profile_file() {
   local slug="${1-}" dir safe
   [ -n "$slug" ] || return 1
   safe=$(hr_sanitize_branch "${2-}") || return 1
   dir=$(hr_lane_dir) || return 1
   printf '%s/run-profiles/%s/%s.json\n' "$dir" "$slug" "$safe"
+}
+
+# hr_run_profile_absent_file <repo slug> <branch> — print `hr_run_profile_file`'s
+# path with `.json` replaced by `.absent`; return 1, printing nothing, whenever
+# `hr_run_profile_file` refuses. Creates nothing.
+hr_run_profile_absent_file() {
+  local file
+  file=$(hr_run_profile_file "${1-}" "${2-}") || return 1
+  printf '%s.absent\n' "${file%.json}"
+}
+
+# hr_absent_manifests_at <pattern> — THE ONE HOME of the manifest listing:
+# print every regular, non-link file matching <pattern>, the path a manifest
+# namer prints for the branch `*`, split at its last `/`, one per line. 0,
+# printing nothing for an absent directory; 1 for an empty <pattern>. Creates
+# nothing. Its callers: `hr_run_profile_absent_files` and `hr_job_absent_files`.
+hr_absent_manifests_at() {
+  local pattern="${1-}" dir leaf m
+  [ -n "$pattern" ] || return 1
+  dir="${pattern%/*}"
+  leaf="${pattern##*/}"
+  [ -d "$dir" ] || return 0
+  # `$leaf` is unquoted so it globs; it holds no whitespace.
+  for m in "$dir"/$leaf; do
+    [ -f "$m" ] && [ ! -L "$m" ] || continue
+    printf '%s\n' "$m"
+  done
+  return 0
+}
+
+# hr_run_profile_absent_files <repo slug> — print every existing manifest
+# `hr_run_profile_absent_file` names for <slug> (`hr_absent_manifests_at`); 1,
+# printing nothing, whenever `hr_run_profile_absent_file` refuses. Its callers:
+# `autonomous-watcher.sh`'s `placeholder_manifests_var`, for
+# `placeholder_start_recover` and `placeholder_sweep_pass`, outside job mode.
+hr_run_profile_absent_files() {
+  local pattern
+  pattern=$(hr_run_profile_absent_file "${1-}" '*') || return 1
+  hr_absent_manifests_at "$pattern"
+}
+
+# hr_job_absent_file <branch> — job mode's manifest:
+# `$RUNNER_TEMP/autonomous-sdlc-harness-placeholders/<hr_sanitize_branch branch>.absent`.
+# `RUNNER_TEMP` lasts the whole job, post-session steps included, and lies
+# outside every root the job's session may write; the machine lane is off in a
+# job. 1, printing nothing, when `RUNNER_TEMP` is empty or relative or the
+# branch does not sanitize. Creates nothing. The directory must stay a sibling
+# of `$RUNNER_TEMP/harness-marketplace`, a session `--add-dir` root.
+hr_job_absent_file() {
+  local base="${RUNNER_TEMP-}" safe
+  case "$base" in /*) ;; *) return 1 ;; esac
+  safe=$(hr_sanitize_branch "${1-}") || return 1
+  printf '%s/autonomous-sdlc-harness-placeholders/%s.absent\n' "${base%/}" "$safe"
+}
+
+# hr_job_absent_files — print every existing manifest `hr_job_absent_file`
+# names (`hr_absent_manifests_at`); 1, printing nothing, whenever
+# `hr_job_absent_file` refuses. Its caller: `autonomous-watcher.sh`'s
+# `placeholder_manifests_var`, in job mode.
+hr_job_absent_files() {
+  local pattern
+  pattern=$(hr_job_absent_file '*') || return 1
+  hr_absent_manifests_at "$pattern"
+}
+
+# hr_placeholder_manifest_write <manifest> <path>... — write <manifest> with one
+# line per <path> that neither exists nor is a symbolic link now; a path
+# carrying a newline is skipped. Written through a mode-600 temp file in the
+# manifest's directory (created 0700) plus `mv -f`, so a reader sees the old
+# manifest or the new one. 1 on any failed step, leaving an earlier manifest
+# untouched; 0 otherwise.
+hr_placeholder_manifest_write() {
+  local manifest="${1-}" dir tmp p nl='
+'
+  [ -n "$manifest" ] || return 1
+  shift
+  case "$manifest" in
+    */*) dir="${manifest%/*}" ;;
+    *) dir="." ;;
+  esac
+  [ -n "$dir" ] || dir="/"
+  (umask 077 && mkdir -p "$dir") 2>/dev/null || return 1
+  chmod 700 "$dir" 2>/dev/null || return 1
+  tmp=$(mktemp "$dir/.absent.XXXXXX" 2>/dev/null) || return 1
+  if ! chmod 600 "$tmp" 2>/dev/null; then
+    rm -f -- "$tmp"
+    return 1
+  fi
+  if ! (
+    for p in "$@"; do
+      case "$p" in *"$nl"*) continue ;; esac
+      if [ ! -e "$p" ] && [ ! -L "$p" ]; then printf '%s\n' "$p" || exit 1; fi
+    done
+  ) >"$tmp" 2>/dev/null; then
+    rm -f -- "$tmp"
+    return 1
+  fi
+  if ! mv -f "$tmp" "$manifest" 2>/dev/null; then
+    rm -f -- "$tmp"
+    return 1
+  fi
+  return 0
+}
+
+# ---------------------------------------------------------------------------
+# PLACEHOLDER LEFTOVERS — on a bubblewrap host, a session killed mid-call can
+# leave each absent `denyWrite` path it mounted as a read-only empty file on
+# disk (`docs/sandbox-verification.md` → §5 F9). The sweep removes such a file,
+# from outside the sandbox, only at a path a manifest recorded as absent before
+# the session, and only when `hr_placeholder_leftover_var` says it is one.
+#
+# A SESSION-PLANTED FILE WITH CONTENT IS NEVER REMOVED, so the clone check
+# still refuses it. Neither function sets a shell option or logs; the caller
+# owns every line.
+# ---------------------------------------------------------------------------
+
+# hr_placeholder_leftover_var <path> — THE ONE HOME of the "is this a
+# placeholder leftover" test. 0 when <path> is a regular file and not a
+# symbolic link, 0 bytes, carries no write bit for user, group or other, and is
+# owned by the effective user; `HR_PLACEHOLDER_REASON` is then empty. Otherwise 1,
+# with `HR_PLACEHOLDER_REASON` the first failed test's reason: `not a regular
+# file`, `has content`, `writable` or `not owned by this user`. Removes nothing.
+# The write bits are read with `find -perm`, which BSD and GNU both take, because
+# `stat`'s format flags differ between them; a `find` that fails reads as
+# `writable`. Its callers: `hr_placeholder_sweep_var` below, and the no-git
+# main-checkout walk.
+hr_placeholder_leftover_var() {
+  local path="${1-}" probe writable
+  HR_PLACEHOLDER_REASON=""
+  if [ -z "$path" ] || [ ! -f "$path" ] || [ -L "$path" ]; then
+    HR_PLACEHOLDER_REASON="not a regular file"
+    return 1
+  fi
+  if [ -s "$path" ]; then
+    HR_PLACEHOLDER_REASON="has content"
+    return 1
+  fi
+  probe="$path"
+  case "$probe" in -*) probe="./$probe" ;; esac
+  if ! writable=$(find "$probe" -prune \( -perm -u+w -o -perm -g+w -o -perm -o+w \) -print </dev/null 2>/dev/null) ||
+    [ -n "$writable" ]; then
+    HR_PLACEHOLDER_REASON="writable"
+    return 1
+  fi
+  if [ ! -O "$path" ]; then
+    HR_PLACEHOLDER_REASON="not owned by this user"
+    return 1
+  fi
+  return 0
+}
+
+# hr_placeholder_sweep_var <manifest>... — for each line of each readable
+# manifest naming a path that exists (`-e` or `-L`), remove it with a
+# non-recursive `rm -f` only when `hr_placeholder_leftover_var` answers 0. Sets
+# `HR_PLACEHOLDER_REMOVED` (the removed paths) and `HR_PLACEHOLDER_KEPT`
+# (`<path>: <reason>` for each listed path that exists and was not removed), one
+# per line; an absent path is in neither. Never touches a path no manifest
+# lists. 0, or 1 when no manifest argument was readable.
+hr_placeholder_sweep_var() {
+  local m p readable=0 nl='
+'
+  HR_PLACEHOLDER_REMOVED=""
+  HR_PLACEHOLDER_KEPT=""
+  for m in "$@"; do
+    [ -n "$m" ] && [ -f "$m" ] && [ -r "$m" ] || continue
+    readable=1
+    while IFS= read -r p || [ -n "$p" ]; do
+      [ -n "$p" ] || continue
+      [ -e "$p" ] || [ -L "$p" ] || continue
+      if ! hr_placeholder_leftover_var "$p"; then
+        HR_PLACEHOLDER_KEPT="$HR_PLACEHOLDER_KEPT$p: $HR_PLACEHOLDER_REASON$nl"
+      elif rm -f -- "$p" 2>/dev/null && [ ! -e "$p" ] && [ ! -L "$p" ]; then
+        HR_PLACEHOLDER_REMOVED="$HR_PLACEHOLDER_REMOVED$p$nl"
+      else
+        HR_PLACEHOLDER_KEPT="$HR_PLACEHOLDER_KEPT$p: could not be removed$nl"
+      fi
+    done <"$m"
+  done
+  HR_PLACEHOLDER_REMOVED="${HR_PLACEHOLDER_REMOVED%"$nl"}"
+  HR_PLACEHOLDER_KEPT="${HR_PLACEHOLDER_KEPT%"$nl"}"
+  [ "$readable" -eq 1 ] || return 1
+  return 0
 }
 
 # Print the lane directory, creating it 0700 when it is not there. Return 1 —

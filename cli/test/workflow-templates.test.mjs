@@ -501,6 +501,22 @@ test('continue runs unless cancelled; the upload and the final push always run',
   assert.match(ifOf(stepCarrying('push-branch.sh')), /always\(\)/);
 });
 
+// The rule: a job whose watcher was killed with its session still hands `Push the branch` a
+// checkout with no recorded placeholder leftover, and the sweep never fails the job.
+test('the placeholder sweep runs under always(), never failing the job, directly before Push the branch', () => {
+  const { list, at } = runJobSteps();
+  const sweep = at('Sweep the sandbox placeholders');
+  assert.equal(sweep + 1, at('Push the branch'), 'the sweep is the step immediately before the push');
+  const step = list[sweep];
+  const cond = ifOf(step.join('\n'));
+  assert.ok(cond.includes('always()'), cond);
+  assert.ok(cond.includes("env.SCRIPTS_DIR != ''"), cond);
+  assert.equal(stepKey(step, 'continue-on-error'), 'true');
+  assert.deepEqual(runBodies(step), [
+    'HARNESS_JOB_MODE=1 bash "$SCRIPTS_DIR/autonomous-watcher.sh" job-sweep "$HARNESS_INPUT_BRANCH"',
+  ]);
+});
+
 test('the uploaded artifact is the one remote-run.sh downloads: STATE_ARTIFACT_NAME in both mirrors', () => {
   const upload = stepCarrying('actions/upload-artifact');
   assert.match(upload, new RegExp(`^\\s*name: ${STATE_ARTIFACT_NAME}$`, 'm'));

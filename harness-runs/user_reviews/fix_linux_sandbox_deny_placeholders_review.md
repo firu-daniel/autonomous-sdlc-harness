@@ -1,0 +1,8 @@
+1. Job mode is left out of the placeholder recovery, and it should be covered. The branch skips job mode in the sweep, the launch check and the start-up recovery (Task 4, Task 11), and Task 9 documents the gap: a job-mode stall-watchdog kill leaves the job checkout's absent `denyWrite` paths behind as read-only empty files, and the leftover `<scriptsDir>/.git` makes `commit-on-branch.sh` in the resumed session and the job's post-session `push-branch.sh` refuse for the rest of that job. That means the fix does not reach remote CI jobs, which are where adopters run on Linux. I want the recovery extended to job mode, so a stall kill inside a job no longer breaks the rest of that job.
+
+Suggestions for the fix plan to verify against the code, not constraints — keep what holds, replace what does not, and say why:
+- Write the job's manifest somewhere a job can write, for example under `$RUNNER_TEMP`, since the machine state directory is off in job mode.
+- Run the sweep in the job-mode stall watchdog's KILL tier, before its reset and resume, and consider whether the start of a job's session or the post-session `push-branch.sh` step needs the same sweep.
+- Check whether the launch check (the planted `commondir` / `config.worktree` / `http-alternates` refusal before launch and resume) applies in job mode, where the run copy is the main checkout and has no clone trust files of its own.
+- Add a job-mode case to `watcher-placeholder-host.test.mjs`.
+- Rewrite Task 9's **Job mode** item in `docs/cli.md` §6 and the story index's `## Context` bullet that lists job mode as a goal case not met, so they describe what the branch then does.
