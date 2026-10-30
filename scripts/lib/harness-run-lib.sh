@@ -255,7 +255,8 @@
 # lane's ceilings are the only environment values here that carry policy, because
 # the lane is machine-scoped and has no configuration key to carry them; each is
 # named where it is used. `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`,
-# `HOME` and `PWD` are also read, as location anchors only, and `PATH` is read by
+# `HOME`, `PWD` and, by `hr_job_absent_file` alone, which only job mode calls,
+# `RUNNER_TEMP` are also read, as location anchors only, and `PATH` is read by
 # `hr_path_with_fallbacks` alone — as that function's input, which it prints back
 # transformed and never assigns — beside the `command -v` of
 # `hr_sandbox_prereq_probe_var`, `hr_keep_awake_probe_var` and
@@ -5888,7 +5889,8 @@ EOF
 # THE THREE CEILINGS ARE THE ONLY ENVIRONMENT VALUES THAT CARRY POLICY HERE. The
 # file's other environment reads are location anchors, not policy:
 # `XDG_STATE_HOME` and `HOME` in `hr_lane_dir`, `XDG_CONFIG_HOME` and `HOME` in
-# `hr_machine_config_dir`, `XDG_CACHE_HOME` and `HOME` in `hr_cache_dir`, `PWD` in `hr_repo_root` and `hr_main_repo`. The
+# `hr_machine_config_dir`, `XDG_CACHE_HOME` and `HOME` in `hr_cache_dir`, `PWD` in `hr_repo_root` and `hr_main_repo`,
+# and `RUNNER_TEMP` in `hr_job_absent_file`, which only job mode calls. The
 # ceilings are machine-scoped policy with no configuration key:
 #
 #   HR_LANE_STATE_MAX_AGE_SECS   21600  when a PUBLISHED RECORD THAT NAMED NO
@@ -5961,17 +5963,14 @@ hr_run_profile_absent_file() {
   printf '%s.absent\n' "${file%.json}"
 }
 
-# hr_run_profile_absent_files <repo slug> — print every existing manifest
-# `hr_run_profile_absent_file` names for <slug>, one per line: a regular file,
-# never a symbolic link. 0, printing nothing for an absent directory; 1,
-# printing nothing, whenever `hr_run_profile_absent_file` refuses. Creates
-# nothing. The directory and the suffix are that function's answer for the
-# branch `*`, split at its last `/`, so neither is spelled here. Its callers:
-# `autonomous-watcher.sh`'s `placeholder_manifests_var`, for
-# `placeholder_start_recover` and `placeholder_sweep_pass`.
-hr_run_profile_absent_files() {
-  local pattern dir leaf m
-  pattern=$(hr_run_profile_absent_file "${1-}" '*') || return 1
+# hr_absent_manifests_at <pattern> — THE ONE HOME of the manifest listing:
+# print every regular, non-link file matching <pattern>, the path a manifest
+# namer prints for the branch `*`, split at its last `/`, one per line. 0,
+# printing nothing for an absent directory; 1 for an empty <pattern>. Creates
+# nothing. Its callers: `hr_run_profile_absent_files` and `hr_job_absent_files`.
+hr_absent_manifests_at() {
+  local pattern="${1-}" dir leaf m
+  [ -n "$pattern" ] || return 1
   dir="${pattern%/*}"
   leaf="${pattern##*/}"
   [ -d "$dir" ] || return 0
@@ -5981,6 +5980,41 @@ hr_run_profile_absent_files() {
     printf '%s\n' "$m"
   done
   return 0
+}
+
+# hr_run_profile_absent_files <repo slug> — print every existing manifest
+# `hr_run_profile_absent_file` names for <slug> (`hr_absent_manifests_at`); 1,
+# printing nothing, whenever `hr_run_profile_absent_file` refuses. Its callers:
+# `autonomous-watcher.sh`'s `placeholder_manifests_var`, for
+# `placeholder_start_recover` and `placeholder_sweep_pass`, outside job mode.
+hr_run_profile_absent_files() {
+  local pattern
+  pattern=$(hr_run_profile_absent_file "${1-}" '*') || return 1
+  hr_absent_manifests_at "$pattern"
+}
+
+# hr_job_absent_file <branch> — job mode's manifest:
+# `$RUNNER_TEMP/autonomous-sdlc-harness-placeholders/<hr_sanitize_branch branch>.absent`.
+# `RUNNER_TEMP` lasts the whole job, post-session steps included, and lies
+# outside every root the job's session may write; the machine lane is off in a
+# job. 1, printing nothing, when `RUNNER_TEMP` is empty or relative or the
+# branch does not sanitize. Creates nothing. The directory must stay a sibling
+# of `$RUNNER_TEMP/harness-marketplace`, a session `--add-dir` root.
+hr_job_absent_file() {
+  local base="${RUNNER_TEMP-}" safe
+  case "$base" in /*) ;; *) return 1 ;; esac
+  safe=$(hr_sanitize_branch "${1-}") || return 1
+  printf '%s/autonomous-sdlc-harness-placeholders/%s.absent\n' "${base%/}" "$safe"
+}
+
+# hr_job_absent_files — print every existing manifest `hr_job_absent_file`
+# names (`hr_absent_manifests_at`); 1, printing nothing, whenever
+# `hr_job_absent_file` refuses. Its caller: `autonomous-watcher.sh`'s
+# `placeholder_manifests_var`, in job mode.
+hr_job_absent_files() {
+  local pattern
+  pattern=$(hr_job_absent_file '*') || return 1
+  hr_absent_manifests_at "$pattern"
 }
 
 # hr_placeholder_manifest_write <manifest> <path>... — write <manifest> with one
