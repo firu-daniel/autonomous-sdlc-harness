@@ -39,3 +39,6 @@ to
 ```
 
 Then copy the edited template byte for byte over `scripts/lib/harness-run-lib.sh`, so the self-adopted copy stays identical. This is a comment-only change, so it needs no test run.
+
+- **Deviations from plan:** Implemented on a `cli`-layer dispatch (path `cli`), so only `cli/templates/scripts/lib/harness-run-lib.sh` was edited. The copy over `scripts/lib/harness-run-lib.sh` falls under the `general` layer's path and was not made; the two files now differ only in these two headers until a `general`-layer dispatch copies the template over the self-adopted copy byte for byte. Callers verified with `git grep -n -e hr_deny_glob_expand -e hr_profile_deny_paths -- '*.sh'`: the `autonomous-watcher.sh` call to `hr_deny_glob_expand` is inside `run_profile_entries`, and its call to `hr_profile_deny_paths` is inside `spawn_engine`.
+  - `general`-layer dispatch: `cp` of the template over `scripts/lib/harness-run-lib.sh` was refused by the tool layer, so the same two header edits were applied with the Edit tool; `git diff --no-index --stat scripts/lib/harness-run-lib.sh cli/templates/scripts/lib/harness-run-lib.sh` then printed nothing and exited 0, so the two files are identical.

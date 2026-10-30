@@ -6072,8 +6072,7 @@ hr_placeholder_manifest_write() {
 # literal. 0, also on no match; 2, printing nothing, for any other shape; 3,
 # printing nothing, under `noglob`, which this library may not turn off.
 # Prints only; creates, removes and logs nothing. Its callers:
-# `hr_profile_deny_paths`, `autonomous-watcher.sh` and this repository's
-# `scripts/sandbox-absent-path-check.sh`.
+# `hr_profile_deny_paths` and `autonomous-watcher.sh` → `run_profile_entries`.
 hr_deny_glob_expand() {
   local entry="${1-}" exclude="${2-}" head suffix parent stem d nl='
 '
@@ -6102,8 +6101,8 @@ hr_deny_glob_expand() {
 # carrying a newline is dropped. Tests no existence and keeps repeats, which
 # `hr_placeholder_manifest_write` handles. 0; 1, printing nothing, when
 # <profile> is unreadable or that value is not a list. Its callers:
-# `autonomous-watcher.sh` and this repository's
-# `scripts/sandbox-absent-path-check.sh`.
+# `autonomous-watcher.sh` → `spawn_engine`, and, in the harness's own source
+# repository only, `scripts/sandbox-absent-path-check.sh`.
 hr_profile_deny_paths() {
   local profile="${1-}" list e
   [ -n "$profile" ] && [ -f "$profile" ] && [ -r "$profile" ] || return 1
