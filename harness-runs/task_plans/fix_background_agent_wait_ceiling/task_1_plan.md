@@ -11,7 +11,7 @@
 
 **Work:**
 
-- [ ] Add `hr_run_ledger_state <state_abs> <branch> <engine>` under the library's `# The flow-progress ledger` section. `<state_abs>` is the run copy's absolute state directory, and an empty `<engine>` means `task`. It prints one line, `<state> <detail>`, with `<state>` one of `finished`, `unfinished`, `absent` or `unreadable`, and returns 0, 1, 2 or 3 respectively. The `<detail>` is one short human-readable clause for a log line. It sets no shell option and writes nothing (`.claude/context/conventions.md` → `## Shell assets`: a sourced library sets no shell options). It stays on the bash 3.2 floor: parameter expansion and `case`, no `[[ =~ ]]`, no `mapfile`.
+- [x] Add `hr_run_ledger_state <state_abs> <branch> <engine>` under the library's `# The flow-progress ledger` section. `<state_abs>` is the run copy's absolute state directory, and an empty `<engine>` means `task`. It prints one line, `<state> <detail>`, with `<state>` one of `finished`, `unfinished`, `absent` or `unreadable`, and returns 0, 1, 2 or 3 respectively. The `<detail>` is one short human-readable clause for a log line. It sets no shell option and writes nothing (`.claude/context/conventions.md` → `## Shell assets`: a sourced library sets no shell options). It stays on the bash 3.2 floor: parameter expansion and `case`, no `[[ =~ ]]`, no `mapfile`.
   - **`task` / `user_review`:** the file is `<state_abs>/flow_progress/<branch>_progress.md`.
     - Not a regular file → `absent`.
     - Present but not readable, or `hr_ledger_phases` returns 1 on it → `unreadable`.
@@ -24,9 +24,9 @@
     - Any `- [ ] ` entry → `unfinished`. Otherwise → `finished`.
     - The `<detail>` is `checklist <x-count>/<entry-count>`.
   - **Any other `<engine>`** → `unreadable`, `<detail>` naming it.
-- [ ] Declare the new mirror in the library header, beside the existing `MIRROR OF plugin/instructions/autonomous_pause_and_ledger.md → ### 1.3 Templates` paragraph. `hr_run_ledger_state` also keys on the docs checklist's entry-box form, owned by `plugin/instructions/docs_orchestration_instructions_autonomous.md` → `## Checklist entry format (parse contract)`, and on the user-review file name `<branch>_review[_<n>].md`. A change to either there is an edit here.
-- [ ] In `hr_remote_status_write`, add `unfinished` to the accepted `pause_reason` set (`usage|budget|user|overload|unfinished`). Add it to the `status.json` comment's `pause_reason` line too: *`unfinished` — a session that exited 0 before its ledger finished*. `killed` and `expired` stay registry-only.
-- [ ] In `cli/test/ledger-phases.test.mjs`, add a `hr_run_ledger_state` group using the file's own `ledger(...)` builder, `TASK_IDS`, `REVIEW_IDS` and `allExcept`. Write each case's state tree under the fixture's temp directory.
+- [x] Declare the new mirror in the library header, beside the existing `MIRROR OF plugin/instructions/autonomous_pause_and_ledger.md → ### 1.3 Templates` paragraph. `hr_run_ledger_state` also keys on the docs checklist's entry-box form, owned by `plugin/instructions/docs_orchestration_instructions_autonomous.md` → `## Checklist entry format (parse contract)`, and on the user-review file name `<branch>_review[_<n>].md`. A change to either there is an edit here.
+- [x] In `hr_remote_status_write`, add `unfinished` to the accepted `pause_reason` set (`usage|budget|user|overload|unfinished`). Add it to the `status.json` comment's `pause_reason` line too: *`unfinished` — a session that exited 0 before its ledger finished*. `killed` and `expired` stay registry-only.
+- [x] In `cli/test/ledger-phases.test.mjs`, add a `hr_run_ledger_state` group using the file's own `ledger(...)` builder, `TASK_IDS`, `REVIEW_IDS` and `allExcept`. Write each case's state tree under the fixture's temp directory.
   - A task ledger all `[x]` / `[-]` → `finished`, exit 0.
   - The same ledger with `D` left `[ ]` → `unfinished`, exit 1, the detail carrying the phases line.
   - No file → `absent`, exit 2. A file whose first line is not a ledger header → `unreadable`, exit 3.
@@ -46,3 +46,4 @@
 - `npm test --workspace cli -- test/ledger-phases.test.mjs` passes, the existing `hr_ledger_phases` cases included, unchanged.
 - `bash -n cli/templates/scripts/lib/harness-run-lib.sh` exits 0.
 - `git grep -n 'usage|budget|user|overload' -- cli/templates/scripts/lib/harness-run-lib.sh` shows the `case` line now ending in `|unfinished`, and no other vocabulary line was added elsewhere.
+  - **Deviations from plan:** The `bash -n cli/templates/scripts/lib/harness-run-lib.sh` bullet was not executed: the call was refused by the tool layer (`Permission to use Bash has been denied because Claude Code is running in don't ask mode`). The claim rests instead on `bash scripts/typecheck.sh`, whose `check-shell-parse` leg reported `97 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`, and on `ledger-phases.test.mjs` sourcing the written library and passing (27 tests, 0 fail). The test group also carries two cases the plan did not list (an empty engine reads as `task`; an unknown engine is `unreadable`), and the header's mutation list adds the all-phases, open-box, no-entry and non-ledger mutations; all eight mutations were run red against scratch copies via `bash scripts/scratch-run.sh harness-runs/scratch/mutate_run_ledger_state.mjs`, the tracked template untouched.
