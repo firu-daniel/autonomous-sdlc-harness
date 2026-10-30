@@ -1705,7 +1705,7 @@ job_report() {
 #                       PARK_LOOP_CLEAR and returns it to `parked`. `paused`
 #                       is reached by a PAUSE honoured or by a zero exit over
 #                       an unfinished ledger (`pause_reason` below)
-#   log_path           the central log this run appends to
+#   log_path            the central log this run appends to
 #   engine              task | user_review | docs — which engine command it runs,
 #                       re-read on resume so the right one is re-launched
 #   started_at          when it was launched
