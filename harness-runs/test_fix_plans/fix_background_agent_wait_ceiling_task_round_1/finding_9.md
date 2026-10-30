@@ -23,3 +23,9 @@ This case plants a `.git/commondir` in a placeholder-host clone and asserts the 
 - [ ] Take the failing assertion of this test and place it in one of the two arms below.
 - [ ] **A time bound exceeded, or a watcher pass killed by its bound**, with every value the test asserts otherwise as expected: the branch has no defect here. Leave the code and the test unchanged — no bound raised, no assertion loosened, no case skipped.
 - [ ] **An assertion on a value the branch changed** — the `classify: … has no readable ledger` line, `pause_reason` / `pause_note_stale` (including the pause-resume clause `spawn_engine` now builds outside job mode), the session's environment, or `log_stopped_background_tasks` running before `record_run_analytics`: change `cli/templates/scripts/autonomous-watcher.sh` (and `cli/templates/scripts/lib/harness-run-lib.sh` where the value comes from `hr_run_ledger_state`) so the asserted behaviour holds again, without undoing the wait-ceiling export or the ledger split, and carry the identical edit into `scripts/autonomous-watcher.sh` / `scripts/lib/harness-run-lib.sh`. Leave the test file unchanged.
+
+## Already passing
+
+- **(a)** Named test `a planted .git/commondir in the clone refuses the resume`; file run: `cli/test/watcher-placeholder-host.test.mjs`.
+- **(b)** Command: `npm test --workspace cli -- test/watcher-placeholder-host.test.mjs` (from the repository root, foreground). Named test result: `ok 1 - a planted .git/commondir in the clone refuses the resume` (duration_ms 18013; re-run on a later dispatch: duration_ms 21827). File summary, both runs: `# tests 29`, `# pass 29`, `# fail 0`, `# cancelled 0`. No failing assertion reproduced, so the failure falls in the first Fix arm (a time bound on a loaded host); no bound raised, no assertion loosened.
+- **(c)** No code file was edited; this record is the only write.
