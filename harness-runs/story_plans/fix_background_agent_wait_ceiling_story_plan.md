@@ -42,7 +42,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_background_agent_wait_ce
 5. [x] **Task 5** — Show a paused run's reason and its way on in `/autonomous-sdlc-harness:branch-status` _(layer: plugin)_ _(points: 10)_
 6. [x] **Task 6** — Correct the "watcher stamps the run `completed`" consequence clause in §2.0, §2.5, the five autonomous forks and the plan core's G.1 _(layer: plugin)_ _(points: 10)_
 7. [x] **Task 7** — Document the wait ceiling, the ledger check and `unfinished` in `docs/watcher.md` and `ARCHITECTURE.md` _(layer: general)_ _(points: 15)_
-8. [ ] **Task 8** — Document job mode's `unfinished` arm in `docs/remote-execution.md` _(layer: general)_ _(points: 10)_
+8. [x] **Task 8** — Document job mode's `unfinished` arm in `docs/remote-execution.md` _(layer: general)_ _(points: 10)_
 9. [ ] **Task 9** — Refresh the self-adopted `scripts/` copies from their templates _(layer: general)_ _(points: 5)_
 
 ## Scope register
