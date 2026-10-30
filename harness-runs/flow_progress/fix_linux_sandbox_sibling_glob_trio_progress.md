@@ -7,7 +7,7 @@ Source: harness-runs/task_prompts/fix_linux_sandbox_sibling_glob_trio_task_promp
 - remote-skipped: none
 
 ## Fix planning
-- [ ] R1. Fix plan written & converged (parity + architecture gates PASS)
+- [x] R1. Fix plan written & converged (parity + architecture gates PASS)
 - [ ] R2. Fix plan + source review committed
 ## Fixing
 - [ ] R3. All fix-plan findings implemented (fix-plan index all [x])
