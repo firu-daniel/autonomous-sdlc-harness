@@ -23,3 +23,9 @@ This case makes one zero-exit launch under the WSL2 probe and asserts exactly on
 - [ ] Take the failing assertion of this test and place it in one of the two arms below.
 - [ ] **A time bound exceeded, or the watcher pass killed by its bound**, with every value the test asserts otherwise as expected: the branch has no defect here. Leave the code and the test unchanged — no bound raised, no assertion loosened, no case skipped.
 - [ ] **An assertion on a value the branch changed** — the `classify: … has no readable ledger` line, `pause_reason` / `pause_note_stale`, the session's environment, or `log_stopped_background_tasks` running before `record_run_analytics`: change `cli/templates/scripts/autonomous-watcher.sh` (and `cli/templates/scripts/lib/harness-run-lib.sh` where the value comes from `hr_run_ledger_state`) so the asserted behaviour holds again, without undoing the wait-ceiling export or the ledger split, and carry the identical edit into `scripts/autonomous-watcher.sh` / `scripts/lib/harness-run-lib.sh`. Leave the test file unchanged.
+
+## Already passing
+
+- **(a)** Named test `(j) WSL2: one not-holding line naming WSL2, and no tool invoked`; file run: `cli/test/watcher-keep-awake.test.mjs`.
+- **(b)** `npm test --workspace cli -- test/watcher-keep-awake.test.mjs`, from the repository root: the named test reported `ok 8 - (j) WSL2: one not-holding line naming WSL2, and no tool invoked` (`duration_ms: 15029.527`; a re-run in the re-dispatch reported the same `ok 8` line at `duration_ms: 16535.227167`, file `duration_ms 147419.090083`); file totals, both runs, `# tests 9`, `# pass 9`, `# fail 0`, `# cancelled 0`. The Fix section's "time bound exceeded" arm applies: no assertion failed in this run.
+- **(c)** No code file was edited; this record is the only write.
