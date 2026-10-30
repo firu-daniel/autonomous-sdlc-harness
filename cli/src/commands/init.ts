@@ -2509,7 +2509,7 @@ async function run(ctx: CommandContext): Promise<number> {
   warnings.push(...permissions.warnings);
   notes.push(...permissions.notes);
 
-  const settings = writeProjectSettings({ repoRoot, plan, flags });
+  const settings = writeProjectSettings({ repoRoot, plan, config: effective, flags });
   warnings.push(...settings.warnings);
   notes.push(...settings.notes);
 

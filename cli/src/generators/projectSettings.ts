@@ -53,18 +53,32 @@
  * encoded the same shape and changed with it. `doctor` no longer holds a copy:
  * {@link marketplaceEntryDefect} is what it asks, so the next correction here reaches it.
  *
- * Nothing here touches the filesystem beyond reading this package's own manifest: the generator
- * plans, and `init` applies the plan once.
+ * ## A third, independent key: the change-request fence's allow rule
+ *
+ * {@link PERMISSIONS_KEY}.{@link ALLOW_KEY} carries {@link taskOfferCheckRule} — the exact rule the
+ * fence's bare opt-out check matches, built by its one producer rather than here. It is outside the
+ * written-together rule above: it neither needs nor completes the plugin keys. It lives in this
+ * committed file because every teammate's interactive session runs the fence, and an unallowed
+ * check prompts mid-fence; the unattended profile is machine-local and the fence's tool clause
+ * already excludes unattended runs, so it gets no allow entry. Under choice 3 an existing `allow`
+ * list is a leaf and is never edited: where one lacks the rule — or `permissions` / its `allow` is
+ * of another type — {@link writeProjectSettings} warns, naming the rule to add by hand.
+ *
+ * The generator reads this package's own manifest and the adopter's existing `.claude/settings.json`
+ * — the latter only to decide whether to warn about an existing `permissions.allow` list — and
+ * mutates nothing: the plan stays a `merge-json` request that `init` applies once.
  */
 
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
+import type { HarnessConfig } from '../config/model.js';
 import { HarnessError, internal } from '../core/errors.js';
-import { isJsonObject, type JsonObject, type JsonValue } from '../core/json.js';
+import { isJsonObject, readJsonFile, type JsonObject, type JsonValue } from '../core/json.js';
 import { packageRoot, parseRepoSlug } from '../core/paths.js';
 import { PLUGIN_NAME } from '../core/pluginIdentity.js';
 import type { WritePlan } from '../core/writer.js';
+import { taskOfferCheckRule } from './outerLoopScripts.js';
 import { PROFILE_PATH } from './profileEntries.js';
 
 /** The marketplace's name, mirroring `.claude-plugin/marketplace.json`'s `name`. */
@@ -88,6 +102,13 @@ export const ENABLED_PLUGINS_KEY = 'enabledPlugins';
 
 /** The key written by a project-scope `plugin marketplace add`. */
 export const MARKETPLACES_KEY = 'extraKnownMarketplaces';
+
+/**
+ * The key path the fence's allow rule is written under, `permissions.allow`. Exported so `doctor`
+ * descends through these rather than through literals of its own.
+ */
+export const PERMISSIONS_KEY = 'permissions';
+export const ALLOW_KEY = 'allow';
 
 /** The inner `source` discriminator for a marketplace published as a repository — see the header. */
 const MARKETPLACE_SOURCE = 'github';
@@ -302,6 +323,8 @@ export interface ProjectSettingsFlags {
 
 /** Everything {@link buildProjectSettings} needs. */
 export interface BuildProjectSettingsOptions {
+  /** The config in effect; its `scriptsDir` decides the allow rule's invocation. */
+  readonly config: HarnessConfig;
   readonly flags: ProjectSettingsFlags;
   /**
    * Sink for a line the adopter should see. Called rather than printed, so this stays a pure
@@ -313,7 +336,7 @@ export interface BuildProjectSettingsOptions {
 
 /** The merge payload, and the slug it was built from. */
 export interface ProjectSettingsPayload {
-  /** The object merged into `.claude/settings.json` — one key, or two. */
+  /** The object merged into `.claude/settings.json` — two keys, or three. */
   readonly settings: JsonObject;
   /** The resolved `<owner>/<repo>`, or `undefined` when the marketplace entry was skipped. */
   readonly marketplaceSlug: string | undefined;
@@ -345,13 +368,13 @@ export interface ProjectSettingsResult {
 
 /**
  * Assemble the merge payload: `enabledPlugins` always, `extraKnownMarketplaces` only when the
- * marketplace repository is known.
+ * marketplace repository is known, then `permissions.allow` holding the fence's rule.
  *
- * Both keys are top-level, so the write engine's action log names them individually — a first run
+ * Every key is top-level, so the write engine's action log names them individually — a first run
  * reports which keys it added and a second reports the file as kept, which is what makes "did this
  * re-run change anything?" answerable from the log rather than from a diff.
  */
-export function buildProjectSettings({ flags, warn }: BuildProjectSettingsOptions): ProjectSettingsPayload {
+export function buildProjectSettings({ config, flags, warn }: BuildProjectSettingsOptions): ProjectSettingsPayload {
   const report = warn ?? ((): void => {});
   const slug = resolveSlug(flags.marketplace);
 
@@ -361,11 +384,36 @@ export function buildProjectSettings({ flags, warn }: BuildProjectSettingsOption
     report(
       `no ${MARKETPLACES_KEY} entry was written into ${SETTINGS_PATH}, because this harness package's own repository URL does not yet name a published account and repository: a teammate's clone will enable ${PLUGIN_KEY} from a marketplace it has never been told about, and will not resolve the plugin — re-run init with ${MARKETPLACE_FLAG} ${SLUG_SHAPE} to write the entry now`,
     );
-    return { settings, marketplaceSlug: undefined };
+  } else {
+    settings[MARKETPLACES_KEY] = marketplaceEntry(slug);
   }
 
-  settings[MARKETPLACES_KEY] = marketplaceEntry(slug);
+  settings[PERMISSIONS_KEY] = { [ALLOW_KEY]: [taskOfferCheckRule(config)] };
   return { settings, marketplaceSlug: slug };
+}
+
+/**
+ * The warning for an existing `permissions` value the merge will not extend with `rule`, or
+ * `undefined` when the merge adds the rule itself or it is already there.
+ */
+function existingAllowListWarning(existing: JsonValue | undefined, rule: string): string | undefined {
+  if (!isJsonObject(existing)) return undefined;
+  const permissions = existing[PERMISSIONS_KEY];
+  if (permissions === undefined) return undefined;
+
+  const allowPath = `${PERMISSIONS_KEY}.${ALLOW_KEY}`;
+  const byHand = `init never edits an existing list, so add that rule to ${allowPath} by hand, or the change-request fence's opt-out check prompts for permission in every interactive session`;
+
+  if (!isJsonObject(permissions)) {
+    return `${SETTINGS_PATH} holds a ${PERMISSIONS_KEY} value that is not an object, so the rule ${rule} was not written: ${byHand}`;
+  }
+  const allow = permissions[ALLOW_KEY];
+  if (allow === undefined) return undefined;
+  if (!Array.isArray(allow)) {
+    return `${SETTINGS_PATH} holds a ${allowPath} value that is not a list, so the rule ${rule} was not written: ${byHand}`;
+  }
+  if (allow.includes(rule)) return undefined;
+  return `${SETTINGS_PATH} already holds a ${allowPath} list without the rule ${rule}: ${byHand}`;
 }
 
 /**
@@ -377,15 +425,19 @@ export function buildProjectSettings({ flags, warn }: BuildProjectSettingsOption
  * (`core/json.ts`). `--force` does not apply: there is nothing here that a backup would protect
  * against, because nothing is replaced.
  */
-export function writeProjectSettings({ repoRoot, plan, flags }: ProjectSettingsOptions): ProjectSettingsResult {
+export function writeProjectSettings({ repoRoot, plan, config, flags }: ProjectSettingsOptions): ProjectSettingsResult {
   const warnings: string[] = [];
 
   const { settings, marketplaceSlug } = buildProjectSettings({
+    config,
     flags,
     warn: (message) => warnings.push(message),
   });
 
   const path = join(repoRoot, SETTINGS_PATH);
+  const allowWarning = existingAllowListWarning(readJsonFile(path), taskOfferCheckRule(config));
+  if (allowWarning !== undefined) warnings.push(allowWarning);
+
   plan.add({
     path,
     policy: 'merge-json',
