@@ -39,7 +39,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_background_agent_wait_ce
 2. [x] **Task 2** — Launch every engine session with `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0` and log the CLI's stopped-agents line _(layer: cli)_ _(points: 15)_
 3. [x] **Task 3** — Split the watcher's zero-exit arm on the ledger: `completed` when finished, `paused` / `unfinished` when not _(layer: cli)_ _(points: 20)_
 4. [x] **Task 4** — Give job mode an `unfinished` arm with a bounded auto-resume, and re-baseline the remote-job progress cases _(layer: cli)_ _(points: 20)_
-5. [ ] **Task 5** — Show a paused run's reason and its way on in `/autonomous-sdlc-harness:branch-status` _(layer: plugin)_ _(points: 10)_
+5. [x] **Task 5** — Show a paused run's reason and its way on in `/autonomous-sdlc-harness:branch-status` _(layer: plugin)_ _(points: 10)_
 6. [ ] **Task 6** — Correct the "watcher stamps the run `completed`" consequence clause in §2.0, §2.5, the five autonomous forks and the plan core's G.1 _(layer: plugin)_ _(points: 10)_
 7. [ ] **Task 7** — Document the wait ceiling, the ledger check and `unfinished` in `docs/watcher.md` and `ARCHITECTURE.md` _(layer: general)_ _(points: 15)_
 8. [ ] **Task 8** — Document job mode's `unfinished` arm in `docs/remote-execution.md` _(layer: general)_ _(points: 10)_

@@ -17,6 +17,7 @@
   - `pause_reason` `unfinished`: the session ended (exit 0) before its ledger finished — the flow-progress ledger, or the docs checklist for a docs run — and the resume continues at the first `[ ]` entry. Show the last few lines of a bounded, single read of `<MAIN_REPO>/<state_dir>/autonomous_logs/watcher.log` naming this branch and `paused (unfinished)` or `stopped background tasks`, in the same form as the `park_loop` arm's read. Never `tail -f`.
   - `paused_by` `usage`: the watcher resumes it by itself after the recorded reset, so no action is needed.
   - The existing remote-record paragraph already covers `paused`. Do not restate it.
+  - **Deviations from plan:** The plan names `/autonomous-sdlc-harness:branch-resume <branch>` as the next action for every local `paused` run and then says no action is needed for `paused_by` `usage`. Those two contradict each other, so the `usage` sentence is worded "in place of the resume". The resume stays the default next action.
 - [ ] Keep the closing read-only paragraph true. The new read is of `watcher.log`, which step 6 already reads for `park_loop`, so no new file, script or verb is added to what the command touches.
 
 **Verification:**
