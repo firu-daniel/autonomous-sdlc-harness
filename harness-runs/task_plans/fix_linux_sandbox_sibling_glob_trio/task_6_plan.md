@@ -60,3 +60,8 @@ Everything about the re-rooting's effect is **predicted** until AP1–AP6 are re
 - `grep -n 'AP6' docs/sandbox-verification.md` finds the new row and its mentions in the lead paragraph and F9's cell, and nothing else.
 - `git diff -U0 -- docs/sandbox-verification.md` changes no line inside a cell that carries a `2026-10-30` or `2026-10-29` reading, other than F9's follow-up cell, the AP Expected cells, `CS1 (Linux)`'s and GW1's Expected cells, and the §6 point. Each change there adds a clause or replaces only the sentences named above.
 - `grep -nE 'not run\.\*\* No Linux' docs/sandbox-verification.md` prints nothing.
+
+**Deviations from plan:**
+
+- §6 glob point: the measured AP2 / GW1 / GW2 statement and the still-unmeasured clause are written once, in place of the point's last two sentences. The removed *"No Linux or WSL2 host…"* sentence is replaced by a one-sentence lead naming the two runs that measured it, not by a second copy of the statement.
+- §5 closing paragraph: the added sentence names the branch without the token `AP6`, so the first **Verification:** grep matches only the AP6 row, the lead paragraph and F9's cell.
