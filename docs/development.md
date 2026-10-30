@@ -2421,7 +2421,13 @@ node cli/dist/cli.js doctor
 
 An expected refusal whose text carries none of the refusal strings the judge knows prints `not run`, naming the text. The person who ran the probe takes those strings from the first Linux run's kept evidence and adds them to the layer table in `scripts/lib/sandbox-probe/judge.sh` in a follow-up.
 
-**The absent-path check, by hand.** It fills `docs/sandbox-verification.md` AP1–AP5, which measure the Linux interim position `docs/cli.md` §6 residual 12 states. On the same container, after the `run` legs and before the refusal subcommand below, start `bash scripts/sandbox-probe.sh run --leg headless-parity` as `probe` in one terminal and leave it holding its clone. In a second terminal, as `probe`, from the checkout:
+**The absent-path check, by hand.** It fills `docs/sandbox-verification.md` AP1–AP6, which measure the Linux interim position `docs/cli.md` §6 residual 12 states. On the same container, after the `run` legs and before the refusal subcommand below, first make the sibling clone AP6 reads, so the per-run profile is rendered with it present. As `probe`, from the checkout:
+
+```
+git clone --shared . ../autonomous-sdlc-harness-sbx_sibling
+```
+
+The check never creates or removes it; it is discarded with the container. `SIB=` names another sibling instead. Then start `bash scripts/sandbox-probe.sh run --leg headless-parity` as `probe` in one terminal and leave it holding its clone. In a second terminal, as `probe`, from the checkout:
 
 ```
 bash scripts/sandbox-absent-path-check.sh run
@@ -2429,7 +2435,7 @@ bash scripts/sandbox-absent-path-check.sh sweep
 bash scripts/sandbox-absent-path-check.sh report
 ```
 
-`sweep` deletes leftovers in the probe clone and the main checkout and moves the probe branch's ref, so take it only in this throwaway container. Press Enter in the first terminal so the probe tears down, then take the last reading and write the report again with it:
+`sweep` deletes manifest-recorded leftovers in the probe clone, the sibling and the main checkout and moves the probe branch's ref, so take it only in this throwaway container. Press Enter in the first terminal so the probe tears down, then take the last reading and write the report again with it:
 
 ```
 bash scripts/sandbox-absent-path-check.sh after-teardown

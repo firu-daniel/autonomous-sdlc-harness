@@ -57,3 +57,9 @@ The re-rooting's effect is **predicted**. The exposure of sibling copies through
 - `git grep -nE 'may skip (one|them|a .denyWrite.)|is unverified — it may skip|containing .\*. is unverified' -- docs/cli.md docs/watcher.md` prints nothing.
 - `grep -n 'sbx_sibling' docs/development.md` finds the fenced `git clone --shared` line, alone on its line inside a fenced block.
 - Each new Linux sentence in the three files carries one of the labels *measured* (with the AP2 or GW1 stamp), *derived* or *owed*. Read the diff of each file and find none without one.
+
+**Deviations from plan:**
+
+- Beyond the listed targets, `docs/cli.md` §6's per-run paragraph also carries two sentences the targets did not name, and both now contradict Task 2. I amended both, with the same wording as the `docs/watcher.md` edits: the manifest sentence now lists each path a remaining glob yields (`hr_profile_deny_paths`), and the launch check's *"gives back the base"* clause now names the trio-less base on a bubblewrap host with a run copy. Residual 12's **Job mode** item 2 (the `$RUNNER_TEMP` manifest) also names the glob expansions, labelled derived.
+- Residual 2: I did not add the *"unmeasured"* sentence on read-only existing files and mid-session siblings that `docs/sandbox-verification.md` §6 carries. The plan did not ask for it, and the measured / derived / owed label set has no slot for it.
+- Verification, all three bullets: both greps were run. The first printed nothing (exit 1). The second found `git clone --shared . ../autonomous-sdlc-harness-sbx_sibling` alone on its line inside a fenced block. For the label bullet, I read the diff of each file.
