@@ -431,6 +431,59 @@ test('with the seam off a clone\'s per-run copy is the base plus today\'s entrie
   assert.equal(printed.stdout, '|0', printed.stderr);
 });
 
+test('another sibling clone keeps its trio Edit rules by exact path on a placeholder host, and off it the render is today\'s', async (t) => {
+  const f = await adoptedFixture(t);
+  if (f === null) return;
+  const parked = `${f.dir}-parked`;
+  t.after(() => rm(parked, { recursive: true, force: true }));
+  const cloned = await runGit(f.dir, ['clone', '--quiet', '--no-hardlinks', f.dir, parked]);
+  assert.equal(cloned.status, 0, cloned.stderr);
+  const omitted = COPY_GIT_PATHS.filter((row) => !row.bubblewrapDenyWrite);
+  assert.equal(omitted.length, 3);
+  const copy = `${f.dir}-sibcheck`;
+  const base = f.base();
+  const siblingRules = omitted.map((row) => [`Edit(/${parked}/${row.path})`, `Edit(/${parked}/${row.path}/**)`]);
+
+  for (const placeholderHost of [true, false]) {
+    const host = `HR_PLACEHOLDER_HOST=${placeholderHost ? 1 : 0}`;
+    const rendered = await f.watcherCall(`${host}; run_profile_render "$1" "$2" clone && printf "%s" "$RUN_PROFILE_FILE"`, [
+      `feat_sibcheck_${placeholderHost ? 1 : 0}`,
+      copy,
+    ]);
+    assert.equal(rendered.status, 0, rendered.stderr);
+    const profile = JSON.parse(readFileSync(rendered.stdout, 'utf8'));
+    const deny = profile.permissions.deny;
+
+    if (placeholderHost) {
+      const entries = cloneEntries(f.config, copy, [], { placeholderHost: true, siblings: siblingEntries(base, ['parked']) });
+      assertBasePlus(profile, base, entries, { main: f.dir, copy, drops: globDrops(base), edits: editDrops(base) });
+      omitted.forEach((row, i) => {
+        assert.deepEqual(fileToolDenyRules({ path: `${parked}/${row.path}`, kind: 'entry' }), siblingRules[i]);
+        for (const rule of siblingRules[i]) assert.ok(deny.includes(rule), `${host}: ${rule} is not in deny`);
+        for (const rule of fileToolDenyRules({ path: `${copy}/${row.path}`, kind: row.kind })) {
+          assert.ok(!deny.includes(rule), `${host}: the run copy's own ${rule} is in deny`);
+        }
+      });
+    } else {
+      assertBasePlus(profile, base, cloneEntries(f.config, copy), { main: f.dir, copy });
+      assert.deepEqual(
+        deny.filter((rule) => rule.startsWith(`Edit(/${parked}/`)),
+        [],
+        `${host}: the sibling was re-rooted off a placeholder host`,
+      );
+    }
+  }
+
+  // The Edit drop takes only `*`-carrying rules: a base already holding the sibling's exact rules loses none of them.
+  const widened = structuredClone(base);
+  widened.permissions.deny.push(...siblingRules.flat());
+  const widenedPath = join(f.dir, 'watcher-test', 'widened-base.json');
+  await writeFile(widenedPath, `${JSON.stringify(widened, null, 2)}\n`, 'utf8');
+  const printed = await f.watcherCall('SETTINGS_PROFILE="$1"; HR_PLACEHOLDER_HOST=1; run_profile_edit_drops', [widenedPath]);
+  assert.equal(printed.status, 0, printed.stderr);
+  assert.deepEqual(printed.stdout.split('\n').filter((line) => line.length > 0), editDrops(base));
+});
+
 // --- Refusal ------------------------------------------------------------------------------------
 
 for (const [name, perturb] of [

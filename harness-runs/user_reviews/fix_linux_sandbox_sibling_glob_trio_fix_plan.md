@@ -19,7 +19,7 @@
 Each entry resolves 1:1 to `harness-runs/user_reviews/fix_linux_sandbox_sibling_glob_trio_fix_plan/finding_<K>.md` through its `**Finding K**` reference. The entries are in dependency order: the profile change first, its sibling guarantee next, then the trust check, the documented acceptance, the measuring script, and last the record that names all of them.
 
 1. [x] **Finding 1** — On a bubblewrap host, leave the run copy's own trio `Edit` rules out of the per-run copy, the exact ones and the base's glob ones, and teach `run_profile_check` that drop. _(layer: cli, general)_
-2. [ ] **Finding 2** — Keep each other sibling's trio `Edit` rules by exact path, both forms, pin them with a test, and state the treatment and its residual in `docs/cli.md` §6 and `docs/watcher.md`. _(layer: cli, general)_
+2. [x] **Finding 2** — Keep each other sibling's trio `Edit` rules by exact path, both forms, pin them with a test, and state the treatment and its residual in `docs/cli.md` §6 and `docs/watcher.md`. _(layer: cli, general)_
 3. [ ] **Finding 3** — Make the clone trust check accept an empty, regular, non-link `config.worktree` (with `extensions.worktreeConfig` off) and `http-alternates`, keep refusing any `commondir`, and add fixtures for each arm. _(layer: cli, general)_
 4. [ ] **Finding 4** — Accept Claude Code's built-in placeholder leftovers and document them in `docs/cli.md` §6. The list is not readable at launch, so the sweep does not cover them. _(layer: general)_
 5. [ ] **Finding 5** — `scripts/sandbox-absent-path-check.sh`: read the built-in paths, stop truncating, add the `dd` write probe and a documented control-profile option. _(layer: general)_

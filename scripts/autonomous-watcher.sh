@@ -2454,7 +2454,13 @@ run_profile_one_object() {
 #     `hr_deny_glob_expand <g> <copy>` prints, as `entry`, when <d>/.git is a
 #     directory and not a symbolic link and <d>/<p>'s parent directory exists.
 #     Such a path carrying a quote, a `*`, a tab or a newline is skipped, never
-#     refused, so a sibling's name cannot refuse a launch.
+#     refused, so a sibling's name cannot refuse a launch. These lines stay
+#     `deny`, so each keeps its exact `Edit` rules as well as its denyWrite
+#     entry: run_profile_edit_drops removes the base's glob `Edit` rules for the
+#     trio, and the base's `Edit(//<work_root>/<project>-*/**)` allow would then
+#     let the file tools plant one in another run's clone, which the watcher
+#     refuses at that run's resume but a person's git there still follows. No
+#     line here carries a `*`, so run_profile_edit_drops cannot match its rules.
 # Never called in job mode. Every path is exact: this watcher's own rule, not
 # the generator's refused set, refuses a path carrying a quote, a `*` or a tab —
 # a `*` would turn an exact entry into a glob, a quote does not belong in a
