@@ -62,7 +62,8 @@
  * check prompts mid-fence; the unattended profile is machine-local and the fence's tool clause
  * already excludes unattended runs, so it gets no allow entry. Under choice 3 an existing `allow`
  * list is a leaf and is never edited: where one lacks the rule — or `permissions` / its `allow` is
- * of another type — {@link writeProjectSettings} warns, naming the rule to add by hand.
+ * of another type — {@link writeProjectSettings} warns, naming the rule to add by hand. `doctor`
+ * holds no copy of that grading: {@link allowRuleState} is what both ask.
  *
  * The generator reads this package's own manifest and the adopter's existing `.claude/settings.json`
  * — the latter only to decide whether to warn about an existing `permissions.allow` list — and
@@ -74,7 +75,7 @@ import { join } from 'node:path';
 
 import type { HarnessConfig } from '../config/model.js';
 import { HarnessError, internal } from '../core/errors.js';
-import { isJsonObject, readJsonFile, type JsonObject, type JsonValue } from '../core/json.js';
+import { isJsonObject, readJsonFile, stringsAt, type JsonObject, type JsonValue } from '../core/json.js';
 import { packageRoot, parseRepoSlug } from '../core/paths.js';
 import { PLUGIN_NAME } from '../core/pluginIdentity.js';
 import type { WritePlan } from '../core/writer.js';
@@ -392,28 +393,62 @@ export function buildProjectSettings({ config, flags, warn }: BuildProjectSettin
   return { settings, marketplaceSlug: slug };
 }
 
+/** Where an existing `.claude/settings.json` value leaves `rule` under {@link PERMISSIONS_KEY}.{@link ALLOW_KEY}. */
+export type AllowRuleState =
+  /** `permissions.allow` is a list holding the rule as a string element. */
+  | 'present'
+  /** Every value on the path is absent or an object, so `init`'s merge adds the rule. */
+  | 'mergeable'
+  /** `permissions.allow` is a list lacking the rule; `init` never edits it. */
+  | 'list-without-rule'
+  /** `permissions.allow` is present and not a list. */
+  | 'allow-not-a-list'
+  /** `permissions` is present and not an object. */
+  | 'permissions-not-object'
+  /** The file's top-level value is present and not an object; the merge refuses the whole file. */
+  | 'settings-not-object';
+
+/**
+ * Classify `settings` — the parsed `.claude/settings.json`, `undefined` when absent — for `rule`.
+ * The one owner of this grading: {@link writeProjectSettings} and `doctor`'s `task-offer-rules`
+ * check both ask it.
+ *
+ * A value the merge can descend into is decided exactly as `core/json.ts` → `mergeMissing` decides
+ * it: absent, or `isJsonObject`. Membership counts string elements only (`core/json.ts` → `stringsAt`).
+ */
+export function allowRuleState(settings: JsonValue | undefined, rule: string): AllowRuleState {
+  if (settings === undefined) return 'mergeable';
+  if (!isJsonObject(settings)) return 'settings-not-object';
+  const permissions = settings[PERMISSIONS_KEY];
+  if (permissions === undefined) return 'mergeable';
+  if (!isJsonObject(permissions)) return 'permissions-not-object';
+  const allow = permissions[ALLOW_KEY];
+  if (allow === undefined) return 'mergeable';
+  if (!Array.isArray(allow)) return 'allow-not-a-list';
+  return stringsAt(allow).includes(rule) ? 'present' : 'list-without-rule';
+}
+
 /**
  * The warning for an existing `permissions` value the merge will not extend with `rule`, or
- * `undefined` when the merge adds the rule itself or it is already there.
+ * `undefined` when the merge adds the rule itself, it is already there, or the merge refuses the
+ * whole file (the write engine reports that one).
  */
 function existingAllowListWarning(existing: JsonValue | undefined, rule: string): string | undefined {
-  if (!isJsonObject(existing)) return undefined;
-  const permissions = existing[PERMISSIONS_KEY];
-  if (permissions === undefined) return undefined;
-
   const allowPath = `${PERMISSIONS_KEY}.${ALLOW_KEY}`;
   const byHand = `init never edits an existing list, so add that rule to ${allowPath} by hand, or the change-request fence's opt-out check prompts for permission in every interactive session`;
 
-  if (!isJsonObject(permissions)) {
-    return `${SETTINGS_PATH} holds a ${PERMISSIONS_KEY} value that is not an object, so the rule ${rule} was not written: ${byHand}`;
+  switch (allowRuleState(existing, rule)) {
+    case 'present':
+    case 'mergeable':
+    case 'settings-not-object':
+      return undefined;
+    case 'permissions-not-object':
+      return `${SETTINGS_PATH} holds a ${PERMISSIONS_KEY} value that is not an object, so the rule ${rule} was not written: ${byHand}`;
+    case 'allow-not-a-list':
+      return `${SETTINGS_PATH} holds a ${allowPath} value that is not a list, so the rule ${rule} was not written: ${byHand}`;
+    case 'list-without-rule':
+      return `${SETTINGS_PATH} already holds a ${allowPath} list without the rule ${rule}: ${byHand}`;
   }
-  const allow = permissions[ALLOW_KEY];
-  if (allow === undefined) return undefined;
-  if (!Array.isArray(allow)) {
-    return `${SETTINGS_PATH} holds a ${allowPath} value that is not a list, so the rule ${rule} was not written: ${byHand}`;
-  }
-  if (allow.includes(rule)) return undefined;
-  return `${SETTINGS_PATH} already holds a ${allowPath} list without the rule ${rule}: ${byHand}`;
 }
 
 /**

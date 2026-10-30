@@ -210,6 +210,7 @@ import {
 } from '../generators/profileEntries.js';
 import {
   ALLOW_KEY,
+  allowRuleState,
   ENABLED_PLUGINS_KEY,
   MARKETPLACE_ENTRY_SHAPE,
   MARKETPLACE_FLAG,
@@ -4094,7 +4095,9 @@ const SETUP_ANALYSIS_CHECK: Check = {
  * the reason above. They are gated on the project file naming the invocation because a project file
  * that predates the script carries the inline test instead and has no script or rule to lose. The
  * rule is graded here rather than in `plugin-wiring` because it exists only for this fence, and
- * `plugin-wiring` grades the two plugin keys and nothing else. Without a config the invocation
+ * `plugin-wiring` grades the two plugin keys and nothing else. The rule's state is asked of
+ * `generators/projectSettings.ts` → {@link allowRuleState}, which `init`'s warning also asks, so no
+ * copy of that grading lives here. Without a config the invocation
  * cannot be resolved, so these arms are skipped and the pass line says so.
  *
  * It reads `.claude/CLAUDE.md` and, on the invocation arms, `.claude/settings.json`; it tests the
@@ -4190,30 +4193,29 @@ function taskOfferCheckFindings(repoRoot: string, config: HarnessConfig, invocat
     return findings;
   }
 
-  const permissions = isJsonObject(settings) ? settings[PERMISSIONS_KEY] : undefined;
-  const allow = isJsonObject(permissions) ? permissions[ALLOW_KEY] : undefined;
-  if (Array.isArray(allow)) {
-    if (!stringsAt(allow).includes(rule)) {
+  switch (allowRuleState(settings, rule)) {
+    case 'present':
+      break;
+    case 'list-without-rule':
       findings.push(
         `${lost}: add \`${rule}\` to ${SETTINGS_PATH} → ${PERMISSIONS_KEY}.${ALLOW_KEY} by hand, because \`${CLI} init\` never edits a list that is already there`,
       );
-    }
-  } else if (allow === undefined && mergeReaches(settings) && mergeReaches(permissions)) {
-    findings.push(
-      `${lost}: ${SETTINGS_PATH} has no ${PERMISSIONS_KEY}.${ALLOW_KEY} list — run \`${CLI} init\`, which merges one in holding that rule`,
-    );
-  } else {
-    findings.push(
-      `${lost}: ${SETTINGS_PATH} → ${PERMISSIONS_KEY}.${ALLOW_KEY} is not a list or sits under a value that is not an object, and \`${CLI} init\` never replaces a value that is there — make it a list holding \`${rule}\` by hand`,
-    );
+      break;
+    case 'mergeable':
+      findings.push(
+        `${lost}: ${SETTINGS_PATH} has no ${PERMISSIONS_KEY}.${ALLOW_KEY} list — run \`${CLI} init\`, which merges one in holding that rule`,
+      );
+      break;
+    case 'allow-not-a-list':
+    case 'permissions-not-object':
+    case 'settings-not-object':
+      findings.push(
+        `${lost}: ${SETTINGS_PATH} → ${PERMISSIONS_KEY}.${ALLOW_KEY} is not a list or sits under a value that is not an object, and \`${CLI} init\` never replaces a value that is there — make it a list holding \`${rule}\` by hand`,
+      );
+      break;
   }
 
   return findings;
-}
-
-/** Whether `init`'s missing-keys merge can add a key under `value`: it is absent or an object (`core/json.ts` → `mergeMissing`). */
-function mergeReaches(value: JsonValue | undefined): boolean {
-  return value === undefined || isJsonObject(value);
 }
 
 /**
