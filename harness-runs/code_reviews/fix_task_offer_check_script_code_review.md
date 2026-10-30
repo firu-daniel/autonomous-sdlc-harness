@@ -31,7 +31,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Replace the `#219` deferral in the shipped `task-offer-check.sh` header with an adopter-resolvable citation _(layer: cli, general)_
+1. [x] **Finding 1** — Replace the `#219` deferral in the shipped `task-offer-check.sh` header with an adopter-resolvable citation _(layer: cli, general)_
 
 ---
 

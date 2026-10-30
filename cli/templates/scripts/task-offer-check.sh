@@ -30,13 +30,13 @@
 # `hr_clone_target_check_var`, so it also refuses a clone with a planted
 # `commondir`, `config.worktree` or `objects/info/http-alternates`, a
 # non-directory `objects`, or a `.git/config` key outside the clone allow-list
-# (a hand-run `git push -u`'s `branch.<name>.*`), where the inline one-liner this
-# replaces offered. Until #219 lands, a Linux run copy can carry leftover
-# `commondir` / `http-alternates` placeholders after a killed session and a
-# `config.worktree` (cause unknown), so the fence is silent there, as the
-# wrappers already refuse that copy. A candidate whose `.git` is a symbolic
-# link is refused, and the printed path is the canonical main checkout rather
-# than the raw `alternates` prefix.
+# (a hand-run `git push -u`'s `branch.<name>.*`), where the inline fence test
+# this script replaced offered. On a Linux host a run copy can carry leftover
+# `commondir` / `http-alternates` placeholders after a killed session, and a
+# `config.worktree` whose cause is not established (`docs/sandbox-verification.md`,
+# row AP2), so the fence is silent there, as the wrappers already refuse that
+# copy. A candidate whose `.git` is a symbolic link is refused, and the printed
+# path is the canonical main checkout rather than the raw `alternates` prefix.
 #
 # TWO SETTLED STATES. A checkout whose fence names this script but which
 # predates it gets bash's "No such file or directory", a non-zero exit and empty
