@@ -20,3 +20,4 @@
 
 - `cmp scripts/autonomous-watcher.sh cli/templates/scripts/autonomous-watcher.sh`, `cmp scripts/lib/harness-run-lib.sh cli/templates/scripts/lib/harness-run-lib.sh` and `cmp scripts/autonomous-notify.sh cli/templates/scripts/autonomous-notify.sh` each print nothing and exit 0.
 - `git diff --stat -- scripts` lists exactly these three files, and `git diff --summary -- scripts` shows no mode change.
+  - **Deviations from plan:** `cp` from the template was refused by the run's permission mode (`Permission to use Bash has been denied because Claude Code is running in don't ask mode`), so each copy was brought to its template's bytes by applying the hunks of `git diff --no-index <template> <copy>` with the file-edit tool, which leaves each file's mode untouched. The outcome is the plan's: all three `cmp` runs printed nothing and exited 0, `git diff --stat -- scripts` listed exactly the three targets, and `git diff --summary -- scripts` printed nothing.

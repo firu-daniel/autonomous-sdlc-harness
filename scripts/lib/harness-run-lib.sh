@@ -217,6 +217,12 @@
 # and its entry ids; `hr_ledger_phases` codes both, so renaming an id or a
 # header form there is an edit here.
 #
+# MIRROR OF `plugin/instructions/docs_orchestration_instructions_autonomous.md`
+# → `## Checklist entry format (parse contract)`, which owns the docs
+# checklist's entry-box form, and of the user-review file name
+# `<branch>_review[_<n>].md`; `hr_run_ledger_state` keys on both, so a change
+# to either there is an edit here.
+#
 # MIRROR OF `cli/src/generators/writeProtection.ts` → `copySurfacePaths`, which
 # owns a working copy's protected set; `hr_run_protected_rel_paths` is its shell
 # mirror, so a change to that set's order or spelling there is an edit here.
@@ -2476,6 +2482,107 @@ hr_ledger_phases() {
   if hr_ledger_all_settled "$settled" $p4; then s4="done"; else s4="pending"; fi
   printf '%s %s %s %s %s %s\n' "$engine" "$round" "$s1" "$s2" "$s3" "$s4"
   return 0
+}
+
+# hr_run_ledger_state <state_abs> <branch> <engine>
+#
+# Whether the run's own ledger under <state_abs> (the run copy's absolute state
+# directory) says the run finished. An empty <engine> means `task`. Prints
+# `<state> <detail>` — <detail> one short clause for a log line — and returns
+# by <state>: 0 `finished`, 1 `unfinished`, 2 `absent` (no ledger file),
+# 3 `unreadable` (a file with no ledger in it, or an unknown <engine>). An
+# absent ledger is never reported as finished or unfinished.
+#
+# `task` / `user_review` read `flow_progress/<branch>_progress.md` through
+# `hr_ledger_phases`: finished only when all four phases are `done`, the
+# ledger's engine is <engine>, and, for `user_review`, the ledger's round is the
+# active round — the highest of 1 for `user_reviews/<branch>_review.md` and each
+# all-digit <n> of `user_reviews/<branch>_review_<n>.md`; with neither file the
+# round is not tested. `docs` reads `docs_catalog/<branch>_docs.md`, whose entry
+# boxes are that flow's only iteration state: an entry is a line whose first
+# non-blank characters are `- [ ] ` or `- [x] `; none at all is unreadable, any
+# `[ ]` one is unfinished. The checklist form and the review file names are
+# mirrors; see the header.
+hr_run_ledger_state() {
+  local state_abs="${1-}" branch="${2-}" engine="${3-}" file line trimmed
+  local phases l_engine l_round rest active=0 f n total=0 checked=0 open=0
+  [ -n "$engine" ] || engine="task"
+  case "$engine" in
+    task|user_review)
+      file="$state_abs/flow_progress/${branch}_progress.md"
+      if [ ! -f "$file" ]; then
+        printf 'absent no ledger at flow_progress/%s_progress.md\n' "$branch"
+        return 2
+      fi
+      if [ ! -r "$file" ] || ! phases=$(hr_ledger_phases "$file"); then
+        printf 'unreadable flow_progress/%s_progress.md holds no task or user-review ledger\n' "$branch"
+        return 3
+      fi
+      l_engine=${phases%% *}
+      rest=${phases#* }
+      l_round=${rest%% *}
+      if [ "$l_engine" != "$engine" ]; then
+        printf 'unfinished ledger engine %s, run engine %s\n' "$l_engine" "$engine"
+        return 1
+      fi
+      if [ "${rest#* }" != "done done done done" ]; then
+        printf 'unfinished %s\n' "$phases"
+        return 1
+      fi
+      if [ "$engine" = "user_review" ]; then
+        [ -e "$state_abs/user_reviews/${branch}_review.md" ] && active=1
+        for f in "$state_abs/user_reviews/${branch}"_review_*.md; do
+          [ -e "$f" ] || continue
+          n=${f##*/}
+          n=${n#"${branch}_review_"}
+          n=${n%.md}
+          case "$n" in
+            ''|*[!0-9]*) continue ;;
+          esac
+          # Base 10 forced, so a zero-padded round is not read as octal.
+          if [ "$((10#$n))" -gt "$active" ]; then active=$((10#$n)); fi
+        done
+        if [ "$active" -gt 0 ] && [ "$((10#$l_round))" -ne "$active" ]; then
+          printf 'unfinished ledger round %s, active round %s\n' "$l_round" "$active"
+          return 1
+        fi
+      fi
+      printf 'finished %s\n' "$phases"
+      return 0
+      ;;
+    docs)
+      file="$state_abs/docs_catalog/${branch}_docs.md"
+      if [ ! -f "$file" ]; then
+        printf 'absent no checklist at docs_catalog/%s_docs.md\n' "$branch"
+        return 2
+      fi
+      if [ ! -r "$file" ]; then
+        printf 'unreadable docs_catalog/%s_docs.md is not readable\n' "$branch"
+        return 3
+      fi
+      while IFS= read -r line || [ -n "$line" ]; do
+        trimmed=${line#"${line%%[![:space:]]*}"}
+        case "$trimmed" in
+          "- [ ] "*) total=$((total + 1)); open=$((open + 1)) ;;
+          "- [x] "*) total=$((total + 1)); checked=$((checked + 1)) ;;
+        esac
+      done < "$file"
+      if [ "$total" -eq 0 ]; then
+        printf 'unreadable docs_catalog/%s_docs.md holds no checklist entry\n' "$branch"
+        return 3
+      fi
+      if [ "$open" -gt 0 ]; then
+        printf 'unfinished checklist %s/%s\n' "$checked" "$total"
+        return 1
+      fi
+      printf 'finished checklist %s/%s\n' "$checked" "$total"
+      return 0
+      ;;
+    *)
+      printf 'unreadable unknown engine %s\n' "$engine"
+      return 3
+      ;;
+  esac
 }
 
 # Whether the docs phase's retrieval step runs: `phases.docs` and
@@ -5230,7 +5337,9 @@ hr_push_landed() {
 #   schema                  a reader that does not recognise it treats the bundle as absent
 #   branch, engine          the run's branch; `task` | `user_review` | `docs`
 #   status                  `running` | `parked` | `park_loop` | `paused` | `completed` | `failed`
-#   pause_reason            `usage` | `budget` | `user` | `overload` | empty. The registry's
+#   pause_reason            `usage` | `budget` | `user` | `overload` | `unfinished` | empty.
+#                           `unfinished` — a session that exited 0 before its ledger
+#                           finished. The registry's
 #                           registry-only `killed` and `expired` are never written
 #                           here: `sync` derives each from a run and its artifact
 #                           list, not from a bundle
@@ -5344,7 +5453,7 @@ hr_remote_status_write() {
   engine=$(hr_registry_get "$registry" "$branch" engine)
   reason=$(hr_registry_get "$registry" "$branch" pause_reason)
   case "$reason" in
-    usage|budget|user|overload) ;;
+    usage|budget|user|overload|unfinished) ;;
     *) reason="" ;;
   esac
   chain="${HARNESS_INPUT_CHAIN-}"
