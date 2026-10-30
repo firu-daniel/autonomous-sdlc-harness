@@ -30,6 +30,16 @@
  * ledger once at the first pass and once at the end:** the `progress:` cases assert the comment on
  * the stub's pull request, its opt-out, and the invocation count read off the watcher log.
  *
+ * **A job ends `completed` only over a finished ledger. An unfinished one is auto-resumed under its
+ * own name, bounded, then reported, unless the user asked for the pause, which outranks it.** The
+ * `unfinished:` cases assert the decision, the prompt count, `pause_reason` and the notifications.
+ * RED ONCE, each against the fixture's installed copy of the watcher or its library, never the
+ * tracked template: `run_job`'s `unfinished)` arm removed -> the exhausted pause's notification
+ * reads *paused itself on API overload*; `unfinished` left out of `hr_remote_status_write`'s
+ * `pause_reason` vocabulary -> `pause_reason` written empty; `classify_run_exit`'s `unfinished`
+ * write made unconditional, overwriting `user` -> the user-pause case shows `pause_reason`
+ * `unfinished`.
+ *
  * **A job commits each session's run analytics on its branch and pushes nothing for them:** the
  * workflow's `Push the branch` step does. The `run analytics:` case drives a job with the real
  * `run-analytics.sh` and a recording `push-branch.sh`, and asserts the two commits and no push call.
@@ -1125,6 +1135,7 @@ async function ledgerTicks(j, stages, holdSecs) {
 const PR_12 = JSON.stringify([{ number: 12, isCrossRepository: false }]);
 const progressBodies = (j) => j.ghBodies().filter((b) => b.includes('event=progress'));
 
+// Each `progress:` case exits 0 over an unfinished ledger, so it ends an `unfinished` pause; MAX 0 keeps it to one session.
 test('progress: a job reports a ledger phase change on its pull request', async (t) => {
   await t.test('ticks P1 to P3 -> a progress POST on #12, the last write carrying Planning: done', async (t) => {
     const j = await createJobFixture(t);
@@ -1134,9 +1145,10 @@ test('progress: a job reports a ledger phase change on its pull request', async 
     const result = await j.job([j.branch, 'task', 'none'], {
       GITHUB_REPOSITORY: FORGE_REPOSITORY,
       STUB_PR_LIST: PR_12,
+      REMOTE_AUTO_RESUME_MAX: '0',
     });
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-    assert.equal(lastLine(result.stdout), 'job: completed stop');
+    assert.equal(lastLine(result.stdout), 'job: paused stop');
 
     const calls = j.ghCalls();
     const post = `api --method POST repos/${FORGE_REPOSITORY}/issues/12/comments `;
@@ -1159,8 +1171,10 @@ test('progress: a job reports a ledger phase change on its pull request', async 
     const result = await j.job([j.branch, 'task', 'none'], {
       GITHUB_REPOSITORY: FORGE_REPOSITORY,
       STUB_PR_LIST: PR_12,
+      REMOTE_AUTO_RESUME_MAX: '0',
     });
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(lastLine(result.stdout), 'job: paused stop');
     assert.deepEqual(progressBodies(j), [], j.ghBodies().join('\n---\n'));
     assert.equal(j.ghCalls().some((c) => c.startsWith('api --method PATCH')), false, j.ghCalls().join('\n'));
     assert.match(j.watcherLog(), /progress comments are off by execution\.progressComments/);
@@ -1170,12 +1184,83 @@ test('progress: a job reports a ledger phase change on its pull request', async 
     const j = await createJobFixture(t);
     if (j === null) return;
     await ledgerTicks(j, [['P1']], 4);
-    const result = await j.job([j.branch, 'task', 'none']);
+    const result = await j.job([j.branch, 'task', 'none'], { REMOTE_AUTO_RESUME_MAX: '0' });
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-    assert.equal(lastLine(result.stdout), 'job: completed stop');
+    assert.equal(lastLine(result.stdout), 'job: paused stop');
     // forge is unset, so each `report progress` writes exactly this one line into the watcher log.
     const reports = j.watcherLog().match(/^remote-run\.sh: report: the forge coupling is off.*$/gm) ?? [];
     assert.equal(reports.length, 2, j.watcherLog());
+  });
+});
+
+/** Stage <ledger> under the recorder and return the shell line copying it into the checkout's ledger. */
+async function stageLedger(j, ledger) {
+  const dir = join(j.dir, STATE_DIR, 'flow_progress');
+  const stage = join(j.dir, 'job-test', 'ledger-final.md');
+  await writeFile(stage, ledger, 'utf8');
+  return `mkdir -p ${shellQuote(dir)}; cp ${shellQuote(stage)} ${shellQuote(join(dir, `${j.branch}_progress.md`))}`;
+}
+
+test('unfinished: a zero exit over an unfinished ledger is resumed, bounded, then reported', async (t) => {
+  await t.test('an unfinished ledger every session -> one auto-resume, then paused / unfinished / stop', async (t) => {
+    const j = await createJobFixture(t);
+    if (j === null) return;
+    await j.setStub(await stageLedger(j, taskLedger(j.branch, [])));
+    const result = await j.job([j.branch, 'task', 'none'], {
+      REMOTE_AUTO_RESUME_DELAY_SECS: '0',
+      REMOTE_AUTO_RESUME_MAX: '1',
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(lastLine(result.stdout), 'job: paused stop');
+    assert.equal(j.prompts().length, 2);
+    assert.match(j.prompts()[1], /RESUME from a PAUSE/);
+    assert.equal(j.status().status, 'paused');
+    assert.equal(j.status().pause_reason, 'unfinished');
+    assert.equal(j.status().decision, 'stop');
+    const notes = j.notifications();
+    const paused = notes.filter((n) => n.event === 'paused');
+    assert.equal(paused.length, 1, JSON.stringify(notes));
+    assert.match(paused[0].detail, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+    assert.equal(notes.some((n) => n.event === 'completed'), false, JSON.stringify(notes));
+    assert.equal(notes.some((n) => /API overload/.test(n.detail ?? '')), false, JSON.stringify(notes));
+  });
+
+  await t.test('every task id ticked, E skipped -> completed / stop', async (t) => {
+    const j = await createJobFixture(t);
+    if (j === null) return;
+    const ledger = taskLedger(j.branch, TASK_LEDGER_IDS).replace(/^- \[x\] E\. /m, '- [-] E. ');
+    assert.match(ledger, /^- \[-\] E\. /m);
+    await j.setStub(await stageLedger(j, ledger));
+    const result = await j.job([j.branch, 'task', 'none']);
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(lastLine(result.stdout), 'job: completed stop');
+    assert.equal(j.notifications().filter((n) => n.event === 'completed').length, 1);
+  });
+
+  await t.test("a user's pause survives an unfinished exit -> paused / user / stop, no auto-resume", async (t) => {
+    const j = await createJobFixture(t);
+    if (j === null) return;
+    const start = nowSecs() - 10;
+    const copy = await stageLedger(j, taskLedger(j.branch, []));
+    await j.setStub(
+      `for i in $(seq 1 ${PAUSE_WAIT_TENTHS}); do if [ -f "$STATE/PAUSE" ]; then break; fi; sleep 0.1; done\n${copy}\nexit 0`,
+    );
+    const result = await j.job([j.branch, 'task', 'none'], {
+      HARNESS_JOB_STARTED_EPOCH: String(start),
+      STUB_RUN_LIST: pauseRunList(start + 5),
+      REMOTE_AUTO_RESUME_DELAY_SECS: '0',
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(lastLine(result.stdout), 'job: paused stop');
+    assert.equal(j.status().pause_reason, 'user');
+    assert.equal(j.status().decision, 'stop');
+    assert.equal(j.prompts().length, 1);
+    const notes = j.notifications();
+    const paused = notes.filter((n) => n.event === 'paused');
+    assert.equal(paused.length, 1, JSON.stringify(notes));
+    assert.match(paused[0].detail, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+    assert.equal(notes.some((n) => n.event === 'completed'), false, JSON.stringify(notes));
+    assert.match(j.watcherLog(), /paused \(unfinished\)/);
   });
 });
 

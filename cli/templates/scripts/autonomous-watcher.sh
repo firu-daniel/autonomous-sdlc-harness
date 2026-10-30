@@ -552,21 +552,24 @@
 #     POLL_INTERVAL_SECS, the most the throttled gate can lag the reset — ends
 #     in `wait-poller` with one notification, on every runner; with no pause
 #     requested — the run's own API-overload
-#     self-pause (`overload`) -> auto-resume, else `stop`. `failed` ->
+#     self-pause (`overload`) -> auto-resume, else `stop`; a zero exit over an
+#     unfinished ledger (`unfinished`) -> auto-resume, else `stop`. `failed` ->
 #     auto-resume unless the stall watchdog gave up, else `stop`. Every other
 #     status -> `stop`. An empty HARNESS_JOB_DEADLINE_EPOCH bounds nothing.
-#   * THE BOUNDED AUTO-RESUME: while `auto_resumes` is below
+#   * THE BOUNDED AUTO-RESUME: an `overload` pause, an `unfinished` pause and a
+#     `failed` exit earn one while `auto_resumes` is below
 #     REMOTE_AUTO_RESUME_MAX and REMOTE_AUTO_RESUME_DELAY_SECS from now is
-#     before the deadline, sleep that delay, count one, and relaunch from the
+#     before the deadline: sleep that delay, count one, and relaunch from the
 #     committed ledger through begin_pause_resume and `spawn_engine … "" 1`. The
 #     count resets on any user action — see `auto_resumes` in the registry.
 #     A resume taken after the hosted budget's PAUSE was dropped re-drops it,
 #     so the relaunched session still yields at the budget.
 #   * NOTIFICATIONS name the user's next action instead of a runner path: a
 #     parked run's `/autonomous-sdlc-harness:branch-answer <branch>`, a park
-#     loop's `/autonomous-sdlc-harness:branch-status <branch>`, a `user` or
-#     exhausted `overload` pause's `/autonomous-sdlc-harness:branch-resume
-#     <branch>`, a usage pause's reset time. A `budget` pause sends NO `paused`,
+#     loop's `/autonomous-sdlc-harness:branch-status <branch>`, a `user`, an
+#     exhausted `overload` or an exhausted `unfinished` pause's
+#     `/autonomous-sdlc-harness:branch-resume <branch>`, a usage pause's reset
+#     time. A `budget` pause sends NO `paused`,
 #     and the next job no `resumed` for it: a chained continuation is not an
 #     event the user acts on. classify_run_exit's `paused` arm notifies only a
 #     `user` pause; job mode sends the others once it has decided. Their titles
@@ -938,6 +941,10 @@
 #                    one auto-resume, `job: completed stop`; a stub ending
 #                    `exit 2` with REMOTE_AUTO_RESUME_DELAY_SECS=0 -> launched
 #                    1 + REMOTE_AUTO_RESUME_MAX times, `job: failed stop`. A
+#                    stub writing a task ledger with `D` `[ ]` and exiting 0,
+#                    with REMOTE_AUTO_RESUME_DELAY_SECS=0 -> launched
+#                    1 + REMOTE_AUTO_RESUME_MAX times, `job: paused stop`, "$j"
+#                    with pause_reason `unfinished`. A
 #                    stub writing a task ledger at
 #                    "$d/sdlc-harness/flow_progress/feat_x_progress.md" and
 #                    sleeping past a few polls, the ledger never ticked ->
@@ -5924,6 +5931,12 @@ run_job() {
               notify paused "$branch" "$log_path" "usage limit: the in-job wait passed ${REMOTE_WAIT_MAX_SECS}s after the reset without a resume — run /autonomous-sdlc-harness:branch-resume $branch to continue; $(hr_github_resume_route "$branch" "$(registry_get "$branch" engine)")"
               break
             fi
+            ;;
+          unfinished)
+            job_auto_resume "$branch" "$worktree" "$log_path" "$state_abs" "an unfinished session" && continue
+            detail="the session ended before its ledger finished; automatic resumes exhausted"
+            notify paused "$branch" "$log_path" "the session ended before its ledger finished — run /autonomous-sdlc-harness:branch-resume $branch to continue; $(hr_github_resume_route "$branch" "$(registry_get "$branch" engine)")"
+            break
             ;;
           *)
             job_auto_resume "$branch" "$worktree" "$log_path" "$state_abs" "an overload self-pause" && continue
