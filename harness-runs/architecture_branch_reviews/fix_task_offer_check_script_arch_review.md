@@ -10,7 +10,7 @@ There is one Must Fix. `doctor`'s new `task-offer-rules` arms grade `.claude/set
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 2** — Self-adopted `scripts/task-offer-check.sh` is committed `100644`, not the row's `0755` _(layer: general)_
+1. [x] **Finding 2** — Self-adopted `scripts/task-offer-check.sh` is committed `100644`, not the row's `0755` _(layer: general)_
 2. [ ] **Finding 1** — `doctor` re-derives the generator's `permissions.allow` grading instead of asking it _(layer: cli)_
 
 ## Must Fix
