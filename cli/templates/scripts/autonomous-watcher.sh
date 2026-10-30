@@ -114,6 +114,32 @@
 #     deferred STALL_KILL_SECS window. A genuinely hung run with no gap is
 #     killed exactly as before.
 #
+# BACKGROUND SUB-AGENTS ARE WAITED FOR. Headless `claude -p` waits 10 minutes
+# for background tasks after the session's last turn, then stops them and exits
+# 0. Measured on Claude Code 2.1.314, 2026-10-30, in the run log of
+# `fix_task_offer_check_script`: `Background tasks still running 10m after the
+# last turn (subagent "Write task plan with answers"); stopping them. Set
+# CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 to wait indefinitely.` — a stopped
+# planner and a zero exit.
+#
+#   * spawn_engine's launch subshell exports CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0
+#     for every engine session, fresh, resumed and in job mode. No operator
+#     value overrides it, from the environment or `watcher.env`: a nonzero
+#     ceiling is that failure.
+#   * THE WATCHDOG STILL SEES A SESSION ONLY WAITING ON A BACKGROUND AGENT. That
+#     agent's `tool_use` events reach the `.stream.jsonl` and, through the
+#     formatter, which keeps every assistant `tool_use` whatever agent produced
+#     it, the run log; the incident log shows the background planner's `→ Read`
+#     / `→ Bash` lines after the orchestrator's last turn. A working agent keeps
+#     the liveness mtime moving.
+#   * A HUNG BACKGROUND AGENT EMITS NOTHING, so the run is warned about, killed,
+#     reset and resumed from the ledger exactly as before, under the same
+#     STALL_* tunables and busy-CPU gate.
+#   * THE STOPPED-AGENTS LINE IS THE TRIPWIRE that the setting did not take.
+#     After each session, log_stopped_background_tasks scans the bytes that
+#     session appended to the run log for the CLI's line and writes one
+#     watcher-log line naming the branch, whatever the classification.
+#
 # KEEP AWAKE. Every local launch holds the host awake for the engine's life, so
 # an unattended run is not frozen by idle sleep or a closed lid.
 #
@@ -674,6 +700,15 @@
 #                    the saved vector carries `--effort <that level>`; remove the
 #                    key and it carries no effort flag at all, while `--model` is
 #                    present either way
+#   bg wait       point the stub at one that saves
+#                 "${CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS-unset}" to a file, and
+#                 launch it as the `a launch` entry does
+#                 -> the file holds `0`, and still `0` with
+#                    CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=600000 in the watcher's
+#                    environment. A stub that writes the CLI's stopped line
+#                    (`Background tasks still running 10m after the last turn
+#                    (subagent "x"); stopping them.`) to stderr -> ONE
+#                    `stopped background tasks` line in watcher.log naming feat_x
 #   no window     AUTO_TAIL_TERMINAL=0 in the environment of the launch above
 #                 -> no .tail_feat_x.command under autonomous_logs/, and the
 #                    launch still completes
@@ -2744,6 +2779,7 @@ EOF
 # The flag string, in full:
 #
 #   HARNESS_MAIN_REPO=<MAIN_REPO>
+#   CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0
 #   <agent cli> -p "<trusted instruction naming the artifact's FILE PATH>" \
 #     --settings <per-run copy> \
 #     --permission-mode "$PERMISSION_MODE" \
@@ -2763,8 +2799,9 @@ EOF
 # the base, unchanged. Either file is checked first (run_profile_check), and
 # the launch is refused when the check fails: Claude Code takes one
 # `--settings` file, and silently ignores one that fails its validation.
-# The environment line is exported inside spawn_engine's subshell, so the engine
-# and every command it runs inherit it. The plugin's readers read it with a bare
+# The environment lines are exported inside spawn_engine's subshell, so the
+# engine and every command it runs inherit them. The plugin's readers read
+# HARNESS_MAIN_REPO with a bare
 # `printenv HARNESS_MAIN_REPO`; no outer-loop script reads it, because an
 # assignment prefix on an excluded call could set it.
 # where the bracketed tail is JOB MODE ONLY: one --add-dir per
@@ -3089,6 +3126,19 @@ EOF
     # Set unconditionally, so a value the watcher inherited is overwritten rather
     # than passed on; inside the subshell, so no other child of the watcher sees it.
     export HARNESS_MAIN_REPO="$MAIN_REPO"
+    # Set unconditionally, so a value inherited by the watcher or sourced from
+    # `watcher.env` is overwritten for the session; inside the subshell, so no
+    # other child of the watcher sees it. No operator value may override it: a
+    # nonzero ceiling stops a running background sub-agent and exits 0
+    # (BACKGROUND SUB-AGENTS ARE WAITED FOR, in the header).
+    export CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0
+    # The run log's length before this session writes to it, so the stopped-
+    # agents scan after it reads only this session's bytes. `$(( ))` strips the
+    # padding BSD `wc` adds; a missing log is 0.
+    log_offset=0
+    if [ -f "$log_path" ]; then
+      log_offset=$(($(wc -c <"$log_path" 2>/dev/null)))
+    fi
     # `--add-dir "$worktree"` is NOT redundant with the profile: that file grants
     # the sibling-run-copy glob through Edit/Read rules, not through
     # additionalDirectories. The job-mode extras after the two fixed --add-dir
@@ -3125,6 +3175,7 @@ EOF
       tee -a "${log_path%.log}.stream.jsonl" |
       "$formatter" >>"$log_path"
     rc=${PIPESTATUS[0]}
+    log_stopped_background_tasks "$branch" "$log_path" "$log_offset"
     record_run_analytics "$branch" "$worktree" "$log_path"
     # The record above runs BEFORE the classification so it is on the branch,
     # and locally on origin, before any notification names the run's outcome —
@@ -3303,6 +3354,29 @@ max_question_index() {
     fi
   done
   printf '%s\n' "$max"
+}
+
+# log_stopped_background_tasks <branch> <log_path> <offset>
+#
+# One watcher-log line per line the session appended to <log_path> past byte
+# <offset> that carries both `Background tasks still running` and `stopping
+# them` — the agent CLI's own stderr line, so the tripwire that the export in
+# spawn_engine did not take. Called from INSIDE the spawn_engine subshell, after
+# every session and before record_run_analytics. It ALWAYS returns 0, touches no
+# registry field and never notifies, so it cannot change rc or the
+# classification.
+log_stopped_background_tasks() {
+  local branch="$1" log_path="$2" offset="$3" line hits
+  [ -f "$log_path" ] || return 0
+  hits="$(tail -c +"$((offset + 1))" "$log_path" 2>/dev/null |
+    grep -F 'Background tasks still running' | grep -F 'stopping them')" || true
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    log "run '$branch': the agent CLI stopped background tasks still running after the session's last turn — CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 did not take: $line"
+  done <<EOF
+$hits
+EOF
+  return 0
 }
 
 # record_run_analytics <branch> <worktree> <log_path>

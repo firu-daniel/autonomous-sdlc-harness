@@ -36,7 +36,7 @@
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_background_agent_wait_ceiling/task_<K>_plan.md`. They are ordered bottom-up by ship sequence, in the configured layer order `cli` → `plugin` → `general`, with the catch-all layer last.
 
 1. [x] **Task 1** — Add the run-ledger reader `hr_run_ledger_state` and the bundle's `unfinished` reason to the run library _(layer: cli)_ _(points: 15)_
-2. [ ] **Task 2** — Launch every engine session with `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0` and log the CLI's stopped-agents line _(layer: cli)_ _(points: 15)_
+2. [x] **Task 2** — Launch every engine session with `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0` and log the CLI's stopped-agents line _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Split the watcher's zero-exit arm on the ledger: `completed` when finished, `paused` / `unfinished` when not _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Give job mode an `unfinished` arm with a bounded auto-resume, and re-baseline the remote-job progress cases _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 5** — Show a paused run's reason and its way on in `/autonomous-sdlc-harness:branch-status` _(layer: plugin)_ _(points: 10)_
