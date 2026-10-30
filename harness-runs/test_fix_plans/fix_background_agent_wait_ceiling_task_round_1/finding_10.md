@@ -23,3 +23,9 @@ This case launches on a placeholder host and asserts the manifest's path list. T
 - [ ] Take the failing assertion of this test and place it in one of the two arms below.
 - [ ] **A time bound exceeded, or a watcher pass killed by its bound**, with every value the test asserts otherwise as expected: the branch has no defect here. Leave the code and the test unchanged — no bound raised, no assertion loosened, no case skipped.
 - [ ] **An assertion on a value the branch changed** — the manifest's contents as `spawn_engine` writes them now, the `classify: … has no readable ledger` line, `pause_reason` / `pause_note_stale`, the session's environment, or `log_stopped_background_tasks` running before `record_run_analytics`: change `cli/templates/scripts/autonomous-watcher.sh` (and `cli/templates/scripts/lib/harness-run-lib.sh` where the value comes from `hr_run_ledger_state`) so the asserted behaviour holds again, without undoing the wait-ceiling export or the ledger split, and carry the identical edit into `scripts/autonomous-watcher.sh` / `scripts/lib/harness-run-lib.sh`. Leave the test file unchanged.
+
+## Already passing
+
+- **(a)** Named test `after a launch the manifest lists exactly the absent exact denyWrite and --add-dir .mcp.json paths`; file run: `cli/test/watcher-placeholder-host.test.mjs`.
+- **(b)** `npm test --workspace cli -- test/watcher-placeholder-host.test.mjs`, from the repository root, in the foreground: `ok 2 - after a launch the manifest lists exactly the absent exact denyWrite and --add-dir .mcp.json paths` (`duration_ms: 22969.544167`; rerun on a later dispatch: `ok 2`, `duration_ms: 17742.110916`, `# pass 29`, `# fail 0`); file summary `# tests 29`, `# pass 29`, `# fail 0`, `# cancelled 0`. The Fix section's first arm holds: no assertion on a value the branch changed fails, consistent with a time bound exceeded on the loaded gate host.
+- **(c)** No code file was edited; the only write is this record.
