@@ -182,6 +182,28 @@ No guard code moved, so no §1.2 latency row is re-taken. The layout the guards 
 
 **2026-10-29: `hc_main_root` changed again, `hc_main_root_var` was added, and no guard calls either.** `fix_clone_main_repo_resolution` gave `hc_main_root` in `plugin/hooks/lib/harness-config-lib.sh` a clone arm, moved its body into the new `hc_main_root_var`, and changed nothing else in the library beyond the header comments describing those two functions. `git log --format='%h %s' 74618b02..6436ad77 -- plugin/hooks`, from the branch's merge base with `origin/dev` to its tip, listed one commit, `1d03a74a`. `grep -n 'hc_main_root' plugin/hooks/*.sh`, run against `6436ad77`, printed nothing and exited 1. The per-Bash-call path the §1.2 composite measures is therefore unchanged, and no latency row is re-taken.
 
+**2026-10-30: `task-offer-check.sh` joined the guard's left-allowed set, and only comments moved.** `fix_task_offer_check_script` changed the `LEFT ALLOWED, DELIBERATELY` comment of `plugin/hooks/autonomous-script-allowlist-guard.sh` and the matching sentence of `plugin/hooks/README.md`, and no other file under `plugin/hooks/`. The first command below printed the branch's merge base with `origin/dev`, `ef7e35be8f98893cdd72d715dd8018009b121fb5`; the second, run from this repository's root with that hash in place of `<merge-base>`, printed two hunks and exited 0, and every changed line it printed begins `#`:
+
+```sh
+git merge-base HEAD origin/dev
+git diff -U0 <merge-base> -- plugin/hooks/autonomous-script-allowlist-guard.sh
+```
+
+`DENY_SCRIPT_BASENAMES` and the decision code are untouched, so the script is allowed by the same arm as every other non-denied `.sh` under `scriptsDir`. Two decisions were re-taken by hand per `plugin/hooks/README.md` → `## Reproducing a decision by hand`, on a throwaway `git init` fixture outside any checkout — `harness.config.json` holding `{"version":1,"projectName":"probe","defaultBranch":"main","protectedBranches":["main"],"scriptsDir":"scripts"}`, the template `cli/templates/scripts/task-offer-check.sh` copied to `scripts/task-offer-check.sh`, both committed on `main`, HEAD on `feat_probe` — with the payload's `cwd` at the fixture root and the guard run by `/bin/bash`, the payload handed to it on stdin by a scratch probe rather than through `printf`; the two commands below are that payload in the README's form. `<fixture>` is that root's **resolved** path: on macOS `/tmp` is a symlink to `/private/tmp`, and with the unresolved spelling as `cwd` the first payload answered nothing, the script token resolving outside the root `git` reports.
+
+```sh
+printf '{"tool_input":{"command":"bash scripts/task-offer-check.sh"},"cwd":"<fixture>"}' | bash plugin/hooks/autonomous-script-allowlist-guard.sh
+printf '{"tool_input":{"command":"bash scripts/task-offer-check.sh | cat"},"cwd":"<fixture>"}' | bash plugin/hooks/autonomous-script-allowlist-guard.sh
+```
+
+The first printed one object and exited 0 — `allow`:
+
+```
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":"Auto-allowed: every script target resolves under the configured scripts directory of <fixture>"}}
+```
+
+The second printed nothing and exited 0 — SILENT, the construct scan withholding the permit for the `|`. No decision path changed, so no §1.2 latency row and no §1.3 fork count is re-taken.
+
 ---
 
 ## 2. Standing decision matrices
