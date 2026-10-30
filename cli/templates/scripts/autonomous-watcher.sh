@@ -2420,8 +2420,9 @@ run_profile_one_object() {
 # (every row but `///`; the loop above covers the quotes), which the copy's
 # wrapper twins would otherwise carry. Exit 1 the protected set or the base's
 # denyWrite list is unreadable, 2 the worktree list failed, 3 a path was
-# refused, 4 <kind> is neither kind; nothing useful is printed on a non-zero
-# exit.
+# refused, 4 <kind> is neither kind, 5 a base sibling-glob trio entry has a
+# shape hr_deny_glob_expand cannot expand; nothing useful is printed on a
+# non-zero exit.
 run_profile_entries() {
   local copy="${1%/}" kind="${2-}" rel p k a list line first=1 out="" drops g sib="" d
   case "$kind" in clone | worktree) ;; *) return 4 ;; esac
@@ -2483,7 +2484,7 @@ EOF
     while IFS=' ' read -r p k a; do
       [ "$a" = omit ] || continue
       case "$g" in *"/$p") ;; *) continue ;; esac
-      list="$(hr_deny_glob_expand "$g" "$copy")" || break
+      list="$(hr_deny_glob_expand "$g" "$copy")" || return 5
       while IFS= read -r line; do
         [ -n "$line" ] || continue
         case "$line" in
@@ -2543,7 +2544,8 @@ run_profile_render() {
     1) RUN_PROFILE_REFUSAL="the run copy's protected paths could not be read from harness.config.json, or the denyWrite list from $SETTINGS_PROFILE"; return 1 ;;
     2) RUN_PROFILE_REFUSAL="git worktree list failed in $MAIN_REPO"; return 1 ;;
     3) RUN_PROFILE_REFUSAL="a per-run profile entry carries a quote, a '*' or a tab, or the run copy's path carries a '\$', a backquote, '&', ';', '|', '<', '>' or a newline"; return 1 ;;
-    *) RUN_PROFILE_REFUSAL="the run copy's kind '$kind' is neither clone nor worktree"; return 1 ;;
+    4) RUN_PROFILE_REFUSAL="the run copy's kind '$kind' is neither clone nor worktree"; return 1 ;;
+    *) RUN_PROFILE_REFUSAL="a sibling-glob denyWrite entry of $SETTINGS_PROFILE for a run copy's .git/commondir, .git/config.worktree or .git/objects/info/http-alternates cannot be re-rooted: the watcher expands only an absolute entry with one '*' ending its segment"; return 1 ;;
   esac
   if ! run_profile_one_object "$SETTINGS_PROFILE"; then
     RUN_PROFILE_REFUSAL="the base profile $SETTINGS_PROFILE is not exactly one JSON object"

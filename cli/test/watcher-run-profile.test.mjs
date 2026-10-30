@@ -489,6 +489,25 @@ test('on a placeholder host run_profile_check accepts exactly the trio glob drop
   assert.match((await check(morePath, 1)).stdout, differs);
 });
 
+test('on a placeholder host a trio glob the expander cannot re-root refuses the render; off it the render is unchanged', async (t) => {
+  const f = await adoptedFixture(t);
+  if (f === null) return;
+
+  const base = f.base();
+  base.sandbox.filesystem.denyWrite.push(`${f.dir}/*/x-*/.git/commondir`);
+  await writeFile(f.basePath, `${JSON.stringify(base, null, 2)}\n`, 'utf8');
+  const render = (host) =>
+    f.watcherCall(`HR_PLACEHOLDER_HOST=${host}; run_profile_render "$1" "$2" clone; printf "%s|%s" "$?" "$RUN_PROFILE_REFUSAL"`, [
+      'feat_unrooted',
+      `${f.dir}-unrooted`,
+    ]);
+
+  const placeholder = await render(1);
+  assert.match(placeholder.stdout, /^1\|.*cannot be re-rooted/, placeholder.stderr);
+  const unchanged = await render(0);
+  assert.equal(unchanged.stdout, '0|', unchanged.stderr);
+});
+
 test('the opt-out profile init renders from sandbox.optOut launches', async (t) => {
   const f = await adoptedFixture(t, { optOut: true });
   if (f === null) return;
