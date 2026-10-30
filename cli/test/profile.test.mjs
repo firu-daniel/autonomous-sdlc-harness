@@ -1216,6 +1216,19 @@ test('every path that runs outside the sandbox is write-protected on both sides'
     `the write-protection _README line does not name the rows the per-run copy omits: ${protectionLine}`,
   );
   assert.ok(!protectionLine.includes('which holds on Linux too'), 'the _README line still claims an exact entry holds on Linux');
+  assert.ok(!protectionLine.includes('is unverified'), `the write-protection _README line still calls the glob treatment unverified: ${protectionLine}`);
+  assert.ok(
+    protectionLine.includes('is expanded against the directories that exist when the sandbox starts') &&
+      protectionLine.includes('2.1.314') &&
+      protectionLine.includes('was written, not refused'),
+    `the write-protection _README line does not state the measured glob treatment: ${protectionLine}`,
+  );
+  assert.ok(
+    protectionLine.includes(
+      `leaves the run copy's ${omitted} out of \`denyWrite\`, also leaves the base's sibling-glob entries for those same paths out of it, and adds an exact entry for each of them in every other sibling run copy whose .git is a directory`,
+    ),
+    `the write-protection _README line does not state the sibling-glob drop and re-rooting: ${protectionLine}`,
+  );
   assertEntriesRunnable(profile);
 });
 

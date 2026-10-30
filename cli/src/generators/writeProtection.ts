@@ -116,8 +116,13 @@ export interface CopyGitPath {
    * bubblewrap 0.8.0). A row marked `false` is a file a clone the harness made never has and the
    * wrappers' clone check refuses (`cli/templates/scripts/lib/harness-run-lib.sh` →
    * `hr_clone_target_check_var`, condition 3), so the entry is left out there; its `Edit` rules stay,
-   * and the watcher's launch check refuses a run copy carrying one. The base profile carries every
-   * row on every host.
+   * and the watcher's launch check refuses a run copy carrying one. A `*` entry there is expanded
+   * against the directories that exist when the sandbox starts, with a placeholder mounted at each
+   * absent path it yields (`docs/sandbox-verification.md` → §5 AP2; 2026-10-30, Claude Code
+   * 2.1.314, bubblewrap 0.8.0), so a row marked `false` is also left out of the per-run copy's
+   * `denyWrite` in its sibling-glob form, and the watcher re-roots it at every other sibling by
+   * exact path (`cli/templates/scripts/autonomous-watcher.sh` → `run_profile_glob_drops`,
+   * `run_profile_entries`). The base profile carries every row on every host.
    */
   readonly bubblewrapDenyWrite: boolean;
 }
@@ -456,12 +461,12 @@ export function applyWriteProtection(profile: JsonObject, { repoRoot, workRoot, 
     profile,
     `WHAT RUNS OUTSIDE THE SANDBOX CANNOT BE WRITTEN FROM INSIDE IT: each path below is in \`sandbox.filesystem.denyWrite\` and has an \`Edit\` rule in \`deny\`, because the file tools run outside the sandbox. ${paths
       .map(({ path, reason }) => `${path} - ${reason}`)
-      .join('; ')}. How the Linux sandbox treats a \`denyWrite\` entry containing \`*\` is unverified - it may skip one, or expand it to the paths that exist when the sandbox starts - so on Linux only the file-tool side is relied on for the globbed entries: a run copy's hooks directory, MCP wiring and settings files, its ${COPY_GIT_PATHS.map(
+      .join('; ')}. On Linux a \`denyWrite\` entry containing \`*\` is expanded against the directories that exist when the sandbox starts, with a placeholder mounted at each absent path it yields (docs/sandbox-verification.md §5 AP2: 2026-10-30, Claude Code 2.1.314, bubblewrap 0.8.0), and a new file under an existing directory that only such an entry covered was written, not refused (§8 GW1: 2026-10-29, Claude Code 2.1.312), so on Linux only the file-tool side is relied on for the globbed entries: a run copy's hooks directory, MCP wiring and settings files, its ${COPY_GIT_PATHS.map(
       ({ path }) => path,
     ).join(', ')}, and its docs-search-server.sh and library when docs retrieval applies. The run watcher passes each run a per-run copy of this file that adds that run's own copy's paths, and every other live worktree's .git pointer, by exact path. On a host sandboxed by bubblewrap, Claude Code enforces an exact entry for a path that does not exist by mounting a placeholder at that path, which breaks git in the run copy and can be left on disk, so the per-run copy there leaves the run copy's ${COPY_GIT_PATHS.filter(
       ({ bubblewrapDenyWrite }) => !bubblewrapDenyWrite,
     )
       .map(({ path }) => path)
-      .join(', ')} out of \`denyWrite\`: their \`Edit\` rules stay, and the watcher refuses to launch or resume a run copy carrying one. A run's own edit under a protected worktree path, such as a change to its hooks directory or to ${MCP_PATH}, or to ${SETTINGS_PATH}, is refused by design.`,
+      .join(', ')} out of \`denyWrite\`, also leaves the base's sibling-glob entries for those same paths out of it, and adds an exact entry for each of them in every other sibling run copy whose .git is a directory: their \`Edit\` rules stay, and the watcher refuses to launch or resume a run copy carrying one. A run's own edit under a protected worktree path, such as a change to its hooks directory or to ${MCP_PATH}, or to ${SETTINGS_PATH}, is refused by design.`,
   );
 }

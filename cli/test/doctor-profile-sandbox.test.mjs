@@ -22,6 +22,7 @@ import { it } from 'node:test';
 
 import { concurrentSuite } from './helpers/concurrency.mjs';
 import { createFixture, runCli } from './helpers/fixture.mjs';
+import { COPY_GIT_PATHS } from '../dist/generators/writeProtection.js';
 
 const CONFIG_FILE = 'harness.config.json';
 const PROFILE_FILE = '.claude/settings.autonomous.json';
@@ -254,7 +255,17 @@ concurrentSuite('doctor profile-write-protection', () => {
   it('(a) passes on a freshly generated profile, stating the Linux residual', async (t) => {
     const dir = await wiredFixture(t);
     const { line } = await doctorLine(dir, 'PASS', [], WRITE_CHECK_ID);
-    assert.ok(line.includes('How the Linux sandbox treats') && line.includes('is unverified'), line);
+    assert.ok(!line.includes('is unverified'), line);
+    assert.ok(line.includes('is expanded against the directories that exist when the sandbox starts'), line);
+    assert.ok(line.includes('2.1.314') && line.includes('was written, not refused'), line);
+    assert.ok(line.includes('a placeholder at that path'), line);
+    const omitted = COPY_GIT_PATHS.filter(({ bubblewrapDenyWrite }) => bubblewrapDenyWrite === false).map(({ path }) => path);
+    assert.ok(
+      line.includes(
+        `leaves a run copy's ${omitted.join(', ')} out of sandbox.filesystem.denyWrite, also drops the base's sibling-glob entries for those paths and re-roots them by exact path at every other sibling run copy`,
+      ),
+      line,
+    );
   });
 
   it("(b) warns when the main checkout's push wrapper has no denyWrite entry, naming the path and the side", async (t) => {
