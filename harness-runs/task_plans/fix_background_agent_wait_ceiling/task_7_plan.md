@@ -18,23 +18,23 @@
 
 **Work:**
 
-- [ ] `docs/watcher.md` §1:
+- [x] `docs/watcher.md` §1:
   - step 6 adds `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0` beside `HARNESS_MAIN_REPO` in the session's environment, with one sentence on why and that no operator value overrides it;
   - step 7 says the zero-exit case reads the run's ledger, per engine as above, and names the absent/unreadable rule;
   - in the status table, `completed` becomes *the session ended cleanly with no park or pause signal **and its ledger finished*** (an absent ledger keeps it, as stated in step 7), and `paused` gains *or its session exited 0 before its ledger finished (`pause_reason` `unfinished`)*, its *What ends it* cell naming `/autonomous-sdlc-harness:branch-resume`.
-- [ ] `docs/watcher.md` §4: add a paragraph, **A zero exit over an unfinished ledger is a pause, not a completion.**, after the parking paragraphs. It covers:
+- [x] `docs/watcher.md` §4: add a paragraph, **A zero exit over an unfinished ledger is a pause, not a completion.**, after the parking paragraphs. It covers:
   - the incident in one sentence, with the CLI's measured line, its version (Claude Code 2.1.314) and its date (2026-10-30), per `.claude/context/conventions.md` → `## Documents of record`, *"A measured fact states what was measured, the command and the exact message"*;
   - the ceiling setting and its no-override decision;
   - how the stall watchdog sees a session waiting on a background agent: the agent's tool calls reach the stream and the run log, so a working agent keeps liveness moving and a hung one is killed and resumed as before;
   - the `unfinished` record and its way on, with the resume command in a fenced block of its own (`harness-runs/lessons.md` → *"Every command an adopter is meant to run sits in a fenced block"*);
   - the `stopped background tasks` `watcher.log` line, as evidence the setting did not take.
   Give the remote case one sentence pointing at [`remote-execution.md`](remote-execution.md) → `### API errors`.
-- [ ] `ARCHITECTURE.md` §5, the `spawn_engine` row:
+- [x] `ARCHITECTURE.md` §5, the `spawn_engine` row:
   - *"The session is launched with one environment variable, `HARNESS_MAIN_REPO`, …"* becomes two: `HARNESS_MAIN_REPO` as now, and `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0`, which keeps the CLI from stopping the session's background sub-agents after its last turn;
   - its *binds* cell notes the second is one CLI's spelling of a behaviour;
   - its adapter cell adds *a way to make a headless session wait for its background sub-agents*.
   Keep the row's `[shipped]` status and the section's site count: this is no new site, it is the same `spawn_engine` row.
-- [ ] `ARCHITECTURE.md` §7 item 1 (*Launch a session*): add that the launched session waits for its background sub-agents after its last turn, in the item's `[designed]` voice, still *forced by* §5's `spawn_engine` row.
+- [x] `ARCHITECTURE.md` §7 item 1 (*Launch a session*): add that the launched session waits for its background sub-agents after its last turn, in the item's `[designed]` voice, still *forced by* §5's `spawn_engine` row.
 
 **Verification:**
 
