@@ -33,3 +33,16 @@
 - **evidence:** dispatch #39 (`[C · Item 3 · cli · iter 0] → layer-implementer`, code-review Finding 1, tag `cli, general`) returned an unmarked blocker: "the finding's fix needs edits outside this dispatch's `cli` path scope". It was re-dispatched as #40 with the routing fact on a `context_notes:` line (`harness-runs/dispatch_additions/fix_linux_sandbox_deny_placeholders.md`), and then completed. The architecture Finding 1 unit, same `cli, general` shape, ran its cli layer without that note and left the general half for the next dispatch.
 - **cost this run:** 1 dispatch redone.
 - **hypothesis:** a guess — the per-finding fix steps name both layers' files, and the implementer cannot see which layer will follow.
+
+# User-review fix round 1 — job-mode placeholder manifest and sweep
+
+## The per-unit layer reviewer passed all 3 fix items on its first pass and changed nothing
+- **category:** optimization
+- **evidence:** zero-yield phase. `layer-reviewer` ran once on each of the 3 fix-plan units (dispatches #2, #5, #8) and returned `verdict: PASS` at iteration 0 each time; each unit's folder under `harness-runs/user_review_fix_plan_point_reviews/fix_linux_sandbox_deny_placeholders_fix_plan/` holds only `item_<K>/review_0.md` (items 1–3), and no fix re-dispatch followed any of them.
+- **cost this run:** 3 dispatches, no change to any unit.
+
+## The disposition derivation's unit-token match picks up a task-run commit whose token collides with this round's
+- **category:** agent-contract
+- **evidence:** the prescribed `git log … <default_branch>..HEAD` could not run as written: `git rev-parse --verify dev` printed `fatal: Needed a single revision` in this checkout, and `statistics-plan-writer` reported the same fallback to `origin/dev..HEAD`. Over `origin/dev..HEAD`, commit `acf9bd90` (`fix: Record disposition of Finding 2 — …`) matches, and its token `Finding 2` is also a readiness unit of this round's `harness-runs/user_reviews/fix_linux_sandbox_deny_placeholders_fix_plan.md`. But that commit changes only `harness-runs/code_reviews/fix_linux_sandbox_deny_placeholders_code_review.md` and its `finding_2.md` (the task run's code review), and this round's Finding 2 landed code in `53ebd512`. It was excluded by its changed-file list, not by the token intersection, so this round reports no dispositioned items.
+- **cost this run:** none landed. Applied literally, the token intersection would have reported a task-run disposition as this round's.
+- **hypothesis:** a guess — `Finding K` tokens repeat across a branch's code-review and user-review indices, so the token alone does not identify the round.
