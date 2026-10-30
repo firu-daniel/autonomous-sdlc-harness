@@ -326,8 +326,8 @@
 # In job mode the same sweep runs at the head of `spawn_engine`'s job arm, in
 # the KILL tier ahead of the copy check and the reset (an untracked leftover
 # `.claude/settings.local.json` makes `hr_run_reset_var` refuse), at
-# `run_job`'s exit ahead of the workflow's `Push the branch` step, and in the
-# job-mode start-up recovery; its manifest is `hr_job_absent_file`'s, under
+# `run_job`'s exit ahead of the workflow's `Push the branch` step, in the
+# job-mode start-up recovery, and in `job-sweep` (JOB MODE); its manifest is `hr_job_absent_file`'s, under
 # `$RUNNER_TEMP`, because the machine lane is off in a job and a hosted
 # runner's lane directory would not outlive it.
 #
@@ -416,8 +416,8 @@
 #
 # WHO RUNS IT. The service manager (`daemon install` renders the unit), or a
 # person by hand for a single `tick` or a `status` — and one other runner, the
-# remote workflow's harness step, invoking `job` with HARNESS_JOB_MODE=1 (see
-# JOB MODE). NEVER a dispatched agent:
+# remote workflow's harness step, invoking `job` with HARNESS_JOB_MODE=1, and its
+# sweep step, invoking `job-sweep` (see JOB MODE). NEVER a dispatched agent:
 # its basename is on the script-allowlist guard's `DENY_SCRIPT_BASENAMES`, so
 # that guard withholds the permit rather than granting one, and the generated
 # permission profile emits no rule for it either — an agent that could start runs
@@ -457,6 +457,13 @@
 #     without the one-run cap, which a single-run job never needs. A stall
 #     kill's leftovers would otherwise refuse the watchdog's reset and every
 #     later wrapper call of the job.
+#   * `job-sweep <branch>`, also refused unless HARNESS_JOB_MODE=1, is the
+#     workflow's `Sweep the sandbox placeholders` step: a cancel or a step
+#     timeout kills this watcher with its session, so `run_job`'s exit sweep
+#     never runs and `push-branch.sh` would refuse the leftovers. It runs the
+#     start-up recovery and one manifest sweep, not probe-gated, keeping
+#     everything while a run is live, and exits 0. Its basename's place on
+#     `DENY_SCRIPT_BASENAMES` (WHO RUNS IT) keeps every session from it.
 #   * THE REGISTRY is the checkout's gitignored one, ephemeral by construction;
 #     what must cross a job boundary rides in the remote state bundle's
 #     `status.json`, restored to `autonomous_logs/remote_status.json` before the
@@ -587,18 +594,24 @@
 #                                    # HARNESS_JOB_DEADLINE_EPOCH,
 #                                    # RUNNER_ENVIRONMENT, GITHUB_RUN_ID and
 #                                    # REMOTE_SELF_PAUSE_AFTER_SECS
+#   HARNESS_JOB_MODE=1 autonomous-watcher.sh job-sweep <branch>
+#                                    # the workflow's post-session placeholder
+#                                    # sweep (JOB MODE). Also reads RUNNER_TEMP
 #
 # Exit map a caller can switch on:
 #
 #   0  the subcommand ran (the watch loop only returns this way on a signal).
 #      For `job`: the run reached a state the job stops in, and
-#      <state_dir>/autonomous_logs/remote_status.json says which, with its decision
+#      <state_dir>/autonomous_logs/remote_status.json says which, with its decision.
+#      For `job-sweep`: the sweep ran or was skipped for a live run, as logged
 #   1  refused to start: the library, the repository or the configuration could
 #      not be resolved. Nothing was created and no run was touched
 #   2  usage error: an unrecognized subcommand; for `job`, also bad arguments,
 #      HARNESS_JOB_MODE not 1, HARNESS_INPUT_CHAIN neither empty nor a
 #      non-negative integer, or a <branch> hr_branch_is_protected answers
-#      protected or unresolvable for. Nothing is launched
+#      protected or unresolvable for; for `job-sweep`, also HARNESS_JOB_MODE
+#      not 1 or other than one argument, refused before any sweep. Nothing is
+#      launched
 #
 # REPRO — reproduce any decision by hand, against a throwaway fixture:
 #
@@ -961,6 +974,20 @@ fatal() {
   exit 1
 }
 
+# job_usage <job|job-sweep> <reason> — a job-mode subcommand's exit-2 refusal:
+# one line on stderr and that subcommand's usage, nothing launched. Defined
+# here because `job-sweep` is refused before the start-up recovery.
+job_usage() {
+  local verb="${1-job}"
+  shift
+  echo "$self: $verb: $*" >&2
+  case "$verb" in
+    job-sweep) echo "usage: HARNESS_JOB_MODE=1 $self job-sweep <branch>" >&2 ;;
+    *) echo "usage: HARNESS_JOB_MODE=1 $self job <branch> <task|user_review|docs> <none|answer|pause>" >&2 ;;
+  esac
+  exit 2
+}
+
 # -----------------------------------------------------------------------------
 # The shared library, reached by a path computed from this script's own location —
 # no session root and no runtime-substituted token is assumed. It is sourced
@@ -1059,7 +1086,7 @@ placeholder_start_recover() {
   local main logs live slug="" line removed=0 job=0
   if [ "${HARNESS_JOB_MODE:-}" = "1" ]; then
     case "${1-}" in
-      job) job=1 ;;
+      job | job-sweep) job=1 ;;
       *) return 0 ;;
     esac
   fi
@@ -1093,6 +1120,12 @@ EOF
   hr_config_reset
   return 0
 }
+# `job-sweep` is refused ahead of the recovery, which would otherwise sweep the
+# slug's local manifests for it outside job mode.
+if [ "${1-}" = "job-sweep" ]; then
+  [ "${HARNESS_JOB_MODE:-}" = "1" ] || job_usage job-sweep "refused: HARNESS_JOB_MODE is not 1 — it sweeps the job's checkout"
+  [ "$#" -eq 2 ] || job_usage job-sweep "expected <branch>"
+fi
 placeholder_start_recover "${1-}"
 
 # -----------------------------------------------------------------------------
@@ -1510,8 +1543,8 @@ LAST_CONTROL_POLL=0
 JOB_PROGRESS_LAST=""
 JOB_USER_PAUSE_DROPPED=0
 JOB_BUDGET_PAUSE_DROPPED=0
-# job_mode_enter — the `job` entry's switch into job mode, and the one copy of
-# its forced-off list, which a test sourcing this script calls too.
+# job_mode_enter — the `job` and `job-sweep` entries' switch into job mode, and
+# the one copy of its forced-off list, which a test sourcing this script calls too.
 job_mode_enter() {
   JOB_MODE=1
   AUTO_TAIL_TERMINAL=0
@@ -1522,9 +1555,9 @@ job_mode_enter() {
     export HARNESS_REPO_SLUG
   fi
 }
-if [ "${1:-}" = "job" ]; then
-  job_mode_enter
-fi
+case "${1:-}" in
+  job | job-sweep) job_mode_enter ;;
+esac
 
 # The keep-awake decision (KEEP AWAKE in the header), copied out of the
 # library's result variables. Resolved here, after JOB_MODE, so `status` reports
@@ -1876,9 +1909,15 @@ placeholder_manifest_writable_root() {
 # session's placeholders are its own mounts, so a live run skips the sweep,
 # logged unless <quiet> is 1. Returns 0.
 placeholder_sweep_pass() {
-  local exclude="${1-}" quiet="${2-0}" live line
   hr_placeholder_host_probe_var
   [ "$HR_PLACEHOLDER_HOST" = "1" ] || return 0
+  placeholder_sweep_unprobed "${1-}" "${2-0}"
+}
+
+# placeholder_sweep_unprobed <exclude_branch> <quiet> — placeholder_sweep_pass
+# on any host. Its other caller: job_sweep.
+placeholder_sweep_unprobed() {
+  local exclude="${1-}" quiet="${2-0}" live line
   live="$(running_count "$exclude")"
   if [ "$live" != "0" ]; then
     [ "$quiet" = "1" ] || log "placeholder sweep: skipped, $live run(s) of this repository live"
@@ -5366,13 +5405,6 @@ watch_loop() {
 # through the `job` arm below, which has already refused a bad invocation.
 # -----------------------------------------------------------------------------
 
-# job_usage <reason> — the exit-2 refusal: one line on stderr, nothing launched.
-job_usage() {
-  echo "$self: job: $*" >&2
-  echo "usage: HARNESS_JOB_MODE=1 $self job <branch> <task|user_review|docs> <none|answer|pause>" >&2
-  exit 2
-}
-
 # The job's name in a `resumed` notification: its GitHub run when known.
 job_label() {
   if [ -n "${GITHUB_RUN_ID:-}" ]; then
@@ -5805,6 +5837,18 @@ run_job() {
   exit 0
 }
 
+# job_sweep <branch> — the `job-sweep` entry, the workflow's `Sweep the sandbox
+# placeholders` step: one job-mode manifest sweep after a `Run the harness` step
+# whose watcher was killed with its session, so `run_job`'s exit sweep never
+# ran. A leftover `<scriptsDir>/.git` was already swept by the start-up
+# recovery; this pass takes what does not stop `hr_main_repo`. Not gated on the
+# probe, as `placeholder_start_recover` is not. Exits 0.
+job_sweep() {
+  log "job-sweep: '${1-}': sweeping this job's recorded placeholder leftovers"
+  placeholder_sweep_unprobed "" 0
+  exit 0
+}
+
 # -----------------------------------------------------------------------------
 # Entry point.
 # -----------------------------------------------------------------------------
@@ -5839,13 +5883,13 @@ watch | "")
 job)
   # Every refusal comes before anything is launched or recorded; see the header's
   # JOB MODE block for why HARNESS_JOB_MODE is the first of them.
-  [ "${HARNESS_JOB_MODE:-}" = "1" ] || job_usage "refused: HARNESS_JOB_MODE is not 1 — job mode resets the checkout it runs in"
-  [ "$#" -eq 4 ] || job_usage "expected <branch> <engine> <resume>"
-  case "$3" in task | user_review | docs) ;; *) job_usage "unknown engine '$3'" ;; esac
-  case "$4" in none | answer | pause) ;; *) job_usage "unknown resume '$4'" ;; esac
+  [ "${HARNESS_JOB_MODE:-}" = "1" ] || job_usage job "refused: HARNESS_JOB_MODE is not 1 — job mode resets the checkout it runs in"
+  [ "$#" -eq 4 ] || job_usage job "expected <branch> <engine> <resume>"
+  case "$3" in task | user_review | docs) ;; *) job_usage job "unknown engine '$3'" ;; esac
+  case "$4" in none | answer | pause) ;; *) job_usage job "unknown resume '$4'" ;; esac
   HARNESS_INPUT_CHAIN="${HARNESS_INPUT_CHAIN:-0}"
   case "$HARNESS_INPUT_CHAIN" in
-    *[!0-9]*) job_usage "HARNESS_INPUT_CHAIN must be empty or a non-negative integer" ;;
+    *[!0-9]*) job_usage job "HARNESS_INPUT_CHAIN must be empty or a non-negative integer" ;;
   esac
   HARNESS_INPUT_CHAIN="$((10#$HARNESS_INPUT_CHAIN))"
   export HARNESS_INPUT_CHAIN
@@ -5854,12 +5898,16 @@ job)
   hr_branch_is_protected "$MAIN_REPO" "$2"
   case "$?" in
     1) ;;
-    *) job_usage "refused: '$2' is a protected branch, or its protection is unresolvable" ;;
+    *) job_usage job "refused: '$2' is a protected branch, or its protection is unresolvable" ;;
   esac
   run_job "$2" "$3" "$4"
   ;;
+job-sweep)
+  # Refused before the start-up recovery unless HARNESS_JOB_MODE=1 with one argument.
+  job_sweep "$2"
+  ;;
 *)
-  echo "usage: $self [watch|tick|status|usage|job]" >&2
+  echo "usage: $self [watch|tick|status|usage|job|job-sweep]" >&2
   exit 2
   ;;
 esac

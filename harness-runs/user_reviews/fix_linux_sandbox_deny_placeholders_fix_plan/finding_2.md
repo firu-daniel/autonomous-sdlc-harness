@@ -48,3 +48,11 @@ This is not the stall-kill case the user asked to fix, so it is Should Fix. It i
   2. The same without `HARNESS_JOB_MODE=1` exits 2 and leaves the file.
   3. The same with the record's `pid` live keeps the file.
   4. A leftover that no manifest lists is kept.
+
+**Deviations from plan:**
+
+- `job-sweep`'s two refusals (HARNESS_JOB_MODE not 1, other than one argument) run at source time, directly ahead of `placeholder_start_recover "${1-}"`, not in the entry arm. In the entry arm they come after the source-time `fatal` that a leftover `<scriptsDir>/.git` triggers when the recovery does not run outside job mode, so test case 2 would have exited 1, not 2. `job_usage` therefore moves up beside `fatal` and takes the subcommand as its first argument: `job_usage <job|job-sweep> <reason>`. The `job` arm's call sites now pass `job`. Its message is unchanged.
+- The entry's sweep is a new `placeholder_sweep_unprobed <exclude> <quiet>`, split out of `placeholder_sweep_pass`, which keeps the probe gate and now calls it. This avoids a second copy of the live-run skip and the removed/kept logging.
+- Test case 3 has two subtests. With a live pid and a leftover `<scriptsDir>/.git`, the start-up recovery keeps the file and the watcher's existing start refusal exits 1 before the entry runs, so no skip line is logged; the subtest asserts the file is kept, exit 1 and `START_REFUSAL`. The finding's "logs the skip" is asserted on a second subtest that uses a leftover `.claude/settings.local.json`: exit 0, kept, and `placeholder sweep: skipped, 1 run(s) of this repository live`. An extra case, 1b, asserts that the entry's own pass removes a `.claude/settings.local.json` leftover. Case 4 also asserts exit 1 and `START_REFUSAL`.
+- The workflow header has no list of post-session steps (a read of its header block found only generic `always()` mentions), so the new step carries its own header comment and no header list was edited.
+- `docs/watcher.md` (the sweep-points paragraph) and `docs/cli.md` §6 residual 12 (**Job mode** item 2) still describe the unswept cancel/timeout case. Both are outside the `cli` layer's path and were not edited.

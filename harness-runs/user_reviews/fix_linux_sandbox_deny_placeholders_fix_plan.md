@@ -21,7 +21,7 @@ The user's suggestions were checked against the code. Four hold, and the fix kee
 Each entry resolves to a self-contained `harness-runs/user_reviews/fix_linux_sandbox_deny_placeholders_fix_plan/finding_<K>.md` via its `**Finding K**` reference. The order runs from lowest blast radius to widest, with the catch-all layer last.
 
 1. [x] **Finding 1** — Extend the absent-path manifest (under `$RUNNER_TEMP`) and the leftover sweep to job mode. The sweep runs at the head of the job's `spawn_engine` arm, in the stall watchdog's KILL tier before the recovery's copy check and reset, at `run_job`'s exit, and in a job-mode start-up recovery. No launch check is added. Job-mode tests come with it. _(layer: cli)_
-2. [ ] **Finding 2** — Add a `job-sweep` watcher subcommand and a `Sweep the sandbox placeholders` workflow step before `Push the branch`, so a cancelled or timed-out job still pushes. _(layer: cli)_
+2. [x] **Finding 2** — Add a `job-sweep` watcher subcommand and a `Sweep the sandbox placeholders` workflow step before `Push the branch`, so a cancelled or timed-out job still pushes. _(layer: cli)_
 3. [ ] **Finding 3** — Rewrite `docs/cli.md` §6 residual 12's **Job mode** item and the story index's `## Context` job-mode bullet to describe the job-mode coverage. Re-scope the *"outside job mode"* statements in `docs/cli.md` and `docs/watcher.md`, name the new step in `docs/remote-execution.md`, and refresh the self-adopted `scripts/` copies. _(layer: general)_
 
 ---

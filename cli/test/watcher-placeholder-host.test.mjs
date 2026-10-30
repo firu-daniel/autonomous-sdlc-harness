@@ -8,7 +8,12 @@
  * at a time, and removes only a recorded, 0-byte, read-only leftover, before the first reader that it
  * breaks, including the watcher's own start. In a job the watcher records what was absent under
  * `$RUNNER_TEMP` and removes those leftovers before the watchdog's recovery and before the job
- * ends.** The seam-off cases hold that a host that is not one takes none of those arms.
+ * ends, and `job-sweep` removes them after a watcher killed with its session.** The seam-off cases
+ * hold that a host that is not one takes none of those arms.
+ *
+ * The `job-sweep:` cases run the written watcher's `job-sweep` entry against a job fixture whose
+ * registry holds the branch `running` under a dead pid, or a live one, and whose `RUNNER_TEMP`
+ * manifest is written through `hr_job_absent_file`.
  *
  * The `job:` cases source the watcher, enter job mode through `job_mode_enter` — the `job` entry's
  * own switch — install the seam, point `RUNNER_TEMP` at a fixture-owned sibling of the checkout and
@@ -771,6 +776,150 @@ test('job: (5) with RUNNER_TEMP unset the job launches, logs that it has no mani
   assert.equal(f.prompts().length, 1, log);
   assert.ok(log.includes(`placeholder manifest: no path for '${f.branch}' — the next sweep removes nothing for this session`), log);
   assert.equal(existsSync(f.manifestDir), false, log);
+});
+
+// ---------------------------------------------------------------------------------------------
+// `job-sweep`: the workflow's post-session sweep, after a watcher killed with its session. Not
+// probe-gated, so no case installs the seam.
+// ---------------------------------------------------------------------------------------------
+
+/** A pid that answered once and no longer does: a process spawned and reaped. */
+async function deadPid() {
+  const child = spawn('true', [], { stdio: 'ignore' });
+  await new Promise((resolve) => child.once('exit', resolve));
+  return String(child.pid);
+}
+
+/**
+ * A job fixture whose `RUNNER_TEMP` manifest for the branch records the paths `pick` names, each
+ * still absent, and whose registry holds the branch `running` under `pid`, as a killed job's does.
+ *
+ * @param {import('node:test').TestContext} t
+ * @param {string} pid
+ * @param {(f: any) => string[]} pick
+ */
+async function killedJobFixture(t, pid, pick) {
+  const f = await jobFixture(t);
+  if (f === null) return null;
+  const paths = pick(f);
+  const written = await runBash(
+    f.dir,
+    [
+      '-c',
+      '. "$1"; m="$(hr_job_absent_file "$2")" || exit 1; shift 2; hr_placeholder_manifest_write "$m" "$@"',
+      '_',
+      join(f.dir, LIB_PATH),
+      f.branch,
+      ...paths,
+    ],
+    f.watcherEnv({ RUNNER_TEMP: f.runnerTemp }),
+    { timeoutMs: TICK_TIMEOUT_MS, signal: t.signal },
+  );
+  assert.equal(written.status, 0, written.stderr);
+  assert.deepEqual(readFileSync(f.manifest, 'utf8').split('\n').filter((l) => l !== ''), paths);
+  await f.writeRegistry({ runs: { [f.branch]: { status: 'running', pid, engine: 'task' } } });
+  return {
+    ...f,
+    /** `autonomous-watcher.sh job-sweep <branch>` in job mode, `env` over the job environment. */
+    sweep: (env = {}) =>
+      runBash(
+        f.dir,
+        [f.watcherPath, 'job-sweep', f.branch],
+        f.watcherEnv({ HARNESS_JOB_MODE: '1', RUNNER_TEMP: f.runnerTemp, ...env }),
+        { timeoutMs: TICK_TIMEOUT_MS, signal: t.signal },
+      ),
+  };
+}
+
+/** A live process for a `running` record's pid, killed when the case ends. */
+function livePid(t) {
+  const live = spawn('sleep', ['300'], { stdio: 'ignore' });
+  t.after(() => live.kill('SIGKILL'));
+  return String(live.pid);
+}
+
+test("job-sweep: (1) a killed job's recorded <scriptsDir>/.git is swept, and the wrapper anchor resolves", async (t) => {
+  const f = await killedJobFixture(t, await deadPid(), (k) => [k.scriptsGit]);
+  if (f === null) return;
+  await plantLeftover(f.scriptsGit);
+
+  const result = await f.sweep();
+
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(present(f.scriptsGit), false, result.stderr);
+  assert.ok(result.stderr.includes(`autonomous-watcher.sh: placeholder sweep at start: removed ${f.scriptsGit}`), result.stderr);
+  const anchor = await runBash(
+    f.dir,
+    ['-c', '. "$1"; hr_wrapper_main_of "$2"', '_', join(f.dir, LIB_PATH), join(f.dir, INIT_SCRIPTS_DIR)],
+    {},
+    { timeoutMs: TICK_TIMEOUT_MS, signal: t.signal },
+  );
+  assert.equal(anchor.status, 0, anchor.stderr);
+  assert.equal(realpathSync(anchor.stdout.trim()), realpathSync(f.dir));
+});
+
+test("job-sweep: (1b) a recorded leftover that does not stop git is swept by the entry's own pass", async (t) => {
+  const f = await killedJobFixture(t, await deadPid(), (k) => [k.settingsLocal]);
+  if (f === null) return;
+  await plantLeftover(f.settingsLocal);
+
+  const result = await f.sweep();
+
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(present(f.settingsLocal), false, f.watcherLog());
+  assert.ok(f.watcherLog().includes(`placeholder sweep: removed ${f.settingsLocal}`), f.watcherLog());
+});
+
+test('job-sweep: (2) without HARNESS_JOB_MODE=1 it exits 2 and leaves the leftover', async (t) => {
+  const f = await killedJobFixture(t, await deadPid(), (k) => [k.scriptsGit]);
+  if (f === null) return;
+  await plantLeftover(f.scriptsGit);
+
+  const result = await f.sweep({ HARNESS_JOB_MODE: '' });
+
+  assert.equal(result.status, 2, `${result.stdout}\n${result.stderr}`);
+  assert.ok(result.stderr.includes('autonomous-watcher.sh: job-sweep: refused: HARNESS_JOB_MODE is not 1'), result.stderr);
+  assert.equal(present(f.scriptsGit), true, result.stderr);
+});
+
+test("job-sweep: (3) with the record's pid live a recorded leftover is kept", async (t) => {
+  await t.test('<scriptsDir>/.git: kept, and the start refused', async (st) => {
+    const f = await killedJobFixture(st, livePid(st), (k) => [k.scriptsGit]);
+    if (f === null) return;
+    await plantLeftover(f.scriptsGit);
+
+    const result = await f.sweep();
+
+    assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+    assert.ok(result.stderr.includes(START_REFUSAL), result.stderr);
+    assert.equal(present(f.scriptsGit), true, result.stderr);
+  });
+
+  await t.test('.claude/settings.local.json: kept, and the skip logged', async (st) => {
+    const f = await killedJobFixture(st, livePid(st), (k) => [k.settingsLocal]);
+    if (f === null) return;
+    await plantLeftover(f.settingsLocal);
+
+    const result = await f.sweep();
+
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(present(f.settingsLocal), true, f.watcherLog());
+    assert.ok(f.watcherLog().includes('placeholder sweep: skipped, 1 run(s) of this repository live'), f.watcherLog());
+  });
+});
+
+test('job-sweep: (4) a leftover no manifest lists is kept', async (t) => {
+  const f = await killedJobFixture(t, await deadPid(), (k) => [join(k.dir, 'never-planted')]);
+  if (f === null) return;
+  await plantLeftover(f.scriptsGit);
+
+  const result = await f.sweep();
+
+  assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+  assert.ok(result.stderr.includes(START_REFUSAL), result.stderr);
+  const stat = statSync(f.scriptsGit);
+  assert.equal(stat.size, 0);
+  assert.equal(stat.mode & 0o777, 0o444);
 });
 
 test('(8) a kept path is not logged by the quiet pass-start sweep', async (t) => {
