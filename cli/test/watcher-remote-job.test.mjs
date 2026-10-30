@@ -40,7 +40,12 @@
  * `pause_reason` vocabulary -> `pause_reason` written empty; `classify_run_exit`'s `unfinished`
  * write made unconditional, overwriting `user` -> the user-pause case shows `pause_reason`
  * `unfinished`; the usage / budget precedence removed from `classify_run_exit`'s `unfinished` arm
- * -> both cases show `pause_reason` `unfinished` and two prompts.
+ * -> both cases show `pause_reason` `unfinished` and two prompts; `pause_note_stale 1` dropped from
+ * `classify_run_exit`'s `unfinished` write -> the auto-resume case fails; `pause_note_stale 1`
+ * dropped from its held-reason write -> the in-job usage relaunch case fails, and the user, usage
+ * and budget cases with it; `pause_note_stale` dropped from `hr_remote_status_write` -> the
+ * auto-resume, user, usage and budget cases show it absent from the bundle; `run_job`'s
+ * `prev_note_stale` read dropped -> both restored `pause_note_stale` pause-note cases fail.
  *
  * **A job commits each session's run analytics on its branch and pushes nothing for them:** the
  * workflow's `Push the branch` step does. The `run analytics:` case drives a job with the real
@@ -536,6 +541,19 @@ test('pause note: kept only for a pause resume of a paused job of the same engin
     assert.equal(readFileSync(f.notePath, 'utf8'), NOTE);
     assert.deepEqual(f.superseded(), []);
   });
+
+  for (const reason of ['unfinished', 'budget']) {
+    await t.test(`restored paused / ${reason} with pause_note_stale, same engine + a note, resume pause: stop/kill clause, note moved aside`, async (t) => {
+      const f = await fixture(t, { restored: { status: 'paused', engine: 'task', pause_reason: reason, pause_note_stale: '1' }, note: true });
+      if (f === null) return;
+      const result = await f.j.job([f.j.branch, 'task', 'pause']);
+      assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+      const prompt = f.j.prompts().at(-1);
+      assert.match(prompt, STOP_KILL);
+      assert.doesNotMatch(prompt, /PAUSE_PROGRESS\.md/);
+      f.assertMovedAside(`${reason} stale`);
+    });
+  }
 
   await t.test('restored paused by engine task, job engine user_review: stop/kill clause, note moved aside', async (t) => {
     const f = await fixture(t, { restored: { status: 'paused', engine: 'task' }, note: true });
@@ -1215,9 +1233,11 @@ test('unfinished: a zero exit over an unfinished ledger is resumed, bounded, the
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
     assert.equal(lastLine(result.stdout), 'job: paused stop');
     assert.equal(j.prompts().length, 2);
-    assert.match(j.prompts()[1], /RESUME from a PAUSE/);
+    assert.match(j.prompts()[1], /RESUME after the previous job was stopped or ended without pausing: there is no pause note/);
+    assert.doesNotMatch(j.prompts()[1], /PAUSE_PROGRESS\.md/);
     assert.equal(j.status().status, 'paused');
     assert.equal(j.status().pause_reason, 'unfinished');
+    assert.equal(j.status().pause_note_stale, '1');
     assert.equal(j.status().decision, 'stop');
     const notes = j.notifications();
     const paused = notes.filter((n) => n.event === 'paused');
@@ -1255,6 +1275,7 @@ test('unfinished: a zero exit over an unfinished ledger is resumed, bounded, the
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
     assert.equal(lastLine(result.stdout), 'job: paused stop');
     assert.equal(j.status().pause_reason, 'user');
+    assert.equal(j.status().pause_note_stale, '1');
     assert.equal(j.status().decision, 'stop');
     assert.equal(j.prompts().length, 1);
     const notes = j.notifications();
@@ -1281,6 +1302,7 @@ test('unfinished: a zero exit over an unfinished ledger is resumed, bounded, the
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
     assert.equal(lastLine(result.stdout), 'job: paused wait-poller');
     assert.equal(j.status().pause_reason, 'usage');
+    assert.equal(j.status().pause_note_stale, '1');
     assert.equal(j.prompts().length, 1);
     assert.match(j.watcherLog(), /paused \(unfinished\)/);
   });
@@ -1300,7 +1322,28 @@ test('unfinished: a zero exit over an unfinished ledger is resumed, bounded, the
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
     assert.equal(lastLine(result.stdout), 'job: paused continue');
     assert.equal(j.status().pause_reason, 'budget');
+    assert.equal(j.status().pause_note_stale, '1');
     assert.equal(j.prompts().length, 1);
+  });
+
+  await t.test('a usage pause pending at an unfinished exit, reset in the job -> the relaunch names no pause note', async (t) => {
+    const j = await createJobFixture(t);
+    if (j === null) return;
+    const copy = await stageLedger(j, taskLedger(j.branch, []));
+    await j.setStub(
+      `${COUNT_LAUNCH}\nif [ "$n" = 1 ]; then ${rateLimitRejected(REPEAT_RESET_AHEAD_SECS)}; for i in $(seq 1 ${REPEAT_PAUSE_WAIT_TENTHS}); do if [ -f "$STATE/PAUSE" ]; then break; fi; sleep 0.1; done; ${copy}; fi\nexit 0`,
+    );
+    const result = await j.job([j.branch, 'task', 'none'], {
+      USAGE_CHECK_INTERVAL_SECS: '1',
+      USAGE_RESUME_MARGIN_SECS: '0',
+      REMOTE_AUTO_RESUME_DELAY_SECS: '0',
+      REMOTE_AUTO_RESUME_MAX: '0',
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(lastLine(result.stdout), 'job: paused stop');
+    assert.equal(j.prompts().length, 2);
+    assert.match(j.prompts()[1], /RESUME after the previous job was stopped or ended without pausing: there is no pause note/);
+    assert.doesNotMatch(j.prompts()[1], /PAUSE_PROGRESS\.md/);
   });
 });
 

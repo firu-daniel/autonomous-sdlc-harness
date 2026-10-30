@@ -17,7 +17,9 @@
  * - `absent` treated as `unfinished` → `task, absent` and `docs, absent` fail;
  * - the ledger check moved above the `PAUSE_ACK` arm → both `order` cases fail, and `task,
  *   unfinished` with them;
- * - the `pause_reason` clear removed from `begin_pause_resume` → `hygiene` fails.
+ * - the `pause_reason` clear removed from `begin_pause_resume` → `hygiene` fails;
+ * - `spawn_engine`'s `pause_note_stale` read kept job-mode only → `note, unfinished` fails;
+ * - the `pause_note_stale` clear dropped from the local `PAUSE_ACK` arm → `note, real pause` fails.
  */
 
 import assert from 'node:assert/strict';
@@ -212,4 +214,37 @@ test('hygiene: resuming an unfinished pause to a finished ledger leaves no pause
   await resumeOnce(f, await writesFile(f, TASK_LEDGER, taskLedger(allMarked(TASK_IDS))), 'task', false);
 
   assertCompleted(f);
+});
+
+const NO_NOTE = /RESUME after the previous job was stopped or ended without pausing: there is no pause note/;
+
+test('note, unfinished: a local resume after an unfinished exit names no pause note', async (t) => {
+  const f = await createWatcherFixture(t);
+  if (f === null) return;
+
+  await resumeOnce(f, await writesFile(f, TASK_LEDGER, taskLedger({})));
+  assertUnfinished(f);
+  assert.equal(f.record().pause_note_stale, '1', f.watcherLog());
+
+  await resumeOnce(f, ':', 'task', false);
+
+  const prompt = f.prompts().at(-1);
+  assert.match(prompt, NO_NOTE);
+  assert.doesNotMatch(prompt, /PAUSE_PROGRESS\.md/);
+});
+
+test('note, real pause: a PAUSE_ACK after an unfinished exit restores the note-naming resume', async (t) => {
+  const f = await createWatcherFixture(t);
+  if (f === null) return;
+
+  await resumeOnce(f, await writesFile(f, TASK_LEDGER, taskLedger({})));
+  assertUnfinished(f);
+
+  await resumeOnce(f, `: > ${STATE_DIR}/PAUSE_ACK`, 'task', false);
+  assert.equal(f.record().status, 'paused', f.watcherLog());
+  assert.equal(f.record().pause_note_stale ?? '', '', f.watcherLog());
+
+  await resumeOnce(f, ':', 'task', false);
+
+  assert.match(f.prompts().at(-1), /RESUME from a PAUSE: read sdlc-harness\/PAUSE_PROGRESS\.md/);
 });

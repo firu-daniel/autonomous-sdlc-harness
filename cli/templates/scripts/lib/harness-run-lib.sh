@@ -5343,7 +5343,11 @@ hr_push_landed() {
 #                           registry-only `killed` and `expired` are never written
 #                           here: `sync` derives each from a run and its artifact
 #                           list, not from a bundle
-#   usage_resume_at         the epoch second a usage pause may resume at, or empty
+#   pause_note_stale        `1` when the run's next pause resume must not name
+#                           PAUSE_PROGRESS.md, because the session that left
+#                           the record `paused` wrote no note; empty otherwise.
+#                           An absent key reads as empty
+#   usage_resume_at        the epoch second a usage pause may resume at, or empty
 #   park_loop_cycles, resume_max_question_index, auto_resumes, stall_restarts
 #                           the counters that must survive a job boundary
 #   chain                   the writing job's OWN input `HARNESS_INPUT_CHAIN`, never
@@ -5475,6 +5479,7 @@ hr_remote_status_write() {
     --arg engine "$engine" \
     --arg status "$status" \
     --arg pause_reason "$reason" \
+    --arg pause_note_stale "$(hr_registry_get "$registry" "$branch" pause_note_stale)" \
     --arg usage_resume_at "$(hr_registry_get "$registry" "$branch" usage_resume_at)" \
     --arg park_loop_cycles "$(hr_registry_get "$registry" "$branch" park_loop_cycles)" \
     --arg resume_max_question_index "$(hr_registry_get "$registry" "$branch" resume_max_question_index)" \
@@ -5488,8 +5493,8 @@ hr_remote_status_write() {
     --arg run_url "$run_url" \
     --arg written_at "$(date +%s)" \
     '{schema: $schema, branch: $branch, engine: $engine, status: $status,
-      pause_reason: $pause_reason, usage_resume_at: $usage_resume_at,
-      park_loop_cycles: $park_loop_cycles,
+      pause_reason: $pause_reason, pause_note_stale: $pause_note_stale,
+      usage_resume_at: $usage_resume_at, park_loop_cycles: $park_loop_cycles,
       resume_max_question_index: $resume_max_question_index,
       auto_resumes: $auto_resumes, stall_restarts: $stall_restarts,
       chain: $chain, control_polled_at: $control_polled_at,

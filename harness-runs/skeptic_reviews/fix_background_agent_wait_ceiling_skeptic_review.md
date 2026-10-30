@@ -38,7 +38,7 @@ This reopens the stale-note defect the project's pause-note rule was written to 
 
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below top to bottom, and the committing role flips each one to `[x]` as that fix's commit lands. Each entry resolves 1:1 to `harness-runs/skeptic_reviews/fix_background_agent_wait_ceiling_skeptic_review/finding_<K>.md`. The leading `N.` is the fix order. `K` is the finding's stable number.
 
-1. [ ] **Finding 1** — Give every relaunch after a zero exit over an unfinished ledger the no-note clause (the in-job auto-resume, the in-job usage relaunch, the local resume and the cross-job resume), carrying `pause_note_stale` in the bundle, with the rule's three statements and cases in `watcher-remote-job` and `watcher-ledger-classification` _(layer: cli, plugin, general)_
+1. [x] **Finding 1** — Give every relaunch after a zero exit over an unfinished ledger the no-note clause (the in-job auto-resume, the in-job usage relaunch, the local resume and the cross-job resume), carrying `pause_note_stale` in the bundle, with the rule's three statements and cases in `watcher-remote-job` and `watcher-ledger-classification` _(layer: cli, plugin, general)_
 
 ---
 
