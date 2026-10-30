@@ -4,18 +4,22 @@
 # sandbox-probe.sh: not in the set `init --force` regenerates, and not a cli/templates/ file.
 #
 # Run as `probe` in Gate 15's container, while `bash scripts/sandbox-probe.sh run --leg headless-parity`
-# holds its clone and per-run profile in another terminal. For every `sandbox.filesystem.denyWrite`
-# entry of that profile, plus the clone's `.git/commondir`, `.git/config.worktree` and
-# `.git/objects/info/http-alternates` and the `.mcp.json` of each `--add-dir` root wherever the profile
-# does not name them, it records, per phase, what a plain shell sees outside any sandbox, and in
-# phases A and B also what a sandboxed call and an excluded call see:
+# holds its clone and per-run profile in another terminal. For every path that profile's
+# `sandbox.filesystem.denyWrite` yields (`hr_profile_deny_paths`: each exact entry, and each glob's
+# expansion against the directories present), plus the clone's and the sibling's `.git/commondir`,
+# `.git/config.worktree` and `.git/objects/info/http-alternates` and the `.mcp.json` of each `--add-dir`
+# root wherever the profile does not yield them, it records, per phase, what a plain shell sees outside
+# any sandbox, and in phases A and B also what a sandboxed call and an excluded call see; every reading
+# also takes `git status` in the clone, <main> and the sibling:
 #
 #   before  plain shell, before any session
 #   A       one headless session: git status, then the inspector sandboxed, then as an excluded command
 #   B       a second session, the same calls: do A's leftovers persist into B, and does B add more
 #   C       two sessions at once, each issuing six short calls (#94008's cross-process cleanup race)
 #   D       one session killed with SIGKILL in the middle of a call: what a killed session leaves
-#   sweep   the run library's placeholder sweep over what D left, then one more plain-shell reading
+#   sweep   the run library's placeholder sweep over the manifest the watcher writes (what D left),
+#           one more plain-shell reading, then the run-copy check on the clone and `git status` in the
+#           clone and the sibling
 #
 # Usage, as `probe`:
 #   bash scripts/sandbox-absent-path-check.sh run              phases before, A, B, C and D
@@ -28,10 +32,16 @@
 #   sibling and the profile the first `run-profiles/*/*.json` in the run lane's directory; set C= and P=
 #   to name others. <out> is ${SBX_ABSENT_OUT:-${TMPDIR:-/tmp}/sbx-absent-path}.
 #
-# `run`, `after-teardown` and `report` write nothing into the clone or the main checkout. `sweep`
-# changes both: it deletes each manifest-recorded 0-byte, read-only leftover in the clone and in the
-# main checkout, <main>/<scriptsDir>/.git included, and its `hr_run_copy_check_var <main> <clone>`
-# syncs the clone's branch into <main> (`hr_copy_sync_in_var`), moving that branch's ref there.
+#   The sibling is ${SIB:-<main>-sbx_sibling}, read only when its `.git` is a directory; otherwise every
+#   sibling step is skipped and the stamp says `sibling: none`. It is the maintainer's: create it with
+#   `git clone --shared` before the probe starts, so the per-run profile is rendered with it present.
+#   This script never creates or removes it.
+#
+# `run`, `after-teardown` and `report` write nothing into the clone, the sibling or the main checkout.
+# `sweep` changes them: it deletes each manifest-recorded 0-byte, read-only leftover in the clone, the
+# sibling and the main checkout, <main>/<scriptsDir>/.git included, and its
+# `hr_run_copy_check_var <main> <clone>` syncs the clone's branch into <main> (`hr_copy_sync_in_var`),
+# moving that branch's ref there. The sibling is no registered run copy, so it takes no run-copy check.
 # Sessions run on a COPY of the per-run profile, with one entry added to `excludedCommands` for the
 # excluded inspector. Everything else it writes, the inspector included, is under <out>.
 #
@@ -92,12 +102,18 @@ resolve() {
 }
 C=${C:-}
 P=${P:-}
+SIB=${SIB:-$M-sbx_sibling}
+if [ -d "$SIB/.git" ]; then
+  SIB=$(cd -P "$SIB" && pwd -P)
+else
+  SIB=""
+fi
 
 # The inspector: one line per inspected path, `<label>\t<path>\t<state>`, then the namespace and git lines.
 write_inspector() {
   cat >"$O/inspect.sh" <<'EOF'
 #!/usr/bin/env bash
-label=$1; list=$2; c=$3; m=$4
+label=$1; list=$2; c=$3; m=$4; s=${5:-}
 printf '#\t%s\tmntns %s\n' "$label" "$(readlink /proc/self/ns/mnt)"
 while IFS= read -r p; do
   case $p in *'*'*) continue ;; esac
@@ -110,7 +126,7 @@ while IFS= read -r p; do
   [ -n "$mnt" ] && st="$st; mount: $mnt"
   printf '%s\t%s\t%s\n' "$label" "$p" "$st"
 done < "$list"
-for r in "$c" "$m"; do
+for r in "$c" "$m" ${s:+"$s"}; do
   out=$(git -C "$r" status --short --branch 2>&1); rc=$?
   printf 'git\t%s\t%s\texit %s: %s\n' "$label" "$r" "$rc" "$(printf '%s' "$out" | tr '\n' ' ' | cut -c1-240)"
 done
@@ -122,7 +138,7 @@ sleep "${3:-2}"; echo "tick $1 $2 ok"
 EOF
 }
 
-outside() { bash "$O/inspect.sh" "$1" "$O/entries.txt" "$C" "$M" >"$O/outside-$1.tsv" 2>&1; }
+outside() { bash "$O/inspect.sh" "$1" "$O/entries.txt" "$C" "$M" "$SIB" >"$O/outside-$1.tsv" 2>&1; }
 
 # Starts one headless session in the background on the watcher's launch line (the profile copy as
 # --settings) and leaves its pid in SESSION_PID, a child of this shell so `wait` can reap it.
@@ -150,29 +166,49 @@ prompt_calls() { # numbered calls from the arguments
 
 inspect_calls() { # <phase>
   prompt_calls "git status --short --branch" \
-    "bash $O/inspect.sh $1-sandboxed $O/entries.txt $C $M" \
-    "bash $O/inspect-ex.sh $1-excluded $O/entries.txt $C $M"
+    "bash $O/inspect.sh $1-sandboxed $O/entries.txt $C $M${SIB:+ $SIB}" \
+    "bash $O/inspect-ex.sh $1-excluded $O/entries.txt $C $M${SIB:+ $SIB}"
 }
 
-# The profile's denyWrite entries verbatim, then each extra path the profile does not already name.
+# The profile's denyWrite entries verbatim, then each path they yield and each extra path not yet listed.
 write_entries() {
-  local x
+  local x paths
   jq -r '.sandbox.filesystem.denyWrite[]' "$P" >"$O/profile-entries.txt"
   cp "$O/profile-entries.txt" "$O/entries.txt"
-  for x in "$C/.git/commondir" "$C/.git/config.worktree" "$C/.git/objects/info/http-alternates" \
-    "$C/.mcp.json" "$S/.mcp.json"; do
-    grep -Fxq -- "$x" "$O/profile-entries.txt" || printf '%s\n' "$x" >>"$O/entries.txt"
+  if ! paths=$(hr_profile_deny_paths "$P"); then
+    echo "sandbox-absent-path-check: could not read the denyWrite list of $P" >&2
+    exit 1
+  fi
+  set --
+  while IFS= read -r x; do
+    [ -n "$x" ] && set -- "$@" "$x"
+  done <<EOF
+$paths
+EOF
+  set -- "$@" "$C/.git/commondir" "$C/.git/config.worktree" "$C/.git/objects/info/http-alternates" \
+    "$C/.mcp.json" "$S/.mcp.json"
+  if [ -n "$SIB" ]; then
+    set -- "$@" "$SIB/.git/commondir" "$SIB/.git/config.worktree" "$SIB/.git/objects/info/http-alternates"
+  fi
+  for x in "$@"; do
+    grep -Fxq -- "$x" "$O/entries.txt" || printf '%s\n' "$x" >>"$O/entries.txt"
   done
 }
 
-# The manifest over the profile's exact (non-glob) entries and the two --add-dir `.mcp.json` paths.
+# The manifest the watcher's `spawn_engine` writes: every path the profile's denyWrite yields, plus
+# `.mcp.json` under each --add-dir root.
 write_manifest() {
-  local p
+  local p paths
+  if ! paths=$(hr_profile_deny_paths "$P"); then
+    echo "sandbox-absent-path-check: could not read the denyWrite list of $P" >&2
+    exit 1
+  fi
   set --
-  while IFS= read -r p || [ -n "$p" ]; do
-    case $p in '' | *'*'*) continue ;; esac
-    set -- "$@" "$p"
-  done <"$O/profile-entries.txt"
+  while IFS= read -r p; do
+    [ -n "$p" ] && set -- "$@" "$p"
+  done <<EOF
+$paths
+EOF
   set -- "$@" "$C/.mcp.json" "$S/.mcp.json"
   if ! hr_placeholder_manifest_write "$O/manifest.absent" "$@"; then
     echo "sandbox-absent-path-check: could not write $O/manifest.absent" >&2
@@ -188,6 +224,7 @@ run() {
   {
     echo "date: $(date -Is)"
     echo "clone: $C"
+    echo "sibling: ${SIB:-none}"
     echo "profile: $P"
     echo "main: $M"
     echo "main head: $(git -C "$M" rev-parse HEAD 2>&1)"
@@ -199,7 +236,7 @@ run() {
   } >"$O/stamp.txt"
   write_entries
   jq --arg e "bash $O/inspect-ex.sh:*" '.sandbox.excludedCommands += [$e]' "$P" >"$O/profile.json"
-  echo "sandbox-absent-path-check: $(wc -l <"$O/profile-entries.txt") denyWrite entries, $(grep -c '\*' "$O/profile-entries.txt") of them globs (not inspected), $(wc -l <"$O/entries.txt") inspected lines in all"
+  echo "sandbox-absent-path-check: $(wc -l <"$O/profile-entries.txt") denyWrite entries, $(grep -c '\*' "$O/profile-entries.txt") of them globs, $(grep -vc '\*' "$O/entries.txt") inspected paths in all"
   write_manifest || exit 1
 
   outside before
@@ -262,6 +299,11 @@ sweep() {
   git -C "$C" status --short --branch >/dev/null 2>&1
   rc=$?
   printf 'git status (clone)\texit %s\n' "$rc" >>"$O/sweep.txt"
+  if [ -n "$SIB" ]; then
+    git -C "$SIB" status --short --branch >/dev/null 2>&1
+    rc=$?
+    printf 'git status (sibling)\texit %s\n' "$rc" >>"$O/sweep.txt"
+  fi
 
   echo "sandbox-absent-path-check: sweep recorded in $O/sweep.txt; when the probe has torn down, run: $SELF after-teardown"
 }

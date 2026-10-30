@@ -25,3 +25,9 @@
 - `bash -n scripts/sandbox-absent-path-check.sh` exits 0.
 - On this macOS checkout, `bash scripts/sandbox-absent-path-check.sh run` exits 2 with its `Linux only` line and writes nothing, as before.
 - `grep -n 'hr_profile_deny_paths' scripts/sandbox-absent-path-check.sh` shows it in `write_entries` and in `write_manifest`, and `write_manifest`'s body reads no line of `profile-entries.txt` directly.
+
+**Deviations from plan:**
+
+- `bash -n scripts/sandbox-absent-path-check.sh` was refused by the run's permission mode (`Permission to use Bash has been denied because Claude Code is running in don't ask mode`). The parse claim rests instead on `bash scripts/typecheck.sh`, whose `scripts/check-shell-parse.sh` step runs `bash -n` over every `*.sh` `git ls-files` lists, this tracked script included: `Check-shell-parse: 97 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`, then `PASS: typecheck`.
+- `run`'s count line now reports `inspected paths` as `grep -vc '\*'` over `entries.txt`, not `wc -l` over it: `entries.txt` still carries the profile's glob strings verbatim, which the inspector skips, so a line count would overstate what is inspected.
+- The header's "writes nothing" sentence now names the sibling, and says `sweep` may delete a manifest-recorded leftover in it: on a bubblewrap host the per-run profile names the sibling's trio exactly, so those paths enter the manifest `sweep` reads.

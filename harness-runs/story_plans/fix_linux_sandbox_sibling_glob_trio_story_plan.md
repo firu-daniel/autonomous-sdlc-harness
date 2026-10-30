@@ -58,7 +58,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_linux_sandbox_sibling_gl
 2. [x] **Task 2** — Re-root the base's sibling-glob trio at every other sibling on a bubblewrap host, and record every glob's absent paths in the manifest _(layer: cli)_ _(points: 20)_
 3. [x] **Task 3** — State the measured Linux glob treatment in the profile's `_README`, the template's residual line and `doctor`'s note _(layer: cli)_ _(points: 15)_
 4. [x] **Task 4** — Refresh the self-adopted outer-loop scripts from their templates _(layer: general)_ _(points: 5)_
-5. [ ] **Task 5** — Teach the absent-path check a sibling clone and the watcher's manifest list _(layer: general)_ _(points: 15)_
+5. [x] **Task 5** — Teach the absent-path check a sibling clone and the watcher's manifest list _(layer: general)_ _(points: 15)_
 6. [ ] **Task 6** — Record the glob finding, the re-rooting and the owed re-take with AP6 in `docs/sandbox-verification.md` _(layer: general)_ _(points: 20)_
 7. [ ] **Task 7** — Bring `docs/cli.md` §6, `docs/watcher.md` and Gate 15 into line with the re-rooting _(layer: general)_ _(points: 20)_
 8. [ ] **Task 8** — Add the 2026-10-30 glob finding to the upstream report _(layer: general)_ _(points: 10)_
