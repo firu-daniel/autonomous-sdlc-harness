@@ -28,3 +28,36 @@
 - **category:** optimization
 - **evidence:** `harness-runs/code_reviews/fix_linux_sandbox_sibling_glob_trio_code_review.md` readiness titles — Finding 1 (`legs-glob.sh`'s header re-quotes deleted sentences), Finding 3 (`push-branch.sh`'s two "unverified" glob statements), Finding 4 (wrong caller lists in the `hr_deny_glob_expand` / `hr_profile_deny_paths` headers); citing reviewer `branch-reviewer`. The plan loop's round 1 (`harness-runs/task_plan_reviews/fix_linux_sandbox_sibling_glob_trio/review_1.md`) raised the same class as its Must Fix per the `task-plan-writer`'s revision return (two "unverified" sites no task owned).
 - **cost this run:** one extra plan revision round and three Phase C fix units.
+
+# User-review fix round 1 — run copy's trio `Edit` rules on bubblewrap, empty `config.worktree` trust check, 2026-10-30 records
+
+## `cp` of a template over its self-adopted copy is still refused in the unattended run copy
+- **category:** tooling-gap
+- **evidence:** the Finding 1 `general` `layer-implementer` (dispatch #3: "`cp` is refused in this mode"), the Finding 2 `general` one (#8) and the Finding 3 `cli` one (#13) each report the `cli/templates/scripts/…` → `scripts/…` copy refused; each re-applied the template's hunks with the Edit tool and confirmed byte-identity with `cmp`.
+- **cost this run:** three units mirrored template edits into `scripts/` hunk by hand instead of by one copy.
+
+## `rm`, `rm -f`, a direct `node` and a direct `bash -n` are refused, so scratch probes stay in the run copy
+- **category:** tooling-gap
+- **evidence:** the Finding 2 `cli` `layer-reviewer` (#7) reports `node` refused and its `rm` of `harness-runs/scratch/run_sibling_case.mjs` refused; the Finding 3 `general` reviewer (#16) left `harness-runs/scratch/fifo_config_probe.py`; the Finding 5 `layer-implementer` (#23) reports `bash -n` and `rm -f` refused and left `harness-runs/scratch/absent_check_probe.py`. All three files are git-ignored (absent from `git status --short`).
+- **cost this run:** three scratch files left on disk; the script parse check ran through a scratch probe instead of `bash -n`.
+
+## A Bash heredoc write was refused with a protected-branch message naming a detached branch
+- **category:** tooling-gap
+- **evidence:** the Finding 4 `layer-implementer` (#18) reports its heredoc write of the deviation note to `harness-runs/user_reviews/fix_linux_sandbox_sibling_glob_trio_fix_plan/finding_4.md` refused by a guard: "Branch detached is protected … confirm commit manually"; the run branch `fix_linux_sandbox_sibling_glob_trio` is not detached. It rewrote the note with the Edit tool.
+- **cost this run:** one refused call; no lost work.
+- **hypothesis:** the commit-branch guard judged text inside the heredoc body as a `git` command.
+
+## The fix-plan writer could not read Claude Code's installed bundle, so the built-in-path list stayed unreadable
+- **category:** tooling-gap
+- **evidence:** the `user-review-fix-plan-writer` initial-write return (fix-plan dispatch #1) reports its read of the installed Claude Code bundle, outside this checkout, refused by the session's permissions; Finding 4 in `harness-runs/user_reviews/fix_linux_sandbox_sibling_glob_trio_fix_plan.md` therefore takes the review's "accept" arm rather than recording built-in paths in the sweep manifest.
+- **cost this run:** review item 4 resolved to documentation only; the sweep does not cover Claude Code's built-in leftovers.
+
+## Cross-finding doc sites flagged by implementers were left unedited because no finding owned them
+- **category:** agent-contract
+- **evidence:** the Finding 6 `layer-implementer` returns (#28, #30) each flag that `docs/cli.md` still labels the AP2 glob reading **measured** (residual 2; the §5 paragraph on what runs outside the sandbox; *Each run adds its own copy's paths by exact path*) and declined to edit it as outside the finding's file list; the Finding 2 (#10) and Finding 4 (#18) returns flag `docs/cli.md` / `docs/watcher.md` citations that point at the user-review record rather than `docs/sandbox-verification.md` §5, with no finding owning the re-point.
+- **cost this run:** `docs/cli.md` carries "measured" wording that `docs/sandbox-verification.md` now labels *derived*.
+
+## Two fix items needed 3 review rounds each
+- **category:** optimization
+- **evidence:** `harness-runs/user_review_fix_plan_point_reviews/fix_linux_sandbox_sibling_glob_trio_fix_plan/item_2/` holds `review_0.md` (`cli`), `review_1.md` and `review_2.md` (`general`); `item_6/` holds `review_0.md`, `review_1.md`, `review_2.md` (`general`). The files carry only severity-section headings, no per-finding headings, so the net-new / re-raised split is not measurable under the headings-only read.
+- **cost this run:** three extra implementer + reviewer pairs: one on Finding 2 (dispatches #10–#11), two on Finding 6 (#28–#31).
