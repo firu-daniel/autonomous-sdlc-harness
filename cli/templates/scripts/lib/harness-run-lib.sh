@@ -914,8 +914,11 @@ hr_wrapper_main_of() {
 # configuration, hooks or objects), and git still reads the record's
 # `config.worktree`. The permission profile write-protects both files, each
 # record's `gitdir`, each worktree's `.git` pointer and the record directories
-# themselves (`cli/src/generators/writeProtection.ts`); how the Linux sandbox
-# treats those globbed entries is unverified.
+# themselves (`cli/src/generators/writeProtection.ts`). On Linux a `denyWrite`
+# glob is expanded against the directories that exist at sandbox start, and a
+# placeholder is mounted at each absent path it yields (AP2, 2026-10-30, Claude
+# Code 2.1.314, bubblewrap 0.8.0); a new file under an existing directory such
+# an entry matched was not refused (GW1, 2026-10-29).
 #
 # It also sets `HR_TARGET_KIND` — `main`, `worktree` or `clone` — and, on the
 # clone arm only, `HR_TARGET_BRANCH`. The clone arm is taken only when
@@ -6053,6 +6056,72 @@ hr_placeholder_manifest_write() {
     rm -f -- "$tmp"
     return 1
   fi
+  return 0
+}
+
+# hr_deny_glob_expand <entry> [<exclude>] — THE ONE HOME of what a `denyWrite`
+# glob yields on disk: on Linux the sandbox expands it against the directories
+# present at its start and mounts a placeholder at each absent path
+# (`docs/sandbox-verification.md` §5 AP2). <entry> is absolute with exactly one
+# `*`, ending its segment — `<parent>/<stem>*<suffix>`, <suffix> empty or
+# starting with `/`, the shape `cli/src/core/paths.ts` → `worktreeGlob` emits.
+# Prints `<parent>/<name><suffix>` for each `<parent>/<stem>*` that is a
+# directory (`-d`, so a link to one counts), in glob order, skipping a name
+# carrying a newline and, when <exclude> is non-empty, one that is `-ef` it.
+# Only the `*` is unquoted, so a glob character in <parent> or <stem> is
+# literal. 0, also on no match; 2, printing nothing, for any other shape; 3,
+# printing nothing, under `noglob`, which this library may not turn off.
+# Prints only; creates, removes and logs nothing. Its callers:
+# `hr_profile_deny_paths`, `autonomous-watcher.sh` and this repository's
+# `scripts/sandbox-absent-path-check.sh`.
+hr_deny_glob_expand() {
+  local entry="${1-}" exclude="${2-}" head suffix parent stem d nl='
+'
+  case "$entry" in /*) ;; *) return 2 ;; esac
+  case "$entry" in *'*'*) ;; *) return 2 ;; esac
+  head="${entry%%\**}"
+  suffix="${entry#*\*}"
+  case "$suffix" in *'*'*) return 2 ;; esac
+  case "$suffix" in '' | /*) ;; *) return 2 ;; esac
+  case $- in *f*) return 3 ;; esac
+  parent="${head%/*}"
+  stem="${head##*/}"
+  for d in "$parent/$stem"*; do
+    case "$d" in *"$nl"*) continue ;; esac
+    [ -d "$d" ] || continue
+    if [ -n "$exclude" ] && [ "$d" -ef "$exclude" ]; then continue; fi
+    printf '%s%s\n' "$d" "$suffix"
+  done
+  return 0
+}
+
+# hr_profile_deny_paths <profile> — every path <profile>'s
+# `.sandbox.filesystem.denyWrite` yields: first each string carrying no `*`,
+# verbatim, then each glob's `hr_deny_glob_expand` output with no exclude, both
+# in file order. A glob the expander refuses contributes nothing, and a string
+# carrying a newline is dropped. Tests no existence and keeps repeats, which
+# `hr_placeholder_manifest_write` handles. 0; 1, printing nothing, when
+# <profile> is unreadable or that value is not a list. Its callers:
+# `autonomous-watcher.sh` and this repository's
+# `scripts/sandbox-absent-path-check.sh`.
+hr_profile_deny_paths() {
+  local profile="${1-}" list e
+  [ -n "$profile" ] && [ -f "$profile" ] && [ -r "$profile" ] || return 1
+  list=$(jq -r '.sandbox.filesystem.denyWrite
+    | if type == "array" then .[] | strings | select(contains("\n") | not)
+      else error("denyWrite is not a list") end' "$profile" 2>/dev/null) || return 1
+  [ -n "$list" ] || return 0
+  while IFS= read -r e; do
+    case "$e" in '' | *'*'*) continue ;; esac
+    printf '%s\n' "$e"
+  done <<EOF
+$list
+EOF
+  while IFS= read -r e; do
+    case "$e" in *'*'*) hr_deny_glob_expand "$e" ;; esac
+  done <<EOF
+$list
+EOF
   return 0
 }
 

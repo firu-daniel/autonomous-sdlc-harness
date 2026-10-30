@@ -36,3 +36,8 @@
 
 - `npm test --workspace cli -- test/placeholder-sweep-lib.test.mjs` passes, with the cases above among its subtests.
 - `bash -n cli/templates/scripts/lib/harness-run-lib.sh` exits 0. `grep -nE '^[[:space:]]*(set|shopt) ' cli/templates/scripts/lib/harness-run-lib.sh` shows no line added by this task.
+
+**Deviations from plan:**
+
+- `hr_profile_deny_paths` drops a `denyWrite` string carrying a newline instead of printing it verbatim: printed raw, it would read back as two paths. That matches `hr_placeholder_manifest_write`'s and `hr_deny_glob_expand`'s own newline skip. It also drops non-string elements. A `denyWrite` that is absent or not an array exits 1, read as "jq cannot read that array as a list".
+- `bash -n` was not run on its own. The evidence is `bash scripts/typecheck.sh`, whose `check-shell-parse` leg reported `97 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`. The `set`/`shopt` check rests on reading the diff: neither added function has a line beginning with `set` or `shopt`.

@@ -54,7 +54,7 @@ So the plan **re-roots** the trio instead of dropping it.
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_linux_sandbox_sibling_glob_trio/task_<K>_plan.md`. The entries are ordered bottom-up by ship sequence, with the catch-all layer last.
 
-1. [ ] **Task 1** — Add the run library's `hr_deny_glob_expand` and `hr_profile_deny_paths` _(layer: cli)_ _(points: 15)_
+1. [x] **Task 1** — Add the run library's `hr_deny_glob_expand` and `hr_profile_deny_paths` _(layer: cli)_ _(points: 15)_
 2. [ ] **Task 2** — Re-root the base's sibling-glob trio at every other sibling on a bubblewrap host, and record every glob's absent paths in the manifest _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — State the measured Linux glob treatment in the profile's `_README`, the template's residual line and `doctor`'s note _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — Refresh the self-adopted outer-loop scripts from their templates _(layer: general)_ _(points: 5)_
