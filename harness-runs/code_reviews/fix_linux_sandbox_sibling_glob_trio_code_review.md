@@ -44,7 +44,7 @@ No job-mode finding is owed.
 
 1. [x] **Finding 1** — Re-quote the deleted `_README` and watcher-banner sentences in `legs-glob.sh`'s header _(layer: general)_
 2. [x] **Finding 4** — Correct the caller lists in the `hr_deny_glob_expand` / `hr_profile_deny_paths` headers _(layer: cli, general)_
-3. [ ] **Finding 3** — Replace `push-branch.sh`'s two "unverified" glob statements with the measured treatment _(layer: cli, general)_
+3. [x] **Finding 3** — Replace `push-branch.sh`'s two "unverified" glob statements with the measured treatment _(layer: cli, general)_
 4. [ ] **Finding 2** — Refuse the render when a dropped trio glob cannot be re-rooted, instead of skipping it silently _(layer: cli, general)_
 
 ---
