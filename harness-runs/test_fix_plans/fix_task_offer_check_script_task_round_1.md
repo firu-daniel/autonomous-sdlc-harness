@@ -12,7 +12,7 @@ The log also reports `BLOCKED` for 13a–13c, because the Python docs-retrieval 
 
 This list is the **single source of truth** for the fix loop. Any `[ ]` marker elsewhere in this plan or its per-finding files is informational only.
 
-1. [ ] **Finding 1** — Remove the absolute machine path from park question 2's option (a). _(layer: general)_
+1. [x] **Finding 1** — Remove the absolute machine path from park question 2's option (a). _(layer: general)_
 
 ## Must Fix
 
