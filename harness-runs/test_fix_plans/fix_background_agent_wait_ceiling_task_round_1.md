@@ -14,7 +14,7 @@ The log carries **no assertion text** for any failure: gate 4's `gate()` in `scr
 
 This list is the **single source of truth** for the fix loop: walk it top to bottom, and treat `[ ]` markers anywhere else — including the `- [ ]` sub-step bullets inside the finding files — as informational only. Finding 1 comes first because it is the cleanest probe of the suspected shared cause (it differs from a passing sibling only by the stub's exit code); Finding 29 precedes Findings 30–34 because those four subtests and their parent read state Finding 29's subtest sets up.
 
-1. [ ] **Finding 1** — keep-awake (b)(c): exit 3 classified failed under a hold. _(layer: cli, general)_
+1. [x] **Finding 1** — keep-awake (b)(c): exit 3 classified failed under a hold. _(layer: cli, general)_
 2. [ ] **Finding 2** — keep-awake: the driver's default probe is silent. _(layer: cli, general)_
 3. [ ] **Finding 3** — keep-awake (d): execution.keepAwake false takes no hold. _(layer: cli, general)_
 4. [ ] **Finding 4** — keep-awake (l): a released hold is retaken once the key is true. _(layer: cli, general)_
