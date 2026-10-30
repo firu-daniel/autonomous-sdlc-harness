@@ -233,9 +233,46 @@ test('a planted .git/commondir in the clone refuses the resume', async (t) => {
   assert.ok(failed[0].detail.includes('.git/commondir'), failed[0].detail);
 });
 
-test('after a launch the manifest lists exactly the absent exact denyWrite and --add-dir .mcp.json paths', async (t) => {
+/**
+ * Every path `profile`'s denyWrite list yields, as `hr_profile_deny_paths` lists it: each exact
+ * string, then each `<parent>/<stem>*<suffix>` glob as `<parent>/<name><suffix>` for each
+ * `<stem>`-prefixed directory under `<parent>`.
+ */
+function profileDenyPaths(profile) {
+  const list = profile.sandbox.filesystem.denyWrite.filter((e) => typeof e === 'string' && !e.includes('\n'));
+  const expanded = list
+    .filter((e) => e.includes('*'))
+    .flatMap((glob) => {
+      const head = glob.slice(0, glob.indexOf('*'));
+      const suffix = glob.slice(glob.indexOf('*') + 1);
+      const parent = head.slice(0, head.lastIndexOf('/'));
+      const stem = head.slice(head.lastIndexOf('/') + 1);
+      return readdirSync(parent)
+        .filter((name) => name.startsWith(stem) && statSync(join(parent, name), { throwIfNoEntry: false })?.isDirectory())
+        .map((name) => `${parent}/${name}${suffix}`);
+    });
+  return [...list.filter((e) => !e.includes('*')), ...expanded];
+}
+
+/** Create the sibling `<projectName>-other` with a real `.git/objects/info/`, removed when the case ends. */
+async function makeOtherSibling(t, f) {
+  const dir = `${f.dir}-other`;
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  await mkdir(join(dir, '.git', 'objects', 'info'), { recursive: true });
+  return dir;
+}
+
+/** `<other>`, spelled as `profile`'s `<glob>/.mcp.json` entry spells the work root. */
+function otherAsGlobbed(profile) {
+  const glob = profile.sandbox.filesystem.denyWrite.find((e) => typeof e === 'string' && e.includes('*') && e.endsWith('/.mcp.json'));
+  assert.ok(glob, 'the profile carries no <glob>/.mcp.json entry');
+  return glob.slice(0, -'/.mcp.json'.length).replace('*', 'other');
+}
+
+test('after a launch the manifest lists exactly the absent denyWrite paths, glob expansions included, and --add-dir .mcp.json paths', async (t) => {
   const f = await adoptedFixture(t);
   if (f === null) return;
+  await makeOtherSibling(t, f);
 
   await f.drop();
   await f.tick({}, { placeholderHost: true });
@@ -249,13 +286,13 @@ test('after a launch the manifest lists exactly the absent exact denyWrite and -
   const manifest = readFileSync(manifestPath, 'utf8').split('\n').filter((l) => l !== '');
 
   const profile = JSON.parse(readFileSync(settings, 'utf8'));
-  const candidates = [
-    ...profile.sandbox.filesystem.denyWrite.filter((p) => typeof p === 'string' && !p.includes('*')),
-    `${f.clone}/.mcp.json`,
-    `${f.dir}/${STATE_DIR}/.mcp.json`,
-  ];
-  assert.deepEqual(manifest, candidates.filter((p) => !present(p)));
+  const candidates = [...profileDenyPaths(profile), `${f.clone}/.mcp.json`, `${f.dir}/${STATE_DIR}/.mcp.json`];
+  assert.deepEqual([...manifest].sort(), candidates.filter((p) => !present(p)).sort());
   assert.ok(manifest.length > 0, 'the manifest is empty');
+  const other = otherAsGlobbed(profile);
+  for (const rel of ['.git/commondir', '.git/config.worktree', '.git/objects/info/http-alternates', '.mcp.json']) {
+    assert.ok(manifest.includes(`${other}/${rel}`), `${other}/${rel} is not listed:\n${manifest.join('\n')}`);
+  }
   assert.ok(manifest.includes(`${f.dir}/${STATE_DIR}/.mcp.json`), manifest.join('\n'));
   const existing = `${f.clone}/.git/config`;
   assert.ok(candidates.includes(existing) && present(existing), `${existing} is not an existing denyWrite path`);
@@ -263,6 +300,27 @@ test('after a launch the manifest lists exactly the absent exact denyWrite and -
   for (const omitted of ['commondir', 'config.worktree', 'objects/info/http-alternates']) {
     assert.ok(!manifest.includes(`${f.clone}/.git/${omitted}`), `${omitted} is listed`);
   }
+});
+
+test("a launch-recorded leftover at a sibling's .git/commondir is swept by the next pass-start sweep", async (t) => {
+  const f = await adoptedFixture(t);
+  if (f === null) return;
+  await makeOtherSibling(t, f);
+
+  await f.drop();
+  await f.tick({}, { placeholderHost: true });
+  const settings = f.settingsArg();
+  assert.ok(settings, `the stub was never called:\n${f.watcherLog()}`);
+  const path = `${otherAsGlobbed(JSON.parse(readFileSync(settings, 'utf8')))}/.git/commondir`;
+  const manifest = readFileSync(await f.manifestFile(), 'utf8').split('\n');
+  assert.ok(manifest.includes(path), `${path} is not in the manifest:\n${manifest.join('\n')}`);
+  await plantLeftover(path);
+
+  await f.tick({}, { placeholderHost: true });
+
+  const log = f.watcherLog();
+  assert.equal(present(path), false, `the leftover is still there:\n${log}`);
+  assert.ok(log.includes(`placeholder sweep: removed ${path}`), log);
 });
 
 test('a second queued run is deferred at cap 1, with the bubblewrap host line logged once', async (t) => {

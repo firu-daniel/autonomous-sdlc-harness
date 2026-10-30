@@ -52,3 +52,9 @@
 - `npm test --workspace cli -- test/watcher-run-profile.test.mjs` and `npm test --workspace cli -- test/watcher-placeholder-host.test.mjs` pass, including the cases above.
 - `bash -n cli/templates/scripts/autonomous-watcher.sh` exits 0.
 - `git grep -n 'Linux may skip' -- cli/templates/scripts` prints nothing.
+
+**Deviations from plan:**
+
+- `bash -n cli/templates/scripts/autonomous-watcher.sh` was refused by the tool layer (don't-ask mode). The parse claim rests instead on `bash scripts/typecheck.sh`, whose `check-shell-parse` step reported `97 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`, and on both edited test files sourcing the watcher, all cases passing.
+- `run_profile_render`'s refusal for `run_profile_entries` exit 1 now reads `the run copy's protected paths could not be read from harness.config.json, or the denyWrite list from $SETTINGS_PROFILE`, because exit 1 now also covers a `run_profile_glob_drops` failure. `run_profile_render` and `run_profile_check` each refuse a `run_profile_glob_drops` failure of their own with `the denyWrite list of the base profile $SETTINGS_PROFILE could not be read`.
+- The placeholder-host clone case also creates a sibling whose `.git` is a symbolic link to a directory holding `objects/info/`, which isolates the not-a-symbolic-link test from the parent-exists test. The `.git`-is-a-file sibling is rejected by both tests.
