@@ -28,7 +28,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Stop calling the re-take a control while the trio's `Edit` deny rules remain, and name them as a candidate source in *The decision rule* _(layer: general)_
+1. [x] **Finding 1** — Stop calling the re-take a control while the trio's `Edit` deny rules remain, and name them as a candidate source in *The decision rule* _(layer: general)_
 
 ---
 
