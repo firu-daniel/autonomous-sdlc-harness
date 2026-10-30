@@ -41,7 +41,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_task_offer_check_script/
 1. [x] **Task 1** — Ship `task-offer-check.sh` as an outer-loop script, with its table row and the one invocation/rule producer _(layer: cli)_ _(points: 20)_
 2. [x] **Task 2** — Shrink fence item 4 to the rendered `{{taskOfferCheckCommand}}` invocation _(layer: cli)_ _(points: 10)_
 3. [x] **Task 3** — Merge the fence's `Bash(…)` allow rule into `.claude/settings.json` _(layer: cli)_ _(points: 15)_
-4. [ ] **Task 4** — Warn in `task-offer-rules` when the fence's script or its allow rule is missing _(layer: cli)_ _(points: 15)_
+4. [x] **Task 4** — Warn in `task-offer-rules` when the fence's script or its allow rule is missing _(layer: cli)_ _(points: 15)_
 5. [ ] **Task 5** — Run the script, not a template command, in every layout under bash and zsh _(layer: cli)_ _(points: 20)_
 6. [ ] **Task 6** — Add `task-offer-check.sh` to the script-allowlist guard's documented left-allowed set _(layer: plugin)_ _(points: 5)_
 7. [ ] **Task 7** — State the script, the allow rule and the new `doctor` arms in `docs/cli.md`, `docs/watcher.md` and `docs/guard-verification.md` _(layer: general)_ _(points: 15)_
