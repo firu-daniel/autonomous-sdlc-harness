@@ -24,7 +24,7 @@ This list is the **single source of truth** for the fix loop: walk it top to bot
 8. [x] **Finding 8** — keep-awake (k): kill switch on battery still releases the hold. _(layer: cli, general)_
 9. [x] **Finding 9** — placeholder host: a planted .git/commondir refuses the resume. _(layer: cli, general)_
 10. [x] **Finding 10** — placeholder host: the manifest lists exactly the absent paths. _(layer: cli, general)_
-11. [ ] **Finding 11** — placeholder host: a second queued run is deferred at cap 1. _(layer: cli, general)_
+11. [x] **Finding 11** — placeholder host: a second queued run is deferred at cap 1. _(layer: cli, general)_
 12. [ ] **Finding 12** — placeholder host: with the seam off no manifest is written. _(layer: cli, general)_
 13. [ ] **Finding 13** — placeholder host (1): a leftover scriptsDir/.git is swept. _(layer: cli, general)_
 14. [ ] **Finding 14** — placeholder host (2): a leftover .git/commondir is kept while live. _(layer: cli, general)_

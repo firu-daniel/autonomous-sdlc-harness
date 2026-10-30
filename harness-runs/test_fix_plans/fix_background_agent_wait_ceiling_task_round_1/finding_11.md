@@ -23,3 +23,9 @@ This case queues two drops on a placeholder host and asserts the second deferred
 - [ ] Take the failing assertion of this test and place it in one of the two arms below.
 - [ ] **A time bound exceeded, or a watcher pass killed by its bound**, with every value the test asserts otherwise as expected: the branch has no defect here. Leave the code and the test unchanged — no bound raised, no assertion loosened, no case skipped.
 - [ ] **An assertion on a value the branch changed** — the `classify: … has no readable ledger` line, `pause_reason` / `pause_note_stale`, the session's environment, or `log_stopped_background_tasks` running before `record_run_analytics`: change `cli/templates/scripts/autonomous-watcher.sh` (and `cli/templates/scripts/lib/harness-run-lib.sh` where the value comes from `hr_run_ledger_state`) so the asserted behaviour holds again, without undoing the wait-ceiling export or the ledger split, and carry the identical edit into `scripts/autonomous-watcher.sh` / `scripts/lib/harness-run-lib.sh`. Leave the test file unchanged.
+
+## Already passing
+
+- **(a)** Named test `a second queued run is deferred at cap 1, with the bubblewrap host line logged once`; file run: `cli/test/watcher-placeholder-host.test.mjs`.
+- **(b)** Command `npm test --workspace cli -- test/watcher-placeholder-host.test.mjs`, from the repository root, in the foreground: `ok 3 - a second queued run is deferred at cap 1, with the bubblewrap host line logged once` (`duration_ms: 15472.720708` on the latest run); file totals `# tests 29`, `# pass 29`, `# fail 0`, `# cancelled 0`. No assertion failed, so neither Fix arm applies.
+- **(c)** No code file was edited; this section is the only write.
