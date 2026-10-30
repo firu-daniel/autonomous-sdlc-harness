@@ -37,3 +37,8 @@ The story index's `## Context`, decision 10, records this reading.
 - `git grep -n 'branch-resume' -- plugin/instructions/plan_orchestration_instructions_core.md` shows no line the diff adds.
 - Each target's `wc -w` is at most its recorded pre-edit count.
 - `git diff --stat -- plugin/` lists exactly the seven targets. `git diff -- plugin/` shows one changed sentence or clause per site, and no added line naming `run_in_background` or `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS`.
+
+**Deviations from plan:**
+- §2.5's new sentence says *"nothing local resumes it on its own"* rather than the Work bullet's *"nothing resumes it on its own"*: the story's job mode auto-resumes an `unfinished` pause a bounded number of times (Task 4; this file's own **Depends on:** *"Nothing auto-resumes it locally"*), so the unqualified wording would be false there.
+- The `unfinished` grep matches three lines in `plugin/instructions/autonomous_pause_and_ledger.md`, not two: the third (in the ledger section, *"which at least reads as unfinished"*) predates this task and is untouched. The two new sites are the §2.0 ⚠️ paragraph and §2.5.
+- Pre-/post-edit `wc -w`: `autonomous_pause_and_ledger.md` 8772 → 8742; `plan_orchestration_instructions_autonomous.md` 11828 → 11828; `task_plan_writing_instructions_autonomous.md` 8990 → 8990; `user_review_fix_plan_writing_instructions_autonomous.md` 6840 → 6840; `user_review_fixes_instructions_autonomous.md` 9573 → 9573; `docs_orchestration_instructions_autonomous.md` 3094 → 3093; `plan_orchestration_instructions_core.md` 18361 → 18361.

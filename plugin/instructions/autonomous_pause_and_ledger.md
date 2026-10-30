@@ -452,7 +452,7 @@ path. §2.5 is the only **run-initiated** pause, which is why it is the only one
 ⚠️ Note where the load-bearing difference lies. Detection could in principle move to the watcher for the
 overload case too (it already tails the same stream) — but that alone would **not** fix a false `completed`:
 a watcher-dropped `PAUSE` is only honored at the run's next safety-contract checkpoint, and a run that ends
-its turn before reaching one still exits `rc=0` with no `PAUSE_ACK` and is stamped `completed`. **The ack is
+its turn before reaching one still exits `rc=0` with no `PAUSE_ACK` and is paused `unfinished`. **The ack is
 what fixes classification**, so the run-side rule in §2.5 is required regardless of who does the detecting.
 
 ### 2.1 Files — FLAT under `<state_dir>/`, machine-local (never commit them)
@@ -576,10 +576,9 @@ sandbox was not measured — BG9):
 - **a `Monitor` pending** — the same, woken when the Monitor's stream ends (BG6).
 
 In the nothing-pending case (BG1) that exit is `rc=0` with no `PAUSE_ACK`, so
-`classify_run_exit` stamps the run **`completed`** and fires a **success** notification for a run that never
-finished — the flow is silently abandoned mid-phase behind a green light, and because the registry says
-`completed` rather than `paused`, both `/autonomous-sdlc-harness:branch-resume` and the watcher's `resume_paused_runs` (which filters
-on `status == "paused"`) refuse to touch it, so even a hand-dropped `RESUME` is ignored. A pending task or
+`classify_run_exit` finds the ledger unfinished and records the run `paused` with `pause_reason` `unfinished`:
+the flow stops mid-phase, nothing local resumes it on its own, and it waits for
+`/autonomous-sdlc-harness:branch-resume`. A pending task or
 `Monitor` is still no resumption mechanism: the wake-up in BG5 and BG6 is observed behaviour of one CLI
 version, not a contract this flow relies on; a session waiting silently gives the stall watchdog no output, so
 a silence longer than `STALL_KILL_SECS` (default 2700 s, `<scripts_dir>/autonomous-watcher.sh` →
