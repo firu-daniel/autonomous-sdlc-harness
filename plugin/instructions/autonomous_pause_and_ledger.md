@@ -577,8 +577,7 @@ sandbox was not measured — BG9):
 
 In the nothing-pending case (BG1) that exit is `rc=0` with no `PAUSE_ACK`, so
 `classify_run_exit` finds the ledger unfinished and records the run `paused` with `pause_reason` `unfinished`:
-the flow stops mid-phase, nothing local resumes it on its own, and it waits for
-`/autonomous-sdlc-harness:branch-resume`. A pending task or
+the flow stops mid-phase and waits for `/autonomous-sdlc-harness:branch-resume`. A pending task or
 `Monitor` is still no resumption mechanism: the wake-up in BG5 and BG6 is observed behaviour of one CLI
 version, not a contract this flow relies on; a session waiting silently gives the stall watchdog no output, so
 a silence longer than `STALL_KILL_SECS` (default 2700 s, `<scripts_dir>/autonomous-watcher.sh` →

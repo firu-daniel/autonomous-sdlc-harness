@@ -1819,11 +1819,13 @@ job_report() {
 #                       docs: the checklist), written by classify_run_exit in
 #                       both modes. In job mode it never replaces a `user`
 #                       reason already recorded; see JOB MODE. Locally it waits
-#                       for /autonomous-sdlc-harness:branch-resume and carries no
-#                       `paused_by`, so the usage gate never resumes it. That arm
-#                       is the only local writer of this field; the local pause
-#                       arm, launch_run and begin_pause_resume clear it, so a
-#                       hand or usage pause never shows a stale `unfinished`.
+#                       for /autonomous-sdlc-harness:branch-resume, unless the
+#                       usage gate had already tagged the run `paused_by=usage`,
+#                       in which case the gate resumes it at the recorded reset.
+#                       That arm is the only local writer of this field; the
+#                       local pause arm, launch_run and begin_pause_resume clear
+#                       it, so a hand or usage pause never shows a stale
+#                       `unfinished`.
 #                       `user` and `budget` are written
 #                       before the PAUSE is dropped, while still `running`;
 #                       classify_run_exit settles the reason as the run pauses,
