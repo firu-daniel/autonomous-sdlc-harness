@@ -19,7 +19,7 @@ This list is the **single source of truth** for the fix loop: walk it top to bot
 3. [x] **Finding 3** — keep-awake (d): execution.keepAwake false takes no hold. _(layer: cli, general)_
 4. [x] **Finding 4** — keep-awake (l): a released hold is retaken once the key is true. _(layer: cli, general)_
 5. [x] **Finding 5** — keep-awake (e)-(h): the logind hold follows mains power. _(layer: cli, general)_
-6. [ ] **Finding 6** — keep-awake (i): a refused lock logs once and is never retried. _(layer: cli, general)_
+6. [x] **Finding 6** — keep-awake (i): a refused lock logs once and is never retried. _(layer: cli, general)_
 7. [ ] **Finding 7** — keep-awake (j): one WSL2 not-holding line. _(layer: cli, general)_
 8. [ ] **Finding 8** — keep-awake (k): kill switch on battery still releases the hold. _(layer: cli, general)_
 9. [ ] **Finding 9** — placeholder host: a planted .git/commondir refuses the resume. _(layer: cli, general)_
