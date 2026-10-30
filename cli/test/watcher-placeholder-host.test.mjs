@@ -6,8 +6,15 @@
  * **The rule these tests exist to enforce: on a bubblewrap host the watcher launches no clone carrying
  * a planted trust file, records what was absent before each session, and runs, and reports, one run
  * at a time, and removes only a recorded, 0-byte, read-only leftover, before the first reader that it
- * breaks, including the watcher's own start.** The seam-off cases hold that a host that is not one
- * takes none of those arms.
+ * breaks, including the watcher's own start. In a job the watcher records what was absent under
+ * `$RUNNER_TEMP` and removes those leftovers before the watchdog's recovery and before the job
+ * ends.** The seam-off cases hold that a host that is not one takes none of those arms.
+ *
+ * The `job:` cases source the watcher, enter job mode through `job_mode_enter` — the `job` entry's
+ * own switch — install the seam, point `RUNNER_TEMP` at a fixture-owned sibling of the checkout and
+ * call `run_job` in the fixture itself, checked out on the run branch. A leftover is planted while
+ * the stall session hangs, or by a session that plants it and exits 2, and the job's automatic
+ * resumes are off, so only the sweep under test can remove it.
  *
  * Every per-run profile and manifest lands under the fixture's own `XDG_STATE_HOME` (`watcherEnv`). A
  * leftover is recorded the way a launch records one: `hr_placeholder_manifest_write`, while the path
@@ -26,7 +33,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { chmod, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 
@@ -540,6 +547,230 @@ test('(7) with the seam off the recorded leftovers of cases 1 and 2 are left in 
     assert.equal(f.record().status, 'failed', log);
     assert.ok(!log.includes('placeholder sweep'), log);
   });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Job mode.
+// ---------------------------------------------------------------------------------------------
+
+/** The manifest directory `hr_job_absent_file` names under `RUNNER_TEMP`. */
+const JOB_MANIFEST_DIR = 'autonomous-sdlc-harness-placeholders';
+
+/** `gh`: `run list` answers no runs, every other call succeeds silently. */
+const GH_STUB = '#!/usr/bin/env bash\ncase "$*" in "run list"*) printf "[]" ;; esac\nexit 0\n';
+
+/** A session that plants each path in `$PLANT` (colon-separated) as `PLANT_BODY` with mode 0444, then exits 2. */
+const PLANT_AND_CRASH = [
+  'IFS=: read -r -a plant <<< "$PLANT"',
+  'for p in "${plant[@]}"; do printf "%s" "${PLANT_BODY-}" > "$p"; chmod 444 "$p"; done',
+  'exit 2',
+].join('\n');
+
+/**
+ * An adopted fixture checked out on the run branch, as a job's checkout is, with `npx` and `gh`
+ * stubbed and a `RUNNER_TEMP` beside the checkout, outside every root the session may write.
+ *
+ * @param {import('node:test').TestContext} t
+ */
+async function jobFixture(t) {
+  const f = await adoptedFixture(t);
+  if (f === null) return null;
+  const config = JSON.parse(readFileSync(join(f.dir, 'harness.config.json'), 'utf8'));
+  const defaultCommit = (await runGit(f.dir, ['rev-parse', 'HEAD'])).stdout.trim();
+  await runGit(f.dir, ['checkout', '--quiet', '-b', f.branch]);
+
+  const rec = join(f.dir, 'watcher-test');
+  const bin = join(rec, 'bin');
+  await mkdir(bin, { recursive: true });
+  await writeFile(join(bin, 'npx'), '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 });
+  await writeFile(join(rec, 'gh'), GH_STUB, { mode: 0o755 });
+  const runnerTemp = `${f.dir}-runner-temp`;
+  t.after(() => rm(runnerTemp, { recursive: true, force: true }));
+  await mkdir(runnerTemp);
+  const manifestDir = join(runnerTemp, JOB_MANIFEST_DIR);
+  const settingsLocal = join(f.dir, '.claude', 'settings.local.json');
+
+  /**
+   * One `run_job` of the branch with the seam answering `host`. With `plant`, the session hangs
+   * until `plant` has run (HUNG_BODY) and the stall watchdog is on; otherwise the session body is
+   * whatever the case set.
+   */
+  async function job(host, env = {}, plant = null) {
+    const script = ['. "$1" status >/dev/null', 'job_mode_enter', probes(host), 'run_job "$2" task none'].join('\n');
+    const jobEnv = f.watcherEnv({
+      HARNESS_JOB_MODE: '1',
+      HARNESS_INPUT_CHAIN: '0',
+      HARNESS_REMOTE_SLUG: '',
+      HARNESS_JOB_STARTED_EPOCH: '',
+      HARNESS_JOB_DEADLINE_EPOCH: '',
+      RUNNER_ENVIRONMENT: '',
+      REMOTE_SELF_PAUSE_AFTER_SECS: '',
+      GITHUB_RUN_ID: '',
+      GITHUB_REPOSITORY: '',
+      GITHUB_SERVER_URL: '',
+      RUNNER_TEMP: runnerTemp,
+      POLL_INTERVAL_SECS: '1',
+      REMOTE_CONTROL_POLL_SECS: '1',
+      REMOTE_AUTO_RESUME_MAX: '0',
+      REMOTE_AUTO_RESUME_DELAY_SECS: '0',
+      HARNESS_GH_CLI: join(rec, 'gh'),
+      HARNESS_CLI_VERSION: '0.0.0',
+      HARNESS_GITHUB_DEFAULT_BRANCH: config.defaultBranch,
+      HARNESS_GITHUB_DEFAULT_COMMIT: defaultCommit,
+      HARNESS_DEFAULT_BRANCH_COMMIT: defaultCommit,
+      PATH: `${bin}:${process.env.PATH ?? ''}`,
+      REC: rec,
+      REGISTRY: join(f.dir, REGISTRY_PATH),
+      ...(plant === null
+        ? {}
+        : { STALL_CHECK_ENABLED: '1', STALL_WARN_SECS: '1', STALL_KILL_SECS: '2', STALL_BUSY_CPU_PCT: '100000' }),
+      ...env,
+    });
+    let settled = null;
+    const running = runBash(f.dir, ['-c', script, '_', f.watcherPath, f.branch], jobEnv, {
+      timeoutMs: STALL_TIMEOUT_MS,
+      signal: t.signal,
+    }).then((result) => {
+      settled = result;
+      return result;
+    });
+    if (plant !== null) {
+      const deadline = Date.now() + HUNG_WAIT_MS;
+      while (!existsSync(join(rec, 'hung'))) {
+        if (settled !== null) assert.fail(`the job ended before the session hung\n${settled.stdout}\n${settled.stderr}\n${f.watcherLog()}`);
+        assert.ok(Date.now() < deadline, `the session did not hang within ${HUNG_WAIT_MS} ms\n${f.watcherLog()}`);
+        await delay(100);
+      }
+      await plant();
+      await writeFile(join(rec, 'go'), '', 'utf8');
+    }
+    const result = await running;
+    assert.equal(result.status, 0, `the job exited ${result.status}\n${result.stdout}\n${result.stderr}\n${f.watcherLog()}`);
+    return result;
+  }
+
+  return {
+    ...f,
+    rec,
+    runnerTemp,
+    manifestDir,
+    manifest: join(manifestDir, `${f.branch}.absent`),
+    settingsLocal,
+    leftovers: [f.scriptsGit, settingsLocal],
+    job,
+    /** The manifest's line naming the same file as `path`: the profile may spell the checkout canonically. */
+    manifestLine(path) {
+      const lines = readFileSync(join(manifestDir, `${f.branch}.absent`), 'utf8').split('\n').filter(Boolean);
+      const dir = realpathSync(dirname(path));
+      return lines.find((l) => basename(l) === basename(path) && existsSync(dirname(l)) && realpathSync(dirname(l)) === dir);
+    },
+  };
+}
+
+test('job: (1) a stall kill in a job sweeps its recorded leftovers before the reset, and the run resumes', async (t) => {
+  const f = await jobFixture(t);
+  if (f === null) return;
+  await f.setStub(HUNG_BODY);
+  const lines = [];
+
+  await f.job(1, {}, async () => {
+    assert.ok(existsSync(f.manifest), `no manifest at ${f.manifest}:\n${f.watcherLog()}`);
+    for (const path of f.leftovers) {
+      const line = f.manifestLine(path);
+      assert.ok(line, `${path} is not in the manifest:\n${readFileSync(f.manifest, 'utf8')}`);
+      lines.push(line);
+      await plantLeftover(path);
+    }
+  });
+
+  const log = f.watcherLog();
+  for (const path of f.leftovers) assert.equal(present(path), false, `${path} is still there:\n${log}`);
+  for (const line of lines) assert.ok(log.includes(`placeholder sweep: removed ${line}`), log);
+  const resumed = existsSync(join(f.rec, 'resumed-registry.json'))
+    ? JSON.parse(readFileSync(join(f.rec, 'resumed-registry.json'), 'utf8')).runs[f.branch]
+    : null;
+  assert.notEqual(resumed, null, `the session was not relaunched:\n${log}`);
+  assert.equal(resumed.stall_restarts, '1', log);
+  assert.equal(f.prompts().length, 2, log);
+  assert.match(f.prompts()[1], /This is a RESUME/, f.prompts()[1]);
+  assert.ok(!log.includes('the reset was refused'), log);
+  assert.equal(existsSync(join(f.dir, 'home', '.local', 'state')), false, 'job mode wrote under XDG_STATE_HOME');
+});
+
+test('job: (2) a stall the watchdog gives up on leaves no leftover, and the wrapper anchor resolves after the job', async (t) => {
+  const f = await jobFixture(t);
+  if (f === null) return;
+  await f.setStub(HUNG_BODY);
+
+  await f.job(1, { STALL_MAX_RESTARTS: '0' }, async () => {
+    for (const path of f.leftovers) await plantLeftover(path);
+  });
+
+  const log = f.watcherLog();
+  assert.equal(f.record().status, 'failed', log);
+  for (const path of f.leftovers) assert.equal(present(path), false, `${path} is still there:\n${log}`);
+  const anchor = await runBash(
+    f.dir,
+    ['-c', '. "$1"; hr_wrapper_main_of "$2"', '_', join(f.dir, LIB_PATH), join(f.dir, INIT_SCRIPTS_DIR)],
+    {},
+    { timeoutMs: TICK_TIMEOUT_MS, signal: t.signal },
+  );
+  assert.equal(anchor.status, 0, anchor.stderr);
+  assert.equal(realpathSync(anchor.stdout.trim()), realpathSync(f.dir));
+});
+
+test("job: (2b) a crashed session's leftovers are swept at the job's exit, ahead of the push step", async (t) => {
+  const f = await jobFixture(t);
+  if (f === null) return;
+  await f.setStub(PLANT_AND_CRASH);
+
+  await f.job(1, { PLANT: f.leftovers.join(':') });
+
+  const log = f.watcherLog();
+  assert.equal(f.prompts().length, 1, log);
+  assert.equal(f.record().status, 'failed', log);
+  for (const path of f.leftovers) assert.equal(present(path), false, `${path} is still there:\n${log}`);
+  assert.equal(log.split('\n').filter((l) => l.includes('placeholder sweep: removed ')).length, 2, log);
+});
+
+test('job: (3) a recorded <scriptsDir>/.git with content is kept and logged', async (t) => {
+  const f = await jobFixture(t);
+  if (f === null) return;
+  await f.setStub(PLANT_AND_CRASH);
+
+  await f.job(1, { PLANT: f.scriptsGit, PLANT_BODY: 'gitdir: /elsewhere\n' });
+
+  const log = f.watcherLog();
+  const line = f.manifestLine(f.scriptsGit);
+  assert.ok(line, readFileSync(f.manifest, 'utf8'));
+  assert.ok(log.includes(`placeholder sweep: kept ${line}: has content`), log);
+  assert.equal(readFileSync(f.scriptsGit, 'utf8'), 'gitdir: /elsewhere\n');
+});
+
+test('job: (4) with the seam off no manifest is written under RUNNER_TEMP and the leftovers stay', async (t) => {
+  const f = await jobFixture(t);
+  if (f === null) return;
+  await f.setStub(PLANT_AND_CRASH);
+
+  await f.job(0, { PLANT: f.leftovers.join(':') });
+
+  const log = f.watcherLog();
+  assert.equal(f.prompts().length, 1, log);
+  assert.equal(existsSync(f.manifestDir), false, `a manifest directory was written:\n${log}`);
+  for (const path of f.leftovers) assert.equal(present(path), true, `${path} was removed:\n${log}`);
+  assert.ok(!log.includes('placeholder sweep'), log);
+});
+
+test('job: (5) with RUNNER_TEMP unset the job launches, logs that it has no manifest path, and writes none', async (t) => {
+  const f = await jobFixture(t);
+  if (f === null) return;
+
+  await f.job(1, { RUNNER_TEMP: '' });
+
+  const log = f.watcherLog();
+  assert.equal(f.prompts().length, 1, log);
+  assert.ok(log.includes(`placeholder manifest: no path for '${f.branch}' — the next sweep removes nothing for this session`), log);
+  assert.equal(existsSync(f.manifestDir), false, log);
 });
 
 test('(8) a kept path is not logged by the quiet pass-start sweep', async (t) => {

@@ -1,6 +1,7 @@
 /**
  * The run library's placeholder primitives — `hr_placeholder_host_probe_var`,
- * `hr_placeholder_manifest_write`, `hr_run_profile_absent_files`, `hr_placeholder_leftover_var` and
+ * `hr_placeholder_manifest_write`, `hr_run_profile_absent_files`, `hr_job_absent_file`,
+ * `hr_job_absent_files`, `hr_placeholder_leftover_var` and
  * `hr_placeholder_sweep_var` in `cli/templates/scripts/lib/harness-run-lib.sh`.
  *
  * **The rule this suite enforces: the sweep removes only a 0-byte, read-only regular file owned by
@@ -123,6 +124,51 @@ test('hr_run_profile_absent_files lists only the regular .absent files, and refu
   assert.equal(unanchored.stdout, 'status=1\n', `unanchorable lane: ${unanchored.stderr}`);
   const noSlug = await list('');
   assert.equal(noSlug.stdout, 'status=1\n', `empty slug: ${noSlug.stderr}`);
+});
+
+test('hr_job_absent_file names the manifest under an absolute RUNNER_TEMP, and refuses an empty or relative one', async (t) => {
+  const f = await fixture(t);
+  const runnerTemp = join(f.root, 'runner-temp');
+  const name = (branch, env) => f.call('hr_job_absent_file "$1"; printf "status=%s\\n" "$?"', [branch], env);
+
+  const named = await name('feat/x', { RUNNER_TEMP: `${runnerTemp}/` });
+  assert.equal(named.stdout, `${runnerTemp}/autonomous-sdlc-harness-placeholders/feat-x.absent\nstatus=0\n`, named.stderr);
+  assert.equal(await exists(runnerTemp), false, 'the namer created a directory');
+
+  for (const [label, env] of [
+    ['empty', { RUNNER_TEMP: '' }],
+    ['relative', { RUNNER_TEMP: 'runner-temp' }],
+  ]) {
+    const refused = await name('feat_x', env);
+    assert.equal(refused.stdout, 'status=1\n', `${label} RUNNER_TEMP: ${refused.stderr}`);
+  }
+  const noBranch = await name('', { RUNNER_TEMP: runnerTemp });
+  assert.equal(noBranch.stdout, 'status=1\n', `empty branch: ${noBranch.stderr}`);
+});
+
+test('hr_job_absent_files lists only the regular, non-link .absent files under RUNNER_TEMP', async (t) => {
+  const f = await fixture(t);
+  const runnerTemp = join(f.root, 'runner-temp');
+  const env = { RUNNER_TEMP: runnerTemp };
+  const list = (extra = env) => f.call('hr_job_absent_files; printf "status=%s\\n" "$?"', [], extra);
+
+  const missing = await list();
+  assert.equal(missing.stdout, 'status=0\n', `no directory yet: ${missing.stderr}`);
+  assert.equal(await exists(runnerTemp), false, 'the enumerator created a directory');
+
+  const dir = join(runnerTemp, 'autonomous-sdlc-harness-placeholders');
+  await mkdir(dir, { recursive: true });
+  const a = await plant(join(dir, 'feat-a.absent'), '', 0o600);
+  const b = await plant(join(dir, 'main.absent'), '/x\n', 0o600);
+  await plant(join(dir, 'feat-a.json'), '{}', 0o600);
+  await symlink(a, join(dir, 'linked.absent'));
+  await mkdir(join(dir, 'a-dir.absent'));
+  const mixed = await list();
+  assert.equal(mixed.stderr, '');
+  assert.deepEqual(mixed.stdout.split('\n').filter(Boolean).sort(), [a, b, 'status=0'].sort());
+
+  const unset = await list({ RUNNER_TEMP: '' });
+  assert.equal(unset.stdout, 'status=1\n', `empty RUNNER_TEMP: ${unset.stderr}`);
 });
 
 /** The four non-leftover shapes of the predicate, each with the reason it must report. */
