@@ -22,7 +22,7 @@ Two findings are Must Fix:
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below top to bottom, and the committing role flips each one to `[x]` as that fix's commit lands. Each entry resolves 1:1 to `harness-runs/code_reviews/fix_background_agent_wait_ceiling_code_review/finding_<K>.md`. The leading `N.` is the fix order. `K` is the finding's stable number.
 
 1. [x] **Finding 5** — Restore the registry field list's `log_path` row alignment in the watcher header, and re-copy `scripts/autonomous-watcher.sh` _(layer: cli, general)_
-2. [ ] **Finding 4** — Drop "until a human resumes it" / "awaiting human resume" from the five autonomous forks and the plan core's G.1 clause (c) _(layer: plugin)_
+2. [x] **Finding 4** — Drop "until a human resumes it" / "awaiting human resume" from the five autonomous forks and the plan core's G.1 clause (c) _(layer: plugin)_
 3. [ ] **Finding 2** — Add the zero-exit ledger read to `ARCHITECTURE.md`'s `classify_run_exit` row, its negative-result paragraph and operation 7 _(layer: general)_
 4. [ ] **Finding 3** — Correct the "carries no `paused_by` / only `branch-resume` resumes it" statements for a local `unfinished` pause the usage gate had requested _(layer: cli, plugin, general)_
 5. [ ] **Finding 1** — Keep a pending `usage` or `budget` pause over `unfinished` in job mode, in the `PAUSE_ACK` arm's order, with two `watcher-remote-job` cases _(layer: cli, general)_
