@@ -46,7 +46,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_task_offer_check_script/
 6. [x] **Task 6** — Add `task-offer-check.sh` to the script-allowlist guard's documented left-allowed set _(layer: plugin)_ _(points: 5)_
 7. [x] **Task 7** — State the script, the allow rule and the new `doctor` arms in `docs/cli.md`, `docs/watcher.md` and `docs/guard-verification.md` _(layer: general)_ _(points: 15)_
 8. [x] **Task 8** — Self-adopt the script under `scripts/` and record the root `.claude/` paste _(layer: general)_ _(points: 10)_
-9. [ ] **Task 9** — Record the worked example's `.claude/` paste and update its README's re-render record _(layer: general)_ _(points: 10)_
+9. [x] **Task 9** — Record the worked example's `.claude/` paste and update its README's re-render record _(layer: general)_ _(points: 10)_
 
 ## Scope register
 

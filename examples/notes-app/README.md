@@ -114,11 +114,22 @@ name the generating machine's home directory, which became `/workspace`. A later
 same keys, through the same three clauses, replaced the glob's `.git` pointer entry with the clone's
 six `.git` paths under `/workspace/notes-app-*` and the per-file `.git` entries with the whole
 `/workspace/notes-app/.git`. A later re-render of the same keys, through the same three clauses,
-dropped every `Write` file rule and the sibling-glob wrapper `Bash` rows. A later re-render of the write-protection `_README` line, through the same three clauses, added the Linux placeholder statement for the three `.git` trust files and changed no entry. The file now carries 163
-`/workspace`-rooted occurrences across 124 lines (`grep -o '/workspace' … | wc -l` and `grep -c '/workspace'`): 132 `/workspace/notes-app`,
+dropped every `Write` file rule and the sibling-glob wrapper `Bash` rows. A later re-render of the write-protection `_README` line, through the same three clauses, added the Linux placeholder statement for the three `.git` trust files and changed no entry. A later re-render of the write-protection entries, through the same three clauses, added the main checkout's `scripts/task-offer-check.sh` to `denyWrite`, the `Edit` deny rules and the write-protection `_README` line, and changed no other entry. The file now carries 166
+`/workspace`-rooted occurrences across 126 lines (`grep -o '/workspace' … | wc -l` and `grep -c '/workspace'`): 135 `/workspace/notes-app`,
 36 of them the sibling worktree glob `/workspace/notes-app-*`; 30 home-directory ones
 (`grep -o '/workspace/\.'`), the `Read(//workspace/.ssh)` family; and one bare `/workspace`
-(`grep -o '/workspace\($\|[^/]\)'`). Every occurrence was substituted, **prose included** — the four `_README`
+(`grep -o '/workspace\($\|[^/]\)'`). Run from this directory, these re-measure every figure:
+
+```sh
+grep -o '/workspace' .claude/settings.autonomous.json | wc -l
+grep -c '/workspace' .claude/settings.autonomous.json
+grep -o '/workspace/notes-app' .claude/settings.autonomous.json | wc -l
+grep -o '/workspace/notes-app-\*' .claude/settings.autonomous.json | wc -l
+grep -o '/workspace/\.' .claude/settings.autonomous.json | wc -l
+grep -o '/workspace\($\|[^/]\)' .claude/settings.autonomous.json | wc -l
+```
+
+Every occurrence was substituted, **prose included** — the four `_README`
 sentences that quote a path (the sibling-glob relation, the file rules, the excluded commands and
 the write-protected paths), every `Read` and `Edit` file rule (the file carries no `Write` rule),
 every wrapper `Bash` entry, and the state-directory entry under `additionalDirectories` —
