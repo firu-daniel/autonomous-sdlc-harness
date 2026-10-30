@@ -50,3 +50,9 @@
 - `bash -n` exits 0 on both edited scripts.
 - `git grep -n 'pause_reason unfinished' -- cli/templates/scripts/autonomous-watcher.sh` shows one `registry_set` write, in `classify_run_exit`, and `status paused pause_reason` appears in the same `registry_set` call. That write sits on the branch the job-mode `user` test does not take.
 - Reading `classify_run_exit` top to bottom, the tests still run `stall_killing` → `PAUSE_ACK` → archival → park-loop / `parked` → `rc`, and the only new branch sits inside the `rc -eq 0` arm.
+
+**Deviations from plan:**
+
+- The docs `REPRO` entry says *launched with `docs` in place of `task`* rather than *`registry_set feat_x engine docs` first*: the `a launch` entry calls `launch_run … task`, and `launch_run` writes `engine` from that argument, which would overwrite a prior `registry_set`.
+- `bash -n` on the two edited scripts was refused by the tool layer (twice, as single plain commands). The syntax claim rests on `bash scripts/typecheck.sh`, whose `check-shell-parse` step reported `97 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`, and on the new suite sourcing and running the edited watcher in all 11 cases. The notifier is replaced by a recorder in the watcher fixture, so its edit is covered by the parse check alone.
+- The red mutations were run through `bash scripts/scratch-run.sh harness-runs/scratch/ledger-red-driver.mjs`, which patched each fixture's installed watcher (never the tracked template). Beyond the cases the plan names, *reader ignored* also reddens `hygiene` (its precondition is the unfinished pause) and *check moved above `PAUSE_ACK`* also reddens `task, unfinished` (the mutated arm sends no notification); the test header records both.
