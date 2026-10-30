@@ -1229,6 +1229,23 @@ test('every path that runs outside the sandbox is write-protected on both sides'
     ),
     `the write-protection _README line does not state the sibling-glob drop and re-rooting: ${protectionLine}`,
   );
+  assert.ok(
+    protectionLine.includes(
+      'On Linux Claude Code enforces the `Edit` deny rules inside the sandbox too, mounting the same placeholder at an absent path inside a write root (measured 2026-10-30, Claude Code 2.1.314, bubblewrap 0.8.0)',
+    ),
+    `the write-protection _README line does not state that Linux enforces the Edit rules inside the sandbox: ${protectionLine}`,
+  );
+  assert.ok(
+    protectionLine.includes(
+      "the per-run copy also leaves out the run copy's own `Edit` rules for those paths, its exact rules and the base's glob rules alike",
+    ),
+    `the write-protection _README line does not state the run copy's own trio Edit rules are left out: ${protectionLine}`,
+  );
+  assert.ok(
+    protectionLine.includes('while each other sibling run copy keeps them by exact path'),
+    `the write-protection _README line does not state each other sibling keeps its Edit rules: ${protectionLine}`,
+  );
+  assert.ok(!protectionLine.includes('`Edit` rules stay'), `the write-protection _README line still says the trio Edit rules stay: ${protectionLine}`);
   assertEntriesRunnable(profile);
 });
 

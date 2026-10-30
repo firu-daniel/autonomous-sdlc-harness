@@ -2302,6 +2302,17 @@ lane_release_if_idle() {
 # the base's sibling-glob entries for the `omit` rows of
 # RUN_PROFILE_COPY_GIT_PATHS are taken out (run_profile_glob_drops) and
 # re-rooted as exact entries at every other sibling (run_profile_entries).
+# There Claude Code also enforces an `Edit` deny rule inside the sandbox,
+# mounting the same placeholder at an absent path inside a write root, globs
+# included: the control of 2026-10-30 (Claude Code 2.1.314, bubblewrap 0.8.0)
+# removed only the per-run copy's trio `Edit` rules and the clone's placeholders,
+# their leftovers and the failing sandboxed `git status` all went. So on a
+# bubblewrap host the per-run copy also carries no `Edit` rule for the run
+# copy's own `omit` paths, exact or glob (run_profile_edit_drops); each other
+# sibling keeps them by exact path. Nothing is lost: the sandboxed shell could
+# already write those paths there, and what stops a planted one is the
+# wrappers' trust check (hr_clone_target_check_var, condition 3) and the launch
+# check in spawn_engine, both failing closed.
 # -----------------------------------------------------------------------------
 
 # A declared mirror of cli/src/generators/writeProtection.ts → COPY_GIT_PATHS:
@@ -2341,6 +2352,37 @@ EOF
     | strings
     | select(contains("*") and (contains("\n") | not))
     | select(. as $e | any($omit[]; . as $p | $e | endswith("/" + $p)))
+  ' "$SETTINGS_PROFILE" 2>/dev/null)" || return 1
+  [ -z "$out" ] || printf '%s\n' "$out"
+}
+
+# run_profile_edit_drops — on HR_PLACEHOLDER_HOST `1`, print each string of
+# $SETTINGS_PROFILE's `.permissions.deny` that is `Edit(/<g>)` or
+# `Edit(/<g>/**)` where <g> carries a `*` and ends in `/<p>` for a
+# RUN_PROFILE_COPY_GIT_PATHS row <p> marked `omit`, in base order, one per
+# line; a string carrying a newline is never printed. Prints nothing on any
+# other host. 1, printing nothing, when the base cannot be read or that value
+# is neither absent nor a list. Read off the base, never rebuilt from
+# projectName, for run_profile_glob_drops' reason.
+run_profile_edit_drops() {
+  local p k a rows="" out
+  [ "${HR_PLACEHOLDER_HOST:-0}" = 1 ] || return 0
+  [ -f "$SETTINGS_PROFILE" ] && [ -r "$SETTINGS_PROFILE" ] || return 1
+  while IFS=' ' read -r p k a; do
+    [ "$a" = omit ] && rows="${rows}${p}
+"
+  done <<EOF
+$RUN_PROFILE_COPY_GIT_PATHS
+EOF
+  out="$(jq -r --arg rows "$rows" '
+    ($rows | split("\n") | map(select(length > 0))) as $omit
+    | (.permissions.deny // [])
+    | if type == "array" then .[] else error("deny is not a list") end
+    | strings
+    | select((contains("\n") | not) and startswith("Edit(/") and endswith(")"))
+    | select(.[6:-1] as $in
+      | [$in, (if ($in | endswith("/**")) then $in[:-3] else empty end)]
+      | any(.[]; contains("*") and (. as $g | any($omit[]; . as $p | $g | endswith("/" + $p)))))
   ' "$SETTINGS_PROFILE" 2>/dev/null)" || return 1
   [ -z "$out" ] || printf '%s\n' "$out"
 }
@@ -2399,7 +2441,9 @@ run_profile_one_object() {
 # being `file`, `directory` or `entry` as writeProtection.ts → ProtectedKind
 # means them. The third column is `omit` only for a clone row marked `omit`
 # while HR_PLACEHOLDER_HOST is `1` (bubblewrap would plant a placeholder at that
-# absent path), `deny` for every other line:
+# absent path, for a denyWrite entry and an `Edit` rule alike): the per-run copy
+# then carries neither the line's denyWrite entry nor its `Edit` rules. The
+# column is `deny` for every other line:
 #   * each `hr_run_protected_rel_paths` line re-rooted at <copy>, as `entry`;
 #   * on a clone, each RUN_PROFILE_COPY_GIT_PATHS row re-rooted at <copy>;
 #   * on a legacy worktree, <copy>/.git as `file`;
@@ -2512,9 +2556,12 @@ EOF
 # prints, through a temporary file in its directory and `mv`, the directory
 # created at mode 700, and set RUN_PROFILE_FILE to it. The content is
 # $SETTINGS_PROFILE with exactly the run_profile_glob_drops strings removed
-# from `.sandbox.filesystem.denyWrite` (none off a bubblewrap host), then each
-# run_profile_entries path not marked `omit` appended to it, the Edit rules of
-# every line to `.permissions.deny`,
+# from `.sandbox.filesystem.denyWrite` and the run_profile_edit_drops strings
+# from `.permissions.deny` (none off a bubblewrap host, where the per-run copy
+# is byte-identical to the render before those drops), then each
+# run_profile_entries path not marked `omit` appended to denyWrite, the Edit
+# rules of each line not marked `omit` to `.permissions.deny` (bubblewrap
+# mounts a placeholder for an `Edit` rule too: THE PER-RUN PROFILE, above),
 # and the run copy's twins of the base's main-checkout wrapper rules appended
 # to `.permissions.allow` and `.permissions.ask`: each base entry of that list
 # starting with RUN_PROFILE_MAIN_PREFIX, that prefix replaced by
@@ -2531,7 +2578,7 @@ EOF
 # Edit(/<p>/**); `entry` → Edit(/<p>), Edit(/<p>/**). A change to that map is
 # an edit here in the same change.
 run_profile_render() {
-  local branch="$1" copy="$2" kind="$3" file dir tmp entries drops rc=0
+  local branch="$1" copy="$2" kind="$3" file dir tmp entries drops edrops rc=0
   RUN_PROFILE_FILE=""
   RUN_PROFILE_REFUSAL=""
   if ! file="$(hr_run_profile_file "$HARNESS_REPO_SLUG" "$branch")"; then
@@ -2559,6 +2606,10 @@ run_profile_render() {
     RUN_PROFILE_REFUSAL="the denyWrite list of the base profile $SETTINGS_PROFILE could not be read"
     return 1
   fi
+  if ! edrops="$(run_profile_edit_drops)"; then
+    RUN_PROFILE_REFUSAL="the permissions.deny list of the base profile $SETTINGS_PROFILE could not be read"
+    return 1
+  fi
   dir="${file%/*}"
   if ! (umask 077 && mkdir -p "$dir") 2>/dev/null || ! chmod 700 "$dir" 2>/dev/null; then
     RUN_PROFILE_REFUSAL="cannot create $dir"
@@ -2569,9 +2620,10 @@ run_profile_render() {
     return 1
   fi
   if ! printf '%s' "$entries" |
-    jq -R -s --slurpfile base "$SETTINGS_PROFILE" --arg drops "$drops" \
+    jq -R -s --slurpfile base "$SETTINGS_PROFILE" --arg drops "$drops" --arg edrops "$edrops" \
       --arg main "$RUN_PROFILE_MAIN_PREFIX" --arg twin "$RUN_PROFILE_COPY_PREFIX" '
       ($drops | split("\n") | map(select(length > 0))) as $drop
+      | ($edrops | split("\n") | map(select(length > 0))) as $edrop
       | def rules:
         if .kind == "entry" then ["Edit(/" + .path + ")", "Edit(/" + .path + "/**)"]
         elif .kind == "directory" then ["Edit(/" + .path + "/**)"]
@@ -2584,8 +2636,11 @@ run_profile_render() {
       | if ($drop | length) > 0
         then .sandbox.filesystem.denyWrite |= [.[] | select(. as $x | any($drop[]; . == $x) | not)]
         else . end
+      | if ($edrop | length) > 0
+        then .permissions.deny |= [.[] | select(. as $x | any($edrop[]; . == $x) | not)]
+        else . end
       | .sandbox.filesystem.denyWrite |= add_absent([$e[] | select(.action != "omit") | .path])
-      | .permissions.deny |= add_absent([$e[] | rules[]])
+      | .permissions.deny |= add_absent([$e[] | select(.action != "omit") | rules[]])
       | if (.permissions.allow | type) == "array" then .permissions.allow |= add_twins else . end
       | if (.permissions.ask | type) == "array" then .permissions.ask |= add_twins else . end
     ' >"$tmp" 2>/dev/null; then
@@ -2621,15 +2676,18 @@ run_profile_render() {
 #     the <copy> twin, as run_profile_render makes it, of a base entry of the
 #     same list. With no <copy> every such append is refused.
 # "The base" is $SETTINGS_PROFILE with exactly the run_profile_glob_drops
-# strings removed from `.sandbox.filesystem.denyWrite` when <copy> is given and
-# HR_PLACEHOLDER_HOST is `1`, as run_profile_render drops them; with no <copy>,
-# or on any other host, it is $SETTINGS_PROFILE unchanged.
+# strings removed from `.sandbox.filesystem.denyWrite` and the
+# run_profile_edit_drops strings from `.permissions.deny` when <copy> is given
+# and HR_PLACEHOLDER_HOST is `1`, as run_profile_render drops them (bubblewrap
+# mounts a placeholder for either: THE PER-RUN PROFILE, above); with no
+# <copy>, or on any other host, it is $SETTINGS_PROFILE unchanged. Any other
+# base entry missing from <file> is still refused.
 # A settings file failing Claude Code's validation is silently ignored under
 # `-p`, so this reduces the per-run copy's validity to the base's, which
 # `doctor` grades. In job mode <file> is $SETTINGS_PROFILE, no <copy> is
 # passed, and the appended set is empty.
 run_profile_check() {
-  local file="$1" copy="${2-}" verdict main="" twin="" drops=""
+  local file="$1" copy="${2-}" verdict main="" twin="" drops="" edrops=""
   RUN_PROFILE_REFUSAL=""
   if ! run_profile_one_object "$SETTINGS_PROFILE"; then
     RUN_PROFILE_REFUSAL="the base profile $SETTINGS_PROFILE is not exactly one JSON object"
@@ -2650,16 +2708,24 @@ run_profile_check() {
       RUN_PROFILE_REFUSAL="the denyWrite list of the base profile $SETTINGS_PROFILE could not be read"
       return 1
     fi
+    if ! edrops="$(run_profile_edit_drops)"; then
+      RUN_PROFILE_REFUSAL="the permissions.deny list of the base profile $SETTINGS_PROFILE could not be read"
+      return 1
+    fi
   fi
   verdict="$(jq -n -r --slurpfile b "$SETTINGS_PROFILE" --slurpfile f "$file" \
-    --arg main "$main" --arg twin "$twin" --arg drops "$drops" \
+    --arg main "$main" --arg twin "$twin" --arg drops "$drops" --arg edrops "$edrops" \
     --arg marker "$RUN_PROFILE_OPT_OUT_MARKER" \
     --argjson strict "$RUN_PROFILE_SANDBOX_STRICT" \
     --argjson optout "$RUN_PROFILE_SANDBOX_OPT_OUT" '
       ($drops | split("\n") | map(select(length > 0))) as $drop
+      | ($edrops | split("\n") | map(select(length > 0))) as $edrop
       | ($b[0]
         | if ($drop | length) > 0
           then .sandbox.filesystem.denyWrite |= [.[] | select(. as $x | any($drop[]; . == $x) | not)]
+          else . end
+        | if ($edrop | length) > 0
+          then .permissions.deny |= [.[] | select(. as $x | any($edrop[]; . == $x) | not)]
           else . end) as $B
       | $f[0] as $F
       | def delta(p):
@@ -2924,8 +2990,10 @@ spawn_engine() {
     if [ "$HR_PLACEHOLDER_HOST" = "1" ]; then
       placeholder_sweep_pass "$branch" 0
       # The launch check: the render omits a clone's commondir, config.worktree
-      # and http-alternates, so a planted one is refused here, before Claude
-      # Code's own startup git reads the copy.
+      # and http-alternates from denyWrite and their `Edit` rules, exact and
+      # glob, from permissions.deny (THE PER-RUN PROFILE, above), so a planted
+      # one is refused here, before Claude Code's own startup git reads the
+      # copy.
       if [ "$copy_kind" = "clone" ]; then
         if [ -z "$RUN_MAIN" ]; then
           spawn_refuse "$branch" "$RUN_MAIN_REFUSAL"

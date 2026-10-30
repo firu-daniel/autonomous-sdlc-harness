@@ -300,7 +300,38 @@ test('after a launch the manifest lists exactly the absent denyWrite paths, glob
   for (const omitted of ['commondir', 'config.worktree', 'objects/info/http-alternates']) {
     assert.ok(!manifest.includes(`${f.clone}/.git/${omitted}`), `${omitted} is listed`);
   }
+
+  // The Edit side: no rule names the clone's omitted trio, exact or by a `*` rule; its kept rows stay.
+  const deny = profile.permissions.deny.filter((e) => typeof e === 'string');
+  const clones = [...new Set([f.clone, realpathSync(f.clone)])];
+  for (const omitted of ['commondir', 'config.worktree', 'objects/info/http-alternates']) {
+    for (const clone of clones) {
+      const named = deny.filter((rule) => editRuleCovers(rule, `${clone}/.git/${omitted}`));
+      assert.deepEqual(named, [], `a deny rule names ${clone}/.git/${omitted}`);
+    }
+  }
+  for (const rule of [`Edit(/${f.clone}/.git/config)`, `Edit(/${f.clone}/.git/hooks/**)`, `Edit(/${f.clone}/.git/objects/info/alternates)`]) {
+    assert.ok(deny.includes(rule), `${rule} is not in deny`);
+  }
+  for (const kept of ['/.git/config)', '/.git/hooks/**)', '/.git/objects/info/alternates)']) {
+    assert.ok(deny.some((rule) => rule.includes('*') && rule.endsWith(kept)), `no glob rule ending ${kept} is in deny`);
+  }
 });
+
+/**
+ * Whether the `Edit(/<p>)` or `Edit(/<p>/**)` rule `rule` reaches `path`: `<p>` equal to it, or a `*`
+ * in `<p>` matching one segment's run of characters.
+ */
+function editRuleCovers(rule, path) {
+  if (!rule.startsWith('Edit(/') || !rule.endsWith(')')) return false;
+  let inner = rule.slice('Edit(/'.length, -1);
+  if (inner.endsWith('/**')) inner = inner.slice(0, -3);
+  const pattern = inner
+    .split('*')
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+    .join('[^/]*');
+  return new RegExp(`^${pattern}$`).test(path);
+}
 
 test("a launch-recorded leftover at a sibling's .git/commondir is swept by the next pass-start sweep", async (t) => {
   const f = await adoptedFixture(t);

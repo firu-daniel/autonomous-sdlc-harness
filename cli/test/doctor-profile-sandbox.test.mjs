@@ -266,6 +266,17 @@ concurrentSuite('doctor profile-write-protection', () => {
       ),
       line,
     );
+    assert.ok(
+      line.includes(
+        'On Linux Claude Code enforces the Edit deny rules inside the sandbox too, mounting the same placeholder at an absent path inside a write root (measured 2026-10-30 on Claude Code 2.1.314 with bubblewrap 0.8.0)',
+      ),
+      line,
+    );
+    assert.ok(
+      line.includes("the per-run copy there also leaves out the run copy's own Edit rules for those paths, its exact rules and the base's glob rules alike"),
+      line,
+    );
+    assert.ok(line.includes('while each other sibling run copy keeps them by exact path'), line);
   });
 
   it("(b) warns when the main checkout's push wrapper has no denyWrite entry, naming the path and the side", async (t) => {

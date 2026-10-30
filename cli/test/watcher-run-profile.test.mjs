@@ -7,7 +7,8 @@
  * the base profile plus that run's exact deny entries and its wrapper twins — the run copy's spelling
  * of each base `allow` or `ask` rule for a main-checkout wrapper — with the sandbox on and strict or
  * the named opt-out taken; on a bubblewrap host the base's sibling-glob trio entries are taken out and
- * re-rooted as exact entries at every other sibling, and the launch check accepts exactly that drop.**
+ * re-rooted as exact entries at every other sibling, the run copy's own trio `Edit` rules, exact and
+ * glob, are left out, and the launch check accepts exactly those drops.**
  * And **a clone run's exit brings its branch into the main checkout, while a sync
  * that cannot run — RUN_MAIN unplaced included — is one log line and never changes the
  * classification.**
@@ -175,25 +176,46 @@ function globDrops(base) {
   );
 }
 
+/**
+ * `run_profile_edit_drops` on a placeholder host, read off `base`: each `permissions.deny` string that is
+ * `Edit(/<g>)` or `Edit(/<g>/**)` for a `*`-carrying `<g>` ending in an omit row.
+ */
+function editDrops(base) {
+  const omit = COPY_GIT_PATHS.filter((row) => !row.bubblewrapDenyWrite);
+  const globs = (base.permissions.deny ?? []).filter((e) => typeof e === 'string' && e.startsWith('Edit(/') && e.endsWith(')'));
+  return globs.filter((e) => {
+    const inner = e.slice('Edit(/'.length, -1);
+    const candidates = inner.endsWith('/**') ? [inner, inner.slice(0, -3)] : [inner];
+    return candidates.some((g) => g.includes('*') && omit.some((row) => g.endsWith(`/${row.path}`)));
+  });
+}
+
 /** The `entry` line each of `base`'s glob drops is re-rooted to at each sibling, `*` read as each of `names` in order. */
 function siblingEntries(base, names) {
   return globDrops(base).flatMap((glob) => names.map((name) => ({ path: glob.replace('*', name), kind: 'entry', action: 'deny' })));
 }
 
 /**
- * Assert `profile` is `base` with exactly `drops` taken out of `denyWrite` and `entries` appended to
- * the deny lists — an `omit` entry's path to `denyWrite` excepted — and the `copy` twins of `main`'s
- * wrapper rules to `allow` and `ask`, in order, each only when absent.
+ * Assert `profile` is `base` with exactly `drops` taken out of `denyWrite` and `edits` out of
+ * `permissions.deny`, then every entry not marked `omit` appended to both deny lists, and the `copy`
+ * twins of `main`'s wrapper rules to `allow` and `ask`, in order, each only when absent.
  */
-function assertBasePlus(profile, base, entries, { main, copy, drops = [] }) {
+function assertBasePlus(profile, base, entries, { main, copy, drops = [], edits = [] }) {
+  const kept = entries.filter((e) => e.action !== 'omit');
   assert.deepEqual(
     profile.sandbox.filesystem.denyWrite,
     addAbsent(
       base.sandbox.filesystem.denyWrite.filter((e) => !drops.includes(e)),
-      entries.filter((e) => e.action !== 'omit').map((e) => e.path),
+      kept.map((e) => e.path),
     ),
   );
-  assert.deepEqual(profile.permissions.deny, addAbsent(base.permissions.deny, entries.flatMap((e) => fileToolDenyRules(e))));
+  assert.deepEqual(
+    profile.permissions.deny,
+    addAbsent(
+      base.permissions.deny.filter((e) => !edits.includes(e)),
+      kept.flatMap((e) => fileToolDenyRules(e)),
+    ),
+  );
   for (const list of ['allow', 'ask']) {
     if (base.permissions[list] === undefined) {
       assert.equal(profile.permissions[list], undefined, `${list} was created`);
@@ -330,19 +352,26 @@ test('on a placeholder host a clone\'s per-run copy re-roots the base\'s trio gl
   const base = f.base();
   const drops = globDrops(base);
   assert.equal(drops.length, 3, JSON.stringify(drops));
+  const edits = editDrops(base);
+  assert.equal(edits.length, 6, JSON.stringify(edits));
   const entries = cloneEntries(f.config, f.clone, [], { placeholderHost: true, siblings: siblingEntries(base, ['other']) });
-  assertBasePlus(profile, base, entries, { main: f.dir, copy: f.clone, drops });
+  assertBasePlus(profile, base, entries, { main: f.dir, copy: f.clone, drops, edits });
 
   const denyWrite = profile.sandbox.filesystem.denyWrite;
+  const deny = profile.permissions.deny;
   for (const glob of drops) {
     assert.ok(!denyWrite.includes(glob), `${glob} is in denyWrite`);
     assert.ok(denyWrite.includes(glob.replace('*', 'other')), `${glob.replace('*', 'other')} is not in denyWrite`);
+    for (const rule of fileToolDenyRules({ path: glob.replace('*', 'other'), kind: 'entry' })) {
+      assert.ok(deny.includes(rule), `${rule} is not in deny: a sibling lost its exact Edit rules`);
+    }
     for (const name of ['wt', 'lnk', f.branch]) {
       assert.ok(!denyWrite.includes(glob.replace('*', name)), `${glob.replace('*', name)} is in denyWrite`);
     }
   }
-  for (const rule of base.permissions.deny.filter((r) => typeof r === 'string' && r.startsWith('Edit('))) {
-    assert.ok(profile.permissions.deny.includes(rule), `${rule} is not in deny`);
+  for (const rule of edits) assert.ok(!deny.includes(rule), `${rule} is in deny`);
+  for (const rule of base.permissions.deny.filter((r) => typeof r === 'string' && r.startsWith('Edit(') && !edits.includes(r))) {
+    assert.ok(deny.includes(rule), `${rule} is not in deny`);
   }
   const omitted = COPY_GIT_PATHS.filter((row) => !row.bubblewrapDenyWrite);
   const kept = COPY_GIT_PATHS.filter((row) => row.bubblewrapDenyWrite);
@@ -352,11 +381,15 @@ test('on a placeholder host a clone\'s per-run copy re-roots the base\'s trio gl
     const path = `${f.clone}/${row.path}`;
     assert.ok(!denyWrite.includes(path), `${path} is in denyWrite`);
     for (const rule of fileToolDenyRules({ path, kind: row.kind })) {
-      assert.ok(profile.permissions.deny.includes(rule), `${rule} is not in deny`);
+      assert.ok(!deny.includes(rule), `${rule} is in deny`);
     }
   }
   for (const row of kept) {
-    assert.ok(denyWrite.includes(`${f.clone}/${row.path}`), `${row.path} is not in denyWrite`);
+    const path = `${f.clone}/${row.path}`;
+    assert.ok(denyWrite.includes(path), `${row.path} is not in denyWrite`);
+    for (const rule of fileToolDenyRules({ path, kind: row.kind })) {
+      assert.ok(deny.includes(rule), `${rule} is not in deny`);
+    }
   }
 
   const check = await f.watcherCall('HR_PLACEHOLDER_HOST=1; run_profile_check "$1" "$2"; printf "%s|%s" "$?" "$RUN_PROFILE_REFUSAL"', [
@@ -385,6 +418,17 @@ test('with the seam off a clone\'s per-run copy is the base plus today\'s entrie
     assert.ok(profile.sandbox.filesystem.denyWrite.includes(glob), `${glob} is not in denyWrite`);
     assert.ok(!profile.sandbox.filesystem.denyWrite.includes(glob.replace('*', 'other')), `${glob} was re-rooted`);
   }
+  // The Edit side is today's too: the base's trio glob rules and the clone's own exact trio rules.
+  const edits = editDrops(base);
+  assert.equal(edits.length, 6, JSON.stringify(edits));
+  for (const rule of edits) assert.ok(profile.permissions.deny.includes(rule), `${rule} is not in deny`);
+  for (const row of COPY_GIT_PATHS) {
+    for (const rule of fileToolDenyRules({ path: `${f.clone}/${row.path}`, kind: row.kind })) {
+      assert.ok(profile.permissions.deny.includes(rule), `${rule} is not in deny`);
+    }
+  }
+  const printed = await f.watcherCall('HR_PLACEHOLDER_HOST=0; run_profile_edit_drops; printf "|%s" "$?"');
+  assert.equal(printed.stdout, '|0', printed.stderr);
 });
 
 // --- Refusal ------------------------------------------------------------------------------------
@@ -487,6 +531,70 @@ test('on a placeholder host run_profile_check accepts exactly the trio glob drop
   const morePath = join(f.dir, 'watcher-test', 'more-dropped.json');
   await writeFile(morePath, `${JSON.stringify(more, null, 2)}\n`, 'utf8');
   assert.match((await check(morePath, 1)).stdout, differs);
+});
+
+test('on a placeholder host run_profile_check accepts exactly the trio Edit drop, and refuses any other dropped deny rule', async (t) => {
+  const f = await adoptedFixture(t);
+  if (f === null) return;
+
+  const base = f.base();
+  const edits = editDrops(base);
+  assert.equal(edits.length, 6, JSON.stringify(edits));
+  const printed = await f.watcherCall('HR_PLACEHOLDER_HOST=1; run_profile_edit_drops');
+  assert.equal(printed.status, 0, printed.stderr);
+  assert.equal(printed.stdout, `${edits.join('\n')}\n`);
+
+  const copy = `${f.dir}-editcheck`;
+  const rendered = await f.watcherCall('HR_PLACEHOLDER_HOST=1; run_profile_render "$1" "$2" clone && printf "%s" "$RUN_PROFILE_FILE"', [
+    'feat_editcheck',
+    copy,
+  ]);
+  assert.equal(rendered.status, 0, rendered.stderr);
+  const file = rendered.stdout;
+  const check = (path, host, checkCopy = copy) =>
+    f.watcherCall(`HR_PLACEHOLDER_HOST=${host}; run_profile_check "$1" "$2"; printf "%s|%s" "$?" "$RUN_PROFILE_REFUSAL"`, [path, checkCopy]);
+  const differs =
+    /^1\|.* differs from the base profile .* by more than entries appended to sandbox\.filesystem\.denyWrite, permissions\.deny, permissions\.allow and permissions\.ask$/;
+
+  const profile = JSON.parse(readFileSync(file, 'utf8'));
+  assertBasePlus(profile, base, cloneEntries(f.config, copy, [], { placeholderHost: true }), {
+    main: f.dir,
+    copy,
+    drops: globDrops(base),
+    edits,
+  });
+  assert.equal((await check(file, 1)).stdout, '0|');
+  assert.match((await check(file, 1, '')).stdout, differs);
+  assert.match((await check(file, 0)).stdout, differs);
+
+  // A base Edit rule that is not a trio glob — the kept .git/config glob, and a main-checkout rule.
+  const configGlob = base.permissions.deny.find((e) => typeof e === 'string' && e.includes('*') && e.endsWith('/.git/config)'));
+  const mainRule = base.permissions.deny.find((e) => typeof e === 'string' && e.startsWith('Edit(') && !e.includes('*'));
+  for (const other of [configGlob, mainRule]) {
+    assert.ok(other, 'the base carries no such deny rule');
+    const more = structuredClone(profile);
+    more.permissions.deny = more.permissions.deny.filter((e) => e !== other);
+    const morePath = join(f.dir, 'watcher-test', 'more-edit-dropped.json');
+    await writeFile(morePath, `${JSON.stringify(more, null, 2)}\n`, 'utf8');
+    assert.match((await check(morePath, 1)).stdout, differs, other);
+  }
+});
+
+test('run_profile_edit_drops refuses a base deny value that is not a list, and the render takes its refusal', async (t) => {
+  const f = await adoptedFixture(t);
+  if (f === null) return;
+
+  const base = f.base();
+  base.permissions.deny = 'Edit(/x)';
+  await writeFile(f.basePath, `${JSON.stringify(base, null, 2)}\n`, 'utf8');
+  const call = (host) => f.watcherCall(`HR_PLACEHOLDER_HOST=${host}; run_profile_edit_drops; printf "|%s" "$?"`);
+  assert.equal((await call(1)).stdout, '|1');
+  assert.equal((await call(0)).stdout, '|0');
+  const render = await f.watcherCall('HR_PLACEHOLDER_HOST=1; run_profile_render "$1" "$2" clone; printf "%s|%s" "$?" "$RUN_PROFILE_REFUSAL"', [
+    'feat_editbad',
+    `${f.dir}-editbad`,
+  ]);
+  assert.match(render.stdout, /^1\|the permissions\.deny list of the base profile .* could not be read$/, render.stderr);
 });
 
 test('on a placeholder host a trio glob the expander cannot re-root refuses the render; off it the render is unchanged', async (t) => {
