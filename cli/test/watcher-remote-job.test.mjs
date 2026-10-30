@@ -8,6 +8,9 @@
  * inside the fixture and passes `USAGE_LANE_STATE_ENABLED=1`, so a lane write that job mode failed
  * to force off would land there and be seen. The same directory holds the per-run profile off: a
  * job-mode render would land under it (`hr_run_profile_file`), so `assertLaneUntouched` asserts both.
+ * `RUNNER_TEMP` is a fixture-owned sibling of the checkout: these cases run the script with no probe
+ * override, so on a Linux host the job writes its placeholder manifest there, never in a CI runner's
+ * own `$RUNNER_TEMP`, and never under the checkout, where the watcher refuses to write one.
  *
  * **Job mode launches only on a base profile its launch check passes:** a sandbox switched off with
  * no opt-out marker launches nothing and ends `failed`, and the opt-out shape `applySandbox` writes
@@ -175,11 +178,14 @@ async function createJobFixture(t, { runAnalytics = false } = {}) {
   const argvPath = join(recorder, 'argv.txt');
   const promptsPath = join(recorder, 'prompts.txt');
   const xdgState = join(w.dir, 'xdg-state');
+  const runnerTemp = `${w.dir}-runner-temp`;
+  t.after(() => rm(runnerTemp, { recursive: true, force: true }));
   const remoteStatus = join(w.dir, STATE_DIR, 'autonomous_logs', 'remote_status.json');
   const watcher = join(w.dir, INIT_SCRIPTS_DIR, 'autonomous-watcher.sh');
 
   await mkdir(recorder, { recursive: true });
   await mkdir(xdgState, { recursive: true });
+  await mkdir(runnerTemp, { recursive: true });
   await writeFile(
     stubPath,
     [
@@ -214,7 +220,7 @@ async function createJobFixture(t, { runAnalytics = false } = {}) {
     GITHUB_RUN_ID: '',
     GITHUB_REPOSITORY: '',
     GITHUB_SERVER_URL: '',
-    RUNNER_TEMP: '',
+    RUNNER_TEMP: runnerTemp,
     REMOTE_CONTROL_POLL_SECS: '1',
     REMOTE_AUTO_RESUME_DELAY_SECS: '0',
     HARNESS_GH_CLI: ghStub,

@@ -114,7 +114,7 @@ name the generating machine's home directory, which became `/workspace`. A later
 same keys, through the same three clauses, replaced the glob's `.git` pointer entry with the clone's
 six `.git` paths under `/workspace/notes-app-*` and the per-file `.git` entries with the whole
 `/workspace/notes-app/.git`. A later re-render of the same keys, through the same three clauses,
-dropped every `Write` file rule and the sibling-glob wrapper `Bash` rows. The file now carries 163
+dropped every `Write` file rule and the sibling-glob wrapper `Bash` rows. A later re-render of the write-protection `_README` line, through the same three clauses, added the Linux placeholder statement for the three `.git` trust files and changed no entry. The file now carries 163
 `/workspace`-rooted occurrences across 124 lines (`grep -o '/workspace' … | wc -l` and `grep -c '/workspace'`): 132 `/workspace/notes-app`,
 36 of them the sibling worktree glob `/workspace/notes-app-*`; 30 home-directory ones
 (`grep -o '/workspace/\.'`), the `Read(//workspace/.ssh)` family; and one bare `/workspace`

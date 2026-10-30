@@ -8,7 +8,8 @@
  * decisions and changes no directory, branch or registry byte. **A run's per-run profile goes with
  * its copy and only with it**, at the path the watcher writes — `hr_run_profile_file` over
  * `hr_repo_slug` of the main checkout, never `HARNESS_REPO_SLUG` — and is kept while any record in
- * a live status maps to the same file.
+ * a live status maps to the same file. Its absent-path manifest, the `.absent` sibling
+ * `hr_run_profile_absent_file` names, goes with it under the same gates.
  *
  * Every case's sweep gets its own `XDG_STATE_HOME`, `<root>/state`, so the snapshot covers the
  * profiles and no case touches the real machine state directory; the unanchorable case empties it
@@ -128,6 +129,13 @@ async function fixture(t) {
       await writeFile(file, '{}\n');
       return file;
     },
+    /** Write one line at `branch`'s absent-path manifest, the profile's `.absent` sibling; returns the path. */
+    plantManifest: async (branch, slugValue = ownSlug) => {
+      const file = profilePath(branch, slugValue).replace(/\.json$/, '.absent');
+      await mkdir(dirname(file), { recursive: true });
+      await writeFile(file, '/nonexistent/.mcp.json\n');
+      return file;
+    },
     derived: (branch) => join(root, `demo-${branch.replaceAll('/', '-')}`),
     /** `hr_clone_create_var` for `branch`, cut at `trunk`; returns the clone's path. */
     clone: async (branch) =>
@@ -165,7 +173,8 @@ const PREFIX = 'cleanup-merged-worktrees.sh: ';
  * The sweep's decisions as comparable strings, one per decision, sorted. A preview's
  * `would delete branch 'b' and remove <kind> d` is the real sweep's `removed <kind> d` and
  * `deleted merged branch 'b'`; a branch `git branch -D` then refuses was still a decision to delete.
- * A preview's `would remove run profile f` is the real sweep's `removed run profile f`.
+ * A preview's `would remove run profile f` is the real sweep's `removed run profile f`, and likewise
+ * for `absent-path manifest`.
  */
 function decisions(stdout) {
   const out = [];
@@ -173,9 +182,9 @@ function decisions(stdout) {
     if (!raw.startsWith(PREFIX)) continue;
     const line = raw.slice(PREFIX.length).replace(/^\[dry-run\] (would )?/, '');
     let m;
-    if ((m = line.match(/^remove(?:d)? run profile (.+) for '.+'$/))) {
-      out.push(`remove profile ${m[1]}`);
-    } else if (/^(keep run profile |no run profile path )/.test(line)) {
+    if ((m = line.match(/^remove(?:d)? (run profile|absent-path manifest) (.+) for '.+'$/))) {
+      out.push(`remove ${m[1]} ${m[2]}`);
+    } else if (/^(keep run profile |keep absent-path manifest |no run profile path )/.test(line)) {
       out.push(line);
     } else if ((m = line.match(/^delete branch '(.+?)'(?: and remove (clone|worktree) (.+))?$/))) {
       out.push(`delete ${m[1]}`);
@@ -210,7 +219,7 @@ const profileLine = (verb, file, branch) => `${PREFIX}${verb} run profile ${file
 
 const skipLine = (dir, branch) => `skip removing ${dir} for '${branch}' — it is not that branch's working copy`;
 
-test('a gone branch with a completed clone record: the clone, its run profile and the branch are removed', async (t) => {
+test('a gone branch with a completed clone record: the clone, its run profile, its manifest and the branch are removed', async (t) => {
   const f = await fixture(t);
   const dir = await f.clone(GONE);
   assert.equal(dir, f.derived(GONE));
@@ -218,15 +227,21 @@ test('a gone branch with a completed clone record: the clone, its run profile an
   await f.publish(GONE);
   await f.gone(GONE);
   const own = await f.plantProfile(GONE);
+  const ownManifest = await f.plantManifest(GONE);
   const foreign = await f.plantProfile(GONE, 'other-repo-slug');
+  const foreignManifest = await f.plantManifest(GONE, 'other-repo-slug');
 
   const r = await sweepBoth(f, { HARNESS_REPO_SLUG: 'other-repo-slug' });
   assert.ok(r.dryStdout.includes(`${PREFIX}[dry-run] would remove run profile ${own} for '${GONE}'`), r.dryStdout);
+  assert.ok(r.dryStdout.includes(`${PREFIX}[dry-run] would remove absent-path manifest ${ownManifest} for '${GONE}'`), r.dryStdout);
   assert.ok(r.stdout.includes(`removed clone ${dir}`), output(r));
   assert.ok(r.stdout.includes(profileLine('removed', own, GONE)), output(r));
+  assert.ok(r.stdout.includes(`${PREFIX}removed absent-path manifest ${ownManifest} for '${GONE}'`), output(r));
   assert.equal(await exists(dir), false, `the clone was not removed:\n${output(r)}`);
   assert.equal(await exists(own), false, `the run profile was not removed:\n${output(r)}`);
+  assert.equal(await exists(ownManifest), false, `the absent-path manifest was not removed:\n${output(r)}`);
   assert.equal(await readFile(foreign, 'utf8'), '{}\n', `the other slug's profile changed:\n${output(r)}`);
+  assert.equal(await readFile(foreignManifest, 'utf8'), '/nonexistent/.mcp.json\n', `the other slug's manifest changed:\n${output(r)}`);
   assert.equal(await f.localHas(GONE), false, `${GONE} was not deleted:\n${output(r)}`);
 });
 
@@ -274,13 +289,16 @@ test("a sanitized-name collision: the clone is removed, and the profile a live r
   await f.publish(COPY);
   await f.gone(COPY);
   const profile = await f.plantProfile(COPY);
+  const manifest = await f.plantManifest(COPY);
   assert.equal(profile, f.profilePath(LIVE));
 
   const r = await sweepBoth(f);
   assert.ok(r.stdout.includes(`removed clone ${dir}`), output(r));
   assert.equal(await exists(dir), false, `the clone was not removed:\n${output(r)}`);
   assert.ok(r.stdout.includes(`${profileLine('keep', profile, COPY)} — the live run '${LIVE}' uses that file`), output(r));
+  assert.ok(r.stdout.includes(`${PREFIX}keep absent-path manifest ${manifest} for '${COPY}' — the live run '${LIVE}' uses that file`), output(r));
   assert.ok(await exists(profile), `the run profile was removed:\n${output(r)}`);
+  assert.ok(await exists(manifest), `the absent-path manifest was removed:\n${output(r)}`);
 });
 
 test('an unanchorable state directory: the copy and branch are removed, and no profile is', async (t) => {

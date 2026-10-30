@@ -35,7 +35,8 @@
  * - `hr_run_protected_rel_paths` in `cli/templates/scripts/lib/harness-run-lib.sh` prints
  *   {@link copySurfacePaths}' lines in the same order (`cli/test/outer-loop-scripts.test.mjs`).
  * - `cli/templates/scripts/autonomous-watcher.sh` holds a copy of {@link COPY_GIT_PATHS}, each row's
- *   relative path and kind (`cli/test/watcher-run-profile.test.mjs`).
+ *   relative path, kind and `bubblewrapDenyWrite`, the last as a third column `deny` (true) or
+ *   `omit` (false) (`cli/test/watcher-run-profile.test.mjs`).
  * - The same script's `run_profile_render` holds a copy of {@link fileToolDenyRules}' kind → rule map
  *   (`cli/test/watcher-run-profile.test.mjs`): `file` → `Edit(/<p>)`; `directory` → `Edit(/<p>/**)`;
  *   `entry` → `Edit(/<p>)`, `Edit(/<p>/**)`. Any change to that map is an edit to `run_profile_render`
@@ -107,6 +108,18 @@ export interface CopyGitPath {
   readonly path: string;
   readonly kind: ProtectedKind;
   readonly reason: string;
+  /**
+   * Whether the per-run copy on a host sandboxed by bubblewrap (Linux, WSL2) carries this row's
+   * `sandbox.filesystem.denyWrite` entry. There Claude Code enforces an exact entry for an absent path
+   * by mounting a placeholder at that path, which git in the run copy then reads and which can
+   * outlive the call (`docs/sandbox-verification.md` → §5 F9; 2026-10-29, Claude Code 2.1.312,
+   * bubblewrap 0.8.0). A row marked `false` is a file a clone the harness made never has and the
+   * wrappers' clone check refuses (`cli/templates/scripts/lib/harness-run-lib.sh` →
+   * `hr_clone_target_check_var`, condition 3), so the entry is left out there; its `Edit` rules stay,
+   * and the watcher's launch check refuses a run copy carrying one. The base profile carries every
+   * row on every host.
+   */
+  readonly bubblewrapDenyWrite: boolean;
 }
 
 /**
@@ -120,27 +133,37 @@ export const COPY_GIT_PATHS: readonly CopyGitPath[] = Object.freeze([
     path: `${GIT_DIR}/config`,
     kind: 'file',
     reason: "the unsandboxed wrappers' clone trust check and every git call in that run copy read it",
+    bubblewrapDenyWrite: true,
   },
-  { path: `${GIT_DIR}/hooks`, kind: 'directory', reason: "it is git's default hooks directory for that run copy" },
+  {
+    path: `${GIT_DIR}/hooks`,
+    kind: 'directory',
+    reason: "it is git's default hooks directory for that run copy",
+    bubblewrapDenyWrite: true,
+  },
   {
     path: `${GIT_DIR}/objects/info/alternates`,
     kind: 'file',
     reason: "the unsandboxed wrappers' clone trust check reads where that run copy borrows objects from",
+    bubblewrapDenyWrite: true,
   },
   {
     path: `${GIT_DIR}/commondir`,
     kind: 'entry',
     reason: "a planted one would redirect that run copy's git to another repository's configuration and hooks",
+    bubblewrapDenyWrite: false,
   },
   {
     path: `${GIT_DIR}/config.worktree`,
     kind: 'entry',
     reason: 'a planted one would be read by every git call in that run copy once extensions.worktreeConfig is on',
+    bubblewrapDenyWrite: false,
   },
   {
     path: `${GIT_DIR}/objects/info/http-alternates`,
     kind: 'entry',
     reason: 'a planted one would point that run copy at objects from another repository',
+    bubblewrapDenyWrite: false,
   },
 ]);
 
@@ -435,6 +458,10 @@ export function applyWriteProtection(profile: JsonObject, { repoRoot, workRoot, 
       .map(({ path, reason }) => `${path} - ${reason}`)
       .join('; ')}. How the Linux sandbox treats a \`denyWrite\` entry containing \`*\` is unverified - it may skip one, or expand it to the paths that exist when the sandbox starts - so on Linux only the file-tool side is relied on for the globbed entries: a run copy's hooks directory, MCP wiring and settings files, its ${COPY_GIT_PATHS.map(
       ({ path }) => path,
-    ).join(', ')}, and its docs-search-server.sh and library when docs retrieval applies. The run watcher passes each run a per-run copy of this file that adds that run's own copy's paths, and every other live worktree's .git pointer, by exact path, which holds on Linux too. A run's own edit under a protected worktree path, such as a change to its hooks directory or to ${MCP_PATH}, or to ${SETTINGS_PATH}, is refused by design.`,
+    ).join(', ')}, and its docs-search-server.sh and library when docs retrieval applies. The run watcher passes each run a per-run copy of this file that adds that run's own copy's paths, and every other live worktree's .git pointer, by exact path. On a host sandboxed by bubblewrap, Claude Code enforces an exact entry for a path that does not exist by mounting a placeholder at that path, which breaks git in the run copy and can be left on disk, so the per-run copy there leaves the run copy's ${COPY_GIT_PATHS.filter(
+      ({ bubblewrapDenyWrite }) => !bubblewrapDenyWrite,
+    )
+      .map(({ path }) => path)
+      .join(', ')} out of \`denyWrite\`: their \`Edit\` rules stay, and the watcher refuses to launch or resume a run copy carrying one. A run's own edit under a protected worktree path, such as a change to its hooks directory or to ${MCP_PATH}, or to ${SETTINGS_PATH}, is refused by design.`,
   );
 }

@@ -1,0 +1,31 @@
+# Task plan review — iteration 1
+
+Iteration 0's two Must Fix findings are resolved. Task 3 now targets `watcher-keep-awake.test.mjs` → `session`, and `git grep -ln '\. "\$1" status' -- cli/test` lists exactly the seven files Task 3 names. Task 8 and the index now cite `setup-worktree.sh` → `hooks_config_write`, and its three branches match the code.
+
+## Must Fix
+
+1. **The sweep runs after the code that a leftover breaks, so a stall-watchdog kill still strands the run** (`task_4_plan.md`, plus the `## Context` route bullet in `fix_linux_sandbox_deny_placeholders_story_plan.md` and `task_9_plan.md`'s **Leftovers** item)
+   Task 4 runs the sweep inside `spawn_engine`, just before `run_profile_render`. But the leftovers it removes are read before `spawn_engine` is ever called, on every path the prompt names as a real kill (*"the watcher's stall watchdog kills and resumes, a session crashes, the host reboots"*):
+   - **Stall-watchdog resume.** The watchdog kills with `kill -9` (`autonomous-watcher.sh` → the KILL tier, *"`-9` rather than TERM"*), which is phase D's condition. On the recovery pass it then runs `elif ! hr_run_copy_check_var "$RUN_MAIN" "$worktree"; then why="stalled …, the working copy $worktree is not one this repository lists …"`, then `hr_run_reset_var`, and only after that the pause-resume `spawn_engine`. Phase D measured a 0444 empty `<clone>/.git/commondir` left behind. `hr_clone_target_check_var` condition 3 refuses it, so the run goes to `failed` before any sweep can run.
+   - **Fresh launch.** `launch_run` creates the run copy through `create-worktree.sh` before `spawn_engine`. With phase D's `<main>/scripts/.git` leftover, that wrapper refuses with *"cannot place this script in a main checkout"*, which is the measured `hr_wrapper_main_of` failure. The sweep that would remove the file comes later in the same launch.
+   - **Review-path reuse.** The `(2b) Review path` block runs `hr_run_copy_check_var "$RUN_MAIN" "$worktree"` and calls `fail_before_launch` on a refusal, again before `spawn_engine`.
+
+   Task 4's new suite would not catch this. Case 1 removes a leftover "before the launch", but no case covers the stall-watchdog resume, or a `<main>/scripts/.git` leftover meeting `create-worktree.sh`. As planned, the goal's *"the next launch or resume finds no placeholder left behind … or is not affected by one"* is met only on the paths that reach `spawn_engine` with no pre-spawn copy check. Task 9 would also document the recovery as covering every *"next launch or resume"*, which would be false.
+   **Fix:** In `task_4_plan.md`, move the sweep out of `spawn_engine` to a point every consumer comes after. For example, at the start of each pass, before the stall watchdog, the exit classification, the inbox launch and the resume paths, under the same `running_count` = 0 gate, the same placeholder-host gate and the same log lines. Keep the launch check where it is. Add cases to `watcher-placeholder-host.test.mjs`:
+   - a stall-watchdog kill-and-resume with a recorded 0444 empty `<clone>/.git/commondir`, which resumes rather than going to `failed`;
+   - a fresh launch with a recorded 0444 empty `<main>/<scriptsDir>/.git`, which launches.
+
+   Then update the index's `## Context` bullet (*"Leftovers are recovered outside the sandbox, before every launch and resume"*) and the triggers `task_9_plan.md` documents, so they name the actual trigger point.
+
+2. **A watcher that restarts with `<main>/<scriptsDir>/.git` left on disk cannot start, so its sweep never runs** (`task_4_plan.md`, plus `task_9_plan.md`)
+   The watcher resolves `MAIN_REPO="$(hr_main_repo "$SCRIPT_DIR")" || MAIN_REPO=""` and then runs `fatal "'$SCRIPT_DIR' is not inside a git repository — refusing to start"` when that fails. `hr_main_repo` runs `git -C "$dir" worktree list --porcelain`. With the measured 0-byte `<main>/scripts/.git` in place (phase D, still there after the probe's teardown), git takes `<main>/scripts` as a checkout with an unreadable gitfile and fails. So after a host reboot, or a daemon restart following a crash, the watcher refuses to start, and the sweep is never reached. The manifest path also depends on `HARNESS_REPO_SLUG`, which is derived from `MAIN_REPO`. The prompt names this exact case (*"A killed session breaks the main checkout for every later run … the host reboots"*), and the plan has no task for it.
+   **Fix:** In `task_4_plan.md`, add a startup step that runs before `hr_main_repo` on a placeholder host. It sweeps the manifests for this repository, located without git: for example, take the main checkout from `SCRIPT_DIR`'s parent, used only to find the manifest directory, and apply the same five-test sweep. Add a case that starts the watcher with a recorded 0444 empty `<main>/<scriptsDir>/.git` and asserts that it starts and removes the file. If the plan decides the restart case cannot be closed, `task_9_plan.md`'s **Linux placeholders** residual must say so: state that a restarted watcher refuses to start, and give the manual remedy as a fenced `ls -l` / `rm --` block naming `<main>/<scriptsDir>/.git`. In that case the index's `## Context` must also list this as a goal bullet the route does not meet.
+
+## Should Fix
+
+1. **`status` would print a cap the watcher does not enforce** (`task_4_plan.md`, `task_9_plan.md`)
+   `docs/watcher.md` says *"`autonomous-watcher.sh status` is the one exception, on its own row only, where it prints the value it actually resolved."* Task 4 clamps only the three `-ge "$MAX_PARALLEL_RUNS"` comparisons. So on a bubblewrap host, `status` and the `machine-footprint` row would still show 5. Either have `status` print the clamped value, or have Task 9 amend that sentence.
+
+2. **Carried from iteration 0, still not addressed or rejected:**
+   - The sweep's `running_count` gate does not see a person's own sandboxed Claude Code session in `<main>`, which mounts placeholders at the same main-checkout paths (#94008's race). Add this to `task_9_plan.md`'s residual as derived, not measured.
+   - `task_6_plan.md`'s `sweep` subcommand removes files in the clone and the main checkout. Its `hr_run_copy_check_var "$M" "$C"` also syncs the clone's branch into `M` (`hr_copy_sync_in_var`). The header carried over from `measure.sh` says nothing writes there. Make the header and usage block say what `sweep` changes.

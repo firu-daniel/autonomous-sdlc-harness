@@ -765,6 +765,15 @@ jobs:
           unset IN_OAUTH IN_API
           bash "$SCRIPTS_DIR/autonomous-watcher.sh" job "$HARNESS_INPUT_BRANCH" "$HARNESS_INPUT_ENGINE" "$HARNESS_INPUT_RESUME"
 
+      # A cancelled or timed-out `Run the harness` step kills the watcher with its session, so
+      # run_job's exit sweep never runs and the session's sandbox placeholders stay on disk; a
+      # leftover <scriptsDir>/.git makes push-branch.sh refuse to place itself and push nothing.
+      # Best-effort: it never fails the job.
+      - name: Sweep the sandbox placeholders
+        if: always() && env.SCRIPTS_DIR != ''
+        continue-on-error: true
+        run: HARNESS_JOB_MODE=1 bash "$SCRIPTS_DIR/autonomous-watcher.sh" job-sweep "$HARNESS_INPUT_BRANCH"
+
       # Runs under always(), so a cancelled or failed job still pushes its commits. push-branch.sh
       # pushes nothing back for a branch origin no longer has, so a run stopped by its branch's
       # deletion does not re-create it (Gate 12 round 9, finding 1).

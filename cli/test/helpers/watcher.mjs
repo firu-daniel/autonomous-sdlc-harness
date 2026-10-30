@@ -43,6 +43,10 @@
  *    here starts a real `caffeinate` or `systemd-inhibit` or gains a `keep-awake:` log line. A suite
  *    running its own pass script defines the same override from {@link DEFAULT_KEEP_AWAKE_PROBE}, as
  *    `localStall` above does.
+ *    It overrides the placeholder-host probe (`hr_placeholder_host_probe_var`) with
+ *    {@link DEFAULT_PLACEHOLDER_HOST_PROBE}, unless a case passes `placeholderHost: true`, because a
+ *    Linux CI host would otherwise take the bubblewrap arms of `spawn_engine` and the cap; a suite
+ *    running its own pass script defines it from {@link DEFAULT_PLACEHOLDER_HOST_PROBE} too.
  * 6. **The run-analytics hook is off unless a case opts in** (`runAnalytics`). Its two commits add
  *    seconds to every launch pass, enough to push a pass past its bound under a loaded host, and only
  *    `cli/test/watcher-run-analytics.test.mjs` asserts them. Off, the installed `run-analytics.sh` is
@@ -78,6 +82,11 @@ export const DEFAULT_SANDBOX_PROBE = 'HR_SANDBOX_HOST=macos; HR_SANDBOX_MISSING=
 
 /** The keep-awake probe body `tick` defines unless a case passes its own (choice 5). */
 export const DEFAULT_KEEP_AWAKE_PROBE = 'HR_KEEP_AWAKE_HOST=unsupported; HR_KEEP_AWAKE_TOOL=; return 0';
+
+/** The placeholder-host probe body `tick` defines unless a case passes `placeholderHost: true` (choice 5). */
+export const DEFAULT_PLACEHOLDER_HOST_PROBE = 'HR_PLACEHOLDER_HOST=0; return 0';
+
+const PLACEHOLDER_HOST_ON_PROBE = 'HR_PLACEHOLDER_HOST=1; return 0';
 
 /** The seed `init`'s own tests use: a repository whose stack detection resolves every command. */
 function nodeProjectFiles() {
@@ -222,14 +231,22 @@ export async function createWatcherFixture(t, { branch = 'feat_x', runAnalytics 
     record: () => JSON.parse(readFileSync(join(dir, REGISTRY_PATH), 'utf8')).runs[branch],
     /**
      * One pass; `sandboxProbe` and `keepAwakeProbe` are shell function bodies replacing
-     * {@link DEFAULT_SANDBOX_PROBE} and {@link DEFAULT_KEEP_AWAKE_PROBE}; `timeoutMs` replaces
-     * {@link TICK_TIMEOUT_MS} for a pass that launches more than one session (choice 4).
+     * {@link DEFAULT_SANDBOX_PROBE} and {@link DEFAULT_KEEP_AWAKE_PROBE}; `placeholderHost: true`
+     * replaces {@link DEFAULT_PLACEHOLDER_HOST_PROBE} with one reporting a bubblewrap host;
+     * `timeoutMs` replaces {@link TICK_TIMEOUT_MS} for a pass that launches more than one session
+     * (choice 4).
      */
     async tick(
       env = {},
-      { sandboxProbe = DEFAULT_SANDBOX_PROBE, keepAwakeProbe = DEFAULT_KEEP_AWAKE_PROBE, timeoutMs = TICK_TIMEOUT_MS } = {},
+      {
+        sandboxProbe = DEFAULT_SANDBOX_PROBE,
+        keepAwakeProbe = DEFAULT_KEEP_AWAKE_PROBE,
+        placeholderHost = false,
+        timeoutMs = TICK_TIMEOUT_MS,
+      } = {},
     ) {
-      const script = `. "$1" status >/dev/null\nhr_sandbox_prereq_probe_var() {\n${sandboxProbe}\n}\nhr_keep_awake_probe_var() {\n${keepAwakeProbe}\n}\ntick; wait`;
+      const placeholderProbe = placeholderHost === true ? PLACEHOLDER_HOST_ON_PROBE : DEFAULT_PLACEHOLDER_HOST_PROBE;
+      const script = `. "$1" status >/dev/null\nhr_sandbox_prereq_probe_var() {\n${sandboxProbe}\n}\nhr_keep_awake_probe_var() {\n${keepAwakeProbe}\n}\nhr_placeholder_host_probe_var() {\n${placeholderProbe}\n}\ntick; wait`;
       const result = await runBash(
         dir,
         ['-c', script, '_', watcherPath],
