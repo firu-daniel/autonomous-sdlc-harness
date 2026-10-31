@@ -12,7 +12,7 @@ Gates 13a–13c reported `BLOCKED` (the Python environment is not provisioned), 
 
 This list is the **single source of truth** for the fix loop. Any `[ ]` marker elsewhere in this plan or its per-finding files is informational only. The list puts the lowest blast radius first: Finding 1 edits one branch-local run artifact and touches no code, and Finding 2 changes one test fixture line and that test's header.
 
-1. [ ] **Finding 1** — Remove the home-directory path from Task 5's plan record. _(layer: general)_
+1. [x] **Finding 1** — Remove the home-directory path from Task 5's plan record. _(layer: general)_
 2. [ ] **Finding 2** — Plant a non-empty `config.worktree` in the stricter-case fixture of the opt-out fence test. _(layer: cli)_
 
 ## Must Fix
