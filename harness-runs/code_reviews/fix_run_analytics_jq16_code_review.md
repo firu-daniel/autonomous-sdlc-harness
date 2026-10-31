@@ -30,7 +30,7 @@ Two findings remain, both Should Fix.
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 1** — State the property the jq-floor scanner checks in its rule sentence and test title, not "parses on jq 1.5 and 1.6" _(layer: cli)_
-2. [ ] **Finding 2** — Name Gate 4's hand-run jq 1.6 leg in `scripts/run-gates.sh`'s hand-run block and closing line, and in §5's count sentence _(layer: general)_
+2. [x] **Finding 2** — Name Gate 4's hand-run jq 1.6 leg in `scripts/run-gates.sh`'s hand-run block and closing line, and in §5's count sentence _(layer: general)_
 
 ---
 

@@ -320,6 +320,7 @@ fi
 
 echo
 echo "== gates this script cannot run"
+echo "  4  its jq 1.6 leg, the suite under Debian 12's jq 1.6 in gate 15's container, which needs a network and a person"
 echo "  5  doctor's exit contract, by hand against gate 4's scratch repository"
 echo "  7  the five adoption shapes, against real directories outside this checkout"
 echo "  8  /autonomous-sdlc-harness:harness-analyze, which is judgement and runs inside a model session"
@@ -352,7 +353,7 @@ fi
 echo "     -> docs/development.md §5"
 
 # The same conditionals the block above states, in the line a caller reads off a green run.
-hand_run="gates 5, 7, 8, 9, 10, 12 and 15 remain hand-run"
+hand_run="gates 5, 7, 8, 9, 10, 12 and 15 remain hand-run, with gate 4's jq 1.6 leg"
 if [ "$floor_blocked" -eq 1 ]; then
   hand_run="$hand_run, and gate 11 with them — it runs unattended only where the model cache is provisioned and the workspace's retrieval packages are installed"
 fi
