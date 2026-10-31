@@ -40,6 +40,8 @@ _[Add headings of your own as themes emerge — one per recurring theme — and 
 
 - **A measurement script stores and reports every reading in full; truncation belongs to a display, never to the record a verdict is read from.** _(taught by: fix_linux_sandbox_sibling_glob_trio)_
 
+- **Grade a write probe on what reached the disk, never on the call's exit status. "Call succeeded, nothing on disk" is an outcome of its own and never reads as "refused".** _(taught by: fix_linux_sandbox_sibling_glob_trio)_
+
 ## Unattended control loops
 
 - **A process that turns off a shared switch another actor can turn on must check the enabling condition again after switching it off, and switch it back on if needed, so an enable that races its check is never undone.** _(taught by: feat_remote_execution_github_actions)_
@@ -55,6 +57,8 @@ _[Add headings of your own as themes emerge — one per recurring theme — and 
 ## Trust checks
 
 - **When a trust check meets a file an actor outside your control creates on every run, accept only its provably inert shape (regular, empty, not a link, its enabling setting off) and keep refusing every other shape; never widen to "present is fine".** _(taught by: fix_linux_sandbox_sibling_glob_trio)_
+
+- **Never drop a protection because another route "can already" reach the same target until that route is measured, and close every route the drop opens, file tools included, before relying on downstream checks.** _(taught by: fix_linux_sandbox_sibling_glob_trio)_
 
 ## Remote and branch-scoped operations
 
