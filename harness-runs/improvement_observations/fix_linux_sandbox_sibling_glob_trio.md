@@ -61,3 +61,26 @@
 - **category:** optimization
 - **evidence:** `harness-runs/user_review_fix_plan_point_reviews/fix_linux_sandbox_sibling_glob_trio_fix_plan/item_2/` holds `review_0.md` (`cli`), `review_1.md` and `review_2.md` (`general`); `item_6/` holds `review_0.md`, `review_1.md`, `review_2.md` (`general`). The files carry only severity-section headings, no per-finding headings, so the net-new / re-raised split is not measurable under the headings-only read.
 - **cost this run:** three extra implementer + reviewer pairs: one on Finding 2 (dispatches #10–#11), two on Finding 6 (#28–#31).
+
+# User-review fix round 2 — file-tool trio guard, AP8 correction, absent-path check script, 2026-10-31 records
+
+## The dispositioned-units derivation command fails in a run copy with no local default-branch ref
+- **category:** agent-contract
+- **evidence:** `## Dispositioned units` (b) of the improvement-observations instructions prescribes `git log --format='%h %s%n%b' --name-only <default_branch>..HEAD`; with `defaultBranch` `dev` this run's `git log --format='%h %s%n%b' dev..HEAD` printed `fatal: ambiguous argument 'dev..HEAD': unknown revision or path not in the working tree.` The same scan against `origin/dev..HEAD` ran.
+- **cost this run:** none beyond one re-issued command; without the re-issue the dispositioned and index-only scans would have read nothing.
+- **hypothesis:** the run copy carries only the remote-tracking ref, the case the core's D.2 delivery bullet already handles by counting against `origin/<default_branch>`.
+
+## `test-fix-plan-writer`'s machine-path check could not resolve the home directory
+- **category:** tooling-gap
+- **evidence:** the G.2 dispatch's return (`harness-runs/test_fix_plans/fix_linux_sandbox_sibling_glob_trio_review_2_round_1.md`) reported "the bare `printenv HOME` call was refused by the permission mode"; it fell back to a fixed-string search for the checkout prefix.
+- **cost this run:** the home-directory needle of the agent's machine-path check went unchecked.
+
+## Per-unit agents could not run a shell parse check or the typos tool on their own change
+- **category:** tooling-gap
+- **evidence:** Finding 3's `layer-implementer` return: "the permission mode refused a plain `bash -n` call" (it ran the check through `bash scripts/scratch-run.sh` instead); test-fix Finding 1's `layer-reviewer` return: "I did not run the `typos` tool on the file: the sandbox refused a combined command that included it".
+- **cost this run:** the test-fix review passed on a grep rather than the gate's own tool; the gate itself ran it in round 2.
+
+## Two reviewers raised the same `REPRO`-block pointer on Finding 1
+- **category:** optimization
+- **evidence:** Finding 1 (layers `cli, plugin`): the `cli` reviewer's `harness-runs/user_review_fix_plan_point_reviews/fix_linux_sandbox_sibling_glob_trio_fix_plan/item_1/review_1.md` and the `plugin` reviewer's `item_1/review_2.md` both report that the test suite's "Not covered" note points at `REPRO`-block coverage the guard does not carry; the second return says "The iteration 1 review raised this from the `cli` side and it is still open". Both PASSed, the finding was Should Fix in each.
+- **cost this run:** none on the verdict; one finding carried unfixed through two reviews of the same unit.
