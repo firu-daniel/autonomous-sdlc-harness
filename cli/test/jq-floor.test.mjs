@@ -5,8 +5,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 /**
- * The rule this suite exists to enforce: every shipped `.jq` program parses on jq 1.5 and 1.6, so
- * no jq keyword is a `$` variable, a `.` field or an object key, and every `if` has an `else`.
+ * The rule this suite exists to enforce: no shipped `.jq` program uses the syntax jq 1.7 relaxed
+ * and jq 1.5 and 1.6 reject — a jq keyword as a `$` variable, a `.` field or an object key, or an
+ * `if` with no `else`. It reads the source; it does not show that a program parses on any jq.
  *
  * jq 1.7 relaxed both, so a 1.7+ host runs a program that Debian 12's jq 1.6 rejects whole. The
  * guard is on the source because no jq older than the host's is reachable from this suite:
@@ -170,7 +171,7 @@ test('self-check: a keyword parameter is reported with its line and its name', (
   }
 });
 
-test('every shipped .jq program parses on jq 1.5 and 1.6', () => {
+test('no shipped .jq program uses the syntax jq 1.7 relaxed and jq 1.5/1.6 reject', () => {
   const programs = jqPrograms(SCRIPTS_ROOT);
   const found = programs.map((file) => relative(SCRIPTS_ROOT, file).split('\\').join('/'));
   for (const required of REQUIRED_PROGRAMS) {
