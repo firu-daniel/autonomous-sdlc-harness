@@ -1216,6 +1216,42 @@ test('every path that runs outside the sandbox is write-protected on both sides'
     `the write-protection _README line does not name the rows the per-run copy omits: ${protectionLine}`,
   );
   assert.ok(!protectionLine.includes('which holds on Linux too'), 'the _README line still claims an exact entry holds on Linux');
+  assert.ok(!protectionLine.includes('is unverified'), `the write-protection _README line still calls the glob treatment unverified: ${protectionLine}`);
+  assert.ok(
+    protectionLine.includes('is expanded against the directories that exist when the sandbox starts') &&
+      protectionLine.includes('2.1.314') &&
+      protectionLine.includes('was written, not refused'),
+    `the write-protection _README line does not state the measured glob treatment: ${protectionLine}`,
+  );
+  assert.ok(
+    protectionLine.includes(
+      `leaves the run copy's ${omitted} out of \`denyWrite\`, also leaves the base's sibling-glob entries for those same paths out of it, and adds an exact entry for each of them in every other sibling run copy whose .git is a directory`,
+    ),
+    `the write-protection _README line does not state the sibling-glob drop and re-rooting: ${protectionLine}`,
+  );
+  assert.ok(
+    protectionLine.includes(
+      'On Linux Claude Code enforces the `Edit` deny rules inside the sandbox too, mounting the same placeholder at an absent path inside a write root (measured 2026-10-30, Claude Code 2.1.314, bubblewrap 0.8.0)',
+    ),
+    `the write-protection _README line does not state that Linux enforces the Edit rules inside the sandbox: ${protectionLine}`,
+  );
+  assert.ok(
+    protectionLine.includes(
+      "the per-run copy also leaves out the run copy's own `Edit` rules for those paths, its exact rules and the base's glob rules alike",
+    ),
+    `the write-protection _README line does not state the run copy's own trio Edit rules are left out: ${protectionLine}`,
+  );
+  assert.ok(
+    protectionLine.includes('while each other sibling run copy keeps them by exact path'),
+    `the write-protection _README line does not state each other sibling keeps its Edit rules: ${protectionLine}`,
+  );
+  assert.ok(!protectionLine.includes('`Edit` rules stay'), `the write-protection _README line still says the trio Edit rules stay: ${protectionLine}`);
+  assert.ok(
+    protectionLine.includes(
+      'the watcher refuses to launch or resume a run copy carrying a `commondir`, or a `config.worktree` or `http-alternates` that is not an empty regular file',
+    ),
+    `the write-protection _README line does not state the launch check's accepted shape: ${protectionLine}`,
+  );
   assertEntriesRunnable(profile);
 });
 

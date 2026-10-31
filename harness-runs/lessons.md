@@ -36,6 +36,12 @@ _[Add headings of your own as themes emerge — one per recurring theme — and 
 
 - **A wall-clock figure in a document of record is never one a run measured inside its own session: record figures taken by hand, outside any headless session, on an otherwise idle machine. A plan never makes repeated in-run timing runs its acceptance evidence.** _(taught by: chore_test_suite_run_time)_
 
+- **Attribute a measured effect to one rule family only after a control run that removes that family alone; a re-take that leaves another candidate source in place is not a control.** _(taught by: fix_linux_sandbox_sibling_glob_trio)_
+
+- **A measurement script stores and reports every reading in full; truncation belongs to a display, never to the record a verdict is read from.** _(taught by: fix_linux_sandbox_sibling_glob_trio)_
+
+- **Grade a write probe on what reached the disk, never on the call's exit status. "Call succeeded, nothing on disk" is an outcome of its own and never reads as "refused".** _(taught by: fix_linux_sandbox_sibling_glob_trio)_
+
 ## Unattended control loops
 
 - **A process that turns off a shared switch another actor can turn on must check the enabling condition again after switching it off, and switch it back on if needed, so an enable that races its check is never undone.** _(taught by: feat_remote_execution_github_actions)_
@@ -47,6 +53,12 @@ _[Add headings of your own as themes emerge — one per recurring theme — and 
 - **A new execution environment must state, for every configurable phase, whether that phase runs there. A phase switched off in this repository is not thereby unsupported for every adopter.** _(taught by: feat_remote_execution_github_actions)_
 
 - **A recovery for an unattended run's failure covers every execution mode the failure reaches, the local watcher and the remote job alike. Leaving a mode out is a question to the user before the plan ships, never a documented residual.** _(taught by: fix_linux_sandbox_deny_placeholders)_
+
+## Trust checks
+
+- **When a trust check meets a file an actor outside your control creates on every run, accept only its provably inert shape (regular, empty, not a link, its enabling setting off) and keep refusing every other shape; never widen to "present is fine".** _(taught by: fix_linux_sandbox_sibling_glob_trio)_
+
+- **Never drop a protection because another route "can already" reach the same target until that route is measured, and close every route the drop opens, file tools included, before relying on downstream checks.** _(taught by: fix_linux_sandbox_sibling_glob_trio)_
 
 ## Remote and branch-scoped operations
 

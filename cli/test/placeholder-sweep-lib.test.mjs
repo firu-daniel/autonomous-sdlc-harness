@@ -1,8 +1,9 @@
 /**
  * The run library's placeholder primitives — `hr_placeholder_host_probe_var`,
  * `hr_placeholder_manifest_write`, `hr_run_profile_absent_files`, `hr_job_absent_file`,
- * `hr_job_absent_files`, `hr_placeholder_leftover_var` and
- * `hr_placeholder_sweep_var` in `cli/templates/scripts/lib/harness-run-lib.sh`.
+ * `hr_job_absent_files`, `hr_placeholder_leftover_var`, `hr_placeholder_sweep_var`,
+ * `hr_deny_glob_expand` and `hr_profile_deny_paths` in
+ * `cli/templates/scripts/lib/harness-run-lib.sh`.
  *
  * **The rule this suite enforces: the sweep removes only a 0-byte, read-only regular file owned by
  * this user at a path a manifest recorded as absent.** Every keep case is asserted on the bytes and
@@ -245,4 +246,84 @@ test('hr_placeholder_sweep_var leaves a 0444 empty file no manifest lists, and r
   const none = await f.call('hr_placeholder_sweep_var "$1"; printf "%s\\n" "$?"', [join(f.root, 'missing.absent')]);
   assert.equal(none.stdout, '1\n', none.stderr);
   assert.deepEqual(await onDisk(unlisted), { mode: 0o444, bytes: '', kind: 'file' });
+});
+
+/** A work root holding directories `proj-a` and `proj-b`, a file `proj-c` and a link `proj-d` to `proj-a`. */
+async function workRoot(root) {
+  const work = join(root, 'work');
+  await mkdir(join(work, 'proj-a'), { recursive: true });
+  await mkdir(join(work, 'proj-b'));
+  await plant(join(work, 'proj-c'), '', 0o644);
+  await symlink(join(work, 'proj-a'), join(work, 'proj-d'));
+  return work;
+}
+
+const EXPAND = 'hr_deny_glob_expand "$@"; printf "status=%s\\n" "$?"';
+
+test('hr_deny_glob_expand prints the suffixed path of each matching directory, a link to one included', async (t) => {
+  const f = await fixture(t);
+  const work = await workRoot(f.root);
+  const r = await f.call(EXPAND, [`${work}/proj-*/.git/commondir`]);
+  assert.equal(r.stderr, '');
+  assert.equal(r.stdout, ['a', 'b', 'd'].map((x) => `${work}/proj-${x}/.git/commondir\n`).join('') + 'status=0\n');
+
+  const bare = await f.call(EXPAND, [`${work}/proj-*`]);
+  assert.equal(bare.stdout, ['a', 'b', 'd'].map((x) => `${work}/proj-${x}\n`).join('') + 'status=0\n', bare.stderr);
+
+  const none = await f.call(EXPAND, [`${work}/other-*/.git`]);
+  assert.equal(none.stdout, 'status=0\n', `no match: ${none.stderr}`);
+});
+
+test('hr_deny_glob_expand skips by identity a differently spelled exclude, and the link to it', async (t) => {
+  const f = await fixture(t);
+  const work = await workRoot(f.root);
+  const r = await f.call(EXPAND, [`${work}/proj-*/.git`, `${work}/proj-b/../proj-a/`]);
+  assert.equal(r.stdout, `${work}/proj-b/.git\nstatus=0\n`, r.stderr);
+});
+
+test('hr_deny_glob_expand matches a glob character in the project name only literally', async (t) => {
+  const f = await fixture(t);
+  const work = join(f.root, 'work');
+  await mkdir(join(work, 'pr[o]j-a'), { recursive: true });
+  await mkdir(join(work, 'proj-x'));
+  const r = await f.call(EXPAND, [`${work}/pr[o]j-*/.git`]);
+  assert.equal(r.stdout, `${work}/pr[o]j-a/.git\nstatus=0\n`, r.stderr);
+});
+
+test('hr_deny_glob_expand exits 2 printing nothing for every refused shape, and 3 under noglob', async (t) => {
+  const f = await fixture(t);
+  const work = await workRoot(f.root);
+  for (const [label, entry] of [
+    ['no *', `${work}/proj-a/.git`],
+    ['two *s', `${work}/proj-*/x-*`],
+    ['* mid-segment', `${work}/pro*j/.git`],
+    ['relative', 'work/proj-*/.git'],
+  ]) {
+    const r = await f.call(EXPAND, [entry]);
+    assert.equal(r.stdout, 'status=2\n', `${label}: ${r.stderr}`);
+  }
+  const noglob = await f.call(`set -f; ${EXPAND}`, [`${work}/proj-*/.git`]);
+  assert.equal(noglob.stdout, 'status=3\n', noglob.stderr);
+});
+
+test('hr_profile_deny_paths prints the exact entries, then each glob expansion, and exits 1 on an unreadable profile', async (t) => {
+  const f = await fixture(t);
+  const work = await workRoot(f.root);
+  const profile = join(f.root, 'profile.json');
+  await writeFile(
+    profile,
+    JSON.stringify({ sandbox: { filesystem: { denyWrite: ['/exact/one', `${work}/proj-*/.git/commondir`, '/exact/two'] } } }),
+  );
+  const PATHS = 'hr_profile_deny_paths "$1"; printf "status=%s\\n" "$?"';
+  const r = await f.call(PATHS, [profile]);
+  assert.equal(r.stderr, '');
+  assert.equal(r.stdout, '/exact/one\n/exact/two\n' + ['a', 'b', 'd'].map((x) => `${work}/proj-${x}/.git/commondir\n`).join('') + 'status=0\n');
+
+  const missing = await f.call(PATHS, [join(f.root, 'missing.json')]);
+  assert.equal(missing.stdout, 'status=1\n', missing.stderr);
+
+  const notList = join(f.root, 'not-list.json');
+  await writeFile(notList, JSON.stringify({ sandbox: { filesystem: { denyWrite: '/exact/one' } } }));
+  const refused = await f.call(PATHS, [notList]);
+  assert.equal(refused.stdout, 'status=1\n', refused.stderr);
 });

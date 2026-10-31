@@ -920,8 +920,11 @@ hr_wrapper_main_of() {
 # configuration, hooks or objects), and git still reads the record's
 # `config.worktree`. The permission profile write-protects both files, each
 # record's `gitdir`, each worktree's `.git` pointer and the record directories
-# themselves (`cli/src/generators/writeProtection.ts`); how the Linux sandbox
-# treats those globbed entries is unverified.
+# themselves (`cli/src/generators/writeProtection.ts`). On Linux a `denyWrite`
+# glob is expanded against the directories that exist at sandbox start, and a
+# placeholder is mounted at each absent path it yields (AP2, 2026-10-30, Claude
+# Code 2.1.314, bubblewrap 0.8.0); a new file under an existing directory such
+# an entry matched was not refused (GW1, 2026-10-29).
 #
 # It also sets `HR_TARGET_KIND` — `main`, `worktree` or `clone` — and, on the
 # clone arm only, `HR_TARGET_BRANCH`. The clone arm is taken only when
@@ -991,9 +994,13 @@ hr_wrapper_target_check_var() {
 #      registry at `hr_state_path <main> autonomous_logs/registry.json` gives
 #      `copy_kind` `clone` for <branch> and a `worktree` that is <target>;
 #   2. <target> is `hr_worktree_dir <main> <branch>`;
-#   3. `.git/commondir`, `.git/config.worktree` and
-#      `.git/objects/info/http-alternates` are absent, symbolic links included,
-#      and `.git/objects` and `.git/objects/info` are real directories;
+#   3. `.git/commondir` is absent, symbolic links included;
+#      `.git/config.worktree` and `.git/objects/info/http-alternates` are each
+#      absent or a regular file, not a symbolic link, of 0 bytes; a present
+#      `config.worktree` additionally needs `git config --bool --get
+#      extensions.worktreeConfig` on `.git/config` to exit 1 (key absent) or to
+#      exit 0 printing `false`; and `.git/objects` and `.git/objects/info` are
+#      real directories;
 #   4. `.git/objects/info/alternates` is a regular file holding one line,
 #      `<main>/.git/objects`;
 #   5. `hr_clone_config_check_var <main> <target>` passes.
@@ -1007,10 +1014,19 @@ hr_wrapper_target_check_var() {
 # (`docs/sandbox-verification.md`, row CL5), so a sandboxed command could plant
 # a `commondir` that redirects git's ref store, a `config.worktree` git layers
 # over `.git/config`, or an `http-alternates` that borrows objects from a host.
+# Any `commondir` is refused, an empty one included: it breaks git itself. The
+# one accepted shape of the other two is safe because an empty file carries
+# nothing, git reads `config.worktree` only while `extensions.worktreeConfig`
+# is on (and `.git/config` is write-protected and held to an allow-list by
+# condition 5), and only a client fetching from this repository over dumb HTTP
+# reads `http-alternates` — local git never does. That shape is accepted
+# because something no profile entry controls creates an empty
+# `config.worktree` at every session start on Linux (both 2026-10-30
+# sessions); its cause stays open in `docs/sandbox-placeholder-upstream-report.md`.
 hr_clone_target_check_var() {
   local main="${1-}" target="${2-}" refused="${3-}" gd hf head_line="" extra=""
   local branch="" registry kind wt wt_c want name alt alt_line="" alt_c main_obj
-  local line="" tab=$'\t'
+  local line="" tab=$'\t' wtc_rc=0 wtc_val=""
   gd="$target/.git"
   hf="$gd/HEAD"
   if [ -f "$hf" ] && [ ! -L "$hf" ] && [ -r "$hf" ]; then
@@ -1049,12 +1065,25 @@ hr_clone_target_check_var() {
     return 1
   fi
 
-  for name in commondir config.worktree objects/info/http-alternates; do
+  if [ -e "$gd/commondir" ] || [ -L "$gd/commondir" ]; then
+    HR_TARGET_REFUSAL="'$target' is a clone, but $gd/commondir exists, and a clone the harness made has none"
+    return 1
+  fi
+  for name in config.worktree objects/info/http-alternates; do
     if [ -e "$gd/$name" ] || [ -L "$gd/$name" ]; then
-      HR_TARGET_REFUSAL="'$target' is a clone, but $gd/$name exists, and a clone the harness made has none"
-      return 1
+      if [ ! -f "$gd/$name" ] || [ -L "$gd/$name" ] || [ -s "$gd/$name" ]; then
+        HR_TARGET_REFUSAL="'$target' is a clone, but $gd/$name exists, and a clone the harness made has none but an empty regular file"
+        return 1
+      fi
     fi
   done
+  if [ -e "$gd/config.worktree" ]; then
+    wtc_val=$(git -C / config --file "$gd/config" --bool --get extensions.worktreeConfig 2>/dev/null) || wtc_rc=$?
+    if [ "$wtc_rc" -ne 1 ] && { [ "$wtc_rc" -ne 0 ] || [ "$wtc_val" != false ]; }; then
+      HR_TARGET_REFUSAL="'$target' is a clone, but $gd/config.worktree exists while $gd/config does not hold extensions.worktreeConfig off, and a clone the harness made has none that git reads"
+      return 1
+    fi
+  fi
   for name in objects objects/info; do
     if [ ! -d "$gd/$name" ] || [ -L "$gd/$name" ]; then
       HR_TARGET_REFUSAL="'$target' is a clone, but $gd/$name is not a real directory"
@@ -6167,6 +6196,71 @@ hr_placeholder_manifest_write() {
     rm -f -- "$tmp"
     return 1
   fi
+  return 0
+}
+
+# hr_deny_glob_expand <entry> [<exclude>] — THE ONE HOME of what a `denyWrite`
+# glob yields on disk: on Linux the sandbox expands it against the directories
+# present at its start and mounts a placeholder at each absent path
+# (`docs/sandbox-verification.md` §5 AP2). <entry> is absolute with exactly one
+# `*`, ending its segment — `<parent>/<stem>*<suffix>`, <suffix> empty or
+# starting with `/`, the shape `cli/src/core/paths.ts` → `worktreeGlob` emits.
+# Prints `<parent>/<name><suffix>` for each `<parent>/<stem>*` that is a
+# directory (`-d`, so a link to one counts), in glob order, skipping a name
+# carrying a newline and, when <exclude> is non-empty, one that is `-ef` it.
+# Only the `*` is unquoted, so a glob character in <parent> or <stem> is
+# literal. 0, also on no match; 2, printing nothing, for any other shape; 3,
+# printing nothing, under `noglob`, which this library may not turn off.
+# Prints only; creates, removes and logs nothing. Its callers:
+# `hr_profile_deny_paths` and `autonomous-watcher.sh` → `run_profile_entries`.
+hr_deny_glob_expand() {
+  local entry="${1-}" exclude="${2-}" head suffix parent stem d nl='
+'
+  case "$entry" in /*) ;; *) return 2 ;; esac
+  case "$entry" in *'*'*) ;; *) return 2 ;; esac
+  head="${entry%%\**}"
+  suffix="${entry#*\*}"
+  case "$suffix" in *'*'*) return 2 ;; esac
+  case "$suffix" in '' | /*) ;; *) return 2 ;; esac
+  case $- in *f*) return 3 ;; esac
+  parent="${head%/*}"
+  stem="${head##*/}"
+  for d in "$parent/$stem"*; do
+    case "$d" in *"$nl"*) continue ;; esac
+    [ -d "$d" ] || continue
+    if [ -n "$exclude" ] && [ "$d" -ef "$exclude" ]; then continue; fi
+    printf '%s%s\n' "$d" "$suffix"
+  done
+  return 0
+}
+
+# hr_profile_deny_paths <profile> — every path <profile>'s
+# `.sandbox.filesystem.denyWrite` yields: first each string carrying no `*`,
+# verbatim, then each glob's `hr_deny_glob_expand` output with no exclude, both
+# in file order. A glob the expander refuses contributes nothing, and a string
+# carrying a newline is dropped. Tests no existence and keeps repeats, which
+# `hr_placeholder_manifest_write` handles. 0; 1, printing nothing, when
+# <profile> is unreadable or that value is not a list. Its callers:
+# `autonomous-watcher.sh` → `spawn_engine`, and, in the harness's own source
+# repository only, `scripts/sandbox-absent-path-check.sh`.
+hr_profile_deny_paths() {
+  local profile="${1-}" list e
+  [ -n "$profile" ] && [ -f "$profile" ] && [ -r "$profile" ] || return 1
+  list=$(jq -r '.sandbox.filesystem.denyWrite
+    | if type == "array" then .[] | strings | select(contains("\n") | not)
+      else error("denyWrite is not a list") end' "$profile" 2>/dev/null) || return 1
+  [ -n "$list" ] || return 0
+  while IFS= read -r e; do
+    case "$e" in '' | *'*'*) continue ;; esac
+    printf '%s\n' "$e"
+  done <<EOF
+$list
+EOF
+  while IFS= read -r e; do
+    case "$e" in *'*'*) hr_deny_glob_expand "$e" ;; esac
+  done <<EOF
+$list
+EOF
   return 0
 }
 

@@ -8,9 +8,15 @@
  * object store alone, and its `.git/config` is on the one allow-list its creator writes — which may
  * carry the main checkout's identity (`user.name`, `user.email`) at its exact value, and nothing
  * else that identifies or signs. Anything else is refused, naming a key or a file and never a
- * value, and the check writes nothing — not the registry, not its lock, not a ref.** The planted-file cases (h) and (i) rest on the measurement in
- * `docs/sandbox-verification.md`, row CL5: the runtime leaves a clone's new top-level `.git` files
- * and `objects/info/` sandbox-writable.
+ * value, and the check writes nothing — not the registry, not its lock, not a ref.** The one
+ * accepted shape of a redirecting file: a `.git/config.worktree` or `.git/objects/info/http-alternates`
+ * that is a regular file, 0 bytes and not a symbolic link — for `config.worktree` only while
+ * `extensions.worktreeConfig` is off. Every other shape of those two, and any `commondir`, an empty
+ * one included, is refused. The non-regular arm plants a FIFO: the `/dev/null` placeholder it
+ * stands for is a character device, which `mknod` makes and an unprivileged test cannot, and a FIFO
+ * fails the regular-file test the same way. The planted-file cases (h), (h2) and (i) rest on the
+ * measurement in `docs/sandbox-verification.md`, row CL5: the runtime leaves a clone's new
+ * top-level `.git` files and `objects/info/` sandbox-writable.
  *
  * The positive case is a clone `hr_clone_create_var` made, so acceptance and creation are held to
  * one contract (case (p)). Each case builds a main checkout, a local bare origin and the clone
@@ -339,7 +345,7 @@ test('(g) A HEAD rewritten to another recorded branch whose record names a diffe
   await assertRefused(f, f.clone, NO_CLONE_RECORD);
 });
 
-test('(h) A planted commondir, config.worktree or http-alternates is refused', async (t) => {
+test('(h) A planted commondir, or a config.worktree or http-alternates carrying content, is refused', async (t) => {
   const plants = {
     commondir: (f) => `${join(f.main, '.git')}\n`,
     'config.worktree': () => `[core]\n\tfsmonitor = ${MARKER}\n`,
@@ -353,6 +359,54 @@ test('(h) A planted commondir, config.worktree or http-alternates is refused', a
       assert.ok(!refusal.includes(MARKER), refusal);
     });
   }
+});
+
+test('(h2) Only an empty regular config.worktree or http-alternates is accepted, the former only with extensions.worktreeConfig off', async (t) => {
+  const INERT = ['config.worktree', 'objects/info/http-alternates'];
+  const planted = (f, name) => new RegExp(`${escape(join(f.clone, '.git', name))} exists, and a clone the harness made has none`);
+  for (const name of INERT) {
+    await t.test(`an empty regular ${name} is accepted`, async (t) => {
+      const f = await fixture(t);
+      await writeFile(join(f.clone, '.git', name), '', { mode: 0o644 });
+      const before = await f.snapshot();
+      const g = await f.check(f.clone);
+      assert.deepEqual(g, { status: '0', kind: 'clone', gitdir: join(f.clone, '.git'), branch: BRANCH, refusal: '' });
+      assert.deepEqual(await f.snapshot(), before);
+    });
+    await t.test(`${name} with content is refused`, async (t) => {
+      const f = await fixture(t);
+      await writeFile(join(f.clone, '.git', name), '\n');
+      await assertRefused(f, f.clone, planted(f, name));
+    });
+    await t.test(`a symbolic link at ${name} to an empty file is refused`, async (t) => {
+      const f = await fixture(t);
+      const decoy = join(f.root, 'empty-decoy');
+      await writeFile(decoy, '');
+      await symlink(decoy, join(f.clone, '.git', name));
+      await assertRefused(f, f.clone, planted(f, name));
+    });
+    await t.test(`a FIFO at ${name} is refused`, async (t) => {
+      const f = await fixture(t);
+      const made = await runBash(f.root, ['-c', 'mkfifo "$1"', 'hr', join(f.clone, '.git', name)]);
+      assert.equal(made.status, 0, made.stderr);
+      await assertRefused(f, f.clone, planted(f, name));
+    });
+  }
+  await t.test('an empty config.worktree is refused while extensions.worktreeConfig is true', async (t) => {
+    const f = await fixture(t);
+    await f.config('extensions.worktreeConfig', 'true');
+    await writeFile(join(f.clone, '.git', 'config.worktree'), '');
+    await assertRefused(
+      f,
+      f.clone,
+      new RegExp(`${escape(join(f.clone, '.git', 'config.worktree'))} exists while .* does not hold extensions\\.worktreeConfig off`),
+    );
+  });
+  await t.test('an empty commondir is refused', async (t) => {
+    const f = await fixture(t);
+    await writeFile(join(f.clone, '.git', 'commondir'), '');
+    await assertRefused(f, f.clone, planted(f, 'commondir'));
+  });
 });
 
 test('(i) alternates must be one regular-file line naming the main object store, and objects/info a real directory', async (t) => {

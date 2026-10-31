@@ -1,0 +1,20 @@
+# general review — ### 3. The absent-path check script: `report` tracebacks with no run, the control copy lands in the wrong folder, `write-probe` calls a successful `dd` "refused", and the guard has no row — iteration 2
+
+Checked on this pass:
+- All four plan items are in the diff. `report` and `after_teardown` refuse with exit 2 on a missing run. `control_profile` refuses without `SBX_ABSENT_OUT` (exit 1) and on an `$O/stamp.txt` (exit 2), and clears `P` before `resolve`. `run` takes `$O/control-profile.json` when `P` is unset. `write-probe` grades its result on the disk first, and `hook-probe` exists with a `## Hook probe` report section. The header and `docs/development.md` blocks match the plan.
+- The guard's deny reason starts with `$GUARD: ` (`plugin/hooks/git-trust-file-guard.sh` → `deny()`), so it can carry `git-trust-file-guard:`. I confirmed this by reading the code only; I did not see the guard's literal `GUARD=` value in a run.
+- The `docs/sandbox-verification.md` AP9 row that the "AP1–AP9" pointer needs is Finding 4's to add (`finding_4.md` → "Add a row AP9."), so it is not graded here.
+- I ran `call_result` and `record_result` on five synthetic streams with `bash scripts/scratch-run.sh harness-runs/scratch/lr_f3_callresult.py`: `dd` ok, `dd` error with `Exit code 1`, `dd` with no result, no `dd` call, and a `Write` refused by the hook. They gave `ok` / `error` + `call exit	exit 1` / `pending` → `none in the stream` / `none` / `error	git-trust-file-guard: refused`, as the header states.
+
+## Should Fix
+1. **The verdict lists in the doc and the header leave out outcomes the code emits** — `docs/development.md` (**The absent-path check, by hand.**) — "the verdict is `refused by the hook`, `written`, `refused, not by the hook`, or `no verdict: no Write call in the stream`"; `scripts/sandbox-absent-path-check.sh` (header, `write-probe` / `hook-probe` paragraphs) — "`no verdict:\n#                no dd call in the stream` when the call never appeared"
+   The implementer's documented deviations add three verdicts: `no verdict: the dd call has no result in the stream` (`write_probe`), `no verdict: the Write call has no result in the stream` and `not on disk, the call reported success` (`hook_probe`). The by-hand procedure leaves out all three. Its list of four is presented as complete ("the verdict is …, or …"). The header leaves out both `has no result` outcomes. Someone grading AP9 off `report.md` who finds `not on disk, the call reported success` gets no help from the procedure on how to grade it. That verdict is the important one: the guard did not refuse, so AP9 failed its *refused by the hook* expectation.
+   **Fix:** In `docs/development.md`, make the `hook-probe` list `refused by the hook`, `written`, `not on disk, the call reported success`, `refused, not by the hook`, or a `no verdict:` line (no `Write` call, or no result for it). Add the matching `no verdict: the dd call has no result in the stream` to the AP8 list. In the script header, add the `has no result in the stream` outcome to both the `write-probe` and `hook-probe` paragraphs.
+
+## Nice to Have
+1. **Two of the four "no run" refusals still print a `run` command that would land in a different `$O`** — `scripts/sandbox-absent-path-check.sh` (`write_probe`, `sweep`) — "run '$SELF run' first"
+   `report`, `after_teardown` and `hook_probe` now print `$RUN_CMD`, which carries `SBX_ABSENT_OUT=<dir>` when that is how `$O` was chosen. `write_probe` and `sweep` still print the bare command. The plan says to leave those two verbs as they are, so this is a consistency point only.
+   **Fix:** Use `'$RUN_CMD'` in those two messages too.
+
+2. **One header line runs well past the header's wrap width** — `scripts/sandbox-absent-path-check.sh` (header) — "record into <out>/write-probe.txt and <out>/hook-probe.txt. `sweep` changes them: it deletes each manifest-recorded 0-byte, read-only"
+   **Fix:** Re-wrap the paragraph to the ~105-column width the rest of the header uses.

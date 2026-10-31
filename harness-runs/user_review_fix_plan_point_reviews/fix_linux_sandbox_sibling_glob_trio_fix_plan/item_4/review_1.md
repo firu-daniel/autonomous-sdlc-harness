@@ -1,0 +1,17 @@
+# general review — ### 4. Claude Code's built-in protected-path placeholders can be left in a run copy after a killed session, and nothing records or states them — iteration 1
+
+Iteration 0's Must Fix 1 (`.mcp.json` contradiction) and Should Fix 1 (line-only citation) are both resolved. Every claim in the new bullet was checked against the code by reading it. No probe was run.
+- `hr_run_protected_rel_paths` prints `$hooks .mcp.json .claude/settings.json .claude/settings.local.json`, where `$hooks` is the githooks directory and not `.claude/hooks`. So "All but `.mcp.json` are paths no profile entry names" holds.
+- `autonomous-watcher.sh`'s "What was absent before this session" block adds `"${add_root%/}/.mcp.json"` for `"$worktree"` first.
+- `hr_pinned_hooks_path` and the `--no-recurse-submodules` / `-c submodule.recurse=false` pins are stated earlier in `docs/cli.md`.
+- `grep -rnE` for `add -A` / `add .` over `cli/templates/scripts/` finds only reproduce-by-hand comments, in six scripts.
+- The review's *Session 2, the control* carries the 21-path list and the "first ten" reading verbatim.
+
+## Should Fix
+1. **"Untracked clutter" omits the one operational effect a leftover has** — `docs/cli.md` (§6 residual 12, **Claude Code's own placeholders: accepted, not swept.**) — "They are untracked clutter, not a breach"
+   This bullet is right that a leftover is not a breach. "Clutter" tells an operator it has no other effect, and that is not quite true. A leftover is an untracked file in the run copy, so a later checkout that brings a tracked file to the same path is refused. That happens when a sync-in, a fast-forward or a refresh brings, say, a `.vscode/` or a `.gitmodules` that the default branch added after the session. The refusal is `hr_run_fast_forward_var`'s "cannot be updated to '$ref' (an untracked or changed file is in the way)" or sync-in's "its working tree cannot take the main checkout's tip (a changed or untracked file is in the way)" (`cli/templates/scripts/lib/harness-run-lib.sh`). The reset after a stall kill is not affected, because `hr_run_reset_var`'s `reset` surface check looks only at the protected set. An operator who gets one of those refusals after a killed session would read this bullet, decide the leftovers do not matter, and look for some other cause. I confirmed this by reading the code only; I did not run it.
+   **Fix:** Add one clause after "not a breach", for example: "the one thing a leftover can do is stand in the way of a later checkout that brings a tracked file to the same path. Sync-in, a fast-forward or a refresh then refuses with 'an untracked or changed file is in the way', and removing the 0-byte read-only file by hand clears it."
+
+2. **A new pointer names a round's finding rather than the artifact it changes** — `docs/cli.md` (same bullet) — "This round's Finding 5 changes that script"
+   `docs/cli.md` is a durable document. Once this branch merges, "this round's Finding 5" points at nothing a reader can find, and the sentence does not name "that script". The sibling pointer, "by this round's Finding 6", follows the form item 12's opening sentence already uses, and the deviation explains it. This one has no such cover, because it leaves the script unnamed.
+   **Fix:** Name the script: "`scripts/sandbox-absent-path-check.sh` truncated the reading; this branch changes it to store the full readings (`harness-runs/user_reviews/fix_linux_sandbox_sibling_glob_trio_fix_plan/finding_5.md`), so the owed re-take measures them."

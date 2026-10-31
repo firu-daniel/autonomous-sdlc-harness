@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # legs-glob.sh — the sandbox probe's glob-deny leg (rows GW1, GW2), Linux only: how the Linux sandbox
-# treats a `sandbox.filesystem.denyWrite` entry containing `*` (docs/sandbox-verification.md §6, and the
-# generated profile's `_README`: "it may skip one, or expand it to the paths that exist when the sandbox
-# starts").
+# treats a `sandbox.filesystem.denyWrite` entry containing `*` (docs/sandbox-verification.md §6; the
+# generated profile's `_README` stated, until `fix_linux_sandbox_sibling_glob_trio`, that it "may skip
+# one, or expand it to the paths that exist when the sandbox starts").
 #
 # The session runs on a scratch profile, SP__GW_PROFILE, not SP_RUN_PROFILE: the per-run profile also
 # carries exact entries for the clone's own paths (autonomous-watcher.sh → THE PER-RUN PROFILE: "The
-# base's glob entries cannot be relied on for the run's own copy (Linux may skip a `*` denyWrite
-# entry)"), so a path in the clone is covered by a glob alone only once those are removed. The scratch
-# profile drops every denyWrite entry and every `Edit(…)` deny rule that carries no `*` (a rule's trailing
-# `/**` aside) and names the clone or a path under it; every entry containing a `*` stays.
+# base's glob entries are not relied on for the run's own copy"), so a path in the clone is covered by
+# a glob alone only once those are removed. The scratch profile drops every denyWrite entry and every
+# `Edit(…)` deny rule that carries no `*` (a rule's trailing `/**` aside) and names the clone or a path
+# under it; every entry containing a `*` stays.
 #
 # The rows, each a sandboxed `dd` onto a clone path only a `*` entry covers, recorded as refused or
 # written and graded on neither outcome (both are `pass`); each needs the session's control written:

@@ -36,7 +36,8 @@
  *   {@link copySurfacePaths}' lines in the same order (`cli/test/outer-loop-scripts.test.mjs`).
  * - `cli/templates/scripts/autonomous-watcher.sh` holds a copy of {@link COPY_GIT_PATHS}, each row's
  *   relative path, kind and `bubblewrapDenyWrite`, the last as a third column `deny` (true) or
- *   `omit` (false) (`cli/test/watcher-run-profile.test.mjs`).
+ *   `omit` (false: on a bubblewrap host the per-run copy carries neither the row's `denyWrite` entry
+ *   nor its `Edit` rules for the run copy) (`cli/test/watcher-run-profile.test.mjs`).
  * - The same script's `run_profile_render` holds a copy of {@link fileToolDenyRules}' kind → rule map
  *   (`cli/test/watcher-run-profile.test.mjs`): `file` → `Edit(/<p>)`; `directory` → `Edit(/<p>/**)`;
  *   `entry` → `Edit(/<p>)`, `Edit(/<p>/**)`. Any change to that map is an edit to `run_profile_render`
@@ -113,11 +114,28 @@ export interface CopyGitPath {
    * `sandbox.filesystem.denyWrite` entry. There Claude Code enforces an exact entry for an absent path
    * by mounting a placeholder at that path, which git in the run copy then reads and which can
    * outlive the call (`docs/sandbox-verification.md` → §5 F9; 2026-10-29, Claude Code 2.1.312,
-   * bubblewrap 0.8.0). A row marked `false` is a file a clone the harness made never has and the
-   * wrappers' clone check refuses (`cli/templates/scripts/lib/harness-run-lib.sh` →
-   * `hr_clone_target_check_var`, condition 3), so the entry is left out there; its `Edit` rules stay,
-   * and the watcher's launch check refuses a run copy carrying one. The base profile carries every
-   * row on every host.
+   * bubblewrap 0.8.0). A row marked `false` is a file the wrappers' clone check refuses in every
+   * shape git would act on (`cli/templates/scripts/lib/harness-run-lib.sh` →
+   * `hr_clone_target_check_var`, condition 3), so the entry is left out there, and the watcher's
+   * launch check refuses a run copy carrying a `commondir`, or a `config.worktree` or
+   * `http-alternates` that is not an empty regular file. A `*` entry there is expanded against the
+   * directories that exist when the sandbox starts, with a placeholder mounted at each absent path it
+   * yields (`docs/sandbox-verification.md` → §5 AP2; 2026-10-30, Claude Code 2.1.314, bubblewrap
+   * 0.8.0), so a row marked `false` is also left out of the per-run copy's `denyWrite` in its
+   * sibling-glob form, and the watcher re-roots it at every other sibling by exact path
+   * (`cli/templates/scripts/autonomous-watcher.sh` → `run_profile_glob_drops`, `run_profile_entries`).
+   * Claude Code enforces an `Edit` deny rule inside that sandbox the same way, globs included: a
+   * control on 2026-10-30 (Claude Code 2.1.314, bubblewrap 0.8.0) removing only the per-run copy's
+   * `Edit` rules for these rows removed the clone's placeholders and its git failure. So the per-run
+   * copy there also leaves out the run copy's own `Edit` rules for a row marked `false`, exact and
+   * the base's glob form alike (`run_profile_edit_drops`), and every other sibling keeps them by exact
+   * path. A sandboxed shell did not land such a file on disk there: a sandboxed `dd` onto the run
+   * copy's `commondir` reported success and a plain shell found the path absent
+   * (`docs/sandbox-verification.md` → §5 AP8; 2026-10-31, Claude Code 2.1.316, bubblewrap 0.8.0);
+   * the mechanism is unmeasured. The file tools, which the base's sibling-glob `Edit` allow reaches,
+   * are refused there by `plugin/hooks/git-trust-file-guard.sh` rather than by an `Edit` rule, which
+   * would mount the placeholder. A file planted by any route is still refused by the trust check and
+   * the launch check, both failing closed. The base profile carries every row on every host.
    */
   readonly bubblewrapDenyWrite: boolean;
 }
@@ -456,12 +474,12 @@ export function applyWriteProtection(profile: JsonObject, { repoRoot, workRoot, 
     profile,
     `WHAT RUNS OUTSIDE THE SANDBOX CANNOT BE WRITTEN FROM INSIDE IT: each path below is in \`sandbox.filesystem.denyWrite\` and has an \`Edit\` rule in \`deny\`, because the file tools run outside the sandbox. ${paths
       .map(({ path, reason }) => `${path} - ${reason}`)
-      .join('; ')}. How the Linux sandbox treats a \`denyWrite\` entry containing \`*\` is unverified - it may skip one, or expand it to the paths that exist when the sandbox starts - so on Linux only the file-tool side is relied on for the globbed entries: a run copy's hooks directory, MCP wiring and settings files, its ${COPY_GIT_PATHS.map(
+      .join('; ')}. On Linux a \`denyWrite\` entry containing \`*\` is expanded against the directories that exist when the sandbox starts, with a placeholder mounted at each absent path it yields (docs/sandbox-verification.md §5 AP2: 2026-10-30, Claude Code 2.1.314, bubblewrap 0.8.0), and a new file under an existing directory that only such an entry covered was written, not refused (§8 GW1: 2026-10-29, Claude Code 2.1.312), so on Linux only the file-tool side is relied on for the globbed entries: a run copy's hooks directory, MCP wiring and settings files, its ${COPY_GIT_PATHS.map(
       ({ path }) => path,
     ).join(', ')}, and its docs-search-server.sh and library when docs retrieval applies. The run watcher passes each run a per-run copy of this file that adds that run's own copy's paths, and every other live worktree's .git pointer, by exact path. On a host sandboxed by bubblewrap, Claude Code enforces an exact entry for a path that does not exist by mounting a placeholder at that path, which breaks git in the run copy and can be left on disk, so the per-run copy there leaves the run copy's ${COPY_GIT_PATHS.filter(
       ({ bubblewrapDenyWrite }) => !bubblewrapDenyWrite,
     )
       .map(({ path }) => path)
-      .join(', ')} out of \`denyWrite\`: their \`Edit\` rules stay, and the watcher refuses to launch or resume a run copy carrying one. A run's own edit under a protected worktree path, such as a change to its hooks directory or to ${MCP_PATH}, or to ${SETTINGS_PATH}, is refused by design.`,
+      .join(', ')} out of \`denyWrite\`, also leaves the base's sibling-glob entries for those same paths out of it, and adds an exact entry for each of them in every other sibling run copy whose .git is a directory. On Linux Claude Code enforces the \`Edit\` deny rules inside the sandbox too, mounting the same placeholder at an absent path inside a write root (measured 2026-10-30, Claude Code 2.1.314, bubblewrap 0.8.0), so on a host sandboxed by bubblewrap the per-run copy also leaves out the run copy's own \`Edit\` rules for those paths, its exact rules and the base's glob rules alike, while each other sibling run copy keeps them by exact path; the watcher refuses to launch or resume a run copy carrying a \`commondir\`, or a \`config.worktree\` or \`http-alternates\` that is not an empty regular file. A run's own edit under a protected worktree path, such as a change to its hooks directory or to ${MCP_PATH}, or to ${SETTINGS_PATH}, is refused by design.`,
   );
 }

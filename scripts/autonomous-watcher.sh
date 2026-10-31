@@ -2377,10 +2377,31 @@ lane_release_if_idle() {
 # profile ($SETTINGS_PROFILE): every spawn renders a per-run copy carrying that
 # run's own exact write-protection entries, checks it, and passes it as the one
 # `--settings` file. In job mode the base is checked and passed unchanged (JOB
-# MODE in the header). The base's glob entries cannot be relied on for the run's
-# own copy (Linux may skip a `*` denyWrite entry), and the base carries no entry
-# for another live worktree's `.git` pointer, which its sibling-glob Edit /
-# Write allow would otherwise reach.
+# MODE in the header). The base's glob entries are not relied on for the run's
+# own copy, and the base carries no entry for another live worktree's `.git`
+# pointer, which its sibling-glob Edit / Write allow would otherwise reach. On
+# Linux a `*` denyWrite entry is expanded against the directories present at
+# sandbox start and a placeholder is mounted at each absent path it yields (AP2,
+# 2026-10-30, Claude Code 2.1.314, bubblewrap 0.8.0), so on a bubblewrap host
+# the base's sibling-glob entries for the `omit` rows of
+# RUN_PROFILE_COPY_GIT_PATHS are taken out (run_profile_glob_drops) and
+# re-rooted as exact entries at every other sibling (run_profile_entries).
+# There Claude Code also enforces an `Edit` deny rule inside the sandbox,
+# mounting the same placeholder at an absent path inside a write root, globs
+# included: the control of 2026-10-30 (Claude Code 2.1.314, bubblewrap 0.8.0)
+# removed only the per-run copy's trio `Edit` rules and the clone's placeholders,
+# their leftovers and the failing sandboxed `git status` all went. So on a
+# bubblewrap host the per-run copy also carries no `Edit` rule for the run
+# copy's own `omit` paths, exact or glob (run_profile_edit_drops); each other
+# sibling keeps them by exact path. A sandboxed shell did not land such a file
+# on disk there: a sandboxed `dd` onto the run copy's `commondir` reported
+# success and a plain shell found the path absent (AP8, 2026-10-31, Claude Code
+# 2.1.316, bubblewrap 0.8.0); the mechanism is unmeasured. The file tools, which
+# the base's sibling-glob Edit allow reaches, are refused there by the plugin's
+# hooks/git-trust-file-guard.sh rather than by an `Edit` rule, which would mount
+# the placeholder. What stops a file planted by any route is the wrappers' trust
+# check (hr_clone_target_check_var, condition 3) and the launch check in
+# spawn_engine, both failing closed.
 # -----------------------------------------------------------------------------
 
 # A declared mirror of cli/src/generators/writeProtection.ts → COPY_GIT_PATHS:
@@ -2394,6 +2415,66 @@ RUN_PROFILE_COPY_GIT_PATHS='.git/config file deny
 .git/commondir entry omit
 .git/config.worktree entry omit
 .git/objects/info/http-alternates entry omit'
+
+# run_profile_glob_drops — on HR_PLACEHOLDER_HOST `1`, print each string of
+# $SETTINGS_PROFILE's `.sandbox.filesystem.denyWrite` that carries a `*` and
+# ends in `/<p>` for a RUN_PROFILE_COPY_GIT_PATHS row <p> marked `omit`, in base
+# order, one per line; a string carrying a newline is never printed. Prints
+# nothing on any other host. 1, printing nothing, when the base cannot be read
+# or that value is neither absent nor a list. Read off the base, never rebuilt
+# from projectName: only writeProtection.ts → protectedPaths writes such an
+# entry, so a base spelling the work root another way still matches.
+run_profile_glob_drops() {
+  local p k a rows="" out
+  [ "${HR_PLACEHOLDER_HOST:-0}" = 1 ] || return 0
+  [ -f "$SETTINGS_PROFILE" ] && [ -r "$SETTINGS_PROFILE" ] || return 1
+  while IFS=' ' read -r p k a; do
+    [ "$a" = omit ] && rows="${rows}${p}
+"
+  done <<EOF
+$RUN_PROFILE_COPY_GIT_PATHS
+EOF
+  out="$(jq -r --arg rows "$rows" '
+    ($rows | split("\n") | map(select(length > 0))) as $omit
+    | (.sandbox.filesystem.denyWrite // [])
+    | if type == "array" then .[] else error("denyWrite is not a list") end
+    | strings
+    | select(contains("*") and (contains("\n") | not))
+    | select(. as $e | any($omit[]; . as $p | $e | endswith("/" + $p)))
+  ' "$SETTINGS_PROFILE" 2>/dev/null)" || return 1
+  [ -z "$out" ] || printf '%s\n' "$out"
+}
+
+# run_profile_edit_drops — on HR_PLACEHOLDER_HOST `1`, print each string of
+# $SETTINGS_PROFILE's `.permissions.deny` that is `Edit(/<g>)` or
+# `Edit(/<g>/**)` where <g> carries a `*` and ends in `/<p>` for a
+# RUN_PROFILE_COPY_GIT_PATHS row <p> marked `omit`, in base order, one per
+# line; a string carrying a newline is never printed. Prints nothing on any
+# other host. 1, printing nothing, when the base cannot be read or that value
+# is neither absent nor a list. Read off the base, never rebuilt from
+# projectName, for run_profile_glob_drops' reason.
+run_profile_edit_drops() {
+  local p k a rows="" out
+  [ "${HR_PLACEHOLDER_HOST:-0}" = 1 ] || return 0
+  [ -f "$SETTINGS_PROFILE" ] && [ -r "$SETTINGS_PROFILE" ] || return 1
+  while IFS=' ' read -r p k a; do
+    [ "$a" = omit ] && rows="${rows}${p}
+"
+  done <<EOF
+$RUN_PROFILE_COPY_GIT_PATHS
+EOF
+  out="$(jq -r --arg rows "$rows" '
+    ($rows | split("\n") | map(select(length > 0))) as $omit
+    | (.permissions.deny // [])
+    | if type == "array" then .[] else error("deny is not a list") end
+    | strings
+    | select((contains("\n") | not) and startswith("Edit(/") and endswith(")"))
+    | select(.[6:-1] as $in
+      | [$in, (if ($in | endswith("/**")) then $in[:-3] else empty end)]
+      | any(.[]; contains("*") and (. as $g | any($omit[]; . as $p | $g | endswith("/" + $p)))))
+  ' "$SETTINGS_PROFILE" 2>/dev/null)" || return 1
+  [ -z "$out" ] || printf '%s\n' "$out"
+}
 
 # Declared mirrors of cli/src/generators/sandboxProfile.ts, held equal by
 # cli/test/watcher-run-profile.test.mjs; a change to either owner is an edit
@@ -2449,12 +2530,26 @@ run_profile_one_object() {
 # being `file`, `directory` or `entry` as writeProtection.ts → ProtectedKind
 # means them. The third column is `omit` only for a clone row marked `omit`
 # while HR_PLACEHOLDER_HOST is `1` (bubblewrap would plant a placeholder at that
-# absent path), `deny` for every other line:
+# absent path, for a denyWrite entry and an `Edit` rule alike): the per-run copy
+# then carries neither the line's denyWrite entry nor its `Edit` rules. The
+# column is `deny` for every other line:
 #   * each `hr_run_protected_rel_paths` line re-rooted at <copy>, as `entry`;
 #   * on a clone, each RUN_PROFILE_COPY_GIT_PATHS row re-rooted at <copy>;
 #   * on a legacy worktree, <copy>/.git as `file`;
 #   * the `.git` pointer of every other linked worktree the main checkout
-#     lists, as `file`.
+#     lists, as `file`;
+#   * while HR_PLACEHOLDER_HOST is `1`, on either kind, for each
+#     run_profile_glob_drops line <g> and its `omit` row <p>, each path <d>/<p>
+#     `hr_deny_glob_expand <g> <copy>` prints, as `entry`, when <d>/.git is a
+#     directory and not a symbolic link and <d>/<p>'s parent directory exists.
+#     Such a path carrying a quote, a `*`, a tab or a newline is skipped, never
+#     refused, so a sibling's name cannot refuse a launch. These lines stay
+#     `deny`, so each keeps its exact `Edit` rules as well as its denyWrite
+#     entry: run_profile_edit_drops removes the base's glob `Edit` rules for the
+#     trio, and the base's `Edit(//<work_root>/<project>-*/**)` allow would then
+#     let the file tools plant one in another run's clone, which the watcher
+#     refuses at that run's resume but a person's git there still follows. No
+#     line here carries a `*`, so run_profile_edit_drops cannot match its rules.
 # Never called in job mode. Every path is exact: this watcher's own rule, not
 # the generator's refused set, refuses a path carrying a quote, a `*` or a tab —
 # a `*` would turn an exact entry into a glob, a quote does not belong in a
@@ -2462,12 +2557,15 @@ run_profile_one_object() {
 # `$`, a backquote, `&`, `;`, `|`, `<`, `>` or a newline: a declared mirror of
 # cli/src/generators/profileEntries.ts → FORBIDDEN_IN_ENTRY's command rows
 # (every row but `///`; the loop above covers the quotes), which the copy's
-# wrapper twins would otherwise carry. Exit 1 the protected set
-# is unreadable, 2 the worktree list failed, 3 a path was refused, 4 <kind> is
-# neither kind; nothing useful is printed on a non-zero exit.
+# wrapper twins would otherwise carry. Exit 1 the protected set or the base's
+# denyWrite list is unreadable, 2 the worktree list failed, 3 a path was
+# refused, 4 <kind> is neither kind, 5 a base sibling-glob trio entry has a
+# shape hr_deny_glob_expand cannot expand; nothing useful is printed on a
+# non-zero exit.
 run_profile_entries() {
-  local copy="${1%/}" kind="${2-}" rel p k a list line first=1 out=""
+  local copy="${1%/}" kind="${2-}" rel p k a list line first=1 out="" drops g sib="" d
   case "$kind" in clone | worktree) ;; *) return 4 ;; esac
+  drops="$(run_profile_glob_drops)" || return 1
   list="$(hr_run_protected_rel_paths "$MAIN_REPO")" || return 1
   while IFS= read -r rel; do
     [ -n "$rel" ] || continue
@@ -2520,16 +2618,45 @@ EOF
   case "$copy" in
     *'$'* | *'`'* | *'&'* | *';'* | *'|'* | *'<'* | *'>'* | *$'\n'*) return 3 ;;
   esac
-  printf '%s' "$out"
+  while IFS= read -r g; do
+    [ -n "$g" ] || continue
+    while IFS=' ' read -r p k a; do
+      [ "$a" = omit ] || continue
+      case "$g" in *"/$p") ;; *) continue ;; esac
+      list="$(hr_deny_glob_expand "$g" "$copy")" || return 5
+      while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        case "$line" in
+          *\"* | *\'* | *\** | *'	'*) continue ;;
+        esac
+        d="${line%/"$p"}"
+        [ -d "$d/.git" ] && [ ! -L "$d/.git" ] && [ -d "${line%/*}" ] || continue
+        sib="${sib}${line}	entry	deny
+"
+      done <<EOF
+$list
+EOF
+      break
+    done <<EOF
+$RUN_PROFILE_COPY_GIT_PATHS
+EOF
+  done <<EOF
+$drops
+EOF
+  printf '%s%s' "$out" "$sib"
 }
 
 # run_profile_render <branch> <copy> <kind> — write the per-run profile for
 # <branch> to the path `hr_run_profile_file "$HARNESS_REPO_SLUG" <branch>`
 # prints, through a temporary file in its directory and `mv`, the directory
 # created at mode 700, and set RUN_PROFILE_FILE to it. The content is
-# $SETTINGS_PROFILE with each run_profile_entries path not marked `omit`
-# appended to `.sandbox.filesystem.denyWrite`, the Edit rules of every line to
-# `.permissions.deny`,
+# $SETTINGS_PROFILE with exactly the run_profile_glob_drops strings removed
+# from `.sandbox.filesystem.denyWrite` and the run_profile_edit_drops strings
+# from `.permissions.deny` (none off a bubblewrap host, where the per-run copy
+# is byte-identical to the render before those drops), then each
+# run_profile_entries path not marked `omit` appended to denyWrite, the Edit
+# rules of each line not marked `omit` to `.permissions.deny` (bubblewrap
+# mounts a placeholder for an `Edit` rule too: THE PER-RUN PROFILE, above),
 # and the run copy's twins of the base's main-checkout wrapper rules appended
 # to `.permissions.allow` and `.permissions.ask`: each base entry of that list
 # starting with RUN_PROFILE_MAIN_PREFIX, that prefix replaced by
@@ -2546,7 +2673,7 @@ EOF
 # Edit(/<p>/**); `entry` → Edit(/<p>), Edit(/<p>/**). A change to that map is
 # an edit here in the same change.
 run_profile_render() {
-  local branch="$1" copy="$2" kind="$3" file dir tmp entries rc=0
+  local branch="$1" copy="$2" kind="$3" file dir tmp entries drops edrops rc=0
   RUN_PROFILE_FILE=""
   RUN_PROFILE_REFUSAL=""
   if ! file="$(hr_run_profile_file "$HARNESS_REPO_SLUG" "$branch")"; then
@@ -2556,10 +2683,11 @@ run_profile_render() {
   entries="$(run_profile_entries "$copy" "$kind")" || rc=$?
   case "$rc" in
     0) ;;
-    1) RUN_PROFILE_REFUSAL="the run copy's protected paths could not be read from harness.config.json"; return 1 ;;
+    1) RUN_PROFILE_REFUSAL="the run copy's protected paths could not be read from harness.config.json, or the denyWrite list from $SETTINGS_PROFILE"; return 1 ;;
     2) RUN_PROFILE_REFUSAL="git worktree list failed in $MAIN_REPO"; return 1 ;;
     3) RUN_PROFILE_REFUSAL="a per-run profile entry carries a quote, a '*' or a tab, or the run copy's path carries a '\$', a backquote, '&', ';', '|', '<', '>' or a newline"; return 1 ;;
-    *) RUN_PROFILE_REFUSAL="the run copy's kind '$kind' is neither clone nor worktree"; return 1 ;;
+    4) RUN_PROFILE_REFUSAL="the run copy's kind '$kind' is neither clone nor worktree"; return 1 ;;
+    *) RUN_PROFILE_REFUSAL="a sibling-glob denyWrite entry of $SETTINGS_PROFILE for a run copy's .git/commondir, .git/config.worktree or .git/objects/info/http-alternates cannot be re-rooted: the watcher expands only an absolute entry with one '*' ending its segment"; return 1 ;;
   esac
   if ! run_profile_one_object "$SETTINGS_PROFILE"; then
     RUN_PROFILE_REFUSAL="the base profile $SETTINGS_PROFILE is not exactly one JSON object"
@@ -2567,6 +2695,14 @@ run_profile_render() {
   fi
   if ! run_profile_wrapper_prefixes "$copy"; then
     RUN_PROFILE_REFUSAL="the scripts directory could not be read from harness.config.json"
+    return 1
+  fi
+  if ! drops="$(run_profile_glob_drops)"; then
+    RUN_PROFILE_REFUSAL="the denyWrite list of the base profile $SETTINGS_PROFILE could not be read"
+    return 1
+  fi
+  if ! edrops="$(run_profile_edit_drops)"; then
+    RUN_PROFILE_REFUSAL="the permissions.deny list of the base profile $SETTINGS_PROFILE could not be read"
     return 1
   fi
   dir="${file%/*}"
@@ -2579,9 +2715,11 @@ run_profile_render() {
     return 1
   fi
   if ! printf '%s' "$entries" |
-    jq -R -s --slurpfile base "$SETTINGS_PROFILE" \
+    jq -R -s --slurpfile base "$SETTINGS_PROFILE" --arg drops "$drops" --arg edrops "$edrops" \
       --arg main "$RUN_PROFILE_MAIN_PREFIX" --arg twin "$RUN_PROFILE_COPY_PREFIX" '
-      def rules:
+      ($drops | split("\n") | map(select(length > 0))) as $drop
+      | ($edrops | split("\n") | map(select(length > 0))) as $edrop
+      | def rules:
         if .kind == "entry" then ["Edit(/" + .path + ")", "Edit(/" + .path + "/**)"]
         elif .kind == "directory" then ["Edit(/" + .path + "/**)"]
         else ["Edit(/" + .path + ")"]
@@ -2590,8 +2728,14 @@ run_profile_render() {
       def add_twins: add_absent([.[] | select(type == "string" and startswith($main)) | $twin + .[($main | length):]]);
       [split("\n")[] | select(length > 0) | split("\t") | {path: .[0], kind: .[1], action: .[2]}] as $e
       | $base[0]
+      | if ($drop | length) > 0
+        then .sandbox.filesystem.denyWrite |= [.[] | select(. as $x | any($drop[]; . == $x) | not)]
+        else . end
+      | if ($edrop | length) > 0
+        then .permissions.deny |= [.[] | select(. as $x | any($edrop[]; . == $x) | not)]
+        else . end
       | .sandbox.filesystem.denyWrite |= add_absent([$e[] | select(.action != "omit") | .path])
-      | .permissions.deny |= add_absent([$e[] | rules[]])
+      | .permissions.deny |= add_absent([$e[] | select(.action != "omit") | rules[]])
       | if (.permissions.allow | type) == "array" then .permissions.allow |= add_twins else . end
       | if (.permissions.ask | type) == "array" then .permissions.ask |= add_twins else . end
     ' >"$tmp" 2>/dev/null; then
@@ -2619,19 +2763,26 @@ run_profile_render() {
 #     (docs/sandbox-verification.md §6);
 #   * removing exactly the entries <file> appends to
 #     `.sandbox.filesystem.denyWrite`, `.permissions.deny`,
-#     `.permissions.allow` and `.permissions.ask` does not give back
-#     $SETTINGS_PROFILE, compared as JSON;
+#     `.permissions.allow` and `.permissions.ask` does not give back the base,
+#     compared as JSON;
 #   * an entry appended to `.sandbox.filesystem.denyWrite` or
 #     `.permissions.deny` is not a string;
 #   * an entry appended to `.permissions.allow` or `.permissions.ask` is not
 #     the <copy> twin, as run_profile_render makes it, of a base entry of the
 #     same list. With no <copy> every such append is refused.
+# "The base" is $SETTINGS_PROFILE with exactly the run_profile_glob_drops
+# strings removed from `.sandbox.filesystem.denyWrite` and the
+# run_profile_edit_drops strings from `.permissions.deny` when <copy> is given
+# and HR_PLACEHOLDER_HOST is `1`, as run_profile_render drops them (bubblewrap
+# mounts a placeholder for either: THE PER-RUN PROFILE, above); with no
+# <copy>, or on any other host, it is $SETTINGS_PROFILE unchanged. Any other
+# base entry missing from <file> is still refused.
 # A settings file failing Claude Code's validation is silently ignored under
 # `-p`, so this reduces the per-run copy's validity to the base's, which
 # `doctor` grades. In job mode <file> is $SETTINGS_PROFILE, no <copy> is
 # passed, and the appended set is empty.
 run_profile_check() {
-  local file="$1" copy="${2-}" verdict main="" twin=""
+  local file="$1" copy="${2-}" verdict main="" twin="" drops="" edrops=""
   RUN_PROFILE_REFUSAL=""
   if ! run_profile_one_object "$SETTINGS_PROFILE"; then
     RUN_PROFILE_REFUSAL="the base profile $SETTINGS_PROFILE is not exactly one JSON object"
@@ -2648,13 +2799,30 @@ run_profile_check() {
     fi
     main="$RUN_PROFILE_MAIN_PREFIX"
     twin="$RUN_PROFILE_COPY_PREFIX"
+    if ! drops="$(run_profile_glob_drops)"; then
+      RUN_PROFILE_REFUSAL="the denyWrite list of the base profile $SETTINGS_PROFILE could not be read"
+      return 1
+    fi
+    if ! edrops="$(run_profile_edit_drops)"; then
+      RUN_PROFILE_REFUSAL="the permissions.deny list of the base profile $SETTINGS_PROFILE could not be read"
+      return 1
+    fi
   fi
   verdict="$(jq -n -r --slurpfile b "$SETTINGS_PROFILE" --slurpfile f "$file" \
-    --arg main "$main" --arg twin "$twin" \
+    --arg main "$main" --arg twin "$twin" --arg drops "$drops" --arg edrops "$edrops" \
     --arg marker "$RUN_PROFILE_OPT_OUT_MARKER" \
     --argjson strict "$RUN_PROFILE_SANDBOX_STRICT" \
     --argjson optout "$RUN_PROFILE_SANDBOX_OPT_OUT" '
-      $b[0] as $B | $f[0] as $F
+      ($drops | split("\n") | map(select(length > 0))) as $drop
+      | ($edrops | split("\n") | map(select(length > 0))) as $edrop
+      | ($b[0]
+        | if ($drop | length) > 0
+          then .sandbox.filesystem.denyWrite |= [.[] | select(. as $x | any($drop[]; . == $x) | not)]
+          else . end
+        | if ($edrop | length) > 0
+          then .permissions.deny |= [.[] | select(. as $x | any($edrop[]; . == $x) | not)]
+          else . end) as $B
+      | $f[0] as $F
       | def delta(p):
           ($B | getpath(p)) as $bv | ($F | getpath(p)) as $fv
           | if $bv == $fv then {ok: true, extra: []}
@@ -2919,8 +3087,11 @@ spawn_engine() {
     if [ "$HR_PLACEHOLDER_HOST" = "1" ]; then
       placeholder_sweep_pass "$branch" 0
       # The launch check: the render omits a clone's commondir, config.worktree
-      # and http-alternates, so a planted one is refused here, before Claude
-      # Code's own startup git reads the copy.
+      # and http-alternates from denyWrite and their `Edit` rules, exact and
+      # glob, from permissions.deny (THE PER-RUN PROFILE, above), so a planted
+      # commondir, or a non-empty or non-regular config.worktree or
+      # http-alternates, is refused here, before Claude Code's own startup git
+      # reads the copy.
       if [ "$copy_kind" = "clone" ]; then
         if [ -z "$RUN_MAIN" ]; then
           spawn_refuse "$branch" "$RUN_MAIN_REFUSAL"
@@ -3104,13 +3275,15 @@ EOF
     [ -z "$extra_dirs_logged" ] || log "job mode: '$branch' also gets --add-dir from the profile's additionalDirectories:${extra_dirs_logged}"
   fi
 
-  # What was absent before this session: every exact denyWrite path, where
-  # bubblewrap may plant a placeholder, and `.mcp.json` under each --add-dir
-  # root. Without a manifest the next sweep removes nothing, so a failed or
-  # refused write does not refuse the launch. A manifest the session could
-  # write is never written, so the sweep never reads one.
+  # What was absent before this session: every path the --settings file's
+  # denyWrite list yields (`hr_profile_deny_paths`: each exact entry, and each
+  # path a remaining glob expands to now), where bubblewrap may plant a
+  # placeholder, and `.mcp.json` under each --add-dir root. Both modes. Without
+  # a manifest the next sweep removes nothing, so a failed or refused write does
+  # not refuse the launch. A manifest the session could write is never written,
+  # so the sweep never reads one.
   if [ "$HR_PLACEHOLDER_HOST" = "1" ]; then
-    local manifest="" exact_paths line add_root mcp_paths
+    local manifest="" exact_paths line add_root mcp_paths deny_paths
     exact_paths=()
     mcp_paths=()
     for add_root in "$worktree" "$main_state" ${extra_dirs[@]+"${extra_dirs[@]}"}; do
@@ -3125,11 +3298,13 @@ EOF
       log "placeholder manifest: no path for '$branch' — the next sweep removes nothing for this session"
     elif add_root="$(placeholder_manifest_writable_root "$manifest" "$worktree" "$main_state" ${extra_dirs[@]+"${extra_dirs[@]}"})"; then
       log "placeholder manifest: not writing $manifest for '$branch', under the session-writable root $add_root — the next sweep removes nothing for this session"
+    elif ! deny_paths="$(hr_profile_deny_paths "$settings_file")"; then
+      log "placeholder manifest: could not read the denyWrite list of $settings_file for '$branch' — the next sweep removes nothing for this session"
     else
       while IFS= read -r line; do
         [ -n "$line" ] && exact_paths+=("$line")
       done <<EOF
-$(jq -r '.sandbox.filesystem.denyWrite[]? | select(type == "string" and (contains("*") | not))' "$settings_file" 2>/dev/null)
+$deny_paths
 EOF
       if ! hr_placeholder_manifest_write "$manifest" ${exact_paths[@]+"${exact_paths[@]}"} "${mcp_paths[@]}"; then
         log "placeholder manifest: could not write $manifest for '$branch' — the next sweep removes nothing for this session"

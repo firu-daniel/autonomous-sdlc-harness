@@ -233,9 +233,77 @@ test('a planted .git/commondir in the clone refuses the resume', async (t) => {
   assert.ok(failed[0].detail.includes('.git/commondir'), failed[0].detail);
 });
 
-test('after a launch the manifest lists exactly the absent exact denyWrite and --add-dir .mcp.json paths', async (t) => {
+test('an empty 0644 .git/config.worktree in the clone passes the launch check, and the resume launches', async (t) => {
   const f = await adoptedFixture(t);
   if (f === null) return;
+
+  await f.drop();
+  await f.tick({}, { placeholderHost: true });
+  assert.equal(f.prompts().length, 1, `the first launch did not run:\n${f.watcherLog()}`);
+
+  const registry = f.registry();
+  const record = registry.runs[f.branch];
+  assert.equal(record.copy_kind, 'clone');
+  record.status = 'parked';
+  record.pid = '';
+  await f.writeRegistry(registry);
+  const clar = join(f.clone, STATE_DIR, 'clarifications', f.branch);
+  await runBash(f.clone, ['-c', 'mkdir -p "$1" && printf "## Q1\\n" > "$1/question_1.md" && printf "a1\\n" > "$1/answer_1.md"', '_', clar]);
+  const created = join(f.clone, '.git', 'config.worktree');
+  await writeFile(created, '', { mode: 0o644 });
+  await chmod(created, 0o644);
+
+  await f.tick({}, { placeholderHost: true });
+
+  assert.equal(f.prompts().length, 2, `the clone was not relaunched:\n${f.watcherLog()}`);
+  assert.ok(!f.watcherLog().includes('failed its trust check before launch'), f.watcherLog());
+  assert.deepEqual(
+    f.notifications().filter((n) => n.event === 'failed'),
+    [],
+    JSON.stringify(f.notifications()),
+  );
+});
+
+/**
+ * Every path `profile`'s denyWrite list yields, as `hr_profile_deny_paths` lists it: each exact
+ * string, then each `<parent>/<stem>*<suffix>` glob as `<parent>/<name><suffix>` for each
+ * `<stem>`-prefixed directory under `<parent>`.
+ */
+function profileDenyPaths(profile) {
+  const list = profile.sandbox.filesystem.denyWrite.filter((e) => typeof e === 'string' && !e.includes('\n'));
+  const expanded = list
+    .filter((e) => e.includes('*'))
+    .flatMap((glob) => {
+      const head = glob.slice(0, glob.indexOf('*'));
+      const suffix = glob.slice(glob.indexOf('*') + 1);
+      const parent = head.slice(0, head.lastIndexOf('/'));
+      const stem = head.slice(head.lastIndexOf('/') + 1);
+      return readdirSync(parent)
+        .filter((name) => name.startsWith(stem) && statSync(join(parent, name), { throwIfNoEntry: false })?.isDirectory())
+        .map((name) => `${parent}/${name}${suffix}`);
+    });
+  return [...list.filter((e) => !e.includes('*')), ...expanded];
+}
+
+/** Create the sibling `<projectName>-other` with a real `.git/objects/info/`, removed when the case ends. */
+async function makeOtherSibling(t, f) {
+  const dir = `${f.dir}-other`;
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  await mkdir(join(dir, '.git', 'objects', 'info'), { recursive: true });
+  return dir;
+}
+
+/** `<other>`, spelled as `profile`'s `<glob>/.mcp.json` entry spells the work root. */
+function otherAsGlobbed(profile) {
+  const glob = profile.sandbox.filesystem.denyWrite.find((e) => typeof e === 'string' && e.includes('*') && e.endsWith('/.mcp.json'));
+  assert.ok(glob, 'the profile carries no <glob>/.mcp.json entry');
+  return glob.slice(0, -'/.mcp.json'.length).replace('*', 'other');
+}
+
+test('after a launch the manifest lists exactly the absent denyWrite paths, glob expansions included, and --add-dir .mcp.json paths', async (t) => {
+  const f = await adoptedFixture(t);
+  if (f === null) return;
+  await makeOtherSibling(t, f);
 
   await f.drop();
   await f.tick({}, { placeholderHost: true });
@@ -249,13 +317,13 @@ test('after a launch the manifest lists exactly the absent exact denyWrite and -
   const manifest = readFileSync(manifestPath, 'utf8').split('\n').filter((l) => l !== '');
 
   const profile = JSON.parse(readFileSync(settings, 'utf8'));
-  const candidates = [
-    ...profile.sandbox.filesystem.denyWrite.filter((p) => typeof p === 'string' && !p.includes('*')),
-    `${f.clone}/.mcp.json`,
-    `${f.dir}/${STATE_DIR}/.mcp.json`,
-  ];
-  assert.deepEqual(manifest, candidates.filter((p) => !present(p)));
+  const candidates = [...profileDenyPaths(profile), `${f.clone}/.mcp.json`, `${f.dir}/${STATE_DIR}/.mcp.json`];
+  assert.deepEqual([...manifest].sort(), candidates.filter((p) => !present(p)).sort());
   assert.ok(manifest.length > 0, 'the manifest is empty');
+  const other = otherAsGlobbed(profile);
+  for (const rel of ['.git/commondir', '.git/config.worktree', '.git/objects/info/http-alternates', '.mcp.json']) {
+    assert.ok(manifest.includes(`${other}/${rel}`), `${other}/${rel} is not listed:\n${manifest.join('\n')}`);
+  }
   assert.ok(manifest.includes(`${f.dir}/${STATE_DIR}/.mcp.json`), manifest.join('\n'));
   const existing = `${f.clone}/.git/config`;
   assert.ok(candidates.includes(existing) && present(existing), `${existing} is not an existing denyWrite path`);
@@ -263,6 +331,58 @@ test('after a launch the manifest lists exactly the absent exact denyWrite and -
   for (const omitted of ['commondir', 'config.worktree', 'objects/info/http-alternates']) {
     assert.ok(!manifest.includes(`${f.clone}/.git/${omitted}`), `${omitted} is listed`);
   }
+
+  // The Edit side: no rule names the clone's omitted trio, exact or by a `*` rule; its kept rows stay.
+  const deny = profile.permissions.deny.filter((e) => typeof e === 'string');
+  const clones = [...new Set([f.clone, realpathSync(f.clone)])];
+  for (const omitted of ['commondir', 'config.worktree', 'objects/info/http-alternates']) {
+    for (const clone of clones) {
+      const named = deny.filter((rule) => editRuleCovers(rule, `${clone}/.git/${omitted}`));
+      assert.deepEqual(named, [], `a deny rule names ${clone}/.git/${omitted}`);
+    }
+  }
+  for (const rule of [`Edit(/${f.clone}/.git/config)`, `Edit(/${f.clone}/.git/hooks/**)`, `Edit(/${f.clone}/.git/objects/info/alternates)`]) {
+    assert.ok(deny.includes(rule), `${rule} is not in deny`);
+  }
+  for (const kept of ['/.git/config)', '/.git/hooks/**)', '/.git/objects/info/alternates)']) {
+    assert.ok(deny.some((rule) => rule.includes('*') && rule.endsWith(kept)), `no glob rule ending ${kept} is in deny`);
+  }
+});
+
+/**
+ * Whether the `Edit(/<p>)` or `Edit(/<p>/**)` rule `rule` reaches `path`: `<p>` equal to it, or a `*`
+ * in `<p>` matching one segment's run of characters.
+ */
+function editRuleCovers(rule, path) {
+  if (!rule.startsWith('Edit(/') || !rule.endsWith(')')) return false;
+  let inner = rule.slice('Edit(/'.length, -1);
+  if (inner.endsWith('/**')) inner = inner.slice(0, -3);
+  const pattern = inner
+    .split('*')
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+    .join('[^/]*');
+  return new RegExp(`^${pattern}$`).test(path);
+}
+
+test("a launch-recorded leftover at a sibling's .git/commondir is swept by the next pass-start sweep", async (t) => {
+  const f = await adoptedFixture(t);
+  if (f === null) return;
+  await makeOtherSibling(t, f);
+
+  await f.drop();
+  await f.tick({}, { placeholderHost: true });
+  const settings = f.settingsArg();
+  assert.ok(settings, `the stub was never called:\n${f.watcherLog()}`);
+  const path = `${otherAsGlobbed(JSON.parse(readFileSync(settings, 'utf8')))}/.git/commondir`;
+  const manifest = readFileSync(await f.manifestFile(), 'utf8').split('\n');
+  assert.ok(manifest.includes(path), `${path} is not in the manifest:\n${manifest.join('\n')}`);
+  await plantLeftover(path);
+
+  await f.tick({}, { placeholderHost: true });
+
+  const log = f.watcherLog();
+  assert.equal(present(path), false, `the leftover is still there:\n${log}`);
+  assert.ok(log.includes(`placeholder sweep: removed ${path}`), log);
 });
 
 test('a second queued run is deferred at cap 1, with the bubblewrap host line logged once', async (t) => {

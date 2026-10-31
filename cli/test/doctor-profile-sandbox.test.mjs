@@ -22,6 +22,7 @@ import { it } from 'node:test';
 
 import { concurrentSuite } from './helpers/concurrency.mjs';
 import { createFixture, runCli } from './helpers/fixture.mjs';
+import { COPY_GIT_PATHS } from '../dist/generators/writeProtection.js';
 
 const CONFIG_FILE = 'harness.config.json';
 const PROFILE_FILE = '.claude/settings.autonomous.json';
@@ -254,7 +255,33 @@ concurrentSuite('doctor profile-write-protection', () => {
   it('(a) passes on a freshly generated profile, stating the Linux residual', async (t) => {
     const dir = await wiredFixture(t);
     const { line } = await doctorLine(dir, 'PASS', [], WRITE_CHECK_ID);
-    assert.ok(line.includes('How the Linux sandbox treats') && line.includes('is unverified'), line);
+    assert.ok(!line.includes('is unverified'), line);
+    assert.ok(line.includes('is expanded against the directories that exist when the sandbox starts'), line);
+    assert.ok(line.includes('2.1.314') && line.includes('was written, not refused'), line);
+    assert.ok(line.includes('a placeholder at that path'), line);
+    const omitted = COPY_GIT_PATHS.filter(({ bubblewrapDenyWrite }) => bubblewrapDenyWrite === false).map(({ path }) => path);
+    assert.ok(
+      line.includes(
+        `leaves a run copy's ${omitted.join(', ')} out of sandbox.filesystem.denyWrite, also drops the base's sibling-glob entries for those paths and re-roots them by exact path at every other sibling run copy`,
+      ),
+      line,
+    );
+    assert.ok(
+      line.includes(
+        'On Linux Claude Code enforces the Edit deny rules inside the sandbox too, mounting the same placeholder at an absent path inside a write root (measured 2026-10-30 on Claude Code 2.1.314 with bubblewrap 0.8.0)',
+      ),
+      line,
+    );
+    assert.ok(
+      line.includes("the per-run copy there also leaves out the run copy's own Edit rules for those paths, its exact rules and the base's glob rules alike"),
+      line,
+    );
+    assert.ok(line.includes('while each other sibling run copy keeps them by exact path'), line);
+    assert.ok(
+      line.includes('refuses a run copy carrying a commondir, or a config.worktree or http-alternates that is not an empty regular file'),
+      line,
+    );
+    assert.ok(!line.includes('refuses a run copy carrying one'), line);
   });
 
   it("(b) warns when the main checkout's push wrapper has no denyWrite entry, naming the path and the side", async (t) => {

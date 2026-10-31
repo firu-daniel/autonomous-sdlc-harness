@@ -147,16 +147,17 @@
 # script runs OUTSIDE the sandbox, so any git configuration a sandboxed command
 # could write would run with the wrapper's reach. In a linked worktree that is
 # `.git/worktrees/<name>/config.worktree`: its path differs per worktree, so only
-# a globbed profile entry can name it, and how the Linux sandbox treats one is
-# unverified. `setup-worktree.sh`
+# a globbed profile entry can name it, and on Linux such an entry is expanded
+# only against the directories present at sandbox start and did not refuse a new
+# file under one (docs/sandbox-verification.md §5 AP2, §8 GW1). `setup-worktree.sh`
 # writes exactly one key there, `core.hooksPath`, so before its first git call
 # this script refuses unless that file is absent, empty, or holds that one key at
 # the value `setup-worktree.sh` writes (`hr_worktree_config_check_var`); a
 # refusal names each offending key and never its value. Every git call after
 # the check then pins `core.hooksPath` to the MAIN repository's configured hooks
 # directory (`hr_pinned_hooks_path`), not the worktree's: the worktree's hooks
-# directory is protected only by a globbed `denyWrite`, which is unverified on
-# Linux. The pin accepts only `<main>/<githooksDir>` or
+# directory is protected only by a globbed `denyWrite`, which on Linux did not
+# refuse a new file under it (GW1). The pin accepts only `<main>/<githooksDir>` or
 # `<main>/.git/hooks` — the two directories the permission profile
 # write-protects on both sides — compared against the main checkout's own
 # `harness.config.json`, which the profile also protects; any other directory,
@@ -175,8 +176,9 @@
 #
 # A CLONE IS A TARGET TOO. The target may also be a run copy made as a clone,
 # accepted only on the library's clone conditions (`lib/harness-run-lib.sh` →
-# `hr_clone_target_check_var`). Those conditions already refuse a
-# `config.worktree` and hold `.git/config` to an allow-list, so
+# `hr_clone_target_check_var`). Those conditions accept only an empty, regular
+# `config.worktree` with `extensions.worktreeConfig` off, which git never
+# reads, and hold `.git/config` to an allow-list, so
 # `hr_worktree_config_check_var` is skipped on that arm alone. The push goes
 # sync-in, operate, sync-out: after the protected-branch decision, and before
 # the deleted-on-its-remote check, the main checkout takes the clone's
