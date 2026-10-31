@@ -8,7 +8,9 @@
 # the Markdown are lib/run-analytics-report.jq's; locating files, reading suspend
 # intervals, merging and writing are run-analytics.sh's, its only caller.
 #
-# Floor: jq 1.5 — no utf8bytelength, no --rawfile, no $ARGS.named, no regex.
+# Floor: jq 1.5 — no utf8bytelength, no --rawfile, no $ARGS.named, no regex, no
+# jq keyword as a $ variable, . field or object key (jq 1.7 accepts one, jq 1.6
+# does not), and every `if` has an `else`.
 #
 # EVERY MODE TAKES EVERY VARIABLE: $mode, $idle_threshold_s, $known, $redact,
 # $suspend, $suspend_source. jq resolves every $name the program references at
