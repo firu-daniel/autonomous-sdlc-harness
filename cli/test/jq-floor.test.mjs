@@ -6,10 +6,11 @@ import assert from 'node:assert/strict';
 
 /**
  * The rule this suite exists to enforce: no shipped `.jq` program uses the syntax jq 1.7 relaxed
- * and jq 1.5 and 1.6 reject — a jq keyword as a `$` variable, a `.` field or an object key, or an
- * `if` with no `else`. It reads the source; it does not show that a program parses on any jq.
+ * and jq 1.5 and 1.6 reject — a jq keyword as a `$` variable, a `.` field or an object key, an
+ * `if` with no `else`, or a `.` between a term and `[` (`.a.["b"]`, `.a.[]`). It reads the source;
+ * it does not show that a program parses on any jq.
  *
- * jq 1.7 relaxed both, so a 1.7+ host runs a program that Debian 12's jq 1.6 rejects whole. The
+ * jq 1.7 relaxed all three, so a 1.7+ host runs a program that Debian 12's jq 1.6 rejects whole. The
  * guard is on the source because no jq older than the host's is reachable from this suite:
  * fetching one needs the network, and vendoring a binary breaks the no-runtime-dependency rule.
  *
@@ -99,6 +100,16 @@ function scan(source) {
   const ifs = [];
 
   tokens.forEach((token, index) => {
+    if (token.text === '[') {
+      const dot = tokens[index - 1];
+      const before = tokens[index - 2];
+      if (dot?.text === '.' && dot.end === token.start && before && before.end === dot.start
+          && (before.text === ']' || before.text === ')' || before.text === '?'
+              || (/^[A-Za-z_]/.test(before.text) && !KEYWORDS.has(before.text)))) {
+        findings.push({ line: token.line, construct: '`.` before `[` (`.a.[…]`, `.a.[]`)' });
+      }
+      return;
+    }
     if (!KEYWORDS.has(token.text)) return;
     const prev = tokens[index - 1];
     const next = tokens[index + 1];
@@ -139,6 +150,12 @@ const MUST_FLAG = [
   '.end',
   'if . then 1 end',
   'if . then 1 elif . then 2 end',
+  '.a.["b"]',
+  '.a.[]',
+  '.[0].[1]',
+  '$x.[0]',
+  '(.a).[0]',
+  '.a?.[0]',
 ];
 
 const MUST_PASS = [
@@ -147,6 +164,13 @@ const MUST_PASS = [
   '# if x then y end',
   '$__loc__',
   'if . then (if . then 1 else 2 end) else 3 end',
+  '.[0]',
+  '.a[0]',
+  '.a[]?',
+  '.a | .[0]',
+  '[.[0]]',
+  'reduce .[] as $x (0; . + $x)',
+  '"x.[0]"',
 ];
 
 for (const program of MUST_FLAG) {

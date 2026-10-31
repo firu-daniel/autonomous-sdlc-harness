@@ -27,7 +27,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Add the `.`-before-`[` class (`.a.["b"]`, `.a.[]`) to the jq-floor scanner with self-checks, and name it in the suite's rule sentence and Gate 4's paragraph _(layer: cli, general)_
+1. [x] **Finding 1** — Add the `.`-before-`[` class (`.a.["b"]`, `.a.[]`) to the jq-floor scanner with self-checks, and name it in the suite's rule sentence and Gate 4's paragraph _(layer: cli, general)_
 
 ---
 
