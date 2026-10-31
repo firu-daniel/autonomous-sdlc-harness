@@ -72,6 +72,10 @@
     {
       "test": "test/main-repo-resolution-corpus.test.mjs",
       "covers": "plugin/**/*.md"
+    },
+    {
+      "test": "test/jq-floor.test.mjs",
+      "covers": "cli/templates/scripts/**/*.jq"
     }
   ]
 }

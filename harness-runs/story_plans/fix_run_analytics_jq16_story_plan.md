@@ -41,7 +41,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_run_analytics_jq16/task_
 
 1. [x] **Task 1** — Rename `latency_row`'s `$label` parameter and audit both run-analytics `jq` templates against the 1.5 floor _(layer: cli)_ _(points: 10)_
 2. [x] **Task 2** — Add `cli/test/jq-floor.test.mjs`, a source guard for the jq syntax 1.5 and 1.6 reject _(layer: cli)_ _(points: 20)_
-3. [ ] **Task 3** — Bring the self-adopted `scripts/lib/` jq programs level with the templates and register the jq-floor guard _(layer: general)_ _(points: 10)_
+3. [x] **Task 3** — Bring the self-adopted `scripts/lib/` jq programs level with the templates and register the jq-floor guard _(layer: general)_ _(points: 10)_
 4. [ ] **Task 4** — Document Gate 4's by-hand run under Debian 12's jq 1.6 and what the floor guard does not cover _(layer: general)_ _(points: 10)_
 5. [ ] **Task 5** — Re-render the notes-app profile's `run-analytics.sh` entries and #224's three `_README` lines, and update its README record _(layer: general)_ _(points: 15)_
 
