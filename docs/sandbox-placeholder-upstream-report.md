@@ -1,6 +1,6 @@
 # The upstream report: Linux sandbox placeholders for denied absent paths
 
-**Who reads this:** the maintainer filing this report on anthropics/claude-code, and anyone checking whether a later Claude Code version lifts the harness's Linux interim position. It is a **draft to file, not a filed issue**: until an issue number is recorded here, nothing upstream has been asked. The interim position it would lift is `docs/cli.md` §6's. It owns the report's text and its asks; the measurements it quotes are recorded in `docs/sandbox-verification.md` (§0 *The probe's first Linux run (2026-10-29)*, §0 *The targeted check (2026-10-29)*, §5 F9, §5 AP2, §5 *Session 1* and AP7, and §8 GW1 and GW2), and that document stays their record.
+**Who reads this:** the maintainer filing this report on anthropics/claude-code, and anyone checking whether a later Claude Code version lifts the harness's Linux interim position. It is a **draft to file, not a filed issue**: until an issue number is recorded here, nothing upstream has been asked. The interim position it would lift is `docs/cli.md` §6's. It owns the report's text and its asks; the measurements it quotes are recorded in `docs/sandbox-verification.md` (§0 *The probe's first Linux run (2026-10-29)*, §0 *The targeted check (2026-10-29)*, §5 F9, §5 AP2, §5 *Session 1* and AP7, §5 *The round's head, taken 2026-10-31*, and §8 GW1 and GW2), and that document stays their record.
 
 Everything from `## Report` to the end of `### Asks` is written to be pasted as is. `<clone>` is the run copy, a `git clone --shared` of the main checkout, and `<main>` is the main checkout; both stand in for absolute paths under the container user's home directory.
 
@@ -14,7 +14,7 @@ Linux sandbox: a write-denied absent path is mounted as `/dev/null`, breaks git,
 
 ### Environment
 
-- Claude Code `2.1.312 (Claude Code)`; the 2026-10-30 readings, `2.1.314 (Claude Code)`
+- Claude Code `2.1.312 (Claude Code)`; the 2026-10-30 readings, `2.1.314 (Claude Code)`; the 2026-10-31 readings, `2.1.316 (Claude Code)`
 - `bubblewrap 0.8.0`
 - `Debian GNU/Linux 12 (bookworm)`, in a container on colima's `default` VM (Ubuntu 24.04.4 LTS, kernel 6.8.0-117-generic, aarch64)
 - `kernel.apparmor_restrict_unprivileged_userns: 0`
@@ -47,6 +47,12 @@ crw-rw-rw- 1 nobody nogroup 1, 3 … <clone>/.git/commondir
 ```
 
 The same holds for every absent entry in both checkouts: `character special file, 0 B, nobody`, mounted from `/null (tmpfs, ro,nosuid,nodev)`. Outside the sandbox, after a session that ends normally, they are absent again: the session's own cleanup removed them.
+
+- **2026-10-31, Claude Code 2.1.316, bubblewrap 0.8.0: unchanged.** Each of the seven absent paths the profile still denies inside a write root — `<main>/.mcp.json`, `<main>/.claude/settings.local.json`, `<main>/scripts/.git`, `<clone>/.mcp.json`, `<clone>/.claude/settings.local.json`, `<clone>/.git/hooks` and `<main>/harness-runs/.mcp.json` — read `character special file, 0 B, crw-rw-rw-, nobody; mount: /null (tmpfs, ro,nosuid,nodev)` in both sandboxed sessions and `absent` from an excluded command. After a session killed with `SIGKILL`, each was left on disk as `regular empty file, 0 B, -r--r--r--, probe`.
+
+### An absent path no rule names
+
+- **2026-10-31, Claude Code 2.1.316, bubblewrap 0.8.0.** Inside a sandboxed call, `dd if=/dev/null of=<clone>/.git/commondir conv=notrunc`, for an absent path named by no deny entry or rule, reported success (`0+0 records in / 0+0 records out / 0 bytes copied`), and the session exited 0. The file never appeared on disk: a plain shell found the path absent through 21 s of polling. Where the write went is not measured, and we offer no mechanism.
 
 ### Glob entries
 
@@ -91,6 +97,8 @@ The 2026-10-30 re-take found it again, on a profile whose `denyWrite` named it o
 
 The 2026-10-30 control (Claude Code 2.1.314, bubblewrap 0.8.0), whose profile named it by no `denyWrite` entry and no `Edit` rule, found it again: it appeared at the first session's start as a real `regular empty file, 0 B, -rw-r--r--`, stayed, and was mounted read-only over itself inside the sandbox.
 
+- **2026-10-31, Claude Code 2.1.316, bubblewrap 0.8.0: again, with no rule naming it.** In a control whose profile named it by no rule, it read `regular empty file, 0 B, -rw-r--r--, probe, mtime 2026-10-31 08:21:53.049350808 +0000` from after the first session on, and was mounted `(overlay, ro,nosuid,nodev,relatime)` over itself inside the sandbox. The session taken before it, whose `permissions.deny` named it by no rule either, read it the same way, with mtime `2026-10-31 08:07:44.690167084 +0000`.
+
 **2. Every absent placeholder, after a session killed with `SIGKILL` mid-call.** One session was killed with `SIGKILL` in the middle of a Bash call, and the paths were read from a plain shell 1 s and 10 s later. Every other absent entry was left on disk as a `-r--r--r-- probe 0 B` real file. The three in `<main>` were still there after the run copy was torn down. git then fails in `<clone>` even outside the sandbox, because the leftover is empty:
 
 ```
@@ -109,7 +117,9 @@ Claude Code mounts placeholders at its own protected paths in the session's cwd,
 .bash_profile .bashrc .claude/agents .claude/commands .claude/hooks .claude/launch.json .claude/loop.md .claude/output-styles .claude/routines .claude/scheduled_tasks.json .claude/skills .claude/workflows .gitconfig .gitmodules .idea .mcp.json .profile .ripgreprc .vscode .zprofile .zshrc
 ```
 
-An excluded command and a plain shell after sessions that end normally listed none. After a session killed with `SIGKILL`, the plain shell's `git status` in `<clone>` listed untracked paths whose first ten are `.bash_profile .bashrc .claude/agents .claude/commands .claude/hooks .claude/launch.json .claude/loop.md .claude/output-styles .claude/routines .claude/scheduled_tasks.json`; our script cut the reading there, so the rest of that list, and the files' types and modes, are not measured yet.
+An excluded command and a plain shell after sessions that end normally listed none. After a session killed with `SIGKILL`, the plain shell's `git status` in `<clone>` listed untracked paths whose first ten are `.bash_profile .bashrc .claude/agents .claude/commands .claude/hooks .claude/launch.json .claude/loop.md .claude/output-styles .claude/routines .claude/scheduled_tasks.json`; our script cut the reading there, so the rest of that list, and the files' types and modes, were not measured on that run.
+
+- **2026-10-31, Claude Code 2.1.316, bubblewrap 0.8.0.** Each of the same 21 paths read `character special file, 0 B, crw-rw-rw-, nobody; mount: /null (tmpfs, ro,nosuid,nodev)` inside a sandboxed call at `<clone>`'s root. After a session killed with `SIGKILL`, each was left on disk as a `regular empty file, 0 B, -r--r--r--, probe`: 0-byte and read-only. git in `<clone>` still worked: `git status` there exited 0, listing them as untracked.
 
 ### Concurrency
 

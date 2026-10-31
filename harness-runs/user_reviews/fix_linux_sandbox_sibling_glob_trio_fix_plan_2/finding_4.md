@@ -61,3 +61,11 @@ Nothing yet records:
    - Leave the first "**What a run cannot rely on:**" bullet to Finding 2.
 
 **Evidence.** Prose only. Re-read each edited table row against the review's quoted text, and grep that no `not run — owed` remains in the AP1–AP8 rows of the round's-head table.
+
+- **Deviations from plan:**
+  - The old label *Owed on the round's head* was also cited by §5's lead paragraph (*The route's re-take (owed)*) and by the *AP6, derived.* paragraph, not only by its own line; both citations were repointed to *The round's head, taken 2026-10-31*. The lead paragraph's owed sentence was brought into line too (owed after the second user-review round: AP9 and AP1–AP6 again; `hook-probe` added to its procedure, as `docs/development.md` already runs it), and it now names AP9 among the rows it introduces. No 2026-10-30 reading was changed.
+  - Session 2's stamp could not sit in a table cell, so it is a fenced block under a bold lead *AP7's session, the control.* after the table; AP7's Observed cell points to it.
+  - `docs/cli.md` residual 12: besides the three named sentences, the *Claude Code's own placeholders* bullet's lead citation and the AP6 paragraph after *What a run cannot rely on* still read "to be recorded in `docs/sandbox-verification.md` §5 by this round's Finding 6"; both were repointed at §5 (*Session 2*, *Session 1*, and the 2026-10-31 table). The first *What a run cannot rely on* bullet was left to Finding 2.
+  - Not changed, outside this finding's anchors: `docs/cli.md`'s two paragraphs before residual 12 (*Everything that runs outside the sandbox is write-protected on both sides* and *Each run adds its own copy's paths by exact path, in a per-run profile*) still cite the 2026-10-30 review "to be recorded … by this round's Finding 6", though §5 *Session 2* now records it.
+  - Upstream report: AP8's result went into a new section *An absent path no rule names*, after *What a write-denied absent path does inside a call*, since no existing section covers a path no rule names.
+  - Verification: the "no `not run — owed` in AP1–AP8" grep was run as `grep -n "not run — owed" docs/sandbox-verification.md`; in the round's-head table it matches only the AP9 row. `grep -rn "Owed on the round's head" docs` returns nothing.
