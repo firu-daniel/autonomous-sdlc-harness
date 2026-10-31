@@ -7,8 +7,9 @@
  * did in every listed layout, under bash and zsh, whether or not `HARNESS_MAIN_REPO` is set — the
  * main checkout and exit 0 only where it resolved one and found no marker there, and otherwise a
  * non-zero exit with nothing on stdout — and refuses the one accepted stricter case.** That stricter
- * case — a registered clone carrying a `config.worktree` or a `.git/config` key outside the clone
- * allow-list, where the one-liner offered — is the user's decision
+ * case — a registered clone carrying a non-empty `config.worktree` (an empty one is the shape
+ * `hr_clone_target_check_var` condition 3 accepts since #224) or a `.git/config` key outside the
+ * clone allow-list, where the one-liner offered — is the user's decision
  * (`harness-runs/clarifications/fix_task_offer_check_script/answered/answer_1.md`, Q2 (a)). The
  * template item must name the script through `{{taskOfferCheckCommand}}` and carry no inline shell.
  *
@@ -87,7 +88,7 @@ test('the opt-out script in every run-copy layout', async (t) => {
 
   const state = join(l.root, 'xdg-state');
   const configWorktreeClone = await createRegisteredClone(l.root, l.main, 'feat_cfgwt', state);
-  await writeFile(join(configWorktreeClone, '.git', 'config.worktree'), '');
+  await writeFile(join(configWorktreeClone, '.git', 'config.worktree'), '[core]\n\tbare = false\n');
   const remoteKeyClone = await createRegisteredClone(l.root, l.main, 'feat_remote', state);
   await runGit(remoteKeyClone, ['config', 'branch.feat_remote.remote', 'origin']);
 
@@ -163,7 +164,7 @@ test('the opt-out script in every run-copy layout', async (t) => {
       const why = ' — the accepted divergence from the #214 one-liner, which offered here';
       await s.test('the accepted stricter case: a registered clone with a config.worktree is silent', async () => {
         assertPrints('registeredClone', await run('registeredClone'), l.main);
-        assertSilent(`registered clone with .git/config.worktree${why}`, await runAt('config.worktree', configWorktreeClone));
+        assertSilent(`registered clone with a non-empty .git/config.worktree${why}`, await runAt('config.worktree', configWorktreeClone));
       });
 
       await s.test('the accepted stricter case: a registered clone with a branch remote key is silent', async () => {
