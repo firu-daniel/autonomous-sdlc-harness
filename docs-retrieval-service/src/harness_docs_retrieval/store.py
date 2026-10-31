@@ -3,8 +3,10 @@
 The rule this module exists to enforce, carried over from `store.ts`: every value reaches SQL as a
 bound parameter, and the SQL stays plain Postgres plus the `vector` and `pg_textsearch` extensions.
 A search query comes from an agent and is untrusted, so no input is ever spliced into a statement;
-the two spliced tokens are the `vector(<dimensions>)` column type, taken from a checked integer, and
-the constant index name inside `to_bm25query($1, 'chunks_bm25')`.
+the four spliced tokens are the `vector(<dimensions>)` column type, taken from a checked integer,
+the constant index name inside `to_bm25query($1, 'chunks_bm25')`, the extension name in each
+`ALTER EXTENSION <name> UPDATE`, taken from the constant record `EXTENSION_UPDATE_STATEMENTS`, and
+the constant index or table name in each `END_STATE_STATEMENTS` entry.
 
 Every statement is `store.ts`'s, character for character, and lives in `statements`, which the
 methods read. The connection's cursor is `psycopg.AsyncRawCursor`, which binds PostgreSQL-native
@@ -28,6 +30,7 @@ Departures from store.ts:
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any, Protocol
 
 import psycopg
@@ -48,6 +51,18 @@ BM25_INDEX_DEFINITION = f"ON {CHUNKS_TABLE} USING bm25 (text) WITH (text_config=
 # The lexical arm's ordering clause; `$1` is the bound query text.
 BM25_ORDER_CLAUSE = f"text <@> to_bm25query($1, '{BM25_INDEX}')"
 
+# The lexical arm's statement: `id` and the ordering expression's value as `score`, so the caller
+# can drop the score-`0` rows a plan other than the index scan returns. `$1` is the query, `$2` the
+# limit.
+LEXICAL_SEARCH_STATEMENT = (
+    f"SELECT id, {BM25_ORDER_CLAUSE} AS score FROM {CHUNKS_TABLE} "
+    f"ORDER BY {BM25_ORDER_CLAUSE} LIMIT $2"
+)
+
+# The statements that bring every index to the state a rebuild over the stored rows leaves, issued
+# in order by `DocStore.rebuild_indexes`. No vector-index statement is among them.
+END_STATE_STATEMENTS: tuple[str, ...] = (f"REINDEX INDEX {BM25_INDEX}",)
+
 CHUNK_TEXT_COLUMN = "text text NOT NULL"
 
 # The meta key recording the width the `chunks.embedding` column was created with.
@@ -56,7 +71,43 @@ DIMENSIONS_META_KEY = "dimensions"
 # The meta key refresh compares against the embedder's id; cleared when the column is recreated.
 EMBEDDER_META_KEY = "embedder"
 
+# The meta key recording whether the indexes are in the end state; cleared when the column is
+# recreated.
+INDEX_STATE_META_KEY = "index_state"
+
+# `INDEX_STATE_META_KEY`'s value from before a refresh's first write until its
+# `DocStore.rebuild_indexes` returns.
+INDEX_STATE_PENDING = "pending"
+
+# `INDEX_STATE_META_KEY`'s value once `DocStore.rebuild_indexes` has returned over the stored rows.
+INDEX_STATE_REBUILT = "rebuilt"
+
 DATABASE_URL_ENV = "HARNESS_DOCS_RETRIEVAL_DATABASE_URL"
+
+# Each extension the store creates, to the statement that moves an older installed version to the
+# server's.
+EXTENSION_UPDATE_STATEMENTS: Mapping[str, str] = MappingProxyType(
+    {
+        "vector": "ALTER EXTENSION vector UPDATE",
+        "pg_textsearch": "ALTER EXTENSION pg_textsearch UPDATE",
+    }
+)
+
+# The store's extensions whose installed `extversion` differs from the server's `default_version`,
+# by name: the ones `EXTENSION_UPDATE_STATEMENTS` must be issued for.
+STALE_EXTENSIONS_QUERY = (
+    "SELECT e.extname FROM pg_extension e JOIN pg_available_extensions a ON a.name = e.extname "
+    "WHERE e.extname IN ('vector', 'pg_textsearch') "
+    "AND e.extversion IS DISTINCT FROM a.default_version ORDER BY e.extname"
+)
+
+
+def _update_extension_key(extname: str) -> str:
+    return f"update_extension_{extname}"
+
+
+def _end_state_key(index: int) -> str:
+    return f"end_state_{index}"
 
 
 def _check_dimensions(dimensions: object) -> int:
@@ -80,6 +131,11 @@ def statements(dimensions: int) -> Mapping[str, str]:
         "create_extensions": (
             "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_textsearch;"
         ),
+        "stale_extensions": STALE_EXTENSIONS_QUERY,
+        **{
+            _update_extension_key(extname): statement
+            for extname, statement in EXTENSION_UPDATE_STATEMENTS.items()
+        },
         "create_meta": (
             "CREATE TABLE IF NOT EXISTS meta (key text PRIMARY KEY, value text NOT NULL)"
         ),
@@ -89,7 +145,7 @@ def statements(dimensions: int) -> Mapping[str, str]:
             "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value"
         ),
         "drop_chunks": f"DROP TABLE IF EXISTS {CHUNKS_TABLE}",
-        "delete_meta": "DELETE FROM meta WHERE key = $1",
+        "delete_meta": "DELETE FROM meta WHERE key = ANY($1::text[])",
         "create_chunks": (
             f"CREATE TABLE IF NOT EXISTS {CHUNKS_TABLE} (id serial PRIMARY KEY, "
             "key text UNIQUE NOT NULL, path text NOT NULL, "
@@ -113,7 +169,7 @@ def statements(dimensions: int) -> Mapping[str, str]:
         ),
         "delete_chunks": f"DELETE FROM {CHUNKS_TABLE} WHERE key = ANY($1::text[])",
         "clear": f"DELETE FROM {CHUNKS_TABLE}",
-        "lexical_search": f"SELECT id FROM {CHUNKS_TABLE} ORDER BY {BM25_ORDER_CLAUSE} LIMIT $2",
+        "lexical_search": LEXICAL_SEARCH_STATEMENT,
         "vector_search": (
             f"SELECT id FROM {CHUNKS_TABLE} ORDER BY embedding <=> $1::vector LIMIT $2"
         ),
@@ -121,6 +177,9 @@ def statements(dimensions: int) -> Mapping[str, str]:
             f"SELECT id, key, path, anchor, heading, body FROM {CHUNKS_TABLE} "
             "WHERE id = ANY($1::int[])"
         ),
+        **{
+            _end_state_key(index): statement for index, statement in enumerate(END_STATE_STATEMENTS)
+        },
     }
 
 
@@ -166,12 +225,15 @@ class DocStore(Protocol):
         ...
 
     async def lexical_search(self, query: str, limit: int) -> list[RankedId]:
-        """The best-scoring chunks for the query, lower-is-better score first, up to `limit`.
+        """The best-scoring chunks for the query, lower-is-better score first, up to `limit`, and
+        **only chunks carrying a query term, on every plan.**
 
-        **Not necessarily only matching chunks:** the filter to matching rows belongs to the BM25
-        index scan rather than to the `<@>` operator, so a plan that falls back to a sequential
-        scan, which a small corpus does, returns non-matching rows at score `0` after the matches.
-        Measured in `docs/retrieval.md` → `## Measured, and how`, item (b).
+        The BM25 index scan filters to matching rows, but the `<@>` operator does not, so the
+        `Seq Scan` a small corpus takes after a `REINDEX` returns non-matching rows at score `0`
+        (`docs/retrieval.md` → `## Measured, and how`, item (b)). The filter runs over the rows the
+        plan returns rather than as a `WHERE`, which would add a `Filter` to the scan, so
+        `LEXICAL_SEARCH_STATEMENT` keeps the plan the crossover was measured on. A row at score `0`
+        carries no lexical evidence, so the result can be shorter than `limit`.
         """
         ...
 
@@ -181,6 +243,12 @@ class DocStore(Protocol):
 
     async def get_chunks(self, ids: Sequence[int]) -> list[StoredChunk]:
         """The chunks with these ids, in the order the ids were given; an unknown id is skipped."""
+        ...
+
+    async def rebuild_indexes(self) -> None:
+        """Brings every index to the state a rebuild over the stored rows leaves, by issuing
+        `END_STATE_STATEMENTS` in order, outside any transaction. The refresh decides when to call
+        it."""
         ...
 
     async def close(self) -> None: ...
@@ -252,11 +320,11 @@ class _PostgresStore:
     async def lexical_search(self, query: str, limit: int) -> list[RankedId]:
         if js_trim(query) == "":
             return []
-        # pg_textsearch scores lower-is-better; a non-matching row scores 0, so matches sort first.
-        # Filtering to matching rows alone is the index scan's behaviour, not the operator's: see
-        # `DocStore.lexical_search`.
+        # pg_textsearch scores lower-is-better and a non-matching row scores exactly 0. Only the
+        # index scan leaves those rows out, so they are dropped here, before ranking keeps ranks
+        # contiguous.
         cursor = await self._conn.execute(self._sql["lexical_search"], [query, limit])
-        return _ranked(await cursor.fetchall())
+        return _ranked([row for row in await cursor.fetchall() if row[1] != 0])
 
     async def vector_search(self, embedding: Sequence[float], limit: int) -> list[RankedId]:
         cursor = await self._conn.execute(
@@ -281,6 +349,10 @@ class _PostgresStore:
         }
         return [by_id[id_] for id_ in ids if id_ in by_id]
 
+    async def rebuild_indexes(self) -> None:
+        for index in range(len(END_STATE_STATEMENTS)):
+            await self._conn.execute(self._sql[_end_state_key(index)])
+
     async def close(self) -> None:
         await self._conn.close()
 
@@ -288,8 +360,13 @@ class _PostgresStore:
 async def open_postgres_store(database_url: str, dimensions: int) -> DocStore:
     """Opens the index on the Postgres `database_url` names.
 
-    An existing index built at another width has its `chunks` table dropped and its embedder
-    record removed, so the next refresh rebuilds rather than failing on the column type.
+    An existing index built at another width has its `chunks` table dropped and its embedder and
+    index-state records removed, so the next refresh rebuilds rather than failing on the column
+    type, and the recreated table's indexes are not taken to be in the end state.
+
+    An index an older `vector` or `pg_textsearch` built is brought to the server's versions by
+    issuing `EXTENSION_UPDATE_STATEMENTS`' entry for each extension `STALE_EXTENSIONS_QUERY` lists,
+    before any other statement reads it, and nothing when it lists none.
     """
     sql = statements(_check_dimensions(dimensions))
     try:
@@ -306,11 +383,14 @@ async def open_postgres_store(database_url: str, dimensions: int) -> DocStore:
     store = _PostgresStore(conn, dimensions)
     try:
         await conn.execute(sql["create_extensions"])
+        cursor = await conn.execute(sql["stale_extensions"])
+        for (extname,) in await cursor.fetchall():
+            await conn.execute(sql[_update_extension_key(str(extname))])
         await conn.execute(sql["create_meta"])
         width = str(dimensions)
         if await store.read_meta(DIMENSIONS_META_KEY) != width:
             await conn.execute(sql["drop_chunks"])
-            await conn.execute(sql["delete_meta"], [EMBEDDER_META_KEY])
+            await conn.execute(sql["delete_meta"], [[EMBEDDER_META_KEY, INDEX_STATE_META_KEY]])
         await conn.execute(sql["create_chunks"])
         await conn.execute(sql["create_hnsw"])
         await conn.execute(sql["create_bm25"])

@@ -83,12 +83,13 @@
 #   cli/src/config/model.ts           DEFAULTS.scriptsDir
 #
 # ACTION PINS.
-#   actions/checkout          v5.1.0
+#   actions/checkout          v7.0.1
 # The `uses:` names the full commit sha of the release on the comment line
-# above it. The release is in the lowest major whose own action.yml declares
-# `runs.using: node24`, per a maintainer's lookups of its action.yml and release
-# notes on 2026-09-29T08:21Z (UTC). That major's release notes require Actions
-# Runner 2.327.1 or newer; a GitHub-hosted runner already has it, and a
+# above it. The release's own action.yml declares `runs.using: node24`, per a
+# maintainer's lookups on 2026-10-21 (UTC) of its action.yml, release notes and
+# tag: the sha is the commit its release tag names, on the action's default
+# branch. Its README requires Actions Runner 2.327.1 or newer; a GitHub-hosted
+# runner already has it, and a
 # self-hosted one must run it (docs/remote-execution.md, section 8). A sha, not
 # a tag: a tag is mutable, and this job holds a write token while it reads
 # untrusted issue text. `init --upgrade-workflows` does not re-render this file
@@ -129,8 +130,8 @@ jobs:
       HARNESS_RUN_ACTORS: ${{ vars.HARNESS_RUN_ACTORS }}
     steps:
       - name: Check out the default branch
-        # actions/checkout v5.1.0
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           token: ${{ github.token }}
           fetch-depth: 0

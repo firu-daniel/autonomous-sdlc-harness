@@ -10,7 +10,7 @@
  *
  * `node --test test` loads this file as a test file of its own, so nothing here runs at import time.
  *
- * ## Four non-obvious choices
+ * ## Six non-obvious choices
  *
  * 1. **The stub sleeps before its body runs.** Not for the registry: its writes are serialized, so
  *    the pass's post-spawn `pid` write and the session's exit classification both survive whichever
@@ -24,9 +24,35 @@
  *    process's first pass and acts on worktrees and branches, none of which these suites assert.
  * 4. **`tick` is bounded at {@link TICK_TIMEOUT_MS}**, through `runBash`'s process-group bound
  *    (`fixture.mjs`, choice 6), and by the test's own `t.signal`. A pass plus its `wait` for a stub
- *    that sleeps under a second is far below it; it sits below the suite's `--test-timeout`
- *    (`cli/package.json` → `scripts.test`) so a hung pass fails naming its command, and its session
- *    and `sleep`s are killed with it.
+ *    that sleeps under a second is far below it. A case whose single pass launches more than one
+ *    session, or whose sessions run the real analytics hook (choice 6), may pass a larger bound through
+ *    `tick`'s `timeoutMs`. That bound and any `timeoutMs` a
+ *    case passes are scaled by `HARNESS_TEST_TIME_SCALE` (`./timing.mjs`) — `tick` does not scale a
+ *    passed `timeoutMs`, so its caller does — and at that variable's cap both stay below the suite's
+ *    `--test-timeout` (`cli/package.json` → `scripts.test`, 1 800 000 ms) so a hung pass fails naming
+ *    its command, and its session and `sleep`s are killed with it.
+ * 5. **`tick` overrides the sourced sandbox probe** (`hr_sandbox_prereq_probe_var`) with
+ *    {@link DEFAULT_SANDBOX_PROBE}, which reports nothing missing, so a pass launches on any host — a
+ *    Linux host without `bubblewrap` or `socat` included. The override is test-only: the watcher
+ *    carries no environment switch for it, because such a switch would be a bypass of the preflight.
+ *    A suite that runs its own `tick` script instead of this `tick`
+ *    (`cli/test/watcher-stall-reset-payloads.test.mjs` → `localStall`) defines the same override from
+ *    {@link DEFAULT_SANDBOX_PROBE}.
+ *    It overrides the keep-awake probe (`hr_keep_awake_probe_var`) the same way, with
+ *    {@link DEFAULT_KEEP_AWAKE_PROBE}: an unsupported host is the silent `off` arm, so no suite built
+ *    here starts a real `caffeinate` or `systemd-inhibit` or gains a `keep-awake:` log line. A suite
+ *    running its own pass script defines the same override from {@link DEFAULT_KEEP_AWAKE_PROBE}, as
+ *    `localStall` above does.
+ *    It overrides the placeholder-host probe (`hr_placeholder_host_probe_var`) with
+ *    {@link DEFAULT_PLACEHOLDER_HOST_PROBE}, unless a case passes `placeholderHost: true`, because a
+ *    Linux CI host would otherwise take the bubblewrap arms of `spawn_engine` and the cap; a suite
+ *    running its own pass script defines it from {@link DEFAULT_PLACEHOLDER_HOST_PROBE} too.
+ * 6. **The run-analytics hook is off unless a case opts in** (`runAnalytics`). Its two commits add
+ *    seconds to every launch pass, enough to push a pass past its bound under a loaded host, and only
+ *    `cli/test/watcher-run-analytics.test.mjs` asserts them. Off, the installed `run-analytics.sh` is
+ *    replaced by an executable `exit 0` that writes no file: `record_run_analytics` then commits
+ *    nothing and logs nothing, where a non-executable or missing script would add a watcher-log line
+ *    a suite asserting that log could trip on.
  */
 
 import assert from 'node:assert/strict';
@@ -35,10 +61,12 @@ import { chmod, mkdir, readdir, writeFile } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
 
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli } from './fixture.mjs';
+import { scaleBound } from './timing.mjs';
 
 const STATE_DIR = 'sdlc-harness';
 const WATCHER_PATH = `${INIT_SCRIPTS_DIR}/autonomous-watcher.sh`;
 const NOTIFY_PATH = `${INIT_SCRIPTS_DIR}/autonomous-notify.sh`;
+const RUN_ANALYTICS_PATH = `${INIT_SCRIPTS_DIR}/run-analytics.sh`;
 const REGISTRY_PATH = `${STATE_DIR}/autonomous_logs/registry.json`;
 const WATCHER_LOG_PATH = `${STATE_DIR}/autonomous_logs/watcher.log`;
 
@@ -46,8 +74,19 @@ const WATCHER_LOG_PATH = `${STATE_DIR}/autonomous_logs/watcher.log`;
 const RECORDER_DIR = 'watcher-test';
 const PROMPT_DELIMITER = '----- end of prompt -----';
 
-/** One watcher pass's bound (choice 4 in the module header). */
-const TICK_TIMEOUT_MS = 60_000;
+/** One watcher pass's bound, scaled (choice 4 in the module header). */
+export const TICK_TIMEOUT_MS = scaleBound(60_000);
+
+/** The body `tick` gives the sourced probe unless a case passes its own (choice 5). */
+export const DEFAULT_SANDBOX_PROBE = 'HR_SANDBOX_HOST=macos; HR_SANDBOX_MISSING=; HR_SANDBOX_REFUSAL=; return 0';
+
+/** The keep-awake probe body `tick` defines unless a case passes its own (choice 5). */
+export const DEFAULT_KEEP_AWAKE_PROBE = 'HR_KEEP_AWAKE_HOST=unsupported; HR_KEEP_AWAKE_TOOL=; return 0';
+
+/** The placeholder-host probe body `tick` defines unless a case passes `placeholderHost: true` (choice 5). */
+export const DEFAULT_PLACEHOLDER_HOST_PROBE = 'HR_PLACEHOLDER_HOST=0; return 0';
+
+const PLACEHOLDER_HOST_ON_PROBE = 'HR_PLACEHOLDER_HOST=1; return 0';
 
 /** The seed `init`'s own tests use: a repository whose stack detection resolves every command. */
 function nodeProjectFiles() {
@@ -94,9 +133,9 @@ async function sortedNames(path, exclude) {
  * return `null` when `bash` or `jq` does not resolve — the watcher refuses to start without either.
  *
  * @param {import('node:test').TestContext} t
- * @param {{ branch?: string }} [options]
+ * @param {{ branch?: string, runAnalytics?: boolean }} [options]
  */
-export async function createWatcherFixture(t, { branch = 'feat_x' } = {}) {
+export async function createWatcherFixture(t, { branch = 'feat_x', runAnalytics = false } = {}) {
   for (const tool of ['bash', 'jq']) {
     if (!onPath(tool)) {
       t.skip(`${tool} does not resolve on this process's PATH, so ${WATCHER_PATH} cannot be driven here`);
@@ -109,6 +148,12 @@ export async function createWatcherFixture(t, { branch = 'feat_x' } = {}) {
 
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
+
+  if (!runAnalytics) {
+    const analyticsPath = join(dir, RUN_ANALYTICS_PATH);
+    await writeFile(analyticsPath, '#!/usr/bin/env bash\nexit 0\n', 'utf8');
+    await chmod(analyticsPath, 0o755);
+  }
 
   const clarDir = join(dir, STATE_DIR, 'clarifications', branch);
   const recorderDir = join(dir, RECORDER_DIR);
@@ -184,12 +229,29 @@ export async function createWatcherFixture(t, { branch = 'feat_x' } = {}) {
       await writeFile(join(dir, REGISTRY_PATH), `${JSON.stringify({ runs: { [branch]: record } }, null, 2)}\n`, 'utf8');
     },
     record: () => JSON.parse(readFileSync(join(dir, REGISTRY_PATH), 'utf8')).runs[branch],
-    async tick(env = {}) {
+    /**
+     * One pass; `sandboxProbe` and `keepAwakeProbe` are shell function bodies replacing
+     * {@link DEFAULT_SANDBOX_PROBE} and {@link DEFAULT_KEEP_AWAKE_PROBE}; `placeholderHost: true`
+     * replaces {@link DEFAULT_PLACEHOLDER_HOST_PROBE} with one reporting a bubblewrap host;
+     * `timeoutMs` replaces {@link TICK_TIMEOUT_MS} for a pass that launches more than one session
+     * (choice 4).
+     */
+    async tick(
+      env = {},
+      {
+        sandboxProbe = DEFAULT_SANDBOX_PROBE,
+        keepAwakeProbe = DEFAULT_KEEP_AWAKE_PROBE,
+        placeholderHost = false,
+        timeoutMs = TICK_TIMEOUT_MS,
+      } = {},
+    ) {
+      const placeholderProbe = placeholderHost === true ? PLACEHOLDER_HOST_ON_PROBE : DEFAULT_PLACEHOLDER_HOST_PROBE;
+      const script = `. "$1" status >/dev/null\nhr_sandbox_prereq_probe_var() {\n${sandboxProbe}\n}\nhr_keep_awake_probe_var() {\n${keepAwakeProbe}\n}\nhr_placeholder_host_probe_var() {\n${placeholderProbe}\n}\ntick; wait`;
       const result = await runBash(
         dir,
-        ['-c', '. "$1" status >/dev/null; tick; wait', '_', watcherPath],
+        ['-c', script, '_', watcherPath],
         watcherEnv(env),
-        { timeoutMs: TICK_TIMEOUT_MS, signal: t.signal },
+        { timeoutMs, signal: t.signal },
       );
       assert.equal(result.status, 0, `the watcher pass exited ${result.status}\n${result.stdout}\n${result.stderr}`);
       return result;

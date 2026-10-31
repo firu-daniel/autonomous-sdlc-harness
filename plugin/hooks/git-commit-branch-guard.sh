@@ -22,8 +22,9 @@
 #   2. A registration that passed a hardcoded repository path judged the WRONG
 #      REPOSITORY — the primary checkout, permanently on the default branch —
 #      every time a commit was made in a sibling worktree on a feature branch.
-#      Interactively that is a stray prompt; in an unattended run an `ask`
-#      cannot be answered, so it is a silent stall. Hence: the repository is
+#      Interactively that is a stray prompt; in an unattended run, under the
+#      default `dontAsk` mode, that `ask` is refused at once, so the commit
+#      does not land. Hence: the repository is
 #      resolved from the command and the payload, never from a path in this
 #      file, so one registration serves every checkout.
 #

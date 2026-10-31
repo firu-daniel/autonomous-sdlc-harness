@@ -2,16 +2,18 @@
 
 ## Resolved values
 
-The tokens below are neither Mode-contract **bindings** (this file declares none — the `**Placeholder resolution.**` note below states where the ones it *uses* come from) nor ordinary **path placeholders** (`<branch>`, and the locally-defined counters `<n>` / `<N>`): they resolve from the adopting repository's `harness.config.json`. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
+The tokens below are neither Mode-contract **bindings** (this file declares none — the `**Placeholder resolution.**` note below states where the ones it *uses* come from) nor ordinary **path placeholders** (`<branch>`, and the locally-defined counters `<n>` / `<N>`): they resolve from the adopting repository's `harness.config.json`, except `<MAIN_REPO>` and `<repo_root>`, which are derived at runtime. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
-| `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory the generated wrapper scripts live in. The two scripts this file names by path, `commit-on-branch.sh` in `## Commit mechanics` and `push-branch.sh` in `## Push`, are outer-loop scripts rather than generated wrappers — they are named by their destination path, and the item that delivers them settles it. |
+| `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory the generated wrapper scripts live in. The two scripts this file names by path, `commit-on-branch.sh` in `## Commit mechanics` and `push-branch.sh` in `## Push`, are outer-loop scripts rather than generated wrappers — they are named by their destination path, and the item that delivers them settles it. Both are invoked under `<MAIN_REPO>` rather than repo-relative, because the main checkout's copy is the one the unattended permission profile runs outside the sandbox. |
+| `<MAIN_REPO>` | derived at runtime | The main checkout — the path a bare `printenv HARNESS_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
+| `<repo_root>` | derived at runtime | The run-copy root this run executes in — the value the activating flow's `<repo_root>` binding gives and `$REPO_ROOT` holds. In the commit and push commands, spell it as a literal absolute path, never through a substitution or a variable. |
 
 ---
 
-The **last of Phase D's artifact writes** — it follows the improvement-observations intake — and best-effort, for the two autonomous flows (the autonomous task flow and the autonomous user-review-fix flow). The park-and-ask clarification channel is machine-local: its question and answer files go with the working copy, so a park's diagnosis and the operator's ruling are destroyed when that copy is removed. This step writes the copy that survives — one committed block per clarification the branch parked on, at `<state_dir>/clarification_digests/<branch>.md`.
+The **last of Phase D's artifact writes** — it follows the improvement-observations intake — and best-effort, for the two autonomous flows (the autonomous task flow and the autonomous user-review-fix flow). The park-and-ask clarification channel is machine-local: its question and answer files go with the run copy, so a park's diagnosis and the operator's ruling are destroyed when that copy is removed. This step writes the copy that survives — one committed block per clarification the branch parked on, at `<state_dir>/clarification_digests/<branch>.md`.
 
 This file is the canonical policy. A flow **activates** it by adding one `Override J` (see `## Activation`); this file is otherwise inert.
 
@@ -61,20 +63,22 @@ The digest is `<state_dir>/clarification_digests/<branch>.md` — **one per bran
 **Direct wrapper, never a `committer` dispatch, and never a bare `git add` / `git commit` to make this commit** — the canonical rule for a non-readiness artifact is `${CLAUDE_PLUGIN_ROOT}/instructions/autonomous_pause_and_ledger.md` §1.6, and the reasoning plus the **four wrapper exit codes with their per-code revert and re-stage duties** are canonical in `${CLAUDE_PLUGIN_ROOT}/instructions/improvement_observations_instructions.md` → `## Commit mechanics`. They apply here unchanged, with this file's own path and subject substituted. Pass the digest as the single explicit path, and keep the fixed subject `chore: Record clarification digest for <branch>` verbatim — **the same subject in both flows**, stated once here so neither activating fork can drift it:
 
 ```zsh
-bash <scripts_dir>/commit-on-branch.sh --repo "$REPO_ROOT" \
-  "<state_dir>/clarification_digests/${branch}.md" \
-  -- "chore: Record clarification digest for ${branch}"
+bash <MAIN_REPO>/<scripts_dir>/commit-on-branch.sh --repo <repo_root> <state_dir>/clarification_digests/<branch>.md -- "chore: Record clarification digest for <branch>"
 ```
+
+Spell `<MAIN_REPO>`, `<repo_root>` and `<branch>` each as the literal text it resolves to, with no `$` anywhere in the command.
 
 ## Push
 
-The push follows the commit **immediately**, as a **plain, single-statement** Bash command, using the same session-start `$REPO_ROOT`:
+The push follows the commit **immediately**, as a **plain, single-statement** Bash command, naming the same run-copy root the commit above used, spelled literally:
 
 ```zsh
-bash <scripts_dir>/push-branch.sh "$REPO_ROOT"
+bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>
 ```
 
-> ⚠️ **No exit-code gate.** Why an `if …; then … fi` wrapper is a headless stall, and why no gate is needed, is canonical in `${CLAUDE_PLUGIN_ROOT}/instructions/improvement_observations_instructions.md` → `## Push` and applies here as written.
+Spell both paths literally — `<MAIN_REPO>` and `<repo_root>` each as the absolute path it resolves to, never `"$REPO_ROOT"` or any other variable. From a run copy, the script-allowlist guard does not vouch for the main checkout's copy, so the profile's literal `allow` entry is this call's only grant, and a command carrying a shell expansion does not match it.
+
+> ⚠️ **No exit-code gate.** Why an `if …; then … fi` wrapper is refused in a headless run, and why no gate is needed, is canonical in `${CLAUDE_PLUGIN_ROOT}/instructions/improvement_observations_instructions.md` → `## Push` and applies here as written.
 
 ## Ledger / resume
 

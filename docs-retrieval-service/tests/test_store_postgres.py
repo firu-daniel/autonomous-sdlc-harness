@@ -5,6 +5,10 @@ bound parameter.
 Every case runs against a throwaway database from `fresh_database_url`, and the module is skipped
 loudly wherever `HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL` is unset. Vectors come from the
 `hash-v1` stub embedder, so they are real 384-wide vectors with no weights.
+
+The Seq Scan case reaches that plan through the store itself, `rebuild_indexes()` below the
+crossover, and asserts the score-`0` filter holds there, as `cli/test/docs-retrieval-store.test.mjs`
+case (c) does on PGlite.
 """
 
 import asyncio
@@ -15,9 +19,13 @@ import pytest
 
 from harness_docs_retrieval.chunk import DocChunk, chunk_markdown
 from harness_docs_retrieval.models import EMBEDDING_DIMENSIONS
+from harness_docs_retrieval.search import ARM_CANDIDATES
 from harness_docs_retrieval.store import (
     DIMENSIONS_META_KEY,
     EMBEDDER_META_KEY,
+    INDEX_STATE_META_KEY,
+    INDEX_STATE_REBUILT,
+    LEXICAL_SEARCH_STATEMENT,
     DocStore,
     StoredChunk,
     open_postgres_store,
@@ -162,17 +170,19 @@ def test_delete_and_clear(monkeypatch: pytest.MonkeyPatch, fresh_database_url: s
     _run(monkeypatch, fresh_database_url, scenario)
 
 
-def test_reopening_at_another_width_drops_the_chunks_and_the_embedder(
+def test_reopening_at_another_width_drops_the_chunks_the_embedder_and_the_index_state(
     monkeypatch: pytest.MonkeyPatch, fresh_database_url: str
 ) -> None:
     async def scenario(store: DocStore, chunks: list[DocChunk], _: list[list[float]]) -> None:
         await store.write_meta(EMBEDDER_META_KEY, "stub-hash:hash-v1")
+        await store.write_meta(INDEX_STATE_META_KEY, INDEX_STATE_REBUILT)
         await store.close()
 
         narrow = await open_postgres_store(fresh_database_url, 8)
         try:
             assert dict(await narrow.list_chunk_hashes()) == {}
             assert await narrow.read_meta(EMBEDDER_META_KEY) is None
+            assert await narrow.read_meta(INDEX_STATE_META_KEY) is None
             assert await narrow.read_meta(DIMENSIONS_META_KEY) == "8"
             await narrow.upsert_chunks(chunks[:1], [[1.0] + [0.0] * 7])
             assert len(await narrow.list_chunk_hashes()) == 1
@@ -180,6 +190,74 @@ def test_reopening_at_another_width_drops_the_chunks_and_the_embedder(
             await narrow.close()
 
     _run(monkeypatch, fresh_database_url, scenario)
+
+
+SEQ_SCAN_SECTIONS = 40
+PROBE_TERM = "quokka"
+ABSENT_TERM = "quantumchromodynamics"
+_FILLER = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel"]
+
+
+def _seq_scan_markdown() -> str:
+    sections = ["# Synthetic"]
+    for index in range(SEQ_SCAN_SECTIONS):
+        if index == SEQ_SCAN_SECTIONS - 1:
+            body = f"A note about the {PROBE_TERM} and its use."
+        else:
+            body = " ".join(_FILLER[(index + w) % len(_FILLER)] for w in range(12))
+        sections.append(f"## Section {index}\n\n{body}")
+    return "\n\n".join(sections) + "\n"
+
+
+def _explain_lexical_search(url: str, query: str) -> str:
+    with psycopg.connect(url, cursor_factory=psycopg.RawCursor) as conn:
+        rows = conn.execute(
+            f"EXPLAIN (VERBOSE, COSTS OFF) {LEXICAL_SEARCH_STATEMENT}", [query, ARM_CANDIDATES]
+        ).fetchall()
+        return "\n".join(str(row[0]) for row in rows)
+
+
+def test_a_lexical_search_returns_the_match_alone_on_the_seq_scan_plan(
+    monkeypatch: pytest.MonkeyPatch, fresh_database_url: str
+) -> None:
+    monkeypatch.setenv(RETRIEVAL_STUB_ENV, "hash-v1")
+
+    async def main() -> None:
+        chunks = chunk_markdown("synthetic/seq-scan.md", _seq_scan_markdown())
+        assert len(chunks) == SEQ_SCAN_SECTIONS
+        [probe_chunk] = [chunk for chunk in chunks if PROBE_TERM in chunk.text]
+        assert not any(ABSENT_TERM in chunk.text for chunk in chunks)
+        vectors = await _vectors(chunks)
+        store = await open_postgres_store(fresh_database_url, EMBEDDING_DIMENSIONS)
+        try:
+            # The rows exist before the BM25 index is rebuilt, which gives the planner the real
+            # row estimate that puts this size on the `Seq Scan`.
+            await store.upsert_chunks(chunks, vectors)
+            await store.rebuild_indexes()
+            assert dict(await store.list_chunk_hashes()) == {c.key: c.hash for c in chunks}
+
+            plan = _explain_lexical_search(fresh_database_url, PROBE_TERM)
+            assert "Seq Scan on public.chunks" in plan, (
+                "this case no longer reaches the Seq Scan plan it exists for; "
+                f"the plan was:\n{plan}"
+            )
+
+            hits = await store.lexical_search(PROBE_TERM, ARM_CANDIDATES)
+            assert len(hits) == 1, (
+                f"on the Seq Scan plan at {SEQ_SCAN_SECTIONS} rows the lexical arm returned more "
+                f"than the matching chunk: {hits}"
+            )
+            assert hits[0].rank == 1
+            [stored] = await store.get_chunks([hits[0].id])
+            assert stored.key == probe_chunk.key
+
+            assert await store.lexical_search(ABSENT_TERM, ARM_CANDIDATES) == [], (
+                f"on the Seq Scan plan at {SEQ_SCAN_SECTIONS} rows a term no chunk carries matched"
+            )
+        finally:
+            await store.close()
+
+    asyncio.run(main())
 
 
 def _other_backends(url: str) -> int:
@@ -208,3 +286,47 @@ def test_close_releases_the_connection(
         assert _other_backends(fresh_database_url) == 0
 
     _run(monkeypatch, fresh_database_url, scenario)
+
+
+def _extension_versions(url: str) -> list[tuple[str, str, str]]:
+    with psycopg.connect(url) as conn:
+        rows = conn.execute(
+            "SELECT e.extname, e.extversion, a.default_version FROM pg_extension e "
+            "JOIN pg_available_extensions a ON a.name = e.extname "
+            "WHERE e.extname IN ('vector', 'pg_textsearch') ORDER BY e.extname"
+        ).fetchall()
+        return [(str(name), str(installed), str(default)) for name, installed, default in rows]
+
+
+def _library_version(url: str) -> str:
+    with psycopg.connect(url) as conn:
+        row = conn.execute("SHOW pg_textsearch.library_version").fetchone()
+        assert row is not None
+        return str(row[0])
+
+
+def test_opening_leaves_both_extensions_at_the_servers_versions(
+    fresh_database_url: str,
+) -> None:
+    """Both extensions read their `default_version` after an open; a second open changes nothing.
+
+    No old-catalog case is possible here: the `v1.5.1` build installs `pg_textsearch--1.5.1.sql`
+    as its only install script, so this server cannot create a 1.3.1 catalog. The outcome measured
+    on a database the 1.3.1 server built is recorded in `docs-retrieval-service/README.md` →
+    `## The seam, as found`, item 4.
+    """
+
+    async def open_and_close() -> None:
+        store = await open_postgres_store(fresh_database_url, EMBEDDING_DIMENSIONS)
+        await store.close()
+
+    asyncio.run(open_and_close())
+    first = _extension_versions(fresh_database_url)
+    assert [name for name, _, _ in first] == ["pg_textsearch", "vector"]
+    for name, installed, default in first:
+        assert installed == default, name
+    installed_versions = {name: installed for name, installed, _ in first}
+    assert _library_version(fresh_database_url) == installed_versions["pg_textsearch"]
+
+    asyncio.run(open_and_close())
+    assert _extension_versions(fresh_database_url) == first

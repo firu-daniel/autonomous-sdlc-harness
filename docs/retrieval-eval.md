@@ -288,7 +288,7 @@ bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --b
 backend; and `--data-dir` with `--backend python`, because the Python index lives in its Postgres
 database, not in a directory.
 
-### The two execution routes, and the one that stalls
+### The two execution routes, and the one that is refused
 
 The route above — `bash scripts/scratch-run.sh <file under harness-runs/scratch/>` — is the first of
 two. The second is a command **inside** `scripts/run-gates.sh`, whose commands run as a bash
@@ -296,8 +296,8 @@ subprocess with no per-command permission check; that is where the regression ga
 how `node evals/docs-retrieval/check-floor.mjs` is reached.
 
 A bare interpreter invocation — `node evals/docs-retrieval/run.mjs …` typed as a tool call — matches no
-entry in the unattended permission profile, and an unmatched tool call in print mode **stalls** rather
-than failing: the run hangs instead of reporting a refusal. That is why the launcher exists and why
+entry in the unattended permission profile, and an unmatched tool call in an unattended run is
+**refused**: the run reports a refusal and the command does not run. That is why the launcher exists and why
 nothing in this document asks for a bare `node`. At a terminal outside a harness run the launcher route
 works identically, so there is one set of commands to keep true rather than two.
 
@@ -346,14 +346,19 @@ bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --b
 bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --backend python --repeat 1 --out harness-runs/scratch/backend-comparison/results.md
 ```
 
-The Python runs index into the one persistent compose database, and the Python backend's lexical
-scores depend on what that database held before (`docs/retrieval-eval-results.md` →
-`## The Python backend against the TypeScript one` → `### Divergence sources, in the order checked`,
-source (3)). So a `@python` block's arm B figures, and arms D and E through the fusion, describe the
-corpus *and* the database's history. A Python run over a database that has held other corpora is not
-a re-measurement of an earlier block's state. Record in `host.txt` whether the database was emptied
-(`docker compose down -v`, then `docker compose up -d --wait postgres`, from `docs-retrieval-service/`)
-before these runs.
+The Python runs still index into the one persistent compose database. Both backends now end every
+refresh that wrote anything, the first build included, and any refresh whose index is not marked
+rebuilt, in `REINDEX INDEX chunks_bm25`, so arm B no longer depends on what that database held before,
+within the one-hit residuals `docs/retrieval-eval-results.md` → `### Route 2 on the fix branch` →
+`#### The shipped end state at refresh level` records. The recorded `@python` blocks of 2026-10-08 were
+taken on `pg_textsearch` 1.3.1 before those fixes: their arm B figures, and arms D and E through the
+fusion, describe the corpus *and* the database's state at the time (`docs/retrieval-eval-results.md`
+→ `## The Python backend against the TypeScript one` → `### Divergence sources, in the order checked`,
+source (3)). A block taken now is not a before/after pair with them: the 1.5.1 upgrade, the fix on both
+backends and, on `self-docs`, the corpus stamp all lie between. The reading taken on both backends as
+shipped is that document's `### A fresh fixture-catalog reading, both backends as shipped`. Record
+in `host.txt` whether the database was emptied (`docker compose down -v`, then
+`docker compose up -d --wait postgres`, from `docs-retrieval-service/`) before these runs.
 
 **4. The MCP pass**, for each backend over `self-docs`: cold start, each `search_docs` round trip and
 resident memory of the shipped stdio server. Create `harness-runs/scratch/mcp-backend-pass.mjs`:
@@ -555,6 +560,117 @@ The comparison pass reads the floor at `evals/docs-retrieval/floor.json` relativ
 runs from, which is why it runs from the repository root. The write-up lives in
 `docs/retrieval-eval-results.md` → `## The Python backend against the TypeScript one`, and is not
 restated here.
+
+### The BM25 index-state probe
+
+Run by a maintainer re-taking `docs/retrieval-eval-results.md` → `## The BM25 index's state, measured`.
+It reads BM25 scores and the index's own statistics, never time, so its figures are not wall-clock figures
+and may be taken in a session. Its `--engine postgres` runs need the compose `postgres` service up: from
+`docs-retrieval-service/`, run
+
+```
+docker compose up -d --wait postgres
+```
+
+A probe run that cannot reach it refuses with `is the compose postgres service up?`. Create
+`harness-runs/scratch/bm25-history.mjs`:
+
+```
+import { runBm25HistoryLauncher } from '../../evals/docs-retrieval/bm25-history.mjs';
+await runBm25HistoryLauncher(process.argv.slice(2));
+```
+
+The states sequence holds one corpus in each index state, on one engine per run; `--engine` is `pglite`
+or `postgres`, `--corpus` a built-in corpus id:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-history.mjs --sequence states --engine pglite --corpus fixture-catalog
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-history.mjs --sequence states --engine postgres --corpus fixture-catalog
+```
+
+The history sequence writes a second corpus, named by `--other`, and deletes it:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-history.mjs --sequence history --engine pglite --corpus fixture-catalog --other self-docs
+```
+
+`--repeat <n>` scores each step's queries `n` times and lists every value a later repetition changes:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-history.mjs --sequence states --engine postgres --corpus self-docs --repeat 5
+```
+
+`--capture <path>` also writes the summary with every score, which is what `--compare` reads. Captures go
+under `harness-runs/scratch/bm25-history/`, which is gitignored. Take each run twice and compare the
+pair; a value the comparison lists is recorded as a one-run value, never dropped:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-history.mjs --sequence states --engine pglite --corpus self-docs --capture harness-runs/scratch/bm25-history/pglite-self-docs-1.txt
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-history.mjs --sequence states --engine pglite --corpus self-docs --capture harness-runs/scratch/bm25-history/pglite-self-docs-2.txt
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-history.mjs --compare harness-runs/scratch/bm25-history/pglite-self-docs-1.txt --compare harness-runs/scratch/bm25-history/pglite-self-docs-2.txt
+```
+
+`--reindex-cost` times one `REINDEX` and is an operator's hand run on an otherwise idle machine, outside
+any session; the branch that measured the index states did not run it.
+
+The refresh-level launcher re-takes `docs/retrieval-eval-results.md` →
+`### The candidate end-state rule, at refresh level`: it drives each backend's own refresh through six
+scenarios, issues the statement the candidate end-state rule decides after the last refresh, and compares
+the reading before and after it with fresh builds of the final corpus taken in the same run. On both
+backends a `before` reading is the shipped end state, because each backend's refresh issues
+`END_STATE_STATEMENTS` itself. `--backend` is `typescript` or `python`, `--corpus` the final corpus A
+and `--other` the corpus B a scenario holds first. Create `harness-runs/scratch/bm25-refresh-rule.mjs`:
+
+```
+import { runRefreshRuleLauncher } from '../../evals/docs-retrieval/bm25-refresh-rule.mjs';
+await runRefreshRuleLauncher(process.argv.slice(2));
+```
+
+The four runs, from the repository root:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-refresh-rule.mjs --backend typescript --corpus fixture-catalog --other self-docs --capture harness-runs/scratch/bm25-history/refresh-rule-typescript-fixture-catalog-1.txt
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-refresh-rule.mjs --backend typescript --corpus self-docs --other fixture-catalog --capture harness-runs/scratch/bm25-history/refresh-rule-typescript-self-docs-1.txt
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-refresh-rule.mjs --backend python --corpus fixture-catalog --other self-docs --capture harness-runs/scratch/bm25-history/refresh-rule-python-fixture-catalog-1.txt
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-refresh-rule.mjs --backend python --corpus self-docs --other fixture-catalog --capture harness-runs/scratch/bm25-history/refresh-rule-python-self-docs-1.txt
+```
+
+Each `python` run was taken a second time into a `-2.txt` capture and the pair compared with the probe
+launcher's `--compare`, as above. The `python` runs have the preconditions of `### The Python backend`:
+the environment synced with the `models` extra, the weights fetched, and the compose `postgres` service
+up. The module creates and drops its own `bm25_refresh_rule_*` databases on the compose server, and
+removes its own corpus mirrors and PGlite data directories, on every exit path.
+
+`--end-state` picks what follows each scenario's last refresh. `candidate`, the default, issues the
+statement the candidate rule decides, and is what the four runs above take. `route-2` measures the
+route `docs/retrieval-eval-results.md` → `### The recommendation for the fix branch` proposes: it issues
+`REINDEX INDEX chunks_bm25` after every scenario's last refresh, `unchanged` included, and still prints
+the candidate decision beside the statement issued. The route-2 runs, as
+`docs/retrieval-eval-results.md` → `### Route 2 on the fix branch` took them:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-refresh-rule.mjs --backend typescript --end-state route-2 --corpus fixture-catalog --other self-docs --capture harness-runs/scratch/fix-bm25/route-2-typescript-fixture-catalog-1.txt
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-refresh-rule.mjs --backend typescript --end-state route-2 --corpus self-docs --other fixture-catalog --capture harness-runs/scratch/fix-bm25/route-2-typescript-self-docs-1.txt
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-refresh-rule.mjs --backend python --end-state route-2 --corpus fixture-catalog --other self-docs --capture harness-runs/scratch/fix-bm25/route-2-python-fixture-catalog-1.txt
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-refresh-rule.mjs --backend python --end-state route-2 --corpus self-docs --other fixture-catalog --capture harness-runs/scratch/fix-bm25/route-2-python-self-docs-1.txt
+```
+
+Each `python` run is taken a second time into a `-2.txt` capture and the pair compared with the probe
+launcher's `--compare`, as above.
+
+Corpus A may instead be an **ad-hoc corpus**, which is how a catalog outside this repository is
+measured: `--repo`, `--docs-root`, `--conventions`, `--corpus-id` and `--queries`, given in place of
+`--corpus`. They are the eval's own flags, forwarded to `evals/docs-retrieval/args.mjs` and resolved
+as `## How to run it` states. `--other` stays a built-in id, and `--capture` resolves against this
+checkout:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/bm25-refresh-rule.mjs --backend typescript --end-state route-2 --repo <checkout> --docs-root <dir> --conventions <file> --corpus-id <id> --queries <file> --other fixture-catalog --capture harness-runs/scratch/fix-bm25/route-2-typescript-<id>-1.txt
+```
+
+A run refuses with `key <key> is in both <A> and <B>` when a chunk key is in both corpora; re-run with
+the other built-in id as `--other`. `docs/development.md` → `## 5. Verifying a change` → gate 10's leg
+(vii) is this form's run on a real catalog.
 
 ## The query-set format
 
@@ -826,7 +942,7 @@ runs and what a failure means.
 
 **Who runs this, and why it is you.** Arm A needs a nested agent subprocess, and no automated route in
 this repository may start one: the unattended permission profile carries no grant for the agent binary
-and an unmatched tool call stalls in print mode rather than refusing, while the `scratch-run.sh` route
+and an unmatched tool call in an unattended run is refused, while the `scratch-run.sh` route
 to the same subprocess is declined on purpose rather than unavailable — it would put an unsupervised
 agent session with its own auth and no token cap inside an unattended run. So an operator at a terminal
 runs arm A, and nobody else. `docs/retrieval-eval-results.md` → `## Arm A — the real-catalog hand run` is the

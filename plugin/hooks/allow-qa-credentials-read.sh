@@ -20,7 +20,7 @@
 # because it is not a compound; and a `;`-joined compound opening with a shell
 # assignment (`f=<creds path>; grep … "$f"`), which that sibling cannot approve
 # because an assignment matches no safe prefix. Interactively each costs a
-# prompt; in an unattended run an unanswerable prompt is a stall.
+# prompt; in an unattended run that prompt is a refusal.
 #
 # THAT JUSTIFICATION IS AD-HOC, SO THE COST BELOW IS RE-DECIDED ON IT. This is
 # the one guard with no literal prefilter, which makes it the one paying

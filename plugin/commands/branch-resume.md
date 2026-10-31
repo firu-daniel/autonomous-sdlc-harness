@@ -1,5 +1,5 @@
 ---
-description: Resume a paused autonomous run from its committed flow-progress ledger — one RESUME marker in a local run's worktree for the watcher, or a resume dispatch sent straight to GitHub for a run that executes there.
+description: Resume a paused autonomous run from its committed flow-progress ledger — one RESUME marker in a local run's run copy for the watcher, or a resume dispatch sent straight to GitHub for a run that executes there.
 argument-hint: "[<branch>]"
 ---
 
@@ -23,9 +23,9 @@ table the body uses each one as an ordinary placeholder.
 
 A run that honored a `<state_dir>/PAUSE` request yielded its session at a clean boundary and is registry
 `status: "paused"` (idle, zero dispatch cost). This command drops a **`<state_dir>/RESUME`** trigger into that
-run's **worktree**. On its next poll tick the watcher detects RESUME, clears the pause protocol files
+run's **run copy**. On its next poll tick the watcher detects RESUME, clears the pause protocol files
 (`PAUSE` / `RESUME` / `PAUSE_ACK`) while keeping `PAUSE_PROGRESS.md`, flips the run back to `running`, and
-**re-launches the same engine in the same worktree** — resuming strictly from the committed flow-progress
+**re-launches the same engine in the same run copy** — resuming strictly from the committed flow-progress
 ledger (`<state_dir>/flow_progress/<branch>_progress.md`), skipping every phase already marked `[x]` or `[-]`. You do
 not re-launch. Wraps "Pause / resume a run" in `${CLAUDE_PLUGIN_ROOT}/docs/AUTONOMOUS_FLOW.md`.
 
@@ -43,7 +43,7 @@ it ends. The only scripts it invokes are `<scripts_dir>/remote-run.sh sync`, for
 
 ## Steps
 
-1. Resolve `<MAIN_REPO>` as the first entry of `git worktree list`; the registry is
+1. Resolve `<MAIN_REPO>` as the path a bare `printenv HARNESS_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none; the registry is
    `<MAIN_REPO>/<state_dir>/autonomous_logs/registry.json` (shaped `{"runs": {"<branch>": {...}}}`).
 2. **Which-branch resolution.** If `$ARGUMENTS` starts with `<branch>:` (or is just a bare `<branch>`),
    parse it. Otherwise read the registry: if **exactly one** run has `status: "paused"`, target it;

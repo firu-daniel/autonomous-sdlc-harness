@@ -9,5 +9,10 @@
         "repo": "firu-daniel/autonomous-sdlc-harness"
       }
     }
+  },
+  "permissions": {
+    "allow": [
+      "Bash(bash scripts/task-offer-check.sh)"
+    ]
   }
 }
