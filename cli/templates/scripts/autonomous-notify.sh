@@ -18,7 +18,9 @@
 #              the answer file lands
 #   park_loop  the watcher stopped resuming a parked run whose resumes made no
 #              progress — idle until an operator clears it
-#   paused     the run honored a PAUSE request and yielded — idle until RESUME
+#   paused     the run yielded at a clean checkpoint, or its session ended
+#              before its ledger finished — idle until RESUME (the detail
+#              argument says which)
 #   failed     the run exited non-zero, or its process vanished
 #   launched   a fresh inbox run was just started
 #   resumed    the same run is being re-launched — a parked run's answer landed,
@@ -205,7 +207,7 @@ park_loop)
   ;;
 paused)
   TITLE="[$slug] Run paused — $BRANCH"
-  MESSAGE="Run '$BRANCH' honored a PAUSE request and yielded. $resume_hint"
+  MESSAGE="Run '$BRANCH' is paused. $resume_hint"
   ;;
 resumed)
   TITLE="[$slug] Run resumed — $BRANCH"

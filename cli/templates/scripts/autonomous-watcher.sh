@@ -114,6 +114,32 @@
 #     deferred STALL_KILL_SECS window. A genuinely hung run with no gap is
 #     killed exactly as before.
 #
+# BACKGROUND SUB-AGENTS ARE WAITED FOR. Headless `claude -p` waits 10 minutes
+# for background tasks after the session's last turn, then stops them and exits
+# 0. Measured on Claude Code 2.1.314, 2026-10-30, in the run log of
+# `fix_task_offer_check_script`: `Background tasks still running 10m after the
+# last turn (subagent "Write task plan with answers"); stopping them. Set
+# CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 to wait indefinitely.` — a stopped
+# planner and a zero exit.
+#
+#   * spawn_engine's launch subshell exports CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0
+#     for every engine session, fresh, resumed and in job mode. No operator
+#     value overrides it, from the environment or `watcher.env`: a nonzero
+#     ceiling is that failure.
+#   * THE WATCHDOG STILL SEES A SESSION ONLY WAITING ON A BACKGROUND AGENT. That
+#     agent's `tool_use` events reach the `.stream.jsonl` and, through the
+#     formatter, which keeps every assistant `tool_use` whatever agent produced
+#     it, the run log; the incident log shows the background planner's `→ Read`
+#     / `→ Bash` lines after the orchestrator's last turn. A working agent keeps
+#     the liveness mtime moving.
+#   * A HUNG BACKGROUND AGENT EMITS NOTHING, so the run is warned about, killed,
+#     reset and resumed from the ledger exactly as before, under the same
+#     STALL_* tunables and busy-CPU gate.
+#   * THE STOPPED-AGENTS LINE IS THE TRIPWIRE that the setting did not take.
+#     After each session, log_stopped_background_tasks scans the bytes that
+#     session appended to the run log for the CLI's line and writes one
+#     watcher-log line naming the branch, whatever the classification.
+#
 # KEEP AWAKE. Every local launch holds the host awake for the engine's life, so
 # an unattended run is not frozen by idle sleep or a closed lid.
 #
@@ -472,19 +498,28 @@
 #     HARNESS_INPUT_CHAIN is above 0, because a chain of 0 is a user's own
 #     dispatch; `chain` never — every write records this job's own input.
 #   * THE PAUSE NOTE belongs to the run that wrote it. Before its own first
-#     write, the job reads the restored `remote_status.json`'s `status` and
-#     `engine`. In job mode, a carried `PAUSE_PROGRESS.md` is kept only when
-#     the job's `resume` is `pause`, the restored `remote_status.json` says
-#     `status: paused`, and its `engine` equals the job's engine. In every other
-#     case — a fresh launch (`resume none`), an answer resume (`resume
-#     answer`), a pause resume whose previous job did not pause (a stop or a
-#     kill), or a different engine — it is moved aside, never deleted, to
+#     write, the job reads the restored `remote_status.json`'s `status`,
+#     `pause_note_stale` and `engine`. In job mode, a carried
+#     `PAUSE_PROGRESS.md` is kept only when the job's `resume` is `pause`, the
+#     restored `remote_status.json` says `status: paused` without
+#     `pause_note_stale: 1`, and its `engine` equals the job's engine. In every
+#     other case — a fresh launch (`resume none`), an answer resume (`resume
+#     answer`), a pause resume whose previous job did not pause (a stop, a
+#     kill, or a zero exit over an unfinished ledger), or a different engine —
+#     it is moved aside, never deleted, to
 #     `<state_dir>/autonomous_logs/remote_superseded/<epoch>[-<n>]/PAUSE_PROGRESS.md`.
 #     The move is lib/harness-run-lib.sh's `hr_remote_move_aside`; this script
 #     writes nothing under `remote_superseded/` itself. Separately, a pause
-#     resume whose previous job did not pause, or paused for a different
-#     engine, is re-launched with a clause saying there is no pause note,
-#     whether or not a note was carried (`pause_note_stale` in the registry).
+#     resume whose previous job did not pause — a stop, a kill, or a zero exit
+#     over an unfinished ledger — or paused for a different engine, is
+#     re-launched with a clause saying there is no pause note, whether or not a
+#     note was carried (`pause_note_stale` in the registry). The same clause
+#     goes to every relaunch after a zero exit over an unfinished ledger,
+#     recorded as `unfinished` or as the `user`, `usage` or `budget` pause that
+#     session left unacknowledged: within a job, in a later job, and outside
+#     job mode on a local resume. classify_run_exit sets `pause_note_stale`
+#     there, because that session wrote no note, and hr_remote_status_write
+#     carries it to the next job.
 #   * IT WRITES `remote_status.json` with decision `continue` before the spawn,
 #     so a job killed mid-run leaves a bundle that says continue, again after
 #     every successful control poll, and once more when the run leaves
@@ -526,21 +561,25 @@
 #     POLL_INTERVAL_SECS, the most the throttled gate can lag the reset — ends
 #     in `wait-poller` with one notification, on every runner; with no pause
 #     requested — the run's own API-overload
-#     self-pause (`overload`) -> auto-resume, else `stop`. `failed` ->
+#     self-pause (`overload`) -> auto-resume, else `stop`; a zero exit over an
+#     unfinished ledger (`unfinished`, written only when no `user`, `usage` or
+#     `budget` pause was pending) -> auto-resume, else `stop`. `failed` ->
 #     auto-resume unless the stall watchdog gave up, else `stop`. Every other
 #     status -> `stop`. An empty HARNESS_JOB_DEADLINE_EPOCH bounds nothing.
-#   * THE BOUNDED AUTO-RESUME: while `auto_resumes` is below
+#   * THE BOUNDED AUTO-RESUME: an `overload` pause, an `unfinished` pause and a
+#     `failed` exit earn one while `auto_resumes` is below
 #     REMOTE_AUTO_RESUME_MAX and REMOTE_AUTO_RESUME_DELAY_SECS from now is
-#     before the deadline, sleep that delay, count one, and relaunch from the
+#     before the deadline: sleep that delay, count one, and relaunch from the
 #     committed ledger through begin_pause_resume and `spawn_engine … "" 1`. The
 #     count resets on any user action — see `auto_resumes` in the registry.
 #     A resume taken after the hosted budget's PAUSE was dropped re-drops it,
 #     so the relaunched session still yields at the budget.
 #   * NOTIFICATIONS name the user's next action instead of a runner path: a
 #     parked run's `/autonomous-sdlc-harness:branch-answer <branch>`, a park
-#     loop's `/autonomous-sdlc-harness:branch-status <branch>`, a `user` or
-#     exhausted `overload` pause's `/autonomous-sdlc-harness:branch-resume
-#     <branch>`, a usage pause's reset time. A `budget` pause sends NO `paused`,
+#     loop's `/autonomous-sdlc-harness:branch-status <branch>`, a `user`, an
+#     exhausted `overload` or an exhausted `unfinished` pause's
+#     `/autonomous-sdlc-harness:branch-resume <branch>`, a usage pause's reset
+#     time. A `budget` pause sends NO `paused`,
 #     and the next job no `resumed` for it: a chained continuation is not an
 #     event the user acts on. classify_run_exit's `paused` arm notifies only a
 #     `user` pause; job mode sends the others once it has decided. Their titles
@@ -659,8 +698,16 @@
 #                    -> `parked` whatever the code; "$d/sdlc-harness/PAUSE_ACK"
 #                    -> `paused`, and a "$d/sdlc-harness/RESUME" that existed
 #                    beforehand is gone. PAUSE_ACK together with an unanswered
-#                    question is `paused` — that ordering is the contract
-#   the prompt    point the stub at one that saves its own "$2" (the argument
+#                    question is `paused` — that ordering is the contract.
+#                    A stub that writes a task ledger at
+#                    "$d/sdlc-harness/flow_progress/feat_x_progress.md" with
+#                    `D` left `[ ]` -> `paused`, pause_reason `unfinished`, ONE
+#                    `paused` notification naming branch-resume and no
+#                    `completed`; every id settled -> `completed`. Launched
+#                    with `docs` in place of `task`, a checklist at
+#                    "$d/sdlc-harness/docs_catalog/feat_x_docs.md" carrying a
+#                    `- [ ] ` entry -> `paused`, pause_reason `unfinished`
+#   the prompt   point the stub at one that saves its own "$2" (the argument
 #                 after -p) to a file
 #                 -> it NAMES sdlc-harness/task_prompts/feat_x_task_prompt.md and
 #                    the absolute kill-switch path, and carries no line of that
@@ -674,6 +721,15 @@
 #                    the saved vector carries `--effort <that level>`; remove the
 #                    key and it carries no effort flag at all, while `--model` is
 #                    present either way
+#   bg wait       point the stub at one that saves
+#                 "${CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS-unset}" to a file, and
+#                 launch it as the `a launch` entry does
+#                 -> the file holds `0`, and still `0` with
+#                    CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=600000 in the watcher's
+#                    environment. A stub that writes the CLI's stopped line
+#                    (`Background tasks still running 10m after the last turn
+#                    (subagent "x"); stopping them.`) to stderr -> ONE
+#                    `stopped background tasks` line in watcher.log naming feat_x
 #   no window     AUTO_TAIL_TERMINAL=0 in the environment of the launch above
 #                 -> no .tail_feat_x.command under autonomous_logs/, and the
 #                    launch still completes
@@ -895,6 +951,10 @@
 #                    one auto-resume, `job: completed stop`; a stub ending
 #                    `exit 2` with REMOTE_AUTO_RESUME_DELAY_SECS=0 -> launched
 #                    1 + REMOTE_AUTO_RESUME_MAX times, `job: failed stop`. A
+#                    stub writing a task ledger with `D` `[ ]` and exiting 0,
+#                    with REMOTE_AUTO_RESUME_DELAY_SECS=0 -> launched
+#                    1 + REMOTE_AUTO_RESUME_MAX times, `job: paused stop`, "$j"
+#                    with pause_reason `unfinished`. A
 #                    stub writing a task ledger at
 #                    "$d/sdlc-harness/flow_progress/feat_x_progress.md" and
 #                    sleeping past a few polls, the ledger never ticked ->
@@ -1652,7 +1712,9 @@ job_report() {
 #   status              running | parked | park_loop | paused | completed | failed.
 #                       `park_loop` is a parked run the park-loop guard holds:
 #                       no resume pass offers it until clear_park_loops finds
-#                       PARK_LOOP_CLEAR and returns it to `parked`
+#                       PARK_LOOP_CLEAR and returns it to `parked`. `paused`
+#                       is reached by a PAUSE honoured or by a zero exit over
+#                       an unfinished ledger (`pause_reason` below)
 #   log_path            the central log this run appends to
 #   engine              task | user_review | docs — which engine command it runs,
 #                       re-read on resume so the right one is re-launched
@@ -1753,14 +1815,28 @@ job_report() {
 #                       pass. It means the run was stopped outright by the user,
 #                       not that it failed on its own.
 #   pause_reason        why a `paused` record paused: `usage` | `budget` | `user` |
-#                       `overload` | empty — the remote state bundle's
-#                       `status.json` vocabulary, each value written by job mode
-#                       (and copied into a local record by `remote-run.sh sync`):
+#                       `overload` | `unfinished` | empty — the remote state
+#                       bundle's `status.json` vocabulary, each value written by
+#                       job mode (and copied into a local record by
+#                       `remote-run.sh sync`), and `unfinished` locally too:
 #                       `usage` the usage gate requested it; `budget` job mode
 #                       did, REMOTE_SELF_PAUSE_AFTER_SECS into a hosted job;
 #                       `user` job mode did, on a `harness pause <branch>` run;
 #                       `overload` nobody requested it — the run's own
-#                       API-overload self-pause. `user` and `budget` are written
+#                       API-overload self-pause; `unfinished` the session exited
+#                       0 before its ledger finished (task / user_review: the
+#                       flow-progress ledger, with engine and round matching;
+#                       docs: the checklist), written by classify_run_exit in
+#                       both modes. In job mode it never replaces a pending
+#                       `user`, `usage` or `budget` pause; see JOB MODE. Locally
+#                       it waits for /autonomous-sdlc-harness:branch-resume,
+#                       unless the usage gate had already tagged the run
+#                       `paused_by=usage`, in which case the gate resumes it at
+#                       the recorded reset. That arm is the only local writer of
+#                       this field; the local pause arm, launch_run and
+#                       begin_pause_resume clear it, so a hand or usage pause
+#                       never shows a stale `unfinished`.
+#                       `user` and `budget` are written
 #                       before the PAUSE is dropped, while still `running`;
 #                       classify_run_exit settles the reason as the run pauses,
 #                       `user` first, then `usage`, then `budget`. A `user` still
@@ -1797,13 +1873,21 @@ job_report() {
 #                       JOB MODE), and after each successful poll the larger of
 #                       that starting bound and the epoch before the query less
 #                       CONTROL_POLL_OVERLAP_SECS
-#   pause_note_stale    job mode only: `1` when a `pause` job's restored
-#                       `status.json` was not `paused` or named another engine,
-#                       so spawn_engine's pause-resume prompt says there is no
-#                       pause note instead of naming PAUSE_PROGRESS.md. Cleared
-#                       with run_job's fresh-launch defaults, and by
-#                       classify_run_exit's job-mode pause arm, whose session
-#                       just wrote its own note for a later relaunch to read
+#   pause_note_stale    `1` when spawn_engine's pause-resume prompt must say
+#                       there is no pause note instead of naming
+#                       PAUSE_PROGRESS.md. Set by run_job when a `pause` job's
+#                       restored `status.json` was not `paused`, carried
+#                       `pause_note_stale: 1`, or named another engine; and by
+#                       classify_run_exit's two writes for a zero exit over an
+#                       unfinished ledger (`unfinished`, and job mode's held
+#                       `user` / `usage` / `budget`), since that session wrote
+#                       no note. Written into the bundle by
+#                       lib/harness-run-lib.sh's hr_remote_status_write.
+#                       Cleared by launch_run, with run_job's fresh-launch
+#                       defaults, by classify_run_exit's pause arm in both
+#                       modes, whose session just wrote its own note for a
+#                       later relaunch to read, and by the stall watchdog's
+#                       restart, which writes one
 #   execution          `github-actions` on a remote record — one
 #                       launch_remote_run wrote through
 #                       lib/harness-run-lib.sh's `hr_remote_record_init` — and
@@ -2744,6 +2828,7 @@ EOF
 # The flag string, in full:
 #
 #   HARNESS_MAIN_REPO=<MAIN_REPO>
+#   CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0
 #   <agent cli> -p "<trusted instruction naming the artifact's FILE PATH>" \
 #     --settings <per-run copy> \
 #     --permission-mode "$PERMISSION_MODE" \
@@ -2763,8 +2848,9 @@ EOF
 # the base, unchanged. Either file is checked first (run_profile_check), and
 # the launch is refused when the check fails: Claude Code takes one
 # `--settings` file, and silently ignores one that fails its validation.
-# The environment line is exported inside spawn_engine's subshell, so the engine
-# and every command it runs inherit it. The plugin's readers read it with a bare
+# The environment lines are exported inside spawn_engine's subshell, so the
+# engine and every command it runs inherit them. The plugin's readers read
+# HARNESS_MAIN_REPO with a bare
 # `printenv HARNESS_MAIN_REPO`; no outer-loop script reads it, because an
 # assignment prefix on an excluded call could set it.
 # where the bracketed tail is JOB MODE ONLY: one --add-dir per
@@ -2884,10 +2970,10 @@ files, each paired by index with its question_<i>.md, and resume from the park p
   # committed flow-progress LEDGER (deterministic), with PAUSE_PROGRESS.md as a
   # human-readable hint. Mutually exclusive with the clarification resume above:
   # a run resumes from a park OR from a pause, never both.
-  # JOB MODE ONLY: `pause_note_stale` (see the registry) swaps the note-naming
-  # opening for the stop/kill one; a local record never carries the field.
+  # `pause_note_stale` (see the registry) swaps the note-naming opening for the
+  # stop/kill one, in job mode and locally alike.
   local pause_note_stale=""
-  if [ -n "$pause_resume" ] && [ "$JOB_MODE" = "1" ]; then
+  if [ -n "$pause_resume" ]; then
     pause_note_stale="$(registry_get "$branch" pause_note_stale)"
   fi
   local pause_resume_clause=""
@@ -3089,6 +3175,19 @@ EOF
     # Set unconditionally, so a value the watcher inherited is overwritten rather
     # than passed on; inside the subshell, so no other child of the watcher sees it.
     export HARNESS_MAIN_REPO="$MAIN_REPO"
+    # Set unconditionally, so a value inherited by the watcher or sourced from
+    # `watcher.env` is overwritten for the session; inside the subshell, so no
+    # other child of the watcher sees it. No operator value may override it: a
+    # nonzero ceiling stops a running background sub-agent and exits 0
+    # (BACKGROUND SUB-AGENTS ARE WAITED FOR, in the header).
+    export CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0
+    # The run log's length before this session writes to it, so the stopped-
+    # agents scan after it reads only this session's bytes. `$(( ))` strips the
+    # padding BSD `wc` adds; a missing log is 0.
+    log_offset=0
+    if [ -f "$log_path" ]; then
+      log_offset=$(($(wc -c <"$log_path" 2>/dev/null)))
+    fi
     # `--add-dir "$worktree"` is NOT redundant with the profile: that file grants
     # the sibling-run-copy glob through Edit/Read rules, not through
     # additionalDirectories. The job-mode extras after the two fixed --add-dir
@@ -3125,6 +3224,7 @@ EOF
       tee -a "${log_path%.log}.stream.jsonl" |
       "$formatter" >>"$log_path"
     rc=${PIPESTATUS[0]}
+    log_stopped_background_tasks "$branch" "$log_path" "$log_offset"
     record_run_analytics "$branch" "$worktree" "$log_path"
     # The record above runs BEFORE the classification so it is on the branch,
     # and locally on origin, before any notification names the run's outcome —
@@ -3217,7 +3317,7 @@ launch_run() {
   registry_set "$branch" stall_restarts 0
   registry_set "$branch" stall_warned ""
   registry_set "$branch" stall_killing ""
-  registry_set "$branch" paused_by "" usage_resume_at ""
+  registry_set "$branch" paused_by "" usage_resume_at "" pause_reason "" pause_note_stale ""
   registry_set "$branch" resume_kind ""
   registry_set "$branch" park_loop_cycles 0
 
@@ -3303,6 +3403,29 @@ max_question_index() {
     fi
   done
   printf '%s\n' "$max"
+}
+
+# log_stopped_background_tasks <branch> <log_path> <offset>
+#
+# One watcher-log line per line the session appended to <log_path> past byte
+# <offset> that carries both `Background tasks still running` and `stopping
+# them` — the agent CLI's own stderr line, so the tripwire that the export in
+# spawn_engine did not take. Called from INSIDE the spawn_engine subshell, after
+# every session and before record_run_analytics. It ALWAYS returns 0, touches no
+# registry field and never notifies, so it cannot change rc or the
+# classification.
+log_stopped_background_tasks() {
+  local branch="$1" log_path="$2" offset="$3" line hits
+  [ -f "$log_path" ] || return 0
+  hits="$(tail -c +"$((offset + 1))" "$log_path" 2>/dev/null |
+    grep -F 'Background tasks still running' | grep -F 'stopping them')" || true
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    log "run '$branch': the agent CLI stopped background tasks still running after the session's last turn — CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 did not take: $line"
+  done <<EOF
+$hits
+EOF
+  return 0
 }
 
 # record_run_analytics <branch> <worktree> <log_path>
@@ -3409,6 +3532,17 @@ record_run_analytics() {
 # engine already read from triggering another resume, without emptying the
 # paths the re-entering engine reads; a pair written mid-session is in neither
 # set and stays.
+#
+# THE LEDGER SPLITS ONLY THE ZERO-EXIT ARM, after every test above it: a zero
+# exit is `completed` only when lib/harness-run-lib.sh's `hr_run_ledger_state`
+# answers `finished`; `unfinished` makes it a `paused` record with pause_reason
+# `unfinished` (in job mode a pending `user`, `usage` or `budget` pause is kept
+# instead).
+# An absent or unreadable ledger keeps `completed`, with one log line: planner
+# and fix-plan Setup create the ledger before the first dispatch, and the
+# watcher commits the docs checklist before launch, so a session cut short
+# mid-dispatch always has one, while a ledger-less exit is a pre-Setup halt or a
+# flow that writes none. An unresolvable state directory skips the read.
 classify_run_exit() {
   local branch="$1" worktree="$2" log_path="$3" rc="$4"
 
@@ -3430,8 +3564,9 @@ classify_run_exit() {
     fi
   fi
 
-  local state_rel clar_dir="" pause_ack="" resume_file=""
+  local state_rel state_abs="" clar_dir="" pause_ack="" resume_file=""
   if state_rel="$(run_state_dir "$worktree")"; then
+    state_abs="$worktree/$state_rel"
     clar_dir="$worktree/$state_rel/clarifications/$branch"
     pause_ack="$worktree/$state_rel/PAUSE_ACK"
     resume_file="$worktree/$state_rel/RESUME"
@@ -3482,7 +3617,7 @@ classify_run_exit() {
       fi
       return 0
     fi
-    registry_set "$branch" status paused
+    registry_set "$branch" status paused pause_reason "" pause_note_stale ""
     log "run '$branch' paused (PAUSE honored) — rc=$rc"
     notify paused "$branch" "$log_path" "drop $state_rel/RESUME in $worktree to continue"
     return 0
@@ -3591,6 +3726,55 @@ classify_run_exit() {
       notify parked "$branch" "$log_path" "See $clar_dir"
     fi
   elif [ "$rc" -eq 0 ]; then
+    # THE LEDGER SPLITS ONLY THIS ARM — see the function's comment.
+    local ledger="" ledger_state="" ledger_detail=""
+    if [ -n "$state_abs" ]; then
+      ledger="$(hr_run_ledger_state "$state_abs" "$branch" "$(registry_get "$branch" engine)")" || :
+      ledger_state="${ledger%% *}"
+      ledger_detail="${ledger#* }"
+    fi
+    if [ "$ledger_state" = "unfinished" ]; then
+      # pid and the watchdog counters are left as the pause arm leaves them.
+      if [ "$JOB_MODE" = "1" ]; then
+        # A pause another actor already requested outranks `unfinished`, in the
+        # PAUSE_ACK arm's order — `user`, then `usage`, then `budget`. Writing
+        # `unfinished` over it would send the record to job_auto_resume, whose
+        # begin_pause_resume deletes that actor's PAUSE.
+        local held_reason
+        held_reason="$(registry_get "$branch" pause_reason)"
+        if [ "$held_reason" != "user" ]; then
+          if [ "$(registry_get "$branch" paused_by)" = "usage" ]; then
+            held_reason=usage
+          elif [ "$held_reason" != "budget" ]; then
+            held_reason=""
+          fi
+        fi
+        if [ -n "$held_reason" ]; then
+          # The pending pause was never acknowledged, so this session wrote no
+          # note either: the relaunch must not name one (`pause_note_stale`).
+          registry_set "$branch" pause_reason "$held_reason" status paused pause_note_stale 1
+          log "run '$branch' paused (unfinished) — the session exited 0 before its ledger finished ($ledger_detail); the pending $held_reason pause is kept"
+          # run_job's `user)` arm notifies nothing, so this is that pause's one
+          # notification; run_job's `usage)` and `budget)` arms own theirs.
+          if [ "$held_reason" = "user" ]; then
+            notify paused "$branch" "$log_path" "paused as you asked — run /autonomous-sdlc-harness:branch-resume $branch to continue; $(hr_github_resume_route "$branch" "$(registry_get "$branch" engine)")"
+          fi
+          return 0
+        fi
+      fi
+      # The session wrote no pause note, so the relaunch must not name one —
+      # job_auto_resume and resume_paused_run alike (`pause_note_stale`).
+      registry_set "$branch" status paused pause_reason unfinished pause_note_stale 1
+      log "run '$branch' paused (unfinished) — the session exited 0 before its ledger finished ($ledger_detail); resume with /autonomous-sdlc-harness:branch-resume $branch"
+      # In job mode run_job decides and notifies, as for every reason but `user`.
+      if [ "$JOB_MODE" != "1" ]; then
+        notify paused "$branch" "$log_path" "the session ended before its ledger finished ($ledger_detail) — run /autonomous-sdlc-harness:branch-resume $branch to continue from the ledger"
+      fi
+      return 0
+    fi
+    if [ "$ledger_state" = "absent" ] || [ "$ledger_state" = "unreadable" ]; then
+      log "classify: '$branch' has no readable ledger ($ledger_state: $ledger_detail) — classifying on the exit code alone"
+    fi
     registry_set "$branch" status completed pid ""
     # Clear the watchdog counters so a reused branch key starts clean.
     registry_set "$branch" stall_restarts 0
@@ -3866,7 +4050,7 @@ EOF
 begin_pause_resume() {
   local branch="$1" state_abs="$2"
   rm -f "$state_abs/PAUSE" "$state_abs/RESUME" "$state_abs/PAUSE_ACK"
-  registry_set "$branch" status running
+  registry_set "$branch" status running pause_reason ""
   registry_set "$branch" resumed_at "$(date '+%Y-%m-%dT%H:%M:%S')"
   registry_set "$branch" resume_kind pause
   registry_set "$branch" resumed_at_epoch "$(date +%s)"
@@ -4284,6 +4468,8 @@ check_stalled_runs() {
       >"$worktree/$note_rel"
     registry_set "$b" stall_restarts "$((restarts + 1))"
     registry_set "$b" stall_warned ""
+    # The note just written is this run's, so the relaunch names it.
+    registry_set "$b" pause_note_stale ""
     registry_set "$b" status running
     if ! spawn_engine "$b" "$worktree" "$log_path" "" 1; then
       spawn_refused "$b" "$log_path"
@@ -5602,7 +5788,7 @@ run_job() {
   local branch="$1" engine="$2" resume="$3"
   local worktree="$MAIN_REPO" log_path="$LOGS_DIR/$branch.log"
   local state_rel state_abs clar_dir remote_status key value answered_set="" prev_reason=""
-  local prev_status="" prev_engine="" aside_rc
+  local prev_status="" prev_engine="" prev_note_stale="" aside_rc
 
   JOB_START_EPOCH="$(job_int "${HARNESS_JOB_STARTED_EPOCH:-}")" || JOB_START_EPOCH="$(date +%s)"
   job_runner_wait
@@ -5632,6 +5818,7 @@ run_job() {
     prev_reason="$(hr_remote_status_get "$remote_status" pause_reason)" || prev_reason=""
     prev_status="$(hr_remote_status_get "$remote_status" status)" || prev_status=""
     prev_engine="$(hr_remote_status_get "$remote_status" engine)" || prev_engine=""
+    prev_note_stale="$(hr_remote_status_get "$remote_status" pause_note_stale)" || prev_note_stale=""
     for key in park_loop_cycles resume_max_question_index stall_restarts; do
       value="$(hr_remote_status_get "$remote_status" "$key")" && registry_set "$branch" "$key" "$value"
     done
@@ -5644,18 +5831,18 @@ run_job() {
 
   # The pause note belongs to the run that wrote it (the header's JOB MODE
   # block). Two decisions, deliberately independent: the clause reads the
-  # restored status alone, so a run stopped before it ever paused is never
-  # pointed at a note; the move governs only a note that exists.
-  if [ "$resume" = "pause" ] && { [ "$prev_status" != "paused" ] || [ "$prev_engine" != "$engine" ]; }; then
+  # restored status and pause_note_stale alone, so a run stopped before it ever
+  # paused is never pointed at a note; the move governs only a note that exists.
+  if [ "$resume" = "pause" ] && { [ "$prev_status" != "paused" ] || [ "$prev_note_stale" = "1" ] || [ "$prev_engine" != "$engine" ]; }; then
     registry_set "$branch" pause_note_stale 1
-    log "job: '$branch' resumes after a job that did not pause for engine $engine (prev_status '${prev_status}', prev_engine '${prev_engine}') — no pause note"
+    log "job: '$branch' resumes after a job that did not pause for engine $engine (prev_status '${prev_status}', prev_note_stale '${prev_note_stale}', prev_engine '${prev_engine}') — no pause note"
   fi
-  if ! { [ "$resume" = "pause" ] && [ "$prev_status" = "paused" ] && [ "$prev_engine" = "$engine" ]; } \
+  if ! { [ "$resume" = "pause" ] && [ "$prev_status" = "paused" ] && [ "$prev_note_stale" != "1" ] && [ "$prev_engine" = "$engine" ]; } \
     && [ -f "$state_abs/$HR_REMOTE_PAUSE_FILE" ]; then
     aside_rc=0
     hr_remote_move_aside "$worktree" "$HR_REMOTE_PAUSE_FILE" || aside_rc=$?
     case "$aside_rc" in
-      0) log "job: '$branch' carried a $HR_REMOTE_PAUSE_FILE that is not this run's (resume $resume, prev_status '${prev_status}', prev_engine '${prev_engine}', engine $engine) — moved aside to $HR_REMOTE_ASIDE" ;;
+      0) log "job: '$branch' carried a $HR_REMOTE_PAUSE_FILE that is not this run's (resume $resume, prev_status '${prev_status}', prev_note_stale '${prev_note_stale}', prev_engine '${prev_engine}', engine $engine) — moved aside to $HR_REMOTE_ASIDE" ;;
       3) ;;
       *) log "job: WARNING — could not move the carried $HR_REMOTE_PAUSE_FILE of '$branch' aside (hr_remote_move_aside exit $aside_rc); continuing" ;;
     esac
@@ -5788,6 +5975,12 @@ run_job() {
               notify paused "$branch" "$log_path" "usage limit: the in-job wait passed ${REMOTE_WAIT_MAX_SECS}s after the reset without a resume — run /autonomous-sdlc-harness:branch-resume $branch to continue; $(hr_github_resume_route "$branch" "$(registry_get "$branch" engine)")"
               break
             fi
+            ;;
+          unfinished)
+            job_auto_resume "$branch" "$worktree" "$log_path" "$state_abs" "an unfinished session" && continue
+            detail="the session ended before its ledger finished; automatic resumes exhausted"
+            notify paused "$branch" "$log_path" "the session ended before its ledger finished — run /autonomous-sdlc-harness:branch-resume $branch to continue; $(hr_github_resume_route "$branch" "$(registry_get "$branch" engine)")"
+            break
             ;;
           *)
             job_auto_resume "$branch" "$worktree" "$log_path" "$state_abs" "an overload self-pause" && continue

@@ -452,7 +452,7 @@ path. §2.5 is the only **run-initiated** pause, which is why it is the only one
 ⚠️ Note where the load-bearing difference lies. Detection could in principle move to the watcher for the
 overload case too (it already tails the same stream) — but that alone would **not** fix a false `completed`:
 a watcher-dropped `PAUSE` is only honored at the run's next safety-contract checkpoint, and a run that ends
-its turn before reaching one still exits `rc=0` with no `PAUSE_ACK` and is stamped `completed`. **The ack is
+its turn before reaching one still exits `rc=0` with no `PAUSE_ACK` and is paused `unfinished`. **The ack is
 what fixes classification**, so the run-side rule in §2.5 is required regardless of who does the detecting.
 
 ### 2.1 Files — FLAT under `<state_dir>/`, machine-local (never commit them)
@@ -525,8 +525,8 @@ The **watcher** owns the resume: on a `<state_dir>/RESUME` trigger for a `paused
 cap) it deletes `PAUSE` + `RESUME` + `PAUSE_ACK`, **keeps** `PAUSE_PROGRESS.md`, flips the registry to
 `running`, and re-launches the same engine with a pause-resume clause.
 
-In job mode, a carried `PAUSE_PROGRESS.md` is kept only when the job's `resume` is `pause`, the restored `remote_status.json` says `status: paused`, and its `engine` equals the job's engine. In every other case — a fresh launch (`resume none`), an answer resume (`resume answer`), a pause resume whose previous job did not pause (a stop or a kill), or a different engine — it is moved aside, never deleted, to `<state_dir>/autonomous_logs/remote_superseded/<epoch>[-<n>]/PAUSE_PROGRESS.md`.
-A pause resume whose previous job did not pause, or paused for a different engine, is re-launched with a clause saying there is no pause note, whether or not a note was carried. That fork resumes from §1.7 alone.
+In job mode, a carried `PAUSE_PROGRESS.md` is kept only when the job's `resume` is `pause`, the restored `remote_status.json` says `status: paused` without `pause_note_stale: 1`, and its `engine` equals the job's engine. In every other case — a fresh launch (`resume none`), an answer resume (`resume answer`), a pause resume whose previous job did not pause (a stop, a kill, or a zero exit over an unfinished ledger), or a different engine — it is moved aside, never deleted, to `<state_dir>/autonomous_logs/remote_superseded/<epoch>[-<n>]/PAUSE_PROGRESS.md`.
+A pause resume whose previous job did not pause — a stop, a kill, or a zero exit over an unfinished ledger — or paused for a different engine, is re-launched with a clause saying there is no pause note, whether or not a note was carried. In both modes, any relaunch after a zero exit over an unfinished ledger gets the same clause, whether the run was recorded `unfinished` or kept the `user`, `usage` or `budget` pause that session never acknowledged: job mode's automatic resume and in-job usage resume, a later job's pause resume, and a local resume alike. That fork resumes from §1.7 alone.
 
 Otherwise the re-entered fork reads `PAUSE_PROGRESS.md` as a hint and resumes via **§1.7 resume-from-ledger**. For a §2.2 pause no dirty-tree
 reconciliation is needed, because the pause was taken at a clean tracked-tree boundary and every completed
@@ -576,10 +576,8 @@ sandbox was not measured — BG9):
 - **a `Monitor` pending** — the same, woken when the Monitor's stream ends (BG6).
 
 In the nothing-pending case (BG1) that exit is `rc=0` with no `PAUSE_ACK`, so
-`classify_run_exit` stamps the run **`completed`** and fires a **success** notification for a run that never
-finished — the flow is silently abandoned mid-phase behind a green light, and because the registry says
-`completed` rather than `paused`, both `/autonomous-sdlc-harness:branch-resume` and the watcher's `resume_paused_runs` (which filters
-on `status == "paused"`) refuse to touch it, so even a hand-dropped `RESUME` is ignored. A pending task or
+`classify_run_exit` finds the ledger unfinished and records the run `paused` with `pause_reason` `unfinished`:
+the flow stops mid-phase and waits for `/autonomous-sdlc-harness:branch-resume`. A pending task or
 `Monitor` is still no resumption mechanism: the wake-up in BG5 and BG6 is observed behaviour of one CLI
 version, not a contract this flow relies on; a session waiting silently gives the stall watchdog no output, so
 a silence longer than `STALL_KILL_SECS` (default 2700 s, `<scripts_dir>/autonomous-watcher.sh` →
