@@ -129,8 +129,13 @@ export interface CopyGitPath {
    * `Edit` rules for these rows removed the clone's placeholders and its git failure. So the per-run
    * copy there also leaves out the run copy's own `Edit` rules for a row marked `false`, exact and
    * the base's glob form alike (`run_profile_edit_drops`), and every other sibling keeps them by exact
-   * path. Nothing is lost: the sandboxed shell could already write the path there, and the trust
-   * check and the launch check both fail closed. The base profile carries every row on every host.
+   * path. A sandboxed shell did not land such a file on disk there: a sandboxed `dd` onto the run
+   * copy's `commondir` reported success and a plain shell found the path absent
+   * (`docs/sandbox-verification.md` → §5 AP8; 2026-10-31, Claude Code 2.1.316, bubblewrap 0.8.0);
+   * the mechanism is unmeasured. The file tools, which the base's sibling-glob `Edit` allow reaches,
+   * are refused there by `plugin/hooks/git-trust-file-guard.sh` rather than by an `Edit` rule, which
+   * would mount the placeholder. A file planted by any route is still refused by the trust check and
+   * the launch check, both failing closed. The base profile carries every row on every host.
    */
   readonly bubblewrapDenyWrite: boolean;
 }

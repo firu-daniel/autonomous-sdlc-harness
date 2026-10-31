@@ -2309,10 +2309,15 @@ lane_release_if_idle() {
 # their leftovers and the failing sandboxed `git status` all went. So on a
 # bubblewrap host the per-run copy also carries no `Edit` rule for the run
 # copy's own `omit` paths, exact or glob (run_profile_edit_drops); each other
-# sibling keeps them by exact path. Nothing is lost: the sandboxed shell could
-# already write those paths there, and what stops a planted one is the
-# wrappers' trust check (hr_clone_target_check_var, condition 3) and the launch
-# check in spawn_engine, both failing closed.
+# sibling keeps them by exact path. A sandboxed shell did not land such a file
+# on disk there: a sandboxed `dd` onto the run copy's `commondir` reported
+# success and a plain shell found the path absent (AP8, 2026-10-31, Claude Code
+# 2.1.316, bubblewrap 0.8.0); the mechanism is unmeasured. The file tools, which
+# the base's sibling-glob Edit allow reaches, are refused there by the plugin's
+# hooks/git-trust-file-guard.sh rather than by an `Edit` rule, which would mount
+# the placeholder. What stops a file planted by any route is the wrappers' trust
+# check (hr_clone_target_check_var, condition 3) and the launch check in
+# spawn_engine, both failing closed.
 # -----------------------------------------------------------------------------
 
 # A declared mirror of cli/src/generators/writeProtection.ts → COPY_GIT_PATHS:

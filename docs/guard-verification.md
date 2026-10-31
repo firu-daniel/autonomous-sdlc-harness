@@ -2,7 +2,7 @@
 
 **Who reads this:** anyone changing a guard hook under `plugin/hooks/` or the configuration library they share. It records what the guard set does **as a whole** — its per-call cost and the standing decision matrices — as measured, so a later change is regressable rather than merely reviewable. The per-guard decision detail lives in each script's own header REPRO block; this file is what those blocks cannot carry, because it is about the set rather than about one decision.
 
-All six guards register on `PreToolUse` under the `Bash` matcher with **no `if:` condition** (`plugin/hooks/hooks.json`), so all six run on **every** Bash tool call in every session the plugin is enabled for. That is why the composite row in §1.2, and not any single guard's row, is the number a change is judged against.
+Six guards register on `PreToolUse` under the `Bash` matcher with **no `if:` condition** (`plugin/hooks/hooks.json`), so all six run on **every** Bash tool call in every session the plugin is enabled for. That is why the composite row in §1.2, and not any single guard's row, is the number a change is judged against; it is the Bash-call figure. A seventh, `git-trust-file-guard.sh`, registers under the `Edit|Write|NotebookEdit` matcher and runs on **every** file-tool call instead, never on a Bash call; its decisions are §2.6 and its per-call latency is owed there.
 
 ---
 
@@ -193,6 +193,7 @@ The whole-set decision records. Each subsection is a table of cases a change to 
 - **§2.3** — Fail-closed matrix, with positive controls: every guard against an unresolvable configuration, an absent configuration and an unparseable payload, alongside a control showing the same guard still decides.
 - **§2.4** — Disclosed residuals, re-confirmed: the standing status of every disclosed shape — the ones deliberately left open, each with its bound restated as a measurement, and the ones that have since been closed, each with the arm that closed it named.
 - **§2.5** — Directory de-quoting: the widening the `-C` de-quote granted, the refusal it did not, and the fault injection showing that one one-line call carries both.
+- **§2.6** — The file-tool trio guard: the decisions `git-trust-file-guard.sh` gives each `Edit`, `Write` and `NotebookEdit` target and payload, reproduced rather than fault-injected, with its latency owed.
 
 ### 2.1 Helper call-order composition
 
@@ -481,6 +482,18 @@ Two readings the table makes available and the cells alone do not. **No control 
 #### Decision identity across the configuration cache
 
 The same 108 cells run against the pre-cache guard set described at the end of §0 differ in **12**, and all 12 sit in the two rows the cache deliberately introduced: seven in `jq` older than 1.5 and five in more than one JSON document. Every other row — invalid JSON, no configuration, an unreadable configuration, both payload rows, `defaultBranch` absent, `jq` absent, not a repository, detached HEAD, protected HEAD, the single-guard gates, and both control sweeps — is **identical** between the two trees. That is the fail-closed half of the decision-identity evidence for the cache refactor, which §1's timing tables cannot carry, and it is what bounds the refactor's behavioural change to the two conditions §1.4 documents.
+
+#### The file-tool guard's fail-closed cells
+
+`git-trust-file-guard.sh` is outside the matrix above: it answers file-tool payloads, not the seven Bash probes, and reads no configuration. Its fail-closed cells are **reproduced decisions**, not measured with fault injection — each is the decision `cli/test/git-trust-file-guard.test.mjs` asserts or the guard's own `REPRO` block states, as the last column names.
+
+| Condition | decision | source |
+|---|---|---|
+| payload will not parse (`not json at all`) | **deny** | the suite's `malformed input, non-JSON text` case; the `REPRO` block's `printf 'not json'` line |
+| `jq` absent from `PATH` | **deny**, the reason naming `jq` | the `REPRO` block's `PATH=/nonexistent` line; not in the suite, whose header says why |
+| any configuration condition above | not applicable | the guard reads no `harness.config.json` |
+
+Unlike the six Bash guards, this guard's closed answer is `deny`, not SILENT. §2.6 carries its whole decision set.
 
 #### What this section does not cover
 
@@ -789,6 +802,46 @@ Each variant is one change to the shipped tree, run over the whole row set in th
 #### What a later change owes this section
 
 A change to the `-C` de-quote, to either directory whitelist or to the reconstruction `case` re-runs all 16 rows **and** the sweep, and re-runs the first fault injection specifically: the `deny → SILENT` column is the one a change aimed at the widening is most likely to move without noticing. The quoted spellings are also standing rows of `allow-safe-compounds.sh`'s own REPRO block, on both its ALLOW and its NO-OUTPUT list, so a decision that moves here contradicts that block and cannot move quietly in one place only.
+
+### 2.6 The file-tool trio guard
+
+**Who reads this and what for:** anyone changing `plugin/hooks/git-trust-file-guard.sh`, the one guard registered under `Edit|Write|NotebookEdit` rather than `Bash`. It answers one question: *which file-tool targets does the guard refuse, and which does it leave to the permission profile?*
+
+**Every row is a reproduced decision, not a measurement with fault injection.** Each is what `cli/test/git-trust-file-guard.test.mjs` asserts or what the guard's own `REPRO` block states, as the last column names; no leg below has been attributed by breaking it. `<repo>` is a `git init` fixture with `.git/objects/info`, `sub/` and `notes/`; `<gl>` is a symbolic link to `<repo>/.git`; `<repo>/innocent` is a symbolic link to `.git/config.worktree`. Rows T1–T13 hold for each of `Edit`, `Write` and `NotebookEdit`, the last carrying `notebook_path` in place of `file_path`; T14–T17 are the single payloads they name.
+
+#### The rows
+
+| # | target, or payload | decision | source |
+|---|---|---|---|
+| T1 | `<repo>/.git/commondir`, `<repo>/.git/config.worktree`, `<repo>/.git/objects/info/http-alternates` | **deny** | suite, `plain` form; `REPRO` |
+| T2 | each of T1's paths followed by `/x` | **deny** | suite, `under` form; `REPRO` (`commondir/x`) |
+| T3 | each written `<repo>/sub/../<trio>` | **deny** | suite, `dotdot` form; `REPRO` (`config.worktree`) |
+| T4 | each written through `<gl>/<leaf>` | **deny** | suite, `symlinkedParent` form; `REPRO` (`commondir`) |
+| T5 | each followed by `/` | **deny** | suite, `trailingSlash` form |
+| T6 | each with its trio part upper-cased | **deny** | suite, `upperCase` form |
+| T7 | `<repo>/innocent` | **deny** | suite, symlinked-leaf case; `REPRO` |
+| T8 | `.git/commondir`, relative, with `cwd` `<repo>` | **deny** | suite, relative case |
+| T9 | `<repo>/.git/config.worktree.bak` | SILENT | suite; `REPRO` |
+| T10 | `<repo>/commondir` | SILENT | suite; `REPRO` |
+| T11 | `<repo>/notes/http-alternates` | SILENT | suite |
+| T12 | `<repo>/.git/worktrees/w/commondir`, a linked worktree's record | SILENT | suite |
+| T13 | `<repo>/index.ts` | SILENT | suite |
+| T14 | non-JSON text | **deny** | suite; `REPRO` |
+| T15 | `{}`; a missing, numeric or empty `file_path`; a `NotebookEdit` carrying `file_path` only | **deny** | suite, malformed-input cases |
+| T16 | `tool_name` `Read` | **deny** | suite, malformed-input case |
+| T17 | any payload with `jq` off `PATH` | **deny**, the reason naming `jq` | `REPRO` only |
+
+T12 is SILENT because the match is on the `.git/<trio>` suffix, and `.git/worktrees/w/commondir` does not end in `.git/commondir`. The fail-closed half of this set, T14–T17, is also §2.3's *The file-tool guard's fail-closed cells*.
+
+#### What is owed
+
+- **Per-call latency.** Owed, taken by hand outside any session. No figure is recorded here, and none taken inside a run may be.
+- **Fault injection.** Owed: which leg produces each **deny** — the lexical form, the physical form, the symlinked-leaf loop, the case-insensitive match — is attributed only by the suite header's `RED ONCE` note, which removed the case match and the leaf loop together from a reference guard, not from the shipped one.
+- **Whether Claude Code honours the `deny` on a file tool.** Owed as `docs/sandbox-verification.md` AP9; a subprocess cannot show it.
+
+#### What a later change owes this section
+
+A change to the guard re-runs `cli/test/git-trust-file-guard.test.mjs` and every `REPRO` line, and adds or moves the row here in the same commit. A row moving from **deny** to SILENT is a finding unless its argument is in the row.
 
 ---
 
