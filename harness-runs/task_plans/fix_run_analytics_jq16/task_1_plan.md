@@ -28,3 +28,14 @@
 - `run-analytics.jq` compiles the same way. Pass the `--arg` / `--argjson` values its header's mode lines declare (`--arg mode sessions --argjson idle_threshold_s 60`, plus any other `$` name the program references). Then check that stderr carries no `compile error` or `syntax error` and that jq did not exit with status `3`.
 - `grep -nE '[$.](as|def|module|import|include|if|then|elif|else|end|and|or|reduce|foreach|try|catch|label)\b' cli/templates/scripts/lib/run-analytics-report.jq cli/templates/scripts/lib/run-analytics.jq` finds no hit outside a `#` comment line.
 - `git diff --stat` lists no file outside `cli/templates/scripts/lib/`.
+
+**Deviations from plan:**
+
+- Audit result: the only post-1.5 construct in either program was `run-analytics-report.jq` → `latency_row` → `$label`, fixed by the rename. No other construct found. In `run-analytics.jq`, nothing needed a change beyond the header.
+  - Keyword probe: the plan's `grep -nE '[$.](as|def|…|label)\b'` over both files, plus a `[{,]\s*<keyword>\s*[:,}]` object-key probe. After the rename, the first gives no hit and the second gave none to begin with.
+  - Builtin probe: a `grep -nwE` over the plan's banned list (and the other later additions it names) found no code-line hit. The only word hits were `sub`, `first`, `last`, `in` and `input` inside string literals, field names (`.input_tokens`, `$u.input`) and bindings (`$in`, `$first`, `$last`), none of them keywords.
+  - `if` / `else`: read every `if` in both files, and each has an `else`.
+- Evidence downgrade: all compile checks ran on the host jq only (`jq-1.8.2`), not on jq 1.5 or 1.6.
+  - `run-analytics-report.jq` stopped with `input is not a run-analytics document` (exit 5).
+  - `run-analytics.jq` exited 0 with no compile or syntax error, in both `overlay` mode (input `[]`) and `sessions` mode (empty stdin), with all six variables passed.
+  - Nothing here shows the programs parse on 1.5 or 1.6. That rests on the audit above.
