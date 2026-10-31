@@ -60,3 +60,8 @@ With these two refusals in place, the five Linux failures' classes fail on a mac
 - `init.test.mjs` passes. This task changes only its comments, but it is a test file the task edits.
 - `isolated-gitconfig` is byte-unchanged after those runs: `git diff --exit-code -- cli/test/helpers/isolated-gitconfig` exits 0. No code path under test writes the global configuration (`git config --global` occurs nowhere under `cli/src`, `cli/templates`, `plugin/hooks` or `plugin/scripts`). This check confirms that.
 - The doc comment on `seedOrigin` and choice 3 both name group 2 as a test assumption, with the measured message `fatal: unable to auto-detect email address (got 'probe@b6e01aa5ca60.(none)')`.
+
+**Deviations from plan:**
+
+- The `isolated-gitconfig` byte-unchanged check: `git diff --exit-code -- cli/test/helpers/isolated-gitconfig` exited 0, but the file is still untracked in this unit, so the diff has no tracked baseline to compare against and the 0 exit is vacuous. What the evidence actually is: the file's content was read back after the `fixture-isolation.test.mjs` and `init.test.mjs` runs and matched what was written (the comment line, `[user]`, `useConfigOnly = true`). Once committed, the same command becomes a real check.
+- The single-string bound's two rejection cases also go through `runBash`'s bounded form (`{ timeoutMs }`), so `runBounded`'s copy of the check is covered as well as `run`'s. The plan asked only for the plain form.
