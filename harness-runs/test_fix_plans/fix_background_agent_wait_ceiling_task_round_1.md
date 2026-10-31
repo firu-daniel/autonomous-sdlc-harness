@@ -25,42 +25,42 @@ This list is the **single source of truth** for the fix loop: walk it top to bot
 9. [x] **Finding 9** — placeholder host: a planted .git/commondir refuses the resume. _(layer: cli, general)_
 10. [x] **Finding 10** — placeholder host: the manifest lists exactly the absent paths. _(layer: cli, general)_
 11. [x] **Finding 11** — placeholder host: a second queued run is deferred at cap 1. _(layer: cli, general)_
-12. [ ] **Finding 12** — placeholder host: with the seam off no manifest is written. _(layer: cli, general)_
-13. [ ] **Finding 13** — placeholder host (1): a leftover scriptsDir/.git is swept. _(layer: cli, general)_
-14. [ ] **Finding 14** — placeholder host (2): a leftover .git/commondir is kept while live. _(layer: cli, general)_
-15. [ ] **Finding 15** — placeholder host (5): a .git/commondir with content refuses the resume. _(layer: cli, general)_
-16. [ ] **Finding 16** — remote dispatch: a remote task drop is dispatched, never spawned. _(layer: cli, general)_
-17. [ ] **Finding 17** — remote dispatch: hold and cap do not gate a remote drop. _(layer: cli, general)_
-18. [ ] **Finding 18** — remote dispatch: a failed dispatch leaves the record failed. _(layer: cli, general)_
-19. [ ] **Finding 19** — remote dispatch: a refused push blocks the dispatch. _(layer: cli, general)_
-20. [ ] **Finding 20** — remote dispatch: a task re-drop and the one-live-copy rule. _(layer: cli, general)_
-21. [ ] **Finding 21** — review drop: a clean reused clone launches. _(layer: cli, general)_
-22. [ ] **Finding 22** — review drop (L2): a nested repository's core.fsmonitor is never run. _(layer: cli, general)_
-23. [ ] **Finding 23** — review drop (L3): a submodule core.fsmonitor is never run. _(layer: cli, general)_
-24. [ ] **Finding 24** — review drop (L5): a committed .claude/settings.json change is refused. _(layer: cli, general)_
-25. [ ] **Finding 25** — review drop (L6): an untracked githooks/post-checkout is refused. _(layer: cli, general)_
-26. [ ] **Finding 26** — review drop (L8): a symlinked user_reviews directory is refused. _(layer: cli, general)_
-27. [ ] **Finding 27** — review drop (L9): a forged base does not pass. _(layer: cli, general)_
-28. [ ] **Finding 28** — review drop: the suite file reported as failed. _(layer: cli, general)_
-29. [ ] **Finding 29** — run analytics: a launch commits both analytics files and pushes. _(layer: cli, general)_
-30. [ ] **Finding 30** — run analytics: a resume adding no session adds no commit. _(layer: cli, general)_
-31. [ ] **Finding 31** — run analytics: a refused push is one watcher-log line. _(layer: cli, general)_
-32. [ ] **Finding 32** — run analytics: a run-analytics.sh exiting 1 changes no outcome. _(layer: cli, general)_
-33. [ ] **Finding 33** — run analytics: a missing run-analytics.sh changes no outcome. _(layer: cli, general)_
-34. [ ] **Finding 34** — run analytics: the parent test. _(layer: cli, general)_
-35. [ ] **Finding 35** — run profile: a task drop launches on a per-run copy. _(layer: cli, general)_
-36. [ ] **Finding 36** — run profile: another live worktree's .git pointer is in the copy. _(layer: cli, general)_
-37. [ ] **Finding 37** — run profile: a placeholder host's copy omits each omit row's denyWrite. _(layer: cli, general)_
-38. [ ] **Finding 38** — run profile: refused on sandbox.enabled false. _(layer: cli, general)_
-39. [ ] **Finding 39** — run profile: refused on a two-document base. _(layer: cli, general)_
-40. [ ] **Finding 40** — run profile: the opt-out profile launches. _(layer: cli, general)_
-41. [ ] **Finding 41** — sandbox refusal (b): a taken optOut launches the stub. _(layer: cli, general)_
-42. [ ] **Finding 42** — sandbox refusal (d): the default probe launches the stub. _(layer: cli, general)_
-43. [ ] **Finding 43** — stall host sleep (a)(b): a long host sleep is not silence. _(layer: cli, general)_
-44. [ ] **Finding 44** — stall host sleep (c): a hung run with no sleep is killed. _(layer: cli, general)_
-45. [ ] **Finding 45** — stall reset: an honest hung run resumes. _(layer: cli, general)_
-46. [ ] **Finding 46** — stall reset (S2): a committed settings hook is refused. _(layer: cli, general)_
-47. [ ] **Finding 47** — stall reset: the suite file reported as failed. _(layer: cli, general)_
+12. [x] **Finding 12** — placeholder host: with the seam off no manifest is written. _(layer: cli, general)_
+13. [x] **Finding 13** — placeholder host (1): a leftover scriptsDir/.git is swept. _(layer: cli, general)_
+14. [x] **Finding 14** — placeholder host (2): a leftover .git/commondir is kept while live. _(layer: cli, general)_
+15. [x] **Finding 15** — placeholder host (5): a .git/commondir with content refuses the resume. _(layer: cli, general)_
+16. [x] **Finding 16** — remote dispatch: a remote task drop is dispatched, never spawned. _(layer: cli, general)_
+17. [x] **Finding 17** — remote dispatch: hold and cap do not gate a remote drop. _(layer: cli, general)_
+18. [x] **Finding 18** — remote dispatch: a failed dispatch leaves the record failed. _(layer: cli, general)_
+19. [x] **Finding 19** — remote dispatch: a refused push blocks the dispatch. _(layer: cli, general)_
+20. [x] **Finding 20** — remote dispatch: a task re-drop and the one-live-copy rule. _(layer: cli, general)_
+21. [x] **Finding 21** — review drop: a clean reused clone launches. _(layer: cli, general)_
+22. [x] **Finding 22** — review drop (L2): a nested repository's core.fsmonitor is never run. _(layer: cli, general)_
+23. [x] **Finding 23** — review drop (L3): a submodule core.fsmonitor is never run. _(layer: cli, general)_
+24. [x] **Finding 24** — review drop (L5): a committed .claude/settings.json change is refused. _(layer: cli, general)_
+25. [x] **Finding 25** — review drop (L6): an untracked githooks/post-checkout is refused. _(layer: cli, general)_
+26. [x] **Finding 26** — review drop (L8): a symlinked user_reviews directory is refused. _(layer: cli, general)_
+27. [x] **Finding 27** — review drop (L9): a forged base does not pass. _(layer: cli, general)_
+28. [x] **Finding 28** — review drop: the suite file reported as failed. _(layer: cli, general)_
+29. [x] **Finding 29** — run analytics: a launch commits both analytics files and pushes. _(layer: cli, general)_
+30. [x] **Finding 30** — run analytics: a resume adding no session adds no commit. _(layer: cli, general)_
+31. [x] **Finding 31** — run analytics: a refused push is one watcher-log line. _(layer: cli, general)_
+32. [x] **Finding 32** — run analytics: a run-analytics.sh exiting 1 changes no outcome. _(layer: cli, general)_
+33. [x] **Finding 33** — run analytics: a missing run-analytics.sh changes no outcome. _(layer: cli, general)_
+34. [x] **Finding 34** — run analytics: the parent test. _(layer: cli, general)_
+35. [x] **Finding 35** — run profile: a task drop launches on a per-run copy. _(layer: cli, general)_
+36. [x] **Finding 36** — run profile: another live worktree's .git pointer is in the copy. _(layer: cli, general)_
+37. [x] **Finding 37** — run profile: a placeholder host's copy omits each omit row's denyWrite. _(layer: cli, general)_
+38. [x] **Finding 38** — run profile: refused on sandbox.enabled false. _(layer: cli, general)_
+39. [x] **Finding 39** — run profile: refused on a two-document base. _(layer: cli, general)_
+40. [x] **Finding 40** — run profile: the opt-out profile launches. _(layer: cli, general)_
+41. [x] **Finding 41** — sandbox refusal (b): a taken optOut launches the stub. _(layer: cli, general)_
+42. [x] **Finding 42** — sandbox refusal (d): the default probe launches the stub. _(layer: cli, general)_
+43. [x] **Finding 43** — stall host sleep (a)(b): a long host sleep is not silence. _(layer: cli, general)_
+44. [x] **Finding 44** — stall host sleep (c): a hung run with no sleep is killed. _(layer: cli, general)_
+45. [x] **Finding 45** — stall reset: an honest hung run resumes. _(layer: cli, general)_
+46. [x] **Finding 46** — stall reset (S2): a committed settings hook is refused. _(layer: cli, general)_
+47. [x] **Finding 47** — stall reset: the suite file reported as failed. _(layer: cli, general)_
 
 ## Must Fix
 
