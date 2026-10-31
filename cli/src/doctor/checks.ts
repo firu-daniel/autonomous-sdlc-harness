@@ -182,7 +182,14 @@ import {
   type PushEnvCandidate,
 } from '../generators/notifications.js';
 import { IN_FLIGHT_RUNS_NOTE, pinnedCliCommand, unparseableControlRoute, upgradeWorkflowsCommand } from '../generators/githubWorkflows.js';
-import { DOCS_SEARCH_SERVER_SCRIPT_NAME, outerLoopScriptsDir } from '../generators/outerLoopScripts.js';
+import {
+  DOCS_SEARCH_SERVER_SCRIPT_NAME,
+  outerLoopScriptPath,
+  outerLoopScriptsDir,
+  TASK_OFFER_CHECK_SCRIPT_NAME,
+  taskOfferCheckInvocation,
+  taskOfferCheckRule,
+} from '../generators/outerLoopScripts.js';
 import {
   entryWord,
   isUnderDirectory,
@@ -202,12 +209,15 @@ import {
   TEMPLATE_PATH as PROFILE_TEMPLATE_PATH,
 } from '../generators/profileEntries.js';
 import {
+  ALLOW_KEY,
+  allowRuleState,
   ENABLED_PLUGINS_KEY,
   MARKETPLACE_ENTRY_SHAPE,
   MARKETPLACE_FLAG,
   MARKETPLACES_KEY,
   MARKETPLACE_NAME,
   marketplaceEntryDefect,
+  PERMISSIONS_KEY,
   PLUGIN_KEY,
   SETTINGS_PATH,
   SLUG_SHAPE,
@@ -4077,7 +4087,21 @@ const SETUP_ANALYSIS_CHECK: Check = {
  * the check already passes on. The remedy for a missing fence costs the adopter something either
  * way, which is why it is offered as a choice rather than as one command.
  *
- * It reads one file, tests one for existence, and writes none.
+ * **Where the fence names {@link taskOfferCheckInvocation}, two more arms grade what that invocation
+ * needs**, and each loses the offer as silently as a missing rules file: the script at
+ * `<scriptsDir>/task-offer-check.sh` missing makes the opt-out check exit non-zero on every request,
+ * and {@link taskOfferCheckRule} missing from `.claude/settings.json` → `permissions.allow` prompts
+ * in every conversation that asks for a change, where a declined prompt is silence. Both warn for
+ * the reason above. They are gated on the project file naming the invocation because a project file
+ * that predates the script carries the inline test instead and has no script or rule to lose. The
+ * rule is graded here rather than in `plugin-wiring` because it exists only for this fence, and
+ * `plugin-wiring` grades the two plugin keys and nothing else. The rule's state is asked of
+ * `generators/projectSettings.ts` → {@link allowRuleState}, which `init`'s warning also asks, so no
+ * copy of that grading lives here. Without a config the invocation
+ * cannot be resolved, so these arms are skipped and the pass line says so.
+ *
+ * It reads `.claude/CLAUDE.md` and, on the invocation arms, `.claude/settings.json`; it tests the
+ * rules file and, on the invocation arms, the fence's script for existence; and it writes none.
  */
 /**
  * The heading of the fence section in the always-loaded file, named by both warnings: adding it by
@@ -4122,11 +4146,77 @@ const TASK_OFFER_RULES_CHECK: Check = {
       );
     }
 
+    const reached = `${CLAUDE_MD_PATH} names ${TASK_OFFER_PATH} and that file is there, so the change-request fence reaches the rules it points at`;
+
+    if (ctx.config === undefined) {
+      return pass(
+        `${reached}; whether the fence's opt-out script and its allow rule are there was not graded, because ${CONFIG_FILENAME} could not be read (see the config check)`,
+      );
+    }
+
+    const invocation = taskOfferCheckInvocation(ctx.config);
+    if (!projectFile.includes(invocation)) return pass(reached);
+
+    const findings = taskOfferCheckFindings(ctx.repoRoot, ctx.config, invocation);
+    if (findings.length > 0) return warn(findings.join('; '));
+
     return pass(
-      `${CLAUDE_MD_PATH} names ${TASK_OFFER_PATH} and that file is there, so the change-request fence reaches the rules it points at`,
+      `${reached}, the script its \`${invocation}\` runs is there, and ${SETTINGS_PATH} allow-lists it as \`${taskOfferCheckRule(ctx.config)}\``,
     );
   },
 };
+
+/**
+ * What the fence's named invocation is missing — its script, its allow rule, or both — as one
+ * finding each. Every finding names the invocation and the remedy; an empty list means both are there.
+ */
+function taskOfferCheckFindings(repoRoot: string, config: HarnessConfig, invocation: string): string[] {
+  const findings: string[] = [];
+
+  const script = outerLoopScriptPath(repoRoot, config, TASK_OFFER_CHECK_SCRIPT_NAME);
+  if (!existsSync(script)) {
+    findings.push(
+      `${CLAUDE_MD_PATH}'s fence runs \`${invocation}\` and ${script} is not there, so its opt-out check exits non-zero and every change request is carried out without an offer: run \`${CLI} init\`, which writes the script create-if-absent and touches nothing else`,
+    );
+  }
+
+  const rule = taskOfferCheckRule(config);
+  const settingsPath = join(repoRoot, SETTINGS_PATH);
+  const lost = `${CLAUDE_MD_PATH}'s fence runs \`${invocation}\` and ${SETTINGS_PATH} does not allow-list it as \`${rule}\`, so the check can raise a permission prompt in every conversation that asks for a change, and a declined one is silence`;
+  let settings: JsonValue | undefined;
+  try {
+    settings = readJsonFile(settingsPath);
+  } catch (error) {
+    findings.push(
+      `${lost}: ${messageOf(error)} — make it parse (see the plugin-wiring check), then add \`${rule}\` to its ${PERMISSIONS_KEY}.${ALLOW_KEY} list`,
+    );
+    return findings;
+  }
+
+  switch (allowRuleState(settings, rule)) {
+    case 'present':
+      break;
+    case 'list-without-rule':
+      findings.push(
+        `${lost}: add \`${rule}\` to ${SETTINGS_PATH} → ${PERMISSIONS_KEY}.${ALLOW_KEY} by hand, because \`${CLI} init\` never edits a list that is already there`,
+      );
+      break;
+    case 'mergeable':
+      findings.push(
+        `${lost}: ${SETTINGS_PATH} has no ${PERMISSIONS_KEY}.${ALLOW_KEY} list — run \`${CLI} init\`, which merges one in holding that rule`,
+      );
+      break;
+    case 'allow-not-a-list':
+    case 'permissions-not-object':
+    case 'settings-not-object':
+      findings.push(
+        `${lost}: ${SETTINGS_PATH} → ${PERMISSIONS_KEY}.${ALLOW_KEY} is not a list or sits under a value that is not an object, and \`${CLI} init\` never replaces a value that is there — make it a list holding \`${rule}\` by hand`,
+      );
+      break;
+  }
+
+  return findings;
+}
 
 /**
  * The analyze target that addresses the layer profile, taken from the one list that declares the

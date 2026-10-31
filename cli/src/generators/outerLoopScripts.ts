@@ -1,7 +1,8 @@
 /**
  * Generator: the outer-loop scripts — the run watcher, the git wrappers, the worktree tooling, the
  * flow walker with its gate library and flow graph, the test-suite runner, the run-analytics script
- * with its two `jq` programs, and the shared library they all source —
+ * with its two `jq` programs, the change-request fence's opt-out check, and the shared library
+ * they all source —
  * written into the adopter's configured `scriptsDir`.
  *
  * **The rule this module exists to enforce: {@link OUTER_LOOP_SCRIPTS} is the single declaration of
@@ -87,8 +88,9 @@ export interface OuterLoopScript {
    * that carry that entry are `autonomous-watcher.sh`, `restart-watcher.sh`,
    * `cleanup-merged-worktrees.sh` and `remote-run.sh` — the last because a run that could dispatch
    * runs could start runs about itself (the guard is `plugin/hooks/autonomous-script-allowlist-guard.sh`).
-   * For the worktree scripts, the notifier, the stream formatter, the run-analytics script and
-   * the docs-retrieval server launcher — which the agent runner starts from `.mcp.json` —
+   * For the worktree scripts, the notifier, the stream formatter, the run-analytics script,
+   * the docs-retrieval server launcher — which the agent runner starts from `.mcp.json` — and the
+   * change-request fence's opt-out check, which an interactive session runs,
    * `false` is a calling convention rather than a gate: the guard auto-allows them, deliberately.
    *
    * A row is added by the change that adds its template, so this flag can only ever describe a
@@ -152,6 +154,16 @@ export const DOCS_SEARCH_SERVER_SCRIPT_NAME = 'docs-search-server.sh';
 export const RUN_LIBRARY_SCRIPT_NAME = 'harness-run-lib.sh';
 
 /**
+ * The change-request fence's opt-out check's file name, named on its own for the same reason
+ * {@link WATCHER_SCRIPT_NAME} is: `generators/claudeContext.ts` writes its invocation into the fence,
+ * `generators/projectSettings.ts` allow-lists that invocation and `doctor/checks.ts` looks for it, and
+ * any of them disagreeing with the writer would name a script that was never written.
+ *
+ * The row below is built from it, so the file is renamed here and nowhere else.
+ */
+export const TASK_OFFER_CHECK_SCRIPT_NAME = 'task-offer-check.sh';
+
+/**
  * The whole outer-loop set, in the order `init` writes it: the shared library first, because every
  * other row sources it, and each further library or data file before the script that sources or
  * reads it.
@@ -200,6 +212,9 @@ export const OUTER_LOOP_SCRIPTS: ReadonlyArray<OuterLoopScript> = Object.freeze(
   // Run by the watcher, the remote job or a person. Carries a `DENY_SCRIPT_BASENAMES` entry: a run that
   // could dispatch runs could start runs about itself.
   Object.freeze({ file: 'remote-run.sh', mode: 0o755, agentInvocable: false }),
+  // Run by an interactive session's fence; `false` is a calling convention, and it carries no
+  // `DENY_SCRIPT_BASENAMES` entry because it is read-only and prints one path.
+  Object.freeze({ file: TASK_OFFER_CHECK_SCRIPT_NAME, mode: 0o755, agentInvocable: false }),
 ] as const);
 
 /** The templates' subdirectory under `cli/templates/`, addressed as {@link readTemplate} wants it. */
@@ -262,6 +277,25 @@ export function outerLoopRelativePath(script: OuterLoopScript): string {
  */
 export function outerLoopScriptsDir(config: HarnessConfig): string {
   return normalizeRepoDir(config.scriptsDir ?? DEFAULTS.scriptsDir);
+}
+
+/**
+ * The repo-relative invocation of the change-request fence's opt-out check —
+ * `bash <scriptsDir>/task-offer-check.sh`, {@link scriptInvocation}'s string for its row.
+ *
+ * The one producer the fence text, the settings allow rule and `doctor` read, so the command the
+ * fence tells a session to run and the rule that allows it cannot drift apart.
+ */
+export function taskOfferCheckInvocation(config: HarnessConfig): string {
+  return scriptInvocation(outerLoopScriptsDir(config), TASK_OFFER_CHECK_SCRIPT_NAME);
+}
+
+/**
+ * The exact `Bash(…)` permission rule for {@link taskOfferCheckInvocation}. No `:*` suffix, so it
+ * matches the bare invocation and nothing else.
+ */
+export function taskOfferCheckRule(config: HarnessConfig): string {
+  return `Bash(${taskOfferCheckInvocation(config)})`;
 }
 
 /**

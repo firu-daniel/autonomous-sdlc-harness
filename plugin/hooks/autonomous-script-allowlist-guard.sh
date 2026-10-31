@@ -670,12 +670,15 @@ esac
 #
 # LEFT ALLOWED, DELIBERATELY: `create-worktree.sh`, `setup-worktree.sh`,
 # `autonomous-notify.sh`, `autonomous-format-stream.sh`, `docs-search-server.sh`,
-# `run-analytics.sh` and `scratch-run.sh`. None of them is destructive, and
-# narrowing past a measured need is a change nothing has justified.
+# `run-analytics.sh`, `task-offer-check.sh` and `scratch-run.sh`. None of them is
+# destructive, and narrowing past a measured need is a change nothing has justified.
 # `docs-search-server.sh` is started by the agent runner from `.mcp.json`, not by
 # a dispatched agent, and reaches only the read-only `docs serve`.
 # `run-analytics.sh` only appends sessions to `<state_dir>/run_analytics/<branch>/`
 # for the branch and checkout it is given, and never rewrites a recorded one.
+# `task-offer-check.sh` is run by an interactive session's change-request fence,
+# reads the checkout and its main checkout's run registry, writes nothing, and
+# prints at most one path.
 # The last one
 # executes an ARGUMENT,
 # and is allowed on a narrower ground: it runs only a file under the

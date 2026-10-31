@@ -309,6 +309,7 @@ const OUTER_LOOP_SCRIPT_FILES = [
   'flow-walker.sh',
   'run-test-suite.sh',
   'run-analytics.sh',
+  'task-offer-check.sh',
 ];
 
 /** A left-over template token — none may survive into a generated file. */

@@ -51,6 +51,7 @@ import { renderTemplate } from '../core/templating.js';
 import type { WritePlan } from '../core/writer.js';
 import { SHARED_CONVENTIONS_PATH } from '../detect/presets.js';
 import { PUSH_ENV_PATH, QA_CREDENTIALS_PATH } from './harnessConfig.js';
+import { taskOfferCheckInvocation } from './outerLoopScripts.js';
 
 /** The adopter-side directory this whole template subtree lands in. The dot is `init`-side only. */
 const CLAUDE_DIR = '.claude';
@@ -513,7 +514,8 @@ function routingRows(stubs: readonly StubTarget[], sharedPath: string, stateDir:
  * Render a context template through {@link renderTemplate}.
  *
  * **`assertNoneSurvive` is on**, and deliberately: every value substituted here is a path, a layer
- * name, a manifest-mirrored slug or generated markup, none of which has any business carrying
+ * name, a manifest-mirrored slug, generated markup or the fence's script invocation (built from a
+ * configured `scriptsDir`), none of which has any business carrying
  * `{{…}}`. One that did would ship a half-rendered always-loaded file — the one file every session
  * reads without being asked.
  */
@@ -627,6 +629,7 @@ export function writeClaudeContext({
     routingRows: routingRows(stubs, sharedPath, stateDir),
     stateDir,
     pluginName: PLUGIN_NAME,
+    taskOfferCheckCommand: taskOfferCheckInvocation(config),
   });
   const keepClaudeMd = force && keepsIdenticalProjectFile(repoRoot, claudeMdContent);
 

@@ -4199,6 +4199,112 @@ test('a rules file no fence names warns, names both remedies, and leaves the exi
 });
 
 /**
+ * The fence's opt-out script, the invocation item 4 renders for it and the exact allow rule
+ * `.claude/settings.json` carries for that invocation, spelled as a wired tree carries them for the
+ * reason `TASK_OFFER_FILE` is.
+ */
+const TASK_OFFER_CHECK_FILE = `${SCRIPTS_DIR}/task-offer-check.sh`;
+const TASK_OFFER_CHECK_INVOCATION = `bash ${TASK_OFFER_CHECK_FILE}`;
+const TASK_OFFER_CHECK_RULE = `Bash(${TASK_OFFER_CHECK_INVOCATION})`;
+
+/** The one report line `task-offer-rules` printed, on whichever stream its grade went to. */
+function taskOfferRulesLine(output) {
+  return output.split('\n').find((line) => /^(! WARN|PASS)\s+task-offer-rules\s/.test(line)) ?? '';
+}
+
+/** Rewrite `.claude/settings.json`'s `permissions.allow`, asserting the rule really is gone or there. */
+function setAllowList(dir, allow) {
+  const path = join(dir, SETTINGS_FILE);
+  const settings = JSON.parse(readFileSync(path, 'utf8'));
+  assert.ok(
+    settings.permissions?.allow?.includes(TASK_OFFER_CHECK_RULE),
+    `init did not allow-list ${TASK_OFFER_CHECK_RULE}, so this case proves nothing`,
+  );
+  if (allow === undefined) delete settings.permissions;
+  else settings.permissions.allow = allow;
+  writeFileSync(path, `${JSON.stringify(settings, null, 2)}\n`);
+}
+
+// Each case below was run red once against a mutation of `TASK_OFFER_RULES_CHECK` in
+// `cli/src/doctor/checks.ts`, then the mutation reverted:
+//   (a) the pass line returned without its script-and-rule clause — the line names neither;
+//   (b) the script existence test removed — the deleted script passes;
+//   (c) the rule compared with `:*` appended — the freshly wired control (a) warns instead, and (c)'s
+//       warning names the wrong rule;
+//   (d) the by-hand remedy replaced with the `init` one — the warning no longer says "by hand";
+//   (e) the gate on the project file naming the invocation dropped — the deleted script warns.
+test('(a) a freshly wired fence passes task-offer-rules, naming its opt-out script', async (t) => {
+  const dir = await wiredFixture(t);
+  assert.ok(
+    readFileSync(join(dir, CLAUDE_MD_FILE), 'utf8').includes(TASK_OFFER_CHECK_INVOCATION),
+    `${CLAUDE_MD_FILE} does not name ${TASK_OFFER_CHECK_INVOCATION}, so this case proves nothing`,
+  );
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor']);
+
+  assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+  assert.doesNotMatch(stderr, warnLine('task-offer-rules'));
+  const line = taskOfferRulesLine(stdout);
+  assert.ok(line.includes(TASK_OFFER_CHECK_INVOCATION), `the pass line does not name the script:\n${line}`);
+  assert.ok(line.includes(TASK_OFFER_CHECK_RULE), `the pass line does not name the allow rule:\n${line}`);
+});
+
+test('(b) a deleted fence opt-out script warns, naming its path and init, and leaves the exit status at 0', async (t) => {
+  const dir = await wiredFixture(t);
+  await rm(join(dir, TASK_OFFER_CHECK_FILE));
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor']);
+
+  assert.equal(status, 0, `doctor exited ${status} on a condition that only warns\n${stdout}\n${stderr}`);
+  const line = taskOfferRulesLine(stderr);
+  assert.match(line, warnLine('task-offer-rules'));
+  assert.ok(line.includes(join(dir, TASK_OFFER_CHECK_FILE)), `the warning does not name the script's path:\n${line}`);
+  assert.match(line, /autonomous-sdlc-harness init/);
+  assert.match(stdout, CLEAN_SUMMARY);
+});
+
+test('(c) a settings file without the fence allow rule warns, naming the exact rule', async (t) => {
+  const dir = await wiredFixture(t);
+  setAllowList(dir, undefined);
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor']);
+
+  assert.equal(status, 0, `doctor exited ${status} on a condition that only warns\n${stdout}\n${stderr}`);
+  const line = taskOfferRulesLine(stderr);
+  assert.match(line, warnLine('task-offer-rules'));
+  assert.ok(line.includes(`\`${TASK_OFFER_CHECK_RULE}\``), `the warning does not name the exact rule:\n${line}`);
+  assert.match(line, /autonomous-sdlc-harness init/);
+});
+
+test('(d) an allow list holding only another entry warns and says to add the rule by hand', async (t) => {
+  const dir = await wiredFixture(t);
+  setAllowList(dir, ['Bash(git status)']);
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor']);
+
+  assert.equal(status, 0, `doctor exited ${status} on a condition that only warns\n${stdout}\n${stderr}`);
+  const line = taskOfferRulesLine(stderr);
+  assert.match(line, warnLine('task-offer-rules'));
+  assert.ok(line.includes(`\`${TASK_OFFER_CHECK_RULE}\``), `the warning does not name the exact rule:\n${line}`);
+  assert.match(line, /by hand/);
+});
+
+test('(e) a fence that does not name the opt-out script passes with the script deleted, as before it existed', async (t) => {
+  const dir = await wiredFixture(t);
+  const path = join(dir, CLAUDE_MD_FILE);
+  const projectFile = readFileSync(path, 'utf8');
+  assert.ok(projectFile.includes(TASK_OFFER_CHECK_INVOCATION), `${CLAUDE_MD_FILE} does not name the invocation, so this case proves nothing`);
+  writeFileSync(path, projectFile.split(TASK_OFFER_CHECK_INVOCATION).join('test ! -e .claude/harness-no-offer'));
+  await rm(join(dir, TASK_OFFER_CHECK_FILE));
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor']);
+
+  assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+  assert.match(stdout, passLine('task-offer-rules'));
+  assert.doesNotMatch(stderr, warnLine('task-offer-rules'));
+});
+
+/**
  * The layer-profile contract literals, spelled here for the reason the section above spells its
  * own: a fixture edited through the constant the check reads would assert only that one module
  * agrees with itself. These are the values an adopter's file actually carries.

@@ -1180,6 +1180,31 @@ test('the run-analytics script and its two jq programs land verbatim under scrip
   assert.equal(text(dir, scriptPath), edited, `a second init rewrote the edited ${scriptPath}`);
 });
 
+/** The change-request fence's opt-out check: run by an interactive session, so executable. */
+const TASK_OFFER_CHECK = 'task-offer-check.sh';
+const TASK_OFFER_CHECK_MODE = 0o755;
+
+test('the task-offer check lands verbatim under scriptsDir, and a re-run keeps an edited copy', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  const path = `${SCRIPTS_DIR}/${TASK_OFFER_CHECK}`;
+
+  await initOk(dir);
+  const first = await snapshotTree(dir);
+
+  const template = readFileSync(join(TEMPLATE_SCRIPTS, TASK_OFFER_CHECK), 'utf8');
+  assert.equal(text(dir, path), template, `${path} is not the template's bytes`);
+  assert.deepEqual(copiesOf(first, TASK_OFFER_CHECK), [path], `${TASK_OFFER_CHECK} was written somewhere other than ${SCRIPTS_DIR}/`);
+  const mode = (await lstat(join(dir, path))).mode & 0o777;
+  assert.equal(mode, TASK_OFFER_CHECK_MODE, `${path} is mode ${mode.toString(8)}, not ${TASK_OFFER_CHECK_MODE.toString(8)}`);
+
+  appendFileSync(join(dir, path), '\n# This line was added by hand.\n', 'utf8');
+  const edited = text(dir, path);
+
+  await initOk(dir);
+
+  assert.equal(text(dir, path), edited, `a second init rewrote the edited ${path}`);
+});
+
 /** The Run gates phase's test-suite runner: run by the orchestrating session, so executable. */
 const TEST_SUITE_RUNNER = 'run-test-suite.sh';
 const TEST_SUITE_RUNNER_MODE = 0o755;
