@@ -52,7 +52,7 @@ The same holds for every absent entry in both checkouts: `character special file
 
 ### An absent path no rule names
 
-- **2026-10-31, Claude Code 2.1.316, bubblewrap 0.8.0.** Inside a sandboxed call, `dd if=/dev/null of=<clone>/.git/commondir conv=notrunc`, for an absent path named by no deny entry or rule, reported success (`0+0 records in / 0+0 records out / 0 bytes copied`), and the session exited 0. The file never appeared on disk: a plain shell found the path absent through 21 s of polling. Where the write went is not measured, and we offer no mechanism.
+- **2026-10-31, Claude Code 2.1.316, bubblewrap 0.8.0.** Inside a sandboxed call, `dd if=/dev/null of=<clone>/.git/commondir conv=notrunc`, for an absent path named by no deny entry or rule, reported success (`0+0 records in / 0+0 records out / 0 bytes copied`), and the session exited 0. The file never appeared on disk: a plain shell found the path absent through 21 s of polling. Where the write went is not measured, and we offer no mechanism. A second session the same day, in a fresh container, read the same: `dd` reported `0+0 records in / 0+0 records out / 0 bytes copied` as a successful result, and the path stayed absent through 21 s of polling.
 
 ### Glob entries
 

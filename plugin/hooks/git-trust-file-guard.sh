@@ -34,8 +34,9 @@
 # ## Prerequisites records the exception).
 #
 # NO SANDBOX MOUNT. The guard creates nothing and mounts nothing, so the
-# sandbox's placeholder mounts are untouched by it. DERIVED from the code until
-# AP1–AP6 are re-taken on this guard's head.
+# sandbox's placeholder mounts are untouched by it. Measured on Linux: AP1–AP6
+# pass on this guard's head, with the same placeholders as before it
+# (docs/sandbox-verification.md §5, 2026-10-31, Claude Code 2.1.316).
 #
 # WHAT IS CHECKED. The target (`.tool_input.file_path`, or
 # `.tool_input.notebook_path` for `NotebookEdit`) is made absolute against
