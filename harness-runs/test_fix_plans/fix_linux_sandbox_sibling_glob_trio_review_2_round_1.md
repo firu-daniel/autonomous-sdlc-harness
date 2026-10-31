@@ -16,7 +16,7 @@ The log also reports gates 13a, 13b and 13c as `BLOCKED` (the Python docs-retrie
 
 Each entry resolves to a self-contained `harness-runs/test_fix_plans/fix_linux_sandbox_sibling_glob_trio_review_2_round_1/finding_<K>.md` file via its `**Finding K**` reference. Sorted lowest blast-radius first.
 
-1. [ ] **Finding 1** — Respell `unparseable` as `unparsable` in `plugin/hooks/README.md` so gate 6f's typos check passes. _(layer: plugin)_
+1. [x] **Finding 1** — Respell `unparseable` as `unparsable` in `plugin/hooks/README.md` so gate 6f's typos check passes. _(layer: plugin)_
 
 ---
 
