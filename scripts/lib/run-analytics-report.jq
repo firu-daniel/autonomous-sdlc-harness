@@ -5,7 +5,9 @@
 # builds no document: merging sessions, ordering them and writing either file
 # are run-analytics.sh's, its only caller. Same document in, same bytes out.
 #
-# Floor: jq 1.5 — no regex, no ceil/round/abs, no unary minus, no $__loc__.
+# Floor: jq 1.5 — no regex, no ceil/round/abs, no unary minus, no $__loc__, no
+# jq keyword as a $ variable, . field or object key (jq 1.7 accepts one, jq 1.6
+# does not), and every `if` has an `else`.
 #
 # Document: {schema: 1, branch, sessions: [<session record>, …], run}, sessions
 # oldest first, each record as lib/run-analytics.jq's header states it. A schema
@@ -230,8 +232,8 @@ def table($head; $rows):
   if ($rows | length) == 0 then ["None."]
   else [($head | row), "|" + ($head | map("---|") | join(""))] + [$rows[] | row] end;
 
-def latency_row($label): [$label, .count, (.p50_ms | fmt_dur), (.p90_ms | fmt_dur),
-                          (.p99_ms | fmt_dur), (.max_ms | fmt_dur), .over_threshold];
+def latency_row($row_label): [$row_label, .count, (.p50_ms | fmt_dur), (.p90_ms | fmt_dur),
+                              (.p99_ms | fmt_dur), (.max_ms | fmt_dur), .over_threshold];
 
 def run_tokens($r):
   if $r.token_sessions == 0 then "—"
