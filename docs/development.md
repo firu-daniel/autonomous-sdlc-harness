@@ -2421,7 +2421,7 @@ node cli/dist/cli.js doctor
 
 An expected refusal whose text carries none of the refusal strings the judge knows prints `not run`, naming the text. The person who ran the probe takes those strings from the first Linux run's kept evidence and adds them to the layer table in `scripts/lib/sandbox-probe/judge.sh` in a follow-up.
 
-**The absent-path check, by hand.** It fills `docs/sandbox-verification.md` AP1–AP8, which measure the Linux interim position `docs/cli.md` §6 residual 12 states: AP1–AP6 and the `dd` row, AP8, off one probe clone's report, and the control, AP7, off a second probe clone's. It is taken on the same container, after the `run` legs and before the refusal subcommand below.
+**The absent-path check, by hand.** It fills `docs/sandbox-verification.md` AP1–AP9, which measure the Linux interim position `docs/cli.md` §6 residual 12 states: AP1–AP6, the `dd` row, AP8, and the guard's row, AP9, off one probe clone's report, and the control, AP7, off a second probe clone's. It is taken on the same container, after the `run` legs and before the refusal subcommand below.
 
 To take it on a branch's head before merge, as §5 *The route's re-take (owed)* requires, clone the checkout from that branch in place of the recipe's `git clone --branch dev` line, then point a local `dev` at it, because the probe's preflight refusal 3 refuses a main checkout that is not on `defaultBranch` (`dev`). As `probe`:
 
@@ -2444,28 +2444,29 @@ The check never creates or removes it; it is discarded with the container. `SIB=
 ```
 bash scripts/sandbox-absent-path-check.sh run
 bash scripts/sandbox-absent-path-check.sh write-probe
+bash scripts/sandbox-absent-path-check.sh hook-probe
 bash scripts/sandbox-absent-path-check.sh sweep
 bash scripts/sandbox-absent-path-check.sh report
 ```
 
-`write-probe` is the `dd` row, AP8, and runs after `run` and before `sweep`: one session on the per-run profile itself issues `dd if=/dev/null of=<clone>/.git/commondir conv=notrunc`, and a plain shell records whether the file appeared and removes it before the session ends. It refuses with exit 2 when `<clone>/.git/commondir` is already there, a leftover AP2 then records. `sweep` deletes manifest-recorded leftovers in the probe clone, the sibling and the main checkout and moves the probe branch's ref, so take it only in this throwaway container. Press Enter in the first terminal so the probe tears down, then take the last reading and write the report again with it:
+`write-probe` is the `dd` row, AP8, and runs after `run` and before `hook-probe`: one session on the per-run profile itself issues `dd if=/dev/null of=<clone>/.git/commondir conv=notrunc`, and a plain shell records whether the file appeared and removes it before the session ends. It records the `dd` call's own tool result, and grades AP8 on the disk first: `written`, `not on disk, the call reported success`, `refused`, or `no verdict: no dd call in the stream`. `hook-probe` is the guard's row, AP9, and runs after `write-probe` and before `sweep`: one session on the per-run profile, loaded with `--plugin-dir <checkout>/plugin` and `--include-hook-events` so the guard under test is this checkout's, issues one `Write` to `<clone>/.git/commondir`; a plain shell polls and removes as `write-probe` does, and the verdict is `refused by the hook`, `written`, `refused, not by the hook`, or `no verdict: no Write call in the stream`. Each refuses with exit 2 when `<clone>/.git/commondir` is already there, a leftover AP2 then records. If `claude --help` in the container lists no `--plugin-dir`, skip `hook-probe` and take AP9 by hand instead: in a session on the per-run profile `run-profiles/*/*.json` under the run lane, with this checkout's plugin enabled, ask for one `Write` to `<clone>/.git/commondir` and record the tool result, then from a plain shell `stat <clone>/.git/commondir`, and remove the file with `rm -f` if it is there. `sweep` deletes manifest-recorded leftovers in the probe clone, the sibling and the main checkout and moves the probe branch's ref, so take it only in this throwaway container. Press Enter in the first terminal so the probe tears down, then take the last reading and write the report again with it:
 
 ```
 bash scripts/sandbox-absent-path-check.sh after-teardown
 bash scripts/sandbox-absent-path-check.sh report
 ```
 
-The report is `${SBX_ABSENT_OUT:-${TMPDIR:-/tmp}/sbx-absent-path}/report.md`. Read AP1–AP6, AP8 and the stamp off it, as `docs/sandbox-verification.md` §5 *The route's re-take (owed)* states.
+The report is `${SBX_ABSENT_OUT:-${TMPDIR:-/tmp}/sbx-absent-path}/report.md`. Read AP1–AP6, AP8, AP9 and the stamp off it, as `docs/sandbox-verification.md` §5 *The route's re-take (owed)* states.
 
 **The control, AP7.** Start `bash scripts/sandbox-probe.sh run --leg headless-parity` again in the first terminal, so a fresh probe clone and its per-run profile are held. In the second terminal, write the control copy of that profile, then run on it into an output directory of its own, with no `sweep`:
 
 ```
-bash scripts/sandbox-absent-path-check.sh control-profile
-SBX_ABSENT_OUT=<control out> P=<the path control-profile printed> bash scripts/sandbox-absent-path-check.sh run
+SBX_ABSENT_OUT=<control out> bash scripts/sandbox-absent-path-check.sh control-profile
+SBX_ABSENT_OUT=<control out> bash scripts/sandbox-absent-path-check.sh run
 SBX_ABSENT_OUT=<control out> bash scripts/sandbox-absent-path-check.sh report
 ```
 
-`control-profile` prints the copy's path and how many trio `Edit` rules it removed; `<control out>` is a fresh directory, such as `${TMPDIR:-/tmp}/sbx-absent-path-control`. Read AP7 and its stamp, whose `profile:` line names the copy, off `<control out>/report.md`. Then press Enter in the first terminal so that probe tears down.
+`control-profile` writes the copy into `<control out>` and prints its path and how many trio `Edit` rules it removed, and `run` takes the copy from there; `<control out>` is a fresh directory, such as `${TMPDIR:-/tmp}/sbx-absent-path-control`. `control-profile` refuses without `SBX_ABSENT_OUT`, and on a directory already holding a run. Read AP7 and its stamp, whose `profile:` line names the copy, off `<control out>/report.md`. Then press Enter in the first terminal so that probe tears down.
 
 **Copy both output directories to the host before leaving the container.** The container is started with `--rm` and no volume, so leaving it deletes them. From a host terminal, while the container still runs:
 
