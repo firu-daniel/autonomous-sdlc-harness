@@ -4,29 +4,29 @@
 
 | Measure | Value |
 |---|---|
-| Sessions | 1 (0 incomplete) |
-| Span | 5h43m |
-| Wall | 5h43m |
-| Active | 3h47m |
+| Sessions | 2 (0 incomplete) |
+| Span | 17h25m |
+| Wall | 6h21m |
+| Active | 4h25m |
 | Host-suspended | 0.0s |
 | Idle | 1h55m |
-| Cost | $86.36 |
-| Input tokens (uncached) | 3422 |
-| Total input tokens (incl. cache) | 193393142 |
-| Output tokens | 918269 |
-| Thinking tokens (main thread) | 3589 |
-| Cache read tokens | 187521580 |
-| Cache write tokens | 5868140 |
-| Cache write tokens, main thread (5m / 1h) | 0 / 379520 |
-| Cache hit ratio | 0.9696 |
-| Requests | 1622 |
-| Request latency p50 / p90 / p99 / max | 2.0s / 7.5s / 25.6s / 1m 42s |
+| Cost | $90.80 |
+| Input tokens (uncached) | 3594 |
+| Total input tokens (incl. cache) | 205286864 |
+| Output tokens | 944168 |
+| Thinking tokens (main thread) | 8974 |
+| Cache read tokens | 199205662 |
+| Cache write tokens | 6077608 |
+| Cache write tokens, main thread (5m / 1h) | 0 / 559055 |
+| Cache hit ratio | 0.9704 |
+| Requests | 1706 |
+| Request latency p50 / p90 / p99 / max | 2.0s / 7.3s / 25.4s / 1m 42s |
 | Requests over the idle threshold | 0 |
 | API retries | 0 |
-| Permission denials | 55 |
+| Permission denials | 57 |
 | Sub-agents failed / killed | 0 / 0 |
 | Slowest sub-agent | autonomous-sdlc-harness:layer-implementer — Fix skeptic Finding 1 (cli) — 21m 44s (session 1) |
-| Rate-limit peak | five_hour 0.72, seven_day 0.44 |
+| Rate-limit peak | five_hour 0.72, seven_day 0.45 |
 
 ## Session 1 — 2026-10-30T13:18:43.007Z → 2026-10-30T19:01:47.158Z
 
@@ -317,3 +317,108 @@ Remainder: tokens the session total holds that neither the orchestrator's reques
 | Turns | 409 |
 | Time to first token | 1.8s |
 | Rate-limit peak | five_hour 0.72, seven_day 0.44 |
+
+## Session 2 — 2026-10-31T06:05:40.366Z → 2026-10-31T06:43:48.726Z
+
+Session id: `6b83bef9-a851-4796-8258-3c0947bd8ff2`
+
+### Time
+
+| Wall | duration_ms | duration_api_ms | Host-suspended | Idle | Active | Suspend source |
+|---|---|---|---|---|---|---|
+| 38m 08s | 38m 09s | 4m 13s | 0.0s | 0.0s | 38m 08s | none |
+
+### Idle gaps (over 120 s)
+
+None.
+
+### Request latency
+
+| Context | Requests | p50 | p90 | p99 | Max | Over threshold |
+|---|---|---|---|---|---|---|
+| all | 84 | 1.6s | 3.7s | 16.0s | 16.0s | 0 |
+| autonomous-sdlc-harness:statistics-plan-writer | 7 | 2.1s | 16.0s | 16.0s | 16.0s | 0 |
+| orchestrator | 77 | 1.6s | 3.7s | 10.7s | 10.7s | 0 |
+
+### Tool time
+
+| Tool | Context | Calls | Total | Max |
+|---|---|---|---|---|
+| Agent — sub-agent wall time | orchestrator | 1 | 32.6s | 32.6s |
+| Bash | autonomous-sdlc-harness:statistics-plan-writer | 8 | 1.0s | 0.1s |
+| Bash | orchestrator | 76 | 33m 56s | 1m 01s |
+| Edit | orchestrator | 3 | 0.0s | 0.0s |
+| Read | autonomous-sdlc-harness:statistics-plan-writer | 1 | 0.0s | 0.0s |
+| Read | orchestrator | 7 | 1.4s | 0.3s |
+| Skill | orchestrator | 1 | 0.0s | 0.0s |
+| Write | autonomous-sdlc-harness:statistics-plan-writer | 1 | 0.0s | 0.0s |
+| Write | orchestrator | 1 | 0.0s | 0.0s |
+
+`Agent` / `Task` rows are sub-agent wall time: how long the orchestrator was blocked on each dispatch, which `### Sub-agents` breaks down per dispatch. They are not time spent in a tool.
+
+#### Slowest calls (sub-agent dispatches excluded)
+
+| Tool | Context | Started | Duration | Result bytes | Error | Permission denied |
+|---|---|---|---|---|---|---|
+| Bash | orchestrator | 2026-10-31T06:08:18.525Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-10-31T06:15:35.569Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-10-31T06:24:58.855Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-10-31T06:23:55.814Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-10-31T06:22:53.096Z | 1m 00s | 19 | true | false |
+| Bash | orchestrator | 2026-10-31T06:07:15.867Z | 1m 00s | 19 | true | false |
+| Bash | orchestrator | 2026-10-31T06:17:40.896Z | 1m 00s | 19 | true | false |
+| Bash | orchestrator | 2026-10-31T06:14:32.939Z | 1m 00s | 19 | true | false |
+| Bash | orchestrator | 2026-10-31T06:19:45.929Z | 1m 00s | 19 | true | false |
+| Bash | orchestrator | 2026-10-31T06:34:18.398Z | 1m 00s | 19 | true | false |
+
+#### Polling loops
+
+| Context | Command | Count | Total |
+|---|---|---|---|
+| orchestrator | bash <main_repo>/scripts/push-branch.sh <repo_root> | 4 | 18.2s |
+| orchestrator | ls harness-runs/STOP harness-runs/PAUSE 2>/dev/null; bash scripts/run-test-suite.sh --wait task_round_2 | 32 | 31m 29s |
+
+### Sub-agents
+
+| Type | Description | Duration | Requests | Output tokens | Input tokens (uncached) | Total input tokens (incl. cache) | Cache read tokens | Cache write tokens | Wall share |
+|---|---|---|---|---|---|---|---|---|---|
+| autonomous-sdlc-harness:statistics-plan-writer | Write branch statistics | 32.6s | 7 | 3948 | 16 | 204760 | 174811 | 29933 | 0.0143 |
+
+### Cost and tokens
+
+| Measure | Value |
+|---|---|
+| Cost | $4.44 |
+| Cost — claude-opus-5-5 | $4.44 |
+| Input tokens (uncached) | 172 |
+| Total input tokens (incl. cache) | 11893722 |
+| Output tokens | 25899 |
+| Thinking tokens (main thread) | 5385 |
+| Cache read tokens | 11684082 |
+| Cache write tokens | 209468 |
+| Cache write tokens, main thread (5m / 1h) | 0 / 179535 |
+| Cache hit ratio | 0.9824 |
+| Token source | result.modelUsage |
+
+#### Token attribution
+
+| Context | Input tokens (uncached) | Total input tokens (incl. cache) | Output tokens | Cache read tokens | Cache write tokens |
+|---|---|---|---|---|---|
+| orchestrator | 156 | 11688962 | 1365 | 11509271 | 179535 |
+| sub-agents | 16 | 204760 | 3948 | 174811 | 29933 |
+| remainder | 0 | 0 | 20586 | 0 | 0 |
+
+Remainder: tokens the session total holds that neither the orchestrator's requests nor the dispatches' transcripts account for.
+
+### Reliability
+
+| Measure | Value |
+|---|---|
+| API retries | 0 |
+| Permission denials | 2 |
+| Sub-agents spawned / failed / killed | 1 / 0 / 0 |
+| terminal_reason | completed |
+| stop_reason | end_turn |
+| Turns | 91 |
+| Time to first token | 1.3s |
+| Rate-limit peak | seven_day 0.45 |
