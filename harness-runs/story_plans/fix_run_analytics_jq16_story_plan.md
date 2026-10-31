@@ -28,7 +28,17 @@ Ship order: the `cli` tasks first (the program fix, then the guard that proves i
    - `npm ci`, then `npm test --workspace cli`.
 
    Record the `jq --version` line and the `# pass` / `# fail` counts in the pull request. Any failure that names `run-analytics`, `git-trust-file-guard` or the watcher's profile render blocks the merge.
+
+   **Taken 2026-11-01, by hand, on `00f186f8`** (this branch's head, carrying the fixture commit), in a throwaway `node:22-bookworm` container on colima, started with Gate 15's three relaxed security options, as `probe` with a global git identity set. `jq --version` printed `jq-1.6`. `npm test --workspace cli`: `# tests 3052`, `# pass 3026`, `# fail 4`, `# cancelled 0`.
+   - **No jq failure.** The log carries no `unexpected label` and no `jq: error`. Every test the task prompt listed as failing on `1a41540c` passes, including `run-analytics.test.mjs`'s *a suspend file* and *none* subtests. So do `git-trust-file-guard decisions`, the per-run profile render tests and `jq-floor.test.mjs`.
+   - **The four failures name none of `run-analytics`, `git-trust-file-guard` or the profile render**, so none blocks the merge:
+     - `spawn E2BIG` in `remote-control-mention.test.mjs` → *an oversized diff is cut at a whole line with the cut note*, and in `watcher-stall-reset-payloads.test.mjs` → *(J6) a forged base in the job checkout: the real doctor judges from the recorded commit and refuses*;
+     - `fatal: unable to auto-detect email address` in `remote-start.test.mjs` → *a feat_x already on origin exits 4 and sends no workflow run* and *a push of the prompt commit after origin/feat_x moved exits 4, names the commit and leaves nothing local*. These run git under a home of their own, so the container user's global identity does not reach them.
+
+     They are Linux-container failures outside this branch's scope, and the 2026-10-30 run on `1a41540c` had five such failures (filed as sandbox3b1e). They were not matched against that filing one by one.
 2. **Only if Task 5's fixture write is refused:** paste the operator remedy recorded in `harness-runs/task_plans/fix_run_analytics_jq16/task_5_plan.md` → `## Disposition`, from the main checkout's root, and commit the two files it changes.
+
+   **Taken 2026-11-01 in `00f186f8`.** The remedy was applied from the run copy's root, after a fresh render with this branch's built CLI was compared with the fixture. The only differences were the two `run-analytics.sh` entries and the three `_README` lines #224 rewrote, apart from machine-path substitution. The patched profile is byte-identical to that render with the paths substituted. The README's six figures re-measure as written: 169 across 128 lines, 138, 36, 30 and 1.
 
 ## Phase 2 Readiness — Ordered Fix List
 
