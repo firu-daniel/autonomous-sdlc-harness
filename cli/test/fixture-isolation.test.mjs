@@ -29,11 +29,15 @@ test('the origin has its own identity', async (t) => {
   t.after(fixture.cleanup);
   const origin = (await runGit(fixture.dir, ['remote', 'get-url', 'origin'])).stdout.trim();
 
-  const tree = (await runGit(origin, ['hash-object', '-w', '-t', 'tree', '/dev/null'])).stdout.trim();
-  const commit = (await runGit(origin, ['commit-tree', tree, '-m', 'identity probe'])).stdout.trim();
-  const body = (await runGit(origin, ['cat-file', 'commit', commit])).stdout;
+  const result = await runBash(origin, [
+    '-c',
+    'unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL EMAIL; ' +
+      'tree=$(git hash-object -w -t tree /dev/null) && commit=$(git commit-tree "$tree" -m "identity probe") && ' +
+      'git cat-file commit "$commit"',
+  ]);
 
-  assert.match(body, /^author Harness Fixture <fixture@example\.invalid> /m);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /^author Harness Fixture <fixture@example\.invalid> /m);
 });
 
 test('git never guesses an identity', async (t) => {

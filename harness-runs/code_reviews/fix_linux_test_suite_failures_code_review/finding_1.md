@@ -19,3 +19,5 @@ The case runs `git commit-tree` in the fixture's bare origin through `runGit`. `
 ```
 
 `runBash` and `runGit` are already imported. `runGit` is still used for the `remote get-url` line. This edits only `cli/test/fixture-isolation.test.mjs`, so that file is the only test the fix runs: `npm test --workspace cli -- test/fixture-isolation.test.mjs`.
+
+**Deviations from plan:** Fix implemented as specified. One extra check could not be executed: re-running `npm test --workspace cli -- test/fixture-isolation.test.mjs` with `GIT_AUTHOR_*` / `GIT_COMMITTER_*` exported, to reproduce the host-identity case, was refused by the permission layer ("Permission to use Bash has been denied because Claude Code is running in don't ask mode"). The claim that the case now passes on such a host rests on reading the probe: its `unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL EMAIL` prefix matches the one `'git never guesses an identity'` uses. The plain single-file run passed (`# tests 6`, `# pass 6`, `# fail 0`).
