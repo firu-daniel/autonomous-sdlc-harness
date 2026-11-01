@@ -11,7 +11,9 @@
  * so an argument shift that fuses the row with the verdict is refused at its source. The Linux-only
  * legs (`SP_LINUX_ONLY_LEGS`) are recorded `not run` row by row off Linux, a leg whose row differs by
  * platform takes the one `sp_leg_row_for` picks from `SP_PLATFORM`, and the parity script's text
- * changes on Linux in its two expectation endings only.**
+ * changes on Linux in its two expectation endings only. The job declaration `--list --job` prints is
+ * the single source of which rows each leg takes in job mode, every job row is a row of its leg,
+ * Gate 15 restates it row for row, and in job mode a clone-only row can be printed only `not run`.**
  *
  * The judges run in a `bash -c` that sources `core.sh` and `judge.sh` from `WORKSPACE_ROOT`, with the
  * fixture (or `os.tmpdir()`) as its working directory; every repository argument names a `seedRepository` fixture and
@@ -58,8 +60,27 @@ const LEG_ORDER = [
   'registry',
   'detached',
   'loopback',
+  'job-layout',
+  'runner-install',
+  'runner-pid',
+  'runner-privs',
   'headless-parity',
   'refusal',
+];
+
+/** The legs that run in job mode, in leg-table order. */
+const JOB_LEGS = [
+  'wrappers',
+  'planted-files',
+  'write-protection',
+  'network',
+  'credentials',
+  'detached',
+  'loopback',
+  'job-layout',
+  'runner-install',
+  'runner-pid',
+  'runner-privs',
 ];
 
 /** The rows the probe's branches added to the table, ranges expanded. */
@@ -98,6 +119,16 @@ const NEW_ROWS = [
   'RF1',
   'RF2',
   'RF3',
+  'CS6',
+  'IS1',
+  'IS2',
+  'IS3',
+  'IS4',
+  'PN1',
+  'PN2',
+  'PN3',
+  'NN1',
+  'NN2',
 ];
 
 /**
@@ -321,11 +352,24 @@ test('--list prints the leg table', async (t) => {
 
 test('the Linux-only legs and the per-platform rows', async (t) => {
   await t.test('sp_leg_linux_only answers 0 for exactly the Linux-only legs', async () => {
-    const legs = ['glob-deny', 'registry', 'detached', 'loopback', 'refusal', 'gates', 'headless-parity'];
+    const legs = [
+      'glob-deny',
+      'registry',
+      'detached',
+      'loopback',
+      'refusal',
+      'runner-install',
+      'runner-pid',
+      'runner-privs',
+      'gates',
+      'headless-parity',
+      'job-layout',
+    ];
     const run = await sourced(tmpdir(), 'for leg in "$@"; do sp_leg_linux_only "$leg"; printf "%s=%s\\n" "$leg" "$?"; done', legs);
     assert.equal(
       run.stdout,
-      'glob-deny=0\nregistry=0\ndetached=0\nloopback=0\nrefusal=0\ngates=1\nheadless-parity=1\n',
+      'glob-deny=0\nregistry=0\ndetached=0\nloopback=0\nrefusal=0\nrunner-install=0\nrunner-pid=0\nrunner-privs=0\n' +
+        'gates=1\nheadless-parity=1\njob-layout=1\n',
       run.stderr,
     );
   });
@@ -356,29 +400,162 @@ test('the Linux-only legs and the per-platform rows', async (t) => {
   });
 });
 
-test("Gate 15's restated leg table matches --list, row for row", async () => {
+/**
+ * The Gate 15 table in `docs/development.md` under `header`, read to the next blank line, each row as
+ * `--list` would print it: backticks stripped, cells tab-joined, the row cell's `, ` joined to `,`.
+ */
+function restatedTable(header, cellCount) {
   const doc = readFileSync(join(WORKSPACE_ROOT, 'docs', 'development.md'), 'utf8').split('\n');
-  const header = doc.indexOf('| Leg | Rows | Expected | Recorded in |');
-  assert.notEqual(header, -1, 'the leg table header is in docs/development.md');
-  const end = doc.indexOf('', header);
-  const restated = doc
-    .slice(header + 2, end === -1 ? undefined : end)
-    .map((line) => {
-      const cells = line
-        .replace(/^\|/, '')
-        .replace(/\|$/, '')
-        .split('|')
-        .map((cell) => cell.replaceAll('`', '').trim());
-      assert.equal(cells.length, 4, `not four cells: ${JSON.stringify(line)}`);
-      const [leg, rows, expected, recorded] = cells;
-      return [leg, rows.replaceAll(', ', ','), expected, recorded].join('\t');
-    });
+  const start = doc.indexOf(header);
+  assert.notEqual(start, -1, `${header} is in docs/development.md`);
+  const end = doc.indexOf('', start);
+  return doc.slice(start + 2, end === -1 ? undefined : end).map((line) => {
+    const cells = line
+      .replace(/^\|/, '')
+      .replace(/\|$/, '')
+      .split('|')
+      .map((cell) => cell.replaceAll('`', '').trim());
+    assert.equal(cells.length, cellCount, `not ${cellCount} cells: ${JSON.stringify(line)}`);
+    cells[1] = cells[1].replaceAll(', ', ',');
+    return cells.join('\t');
+  });
+}
 
-  const run = await runBash(WORKSPACE_ROOT, [PROBE, '--list']);
+/** The probe's stdout for `args`, one entry per line, the trailing newline dropped. */
+async function listed(args) {
+  const run = await runBash(WORKSPACE_ROOT, [PROBE, ...args]);
   assert.equal(run.status, 0, run.stderr);
-  const listed = run.stdout.split('\n');
-  if (listed.at(-1) === '') listed.pop();
-  assert.deepEqual(restated, listed);
+  const lines = run.stdout.split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  return lines;
+}
+
+test("Gate 15's restated leg table matches --list, row for row", async () => {
+  assert.deepEqual(restatedTable('| Leg | Rows | Expected | Recorded in |', 4), await listed(['--list']));
+});
+
+test('--list --job prints the job table', async (t) => {
+  const table = await legTable();
+  const job = (await listed(['--list', '--job'])).map((line) => {
+    const fields = line.split('\t');
+    assert.equal(fields.length, 2, `not two tab-separated fields: ${JSON.stringify(line)}`);
+    return { leg: fields[0], rows: fields[1].split(',') };
+  });
+
+  await t.test('one line per job leg, exactly the eleven, in leg-table order', () => {
+    assert.deepEqual(
+      job.map((entry) => entry.leg),
+      JOB_LEGS,
+    );
+    assert.deepEqual(
+      LEG_ORDER.filter((leg) => JOB_LEGS.includes(leg)),
+      JOB_LEGS,
+    );
+  });
+
+  await t.test("every job row is in that leg's --list row field", () => {
+    for (const entry of job) {
+      const leg = table.find((row) => row.leg === entry.leg);
+      assert.ok(leg, `${entry.leg} is not a --list leg`);
+      assert.ok(entry.rows.length > 0, entry.leg);
+      for (const row of entry.rows) {
+        assert.ok(leg.rows.includes(row), `${row} is not a row of ${entry.leg} (${leg.rows.join(',')})`);
+      }
+    }
+  });
+
+  await t.test('no non-job leg appears', () => {
+    for (const entry of job) assert.ok(JOB_LEGS.includes(entry.leg), entry.leg);
+  });
+
+  await t.test('sp_leg_job_rows answers each job leg with its field, and git with status 1', async () => {
+    for (const entry of job) {
+      const rows = await sourced(tmpdir(), 'sp_leg_job_rows "$1"', [entry.leg]);
+      assert.equal(rows.stdout, `${entry.rows.join(',')}\n`, rows.stderr);
+    }
+    const git = await sourced(tmpdir(), 'sp_leg_job_rows git; printf "|%s" "$?"');
+    assert.equal(git.stdout, '|1', git.stderr);
+  });
+});
+
+test("Gate 15's restated job table matches --list --job, row for row", async () => {
+  assert.deepEqual(restatedTable('| Leg | Job rows |', 2), await listed(['--list', '--job']));
+});
+
+test('the mode skips and the job-mode result line', async (t) => {
+  /** `sp_result_line`'s line for a `not run` row, `claude=` unknown. */
+  const notRun = (leg, row, evidence) =>
+    `leg="${leg}" row="${row}" result="not run" evidence="${evidence}" departure="none" claude="unknown"\n`;
+
+  await t.test('sp_leg_mode_skip prints one not run line per row, carrying the evidence', async () => {
+    const run = await sourced(tmpdir(), 'sp_leg_mode_skip runner-pid "job mode only: x"');
+    assert.equal(
+      run.stdout,
+      ['PN1', 'PN2', 'PN3'].map((row) => notRun('runner-pid', row, 'job mode only: x')).join(''),
+      run.stderr,
+    );
+  });
+
+  await t.test('sp_job_skip_clone_rows prints the clone-only rows in job mode, and nothing outside it', async () => {
+    const job = await sourced(tmpdir(), 'SP_JOB_MODE=1; sp_job_skip_clone_rows wrappers');
+    assert.equal(
+      job.stdout,
+      ['CS4', 'P3', 'CW2']
+        .map((row) => notRun('wrappers', row, 'clone layout only: job mode cuts no clone and measures the checkout itself'))
+        .join(''),
+      job.stderr,
+    );
+    const clone = await sourced(tmpdir(), 'SP_JOB_MODE=0; sp_job_skip_clone_rows wrappers; printf "|%s" "$?"');
+    assert.equal(clone.stdout, '|0', clone.stderr);
+  });
+
+  await t.test('in job mode a measured clone-only row is refused, while not run and a job row print', async () => {
+    const refused = await sourced(
+      tmpdir(),
+      'SP_JOB_MODE=1; sp_result_line wrappers CW2 pass x ""; printf "|%s|%s" "$?" "$SP_FAIL_COUNT"',
+    );
+    assert.equal(refused.stdout, '|1|1');
+    assert.equal(
+      refused.stderr,
+      "sandbox-probe: sp_result_line: row 'CW2' of leg 'wrappers' is not a job-mode row, so its verdict 'pass' is refused in job mode\n",
+    );
+
+    const skipped = await sourced(tmpdir(), 'SP_JOB_MODE=1; sp_result_line wrappers CW2 "not run" x ""');
+    assert.equal(skipped.stdout, notRun('wrappers', 'CW2', 'x'), skipped.stderr);
+
+    const measured = await sourced(tmpdir(), 'SP_JOB_MODE=1; sp_result_line wrappers P1b pass x ""');
+    assert.equal(
+      measured.stdout,
+      'leg="wrappers" row="P1b" result="pass" evidence="x" departure="none" claude="unknown"\n',
+      measured.stderr,
+    );
+  });
+
+  await t.test('outside job mode a measured clone-only row prints as before', async () => {
+    const run = await sourced(tmpdir(), 'SP_JOB_MODE=0; sp_result_line wrappers CW2 pass x ""');
+    assert.equal(run.stdout, 'leg="wrappers" row="CW2" result="pass" evidence="x" departure="none" claude="unknown"\n', run.stderr);
+  });
+
+  for (const [args, refusal] of [
+    [['run', '--runner-controls', 'x'], 'sandbox-probe: --runner-controls needs --job <checkout>'],
+    [
+      ['run', '--job', '/nonexistent', '--leg', 'headless-parity'],
+      "sandbox-probe: --job does not take --leg headless-parity: the parity script prints a clone's paths",
+    ],
+  ]) {
+    await t.test(`${args.join(' ')} is a usage error, raised before preflight`, async () => {
+      const run = await runBash(WORKSPACE_ROOT, [PROBE, ...args]);
+      assert.equal(run.status, 1, run.stderr);
+      assert.equal(run.stdout, '');
+      const lines = run.stderr.split('\n');
+      assert.equal(lines[0], refusal, run.stderr);
+      assert.ok(
+        lines.some((line) => line.startsWith('Usage: sandbox-probe.sh')),
+        run.stderr,
+      );
+      assert.ok(!run.stderr.includes('stamp:'), 'no preflight output');
+    });
+  }
 });
 
 test('sp_result_line: fixed field order, double-quoted values', async (t) => {

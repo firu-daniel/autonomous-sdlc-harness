@@ -116,7 +116,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_sandbox_probe_job_mode/
 13. [x] **Task 13** — Take L1 in job mode on the checkout's own `HEAD` _(layer: general)_ _(points: 15)_
 14. [x] **Task 14** — Add the runner workflow `scripts/sandbox-probe-runner.yml` _(layer: general)_ _(points: 20)_
 15. [x] **Task 15** — Restate Gate 15 for job mode and the runner workflow _(layer: general)_ _(points: 20)_
-16. [ ] **Task 16** — Test the leg table, the job table, Gate 15's two restated tables and the mode skips _(layer: cli)_ _(points: 12)_
+16. [x] **Task 16** — Test the leg table, the job table, Gate 15's two restated tables and the mode skips _(layer: cli)_ _(points: 12)_
 17. [ ] **Task 17** — Test job mode's preflight, setup and teardown _(layer: cli)_ _(points: 20)_
 18. [ ] **Task 18** — Test the job launch line, the manifest, the sweep call and the agent-PID token _(layer: cli)_ _(points: 20)_
 19. [ ] **Task 19** — Test PD23's shapes, and move the existing `unrecognised` cases onto a string the judge still does not know _(layer: cli)_ _(points: 15)_
