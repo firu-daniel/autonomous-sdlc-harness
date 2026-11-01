@@ -133,6 +133,30 @@ sp__line_with() {
   return 1
 }
 
+# The layer table's Linux `sandbox` strings, the only copy: a caller outside this file reads them through
+# sp__linux_refusal_line.
+SP__LINUX_SANDBOX_STRINGS=("Read-only file system" "Permission denied" "Device or resource busy")
+
+# sp__linux_refusal_line <text> [<string>...] — the first line carrying one of SP__LINUX_SANDBOX_STRINGS,
+# or of the named subset; status 1 when none does, status 2 and nothing printed when a named string is
+# not a member. Does not test SP_PLATFORM: the caller does.
+sp__linux_refusal_line() {
+  local text="$1" s known found
+  shift
+  if [ "$#" -eq 0 ]; then
+    set -- "${SP__LINUX_SANDBOX_STRINGS[@]}"
+  else
+    for s in "$@"; do
+      found=0
+      for known in "${SP__LINUX_SANDBOX_STRINGS[@]}"; do
+        [ "$s" = "$known" ] && found=1
+      done
+      [ "$found" -eq 1 ] || return 2
+    done
+  fi
+  sp__line_with "$text" "$@"
+}
+
 # sp__issued <count> — the `(issued <n> times)` suffix when a call was matched more than once.
 sp__issued() {
   [ "$1" -gt 1 ] && printf ' (issued %s times)' "$1"
@@ -168,7 +192,7 @@ sp__layer() {
     SP_LAYER=network
   elif line="$(sp__line_with "$text" "Operation not permitted")"; then
     SP_LAYER=sandbox
-  elif [ "${SP_PLATFORM:-}" = linux ] && line="$(sp__line_with "$text" "Read-only file system" "Permission denied" "Device or resource busy")"; then
+  elif [ "${SP_PLATFORM:-}" = linux ] && line="$(sp__linux_refusal_line "$text")"; then
     SP_LAYER=sandbox
   else
     SP_LAYER=ran

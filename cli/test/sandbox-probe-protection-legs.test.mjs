@@ -11,8 +11,8 @@
  * never reached the layer CS1, CS2, CS7, CS3 and CL5 measure, and is `not run`, and a CS3 state check
  * depending on such a call is skipped rather than failed, and no probe helper writes `Broken pipe`. On
  * Linux, `Read-only file system` is a dd and rename refusal beside `Operation not permitted`, and so, from
- * PD23 (docs/sandbox-verification.md §5), are a dd's `Permission denied` and a rename's `Device or resource
- * busy`; a dd, rename or CS3 fetch error carrying no refusal string the judge knows is `not run`, never
+ * PD23 (docs/sandbox-verification.md §5), are `Permission denied` and `Device or resource busy`, the judge's
+ * whole Linux set applying to a dd and a rename alike; a dd, rename or CS3 fetch error carrying no refusal string the judge knows is `not run`, never
  * `fail`; with SP_PLATFORM empty each of those cases keeps its macOS verdict.** The unknown dd and rename
  * error is `Input/output error`, which no layer-table arm matches; it was `Device or resource busy` until
  * PD23 made that a refusal.
@@ -329,6 +329,7 @@ test('sp__wp_mv_class: one rename helper line’s class, by platform', async (t)
     ['sbx_wp_mv 0 mv: rename a to b: Operation not permitted', 'refused\n', 'refused\n'],
     ["sbx_wp_mv 0 mv: cannot move 'a' to 'b': Read-only file system", 'refused\n', 'other\n'],
     ["sbx_wp_mv 0 mv: cannot move 'a' to 'b': Device or resource busy", 'refused\n', 'other\n'],
+    ["sbx_wp_mv 0 mv: cannot move 'a' to 'b': Permission denied", 'refused\n', 'other\n'],
     [
       "sbx_wp_mv 0 mv: inter-device move failed: 'a' to 'b'; unable to remove target: Device or resource busy",
       'refused\n',

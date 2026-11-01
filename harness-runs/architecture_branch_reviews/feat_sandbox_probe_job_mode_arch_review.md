@@ -23,7 +23,7 @@ Two Should Fix items remain. Both are the same kind of problem: a second copy of
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 2** — `sp__wp_mv_class` keeps a second copy of the judge's Linux refusal strings, and its header says the copy matches when it does not _(layer: general)_
+1. [x] **Finding 2** — `sp__wp_mv_class` keeps a second copy of the judge's Linux refusal strings, and its header says the copy matches when it does not _(layer: general)_
 2. [ ] **Finding 1** — `sp__job_writable_root` is a second copy of the watcher's `placeholder_manifest_writable_root`, which the probe can call directly _(layer: general)_
 
 ## Must Fix

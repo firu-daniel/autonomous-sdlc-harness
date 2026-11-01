@@ -50,9 +50,9 @@
 # rename refusal beside `Operation not permitted`, and the row's pass sentence names both. With
 # SP_PLATFORM empty or `macos`, every verdict and evidence string is unchanged.
 #
-# PD23. On Linux sp__wp_mv_class classes `Device or resource busy` as `refused` too, an
-# `inter-device move failed: … unable to remove target` line among them, as the judge's layer table does,
-# so CS1's renames grade as the judge grades them.
+# PD23. On Linux sp__wp_mv_class classes every string of the judge's Linux set as `refused`, `Device or
+# resource busy` and an `inter-device move failed: … unable to remove target` line among them, so CS1's
+# renames grade as the judge grades them.
 #
 # JOB MODE (SP_JOB_MODE=1). SP_CLONE and SP_MAIN are the job's checkout and SP_RUN_PROFILE its base
 # profile. The leg takes its job rows W6 and W8 only: one session carries W6's Write and Edit calls and a
@@ -475,9 +475,8 @@ EOF
 }
 
 # sp__wp_mv_class <helper line> — print the line's class: landed, stage-failed, refused, or, when no
-# refusal string matches, unrecognised on Linux and other on macOS. Reads only its argument. It reads the
-# message itself rather than through the judge, so its Linux refusal strings are kept to the judge's
-# layer table (judge.sh → sp__layer's Linux `sandbox` arm), `Device or resource busy` among them (PD23).
+# refusal string matches, unrecognised on Linux and other on macOS. Reads only its argument. On Linux its
+# refusal strings are the judge's whole Linux set, through judge.sh → sp__linux_refusal_line.
 sp__wp_mv_class() {
   case "$1" in
     *" landed")
@@ -494,10 +493,11 @@ sp__wp_mv_class() {
       ;;
   esac
   if [ "${SP_PLATFORM:-}" = linux ]; then
-    case "$1" in
-      *"Read-only file system"* | *"Device or resource busy"*) printf '%s\n' refused ;;
-      *) printf '%s\n' unrecognised ;;
-    esac
+    if sp__linux_refusal_line "$1" >/dev/null; then
+      printf '%s\n' refused
+    else
+      printf '%s\n' unrecognised
+    fi
     return 0
   fi
   printf '%s\n' other
