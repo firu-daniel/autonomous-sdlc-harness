@@ -25,12 +25,18 @@
 # unsandboxed from its own shell (sp__net_n4_control), and N4 is graded against it: `pass` when the
 # control got a response or ended on a different curl exit code than the session's `curl: (<n>)` line,
 # `not run` when the session's line carries no code or the two ended the same way, curl being off PATH
-# included. Elapsed time is not compared: a host with no link-local route also fails at once. On Linux a
+# included. Elapsed time is not compared: a host with no link-local route also fails at once. In job mode
+# the runner arm grades N4 against legs-runner.sh's imds-control instead, the GitHub runner workflow's own
+# unsandboxed call to the same host, which keeps the status code only and never a body. Azure's metadata
+# service answers a request without its `Metadata: true` header with HTTP 400, so any `http <code>` value
+# is an answer: a response to the sandboxed call is then `fail`, and anything else that reached the call
+# is `pass`. Any other value (no answer, or unrecorded) keeps the comparison with the probe's own control,
+# its evidence naming the workflow's value. On Linux a
 # curl error with no known refusal string is layer `unrecognised`, and N3 and N4 read it as their data, as
 # they read a `ran` error on macOS; every other row here keeps the judge's `not run` for it. The two
 # grades read only their arguments and the stream:
 #   sp__net_n3_grade <stream> <command> <token> <listener answered: 1|0>
-#   sp__net_n4_grade <stream> <command> [<control exit> <control line>]
+#   sp__net_n4_grade <stream> <command> [<control exit> <control line> [<runner control>]]
 #   sp__net_n4_control <command> — sets SP__NET_N4_CTL_RC and SP__NET_N4_CTL_LINE
 #
 # SOURCED, NEVER EXECUTED. It sets no shell option: the entry point owns `set -u`. Bash 3.2 floor.
@@ -267,8 +273,49 @@ sp__net_n4_control() {
   return 0
 }
 
-# sp__net_n4_grade <stream> <command> [<control exit> <control line>] — sets SP_VERDICT and SP_EVIDENCE.
+# sp__net_n4_grade <stream> <command> [<control exit> <control line> [<runner control>]] — sets SP_VERDICT
+# and SP_EVIDENCE. With four arguments or fewer, the runner arm is never reached.
 sp__net_n4_grade() {
+  if [ "$#" -ge 5 ]; then
+    case "${5:-}" in
+      "http "*) ;;
+      *)
+        sp__net_n4_grade "$1" "$2" "$3" "$4"
+        SP_EVIDENCE="$SP_EVIDENCE; the workflow's control: $5"
+        return 0
+        ;;
+    esac
+    local runner="$5" rline
+    sp_judge_call "$1" network "$2"
+    [ "$SP_VERDICT" = "not run" ] && [ "$SP_LAYER" != unrecognised ] && return 0
+    case "$SP_LAYER" in
+      permission | file-tool)
+        SP_VERDICT="not run"
+        SP_EVIDENCE="refused at the $SP_LAYER layer, so it never reached the sandbox: $SP_EVIDENCE"
+        ;;
+      network | sandbox)
+        SP_VERDICT=pass
+        SP_EVIDENCE="the workflow's control got $runner; the sandboxed call got none: $SP_LAYER_EVIDENCE"
+        ;;
+      *)
+        if [ "$SP__STATUS" != error ]; then
+          SP_VERDICT=fail
+          SP_EVIDENCE="the metadata service answered the workflow's unsandboxed control ($runner) and the sandboxed call got a response: $(sp__first_line "$SP__TEXT")"
+        else
+          if ! rline="$(sp__net_curl_line "$SP__TEXT")"; then
+            if [ "$SP_LAYER" = unrecognised ]; then
+              rline="$SP_LAYER_EVIDENCE"
+            else
+              rline="$(sp__first_line "$SP__TEXT")"
+            fi
+          fi
+          SP_VERDICT=pass
+          SP_EVIDENCE="the workflow's control got $runner; the sandboxed call got none: $rline"
+        fi
+        ;;
+    esac
+    return 0
+  fi
   local stream="${1:-}" cmd="${2:-}" host line code ctl_rc ctl_line have_ctl=0
   [ "$#" -ge 3 ] && have_ctl=1
   ctl_rc="${3:-}"
@@ -370,7 +417,7 @@ sp__net_unlisted() {
 }
 
 sp_leg_network() {
-  local pfile c3 c4 c5 departure row answered launched reply allowed
+  local pfile c3 c4 c5 departure row answered launched reply allowed imds
   if ! sp__net_profile; then
     for row in N1 N2 N3 N4 N5; do
       sp_result_line network "$row" "not run" "$SP__NET_PROFILE_WHY" ""
@@ -427,7 +474,11 @@ sp_leg_network() {
         "$SP__NET_LOOPBACK_HOST:$SP__NET_PORT (probe-owned listener): $SP_EVIDENCE; control in the same session: $SP_NET_CONTROL" "$departure"
     fi
     sp__net_n4_control "$c4"
-    sp__net_n4_grade "$SP_STREAM" "$c4" "$SP__NET_N4_CTL_RC" "$SP__NET_N4_CTL_LINE"
+    if [ "$SP_JOB_MODE" = 1 ] && imds="$(sp_runner_control imds-control)"; then
+      sp__net_n4_grade "$SP_STREAM" "$c4" "$SP__NET_N4_CTL_RC" "$SP__NET_N4_CTL_LINE" "$imds"
+    else
+      sp__net_n4_grade "$SP_STREAM" "$c4" "$SP__NET_N4_CTL_RC" "$SP__NET_N4_CTL_LINE"
+    fi
     sp_row_result --direct network N4 "$SP_VERDICT" \
       "$SP__NET_LINKLOCAL_HOST: $SP_EVIDENCE; control in the same session: $SP_NET_CONTROL" "$departure"
   fi
