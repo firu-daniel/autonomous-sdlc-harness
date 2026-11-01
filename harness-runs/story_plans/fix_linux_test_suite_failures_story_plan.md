@@ -17,12 +17,13 @@ This branch makes `npm test --workspace cli` pass on Linux, apart from sandbox3b
   - `cli/templates/scripts/cleanup-merged-worktrees.sh` → `run_bounded` skips the process-group kill whenever `/dev/tty` opens, and then signals only the direct child.
   - Gate 15's recipe gives the suite a controlling terminal: `docker run -it … bash`, then `su - probe`. So the `git` stand-in died and its `sleep 300` kept the output pipe, which accounts for the measured 300.1 s.
   - The real case this affects is a watcher started from a terminal. It reads the sweep through a pipe, so it would block for as long as a hung transport lives.
+  - **Confirmed by hand on macOS** (park 2 answer, `harness-runs/clarifications/fix_linux_test_suite_failures/answer_2.md`). This run's command sandbox refuses `script` a pseudo-terminal (`script: openpty: Operation not permitted`), so the run could not take the reproduction itself. The user ran the proving case from a macOS terminal, outside the sandbox, against the unchanged script: `npm test --workspace cli -- --test-name-pattern="terminal is attached" test/outer-loop-scripts.test.mjs`. It failed with *"the sweep took 53.0s against a 3s ceiling — the fetch's transport is still holding the pipe"*. That reproduction and the user's pre-merge Linux container run are the branch's proof for group 3. The sandbox stays as it is, with no `sandbox.optOut`.
 
 **Each group gets a guard that runs on macOS**, so that a later test cannot bring the same mistake back unseen:
 
 - **Group 1:** Task 1 makes the fixture runners refuse any single argument or environment string over the Linux bound.
 - **Group 2:** Task 1 also points `GIT_CONFIG_GLOBAL` at a checked-in file that sets `user.useConfigOnly = true`, so git refuses to guess an identity on every host.
-- **Group 3:** Task 3 adds a case that runs the sweep under a pseudo-terminal through `script`.
+- **Group 3:** Task 3 adds a case that runs the sweep under a pseudo-terminal through `script`. Where `script` is refused a pseudo-terminal before the sweep runs, as under the run's sandbox, the case skips and names the refusal.
 
 **Task order and dependencies.** The tasks run in bottom-up order: three `cli` tasks, then the `general` catch-all task, which brings the self-adopted root copy of the sweep up to date and documents the change.
 
@@ -33,8 +34,9 @@ This branch makes `npm test --workspace cli` pass on Linux, apart from sandbox3b
 **Top risks:**
 
 1. **`user.useConfigOnly` could surface a test that passes on macOS only because git guesses an identity.** The Linux measurement already ran every `ISOLATED_ENV` subprocess with no usable guess, and only group 2 failed. Even so, a test that has never run on Linux, or a subprocess outside `ISOLATED_ENV`, could still depend on the guess. Task 1 guards this risk: it states the residual it does not close, and Phase G's full macOS run is where any such test shows up.
-2. **The pseudo-terminal case could fail on one platform for a reason unrelated to the sweep.** BSD `script` and util-linux `script` take different arguments, and util-linux `script` reacts to stdin reaching EOF. Task 3 guards this risk: it requires the case to prove that a controlling terminal was really present before it asserts on the timing, and to skip, naming the reason, only when `script` is not installed.
-3. **The terminal explanation for group 3 could be incomplete on Linux.** No task can close this risk, because only the user's pre-merge container run shows it. The pseudo-terminal case reproduces the mechanism on macOS, and Task 4's document of record states only what was measured and what guards each group. It claims no Linux pass.
+2. **The pseudo-terminal case could fail on one platform for a reason unrelated to the sweep.** BSD `script` and util-linux `script` take different arguments, and util-linux `script` reacts to stdin reaching EOF. Task 3 guards this risk. The case must prove that a controlling terminal was really present before it asserts on the timing. It skips, naming the reason, in two cases only: when `script` is not installed, and when `script` reports an `openpty` / `tcgetattr` (util-linux: *"failed to create pseudo-terminal"*) refusal and the sweep never ran.
+3. **The refused-pseudo-terminal skip means the sandboxed gates never run the terminal case.** A skip there could hide a broken fix. Task 3 keeps the skip narrow: the marker must be missing, `script`'s refusal line must be present, and the sweep's output must be absent, so any other missing marker still fails. Task 4 records that the proof is the user's hand reproduction plus the pre-merge container run, never a gate pass.
+4. **The terminal explanation for group 3 could be incomplete on Linux.** No task can close this risk, because only the user's pre-merge container run shows it. The macOS hand reproduction confirms the mechanism there, and Task 4's document of record states only what was measured and what guards each group. It claims no Linux pass.
 
 ## Phase 2 Readiness — Ordered Fix List
 
@@ -60,7 +62,7 @@ The register covers only this plan's targets in the project's durable text. Ever
 **Derivation entry — corpus files (command).** Re-run this from the checkout root, exactly as written:
 
 ```
-git grep -noE 'GIT_CONFIG_GLOBAL|ISOLATED_ENV|per-user file|useConfigOnly|Author identity|seedOrigin|E2BIG|MAX_ARG|STUB_PR_DIFF|commitInCopy|run_bounded|/dev/tty|controlling terminal|HARNESS_FETCH_TIMEOUT|releases its output pipe|The suite under jq 1\.6' -- '*.md' '*.txt' ':(exclude)harness-runs/*/**' ':(exclude)examples/**'
+git grep -noE 'GIT_CONFIG_GLOBAL|ISOLATED_ENV|per-user file|useConfigOnly|Author identity|seedOrigin|E2BIG|MAX_ARG|STUB_PR_DIFF|commitInCopy|run_bounded|/dev/tty|controlling terminal|HARNESS_FETCH_TIMEOUT|releases its output pipe|pseudo-terminal|openpty|tcgetattr|The suite under jq 1\.6' -- '*.md' '*.txt' ':(exclude)harness-runs/*/**' ':(exclude)examples/**'
 ```
 
 The patterns name each symbol this branch changes or classifies, plus the anchor of the paragraph the new record goes beside. The pathspec covers every Markdown and text file except per-run artifacts and the frozen `examples/` capture. Each hit is a `path:line:match` triple, and each distinct paragraph it lands in is one site.
@@ -82,4 +84,4 @@ The patterns name each symbol this branch changes or classifies, plus the anchor
 | 3 | `docs/cli.md`, the paragraph beginning *"The excluded rule's `:*` accepts any argument"* (`hr_wrapper_target_check_var`) | — | command entry, `GIT_CONFIG_GLOBAL` | `no-change` | It describes the wrappers dropping the inherited git environment. This branch changes no wrapper. |
 | 4 | `docs/development.md`, the paragraph *"**The suite under jq 1.6, by hand.**"* | — | command entry, `The suite under jq 1.6` | `change` | Task 4 inserts the new paragraph *"**The suite on Linux, by hand.**"* directly after this one. The jq paragraph's own text stays as it is. |
 | 5 | `docs/outer-loop-verification.md`, the list item *"`cleanup-merged-worktrees.sh` — `run_bounded()` and the `HARNESS_FETCH_TIMEOUT`-bounded `fetch --prune`"* | — | command entry, `run_bounded` / `HARNESS_FETCH_TIMEOUT` | `no-change` | It records executable change since a dated stamp, and the script is already listed as changed. Its own text says *"re-run the recipe rather than editing the number"*. |
-| 6 | `docs/development.md`, the new paragraph *"**The suite on Linux, by hand.**"* (created by this branch, so the command first reaches it once Task 4 lands) | — | command entry, after Task 4: `E2BIG` / `Author identity` / `useConfigOnly` / `controlling terminal` / `run_bounded` | `change` | Task 4 creates it. It is the branch's record of which group was a test assumption and which a code defect. |
+| 6 | `docs/development.md`, the new paragraph *"**The suite on Linux, by hand.**"* (created by this branch, so the command first reaches it once Task 4 lands) | — | command entry, after Task 4: `E2BIG` / `Author identity` / `useConfigOnly` / `controlling terminal` / `run_bounded` / `pseudo-terminal` | `change` | Task 4 creates it. It is the branch's record of which group was a test assumption and which a code defect, and of group 3's hand reproduction. |

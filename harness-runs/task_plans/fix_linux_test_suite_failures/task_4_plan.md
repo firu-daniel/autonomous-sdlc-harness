@@ -21,7 +21,12 @@
 - **Task 3** (`cli/templates/scripts/cleanup-merged-worktrees.sh`): Group 3 was a **code defect** that depends on the terminal, not on Linux.
   - `run_bounded` used to skip the process-group kill whenever `/dev/tty` opened. Gate 15's `docker run -it` plus `su - probe` gave the suite a controlling terminal, so the `git` stand-in's `sleep 300` kept the pipe open (300.1 s against a 3 s ceiling).
   - It now signals the child alone only when its stdout is a terminal (`[ -t 1 ]`).
-  - `outer-loop-scripts.test.mjs` proves it with *"the sweep releases its output pipe on a bounded fetch when a terminal is attached"*, which runs the sweep under `script`.
+  - `outer-loop-scripts.test.mjs` guards it with *"the sweep releases its output pipe on a bounded fetch when a terminal is attached"*, which runs the sweep under `script`. Where `script` is refused a pseudo-terminal before the sweep runs (an `openpty` / `tcgetattr` refusal, as under the run's command sandbox), the case **skips by name**. So a sandboxed gate run does not exercise it.
+  - **The proof on record is a hand reproduction, not a gate run** (park 2 answer, `harness-runs/clarifications/fix_linux_test_suite_failures/answer_2.md`):
+    - **Where:** from a macOS terminal, outside the sandbox, against the **unfixed** script, with the case in place.
+    - **The command:** `npm test --workspace cli -- --test-name-pattern="terminal is attached" test/outer-loop-scripts.test.mjs`.
+    - **The result:** `✖ the sweep releases its output pipe on a bounded fetch when a terminal is attached (53490.398708ms)`, with the message *"the sweep took 53.0s against a 3s ceiling — the fetch's transport is still holding the pipe"*.
+    - **What comes next:** the user's pre-merge Linux container run, where `docker run -it` gives the case a terminal and it runs for real.
 
 **How this task's implementer reads the conventions.** This is the catch-all task, so read `.claude/context/conventions.md` → `## Documents of record`: a measured fact states what was measured, the command and the exact message. Also read `.claude/context/cli.md`, because the documents describe that layer's test harness.
 
@@ -45,7 +50,8 @@
     - the command, `npm test --workspace cli`, run as the non-root `probe` user in the container *A Linux run, in a local container* describes: Debian 12, `node:22-bookworm`, Node 22, git 2.39.5, on `dev` at `1a41540c`;
     - the result: 2,850 tests, 2,807 passed, 21 failed, 22 skipped. Apart from the jq failures the paragraph before covers, there were five failures in three groups, each with its exact message: `spawn E2BIG`; `fatal: unable to auto-detect email address (got 'probe@b6e01aa5ca60.(none)')`; and *"the sweep took 300.1s against a 3s ceiling — the fetch's transport is still holding the pipe"*.
   - **Each group's verdict**: test assumption, test assumption, code defect. Give each one's cause in one sentence.
-  - **What now catches each class on macOS**, naming each by file and symbol or case title: the single-string bound, `isolated-gitconfig`, and the pseudo-terminal case.
+  - **What now catches each class on macOS**, naming each by file and symbol or case title: the single-string bound, `isolated-gitconfig`, and the pseudo-terminal case. For the pseudo-terminal case, say that it runs only where `script` can get a pseudo-terminal, and skips by name where it is refused one, as in a sandboxed gate run.
+  - **Group 3's proof**, as a measured fact: the hand reproduction on macOS against the unfixed script, with the command, the 53.0 s against the 3 s ceiling, and the exact message above. Name the pre-merge Linux container run as the run that exercises the case with a terminal after the fix. Give no result for that run.
   - **That the recipe's `docker run -it` and `su - probe` give the suite a controlling terminal**, which is the condition group 3 needed.
   - **How to take the run on a branch's head**: point to *The absent-path check, by hand*'s three clone lines, then `npm ci` and `npm test --workspace cli`, the same route the jq paragraph gives.
 
@@ -54,6 +60,6 @@
 **Verification:**
 
 - `cmp scripts/cleanup-merged-worktrees.sh cli/templates/scripts/cleanup-merged-worktrees.sh` exits 0, and `test -x scripts/cleanup-merged-worktrees.sh` exits 0.
-- Re-run the story index's `## Scope register` command entry. Every site it reaches is a register row: the new paragraph's matches of `E2BIG`, `Author identity`, `MAX_ARG`, `useConfigOnly`, `controlling terminal` or `run_bounded` land in the row created for that paragraph, and the `docs/cli.md` matches land in row 1. Every `change` row names this task. A hit outside the register rows is a site this plan missed. Report it rather than leave it unrecorded.
+- Re-run the story index's `## Scope register` command entry. Every site it reaches is a register row: the new paragraph's matches of `E2BIG`, `Author identity`, `MAX_ARG`, `useConfigOnly`, `controlling terminal`, `run_bounded`, `pseudo-terminal`, `openpty` or `tcgetattr` land in the row created for that paragraph, and the `docs/cli.md` matches land in row 1. Every `change` row names this task. A hit outside the register rows is a site this plan missed. Report it rather than leave it unrecorded.
 - `docs/development.md`'s new paragraph contains no claim that the suite passes on Linux. `grep -n 'The suite on Linux, by hand' docs/development.md` matches the paragraph's opening line and no other line.
 - The self-containment gate's property holds: neither document names a location on this machine. The paths it gives are repo-relative.
