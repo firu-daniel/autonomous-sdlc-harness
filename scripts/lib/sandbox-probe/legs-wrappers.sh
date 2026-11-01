@@ -21,7 +21,10 @@
 # JOB MODE (SP_JOB_MODE=1). SP_CLONE and SP_MAIN are the job's checkout, so P1c, CW5, P1b and CW6 aim the
 # checkout's own wrappers at the checkout, whose origin is the remote actions/checkout set up; each row's
 # expected result is unchanged and its evidence ends with sp_job_git_note. CS4, P3 and CW2 need a clone and
-# are printed `not run` by sp_job_skip_clone_rows; their sessions are never launched. SP_BRANCH is
+# are printed `not run` by sp_job_skip_clone_rows; their sessions are never launched. The commit and push
+# controls act on the control clone <branch>_ctl, which sp_ctl_clone cuts beside the checkout with its
+# run-registry record and per-run profile, and teardown removes with its branch locally and on origin, as
+# in the clone layout; it is never measured. SP_BRANCH is
 # published with no upstream, so a push that ran excluded and landed also writes --set-upstream into
 # <checkout>/.git/config, which the shasum guard reports as a FAILED line beside the row's `fail`. Over an
 # origin that is not SSH, git never runs GIT_SSH_COMMAND, so P1b is graded on `ls-remote` alone and its
@@ -483,6 +486,8 @@ sp_leg_wrappers() {
       sp__wr_notrun "the scripts directory or the checkout path is not spellable as a literal" P1c CW5 P1b CW6
       return 0
     fi
+    # The commit and push controls act on the control clone, as in the clone layout's sp__wr_own.
+    sp_ctl_clone
     sp__wr_compound
     sp__wr_prefix
     return 0

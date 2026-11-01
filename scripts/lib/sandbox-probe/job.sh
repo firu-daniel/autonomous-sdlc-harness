@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # job.sh — what the sandbox probe does differently in job mode: it runs in the checkout itself, on the
-# base profile, as a `harness-run.yml` job's session does, cutting no clone and rendering no per-run
-# profile. session.sh calls in through hooks only; nothing here forks its code.
+# base profile, as a `harness-run.yml` job's session does, measuring no clone and launching no session on a
+# per-run profile; the one clone cut is the wrappers leg's control clone (controls.sh), never measured.
+# session.sh calls in through hooks only; nothing here forks its code.
 #
 # Each function reproduces a piece of the watcher (cli/templates/scripts/autonomous-watcher.sh); keep
 # each in step with the code it names:

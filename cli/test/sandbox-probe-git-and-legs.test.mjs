@@ -501,7 +501,7 @@ test('the mode skips and the job-mode result line', async (t) => {
     assert.equal(
       job.stdout,
       ['CS4', 'P3', 'CW2']
-        .map((row) => notRun('wrappers', row, 'clone layout only: job mode cuts no clone and measures the checkout itself'))
+        .map((row) => notRun('wrappers', row, 'clone layout only: job mode measures no clone, only the checkout itself'))
         .join(''),
       job.stderr,
     );

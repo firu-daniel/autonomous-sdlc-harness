@@ -22,7 +22,7 @@
 # SP_JOB_LEGS declares, one tab-separated line per leg in leg-table order, the rows each leg takes
 # in job mode: <leg> <job rows, comma-joined>. Every job row is a row of that leg in SP_LEGS. A leg
 # absent from it does not run in job mode. The clone-only rows (CS1-CS5, CS7-CS15, CL5, and the
-# wrappers' clone arm CS4, P3 and CW2) do not carry over: job mode cuts no clone.
+# wrappers' clone arm CS4, P3 and CW2) do not carry over: job mode measures no clone.
 #   sp_job_print                      prints SP_JOB_LEGS (--list --job)
 #   sp_leg_job_rows <leg>             the leg's job rows, comma-joined; status 1 for a leg not run in job mode
 #   sp_leg_is_job_row <leg> <row>     status 0 for a job row of <leg>
@@ -246,7 +246,7 @@ sp_result_line() {
   esac
   if [ "$SP_JOB_MODE" = 1 ] && [ "$leg" != judge ] && [ "$verdict" != "not run" ] \
     && ! sp_leg_is_job_row "$leg" "$row"; then
-    # Job mode cuts no clone, so a clone-layout row it measured would be a result it never took.
+    # Job mode measures no clone, so a clone-layout row it measured would be a result it never took.
     sp_refuse "sp_result_line: row '$row' of leg '$leg' is not a job-mode row, so its verdict '$verdict' is refused in job mode"
     SP_FAIL_COUNT=$((SP_FAIL_COUNT + 1))
     sp__nonpass_add "$leg"
@@ -309,7 +309,7 @@ sp_job_skip_clone_rows() {
   for row in $rows; do
     sp_leg_is_job_row "$leg" "$row" \
       || sp_result_line "$leg" "$row" "not run" \
-        "clone layout only: job mode cuts no clone and measures the checkout itself" ""
+        "clone layout only: job mode measures no clone, only the checkout itself" ""
   done
 }
 

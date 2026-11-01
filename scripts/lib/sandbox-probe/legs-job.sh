@@ -6,7 +6,7 @@
 # `bash <checkout>/<scriptsDir>/commit-on-branch.sh --repo <checkout> sbx_cs6.txt -- "sbx probe CS6"`
 # lands, refs/heads/<branch> moving to a commit whose only change is sbx_cs6.txt (docs/cli.md §6's job
 # settlement). Outside job mode the row is `not run`: only job mode makes the checkout both main
-# checkout and run copy, and job mode cuts no clone. Every reading is taken before the placeholder sweep.
+# checkout and run copy, and job mode measures no clone. Every reading is taken before the placeholder sweep.
 #
 # Two sessions, because the wrapper syncs <checkout>/.git/index after its commit
 # (cli/templates/scripts/commit-on-branch.sh → wt_git): an index reading taken across the wrapper call

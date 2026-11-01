@@ -63,7 +63,7 @@ const W8_UNMATCHED = join(FIXTURES, 'w8-unmatched.debug.log');
 const W8_COUNTS = (name) =>
   `${name} log: 3 line(s), 0 unmatched-rule or mixed-prefix line(s) for a rule the profile does not carry`;
 const W8_JOB_NOTE = "; W7's half is not a job row: the gates leg does not run in job mode";
-const CLONE_ONLY = 'clone layout only: job mode cuts no clone and measures the checkout itself';
+const CLONE_ONLY = 'clone layout only: job mode measures no clone, only the checkout itself';
 const SWEEP_NOTE = '; read before the placeholder sweep';
 
 function fixture(name) {
@@ -253,6 +253,20 @@ test('the carried-over legs in job mode', async (t) => {
       assert.equal(run.stdout, '');
       assert.equal(run.stderr, '');
     }
+  });
+
+  await t.test('sp_leg_wrappers in job mode cuts the control clone before its first session', async (t) => {
+    const dir = await caseDir(t);
+    const run = await sourced(
+      dir,
+      'sp_job_skip_clone_rows() { :; }; sp_ctl_clone() { echo ctl; }; sp__wr_compound() { echo compound; }; ' +
+        'sp__wr_prefix() { echo prefix; }; sp_leg_wrappers',
+      [],
+      { SP_JOB_MODE: '1', SP_SCRIPTS: dir, SP_CLONE: dir },
+    );
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(run.stderr, '');
+    assert.equal(run.stdout, 'ctl\ncompound\nprefix\n');
   });
 
   /** `sp__wp_w8 <departure> <write-protection log> <W7 log>`'s line. */

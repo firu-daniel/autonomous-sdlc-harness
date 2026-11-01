@@ -6,8 +6,10 @@
 #
 # It changes nothing outside its own temp area, the probe clone and the probe branch, but one evidence directory:
 # a sandbox-probe-evidence.* directory under TMPDIR, kept only when a leg does not pass.
-# Job mode cuts no clone; it changes the probe branch in the checkout and on its origin, the checkout's
-# HEAD and the job-mode placeholder manifest under RUNNER_TEMP, each restored or removed at teardown.
+# Job mode measures no clone; it changes the probe branch in the checkout and on its origin, the checkout's
+# HEAD, the job-mode placeholder manifest under RUNNER_TEMP, and the wrappers leg's control clone with its
+# run-registry record, its per-run profile and its <branch>_ctl branch in the checkout and on origin, each
+# restored or removed at teardown.
 # On Linux the registry leg is the exception: it writes beside <main>/<stateDir>/autonomous_logs/registry.json
 # and RG3 may move that directory aside; it removes what it wrote and restores the directory
 # (lib/sandbox-probe/legs-registry.sh → THE RESTORE RULE), so take a Linux run only in the throwaway container.
@@ -68,7 +70,7 @@ Usage: sandbox-probe.sh [--help] | --list [--job] | preflight [<job>] | run [<jo
   preflight              run the refusals and the shasum guard; create nothing
   run [--leg <name>]...  run the named legs, or every leg but headless-parity, in table order;
                          without --job, every job-mode-only leg is left out
-  --job <checkout>       job mode: measure <checkout> itself under its base profile, cutting no clone;
+  --job <checkout>       job mode: measure <checkout> itself under its base profile, not a clone;
                          without --leg, only the legs --list --job names run
   --runner-controls <file>
                          job mode only: the runner workflow's unsandboxed controls file
@@ -285,7 +287,7 @@ case "$cmd" in
         if sp_leg_linux_only "$sp_leg" && [ "${SP_PLATFORM:-}" != linux ]; then
           sp_leg_platform_skip "$sp_leg"
         elif [ "$SP_JOB_MODE" = 1 ] && ! sp_leg_job_rows "$sp_leg" >/dev/null; then
-          sp_leg_mode_skip "$sp_leg" "not a job-mode leg: job mode cuts no clone"
+          sp_leg_mode_skip "$sp_leg" "not a job-mode leg: job mode measures no clone"
         elif [ "$SP_JOB_MODE" != 1 ] && sp_leg_job_only "$sp_leg"; then
           sp_leg_mode_skip "$sp_leg" "job mode only: run it with --job <checkout>"
         elif declare -F "$sp_leg_fn" >/dev/null; then

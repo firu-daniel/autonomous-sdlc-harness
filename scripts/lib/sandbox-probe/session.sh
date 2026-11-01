@@ -774,8 +774,7 @@ sp_teardown() {
   fi
   sp_restore_clear
 
-  # Job mode registered no clone, so the clone loop then removes nothing and the tracked-branch pass
-  # deletes the probe branch, no longer checked out.
+  # In job mode the only registered clone is the wrappers leg's control clone, which the clone loop removes; the tracked-branch pass deletes the probe branch, no longer checked out.
   if declare -F sp_job_teardown >/dev/null; then
     sp_job_teardown
   fi
