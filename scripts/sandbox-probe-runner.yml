@@ -229,7 +229,11 @@ jobs:
             local f=/proc/sys/kernel/apparmor_restrict_unprivileged_userns
             if [ -r "$f" ]; then cat "$f"; else echo absent; fi
           }
-          profile_presence() { if [ -f /etc/apparmor.d/bwrap ]; then echo present; else echo absent; fi; }
+          profile_presence() {
+            if [ ! -f /etc/apparmor.d/bwrap ]; then echo absent
+            elif grep -q '^[[:space:]]*userns,' /etc/apparmor.d/bwrap; then echo present
+            else echo present without userns; fi
+          }
           RECORD
           source "$RUNNER_TEMP/sandbox-probe-record.sh"
           : > "$out/controls.tsv"

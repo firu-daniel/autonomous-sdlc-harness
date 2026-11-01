@@ -11,7 +11,8 @@
 #     the stamp:      image-os, image-version, uname-r, probe-commit, cli-version
 #     before the install step:
 #                     sysctl-before            /proc/sys/kernel/apparmor_restrict_unprivileged_userns, or `absent`
-#                     apparmor-profile-before  /etc/apparmor.d/bwrap: `present` or `absent`
+#                     apparmor-profile-before  /etc/apparmor.d/bwrap: `present` (carrying a `userns,` line),
+#                                              `present without userns`, or `absent`
 #                     bwrap-before, socat-before  the `command -v` path, or `absent`
 #     the controls:   sudo-control             `exit <n>` of the workflow's own unsandboxed `sudo -n true`
 #                     imds-control             `http <code>` or `no answer: curl exit <n>`
@@ -153,16 +154,22 @@ sp__is3_grade() {
   local sysctl="${1:-}" pb="${2:-}" pa="${3:-}"
   sp__runner_unrecorded sysctl-before "$sysctl" apparmor-profile-before "$pb" \
     apparmor-profile-after "$pa" && return 0
-  # The step writes /etc/apparmor.d/bwrap exactly when the sysctl reads 1 and no profile is there.
-  if [ "$sysctl" = 1 ] && [ "$pa" = absent ]; then
+  # The step writes /etc/apparmor.d/bwrap exactly when the sysctl reads 1 and the file is absent or carries no userns, line.
+  if [ "$sysctl" = 1 ] && [ "$pa" != present ]; then
     SP_VERDICT=fail
-    SP_EVIDENCE="the sysctl read 1 before the install step and /etc/apparmor.d/bwrap is absent after it (before: $pb)"
+    SP_EVIDENCE="the sysctl read 1 before the install step and /etc/apparmor.d/bwrap is $pa after it (before: $pb)"
   elif [ "$sysctl" = 1 ] && [ "$pb" = absent ] && [ "$pa" = present ]; then
     SP_VERDICT=pass
     SP_EVIDENCE="written: the sysctl read 1 and the step wrote /etc/apparmor.d/bwrap"
+  elif [ "$sysctl" = 1 ] && [ "$pb" = "present without userns" ] && [ "$pa" = present ]; then
+    SP_VERDICT=pass
+    SP_EVIDENCE="written: the sysctl read 1 and the step rewrote /etc/apparmor.d/bwrap, which carried no userns rule"
   elif [ "$pb" = present ] && [ "$pa" = present ]; then
     SP_VERDICT=pass
     SP_EVIDENCE="not needed: /etc/apparmor.d/bwrap was present before the install step (sysctl: $sysctl)"
+  elif [ "$sysctl" != 1 ] && [ "$pb" = "present without userns" ] && [ "$pa" = "present without userns" ]; then
+    SP_VERDICT=pass
+    SP_EVIDENCE="not needed: the sysctl read $sysctl, and /etc/apparmor.d/bwrap was present before the install step, carrying no userns rule"
   elif [ "$sysctl" != 1 ] && [ "$pb" = absent ] && [ "$pa" = absent ]; then
     SP_VERDICT=pass
     SP_EVIDENCE="not needed: the sysctl read $sysctl, and the step wrote no /etc/apparmor.d/bwrap"

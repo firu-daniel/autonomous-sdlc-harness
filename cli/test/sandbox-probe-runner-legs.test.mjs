@@ -270,6 +270,21 @@ test('IS1–IS4', async (t) => {
     );
   });
 
+  await t.test('IS3 grades a profile carrying no userns rule by what the step must do with it', async (t) => {
+    assert.equal(
+      await graded(t, 'sp__is3_grade', ['1', 'present without userns', 'present']),
+      'pass|written: the sysctl read 1 and the step rewrote /etc/apparmor.d/bwrap, which carried no userns rule',
+    );
+    assert.equal(
+      await graded(t, 'sp__is3_grade', ['1', 'present without userns', 'present without userns']),
+      'fail|the sysctl read 1 before the install step and /etc/apparmor.d/bwrap is present without userns after it (before: present without userns)',
+    );
+    assert.equal(
+      await graded(t, 'sp__is3_grade', ['0', 'present without userns', 'present without userns']),
+      'pass|not needed: the sysctl read 0, and /etc/apparmor.d/bwrap was present before the install step, carrying no userns rule',
+    );
+  });
+
   await t.test('IS3 is not run where no rule fits, or on an unrecorded key', async (t) => {
     assert.equal(
       await graded(t, 'sp__is3_grade', ['0', 'present', 'absent']),
