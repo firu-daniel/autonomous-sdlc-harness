@@ -7,7 +7,8 @@
  * **The rule these tests exist to enforce: job mode's launch line is the clone layout's plus the watcher's
  * job tail and nothing else; its manifest lists exactly what the watcher's would, at the path the job's
  * sweep reads, and is never written where a session could write it; the sweep is the checkout's own
- * `job-sweep`; and the agent's PID reaches the prompt as a literal.**
+ * `job-sweep`, run before every manifest write as well as at teardown; and the agent's PID reaches the
+ * prompt as a literal.**
  *
  * Each case runs a `bash -c` through `runBash`, sourcing the run library and `core.sh`, `platform.sh`,
  * `judge.sh`, `controls.sh`, `session.sh` and `job.sh` from `WORKSPACE_ROOT`, with the probe's variables
@@ -215,6 +216,9 @@ test('the job-mode placeholder manifest', async (t) => {
       m.w.watcherEnv(),
     );
   const manifestAt = (runnerTemp) => join(runnerTemp, 'autonomous-sdlc-harness-placeholders', `${BRANCH}.absent`);
+  /** The probe's lines less the pre-session sweep's, which the real watcher's `job-sweep` produces. */
+  const manifestLines = (stderr) =>
+    probeLines(stderr).filter((l) => !l.startsWith('sandbox-probe: job-sweep before this session: '));
 
   await t.test('lists exactly the absent deny paths and the absent .mcp.json', async (t) => {
     const m = await manifestFixture(t);
@@ -225,7 +229,7 @@ test('the job-mode placeholder manifest', async (t) => {
 
     assert.equal(run.status, 0, run.stderr);
     assert.equal(run.stdout, 'status=0\n');
-    assert.deepEqual(probeLines(run.stderr), [], run.stderr);
+    assert.deepEqual(manifestLines(run.stderr), [], run.stderr);
     assert.equal(
       readFileSync(manifestAt(rt), 'utf8'),
       `${m.absentOne}\n${m.absentTwo}\n${join(m.rootB, '.mcp.json')}\n`,
@@ -240,7 +244,7 @@ test('the job-mode placeholder manifest', async (t) => {
     const run = await write(m, rt);
 
     assert.equal(run.status, 0, run.stderr);
-    assert.deepEqual(probeLines(run.stderr), [
+    assert.deepEqual(manifestLines(run.stderr), [
       `sandbox-probe: placeholder manifest: not writing ${manifestAt(rt)}, under the session-writable root ${m.rootB} — the sweep removes nothing for this session`,
     ]);
     assert.ok(!existsSync(manifestAt(rt)), 'no manifest is written');
@@ -258,10 +262,36 @@ test('the job-mode placeholder manifest', async (t) => {
 
     assert.equal(run.status, 0, run.stderr);
     assert.equal(run.stdout, 'status=0\n');
-    assert.deepEqual(probeLines(run.stderr), [
+    assert.deepEqual(manifestLines(run.stderr), [
+      'sandbox-probe: job-sweep before this session exited 127',
       `sandbox-probe: placeholder manifest: not writing ${manifestAt(rt)}, the watcher's placeholder_manifest_writable_root could not be called from ${scripts}/autonomous-watcher.sh — the sweep removes nothing for this session`,
     ]);
     assert.ok(!existsSync(manifestAt(rt)), 'no manifest is written');
+  });
+
+  await t.test('a placeholder an earlier session left is swept and listed again', async (t) => {
+    const m = await manifestFixture(t);
+    if (m === null) return;
+    const rt = join(m.d.tmp, 'runner-temp');
+    const call = `sp_job_manifest_write ${q(m.profile)} ${q(m.rootA)} ${q(m.rootB)}`;
+
+    const run = await sourced(
+      m.d,
+      [
+        `SP_MAIN=${q(m.w.dir)}; SP_SCRIPTS=${q(m.scripts)}`,
+        `SP_JOB_MODE=1; SP_JOB_PLACEHOLDER_HOST=1; SP_JOB_RUNNER_TEMP=${q(rt)}`,
+        call,
+        `: > ${q(m.absentOne)}`,
+        call,
+        'printf "status=%s\\n" "$?"',
+      ].join('\n'),
+      m.w.watcherEnv(),
+    );
+
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(run.stdout, 'status=0\n');
+    assert.ok(!existsSync(m.absentOne), `the earlier session's placeholder is swept\n${run.stderr}`);
+    assert.equal(lines(readFileSync(manifestAt(rt), 'utf8'))[0], m.absentOne);
   });
 
   for (const [label, flags] of [

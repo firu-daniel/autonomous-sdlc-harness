@@ -13,7 +13,8 @@
 #   manifest      spawn_engine's "What was absent before this session" block, its job-mode half; the
 #                 writable-root test is the watcher's own placeholder_manifest_writable_root, called
 #                 with no copy
-#   sweep         the job's `Sweep the sandbox placeholders` step:
+#   sweep         the job's `Sweep the sandbox placeholders` step at teardown, and spawn_engine's
+#                 placeholder_sweep_pass before every spawn, both as
 #                 `HARNESS_JOB_MODE=1 autonomous-watcher.sh job-sweep <branch>` (job_sweep)
 #
 #   sp_job_setup              status 0, or 2 through sp__setup_refuse naming the refusal. Sets
@@ -24,7 +25,8 @@
 #   sp_job_add_dirs <base profile> <cwd> <state root>
 #                             sets the array SP_JOB_ADD_DIRS; never fails
 #   sp_job_manifest_write <settings file> <add-dir root>...
-#                             writes the placeholder manifest on a placeholder host; the first root is
+#                             first runs the job's sweep (sp__job_sweep), then writes the placeholder
+#                             manifest on a placeholder host; the first root is
 #                             the session's cwd. A failed or refused step is one stderr line; status 0.
 #                             Needs SP_MAIN and SP_SCRIPTS set
 #   sp_job_teardown           the sweep, its output on stderr as `sandbox-probe: job-sweep: <line>`, then
@@ -136,6 +138,12 @@ EOF
 sp_job_manifest_write() {
   [ "${SP_JOB_MODE:-0}" = 1 ] || return 0
   [ "$SP_JOB_PLACEHOLDER_HOST" = 1 ] || return 0
+  # spawn_engine sweeps before every spawn, so a placeholder an earlier session left is removed before
+  # this session's manifest is taken; without it, the next manifest omits that path and nothing sweeps it.
+  local sweep_rc
+  sp__job_sweep "job-sweep before this session"
+  sweep_rc=$?
+  [ "$sweep_rc" -eq 0 ] || sp_refuse "job-sweep before this session exited $sweep_rc"
   local settings="${1:-}" manifest root line deny_paths paths out
   shift
   paths=()
@@ -183,20 +191,27 @@ EOF
   return 0
 }
 
+sp__job_sweep() {
+  local label="${1:-}" out rc line
+  out="$(cd "$SP_MAIN" && HARNESS_JOB_MODE=1 RUNNER_TEMP="$SP_JOB_RUNNER_TEMP" \
+    bash "$SP_SCRIPTS/autonomous-watcher.sh" job-sweep "$SP_BRANCH" </dev/null 2>&1)"
+  rc=$?
+  while IFS= read -r line; do
+    [ -n "$line" ] && sp_refuse "$label: $line"
+  done <<EOF
+$out
+EOF
+  return "$rc"
+}
+
 sp_job_teardown() {
   [ "${SP_JOB_MODE:-0}" = 1 ] || return 0
-  local out rc line status
+  local rc status
 
   # 1. The sweep, as the job's `if: always()` step runs it; off a placeholder host it finds no manifest.
   if [ "$SP__JOB_SETUP_RAN" = 1 ]; then
-    out="$(cd "$SP_MAIN" && HARNESS_JOB_MODE=1 RUNNER_TEMP="$SP_JOB_RUNNER_TEMP" \
-      bash "$SP_SCRIPTS/autonomous-watcher.sh" job-sweep "$SP_BRANCH" </dev/null 2>&1)"
+    sp__job_sweep job-sweep
     rc=$?
-    while IFS= read -r line; do
-      [ -n "$line" ] && sp_refuse "job-sweep: $line"
-    done <<EOF
-$out
-EOF
     status="$(git -C "$SP_MAIN" status --porcelain 2>/dev/null)"
     status="${status%%$'\n'*}"
     sp_refuse "job-sweep: exit $rc; git status after the sweep: ${status:-clean}"

@@ -11,7 +11,8 @@
 #   sp_session <name> <settings> <prompt file> [--mode dontAsk|acceptEdits] [--allowed <rule>]...
 #              [--debug-file <f>] [--cwd <dir>]
 #                            one headless session on the watcher's launch line; sets SP_STREAM. In job
-#                            mode it first writes job.sh's placeholder manifest. Every @SP_AGENT_PID@ in
+#                            mode it first sweeps the job's placeholders and writes job.sh's placeholder
+#                            manifest. Every @SP_AGENT_PID@ in
 #                            the prompt or an --allowed rule becomes the launching subshell's PID, also
 #                            written to SP_TMP/<name>.agent-pid: after `exec` the agent CLI holds that
 #                            PID, though a CLI launched through a wrapper that forks would hold another

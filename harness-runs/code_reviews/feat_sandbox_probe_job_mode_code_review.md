@@ -44,7 +44,7 @@
 3. [x] **Finding 6** — Build the Linux write-protection pass sentence from the judge's whole refusal set _(layer: cli, general)_
 4. [x] **Finding 3** — Record the `userns,` test in the controls file and grade IS3's rewrite case _(layer: cli, general)_
 5. [x] **Finding 1** — Cut the control clone in the `wrappers` leg's job arm before its first session _(layer: cli, general)_
-6. [ ] **Finding 2** — Run the job's sweep before every job-mode manifest write, as `spawn_engine` does before every spawn _(layer: cli, general)_
+6. [x] **Finding 2** — Run the job's sweep before every job-mode manifest write, as `spawn_engine` does before every spawn _(layer: cli, general)_
 
 ---
 
