@@ -1,0 +1,18 @@
+### 1. `sp__job_writable_root` is a second copy of the watcher's `placeholder_manifest_writable_root`, which the probe can call directly
+
+**Site.** `scripts/lib/sandbox-probe/job.sh` → `sp__job_writable_root` (the comment above it reads *"placeholder_manifest_writable_root, line for line."*), and its one caller `sp_job_manifest_write` → `if root="$(sp__job_writable_root "$manifest" "$@")"; then`.
+
+**Problem.** `sp__job_writable_root` has the same body as `placeholder_manifest_writable_root` in `scripts/autonomous-watcher.sh` (byte-identical to `cli/templates/scripts/autonomous-watcher.sh`). That function is a standalone top-level function. It is not code inline in `spawn_engine`. So the probe can reach the real implementation through the route `sp_job_setup` already takes in the same file: a `bash -c` child that sources `$SP_SCRIPTS/autonomous-watcher.sh status` and then calls the watcher's own function, as step 1 does for `run_profile_check`.
+
+`.claude/context/conventions.md` → `### Where a new responsibility goes` says *"A responsibility that already has a home does not get a second one"* and *"Before adding a copy of anything, grep for it"*. `cli/src/core/repoPaths.ts` is cited there as the worked cost of two private copies of one rule drifting apart. `job.sh`'s header admits the copy (*"keep each in step with the code it names"*), but nothing enforces that: `cli/test/sandbox-probe-job-launch.test.mjs` tests the probe's copy against the probe's own expected manifest outcomes and never compares it with the watcher's function. If the watcher's rule changes, the probe will keep grading against the old rule and nothing will report it. That defeats the purpose of job mode, which is to reproduce the job rather than approximate it (`harness-runs/story_plans/feat_sandbox_probe_job_mode_story_plan.md` → `## Context`).
+
+`sp_job_add_dirs` is different and is not part of this finding. It mirrors code that sits inline inside `spawn_engine`, and the branch's scope rules out changing the watcher. So no callable home exists for that one.
+
+**Fix.**
+1. Delete `sp__job_writable_root` from `scripts/lib/sandbox-probe/job.sh`.
+2. In `sp_job_manifest_write`, get the writable root from the watcher's own function, the same way `sp_job_setup` step 1 calls `run_profile_check`:
+   `root="$(cd "$SP_MAIN" && bash -c '. "$1" status >/dev/null 2>&1; shift; placeholder_manifest_writable_root "$@"' _ "$SP_SCRIPTS/autonomous-watcher.sh" "$manifest" "$@" 2>/dev/null)"`.
+   Keep the existing branch behaviour: status 0 means the manifest is under a session-writable root, and the existing `sp_refuse` line still applies.
+3. Handle the case where the watcher cannot be sourced or does not define the function (`declare -F placeholder_manifest_writable_root` inside the child). Treat it as "under a root": refuse to write the manifest and print one `sp_refuse` line saying so. The watcher's own rule already says an unplaceable manifest is never written.
+4. In `job.sh`'s header, change the `manifest` line so it says the writable-root test is the watcher's own function, called and not mirrored.
+5. In `cli/test/sandbox-probe-job-launch.test.mjs` → `test('the job-mode placeholder manifest', …)`, keep the existing `a runner temp under a root` case. It now covers the watcher's function through the probe. Add `scripts/autonomous-watcher.sh` to what that case's fixture provides under `SP_SCRIPTS`, if it does not already.
