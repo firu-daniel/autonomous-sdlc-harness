@@ -51,7 +51,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_linux_test_suite_failure
 1. [x] **Task 1** — Make the fixture environment refuse, on every host, what Linux refuses: a guessed git identity and an oversized single argument _(layer: cli)_ _(points: 20)_
 2. [x] **Task 2** — Pass the two group-1 tests' oversized values through a file, not an argument or environment string _(layer: cli)_ _(points: 10)_
 3. [x] **Task 3** — Bound the sweep's fetch by process group whenever its stdout is not a terminal, with a pseudo-terminal case as the proof _(layer: cli)_ _(points: 20)_
-4. [ ] **Task 4** — Re-sync the root sweep copy and record the Linux suite's three groups in the documents of record _(layer: general)_ _(points: 10)_
+4. [x] **Task 4** — Re-sync the root sweep copy and record the Linux suite's three groups in the documents of record _(layer: general)_ _(points: 10)_
 
 ## Scope register
 
