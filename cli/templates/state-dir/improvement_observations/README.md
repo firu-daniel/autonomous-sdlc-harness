@@ -8,10 +8,10 @@ The file is committed and pushed by the run itself, on the run's own branch, nea
 
 The mistake worth naming is reading the per-branch split as an accident and consolidating it into one shared file. Every parallel run appending to one target at the end of its work is among the most reliable merge-conflict generators there is, and it would re-serialise exactly the parallel runs this tree exists to allow. The intakes are meant to come together at triage — shared, human, and on the default branch — and nowhere earlier.
 
-One block, illustrative rather than real, in the shape every entry takes — as the intake file for the branch `feat/recent_searches_panel` would carry it. The format and the seven category names are fixed by `${CLAUDE_PLUGIN_ROOT}/instructions/improvement_observations_instructions.md` → `## The entry format`; what belongs here is a harness or workflow problem the run hit, never a defect in the work the run was shipping:
+One block, illustrative rather than real, in the shape every entry takes — as the intake file for the branch `feat/recent_searches_panel` would carry it. The format and the seven category names are fixed by `${CLAUDE_PLUGIN_ROOT}/instructions/improvement_observations_instructions.md` → `## The entry format`; what belongs here is a harness or workflow problem the run hit, never a defect in the work the run was shipping. Its heading's run copy is the working copy the watcher prepares for one run:
 
 ```markdown
-## The type-check wrapper is gated in a sibling working copy, so two tasks shipped unverified
+## The type-check wrapper is gated in a sibling run copy, so two tasks shipped unverified
 - **category:** tooling-gap
 - **evidence:** the profile entry for the wrapper matches the main checkout's path only, so both dispatches that ran it were denied; both tasks were committed on a review reading alone.
 - **cost this run:** two of five tasks carry no type-check result.

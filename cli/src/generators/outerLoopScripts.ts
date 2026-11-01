@@ -1,6 +1,7 @@
 /**
  * Generator: the outer-loop scripts — the run watcher, the git wrappers, the worktree tooling, the
- * flow walker with its gate library and flow graph, the test-suite runner, and the shared library
+ * flow walker with its gate library and flow graph, the test-suite runner, the run-analytics script
+ * with its two `jq` programs, the change-request fence's opt-out check, and the shared library
  * they all source —
  * written into the adopter's configured `scriptsDir`.
  *
@@ -27,8 +28,9 @@
  *    row is {@link OuterLoopScript.agentInvocable}.
  * 3. **The invocation string comes from `scriptInvocation`, in `generators/scripts.ts`.** That is
  *    the single producer of `bash <scriptsDir>/<file>`, and the permission profile derives its
- *    three allow forms from that exact string. Formatting the same shape here would be a second
- *    producer, and the two would disagree the first time either is corrected.
+ *    two allow forms from that exact string, and the run watcher's per-run copy twins the absolute
+ *    one. Formatting the same shape here would be a second producer, and the two would disagree
+ *    the first time either is corrected.
  *
  * ## Scope this release
  *
@@ -86,8 +88,9 @@ export interface OuterLoopScript {
    * that carry that entry are `autonomous-watcher.sh`, `restart-watcher.sh`,
    * `cleanup-merged-worktrees.sh` and `remote-run.sh` — the last because a run that could dispatch
    * runs could start runs about itself (the guard is `plugin/hooks/autonomous-script-allowlist-guard.sh`).
-   * For the worktree scripts, the notifier, the stream formatter and
-   * the docs-retrieval server launcher — which the agent runner starts from `.mcp.json` —
+   * For the worktree scripts, the notifier, the stream formatter, the run-analytics script,
+   * the docs-retrieval server launcher — which the agent runner starts from `.mcp.json` — and the
+   * change-request fence's opt-out check, which an interactive session runs,
    * `false` is a calling convention rather than a gate: the guard auto-allows them, deliberately.
    *
    * A row is added by the change that adds its template, so this flag can only ever describe a
@@ -95,6 +98,20 @@ export interface OuterLoopScript {
    * path that resolves to nothing.
    */
   readonly agentInvocable: boolean;
+  /**
+   * The main checkout's copy of this script is a named `sandbox.excludedCommands` entry
+   * (`generators/sandboxProfile.ts`). Absent means it runs sandboxed in every spelling.
+   *
+   * Set on the git wrappers an agent commits, pushes and refreshes through: sandboxed on macOS, a
+   * commit cannot write a linked worktree's record (`docs/sandbox-verification.md` G1, F1) and a push
+   * or fetch cannot reach an SSH remote (P1, F3). Set it only on a script carrying the
+   * excluded-wrapper checks `templates/scripts/lib/harness-run-lib.sh` → the header's `JURISDICTION`
+   * paragraph names (`hr_wrapper_main_of`, `hr_wrapper_target_check_var`,
+   * `hr_worktree_config_check_var`, `hr_pinned_hooks_path`, `hr_wrapper_branch_var`), plus
+   * `hr_git_env_drop` and the main checkout's protected set, as `commit-on-branch.sh`'s header
+   * applies them.
+   */
+  readonly runsUnsandboxed?: true;
 }
 
 /**
@@ -127,6 +144,26 @@ export const NOTIFY_SCRIPT_NAME = 'autonomous-notify.sh';
 export const DOCS_SEARCH_SERVER_SCRIPT_NAME = 'docs-search-server.sh';
 
 /**
+ * The run library's file name, named on its own for the same reason {@link WATCHER_SCRIPT_NAME} is:
+ * `generators/writeProtection.ts` → `libraryDir` looks its row up to take the `subdir` it joins into
+ * the write-protected paths, and a literal there would let a rename here surface only as an `init`
+ * fault.
+ *
+ * The row below is built from it, so the file is renamed here and nowhere else.
+ */
+export const RUN_LIBRARY_SCRIPT_NAME = 'harness-run-lib.sh';
+
+/**
+ * The change-request fence's opt-out check's file name, named on its own for the same reason
+ * {@link WATCHER_SCRIPT_NAME} is: `generators/claudeContext.ts` writes its invocation into the fence,
+ * `generators/projectSettings.ts` allow-lists that invocation and `doctor/checks.ts` looks for it, and
+ * any of them disagreeing with the writer would name a script that was never written.
+ *
+ * The row below is built from it, so the file is renamed here and nowhere else.
+ */
+export const TASK_OFFER_CHECK_SCRIPT_NAME = 'task-offer-check.sh';
+
+/**
  * The whole outer-loop set, in the order `init` writes it: the shared library first, because every
  * other row sources it, and each further library or data file before the script that sources or
  * reads it.
@@ -135,10 +172,10 @@ export const DOCS_SEARCH_SERVER_SCRIPT_NAME = 'docs-search-server.sh';
  * row — no condition threaded through the writer, no second list to keep in step.
  */
 export const OUTER_LOOP_SCRIPTS: ReadonlyArray<OuterLoopScript> = Object.freeze([
-  Object.freeze({ file: 'harness-run-lib.sh', subdir: 'lib', mode: 0o644, agentInvocable: false }),
-  Object.freeze({ file: 'commit-on-branch.sh', mode: 0o755, agentInvocable: true }),
-  Object.freeze({ file: 'push-branch.sh', mode: 0o755, agentInvocable: true }),
-  Object.freeze({ file: 'refresh-branch.sh', mode: 0o755, agentInvocable: true }),
+  Object.freeze({ file: RUN_LIBRARY_SCRIPT_NAME, subdir: 'lib', mode: 0o644, agentInvocable: false }),
+  Object.freeze({ file: 'commit-on-branch.sh', mode: 0o755, agentInvocable: true, runsUnsandboxed: true }),
+  Object.freeze({ file: 'push-branch.sh', mode: 0o755, agentInvocable: true, runsUnsandboxed: true }),
+  Object.freeze({ file: 'refresh-branch.sh', mode: 0o755, agentInvocable: true, runsUnsandboxed: true }),
   // The one row that executes an ARGUMENT, so its safety is in the script rather than in this flag:
   // it runs a file only from `<state_dir>/scratch/` and refuses every other path. It carries NO
   // `DENY_SCRIPT_BASENAMES` entry in the script-allowlist guard, and that omission is the decision —
@@ -162,12 +199,22 @@ export const OUTER_LOOP_SCRIPTS: ReadonlyArray<OuterLoopScript> = Object.freeze(
   Object.freeze({ file: DOCS_SEARCH_SERVER_SCRIPT_NAME, mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: 'cleanup-merged-worktrees.sh', mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: 'autonomous-format-stream.sh', mode: 0o755, agentInvocable: false }),
+  Object.freeze({ file: 'run-analytics.jq', subdir: 'lib', mode: 0o644, agentInvocable: false }),
+  Object.freeze({ file: 'run-analytics-report.jq', subdir: 'lib', mode: 0o644, agentInvocable: false }),
+  // Run by the watcher after each session. An agent reaching it through the script-allowlist guard
+  // can only append sessions to `<state_dir>/run_analytics/<branch>/` for the branch and checkout it
+  // names, and never rewrites a recorded one, so `false` is a calling convention and it carries no
+  // `DENY_SCRIPT_BASENAMES` entry.
+  Object.freeze({ file: 'run-analytics.sh', mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: NOTIFY_SCRIPT_NAME, mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: WATCHER_SCRIPT_NAME, mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: 'restart-watcher.sh', mode: 0o755, agentInvocable: false }),
   // Run by the watcher, the remote job or a person. Carries a `DENY_SCRIPT_BASENAMES` entry: a run that
   // could dispatch runs could start runs about itself.
   Object.freeze({ file: 'remote-run.sh', mode: 0o755, agentInvocable: false }),
+  // Run by an interactive session's fence; `false` is a calling convention, and it carries no
+  // `DENY_SCRIPT_BASENAMES` entry because it is read-only and prints one path.
+  Object.freeze({ file: TASK_OFFER_CHECK_SCRIPT_NAME, mode: 0o755, agentInvocable: false }),
 ] as const);
 
 /** The templates' subdirectory under `cli/templates/`, addressed as {@link readTemplate} wants it. */
@@ -211,9 +258,10 @@ export interface OuterLoopScriptsResult {
 /**
  * A row's path relative to `scriptsDir`, which is also its path under `cli/templates/scripts/`.
  *
- * Exported because the permission profile needs the same answer: its repo-root-absolute and
- * sibling-worktree forms are that path joined to a root, and a row in a subdirectory is the case
- * where re-deriving it from `file` alone would name a file that is not there.
+ * Exported because the permission profile needs the same answer: its repo-root-absolute form is
+ * that path joined to the root, and the run watcher's per-run twin is the same path under the run
+ * copy, and a row in a subdirectory is the case where re-deriving it from `file` alone would name a
+ * file that is not there.
  */
 export function outerLoopRelativePath(script: OuterLoopScript): string {
   return script.subdir === undefined ? script.file : `${script.subdir}/${script.file}`;
@@ -229,6 +277,25 @@ export function outerLoopRelativePath(script: OuterLoopScript): string {
  */
 export function outerLoopScriptsDir(config: HarnessConfig): string {
   return normalizeRepoDir(config.scriptsDir ?? DEFAULTS.scriptsDir);
+}
+
+/**
+ * The repo-relative invocation of the change-request fence's opt-out check —
+ * `bash <scriptsDir>/task-offer-check.sh`, {@link scriptInvocation}'s string for its row.
+ *
+ * The one producer the fence text, the settings allow rule and `doctor` read, so the command the
+ * fence tells a session to run and the rule that allows it cannot drift apart.
+ */
+export function taskOfferCheckInvocation(config: HarnessConfig): string {
+  return scriptInvocation(outerLoopScriptsDir(config), TASK_OFFER_CHECK_SCRIPT_NAME);
+}
+
+/**
+ * The exact `Bash(…)` permission rule for {@link taskOfferCheckInvocation}. No `:*` suffix, so it
+ * matches the bare invocation and nothing else.
+ */
+export function taskOfferCheckRule(config: HarnessConfig): string {
+  return `Bash(${taskOfferCheckInvocation(config)})`;
 }
 
 /**

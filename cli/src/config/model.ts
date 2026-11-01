@@ -14,8 +14,9 @@
  * `docs/config.md` §5's key reference — those four are one contract in four places.
  *
  * Paths: every string path in this model is **repo-relative** (`docs/config.md` §5), except
- * `$schema`, which resolves relative to the config file's own location, and
- * `parity.referenceImplPath`, which may be absolute. Both say so in their own doc comment.
+ * `$schema`, which resolves relative to the config file's own location,
+ * `parity.referenceImplPath`, which may be absolute, and `treeGuards[].test`, which is the argument
+ * the single-file test command takes. Each says so in its own doc comment.
  */
 
 /** The config file's name, at the adopting repository's root. */
@@ -145,6 +146,38 @@ export interface HarnessExecution {
   target?: HarnessExecutionTarget;
   /** Whether a run on GitHub Actions with `forge` `github` keeps one phase-progress comment on its pull request; read at run time by `hr_progress_comments` in the run library, and by nothing in this package. */
   progressComments?: boolean;
+  /** Whether a run the local watcher launches holds this host awake for its engine's life (macOS on AC power, Linux on mains power); read at run time by `hr_keep_awake_mode_var` in the run library and by `doctor`'s `keep-awake` check through {@link keepAwakeEnabled}. */
+  keepAwake?: boolean;
+}
+
+/** One domain an unattended run's sandboxed commands may reach, and why. */
+export interface HarnessSandboxDomain {
+  /** A bare hostname or IPv4 literal — no scheme, port, path or wildcard; see {@link SANDBOX_DOMAIN_PATTERN}. */
+  readonly domain: string;
+  /** Why a sandboxed command needs this domain; the generated profile repeats it beside the entry. */
+  readonly reason: string;
+}
+
+/** The explicit, named opt-out from the sandbox. Never a default, and never a bare switch. */
+export interface HarnessSandboxOptOut {
+  /** Why every unattended command runs unsandboxed; a blank reason is not a taken opt-out. */
+  readonly reason: string;
+}
+
+/** The unattended run's Bash sandbox. Read through {@link sandboxOptedOut} and {@link sandboxAllowedDomains}. */
+export interface HarnessSandbox {
+  /** This repository's own additions to the sandbox's network allowlist, each with its reason; absent means none. */
+  readonly allowedDomains?: readonly HarnessSandboxDomain[];
+  /** Run every unattended command unsandboxed, for the reason stated. */
+  readonly optOut?: HarnessSandboxOptOut;
+}
+
+/** One test file a change under a glob must run. Read through {@link configuredTreeGuards}. */
+export interface HarnessTreeGuard {
+  /** The argument the single-file test command takes, verbatim — **not necessarily** repo-relative. */
+  readonly test: string;
+  /** Repo-relative glob of the paths this test guards: `**` zero or more whole segments, `*` within one segment, `?` one character within one segment. */
+  readonly covers: string;
 }
 
 /**
@@ -204,6 +237,10 @@ export interface HarnessConfig {
   design?: HarnessDesign;
   /** Execution-target settings. */
   execution?: HarnessExecution;
+  /** Unattended-run Bash-sandbox settings. */
+  sandbox?: HarnessSandbox;
+  /** Test files a change touching a covered path must run; absent means none. */
+  treeGuards?: readonly HarnessTreeGuard[];
 }
 
 /**
@@ -224,7 +261,9 @@ export interface HarnessConfig {
  *
  * `execution` is the one section here that no generator seeds: `buildConfig` writes no `execution`
  * key, so a fresh `init` file is unchanged, and {@link remoteExecutionApplies} falls back to
- * `execution.target` below instead.
+ * `execution.target` below instead. `sandbox` and `treeGuards` are the same: no generator seeds
+ * either, and {@link sandboxAllowedDomains} and {@link configuredTreeGuards} fall back to
+ * `sandbox.allowedDomains` and `treeGuards` below.
  *
  * `scriptsDir` is the one key whose generated value differs from its default: `init` writes
  * {@link INIT_SCRIPTS_DIR}, while the value here stays the absent-key meaning every reader falls
@@ -246,7 +285,9 @@ export const DEFAULTS = {
   clientEnvPrefix: null,
   phases: { qa: false, docs: false, parity: false },
   qa: { driver: 'web-playwright', portSeed: 3001 },
-  execution: { target: 'local', progressComments: true },
+  execution: { target: 'local', progressComments: true, keepAwake: true },
+  sandbox: { allowedDomains: [] },
+  treeGuards: [],
 } as const;
 
 /**
@@ -636,6 +677,17 @@ export function remoteExecutionApplies(config: HarnessConfig): boolean {
 }
 
 /**
+ * Does a run the local watcher launches hold this host awake?
+ *
+ * The one TypeScript reader of `execution.keepAwake`; its shell mirror is `hr_keep_awake` in
+ * `cli/templates/scripts/lib/harness-run-lib.sh`, and both read an absent key as `true`. Import it;
+ * do not re-spell it.
+ */
+export function keepAwakeEnabled(config: HarnessConfig): boolean {
+  return config.execution?.keepAwake !== false;
+}
+
+/**
  * Is the whole forge coupling on — the trigger and control workflows, the lifecycle comments, the
  * run-state labels and the draft pull request?
  *
@@ -649,6 +701,50 @@ export function remoteExecutionApplies(config: HarnessConfig): boolean {
  */
 export function forgeTriggerApplies(config: HarnessConfig): boolean {
   return config.forge === 'github' && remoteExecutionApplies(config);
+}
+
+/**
+ * The schema's `sandbox.allowedDomains[].domain` `pattern`, mirrored verbatim: a bare hostname or
+ * IPv4 literal — dot-separated labels of letters, digits and inner hyphens.
+ *
+ * No scheme, port, path or wildcard: the entry is a host the sandbox's network allowlist names, and
+ * a wildcard is excluded because nothing verified states that the sandbox honours one.
+ */
+export const SANDBOX_DOMAIN_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*$/;
+
+/**
+ * Has this config taken the sandbox opt-out — an `optOut` whose `reason` is non-blank?
+ *
+ * **Declared once, here, because every consumer has to agree**: the permission-profile generator's
+ * sandbox block (`generators/sandboxProfile.ts`), its write-protection rules
+ * (`generators/writeProtection.ts`) and `doctor`'s `profile-sandbox` check. A drift between them
+ * would grade a profile against an opt-out the generator never applied. Import it; do not re-spell it.
+ *
+ * A blank reason answers `false`: an opt-out nobody explained is not one taken, and the structural
+ * check reports it as an error. The `typeof` is load-bearing: `config/io.ts` → `loadConfig` can hand
+ * a caller a config the check found errors in, and a non-string `reason` must not throw here.
+ *
+ * Its shell mirror is `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_sandbox_opted_out`, held
+ * equal by `cli/test/sandbox-prerequisites-shell-mirror.test.mjs`.
+ */
+export function sandboxOptedOut(config: HarnessConfig): boolean {
+  const reason: unknown = config.sandbox?.optOut?.reason;
+  return typeof reason === 'string' && reason.trim() !== '';
+}
+
+/**
+ * The adopter's own additions to the sandbox's network allowlist; an absent key is none.
+ *
+ * **Declared once, here, for the same consumers as {@link sandboxOptedOut}** — import it; do not
+ * re-spell the fallback.
+ */
+export function sandboxAllowedDomains(config: HarnessConfig): readonly HarnessSandboxDomain[] {
+  return config.sandbox?.allowedDomains ?? DEFAULTS.sandbox.allowedDomains;
+}
+
+/** The configured tree guards; an absent key is none. Import it; do not re-spell the fallback. */
+export function configuredTreeGuards(config: HarnessConfig): readonly HarnessTreeGuard[] {
+  return config.treeGuards ?? DEFAULTS.treeGuards;
 }
 
 /** The schema's `qa.portSeed` bounds, mirrored verbatim. */

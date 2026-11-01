@@ -52,7 +52,7 @@ const TOKEN_PRESENT = /\{\{[A-Za-z][A-Za-z0-9_]*\}\}/;
  *
  * For a caller checking an already-rendered string it did not render itself — the permission
  * profile's runnability check, which asks it of every generated entry, because an entry carrying a
- * leftover token matches neither `allow` nor `deny` and stalls an unattended run.
+ * leftover token matches neither `allow` nor `deny`, so an unattended run's call is refused.
  */
 export function containsToken(text: string): boolean {
   return TOKEN_PRESENT.test(text);

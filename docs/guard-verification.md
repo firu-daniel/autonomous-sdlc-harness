@@ -2,7 +2,7 @@
 
 **Who reads this:** anyone changing a guard hook under `plugin/hooks/` or the configuration library they share. It records what the guard set does **as a whole** — its per-call cost and the standing decision matrices — as measured, so a later change is regressable rather than merely reviewable. The per-guard decision detail lives in each script's own header REPRO block; this file is what those blocks cannot carry, because it is about the set rather than about one decision.
 
-All six guards register on `PreToolUse` under the `Bash` matcher with **no `if:` condition** (`plugin/hooks/hooks.json`), so all six run on **every** Bash tool call in every session the plugin is enabled for. That is why the composite row in §1.2, and not any single guard's row, is the number a change is judged against.
+Six guards register on `PreToolUse` under the `Bash` matcher with **no `if:` condition** (`plugin/hooks/hooks.json`), so all six run on **every** Bash tool call in every session the plugin is enabled for. That is why the composite row in §1.2, and not any single guard's row, is the number a change is judged against; it is the Bash-call figure. A seventh, `git-trust-file-guard.sh`, registers under the `Edit|Write|NotebookEdit` matcher and runs on **every** file-tool call instead, never on a Bash call; its decisions are §2.6 and its per-call latency is owed there.
 
 ---
 
@@ -169,6 +169,41 @@ Three candidates fall out of that table, in descending size:
 
 **(c) The grid stops at 8 pieces and the expansion parser is quadratic.** `hc_split_command` costs O(pieces × length) and is called three times per decision. Warm-up call excluded, 50 iterations per cell: 0.42 ms at 1 piece, 0.34 at 2, 0.40 at 4, 0.57 at 8, 1.07 at 16, 2.63 at 32, 28.4 at 128; separately, 409 ms at 512 and 1.6 s at 1,024. End to end through `allow-safe-compounds.sh`, the `sed`-fork parser it replaced is still slower at every ordinary size — 8 pieces 126 → 61 ms, 128 pieces 904 → 522 ms, 512 pieces 3.5 → 2.9 s — with the crossover near **1,024 pieces**, where the fork form wins at 7.0 s against 8.2 s. Nothing in a real session approaches that; the number is here so the ceiling is stated rather than discovered. The scaling and the trade are also recorded in `lib/harness-config-lib.sh` under **BOTH PARSERS ARE PURE PARAMETER EXPANSION, AND THAT IS A COST FIX WITH A SECOND, SAFETY HALF**.
 
+**2026-10-20: `hc_main_root` changed, and no guard calls it.** `feat_clone_per_run_anchor` changed `hc_main_root` in `plugin/hooks/lib/harness-config-lib.sh` to read `HARNESS_MAIN_REPO` first, and changed nothing else in the library. `grep -n 'hc_main_root' plugin/hooks/*.sh`, run against `dc53f1d0`, printed nothing and exited 1. The per-Bash-call path the §1.2 composite measures is therefore unchanged, and no latency row is re-taken.
+
+**2026-10-20: `feat_clone_per_run_switch` changed no file under `plugin/hooks/`, and the guards now run with their cwd in a clone.** The first command below prints the branch's merge base with `dev`, the `defaultBranch` in `harness.config.json`; `<merge-base>` in the second stands for the hash it printed (`fb44db76ca53b84586ed5be0b3786370a1ac6f02` when this note was written). Run from this repository's root on the branch, the second printed nothing and exited 0:
+
+```sh
+git merge-base HEAD origin/dev
+git diff --stat <merge-base>..HEAD -- plugin/hooks
+```
+
+No guard code moved, so no §1.2 latency row is re-taken. The layout the guards are judged in did move: every new run copy is now a `git clone --shared`, whose `.git` is a directory, where a linked worktree's is a pointer file. A guard's own `git` calls from a session in a run copy now resolve the clone's `.git`, not a worktree's pointer. §2's standing decision matrices were taken with the payload's `cwd` at §0's primary fixture, and §2.1 adds a real sibling **linked worktree** for the `<work_root>/<project_name>-*` arms. None of them was taken from a clone, so they are owed a re-run with the `cwd`, and §2.1's sibling, in a clone. The measured rows below stand as the record of their date until that re-run.
+
+**2026-10-29: `hc_main_root` changed again, `hc_main_root_var` was added, and no guard calls either.** `fix_clone_main_repo_resolution` gave `hc_main_root` in `plugin/hooks/lib/harness-config-lib.sh` a clone arm, moved its body into the new `hc_main_root_var`, and changed nothing else in the library beyond the header comments describing those two functions. `git log --format='%h %s' 74618b02..6436ad77 -- plugin/hooks`, from the branch's merge base with `origin/dev` to its tip, listed one commit, `1d03a74a`. `grep -n 'hc_main_root' plugin/hooks/*.sh`, run against `6436ad77`, printed nothing and exited 1. The per-Bash-call path the §1.2 composite measures is therefore unchanged, and no latency row is re-taken.
+
+**2026-10-30: `task-offer-check.sh` joined the guard's left-allowed set, and only comments moved.** `fix_task_offer_check_script` changed the `LEFT ALLOWED, DELIBERATELY` comment of `plugin/hooks/autonomous-script-allowlist-guard.sh` and the matching sentence of `plugin/hooks/README.md`, and no other file under `plugin/hooks/`. The first command below printed the branch's merge base with `origin/dev`, `ef7e35be8f98893cdd72d715dd8018009b121fb5`; the second, run from this repository's root with that hash in place of `<merge-base>`, printed two hunks and exited 0, and every changed line it printed begins `#`:
+
+```sh
+git merge-base HEAD origin/dev
+git diff -U0 <merge-base> -- plugin/hooks/autonomous-script-allowlist-guard.sh
+```
+
+`DENY_SCRIPT_BASENAMES` and the decision code are untouched, so the script is allowed by the same arm as every other non-denied `.sh` under `scriptsDir`. Two decisions were re-taken by hand per `plugin/hooks/README.md` → `## Reproducing a decision by hand`, on a throwaway `git init` fixture outside any checkout — `harness.config.json` holding `{"version":1,"projectName":"probe","defaultBranch":"main","protectedBranches":["main"],"scriptsDir":"scripts"}`, the template `cli/templates/scripts/task-offer-check.sh` copied to `scripts/task-offer-check.sh`, both committed on `main`, HEAD on `feat_probe` — with the payload's `cwd` at the fixture root and the guard run by `/bin/bash`, the payload handed to it on stdin by a scratch probe rather than through `printf`; the two commands below are that payload in the README's form. `<fixture>` is that root's **resolved** path: on macOS `/tmp` is a symlink to `/private/tmp`, and with the unresolved spelling as `cwd` the first payload answered nothing, the script token resolving outside the root `git` reports.
+
+```sh
+printf '{"tool_input":{"command":"bash scripts/task-offer-check.sh"},"cwd":"<fixture>"}' | bash plugin/hooks/autonomous-script-allowlist-guard.sh
+printf '{"tool_input":{"command":"bash scripts/task-offer-check.sh | cat"},"cwd":"<fixture>"}' | bash plugin/hooks/autonomous-script-allowlist-guard.sh
+```
+
+The first printed one object and exited 0 — `allow`:
+
+```
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":"Auto-allowed: every script target resolves under the configured scripts directory of <fixture>"}}
+```
+
+The second printed nothing and exited 0 — SILENT, the construct scan withholding the permit for the `|`. No decision path changed, so no §1.2 latency row and no §1.3 fork count is re-taken.
+
 ---
 
 ## 2. Standing decision matrices
@@ -180,6 +215,7 @@ The whole-set decision records. Each subsection is a table of cases a change to 
 - **§2.3** — Fail-closed matrix, with positive controls: every guard against an unresolvable configuration, an absent configuration and an unparseable payload, alongside a control showing the same guard still decides.
 - **§2.4** — Disclosed residuals, re-confirmed: the standing status of every disclosed shape — the ones deliberately left open, each with its bound restated as a measurement, and the ones that have since been closed, each with the arm that closed it named.
 - **§2.5** — Directory de-quoting: the widening the `-C` de-quote granted, the refusal it did not, and the fault injection showing that one one-line call carries both.
+- **§2.6** — The file-tool trio guard: the decisions `git-trust-file-guard.sh` gives each `Edit`, `Write` and `NotebookEdit` target and payload, reproduced rather than fault-injected, with its latency owed.
 
 ### 2.1 Helper call-order composition
 
@@ -379,7 +415,7 @@ A row that is SILENT proves nothing on its own — a guard is silent by default.
 | **both** lines removed | 20 — the union of the two rows above | SILENT → **allow** | no third leg backs either of them up, C7 excepted |
 | `hc_torn_substitution` stubbed to "never torn" | 6 — E1–E4, F1, F2 | SILENT → **allow** | the torn test alone produces those six, costs included |
 | depth tracking → "does the last `$(` have a `)` after it" | 2 — E2, E4 | SILENT → **allow** | tracking depth, rather than looking for a following `)`, is what catches a nested closed substitution |
-| depth tracking → an open/close equality count | 1 — K9 | **allow** → SILENT | ignoring the depth-0 `)` is what keeps an ordinary regex group from stalling a run |
+| depth tracking → an open/close equality count | 1 — K9 | **allow** → SILENT | ignoring the depth-0 `)` is what keeps an ordinary regex group from being refused in a run |
 
 Two readings that only the table makes available. **No keeper row moves under any variant except K9 under the last one** — so the guards were live throughout and the whitelist costs the keepers nothing. And **C7 is the one hole row with three independent refusals**: it does not move even with both reject lines gone, because the stray `"` that survives the one-layer de-quote also breaks `hc_in_workspace`'s `case "$dir" in "$root"/*` containment. Traced at helper level, its de-quoted directory fails all three tests on its own, and the literal `/../` reject is the one that fires — it is the first of the two reject lines in both helpers, above the whitelist. Do not read that third refusal as covering C1–C6.
 
@@ -468,6 +504,18 @@ Two readings the table makes available and the cells alone do not. **No control 
 #### Decision identity across the configuration cache
 
 The same 108 cells run against the pre-cache guard set described at the end of §0 differ in **12**, and all 12 sit in the two rows the cache deliberately introduced: seven in `jq` older than 1.5 and five in more than one JSON document. Every other row — invalid JSON, no configuration, an unreadable configuration, both payload rows, `defaultBranch` absent, `jq` absent, not a repository, detached HEAD, protected HEAD, the single-guard gates, and both control sweeps — is **identical** between the two trees. That is the fail-closed half of the decision-identity evidence for the cache refactor, which §1's timing tables cannot carry, and it is what bounds the refactor's behavioural change to the two conditions §1.4 documents.
+
+#### The file-tool guard's fail-closed cells
+
+`git-trust-file-guard.sh` is outside the matrix above: it answers file-tool payloads, not the seven Bash probes, and reads no configuration. Its fail-closed cells are **reproduced decisions**, not measured with fault injection — each is the decision `cli/test/git-trust-file-guard.test.mjs` asserts or the guard's own `REPRO` block states, as the last column names.
+
+| Condition | decision | source |
+|---|---|---|
+| payload will not parse (`not json at all`) | **deny** | the suite's `malformed input, non-JSON text` case; the `REPRO` block's `printf 'not json'` line |
+| `jq` absent from `PATH` | **deny**, the reason naming `jq` | the `REPRO` block's `PATH=/nonexistent` line; not in the suite, whose header says why |
+| any configuration condition above | not applicable | the guard reads no `harness.config.json` |
+
+Unlike the six Bash guards, this guard's closed answer is `deny`, not SILENT. §2.6 carries its whole decision set.
 
 #### What this section does not cover
 
@@ -662,7 +710,7 @@ Readmitting either name to `CREDS_READ_COMMANDS` still needs an option walk refu
 
 **The bound, as a claim a row can falsify:** *the tail is reached by a whole-string scan and by nothing else, and the two guards run different scans — so the credentials guard's residual is exactly the set of tails naming no refused **binary**, and the script-allowlist guard's is exactly the set of tails carrying no **construct**, which is empty for any tail that runs a second command.* k1–k3 are (k) still open: a tail whose binaries are unlisted rides along. k5 and k6 are that guard's scan refusing a tail in both positions, and (i)'s i11–i13 are the two write-capable names being taken **out** of the residual for exactly that reason — a tail may ride along, but not one that writes a second cleartext copy of the file the allow is about. j1–j3 and j8 are the construct scan, in the four positions that used to be (j). j7 bounds (j) from the other side and did so before the scan existed: a pipe does not launder a denied basename, because the deny list and the leading-words test are applied to the piece the wrapper is in.
 
-**Why the two guards do not share one mechanism.** A binary list enumerates the attacker's tools — open-ended, and every unlisted binary is a gap, which is what k1–k3 measure. The construct set is closed and specified by POSIX, and it is sufficient because a bare binary in argument position is inert: `bash <S>/<wrapper>.sh curl` hands the string `curl` to a wrapper and runs nothing. The reverse import is what is refused, not the comparison: the credentials guard judges `cat <path>`, where a false-positive binary costs nothing, while the script-allowlist guard judges commands carrying prose and paths — a commit subject naming `sed`, a path component `node` — and a false positive in an allow-only guard is a prompt, which unattended is a stall. Adding a **short** list of unambiguous network and interpreter names on top of the construct scan is deferred, not rejected.
+**Why the two guards do not share one mechanism.** A binary list enumerates the attacker's tools — open-ended, and every unlisted binary is a gap, which is what k1–k3 measure. The construct set is closed and specified by POSIX, and it is sufficient because a bare binary in argument position is inert: `bash <S>/<wrapper>.sh curl` hands the string `curl` to a wrapper and runs nothing. The reverse import is what is refused, not the comparison: the credentials guard judges `cat <path>`, where a false-positive binary costs nothing, while the script-allowlist guard judges commands carrying prose and paths — a commit subject naming `sed`, a path component `node` — and a false positive in an allow-only guard is a prompt, which unattended is a refusal. Adding a **short** list of unambiguous network and interpreter names on top of the construct scan is deferred, not rejected.
 
 **(k) stays open, with the comparison it always had.** s1–s3 show `allow-safe-compounds.sh` granting the identical tail behind an ordinary safe prefix, so refusing it in the credentials guard alone would remove nothing a session can otherwise do; s4 marks that comparison's edge — the sibling declines every single statement **except a workspace-scoped `git -C`** (§3.3's W25–W26), and s4 is not one, so the single statement is still the shape (k) reaches and it does not. Those three rows are also now a **statement about the set rather than about (k) alone**: closing (j) makes the script-allowlist guard the *narrowest* of the three on a tail, and `allow-safe-compounds.sh` the widest. That asymmetry is the next thing this section should be asked about, and it is not this round's row.
 
@@ -776,6 +824,46 @@ Each variant is one change to the shipped tree, run over the whole row set in th
 #### What a later change owes this section
 
 A change to the `-C` de-quote, to either directory whitelist or to the reconstruction `case` re-runs all 16 rows **and** the sweep, and re-runs the first fault injection specifically: the `deny → SILENT` column is the one a change aimed at the widening is most likely to move without noticing. The quoted spellings are also standing rows of `allow-safe-compounds.sh`'s own REPRO block, on both its ALLOW and its NO-OUTPUT list, so a decision that moves here contradicts that block and cannot move quietly in one place only.
+
+### 2.6 The file-tool trio guard
+
+**Who reads this and what for:** anyone changing `plugin/hooks/git-trust-file-guard.sh`, the one guard registered under `Edit|Write|NotebookEdit` rather than `Bash`. It answers one question: *which file-tool targets does the guard refuse, and which does it leave to the permission profile?*
+
+**Every row is a reproduced decision, not a measurement with fault injection.** Each is what `cli/test/git-trust-file-guard.test.mjs` asserts or what the guard's own `REPRO` block states, as the last column names; no leg below has been attributed by breaking it. `<repo>` is a `git init` fixture with `.git/objects/info`, `sub/` and `notes/`; `<gl>` is a symbolic link to `<repo>/.git`; `<repo>/innocent` is a symbolic link to `.git/config.worktree`. Rows T1–T13 hold for each of `Edit`, `Write` and `NotebookEdit`, the last carrying `notebook_path` in place of `file_path`; T14–T17 are the single payloads they name.
+
+#### The rows
+
+| # | target, or payload | decision | source |
+|---|---|---|---|
+| T1 | `<repo>/.git/commondir`, `<repo>/.git/config.worktree`, `<repo>/.git/objects/info/http-alternates` | **deny** | suite, `plain` form; `REPRO` |
+| T2 | each of T1's paths followed by `/x` | **deny** | suite, `under` form; `REPRO` (`commondir/x`) |
+| T3 | each written `<repo>/sub/../<trio>` | **deny** | suite, `dotdot` form; `REPRO` (`config.worktree`) |
+| T4 | each written through `<gl>/<leaf>` | **deny** | suite, `symlinkedParent` form; `REPRO` (`commondir`) |
+| T5 | each followed by `/` | **deny** | suite, `trailingSlash` form |
+| T6 | each with its trio part upper-cased | **deny** | suite, `upperCase` form |
+| T7 | `<repo>/innocent` | **deny** | suite, symlinked-leaf case; `REPRO` |
+| T8 | `.git/commondir`, relative, with `cwd` `<repo>` | **deny** | suite, relative case |
+| T9 | `<repo>/.git/config.worktree.bak` | SILENT | suite; `REPRO` |
+| T10 | `<repo>/commondir` | SILENT | suite; `REPRO` |
+| T11 | `<repo>/notes/http-alternates` | SILENT | suite |
+| T12 | `<repo>/.git/worktrees/w/commondir`, a linked worktree's record | SILENT | suite |
+| T13 | `<repo>/index.ts` | SILENT | suite |
+| T14 | non-JSON text | **deny** | suite; `REPRO` |
+| T15 | `{}`; a missing, numeric or empty `file_path`; a `NotebookEdit` carrying `file_path` only | **deny** | suite, malformed-input cases |
+| T16 | `tool_name` `Read` | **deny** | suite, malformed-input case |
+| T17 | any payload with `jq` off `PATH` | **deny**, the reason naming `jq` | `REPRO` only |
+
+T12 is SILENT because the match is on the `.git/<trio>` suffix, and `.git/worktrees/w/commondir` does not end in `.git/commondir`. The fail-closed half of this set, T14–T17, is also §2.3's *The file-tool guard's fail-closed cells*.
+
+#### What is owed
+
+- **Per-call latency.** Owed, taken by hand outside any session. No figure is recorded here, and none taken inside a run may be.
+- **Fault injection.** Owed: which leg produces each **deny** — the lexical form, the physical form, the symlinked-leaf loop, the case-insensitive match — is attributed only by the suite header's `RED ONCE` note, which removed the case match and the leaf loop together from a reference guard, not from the shipped one.
+- **Whether Claude Code honours the `deny` on a file tool.** Owed as `docs/sandbox-verification.md` AP9; a subprocess cannot show it.
+
+#### What a later change owes this section
+
+A change to the guard re-runs `cli/test/git-trust-file-guard.test.mjs` and every `REPRO` line, and adds or moves the row here in the same commit. A row moving from **deny** to SILENT is a finding unless its argument is in the row.
 
 ---
 
@@ -1051,6 +1139,21 @@ Seven of those SILENT holds are `&`-borne ride-along shapes that were **already*
 **Two keeper controls hold `allow` in both columns**: `bash <repo>/<S>/commit-on-branch.sh --repo <repo> tracked.txt -- "Probe commit"`, and N119's first piece alone, `bash <repo>/<S>/typecheck.sh`. The guard was live in both columns, and the fixture configuration was byte-identical to its pristine copy afterwards.
 
 **What §1 owes this change: nothing.** No §1 figure depends on the deny list's length — `is_denied_script` is reached only from a `.sh` token and none of §1's payloads carries one, and the list is lower-cased by one `tr` whatever its length — and with §0's shim this guard's counts are unchanged before → after, at **0 `jq`, 0 `git`, 0 `sed`, 0 `grep`, 0 `tr`, 1 `cat`** on `git status && ls` and on the bare `ls`, and at **3 `jq`, 1 `git`, 0 `sed`, 0 `grep`, 2 `tr`, 1 `cat`** on `bash <repo>/<S>/typecheck.sh`.
+
+**The script-allowlist guard's sibling-run-copy rows, added after every block above and measured against the same kind of pair.** `under_allowed_scripts` had a second half: a `.sh` token under `<work_root>/<project_name>-*` that spelled the same repo-relative `scriptsDir` at that worktree's own root was granted, so a session judged at one checkout vouched for every sibling run copy's wrappers. The per-run permission profile grants a run only its own copy's wrappers, and a sibling glob in a `Bash` rule is matched literally (`docs/sandbox-verification.md` F4), so the guard granted what the profile does not. The fix keeps only the judged checkout's scripts directory and drops *" or of one of its sibling worktrees"* from the `permissionDecisionReason`. Silence, never a deny. Its rows carry **N120–N123**, the numbers free above every row already recorded. `<S>` is §0's primary fixture's `packages/storefront/scripts`, holding `typecheck.sh` and `commit-on-branch.sh`; the sibling is `<work_root>/<project_name>-<branch>`, a linked worktree on the ordinary branch `feat_x`, added with `git worktree add` beside the fixture. Every row is driven with `payload.cwd` at `<repo>`.
+
+| # | Shape | before | after | What narrowed it |
+|---|---|---|---|---|
+| N120 | `bash <work_root>/<project_name>-<branch>/<S>/typecheck.sh` | allow | **SILENT** | `under_allowed_scripts` keeps only the judged checkout's scripts directory |
+| N121 | `bash "<work_root>/<project_name>-<branch>/<S>/typecheck.sh"` | allow | **SILENT** | the same, through the quoted-path normalization |
+| N122 | `cd <repo> && bash <work_root>/<project_name>-<branch>/<S>/typecheck.sh` | allow | **SILENT** | the same, behind a leading `cd <repo>` |
+| N123 | `bash <repo>/<S>/typecheck.sh && bash <work_root>/<project_name>-<branch>/<S>/typecheck.sh` | allow | **SILENT** | the same, composed with the all-or-nothing rule: the sibling piece silences a compound whose other piece is allowed |
+
+**Which two trees these columns are.** As with N23–N119: **this plugin's tree immediately before this fix and immediately after** — the branch's base tree and the tree carrying the narrowing — each taken by `git archive` of `plugin/hooks` into a scratch directory, driven back to back on 2026-10-21 in one session on §0's primary fixture, built on a resolved path, with `/bin/bash` 3.2.57(1)-release and `jq` 1.8.2. Not the pre-extraction baseline, which §3's caveat says cannot be re-taken here.
+
+**Four keeper controls hold `allow` in both columns**: `bash <repo>/<S>/typecheck.sh` bare and quoted, and `cd <repo> && bash <S>/typecheck.sh`, each with `payload.cwd` at `<repo>`; and the sibling's own wrapper, `bash <work_root>/<project_name>-<branch>/<S>/typecheck.sh` with `payload.cwd` at that sibling, which the shipped guard grants under a reason naming the sibling as the directory's checkout — the run copy a session launched there judges as its own `<top>`. The guard was live in both columns, and the fixture configuration was byte-identical to its pristine copy afterwards.
+
+**What §1 owes this change.** With §0's shim, payload fed by redirection, this guard's counts on `bash <repo>/<S>/typecheck.sh` are unchanged before → after, at **3 `jq`, 1 `git`, 0 `sed`, 0 `grep`, 2 `tr`, 1 `cat`**. The wall-clock §1.2 figure for this guard is **not** taken here: it is owed to a hand re-take of §0's paired recipe outside any headless session.
 
 ### 3.2 Tightened — SILENT → `deny`
 

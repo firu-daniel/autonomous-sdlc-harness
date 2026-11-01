@@ -25,8 +25,14 @@
  * 2. **The repository-root probe is issued bare** — the literal arguments
  *    `rev-parse --show-toplevel`, with nothing added. An unattended run's permission profile
  *    can allow-list a literal read-only git command, while the same command wrapped in a shell
- *    substitution or embedded in a compound statement is a different string and stalls on a
- *    prompt (`docs/config.md` §1).
+ *    substitution or embedded in a compound statement is a different string, which an
+ *    unattended run refuses (`docs/config.md` §1).
+ *
+ * Three reads compare a branch with the default branch without touching a working tree:
+ * {@link mergeBase}, {@link fileAtRef} and {@link changedPathsBetween}. Each runs no hook, no diff
+ * driver and no textconv, and returns `undefined` rather than throwing when git does not answer.
+ * They read history as stored, with replace refs and grafts switched off, because a sandboxed
+ * session can write both.
  *
  * Most of what follows is read-only. The two exceptions — {@link initRepository} and
  * {@link commitAll} — are the only functions in the CLI that mutate a repository's history, and
@@ -34,6 +40,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { devNull } from 'node:os';
 
 import { HarnessError } from './errors.js';
 
@@ -155,12 +162,46 @@ const ORIGIN_PREFIX = 'origin/';
  * text never interleaves with the reporter's output.
  */
 function runGit(args: readonly string[], cwd: string): string {
+  return runGitUntrimmed(args, cwd).trim();
+}
+
+/**
+ * Above `execFileSync`'s 1 MiB default, which a shipped outer-loop script approaches: an overflow
+ * would read as an absent file to {@link fileAtRef}.
+ */
+const GIT_OUTPUT_MAX_BYTES = 64 * 1024 * 1024;
+
+/** {@link runGit}'s stdout as git printed it, for a caller whose answer is the bytes themselves. */
+function runGitUntrimmed(args: readonly string[], cwd: string): string {
   return execFileSync('git', [...args], {
     cwd,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
-  }).trim();
+    maxBuffer: GIT_OUTPUT_MAX_BYTES,
+  });
+}
+
+/** Git's switch-off for `refs/replace/`: a sandboxed session can write that namespace. */
+const NO_REPLACE_OBJECTS_ENV = 'GIT_NO_REPLACE_OBJECTS';
+/** Where git looks for `info/grafts`; pointed at the null device so no graft is read. */
+const GRAFT_FILE_ENV = 'GIT_GRAFT_FILE';
+
+/**
+ * {@link runGitUntrimmed} with history read as stored — no `refs/replace/` substitution and no
+ * `info/grafts` — for the reads that compare a run's branch with a trusted commit: a session that
+ * can write the common directory's `refs/` and `info/` could otherwise make the merge base read
+ * as a commit carrying the branch's own tree.
+ */
+function runGitAsStored(args: readonly string[], cwd: string): string {
+  return execFileSync('git', [...args], {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+    maxBuffer: GIT_OUTPUT_MAX_BYTES,
+    env: { ...process.env, [NO_REPLACE_OBJECTS_ENV]: '1', [GRAFT_FILE_ENV]: devNull },
+  });
 }
 
 /** True when a thrown value is a failure to spawn `git` at all, rather than a non-zero status. */
@@ -363,9 +404,10 @@ export function currentBranch(repoRoot: string): string | undefined {
  *
  * `undefined` and an empty answer are the same result on purpose: `git worktree list` prints the
  * main working copy even when there is only one, so nothing to report means the probe did not work
- * rather than that there are no checkouts. The one caller is `doctor`, which asks whether
- * worktree-based runs can be prepared here and reports a `warn` either way, so the distinction
- * between the ways it can fail buys nothing.
+ * rather than that there are no checkouts. The one caller is `doctor`'s `worktrees` check, which
+ * asks whether the one-live-copy rule (`hr_run_copy_live_var`) and sync-in can see which checkout
+ * has a branch checked out — a legacy worktree run is listed there and nowhere else in git — and
+ * reports a `warn` either way, so the distinction between the ways it can fail buys nothing.
  *
  * It lives here rather than in that check, for the reason in the module header: every
  * repository-state probe has one definition and one place a review checks that it stayed read-only.
@@ -659,4 +701,74 @@ export function pathIsIgnored(repoRoot: string, repoRelativePath: string): boole
   } catch (error) {
     return (error as { status?: number } | null)?.status === 1 ? false : undefined;
   }
+}
+
+/** A revision argument git could read as an option; refused before any call is made. */
+function looksLikeOption(revision: string): boolean {
+  return revision === '' || revision.startsWith('-');
+}
+
+/**
+ * The best common ancestor of `a` and `b` — `git merge-base <a> <b>` — or `undefined` when they
+ * share none, either does not resolve, or git fails.
+ */
+export function mergeBase(repoRoot: string, a: string, b: string): string | undefined {
+  if (looksLikeOption(a) || looksLikeOption(b)) return undefined;
+  let output: string;
+  try {
+    output = runGitAsStored(['merge-base', a, b], repoRoot).trim();
+  } catch {
+    return undefined;
+  }
+  return output === '' ? undefined : output;
+}
+
+/**
+ * The blob at `repoRelativePath` in `ref` — `git show <ref>:<path>`'s stdout, untrimmed — or
+ * `undefined` when the ref or the path is absent or git fails. Without `--textconv` on the command
+ * line `git show` streams a blob's bytes as stored, so no configured driver runs.
+ */
+export function fileAtRef(repoRoot: string, ref: string, repoRelativePath: string): string | undefined {
+  if (looksLikeOption(ref)) return undefined;
+  try {
+    return runGitAsStored(['show', `${ref}:${repoRelativePath}`], repoRoot);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether `revision` names a commit this repository holds — `rev-parse --verify --quiet <revision>^{commit}`. */
+export function commitResolves(repoRoot: string, revision: string): boolean {
+  if (looksLikeOption(revision)) return false;
+  try {
+    runGitAsStored([...GIT_VERIFY_REF_ARGS, `${revision}^{commit}`], repoRoot);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The paths under `pathspecs` that differ between the trees of `base` and `tip`, one per entry, or
+ * `undefined` when git fails. Tree to tree: no working tree or index is read, renames are reported as
+ * a deletion and an addition, and no external diff or textconv driver runs. An empty `pathspecs`
+ * compares the whole tree.
+ */
+export function changedPathsBetween(
+  repoRoot: string,
+  base: string,
+  tip: string,
+  pathspecs: readonly string[],
+): readonly string[] | undefined {
+  if (looksLikeOption(base) || looksLikeOption(tip)) return undefined;
+  let output: string;
+  try {
+    output = runGitAsStored(
+      ['diff', '--name-only', '--no-renames', '--no-ext-diff', '--no-textconv', base, tip, PATHSPEC_SEPARATOR, ...pathspecs],
+      repoRoot,
+    );
+  } catch {
+    return undefined;
+  }
+  return output.split('\n').filter((line) => line !== '');
 }

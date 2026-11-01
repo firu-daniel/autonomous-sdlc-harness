@@ -352,7 +352,7 @@
     "execution": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Where an unattended run executes. Read by init (which writes the GitHub Actions workflows), by doctor, and by the run watcher (which dispatches instead of launching). Also holds one reporting switch, progressComments, read by the run job.",
+      "description": "Where an unattended run executes. Read by init (which writes the GitHub Actions workflows), by doctor, and by the run watcher (which dispatches instead of launching). Also holds two switches: progressComments, read by the run job, and keepAwake, read by the run watcher.",
       "properties": {
         "target": {
           "type": "string",
@@ -364,6 +364,77 @@
           "type": "boolean",
           "default": true,
           "description": "Whether a run that executes on GitHub Actions with forge 'github' keeps one progress comment on its pull request, edited as the run passes its four main phases (for a task run planning, implementation, branch review and done; for a user-review round fix plan, fix implementation, branch review and done). false posts none; every other lifecycle comment is unchanged. Read at run time from the run's branch; an absent key is true."
+        },
+        "keepAwake": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether a run the local run watcher launches holds this host awake for the life of its engine process: on macOS through caffeinate -s -i -w, which holds on AC power only; on Linux through a logind sleep and lid-switch block lock, taken only while the host is on mains power. false holds nothing. Never held in a GitHub Actions job, on a GitHub Actions runner or under WSL2, where nothing can keep Windows awake. Read at run time from the main checkout by the run watcher, and by doctor's keep-awake check; an absent key is true."
+        }
+      }
+    },
+    "sandbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The unattended run's Bash sandbox. Read by init, which renders it into the unattended permission profile, and by doctor, which grades that profile against it. Absent means the sandbox is on and this repository adds no domain to its network allowlist.",
+      "properties": {
+        "allowedDomains": {
+          "type": "array",
+          "default": [],
+          "description": "This repository's own additions to the sandbox's network allowlist, each with the reason a sandboxed command needs it.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["domain", "reason"],
+            "properties": {
+              "domain": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*$",
+                "description": "A bare hostname or IPv4 literal: dot-separated labels of letters, digits and inner hyphens, with no scheme, port, path or wildcard. This pattern must match SANDBOX_DOMAIN_PATTERN in cli/src/config/model.ts."
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S",
+                "description": "Why a sandboxed command needs this domain. The generated profile repeats it beside the entry, so it must hold more than whitespace."
+              }
+            }
+          }
+        },
+        "optOut": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reason"],
+          "description": "Run every unattended command unsandboxed, for the reason stated. Never a default, and never a bare switch; the generated profile shows that the opt-out is taken.",
+          "properties": {
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S",
+              "description": "Why every unattended command runs unsandboxed. Must hold more than whitespace: an opt-out nobody explained is not one taken."
+            }
+          }
+        }
+      }
+    },
+    "treeGuards": {
+      "type": "array",
+      "default": [],
+      "description": "Tree guards: tests that each enforce a rule over every file under a path. Read by the unit loop, which after a unit's own test run runs, through the single-file test command, every guard whose covers matches a path the unit's change touched; and by doctor's tree-guards check. Optional, and no generator writes it.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["test", "covers"],
+        "properties": {
+          "test": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The argument the single-file test command takes, spelled exactly as that command takes it, and therefore not necessarily repo-relative: in a workspace whose command runs from a package directory, it is relative to that directory."
+          },
+          "covers": {
+            "type": "string",
+            "minLength": 1,
+            "description": "A repo-relative glob over the files the guard reads, matched against the whole path: ** matches zero or more whole path segments, * any run of characters inside one segment, ? one character inside one segment."
+          }
         }
       }
     }

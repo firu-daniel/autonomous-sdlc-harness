@@ -5,9 +5,9 @@
  * wrapper set, and {@link scriptInvocation} is the single producer of the string that names *any*
  * script `init` writes into `scriptsDir`.** The generated config, the wrapper files and the
  * generated permission profile are three views of one string; drift between them is invisible until
- * an unattended run stalls on a command that matches neither `allow` nor `deny`, which in `-p` mode
- * is a stall rather than a prompt. So the config generator and the profile generator import from
- * here rather than formatting `bash …/….sh` themselves; {@link wrapperInvocation} is the typed
+ * an unattended run's command matches neither `allow` nor `deny`, which under the default `dontAsk`
+ * mode is refused at once rather than prompting a session nobody can answer. So the config
+ * generator and the profile generator import from here rather than formatting `bash …/….sh` themselves; {@link wrapperInvocation} is the typed
  * wrapper-only spelling of the same producer, and `generators/outerLoopScripts.ts` — whose files
  * land in the same directory and whose agent-invocable rows reach the same profile — calls
  * {@link scriptInvocation} directly rather than becoming a second producer of the shape.
@@ -28,8 +28,8 @@
  *    rationale block states. Wrapping them would hand an agent a script path it is allowed to
  *    run, which is exactly what those two must not have.
  * 3. **Each script prints its own verdict line** — `PASS: <name>` / `FAIL: <name> (exit n)` —
- *    so a caller never appends `; echo $?` to it. That compound form is what stalls an
- *    unattended run on a permission prompt, and a wrapper that reports its own result removes
+ *    so a caller never appends `; echo $?` to it. That compound form matches no entry, so an
+ *    unattended run's call is refused, and a wrapper that reports its own result removes
  *    the reason to write one.
  *
  * ## Scope
@@ -42,11 +42,19 @@
  * at it and the permission profile allow-lists its literal path — writing a path the file does not
  * back would generate a profile naming a file that does not exist.
  *
- * The one thing here that does not write is {@link wrapperCommandLine}, which reads a written
- * wrapper's command line back out; it sits in this module rather than beside its caller for the
- * reason its own doc gives.
+ * **One arm is opt-in and off for every adopter.** With
+ * {@link WrapperScriptsOptions.carryOnDiskCommandLines} set — a self-adopt run only — a wrapper whose
+ * configured value is its own invocation renders the command line its file **on disk** already runs,
+ * ahead of detection's line, so a forced run re-renders the template around a hand-set line instead of
+ * replacing it ({@link resolveBody}, precedence 1a). Absent or `false`, every body is resolved exactly
+ * as `docs/cli.md` §5 states.
+ *
+ * The things here that do not write are {@link wrapperCommandLine}, which reads a written wrapper's
+ * command line back out of its text, and {@link readWrapperBody}, which reads that text off disk for
+ * it; they sit in this module rather than beside their callers for the reason the former's doc gives.
  */
 
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { answersNone, DEFAULTS, isPlaceholder, type HarnessCommands, type HarnessConfig } from '../config/model.js';
@@ -102,6 +110,11 @@ export interface WrapperScriptsOptions {
   readonly rawCommands: RawCommands;
   /** The command's write plan; this generator enqueues into it and never touches `fs` itself. */
   readonly plan: WritePlan;
+  /**
+   * Carry a self-invoking wrapper's on-disk command line forward ({@link resolveBody}, precedence 1a).
+   * Set by `init` on a self-adopt run only; absent for every adopter, whose precedence is unchanged.
+   */
+  readonly carryOnDiskCommandLines?: boolean;
 }
 
 /** One wrapper that was written, or that a `--dry-run` reported it would write. */
@@ -113,7 +126,7 @@ export interface WrittenWrapper extends WrapperScript {
   readonly invocation: string;
   /**
    * The raw command line **this run rendered into the wrapper body**: {@link resolveBody}'s `body`
-   * verbatim, whichever of its three precedences won.
+   * verbatim, whichever of its precedences won.
    *
    * It is returned rather than re-read from the file because wrappers are `create-if-absent`
    * ({@link writeWrapperScripts}): over a wrapper already on disk the body resolved here is
@@ -129,6 +142,12 @@ export interface WrittenWrapper extends WrapperScript {
    * kept file on disk holds.
    */
   readonly unresolved: boolean;
+  /**
+   * True exactly when {@link command} was taken from the wrapper file on disk
+   * ({@link WrapperScriptsOptions.carryOnDiskCommandLines}). It carries {@link command}'s caveat: it
+   * describes what this run resolved, not what a kept file on disk holds.
+   */
+  readonly carried: boolean;
 }
 
 /** What the generator produced, for the config and profile generators that consume it. */
@@ -188,8 +207,8 @@ function resolvedScriptsDir(config: HarnessConfig): string {
  *
  * Repo-relative, forward-slashed and unquoted, because commands are executed from the repository
  * root and every path in the config file is repo-relative. The profile's allow entry (i) is this
- * exact string; its repo-root-absolute and sibling-worktree twins are the profile's to derive and
- * are deliberately not produced here.
+ * exact string; its repo-root-absolute twin is the profile's to derive, and a run copy's exact
+ * twin the run watcher's per-run copy's, and neither is produced here.
  *
  * `file` is a path relative to `scriptsDir`, so a script in a subdirectory is named by passing
  * `<subdir>/<file>` rather than by joining the pieces at the call site.
@@ -485,6 +504,8 @@ interface ResolvedBody {
    * its file name to {@link invokesScript} to clear.
    */
   readonly unresolved?: boolean;
+  /** True when the body was read off the wrapper file on disk (precedence 1a). */
+  readonly carried?: boolean;
 }
 
 /**
@@ -496,11 +517,20 @@ interface ResolvedBody {
  *    `templates/scripts/README.md`'s "command lines come from `commands.*`" holds. It wins and is
  *    **reported**: the profile allow-lists the wrapper this line was just inlined into, not the line
  *    itself, so the arm carries {@link wrappedKeyMismatchMessage} as its warning.
+ *
+ * 1a. **Opt-in only — when `carry` is set and the configured value is this wrapper's own
+ *    invocation**, the command line the wrapper file on disk already runs ({@link readWrapperBody}
+ *    answering `command` with a non-empty line). An `unresolved` or `unrecognised` file, or none,
+ *    falls through. It sits below precedence 1 because a raw configured line is the adopter's stated
+ *    intent, and above precedence 2 because the hand-set line is what a self-adopt run must keep.
+ *    Lettered rather than numbered so the citations of precedences 2 and 3 elsewhere still resolve.
+ *
  * 2. **Otherwise, when the configured value *is* this wrapper's own invocation** — the normal
  *    state after a first `init` — the body is stack detection's raw line. Inlining the
  *    self-reference instead would produce a script that runs itself forever, so
- *    {@link writeWrapperScripts} asserts against it explicitly rather than trusting this branch.
- * 3. **When neither resolves**, the body says what to fix and exits non-zero — for `deploy`, which
+ *    {@link writeWrapperScripts} asserts against it explicitly — of a carried body too — rather than
+ *    trusting this branch.
+ * 3. **When none resolves**, the body says what to fix and exits non-zero — for `deploy`, which
  *    step 2 can never supply, that is the wrapper rather than the config key.
  */
 function resolveBody(
@@ -508,6 +538,7 @@ function resolveBody(
   configured: string | undefined,
   invocation: string,
   rawCommands: RawCommands,
+  onDisk: { readonly repoRoot: string; readonly scriptsDir: string; readonly carry: boolean },
 ): ResolvedBody {
   const detected = key === 'deploy' ? undefined : rawCommands[key];
 
@@ -519,6 +550,10 @@ function resolveBody(
   // form on its own object (`docs/cli.md` §5).
   if (configured !== undefined && configured !== invocation) {
     return { body: configured, warning: wrappedKeyMismatchMessage(key, { configured, invocation, file }) };
+  }
+  if (onDisk.carry && configured === invocation) {
+    const kept = readWrapperBody(join(onDisk.repoRoot, onDisk.scriptsDir, file));
+    if (kept?.kind === 'command' && kept.command !== '') return { body: kept.command, carried: true };
   }
   if (detected !== undefined && detected.trim() !== '' && !isPlaceholder(detected)) return { body: detected.trim() };
 
@@ -602,6 +637,7 @@ export function writeWrapperScripts({
   config,
   rawCommands,
   plan,
+  carryOnDiskCommandLines,
 }: WrapperScriptsOptions): WrapperScriptsResult {
   const scriptsDir = resolvedScriptsDir(config);
   const warnings: string[] = [];
@@ -632,7 +668,11 @@ export function writeWrapperScripts({
     if (!selected) continue;
 
     const invocation = wrapperInvocation(scriptsDir, file);
-    const { body, warning, unresolved } = resolveBody(script, configured, invocation, rawCommands);
+    const { body, warning, unresolved, carried } = resolveBody(script, configured, invocation, rawCommands, {
+      repoRoot,
+      scriptsDir,
+      carry: carryOnDiskCommandLines === true,
+    });
 
     // The assertion the precedence above exists to make impossible, stated anyway: a wrapper
     // whose body runs the wrapper is an infinite recursion, and the failure mode of not catching
@@ -653,7 +693,7 @@ export function writeWrapperScripts({
       label: `wrapper script ${file}`,
       mode: SCRIPT_MODE,
     });
-    written.push({ key, file, invocation, command: body, unresolved: unresolved === true });
+    written.push({ key, file, invocation, command: body, unresolved: unresolved === true, carried: carried === true });
   }
 
   return { scriptsDir, written, warnings };
@@ -703,8 +743,8 @@ const UNRESOLVED_HEAD = 'harness_fail';
  *
  * The wrapper is the **adopter's** file from `init` on ({@link writeWrapperScripts}: *"the raw command
  * line in each wrapper is the adopter's to correct"*), which is why an unreadable body is a reported
- * state rather than a fallback. Its one caller is `doctor`'s `daemon-path` check, which must treat
- * neither `unresolved` nor `unrecognised` as a binary the run needs.
+ * state rather than a fallback. Its callers are `doctor`'s `daemon-path` check, which must treat
+ * neither `unresolved` nor `unrecognised` as a binary the run needs, and {@link readWrapperBody}.
  */
 export function wrapperCommandLine(text: string): WrapperBody {
   // Reversed rather than indexed backwards, because `for…of` over the copy yields a `string` where
@@ -717,6 +757,21 @@ export function wrapperCommandLine(text: string): WrapperBody {
     return command.split(/\s+/)[0] === UNRESOLVED_HEAD ? { kind: 'unresolved' } : { kind: 'command', command };
   }
   return { kind: 'unrecognised' };
+}
+
+/**
+ * {@link wrapperCommandLine} over the file at `path`: `undefined` when nothing is there, and
+ * `unrecognised` when the read throws — neither is a licence to guess what the file runs.
+ *
+ * Reads and never writes, so {@link resolveBody}'s carry arm keeps this generator a planner.
+ */
+export function readWrapperBody(path: string): WrapperBody | undefined {
+  if (!existsSync(path)) return undefined;
+  try {
+    return wrapperCommandLine(readFileSync(path, 'utf8'));
+  } catch {
+    return { kind: 'unrecognised' };
+  }
 }
 
 /**
