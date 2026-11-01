@@ -1,0 +1,27 @@
+### 1. Gate 6a reads the gitignored clarification channel
+
+**Site:** `scripts/run-gates.sh`, function `machine_path_hits` (the `grep -rn "$HOME" . --exclude-dir=node_modules …` line, near line 147), and the comment block above it that begins `# In a linked worktree`. The same command is copied in `docs/development.md` → `## 5. Verifying a change` (the line `grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git --exclude-dir=test_run_logs …`, near line 378), and the paragraph after it explains each exclusion (the sentence beginning `` `--exclude-dir=test_run_logs` skips the Run gates phase's logs``, near line 382).
+
+**Failing test:** none — 6a no machine paths
+
+**Failure (from the log, test gate section; the absolute run-copy path is rewritten to its repo-relative form):**
+
+```
+  FAIL  6a no machine paths (printed output, which is the finding)
+        ./harness-runs/clarifications/fix_linux_test_suite_failures/answer_2.md:6:    at TestContext.<anonymous> (file://cli/test/outer-loop-scripts.test.mjs:2039:12)
+```
+
+**Diagnosis.** This is the first round, with no earlier logs to compare against. Gate 6a greps the whole working tree for the running user's `$HOME`. It excludes `node_modules`, `dist`, `.git`, `test_run_logs`, `scratch` and `__pycache__`, and nothing else. The one hit is `harness-runs/clarifications/fix_linux_test_suite_failures/answer_2.md`, the operator's answer to this run's parked question. Line 6 of that answer is a pasted Node assertion stack frame, and Node prints each frame as an absolute `file://` URL.
+
+That file can never reach a commit. The root `.gitignore` ignores `harness-runs/clarifications/*` and keeps only `!harness-runs/clarifications/README.md`. Its comment calls the questions and answers *"machine-local"*, the same class as `harness-runs/test_run_logs/*` and `harness-runs/scratch/*`, which 6a already skips for that reason. `git status --short --ignored harness-runs/clarifications` reports `!! harness-runs/clarifications/fix_linux_test_suite_failures/`. 6a exists to stop a machine path reaching a commit, so flagging this file is a false positive. It will come back whenever an operator pastes terminal output into an answer, which is exactly what an answer to a reproduction question asks for.
+
+The operator's answer file must not be edited to make the gate pass. It is the run's record of the person's decision, and rewriting it fixes only this one occurrence.
+
+**Do not use `--exclude-dir=clarifications`.** GNU and BSD grep match `--exclude-dir` against a directory's base name. The tracked template directory `cli/templates/state-dir/clarifications/`, whose `README.md` ships to adopters, has that same base name, so the flag would also stop 6a from checking a shipped file. The tracked `harness-runs/clarifications/README.md` must stay covered too.
+
+**Fix.**
+
+- [ ] In `scripts/run-gates.sh` → `machine_path_hits`, add one more pipeline stage after the existing `grep -v '^\./\.git:[0-9][0-9]*:'`. The new stage removes output lines for files one or more directories below `./harness-runs/clarifications/`, for example `grep -v '^\./harness-runs/clarifications/[^/][^/]*/'`. That removes the per-branch question and answer files the `.gitignore` glob ignores. The directory's own tracked `README.md`, every other `clarifications` directory, and grep's `grep: …` error lines all still print. `harness-runs` is this repository's `stateDir`. The existing comments already name `harness-runs/scratch/` literally, so a literal is consistent here.
+- [ ] Extend the comment block above `machine_path_hits` with a paragraph in the style of the `test_run_logs` / `scratch` / `__pycache__` ones. It should say that the clarification channel's per-branch questions and answers are gitignored and machine-local by construction: an operator's answer quotes terminal output, and Node stack frames carry absolute paths. It should also say why the filter anchors on the path rather than using `--exclude-dir=clarifications`, which would match the base name of the shipped `cli/templates/state-dir/clarifications/`, and that the tracked `README.md` at the directory's top level stays covered. The existing note *"The pipe is safe here and only here: `gate_silent` grades OUTPUT"* already covers a third stage's exit status. Make sure its wording still holds for three stages.
+- [ ] Update `docs/development.md` → `## 5. Verifying a change` to match. Make the printed 6a command near line 378 identical to the new `machine_path_hits` body. In the explanatory paragraph near line 382, add one clause for the new stage, next to the `--exclude-dir=test_run_logs` and `--exclude-dir=scratch` clauses: what it skips, why that content is never committed, and why it anchors on the path.
+- [ ] Do not edit `harness-runs/clarifications/fix_linux_test_suite_failures/answer_2.md`, `.gitignore`, or any other exclusion 6a already has. Write no absolute or home-directory path into any file this fix touches.
