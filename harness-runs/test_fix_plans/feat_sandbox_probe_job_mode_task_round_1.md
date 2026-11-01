@@ -14,7 +14,7 @@ Inner gate 13 (13a–13c) was reported BLOCKED because the Python environment is
 
 This list is the **single source of truth** for the fix loop. Any `[ ]` marker elsewhere in this plan or in its per-finding files is informational only.
 
-1. [ ] **Finding 1** — Make the sweep case's planted placeholder read-only. _(layer: cli)_
+1. [x] **Finding 1** — Make the sweep case's planted placeholder read-only. _(layer: cli)_
 
 ## Must Fix
 

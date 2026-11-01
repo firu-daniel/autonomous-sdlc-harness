@@ -281,7 +281,8 @@ test('the job-mode placeholder manifest', async (t) => {
         `SP_MAIN=${q(m.w.dir)}; SP_SCRIPTS=${q(m.scripts)}`,
         `SP_JOB_MODE=1; SP_JOB_PLACEHOLDER_HOST=1; SP_JOB_RUNNER_TEMP=${q(rt)}`,
         call,
-        `: > ${q(m.absentOne)}`,
+        // Read-only: hr_placeholder_leftover_var sweeps only a 0-byte file with no write bit.
+        `: > ${q(m.absentOne)} && chmod 444 ${q(m.absentOne)}`,
         call,
         'printf "status=%s\\n" "$?"',
       ].join('\n'),
