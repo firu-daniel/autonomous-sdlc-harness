@@ -50,5 +50,10 @@ bash scripts/sandbox-probe.sh --list --job
 - The type check passes.
 - `bash scripts/sandbox-probe.sh --list --job` prints the eleven job lines; `bash scripts/sandbox-probe.sh run --runner-controls x` exits 1 with a usage line naming `--job`.
 - `bash scripts/sandbox-probe.sh --list` prints the same table as Task 1's `core.sh` declares, unchanged by this task.
+- **Deviations from plan:**
+  - The controls-file read after a passing preflight runs on `preflight --job` as well as `run --job`, since a status 1 from it is a preflight refusal; a refusal goes through `sp_preflight_refuse`, which checks and releases the snapshot.
+  - The `mode:` stamp line is also printed by the `refusal` subcommand (as `mode: clone layout`), so every run's record names its mode; `preflight` prints no stamp, as before.
+  - `--runner-controls`, like `--job`, is a usage error on `refusal`, `judge` and `print-parity-script`.
+  - The run loop's four mode-selection arms were read, not executed: each needs a passing preflight and a live session. Evidence rests on reading `scripts/sandbox-probe.sh` and on `bash scripts/typecheck.sh` (its shell-parse check covers the file); Tasks 16 and 17 own the tests.
 </content>
 </invoke>
