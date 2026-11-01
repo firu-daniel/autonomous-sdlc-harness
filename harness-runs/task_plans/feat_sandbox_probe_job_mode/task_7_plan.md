@@ -54,5 +54,10 @@
 - The type check passes.
 - By hand, `bash -c '. scripts/lib/sandbox-probe/core.sh; . scripts/lib/sandbox-probe/legs-runner.sh; sp__is3_grade 1 absent present; echo "$SP_VERDICT: $SP_EVIDENCE"; sp__is2_grade absent absent /usr/bin/bwrap absent "bubblewrap 0.9.0"; echo "$SP_VERDICT: $SP_EVIDENCE"'` prints `pass` (written) and then `fail` naming `socat`.
 - `grep -nE 'cat |printf .*\$\(cat' scripts/lib/sandbox-probe/legs-runner.sh` shows the file reads the controls file only through its own reader.
+
+**Deviations from plan:**
+
+- Cases the plan leaves open, settled in `legs-runner.sh`: `sp__is2_grade` gives `not run` when an `-after` value is neither `absent` nor an absolute path. `sp__is4_grade` grades a non-zero `bwrap-start` as `fail` before checking for an empty prerequisites line. It gives `not run` for `exit 0` with a non-`PASS` line, or for a `bwrap-start` value not of the `exit …` shape. The reader keeps only lines whose key is in the closed set, so `sp_runner_control` of an unknown key prints `unrecorded`.
+- The by-hand `bash -c '. core.sh; . legs-runner.sh; …'` check was refused as a compound command. It ran through the probe route instead: `bash scripts/scratch-run.sh harness-runs/scratch/task7_runner_probe.py <root>`, under `/bin/bash` 3.2 and PATH `bash`. Both printed `pass: written: …` and then `fail: socat absent from PATH after the install step …`. The same probe exercised the reader (an unreadable file and a file with no tab line each returned status 1; a repeated key kept its last value), the stamp, both mode skips and the job-mode leg against a sample controls file.
 </content>
 </invoke>
