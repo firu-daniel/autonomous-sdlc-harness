@@ -16,6 +16,21 @@
 #   sp_leg_platform_skip <leg>        one `not run` line per row of <leg>, naming the host's platform
 #   sp_leg_row_for <macOS row> <Linux row>  prints the Linux row when SP_PLATFORM is `linux`, else the macOS one
 #
+# Job mode. SP_JOB_MODE, SP_JOB_CHECKOUT and SP_RUNNER_CONTROLS_FILE are assigned here and then
+# only by the entry point, never read from the caller's environment. With SP_JOB_MODE at 0 every
+# function behaves exactly as it does without job mode.
+# SP_JOB_LEGS declares, one tab-separated line per leg in leg-table order, the rows each leg takes
+# in job mode: <leg> <job rows, comma-joined>. Every job row is a row of that leg in SP_LEGS. A leg
+# absent from it does not run in job mode. The clone-only rows (CS1-CS5, CS7-CS15, CL5, and the
+# wrappers' clone arm CS4, P3 and CW2) do not carry over: job mode measures no clone.
+#   sp_job_print                      prints SP_JOB_LEGS (--list --job)
+#   sp_leg_job_rows <leg>             the leg's job rows, comma-joined; status 1 for a leg not run in job mode
+#   sp_leg_is_job_row <leg> <row>     status 0 for a job row of <leg>
+#   SP_JOB_ONLY_LEGS / sp_leg_job_only <leg>  the legs that run only in job mode
+#   sp_leg_mode_skip <leg> <evidence> [<row>...]  one `not run` line per named row, or per row of <leg>
+#   sp_job_skip_clone_rows <leg>      in job mode, one `not run` line per row of <leg> not a job row
+# In job mode sp_result_line refuses any verdict but `not run` on a row that is not a job row.
+#
 # SOURCED, NEVER EXECUTED. It sets no shell option: the entry point owns `set -u`.
 # Bash 3.2 is the floor (macOS /bin/bash): no associative array.
 
@@ -23,6 +38,10 @@ SP_LEGS=""
 SP_FAIL_COUNT=0
 SP_NONPASS_LEGS=""
 SP_EXIT=0
+SP_JOB_MODE=0
+SP_JOB_CHECKOUT=""
+SP_RUNNER_CONTROLS_FILE=""
+SP_JOB_LEGS=""
 
 sp_leg_declare() {
   SP_LEGS="${SP_LEGS}$1"$'\t'"$2"$'\t'"$3"$'\t'"$4"$'\n'
@@ -85,6 +104,18 @@ sp_leg_declare detached "BG9,WF5" \
 sp_leg_declare loopback "LB1,LB2,LB3,LB4,LB5" \
   "Linux only: the probe's loopback listener is called by 127.0.0.1 and by localhost, each also with --noproxy, on the network scratch profile as generated (LB1, LB2) and with 127.0.0.1 listed (LB3, LB4), and a listener a sandboxed call starts is called from outside the sandbox (LB5); once the listener answered the probe's own request, each row records whether the token came back and the proxy variables' host and port, and grades neither outcome" \
   "§8 The Linux legs (owed)"
+sp_leg_declare job-layout "CS6" \
+  "job mode only: a session in the checkout itself, on its base profile, runs git status, git add of a new file is refused under the checkout's .git with the index unchanged, and commit-on-branch.sh lands a commit whose only change is that file, all read before the placeholder sweep" \
+  "§2 The clone layout (owed) (CS6); §9 The GitHub-hosted runner legs"
+sp_leg_declare runner-install "IS1,IS2,IS3,IS4" \
+  "Linux job mode with a runner controls file only: the AppArmor sysctl read before the install step is recorded (IS1), the step leaves bwrap and socat on PATH (IS2), whether it wrote /etc/apparmor.d/bwrap is recorded against that sysctl (IS3), and bwrap starts as the runner user while doctor --remote-job passes sandbox-prerequisites (IS4)" \
+  "§9 The GitHub-hosted runner legs"
+sp_leg_declare runner-pid "PN1,PN2,PN3" \
+  "Linux job mode only: a sandboxed call cannot read the canary variable in the environ of the agent CLI that launched it (PN1) or of the probe (PN2), each read counted by name and never printed, and ls /proc lists neither process (PN3)" \
+  "§9 The GitHub-hosted runner legs"
+sp_leg_declare runner-privs "NN1,NN2" \
+  "Linux job mode with a runner controls file only: a sandboxed sudo -n true fails while the workflow's unsandboxed control succeeded (NN1), and a sandboxed call reads NoNewPrivs 1 from /proc/self/status (NN2)" \
+  "§9 The GitHub-hosted runner legs"
 sp_leg_declare headless-parity "HP1" \
   "the network, retry and write-protection legs give the same results in an interactive session, from the printed parity script" \
   "§4 The profile's denials"
@@ -112,6 +143,47 @@ sp_leg_rows() {
       return 0
     fi
   done <<<"$SP_LEGS"
+  return 1
+}
+
+sp_job_declare() {
+  SP_JOB_LEGS="${SP_JOB_LEGS}$1"$'\t'"$2"$'\n'
+}
+
+sp_job_declare wrappers "P1c,CW5,P1b,CW6"
+sp_job_declare planted-files "L1"
+sp_job_declare write-protection "W6,W8"
+sp_job_declare network "N1,N2,N3,N4,N5"
+sp_job_declare credentials "S1,S2,S4,S5"
+sp_job_declare detached "BG9,WF5"
+sp_job_declare loopback "LB1,LB2,LB3,LB4,LB5"
+sp_job_declare job-layout "CS6"
+sp_job_declare runner-install "IS1,IS2,IS3,IS4"
+sp_job_declare runner-pid "PN1,PN2,PN3"
+sp_job_declare runner-privs "NN1,NN2"
+
+sp_job_print() {
+  printf '%s' "$SP_JOB_LEGS"
+}
+
+sp_leg_job_rows() {
+  local leg rows
+  while IFS=$'\t' read -r leg rows; do
+    if [ -n "$leg" ] && [ "$leg" = "${1:-}" ]; then
+      printf '%s\n' "$rows"
+      return 0
+    fi
+  done <<<"$SP_JOB_LEGS"
+  return 1
+}
+
+sp_leg_is_job_row() {
+  local rows
+  [ -n "${2:-}" ] || return 1
+  rows="$(sp_leg_job_rows "${1:-}")" || return 1
+  case ",$rows," in
+    *",$2,"*) return 0 ;;
+  esac
   return 1
 }
 
@@ -172,6 +244,14 @@ sp_result_line() {
       return 1
       ;;
   esac
+  if [ "$SP_JOB_MODE" = 1 ] && [ "$leg" != judge ] && [ "$verdict" != "not run" ] \
+    && ! sp_leg_is_job_row "$leg" "$row"; then
+    # Job mode measures no clone, so a clone-layout row it measured would be a result it never took.
+    sp_refuse "sp_result_line: row '$row' of leg '$leg' is not a job-mode row, so its verdict '$verdict' is refused in job mode"
+    SP_FAIL_COUNT=$((SP_FAIL_COUNT + 1))
+    sp__nonpass_add "$leg"
+    return 1
+  fi
   [ "$verdict" = fail ] && SP_FAIL_COUNT=$((SP_FAIL_COUNT + 1))
   [ "$verdict" = pass ] || sp__nonpass_add "$leg"
   # Bash 3.2 keeps the backslash of an escaped quote in a replacement; a variable does not.
@@ -195,7 +275,43 @@ sp_leg_missing() {
   done
 }
 
-SP_LINUX_ONLY_LEGS="glob-deny registry detached loopback refusal"
+SP_LINUX_ONLY_LEGS="glob-deny registry detached loopback refusal runner-install runner-pid runner-privs"
+SP_JOB_ONLY_LEGS="job-layout runner-install runner-pid runner-privs"
+
+sp_leg_job_only() {
+  case " $SP_JOB_ONLY_LEGS " in
+    *" ${1:-} "*) [ -n "${1:-}" ] ;;
+    *) return 1 ;;
+  esac
+}
+
+sp_leg_mode_skip() {
+  local leg="${1:-}" evidence="${2:-}" rows row
+  rows="$(sp_leg_rows "$leg")" || return 1
+  if [ $# -gt 2 ]; then
+    shift 2
+    for row in "$@"; do
+      sp_result_line "$leg" "$row" "not run" "$evidence" ""
+    done
+    return 0
+  fi
+  local IFS=,
+  for row in $rows; do
+    sp_result_line "$leg" "$row" "not run" "$evidence" ""
+  done
+}
+
+sp_job_skip_clone_rows() {
+  local leg="${1:-}" rows row
+  [ "$SP_JOB_MODE" = 1 ] || return 0
+  rows="$(sp_leg_rows "$leg")" || return 1
+  local IFS=,
+  for row in $rows; do
+    sp_leg_is_job_row "$leg" "$row" \
+      || sp_result_line "$leg" "$row" "not run" \
+        "clone layout only: job mode measures no clone, only the checkout itself" ""
+  done
+}
 
 sp_leg_linux_only() {
   case " $SP_LINUX_ONLY_LEGS " in

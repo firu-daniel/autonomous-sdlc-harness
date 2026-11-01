@@ -1,0 +1,402 @@
+# sandbox-probe-runner.yml — runs `scripts/sandbox-probe.sh run --job` on a GitHub-hosted runner,
+# against a checkout set up as a `harness-run.yml` job sets up its own, up to that job's launch.
+#
+# WHERE IT GOES. Committed by hand to the Gate 12 repository, firu-daniel/harness-gate12, on its
+# default branch, as .github/workflows/sandbox-probe-runner.yml. Never to this repository: it lives
+# under scripts/, never under .github/, and scripts/publish-main.sh removes scripts/ from main and
+# every release tag. How to commit, run and read it is docs/development.md → `## 5. Verifying a
+# change` → Gate 15.
+#
+# WHAT IT UPLOADS. One artifact, sandbox-probe-evidence, kept 3 days: $RUNNER_TEMP/sandbox-probe-out/
+# (the runner controls file controls.tsv, the probe's run.stdout and run.stderr, exit.txt) and the
+# evidence directories the probe keeps under its TMPDIR. Nothing else leaves the runner.
+#
+# NO SECRET IS PRINTED AND NO RESPONSE BODY IS KEPT. The OAuth secret reaches a shell only through
+# `env:` and is never printed; the probe's canary SBX_PROBE_CANARY is a non-secret value, so the kept
+# streams, which can quote what a session read, carry no real secret. The metadata-service control
+# keeps the HTTP status alone: its response body goes to /dev/null.
+#
+# THE COPIED STEPS. Each step named as one of cli/templates/github/workflows/harness-run.yml's `run`
+# job steps carries that step's `run:` body byte for byte, without its HARNESS_STOPPED condition, and
+# each `uses:` keeps that file's pin and its version comment.
+#
+# Every input and secret reaches a shell line through `env:`, never through an expression inside `run:`.
+
+name: sandbox-probe-runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      probe_commit:
+        description: The full commit of autonomous-sdlc-harness to take the probe from
+        required: true
+        type: string
+      cli_version:
+        description: The released CLI version under test
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sandbox-probe-runner
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  probe:
+    runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 120
+    env:
+      HARNESS_CLI_VERSION: ${{ inputs.cli_version }}
+    steps:
+      - name: Check out the run's branch
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          token: ${{ secrets.HARNESS_GIT_TOKEN || github.token }}
+
+      - name: Check for jq and gh
+        run: |
+          missing=""
+          for tool in jq gh; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::this runner lacks:$missing. Install them on the self-hosted runner, or use a GitHub-hosted one."
+            exit 1
+          fi
+
+      - name: Set up Node
+        # actions/setup-node v7.0.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+          # v5 caches by package.json's packageManager; the job installs nothing through npm's cache, and a lockfile-less repository must not fail this step.
+          package-manager-cache: false
+
+      - name: Read the configuration
+        id: config
+        run: |
+          scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
+          retrieval=$(jq -r '(.phases.docs == true and .docs.retrieval == true)' harness.config.json)
+          {
+            echo "SCRIPTS_DIR=${scripts_dir%/}"
+            echo "HARNESS_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval"
+          } >> "$GITHUB_ENV"
+          echo "retrieval=$retrieval" >> "$GITHUB_OUTPUT"
+
+      # Job-mode preflight check 3 refuses a checkout not on harness.config.json's defaultBranch, which
+      # can differ from GitHub's default branch, so every later step runs on the configured one.
+      - name: Switch to the configured default branch
+        env:
+          IN_GH_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          gh_branch="$IN_GH_DEFAULT_BRANCH"
+          cfg=$(jq -r '.defaultBranch // empty' harness.config.json)
+          if [ -z "$cfg" ]; then
+            echo "::error::harness.config.json names no defaultBranch, so the probe has no branch its preflight accepts."
+            exit 1
+          fi
+          if [ "$cfg" != "$gh_branch" ]; then
+            if ! git fetch --quiet origin "+refs/heads/$cfg:refs/remotes/origin/$cfg"; then
+              echo "::error::the configuration's defaultBranch '$cfg' is not on origin; GitHub's default branch is '$gh_branch'"
+              exit 1
+            fi
+          fi
+          git switch --quiet -C "$cfg" "origin/$cfg"
+          head=$(git symbolic-ref --short HEAD 2>/dev/null || true)
+          if [ "$head" != "$cfg" ]; then
+            echo "::error::the checkout is on '${head:-a detached HEAD}' after switching, not the configuration's defaultBranch '$cfg'; GitHub's default branch is '$gh_branch'"
+            exit 1
+          fi
+          echo "GitHub's default branch: $gh_branch; the configuration's defaultBranch, which the probe measures: $cfg"
+
+      - name: Install the claude CLI when absent
+        working-directory: ${{ runner.temp }}
+        run: |
+          if ! command -v claude >/dev/null 2>&1; then
+            npm install -g @anthropic-ai/claude-code
+          fi
+          claude --version
+
+      - name: Set the git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Install the pinned plugin
+        run: |
+          source_repo=$(jq -r '.extraKnownMarketplaces["autonomous-sdlc-harness"].source.repo // empty' .claude/settings.json 2>/dev/null || true)
+          if [ -z "$source_repo" ]; then
+            echo "::error::.claude/settings.json names no marketplace source for autonomous-sdlc-harness. Run init locally with --marketplace <owner>/<repo> and commit the file."
+            exit 1
+          fi
+          upgrade_route="to run another version, re-render this repository's workflows with 'npx autonomous-sdlc-harness@<version> init --upgrade-workflows', then commit the paths its printed 'git add' names and push them to the default branch (docs/remote-execution.md, section 7, Upgrading)"
+          tag="autonomous-sdlc-harness--v$HARNESS_CLI_VERSION"
+          marketplace_dir="$RUNNER_TEMP/harness-marketplace"
+          # --quiet does not cover the detached-HEAD advice a tag checkout prints; only advice.detachedHead gates it.
+          if ! git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$tag" "https://github.com/$source_repo.git" "$marketplace_dir"; then
+            echo "::error::$source_repo has no release tag $tag, so the plugin this workflow was rendered for cannot be installed. If $HARNESS_CLI_VERSION was released, its release is missing the tag; otherwise, $upgrade_route."
+            exit 1
+          fi
+          (cd "$RUNNER_TEMP" && claude plugin marketplace add ./harness-marketplace && claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness)
+          installed=$(claude plugin list --json | jq -r '[.[] | select(.id == "autonomous-sdlc-harness@autonomous-sdlc-harness" and .scope == "user")][0].version // empty')
+          if [ "$installed" != "$HARNESS_CLI_VERSION" ]; then
+            echo "::error::the installed plugin is version '${installed:-none}', but this workflow was rendered for $HARNESS_CLI_VERSION and cloned $tag; $upgrade_route."
+            exit 1
+          fi
+
+      - name: Generate the job's permission profile
+        working-directory: ${{ runner.temp }}
+        run: |
+          npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" --cwd "$GITHUB_WORKSPACE" init --plugin-root-entries
+          changed=$(git -C "$GITHUB_WORKSPACE" status --porcelain --untracked-files=no)
+          if [ -n "$changed" ]; then
+            printf '%s\n' "$changed"
+            echo "::error::init $HARNESS_CLI_VERSION changed tracked files. Run 'npx autonomous-sdlc-harness@$HARNESS_CLI_VERSION init' locally and commit the result."
+            exit 1
+          fi
+
+      # Named apart from harness-run.yml's `Check the credentials`, which accepts either of two secrets.
+      - name: Check the OAuth credential
+        env:
+          IN_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -z "$IN_OAUTH" ]; then
+            printf '%s\n' "::error::the CLAUDE_CODE_OAUTH_TOKEN repository secret is not set; the probe signs in with it alone."
+            exit 1
+          fi
+
+      - name: Take the probe from the marketplace repository
+        env:
+          IN_PROBE_COMMIT: ${{ inputs.probe_commit }}
+        run: |
+          commit="$IN_PROBE_COMMIT"
+          case "$commit" in
+            *[!0-9a-f]* | '')
+              echo "::error::probe_commit '$commit' is not a full commit: it must be 40 lowercase hex characters."
+              exit 1
+              ;;
+          esac
+          if [ "${#commit}" -ne 40 ]; then
+            echo "::error::probe_commit '$commit' is not a full commit: it must be 40 lowercase hex characters."
+            exit 1
+          fi
+          source_repo=$(jq -r '.extraKnownMarketplaces["autonomous-sdlc-harness"].source.repo // empty' .claude/settings.json 2>/dev/null || true)
+          if [ -z "$source_repo" ]; then
+            echo "::error::.claude/settings.json names no marketplace source for autonomous-sdlc-harness, so there is no repository to take the probe from."
+            exit 1
+          fi
+          probe_dir="$RUNNER_TEMP/sandbox-probe-src"
+          if ! git clone --quiet "https://github.com/$source_repo.git" "$probe_dir"; then
+            echo "::error::cannot clone $source_repo to take the probe from."
+            exit 1
+          fi
+          if ! git -C "$probe_dir" -c advice.detachedHead=false checkout --quiet --detach "$commit"; then
+            echo "::error::$source_repo has no commit $commit."
+            exit 1
+          fi
+          head=$(git -C "$probe_dir" rev-parse HEAD)
+          if [ "$head" != "$commit" ]; then
+            echo "::error::the probe clone is at $head, not probe_commit $commit."
+            exit 1
+          fi
+          echo "The probe is $source_repo at $head."
+
+      # The runner controls file's contract is scripts/lib/sandbox-probe/legs-runner.sh's header. These
+      # readings are taken unsandboxed, before the install step changes the runner.
+      - name: Record the runner and the controls
+        run: |
+          out="$RUNNER_TEMP/sandbox-probe-out"
+          mkdir -p "$out"
+          cat > "$RUNNER_TEMP/sandbox-probe-record.sh" <<'RECORD'
+          # record <key> <value> — one `<key>\t<value>` line in controls.tsv; a tab or newline in the value becomes a space.
+          record() {
+            local value="$2"
+            value="${value//$'\t'/ }"
+            value="${value//$'\n'/ }"
+            printf '%s\t%s\n' "$1" "$value" >> "$RUNNER_TEMP/sandbox-probe-out/controls.tsv"
+          }
+          path_or_absent() { command -v "$1" 2>/dev/null || echo absent; }
+          sysctl_or_absent() {
+            local f=/proc/sys/kernel/apparmor_restrict_unprivileged_userns
+            if [ -r "$f" ]; then cat "$f"; else echo absent; fi
+          }
+          profile_presence() {
+            if [ ! -f /etc/apparmor.d/bwrap ]; then echo absent
+            elif grep -q '^[[:space:]]*userns,' /etc/apparmor.d/bwrap; then echo present
+            else echo present without userns; fi
+          }
+          RECORD
+          source "$RUNNER_TEMP/sandbox-probe-record.sh"
+          : > "$out/controls.tsv"
+          record image-os "${ImageOS:-}"
+          record image-version "${ImageVersion:-}"
+          record uname-r "$(uname -r)"
+          record probe-commit "$(git -C "$RUNNER_TEMP/sandbox-probe-src" rev-parse HEAD)"
+          record cli-version "$HARNESS_CLI_VERSION"
+          record sysctl-before "$(sysctl_or_absent)"
+          record apparmor-profile-before "$(profile_presence)"
+          record bwrap-before "$(path_or_absent bwrap)"
+          record socat-before "$(path_or_absent socat)"
+          rc=0
+          sudo -n true >/dev/null 2>&1 || rc=$?
+          record sudo-control "exit $rc"
+          rc=0
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://169.254.169.254/) || rc=$?
+          if [ "$rc" = 0 ]; then
+            record imds-control "http $code"
+          else
+            record imds-control "no answer: curl exit $rc"
+          fi
+          # PD21's placeholder, so S1 and S2 can tell a refusal from an absence.
+          if [ -e "$HOME/.ssh/config" ]; then
+            record ssh-config existed
+          else
+            mkdir -p "$HOME/.ssh"
+            chmod 700 "$HOME/.ssh"
+            printf '%s\n' '# sandbox-probe placeholder: S1 and S2 read this file to tell a refusal from an absence.' > "$HOME/.ssh/config"
+            chmod 600 "$HOME/.ssh/config"
+            record ssh-config created
+          fi
+          cat "$out/controls.tsv"
+
+      - name: Install the sandbox prerequisites
+        run: |
+          sysctl_file=/proc/sys/kernel/apparmor_restrict_unprivileged_userns
+          profile=/etc/apparmor.d/bwrap
+          missing=()
+          command -v bwrap >/dev/null 2>&1 || missing+=(bubblewrap)
+          command -v socat >/dev/null 2>&1 || missing+=(socat)
+          needs_profile=0
+          if [ -r "$sysctl_file" ] && [ "$(cat "$sysctl_file")" = 1 ]; then
+            if [ ! -f "$profile" ] || ! grep -q '^[[:space:]]*userns,' "$profile"; then
+              needs_profile=1
+            fi
+          fi
+          if [ "${#missing[@]}" -eq 0 ] && [ "$needs_profile" = 0 ]; then
+            echo "The sandbox prerequisites are present."
+            exit 0
+          fi
+          if [ "$(uname -s)" != Linux ]; then
+            echo "::warning::not a Linux runner, so nothing was installed; missing packages: ${missing[*]:-none}."
+            exit 0
+          fi
+          if [ "$(id -u)" = 0 ]; then
+            as_root=()
+          elif sudo -n true >/dev/null 2>&1; then
+            as_root=(sudo -n)
+          else
+            echo "::warning::no root and no passwordless sudo on this runner, so nothing was installed; missing packages: ${missing[*]:-none}; bwrap AppArmor profile needed: $needs_profile."
+            exit 0
+          fi
+          if [ "${#missing[@]}" -gt 0 ]; then
+            if command -v apt-get >/dev/null 2>&1; then
+              if ! { "${as_root[@]}" apt-get update -qq && "${as_root[@]}" apt-get install -y -qq "${missing[@]}"; }; then
+                echo "::warning::apt-get could not install ${missing[*]}."
+              fi
+            elif command -v dnf >/dev/null 2>&1; then
+              if ! "${as_root[@]}" dnf install -y "${missing[@]}"; then
+                echo "::warning::dnf could not install ${missing[*]}."
+              fi
+            else
+              echo "::warning::neither apt-get nor dnf is on this runner, so ${missing[*]} was not installed."
+            fi
+          fi
+          if [ "$needs_profile" = 1 ]; then
+            if "${as_root[@]}" tee "$profile" >/dev/null <<'PROFILE'
+          abi <abi/4.0>,
+          include <tunables/global>
+
+          profile bwrap /usr/bin/bwrap flags=(unconfined) {
+            userns,
+
+            include if exists <local/bwrap>
+          }
+          PROFILE
+            then
+              if ! "${as_root[@]}" systemctl reload apparmor; then
+                echo "::warning::systemctl could not reload apparmor after writing $profile."
+              fi
+            else
+              echo "::warning::could not write $profile."
+            fi
+          fi
+
+      - name: Record the readings after the install step
+        run: |
+          source "$RUNNER_TEMP/sandbox-probe-record.sh"
+          record sysctl-after "$(sysctl_or_absent)"
+          record apparmor-profile-after "$(profile_presence)"
+          record bwrap-after "$(path_or_absent bwrap)"
+          record socat-after "$(path_or_absent socat)"
+          if command -v bwrap >/dev/null 2>&1; then
+            version=$(bwrap --version 2>&1 || true)
+            record bwrap-version "${version%%$'\n'*}"
+          else
+            record bwrap-version absent
+          fi
+          rc=0
+          err=$(bwrap --ro-bind / / --dev /dev --unshare-all --proc /proc true 2>&1 >/dev/null) || rc=$?
+          if [ "$rc" = 0 ]; then
+            record bwrap-start "exit 0"
+          else
+            record bwrap-start "exit $rc: ${err%%$'\n'*}"
+          fi
+          cat "$RUNNER_TEMP/sandbox-probe-out/controls.tsv"
+
+      - name: Bootstrap the checkout
+        run: bash "$SCRIPTS_DIR/setup-worktree.sh"
+
+      # Ends `exit 0` so the upload always has the streams; the last step fails the job on the probe's exit.
+      - name: Run the probe in job mode
+        timeout-minutes: 90
+        env:
+          IN_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          SBX_PROBE_CANARY: sbx-probe-canary-${{ github.run_id }}
+        run: |
+          if [ -n "$IN_OAUTH" ]; then export CLAUDE_CODE_OAUTH_TOKEN="$IN_OAUTH"; fi
+          unset IN_OAUTH
+          out="$RUNNER_TEMP/sandbox-probe-out"
+          mkdir -p "$RUNNER_TEMP/sandbox-probe-tmp"
+          export TMPDIR="$RUNNER_TEMP/sandbox-probe-tmp"
+          status=0
+          bash "$RUNNER_TEMP/sandbox-probe-src/scripts/sandbox-probe.sh" run --job "$GITHUB_WORKSPACE" --runner-controls "$out/controls.tsv" \
+            > "$out/run.stdout" 2> "$out/run.stderr" || status=$?
+          printf '%s\n' "$status" > "$out/exit.txt"
+          echo "== run.stdout"
+          cat "$out/run.stdout"
+          echo "== run.stderr"
+          cat "$out/run.stderr"
+          echo "== the probe exited $status"
+          exit 0
+
+      - name: Upload the evidence
+        if: always()
+        # actions/upload-artifact v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: sandbox-probe-evidence
+          path: |
+            ${{ runner.temp }}/sandbox-probe-out/
+            ${{ runner.temp }}/sandbox-probe-tmp/sandbox-probe-evidence.*
+          retention-days: 3
+          if-no-files-found: warn
+
+      - name: Report the probe's exit status
+        run: |
+          file="$RUNNER_TEMP/sandbox-probe-out/exit.txt"
+          if [ ! -r "$file" ]; then
+            echo "::error::the probe step wrote no exit status ($file)."
+            exit 1
+          fi
+          status=$(cat "$file")
+          echo "The probe exited $status."
+          exit "$status"

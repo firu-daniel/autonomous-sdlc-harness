@@ -7,7 +7,10 @@
  * **The rule these tests exist to enforce: the glob leg measures only paths a `*` entry alone covers,
  * outside the clone's `.git`, and records either outcome; and RG2 and RG3 are graded on the registry's own
  * state, and a moved directory is restored with no recursive removal.** Every grading function drives a
- * permission-refused fixture to `not run`.
+ * permission-refused fixture to `not run`. Since PD23 (docs/sandbox-verification.md §5), a Linux
+ * `Device or resource busy` is a sandbox-layer refusal, so RG2 (a) and RG3 quote it as one; only that
+ * evidence moved, no verdict. RG3's unrecognised path is held on `Input/output error` instead, in a stream
+ * the case derives from `rg3-refused.jsonl`.
  *
  * Each case runs a `bash -c` through `runBash` sourcing `core.sh`, `platform.sh`, `judge.sh`,
  * `controls.sh`, `preflight.sh`, `session.sh`, `legs-protection.sh` and the two leg files, then sets
@@ -90,6 +93,7 @@ const RG2_MV = `mv ${LOGS}/sbx_rg2_sib ${REG}`;
 const RG2_HELPER = 'bash @FIXTURE_ROOT@/sp-tmp/rg2-helper.sh';
 const RG2_BUSY = `sbx_rg2_mv refused: mv: cannot move '${LOGS}/sbx_rg2_copy' to '${REG}': Device or resource busy`;
 const RG3_MV = `mv ${LOGS} ${LOGS}.aside`;
+const RG3_BUSY = `mv: cannot move '${LOGS}' to '${LOGS}.aside': Device or resource busy`;
 
 test('sp__gw_targets: only clone paths a `*` entry alone covers, never under the clone’s .git', async (t) => {
   /** A work root holding the clone `proj-sbx/`, a profile with `denyWrite`, and the run's printed targets. */
@@ -203,13 +207,40 @@ test('sp__rg2_grade: graded on the registry’s inode and shasum and the helper�
     assert.equal(v, 'not run');
     assert.ok(e.includes(`(b) refused at the permission layer, so the helper never ran: ${DONT_ASK}`), e);
   });
+
+  // PD23: on Linux a direct mv's `Device or resource busy` is a sandbox refusal; with SP_PLATFORM empty it
+  // is still an error carrying no refusal string. Only (a)'s evidence moves; the verdict is (b)'s.
+  for (const [platform, a] of [
+    ['linux', `(a) refused at the sandbox layer: ${RG3_BUSY}`],
+    ['', `(a) failed with no refusal string: Exit code 1: ${RG3_BUSY}`],
+  ]) {
+    await t.test(`a busy direct mv with SP_PLATFORM '${platform}': (a) reads ${platform ? 'sandbox' : 'no refusal string'}`, async (t) => {
+      assert.deepEqual(
+        await graded(t, 'sp__rg2_grade', [fixture('rg3-refused'), RG3_MV, RG2_HELPER, '1', '1'], { platform }),
+        ['not run', `${a}; (b) no Bash call "${RG2_HELPER}" in the session; inode unchanged, shasum unchanged`],
+      );
+    });
+  }
 });
 
 test('sp__rg3_grade: graded on whether the directory moved; the mv’s message is quoted, never matched', async (t) => {
-  await t.test('not moved, an unrecognised busy error: pass, quoting it', async (t) => {
+  // PD23 made `Device or resource busy` a Linux sandbox refusal, so its evidence is the refusal line;
+  // `Input/output error`, which no layer-table arm matches, keeps the unrecognised path.
+  await t.test('not moved, a busy error: pass, quoting the sandbox refusal', async (t) => {
     assert.deepEqual(await graded(t, 'sp__rg3_grade', [fixture('rg3-refused'), RG3_MV, '0', '1']), [
       'pass',
-      `refused: Exit code 1: mv: cannot move '${LOGS}' to '${LOGS}.aside': Device or resource busy`,
+      `refused: ${RG3_BUSY}`,
+    ]);
+  });
+
+  await t.test('not moved, an unrecognised error: pass, quoting it', async (t) => {
+    const dir = await caseDir(t);
+    const stream = join(dir, 'rg3-unrecognised.jsonl');
+    const recorded = await readFile(fixture('rg3-refused'), 'utf8');
+    await writeFile(stream, recorded.replace('Device or resource busy', 'Input/output error'));
+    assert.deepEqual(await graded(t, 'sp__rg3_grade', [stream, RG3_MV, '0', '1']), [
+      'pass',
+      `refused: Exit code 1: mv: cannot move '${LOGS}' to '${LOGS}.aside': Input/output error`,
     ]);
   });
 

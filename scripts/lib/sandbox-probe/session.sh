@@ -4,11 +4,20 @@
 #
 # THE SESSION API.
 #   sp_setup                 cut the probe clone SP_CLONE on branch SP_BRANCH and render its per-run
-#                            profile SP_RUN_PROFILE; installs the EXIT/INT/TERM teardown trap first
+#                            profile SP_RUN_PROFILE; installs the EXIT/INT/TERM teardown trap first.
+#                            In job mode (SP_JOB_MODE=1) it hands off to job.sh's sp_job_setup instead:
+#                            SP_CLONE is the checkout SP_MAIN, SP_RUN_PROFILE is its base profile, and no
+#                            clone or per-run profile exists
 #   sp_session <name> <settings> <prompt file> [--mode dontAsk|acceptEdits] [--allowed <rule>]...
 #              [--debug-file <f>] [--cwd <dir>]
-#                            one headless session on the watcher's launch line; sets SP_STREAM
-#   sp_departures            the last session's --allowedTools rules, as a result line's departure
+#                            one headless session on the watcher's launch line; sets SP_STREAM. In job
+#                            mode it first sweeps the job's placeholders and writes job.sh's placeholder
+#                            manifest. Every @SP_AGENT_PID@ in
+#                            the prompt or an --allowed rule becomes the launching subshell's PID, also
+#                            written to SP_TMP/<name>.agent-pid: after `exec` the agent CLI holds that
+#                            PID, though a CLI launched through a wrapper that forks would hold another
+#   sp_departures            the last session's --allowedTools rules, as a result line's departure, with
+#                            @SP_AGENT_PID@ unreplaced
 #   sp_prompt_new / sp_prompt_bash / sp_prompt_tool       build a prompt file
 #   sp_scratch_profile <name> <jq filter> [<base>]        a derived profile under SP_TMP
 #   sp_extra_clone <branch> [--no-bootstrap] [--existing] another clone; sets SP_EXTRA_CLONE, SP_EXTRA_PROFILE
@@ -23,8 +32,10 @@
 #   sp_teardown              first move the recorded files of every leg sp_leg_nonpass names into a
 #                            new ${TMPDIR:-/tmp}/sandbox-probe-evidence.XXXXXX/<leg>/, printed last on
 #                            stderr; then stop the tracked processes; then run the pending restore, if
-#                            one is registered, before the clone loop reads SP_REGISTRY; then remove
-#                            exactly what was registered; idempotent
+#                            one is registered, and job.sh's sp_job_teardown (the sweep, then the switch
+#                            back off SP_BRANCH), before the clone loop reads SP_REGISTRY; then remove
+#                            exactly what was registered; idempotent. In job mode SP_MAIN and SP_CLONE
+#                            are one checkout, so the evidence directory's containment check is unchanged
 #
 # THE POSITIVE-CONTROL RULE (docs/sandbox-verification.md → `## 0. Method`: "a positive control in the
 # same session for every refusal"). Every session that measures a refusal row also issues a positive
@@ -234,6 +245,13 @@ sp_setup() {
     return 2
   fi
 
+  # The trap first, so a refusal after job mode cuts the branch still tears down.
+  if [ "${SP_JOB_MODE:-0}" = 1 ]; then
+    sp__install_trap
+    sp_job_setup
+    return $?
+  fi
+
   if sp__branch_taken "$SP_BRANCH"; then
     sp__setup_refuse "the probe branch '$SP_BRANCH' already exists locally or on origin"
     return 2
@@ -400,13 +418,22 @@ sp_stop_pid() {
 # flags of the watcher's launch line that a headless and an interactive session share: --settings,
 # --permission-mode, --model and --effort when the configuration names them (SP_AGENT_MODEL,
 # SP_AGENT_EFFORT), and the two --add-dir entries. sp_session launches with them, and legs-settings.sh's
-# parity checklist prints them, so the two launch lines cannot drift.
+# parity checklist prints them, so the two launch lines cannot drift. In job mode it appends the
+# watcher's JOB MODE ONLY tail (autonomous-watcher.sh → spawn_engine): one --add-dir per
+# SP_JOB_ADD_DIRS entry, which sp_job_add_dirs builds from the base profile.
 SP_LAUNCH_ARGS=()
 sp_launch_args() {
+  local dir
   SP_LAUNCH_ARGS=(--settings "$1" --permission-mode "$2")
   [ -z "$SP_AGENT_MODEL" ] || SP_LAUNCH_ARGS=("${SP_LAUNCH_ARGS[@]}" --model "$SP_AGENT_MODEL")
   [ -z "$SP_AGENT_EFFORT" ] || SP_LAUNCH_ARGS=("${SP_LAUNCH_ARGS[@]}" --effort "$SP_AGENT_EFFORT")
   SP_LAUNCH_ARGS=("${SP_LAUNCH_ARGS[@]}" --add-dir "$3" --add-dir "$4/$5")
+  if [ "${SP_JOB_MODE:-0}" = 1 ]; then
+    sp_job_add_dirs "$SP_JOB_BASE_PROFILE" "$3" "$4/$5"
+    for dir in ${SP_JOB_ADD_DIRS[@]+"${SP_JOB_ADD_DIRS[@]}"}; do
+      SP_LAUNCH_ARGS=("${SP_LAUNCH_ARGS[@]}" --add-dir "$dir")
+    done
+  fi
 }
 
 # sp_session <name> <settings file> <prompt file> [--mode dontAsk|acceptEdits] [--allowed <rule>]...
@@ -415,7 +442,7 @@ sp_launch_args() {
 # and --debug-file flags named. Status is the agent CLI's.
 sp_session() {
   local name="${1:-}" settings="${2:-}" pfile="${3:-}" mode=dontAsk cwd="$SP_CLONE" debug="" prompt cli rc
-  local allowed_args debug_args
+  local allowed_args debug_args pid_token="@SP_AGENT_PID@" has_pid_token=0 pid_file agent_pid i
   allowed_args=()
   debug_args=()
   SP_SESSION_ALLOWED=""
@@ -463,7 +490,15 @@ sp_session() {
   fi
   [ -z "$debug" ] || debug_args=(--debug-file "$debug")
   sp_launch_args "$settings" "$mode" "$cwd" "$SP_MAIN" "$SP_STATE_DIR"
+  # Every --add-dir root, so each root's .mcp.json is recorded, as spawn_engine records them.
+  if [ "${SP_JOB_MODE:-0}" = 1 ]; then
+    sp_job_manifest_write "$settings" "$cwd" "$SP_MAIN/$SP_STATE_DIR" \
+      ${SP_JOB_ADD_DIRS[@]+"${SP_JOB_ADD_DIRS[@]}"}
+  fi
   prompt="$(cat -- "$pfile")"
+  case "$prompt$SP_SESSION_ALLOWED" in
+    *"$pid_token"*) has_pid_token=1 ;;
+  esac
   cli="${SANDBOX_PROBE_AGENT_CLI:-}"
   [ -n "$cli" ] || cli=claude
   SP_STREAM="$SP_TMP/$name.stream.jsonl"
@@ -472,6 +507,24 @@ sp_session() {
   (
     cd "$cwd" || exit 97
     export HARNESS_MAIN_REPO="$SP_MAIN"
+    if [ "$has_pid_token" -eq 1 ]; then
+      # Bash 3.2 has no BASHPID: sh's PPID is this subshell, which `exec` turns into the agent CLI.
+      pid_file="$SP_TMP/$name.agent-pid"
+      sh -c 'echo "$PPID"' >"$pid_file" || exit 96
+      read -r agent_pid <"$pid_file" || agent_pid=""
+      case "$agent_pid" in
+        "" | *[!0-9]*)
+          printf 'sandbox-probe: sp_session %s: no PID for %s in %s\n' "$name" "$pid_token" "$pid_file" >&2
+          exit 96
+          ;;
+      esac
+      prompt="${prompt//"$pid_token"/$agent_pid}"
+      i=0
+      while [ "$i" -lt ${#allowed_args[@]} ]; do
+        allowed_args[$i]="${allowed_args[$i]//"$pid_token"/$agent_pid}"
+        i=$((i + 1))
+      done
+    fi
     exec "$cli" -p "$prompt" \
       "${SP_LAUNCH_ARGS[@]}" \
       --output-format stream-json --verbose \
@@ -696,7 +749,8 @@ $SP__PIDS
 EOF
 }
 
-# sp_teardown — keep the evidence of every leg that did not pass; stop the tracked processes; remove every
+# sp_teardown — keep the evidence of every leg that did not pass; stop the tracked processes; run the
+# pending restore and job.sh's sp_job_teardown; remove every
 # registered clone (last created first) with its record, per-run profile and branch; then tracked
 # branches, tracked files and directories, and SP_TMP; then sp_snapshot_check; then name the evidence
 # directory, as the last stderr line. Every step runs after a failed one; each removal or stop failure is
@@ -720,6 +774,11 @@ sp_teardown() {
     fi
   fi
   sp_restore_clear
+
+  # In job mode the only registered clone is the wrappers leg's control clone, which the clone loop removes; the tracked-branch pass deletes the probe branch, no longer checked out.
+  if declare -F sp_job_teardown >/dev/null; then
+    sp_job_teardown
+  fi
 
   i=$((${#SP__CLONE_BRANCHES[@]} - 1))
   while [ "$i" -ge 0 ]; do

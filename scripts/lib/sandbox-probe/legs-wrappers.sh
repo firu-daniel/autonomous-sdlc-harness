@@ -18,6 +18,18 @@
 # Every measured call is graded through sp__wr_reached, so a permission-layer refusal of any of them is
 # `not run`: that layer is not the one any row of this leg measures.
 #
+# JOB MODE (SP_JOB_MODE=1). SP_CLONE and SP_MAIN are the job's checkout, so P1c, CW5, P1b and CW6 aim the
+# checkout's own wrappers at the checkout, whose origin is the remote actions/checkout set up; each row's
+# expected result is unchanged and its evidence ends with sp_job_git_note. CS4, P3 and CW2 need a clone and
+# are printed `not run` by sp_job_skip_clone_rows; their sessions are never launched. The commit and push
+# controls act on the control clone <branch>_ctl, which sp_ctl_clone cuts beside the checkout with its
+# run-registry record and per-run profile, and teardown removes with its branch locally and on origin, as
+# in the clone layout; it is never measured. SP_BRANCH is
+# published with no upstream, so a push that ran excluded and landed also writes --set-upstream into
+# <checkout>/.git/config, which the shasum guard reports as a FAILED line beside the row's `fail`. Over an
+# origin that is not SSH, git never runs GIT_SSH_COMMAND, so P1b is graded on `ls-remote` alone and its
+# marker is recorded, not graded; an SSH origin grades P1b as the clone layout does.
+#
 # THE GRADING FUNCTIONS read only their arguments, the stream and the globals named, and call only core.sh,
 # judge.sh, controls.sh and this file's functions:
 #   sp__wr_reached <stream> <exact command>            status 0 with SP_LAYER, SP_LAYER_EVIDENCE; 1 with SP__WR_WHY
@@ -172,7 +184,7 @@ sp__wr_notrun() {
   local why="$1" row
   shift
   for row in "$@"; do
-    sp_result_line wrappers "$row" "not run" "$why" ""
+    sp_result_line wrappers "$row" "not run" "$why$(sp_job_git_note)" ""
   done
 }
 
@@ -344,14 +356,14 @@ sp__wr_compound() {
   departure="$(sp_departures)"
   sp_ctl_held "$SP_STREAM"
   sp__wr_push_held "$SP_STREAM" "$p1c" "$tip"
-  sp_row_result --direct wrappers P1c "$SP__WR_V" "$SP__WR_E" "$departure"
+  sp_row_result --direct wrappers P1c "$SP__WR_V" "$SP__WR_E$(sp_job_git_note)" "$departure"
   sp__wr_commit_held "$SP_STREAM" "$cw5" "$before"
-  sp_row_result --direct wrappers CW5 "$SP__WR_V" "$SP__WR_E" "$departure"
+  sp_row_result --direct wrappers CW5 "$SP__WR_V" "$SP__WR_E$(sp_job_git_note)" "$departure"
 }
 
 # sp__wr_prefix — P1b (GIT_SSH_COMMAND=<helper>) and CW6 (GIT_DIR=<scratch .git>), one session.
 sp__wr_prefix() {
-  local file before tip pfile p1b cw6 departure helper marker scratch x x_ref x_before
+  local file before tip pfile p1b cw6 departure helper marker scratch x x_ref x_before note unread url m
   sp_ctl_prepare wr_prefix
   marker="$HOME/sbx_probe_ssh_marker"
   helper="$SP_TMP/sbx_ssh_probe.sh"
@@ -398,26 +410,45 @@ sp__wr_prefix() {
   fi
   departure="$(sp_departures)"
   sp_ctl_held "$SP_STREAM"
+  note="$(sp_job_git_note)"
+  unread=""
+  if [ "$SP_JOB_MODE" = 1 ]; then
+    url="$(git -C "$SP_MAIN" remote get-url origin 2>/dev/null)" || url=""
+    case "$url" in
+      ssh://* | git+ssh://* | ssh+git://*) ;;
+      *://*) unread="${url%%://*}" ;;
+      *@*:*) ;; # scp-like SSH, git@host:path among them
+      *) unread="${url:-unreadable}" ;;
+    esac
+    if [ -n "$unread" ]; then
+      [ -e "$marker" ] && m=present || m=absent
+      unread="origin is $unread, so GIT_SSH_COMMAND is never run and the marker is recorded, not graded: $m"
+    fi
+  fi
 
   # P1b: sandboxed is the pass; a helper that ran or a push that landed is the prefix running excluded.
   if sp__wr_permission_screen "$SP_STREAM" "$p1b"; then
-    sp_row_result --direct wrappers P1b "$SP__WR_V" "$SP__WR_E" "$departure"
+    sp_row_result --direct wrappers P1b "$SP__WR_V" "$SP__WR_E$note" "$departure"
   else
     sp__wr_push_held "$SP_STREAM" "$p1b" "$tip"
     if [ "$SP__WR_V" = "not run" ]; then
-      sp_row_result --direct wrappers P1b "not run" "$SP__WR_E" "$departure"
+      sp_row_result --direct wrappers P1b "not run" "$SP__WR_E$note" "$departure"
+    elif [ -n "$unread" ] && [ "$SP__WR_V" = fail ]; then
+      sp_row_result --direct wrappers P1b fail "ran excluded, $unread; $SP__WR_E$note" "$departure"
+    elif [ -n "$unread" ]; then
+      sp_row_result --direct wrappers P1b pass "stayed sandboxed, $unread; $SP__WR_E$note" "$departure"
     elif [ -e "$marker" ]; then
       sp_row_result --direct wrappers P1b fail \
-        "ran excluded: $marker exists, so GIT_SSH_COMMAND ran unsandboxed; $SP__WR_E" "$departure"
+        "ran excluded: $marker exists, so GIT_SSH_COMMAND ran unsandboxed; $SP__WR_E$note" "$departure"
     elif [ "$SP__WR_V" = fail ]; then
-      sp_row_result --direct wrappers P1b fail "ran excluded, marker absent: $SP__WR_E" "$departure"
+      sp_row_result --direct wrappers P1b fail "ran excluded, marker absent: $SP__WR_E$note" "$departure"
     else
-      sp_row_result --direct wrappers P1b pass "stayed sandboxed, marker absent: $SP__WR_E" "$departure"
+      sp_row_result --direct wrappers P1b pass "stayed sandboxed, marker absent: $SP__WR_E$note" "$departure"
     fi
   fi
 
   sp__wr_cw6_grade "$SP_STREAM" "$cw6" "$x" "$x_before" "$before"
-  sp_row_result --direct wrappers CW6 "$SP__WR_V" "$SP__WR_E" "$departure"
+  sp_row_result --direct wrappers CW6 "$SP__WR_V" "$SP__WR_E$note" "$departure"
 }
 
 # sp__wr_cw6_grade <stream> <exact command> <x .git dir> <x ref before> <clone ref before> — CW6: sandboxed
@@ -449,6 +480,18 @@ sp__wr_cw6_grade() {
 }
 
 sp_leg_wrappers() {
+  if [ "$SP_JOB_MODE" = 1 ]; then
+    sp_job_skip_clone_rows wrappers
+    if ! sp__ctl_literal "scripts directory" "$SP_SCRIPTS" || ! sp__ctl_literal "checkout" "$SP_CLONE"; then
+      sp__wr_notrun "the scripts directory or the checkout path is not spellable as a literal" P1c CW5 P1b CW6
+      return 0
+    fi
+    # The commit and push controls act on the control clone, as in the clone layout's sp__wr_own.
+    sp_ctl_clone
+    sp__wr_compound
+    sp__wr_prefix
+    return 0
+  fi
   if ! sp__ctl_literal "scripts directory" "$SP_SCRIPTS" || ! sp__ctl_literal "probe clone" "$SP_CLONE"; then
     sp__wr_notrun "the scripts directory or the probe clone path is not spellable as a literal" \
       CS4 P3 CW2 P1c CW5 P1b CW6
