@@ -13,7 +13,7 @@ The three verdicts hold against the code. Group 1: `remote-run.sh` → `control_
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 1** — Unset the host's identity variables in the origin-identity probe of `fixture-isolation.test.mjs` _(layer: cli)_
-2. [ ] **Finding 2** — Name the two system-scope redirects in `docs/cli.md` §10 instead of the now-wrong ordinals _(layer: general)_
+2. [x] **Finding 2** — Name the two system-scope redirects in `docs/cli.md` §10 instead of the now-wrong ordinals _(layer: general)_
 3. [ ] **Finding 3** — Drop the clause in `docs/development.md` that repeats the quoted 53.0 s message _(layer: general)_
 4. [ ] **Finding 4** — Name util-linux's refusal beside BSD's in the group-3 skip sentence of `docs/development.md` _(layer: general)_
 
