@@ -2020,11 +2020,13 @@ test('the sweep releases its output pipe on a bounded fetch when a terminal is a
   // watcher's shape. The program and the sweep's path travel in the environment so neither is
   // re-quoted for `script`'s own command line.
   const inner = `{ : > /dev/tty; } 2>/dev/null && echo ${PTY_MARKER}; bash "$PTY_SWEEP" 2>&1 | cat`;
-  // `script`'s stdin must stay open for the whole run, because util-linux `script` ends the session
-  // at stdin EOF, and must be a pipe rather than Node's stdio socket, on which BSD `script` fails
-  // `tcgetattr` with EOPNOTSUPP. The `cat` relays Node's never-closed stdin into a real pipe; a
-  // process substitution is not waited for, so `script`'s exit still ends the run.
-  const stdin = '< <(exec cat 2>/dev/null)';
+  // BSD `script` needs a pipe for stdin rather than Node's stdio socket, on which it fails `tcgetattr`
+  // with EOPNOTSUPP, and one that stays open for the whole run: the `cat` relays Node's never-closed
+  // stdin into a real pipe, and a process substitution is not waited for, so `script`'s exit still
+  // ends the run. util-linux `script` takes `/dev/null` instead: with a stdin that never closes it
+  // does not exit when its child does (util-linux 2.38.1, Debian 12, 2026-11-01), so the case timed
+  // out with the sweep already finished, while at stdin EOF it still runs the child to its end.
+  const stdin = utilLinux ? '< /dev/null' : '< <(exec cat 2>/dev/null)';
   const outer = utilLinux
     ? `exec "$PTY_SCRIPT" -q -e -c 'bash -c "$PTY_INNER"' /dev/null ${stdin}`
     : `exec "$PTY_SCRIPT" -q /dev/null bash -c "$PTY_INNER" ${stdin}`;
