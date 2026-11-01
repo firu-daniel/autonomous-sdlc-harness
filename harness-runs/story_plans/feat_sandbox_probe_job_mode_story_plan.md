@@ -101,7 +101,7 @@ This is sandbox3b2, the second of three branches that split sandbox3b. Its Linux
 
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_sandbox_probe_job_mode/task_<K>_plan.md`.
 
-1. [ ] **Task 1** — Declare the job-mode legs and rows, and refuse a measured clone-only row in job mode _(layer: general)_ _(points: 15)_
+1. [x] **Task 1** — Declare the job-mode legs and rows, and refuse a measured clone-only row in job mode _(layer: general)_ _(points: 15)_
 2. [ ] **Task 2** — Add `job.sh`: job-mode setup, the launch line's job tail, the placeholder manifest, the sweep and the branch restore _(layer: general)_ _(points: 20)_
 3. [ ] **Task 3** — Add job mode's own preflight _(layer: general)_ _(points: 20)_
 4. [ ] **Task 4** — Hook job mode into the session API, and resolve the agent CLI's PID at launch _(layer: general)_ _(points: 15)_
