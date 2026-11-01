@@ -87,5 +87,12 @@ The job steps it copies are `cli/templates/github/workflows/harness-run.yml`'s, 
 - `grep -n 'echo.*IN_OAUTH\|echo.*TOKEN\|set -x' scripts/sandbox-probe-runner.yml` finds nothing.
 - `grep -n 'uses:' scripts/sandbox-probe-runner.yml` lists only pins that `grep -n 'uses:' cli/templates/github/workflows/harness-run.yml` also lists.
 - `grep -n 'name: Read the configuration\|name: Switch to the configured default branch\|name: Install the claude CLI when absent' scripts/sandbox-probe-runner.yml` shows the switch step between the other two, and `grep -n 'defaultBranch' scripts/sandbox-probe-runner.yml` shows it read from `harness.config.json` and named in its refusal beside GitHub's default branch.
+
+**Deviations from plan:**
+
+- `probe_commit` is checked as 40 **lowercase** hex characters: the plan says "40 hex characters", but the step compares the input with `git rev-parse HEAD`, which prints lowercase, so an uppercase input could never pass that comparison anyway. The refusal message says so.
+- `Check the OAuth credential` prints its refusal with `printf`, not `echo`. Its message names `CLAUDE_CODE_OAUTH_TOKEN`, and the plan's own Verification grep `echo.*TOKEN` treats any `echo` line naming a token as a finding.
+- The one record function is written once to `$RUNNER_TEMP/sandbox-probe-record.sh` by `Record the runner and the controls` and sourced by `Record the readings after the install step`, because two steps do not share a shell.
+- Evidence beyond the four greps: a scratch probe parsed the file with the workspace's `js-yaml` and compared every copied step's `run:`, `uses:` and `working-directory` with `harness-run.yml`'s `run` job step of the same name (all identical), and ran `bash -n` over every `run:` body (all ok). Nothing ran it on a GitHub runner; Task 15 / Gate 15 own that.
 </content>
 </invoke>
