@@ -52,5 +52,13 @@
 - The type check passes; its shell-parse step covers the new file once it is tracked.
 - `grep -n 'set-upstream\|push -u' scripts/lib/sandbox-probe/job.sh` finds nothing outside a comment.
 - By hand, `bash -c '. scripts/lib/sandbox-probe/core.sh; . scripts/lib/sandbox-probe/job.sh; SP_JOB_MODE=1; f=$(mktemp "${TMPDIR:-/tmp}/jp.XXXXXX"); printf "%s" "{\"permissions\":{\"additionalDirectories\":[\"/a\",\"\",\"/c\",\"/s/harness-runs/\",\"/b\"]}}" >"$f"; sp_job_add_dirs "$f" /c /s/harness-runs; printf "%s\n" "${SP_JOB_ADD_DIRS[@]}"; rm -f "$f"'` prints `/a` then `/b`.
+
+**Deviations from plan:**
+
+- Evidence downgrade — the shell parse of `job.sh`. `bash scripts/typecheck.sh` ran and printed `check-shell-parse: 101 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed` and `PASS: typecheck`, but its parse step covers tracked files only and `job.sh` is untracked until the commit. A direct `/bin/bash -n scripts/lib/sandbox-probe/job.sh` was refused by the permission layer (`Permission to use Bash has been denied because Claude Code is running in don't ask mode`). The claim rests on reading the file; the Run gates phase's whole-tree `bash scripts/typecheck.sh`, run once the file is tracked, verifies it.
+- Evidence downgrade — the by-hand `sp_job_add_dirs` check (the `bash -c '…'` bullet above) was refused by the permission layer with the same message, and was not routed through a probe. It is not run; the claim that it prints `/a` then `/b` rests on reading `sp_job_add_dirs` against `spawn_engine`'s `extra_dirs` loop. The `grep -n 'set-upstream\|push -u'` bullet was run and found nothing.
+- Added `SP__JOB_SETUP_RAN`: `sp_job_teardown` runs the sweep only when `sp_job_setup` was entered, since before it `SP_SCRIPTS`, `SP_BRANCH` and the runner temp may be unset and no session can have run. The plan's "runs on every host" is kept: the gate is on setup, never on the host.
+- `sp_job_setup` step 3 refuses when `git symbolic-ref --short HEAD` prints nothing (a detached HEAD), since teardown's switch back needs a branch name; the plan records the value without saying what an empty one does.
+- `sp_job_manifest_write` reproduces `placeholder_manifest_writable_root` as the private `sp__job_writable_root` (its first root is the session cwd, as the watcher passes `$worktree` first), because the watcher's function is reachable only by sourcing the watcher in a child shell.
 </content>
 </invoke>
