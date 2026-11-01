@@ -113,7 +113,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_sandbox_probe_job_mode/
 10. [x] **Task 10** — Grade N4 against the runner's metadata-service control _(layer: general)_ _(points: 8)_
 11. [x] **Task 11** — Take the wrappers leg's prefix and compound rows on the checkout in job mode _(layer: general)_ _(points: 15)_
 12. [x] **Task 12** — Take W6 and W8 in job mode, and class PD23's rename shapes as sandbox refusals _(layer: general)_ _(points: 12)_
-13. [ ] **Task 13** — Take L1 in job mode on the checkout's own `HEAD` _(layer: general)_ _(points: 15)_
+13. [x] **Task 13** — Take L1 in job mode on the checkout's own `HEAD` _(layer: general)_ _(points: 15)_
 14. [ ] **Task 14** — Add the runner workflow `scripts/sandbox-probe-runner.yml` _(layer: general)_ _(points: 20)_
 15. [ ] **Task 15** — Restate Gate 15 for job mode and the runner workflow _(layer: general)_ _(points: 20)_
 16. [ ] **Task 16** — Test the leg table, the job table, Gate 15's two restated tables and the mode skips _(layer: cli)_ _(points: 12)_
