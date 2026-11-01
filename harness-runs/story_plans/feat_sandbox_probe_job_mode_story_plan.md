@@ -104,7 +104,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_sandbox_probe_job_mode/
 1. [x] **Task 1** — Declare the job-mode legs and rows, and refuse a measured clone-only row in job mode _(layer: general)_ _(points: 15)_
 2. [x] **Task 2** — Add `job.sh`: job-mode setup, the launch line's job tail, the placeholder manifest, the sweep and the branch restore _(layer: general)_ _(points: 20)_
 3. [x] **Task 3** — Add job mode's own preflight _(layer: general)_ _(points: 20)_
-4. [ ] **Task 4** — Hook job mode into the session API, and resolve the agent CLI's PID at launch _(layer: general)_ _(points: 15)_
+4. [x] **Task 4** — Hook job mode into the session API, and resolve the agent CLI's PID at launch _(layer: general)_ _(points: 15)_
 5. [ ] **Task 5** — Add `run --job`, `preflight --job`, `--runner-controls` and `--list --job` to the entry point _(layer: general)_ _(points: 15)_
 6. [ ] **Task 6** — Add PD23's Linux refusal shapes to the judge's layer table _(layer: general)_ _(points: 10)_
 7. [ ] **Task 7** — Add the runner controls file, the runner stamp and the `runner-install` leg (IS1–IS4) _(layer: general)_ _(points: 15)_
