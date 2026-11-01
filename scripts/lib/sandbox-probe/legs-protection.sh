@@ -46,9 +46,10 @@
 # run, else `pass`.
 #
 # ON LINUX (SP_PLATFORM `linux`): a dd or the CS3 fetch the judge files under layer `unrecognised` is
-# `not run`, and so is a rename line sp__wp_mv_class classes `unrecognised`; `Read-only file system` is a
-# rename refusal beside `Operation not permitted`, and the row's pass sentence names both. With
-# SP_PLATFORM empty or `macos`, every verdict and evidence string is unchanged.
+# `not run`, and so is a rename line sp__wp_mv_class classes `unrecognised`; every string of the judge's
+# Linux set is a rename refusal beside Operation not permitted, and the row's pass sentence names them
+# all through judge.sh → sp__linux_refusal_names. With SP_PLATFORM empty or `macos`, every verdict and
+# evidence string is unchanged.
 #
 # PD23. On Linux sp__wp_mv_class classes every string of the judge's Linux set as `refused`, `Device or
 # resource busy` and an `inter-device move failed: … unable to remove target` line among them, so CS1's
@@ -629,7 +630,7 @@ sp__wp_judge_row() {
     SP__WP_RE="no target for $row in the per-run profile"
   elif [ "${SP_PLATFORM:-}" = linux ]; then
     SP__WP_RV=pass
-    SP__WP_RE="$passed target(s): every dd and rename refused by the sandbox (Operation not permitted or Read-only file system), every inode and shasum unchanged, no new name created"
+    SP__WP_RE="$passed target(s): every dd and rename refused by the sandbox (one of: Operation not permitted, $(sp__linux_refusal_names)), every inode and shasum unchanged, no new name created"
   else
     SP__WP_RV=pass
     SP__WP_RE="$passed target(s): every dd and rename refused with Operation not permitted, every inode and shasum unchanged, no new name created"

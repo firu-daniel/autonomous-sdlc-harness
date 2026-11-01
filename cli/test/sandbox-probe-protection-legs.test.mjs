@@ -345,6 +345,13 @@ test('sp__wp_mv_class: one rename helper line’s class, by platform', async (t)
   }
 });
 
+test('sp__linux_refusal_names: the Linux pass sentence names the judge’s whole set', async (t) => {
+  const dir = await caseDir(t);
+  const run = await sourced(dir, 'sp__linux_refusal_names');
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(run.stdout, 'Read-only file system, Permission denied, Device or resource busy');
+});
+
 test('sp__git_cs3_fetch by platform: an unknown error is not run on Linux only', async (t) => {
   const fetch = (t, platform, name) =>
     gradedOn(t, platform, 'sp__git_cs3_fetch', 'SP__GIT_FETCH_V', 'SP__GIT_FETCH_E', fixture(name), 'git fetch origin');

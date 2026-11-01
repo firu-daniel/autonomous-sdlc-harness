@@ -134,7 +134,7 @@ sp__line_with() {
 }
 
 # The layer table's Linux `sandbox` strings, the only copy: a caller outside this file reads them through
-# sp__linux_refusal_line.
+# sp__linux_refusal_line, or names them through sp__linux_refusal_names.
 SP__LINUX_SANDBOX_STRINGS=("Read-only file system" "Permission denied" "Device or resource busy")
 
 # sp__linux_refusal_line <text> [<string>...] — the first line carrying one of SP__LINUX_SANDBOX_STRINGS,
@@ -155,6 +155,16 @@ sp__linux_refusal_line() {
     done
   fi
   sp__line_with "$text" "$@"
+}
+
+# sp__linux_refusal_names — print SP__LINUX_SANDBOX_STRINGS joined by ", ", for an evidence sentence that
+# names the set it was graded against.
+sp__linux_refusal_names() {
+  local s out=""
+  for s in "${SP__LINUX_SANDBOX_STRINGS[@]}"; do
+    out="${out:+$out, }$s"
+  done
+  printf '%s' "$out"
 }
 
 # sp__issued <count> — the `(issued <n> times)` suffix when a call was matched more than once.
