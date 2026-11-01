@@ -32,5 +32,12 @@ It reuses, unchanged: `sp__wr_seed`, `sp__wr_session`, `sp__wr_reached`, `sp__wr
 
 - The type check passes.
 - `git diff scripts/lib/sandbox-probe/legs-wrappers.sh` shows every change behind an `SP_JOB_MODE` test, and no grading function's existing arms changed.
+
+**Deviations from plan:**
+
+- The SSH test matches `ssh://`, `git+ssh://`, `ssh+git://` and any scp-like `user@host:path`, not only `git@…:` and `ssh://`: a non-`git` scp-like user is SSH too, and reading it as HTTPS would skip grading the marker. For a `scheme://` origin the evidence names the scheme only, so a credential in an HTTPS URL is never printed.
+- The `sp_job_git_note` appends at the result-line call sites carry no `SP_JOB_MODE` test of their own: `sp_job_git_note` tests it and prints nothing outside job mode, so clone-layout output is byte-for-byte unchanged. The URL read and the two new P1b arms are behind an explicit `SP_JOB_MODE` test (`unread` is empty otherwise). No arm of `sp__wr_reached`, `sp__wr_push_held`, `sp__wr_commit_held` or `sp__wr_cw6_grade` changed.
+- A row that `sp_row_result` downgrades to `not run` because its control failed carries `controls.sh`'s own evidence, without the note; `controls.sh` is outside this task's target.
+- Verification: `bash scripts/typecheck.sh` (the configured `commands.typecheck`) ran and printed `PASS: typecheck`, its shell-parse check covering this file under `/bin/bash` 3.2. A bare `bash -n` on the file was refused by the permission layer; the typecheck's parse check stands in for it. No test ran: tests are Task 21's.
 </content>
 </invoke>
