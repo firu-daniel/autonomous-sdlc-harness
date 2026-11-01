@@ -56,5 +56,11 @@ It reads two fixed files, the workflow and `cli/templates/github/workflows/harne
 
 - This suite passes: `npm test --workspace cli -- test/sandbox-probe-runner-workflow.test.mjs`, from the repository root, as one plain foreground command.
 - Read the counts and the exit status, not a summary line.
+
+**Deviations from plan:**
+
+- `Set up Node` is an action step with no `run:` body, so the byte-for-byte check compares its `uses:` pin and its `with:` map to the template step's instead; every other copied step compares its `run:` body, both through the suite's `stepBody` copy and through the `js-yaml`-parsed value.
+- The suite's `stepBody` copy also accepts a one-line `run: <command>`, because `Bootstrap the checkout` carries one in both files; the source copy in `cli/test/workflow-sandbox-install.test.mjs` accepts only `run: |`.
+- The controls keys are read back by sourcing `scripts/lib/sandbox-probe/legs-runner.sh` and printing `SP__RUNNER_KEYS`, the code declaration of that header's closed key list, rather than by parsing the header comment. The keys are checked against the `record` calls in both `Record the runner and the controls` and `Record the readings after the install step`, because the `-after` keys, `bwrap-version` and `bwrap-start` are written by the second step through the same sourced `record` function.
 </content>
 </invoke>
