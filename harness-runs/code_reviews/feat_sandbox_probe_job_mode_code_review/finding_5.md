@@ -13,3 +13,5 @@ The plan-stage architecture review raised exactly this (`harness-runs/architectu
 3. In the suite's header comment, after "The canary name and the controls keys are read back by sourcing `legs-runner-isolation.sh` and `legs-runner.sh`, never retyped.", add: `It parses both files with js-yaml, a cli/package.json devDependency.`
 
 The suite's own run, `npm test --workspace cli -- test/sandbox-probe-runner-workflow.test.mjs`, is the test file the fix runs.
+
+- **Deviations from plan:** Step 2's "`npm ci` stays in sync" was not executed: the `npm ls js-yaml --workspace cli` check was refused by the tool layer (don't-ask mode), and `npm ci` was not attempted. The claim rests on reading `package-lock.json` — the `"node_modules/js-yaml"` entry already resolves 4.3.2 (`"dev": true`), which satisfies `^4.3.2` — and on the suite passing after the edit; the Run gates phase's install-dependent gates verify it.

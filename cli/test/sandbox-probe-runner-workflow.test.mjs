@@ -12,6 +12,7 @@
  * It reads two fixed files — the workflow and `cli/templates/` + `WORKFLOW_TEMPLATE_DIR` + `WORKFLOW_RUN_FILE`
  * — and no tree, so it is not a tree guard and owes no `treeGuards` entry. The canary name and the controls
  * keys are read back by sourcing `legs-runner-isolation.sh` and `legs-runner.sh`, never retyped.
+ * It parses both files with js-yaml, a cli/package.json devDependency.
  *
  * Left out deliberately: no workflow step runs here. Gate 12's run is the evidence that the workflow works
  * on a runner.
