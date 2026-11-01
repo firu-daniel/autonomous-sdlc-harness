@@ -9,8 +9,9 @@
 #                 run_profile_check with no copy
 #   add-dirs      spawn_engine's "JOB MODE ONLY: every permissions.additionalDirectories entry of the
 #                 base profile" block, building extra_dirs (the launch-line comment's bracketed tail)
-#   manifest      spawn_engine's "What was absent before this session" block, its job-mode half, with
-#                 placeholder_manifest_writable_root
+#   manifest      spawn_engine's "What was absent before this session" block, its job-mode half; the
+#                 writable-root test is the watcher's own placeholder_manifest_writable_root, called
+#                 with no copy
 #   sweep         the job's `Sweep the sandbox placeholders` step:
 #                 `HARNESS_JOB_MODE=1 autonomous-watcher.sh job-sweep <branch>` (job_sweep)
 #
@@ -23,7 +24,8 @@
 #                             sets the array SP_JOB_ADD_DIRS; never fails
 #   sp_job_manifest_write <settings file> <add-dir root>...
 #                             writes the placeholder manifest on a placeholder host; the first root is
-#                             the session's cwd. A failed or refused step is one stderr line; status 0
+#                             the session's cwd. A failed or refused step is one stderr line; status 0.
+#                             Needs SP_MAIN and SP_SCRIPTS set
 #   sp_job_teardown           the sweep, its output on stderr as `sandbox-probe: job-sweep: <line>`, then
 #                             the switch back to SP_JOB_ORIG_BRANCH; failures go through sp__td_fail.
 #                             Called once by sp_teardown, after its pending restore, before its clone loop
@@ -130,43 +132,10 @@ EOF
   return 0
 }
 
-# sp__job_writable_root <manifest> <cwd> <root>... — placeholder_manifest_writable_root, line for line.
-sp__job_writable_root() {
-  local m r root abs cwd="${2-}"
-  m="$(hr_canonical_path_nogit "${1-}")" || {
-    printf '%s\n' "${1-}"
-    return 0
-  }
-  shift
-  for root in "$@"; do
-    [ -n "$root" ] || continue
-    case "$root" in
-      /*) abs="$root" ;;
-      "~/"*) abs="${HOME-}/${root#\~/}" ;;
-      *) abs="${cwd%/}/$root" ;;
-    esac
-    r="$(hr_canonical_path_nogit "$abs")" || {
-      printf '%s\n' "$root"
-      return 0
-    }
-    if [ "$r" = "/" ]; then
-      printf '%s\n' "$root"
-      return 0
-    fi
-    case "$m" in
-      "$r" | "$r"/*)
-        printf '%s\n' "$root"
-        return 0
-        ;;
-    esac
-  done
-  return 1
-}
-
 sp_job_manifest_write() {
   [ "${SP_JOB_MODE:-0}" = 1 ] || return 0
   [ "$SP_JOB_PLACEHOLDER_HOST" = 1 ] || return 0
-  local settings="${1:-}" manifest root line deny_paths paths
+  local settings="${1:-}" manifest root line deny_paths paths out
   shift
   paths=()
   manifest="$(RUNNER_TEMP="$SP_JOB_RUNNER_TEMP" hr_job_absent_file "$SP_BRANCH")" || manifest=""
@@ -174,10 +143,27 @@ sp_job_manifest_write() {
     sp_refuse "placeholder manifest: no path for '$SP_BRANCH' — the sweep removes nothing for this session"
     return 0
   fi
-  if root="$(sp__job_writable_root "$manifest" "$@")"; then
-    sp_refuse "placeholder manifest: not writing $manifest, under the session-writable root $root — the sweep removes nothing for this session"
-    return 0
-  fi
+  # The answer is a printed marker, not the exit status: a watcher that refuses to source exits through
+  # its own `fatal`, whose status could read as "under no root".
+  out="$(cd "$SP_MAIN" && bash -c '
+    . "$1" status >/dev/null 2>&1
+    declare -F placeholder_manifest_writable_root >/dev/null || exit 3
+    shift
+    if r="$(placeholder_manifest_writable_root "$@")"; then printf "under %s\n" "$r"; else printf "clear\n"; fi' \
+    _ "$SP_SCRIPTS/autonomous-watcher.sh" "$manifest" "$@" 2>/dev/null)" || out=""
+  case "$out" in
+    clear) ;;
+    "under "*)
+      root="${out#under }"
+      sp_refuse "placeholder manifest: not writing $manifest, under the session-writable root $root — the sweep removes nothing for this session"
+      return 0
+      ;;
+    *)
+      # An unplaceable manifest is never written, as the watcher's own rule has it.
+      sp_refuse "placeholder manifest: not writing $manifest, the watcher's placeholder_manifest_writable_root could not be called from $SP_SCRIPTS/autonomous-watcher.sh — the sweep removes nothing for this session"
+      return 0
+      ;;
+  esac
   if ! deny_paths="$(hr_profile_deny_paths "$settings")"; then
     sp_refuse "placeholder manifest: could not read the denyWrite list of $settings — the sweep removes nothing for this session"
     return 0

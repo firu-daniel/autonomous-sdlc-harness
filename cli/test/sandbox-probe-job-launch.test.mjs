@@ -12,6 +12,8 @@
  * Each case runs a `bash -c` through `runBash`, sourcing the run library and `core.sh`, `platform.sh`,
  * `judge.sh`, `controls.sh`, `session.sh` and `job.sh` from `WORKSPACE_ROOT`, with the probe's variables
  * set after sourcing because the libraries blank them. Fixtures sit under `os.tmpdir()`, removed in process.
+ * The manifest cases point `SP_MAIN` and `SP_SCRIPTS` at an `init`-written fixture (`createWatcherFixture`),
+ * because the probe calls that watcher's own `placeholder_manifest_writable_root`.
  *
  * Left out deliberately: no real agent CLI — `SANDBOX_PROBE_AGENT_CLI` is a stub recording its argument
  * vector — and no real placeholder host: `SP_JOB_PLACEHOLDER_HOST` is set by the case, not probed.
@@ -24,8 +26,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { runBash, seedRepository, WORKSPACE_ROOT } from './helpers/fixture.mjs';
+import { INIT_SCRIPTS_DIR, runBash, seedRepository, WORKSPACE_ROOT } from './helpers/fixture.mjs';
 import { scaleBound } from './helpers/timing.mjs';
+import { createWatcherFixture } from './helpers/watcher.mjs';
 
 const RUN_LIB = join(WORKSPACE_ROOT, 'scripts', 'lib', 'harness-run-lib.sh');
 const PROBE_LIB = join(WORKSPACE_ROOT, 'scripts', 'lib', 'sandbox-probe');
@@ -179,9 +182,12 @@ test('the job tail of the launch line', async (t) => {
 test('the job-mode placeholder manifest', async (t) => {
   /**
    * A profile denying one present and two absent paths, and two add-dir roots, the first holding a
-   * `.mcp.json`.
+   * `.mcp.json`; `w` is the watcher fixture whose scripts directory is `SP_SCRIPTS`, `null` when its
+   * helper skipped the case.
    */
   async function manifestFixture(t) {
+    const w = await createWatcherFixture(t);
+    if (w === null) return null;
     const d = await caseDirs(t);
     const present = join(d.tmp, 'present.txt');
     const absentOne = join(d.tmp, 'absent-one.txt');
@@ -194,22 +200,25 @@ test('the job-mode placeholder manifest', async (t) => {
     await mkdir(rootA);
     await mkdir(rootB);
     await writeFile(join(rootA, '.mcp.json'), '{}\n');
-    return { d, profile, rootA, rootB, absentOne, absentTwo };
+    return { w, d, profile, rootA, rootB, absentOne, absentTwo, scripts: join(w.dir, INIT_SCRIPTS_DIR) };
   }
 
-  const write = (m, runnerTemp, { jobMode = 1, host = 1 } = {}) =>
+  const write = (m, runnerTemp, { jobMode = 1, host = 1, scripts = m.scripts } = {}) =>
     sourced(
       m.d,
       [
+        `SP_MAIN=${q(m.w.dir)}; SP_SCRIPTS=${q(scripts)}`,
         `SP_JOB_MODE=${jobMode}; SP_JOB_PLACEHOLDER_HOST=${host}; SP_JOB_RUNNER_TEMP=${q(runnerTemp)}`,
         `sp_job_manifest_write ${q(m.profile)} ${q(m.rootA)} ${q(m.rootB)}`,
         'printf "status=%s\\n" "$?"',
       ].join('\n'),
+      m.w.watcherEnv(),
     );
   const manifestAt = (runnerTemp) => join(runnerTemp, 'autonomous-sdlc-harness-placeholders', `${BRANCH}.absent`);
 
   await t.test('lists exactly the absent deny paths and the absent .mcp.json', async (t) => {
     const m = await manifestFixture(t);
+    if (m === null) return;
     const rt = join(m.d.tmp, 'runner-temp');
 
     const run = await write(m, rt);
@@ -225,6 +234,7 @@ test('the job-mode placeholder manifest', async (t) => {
 
   await t.test('a runner temp under a root: no file, one line saying so', async (t) => {
     const m = await manifestFixture(t);
+    if (m === null) return;
     const rt = join(m.rootB, 'runner-temp');
 
     const run = await write(m, rt);
@@ -237,12 +247,30 @@ test('the job-mode placeholder manifest', async (t) => {
     assert.ok(!existsSync(rt), 'nothing is created under the root');
   });
 
+  await t.test('no watcher under SP_SCRIPTS: no file, one line saying so', async (t) => {
+    const m = await manifestFixture(t);
+    if (m === null) return;
+    const rt = join(m.d.tmp, 'runner-temp');
+    const scripts = join(m.d.tmp, 'no-watcher');
+    await mkdir(scripts);
+
+    const run = await write(m, rt, { scripts });
+
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(run.stdout, 'status=0\n');
+    assert.deepEqual(probeLines(run.stderr), [
+      `sandbox-probe: placeholder manifest: not writing ${manifestAt(rt)}, the watcher's placeholder_manifest_writable_root could not be called from ${scripts}/autonomous-watcher.sh — the sweep removes nothing for this session`,
+    ]);
+    assert.ok(!existsSync(manifestAt(rt)), 'no manifest is written');
+  });
+
   for (const [label, flags] of [
     ['SP_JOB_PLACEHOLDER_HOST=0', { host: 0 }],
     ['SP_JOB_MODE=0', { jobMode: 0 }],
   ]) {
     await t.test(`${label}: no file, no output`, async (t) => {
       const m = await manifestFixture(t);
+      if (m === null) return;
       const rt = join(m.d.tmp, 'runner-temp');
 
       const run = await write(m, rt, flags);
