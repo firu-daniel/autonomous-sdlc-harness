@@ -123,7 +123,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_sandbox_probe_job_mode/
 20. [x] **Task 20** — Test the runner controls file, the runner stamp, the runner legs' grades and N4's runner arm _(layer: cli)_ _(points: 20)_
 21. [x] **Task 21** — Test CS6's grade, the carried-over legs' job arms and L1's reachability _(layer: cli)_ _(points: 20)_
 22. [x] **Task 22** — Test the runner workflow against the job's template _(layer: cli)_ _(points: 15)_
-23. [ ] **Task 23** — Add `## 9. The GitHub-hosted runner legs`, each row *not yet measured*, and point the existing rows at job mode _(layer: general)_ _(points: 20)_
+23. [x] **Task 23** — Add `## 9. The GitHub-hosted runner legs`, each row *not yet measured*, and point the existing rows at job mode _(layer: general)_ _(points: 20)_
 
 ## Scope register
 
