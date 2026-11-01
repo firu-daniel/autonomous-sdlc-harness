@@ -19,6 +19,10 @@
 #               docs/sandbox-verification.md row P1)
 #   sandbox     `Operation not permitted`
 #   sandbox     Linux only: `Read-only file system` (EROFS, a write into a bubblewrap read-only bind)
+#   sandbox     Linux only: `Permission denied` (a write onto a bubblewrap placeholder), `Device or
+#               resource busy` (a rename onto or across a read-only bind), from the first Linux run's
+#               kept evidence (docs/sandbox-verification.md §5 PD23). Ordinary file permissions print
+#               `Permission denied` too, so the evidence quotes the line rather than naming a cause.
 #   ran         none of the above. Its evidence is the result's first line, except that a bare
 #               `Exit code <n>` first line is quoted as `Exit code <n>: <first later non-empty line>`
 #               (docs/sandbox-verification.md §5 PD18; sp__message_line)
@@ -28,6 +32,8 @@
 # `ran`, and the result is an error. A `ran` result that is not an error still fails against an expected
 # refusal. No caller may expect `unrecognised`. A Linux refusal string is added to the table above only
 # from a Linux run's kept evidence, never guessed. With SP_PLATFORM empty or `macos`, no Linux arm applies.
+# PD23's shapes are recognised since feat_sandbox_probe_job_mode; any other Linux error against an
+# expected refusal is still `unrecognised`.
 #
 # A call is matched byte-equal: a command with anything appended is a different call. Every jq read
 # skips a stream line that is not JSON.
@@ -162,7 +168,7 @@ sp__layer() {
     SP_LAYER=network
   elif line="$(sp__line_with "$text" "Operation not permitted")"; then
     SP_LAYER=sandbox
-  elif [ "${SP_PLATFORM:-}" = linux ] && line="$(sp__line_with "$text" "Read-only file system")"; then
+  elif [ "${SP_PLATFORM:-}" = linux ] && line="$(sp__line_with "$text" "Read-only file system" "Permission denied" "Device or resource busy")"; then
     SP_LAYER=sandbox
   else
     SP_LAYER=ran
