@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"sp-runner-pn3-neither","cwd":"@FIXTURE_ROOT@"}
+{"type":"user","timestamp":"2026-01-01T00:00:00.000Z","message":{"role":"user","content":"Run the command."}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:01.000Z","message":{"id":"m1","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"ls /proc"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"1\n7\n812\nacpi\ncpuinfo\nself"}]}}
+{"type":"result","subtype":"success","timestamp":"2026-01-01T00:00:03.000Z","duration_ms":3000,"permission_denials":[]}

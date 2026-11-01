@@ -62,5 +62,11 @@
 
 - This suite passes: `npm test --workspace cli -- test/sandbox-probe-runner-legs.test.mjs`, from the repository root, as one plain foreground command.
 - Read the counts and the exit status, not a summary line.
+
+**Deviations from plan:**
+
+- IS1 has no `fail` arm: `sp__is1_grade` records the sysctl it read and never fails, so the IS1 case asserts `pass` (on `1` and `absent`) and `not run` only.
+- The absent canary is a leg-level skip in `sp_leg_runner_pid`, not a grade argument, so it is asserted on the leg (`SP_JOB_MODE=1`, canary unset: three `not run` lines; no session is reached). Two further leg cases hold `sp_leg_runner_install` to an unrecorded key (IS4 `not run` naming `bwrap-start`) and to no controls file.
+- Added beyond the plan: a missing controls file returns 1; NN1 with an `unrecorded` control is `not run`; N4's runner arm with a sandbox refusal (`n4-refused`) passes.
 </content>
 </invoke>
