@@ -52,5 +52,13 @@ The cases this moves, as the suites hold them today:
 - Read the counts and the exit status, not a summary line.
 - `git diff --stat` shows no file under `scripts/` changed by this task.
 - `git status --porcelain cli/test/fixtures/sandbox-probe/` lists no new fixture outside the three `(new)` entries of `### Targets`.
+
+**Deviations from plan:**
+
+- RG2 (a): no existing case held a busy `(a)` evidence — every existing RG2 case's `(a)` is the permission-layer `DONT_ASK` refusal from `rg-session.jsonl`, and `RG2_BUSY` is (b)'s helper line, which `sp__rg2_grade` quotes rather than classifies, so it is unchanged. Added instead a two-platform RG2 case on the existing `rg3-refused.jsonl` (its busy mv as `(a)`, no helper call): Linux reads `(a) refused at the sandbox layer: mv: … Device or resource busy`, SP_PLATFORM empty keeps `(a) failed with no refusal string: Exit code 1: mv: …`; verdict `not run` on both, from (b).
+- RG3's new unknown-string case needs a stream and the task creates no fixture beyond the three named, so the case writes one into its own temp directory, derived from `rg3-refused.jsonl` with `Device or resource busy` replaced by `Input/output error`.
+- The mv-class table's `inter-device move failed` row also asserts `other` with SP_PLATFORM empty, matching the table's two-column shape; the eacces dd case also carries the SP_PLATFORM-empty twin (`fail`, `ran:`), as `wp-dd-erofs` does.
+- Evidence downgrade, run form: the judge suite ran as one plain foreground command; the protection-legs and glob-registry suites' recorded runs had their output piped or redirected to read the counts (exit 0; 54/54 and 29/29 pass). The conventions document's no-pipe rule was not met on those two runs; the counts and exit status are as read.
+- Tree guard `test/main-anchor-isolation.test.mjs` (covers `cli/test/**/*.mjs`) run: 2/2 pass.
 </content>
 </invoke>

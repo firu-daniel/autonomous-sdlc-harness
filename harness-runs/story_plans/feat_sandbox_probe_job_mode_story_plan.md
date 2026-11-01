@@ -119,7 +119,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_sandbox_probe_job_mode/
 16. [x] **Task 16** — Test the leg table, the job table, Gate 15's two restated tables and the mode skips _(layer: cli)_ _(points: 12)_
 17. [x] **Task 17** — Test job mode's preflight, setup and teardown _(layer: cli)_ _(points: 20)_
 18. [x] **Task 18** — Test the job launch line, the manifest, the sweep call and the agent-PID token _(layer: cli)_ _(points: 20)_
-19. [ ] **Task 19** — Test PD23's shapes, and move the existing `unrecognised` cases onto a string the judge still does not know _(layer: cli)_ _(points: 15)_
+19. [x] **Task 19** — Test PD23's shapes, and move the existing `unrecognised` cases onto a string the judge still does not know _(layer: cli)_ _(points: 15)_
 20. [ ] **Task 20** — Test the runner controls file, the runner stamp, the runner legs' grades and N4's runner arm _(layer: cli)_ _(points: 20)_
 21. [ ] **Task 21** — Test CS6's grade, the carried-over legs' job arms and L1's reachability _(layer: cli)_ _(points: 20)_
 22. [ ] **Task 22** — Test the runner workflow against the job's template _(layer: cli)_ _(points: 15)_

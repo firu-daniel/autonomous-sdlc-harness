@@ -1,5 +1,5 @@
 {"type":"system","subtype":"init","session_id":"sp-wp-dd-unrecognised","cwd":"@FIXTURE_ROOT@"}
 {"type":"user","timestamp":"2026-01-01T00:00:00.000Z","message":{"role":"user","content":"Run the command."}}
 {"type":"assistant","timestamp":"2026-01-01T00:00:01.000Z","message":{"id":"m1","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"dd if=/dev/null of=@FIXTURE_ROOT@/clone/.git/config conv=notrunc"}}]}}
-{"type":"user","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","is_error":true,"content":"Exit code 1\ndd: failed to open '@FIXTURE_ROOT@/clone/.git/config': Device or resource busy"}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","is_error":true,"content":"Exit code 1\ndd: failed to open '@FIXTURE_ROOT@/clone/.git/config': Input/output error"}]}}
 {"type":"result","subtype":"success","timestamp":"2026-01-01T00:00:03.000Z","duration_ms":3000,"permission_denials":[]}

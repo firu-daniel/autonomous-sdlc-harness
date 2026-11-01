@@ -10,9 +10,12 @@
  * `not run`), CS3's fetch refusal is the clone layout's design, a call refused at the permission layer
  * never reached the layer CS1, CS2, CS7, CS3 and CL5 measure, and is `not run`, and a CS3 state check
  * depending on such a call is skipped rather than failed, and no probe helper writes `Broken pipe`. On
- * Linux, `Read-only file system` is a dd and rename refusal beside `Operation not permitted`, and a dd,
- * rename or CS3 fetch error carrying no refusal string the judge knows is `not run`, never `fail`; with
- * SP_PLATFORM empty each of those cases keeps its macOS verdict.**
+ * Linux, `Read-only file system` is a dd and rename refusal beside `Operation not permitted`, and so, from
+ * PD23 (docs/sandbox-verification.md §5), are a dd's `Permission denied` and a rename's `Device or resource
+ * busy`; a dd, rename or CS3 fetch error carrying no refusal string the judge knows is `not run`, never
+ * `fail`; with SP_PLATFORM empty each of those cases keeps its macOS verdict.** The unknown dd and rename
+ * error is `Input/output error`, which no layer-table arm matches; it was `Device or resource busy` until
+ * PD23 made that a refusal.
  *
  * Fixtures are passed unsubstituted: no function here requires an absolute path, and W8's rule and its
  * unmatched-rule line both spell `@FIXTURE_ROOT@`, so the substring match holds as recorded. A case
@@ -268,6 +271,7 @@ async function gradedOn(t, platform, fn, v, e, stream, cmd) {
 }
 
 const EROFS_LINE = "dd: failed to open '@FIXTURE_ROOT@/clone/.git/config': Read-only file system";
+const EACCES_LINE = "dd: failed to open '@FIXTURE_ROOT@/clone/.git/config': Permission denied";
 const LINUX_UNRECOGNISED = 'no refusal string this judge knows on Linux';
 
 test('sp__wp_dd_grade on Linux: Read-only file system passes, an unknown error is not run', async (t) => {
@@ -280,6 +284,16 @@ test('sp__wp_dd_grade on Linux: Read-only file system passes, an unknown error i
 
   await t.test('Read-only file system with SP_PLATFORM empty fails as a call that ran', async (t) => {
     const [v, e] = await dd(t, '', 'wp-dd-erofs');
+    assert.equal(v, 'fail');
+    assert.ok(e.startsWith('ran:'), e);
+  });
+
+  await t.test('PD23: Permission denied on Linux passes, quoting the line', async (t) => {
+    assert.deepEqual(await dd(t, 'linux', 'wp-dd-eacces'), ['pass', EACCES_LINE]);
+  });
+
+  await t.test('PD23: Permission denied with SP_PLATFORM empty fails as a call that ran', async (t) => {
+    const [v, e] = await dd(t, '', 'wp-dd-eacces');
     assert.equal(v, 'fail');
     assert.ok(e.startsWith('ran:'), e);
   });
@@ -314,7 +328,13 @@ test('sp__wp_mv_class: one rename helper line’s class, by platform', async (t)
     ['sbx_wp_mv 0 stage failed: cp: x', 'stage-failed\n', 'stage-failed\n'],
     ['sbx_wp_mv 0 mv: rename a to b: Operation not permitted', 'refused\n', 'refused\n'],
     ["sbx_wp_mv 0 mv: cannot move 'a' to 'b': Read-only file system", 'refused\n', 'other\n'],
-    ["sbx_wp_mv 0 mv: cannot move 'a' to 'b': Device or resource busy", 'unrecognised\n', 'other\n'],
+    ["sbx_wp_mv 0 mv: cannot move 'a' to 'b': Device or resource busy", 'refused\n', 'other\n'],
+    [
+      "sbx_wp_mv 0 mv: inter-device move failed: 'a' to 'b'; unable to remove target: Device or resource busy",
+      'refused\n',
+      'other\n',
+    ],
+    ["sbx_wp_mv 0 mv: cannot move 'a' to 'b': Input/output error", 'unrecognised\n', 'other\n'],
   ];
   for (const [line, linux, empty] of cases) {
     await t.test(line, async (t) => {
