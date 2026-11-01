@@ -217,12 +217,11 @@ const SCRIPT_ENTRY = /^Bash\(bash (\S+\.sh):\*\)$/;
  * A commit identity handed to the subprocess, for the cases that expect a commit to happen.
  *
  * `createFixture` configures `user.email` and `user.name` only when it created a repository itself,
- * and every subprocess runs with `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` pointed at `/dev/null`
- * — so a repository `--git-init` creates inside a `{ git: false }` fixture has an identity in no
- * configuration file at all. Left to guess one, git accepts or refuses depending on whether this
- * host's name carries a domain, which is exactly the "passes on one machine, fails on another for a
- * reason no assertion names" failure the fixture's isolation exists to prevent. These four are
- * honoured whatever the configuration files hold.
+ * and every subprocess runs with `GIT_CONFIG_SYSTEM` at `/dev/null` and `GIT_CONFIG_GLOBAL` at the
+ * fixture's `isolated-gitconfig`, which holds no identity and sets `user.useConfigOnly` — so a
+ * repository `--git-init` creates inside a `{ git: false }` fixture has an identity in no
+ * configuration file at all, and git refuses to commit there rather than guess one from the host
+ * name. These four are honoured whatever the configuration files hold.
  */
 const COMMIT_IDENTITY = {
   GIT_AUTHOR_NAME: 'Harness Fixture',
@@ -233,9 +232,11 @@ const COMMIT_IDENTITY = {
 
 /**
  * The mirror of {@link COMMIT_IDENTITY}, pinned just as deterministically: git's own switch for
- * "never guess an identity", passed through the environment-borne configuration. Combined with the
- * fixture's `/dev/null` configuration files there is then no identity on **any** host, rather than
- * none on the hosts that happen to lack one.
+ * "never guess an identity", passed through the environment-borne configuration. The fixture's
+ * `isolated-gitconfig` already sets it for every subprocess; this states it again for the git a
+ * case's own command runs, so the refusal the case asserts names its own cause. With no identity in
+ * any configuration file there is then none on **any** host, rather than none on the hosts that
+ * happen to lack one.
  */
 const NO_COMMIT_IDENTITY = {
   GIT_CONFIG_COUNT: '1',

@@ -193,6 +193,7 @@ async function createStallFixture(t, { job = false, legacy = false } = {}) {
     t.after(() => rm(dir, { recursive: true, force: true }));
   }
   for (const dir of [markers, payloads, outside]) await mkdir(dir);
+  let blobs = 0;
   const markerBody = (name, tail = 'exit 0') => `#!/bin/sh\n: > '${join(markers, name)}'\n${tail}\n`;
 
   const configPath = join(w.dir, 'harness.config.json');
@@ -354,12 +355,22 @@ async function createStallFixture(t, { job = false, legacy = false } = {}) {
      * Commit `entries` on the copy's branch the way a sandboxed session in it can: by plumbing
      * through the copy's own index, object store and `refs/heads/<branch>`, writing no working-tree
      * file. On a clone the main checkout's branch stays where it was until the watchdog syncs in.
+     * A `content` entry is hashed from a file under `payloads`, outside the copy, never from an
+     * argument: J6 commits the whole `remote-run.sh` (about 400 KB), and Linux's per-string
+     * `MAX_ARG_STRLEN` refused it with `spawn E2BIG` (measured 2026-10-30). A test assumption, not a
+     * code fault.
      *
      * @param {{ path: string, content?: string, oid?: string, mode?: string }[]} entries
      */
     async commitInCopy(entries, message) {
       for (const { path, content, oid, mode = '100644' } of entries) {
-        const object = oid ?? (await sh(copy, 'printf "%s" "$1" | git hash-object -w --no-filters --stdin', [content]));
+        let object = oid;
+        if (object === undefined) {
+          blobs += 1;
+          const blobFile = join(payloads, `blob-${blobs}`);
+          await writeFile(blobFile, content, 'utf8');
+          object = await git(copy, ['hash-object', '-w', '--no-filters', '--', blobFile]);
+        }
         await git(copy, ['update-index', '--add', '--cacheinfo', `${mode},${object},${path}`]);
       }
       const tree = await git(copy, ['write-tree']);

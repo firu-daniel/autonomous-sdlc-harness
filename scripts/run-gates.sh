@@ -132,9 +132,9 @@ echo "== gate 6 — self-containment"
 # both. Not `--exclude=.git`: GNU and BSD grep both match it against a file's base name, so it
 # would also skip every nested file named `.git`. Not `--exclude=./.git`: GNU grep matches a
 # recursive subfile's base name only, so it would exclude nothing on Linux.
-# The pipe is safe here and only here: `gate_silent` grades OUTPUT, so the second stage's exit
-# status (1 when it filters everything) is never read, and grep's own `grep: …` error lines do not
-# begin `./.git:` and still reach the log.
+# The pipe is safe here and only here: `gate_silent` grades OUTPUT, so no filtering stage's exit
+# status (1 when it filters everything) is ever read, and grep's own `grep: …` error lines match
+# neither filter and still reach the log.
 # `test_run_logs` holds the Run gates phase's logs: they carry machine paths by construction, are
 # gitignored, and include the log of the run in progress, so 6a would fail on its own output.
 # `scratch` holds throwaway probes and the backend-comparison captures `docs/retrieval-eval.md`
@@ -143,8 +143,15 @@ echo "== gate 6 — self-containment"
 # `__pycache__` holds Python bytecode, which records each source's absolute path: gitignored, never
 # committed, and written by any Python run against the editable install that does not carry
 # `PYTHONDONTWRITEBYTECODE`.
+# The third stage drops files one or more directories below `harness-runs/clarifications/`: the
+# clarification channel's per-branch questions and answers, gitignored and machine-local by
+# construction — an operator's answer quotes terminal output, and a Node stack frame carries an
+# absolute path. It anchors on the path rather than using `--exclude-dir=clarifications`, which
+# GNU and BSD grep match against the base name and so would also skip the shipped
+# `cli/templates/state-dir/clarifications/`. The tracked `README.md` at the directory's top level
+# is not below a subdirectory and stays covered.
 machine_path_hits() {
-  grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git --exclude-dir=test_run_logs --exclude-dir=scratch --exclude-dir=__pycache__ | grep -v '^\./\.git:[0-9][0-9]*:'
+  grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git --exclude-dir=test_run_logs --exclude-dir=scratch --exclude-dir=__pycache__ | grep -v '^\./\.git:[0-9][0-9]*:' | grep -v '^\./harness-runs/clarifications/[^/][^/]*/'
 }
 gate_silent "6a no machine paths" machine_path_hits
 # Two exclusions, not one. `examples/notes-app/.claude` is an adopted repository's own generated
