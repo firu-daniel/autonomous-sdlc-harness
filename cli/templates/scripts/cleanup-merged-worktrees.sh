@@ -365,29 +365,40 @@ fi
 # sweep that already printed its verdict — the original hang, moved rather than
 # closed. Against a fetch stalled for 3 seconds under a 3-second ceiling, the
 # child-only version returned its message on time and did not let the script exit
-# for 144 seconds; the group kill ends it in the 2 the escalation costs.
+# for 144 seconds; the group kill ends it in the 2 the escalation costs. Every
+# run whose stdout is not a terminal — the watcher's pipe, a file — takes this
+# path; only stdout on a terminal does not (see "NOT GROUPED" below).
 #
 # Job control is restored to whatever it was, since a script that leaves `-m` on
 # behind it changes how every later background command here reports.
 #
 # run_bounded <seconds> <command> [args…]
-# NOT GROUPED WHEN A PERSON IS WATCHING. `set -m` puts the child in a process
-# group that is not the terminal's foreground one, so a child that reads the
-# CONTROLLING TERMINAL is stopped with SIGTTIN instead of being answered — and
-# `ssh` reads a key passphrase from `/dev/tty` directly, which `GIT_TERMINAL_PROMPT=0`
-# does not cover because it is not git asking. `kill -0` keeps succeeding on a
-# stopped process, so a by-hand sweep on a passphrase-protected key would burn the
-# whole ceiling and report a network failure that never happened. The header's
-# "WHO RUNS IT" names a person by hand as a supported caller, so that path keeps
-# the child in this script's own group and signals the child alone: the pipe a
+# NOT GROUPED WHEN A PERSON IS WATCHING — decided on THIS SCRIPT'S STDOUT
+# (`[ -t 1 ]`), because stdout is what the group kill has to release. Whether a
+# controlling terminal exists is the wrong signal: a watcher started from a
+# terminal, or a test run under `docker run -it`, has one and still reads the
+# sweep through a pipe, and the child-only kill then leaves the transport holding
+# it — 300.1 s against a 3 s ceiling in Gate 15's container on 2026-10-30, and
+# 53.0 s against a 3 s ceiling on macOS under a pseudo-terminal, both measured
+# against the earlier `/dev/tty` test this replaced.
+# When stdout IS a terminal, a person is reading it directly. `set -m` would put
+# the child in a process group that is not the terminal's foreground one, so a
+# child that reads the CONTROLLING TERMINAL is stopped with SIGTTIN instead of
+# being answered — and `ssh` reads a key passphrase from `/dev/tty` directly,
+# which `GIT_TERMINAL_PROMPT=0` does not cover because it is not git asking.
+# `kill -0` keeps succeeding on a stopped process, so the sweep would burn the
+# whole ceiling and report a network failure that never happened. That path keeps
+# the child in this script's own group and signals the child alone: the output a
 # surviving transport could hold is a terminal the person is looking at, and they
-# can end it themselves. The watcher is daemonised with no controlling terminal,
-# so it takes the grouped path, which is the one the orphaned-transport hang
-# needed.
+# can end it themselves.
+# Accepted cost: a by-hand sweep whose stdout is piped (`… | tee`) on a
+# passphrase-protected key takes the grouped path, so that `ssh` is stopped by
+# SIGTTIN and the run reports a failed fetch after the ceiling instead of
+# prompting.
 run_bounded() {
   local limit="$1" pid waited=0 job_control=0 grouped=1
   shift
-  if { : > /dev/tty; } 2>/dev/null; then grouped=0; fi
+  [ -t 1 ] && grouped=0
   case "$-" in *m*) job_control=1 ;; esac
   [ "$grouped" -eq 1 ] && set -m
   "$@" &

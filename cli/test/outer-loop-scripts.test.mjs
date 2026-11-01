@@ -1927,6 +1927,22 @@ test('hr_cache_dir resolves the machine cache directory the way machineCacheDir(
  *
  * The fake `git` hangs ONLY on `fetch` and delegates every other subcommand to the real one, so
  * the script's own repository probing is untouched and the ceiling is the only thing under test.
+ *
+ * TWO CASES, ONE WITHOUT A TERMINAL AND ONE WITH. `run_bounded` used to choose the group kill by
+ * whether `/dev/tty` opened, so a run with a controlling terminal took the child-only kill and
+ * waited for the orphaned transport even when its stdout was a pipe — 300.1 s against a 3 s
+ * ceiling in Gate 15's `docker run -it` container on 2026-10-30, while a run with no terminal
+ * passed. The second case runs the sweep under a pseudo-terminal through `script`, with its stdout
+ * piped to a reader inside it. Group 3's verdict: a code defect that depends on whether a terminal
+ * is attached, not on Linux; `run_bounded` now decides on whether its stdout is a terminal.
+ *
+ * The proof on record is a hand run from a macOS terminal against the unfixed script —
+ * `npm test --workspace cli -- --test-name-pattern="terminal is attached" test/outer-loop-scripts.test.mjs`
+ * — which failed with "the sweep took 53.0s against a 3s ceiling — the fetch's transport is still
+ * holding the pipe". The case runs for real from a terminal on macOS and in the pre-merge Linux
+ * container run, where `docker run -it` gives it one. Where `script` is refused a pseudo-terminal,
+ * as in a sandboxed gate run, it skips by name; that skip is not a pass, so the proof rests on
+ * those two runs.
  */
 const HANGING_GIT = [
   '#!/usr/bin/env bash',
@@ -1963,6 +1979,95 @@ test('the sweep bounds a hanging fetch and releases its output pipe', async (t) 
   // 144 s child-only kill recorded above, so a child-only kill still fails here: it waits for the orphan.
   assert.ok(
     elapsed < ceiling + scaleBound(20),
+    `the sweep took ${elapsed.toFixed(1)}s against a ${ceiling}s ceiling — the fetch's transport is still holding the pipe`,
+  );
+});
+
+/** Printed inside the pseudo-terminal only when `/dev/tty` opened there. */
+const PTY_MARKER = 'pty-controlling-terminal-present';
+
+/** BSD `script` prints the first (`openpty` / `tcgetattr`), util-linux `script` the second. */
+const PTY_REFUSALS = [/^script: (openpty|tcgetattr)\b.*$/m, /^script: failed to create pseudo-terminal\b.*$/m];
+
+test('the sweep releases its output pipe on a bounded fetch when a terminal is attached', async (t) => {
+  let scriptBin = '';
+  try {
+    scriptBin = execFileSync('/bin/sh', ['-c', 'command -v script'], { encoding: 'utf8' }).trim();
+  } catch {
+    scriptBin = '';
+  }
+  if (scriptBin === '') {
+    t.skip('`script` is not on PATH, so no pseudo-terminal can be given to the sweep');
+    return;
+  }
+  // util-linux identifies itself on `--version`; BSD `script` rejects the flag.
+  let utilLinux = false;
+  try {
+    utilLinux = execFileSync(scriptBin, ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).includes('util-linux');
+  } catch {
+    utilLinux = false;
+  }
+
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(dir);
+
+  const realGit = execFileSync('/bin/sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+  const shims = join(dir, 'shims');
+  mkdirSync(shims, { recursive: true });
+  writeFileSync(join(shims, 'git'), HANGING_GIT.replace('%REAL_GIT%', realGit), { mode: 0o755 });
+
+  // Inside the terminal: prove it is a controlling one, then read the sweep through a pipe, the
+  // watcher's shape. The program and the sweep's path travel in the environment so neither is
+  // re-quoted for `script`'s own command line.
+  const inner = `{ : > /dev/tty; } 2>/dev/null && echo ${PTY_MARKER}; bash "$PTY_SWEEP" 2>&1 | cat`;
+  // `script`'s stdin must stay open for the whole run, because util-linux `script` ends the session
+  // at stdin EOF, and must be a pipe rather than Node's stdio socket, on which BSD `script` fails
+  // `tcgetattr` with EOPNOTSUPP. The `cat` relays Node's never-closed stdin into a real pipe; a
+  // process substitution is not waited for, so `script`'s exit still ends the run.
+  const stdin = '< <(exec cat 2>/dev/null)';
+  const outer = utilLinux
+    ? `exec "$PTY_SCRIPT" -q -e -c 'bash -c "$PTY_INNER"' /dev/null ${stdin}`
+    : `exec "$PTY_SCRIPT" -q /dev/null bash -c "$PTY_INNER" ${stdin}`;
+
+  const ceiling = 3;
+  const bound = ceiling + scaleBound(20);
+  const started = Date.now();
+  // The bound only stops a failing run from waiting out HANGING_GIT's `sleep 300`. A timed-out
+  // run's output is discarded by `runBash`, so it fails on the elapsed time alone.
+  let stdout;
+  let stderr;
+  try {
+    ({ stdout, stderr } = await runBash(dir, ['-c', outer], {
+      PATH: `${shims}:${process.env.PATH ?? ''}`,
+      HARNESS_FETCH_TIMEOUT: String(ceiling),
+      PTY_SCRIPT: scriptBin,
+      PTY_INNER: inner,
+      PTY_SWEEP: join(dir, `${SCRIPTS_DIR}/cleanup-merged-worktrees.sh`),
+    }, { timeoutMs: (bound + 10) * 1000 }));
+  } catch (error) {
+    if (!String(error?.message).startsWith('runBash timed out')) throw error;
+    const elapsed = (Date.now() - started) / 1000;
+    assert.fail(`the sweep took ${elapsed.toFixed(1)}s against a ${ceiling}s ceiling — the fetch's transport is still holding the pipe`);
+  }
+  const elapsed = (Date.now() - started) / 1000;
+
+  const output = `${stdout}${stderr}`;
+  const refusal = PTY_REFUSALS.map((pattern) => output.match(pattern)).find(Boolean);
+  if (!stdout.includes(PTY_MARKER) && refusal && !output.includes('fetch --prune failed')) {
+    t.skip(`\`script\` was refused a pseudo-terminal (${refusal[0]}), so the sweep cannot be given a controlling terminal here`);
+    return;
+  }
+  assert.ok(
+    stdout.includes(PTY_MARKER),
+    `the pseudo-terminal gave the sweep no controlling terminal, so the terminal arm was not exercised:\n${stdout}${stderr}`,
+  );
+  assert.match(
+    stdout,
+    /fetch --prune failed \(offline, unreachable or timed out\); skipping this round/,
+    `the sweep did not report the bounded fetch:\n${stdout}`,
+  );
+  assert.ok(
+    elapsed < bound,
     `the sweep took ${elapsed.toFixed(1)}s against a ${ceiling}s ceiling — the fetch's transport is still holding the pipe`,
   );
 });

@@ -80,3 +80,7 @@ Amend them where the bullets below say. Do not rewrite them from scratch. The `s
   - The sandbox is left as it is.
 
   The plan above was revised to match.
+- **Implementation pass after the park 2 answer.**
+  - **The standalone `/bin/bash -n cli/templates/scripts/cleanup-merged-worktrees.sh` was refused by the tool layer** (and so was a bare `bash -n` on the same path). That claim rests instead on `bash scripts/typecheck.sh`, whose own output reads `check-shell-parse: 100 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed` before `PASS: typecheck`.
+  - **The *"THE SIGNAL GOES TO THE PROCESS GROUP"* paragraph had no sentence saying who takes which path.** Its old last sentence is the 144 s measurement, and the who-takes-which-path sentence (*"The watcher is daemonised with no controlling terminal, so it takes the grouped path"*) was in the *"NOT GROUPED"* block. That sentence was removed with the rewrite. A sentence stating the new condition was appended to the *"THE SIGNAL GOES"* paragraph: every run whose stdout is not a terminal takes the group path.
+  - **The *"TWO CASES…"* paragraph's clause *"so that arm is exercised on every host"* was dropped.** It contradicts the named skip this task adds. The rest of the paragraph was kept and extended as the plan asks.
