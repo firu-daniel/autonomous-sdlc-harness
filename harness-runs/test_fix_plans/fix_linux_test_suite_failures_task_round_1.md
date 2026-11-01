@@ -12,7 +12,7 @@ The log also reports gates `13a`, `13b` and `13c` as `BLOCKED` (the Python servi
 
 This list is the **single source of truth** for the fix loop. `[ ]` markers anywhere else in this plan or its finding files are informational only.
 
-1. [ ] **Finding 1** — Gate 6a reads the gitignored clarification channel. _(layer: general)_
+1. [x] **Finding 1** — Gate 6a reads the gitignored clarification channel. _(layer: general)_
 
 ## Must Fix
 
