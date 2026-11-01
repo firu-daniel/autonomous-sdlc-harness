@@ -39,7 +39,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 4** — Restate Gate 15's `run` sentence: the job-mode-only legs left out, seven Linux-only legs _(layer: general)_
+1. [x] **Finding 4** — Restate Gate 15's `run` sentence: the job-mode-only legs left out, seven Linux-only legs _(layer: general)_
 2. [ ] **Finding 5** — Declare `js-yaml` in `cli/package.json` and the lock's `cli` entry _(layer: cli, general)_
 3. [ ] **Finding 6** — Build the Linux write-protection pass sentence from the judge's whole refusal set _(layer: cli, general)_
 4. [ ] **Finding 3** — Record the `userns,` test in the controls file and grade IS3's rewrite case _(layer: cli, general)_
