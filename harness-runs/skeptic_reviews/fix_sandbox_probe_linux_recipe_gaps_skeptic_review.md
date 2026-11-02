@@ -28,7 +28,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Copy every evidence directory the run leaves, not only the `run` one _(layer: general)_
+1. [x] **Finding 1** — Copy every evidence directory the run leaves, not only the `run` one _(layer: general)_
 
 ---
 

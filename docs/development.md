@@ -2573,13 +2573,14 @@ node cli/dist/cli.js doctor --remote-job
 **Copy the evidence out before leaving the container.** The container is started with `--rm` and no volume, so leaving it deletes everything in it; this step comes after the hand rows, so the HP1 sessions' logs are included. From a host terminal, while the container still runs:
 
 ```
+docker exec sbx-probe-linux find /tmp -maxdepth 1 -name 'sandbox-probe-evidence.*'
 docker cp sbx-probe-linux:/tmp/sandbox-probe-evidence.<suffix> <host dir>
 docker cp sbx-probe-linux:/home/probe/.claude/projects <host dir>
 docker cp sbx-probe-linux:/home/probe/sandbox-probe-run.log <host dir>
 docker cp sbx-probe-linux:/home/probe/sandbox-probe-refusal.log <host dir>
 ```
 
-`<suffix>` is read off the evidence directory the probe prints as its last stderr line, which the run log holds; `TMPDIR` is unset for `probe` in the container, so the directory is under `/tmp`. Copy `~/.claude/projects` only, never the whole `~/.claude`, which holds the OAuth credential. The kept streams and session logs can quote what a session read, so the copies are removed once the rows are recorded, as **A leg that does not pass leaves its evidence behind.** already gives for the evidence directory.
+The first line lists every evidence directory the run left: one per `run` or `refusal` invocation that kept anything, each also printed as that invocation's last stderr line, in the run log or the refusal log. The second line is repeated once per directory listed, `<suffix>` taken from each; `TMPDIR` is unset for `probe` in the container, so every directory is under `/tmp`. Copy `~/.claude/projects` only, never the whole `~/.claude`, which holds the OAuth credential. The kept streams and session logs can quote what a session read, so the copies are removed once the rows are recorded, as **A leg that does not pass leaves its evidence behind.** already gives for the evidence directory.
 
 **Recording a Linux run.** The stamp lines the probe prints, the `echo "exit ${PIPESTATUS[0]}"` line after every `run` and `refusal`, the VM's `kernel.apparmor_restrict_unprivileged_userns` reading from the host block and whether it was set to `0`, and the exact `docker run` line go into `docs/sandbox-verification.md` → §8 *The Linux legs (owed)*, beside each row's result. **PD19:** a fresh container's registry has no stale `pid`; if preflight refusal 4 still fires, `jq '.runs' harness-runs/autonomous_logs/registry.json` shows which record's `pid` answered.
 
