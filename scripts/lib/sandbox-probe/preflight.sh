@@ -30,6 +30,27 @@
 #      resolve on PATH.
 #   7. The agent CLI does not resolve on PATH. Sets SP_VERSION from one `<agent cli> --version`.
 #
+# JOB MODE (SP_JOB_MODE=1). The checkout measured is SP_JOB_CHECKOUT, a harness-run.yml job's own, and
+# the job's preflight is `doctor --remote-job` (docs/remote-execution.md → **The permission
+# profile.**). Checks 2, 3 and 7 run as above; 1 and 6 take a job arm; 8 is job mode's alone:
+#   1. SP_JOB_CHECKOUT has no git top (hr_repo_root); that top is the probe's own checkout (the git
+#      top of the probe's scripts directory, compared canonically), tested before the next two so the
+#      refusal names that cause whatever kind of checkout the probe sits in; it is a linked worktree
+#      (hr_main_repo is not the top itself); its .git is not a directory, or carries
+#      objects/info/alternates (a run copy); hr_run_main_set_var refuses it. Sets SP_MAIN.
+#   3. Also: <main> carries a tracked change (`git status --porcelain --untracked-files=no` prints a
+#      line), the job's own *Generate the job's permission profile* test, so teardown's
+#      `switch --discard-changes` discards only the probe's own edits.
+#   6. `doctor --remote-job` exits non-zero (the first `!! FAIL` line is named), or prints no PASS line
+#      for one of the four ids above. Its command: SANDBOX_PROBE_DOCTOR in <main>; else, when
+#      HARNESS_CLI_VERSION is set, `npx --yes autonomous-sdlc-harness@<version> doctor --cwd <main>
+#      --remote-job` from SP_TMP, as the job runs it from runner.temp; else the probe checkout's own
+#      cli/dist/cli.js with the same arguments. Sets SP_JOB_DOCTOR_OUT (its whole output) and
+#      SP_JOB_PREREQ_LINE (its sandbox-prerequisites line, verbatim).
+#   8. SP_RUNNER_CONTROLS_FILE is set and is not a readable regular file, or is a symbolic link.
+# Checks 4 and 5, and check 6's SETTINGS_PROFILE comparison, do not run: each assumes a local watcher,
+# and a job has none and turns the cleanup sweep off.
+#
 # SP_PREFLIGHT_PREREQ selects checks 2 and 6: `present` (also when empty or unset) for preflight and run,
 # `absent` for the refusal subcommand, which measures a Linux host lacking bwrap or socat. The entry
 # point assigns it before every sp_preflight call; it is never read from the caller's environment.
@@ -37,7 +58,8 @@
 # TEST-ONLY SEAMS. An unset or empty value means the default.
 #   SANDBOX_PROBE_UNAME      replaces the output of `uname -s`
 #   SANDBOX_PROBE_DOCTOR     a command line run by `bash -c` in <main>, replacing
-#                            `node <main>/cli/dist/cli.js doctor`
+#                            `node <main>/cli/dist/cli.js doctor`, and in job mode the
+#                            `doctor --remote-job` command
 #   SANDBOX_PROBE_AGENT_CLI  replaces `claude`, as HARNESS_AGENT_CLI does for the watcher
 #   SANDBOX_PROBE_BWRAP      replaces `bwrap` in check 6 under `absent` (platform.sh → sp_prereq_cmd)
 #   SANDBOX_PROBE_SOCAT      replaces `socat` likewise
@@ -49,6 +71,9 @@
 SP_SNAPSHOT=""
 SP_SNAPSHOT_FILE=""
 SP_SNAPSHOT_REFUSAL=""
+SP_JOB_DOCTOR_OUT=""
+SP_JOB_PREREQ_LINE=""
+SP__JOB_PROBE_TOP=""
 
 # sp_preflight_refuse <reason> — print the refusal; when a snapshot was taken, check it and release it.
 sp_preflight_refuse() {
@@ -62,7 +87,7 @@ sp_preflight_refuse() {
 
 sp_preflight() {
   local lib probe_scripts top main_repo placed main_c top_c uname_s head watcher out count settings
-  local doctor_out id line status want cli f1 f2 f3 rest s_dir
+  local doctor_out id line status want cli f1 f2 f3 rest s_dir tracked
 
   # --- 1. The probe's own checkout is the main checkout.
   probe_scripts="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)" || probe_scripts=""
@@ -73,29 +98,33 @@ sp_preflight() {
   fi
   # shellcheck source=../harness-run-lib.sh
   . "$lib"
-  top="$(hr_repo_root "$probe_scripts")" || top=""
-  if [ -z "$top" ]; then
-    sp_preflight_refuse "'$probe_scripts' is not inside a git repository"
-    return 2
+  if [ "$SP_JOB_MODE" = 1 ]; then
+    sp__preflight_job_main "$probe_scripts" || return 2
+  else
+    top="$(hr_repo_root "$probe_scripts")" || top=""
+    if [ -z "$top" ]; then
+      sp_preflight_refuse "'$probe_scripts' is not inside a git repository"
+      return 2
+    fi
+    main_repo="$(hr_main_repo "$top")" || main_repo=""
+    [ -n "$main_repo" ] || main_repo="$top"
+    placed="$(hr_wrapper_main_of "$probe_scripts")" || placed=""
+    main_c="$(CDPATH= cd -P -- "$main_repo" 2>/dev/null && pwd -P)" || main_c=""
+    top_c="$(CDPATH= cd -P -- "$top" 2>/dev/null && pwd -P)" || top_c=""
+    if [ -z "$placed" ] || [ "$placed" != "$main_c" ] || [ "$placed" != "$top_c" ]; then
+      sp_preflight_refuse "the probe's checkout '$top' is not the main checkout (its scripts directory places as '${placed:-nothing}', the main checkout is '$main_repo')"
+      return 2
+    fi
+    if ! hr_run_main_set_var "$main_repo"; then
+      sp_preflight_refuse "the probe's checkout '$top' is not the main checkout: $HR_RUN_REFUSAL"
+      return 2
+    fi
+    if [ -e "$HR_RUN_MAIN/.git/objects/info/alternates" ] || [ -L "$HR_RUN_MAIN/.git/objects/info/alternates" ]; then
+      sp_preflight_refuse "the probe's checkout '$top' is not the main checkout: it borrows objects through .git/objects/info/alternates, so it is a run copy; run the main checkout's own scripts/sandbox-probe.sh"
+      return 2
+    fi
+    SP_MAIN="$HR_RUN_MAIN"
   fi
-  main_repo="$(hr_main_repo "$top")" || main_repo=""
-  [ -n "$main_repo" ] || main_repo="$top"
-  placed="$(hr_wrapper_main_of "$probe_scripts")" || placed=""
-  main_c="$(CDPATH= cd -P -- "$main_repo" 2>/dev/null && pwd -P)" || main_c=""
-  top_c="$(CDPATH= cd -P -- "$top" 2>/dev/null && pwd -P)" || top_c=""
-  if [ -z "$placed" ] || [ "$placed" != "$main_c" ] || [ "$placed" != "$top_c" ]; then
-    sp_preflight_refuse "the probe's checkout '$top' is not the main checkout (its scripts directory places as '${placed:-nothing}', the main checkout is '$main_repo')"
-    return 2
-  fi
-  if ! hr_run_main_set_var "$main_repo"; then
-    sp_preflight_refuse "the probe's checkout '$top' is not the main checkout: $HR_RUN_REFUSAL"
-    return 2
-  fi
-  if [ -e "$HR_RUN_MAIN/.git/objects/info/alternates" ] || [ -L "$HR_RUN_MAIN/.git/objects/info/alternates" ]; then
-    sp_preflight_refuse "the probe's checkout '$top' is not the main checkout: it borrows objects through .git/objects/info/alternates, so it is a run copy; run the main checkout's own scripts/sandbox-probe.sh"
-    return 2
-  fi
-  SP_MAIN="$HR_RUN_MAIN"
 
   if ! sp_snapshot_take; then
     sp_preflight_refuse "$SP_SNAPSHOT_REFUSAL"
@@ -126,40 +155,56 @@ sp_preflight() {
     sp_preflight_refuse "the main checkout '$SP_MAIN' is on '${head:-a detached HEAD}', not the default branch '$SP_DEFAULT_BRANCH'"
     return 2
   fi
-
-  # --- 4. No watcher run in flight; SETTINGS_PROFILE read in the same child shell for check 6.
-  watcher="$probe_scripts/autonomous-watcher.sh"
-  if [ ! -r "$watcher" ]; then
-    sp_preflight_refuse "cannot read the watcher at '$watcher'"
-    return 2
-  fi
-  out="$(bash -c '. "$1" status >/dev/null; running_count; printf "%s\n" "$SETTINGS_PROFILE"' _ "$watcher" 2>/dev/null)" || out=""
-  count="${out%%$'\n'*}"
-  settings="${out#*$'\n'}"
-  settings="${settings%%$'\n'*}"
-  case "$count" in
-    '' | *[!0-9]*)
-      sp_preflight_refuse "the watcher's running_count gave no count (sourced '$watcher' status)"
+  if [ "$SP_JOB_MODE" = 1 ]; then
+    if ! tracked="$(git -C "$SP_MAIN" status --porcelain --untracked-files=no 2>/dev/null)"; then
+      sp_preflight_refuse "cannot read the tracked changes of '$SP_MAIN' ('git status --porcelain --untracked-files=no' failed)"
       return 2
-      ;;
-  esac
-  if [ "$count" -ne 0 ]; then
-    sp_preflight_refuse "the watcher has $count run(s) in flight; wait for them or stop them first"
-    return 2
+    fi
+    if [ -n "$tracked" ]; then
+      tracked="${tracked%%$'\n'*}"
+      sp_preflight_refuse "'$SP_MAIN' carries a tracked change, first '${tracked:3}', which the probe's teardown would discard; commit or stash it first"
+      return 2
+    fi
   fi
 
-  # --- 5. Nothing for the cleanup sweep to delete while the probe runs.
-  if ! sp_preflight_cleanup_pending "$SP_MAIN"; then
-    sp_preflight_refuse "$SP__PENDING_WHY"
-    return 2
-  fi
-  if [ -n "$SP__PENDING" ]; then
-    sp_preflight_refuse "the main checkout '$SP_MAIN' has local branch(es) whose upstream is gone, which the watcher's cleanup sweep would delete mid-run, changing .git/config: $SP__PENDING; wait for the watcher's next cleanup pass, or run 'bash $probe_scripts/cleanup-merged-worktrees.sh' from the main checkout, then retry"
-    return 2
+  if [ "$SP_JOB_MODE" != 1 ]; then
+    # --- 4. No watcher run in flight; SETTINGS_PROFILE read in the same child shell for check 6.
+    watcher="$probe_scripts/autonomous-watcher.sh"
+    if [ ! -r "$watcher" ]; then
+      sp_preflight_refuse "cannot read the watcher at '$watcher'"
+      return 2
+    fi
+    out="$(bash -c '. "$1" status >/dev/null; running_count; printf "%s\n" "$SETTINGS_PROFILE"' _ "$watcher" 2>/dev/null)" || out=""
+    count="${out%%$'\n'*}"
+    settings="${out#*$'\n'}"
+    settings="${settings%%$'\n'*}"
+    case "$count" in
+      '' | *[!0-9]*)
+        sp_preflight_refuse "the watcher's running_count gave no count (sourced '$watcher' status)"
+        return 2
+        ;;
+    esac
+    if [ "$count" -ne 0 ]; then
+      sp_preflight_refuse "the watcher has $count run(s) in flight; wait for them or stop them first"
+      return 2
+    fi
+
+    # --- 5. Nothing for the cleanup sweep to delete while the probe runs.
+    if ! sp_preflight_cleanup_pending "$SP_MAIN"; then
+      sp_preflight_refuse "$SP__PENDING_WHY"
+      return 2
+    fi
+    if [ -n "$SP__PENDING" ]; then
+      sp_preflight_refuse "the main checkout '$SP_MAIN' has local branch(es) whose upstream is gone, which the watcher's cleanup sweep would delete mid-run, changing .git/config: $SP__PENDING; wait for the watcher's next cleanup pass, or run 'bash $probe_scripts/cleanup-merged-worktrees.sh' from the main checkout, then retry"
+      return 2
+    fi
   fi
 
   # --- 6. The profile doctor grades is the live one.
-  if [ -n "${SANDBOX_PROBE_DOCTOR:-}" ]; then
+  if [ "$SP_JOB_MODE" = 1 ]; then
+    sp__preflight_job_doctor || return 2
+    doctor_out="$SP_JOB_DOCTOR_OUT"
+  elif [ -n "${SANDBOX_PROBE_DOCTOR:-}" ]; then
     doctor_out="$(cd "$SP_MAIN" && bash -c "$SANDBOX_PROBE_DOCTOR" 2>&1)"
   else
     if [ ! -f "$SP_MAIN/cli/dist/cli.js" ]; then
@@ -202,6 +247,9 @@ sp_preflight() {
       fi
       return 2
     fi
+    if [ "$SP_JOB_MODE" = 1 ] && [ "$want" = sandbox-prerequisites ]; then
+      SP_JOB_PREREQ_LINE="$line"
+    fi
   done
   if [ "${SP_PREFLIGHT_PREREQ:-present}" = absent ] \
     && command -v "$(sp_prereq_cmd bwrap)" >/dev/null 2>&1 \
@@ -209,13 +257,15 @@ sp_preflight() {
     sp_preflight_refuse "the refusal subcommand needs bwrap or socat missing from PATH, and both resolve"
     return 2
   fi
-  want="$SP_MAIN/.claude/settings.autonomous.json"
-  if [ "$settings" != "$want" ]; then
-    # MAIN_REPO in the watcher need not be spelled canonically; compare the directory canonically.
-    s_dir="$(CDPATH= cd -P -- "$(dirname -- "$settings")" 2>/dev/null && pwd -P)" || s_dir=""
-    if [ -z "$settings" ] || [ "$s_dir/$(basename -- "$settings")" != "$want" ]; then
-      sp_preflight_refuse "the watcher's SETTINGS_PROFILE is '${settings:-empty}', not '$want', the file doctor grades"
-      return 2
+  if [ "$SP_JOB_MODE" != 1 ]; then
+    want="$SP_MAIN/.claude/settings.autonomous.json"
+    if [ "$settings" != "$want" ]; then
+      # MAIN_REPO in the watcher need not be spelled canonically; compare the directory canonically.
+      s_dir="$(CDPATH= cd -P -- "$(dirname -- "$settings")" 2>/dev/null && pwd -P)" || s_dir=""
+      if [ -z "$settings" ] || [ "$s_dir/$(basename -- "$settings")" != "$want" ]; then
+        sp_preflight_refuse "the watcher's SETTINGS_PROFILE is '${settings:-empty}', not '$want', the file doctor grades"
+        return 2
+      fi
     fi
   fi
 
@@ -228,7 +278,99 @@ sp_preflight() {
   fi
   SP_VERSION="$("$cli" --version 2>/dev/null)" || SP_VERSION=""
   SP_VERSION="${SP_VERSION%%$'\n'*}"
+
+  # --- 8. Job mode: the runner controls file, when named, is a readable regular file.
+  if [ "$SP_JOB_MODE" = 1 ] && [ -n "$SP_RUNNER_CONTROLS_FILE" ]; then
+    if [ -L "$SP_RUNNER_CONTROLS_FILE" ] || [ ! -f "$SP_RUNNER_CONTROLS_FILE" ] || [ ! -r "$SP_RUNNER_CONTROLS_FILE" ]; then
+      sp_preflight_refuse "the runner controls file '$SP_RUNNER_CONTROLS_FILE' is not a readable regular file, or is a symbolic link"
+      return 2
+    fi
+  fi
   return 0
+}
+
+# sp__preflight_job_main <probe scripts> — check 1's job arm: place SP_JOB_CHECKOUT, set SP_MAIN and
+# SP__JOB_PROBE_TOP (the probe's own git top). Status 2 after sp_preflight_refuse.
+sp__preflight_job_main() {
+  local probe_scripts="$1" top top_c own_c main_repo main_c
+  if [ -z "$SP_JOB_CHECKOUT" ]; then
+    sp_preflight_refuse "job mode names no checkout"
+    return 2
+  fi
+  top="$(hr_repo_root "$SP_JOB_CHECKOUT")" || top=""
+  if [ -z "$top" ]; then
+    sp_preflight_refuse "'$SP_JOB_CHECKOUT' is not inside a git repository"
+    return 2
+  fi
+  top_c="$(CDPATH= cd -P -- "$top" 2>/dev/null && pwd -P)" || top_c=""
+  SP__JOB_PROBE_TOP="$(hr_repo_root "$probe_scripts")" || SP__JOB_PROBE_TOP=""
+  own_c="$(CDPATH= cd -P -- "$SP__JOB_PROBE_TOP" 2>/dev/null && pwd -P)" || own_c=""
+  if [ -z "$top_c" ] || [ -z "$own_c" ]; then
+    sp_preflight_refuse "cannot compare '$top' with the probe's own checkout '${SP__JOB_PROBE_TOP:-unresolved}'"
+    return 2
+  fi
+  if [ "$top_c" = "$own_c" ]; then
+    sp_preflight_refuse "'$top' is the probe's own checkout: job mode measures another checkout; the probe's own is not one"
+    return 2
+  fi
+  main_repo="$(hr_main_repo "$top")" || main_repo=""
+  main_c="$(CDPATH= cd -P -- "$main_repo" 2>/dev/null && pwd -P)" || main_c=""
+  if [ -z "$main_c" ] || [ "$main_c" != "$top_c" ]; then
+    sp_preflight_refuse "'$top' is not a main checkout: it is a linked worktree of '${main_repo:-an unresolved main checkout}'"
+    return 2
+  fi
+  if [ -L "$top_c/.git" ] || [ ! -d "$top_c/.git" ]; then
+    sp_preflight_refuse "'$top' is not a main checkout: its .git is not a directory"
+    return 2
+  fi
+  if [ -e "$top_c/.git/objects/info/alternates" ] || [ -L "$top_c/.git/objects/info/alternates" ]; then
+    sp_preflight_refuse "'$top' is not a main checkout: it borrows objects through .git/objects/info/alternates, so it is a run copy"
+    return 2
+  fi
+  if ! hr_run_main_set_var "$top_c"; then
+    sp_preflight_refuse "'$top' is not a main checkout: $HR_RUN_REFUSAL"
+    return 2
+  fi
+  SP_MAIN="$HR_RUN_MAIN"
+  return 0
+}
+
+# sp__preflight_job_doctor — check 6's job arm: run `doctor --remote-job` once, set SP_JOB_DOCTOR_OUT,
+# refuse a non-zero exit. Status 2 after sp_preflight_refuse.
+sp__preflight_job_doctor() {
+  local rc cli_js line f1 f2 rest fail=""
+  SP_JOB_DOCTOR_OUT=""
+  SP_JOB_PREREQ_LINE=""
+  if [ -n "${SANDBOX_PROBE_DOCTOR:-}" ]; then
+    SP_JOB_DOCTOR_OUT="$(cd "$SP_MAIN" && bash -c "$SANDBOX_PROBE_DOCTOR" 2>&1)"
+    rc=$?
+  elif [ -n "${HARNESS_CLI_VERSION:-}" ]; then
+    # From SP_TMP, never the checkout, as the job runs it from runner.temp.
+    SP_JOB_DOCTOR_OUT="$(cd "$SP_TMP" && npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --cwd "$SP_MAIN" --remote-job 2>&1)"
+    rc=$?
+  else
+    cli_js="$SP__JOB_PROBE_TOP/cli/dist/cli.js"
+    if [ ! -f "$cli_js" ]; then
+      sp_preflight_refuse "'$cli_js' is missing; run 'npm run build' in the probe's checkout first"
+      return 2
+    fi
+    SP_JOB_DOCTOR_OUT="$(cd "$SP_TMP" && node "$cli_js" doctor --cwd "$SP_MAIN" --remote-job 2>&1)"
+    rc=$?
+  fi
+  [ "$rc" -eq 0 ] && return 0
+  while IFS= read -r line; do
+    read -r f1 f2 rest <<<"$line"
+    if [ "$f1" = '!!' ] && [ "$f2" = FAIL ]; then
+      fail="$line"
+      break
+    fi
+  done <<<"$SP_JOB_DOCTOR_OUT"
+  if [ -n "$fail" ]; then
+    sp_preflight_refuse "doctor --remote-job fails: $fail"
+  else
+    sp_preflight_refuse "doctor --remote-job exited $rc with no FAIL line"
+  fi
+  return 2
 }
 
 # sp_preflight_cleanup_pending <main> — set SP__PENDING to the local branches of <main> that
