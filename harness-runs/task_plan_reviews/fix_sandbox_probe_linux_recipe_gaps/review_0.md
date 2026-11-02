@@ -1,0 +1,22 @@
+# Task plan review — iteration 0
+
+## Must Fix
+1. **Task 3's verification bans verdict text that its own Work bullets require** — `task_3_plan.md`
+   The `**Verification:**` bullet reads: *"No date later than 2026-11-02 and no `pass`, `fail` or `not run` verdict appears in the added text. That includes the verdicts AP5, RG2 and RG3 already recorded, which are cited as they stand."* Two `**Work:**` bullets in the same file require that text in the added cells:
+   - the PD21 bullet: *"Not yet confirmed by a run: S1 and S2 (Linux) keep their `not run` until the next container run."*
+   - the PD23 bullet: *"A rename onto a present path mounted read-only over itself ... RG2 and RG3 (§8) graded `pass` on it."*
+   An implementer who follows the Work bullets fails the verification, and one who satisfies the verification has to drop evidence the Work bullets ask for. The goal guards a real risk: the story index's first `Top risks:` entry, an invented result. But the check as written cannot tell a recorded verdict that is quoted from a new one. The recorded verdicts the cells cite do exist: `docs/sandbox-verification.md` §8 rows RG2 (Linux) and RG3 (Linux) read **pass** with `Device or resource busy`, and rows S1 (Linux) and S2 (Linux) read `not run`.
+   **Fix:** In `task_3_plan.md`, rewrite that Verification bullet so it bans only **new** results. No added text may state a verdict, observation or date that is not already recorded in the row it cites. Each verdict quoted in the added text must name its source row (§8 RG2 (Linux), RG3 (Linux), S1 (Linux), S2 (Linux), §5 AP5), and must match what that row records. Alternatively, reword the PD21 and PD23 Work bullets so they cite those rows without quoting a verdict. Either way, the Work bullets and the Verification bullet must agree.
+
+2. **Task 3 names the branch in one cell, but its verification greps for the branch name in all four** — `task_3_plan.md`
+   The Goal says each row *"reads as fixed by `fix_sandbox_probe_linux_recipe_gaps`"*. The Verification bullet says *"`git grep -n 'fix_sandbox_probe_linux_recipe_gaps' -- docs/sandbox-verification.md` reaches the four Follow-up cells only"*. The Work bullets do not match:
+   - only the PD20 bullet names the branch (*"Fixed by `fix_sandbox_probe_linux_recipe_gaps`."*);
+   - the PD21 bullet says *"Fixed by this branch."*;
+   - the PD22 and PD23 bullets do not say what fixed them at all.
+   Read as written, three of the four cells miss the grep. *"This branch"* also stops meaning anything in a document of record once the branch merges. The neighbouring rows name branches literally (*"since `feat_sandbox_probe_job_mode`"*).
+   **Fix:** In `task_3_plan.md`, make each of the four Work bullets (PD20, PD21, PD22, PD23) open its cell with *"Fixed by `fix_sandbox_probe_linux_recipe_gaps`"*. Replace *"Fixed by this branch."* in the PD21 bullet. In the PD23 bullet, put it before the kept clause about `feat_sandbox_probe_job_mode`.
+
+## Should Fix
+1. **Task 2's `PIPESTATUS` grep check misses the prose its own Work bullets add** — `task_2_plan.md`. The Verification bullet says `git grep -n 'PIPESTATUS' -- docs/development.md` *"reaches only the run block, the refusal block and **Recording a Linux run.**"*. But the PD22 item 3 Work bullet adds prose beside the "As root in the container:" block saying *"The recipe's exit-status lines read bash's `PIPESTATUS`"*. That is a fourth site. Either add the root block's prose to the list in the Verification bullet, or word that clause without the token.
+2. **Task 1's `git diff --name-only` check cannot see the new fixture** — `task_1_plan.md`. The Verification bullet says `git diff --name-only` *"names only the two targets"*. The fixture `linux-busy-inter-device.jsonl` is new and untracked, so `git diff --name-only` never lists it. Use the union of `git diff --name-only HEAD` and `git ls-files --others --exclude-standard`, as the test-run rule's changed-path set does.
+3. **Task 2's copy-out step does not say what happens when every leg passes** — `task_2_plan.md`. In `docs/development.md`, **A leg that does not pass leaves its evidence behind.** says *"A passing leg keeps nothing"*, so on an all-pass run the first `docker cp` line has no `sandbox-probe-evidence.<suffix>` directory to copy. The prose with the block should say that the directory exists only when the run log's last stderr line names it, and that the line is skipped otherwise.
