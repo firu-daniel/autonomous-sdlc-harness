@@ -2376,12 +2376,16 @@ bash scripts/sandbox-probe.sh refusal
 
 **A leg that does not pass leaves its evidence behind.** When a leg prints anything but `pass`, the probe keeps that leg's session streams, prompts, stderr files and debug logs, and T2's gate log, and moves them, before teardown removes its temp area, into a new `sandbox-probe-evidence.<suffix>` directory under `TMPDIR`, outside the clone and the main checkout; it prints that directory as its last stderr line. A passing leg keeps nothing. The kept streams can quote what a session read, so the person who ran the probe removes the directory once the rows are recorded.
 
-**A Linux run, in a local container.** A Linux run is taken in a throwaway Docker container on this machine's colima VM, as a non-root user. The container is started with three security options relaxed, because Docker's default seccomp profile refuses the namespace calls bubblewrap makes, and its masked `/proc` stops bubblewrap mounting a fresh one (the task prompt's verified facts S and SR, `harness-runs/task_prompts/feat_sandbox_probe_linux_legs_task_prompt.md`). The probe sets neither `allowNestedUserNamespaces` nor `enableWeakerNestedSandbox` in any profile it measures. If no container shape listed here lets the sandbox start, the record says so, and states what `enableWeakerNestedSandbox` would stop holding: the sandbox would bind-mount the container's own `/proc` instead of mounting a fresh one. `node:22-bookworm` meets the CLI's `engines` floor of `>=20.11.0` and carries `git`, `curl`, `python3` and `perl`, whose `shasum` the probe's guard needs. On the host:
+**A Linux run, in a local container.** A Linux run is taken in a throwaway Docker container on this machine's colima VM, as a non-root user. The container is started with three security options relaxed, because Docker's default seccomp profile refuses the namespace calls bubblewrap makes, and its masked `/proc` stops bubblewrap mounting a fresh one (the task prompt's verified facts S and SR, `harness-runs/task_prompts/feat_sandbox_probe_linux_legs_task_prompt.md`). The probe sets neither `allowNestedUserNamespaces` nor `enableWeakerNestedSandbox` in any profile it measures. If no container shape listed here lets the sandbox start, the record says so, and states what `enableWeakerNestedSandbox` would stop holding: the sandbox would bind-mount the container's own `/proc` instead of mounting a fresh one. `node:22-bookworm` meets the CLI's `engines` floor of `>=20.11.0` and carries `git`, `curl`, `python3` and `perl`, whose `shasum` the probe's guard needs. On colima's Ubuntu 24.04 VM, `kernel.apparmor_restrict_unprivileged_userns` reads `1`; in that state `bwrap` run as `probe` fails with `setting up uid map: Permission denied`, and `--security-opt apparmor=unconfined` does not lift it (`docs/sandbox-verification.md` §5 PD20). On the host:
 
 ```
 colima start
+colima ssh -- sysctl kernel.apparmor_restrict_unprivileged_userns
+colima ssh -- sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 docker run --rm -it --name sbx-probe-linux --security-opt seccomp=unconfined --security-opt apparmor=unconfined --security-opt systempaths=unconfined node:22-bookworm bash
 ```
+
+The second line reads the VM's sysctl; the third, which sets it to `0`, is taken only when the read prints `1`. Setting it is a **departure the record names**: the value read, and whether it was set to `0`, go into the run's record (**Recording a Linux run.** below). A VM restart undoes it, so after any `colima start` the sysctl is read again before the next container. The restricted case, a `bwrap` AppArmor profile installed with the sysctl left at `1`, belongs to the GitHub-hosted runner, `docs/sandbox-verification.md` §9 IS1–IS4 (#194), and not to this container.
 
 As root in the container:
 
@@ -2389,9 +2393,11 @@ As root in the container:
 apt-get update
 apt-get install -y bubblewrap socat jq
 npm install -g @anthropic-ai/claude-code
-useradd -m probe
+useradd -m -s /bin/bash probe
 su - probe
 ```
+
+`-s /bin/bash` is there because Debian gives a new user `/bin/sh`, and the recipe's exit-status lines read bash's `PIPESTATUS`, which `/bin/sh` does not have (`docs/sandbox-verification.md` §5 PD22).
 
 As `probe`, clone the repository from its GitHub origin onto `dev`: refusal 5 lists the remote, and the `wrappers` legs push the probe branch, so the checkout must reach its origin. Sign in to Claude Code with `claude` before the `plugin` lines, and give git a commit identity, since the container has none:
 
@@ -2414,8 +2420,28 @@ node cli/dist/cli.js doctor
 `git status --porcelain` must print nothing; if it prints a path, `init` changed a tracked file and the run stops there. **What the recipe places in the container, and how it is removed** — the maintainer's decision, made when they run the gate:
 
 - **The Claude Code credential** is the OAuth credential `claude` writes under `/home/probe/.claude/` when the maintainer signs in. `/logout` before leaving invalidates it, and the container's removal (`--rm`, no volume mounted) deletes the file.
-- **The git credential** is a fine-grained GitHub token with contents read and write on this one repository, given at git's first prompt and held only in memory by the `credential.helper 'cache --timeout=7200'` line above. It is revoked at GitHub afterwards.
+- **The git credential** is a fine-grained GitHub token with contents read and write on this one repository, given at the prompt the run block's dry-run push raises and held only in memory by the `credential.helper 'cache --timeout=7200'` line above. It is revoked at GitHub afterwards.
+- **The `~/.ssh/config` placeholder** is one comment line, with no key and no host entry, deleted with the container.
 - Nothing from the host's `~/.ssh`, `~/.claude` or keychain is mounted.
+
+As `probe`, from the checkout, once `git status --porcelain` has printed nothing, create the `~/.ssh/config` placeholder, as the runner workflow's `ssh-config` step does (`scripts/sandbox-probe-runner.yml`):
+
+```
+mkdir -p ~/.ssh
+chmod 700 ~/.ssh
+printf '%s\n' '# sandbox-probe placeholder: S1 and S2 read this file to tell a refusal from an absence.' > ~/.ssh/config
+chmod 600 ~/.ssh/config
+```
+
+It holds no key and no host entry; without it, S1 and S2 print `not run` (`docs/sandbox-verification.md` §5 PD21). Then run the probe, as `probe`, from the checkout:
+
+```
+git push --dry-run origin HEAD:refs/heads/sbx-cred-check
+bash scripts/sandbox-probe.sh run 2>&1 | tee ~/sandbox-probe-run.log
+echo "exit ${PIPESTATUS[0]}"
+```
+
+The first line caches the git credential before the first probe clone: cutting a probe clone pushes its branch, for `run` and for `run --leg headless-parity` alike (`docs/sandbox-verification.md` §5 PD22). The dry run creates nothing on the remote, and the credential stays cached for the `credential.helper 'cache --timeout=7200'` window; if more than two hours pass before a later `run --leg headless-parity` or the absent-path check, run the line again first. Once the output is piped to a log, `$?` is `tee`'s status, so the line directly after `run` reads `${PIPESTATUS[0]}`.
 
 **What a Linux run expects, and the macOS result it compares against.** No row below has a Linux result yet; every Linux cell is an expectation. Each baseline is the latest macOS result recorded in `docs/sandbox-verification.md`, with its date and run (§0 numbers the probe's runs). Wherever a macOS refusal reads `Operation not permitted`, the Linux one is expected to read `Read-only file system`, which the judge files under the sandbox layer on Linux.
 
@@ -2455,7 +2481,7 @@ cd autonomous-sdlc-harness
 git checkout -B dev
 ```
 
-The rest of the recipe follows unchanged. The report's `main head` stamp is then the branch's head, while the probe clone is still cut from `origin/dev`, as `create-worktree.sh` always does; the row's stamp records both.
+Its `run --leg headless-parity` cuts and pushes a probe clone, so the recipe's run block's credential line (`git push --dry-run origin HEAD:refs/heads/sbx-cred-check`) is run before it, and the recipe's placeholder and `useradd` lines apply unchanged. The rest of the recipe follows unchanged. The report's `main head` stamp is then the branch's head, while the probe clone is still cut from `origin/dev`, as `create-worktree.sh` always does; the row's stamp records both.
 
 First make the sibling clone AP6 reads, before the probe starts, so the per-run profile is rendered with it present. As `probe`, from the checkout:
 
@@ -2510,8 +2536,8 @@ apt-get remove -y bubblewrap
 As `probe`, from the checkout:
 
 ```
-bash scripts/sandbox-probe.sh refusal
-echo "exit $?"
+bash scripts/sandbox-probe.sh refusal 2>&1 | tee -a ~/sandbox-probe-refusal.log
+echo "exit ${PIPESTATUS[0]}"
 ```
 
 As root, then the same two lines as `probe` again:
@@ -2544,7 +2570,18 @@ node cli/dist/cli.js doctor --remote-job
 - DP6: the `probe` user against root;
 - DP7: a taken `sandbox.optOut` in the container checkout's `harness.config.json`, removed again afterwards.
 
-**Recording a Linux run.** The stamp lines the probe prints, the `echo "exit $?"` line after every `run` and `refusal`, and the exact `docker run` line go into `docs/sandbox-verification.md` → §8 *The Linux legs (owed)*, beside each row's result. **PD19:** a fresh container's registry has no stale `pid`; if preflight refusal 4 still fires, `jq '.runs' harness-runs/autonomous_logs/registry.json` shows which record's `pid` answered.
+**Copy the evidence out before leaving the container.** The container is started with `--rm` and no volume, so leaving it deletes everything in it; this step comes after the hand rows, so the HP1 sessions' logs are included. From a host terminal, while the container still runs:
+
+```
+docker cp sbx-probe-linux:/tmp/sandbox-probe-evidence.<suffix> <host dir>
+docker cp sbx-probe-linux:/home/probe/.claude/projects <host dir>
+docker cp sbx-probe-linux:/home/probe/sandbox-probe-run.log <host dir>
+docker cp sbx-probe-linux:/home/probe/sandbox-probe-refusal.log <host dir>
+```
+
+`<suffix>` is read off the evidence directory the probe prints as its last stderr line, which the run log holds; `TMPDIR` is unset for `probe` in the container, so the directory is under `/tmp`. Copy `~/.claude/projects` only, never the whole `~/.claude`, which holds the OAuth credential. The kept streams and session logs can quote what a session read, so the copies are removed once the rows are recorded, as **A leg that does not pass leaves its evidence behind.** already gives for the evidence directory.
+
+**Recording a Linux run.** The stamp lines the probe prints, the `echo "exit ${PIPESTATUS[0]}"` line after every `run` and `refusal`, the VM's `kernel.apparmor_restrict_unprivileged_userns` reading from the host block and whether it was set to `0`, and the exact `docker run` line go into `docs/sandbox-verification.md` → §8 *The Linux legs (owed)*, beside each row's result. **PD19:** a fresh container's registry has no stale `pid`; if preflight refusal 4 still fires, `jq '.runs' harness-runs/autonomous_logs/registry.json` shows which record's `pid` answered.
 
 **Job mode, on a local fresh clone (CS6).** CS6 is taken locally, on macOS too, from a fresh `git clone` made outside the sibling glob and adopted without `--force`, so `git status --porcelain` stays empty. This departs from CS6's own `init --force`, which rewrites tracked files that job mode's preflight refuses. The clone must sit on the configured `defaultBranch`, because job-mode preflight check 3 refuses any other branch, and a bare `git clone` lands on the remote's default branch instead: in this repository `harness.config.json` → `defaultBranch` is `dev` while GitHub's default is `main`, which carries no `scripts/` (`scripts/publish-main.sh`). So the clone line below names `--branch dev`; in another adopting repository, substitute its own `defaultBranch`. `<job>` is a directory outside the sibling glob and `<origin url>` this repository's origin. The `init` line runs the clone's own build. `git -C <job> status --porcelain` must print nothing; if it prints a path, `init` changed a tracked file and the run stops there. The probe runs from the repository root of the main checkout, and the `echo` line reads its exit status:
 
