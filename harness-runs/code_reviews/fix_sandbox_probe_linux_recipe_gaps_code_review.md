@@ -40,7 +40,7 @@ One finding remains.
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Replace the judge test header's restated PD23 evidence decision with a pointer to the PD23 row, and rewrap the over-long line _(layer: cli)_
+1. [x] **Finding 1** — Replace the judge test header's restated PD23 evidence decision with a pointer to the PD23 row, and rewrap the over-long line _(layer: cli)_
 
 ---
 

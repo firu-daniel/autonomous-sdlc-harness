@@ -15,15 +15,13 @@
  * `Read-only file system` is a sandbox refusal, and so, from PD23 (docs/sandbox-verification.md §5),
  * are `Permission denied` and `Device or resource busy` — the latter also matching PD23's third
  * recorded shape, `inter-device move failed: … unable to remove target: Device or resource busy`,
- * which has its own fixture. Each of the three shapes was checked against the evidence and kept:
- * AP5 (2026-10-31) still reads the non-trio placeholders, and present read-only binds still refuse
- * a rename; no shape the current code can no longer produce is held here. On Linux, an error result
+ * which has its own fixture; that row records why each shape is kept. On Linux, an error result
  * carrying no refusal string, judged against an expected `sandbox` or `network`, is `not run` (layer
- * `unrecognised`), never `fail`. The `unrecognised` cases use `Input/output error`, which no layer-table arm matches; they
- * used `Device or resource busy` until PD23 made it a refusal. Each Linux case has a twin with no
- * platform holding the macOS verdict. No case launches
- * `claude`, loads a model or reaches the network: the subcommand reads a fixture file and prints one
- * result line, and every assertion compares that printed line verbatim.
+ * `unrecognised`), never `fail`. The `unrecognised` cases use `Input/output error`, which no
+ * layer-table arm matches; they used `Device or resource busy` until PD23 made it a refusal. Each
+ * Linux case has a twin with no platform holding the macOS verdict. No case launches `claude`,
+ * loads a model or reaches the network: the subcommand reads a fixture file and prints one result
+ * line, and every assertion compares that printed line verbatim.
  *
  * Left out deliberately: whether a real sandboxed session produces these shapes at all. Only a
  * hand-run `sandbox-probe.sh run` shows that; the fixtures are hand-written recordings of it.
