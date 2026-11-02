@@ -1,7 +1,7 @@
 /**
  * The sandbox probe's job-mode legs: CS6's grade (`scripts/lib/sandbox-probe/legs-job.sh` →
  * `sp__cs6_grade`), the carried-over legs' job arms (`core.sh` → `sp_job_skip_clone_rows`,
- * `legs-protection.sh` → `sp__wp_w8`, `job.sh` → `sp_job_git_note`) and L1 in job mode
+ * `legs-protection.sh` → `sp__wp_w8` and W6's set in `sp_protected_set`, `job.sh` → `sp_job_git_note`) and L1 in job mode
  * (`legs-planted-files.sh` → `sp__pf_l1_grade`, `sp__pf_l1_restore`), run over the recorded streams in
  * `fixtures/sandbox-probe/job-*.jsonl` and over repositories each case builds.
  *
@@ -513,5 +513,57 @@ test('L1 in job mode', async (t) => {
     const output = `${run.stdout}${run.stderr}`;
     assert.ok(output.split('\n').includes(DASH_LINE), `push-branch.sh answered with the dash refusal:\n${output}`);
     assert.doesNotMatch(await refs(origin), DASH_LISTED);
+  });
+});
+
+/**
+ * W6 over a base profile carrying a sibling-glob `Edit` rule: in job mode the rule cannot name the
+ * checkout, because a job's checkout is no sibling and a job cuts no copy, so it is listed not
+ * applicable and W6 grades the rest; on the clone layout the same unmatched rule stays unprobed and
+ * keeps W6 `not run`. Every call is judged `pass` by a stub, so only the set reading is under test.
+ */
+test('W6 in job mode: a sibling-glob Edit rule is not applicable, the rest graded', async (t) => {
+  async function w6(t, jobMode) {
+    const dir = await caseDir(t);
+    const checkout = join(dir, 'job');
+    await mkdir(join(checkout, 'scripts'), { recursive: true });
+    const own = `Edit(/${checkout}/scripts/**)`;
+    const sibling = `Edit(/${dir}/job-*/.mcp.json)`;
+    const profile = join(dir, 'base.json');
+    await writeFile(
+      profile,
+      `${JSON.stringify({ permissions: { deny: [own, sibling] }, sandbox: { filesystem: { denyWrite: [] } } })}\n`,
+    );
+    const run = await sourced(
+      dir,
+      'sp_judge_tool() { SP_VERDICT=pass; SP_LAYER=permission; SP_EVIDENCE=denied; }; ' +
+        'sp__wp_plugin_root() { return 1; }; ' +
+        'sp_protected_set || { echo "set: $SP__WP_WHY"; exit 1; }; sp__wp_w6 none; ' +
+        'printf \'%s|%s|%s|%s\' "$SP__WP_RV" "$SP__WP_RE" "$SP__W6_NA" "$SP__W6_SKIPPED"',
+      [],
+      { SP_JOB_MODE: jobMode, SP_CLONE: checkout, SP_MAIN: checkout, SP_RUN_PROFILE: profile },
+    );
+    assert.equal(run.status, 0, `${run.stdout}${run.stderr}`);
+    const [verdict, evidence, na, skipped] = run.stdout.split('|');
+    return { verdict, evidence, na, skipped, sibling, checkout };
+  }
+
+  await t.test('job mode: pass, the sibling-glob rule named not applicable', async (t) => {
+    const r = await w6(t, '1');
+    assert.equal(r.verdict, 'pass');
+    assert.equal(r.na, r.sibling);
+    assert.equal(r.skipped, '');
+    assert.equal(
+      r.evidence,
+      `1 of 1 call(s) refused with the denied-directory message, the profile's layer; ` +
+        `not applicable in job mode, sibling-glob rules the checkout is not under: ${r.sibling}`,
+    );
+  });
+
+  await t.test('clone layout: the same unmatched rule is unprobed and W6 stays not run', async (t) => {
+    const r = await w6(t, '0');
+    assert.equal(r.verdict, 'not run');
+    assert.equal(r.na, '');
+    assert.equal(r.skipped, `${r.sibling} does not match the clone ${r.checkout}`);
   });
 });

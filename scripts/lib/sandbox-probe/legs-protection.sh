@@ -58,8 +58,10 @@
 # JOB MODE (SP_JOB_MODE=1). SP_CLONE and SP_MAIN are the job's checkout and SP_RUN_PROFILE its base
 # profile. The leg takes its job rows W6 and W8 only: one session carries W6's Write and Edit calls and a
 # Write control, and issues no dd, rename or CS7 call. CS1, CS2 and CS7 are printed `not run` by
-# sp_job_skip_clone_rows. W8 grades this leg's log alone: W7's half is not a job row, because the gates
-# leg does not run in job mode.
+# sp_job_skip_clone_rows. W6 lists a sibling-glob Edit rule that does not match the checkout as not
+# applicable (SP__W6_NA) rather than unprobed: a job's checkout is no sibling and a job cuts no copy, so
+# the rule guards nothing there, and W6 grades the rules that name the checkout or lie outside it. W8
+# grades this leg's log alone: W7's half is not a job row, because the gates leg does not run in job mode.
 #
 # SOURCED, NEVER EXECUTED. It sets no shell option: the entry point owns `set -u`. Bash 3.2 floor.
 
@@ -90,6 +92,8 @@ SP__W6R_DIR=()
 SP__WP_WHY=""
 SP__WP_UNMATCHED=""
 SP__W6_SKIPPED=""
+# Job mode only: the sibling-glob Edit rules that cannot name the job's checkout, listed, never graded.
+SP__W6_NA=""
 SP__WP_N_CLONE=0
 SP__WP_N_OUT=0
 SP__WP_CLONE_LIST=""
@@ -283,12 +287,12 @@ sp__wp_plugin_root() {
 # sp_protected_set — read the dd / rename set and the Edit / Write set off SP_RUN_PROFILE into the
 # SP__WP_* and SP__W6_* arrays. Status 1 with SP__WP_WHY when the profile cannot be read.
 sp_protected_set() {
-  local entries rules entry p rc main_git main_c rule i n
+  local entries rules entry p rc xrc main_git main_c rule i n
   SP__WP_T=() SP__WP_ROW=() SP__WP_NEW=() SP__WP_INO=() SP__WP_SUM=() SP__WP_SKIP=() SP__WP_LANDED=()
   SP__WP_STAGE=()
   SP__W6_P=() SP__W6_TOOL=() SP__W6_NEW=() SP__W6_SUM=() SP__W6_LANDED=()
   SP__W6R_P=() SP__W6R_PLAIN=() SP__W6R_DIR=()
-  SP__WP_WHY="" SP__WP_UNMATCHED="" SP__W6_SKIPPED="" SP__WP_CLONE_LIST="" SP__WP_OUT_LIST=""
+  SP__WP_WHY="" SP__WP_UNMATCHED="" SP__W6_SKIPPED="" SP__W6_NA="" SP__WP_CLONE_LIST="" SP__WP_OUT_LIST=""
   SP__WP_N_CLONE=0
   SP__WP_N_OUT=0
   if [ -z "${SP_RUN_PROFILE:-}" ] || [ ! -r "$SP_RUN_PROFILE" ]; then
@@ -379,8 +383,17 @@ EOF
       */\*\*) p="${p%/\*\*}"; rc=dir ;;
       *) rc=plain ;;
     esac
-    if ! p="$(sp__wp_expand "$p")"; then
-      SP__W6_SKIPPED="${SP__W6_SKIPPED:+$SP__W6_SKIPPED; }$rule does not match the clone $SP_CLONE"
+    p="$(sp__wp_expand "$p")"
+    xrc=$?
+    if [ "$xrc" -ne 0 ]; then
+      # Job mode: a one-segment glob that does not match the checkout is a sibling-glob rule, written
+      # for run copies beside a local main checkout. A job's checkout is no sibling and a job cuts no
+      # copy, so the rule guards nothing there: it is not applicable, not unprobed.
+      if [ "$xrc" -eq 1 ] && [ "$SP_JOB_MODE" = 1 ]; then
+        SP__W6_NA="${SP__W6_NA:+$SP__W6_NA; }$rule"
+      else
+        SP__W6_SKIPPED="${SP__W6_SKIPPED:+$SP__W6_SKIPPED; }$rule does not match the clone $SP_CLONE"
+      fi
       continue
     fi
     sp__wp_w6_note "$p" "$rc"
@@ -707,6 +720,9 @@ sp__wp_w6() {
   if [ -n "$SP__W6_SKIPPED" ]; then
     [ "$SP__WP_RV" = fail ] || SP__WP_RV="not run"
     SP__WP_RE="$SP__WP_RE; not probed: $SP__W6_SKIPPED"
+  fi
+  if [ -n "$SP__W6_NA" ]; then
+    SP__WP_RE="$SP__WP_RE; not applicable in job mode, sibling-glob rules the checkout is not under: $SP__W6_NA"
   fi
   if [ -n "$runtime" ] && [ "$SP__WP_RV" != "not run" ]; then
     SP__WP_RE="$SP__WP_RE; refused by the runtime's .git guard (permission layer, don't ask mode), not graded against the profile: $runtime"
