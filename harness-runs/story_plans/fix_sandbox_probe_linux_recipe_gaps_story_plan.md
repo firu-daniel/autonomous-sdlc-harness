@@ -40,7 +40,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/fix_sandbox
 
 1. [x] **Task 1** — Pin PD23's inter-device refusal shape with a judge fixture and its no-platform twin _(layer: cli)_ _(points: 10)_
 2. [x] **Task 2** — Bring Gate 15's container recipe up to date for PD20, PD21 and PD22's four fixes _(layer: general)_ _(points: 20)_
-3. [ ] **Task 3** — Record PD20–PD23 as fixed by this branch in `docs/sandbox-verification.md` §5, with confirmation owed to the next container run _(layer: general)_ _(points: 10)_
+3. [x] **Task 3** — Record PD20–PD23 as fixed by this branch in `docs/sandbox-verification.md` §5, with confirmation owed to the next container run _(layer: general)_ _(points: 10)_
 
 ## Scope register
 
