@@ -134,8 +134,12 @@ sp__line_with() {
 }
 
 # The layer table's Linux `sandbox` strings, the only copy: a caller outside this file reads them through
-# sp__linux_refusal_line, or names them through sp__linux_refusal_names.
-SP__LINUX_SANDBOX_STRINGS=("Read-only file system" "Permission denied" "Device or resource busy")
+# sp__linux_refusal_line, or names them through sp__linux_refusal_names. The fourth member is git's whole
+# lock line, never a bare `File exists`, which any mkdir or ln collision on any Linux row would print
+# (§5 PD28); CL5 is the only row whose in-session command writes .git/config, and the push wrappers'
+# verdicts are graded by ls-remote, so the member moves no other row's verdict.
+SP__LINUX_SANDBOX_STRINGS=("Read-only file system" "Permission denied" "Device or resource busy"
+  "could not lock config file .git/config: File exists")
 
 # sp__linux_refusal_line <text> [<string>...] — the first line carrying one of SP__LINUX_SANDBOX_STRINGS,
 # or of the named subset; status 1 when none does, status 2 and nothing printed when a named string is
