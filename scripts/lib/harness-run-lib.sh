@@ -22,7 +22,9 @@
 # anchors (main checkout, work root, worktree directory, repo slug,
 # state-dir paths) the scripts would otherwise each re-derive slightly
 # differently. It also implements the run registry's reads and writes for the
-# scripts that share that registry, and states the remote state bundle's format
+# scripts that share that registry — its readers `hr_registry_get`,
+# `hr_registry_branches`, `hr_registry_live_count`, `hr_registry_peek` and
+# `hr_registry_foreign_copy_var` — and states the remote state bundle's format
 # with the one writer and restorer every remote-execution consumer shares, and
 # the GitHub route a job-side notification names beside its local command.
 #
@@ -3339,6 +3341,54 @@ hr_registry_peek() {
     .runs[$b] | if type == "object" then (if .[$k] == null then empty else .[$k] end) else error("absent") end
   ' "$file" 2>/dev/null) || return 1
   [ -z "$out" ] || printf '%s\n' "$out"
+}
+
+# hr_registry_foreign_copy_var <file> <main> — whether a live run of the
+# registry at <file> names a working copy other than the main checkout <main>:
+# what `launch-sandboxed-gates.sh` check 6 tells local mode from job mode by.
+# 0 with `HR_REGISTRY_FOREIGN` empty when none does, an absent <file> included;
+# 1 with `HR_REGISTRY_FOREIGN` `'<branch>' in '<worktree>'` for the first that
+# does; 2 when <file> is present but not a readable regular file holding one
+# JSON object whose `.runs` is an object of objects, or `jq` fails, or <main>
+# has no canonical form. Like `hr_registry_peek` it never creates the file.
+#
+# LIVE IS NOT `hr_registry_live_count`'S SLOT RULE. This is a trust decision,
+# so it does not hang on a pid answering `kill -0`: a record is live when its
+# `status` is `running`, `parked`, `park_loop` or `paused`, whatever its `pid`
+# and its `execution` — a parked or paused record naming a run copy is as much
+# evidence of local mode as a running one. A live record whose `worktree` is
+# empty or has no canonical form counts as foreign: fail-closed.
+hr_registry_foreign_copy_var() {
+  local file="${1-}" main_c b wt wt_c lines line tab=$'\t'
+  HR_REGISTRY_FOREIGN=""
+  [ -n "$file" ] || return 2
+  main_c=$(hr_canonical_path_nogit "${2-}") || return 2
+  [ -e "$file" ] || [ -L "$file" ] || return 0
+  [ -f "$file" ] && [ -r "$file" ] && hr_json_single_object "$file" || return 2
+  lines=$(jq -r '
+    .runs | if type == "object" then . else error("runs") end
+    | to_entries[]
+    | (if (.value | type) == "object" then .value else error("record") end) as $r
+    | (($r.status // "") | tostring) as $s
+    | select($s == "running" or $s == "parked" or $s == "park_loop" or $s == "paused")
+    | [.key, (($r.worktree // "") | tostring)] | @tsv
+  ' "$file" 2>/dev/null) || return 2
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    hr_tsv_unescape_var "${line%%"$tab"*}"
+    b=$HR_CFG_VALUE
+    hr_tsv_unescape_var "${line#*"$tab"}"
+    wt=$HR_CFG_VALUE
+    wt_c=""
+    [ -z "$wt" ] || wt_c=$(hr_canonical_path_nogit "$wt") || wt_c=""
+    if [ -z "$wt_c" ] || [ "$wt_c" != "$main_c" ]; then
+      HR_REGISTRY_FOREIGN="'$b' in '$wt'"
+      return 1
+    fi
+  done <<EOF
+$lines
+EOF
+  return 0
 }
 
 # hr_remote_record_init <file> <branch> <worktree> <log_path> <engine>

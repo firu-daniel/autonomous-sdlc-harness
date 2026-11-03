@@ -64,10 +64,13 @@
 #   5. the base profile, `<main>/.claude/settings.autonomous.json` (the path
 #      `autonomous-watcher.sh`'s SETTINGS_PROFILE defaults to): one JSON object
 #      (`hr_json_single_object`, as in step 8), else a refusal; `.sandbox.enabled` `false` is `in-session`;
-#   6. `hr_wrapper_target_check_var <main> <target>`;
+#   6. `hr_wrapper_target_check_var <main> <target>`, and, when the target is
+#      the main checkout, `hr_registry_foreign_copy_var` over the main
+#      checkout's run registry: a live record naming another working copy is a
+#      refusal (local mode); the main checkout is the target only in job mode;
 #   7. `hr_wrapper_branch_var`, refusing a failure or a branch starting `-`;
-#   8. the session's own profile: the base when the target is the main checkout
-#      (job mode), else the per-run copy whose absolute path the watcher
+#   8. the session's own profile: the base when the target is the main checkout,
+#      which check 6 has established is job mode, else the per-run copy whose absolute path the watcher
 #      recorded in the branch's run-registry record (`run_profile`), which must
 #      be a regular, non-link, readable file holding one JSON object;
 #   9. the lane: `scriptsDir` from the main checkout, `stateDir` from the
@@ -134,7 +137,8 @@
 #   2  refusal — one stderr line `launch-sandboxed-gates.sh: <reason>`, nothing
 #      on stdout: bad arguments, a label outside HR_TEST_RUN_LABEL_PATTERN, an unplaceable
 #      main checkout, an unparsable base or per-run profile, a refused target,
-#      an unreadable branch, a lane outside <target>, an unreadable heartbeat,
+#      the main checkout as the target outside job mode, an unreadable run
+#      registry, an unreadable branch, a lane outside <target>, an unreadable heartbeat,
 #      `bwrap` not on `PATH`, `bwrap` unable to start a sandbox, a protected
 #      path whose parent is absent, or a run that did not start
 #   3  `pending` — a run of <label> is live, or this call's run claimed
@@ -200,6 +204,16 @@ enabled="$(jq -r 'if .sandbox.enabled == false then "off" else "on" end' "$base"
 target="$( CDPATH= cd -P -- "$target_arg" 2>/dev/null && pwd -P )" ||
   refuse "the target '$target_arg' is not a directory"
 hr_wrapper_target_check_var "$main" "$target" || refuse "$HR_TARGET_REFUSAL"
+if [ "$HR_TARGET_KIND" = main ]; then
+  registry="$(hr_state_path "$main" autonomous_logs/registry.json)" ||
+    refuse "cannot resolve the run registry of '$main' to tell job mode from local mode"
+  hr_registry_foreign_copy_var "$registry" "$main"
+  case $? in
+    0) ;;
+    1) refuse "the target '$target' is the main checkout, accepted only in job mode, and the run registry records the live run $HR_REGISTRY_FOREIGN" ;;
+    *) refuse "cannot read the run registry '$registry' to tell job mode from local mode" ;;
+  esac
+fi
 
 # 7.
 hr_wrapper_branch_var "$main" "$HR_TARGET_GITDIR" ||

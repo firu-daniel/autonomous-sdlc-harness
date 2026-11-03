@@ -511,6 +511,49 @@ test('(k) a registered clone takes its protected paths from the recorded per-run
   assertRefusal(refused, `no per-run profile for '${CLONE_BRANCH}' at ${profileFile}`);
 });
 
+// ---------------------------------------------------------------------------------------------
+// The main checkout as the target: job mode only, told from the main checkout's run registry.
+// ---------------------------------------------------------------------------------------------
+
+/** Write the main checkout's run registry as `runs`, or as the raw string `runs`. */
+async function writeRegistry(f, runs) {
+  const dir = join(f.dir, STATE_DIR, 'autonomous_logs');
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, 'registry.json'), typeof runs === 'string' ? runs : `${JSON.stringify({ runs })}\n`);
+}
+
+test('(p) local mode: a live record naming a run copy refuses the main checkout as the target, and an unreadable registry refuses', async (t) => {
+  const f = await launcherFixture(t);
+  const copy = join(f.root, 'copy');
+  await mkdir(copy);
+  for (const status of ['running', 'parked']) {
+    await writeRegistry(f, { [BRANCH]: { branch: BRANCH, worktree: copy, status } });
+    assertRefusal(await f.launch([f.dir, LABEL]), 'accepted only in job mode');
+  }
+  await writeRegistry(f, 'not json\n');
+  assertRefusal(await f.launch([f.dir, LABEL]), 'cannot read the run registry');
+  assert.equal(existsSync(f.record), false);
+  assert.deepEqual(f.gateRuns(), []);
+  assert.ok(!present(join(f.dir, LANE, `${LABEL}.running`)) && !present(join(f.dir, LANE, `${LABEL}.verdict`)));
+});
+
+test('(q) job mode: the registry run_job leaves accepts the main checkout, a finished record elsewhere notwithstanding', async (t) => {
+  const f = await launcherFixture(t);
+  const elsewhere = join(f.root, 'finished');
+  await mkdir(elsewhere);
+  await writeRegistry(f, {
+    [BRANCH]: { branch: BRANCH, worktree: f.dir, status: 'running' },
+    feat_done: { branch: 'feat_done', worktree: elsewhere, status: 'completed' },
+  });
+  const expected = await expectedVector(f, f.dir, join(f.dir, BASE_PROFILE));
+  const r = await f.launch([f.dir, LABEL]);
+  assert.deepEqual([r.status, r.stdout], [3, 'pending\n'], output(r));
+  const verdict = await f.collect(f.dir);
+  assert.deepEqual([verdict.status, verdict.stdout], [0, 'pass\n'], output(verdict));
+  assert.deepEqual(lines(f.record), expected);
+  await f.until(() => existsSync(join(f.out, 'bwrap-exited')), 'the bwrap stub to exit');
+});
+
 test('(n) a redirected XDG_STATE_HOME or HOME does not choose the clone\'s profile', async (t) => {
   const f = await launcherFixture(t);
   const { clone, protectedPath, profileFile } = await registeredClone(t, f);
