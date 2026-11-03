@@ -31,4 +31,4 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_stall_stub_release_marke
 
 1. [x] **Task 1** — Share the release-aware hung session, its scaled bound and its release trigger in `cli/test/helpers/watcher.mjs` _(layer: cli)_ _(points: 15)_
 2. [x] **Task 2** — Release the hung stub per case in `watcher-stall-reset-payloads.test.mjs` _(layer: cli)_ _(points: 15)_
-3. [ ] **Task 3** — Release the hung stub per case in `watcher-placeholder-host.test.mjs` _(layer: cli)_ _(points: 15)_
+3. [x] **Task 3** — Release the hung stub per case in `watcher-placeholder-host.test.mjs` _(layer: cli)_ _(points: 15)_

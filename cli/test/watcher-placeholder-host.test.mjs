@@ -26,9 +26,12 @@
  * is still absent, at `hr_run_profile_absent_file` for a branch of its own (`KILLED_BRANCH`), so no
  * launch in the case rewrites it.
  *
- * The stall cases replay the watcher header's `a stall` REPRO row with the session of
- * `watcher-stall-reset-payloads.test.mjs`: hung on its first launch until the test writes `go`, a
- * registry snapshot on its relaunch.
+ * The stall cases replay the watcher header's `a stall` REPRO row with `helpers/watcher.mjs` →
+ * `HUNG_BODY`: hung on its first launch until the test writes `go`, then waiting for the test's
+ * release rather than sleeping; a registry snapshot on its relaunch. The local stall pass releases
+ * it after its second `tick`, and a `job:` stall case at the watchdog's `failed` or `resumed`
+ * notification. Outside the sandbox the watchdog has already killed the stub, so the release frees
+ * nothing.
  *
  * The another-run-live case drives `process_inbox_file` itself with `RUN_CAP` lifted: on a bubblewrap
  * host the cap is 1, so a live run defers the drop at the cap check, ahead of the sweep call.
@@ -46,8 +49,12 @@ import { INIT_SCRIPTS_DIR, runBash, runGit } from './helpers/fixture.mjs';
 import {
   DEFAULT_KEEP_AWAKE_PROBE,
   DEFAULT_SANDBOX_PROBE,
+  HUNG_BODY,
+  HUNG_RELEASE,
   TICK_TIMEOUT_MS,
+  assertHungReleased,
   createWatcherFixture,
+  stallVerdictNotified,
 } from './helpers/watcher.mjs';
 import { scaleBound } from './helpers/timing.mjs';
 
@@ -64,18 +71,6 @@ const START_REFUSAL = 'is not inside a git repository — refusing to start';
 /** One stalled pass's bound, and the wait for the hung session (`helpers/timing.mjs`). */
 const STALL_TIMEOUT_MS = scaleBound(180_000);
 const HUNG_WAIT_MS = scaleBound(60_000);
-
-/** The session: hung on its first launch until `go`, a registry snapshot on a relaunch. */
-const HUNG_BODY = [
-  'if [ ! -e "$REC/hung" ]; then',
-  '  : > "$REC/hung"',
-  '  until [ -e "$REC/go" ]; do echo "{}"; sleep 0.2; done',
-  '  : > "$REC/silent"',
-  '  sleep 60',
-  'else',
-  '  cp "$REGISTRY" "$REC/resumed-registry.json"',
-  'fi',
-].join('\n');
 
 /** The probe overrides a pass script installs after sourcing the watcher, the seam answering `host`. */
 const probes = (host) =>
@@ -462,6 +457,7 @@ async function stalledPass(t, f, host, plant) {
     'until [ -e "$2" ]; do sleep 0.1; done',
     'touch -t 202001010000 "$3" "$4"',
     'tick',
+    `: > "$REC/${HUNG_RELEASE}"`,
     'wait',
   ].join('\n');
   const env = f.watcherEnv({
@@ -487,6 +483,7 @@ async function stalledPass(t, f, host, plant) {
   await plant();
   await writeFile(join(rec, 'go'), '', 'utf8');
   const result = await running;
+  assertHungReleased(rec);
   assert.equal(result.status, 0, `the stalled pass exited ${result.status}\n${result.stdout}\n${result.stderr}`);
   const snapshot = join(rec, 'resumed-registry.json');
   return existsSync(snapshot) ? JSON.parse(readFileSync(snapshot, 'utf8')).runs[f.branch] : null;
@@ -768,8 +765,12 @@ async function jobFixture(t) {
       }
       await plant();
       await writeFile(join(rec, 'go'), '', 'utf8');
+      // No deadline here: the stub's own bound ends the job, and `STALL_TIMEOUT_MS` bounds `runBash`.
+      while (settled === null && !stallVerdictNotified(f.notifications(), f.branch)) await delay(100);
+      await writeFile(join(rec, HUNG_RELEASE), '', 'utf8');
     }
     const result = await running;
+    if (plant !== null) assertHungReleased(rec);
     assert.equal(result.status, 0, `the job exited ${result.status}\n${result.stdout}\n${result.stderr}\n${f.watcherLog()}`);
     return result;
   }
