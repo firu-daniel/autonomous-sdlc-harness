@@ -71,3 +71,15 @@ Not tested here, because no suite can show it: whether the detached supervisor o
 
 - `cli/test/launch-sandboxed-gates.test.mjs` passes, through the single-file command `.claude/context/conventions.md` → `## The testing bar` gives.
 - No case starts a session or reaches the network. Every file a case creates lives under its own temporary directory and is removed in process.
+
+**Deviations from plan:**
+
+- **The placeholder emulation.** The plan has the `bwrap` stub create each absent `--ro-bind /dev/null <p>` as a 0-byte 0444 file, then exec the command. Implemented differently: while the command runs, `<p>` is a symlink to `/dev/null`. Once the command exits, the stub replaces it with the 0-byte 0444 file, then exits with the command's status.
+  - **Why.** With the plan's version, the fixture's `<scriptsDir>/.git` placeholder sat on disk as an empty regular file during the run. That made the gate run's own `hr_repo_root` (`git rev-parse --show-toplevel` from `scripts/`) refuse with `'…/scripts' is not inside a git repository`, and case (g) failed with `the sandboxed gate run of gates_round_1 did not start`.
+  - **Evidence.** A scratch probe this session ran `git -C <sub> rev-parse --show-toplevel` with `<sub>/.git` set up two ways:
+    - a symlink to `/dev/null` gave `ok <repo top>`;
+    - an empty 0444 regular file gave `exit 128 fatal: invalid gitfile format`.
+  - **What the emulation now matches.** Inside real bubblewrap the path is the `/dev/null` character device, which git's discovery passes over. On the host, bubblewrap leaves the empty mount-point file behind. The sweep assertion (h) is still made against that host-side file, after the stub has exited (`out/bwrap-exited`).
+- **The stub honours only `--unsetenv` and `--chdir`.** It applies no `--setenv` (so `TMPDIR` stays the host's), no namespace and no mount. The test file's header states this, and the full vector is still compared element by element.
+- **The `setsid` stub is installed in case (g) only.** That case asserts the supervisor was started as `setsid bash <launcher> --supervise <target> <label>`. Every other case uses whatever `setsid` the host has, or none.
+- **The fixture commit uses `--allow-empty`.** Without it, `git commit --quiet --no-verify` exited 1 with empty stderr in every case after `init`, `checkout -b` and `add -A`. Nothing-to-commit is the likely cause, but this run did not establish it.
