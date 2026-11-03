@@ -42,6 +42,8 @@ _[Add headings of your own as themes emerge — one per recurring theme — and 
 
 - **Grade a write probe on what reached the disk, never on the call's exit status. "Call succeeded, nothing on disk" is an outcome of its own and never reads as "refused".** _(taught by: fix_linux_sandbox_sibling_glob_trio)_
 
+- **When a check moves to reading a field one producer writes, the same change makes every path that stands in for that producer (a probe's setup, a fixture helper) write the field too.** _(taught by: fix_linux_detached_gate_run)_
+
 ## Unattended control loops
 
 - **A process that turns off a shared switch another actor can turn on must check the enabling condition again after switching it off, and switch it back on if needed, so an enable that races its check is never undone.** _(taught by: feat_remote_execution_github_actions)_
