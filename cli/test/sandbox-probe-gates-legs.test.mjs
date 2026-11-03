@@ -1,11 +1,14 @@
 /**
- * The sandbox probe's T2/T3 and TD2/TD4 grading functions (`sp__t2_grade`, `sp__td2_tmpdir`,
- * `sp__td2_grade`, `sp__td4_grade` in `scripts/lib/sandbox-probe/legs-local.sh`) and the row choice
+ * The sandbox probe's T2/T3 and TD2/TD4 grading functions (`sp__t2_grade`, `sp__t3_grade`,
+ * `sp__t2_lane_state`, `sp__td2_tmpdir`, `sp__td2_grade`, `sp__td4_grade` in
+ * `scripts/lib/sandbox-probe/legs-local.sh`) and the row choice
  * between them (`sp_leg_row_for` in `core.sh`), run over the recorded streams in
  * `fixtures/sandbox-probe/` and over gate-lane files each case writes.
  *
  * **The rule these tests exist to enforce: T2 and T3 are graded from the gate lane's verdict and log,
- * T3's log search quoting a Linux refusal line on Linux only; TD2's control is a literal path; TD4 is
+ * T3's log search quoting a Linux refusal line on Linux only; T3 is graded only when Phase G's launcher
+ * answered `pending`, and a stale `.running` heartbeat is read as a dead worker; TD2's control is a
+ * literal path; TD4 is
  * graded against TD3's unsandboxed result, never TD2's, an error carrying no known text being `not run`;
  * and a permission-layer refusal of any measured call or control is `not run`, never `fail`.**
  *
@@ -20,7 +23,8 @@
  * The four libraries are sourced in a `bash -c` whose working directory is the case directory, a
  * `mkdtemp` under `os.tmpdir()` removed when the case ends; a case setting SP_PLATFORM also sources
  * `platform.sh` and sets it afterwards, since that file empties it. No case launches `claude` or starts a gate:
- * the lane's `.verdict` and `.log` are files the case writes.
+ * the lane's `.verdict` and `.log` are files the case writes. Left out deliberately: the session wiring
+ * of T3's wait loop in `sp_leg_gates`, which stays hand-run.
  */
 
 import assert from 'node:assert/strict';
@@ -40,6 +44,8 @@ const T2_COMMAND = 'bash scripts/run-test-suite.sh sbx_probe_t2';
 const COMPARE = 'compare with the same call unsandboxed on the same tree before filing its row';
 const DENIALS = 'network denials in the log, recorded and not graded';
 const STREAM_DENIALS = 'network denials in the session stream, recorded and not graded';
+const T3_REFUSAL =
+  'launch-sandboxed-gates.sh: bwrap is not on PATH, so the gate run cannot be sandboxed on this bubblewrap host, and Run gates do not run here unsandboxed (docs/cli.md §6)';
 
 function fixture(name) {
   return join(FIXTURES, `${name}.jsonl`);
@@ -191,6 +197,110 @@ test('sp__t2_grade: graded from the lane verdict and log', async (t) => {
       `fail|${exit}; ${COMPARE}; ${DENIALS}: 0; ${STREAM_DENIALS}: 0 event(s)`,
     );
   });
+});
+
+/**
+ * Writes `<dir>/<name>.jsonl`: one launcher call `command` whose tool_result carries `text`, in the
+ * T2 fixture's shape. A non-zero `exit` opens the text on the Bash tool's `Exit code <n>` header.
+ */
+async function launchStream(dir, name, command, text, exit = 0) {
+  const content = exit === 0 ? [{ type: 'text', text }] : `Exit code ${exit}\n${text}`;
+  const result = { type: 'tool_result', tool_use_id: 'tu1', content };
+  if (exit !== 0) result.is_error = true;
+  const lines = [
+    { type: 'system', subtype: 'init', session_id: `sp-${name}`, cwd: dir },
+    { type: 'user', timestamp: '2026-01-01T00:00:00.000Z', message: { role: 'user', content: 'Run the commands.' } },
+    {
+      type: 'assistant',
+      timestamp: '2026-01-01T00:00:01.000Z',
+      message: { id: 'm1', content: [{ type: 'tool_use', id: 'tu1', name: 'Bash', input: { command } }] },
+    },
+    { type: 'user', timestamp: '2026-01-01T00:00:02.000Z', message: { role: 'user', content: [result] } },
+    {
+      type: 'result',
+      subtype: 'success',
+      timestamp: '2026-01-01T00:00:03.000Z',
+      duration_ms: 3000,
+      permission_denials: [],
+    },
+  ];
+  const path = join(dir, `${name}.jsonl`);
+  await writeFile(path, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
+  return path;
+}
+
+test('sp__t3_grade: T2’s grade kept only when the launcher answered pending', async (t) => {
+  /** A pass lane and the launcher call, both under `dir`. */
+  async function lane(dir) {
+    const verdict = join(dir, 'sbx_probe_t2.verdict');
+    const log = join(dir, 'sbx_probe_t2.log');
+    await writeFile(verdict, 'pass\n');
+    await writeFile(log, '== run-test-suite.sh: gate test exited 0 ==\n');
+    const command = `bash ${dir}/main/scripts/launch-sandboxed-gates.sh ${dir}/clone sbx_probe_t2`;
+    return { verdict, log, command };
+  }
+
+  await t.test('pending, bare or under its Exit code 3 header, keeps the pass verdict', async (t) => {
+    const dir = await caseDir(t);
+    const { verdict, log, command } = await lane(dir);
+    for (const exit of [0, 3]) {
+      const stream = await launchStream(dir, `t3-pending-${exit}`, command, 'pending', exit);
+      assert.equal(
+        await graded(dir, 'sp__t3_grade', [stream, command, verdict, log]),
+        `pass|the launcher answered pending; run-test-suite.sh verdict pass; ${DENIALS}: 0; ${STREAM_DENIALS}: 0 event(s)`,
+        `exit ${exit}`,
+      );
+    }
+  });
+
+  await t.test('in-session with a pass verdict on disk is not run', async (t) => {
+    const dir = await caseDir(t);
+    const { verdict, log, command } = await lane(dir);
+    const stream = await launchStream(dir, 't3-in-session', command, 'in-session', 4);
+    const out = await graded(dir, 'sp__t3_grade', [stream, command, verdict, log]);
+    assert.ok(out.startsWith('not run|'), out);
+    assert.ok(
+      out.includes(
+        "the launcher answered 'in-session', not pending, so no sandboxed gate run was started: run-test-suite.sh verdict pass",
+      ),
+      out,
+    );
+  });
+
+  await t.test('the launcher’s refusal is not run, quoting it', async (t) => {
+    const dir = await caseDir(t);
+    const { verdict, log, command } = await lane(dir);
+    const stream = await launchStream(dir, 't3-refused', command, T3_REFUSAL, 2);
+    const out = await graded(dir, 'sp__t3_grade', [stream, command, verdict, log]);
+    assert.ok(out.startsWith('not run|'), out);
+    assert.ok(out.includes(`the launcher answered '${T3_REFUSAL}', not pending`), out);
+  });
+
+  await t.test('a launch call that did not run keeps T2’s not run', async (t) => {
+    const dir = await caseDir(t);
+    const { verdict, log, command } = await lane(dir);
+    const out = await graded(dir, 'sp__t3_grade', [fixture('t2-run-form'), command, verdict, log]);
+    assert.ok(out.startsWith('not run|the run form did not reach the gates: '), out);
+    assert.ok(!out.includes('the launcher answered'), out);
+  });
+});
+
+test('sp__t2_lane_state: verdict, gone, live or stale, first that applies', async (t) => {
+  const dir = await caseDir(t);
+  for (const [args, want] of [
+    [['1', '1', '0', '1000', '30'], 'verdict'],
+    [['1', '0', 'x', 'y', 'z'], 'verdict'],
+    [['0', '0', '970', '1000', '30'], 'gone'],
+    [['0', '1', '970', '1000', '30'], 'live'],
+    [['0', '1', '969', '1000', '30'], 'stale'],
+    [['0', '1', 'abc', '1000', '30'], 'stale'],
+    [['0', '1', '', '1000', '30'], 'stale'],
+    [['0', '1', '970', 'now', '30'], 'stale'],
+  ]) {
+    const run = await sourced(dir, 'sp__t2_lane_state "$@"', args);
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(run.stdout, `${want}\n`, args.join(' '));
+  }
 });
 
 test('sp__td2_tmpdir: the printed TMPDIR as one literal path', async (t) => {

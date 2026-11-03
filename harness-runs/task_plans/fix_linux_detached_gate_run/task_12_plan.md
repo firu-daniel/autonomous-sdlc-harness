@@ -33,3 +33,9 @@ This task tests them and changes no probe file.
 
 - `cli/test/sandbox-probe-gates-legs.test.mjs` passes, through the single-file command `.claude/context/conventions.md` → `## The testing bar` gives.
 - No case launches a session, starts a worker, or creates anything outside its own temporary directory.
+
+**Deviations from plan:**
+
+- The plan says `sp__t3_grade` reads the line through `sp__first_line`. The shipped function in `legs-local.sh` reads it through `sp__message_line` and then removes a leading `Exit code <n>: `. The fixtures therefore use the launcher's real exit forms: `in-session` under `Exit code 4`, the refusal under `Exit code 2` with `is_error`, and `pending` both bare and under `Exit code 3`. That covers the header-stripping branch as well.
+- The plan's third bullet ("a call that did not run keeps `not run`") had no assertion listed. A fourth `sp__t3_grade` case covers it with the `t2-run-form` fixture, which holds no launcher call.
+- The lane-state table also covers an empty mtime and a non-numeric `now`, both expected to read `stale`.
