@@ -41,3 +41,20 @@
 - **category:** tooling-gap
 - **evidence:** the general-layer `layer-implementer` returns for fix-plan Findings 1 and 2 report that `cp` from `cli/templates/scripts/…` to `scripts/…` was refused, so both root copies were rebuilt with the Edit tool and checked with `cmp`. Two `test-fix-plan-writer` returns (rounds 2 and 3) report that `printenv HOME` was denied during their machine-path check.
 - **cost this run:** a second hand-edit pass for each template copy, and the planners' home-directory check was done from a path taken out of the session instead of the command.
+
+# User-review fix round 2 — probe launcher legs record the per-run profile, launcher committed executable
+
+## The resume answer left a tracked change that the tree-state precondition halts on
+- **category:** agent-contract
+- **evidence:** at the start of this resumed session, `git status --short` printed ` M scripts/launch-sandboxed-gates.sh` (`git diff` showed only `old mode 100644` / `new mode 100755`). Option (a) of `harness-runs/clarifications/fix_linux_detached_gate_run/question_2.md`, the one `answer_2.md` chose, tells the operator to make exactly that change and leave it for the committer. `/autonomous-sdlc-harness:branch-start-user-review-fix-autonomous` step 5 halts on any `git status --short` line not beginning with `??`, and it makes no exception for a change a consumed answer prescribed.
+- **cost this run:** the orchestrator went ahead anyway, judging the change sanctioned by the answer. A literal reading of step 5 would have parked again on the change the answer asked for.
+
+## A `layer-reviewer` returned `verdict: PASS` while reporting a Should Fix (again this round)
+- **category:** agent-contract
+- **evidence:** the general-layer review of fix-plan Finding 2 (`harness-runs/user_review_fix_plan_point_reviews/fix_linux_detached_gate_run_fix_plan/item_2/review_2.md`) returned `verdict: PASS`. Its return reported one Should Fix: the deviation note in `finding_2.md` names `question_2.md` / `answer_2.md` by filename only, not by repo-relative path.
+- **cost this run:** the loop committed the unit (`bf47252d`) with that Should Fix unapplied.
+
+## `rm` was refused for an implementer's scratch probe again this round
+- **category:** tooling-gap
+- **evidence:** the cli-layer `layer-implementer` return for fix-plan Finding 1 reports that it left `harness-runs/scratch/render_record_probe.py` (gitignored) behind because deleting it was refused.
+- **cost this run:** a scratch file was left on disk in the run copy.
