@@ -12,7 +12,7 @@ The log also reports gate 13a–13c `BLOCKED` (the Python docs-retrieval environ
 
 This list is the **single source of truth** for the fix loop. Any `[ ]` markers elsewhere in this plan or its per-finding files are informational only.
 
-1. [ ] **Finding 1** — `(g)(h)` launcher run test fails after the review-round launcher changes. _(layer: cli, general)_
+1. [x] **Finding 1** — `(g)(h)` launcher run test fails after the review-round launcher changes. _(layer: cli, general)_
 
 ## Must Fix
 
