@@ -15,7 +15,9 @@
  * Not covered, because no suite can show it: whether the detached supervisor outlives a sandboxed
  * Bash call on Linux. That is the GS1 row's measurement. The stub emulates bubblewrap's placeholder
  * at a `--ro-bind /dev/null <p>` mount point ({@link BWRAP_STUB}) and honours `--unsetenv` and
- * `--chdir`; it applies no namespace, mount or `--setenv`, and that emulation is not measured.
+ * `--chdir`; it applies no namespace, mount or `--setenv`, and that emulation is not measured. Nor is
+ * the host-side leftover at a `.git` leaf, which the stub removes so the unsandboxed `--wait`
+ * collector's `git rev-parse` never meets an empty regular `.git`.
  *
  * The host answer is `hr_placeholder_host_probe_var` redefined at the end of the fixture's installed
  * library, as `watcher-placeholder-host.test.mjs` overrides it. The library's `HR_TEST_RUN_STALE_SECONDS`
@@ -68,7 +70,11 @@ const GATE_STUB = [
  * it records its argv, honours `--unsetenv` and `--chdir`, and runs the words after `--`. Each absent
  * `--ro-bind /dev/null <p>` is a link to `/dev/null` while the command runs — the device the
  * sandbox shows there, which git's discovery passes over where it dies on an empty regular `.git` —
- * and the 0-byte 0444 file bubblewrap leaves on the host once it exits.
+ * and the 0-byte 0444 file bubblewrap leaves on the host once it exits. A `.git`-leaf placeholder is
+ * removed instead: this suite's `--wait` collector runs unsandboxed and places its root by
+ * `git rev-parse` from `scripts/`, so an empty regular `scripts/.git` between the stub's exit and the
+ * supervisor's sweep refused it (`'…/scripts' is not inside a git repository`). A real session's
+ * `--wait` is sandboxed and sees the `/dev/null` device there.
  */
 const BWRAP_STUB = [
   '#!/usr/bin/env bash',
@@ -100,7 +106,12 @@ const BWRAP_STUB = [
   'done',
   'STUB_IN_BWRAP=1 "${args[@]:i}"',
   'status=$?',
-  'for p in ${made[@]+"${made[@]}"}; do rm -f "$p"; : > "$p"; chmod 444 "$p"; done',
+  'for p in ${made[@]+"${made[@]}"}; do',
+  '  case "${p##*/}" in',
+  '    .git) rm -f "$p" ;;',
+  '    *) rm -f "$p"; : > "$p"; chmod 444 "$p" ;;',
+  '  esac',
+  'done',
   ': > "$STUB_OUT/bwrap-exited"',
   'exit "$status"',
   '',

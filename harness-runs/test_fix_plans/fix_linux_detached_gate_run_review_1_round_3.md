@@ -14,7 +14,7 @@ The log also reports gates 13a–13c as `BLOCKED`, because the Python docs-retri
 
 This list is the **single source of truth** for the fix loop. Any `[ ]` markers elsewhere in this plan or its per-finding files are informational only.
 
-1. [ ] **Finding 1** — `(l)` fails because the `bwrap` stub leaves a 0-byte `scripts/.git` that the unsandboxed `--wait` collector reads before the sweep. _(layer: cli)_
+1. [x] **Finding 1** — `(l)` fails because the `bwrap` stub leaves a 0-byte `scripts/.git` that the unsandboxed `--wait` collector reads before the sweep. _(layer: cli)_
 
 ## Must Fix
 
