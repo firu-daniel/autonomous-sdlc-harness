@@ -1,0 +1,10 @@
+# Architecture review — iteration 0
+
+## Must Fix
+1. **Finding 2's layer tag omits `general`, but its contingent fix edits a `general`-layer file** — offending files: the test fix plan index `fix_linux_detached_gate_run_review_1_round_2.md` (readiness entry 2) and `finding_2.md`. Rule source: `.claude/context/conventions.md` → `## The layers` (the `general` row owns everything at the root outside `cli/` and `plugin/`, and *"A change whose files sit under `cli/` or `plugin/` belongs to that layer and never to `general`"*, with the converse that a root-level file is `general`'s), and `harness.config.json` → `layers` (`cli` → path `cli`, `general` → path `.`).
+   `finding_2.md` → **Fix**, second bullet, says: *"If that side is the launcher, edit `cli/templates/scripts/launch-sandboxed-gates.sh` and `scripts/launch-sandboxed-gates.sh` together and keep them byte-identical."* `scripts/launch-sandboxed-gates.sh` is the self-adopted copy at the repository root. It sits outside `cli/`, so it belongs to the `general` layer. Readiness entry 2 is tagged `_(layer: cli)_` only, so the fix loop would dispatch only the `cli` layer's implementer, whose `layers[].path` is `cli`. If the plan's contingency fires, that implementer must either edit outside its layer's path, which is a placement violation, or leave the self-adopted twin un-edited, which breaks the byte-identity the finding requires. Finding 1 avoids this: its index entry is tagged `cli, general` for the same kind of twin edit (`scripts/run-gates.sh`, `scripts/lib/harness-run-lib.sh`, `scripts/launch-sandboxed-gates.sh`).
+   **Fix:** Either change readiness entry 2 in the index to `_(layer: cli, general)_` (bottom-up order, the catch-all `general` last), or remove the launcher-edit contingency from `finding_2.md` → **Fix**. If you remove it, have that bullet state that a real mismatch on the launcher side is reported as a blocker rather than fixed under this entry. Do not leave a `cli`-only tag on a fix that names a path under `scripts/`.
+
+## Should Fix
+
+## Nice to Have
