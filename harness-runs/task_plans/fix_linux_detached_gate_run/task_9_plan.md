@@ -95,3 +95,19 @@ The leg's declaration, its sourcing and Gate 15's tables are **Task 10's**. The 
 - `sp_leg_gate_sandbox` restores `harness.config.json` on every exit path. Read each `return` against the restore.
 - In the written test script, no outside path GS2 writes lies under the target in either layout: read `sp__gs2_outside_paths` against `job.sh`'s `SP_CLONE="$SP_MAIN"`.
 - `git grep -n -i 'first stderr line\|first line' -- scripts/lib/sandbox-probe/legs-gate-sandbox.sh` hits only the `wf5.mtimes` display line and evidence sentences that say their shortening is display.
+
+**Deviations from plan:**
+
+- `sp__wf5_grade`'s kind defaults to `a sandboxed`, not `sandboxed`: the pass sentence is `in <kind> process`, so this default keeps the moved function's default sentence byte-identical (`in a sandboxed process`), and the leg's `the launcher's sandboxed gate-worker` reads `in the launcher's sandboxed gate-worker process`.
+- The launch line strips the Bash tool's bare `Exit code <n>` header (PD18) before `sp__first_line`. The launcher answers `pending` with exit 3, so `sp__first_line` alone would read `Exit code 3` and GS1 could never see `pending`. A call that did not run at all, or was refused at a layer, gives a launch line naming that layer instead.
+- `sp__gs2_outside_paths` always offers `<main>/sbx_gs2_main.txt`. In job mode the inside-the-target rule drops it, with a `dropped … : inside the target` stderr line, so GS2's evidence shows the drop. It also drops a candidate whose directory does not exist (`dropped <path>: its directory does not exist`), because a write there fails whether or not there is a sandbox.
+- The session-level gate `sp_row_result` reads (`SP_CTL_OK`) is set from the launch call: 1 when it ran, 0 with the launch line otherwise. Each row's own control is read inside its grading function, as the plan specifies. The leg prints every row with `--direct`, so a visible `fail` is never withheld.
+- Grading arms the plan leaves unstated:
+  - GS1 is `not run` when its verdict reads `pass` but the session end or the done marker cannot be read, or the done marker predates the session end.
+  - GS2 is `not run` when a `.git/config` shasum is empty.
+  - GS3 is `fail` when curl exits 0 with no body, and `not run` when `gs3.status` is absent or not an integer.
+  - GS4's pass evidence says whether the worker's copy was empty or differed, and counts the unset names.
+- Evidence is kept as copies under `$SP_TMP/gate-sandbox.records/`, and each copy goes through `sp_keep_file`. The originals in `<target>/sbx_gs/`, the lane's `.verdict` and `.log` are removed by the leg. `sp_rm_tree` refuses a directory outside `SP_TMP`, so the job-mode records directory in the main checkout has to be removed in-leg. The lane's `.verdict`, `.log` and lane directory are removed only when each was absent before the session.
+- The worker reads which `envVars` names are set from `compgen -e`, the shell's list of exported names. That gives names only and never a value, and needs no `${!name}` indirection.
+- `legs-detached.sh` also drops the `scriptsDir` / run-library plumbing. That is the `hr_scripts_dir` refusal, the `lib` literal check, the `lib=` line and the helper's fourth argument, and WF5 was their only reader. BG9's grading function, session, prompt, control and the worker's beat loop are unchanged.
+- Evidence downgrade: the leg itself was not run. It needs Linux, `bwrap` and a real session, and its result is owed to Gate 15's container (story index, *Take the Linux results by hand*). The verification bullets above are reads plus `bash scripts/typecheck.sh`, run from the checkout root, which printed `PASS: typecheck` with `check-shell-parse: 107 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`.
