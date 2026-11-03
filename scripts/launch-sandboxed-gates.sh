@@ -89,6 +89,12 @@
 #       <target>/. An absent one is pinned by a read-only placeholder, as
 #       bubblewrap does for the session (§5 AP2); one whose parent is absent is
 #       a refusal. The supervisor sweeps its placeholders after `bwrap` exits.
+#   --ro-bind <target>/.git <target>/.git, after the entries above
+#       NO WRITE TO THE RUN COPY'S GIT RECORDS: it closes `.git/commondir`,
+#       `.git/config.worktree` and `.git/objects/info/http-alternates`, which a
+#       per-run profile leaves out of `denyWrite` on a bubblewrap host and no
+#       placeholder may pin (§5 F9). It comes last so the placeholders above
+#       are created before `.git` turns read-only.
 #   --tmpfs <dir> / --ro-bind /dev/null <file>, --unsetenv <name>
 #       NO READ OF A DENIED CREDENTIAL: each base-profile
 #       `.sandbox.credentials.files` path that exists, and its canonical form,
@@ -263,6 +269,14 @@ lsg_bwrap_args_var() {
   done <<EOF
 $list
 EOF
+
+  # The run copy's `.git`, read-only and last among the target's binds: it
+  # closes the `omit` trio (`autonomous-watcher.sh` → RUN_PROFILE_COPY_GIT_PATHS),
+  # which no placeholder may pin (F9), and comes after the loop so bwrap can
+  # still create the loop's placeholder mount points under it.
+  if [ -e "$target/.git" ] || [ -L "$target/.git" ]; then
+    LSG_ARGS+=(--ro-bind "$target/.git" "$target/.git")
+  fi
 
   if ! list="$(jq -r '(.sandbox.credentials.files // [])
       | if type == "array" then .[] | objects | .path | strings | select(contains("\n") | not)

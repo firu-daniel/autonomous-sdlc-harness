@@ -265,6 +265,7 @@ async function expectedVector(f, target, profile) {
     if (present(p)) v.push('--ro-bind', p, p);
     else v.push('--ro-bind', '/dev/null', p);
   }
+  if (present(join(target, '.git'))) v.push('--ro-bind', join(target, '.git'), join(target, '.git'));
   const homes = [f.home];
   const other = (await passwdHome(f)).replace(/\/$/, '');
   if (other.startsWith('/') && other.length > 1 && other !== f.home) homes.push(other);
@@ -468,4 +469,23 @@ test('(k) a registered clone takes its protected paths from the per-run profile,
   await rm(profileFile);
   const refused = await f.launch([clone, 'gates_round_2']);
   assertRefusal(refused, `no per-run profile for '${CLONE_BRANCH}' at ${profileFile}`);
+});
+
+test('(l) the vector binds the target\'s .git read-only after every denyWrite entry, closing the omit trio', async (t) => {
+  const f = await launcherFixture(t);
+  const r = await f.launch([f.dir, LABEL]);
+  assert.deepEqual([r.status, r.stdout], [3, 'pending\n'], output(r));
+  const verdict = await f.collect(f.dir);
+  assert.deepEqual([verdict.status, verdict.stdout], [0, 'pass\n'], output(verdict));
+  const argv = lines(f.record);
+  const git = join(f.dir, '.git');
+  const at = argv.lastIndexOf(git);
+  assert.deepEqual(argv.slice(at - 2, at + 1), ['--ro-bind', git, git], argv.join('\n'));
+  const after = argv.slice(at + 1);
+  const pinnedAfter = after.filter((a, i) => after[i - 1] === '/dev/null' && a.startsWith(`${f.dir}/`));
+  assert.deepEqual(pinnedAfter, [], `a denyWrite placeholder follows the .git bind:\n${argv.join('\n')}`);
+  for (const p of ['commondir', 'config.worktree', 'objects/info/http-alternates']) {
+    assert.ok(!argv.includes(join(git, p)), `${p} is pinned path by path, which F9 forbids:\n${argv.join('\n')}`);
+  }
+  await f.until(() => existsSync(join(f.out, 'bwrap-exited')), 'the bwrap stub to exit');
 });

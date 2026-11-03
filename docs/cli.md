@@ -548,10 +548,12 @@ All three hold in a clone exactly as stated: the copy kind changes none of them.
      - no network: `--unshare-all` and no `--share-net`;
      - writes to the target alone: `--ro-bind / /` with `--bind <target> <target>`, and a private `--tmpfs /tmp`;
      - every exact `sandbox.filesystem.denyWrite` path of the session's own profile that lies under the target read-only — the per-run copy for a run copy, the base for the main checkout in job mode;
+     - the target's `.git` read-only, bound after those paths, which closes the run copy's `.git/commondir`, `.git/config.worktree` and `.git/objects/info/http-alternates`: a per-run profile leaves them out of `denyWrite` on a bubblewrap host (`autonomous-watcher.sh` → `RUN_PROFILE_COPY_GIT_PATHS`, the `omit` rows), no placeholder may pin them (`docs/sandbox-verification.md` §5 F9), and the worker's real `--bind` of the target would otherwise let it write what the session's own sandbox did not land (AP8). The gate run's own records go to the lane under `<state_dir>`, not to `.git`;
      - the base profile's `sandbox.credentials.files` masked and its `envVars` unset;
      - `--die-with-parent`, so the worker ends with its supervisor.
    - **What it does not hold**, each derived from the code:
      - a `denyWrite` entry carrying `*` is not applied: only exact paths are;
+     - a gate whose command writes the target's own `.git` (a commit, an index refresh it does not tolerate failing) fails inside the worker, because `.git` is read-only there, which is stricter than the session's sandbox; GS2 measures `.git/config` alone, and the `.git` bind is derived from the code, not measured;
      - an absent protected path is held by a `--ro-bind /dev/null` placeholder, which `bwrap` creates on disk and the supervisor sweeps through `hr_placeholder_sweep_paths_var` once `bwrap` exits; a supervisor killed first leaves residual 12's class of leftover behind, and a protected path whose parent directory is absent is a refusal;
      - the profile's `Edit` rules do not apply, because no file tool runs inside it;
      - its loopback is its own, so the worker cannot reach a service on the host's loopback, which is stricter than the session's sandbox (`docs/sandbox-verification.md` §5 F8).

@@ -29,7 +29,7 @@ Two findings remain, both Must Fix. A durable citation of the ruling points at a
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 1** — Cite `docs/sandbox-verification.md` §5 F10 instead of the gitignored clarification file in the launcher, the probe leg and the two documents _(layer: cli, general)_
-2. [ ] **Finding 2** — Bind the target's `.git` read-only in the gate worker's `bwrap` vector to close the `.git` trio, with its test and the header and residual 13 updates _(layer: cli, general)_
+2. [x] **Finding 2** — Bind the target's `.git` read-only in the gate worker's `bwrap` vector to close the `.git` trio, with its test and the header and residual 13 updates _(layer: cli, general)_
 
 ---
 
