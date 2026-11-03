@@ -9,8 +9,8 @@
  * collected by the target's own `run-test-suite.sh --wait`. The vector, compared element by element
  * against one built here from the profile with `jq`, carries no `--share-net`, and the target's own
  * command runs only as the vector's command — the gate stub records whether `bwrap` ran it. The
- * supervisor sweeps every placeholder the stub mounted, and nothing else under the fixture changes
- * but the lane files.
+ * supervisor sweeps every placeholder the stub leaves on the host (a `.git`-leaf one the stub
+ * removes itself, below), and nothing else under the fixture changes but the lane files.
  *
  * Not covered, because no suite can show it: whether the detached supervisor outlives a sandboxed
  * Bash call on Linux. That is the GS1 row's measurement. The stub emulates bubblewrap's placeholder
