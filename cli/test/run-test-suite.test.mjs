@@ -5,7 +5,9 @@
  * **The rule these tests exist to enforce: the run form detaches the gate run and answers `pending`
  * at once; the verdict, one line and nothing else, is read through `--wait`; a run runs
  * `commands.typecheck` and then `commands.test` exactly once each under one verdict; no run starts
- * while one of the same label is live; each round keeps its log. Liveness is the heartbeat.**
+ * while one of the same label is live; each round keeps its log. Liveness is the heartbeat. The
+ * no-detach form runs both gates in its own process, detaching nothing, and answers its verdict
+ * itself, or `pending` at once for a live label.**
  * Every case seeds `commands.test` with a stub that counts its own runs, so "exactly once" is an
  * assertion on a counter file; the stub's own output must reach the log and neither stream. A
  * `<none>` typecheck is asserted as not run — a marker line and no counter — never as a pass.
@@ -873,4 +875,95 @@ test('--wait after a run that failed on typecheck alone reprints its `fail` and 
   assert.equal(waited.stderr, '');
   assert.deepEqual(counterLines(dir, TC_COUNTER), ['ran'], 'the wait form ran the typecheck');
   assert.deepEqual(counterLines(dir), ['ran'], 'the wait form ran the test');
+});
+
+const USAGE_REFUSAL =
+  'run-test-suite.sh: usage: run-test-suite.sh <label> | run-test-suite.sh --wait <label> | run-test-suite.sh --no-detach <label>\n';
+
+test('--no-detach runs both gates in its own process and answers `pass` itself, with no detach', async (t) => {
+  const dir = await wiredFixture(t);
+  const fakeBin = join(dir, 'fake-bin');
+  const nohupRecord = join(dir, 'nohup-called.txt');
+  mkdirSync(fakeBin);
+  writeFileSync(join(fakeBin, 'nohup'), `#!/bin/sh\nprintf 'called\\n' > '${nohupRecord}'\nexit 1\n`, { mode: 0o755 });
+
+  const result = await wrapper(dir, ['--no-detach', LABEL], { PATH: `${fakeBin}:${process.env.PATH}` });
+
+  assert.equal(result.stdout, 'pass\n');
+  assert.equal(result.status, 0);
+  assert.equal(result.stderr, '');
+  // Read on return, with no poll: the gates ran inside the call.
+  assert.deepEqual(counterLines(dir), ['ran'], 'the command did not run exactly once');
+  assert.equal(text(dir, VERDICT), 'pass\n');
+  assert.equal(existsSync(join(dir, RUNNING)), false, '.running outlived the run');
+  assert.equal(text(dir, 'stub-env.txt'), 'unset\n', 'the worker marker reached the gate');
+  assert.equal(existsSync(nohupRecord), false, 'the no-detach form called nohup');
+});
+
+test('--no-detach with a failing gate answers `fail <log path>` with exit 1, and the log carries the marker lines', async (t) => {
+  const dir = await wiredFixture(t);
+
+  const result = await wrapper(dir, ['--no-detach', LABEL], { STUB_EXIT: '1' });
+
+  assert.equal(result.stdout, `fail ${LOG}\n`);
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr, '');
+  assert.deepEqual(counterLines(dir), ['ran'], 'the command did not run exactly once');
+  const lines = text(dir, LOG).split('\n');
+  for (const marker of [
+    GATE_MARKER.typecheckHeader,
+    GATE_MARKER.typecheckExited(0),
+    GATE_MARKER.testHeader,
+    GATE_MARKER.testExited(1),
+  ]) {
+    assert.ok(lines.includes(marker), `the log has no line ${marker}`);
+  }
+  assert.match(text(dir, LOG), new RegExp(STDERR_MARKER));
+});
+
+test('--no-detach finding a fresh heartbeat of its label prints `pending` with exit 3 and starts nothing', async (t) => {
+  const dir = await wiredFixture(t);
+  const pid = deadPid();
+  plantRunning(dir, { pid, ageSeconds: 0 });
+
+  // No wait slice is shortened: a `wait_for_verdict` here would outlast the heartbeat and refuse.
+  const result = await wrapper(dir, ['--no-detach', LABEL]);
+
+  assert.equal(result.stdout, 'pending\n');
+  assert.equal(result.status, 3);
+  assert.equal(result.stderr, '');
+  assert.deepEqual(counterLines(dir), [], 'the no-detach form started the command');
+  assert.equal(pidOf(dir), pid, 'the no-detach form replaced the live run\'s .running');
+  assert.equal(existsSync(join(dir, VERDICT)), false, 'the no-detach form wrote a verdict');
+});
+
+test('--no-detach replaces a stale `.verdict` of its label and never reads it', async (t) => {
+  const dir = await wiredFixture(t);
+  mkdirSync(join(dir, LOG_DIR), { recursive: true });
+  writeFileSync(join(dir, VERDICT), 'pass\n');
+
+  const result = await wrapper(dir, ['--no-detach', LABEL], { STUB_EXIT: '1' });
+
+  assert.equal(result.stdout, `fail ${LOG}\n`, 'the no-detach form answered the stale verdict');
+  assert.equal(result.status, 1);
+  assert.equal(text(dir, VERDICT), `fail ${LOG}\n`);
+  assert.deepEqual(counterLines(dir), ['ran'], 'the command did not run exactly once');
+});
+
+test('--no-detach with three arguments or no label refuses with exit 2 and the usage line', async (t) => {
+  const dir = await wiredFixture(t);
+  const before = await snapshotTree(dir);
+
+  for (const [what, args] of [
+    ['three arguments', ['--no-detach', LABEL, 'extra']],
+    ['--no-detach alone', ['--no-detach']],
+  ]) {
+    const result = await wrapper(dir, args);
+    assert.equal(result.status, 2, `${what}: exit ${result.status}`);
+    assert.equal(result.stdout, '', `${what}: stdout`);
+    assert.equal(result.stderr, USAGE_REFUSAL, `${what}: stderr`);
+  }
+
+  assert.deepEqual(counterLines(dir), [], 'a refusal ran the command');
+  assert.deepEqual(await snapshotTree(dir), before, 'a refusal wrote a file');
 });

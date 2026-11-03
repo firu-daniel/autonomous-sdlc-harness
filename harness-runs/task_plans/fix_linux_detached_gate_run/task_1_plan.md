@@ -51,3 +51,10 @@ Then, instead of detaching a worker, it becomes the worker in its own process: i
 - `cli/test/run-test-suite.test.mjs` passes, through the single-file command `.claude/context/conventions.md` → `## The testing bar` gives.
 - `git diff -- cli/templates/scripts/run-test-suite.sh` changes no line that the run form or the wait form alone executes. Read every hunk: each new branch is guarded by `mode = nodetach`, or is a header, usage or exit-map line.
 - `bash scripts/typecheck.sh` passes. It includes the shell-parse gate over the template, under the Bash 3.2 floor.
+
+**Deviations from plan:**
+
+- The no-detach handling is its own `mode = nodetach`-guarded block placed before `if [ "$worker_marker" != "$label" ]`, rather than branches inside that block: it does the live-label check, the `mkdir -p` and the stale-`.verdict` removal, then sets `worker_marker="$label"` so the run form's block is skipped and the worker section runs. The run form's block stays byte-identical in the diff; the cost is the `mkdir -p` / `rm -f` pair appearing twice.
+- The usage string is held once in a `usage` variable that all refusals pass, instead of being spelled out in each one. The plan's "the same in both places" holds by construction.
+- Case (e) asks for `--no-detach` with no label to refuse with the usage string. Under the existing parser that one-argument call fell through to the label-pattern refusal. A new line after the argument `case`, `[ "$label" != "--no-detach" ] || refuse "$usage"`, makes it give the usage string. The run form also executes this line; it is a usage line, and it changes no outcome for any label that `LABEL_PATTERN` admits.
+- The `--wait` arm of the parser changed from `[ "$1" = "--wait" ] || refuse …; mode=wait` to a `case` on `$1`. The plan's parsing step called for this change ("accept `--no-detach` beside `--wait`"), and the wait form's behaviour is unchanged: all existing cases pass.
