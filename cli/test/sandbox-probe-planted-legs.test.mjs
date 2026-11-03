@@ -4,20 +4,23 @@
  *
  * **The rule these tests exist to enforce: a planted-config row passes only on the wrapper's own refusal line; a
  * wrapper call refused at the permission layer never reached the wrapper and is `not run`; any other refusal of
- * the main wrapper is `fail`.**
+ * the main wrapper is `fail`. From PD25, `sp__pf_inert_worktree_config` (`legs-planted-files.sh`) accepts
+ * exactly the `config.worktree` shape `hr_run_copy_check_var` accepts: a regular, non-link, empty file with
+ * `extensions.worktreeConfig` absent or false.**
  *
- * Every case sources libraries and reads a fixture: none plants a config, starts a session or runs a wrapper.
+ * Every case sources libraries and reads a fixture or its own temporary repository: none plants a config,
+ * starts a session or runs a wrapper.
  * Fixtures are passed unsubstituted, since each call is matched byte-equal against a command that spells
  * `@FIXTURE_ROOT@` the same way.
  */
 
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { PACKAGE_ROOT, runBash, WORKSPACE_ROOT } from './helpers/fixture.mjs';
+import { PACKAGE_ROOT, runBash, runGit, WORKSPACE_ROOT } from './helpers/fixture.mjs';
 
 const PROBE_LIB = join(WORKSPACE_ROOT, 'scripts', 'lib', 'sandbox-probe');
 const LIBS = ['core.sh', 'judge.sh', 'controls.sh', 'legs-planted.sh'];
@@ -70,5 +73,62 @@ test('sp__pc_refusal: a planted-config row passes only on the wrapper’s own re
       await refusal(t, fixture('sandbox-dd'), DD_CMD, 'refusing to commit:', CS15_WANT),
       'fail|the wrapper did not run: refused at sandbox: dd: @FIXTURE_ROOT@/outside/probe: Operation not permitted',
     );
+  });
+});
+
+test('PD25: sp__pf_inert_worktree_config accepts only the trust check’s inert config.worktree', async (t) => {
+  /** A case-owned repository; `plant(path, dir)` shapes its `.git/config.worktree`. Returns the status. */
+  async function inert(t, plant, worktreeConfig) {
+    const dir = await mkdtemp(join(tmpdir(), 'harness-sp-planted-legs-'));
+    t.after(() => rm(dir, { recursive: true, force: true }));
+    await runGit(dir, ['init', '--quiet']);
+    if (worktreeConfig !== undefined) {
+      await runGit(dir, ['config', '--file', join(dir, '.git', 'config'), 'extensions.worktreeConfig', worktreeConfig]);
+    }
+    const path = join(dir, '.git', 'config.worktree');
+    await plant(path, dir);
+    const libs = [...LIBS, 'legs-planted-files.sh'].map((f) => join(PROBE_LIB, f));
+    const run = await runBash(
+      dir,
+      ['-c', '. "$1"; . "$2"; . "$3"; . "$4"; . "$5"; shift 5; sp__pf_inert_worktree_config "$@"; printf %s "$?"', '_', ...libs, path, dir],
+      { SP_VERSION: '' },
+    );
+    assert.equal(run.stderr, '');
+    return run.stdout;
+  }
+  const empty = (p) => writeFile(p, '');
+
+  await t.test('an empty regular file with extensions.worktreeConfig absent is inert', async (t) => {
+    assert.equal(await inert(t, empty), '0');
+  });
+
+  await t.test('an empty regular file with extensions.worktreeConfig false is inert', async (t) => {
+    assert.equal(await inert(t, empty, 'false'), '0');
+  });
+
+  await t.test('a 1-byte file is not', async (t) => {
+    assert.equal(await inert(t, (p) => writeFile(p, '\n')), '1');
+  });
+
+  await t.test('a symbolic link to an empty file is not', async (t) => {
+    assert.equal(
+      await inert(t, async (p, dir) => {
+        await writeFile(join(dir, 'empty'), '');
+        await symlink(join(dir, 'empty'), p);
+      }),
+      '1',
+    );
+  });
+
+  await t.test('a directory is not', async (t) => {
+    assert.equal(await inert(t, (p) => mkdir(p)), '1');
+  });
+
+  await t.test('an empty file with extensions.worktreeConfig true is not', async (t) => {
+    assert.equal(await inert(t, empty, 'true'), '1');
+  });
+
+  await t.test('an empty file with extensions.worktreeConfig unparseable as a boolean is not', async (t) => {
+    assert.equal(await inert(t, empty, 'maybe'), '1');
   });
 });

@@ -19,7 +19,9 @@
  * carrying no refusal string, judged against an expected `sandbox` or `network`, is `not run` (layer
  * `unrecognised`), never `fail`. The `unrecognised` cases use `Input/output error`, which no
  * layer-table arm matches; they used `Device or resource busy` until PD23 made it a refusal. Each
- * Linux case has a twin with no platform holding the macOS verdict. No case launches `claude`,
+ * Linux case has a twin with no platform holding the macOS verdict. CL5's `File exists` stays out of the
+ * Linux table (§5 PD28), so on Linux it is judged as an unknown refusal; the one case pinning that
+ * table sources `judge.sh` and compares `sp__linux_refusal_names`' output instead. No case launches `claude`,
  * loads a model or reaches the network: the subcommand reads a fixture file and prints one result
  * line, and every assertion compares that printed line verbatim.
  *
@@ -260,6 +262,30 @@ test('PD23: Permission denied and Device or resource busy are sandbox refusals, 
       assertJudged(await judge('call', fixture(c.stream), 'sandbox', c.command), 'fail', `Exit code 1: ${c.line}`);
     });
   }
+});
+
+// docs/sandbox-verification.md §5 PD28: whether `File exists` on `could not lock config file` is a sandbox
+// refusal is undecided, so it stays out of the Linux table until a run's `.git/config.lock` readings decide it.
+test('PD28: on Linux, File exists is not a known sandbox refusal, and the Linux table is unchanged', async (t) => {
+  const cl5 = 'git config sbx.probe true';
+  const exists = 'Exit code 255: error: could not lock config file .git/config: File exists';
+
+  await t.test('Linux: the CL5 File exists line is not run, as an unknown refusal', async () => {
+    assertJudged(
+      await judgeOnLinux('call', fixture('cl5-file-exists'), 'sandbox', cl5),
+      'not run',
+      `no refusal string this judge knows on Linux, so not graded: ${exists}`,
+    );
+  });
+
+  await t.test('the Linux table names exactly its three strings', async () => {
+    const libs = ['core.sh', 'judge.sh'].map((f) => join(WORKSPACE_ROOT, 'scripts', 'lib', 'sandbox-probe', f));
+    const run = await runBash(WORKSPACE_ROOT, ['-c', '. "$1"; . "$2"; sp__linux_refusal_names', '_', ...libs], {
+      SP_VERSION: '',
+    });
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(run.stdout, 'Read-only file system, Permission denied, Device or resource busy');
+  });
 });
 
 test('judge tool: Edit, Write and Read are matched by file_path', async (t) => {

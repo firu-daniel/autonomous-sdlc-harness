@@ -6,17 +6,19 @@
  * **The rule these tests exist to enforce: CS8 (a) records only a call that reached the sandbox or wrote the
  * marker; CS8 (b) passes only on the watcher check's sandbox-clause refusal of a profile whose
  * `failIfUnavailable` is a string, fails on its acceptance, and is not run when the unmodified profile's control
- * is refused. CS8's one line fails when (b) fails, is `not run` when either half is `not run` or (b) was not
- * taken, and passes otherwise.**
+ * is refused; from PD26, its check takes the watcher's `hr_placeholder_host_probe_var` before
+ * `run_profile_check`, and is status 2 on a watcher that defines none. CS8's one line fails when (b) fails, is
+ * `not run` when either half is `not run` or (b) was not taken, and passes otherwise.**
  *
  * No case launches a session or sources the real watcher (`autonomous-watcher.sh`): `sp__cs8b_check` is aimed
  * at `fixtures/sandbox-probe/cs8b-watcher-stub.sh`, whose `run_profile_check` answers from `CS8B_STUB_RC` and
- * `CS8B_STUB_REFUSAL`. Fixtures are passed unsubstituted, since each call is matched byte-equal against a
+ * `CS8B_STUB_REFUSAL`, and refuses when `CS8B_STUB_WANT_HOST` differs from the host answer its
+ * `hr_placeholder_host_probe_var` took from `CS8B_STUB_HOST`. Fixtures are passed unsubstituted, since each call is matched byte-equal against a
  * command that spells `@FIXTURE_ROOT@` the same way.
  */
 
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -158,6 +160,30 @@ test('sp__cs8b_check: reads the check through a sourced watcher and discards the
 
   await t.test('acceptance sets status 0 and an empty refusal', async (t) => {
     assert.equal(await check(t, { CS8B_STUB_RC: '0', CS8B_STUB_REFUSAL: '' }), '0|');
+  });
+
+  await t.test('PD26: the host answer is taken before the check', async (t) => {
+    assert.equal(await check(t, { CS8B_STUB_HOST: '1', CS8B_STUB_WANT_HOST: '1', CS8B_STUB_REFUSAL: '' }), '0|');
+  });
+
+  await t.test('PD26 control: the stub refuses when the host answer differs from the one wanted', async (t) => {
+    assert.equal(
+      await check(t, { CS8B_STUB_HOST: '0', CS8B_STUB_WANT_HOST: '1', CS8B_STUB_REFUSAL: 'host answer not taken' }),
+      '1|host answer not taken',
+    );
+  });
+
+  await t.test('PD26: a watcher defining no hr_placeholder_host_probe_var is status 2, naming it', async (t) => {
+    const dir = await caseDir(t);
+    const stub = join(dir, 'no-host-probe-stub.sh');
+    await writeFile(stub, 'run_profile_check() { RUN_PROFILE_REFUSAL=""; return 0; }\n');
+    const run = await sourced(
+      dir,
+      'sp__cs8b_check "$@"; printf \'%s|%s\' "$SP__CS8B_RC" "$SP__CS8B_REFUSAL"',
+      [stub, join(dir, 'bad.json'), join(dir, 'copy')],
+    );
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(run.stdout, `2|${stub} defines no hr_placeholder_host_probe_var`);
   });
 });
 

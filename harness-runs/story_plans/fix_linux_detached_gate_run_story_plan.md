@@ -125,7 +125,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_linux_detached_gate_run/
 11. [x] **Task 11** — Fix probe defects PD25, PD26 and PD27, and add PD28's `.git/config.lock` readings to the git leg _(layer: general)_ _(points: 20)_
 12. [x] **Task 12** — Test T3's launcher answer and the lane-state reading in the gates-leg suite _(layer: cli)_ _(points: 10)_
 13. [x] **Task 13** — Test the `gate-sandbox` leg's grading and declaration, and move the WF5 cases with it _(layer: cli)_ _(points: 20)_
-14. [ ] **Task 14** — Test the PD25–PD28 fixes against fixtures, and pin that PD28's shape stays out of the judge's Linux table _(layer: cli)_ _(points: 20)_
+14. [x] **Task 14** — Test the PD25–PD28 fixes against fixtures, and pin that PD28's shape stays out of the judge's Linux table _(layer: cli)_ _(points: 20)_
 15. [ ] **Task 15** — Record F10 and PD25–PD28 as fixed by this branch in `docs/sandbox-verification.md`, restate T3, WF5 and their runner rows, and add the GS rows as owed _(layer: general)_ _(points: 20)_
 16. [ ] **Task 16** — State the launcher and its sandbox in `docs/cli.md` §5 and §6, with a new residual _(layer: general)_ _(points: 20)_
 17. [ ] **Task 17** — State the launcher and the `--no-detach` form in `docs/watcher.md`'s shipped-scripts table _(layer: general)_ _(points: 10)_
