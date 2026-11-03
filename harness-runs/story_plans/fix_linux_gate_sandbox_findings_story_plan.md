@@ -28,7 +28,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_linux_gate_sandbox_findi
 
 1. [x] **Task 1** — F13: run `doctor-profile-sandbox` case `(d)` under the retrieval stub and an isolated cache, and lead its failure messages with the cause _(layer: cli)_ _(points: 10)_
 2. [x] **Task 2** — F12: make launcher case `(c)` hide only `bwrap`, and pin the shared-directory layout _(layer: cli)_ _(points: 10)_
-3. [ ] **Task 3** — F11: move gate 6a into `scripts/check-machine-paths.sh`, dropping only `Permission denied` on a character-device placeholder _(layer: general)_ _(points: 15)_
+3. [x] **Task 3** — F11: move gate 6a into `scripts/check-machine-paths.sh`, dropping only `Permission denied` on a character-device placeholder _(layer: general)_ _(points: 15)_
 4. [ ] **Task 4** — PD28: add CL5's `File exists` lock refusal to the judge's Linux table, and grade CL5 on it plus the placeholder readings _(layer: general)_ _(points: 15)_
 5. [ ] **Task 5** — PD29: give the `gate-sandbox` leg a clone of its own, check it against the clone allow-list, and name the writer in the header _(layer: general)_ _(points: 20)_
 6. [ ] **Task 6** — PD30: make T3's `fail` evidence name every `FAIL` line and the suite's counts _(layer: general)_ _(points: 10)_

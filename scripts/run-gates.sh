@@ -51,8 +51,8 @@ python_skip_reason=""
 
 # Run one command and grade it by its EXIT STATUS. Output goes to a file rather than through a
 # pipe: §5's opening rule is that piping a gate into a pager or into `head` returns the *pager's*
-# status, so a failing gate reads as a passing one. No status-graded gate pipes; gate 6a pipes
-# inside `gate_silent`, which reads no exit status.
+# status, so a failing gate reads as a passing one. No status-graded gate pipes; gate 6a's script
+# pipes, run under `gate_silent`, which reads no exit status.
 gate() {
   local name="$1"; shift
   if "$@" >"$log" 2>&1; then
@@ -142,38 +142,9 @@ echo "== gate 4 — init against a throwaway fixture"
 gate "4 npm test" npm test
 
 echo "== gate 6 — self-containment"
-# `$HOME` expands to the home of whoever runs this, which is what makes it a pre-commit self-check
-# rather than an audit — §5 says so, and it is why a clean clone passes it unconditionally.
-# In a linked worktree `.git` is a one-line FILE, `gitdir: <main checkout>/.git/worktrees/<name>`,
-# which `--exclude-dir=.git` does not skip because it skips directories only. The second stage
-# drops output lines whose path is exactly `./.git` and nothing else, so a nested `.git` file and a
-# file that quotes a `gitdir:` line are still printed. In a main checkout `.git` is the directory
-# the first stage already skips, so the second stage never matches and the command is the same in
-# both. Not `--exclude=.git`: GNU and BSD grep both match it against a file's base name, so it
-# would also skip every nested file named `.git`. Not `--exclude=./.git`: GNU grep matches a
-# recursive subfile's base name only, so it would exclude nothing on Linux.
-# The pipe is safe here and only here: `gate_silent` grades OUTPUT, so no filtering stage's exit
-# status (1 when it filters everything) is ever read, and grep's own `grep: …` error lines match
-# neither filter and still reach the log.
-# `test_run_logs` holds the Run gates phase's logs: they carry machine paths by construction, are
-# gitignored, and include the log of the run in progress, so 6a would fail on its own output.
-# `scratch` holds throwaway probes and the backend-comparison captures `docs/retrieval-eval.md`
-# writes there: gitignored and machine-local by construction (a `du` of the model caches, a
-# stream-json session's init line), so 6a would otherwise fail on files that can never be committed.
-# `__pycache__` holds Python bytecode, which records each source's absolute path: gitignored, never
-# committed, and written by any Python run against the editable install that does not carry
-# `PYTHONDONTWRITEBYTECODE`.
-# The third stage drops files one or more directories below `harness-runs/clarifications/`: the
-# clarification channel's per-branch questions and answers, gitignored and machine-local by
-# construction — an operator's answer quotes terminal output, and a Node stack frame carries an
-# absolute path. It anchors on the path rather than using `--exclude-dir=clarifications`, which
-# GNU and BSD grep match against the base name and so would also skip the shipped
-# `cli/templates/state-dir/clarifications/`. The tracked `README.md` at the directory's top level
-# is not below a subdirectory and stays covered.
-machine_path_hits() {
-  grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git --exclude-dir=test_run_logs --exclude-dir=scratch --exclude-dir=__pycache__ | grep -v '^\./\.git:[0-9][0-9]*:' | grep -v '^\./harness-runs/clarifications/[^/][^/]*/'
-}
-gate_silent "6a no machine paths" machine_path_hits
+# Gate 6a's exclusions, filters and the one grep error it drops are argued in
+# `scripts/check-machine-paths.sh`'s header; it searches the working directory, the root here.
+gate_silent "6a no machine paths" bash scripts/check-machine-paths.sh
 # Two exclusions, not one. `examples/notes-app/.claude` is an adopted repository's own generated
 # output; `./.claude` is THIS repository's, once it adopts the harness itself. Neither is a
 # template committed into the namespace `init` generates, which is the breach this gate is for —
