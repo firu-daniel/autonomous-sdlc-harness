@@ -103,8 +103,9 @@ export const HUNG_RELEASE_MISSED = 'release-missed';
 
 /**
  * How long, in seconds, the hung session waits silently for {@link HUNG_RELEASE}. A ceiling, so it
- * is scaled (`./timing.mjs`). Never below the 60 s it replaces: the task prompt forbids lowering the
- * sleep, because under load a shorter one ended before the watchdog's second check. It stays below
+ * is scaled (`./timing.mjs`). At any scale of 2/3 or more (the default is 2) it is no shorter than
+ * the fixed `sleep 60` it replaces, which had been raised to 60 s because under load a shorter one
+ * ended before the watchdog's second check. It stays below
  * the stalled-pass timeout at every scale: hung wait `scaleBound(60_000)` ms + this bound
  * `scaleBound(90)` s = 150 × scale s, under `scaleBound(180_000)` ms = 180 × scale s
  * (`watcher-stall-reset-payloads.test.mjs` → `RUN_TIMEOUT_MS`; `watcher-placeholder-host.test.mjs`

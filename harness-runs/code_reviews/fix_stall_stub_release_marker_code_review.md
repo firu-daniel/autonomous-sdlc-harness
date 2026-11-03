@@ -19,7 +19,7 @@ Two Should Fix findings remain, both about comment text. Pass 2 found no per-uni
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 2** — Drop the in-session "about 13 s" figure from the stall-reset header's `(release)` mutation entry _(layer: cli)_
-2. [ ] **Finding 1** — Correct `HUNG_RELEASE_BOUND_SECS`'s "never below 60 s" claim and state its reason instead of citing the task prompt _(layer: cli)_
+2. [x] **Finding 1** — Correct `HUNG_RELEASE_BOUND_SECS`'s "never below 60 s" claim and state its reason instead of citing the task prompt _(layer: cli)_
 
 ---
 
