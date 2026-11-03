@@ -59,6 +59,7 @@ const LEG_ORDER = [
   'glob-deny',
   'registry',
   'detached',
+  'gate-sandbox',
   'loopback',
   'job-layout',
   'runner-install',
@@ -76,6 +77,7 @@ const JOB_LEGS = [
   'network',
   'credentials',
   'detached',
+  'gate-sandbox',
   'loopback',
   'job-layout',
   'runner-install',
@@ -356,6 +358,7 @@ test('the Linux-only legs and the per-platform rows', async (t) => {
       'glob-deny',
       'registry',
       'detached',
+      'gate-sandbox',
       'loopback',
       'refusal',
       'runner-install',
@@ -368,7 +371,7 @@ test('the Linux-only legs and the per-platform rows', async (t) => {
     const run = await sourced(tmpdir(), 'for leg in "$@"; do sp_leg_linux_only "$leg"; printf "%s=%s\\n" "$leg" "$?"; done', legs);
     assert.equal(
       run.stdout,
-      'glob-deny=0\nregistry=0\ndetached=0\nloopback=0\nrefusal=0\nrunner-install=0\nrunner-pid=0\nrunner-privs=0\n' +
+      'glob-deny=0\nregistry=0\ndetached=0\ngate-sandbox=0\nloopback=0\nrefusal=0\nrunner-install=0\nrunner-pid=0\nrunner-privs=0\n' +
         'gates=1\nheadless-parity=1\njob-layout=1\n',
       run.stderr,
     );

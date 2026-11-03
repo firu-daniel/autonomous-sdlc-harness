@@ -85,3 +85,5 @@ This task changes no probe file.
 - The three test files this task creates or edits pass, each through the single-file command `.claude/context/conventions.md` → `## The testing bar` gives: `cli/test/sandbox-probe-gate-sandbox-legs.test.mjs`, `cli/test/sandbox-probe-detached-loopback-legs.test.mjs` and `cli/test/sandbox-probe-git-and-legs.test.mjs`.
 - `git grep -n 'sp__wf5_grade' -- cli/test` hits only `cli/test/sandbox-probe-gate-sandbox-legs.test.mjs`.
 - No case starts a session, the launcher, `bwrap` or a network call.
+
+- **Deviations from plan:** The new suite also sources `scripts/lib/harness-run-lib.sh`, first, beside the six probe files the plan lists: `sp__gs1_grade` reads the done marker through `hr_lane_mtime`, which none of those six defines, so the GS1 pass case cannot run without it (the same order `cli/test/sandbox-probe-job-launch.test.mjs` uses). The old suite's header points at the new file without naming `sp__wf5_grade`, so the plan's `git grep` check holds; until the new file is committed that check needs `git grep --untracked`, which hits only `cli/test/sandbox-probe-gate-sandbox-legs.test.mjs`.

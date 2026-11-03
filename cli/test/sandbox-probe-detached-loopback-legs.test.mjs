@@ -1,11 +1,12 @@
 /**
- * The sandbox probe's detached and loopback legs' grading functions (`sp__bg9_grade`, `sp__wf5_grade` in
+ * The sandbox probe's detached and loopback legs' grading functions (`sp__bg9_grade` in
  * `scripts/lib/sandbox-probe/legs-detached.sh`; `sp__lb_proxy_line`, `sp__lb_grade`, `sp__lb5_grade` in
- * `scripts/lib/sandbox-probe/legs-loopback.sh`).
+ * `scripts/lib/sandbox-probe/legs-loopback.sh`). WF5's cases moved with its grading function to
+ * `cli/test/sandbox-probe-gate-sandbox-legs.test.mjs`.
  *
  * **The rule these tests exist to enforce: a detached worker that dies with its session is a finding, not a
- * pass; the heartbeat must advance; and the loopback rows record what came back, never what was expected,
- * with the proxy recorded by host and port only.** Every grading function drives a permission-refused
+ * pass; and the loopback rows record what came back, never what was expected, with the proxy recorded by
+ * host and port only.** Every grading function drives a permission-refused
  * fixture to `not run`, and LB5 never records *unreachable* for a listener that was no longer running.
  *
  * Each case runs a `bash -c` through `runBash` sourcing `core.sh`, `platform.sh`, `judge.sh`, `controls.sh`,
@@ -121,44 +122,6 @@ test('sp__bg9_grade: pass only on a worker that outlived the session and finishe
       'not run',
       `the start call was refused at the permission layer, so nothing was detached: ${DONT_ASK}`,
     ]);
-  });
-});
-
-test('sp__wf5_grade: pass only on an advancing hr_lane_mtime', async (t) => {
-  /** Grades a temp file holding `text`, or, with `text` null, a path that does not exist. */
-  async function wf5(t, text) {
-    const dir = await caseDir(t);
-    const file = join(dir, 'sbx_wf5.mtimes');
-    if (text !== null) await writeFile(file, text);
-    return [file, await graded(t, 'sp__wf5_grade', [file])];
-  }
-
-  await t.test('an advancing mtime through the GNU arm: pass', async (t) => {
-    const [, r] = await wf5(t, 'stat -f %m: ?\nmtime 100\nmtime 103\n');
-    assert.deepEqual(r, [
-      'pass',
-      "hr_lane_mtime advanced 100..103 in a sandboxed process (stat -f %m gave '?', so the GNU stat -c %Y arm answered)",
-    ]);
-  });
-
-  await t.test('two equal mtimes: fail', async (t) => {
-    const [, r] = await wf5(t, 'stat -f %m: ?\nmtime 100\nmtime 100\n');
-    assert.deepEqual(r, ['fail', 'hr_lane_mtime did not advance: 100, then 100']);
-  });
-
-  await t.test('a 0: fail, neither stat arm answered', async (t) => {
-    const [, r] = await wf5(t, 'stat -f %m: ?\nmtime 0\nmtime 103\n');
-    assert.deepEqual(r, ['fail', 'neither stat arm answered: hr_lane_mtime printed 0, then 103']);
-  });
-
-  await t.test('a one-line file: not run', async (t) => {
-    const [file, r] = await wf5(t, 'mtime 100\n');
-    assert.deepEqual(r, ['not run', `the worker did not reach the hr_lane_mtime calls: 1 mtime line(s) in ${file}`]);
-  });
-
-  await t.test('a missing file: not run', async (t) => {
-    const [file, r] = await wf5(t, null);
-    assert.deepEqual(r, ['not run', `the worker did not reach the hr_lane_mtime calls: no ${file}`]);
   });
 });
 
