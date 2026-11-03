@@ -60,8 +60,8 @@
 #   3. the main checkout, `hr_wrapper_main_of` this file's directory;
 #   4. `hr_placeholder_host_probe_var`: not a bubblewrap host is `in-session`;
 #   5. the base profile, `<main>/.claude/settings.autonomous.json` (the path
-#      `autonomous-watcher.sh`'s SETTINGS_PROFILE defaults to): one JSON object,
-#      else a refusal; `.sandbox.enabled` `false` is `in-session`;
+#      `autonomous-watcher.sh`'s SETTINGS_PROFILE defaults to): one JSON object
+#      (`hr_json_single_object`, as in step 8), else a refusal; `.sandbox.enabled` `false` is `in-session`;
 #   6. `hr_wrapper_target_check_var <main> <target>`;
 #   7. `hr_wrapper_branch_var`, refusing a failure or a branch starting `-`;
 #   8. the session's own profile: the base when the target is the main checkout
@@ -171,16 +171,9 @@ main="$(hr_wrapper_main_of "$script_dir")" ||
 hr_placeholder_host_probe_var
 [ "$HR_PLACEHOLDER_HOST" = 1 ] || in_session
 
-# One JSON object, read by `jq` and never sourced.
-lsg_json_object() {
-  local file="${1-}" answer
-  answer="$(jq -s 'if length == 1 and (.[0] | type) == "object" then 1 else 0 end' "$file" 2>/dev/null)" || return 1
-  [ "$answer" = 1 ]
-}
-
 # 5.
 base="$main/.claude/settings.autonomous.json"
-[ -f "$base" ] && [ -r "$base" ] && lsg_json_object "$base" ||
+[ -f "$base" ] && [ -r "$base" ] && hr_json_single_object "$base" ||
   refuse "cannot read '$base' as one JSON object (absent, unreadable, invalid JSON, or jq missing)"
 enabled="$(jq -r 'if .sandbox.enabled == false then "off" else "on" end' "$base" 2>/dev/null)" ||
   refuse "cannot read '$base' as one JSON object (absent, unreadable, invalid JSON, or jq missing)"
@@ -205,7 +198,7 @@ if [ "$HR_TARGET_KIND" = main ]; then
 else
   profile="$(hr_run_profile_file "$(hr_repo_slug "$main")" "$branch")" || profile=""
   if [ -z "$profile" ] || [ ! -f "$profile" ] || [ -L "$profile" ] || [ ! -r "$profile" ] ||
-    ! lsg_json_object "$profile"; then
+    ! hr_json_single_object "$profile"; then
     refuse "no per-run profile for '$branch' at ${profile:-<unplaceable>}: the gate sandbox takes its protected paths from the session's own profile"
   fi
 fi

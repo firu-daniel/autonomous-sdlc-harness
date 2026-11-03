@@ -6271,6 +6271,16 @@ EOF
   return 0
 }
 
+# hr_json_single_object <file> — 0 only when <file> parses as exactly one JSON
+# value and that value is an object; 1 when it does not, or `jq` is missing or
+# fails. Read by `jq`, never sourced. THE ONE HOME of the test, so a profile one
+# caller accepts the other cannot refuse. Its callers:
+# `autonomous-watcher.sh` → `run_profile_render` and `run_profile_check`, and
+# `launch-sandboxed-gates.sh` checks 5 and 8.
+hr_json_single_object() {
+  [ "$(jq -s 'length == 1 and (.[0] | type) == "object"' "${1-}" 2>/dev/null)" = "true" ]
+}
+
 # ---------------------------------------------------------------------------
 # PLACEHOLDER LEFTOVERS — on a bubblewrap host, a session killed mid-call can
 # leave each absent `denyWrite` path it mounted as a read-only empty file on

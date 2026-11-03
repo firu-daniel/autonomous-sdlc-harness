@@ -1,12 +1,13 @@
 /**
  * The run library's Run gates lane — `HR_TEST_RUN_LABEL_PATTERN`, `HR_TEST_RUN_STALE_SECONDS`,
- * `HR_TEST_RUN_LOG_SUBDIR`, `hr_test_run_lane_dir` and `hr_heartbeat_age` in
- * `cli/templates/scripts/lib/harness-run-lib.sh`.
+ * `HR_TEST_RUN_LOG_SUBDIR`, `hr_test_run_lane_dir` and `hr_heartbeat_age` — and the profile predicate
+ * `hr_json_single_object`, in `cli/templates/scripts/lib/harness-run-lib.sh`.
  *
  * **The rule this suite enforces: `run-test-suite.sh` and `launch-sandboxed-gates.sh` take the lane
  * layout, the label pattern, the staleness bound and the heartbeat reader from this one owner, and
- * `hr_heartbeat_age` never answers a time it could not read.** The two scripts' own suites pin the
- * behaviour built on these; this one pins the helpers themselves.
+ * `hr_heartbeat_age` never answers a time it could not read; `launch-sandboxed-gates.sh` and
+ * `autonomous-watcher.sh` judge a profile by the one `hr_json_single_object`.** The scripts' own
+ * suites pin the behaviour built on these; this one pins the helpers themselves.
  *
  * Each case copies the library into its own throwaway directory under `os.tmpdir()`, sources it from
  * there in one `bash` process, and removes the directory in process. An unreadable mtime comes from a
@@ -118,4 +119,24 @@ test('hr_heartbeat_age fails, printing nothing, when the mtime cannot be read', 
   const r = await f.call('PATH="$1:$PATH"; hr_heartbeat_age "$2"; echo "status=$?"', [stubs, running]);
   assert.equal(r.stderr, '');
   assert.equal(r.stdout, 'status=1\n');
+});
+
+test('hr_json_single_object accepts exactly one JSON object and refuses anything else', async (t) => {
+  const f = await fixture(t);
+  const cases = [
+    ['object.json', '{"sandbox":{"enabled":true}}\n', 'status=0'],
+    ['array.json', '[{"sandbox":{}}]\n', 'status=1'],
+    ['two-objects.json', '{"a":1}\n{"b":2}\n', 'status=1'],
+    ['invalid.json', '{"a":\n', 'status=1'],
+    ['empty.json', '', 'status=1'],
+  ];
+  for (const [name, body, expected] of cases) {
+    const file = join(f.root, name);
+    await writeFile(file, body);
+    const r = await f.call('hr_json_single_object "$1"; echo "status=$?"', [file]);
+    assert.equal(r.stderr, '', name);
+    assert.equal(r.stdout, `${expected}\n`, name);
+  }
+  const absent = await f.call('hr_json_single_object "$1"; echo "status=$?"', [join(f.root, 'absent.json')]);
+  assert.equal(absent.stdout, 'status=1\n');
 });

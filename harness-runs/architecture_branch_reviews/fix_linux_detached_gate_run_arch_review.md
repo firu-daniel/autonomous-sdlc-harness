@@ -9,7 +9,7 @@ Headline: the layering holds. The launcher is a template under `cli/templates/sc
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 1** — Move the Run gates lane layout, label pattern, staleness bound and heartbeat age into the run library _(layer: cli, general)_
-2. [ ] **Finding 2** — Share the one-JSON-object profile predicate instead of re-typing it in the launcher _(layer: cli, general)_
+2. [x] **Finding 2** — Share the one-JSON-object profile predicate instead of re-typing it in the launcher _(layer: cli, general)_
 
 ## Must Fix
 

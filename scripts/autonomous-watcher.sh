@@ -2519,11 +2519,6 @@ run_profile_wrapper_prefixes() {
   RUN_PROFILE_COPY_PREFIX="Bash(bash ${copy}/${scripts}"
 }
 
-# 0 when <file> parses as exactly one JSON document, and that an object.
-run_profile_one_object() {
-  [ "$(jq -s 'length == 1 and (.[0] | type) == "object"' "$1" 2>/dev/null)" = "true" ]
-}
-
 # run_profile_entries <copy> <kind> — print one
 # `<absolute path><TAB><kind><TAB><deny|omit>` line per entry the per-run
 # profile adds for the run copy <copy> of <kind> (`clone` or `worktree`), kind
@@ -2689,7 +2684,7 @@ run_profile_render() {
     4) RUN_PROFILE_REFUSAL="the run copy's kind '$kind' is neither clone nor worktree"; return 1 ;;
     *) RUN_PROFILE_REFUSAL="a sibling-glob denyWrite entry of $SETTINGS_PROFILE for a run copy's .git/commondir, .git/config.worktree or .git/objects/info/http-alternates cannot be re-rooted: the watcher expands only an absolute entry with one '*' ending its segment"; return 1 ;;
   esac
-  if ! run_profile_one_object "$SETTINGS_PROFILE"; then
+  if ! hr_json_single_object "$SETTINGS_PROFILE"; then
     RUN_PROFILE_REFUSAL="the base profile $SETTINGS_PROFILE is not exactly one JSON object"
     return 1
   fi
@@ -2784,11 +2779,11 @@ run_profile_render() {
 run_profile_check() {
   local file="$1" copy="${2-}" verdict main="" twin="" drops="" edrops=""
   RUN_PROFILE_REFUSAL=""
-  if ! run_profile_one_object "$SETTINGS_PROFILE"; then
+  if ! hr_json_single_object "$SETTINGS_PROFILE"; then
     RUN_PROFILE_REFUSAL="the base profile $SETTINGS_PROFILE is not exactly one JSON object"
     return 1
   fi
-  if ! run_profile_one_object "$file"; then
+  if ! hr_json_single_object "$file"; then
     RUN_PROFILE_REFUSAL="the per-run profile $file is not exactly one JSON object"
     return 1
   fi
