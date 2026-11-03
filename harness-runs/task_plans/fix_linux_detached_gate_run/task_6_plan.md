@@ -36,3 +36,7 @@ It also depends on Task 2's spelling: `launch-sandboxed-gates.sh <target> <label
 - `git grep -n -F '| `<park_answer_lookup>` |' -- plugin/instructions` returns the same files as the previous command. Invariant: every file that binds `<park_answer_lookup>` binds `<gate_launcher>`.
 - Neither autonomous row's command carries a `$`.
 - `claude plugin validate --strict plugin` passes.
+- **Deviations from plan:**
+  - Evidence downgrade: `claude plugin validate --strict plugin` was refused by the tool layer ("Permission to use Bash has been denied … don't ask mode") and was not run. The claim rests on the diff: the change edits four instruction-fork table rows and one `plugin/docs/AUTONOMOUS_FLOW.md` table cell, touches no manifest, frontmatter or component file the validator parses. Not run, and no phase of this flow runs it.
+  - "Neither autonomous row's command carries a `$`" was checked on the command span only (`git grep -o -F` of the backticked `bash <MAIN_REPO>/…` string, no `$`); each row's prose carries the plan-dictated phrase "with no `$` anywhere in the command", so a whole-row `$` grep matches both rows by design.
+  - Where the autonomous rows say where `<MAIN_REPO>` resolves, each cites "the **Path:** bullet of `## Override B — global kill switch`" — the heading both autonomous forks carry and the bullet holding their `AUTONOMOUS_STOP` resolution paragraph.

@@ -117,7 +117,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_linux_detached_gate_run/
 3. [x] **Task 3** — Register the launcher as an excluded, agent-invocable outer-loop row, and bring the doctor sentence, the profile `_README` and the script lists level with it _(layer: cli)_ _(points: 20)_
 4. [x] **Task 4** — Test the launcher end to end against a recording `bwrap` stub _(layer: cli)_ _(points: 20)_
 5. [x] **Task 5** — Declare the `<gate_launcher>` binding and make Phase G issue it before the run form _(layer: plugin)_ _(points: 20)_
-6. [ ] **Task 6** — Bind `<gate_launcher>` in the four forks and name the launcher in the autonomous flow document _(layer: plugin)_ _(points: 10)_
+6. [x] **Task 6** — Bind `<gate_launcher>` in the four forks and name the launcher in the autonomous flow document _(layer: plugin)_ _(points: 10)_
 7. [ ] **Task 7** — Bring this checkout's root `run-test-suite.sh`, run library and new launcher level with their templates _(layer: general)_ _(points: 10)_
 8. [ ] **Task 8** — Take T3 through Phase G's launcher spelling, and stop its post-session wait on a stale heartbeat _(layer: general)_ _(points: 15)_
 9. [ ] **Task 9** — Add the probe's `gate-sandbox` leg (GS1–GS4 and WF5), and take WF5 out of the `detached` leg _(layer: general)_ _(points: 20)_
