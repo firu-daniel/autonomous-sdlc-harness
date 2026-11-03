@@ -8,7 +8,13 @@
 # prints `pending`, up to SP_T2_MAX_WAITS times. T2 is graded from the lane's .verdict and .log, never
 # from a call's output. A worker still running after the session is tracked for teardown and polled for
 # up to SP_T2_COLLECT_SECONDS, so teardown never removes the clone under it, interrupted or not.
-# T3 runs and is graded the same way; on Linux the log search also quotes `Read-only file system` and
+# T3 takes Phase G's autonomous launcher spelling (plan_orchestration_instructions_core.md → `### G.1 Run
+# the gates`): the session issues `bash $SP_SCRIPTS/launch-sandboxed-gates.sh $SP_CLONE sbx_probe_t2`,
+# the main checkout's launcher aimed at the clone, then the clone's repo-relative `--wait` as T2 does. It
+# is graded as T2 is, and only once the launcher answered `pending`; any other answer from a call that
+# ran is `not run`, quoted. Its post-session wait tracks no PID, since `.running` holds the launcher's
+# namespace PID, never a host one, and stops once the heartbeat (`.running`'s mtime) is older than
+# SP_T2_STALE_SECONDS. On Linux the log search also quotes `Read-only file system` and
 # `failed to create file via template`.
 #
 # W7's session carries `--debug-file`, a departure from the watcher's line; its path is exported as
@@ -26,7 +32,10 @@
 #
 # THE GRADING FUNCTIONS read only their arguments and the stream, and call only core.sh, judge.sh,
 # controls.sh and this file's functions:
-#   sp__t2_grade <stream> <run command> <verdict file> <log file>   T2's and T3's verdict
+#   sp__t2_grade <stream> <run command> <verdict file> <log file>   T2's verdict, and T3's base
+#   sp__t3_grade <stream> <launch command> <verdict file> <log file>   T3's verdict
+#   sp__t2_lane_state <has verdict 0|1> <has running 0|1> <running mtime> <now> <stale seconds>
+#                                        prints verdict, gone, live or stale
 #   sp__td2_tmpdir <stream> <command>    the printed TMPDIR, no trailing slash; status 1, printing nothing
 #   sp__td2_grade <stream> <tmpdir>      TD2's verdict
 #   sp__td4_grade <stream> <tmpdir>      TD4's verdict
@@ -40,6 +49,8 @@ SP_T2_LABEL=sbx_probe_t2
 SP_T2_MAX_WAITS=40
 SP_T2_COLLECT_SECONDS=1800
 SP_T2_POLL_SECONDS=5
+# Mirrors run-test-suite.sh's STALE_SECONDS: a change to either is an edit to both.
+SP_T2_STALE_SECONDS=30
 SP_W7_DEBUG=""
 
 # sp__local_session <name> <prompt file> [sp_session option]... — launch on SP_RUN_PROFILE; status 1,
@@ -121,6 +132,50 @@ sp__t2_grade() {
   n="$(grep -c -F -e '<sandbox_violations>' -e 'host is not on the allow list' -- "$stream" 2>/dev/null)" || true
   case "$n" in '' | *[!0-9]*) n=0 ;; esac
   SP_EVIDENCE="$SP_EVIDENCE; network denials in the session stream, recorded and not graded: $n event(s)"
+}
+
+# sp__t3_grade <stream> <launch command> <verdict file> <log file> — sets SP_VERDICT and SP_EVIDENCE:
+# sp__t2_grade's, kept only when the launch call answered `pending`.
+sp__t3_grade() {
+  local line
+  sp__t2_grade "${1:-}" "${2:-}" "${3:-}" "${4:-}"
+  # SP__TEXT is still the launch call's: sp__t2_grade judges no call after it. `pending` exits 3, so the
+  # Bash tool opens the text on a bare `Exit code 3` header, which sp__message_line joins to the answer.
+  line="$(sp__message_line "$(sp__local_text)")"
+  case "$line" in "Exit code "[0-9]*": "*) line="${line#*: }" ;; esac
+  if [ "${SP__COUNT:-0}" -eq 0 ] || [ "$SP_LAYER" = permission ]; then
+    return 0
+  fi
+  if [ "$line" = pending ]; then
+    SP_EVIDENCE="the launcher answered pending; $SP_EVIDENCE"
+  else
+    SP_VERDICT="not run"
+    SP_EVIDENCE="the launcher answered '$line', not pending, so no sandboxed gate run was started: $SP_EVIDENCE"
+  fi
+}
+
+# sp__t2_lane_state <has verdict 0|1> <has running 0|1> <running mtime> <now> <stale seconds> — prints
+# verdict, gone, live or stale; a non-numeric mtime, now or bound reads stale.
+sp__t2_lane_state() {
+  if [ "${1:-}" = 1 ]; then
+    echo verdict
+    return 0
+  fi
+  if [ "${2:-}" = 0 ]; then
+    echo gone
+    return 0
+  fi
+  case "${3:-}:${4:-}:${5:-}" in
+    *[!0-9:]* | :* | *::* | *:)
+      echo stale
+      return 0
+      ;;
+  esac
+  if [ "$(($4 - $3))" -le "$5" ]; then
+    echo live
+  else
+    echo stale
+  fi
 }
 
 # sp__td2_tmpdir <stream> <command> — print the TMPDIR the call printed, without a trailing slash;
@@ -259,12 +314,18 @@ sp_leg_gates() {
     return 0
   fi
 
-  # --- T2 (T3 on Linux): the gates through run-test-suite.sh, cwd = the clone.
+  # --- T2 (T3 on Linux): the gates through run-test-suite.sh (T3: started by the main checkout's
+  # launcher), cwd = the clone.
   if ! state_rel="$(hr_state_dir "$SP_CLONE")"; then
     sp_result_line gates "$row" "not run" "stateDir unresolvable in the clone" ""
+  elif [ "$row" = T3 ] && ! sp__ctl_literal clone "$SP_CLONE"; then
+    sp_result_line gates "$row" "not run" "the clone is not spellable as one literal word, so the launcher call cannot be issued" ""
+  elif [ "$row" = T3 ] && ! sp__ctl_literal "main scripts directory" "$SP_SCRIPTS"; then
+    sp_result_line gates "$row" "not run" "the main checkout's scripts directory is not spellable as one literal word, so the launcher call cannot be issued" ""
   else
     lane="$SP_CLONE/$state_rel/test_run_logs/$(hr_sanitize_branch "$SP_BRANCH")/$SP_T2_LABEL"
     cmd="bash $scripts_rel/run-test-suite.sh $SP_T2_LABEL"
+    [ "$row" != T3 ] || cmd="bash $SP_SCRIPTS/launch-sandboxed-gates.sh $SP_CLONE $SP_T2_LABEL"
     wait_cmd="bash $scripts_rel/run-test-suite.sh --wait $SP_T2_LABEL"
     pfile="$SP_TMP/gates-t2.prompt"
     sp_prompt_new "$pfile"
@@ -274,7 +335,30 @@ sp_leg_gates() {
     sp__local_session gates-t2 "$pfile"
     departure="$(sp_departures)"
     note=""
-    if [ ! -f "$lane.verdict" ] && [ -f "$lane.running" ]; then
+    if [ "$row" = T3 ]; then
+      # No PID is tracked: .running holds the launcher's namespace PID, never a host one.
+      local has_v has_r lane_state=""
+      waited=0
+      while :; do
+        has_v=0
+        [ ! -f "$lane.verdict" ] || has_v=1
+        has_r=0
+        [ ! -f "$lane.running" ] || has_r=1
+        lane_state="$(sp__t2_lane_state "$has_v" "$has_r" "$(hr_lane_mtime "$lane.running")" "$(date +%s)" "$SP_T2_STALE_SECONDS")"
+        [ "$lane_state" = live ] && [ "$waited" -lt "$SP_T2_COLLECT_SECONDS" ] || break
+        sleep "$SP_T2_POLL_SECONDS"
+        waited=$((waited + SP_T2_POLL_SECONDS))
+      done
+      if [ "$waited" -gt 0 ]; then
+        case "$lane_state" in
+          verdict) note="the verdict was collected by the probe after the session, ${waited}s later" ;;
+          gone) note="the gate worker removed .running ${waited}s after the session without a verdict" ;;
+          live) note="no verdict ${waited}s after the session and the gate worker's heartbeat on .running is still live" ;;
+        esac
+      fi
+      [ "$lane_state" != stale ] ||
+        note="the gate worker's heartbeat on .running went stale (older than ${SP_T2_STALE_SECONDS}s) ${waited}s after the session, without a verdict"
+    elif [ ! -f "$lane.verdict" ] && [ -f "$lane.running" ]; then
       # Tracked before the wait, so the EXIT/INT/TERM teardown stops a live worker before it removes the
       # clone under it on every exit path, not only when the wait runs out.
       pid=""
@@ -298,7 +382,11 @@ sp_leg_gates() {
     if [ -f "$lane.log" ] && cp -- "$lane.log" "$SP_TMP/gates-t2.lane.log" 2>/dev/null; then
       sp_keep_file "$SP_TMP/gates-t2.lane.log"
     fi
-    sp__t2_grade "$SP_STREAM" "$cmd" "$lane.verdict" "$lane.log"
+    if [ "$row" = T3 ]; then
+      sp__t3_grade "$SP_STREAM" "$cmd" "$lane.verdict" "$lane.log"
+    else
+      sp__t2_grade "$SP_STREAM" "$cmd" "$lane.verdict" "$lane.log"
+    fi
     verdict="$SP_VERDICT"
     evidence="$SP_EVIDENCE"
     [ -z "$note" ] || evidence="$evidence; $note"
