@@ -24,3 +24,13 @@
   >
   > Fallback. If no route can be built and checked on this branch, or a later Gate 15 run shows the chosen route does not hold, Run gates do not run on Linux and WSL2. On a bubblewrap host the phase refuses with a message that says why. The plan states what an unattended Linux run does then: it parks with that reason, or it ends with the gates recorded as not run. It never reports gates as passed. F10's row records which outcome this branch shipped. PD25–PD28 and the documentation land on this branch either way. macOS is unchanged.
 - **carries beyond this branch:** a standing rule for the excluded set: a command may run outside the sandbox only if it is run from the main checkout and is a fixed script no agent can write. Session-written code, such as a gate run's build, tests and package scripts, never runs unsandboxed through an excluded command, even with the cost recorded as a residual. On Linux and WSL2, Run gates either run sandboxed or do not run, and are never reported as passed when they did not run.
+
+## question_2 — The unattended profile refused the `chmod +x` that user-review round 2 Finding 2 (launcher mode `100644` → `100755`) needs
+- **raised by:** Phase A, `layer-implementer` (layer `general`), on Finding 2 of `harness-runs/user_reviews/fix_linux_detached_gate_run_fix_plan_2.md`.
+- **asked:** Q1. How should the executable bit on `scripts/launch-sandboxed-gates.sh` be set? The implementer's `chmod +x` on that path was refused ("Permission to use Bash has been denied because Claude Code is running in don't ask mode"). The loop works through items in order and could not skip to Finding 1. Options:
+  - **(a)** The operator sets the bit by hand in the run copy, then resumes. The committer then records `100755` with the readiness flip.
+  - **(b)** The operator allows `chmod +x` on that one path in the run's permission profile, then resumes.
+  - **(c)** Drop Finding 2 for this round: close it with a `## Disposition` and move on to Finding 1.
+- **answered:**
+  > Q1 — (a). The executable bit is set in the run copy; record `100755` with the readiness flip and continue with Finding 1.
+- **carries beyond this branch:** nothing beyond this branch
