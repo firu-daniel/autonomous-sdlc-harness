@@ -4,26 +4,26 @@
 
 | Measure | Value |
 |---|---|
-| Sessions | 85 (83 incomplete) |
-| Span | 20h38m |
-| Wall | 5h19m |
-| Active | 5h13m |
+| Sessions | 86 (83 incomplete) |
+| Span | 25h05m |
+| Wall | 9h14m |
+| Active | 9h05m |
 | Host-suspended | 0.0s |
-| Idle | 6m 44s |
-| Cost | $135.00 |
-| Input tokens (uncached) | 4714 (2 of 85 sessions) |
-| Total input tokens (incl. cache) | 316595710 (2 of 85 sessions) |
-| Output tokens | 1502283 (2 of 85 sessions) |
-| Thinking tokens (main thread) | 2041 |
-| Cache read tokens | 308279283 (2 of 85 sessions) |
-| Cache write tokens | 8311713 (2 of 85 sessions) |
-| Cache write tokens, main thread (5m / 1h) | 0 / 145688 |
-| Cache hit ratio | 0.9737 |
-| Requests | 2257 |
-| Request latency p50 / p90 / p99 / max | 1.8s / 8.3s / 44.3s / 2m 23s |
+| Idle | 9m 00s |
+| Cost | $195.35 |
+| Input tokens (uncached) | 6960 (3 of 86 sessions) |
+| Total input tokens (incl. cache) | 496186367 (3 of 86 sessions) |
+| Output tokens | 1935576 (3 of 86 sessions) |
+| Thinking tokens (main thread) | 7844 |
+| Cache read tokens | 484836521 (3 of 86 sessions) |
+| Cache write tokens | 11342886 (3 of 86 sessions) |
+| Cache write tokens, main thread (5m / 1h) | 0 / 551323 |
+| Cache hit ratio | 0.9771 |
+| Requests | 3327 |
+| Request latency p50 / p90 / p99 / max | 1.8s / 7.8s / 35.1s / 2m 23s |
 | Requests over the idle threshold | 2 |
 | API retries | 0 |
-| Permission denials | 8 |
+| Permission denials | 33 |
 | Sub-agents failed / killed | 0 / 0 |
 | Slowest sub-agent | autonomous-sdlc-harness:task-plan-writer — Write task plan — 24m 37s (session 1) |
 | Rate-limit peak | seven_day 0.64 |
@@ -8492,3 +8492,217 @@ Remainder: tokens the session total holds that neither the orchestrator's reques
 | Turns | 24 |
 | Time to first token | 1.4s |
 | Rate-limit peak | — |
+
+## Session 86 — 2026-11-03T11:31:31.423Z → 2026-11-03T15:26:05.590Z
+
+Session id: `6fa6040a-d84c-4f48-8b0c-9fc8a5b3f933`
+
+### Time
+
+| Wall | duration_ms | duration_api_ms | Host-suspended | Idle | Active | Suspend source |
+|---|---|---|---|---|---|---|
+| 3h54m | 3h54m | 1h10m | 0.0s | 2m 15s | 3h52m | none |
+
+### Idle gaps (over 120 s)
+
+| Start | Length | Context | Class |
+|---|---|---|---|
+| 2026-11-03T11:50:09.284Z | 2m 15s | autonomous-sdlc-harness:layer-implementer | tool_running |
+
+### Request latency
+
+| Context | Requests | p50 | p90 | p99 | Max | Over threshold |
+|---|---|---|---|---|---|---|
+| all | 1070 | 1.9s | 5.9s | 26.3s | 48.0s | 0 |
+| autonomous-sdlc-harness:architecture-reviewer | 50 | 2.2s | 8.3s | 17.6s | 17.6s | 0 |
+| autonomous-sdlc-harness:committer | 80 | 1.6s | 4.1s | 9.1s | 9.1s | 0 |
+| autonomous-sdlc-harness:layer-implementer | 238 | 2.4s | 6.1s | 16.2s | 26.3s | 0 |
+| autonomous-sdlc-harness:layer-reviewer | 100 | 3.1s | 8.7s | 15.9s | 18.0s | 0 |
+| autonomous-sdlc-harness:statistics-plan-writer | 8 | 2.2s | 25.2s | 25.2s | 25.2s | 0 |
+| autonomous-sdlc-harness:test-fix-plan-writer | 92 | 3.1s | 16.6s | 48.0s | 48.0s | 0 |
+| autonomous-sdlc-harness:user-review-fix-plan-writer | 43 | 4.8s | 24.3s | 33.3s | 33.3s | 0 |
+| orchestrator | 459 | 1.6s | 2.1s | 4.7s | 14.9s | 0 |
+
+### Tool time
+
+| Tool | Context | Calls | Total | Max |
+|---|---|---|---|---|
+| Agent — sub-agent wall time | orchestrator | 52 | 1h08m | 6m 50s |
+| Bash | autonomous-sdlc-harness:architecture-reviewer | 39 | 5.3s | 0.2s |
+| Bash | autonomous-sdlc-harness:committer | 121 | 1m 15s | 4.8s |
+| Bash | autonomous-sdlc-harness:layer-implementer | 195 | 11m 57s | 2m 15s |
+| Bash | autonomous-sdlc-harness:layer-reviewer | 92 | 1m 38s | 42.8s |
+| Bash | autonomous-sdlc-harness:statistics-plan-writer | 13 | 1.7s | 0.1s |
+| Bash | autonomous-sdlc-harness:test-fix-plan-writer | 71 | 9.7s | 0.2s |
+| Bash | autonomous-sdlc-harness:user-review-fix-plan-writer | 28 | 4.3s | 0.2s |
+| Bash | orchestrator | 383 | 2h29m | 1m 01s |
+| Edit | autonomous-sdlc-harness:committer | 9 | 0.3s | 0.0s |
+| Edit | autonomous-sdlc-harness:layer-implementer | 75 | 3.2s | 0.0s |
+| Edit | autonomous-sdlc-harness:test-fix-plan-writer | 2 | 0.0s | 0.0s |
+| Edit | autonomous-sdlc-harness:user-review-fix-plan-writer | 2 | 0.0s | 0.0s |
+| Edit | orchestrator | 6 | 0.2s | 0.0s |
+| Read | autonomous-sdlc-harness:architecture-reviewer | 42 | 3.3s | 0.4s |
+| Read | autonomous-sdlc-harness:committer | 8 | 0.1s | 0.0s |
+| Read | autonomous-sdlc-harness:layer-implementer | 73 | 7.0s | 1.8s |
+| Read | autonomous-sdlc-harness:layer-reviewer | 33 | 2.2s | 0.3s |
+| Read | autonomous-sdlc-harness:statistics-plan-writer | 4 | 0.4s | 0.3s |
+| Read | autonomous-sdlc-harness:test-fix-plan-writer | 28 | 1.1s | 0.3s |
+| Read | autonomous-sdlc-harness:user-review-fix-plan-writer | 19 | 0.8s | 0.3s |
+| Read | orchestrator | 13 | 7.1s | 3.6s |
+| Skill | orchestrator | 1 | 0.0s | 0.0s |
+| Write | autonomous-sdlc-harness:architecture-reviewer | 1 | 0.0s | 0.0s |
+| Write | autonomous-sdlc-harness:layer-implementer | 1 | 0.0s | 0.0s |
+| Write | autonomous-sdlc-harness:layer-reviewer | 8 | 0.3s | 0.0s |
+| Write | autonomous-sdlc-harness:statistics-plan-writer | 1 | 0.0s | 0.0s |
+| Write | autonomous-sdlc-harness:test-fix-plan-writer | 7 | 0.2s | 0.0s |
+| Write | autonomous-sdlc-harness:user-review-fix-plan-writer | 6 | 0.3s | 0.0s |
+| Write | orchestrator | 55 | 2.4s | 0.0s |
+
+`Agent` / `Task` rows are sub-agent wall time: how long the orchestrator was blocked on each dispatch, which `### Sub-agents` breaks down per dispatch. They are not time spent in a tool.
+
+#### Slowest calls (sub-agent dispatches excluded)
+
+| Tool | Context | Started | Duration | Result bytes | Error | Permission denied |
+|---|---|---|---|---|---|---|
+| Bash | autonomous-sdlc-harness:layer-implementer | 2026-11-03T11:50:09.284Z | 2m 15s | 6628 | false | false |
+| Bash | orchestrator | 2026-11-03T14:54:32.233Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-03T14:00:13.317Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-03T14:56:43.198Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-03T14:09:57.769Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-03T12:24:31.700Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-03T14:49:04.702Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-03T13:58:02.342Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-03T14:02:23.436Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-03T13:20:01.772Z | 1m 01s | 19 | true | false |
+
+#### Polling loops
+
+| Context | Command | Count | Total |
+|---|---|---|---|
+| autonomous-sdlc-harness:architecture-reviewer | git rev-parse --show-toplevel | 5 | 0.5s |
+| autonomous-sdlc-harness:committer | bash <main_repo>/scripts/commit-on-branch.sh --repo <repo_root> harness-runs/test_fix_plans/fix_linux_detached_gate_run_review_1_round_2.md harness-runs/test_fi | 3 | 1.6s |
+| autonomous-sdlc-harness:committer | bash <main_repo>/scripts/commit-on-branch.sh --repo <repo_root> harness-runs/user_reviews/fix_linux_detached_gate_run_fix_plan.md harness-runs/user_reviews/fix_ | 5 | 2.9s |
+| autonomous-sdlc-harness:committer | bash <main_repo>/scripts/push-branch.sh <repo_root> | 12 | 55.7s |
+| autonomous-sdlc-harness:committer | git branch --show-current | 11 | 1.3s |
+| autonomous-sdlc-harness:committer | git log -1 --oneline | 10 | 1.2s |
+| autonomous-sdlc-harness:committer | git rev-parse --show-toplevel | 11 | 1.3s |
+| autonomous-sdlc-harness:committer | git show --stat --format= HEAD | 4 | 0.4s |
+| autonomous-sdlc-harness:committer | git status --short | 24 | 3.5s |
+| autonomous-sdlc-harness:committer | printenv HARNESS_MAIN_REPO | 11 | 1.2s |
+| autonomous-sdlc-harness:layer-implementer | bash scripts/typecheck.sh | 15 | 36.6s |
+| autonomous-sdlc-harness:layer-implementer | git diff --name-only HEAD | 5 | 5.2s |
+| autonomous-sdlc-harness:layer-implementer | git diff --name-only HEAD; git ls-files --others --exclude-standard | 3 | 0.5s |
+| autonomous-sdlc-harness:layer-implementer | git ls-files --others --exclude-standard | 5 | 4.5s |
+| autonomous-sdlc-harness:layer-implementer | git rev-parse --show-toplevel | 17 | 2.1s |
+| autonomous-sdlc-harness:layer-implementer | npm test --workspace cli -- test/launch-sandboxed-gates.test.mjs | 10 | 7m 15s |
+| autonomous-sdlc-harness:layer-implementer | npm test --workspace cli -- test/main-anchor-isolation.test.mjs | 6 | 10.9s |
+| autonomous-sdlc-harness:layer-implementer | npm test --workspace cli -- test/shipped-scripts-mktemp.test.mjs | 6 | 11.1s |
+| autonomous-sdlc-harness:layer-implementer | npm test --workspace cli -- test/watcher-main-anchor.test.mjs | 6 | 44.9s |
+| autonomous-sdlc-harness:layer-reviewer | git rev-parse --show-toplevel | 12 | 1.5s |
+| autonomous-sdlc-harness:layer-reviewer | git status --short && git diff HEAD | 8 | 1.4s |
+| autonomous-sdlc-harness:test-fix-plan-writer | git rev-parse --show-toplevel | 4 | 0.4s |
+| autonomous-sdlc-harness:test-fix-plan-writer | printenv HOME | 4 | 0.3s |
+| orchestrator | bash <main_repo>/scripts/push-branch.sh <repo_root> | 10 | 46.0s |
+| orchestrator | bash scripts/run-test-suite.sh --wait review_1_round_1 | 38 | 37m 42s |
+| orchestrator | bash scripts/run-test-suite.sh --wait review_1_round_2 | 37 | 36m 23s |
+| orchestrator | bash scripts/run-test-suite.sh --wait review_1_round_3 | 37 | 36m 28s |
+| orchestrator | bash scripts/run-test-suite.sh --wait review_1_round_4 | 37 | 37m 14s |
+| orchestrator | ls <repo_root>/harness-runs/STOP <repo_root>/harness-runs/PAUSE | 161 | 48.8s |
+| orchestrator | ls <repo_root>/harness-runs/STOP <repo_root>/harness-runs/PAUSE <main_repo>/harness-runs/AUTONOMOUS_STOP | 10 | 1.1s |
+| orchestrator | ls <repo_root>/harness-runs/user_review_fix_plan_point_reviews/fix_linux_detached_gate_run_fix_plan/item_4/ <repo_root>/harness-runs/STOP <repo_root>/harness-ru | 3 | 0.3s |
+
+### Sub-agents
+
+| Type | Description | Duration | Requests | Output tokens | Input tokens (uncached) | Total input tokens (incl. cache) | Cache read tokens | Cache write tokens | Wall share |
+|---|---|---|---|---|---|---|---|---|---|
+| autonomous-sdlc-harness:user-review-fix-plan-writer | Write user-review fix plan | 6m 27s | 43 | 40603 | 88 | 5831444 | 5627598 | 203758 | 0.0275 |
+| autonomous-sdlc-harness:architecture-reviewer | Architecture gate on fix plan | 1m 31s | 15 | 9390 | 32 | 1057149 | 962911 | 94206 | 0.0065 |
+| autonomous-sdlc-harness:layer-implementer | Implement Finding 3 (general) | 43.2s | 8 | 4257 | 18 | 338951 | 297987 | 40946 | 0.0031 |
+| autonomous-sdlc-harness:committer | Commit Finding 3 disposition | 29.2s | 8 | 2397 | 18 | 219392 | 192361 | 27013 | 0.0021 |
+| autonomous-sdlc-harness:layer-implementer | Implement Finding 5 (plugin) | 59.6s | 15 | 5648 | 32 | 685110 | 648072 | 37006 | 0.0042 |
+| autonomous-sdlc-harness:layer-reviewer | Review Finding 5 (plugin) | 27.8s | 6 | 2642 | 14 | 171530 | 144505 | 27011 | 0.002 |
+| autonomous-sdlc-harness:layer-implementer | Implement Finding 5 (general) | 31.7s | 6 | 2726 | 14 | 236417 | 208299 | 28104 | 0.0023 |
+| autonomous-sdlc-harness:layer-reviewer | Review Finding 5 (general) | 23.3s | 3 | 2392 | 8 | 143645 | 101046 | 42591 | 0.0017 |
+| autonomous-sdlc-harness:committer | Commit Finding 5 | 27.4s | 6 | 2339 | 14 | 182026 | 165877 | 16135 | 0.002 |
+| autonomous-sdlc-harness:layer-implementer | Implement Finding 2 (cli) | 6m 50s | 34 | 19750 | 70 | 2597758 | 2498675 | 99013 | 0.0292 |
+| autonomous-sdlc-harness:layer-reviewer | Review Finding 2 (cli) | 52.2s | 11 | 4991 | 24 | 495114 | 442605 | 52485 | 0.0037 |
+| autonomous-sdlc-harness:layer-implementer | Implement Finding 2 (general) | 1m 23s | 16 | 7709 | 34 | 829362 | 783464 | 45864 | 0.0059 |
+| autonomous-sdlc-harness:layer-reviewer | Review Finding 2 (general) | 44.4s | 9 | 4491 | 20 | 441531 | 394807 | 46704 | 0.0032 |
+| autonomous-sdlc-harness:committer | Commit Finding 2 | 32.3s | 8 | 2889 | 18 | 220813 | 193078 | 27717 | 0.0023 |
+| autonomous-sdlc-harness:layer-implementer | Implement Finding 4 (cli) | 1m 15s | 10 | 4210 | 22 | 458486 | 413763 | 44701 | 0.0053 |
+| autonomous-sdlc-harness:layer-reviewer | Review Finding 4 (cli) | 24.3s | 6 | 2415 | 14 | 201655 | 177032 | 24609 | 0.0017 |
+| autonomous-sdlc-harness:layer-implementer | Implement Finding 4 (general) | 1m 12s | 14 | 6456 | 30 | 747677 | 693728 | 53919 | 0.0052 |
+| autonomous-sdlc-harness:layer-reviewer | Review Finding 4 (general) | 1m 07s | 12 | 6154 | 26 | 651595 | 589678 | 61891 | 0.0048 |
+| autonomous-sdlc-harness:layer-implementer | Fix Finding 4 (general) iter 1 | 1m 16s | 15 | 6589 | 32 | 802503 | 754722 | 47749 | 0.0055 |
+| autonomous-sdlc-harness:layer-reviewer | Re-review Finding 4 (general) | 38.3s | 8 | 3840 | 18 | 429418 | 373095 | 56305 | 0.0027 |
+| autonomous-sdlc-harness:committer | Commit Finding 4 | 32.1s | 9 | 2717 | 20 | 253331 | 224067 | 29244 | 0.0023 |
+| autonomous-sdlc-harness:layer-implementer | Implement Finding 1 (cli) | 3m 12s | 26 | 14674 | 54 | 1740640 | 1656599 | 83987 | 0.0137 |
+| autonomous-sdlc-harness:layer-reviewer | Review Finding 1 (cli) | 1m 39s | 11 | 5948 | 24 | 494696 | 452481 | 42191 | 0.007 |
+| autonomous-sdlc-harness:layer-implementer | Implement Finding 1 (general) | 1m 21s | 17 | 8229 | 36 | 911109 | 862708 | 48365 | 0.0058 |
+| autonomous-sdlc-harness:layer-reviewer | Review Finding 1 (general) | 1m 02s | 11 | 6319 | 24 | 686329 | 620367 | 65938 | 0.0045 |
+| autonomous-sdlc-harness:committer | Commit Finding 1 | 26.2s | 6 | 2344 | 14 | 186962 | 157056 | 29892 | 0.0019 |
+| autonomous-sdlc-harness:test-fix-plan-writer | Write test fix plan round 1 | 2m 00s | 18 | 11911 | 38 | 1083521 | 1000434 | 83049 | 0.0086 |
+| autonomous-sdlc-harness:architecture-reviewer | Arch gate on test fix plan | 31.8s | 8 | 3072 | 18 | 337717 | 260586 | 77113 | 0.0023 |
+| autonomous-sdlc-harness:committer | Commit test fix plan round 1 | 21.3s | 6 | 1617 | 14 | 158729 | 134772 | 23943 | 0.0015 |
+| autonomous-sdlc-harness:layer-implementer | Implement test fix 1 (cli) | 1m 18s | 9 | 3060 | 20 | 419885 | 368062 | 51803 | 0.0056 |
+| autonomous-sdlc-harness:layer-implementer | Implement test fix 1 (general) | 1m 16s | 9 | 2855 | 20 | 423345 | 387203 | 36122 | 0.0055 |
+| autonomous-sdlc-harness:committer | Commit test fix item 1 | 25.8s | 6 | 2227 | 14 | 165514 | 152518 | 12982 | 0.0018 |
+| autonomous-sdlc-harness:test-fix-plan-writer | Write test fix plan round 2 | 4m 21s | 32 | 26398 | 66 | 2545270 | 2431785 | 113419 | 0.0185 |
+| autonomous-sdlc-harness:architecture-reviewer | Arch gate test fix plan r2 | 54.5s | 11 | 5587 | 24 | 680081 | 596318 | 83739 | 0.0039 |
+| autonomous-sdlc-harness:test-fix-plan-writer | Revise test fix plan r2 | 21.7s | 6 | 2269 | 14 | 153327 | 137412 | 15901 | 0.0015 |
+| autonomous-sdlc-harness:architecture-reviewer | Arch re-gate test fix plan r2 | 46.2s | 9 | 4674 | 20 | 432196 | 372114 | 60062 | 0.0033 |
+| autonomous-sdlc-harness:committer | Commit test fix plan round 2 | 20.1s | 5 | 1540 | 12 | 137494 | 113329 | 24153 | 0.0014 |
+| autonomous-sdlc-harness:layer-implementer | Implement r2 test fix 1 (cli) | 2m 53s | 21 | 8811 | 44 | 1087380 | 1025056 | 62280 | 0.0123 |
+| autonomous-sdlc-harness:layer-reviewer | Review r2 test fix 1 (cli) | 1m 08s | 6 | 2560 | 14 | 215832 | 180484 | 35334 | 0.0049 |
+| autonomous-sdlc-harness:layer-implementer | Implement r2 test fix 1 (general) | 1m 06s | 10 | 6755 | 22 | 530956 | 486177 | 44757 | 0.0048 |
+| autonomous-sdlc-harness:layer-reviewer | Review r2 test fix 1 (general) | 51.7s | 9 | 5172 | 20 | 574666 | 514581 | 60065 | 0.0037 |
+| autonomous-sdlc-harness:committer | Commit r2 test fix 1 | 27.1s | 8 | 2388 | 18 | 225360 | 197619 | 27723 | 0.0019 |
+| autonomous-sdlc-harness:layer-implementer | Implement r2 test fix 2 (cli) | 1m 36s | 13 | 5195 | 28 | 612727 | 570874 | 41825 | 0.0069 |
+| autonomous-sdlc-harness:layer-implementer | Implement r2 test fix 2 (general) | 1m 11s | 7 | 2579 | 16 | 235449 | 216280 | 19153 | 0.0051 |
+| autonomous-sdlc-harness:committer | Commit r2 test fix 2 | 22.5s | 6 | 1893 | 14 | 160376 | 148840 | 11522 | 0.0016 |
+| autonomous-sdlc-harness:test-fix-plan-writer | Write test fix plan round 3 | 4m 55s | 36 | 29233 | 74 | 2767880 | 2649227 | 118579 | 0.021 |
+| autonomous-sdlc-harness:architecture-reviewer | Arch gate test fix plan r3 | 32.2s | 7 | 3439 | 16 | 447518 | 369514 | 77988 | 0.0023 |
+| autonomous-sdlc-harness:committer | Commit test fix plan round 3 | 19.6s | 5 | 1554 | 12 | 137164 | 113066 | 24086 | 0.0014 |
+| autonomous-sdlc-harness:layer-implementer | Implement r3 test fix 1 (cli) | 1m 21s | 8 | 3732 | 18 | 329786 | 288555 | 41213 | 0.0058 |
+| autonomous-sdlc-harness:layer-reviewer | Review r3 test fix 1 (cli) | 39.4s | 8 | 3536 | 18 | 297272 | 259543 | 37711 | 0.0028 |
+| autonomous-sdlc-harness:committer | Commit r3 test fix 1 | 26.0s | 7 | 2223 | 16 | 192061 | 178681 | 13364 | 0.0019 |
+| autonomous-sdlc-harness:statistics-plan-writer | Update branch statistics | 57.4s | 8 | 7272 | 18 | 348660 | 298334 | 50308 | 0.0041 |
+
+### Cost and tokens
+
+| Measure | Value |
+|---|---|
+| Cost | $60.36 |
+| Cost — claude-opus-5-5 | $60.36 |
+| Input tokens (uncached) | 2246 |
+| Total input tokens (incl. cache) | 179590657 |
+| Output tokens | 433293 |
+| Thinking tokens (main thread) | 5803 |
+| Cache read tokens | 176557238 |
+| Cache write tokens | 3031173 |
+| Cache write tokens, main thread (5m / 1h) | 0 / 405635 |
+| Cache hit ratio | 0.9831 |
+| Token source | result.modelUsage |
+
+#### Token attribution
+
+| Context | Input tokens (uncached) | Total input tokens (incl. cache) | Output tokens | Cache read tokens | Cache write tokens |
+|---|---|---|---|---|---|
+| orchestrator | 920 | 143875848 | 11151 | 143469293 | 405635 |
+| sub-agents | 1326 | 35714809 | 333671 | 33087945 | 2625538 |
+| remainder | 0 | 0 | 88471 | 0 | 0 |
+
+Remainder: tokens the session total holds that neither the orchestrator's requests nor the dispatches' transcripts account for.
+
+### Reliability
+
+| Measure | Value |
+|---|---|
+| API retries | 0 |
+| Permission denials | 25 |
+| Sub-agents spawned / failed / killed | 52 / 0 / 0 |
+| terminal_reason | completed |
+| stop_reason | end_turn |
+| Turns | 512 |
+| Time to first token | 1.7s |
+| Rate-limit peak | seven_day 0.06 |
