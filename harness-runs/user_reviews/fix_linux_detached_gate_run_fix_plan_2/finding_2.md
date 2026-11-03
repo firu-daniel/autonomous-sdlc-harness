@@ -16,3 +16,5 @@ chmod +x scripts/launch-sandboxed-gates.sh
 ```
 
 Afterwards, `git ls-files -s scripts/launch-sandboxed-gates.sh` prints `100755` with the blob id unchanged (`69699c05…`). The commit is a mode change only, `old mode 100644` / `new mode 100755`, with no content diff. Leave `cli/templates/scripts/launch-sandboxed-gates.sh` at `100644`.
+
+- **Deviations from plan:** The implementer ran neither Fix command. The unattended profile refused `chmod +x` (question_2.md, Q1). Under answer_2.md Q1 (a), the operator set the bit in the run copy instead. The implementer also did not run `git update-index --chmod=+x`, because staging belongs to the committer. With `core.fileMode=true`, the committer's `git add` records the mode. What the implementer verified in this session: `ls -l` shows `-rwxr-xr-x`, and `git diff scripts/launch-sandboxed-gates.sh` prints only `old mode 100644` / `new mode 100755` with no content hunk. The index still reads `100644 69699c05…` until the committer stages the file. `cli/templates/scripts/launch-sandboxed-gates.sh` was not touched.

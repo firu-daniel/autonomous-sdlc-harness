@@ -14,7 +14,7 @@
 
 Each entry resolves to `harness-runs/user_reviews/fix_linux_detached_gate_run_fix_plan_2/finding_<K>.md` through its `**Finding K**` reference. The list runs from the lowest blast radius to the widest. Finding 2 is a mode-only change to one file. Finding 1 changes the probe's render, its teardown note and a document of record, and adds fixtures.
 
-1. [ ] **Finding 2** — Commit `scripts/launch-sandboxed-gates.sh` as `100755`, like the other rendered wrappers in `scripts/`. _(layer: general)_
+1. [x] **Finding 2** — Commit `scripts/launch-sandboxed-gates.sh` as `100755`, like the other rendered wrappers in `scripts/`. _(layer: general)_
 2. [ ] **Finding 1** — `sp__render` records the rendered per-run profile as the clone record's `run_profile`, as `spawn_engine` does. Teardown's record drop removes it. Add fixtures for the record, the launcher's acceptance and the job-mode arm. _(layer: cli, general)_
 
 ---
