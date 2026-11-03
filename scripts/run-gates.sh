@@ -63,8 +63,28 @@ gate() {
     failed+=("$name")
     echo "  FAIL  $name (exit $status)"
     # A TAP runner reports each failure inline as it happens and only counts in its closing
-    # summary, so the tail below alone never names a failing test. `|| true`: no match is normal.
-    grep -E '^[[:space:]]*not ok ' "$log" | sed 's/^/        /' || true
+    # summary, so the tail below alone never names a failing test. Each `not ok` line is printed
+    # with the YAML diagnostic block `node --test` writes right after it — `error:`, `expected:`,
+    # `actual:`, `location:` — because without it the log cannot say which assertion failed. The
+    # block closes on `...` at the `---` line's own indentation, so an assertion diff's deeper
+    # `...` does not end it early; each block is capped at `cap` lines. No match is normal and
+    # prints nothing.
+    awk -v cap=40 '
+      block {
+        if (substr($0, 1, length(ind) + 3) == ind "..." && length($0) == length(ind) + 3) {
+          if (n > cap) print "        " ind "  [diagnostic truncated after " cap " lines]"
+          print "        " $0; block = 0; next
+        }
+        if (++n <= cap) print "        " $0
+        next
+      }
+      pending && /^[[:space:]]*---[[:space:]]*$/ {
+        match($0, /^[[:space:]]*/); ind = substr($0, 1, RLENGTH)
+        print "        " $0; block = 1; n = 0; pending = 0; next
+      }
+      { pending = 0 }
+      /^[[:space:]]*not ok / { print "        " $0; pending = 1 }
+    ' "$log" || true
     sed 's/^/        /' "$log" | tail -25
   fi
 }

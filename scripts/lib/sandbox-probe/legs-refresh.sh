@@ -16,7 +16,8 @@
 # scratch clone under SP_TMP and fetched into <main> as refs/heads/<fx> — the leg's only write to <main> —
 # then cut as its own clone with `sp_extra_clone <fx> --existing`, because create-worktree.sh's default
 # mode cuts at the default's tip. Each fixture branch is registered with sp_track_branch before the ref is
-# written, so teardown deletes it; it is never pushed.
+# written, so teardown deletes it; it is never pushed. R3's own commit edits no file
+# `sp__rf_bootstrap_read <path>` names, so its clone's bootstrap is not broken by the fixture (§5 PD27).
 #
 # SOURCED, NEVER EXECUTED. It sets no shell option: the entry point owns `set -u`. Bash 3.2 floor.
 
@@ -90,9 +91,19 @@ EOF
   return 1
 }
 
+# sp__rf_bootstrap_read <path> — status 0 when <path>'s basename, at any depth, is a file the clone's
+# bootstrap install reads.
+sp__rf_bootstrap_read() {
+  case "${1##*/}" in
+    package.json | package-lock.json | npm-shrinkwrap.json | yarn.lock | pnpm-lock.yaml) return 0 ;;
+  esac
+  return 1
+}
+
 # sp__rf_pick_conflict — set SP__RF_C_FILE and SP__RF_C_LINE to the first text file the default's last
 # commit modifies outside the protected set, and an old-side line inside one of its hunks; status 1 if none,
-# or when the protected set is unresolvable.
+# or when the protected set is unresolvable. It also skips the files the bootstrap reads
+# (sp__rf_bootstrap_read): an edited one fails the R3 clone's bootstrap (§5 PD27).
 sp__rf_pick_conflict() {
   local f num hunk old start count prot
   SP__RF_C_FILE=""
@@ -105,6 +116,7 @@ sp__rf_pick_conflict() {
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     sp__rf_protected "$f" "$prot" && continue
+    sp__rf_bootstrap_read "$f" && continue
     num="$(git -C "$SP_MAIN" diff --numstat "$SP__RF_TIP~1" "$SP__RF_TIP" -- "$f" 2>/dev/null)" || continue
     case "$num" in -*) continue ;; esac
     # The first hunk that removes or replaces an old line: an edit to that line overlaps the default's.

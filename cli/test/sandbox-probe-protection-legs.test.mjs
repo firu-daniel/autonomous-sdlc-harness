@@ -1,7 +1,7 @@
 /**
  * The sandbox probe's write-protection and git-leg helpers (`sp__wp_w8`, `sp__wp_cs7_edit`,
  * `sp__git_cs3_fetch`, `sp__wp_dd_grade`, `sp__git_cs3_call`, `sp__git_cs3_state`, `sp__git_cl5_grade`,
- * `sp__wp_tracked`, `sp__wp_mv_class` in
+ * `sp__wp_tracked`, `sp__wp_mv_class`, `sp__git_lock_reading` in
  * `scripts/lib/sandbox-probe/legs-protection.sh`), run over the recorded streams and debug logs in
  * `fixtures/sandbox-probe/` and over a repository each case seeds.
  *
@@ -13,7 +13,9 @@
  * Linux, `Read-only file system` is a dd and rename refusal beside `Operation not permitted`, and so, from
  * PD23 (docs/sandbox-verification.md §5), are `Permission denied` and `Device or resource busy`, the judge's
  * whole Linux set applying to a dd and a rename alike; a dd, rename or CS3 fetch error carrying no refusal string the judge knows is `not run`, never
- * `fail`; with SP_PLATFORM empty each of those cases keeps its macOS verdict.** The unknown dd and rename
+ * `fail`; with SP_PLATFORM empty each of those cases keeps its macOS verdict. From PD28, on Linux, CL5's
+ * evidence carries its three `.git/config.lock` readings only when its result carries `File exists`, and its
+ * verdict does not change.** The unknown dd and rename
  * error is `Input/output error`, which no layer-table arm matches; it was `Device or resource busy` until
  * PD23 made that a refusal.
  *
@@ -30,7 +32,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -261,10 +263,10 @@ test('sp__wp_dd_grade: a permission-layer refusal of a dd is not run', async (t)
   });
 });
 
-/** As {@link graded}, on `platform`; returns `[<$v>, <$e>]`. */
-async function gradedOn(t, platform, fn, v, e, stream, cmd) {
+/** As {@link graded}, on `platform`, `extra` following `cmd`; returns `[<$v>, <$e>]`. */
+async function gradedOn(t, platform, fn, v, e, stream, cmd, extra = []) {
   const dir = await caseDir(t);
-  const run = await sourcedOn(dir, platform, `${fn} "$@"; printf '%s|%s' "$${v}" "$${e}"`, [stream, cmd]);
+  const run = await sourcedOn(dir, platform, `${fn} "$@"; printf '%s|%s' "$${v}" "$${e}"`, [stream, cmd, ...extra]);
   assert.equal(run.status, 0, run.stderr);
   const bar = run.stdout.indexOf('|');
   return [run.stdout.slice(0, bar), run.stdout.slice(bar + 1)];
@@ -409,6 +411,59 @@ test('sp__git_cl5_grade: a permission-layer refusal of CL5’s git config is not
 
   await t.test('a session with no git config is not run', async (t) => {
     assert.equal(await cl5(t, fixture('sandbox-dd')), `not run|no Bash call "${CL5_CMD}" in the session`);
+  });
+});
+
+test('PD28: on Linux, CL5 carries the .git/config.lock readings only on File exists, its verdict unchanged', async (t) => {
+  const READINGS = ['absent', '-rw-r--r--  1 probe  probe  0 Nov  2 13:06 .git/config.lock', 'absent'];
+  const cl5 = (t, name) =>
+    gradedOn(t, 'linux', 'sp__git_cl5_grade', 'SP_VERDICT', 'SP_EVIDENCE', fixture(name), CL5_CMD, READINGS);
+
+  await t.test('File exists is not run, and the evidence ends with all three readings verbatim', async (t) => {
+    const [v, e] = await cl5(t, 'cl5-file-exists');
+    assert.equal(v, 'not run');
+    assert.ok(e.startsWith(LINUX_UNRECOGNISED), e);
+    assert.ok(
+      e.endsWith(
+        `; .git/config.lock read: before the session ${READINGS[0]}, inside the session ${READINGS[1]}, after it ${READINGS[2]}`,
+      ),
+      e,
+    );
+  });
+
+  await t.test('Operation not permitted carries no readings clause', async (t) => {
+    assert.deepEqual(await cl5(t, 'cl5-sandbox'), [
+      'pass',
+      'error: could not lock config file .git/config: Operation not permitted',
+    ]);
+  });
+});
+
+test('PD28: sp__git_lock_reading prints absent or the first line of ls -ld', async (t) => {
+  async function reading(t, setup) {
+    const dir = await caseDir(t);
+    const path = join(dir, 'config.lock');
+    await setup(path, dir);
+    const run = await sourced(dir, 'sp__git_lock_reading "$@"', [path]);
+    assert.equal(run.status, 0, run.stderr);
+    assert.ok(run.stdout.endsWith('\n') && run.stdout.indexOf('\n') === run.stdout.length - 1, run.stdout);
+    return [run.stdout.slice(0, -1), path];
+  }
+
+  await t.test('a missing path is absent', async (t) => {
+    const [line] = await reading(t, async () => {});
+    assert.equal(line, 'absent');
+  });
+
+  await t.test('an empty regular file is one ls line naming it', async (t) => {
+    const [line, path] = await reading(t, (p) => writeFile(p, ''));
+    assert.ok(line.startsWith('-'), line);
+    assert.ok(line.endsWith(path), line);
+  });
+
+  await t.test('a dangling symbolic link is one ls line of a link', async (t) => {
+    const [line] = await reading(t, (p, dir) => symlink(join(dir, 'missing'), p));
+    assert.ok(line.startsWith('l'), line);
   });
 });
 

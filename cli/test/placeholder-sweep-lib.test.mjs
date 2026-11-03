@@ -2,6 +2,7 @@
  * The run library's placeholder primitives — `hr_placeholder_host_probe_var`,
  * `hr_placeholder_manifest_write`, `hr_run_profile_absent_files`, `hr_job_absent_file`,
  * `hr_job_absent_files`, `hr_placeholder_leftover_var`, `hr_placeholder_sweep_var`,
+ * `hr_placeholder_sweep_paths_var`,
  * `hr_deny_glob_expand` and `hr_profile_deny_paths` in
  * `cli/templates/scripts/lib/harness-run-lib.sh`.
  *
@@ -246,6 +247,37 @@ test('hr_placeholder_sweep_var leaves a 0444 empty file no manifest lists, and r
   const none = await f.call('hr_placeholder_sweep_var "$1"; printf "%s\\n" "$?"', [join(f.root, 'missing.absent')]);
   assert.equal(none.stdout, '1\n', none.stderr);
   assert.deepEqual(await onDisk(unlisted), { mode: 0o444, bytes: '', kind: 'file' });
+});
+
+test('hr_placeholder_sweep_paths_var removes a 0444 empty file and keeps every other given shape with its reason', async (t) => {
+  const f = await fixture(t);
+  const leftover = await plant(join(f.root, 'leftover'), '', 0o444);
+  const oneByte = await plant(join(f.root, 'one-byte'), 'x', 0o444);
+  const writable = await plant(join(f.root, 'writable-empty'), '', 0o644);
+  const target = await plant(join(f.root, 'link-target'), '', 0o444);
+  const link = join(f.root, 'a-link');
+  await symlink(target, link);
+  const absent = join(f.root, 'never-planted');
+  const shapes = [
+    [oneByte, 'has content'],
+    [writable, 'writable'],
+    [link, 'not a regular file'],
+  ];
+  const before = new Map();
+  for (const [path] of [...shapes, [target]]) before.set(path, await onDisk(path));
+
+  const r = await f.call(
+    'hr_placeholder_sweep_paths_var "$@"; s=$?; printf "status=%s\\n---\\n%s\\n---\\n%s\\n" "$s" "$HR_PLACEHOLDER_REMOVED" "$HR_PLACEHOLDER_KEPT"',
+    [leftover, oneByte, writable, link, absent],
+  );
+  assert.equal(r.stderr, '');
+  const [status, removed, kept] = r.stdout.replace(/\n$/, '').split('\n---\n');
+  assert.equal(status, 'status=0');
+  assert.equal(removed, leftover);
+  assert.deepEqual(kept.split('\n'), shapes.map(([p, reason]) => `${p}: ${reason}`));
+  assert.equal(await exists(leftover), false, 'the leftover was not removed');
+  for (const [path, was] of before) assert.deepEqual(await onDisk(path), was, `the sweep changed ${path}`);
+  assert.equal(await exists(absent), false);
 });
 
 /** A work root holding directories `proj-a` and `proj-b`, a file `proj-c` and a link `proj-d` to `proj-a`. */

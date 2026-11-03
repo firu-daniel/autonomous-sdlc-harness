@@ -39,7 +39,9 @@
 #   sp__git_cs3_call <stream> <exact command>          one CS3 call: SP__GIT_CALL_V, SP__GIT_CALL_E
 #   sp__git_cs3_state <ref before> <a> <b> <marker> <x> <stash count before> <unrun>
 #                                                      CS3's state checks: SP__GIT_STATE_F, SP__GIT_STATE_P
-#   sp__git_cl5_grade <stream> <exact command>         CL5's git config: SP_VERDICT, SP_EVIDENCE
+#   sp__git_cl5_grade <stream> <exact command> [<lock before> <lock inside> <lock after>]
+#                                                      CL5's git config: SP_VERDICT, SP_EVIDENCE
+#   sp__git_lock_reading <path>                        one .git/config.lock reading, printed
 #   sp__wp_mv_class <helper line>                      one rename line's class, printed
 # A call refused at the permission layer is `not run`, never `fail`; CS3 is `fail` on any failure from a
 # call that ran, the fetch or a state check whose calls all ran, else `not run` when any call did not
@@ -54,6 +56,12 @@
 # PD23. On Linux sp__wp_mv_class classes every string of the judge's Linux set as `refused`, `Device or
 # resource busy` and an `inter-device move failed: … unable to remove target` line among them, so CS1's
 # renames grade as the judge grades them.
+#
+# PD28. On Linux the git leg reads $SP_CLONE/.git/config.lock before and after the session
+# (sp__git_lock_reading) and inside it (`ls -ld .git/config.lock`, after the `git config` call), and CL5's
+# evidence carries all three when the `git config` result carries `File exists`. The readings exist to
+# decide whether `File exists` is a sandbox refusal; until a run's readings decide it, the shape stays out
+# of judge.sh's Linux set and CL5 grades it `not run`.
 #
 # JOB MODE (SP_JOB_MODE=1). SP_CLONE and SP_MAIN are the job's checkout and SP_RUN_PROFILE its base
 # profile. The leg takes its job rows W6 and W8 only: one session carries W6's Write and Edit calls and a
@@ -1196,8 +1204,22 @@ sp__git_cs3_state() {
   esac
 }
 
-# sp__git_cl5_grade <stream> <exact command> — CL5's `git config` when the key did not land: SP_VERDICT
-# and SP_EVIDENCE. A permission-layer refusal never reached the sandbox CL5 measures, so it is `not run`.
+# sp__git_lock_reading <path> — `absent` when neither -e nor -L holds, else the whole first line of
+# `ls -ld -- <path>`.
+sp__git_lock_reading() {
+  local out
+  if [ ! -e "$1" ] && [ ! -L "$1" ]; then
+    printf 'absent\n'
+    return 0
+  fi
+  out="$(ls -ld -- "$1" 2>&1)"
+  printf '%s\n' "${out%%$'\n'*}"
+}
+
+# sp__git_cl5_grade <stream> <exact command> [<lock before> <lock inside> <lock after>] — CL5's `git config`
+# when the key did not land: SP_VERDICT and SP_EVIDENCE. A permission-layer refusal never reached the
+# sandbox CL5 measures, so it is `not run`. On Linux, when the result carries `File exists`, the three
+# .git/config.lock readings are appended to the evidence (§5 PD28); the verdict is unchanged.
 sp__git_cl5_grade() {
   sp_judge_call "$1" sandbox "$2"
   case "$SP_LAYER" in
@@ -1212,6 +1234,9 @@ sp__git_cl5_grade() {
       SP_EVIDENCE="refused at the permission layer, so it never reached the sandbox: $SP_EVIDENCE"
       ;;
   esac
+  if [ "${SP_PLATFORM:-}" = linux ] && [ "$#" -ge 5 ] && sp__line_with "${SP__TEXT:-}" "File exists" >/dev/null; then
+    SP_EVIDENCE="$SP_EVIDENCE; .git/config.lock read: before the session $3, inside the session $4, after it $5"
+  fi
 }
 
 sp_leg_git() {
@@ -1276,8 +1301,17 @@ sp_leg_git() {
   for cmd in "$c_add" "$c_commit" "$c_url" "$c_fetch" "$c_push" "$c_pop" "$c_switch" "$c_cl5"; do
     sp_prompt_bash "$pfile" "$cmd"
   done
+  if [ "${SP_PLATFORM:-}" = linux ]; then
+    # PD28's readings of .git/config.lock: before, inside and after the session.
+    local c_lock="ls -ld .git/config.lock" lock_before lock_in="" lock_after=""
+    sp_prompt_bash "$pfile" "$c_lock"
+    allowed[${#allowed[@]}]=--allowed
+    allowed[${#allowed[@]}]="Bash($c_lock)"
+    lock_before="$(sp__git_lock_reading "$SP_CLONE/.git/config.lock")"
+  fi
   sp_ctl_add "$pfile" ran "$c_ctl"
   sp_session git "$SP_RUN_PROFILE" "$pfile" --cwd "$SP_CLONE" ${allowed[@]+"${allowed[@]}"}
+  [ "${SP_PLATFORM:-}" != linux ] || lock_after="$(sp__git_lock_reading "$SP_CLONE/.git/config.lock")"
   departure="$(sp_departures)"
   if [ -z "$SP_STREAM" ] || [ ! -f "$SP_STREAM" ]; then
     sp_refuse "session git did not launch; see $SP_TMP/git.stderr"
@@ -1343,6 +1377,15 @@ sp_leg_git() {
       sp_refuse "git leg: sbx.probe is left in $SP_CLONE/.git/config"
     sp_row_result --direct git CL5 fail "sbx.probe=$got landed in $SP_CLONE/.git/config (unset after the session)" \
       "$departure"
+  elif [ "${SP_PLATFORM:-}" = linux ]; then
+    sp_judge_call "$SP_STREAM" ran "$c_lock"
+    if [ "$SP_VERDICT" = "not run" ]; then
+      lock_in="not read: $SP_EVIDENCE"
+    else
+      lock_in="$(sp__first_line "${SP__TEXT//$'\n'/ | }")"
+    fi
+    sp__git_cl5_grade "$SP_STREAM" "$c_cl5" "$lock_before" "$lock_in" "$lock_after"
+    sp_row_result --direct git CL5 "$SP_VERDICT" "$SP_EVIDENCE" "$departure"
   else
     sp__git_cl5_grade "$SP_STREAM" "$c_cl5"
     sp_row_result --direct git CL5 "$SP_VERDICT" "$SP_EVIDENCE" "$departure"

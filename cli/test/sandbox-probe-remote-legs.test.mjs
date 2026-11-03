@@ -1,27 +1,31 @@
 /**
  * The sandbox probe's N3 and N4 grading (`sp__net_n3_grade`, `sp__net_n4_grade` in `legs-network.sh`), the
  * credentials leg's no-calls check (`sp__cred_issued` in `legs-settings.sh`), P1b's permission screen
- * (`sp__wr_permission_screen` in `legs-wrappers.sh`) and R4's `--local` grading (`sp__rf_r4_local_grade` in
- * `legs-refresh.sh`), run over the recorded streams in `fixtures/sandbox-probe/`.
+ * (`sp__wr_permission_screen` in `legs-wrappers.sh`), R4's `--local` grading (`sp__rf_r4_local_grade` in
+ * `legs-refresh.sh`) and R3's conflict pick (`sp__rf_bootstrap_read`, `sp__rf_pick_conflict` in
+ * `legs-refresh.sh`), run over the recorded streams in `fixtures/sandbox-probe/` and, for the conflict pick, a
+ * repository the case builds.
  *
  * **The rule these tests exist to enforce: a refusal is graded only at the layer the row measures — a
  * permission-layer refusal is `not run`; N3 fails only on a body that came back; N4 never fails on an error
  * line that cannot tell; N4 passes only where its curl error differs from the same call issued unsandboxed from
  * the probe's own shell; a session that issued no calls grades nothing; on Linux an `unrecognised` curl error
- * is N3's and N4's data, graded exactly as on macOS.**
+ * is N3's and N4's data, graded exactly as on macOS; R3's conflict file is never one the clone's bootstrap
+ * reads (§5 PD27).**
  *
- * Every case sources libraries and reads a fixture: none starts a listener, a session or a network call.
+ * Every case sources libraries and reads a fixture or its own temporary repository: none starts a listener,
+ * a session or a network call.
  * Port `8765` and token `sbx_n3_fixture` are fixture literals. Fixtures are passed unsubstituted, since
  * each call is matched byte-equal against a command that spells `@FIXTURE_ROOT@` the same way.
  */
 
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { PACKAGE_ROOT, runBash, WORKSPACE_ROOT } from './helpers/fixture.mjs';
+import { PACKAGE_ROOT, runBash, runGit, WORKSPACE_ROOT } from './helpers/fixture.mjs';
 
 const PROBE_LIB = join(WORKSPACE_ROOT, 'scripts', 'lib', 'sandbox-probe');
 const BASE_LIBS = ['core.sh', 'judge.sh', 'controls.sh'];
@@ -287,5 +291,51 @@ test('sp__rf_r4_local_grade: R4’s --local half is graded on its exit and its r
 
   await t.test('a session without the call is not run', async (t) => {
     assert.equal(await r4(t, 'ran'), `not run|no Bash call "${R4_LOCAL_CMD}" in the session`);
+  });
+});
+
+test('PD27: R3’s conflict file is never one the clone’s bootstrap reads', async (t) => {
+  async function bootstrapRead(t, path) {
+    const run = await sourced(await caseDir(t), 'legs-refresh.sh', 'sp__rf_bootstrap_read "$1"; printf %s "$?"', [
+      path,
+    ]);
+    assert.equal(run.stderr, '');
+    return run.stdout;
+  }
+
+  for (const path of ['cli/package.json', 'package-lock.json', 'a/b/yarn.lock']) {
+    await t.test(`sp__rf_bootstrap_read: ${path} is read by the bootstrap`, async (t) => {
+      assert.equal(await bootstrapRead(t, path), '0');
+    });
+  }
+  for (const path of ['README.md', 'package.json.bak', 'cli/src/package.ts']) {
+    await t.test(`sp__rf_bootstrap_read: ${path} is not`, async (t) => {
+      assert.equal(await bootstrapRead(t, path), '1');
+    });
+  }
+
+  await t.test('sp__rf_pick_conflict skips a modified cli/package.json for the next modified file', async (t) => {
+    const repo = await caseDir(t);
+    await runGit(repo, ['init', '--quiet']);
+    await runGit(repo, ['config', 'user.email', 'fixture@example.invalid']);
+    await runGit(repo, ['config', 'user.name', 'Harness Fixture']);
+    await mkdir(join(repo, 'cli'));
+    await mkdir(join(repo, 'docs'));
+    await writeFile(join(repo, 'cli', 'package.json'), '{\n  "name": "a"\n}\n');
+    await writeFile(join(repo, 'docs', 'a.md'), 'one\ntwo\nthree\n');
+    await runGit(repo, ['add', '.']);
+    await runGit(repo, ['commit', '--quiet', '-m', 'base']);
+    await writeFile(join(repo, 'cli', 'package.json'), '{\n  "name": "b"\n}\n');
+    await writeFile(join(repo, 'docs', 'a.md'), 'one\nTWO\nthree\n');
+    await runGit(repo, ['commit', '--quiet', '-am', 'tip']);
+    const tip = (await runGit(repo, ['rev-parse', 'HEAD'])).stdout.trim();
+    const run = await sourced(
+      repo,
+      'legs-refresh.sh',
+      'hr_run_protected_rel_paths() { :; }; SP_MAIN="$1"; SP__RF_TIP="$2"; sp__rf_pick_conflict; s=$?; printf \'%s|%s|%s\' "$s" "$SP__RF_C_FILE" "$SP__RF_C_LINE"',
+      [repo, tip],
+    );
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(run.stdout, '0|docs/a.md|2');
   });
 });

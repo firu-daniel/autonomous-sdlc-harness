@@ -1,0 +1,23 @@
+# Architecture review — iteration 1
+
+Iteration 0's Must Fix 1 is resolved. `task_1_plan.md` now targets the `OuterLoopScript.runsUnsandboxed` doc comment, declares the mirror on both sides, and limits the `cli/src` hunk to that comment. The story index's `## Context`, E2 pathspec and register rows 94–102 match. Iteration 0's Should Fix 1 is neither resolved nor recorded under a `## Rejected findings` section, so it is raised again below.
+
+## Must Fix
+1. **The plan leaves `sandboxExcludedCommand`'s "the one producer" header false, and its register row misquotes the claim to justify `no-change`.** Offending files: `fix_linux_detached_gate_run_story_plan.md` (`## Scope register` row 99, `cli/src/generators/profileEntries.ts` → `sandboxExcludedCommand` doc comment, disposition `no-change`, reason *"still the one producer of the `bash <path>:*` form"*) and `task_1_plan.md` (`### Targets` and the `run_profile_gate_exclusion` work item, which declare this mirror only from the watcher's side). Rules broken: `.claude/context/cli.md` → `## What "done" means here` (*"A reviewer holds a change to its module's own header. Where the header states a rule, the change either satisfies it or amends the header in the same edit"*) and → `## How a module in this layer is written` → **One string, one producer**; `.claude/context/conventions.md` → `### Where a new responsibility goes` (*"A responsibility that already has a home does not get a second one"*).
+   The doc comment says *"A `sandbox.excludedCommands` entry, `bash <path>:*` — the one producer of one."* It claims to be the only producer of an excluded-commands **entry**, not just of the `bash <path>:*` form, which is how row 99 paraphrases it. Today the watcher never writes `sandbox.excludedCommands`. Task 1 adds `run_profile_gate_exclusion`, which emits such an entry into the per-run copy and the new job copy, and `run_profile_render` / `run_profile_job_render`, which append it. After Task 1 the owner's header no longer holds. This is the same defect iteration 0 found in `outerLoopScripts.ts`, now on the second owner the watcher mirrors. Task 1's own work item names both owners as mirrored (*"the `bash <path>:*` form mirrors `cli/src/generators/profileEntries.ts` → `sandboxExcludedCommand`"*), but only `outerLoopScripts.ts` is told about it.
+   **Fix:** In `task_1_plan.md`:
+   - Add `cli/src/generators/profileEntries.ts` → the `sandboxExcludedCommand` doc comment to `### Targets` as a comment-only edit. It should say that this function is the one producer of an entry in a **generated** profile. It should name the run watcher's `run_profile_gate_exclusion` (`cli/templates/scripts/autonomous-watcher.sh`) as the one shell mirror. That mirror emits the same `bash <path>:*` form into a per-run or job copy on a bubblewrap host only, and test (d) holds it equal.
+   - Widen the last Verification bullet and the *"The only `cli/src` change is one doc comment"* sentence to cover these two doc comments, with no `cli/src` code line changing.
+
+   In the story index:
+   - Change row 99 to `change`, Task 1, with that reason.
+   - Amend the `## Context` sentence *"The one `cli/src` hunk is a doc comment"* to match.
+
+## Should Fix
+1. **Phase G's new use of `<repo_root>` is still missing from the core binding tables' `Used at` cells (re-raised from iteration 0; neither resolved nor recorded as rejected).** Offending file: `task_3_plan.md` (`### Targets`), and the story index's `## Scope register`, which has no row for either binding row. Source: `plugin/instructions/mode_contract.md`, which `.claude/context/plugin.md` → `## Cores, forks and the single-owner rule` names as the mechanism binding every instruction file. Also `plugin/instructions/plan_orchestration_instructions_core.md` (*"The `Used at` column is load-bearing, not documentation"*).
+   After Task 3, `### G.1 Run the gates` steps 2–3 use `<repo_root>`. The core's `<repo_root>` binding row still lists only `## Setup` step 3 and `## Phase E — QA testing`. `user_review_fixes_instructions_core.md`'s row, which reaches Phase G by reference, lists only Setup, Phase QA and the cited Phase E.
+   **Fix:** Add both rows to Task 3's `### Targets`:
+   - In the core's `<repo_root>` row, append `## Phase G — Run gates` → `### G.1 Run the gates` (steps 2–3, the wrapper's literal spelling) to the `Used at` cell.
+   - In `user_review_fixes_instructions_core.md`'s row, add *"Also consumed by the cited `## Phase G — Run gates`"* (G.1 steps 2–3), in the form its existing Phase E clause uses.
+
+   Add matching `change` rows to the story index's `## Scope register`. If the writer disagrees, record the finding under a `## Rejected findings` section with the reason.

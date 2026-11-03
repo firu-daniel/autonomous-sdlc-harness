@@ -277,6 +277,22 @@ test('a task drop launches on a per-run copy at hr_run_profile_file: the base pl
   assert.ok(twins > 0, `the base carries no ${wrapperPrefix(f.dir)} rule to twin`);
 });
 
+test('a launch outside job mode records the per-run copy\'s absolute path as the record\'s run_profile', async (t) => {
+  const f = await adoptedFixture(t);
+  if (f === null) return;
+
+  await f.drop();
+  await f.tick();
+
+  const settings = f.settingsArg();
+  assert.ok(settings, `the stub was never called:\n${f.watcherLog()}`);
+  const record = f.record();
+  assert.equal(record.run_profile, settings, `run_profile is not the --settings file\nrecord: ${JSON.stringify(record)}`);
+  assert.equal(record.run_profile, await f.profileFileFor(f.branch));
+  assert.ok(record.run_profile.startsWith('/'), record.run_profile);
+  assert.ok(existsSync(record.run_profile), `${record.run_profile} does not exist`);
+});
+
 test('a parked legacy worktree run, resumed, carries its own .git pointer and no clone .git path', async (t) => {
   const f = await adoptedFixture(t);
   if (f === null) return;

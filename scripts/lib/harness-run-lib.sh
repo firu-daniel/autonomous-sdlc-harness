@@ -14,12 +14,17 @@
 # answers whether a launch holds the host awake (`hr_keep_awake`,
 # `hr_keep_awake_probe_var`, `hr_keep_awake_mode_var`), whether it is on mains
 # power (`hr_on_mains_power`) and starts that hold (`hr_keep_awake_hold_var`),
-# places a dropped
+# owns the Run gates lane for `run-test-suite.sh` and
+# `launch-sandboxed-gates.sh` — its layout (`hr_test_run_lane_dir`), label
+# pattern and staleness bound (`HR_TEST_RUN_*`) and heartbeat reader
+# (`hr_heartbeat_age`) — places a dropped
 # artifact in a working copy and commits and pushes it, and derives the
 # anchors (main checkout, work root, worktree directory, repo slug,
 # state-dir paths) the scripts would otherwise each re-derive slightly
 # differently. It also implements the run registry's reads and writes for the
-# scripts that share that registry, and states the remote state bundle's format
+# scripts that share that registry — its readers `hr_registry_get`,
+# `hr_registry_branches`, `hr_registry_live_count`, `hr_registry_peek` and
+# `hr_registry_foreign_copy_var` — and states the remote state bundle's format
 # with the one writer and restorer every remote-execution consumer shares, and
 # the GitHub route a job-side notification names beside its local command.
 #
@@ -66,7 +71,11 @@
 # (`hr_wrapper_main_of` their own location) for every configured value they
 # decide by — `defaultBranch`, `protectedBranches`, and the `githooksDir`
 # `hr_pinned_hooks_path` pins — never the worktree they act in, whose
-# `harness.config.json` the sandbox can rewrite. One worktree read remains and
+# `harness.config.json` the sandbox can rewrite. `launch-sandboxed-gates.sh`,
+# a main-checkout script the profile runs unsandboxed the same way, passes the
+# MAIN checkout for `scriptsDir`; its one target read, `stateDir`, is data that
+# places the lane it reads, and every target byte it runs runs inside its own
+# `bwrap` sandbox. One worktree read remains and
 # is inert: `hr_worktree_config_check_var` compares a worktree's
 # `config.worktree` `core.hooksPath` against `<worktree>/<githooksDir>` read
 # from that worktree's own copy. A rewritten copy can only make the check
@@ -835,9 +844,9 @@ hr_main_checkout_of() {
 }
 
 # Print the canonical main checkout of the wrapper whose own directory is
-# <script_dir>, for `push-branch.sh`, `refresh-branch.sh`, `commit-on-branch.sh`
-# and the watcher family's callers the header's JURISDICTION lists, and no
-# others. Return 1,
+# <script_dir>, for `push-branch.sh`, `refresh-branch.sh`, `commit-on-branch.sh`,
+# `launch-sandboxed-gates.sh` and the watcher family's callers the header's
+# JURISDICTION lists, and no others. Return 1,
 # printing nothing, when it cannot be placed. The checkout `hr_checkout_top_nogit`
 # finds from <script_dir> is taken as it stands when its `.git` is a real
 # directory — not a symbolic link — holding no `commondir`; one whose `.git` is
@@ -3332,6 +3341,54 @@ hr_registry_peek() {
     .runs[$b] | if type == "object" then (if .[$k] == null then empty else .[$k] end) else error("absent") end
   ' "$file" 2>/dev/null) || return 1
   [ -z "$out" ] || printf '%s\n' "$out"
+}
+
+# hr_registry_foreign_copy_var <file> <main> — whether a live run of the
+# registry at <file> names a working copy other than the main checkout <main>:
+# what `launch-sandboxed-gates.sh` check 6 tells local mode from job mode by.
+# 0 with `HR_REGISTRY_FOREIGN` empty when none does, an absent <file> included;
+# 1 with `HR_REGISTRY_FOREIGN` `'<branch>' in '<worktree>'` for the first that
+# does; 2 when <file> is present but not a readable regular file holding one
+# JSON object whose `.runs` is an object of objects, or `jq` fails, or <main>
+# has no canonical form. Like `hr_registry_peek` it never creates the file.
+#
+# LIVE IS NOT `hr_registry_live_count`'S SLOT RULE. This is a trust decision,
+# so it does not hang on a pid answering `kill -0`: a record is live when its
+# `status` is `running`, `parked`, `park_loop` or `paused`, whatever its `pid`
+# and its `execution` — a parked or paused record naming a run copy is as much
+# evidence of local mode as a running one. A live record whose `worktree` is
+# empty or has no canonical form counts as foreign: fail-closed.
+hr_registry_foreign_copy_var() {
+  local file="${1-}" main_c b wt wt_c lines line tab=$'\t'
+  HR_REGISTRY_FOREIGN=""
+  [ -n "$file" ] || return 2
+  main_c=$(hr_canonical_path_nogit "${2-}") || return 2
+  [ -e "$file" ] || [ -L "$file" ] || return 0
+  [ -f "$file" ] && [ -r "$file" ] && hr_json_single_object "$file" || return 2
+  lines=$(jq -r '
+    .runs | if type == "object" then . else error("runs") end
+    | to_entries[]
+    | (if (.value | type) == "object" then .value else error("record") end) as $r
+    | (($r.status // "") | tostring) as $s
+    | select($s == "running" or $s == "parked" or $s == "park_loop" or $s == "paused")
+    | [.key, (($r.worktree // "") | tostring)] | @tsv
+  ' "$file" 2>/dev/null) || return 2
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    hr_tsv_unescape_var "${line%%"$tab"*}"
+    b=$HR_CFG_VALUE
+    hr_tsv_unescape_var "${line#*"$tab"}"
+    wt=$HR_CFG_VALUE
+    wt_c=""
+    [ -z "$wt" ] || wt_c=$(hr_canonical_path_nogit "$wt") || wt_c=""
+    if [ -z "$wt_c" ] || [ "$wt_c" != "$main_c" ]; then
+      HR_REGISTRY_FOREIGN="'$b' in '$wt'"
+      return 1
+    fi
+  done <<EOF
+$lines
+EOF
+  return 0
 }
 
 # hr_remote_record_init <file> <branch> <worktree> <log_path> <engine>
@@ -6264,6 +6321,16 @@ EOF
   return 0
 }
 
+# hr_json_single_object <file> — 0 only when <file> parses as exactly one JSON
+# value and that value is an object; 1 when it does not, or `jq` is missing or
+# fails. Read by `jq`, never sourced. THE ONE HOME of the test, so a profile one
+# caller accepts the other cannot refuse. Its callers:
+# `autonomous-watcher.sh` → `run_profile_render` and `run_profile_check`, and
+# `launch-sandboxed-gates.sh` checks 5 and 8.
+hr_json_single_object() {
+  [ "$(jq -s 'length == 1 and (.[0] | type) == "object"' "${1-}" 2>/dev/null)" = "true" ]
+}
+
 # ---------------------------------------------------------------------------
 # PLACEHOLDER LEFTOVERS — on a bubblewrap host, a session killed mid-call can
 # leave each absent `denyWrite` path it mounted as a read-only empty file on
@@ -6284,8 +6351,8 @@ EOF
 # file`, `has content`, `writable` or `not owned by this user`. Removes nothing.
 # The write bits are read with `find -perm`, which BSD and GNU both take, because
 # `stat`'s format flags differ between them; a `find` that fails reads as
-# `writable`. Its callers: `hr_placeholder_sweep_var` below, and the no-git
-# main-checkout walk.
+# `writable`. Its callers: `hr_placeholder_sweep_paths_var` below, which
+# `hr_placeholder_sweep_var` delegates to, and the no-git main-checkout walk.
 hr_placeholder_leftover_var() {
   local path="${1-}" probe writable
   HR_PLACEHOLDER_REASON=""
@@ -6317,30 +6384,49 @@ hr_placeholder_leftover_var() {
 # `HR_PLACEHOLDER_REMOVED` (the removed paths) and `HR_PLACEHOLDER_KEPT`
 # (`<path>: <reason>` for each listed path that exists and was not removed), one
 # per line; an absent path is in neither. Never touches a path no manifest
-# lists. 0, or 1 when no manifest argument was readable.
+# lists. 0, or 1 when no manifest argument was readable. The per-path rule is
+# `hr_placeholder_sweep_paths_var`'s.
 hr_placeholder_sweep_var() {
-  local m p readable=0 nl='
-'
-  HR_PLACEHOLDER_REMOVED=""
-  HR_PLACEHOLDER_KEPT=""
+  local m p readable=0
+  local paths=()
   for m in "$@"; do
     [ -n "$m" ] && [ -f "$m" ] && [ -r "$m" ] || continue
     readable=1
     while IFS= read -r p || [ -n "$p" ]; do
       [ -n "$p" ] || continue
-      [ -e "$p" ] || [ -L "$p" ] || continue
-      if ! hr_placeholder_leftover_var "$p"; then
-        HR_PLACEHOLDER_KEPT="$HR_PLACEHOLDER_KEPT$p: $HR_PLACEHOLDER_REASON$nl"
-      elif rm -f -- "$p" 2>/dev/null && [ ! -e "$p" ] && [ ! -L "$p" ]; then
-        HR_PLACEHOLDER_REMOVED="$HR_PLACEHOLDER_REMOVED$p$nl"
-      else
-        HR_PLACEHOLDER_KEPT="$HR_PLACEHOLDER_KEPT$p: could not be removed$nl"
-      fi
+      paths+=("$p")
     done <"$m"
+  done
+  hr_placeholder_sweep_paths_var ${paths[@]+"${paths[@]}"}
+  [ "$readable" -eq 1 ] || return 1
+  return 0
+}
+
+# hr_placeholder_sweep_paths_var <path>... — THE ONE HOME of the per-path sweep
+# rule: for each argument naming a path that exists (`-e` or `-L`), remove it
+# with a non-recursive `rm -f` only when `hr_placeholder_leftover_var` answers
+# 0. Sets `HR_PLACEHOLDER_REMOVED` and `HR_PLACEHOLDER_KEPT` as
+# `hr_placeholder_sweep_var` documents; an empty or absent path is in neither.
+# Always 0. Its callers: `hr_placeholder_sweep_var` above, and
+# `launch-sandboxed-gates.sh`'s supervisor, for the placeholders it mounted.
+hr_placeholder_sweep_paths_var() {
+  local p nl='
+'
+  HR_PLACEHOLDER_REMOVED=""
+  HR_PLACEHOLDER_KEPT=""
+  for p in "$@"; do
+    [ -n "$p" ] || continue
+    [ -e "$p" ] || [ -L "$p" ] || continue
+    if ! hr_placeholder_leftover_var "$p"; then
+      HR_PLACEHOLDER_KEPT="$HR_PLACEHOLDER_KEPT$p: $HR_PLACEHOLDER_REASON$nl"
+    elif rm -f -- "$p" 2>/dev/null && [ ! -e "$p" ] && [ ! -L "$p" ]; then
+      HR_PLACEHOLDER_REMOVED="$HR_PLACEHOLDER_REMOVED$p$nl"
+    else
+      HR_PLACEHOLDER_KEPT="$HR_PLACEHOLDER_KEPT$p: could not be removed$nl"
+    fi
   done
   HR_PLACEHOLDER_REMOVED="${HR_PLACEHOLDER_REMOVED%"$nl"}"
   HR_PLACEHOLDER_KEPT="${HR_PLACEHOLDER_KEPT%"$nl"}"
-  [ "$readable" -eq 1 ] || return 1
   return 0
 }
 
@@ -6367,7 +6453,7 @@ hr_lane_mkdir() {
 # `stat` in this file. Two kinds of caller depend on the 0-for-missing-or-
 # unreadable answer: a lock directory whose `owner` file is missing or
 # unreadable, where the directory's own mtime is the only acquisition time
-# there is; and `run-test-suite.sh`'s `heartbeat_age`, which reads a run's
+# there is; and `hr_heartbeat_age`, which reads a Run gates round's
 # `<label>.running` heartbeat and treats 0 as "cannot be read", never as a time.
 hr_lane_mtime() {
   local path="${1-}" m=""
@@ -6383,6 +6469,43 @@ hr_lane_mtime() {
   fi
   [ -n "$m" ] || m=0
   printf '%s\n' "$m"
+}
+
+# THE RUN GATES LANE:
+# `<state_dir>/test_run_logs/<sanitized branch>/<label>.{running,verdict,log}`,
+# the labels it accepts, and the age past which a `.running` heartbeat is stale.
+# Its two callers, `run-test-suite.sh` and `launch-sandboxed-gates.sh`, take all
+# four from here and must agree on them: a drift makes the launcher's `pending`
+# answer and its "did not start" refusal read the wrong lane. Only
+# `run-test-suite.sh` lets `RUN_TEST_SUITE_STALE` override the bound.
+HR_TEST_RUN_LABEL_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]*$'
+HR_TEST_RUN_STALE_SECONDS=30
+HR_TEST_RUN_LOG_SUBDIR='test_run_logs'
+
+# hr_test_run_lane_dir <state_dir> <branch> — print the lane directory
+# `<state_dir>/test_run_logs/<hr_sanitize_branch branch>`, as given (relative
+# when <state_dir> is); 1, printing nothing, when the branch does not sanitize.
+# Callers: `run-test-suite.sh` and `launch-sandboxed-gates.sh` (check 9).
+hr_test_run_lane_dir() {
+  local state_dir="${1-}" safe
+  safe=$(hr_sanitize_branch "${2-}") || return 1
+  printf '%s/%s/%s\n' "$state_dir" "$HR_TEST_RUN_LOG_SUBDIR" "$safe"
+}
+
+# hr_heartbeat_age <running_file> — print the heartbeat's age in whole seconds,
+# 0 for an mtime in the future; fail, printing nothing, when `hr_lane_mtime`
+# answers 0 (missing or unreadable). Callers: `run-test-suite.sh`'s `run_alive`
+# and `launch-sandboxed-gates.sh`'s live check (check 10).
+hr_heartbeat_age() {
+  local mtime now
+  mtime="$(hr_lane_mtime "${1-}")"
+  [ "$mtime" != 0 ] || return 1
+  now="$(date +%s)"
+  if [ "$now" -gt "$mtime" ]; then
+    printf '%s\n' "$((now - mtime))"
+  else
+    printf '0\n'
+  fi
 }
 
 # Set `HR_LANE_RANK` to a lane state's severity. A state this vocabulary does not

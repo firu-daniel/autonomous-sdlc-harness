@@ -1,0 +1,3 @@
+**1. The probe's launcher legs never record the per-run profile in the registry.** Must fix. `launch-sandboxed-gates.sh` now reads `run_profile` from the run's registry record, which only `spawn_engine` writes. `sp__render` never writes it, so T3 (`legs-local.sh`) and the `gate-sandbox` leg would get the launcher's refusal and print `not run`. Record the rendered profile in the probe clone's record as `spawn_engine` does, remove it at teardown, and add fixtures showing the launcher call is not refused for a missing record. Confirm the job-mode arm is not refused by the `wrappers` leg's control-clone record.
+
+**2. `scripts/launch-sandboxed-gates.sh` is committed `100644`.** Nice to have. The other rendered wrappers in `scripts/` are `100755`.

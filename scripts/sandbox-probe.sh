@@ -49,8 +49,8 @@ if [ ! -f "$SP_LIB/core.sh" ]; then
 fi
 for sp_lib_file in core.sh platform.sh preflight.sh judge.sh session.sh job.sh controls.sh legs-local.sh \
   legs-wrappers.sh legs-refresh.sh legs-planted.sh legs-planted-files.sh legs-protection.sh \
-  legs-network.sh legs-settings.sh legs-glob.sh legs-registry.sh legs-detached.sh legs-loopback.sh \
-  legs-job.sh legs-runner.sh legs-runner-isolation.sh legs-refusal.sh; do
+  legs-network.sh legs-settings.sh legs-glob.sh legs-registry.sh legs-detached.sh legs-gate-sandbox.sh \
+  legs-loopback.sh legs-job.sh legs-runner.sh legs-runner-isolation.sh legs-refusal.sh; do
   if [ -f "$SP_LIB/$sp_lib_file" ]; then
     # shellcheck source=/dev/null
     . "$SP_LIB/$sp_lib_file"

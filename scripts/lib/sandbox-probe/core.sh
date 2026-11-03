@@ -48,7 +48,7 @@ sp_leg_declare() {
 }
 
 sp_leg_declare gates "T2,W7,T3" \
-  "the gates, started in the clone through run-test-suite.sh and collected with --wait, reach a pass verdict with no gate failing on its temporary file (T2 on macOS, T3 on Linux), and each of W7's six wrapper calls runs with no permission denial" \
+  "the gates, started in the clone through run-test-suite.sh and collected with --wait, reach a pass verdict with no gate failing on its temporary file (T2 on macOS, T3 on Linux), and each of W7's six wrapper calls runs with no permission denial; on Linux T3 issues Phase G's launcher, launch-sandboxed-gates.sh, and is not run unless the launcher answers pending" \
   "§5 Failures and their follow-ups (T2, T3); §4 The profile's denials (W7)"
 sp_leg_declare mktemp "TD2,TD4" \
   "on macOS (TD2) the bare, -d and -t mktemp forms are refused with mkstemp failed; on Linux (TD4) the bare and -d forms are written under the session's TMPDIR and -t fails with too few X's, as TD3 found unsandboxed; on both the explicit form spelled with the session's TMPDIR as a literal path is written, and a call refused at the permission layer is not run" \
@@ -98,9 +98,12 @@ sp_leg_declare glob-deny "GW1,GW2" \
 sp_leg_declare registry "RG1,RG2,RG3" \
   "Linux only: a sandboxed dd onto the run registry is refused while a new file beside it is written and an Edit of it is refused (RG1), a rename onto it leaves its inode and shasum unchanged (RG2), and moving its directory aside is refused, the probe restoring it at once if not (RG3)" \
   "§8 The Linux legs (owed)"
-sp_leg_declare detached "BG9,WF5" \
-  "Linux only: a process started with nohup and disown inside one sandboxed call outlives the call and the session (BG9), and hr_lane_mtime, read in that process through the GNU stat arm, advances (WF5)" \
+sp_leg_declare detached "BG9" \
+  "Linux only: a process started with nohup and disown inside one sandboxed call outlives the call and the session (BG9), recorded as F10's fact" \
   "§5 Failures and their follow-ups"
+sp_leg_declare gate-sandbox "GS1,GS2,GS3,GS4,WF5" \
+  "Linux only: the gate launcher's worker, started from one excluded call under the launcher's own bwrap sandbox, outlives the call and the session and reaches a verdict (GS1); inside it a write to the home directory, to the target's parent directory and, in the clone layout, to the main checkout, and a write to the target's .git/config, are refused on disk while its control lands (GS2), a call to an outside host returns no body while the same call from the probe's shell does (GS3), the denied credential file and token variables read as absent while an ordinary file reads (GS4), and hr_lane_mtime advances through the GNU stat arm (WF5)" \
+  "§8 The Linux legs (owed) (GS1, GS2, GS3, GS4); §5 Failures and their follow-ups (WF5)"
 sp_leg_declare loopback "LB1,LB2,LB3,LB4,LB5" \
   "Linux only: the probe's loopback listener is called by 127.0.0.1 and by localhost, each also with --noproxy, on the network scratch profile as generated (LB1, LB2) and with 127.0.0.1 listed (LB3, LB4), and a listener a sandboxed call starts is called from outside the sandbox (LB5); once the listener answered the probe's own request, each row records whether the token came back and the proxy variables' host and port, and grades neither outcome" \
   "§8 The Linux legs (owed)"
@@ -155,7 +158,8 @@ sp_job_declare planted-files "L1"
 sp_job_declare write-protection "W6,W8"
 sp_job_declare network "N1,N2,N3,N4,N5"
 sp_job_declare credentials "S1,S2,S4,S5"
-sp_job_declare detached "BG9,WF5"
+sp_job_declare detached "BG9"
+sp_job_declare gate-sandbox "GS1,GS2,GS3,GS4,WF5"
 sp_job_declare loopback "LB1,LB2,LB3,LB4,LB5"
 sp_job_declare job-layout "CS6"
 sp_job_declare runner-install "IS1,IS2,IS3,IS4"
@@ -275,7 +279,7 @@ sp_leg_missing() {
   done
 }
 
-SP_LINUX_ONLY_LEGS="glob-deny registry detached loopback refusal runner-install runner-pid runner-privs"
+SP_LINUX_ONLY_LEGS="glob-deny registry detached gate-sandbox loopback refusal runner-install runner-pid runner-privs"
 SP_JOB_ONLY_LEGS="job-layout runner-install runner-pid runner-privs"
 
 sp_leg_job_only() {
