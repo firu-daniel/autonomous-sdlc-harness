@@ -11,8 +11,19 @@
 #        advancing mtime through its GNU `stat -c %Y` arm. On Linux a gate run's heartbeat lives there, and
 #        the detached leg's worker dies with its call (F10), so WF5 moved here from legs-detached.sh.
 #
-# The target is SP_CLONE in both layouts; job mode sets it to the checkout itself (job.sh), so job mode
-# measures the launcher's main-checkout arm.
+# THE TARGET (SP__GS_TARGET, set by sp__gs_target). In the clone layout it is the leg's own extra clone
+# ${SP_BRANCH}_gs, cut with --no-bootstrap, with its own rendered profile: no earlier leg has touched it.
+# In job mode it is SP_CLONE, the checkout itself (job.sh), with the session's own profile, so job mode
+# measures the launcher's main-checkout arm as before.
+# The writer this protects against (docs/sandbox-verification.md §5 PD29): legs-refresh.sh → sp__rf_r4
+# runs `git branch <defaultBranch> refs/remotes/origin/<defaultBranch>` in the shared probe clone, and
+# under git's default branch.autoSetupMerge that records branch.<defaultBranch>.remote and
+# branch.<defaultBranch>.merge, two keys the clone allow-list (hr_clone_config_spec) does not hold, so the
+# launcher refuses that clone. Before its session the leg runs the same allow-list check on its target
+# (sp__gs_target_check), so a probe defect prints as one and never reaches the launcher.
+# An extra clone rather than a reorder: running first would tie this leg's correctness to the leg order
+# and to what every future leg leaves in the shared clone; planted-files and wrappers-refresh already cut
+# their own clones. sp_extra_clone registers the clone and its branch for teardown.
 #
 # THE DEPARTURE, "a fixture written from an ordinary terminal" (docs/sandbox-verification.md §0): the
 # probe's own shell rewrites the target's harness.config.json to commands.typecheck `<none>` and
@@ -37,6 +48,9 @@
 #   sp__gs3_grade <body file> <status file> <stderr file> <unsandboxed control code>
 #   sp__gs4_grade <worker ssh copy> <host ssh file> <env record> <control file>
 #   sp__wf5_grade <mtimes file> [<process kind>]
+# The target functions set SP__GS_WHY and return 1 on failure:
+#   sp__gs_target                                  sets SP__GS_TARGET and SP__GS_PROFILE
+#   sp__gs_target_check <main> <target>            the clone allow-list check; none in job mode
 #
 # SOURCED, NEVER EXECUTED. It sets no shell option: the entry point owns `set -u`. Bash 3.2 floor.
 
@@ -49,6 +63,42 @@ SP_GS_HOLD_SECONDS=60
 SP__GS_SAVED=""
 SP__GS_GITCFG_SAVED=""
 SP__GS_WHY=""
+SP__GS_TARGET=""
+SP__GS_PROFILE=""
+
+sp__gs_target() {
+  local err line last=""
+  SP__GS_TARGET=""
+  SP__GS_PROFILE=""
+  if [ "${SP_JOB_MODE:-0}" = 1 ]; then
+    SP__GS_TARGET="$SP_CLONE"
+    SP__GS_PROFILE="$SP_RUN_PROFILE"
+    return 0
+  fi
+  err="$SP_TMP/gate-sandbox-clone.stderr"
+  if ! sp_extra_clone "${SP_BRANCH}_gs" --no-bootstrap 2>"$err"; then
+    while IFS= read -r line; do
+      [ -n "$line" ] && last="$line"
+    done <"$err"
+    cat -- "$err" >&2
+    SP__GS_WHY="${last:-sp_extra_clone ${SP_BRANCH}_gs refused with no message}"
+    return 1
+  fi
+  cat -- "$err" >&2
+  # Copied at once: the next sp_extra_clone overwrites SP_EXTRA_*.
+  SP__GS_TARGET="$SP_EXTRA_CLONE"
+  SP__GS_PROFILE="$SP_EXTRA_PROFILE"
+  return 0
+}
+
+sp__gs_target_check() {
+  local main="${1:-}" target="${2:-}"
+  # The launcher's main-checkout arm reads no clone allow-list.
+  [ "${SP_JOB_MODE:-0}" = 1 ] && return 0
+  hr_clone_config_check_var "$main" "$target" && return 0
+  SP__GS_WHY="the gate-sandbox target's .git/config is outside the clone allow-list before the launch: $HR_CLONE_CONFIG_REFUSAL"
+  return 1
+}
 
 # sp__gs_canon_dir <dir> — the directory's canonical path; status 1 when it has none.
 sp__gs_canon_dir() {
@@ -434,21 +484,21 @@ EOF
     SP__GS_WHY="could not create the records directory '$rec'"
     return 1
   fi
-  if ! sp__gs_test_script "$script" "$SP_CLONE" "$rec" "$running" "$lib" "$outside" \
+  if ! sp__gs_test_script "$script" "$SP__GS_TARGET" "$rec" "$running" "$lib" "$outside" \
     ${nargs[@]+"${nargs[@]}"}; then
     SP__GS_WHY="could not write the test script '$script'"
     return 1
   fi
 
   # 4.
-  sha_before="$(sp__gs_sha "$SP_CLONE/.git/config")"
+  sha_before="$(sp__gs_sha "$SP__GS_TARGET/.git/config")"
 
   # 5.
-  cmd="bash $SP_SCRIPTS/launch-sandboxed-gates.sh $SP_CLONE $SP_GS_LABEL"
+  cmd="bash $SP_SCRIPTS/launch-sandboxed-gates.sh $SP__GS_TARGET $SP_GS_LABEL"
   pfile="$SP_TMP/gate-sandbox.prompt"
   sp_prompt_new "$pfile"
   sp_prompt_bash "$pfile" "$cmd"
-  sp_session gate-sandbox "$SP_RUN_PROFILE" "$pfile" --cwd "$SP_CLONE"
+  sp_session gate-sandbox "$SP__GS_PROFILE" "$pfile" --cwd "$SP__GS_TARGET"
   end="$(date +%s)"
   departure="$(sp_departures)"
   departure="${departure:+$departure; }a fixture written from an ordinary terminal: the target's harness.config.json with commands.typecheck <none> and commands.test bash $script"
@@ -489,7 +539,7 @@ EOF
 
   # 7.
   code="$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' https://example.com/ 2>/dev/null)" || :
-  sha_after="$(sp__gs_sha "$SP_CLONE/.git/config")"
+  sha_after="$(sp__gs_sha "$SP__GS_TARGET/.git/config")"
 
   # 8. Kept whole, as copies: the leg removes the originals before the next leg.
   if mkdir -- "$SP_TMP/gate-sandbox.records" 2>/dev/null; then
@@ -521,38 +571,46 @@ EOF
 sp_leg_gate_sandbox() {
   local scripts_rel state_rel branch lane lib outside="$SP_TMP/gate-sandbox.outside"
   local drops_file="$SP_TMP/gate-sandbox.outside.stderr" drops="" line p
-  local script="$SP_CLONE/sbx_gs_test.sh" rec="$SP_CLONE/sbx_gs" vfile lfile lane_new=0 vfile_new=0 lfile_new=0
+  local script rec vfile lfile lane_new=0 vfile_new=0 lfile_new=0
   local rewritten="$SP_TMP/gate-sandbox.rewritten.json"
   SP__GS_SAVED="$SP_TMP/gate-sandbox.config.json"
   SP__GS_GITCFG_SAVED="$SP_TMP/gate-sandbox.git-config"
   SP__GS_WHY=""
 
+  # 0.
+  if ! sp__gs_target || ! sp__gs_target_check "$SP_MAIN" "$SP__GS_TARGET"; then
+    sp__gs_all "$SP__GS_WHY"
+    return 0
+  fi
+  script="$SP__GS_TARGET/sbx_gs_test.sh"
+  rec="$SP__GS_TARGET/sbx_gs"
+
   # 1.
-  if ! sp__gs2_outside_paths "$SP_CLONE" "$SP_MAIN" "${HOME:-}" >"$outside" 2>"$drops_file"; then
+  if ! sp__gs2_outside_paths "$SP__GS_TARGET" "$SP_MAIN" "${HOME:-}" >"$outside" 2>"$drops_file"; then
     sp__gs_all "could not write GS2's outside paths to '$outside'"
     return 0
   fi
   while IFS= read -r line; do
     [ -n "$line" ] && drops="${drops:+$drops; }$line"
   done <"$drops_file"
-  if ! scripts_rel="$(hr_scripts_dir "$SP_CLONE")" || [ -z "$scripts_rel" ]; then
-    sp__gs_all "cannot resolve scriptsDir from '$SP_CLONE/harness.config.json'"
+  if ! scripts_rel="$(hr_scripts_dir "$SP__GS_TARGET")" || [ -z "$scripts_rel" ]; then
+    sp__gs_all "cannot resolve scriptsDir from '$SP__GS_TARGET/harness.config.json'"
     return 0
   fi
-  if ! state_rel="$(hr_state_dir "$SP_CLONE")" || [ -z "$state_rel" ]; then
-    sp__gs_all "cannot resolve stateDir from '$SP_CLONE/harness.config.json'"
+  if ! state_rel="$(hr_state_dir "$SP__GS_TARGET")" || [ -z "$state_rel" ]; then
+    sp__gs_all "cannot resolve stateDir from '$SP__GS_TARGET/harness.config.json'"
     return 0
   fi
-  branch="$(hr_current_branch "$SP_CLONE")"
+  branch="$(hr_current_branch "$SP__GS_TARGET")"
   if ! lane="$(hr_test_run_lane_dir "$state_rel" "$branch")"; then
-    sp__gs_all "the target '$SP_CLONE' has no current branch"
+    sp__gs_all "the target '$SP__GS_TARGET' has no current branch"
     return 0
   fi
-  if [ "$scripts_rel" = . ]; then lib="$SP_CLONE/lib/harness-run-lib.sh"; else lib="$SP_CLONE/$scripts_rel/lib/harness-run-lib.sh"; fi
-  lane="$SP_CLONE/$lane"
+  if [ "$scripts_rel" = . ]; then lib="$SP__GS_TARGET/lib/harness-run-lib.sh"; else lib="$SP__GS_TARGET/$scripts_rel/lib/harness-run-lib.sh"; fi
+  lane="$SP__GS_TARGET/$lane"
   vfile="$lane/$SP_GS_LABEL.verdict"
   lfile="$lane/$SP_GS_LABEL.log"
-  if ! sp__ctl_literal target "$SP_CLONE" || ! sp__ctl_literal "scripts directory" "$SP_SCRIPTS" ||
+  if ! sp__ctl_literal target "$SP__GS_TARGET" || ! sp__ctl_literal "scripts directory" "$SP_SCRIPTS" ||
     ! sp__ctl_literal "run library" "$lib" || ! sp__ctl_literal lane "$lane"; then
     sp__gs_all "the target, the scripts directory, the target's run library or its lane is not spellable as one literal word"
     return 0
@@ -582,8 +640,8 @@ sp_leg_gate_sandbox() {
   [ -e "$lfile" ] || lfile_new=1
 
   # 2. Saved and restore-registered before the target's copy changes.
-  if ! cp -p -- "$SP_CLONE/harness.config.json" "$SP__GS_SAVED" 2>/dev/null ||
-    ! cp -p -- "$SP_CLONE/.git/config" "$SP__GS_GITCFG_SAVED" 2>/dev/null; then
+  if ! cp -p -- "$SP__GS_TARGET/harness.config.json" "$SP__GS_SAVED" 2>/dev/null ||
+    ! cp -p -- "$SP__GS_TARGET/.git/config" "$SP__GS_GITCFG_SAVED" 2>/dev/null; then
     sp__gs_all "could not save the target's harness.config.json and .git/config under '$SP_TMP'"
     return 0
   fi
@@ -592,19 +650,19 @@ sp_leg_gate_sandbox() {
     sp__gs_all "jq could not rewrite the commands of '$SP__GS_SAVED'"
     return 0
   fi
-  if ! sp_restore_register sp__gs_restore "$SP_CLONE"; then
+  if ! sp_restore_register sp__gs_restore "$SP__GS_TARGET"; then
     sp__gs_all "could not register the gate-sandbox restore"
     return 0
   fi
-  if cp -- "$rewritten" "$SP_CLONE/harness.config.json" 2>/dev/null; then
+  if cp -- "$rewritten" "$SP__GS_TARGET/harness.config.json" 2>/dev/null; then
     sp__gs_body "$outside" "$script" "$rec" "$lane/$SP_GS_LABEL.running" "$vfile" "$lfile" "$lib" "$drops" ||
       sp__gs_all "$SP__GS_WHY"
   else
-    sp__gs_all "could not rewrite '$SP_CLONE/harness.config.json'"
+    sp__gs_all "could not rewrite '$SP__GS_TARGET/harness.config.json'"
   fi
 
   # 9. Every path past step 2 reaches here.
-  sp__gs_restore "$SP_CLONE" && sp_restore_clear
+  sp__gs_restore "$SP__GS_TARGET" && sp_restore_clear
   sp__gs_rm "$script"
   for p in "$rec"/*; do
     sp__gs_rm "$p"
