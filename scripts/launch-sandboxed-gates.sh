@@ -44,6 +44,12 @@
 #   - `HOME` reads a credential path's `~/`. The account's passwd home, where
 #     `getent` answers, is masked as well, so redirecting `HOME` unmasks
 #     nothing that path names.
+# What keeps an assignment prefix from setting these is measured, not
+# structural: a prefixed call does not match the `excludedCommands` entry and
+# stays sandboxed (`docs/sandbox-verification.md` P1b, macOS, runs 2 and 3;
+# P1b (Linux), `pass`, answered by F9's earlier refusal, the answer after F9's
+# fix not traced). Both rows measure `push-branch.sh`; this script's own
+# spelling is not measured, and no row takes it.
 #
 # The label pattern, the staleness bound, the lane layout and the heartbeat
 # reader are the run library's (`HR_TEST_RUN_LABEL_PATTERN`,

@@ -22,7 +22,7 @@ It qualifies on the ruling's two grounds:
 - **It is run from the main checkout and is write-protected the way the git wrappers are.**
 - **It carries their checks:** `hr_wrapper_main_of`, `hr_git_env_drop`, `hr_wrapper_target_check_var` and `hr_wrapper_branch_var`. It runs no git command in the target, so `hr_pinned_hooks_path` and `hr_worktree_config_check_var` have nothing to guard. Its header and the `runsUnsandboxed` doc comment say so.
 
-It reads no environment variable for a trust decision. `HARNESS_MAIN_REPO` included: an assignment prefix could set one.
+No environment variable decides trust in the target, `HARNESS_MAIN_REPO` included. `PATH` and `HOME` still reach it. An assignment prefix left `push-branch.sh`'s excluded call sandboxed (P1b, macOS and Linux); this script's own spelling is not measured, and no row takes it.
 
 **Its interface**, which Tasks 2, 4, 5, 6, 8, 9, 13 and 16 rely on, is `launch-sandboxed-gates.sh <target> <label>`. It prints one stdout line:
 
