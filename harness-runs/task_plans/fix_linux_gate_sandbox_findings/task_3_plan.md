@@ -1,0 +1,28 @@
+### Task 3 — F11: move gate 6a into `scripts/check-machine-paths.sh`, dropping only `Permission denied` on a character-device placeholder
+
+**Goal:** Stop gate 6a failing inside the launcher's `bwrap` worker on `grep`'s own errors at the placeholders the launcher's vector mounts, without hiding a real hit and without hiding an unreadable file that could hold a path. Gate 6a's search moves out of `scripts/run-gates.sh` into a script of its own, so the cli-layer fixture (Task 7) can drive it against throwaway trees.
+
+**The finding (docs/sandbox-verification.md §5 F11).** In T3's worker (2026-11-03) gate 6a printed `grep: ./.bash_profile: Permission denied`, `grep: ./.vscode: Permission denied` and `grep: ./.ripgreprc: Permission denied`. `gate_silent` grades output, so those lines alone fail every unattended Linux Run gates round. The gate's printout is `tail -25`, so other placeholders may have failed the same way unseen.
+
+**Why the reads are denied, read from the vector (not measured).** `scripts/launch-sandboxed-gates.sh` → `lsg_bwrap_args_var` pins each absent root-level built-in protected path, and each absent exact `denyWrite` entry under the target, with `--ro-bind /dev/null <p>`. bwrap grants device access only to `--dev-bind` (bwrap(1): `--dev-bind` binds *"allowing device access"*) and mounts every other bind `nodev`. Opening a character device on a `nodev` mount fails with `EACCES`. AP5 in `docs/sandbox-verification.md` records the same `nodev` flag on Claude Code's own placeholders (`/null (tmpfs, ro,nosuid,nodev)`). So inside the worker each placeholder is a character device `grep -r` cannot open. It holds no bytes, so it cannot hold a machine path. This reading goes into the new script's header as **read from the vector, not measured**. The next Gate 15 container run confirms it.
+
+**The interface Task 7 and Task 12 rely on.** `bash scripts/check-machine-paths.sh`, with no arguments, searches **the working directory it is run from**, recursively, for the value of `$HOME`. It uses the exclusions gate 6a uses today, unchanged: `--exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git --exclude-dir=test_run_logs --exclude-dir=scratch --exclude-dir=__pycache__`, the `^\./\.git:[0-9][0-9]*:` line filter, and the `^\./harness-runs/clarifications/[^/][^/]*/` filter. It prints each hit as `grep -rn` does, then each `grep` error line it keeps, and it exits 0 whatever it printed. Its output is the finding, as gate 6a's is today. It drops **exactly one** error shape: a stderr line that is exactly `grep: <p>: Permission denied` where `[ -c "<p>" ]` holds from the same working directory. Every other stderr line is printed: a `Permission denied` on a regular file or a directory, any other error, any line not in that shape. If it cannot create its temporary file it prints one line naming the failure and exits 1, so the gate fails closed, since a printed line is a 6a failure. `scripts/run-gates.sh` runs it from the repository root it already `cd`s to.
+
+### Targets
+
+- `scripts/check-machine-paths.sh` (new)
+- `scripts/run-gates.sh`
+
+**Work:**
+
+- [ ] Write `scripts/check-machine-paths.sh`: `#!/usr/bin/env bash`, `set -uo pipefail`, bash 3.2 floor. Its header opens with a `# check-machine-paths.sh — …` line and carries the rationale from `run-gates.sh` → the comment block above `machine_path_hits`, moved here whole: the `.git` file filter, the five `--exclude-dir`s and the clarifications filter, each with its reason. To that it adds the F11 paragraph: the placeholder reading above, marked *read from the vector, not measured*, and why dropping only `Permission denied` on a character device hides nothing a commit could carry. This applies `harness-runs/lessons.md` → *"accept only its provably inert shape … and keep refusing every other shape"*.
+- [ ] Implement the search as the interface states. `grep`'s stderr goes to a temporary file made with an explicit template under `${TMPDIR:-/tmp}` (`mktemp "${TMPDIR:-/tmp}/check-machine-paths.XXXXXX"`, the form F2's fix requires, removed by an `EXIT` trap). Its stdout goes through the two existing `grep -v` filters. Then each stderr line is read and printed unless it is the one dropped shape. Parse `<p>` by stripping the literal `grep: ` prefix and the literal `: Permission denied` suffix, never by splitting on `:`, so a path containing a colon is handled.
+- [ ] In `scripts/run-gates.sh`, replace `machine_path_hits` and its call with `gate_silent "6a no machine paths" bash scripts/check-machine-paths.sh`, and keep the gate name `6a no machine paths` byte for byte. Replace the moved comment block with two lines pointing at the new script's header. Leave the "gate 6a pipes inside `gate_silent`" sentence above `gate()` accurate: the pipe now lives inside the script.
+- [ ] Keep the macOS outcome identical: on a tree with no character device, the script's output is byte-identical to `machine_path_hits`'s output on the same tree.
+
+**Verification:**
+
+- `git grep -n 'machine_path_hits' -- scripts` prints nothing. Every line `git grep -n 'check-machine-paths.sh' -- scripts/run-gates.sh` prints is either the `gate_silent "6a no machine paths"` call or the pointer comment.
+- `git ls-files -- cli/templates/scripts/run-gates.sh` prints nothing: no template carries gate 6a, so nothing under `cli/templates/` changes.
+- Read the new script for each `[` test, `${…}` expansion and array use against the bash 3.2 floor (no `mapfile`, no `${var,,}`, no associative array). Gate 16 parses it at Run gates.
+- Task 7's suite drives this script's behaviour. This task's own check is reading the dropped-shape test against the interface above: `-c` on the exact path, and only for `Permission denied`.
