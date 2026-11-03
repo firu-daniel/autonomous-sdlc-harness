@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # legs-gate-sandbox.sh — the sandbox probe's gate-sandbox leg (rows GS1, GS2, GS3, GS4, WF5), Linux only:
 # the four claims the ruling makes of launch-sandboxed-gates.sh's `bwrap` sandbox
-# (harness-runs/clarifications/fix_linux_detached_gate_run/answer_1.md, Proof), measured through the real
+# (docs/sandbox-verification.md §5 F10 and §8 GS1–GS4), measured through the real
 # launcher, a real session and a gate command the probe writes, plus WF5.
 #   GS1  the worker outlives the call and the session, and yields a verdict
 #   GS2  a write outside the worker's roots, and a write to <target>/.git/config, is refused, read on disk

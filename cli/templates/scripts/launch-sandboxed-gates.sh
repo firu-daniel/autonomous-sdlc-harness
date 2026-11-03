@@ -14,9 +14,9 @@
 # runs outside Claude Code's sandbox, so what it detaches survives. A gate run
 # executes session-written code, which never runs unsandboxed, so this script
 # runs no byte of the target itself: its one command of the target's is run
-# inside the `bwrap` sandbox it builds below
-# (`harness-runs/clarifications/fix_linux_detached_gate_run/answer_1.md`, Q2
-# route 1).
+# inside the `bwrap` sandbox it builds below (`docs/sandbox-verification.md`
+# §5 F10, the user's ruling: route 1, the run copy's own `run-test-suite.sh`
+# never excluded).
 #
 # WHY IT MAY BE EXCLUDED: the git wrappers' two grounds. It is run from the main
 # checkout, which the profile write-protects as it does the git wrappers, and it
