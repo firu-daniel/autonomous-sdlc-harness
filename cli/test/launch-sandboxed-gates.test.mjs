@@ -18,7 +18,10 @@
  * `--chdir`; it applies no namespace, mount or `--setenv`, and that emulation is not measured.
  *
  * The host answer is `hr_placeholder_host_probe_var` redefined at the end of the fixture's installed
- * library, as `watcher-placeholder-host.test.mjs` overrides it. `HOME` and `XDG_STATE_HOME` are
+ * library, as `watcher-placeholder-host.test.mjs` overrides it. The library's `HR_TEST_RUN_STALE_SECONDS`
+ * is redefined there too, as {@link STALE_BOUND_S}: the launcher's start window and `--wait`'s
+ * staleness are ceilings under `helpers/timing.mjs`'s rule, and at a fixed 30 s they failed
+ * launched-run cases at random under full-suite load. `HOME` and `XDG_STATE_HOME` are
  * case-owned; nothing reaches the network or starts a session. Runs the compiled `dist/cli.js`.
  */
 
@@ -46,6 +49,8 @@ const CLONE_BRANCH = 'feat_clone';
 
 const RUN_TIMEOUT_MS = scaleBound(90_000);
 const POLL_LIMIT = scaleBound(600);
+/** The library's `HR_TEST_RUN_STALE_SECONDS` (30), scaled by the same multiplier as {@link RUN_TIMEOUT_MS} so it stays a third of it. */
+const STALE_BOUND_S = scaleBound(30);
 
 /** `commands.test`: records whether `bwrap` ran it and what it saw of the worker marker, under `$STUB_OUT`. */
 const GATE_STUB = [
@@ -187,7 +192,10 @@ async function launcherFixture(t, { host = 1, bwrap = true, setsid = false } = {
   await runGit(dir, ['checkout', '--quiet', '-b', BRANCH]);
   await runGit(dir, ['add', '-A']);
   await runGit(dir, ['commit', '--quiet', '--no-verify', '--allow-empty', '-m', 'fixture: adopt the harness']);
-  await appendFile(join(dir, LIB), `\nhr_placeholder_host_probe_var() {\n  HR_PLACEHOLDER_HOST=${host}\n  return 0\n}\n`);
+  await appendFile(
+    join(dir, LIB),
+    `\nhr_placeholder_host_probe_var() {\n  HR_PLACEHOLDER_HOST=${host}\n  return 0\n}\nHR_TEST_RUN_STALE_SECONDS=${STALE_BOUND_S}\n`,
+  );
 
   const env = (extra = {}) => ({
     HOME: home,
