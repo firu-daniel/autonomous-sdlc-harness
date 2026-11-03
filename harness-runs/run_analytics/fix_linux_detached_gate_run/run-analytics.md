@@ -4,26 +4,26 @@
 
 | Measure | Value |
 |---|---|
-| Sessions | 86 (83 incomplete) |
-| Span | 25h05m |
-| Wall | 9h14m |
-| Active | 9h05m |
+| Sessions | 87 (83 incomplete) |
+| Span | 27h02m |
+| Wall | 9h21m |
+| Active | 9h12m |
 | Host-suspended | 0.0s |
 | Idle | 9m 00s |
-| Cost | $195.35 |
-| Input tokens (uncached) | 6960 (3 of 86 sessions) |
-| Total input tokens (incl. cache) | 496186367 (3 of 86 sessions) |
-| Output tokens | 1935576 (3 of 86 sessions) |
-| Thinking tokens (main thread) | 7844 |
-| Cache read tokens | 484836521 (3 of 86 sessions) |
-| Cache write tokens | 11342886 (3 of 86 sessions) |
-| Cache write tokens, main thread (5m / 1h) | 0 / 551323 |
-| Cache hit ratio | 0.9771 |
-| Requests | 3327 |
+| Cost | $200.13 |
+| Input tokens (uncached) | 7146 (4 of 87 sessions) |
+| Total input tokens (incl. cache) | 503801725 (4 of 87 sessions) |
+| Output tokens | 1974683 (4 of 87 sessions) |
+| Thinking tokens (main thread) | 9378 |
+| Cache read tokens | 492050615 (4 of 87 sessions) |
+| Cache write tokens | 11743964 (4 of 87 sessions) |
+| Cache write tokens, main thread (5m / 1h) | 0 / 733371 |
+| Cache hit ratio | 0.9767 |
+| Requests | 3416 |
 | Request latency p50 / p90 / p99 / max | 1.8s / 7.8s / 35.1s / 2m 23s |
 | Requests over the idle threshold | 2 |
 | API retries | 0 |
-| Permission denials | 33 |
+| Permission denials | 37 |
 | Sub-agents failed / killed | 0 / 0 |
 | Slowest sub-agent | autonomous-sdlc-harness:task-plan-writer — Write task plan — 24m 37s (session 1) |
 | Rate-limit peak | seven_day 0.64 |
@@ -8705,4 +8705,117 @@ Remainder: tokens the session total holds that neither the orchestrator's reques
 | stop_reason | end_turn |
 | Turns | 512 |
 | Time to first token | 1.7s |
+| Rate-limit peak | seven_day 0.06 |
+
+## Session 87 — 2026-11-03T17:16:48.567Z → 2026-11-03T17:23:43.880Z
+
+Session id: `901794c2-1cab-44fe-99e6-b26f0002a343`
+
+### Time
+
+| Wall | duration_ms | duration_api_ms | Host-suspended | Idle | Active | Suspend source |
+|---|---|---|---|---|---|---|
+| 6m 55s | 6m 56s | 6m 22s | 0.0s | 0.0s | 6m 55s | none |
+
+### Idle gaps (over 120 s)
+
+None.
+
+### Request latency
+
+| Context | Requests | p50 | p90 | p99 | Max | Over threshold |
+|---|---|---|---|---|---|---|
+| all | 89 | 2.1s | 6.2s | 39.0s | 39.0s | 0 |
+| autonomous-sdlc-harness:architecture-reviewer | 12 | 2.3s | 5.1s | 6.7s | 6.7s | 0 |
+| autonomous-sdlc-harness:layer-implementer | 7 | 2.3s | 5.1s | 5.1s | 5.1s | 0 |
+| autonomous-sdlc-harness:user-review-fix-plan-writer | 31 | 3.6s | 9.6s | 39.0s | 39.0s | 0 |
+| orchestrator | 39 | 1.5s | 2.5s | 7.1s | 7.1s | 0 |
+
+### Tool time
+
+| Tool | Context | Calls | Total | Max |
+|---|---|---|---|---|
+| Agent — sub-agent wall time | orchestrator | 3 | 4m 39s | 3m 18s |
+| Bash | autonomous-sdlc-harness:architecture-reviewer | 10 | 1.2s | 0.1s |
+| Bash | autonomous-sdlc-harness:layer-implementer | 8 | 0.9s | 0.1s |
+| Bash | autonomous-sdlc-harness:user-review-fix-plan-writer | 27 | 4.1s | 0.2s |
+| Bash | orchestrator | 24 | 27.1s | 4.6s |
+| Edit | autonomous-sdlc-harness:user-review-fix-plan-writer | 1 | 0.0s | 0.0s |
+| Edit | orchestrator | 2 | 0.1s | 0.0s |
+| Read | autonomous-sdlc-harness:architecture-reviewer | 9 | 0.3s | 0.2s |
+| Read | autonomous-sdlc-harness:layer-implementer | 2 | 0.2s | 0.2s |
+| Read | autonomous-sdlc-harness:user-review-fix-plan-writer | 3 | 0.0s | 0.0s |
+| Read | orchestrator | 9 | 1.8s | 0.4s |
+| Skill | orchestrator | 1 | 0.0s | 0.0s |
+| Write | autonomous-sdlc-harness:user-review-fix-plan-writer | 3 | 0.1s | 0.0s |
+| Write | orchestrator | 2 | 0.0s | 0.0s |
+
+`Agent` / `Task` rows are sub-agent wall time: how long the orchestrator was blocked on each dispatch, which `### Sub-agents` breaks down per dispatch. They are not time spent in a tool.
+
+#### Slowest calls (sub-agent dispatches excluded)
+
+| Tool | Context | Started | Duration | Result bytes | Error | Permission denied |
+|---|---|---|---|---|---|---|
+| Bash | orchestrator | 2026-11-03T17:22:20.151Z | 4.6s | 481 | false | false |
+| Bash | orchestrator | 2026-11-03T17:17:21.814Z | 4.6s | 481 | false | false |
+| Bash | orchestrator | 2026-11-03T17:20:54.455Z | 4.5s | 481 | false | false |
+| Bash | orchestrator | 2026-11-03T17:22:00.677Z | 4.5s | 481 | false | false |
+| Bash | orchestrator | 2026-11-03T17:22:10.141Z | 4.4s | 481 | false | false |
+| Bash | orchestrator | 2026-11-03T17:22:08.172Z | 0.5s | 493 | false | false |
+| Read | orchestrator | 2026-11-03T17:17:03.012Z | 0.4s | 48058 | false | false |
+| Bash | orchestrator | 2026-11-03T17:20:52.486Z | 0.4s | 70 | false | false |
+| Bash | orchestrator | 2026-11-03T17:22:18.197Z | 0.4s | 70 | false | false |
+| Bash | orchestrator | 2026-11-03T17:17:19.918Z | 0.4s | 70 | false | false |
+
+#### Polling loops
+
+| Context | Command | Count | Total |
+|---|---|---|---|
+| orchestrator | bash <main_repo>/scripts/push-branch.sh <repo_root> | 5 | 22.7s |
+
+### Sub-agents
+
+| Type | Description | Duration | Requests | Output tokens | Input tokens (uncached) | Total input tokens (incl. cache) | Cache read tokens | Cache write tokens | Wall share |
+|---|---|---|---|---|---|---|---|---|---|
+| autonomous-sdlc-harness:user-review-fix-plan-writer | Write round-2 fix plan | 3m 18s | 31 | 19388 | 64 | 2301314 | 2191642 | 109608 | 0.4784 |
+| autonomous-sdlc-harness:architecture-reviewer | Architecture gate on fix plan 2 | 48.8s | 12 | 5112 | 26 | 640654 | 569865 | 70763 | 0.1176 |
+| autonomous-sdlc-harness:layer-implementer | Implement Finding 2 (general) | 32.0s | 7 | 3162 | 16 | 290060 | 251385 | 38659 | 0.0772 |
+
+### Cost and tokens
+
+| Measure | Value |
+|---|---|
+| Cost | $4.78 |
+| Cost — claude-opus-5-5 | $4.78 |
+| Input tokens (uncached) | 186 |
+| Total input tokens (incl. cache) | 7615358 |
+| Output tokens | 39107 |
+| Thinking tokens (main thread) | 1534 |
+| Cache read tokens | 7214094 |
+| Cache write tokens | 401078 |
+| Cache write tokens, main thread (5m / 1h) | 0 / 182048 |
+| Cache hit ratio | 0.9473 |
+| Token source | result.modelUsage |
+
+#### Token attribution
+
+| Context | Input tokens (uncached) | Total input tokens (incl. cache) | Output tokens | Cache read tokens | Cache write tokens |
+|---|---|---|---|---|---|
+| orchestrator | 80 | 4383330 | 1022 | 4201202 | 182048 |
+| sub-agents | 106 | 3232028 | 27662 | 3012892 | 219030 |
+| remainder | 0 | 0 | 10423 | 0 | 0 |
+
+Remainder: tokens the session total holds that neither the orchestrator's requests nor the dispatches' transcripts account for.
+
+### Reliability
+
+| Measure | Value |
+|---|---|
+| API retries | 0 |
+| Permission denials | 4 |
+| Sub-agents spawned / failed / killed | 3 / 0 / 0 |
+| terminal_reason | completed |
+| stop_reason | end_turn |
+| Turns | 43 |
+| Time to first token | 1.4s |
 | Rate-limit peak | seven_day 0.06 |
