@@ -15,7 +15,7 @@ The log also reports gate 13a–13c as `BLOCKED` (the Python docs-retrieval envi
 This list is the **single source of truth** for the fix loop. Any `[ ]` markers elsewhere in this plan or its per-finding files are informational only.
 
 1. [x] **Finding 1** — `(q)` fails under full-suite load: the launcher's unscaled 30 s start window, and a gate log that drops the assertion. _(layer: cli, general)_
-2. [ ] **Finding 2** — `(m)` fails under full-suite load, on the same launched-run path. _(layer: cli, general)_
+2. [x] **Finding 2** — `(m)` fails under full-suite load, on the same launched-run path. _(layer: cli, general)_
 
 ## Must Fix
 

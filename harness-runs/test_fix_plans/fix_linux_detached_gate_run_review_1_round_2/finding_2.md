@@ -58,3 +58,16 @@ The log carries **no assertion detail** for test 360. It keeps only the `not ok`
 
   If the reading finds a real mismatch, fix the side that departs from the launcher header's THE BWRAP VECTOR. If that side is the launcher, edit `cli/templates/scripts/launch-sandboxed-gates.sh` and `scripts/launch-sandboxed-gates.sh` together and keep them byte-identical. Never loosen the assertion.
 - Do not delete, skip or weaken any assertion of `(m)`.
+
+## Already passing
+
+- **(a) Named test and what was read.**
+  - Test: `(m) the vector pins Claude Code's built-in protected paths at the target's root, .claude read-only after every denyWrite entry`, run from `cli/test/launch-sandboxed-gates.test.mjs`.
+  - Fix site read for sub-step 1: `launcherFixture` already carries Finding 1's change (commit `ced9413b`). The `appendFile(join(dir, LIB), …)` call appends `HR_TEST_RUN_STALE_SECONDS=${STALE_BOUND_S}`, with `const STALE_BOUND_S = scaleBound(30);`. The change is in the shared builder, not in a case body, so `(m)`, `(l)`, `(g)(h)` and `(q)` all inherit it.
+  - Sub-step 2 (inspection): `(m)` was re-read against `lsg_bwrap_args_var` in `cli/templates/scripts/launch-sandboxed-gates.sh`. `cmp` reports that file byte-identical to `scripts/launch-sandboxed-gates.sh`. The assertions match the builder:
+    - The `.claude` `--ro-bind` is appended after the `for rel in .bash_profile .bashrc … .zshrc` loop, and that loop runs after the `denyWrite` loop.
+    - The only binds after `.claude` and before `--` are the `.git` bind and the credential masks (home paths). None lies under `<target>/.claude/`.
+    - `.bashrc`, `.gitmodules` and `.vscode` are each pinned, as either `--ro-bind <p> <p>` or `--ro-bind /dev/null <p>`.
+  - No mismatch was found, and the launcher header's THE BWRAP VECTOR agrees.
+- **(b) Command and result.** `npm test --workspace cli -- test/launch-sandboxed-gates.test.mjs`, run from the repository root at HEAD `ced9413b`, reported `ok 16 - (m) the vector pins Claude Code's built-in protected paths …`. File totals: `# tests 16`, `# pass 16`, `# fail 0`.
+- **(c) No code file edited.** This detail file is the only write.
