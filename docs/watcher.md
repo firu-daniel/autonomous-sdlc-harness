@@ -124,7 +124,7 @@ What this leaves open — the bootstrap's configured commands, filter drivers, t
 ${XDG_STATE_HOME:-$HOME/.local/state}/autonomous-sdlc-harness/run-profiles/<repo slug>/<sanitized branch>.json
 ```
 
-That directory is outside the run copy, the state directory and every other root the profile lets a session write, so a session cannot rewrite its own protection. The copy is re-rendered at every spawn, so a resume gets one derived from the current base.
+That directory is outside the run copy, the state directory and every other root the profile lets a session write, so a session cannot rewrite its own protection. The copy is re-rendered at every spawn, so a resume gets one derived from the current base. At every spawn the watcher also records the copy's absolute path in the run's registry record as `run_profile`, which the gate launcher reads.
 
 **When it is removed.** `cleanup-merged-worktrees.sh` deletes the file once it has removed that run's copy, on the clone arm and the worktree arm alike, and before `git branch -D`. It finds the file at the path above through `hr_run_profile_file`, with the slug of the main checkout (`hr_repo_slug`), never through a glob. It keeps the file when the copy was not removed: a refused or skipped copy, a failed `worktree remove`, or a record whose copy is already gone. It also keeps the file when a record in a live status — `running`, `parked`, `park_loop` or `paused` — maps to the same file on a re-read of the registry just before the deletion. `--dry-run` prints `would remove run profile <file> for '<branch>'` and deletes nothing. Job mode writes no file, so there is nothing to sweep (`cleanup-merged-worktrees.sh`'s header, step 2; `cli/test/cleanup-run-copies.test.mjs`).
 

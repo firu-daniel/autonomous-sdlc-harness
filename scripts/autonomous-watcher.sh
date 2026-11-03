@@ -1716,6 +1716,11 @@ job_report() {
 #                       is reached by a PAUSE honoured or by a zero exit over
 #                       an unfinished ledger (`pause_reason` below)
 #   log_path            the central log this run appends to
+#   run_profile         the absolute path of the per-run profile this run's
+#                       latest spawn was launched on, written by spawn_engine
+#                       after its launch check, outside job mode; read by
+#                       launch-sandboxed-gates.sh for the worker's protected
+#                       paths
 #   engine              task | user_review | docs — which engine command it runs,
 #                       re-read on resume so the right one is re-launched
 #   started_at          when it was launched
@@ -3108,6 +3113,14 @@ spawn_engine() {
   [ "$JOB_MODE" = "1" ] || check_copy="$worktree"
   if ! run_profile_check "$settings_file" "$check_copy"; then
     spawn_refuse "$branch" "$RUN_PROFILE_REFUSAL"
+    return 1
+  fi
+  # `launch-sandboxed-gates.sh` reads this record, never `hr_run_profile_file`:
+  # an environment variable must not choose the profile its worker's protected
+  # paths come from. Job mode writes nothing — its launcher target is the main
+  # checkout, whose profile is the base.
+  if [ "$JOB_MODE" != "1" ] && ! registry_set "$branch" run_profile "$settings_file"; then
+    spawn_refuse "$branch" "cannot record the per-run profile's path in the run registry"
     return 1
   fi
 

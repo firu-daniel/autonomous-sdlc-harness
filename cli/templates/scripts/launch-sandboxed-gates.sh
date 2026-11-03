@@ -41,10 +41,6 @@
 # What the environment does reach, as residuals:
 #   - `PATH` finds `bwrap`, `jq`, `git` and `setsid`, the trust `docs/cli.md` §6
 #     residual 5 states for the wrappers; `BASH_ENV` arrives as it does for them.
-#   - `XDG_STATE_HOME` / `HOME` place the per-run profile (`hr_run_profile_file`
-#     → `hr_lane_dir`), as they do for the watcher that renders it. Redirected,
-#     they can drop protected paths inside <target> from the vector; they
-#     cannot add the network or a writable root outside <target>.
 #   - `HOME` reads a credential path's `~/`. The account's passwd home, where
 #     `getent` answers, is masked as well, so redirecting `HOME` unmasks
 #     nothing that path names.
@@ -65,8 +61,9 @@
 #   6. `hr_wrapper_target_check_var <main> <target>`;
 #   7. `hr_wrapper_branch_var`, refusing a failure or a branch starting `-`;
 #   8. the session's own profile: the base when the target is the main checkout
-#      (job mode), else the per-run copy `hr_run_profile_file`, which must be a
-#      regular, non-link, readable file holding one JSON object;
+#      (job mode), else the per-run copy whose absolute path the watcher
+#      recorded in the branch's run-registry record (`run_profile`), which must
+#      be a regular, non-link, readable file holding one JSON object;
 #   9. the lane: `scriptsDir` from the main checkout, `stateDir` from the
 #      target, and `log_dir` (`hr_test_run_lane_dir`, with the branch check 7
 #      read), whose canonical form must lie under <target>/;
@@ -210,10 +207,19 @@ esac
 if [ "$HR_TARGET_KIND" = main ]; then
   profile="$base"
 else
-  profile="$(hr_run_profile_file "$(hr_repo_slug "$main")" "$branch")" || profile=""
-  if [ -z "$profile" ] || [ ! -f "$profile" ] || [ -L "$profile" ] || [ ! -r "$profile" ] ||
+  registry="$(hr_state_path "$main" autonomous_logs/registry.json)" || registry=""
+  profile=""
+  [ -z "$registry" ] || profile="$(hr_registry_peek "$registry" "$branch" run_profile)" || profile=""
+  case "$profile" in
+    *$'\n'*) profile="" ;;
+    /*) ;;
+    *) profile="" ;;
+  esac
+  [ -n "$profile" ] ||
+    refuse "the run registry records no per-run profile for '$branch': the gate sandbox takes its protected paths from the session's own profile"
+  if [ ! -f "$profile" ] || [ -L "$profile" ] || [ ! -r "$profile" ] ||
     ! hr_json_single_object "$profile"; then
-    refuse "no per-run profile for '$branch' at ${profile:-<unplaceable>}: the gate sandbox takes its protected paths from the session's own profile"
+    refuse "no per-run profile for '$branch' at $profile: the gate sandbox takes its protected paths from the session's own profile"
   fi
 fi
 

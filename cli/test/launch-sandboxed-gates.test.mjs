@@ -24,7 +24,7 @@
 
 import assert from 'node:assert/strict';
 import { accessSync, constants, existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
-import { appendFile, chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { appendFile, chmod, mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -215,9 +215,9 @@ async function launcherFixture(t, { host = 1, bwrap = true, setsid = false } = {
     /** The main checkout's launcher, issued from the case root. */
     launch: (args, extra = {}) => runBash(root, [join(dir, LAUNCHER), ...args], env(extra), bounded),
     /** `bash <target>/<scriptsDir>/run-test-suite.sh --wait <label>`, repeated while it prints `pending`. */
-    async collect(target) {
+    async collect(target, label = LABEL) {
       for (let i = 0; i < POLL_LIMIT; i += 1) {
-        const r = await runBash(target, [join(target, RUNNER), '--wait', LABEL], env({ RUN_TEST_SUITE_WAIT_SLICE: '1' }), bounded);
+        const r = await runBash(target, [join(target, RUNNER), '--wait', label], env({ RUN_TEST_SUITE_WAIT_SLICE: '1' }), bounded);
         if (r.stdout !== 'pending\n') return r;
       }
       assert.fail('--wait never left pending');
@@ -237,9 +237,17 @@ async function launcherFixture(t, { host = 1, bwrap = true, setsid = false } = {
       return r.stdout.split('\n').filter((l) => l !== '');
     },
     async lib(fn, ...args) {
-      const r = await runBash(root, ['-c', `. "$1"; shift; ${fn}`, '_', join(dir, LIB), ...args], env(), bounded);
+      return this.libWith({}, fn, ...args);
+    },
+    /** {@link lib} under `env(extra)`. */
+    async libWith(extra, fn, ...args) {
+      const r = await runBash(root, ['-c', `. "$1"; shift; ${fn}`, '_', join(dir, LIB), ...args], env(extra), bounded);
       assert.equal(r.status, 0, output(r));
       return r.stdout.trim();
+    },
+    /** Write `.runs[<branch>].run_profile` in the main checkout's run registry. */
+    async recordProfile(branch, value) {
+      await this.lib('hr_registry_set "$1" "$2" run_profile "$3"', join(dir, STATE_DIR, 'autonomous_logs', 'registry.json'), branch, value);
     },
   };
 }
@@ -252,9 +260,10 @@ async function passwdHome(f) {
 
 /**
  * The vector the launcher must hand `bwrap` for `target`, built from `profile`'s exact denyWrite
- * entries and the base profile's credential lists — read with `jq` — and the files as they stand now.
+ * entries and the base profile's credential lists — read with `jq` — and the files as they stand now;
+ * a credential path's `~/` is read under `home`, the `HOME` the launch is given.
  */
-async function expectedVector(f, target, profile) {
+async function expectedVector(f, target, profile, { home = f.home, label = LABEL } = {}) {
   const base = join(f.dir, BASE_PROFILE);
   const v = ['--new-session', '--unshare-all', '--die-with-parent', '--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc',
     '--tmpfs', '/tmp', '--bind', target, target];
@@ -274,9 +283,9 @@ async function expectedVector(f, target, profile) {
   if (present(claude)) v.push('--ro-bind', claude, claude);
   else v.push('--ro-bind', '/dev/null', claude);
   if (present(join(target, '.git'))) v.push('--ro-bind', join(target, '.git'), join(target, '.git'));
-  const homes = [f.home];
+  const homes = [home];
   const other = (await passwdHome(f)).replace(/\/$/, '');
-  if (other.startsWith('/') && other.length > 1 && other !== f.home) homes.push(other);
+  if (other.startsWith('/') && other.length > 1 && other !== home) homes.push(other);
   const mask = (p) => {
     const s = statSync(p, { throwIfNoEntry: false });
     if (s?.isDirectory()) v.push('--tmpfs', p);
@@ -291,7 +300,7 @@ async function expectedVector(f, target, profile) {
   }
   for (const name of await f.jq('.sandbox.credentials.envVars[]? | objects | .name | strings', base)) v.push('--unsetenv', name);
   v.push('--unsetenv', 'RUN_TEST_SUITE_WORKER', '--setenv', 'TMPDIR', '/tmp', '--chdir', target, '--', 'bash',
-    join(target, RUNNER), '--no-detach', LABEL);
+    join(target, RUNNER), '--no-detach', label);
   return v;
 }
 
@@ -440,8 +449,12 @@ test('(j) a protected path whose parent is absent: cannot protect, bwrap never c
 // The clone arm.
 // ---------------------------------------------------------------------------------------------
 
-test('(k) a registered clone takes its protected paths from the per-run profile, and refuses without one', async (t) => {
-  const f = await launcherFixture(t);
+/**
+ * A clone of the fixture registered as {@link CLONE_BRANCH}, holding `protected.txt`, and its per-run
+ * profile written where the watcher renders it — under the case's own `XDG_STATE_HOME` — protecting
+ * that file and recorded as the branch's `run_profile`.
+ */
+async function registeredClone(t, f) {
   await mkdir(join(f.dir, STATE_DIR, 'autonomous_logs'), { recursive: true });
   const created = await runBash(f.root, [
     '-c',
@@ -462,21 +475,85 @@ test('(k) a registered clone takes its protected paths from the per-run profile,
   assert.ok(profileFile.startsWith(`${f.state}/`), profileFile);
   await mkdir(profileFile.slice(0, profileFile.lastIndexOf('/')), { recursive: true });
   await writeFile(profileFile, `${JSON.stringify({ sandbox: { filesystem: { denyWrite: [protectedPath] } } })}\n`);
+  await f.recordProfile(CLONE_BRANCH, profileFile);
+  return { clone, protectedPath, profileFile };
+}
+
+/** Launch `clone` for `label` under `extra`, collect its pass, and return the `bwrap` argv it recorded. */
+async function launchClone(f, clone, label, extra = {}) {
+  await rm(f.record, { force: true });
+  await rm(join(f.out, 'bwrap-exited'), { force: true });
+  const r = await f.launch([clone, label], extra);
+  assert.deepEqual([r.status, r.stdout], [3, 'pending\n'], output(r));
+  const verdict = await f.collect(clone, label);
+  assert.deepEqual([verdict.status, verdict.stdout], [0, 'pass\n'], output(verdict));
+  await f.until(() => existsSync(join(f.out, 'bwrap-exited')), 'the bwrap stub to exit');
+  await f.until(() => !present(join(clone, STATE_DIR, 'test_run_logs', CLONE_BRANCH, `${label}.running`)), 'the clone run to end');
+  return lines(f.record);
+}
+
+test('(k) a registered clone takes its protected paths from the recorded per-run profile, and refuses without one', async (t) => {
+  const f = await launcherFixture(t);
+  const { clone, protectedPath, profileFile } = await registeredClone(t, f);
   const expected = await expectedVector(f, clone, profileFile);
 
-  const r = await f.launch([clone, LABEL]);
-  assert.deepEqual([r.status, r.stdout], [3, 'pending\n'], output(r));
-  const verdict = await f.collect(clone);
-  assert.deepEqual([verdict.status, verdict.stdout], [0, 'pass\n'], output(verdict));
-  const argv = lines(f.record);
+  const argv = await launchClone(f, clone, LABEL);
   assert.deepEqual(argv, expected);
   const at = argv.indexOf(protectedPath);
   assert.deepEqual(argv.slice(at - 1, at + 2), ['--ro-bind', protectedPath, protectedPath]);
-  await f.until(() => !present(join(clone, STATE_DIR, 'test_run_logs', CLONE_BRANCH, `${LABEL}.running`)), 'the clone run to end');
 
+  await f.recordProfile(CLONE_BRANCH, '');
+  assertRefusal(await f.launch([clone, 'gates_round_2']), `the run registry records no per-run profile for '${CLONE_BRANCH}'`);
+
+  await f.recordProfile(CLONE_BRANCH, profileFile);
   await rm(profileFile);
   const refused = await f.launch([clone, 'gates_round_2']);
   assertRefusal(refused, `no per-run profile for '${CLONE_BRANCH}' at ${profileFile}`);
+});
+
+test('(n) a redirected XDG_STATE_HOME or HOME does not choose the clone\'s profile', async (t) => {
+  const f = await launcherFixture(t);
+  const { clone, protectedPath, profileFile } = await registeredClone(t, f);
+  const altState = join(f.root, 'alt-state');
+  const altHome = join(f.root, 'alt-home');
+  await mkdir(altState);
+  await mkdir(altHome);
+  const crafted = `${JSON.stringify({ sandbox: { filesystem: { denyWrite: [] } } })}\n`;
+  const legs = [
+    { name: 'XDG_STATE_HOME', extra: { XDG_STATE_HOME: altState }, home: f.home, under: altState },
+    { name: 'HOME', extra: { HOME: altHome, XDG_STATE_HOME: '' }, home: altHome, under: altHome },
+  ];
+
+  for (const [i, leg] of legs.entries()) {
+    const placed = await f.libWith(leg.extra, 'hr_run_profile_file "$(hr_repo_slug "$1")" "$2"', f.dir, CLONE_BRANCH);
+    assert.ok(placed.startsWith(`${leg.under}/`), `${leg.name}: ${placed}`);
+    await mkdir(placed.slice(0, placed.lastIndexOf('/')), { recursive: true });
+    await writeFile(placed, crafted);
+
+    const label = `gates_round_${i + 1}`;
+    const expected = await expectedVector(f, clone, profileFile, { home: leg.home, label });
+    const argv = await launchClone(f, clone, label, leg.extra);
+    assert.deepEqual(argv, expected, leg.name);
+    const at = argv.indexOf(protectedPath);
+    assert.deepEqual(argv.slice(at - 1, at + 2), ['--ro-bind', protectedPath, protectedPath], leg.name);
+  }
+});
+
+test('(o) an unusable run_profile field is a refusal, bwrap never called past its preflight', async (t) => {
+  const f = await launcherFixture(t);
+  const { clone, profileFile } = await registeredClone(t, f);
+  const link = join(f.root, 'profile-link.json');
+  await symlink(profileFile, link);
+
+  await f.recordProfile(CLONE_BRANCH, 'profile.json');
+  assertRefusal(await f.launch([clone, LABEL]), `the run registry records no per-run profile for '${CLONE_BRANCH}'`);
+  await f.recordProfile(CLONE_BRANCH, `${profileFile}\n${profileFile}`);
+  assertRefusal(await f.launch([clone, LABEL]), `the run registry records no per-run profile for '${CLONE_BRANCH}'`);
+  await f.recordProfile(CLONE_BRANCH, link);
+  assertRefusal(await f.launch([clone, LABEL]), `no per-run profile for '${CLONE_BRANCH}' at ${link}`);
+
+  assert.equal(existsSync(f.record), false);
+  assert.deepEqual(f.gateRuns(), []);
 });
 
 test('(l) the vector binds the target\'s .git read-only after every denyWrite entry, closing the omit trio', async (t) => {
