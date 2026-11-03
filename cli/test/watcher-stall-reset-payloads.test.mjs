@@ -67,7 +67,7 @@
  * - (release) `collect_descendants() { :; }` defined in `localStall`'s script after the sourcing
  *   line, which reproduces the sandbox's empty descendant list, with the release line removed → the
  *   honest case fails `the hung session was never released`, after the stub's bound and before any
- *   status or resume assertion. With the release line kept, the same case passes in about 13 s.
+ *   status or resume assertion.
  * - (S5) both `hr_run_path_safe` calls on the `PAUSE_PROGRESS.md` write skipped → the case resumes:
  *   fails on the record's `status`, `completed`, not `failed`.
  * - (S6) `hr_run_surface_check_var`'s merge base taken against the local
