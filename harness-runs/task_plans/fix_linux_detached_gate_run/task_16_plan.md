@@ -41,8 +41,8 @@ Every sentence added is either cited to a row, or marked *derived from the code*
 
 **Work:**
 
-- [ ] **§5.** In *"Two families land in `scriptsDir`"*, name the gate launcher `launch-sandboxed-gates.sh` beside the test-suite runner in the outer-loop list.
-- [ ] **§6, the excluded set.**
+- [x] **§5.** In *"Two families land in `scriptsDir`"*, name the gate launcher `launch-sandboxed-gates.sh` beside the test-suite runner in the outer-loop list.
+- [x] **§6, the excluded set.**
   - Retitle *"Three wrappers run outside the sandbox, each in one spelling."* to *"Four scripts run outside the sandbox, each in one spelling."* Search the document for every citation of that bold lead and repoint it in the same edit (`git grep -n -F 'Three wrappers run outside the sandbox' -- docs plugin cli README.md ARCHITECTURE.md`).
   - Append one passage after the paragraph's account of the git wrappers. It says three things:
     - On a bubblewrap host the gate launcher is the fourth, because a process a sandboxed call detaches did not outlive the call there (F10).
@@ -50,11 +50,11 @@ Every sentence added is either cited to a row, or marked *derived from the code*
     - Its `:*` accepts any argument, so it checks its target exactly as the wrappers do (the next paragraph), and Phase G issues it literally.
   - In the *"Everything that runs outside the sandbox …"* paragraph, change *"the three excluded wrappers"* to *"the four excluded scripts"*. The set itself is derived from the row, so nothing else changes there.
   - **The next paragraph, *"The excluded rule's `:*` accepts any argument …"*** (register row 75). Its bold lead becomes *"The excluded rule's `:*` accepts any argument, so all four excluded scripts check their target first: the three git wrappers before any git call, the gate launcher before it starts anything"*. Re-run `git grep -n -F 'all three wrappers check their target' -- docs plugin cli README.md ARCHITECTURE.md` and repoint any citation of the old lead in the same edit. In the sentence ending *"which all three wrappers call"*, add that the gate launcher calls `hr_git_env_drop` too. Every other sentence of that paragraph describes git calls the launcher does not make, and stays byte-identical.
-- [ ] **§6 credentials and §7 `profile-sandbox`, the two statements derived from elsewhere.**
+- [x] **§6 credentials and §7 `profile-sandbox`, the two statements derived from elsewhere.**
   - **§6 *"Credentials are denied on both sides."*** (register row 76). After *"which is also why the excluded wrappers keep the environment an HTTPS push needs"*, add: the gate launcher, also excluded, keeps it too, and for the gate worker it starts it unsets every `envVars` name and masks every `files` path again inside its own `bwrap` sandbox (residual 13). This mirrors the sentence Task 3 adds to the profile template's `CREDENTIALS ARE DENIED ON BOTH SIDES` string.
   - **§7 *"`profile-sandbox` is a warning without `--remote-job`"*** (register row 35). The bullet quotes the old `SANDBOXED_WRAPPER_CONSEQUENCE` word for word: *"a missing one is named with what its absence costs on every count, that wrapper running sandboxed where a clone cannot move the main checkout's branch because the profile write-denies the main checkout's whole `.git`, and a linked worktree's git record and an SSH remote are both out of reach on macOS"*. Restate that clause so it matches Task 3's new value (**Depends on:** above), in the bullet's participial form: *"… on every count, that script running sandboxed: a git wrapper there cannot move the main checkout's branch from a clone, because the profile write-denies the main checkout's whole `.git`, and a linked worktree's git record and an SSH remote are both out of reach on macOS; the gate launcher there cannot start its own `bwrap` sandbox on a bubblewrap host, so Run gates refuse and an unattended run parks"*. Change no other clause of the bullet: the stale-spelling clause still says *"leaves that wrapper running sandboxed"*, which stays true of the wrappers it was written for.
-- [ ] **Residual 5.** Add that the launcher's `bwrap` and `setsid` are chosen by `PATH` the same way, so a `bwrap` earlier on `PATH` than the system's is the sandbox the gates run in.
-- [ ] **New residual 13: *"On a bubblewrap host the gate run is sandboxed by the launcher, not by Claude Code."*** It states five things:
+- [x] **Residual 5.** Add that the launcher's `bwrap` and `setsid` are chosen by `PATH` the same way, so a `bwrap` earlier on `PATH` than the system's is the sandbox the gates run in.
+- [x] **New residual 13: *"On a bubblewrap host the gate run is sandboxed by the launcher, not by Claude Code."*** It states five things:
   - **The fact and the route.** F10 with BG9, LB5 and T3, the cause not measured. The user's ruling, which rejected excluding the run copy's own `run-test-suite.sh` and took re-sandboxing the worker.
   - **What the sandbox holds** (derived from the code, `launch-sandboxed-gates.sh`):
     - no network;
