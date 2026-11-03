@@ -16,7 +16,9 @@
 # namespace PID, never a host one, and stops once the heartbeat (`.running`'s mtime) is older than
 # the run library's HR_TEST_RUN_STALE_SECONDS, read at call time because preflight sources that library
 # after this file. On Linux the log search also quotes `Read-only file system` and
-# `failed to create file via template`.
+# `failed to create file via template`. T3's `fail` evidence leads with the failed gates and the suite
+# counts (docs/sandbox-verification.md §5 PD30): gate output pasted into the log can match a
+# temporary-file pattern, so that match follows, labelled as possibly a gate's printed output.
 #
 # W7's session carries `--debug-file`, a departure from the watcher's line; its path is exported as
 # SP_W7_DEBUG once that session has launched, for the write-protection leg's W8.
@@ -35,6 +37,8 @@
 # controls.sh and this file's functions:
 #   sp__t2_grade <stream> <run command> <verdict file> <log file>   T2's verdict, and T3's base
 #   sp__t3_grade <stream> <launch command> <verdict file> <log file>   T3's verdict
+#   sp__gate_log_failures <log> [verdict line]   prints `gates failed: …; suite counts: …` on one line;
+#                                        status 1, printing nothing, when the log is absent
 #   sp__t2_lane_state <has verdict 0|1> <has running 0|1> <running mtime> <now> <stale seconds>
 #                                        prints verdict, gone, live or stale
 #   sp__td2_tmpdir <stream> <command>    the printed TMPDIR, no trailing slash; status 1, printing nothing
@@ -71,14 +75,79 @@ sp__local_text() {
   printf '%s' "${SP__TEXT:-}"
 }
 
+# sp__tmpfile_names — the temporary-file patterns sp__tmpfile_line searches for, comma-joined.
+sp__tmpfile_names() {
+  local named="mkstemp failed, Operation not permitted"
+  [ "${SP_PLATFORM:-}" != linux ] || named="$named, Read-only file system, failed to create file via template"
+  printf '%s\n' "$named"
+}
+
+# sp__tmpfile_line <log> — print the first log line matching a temporary-file pattern; grep's status.
+sp__tmpfile_line() {
+  local pats=(-e 'mkstemp failed' -e 'Operation not permitted')
+  [ "${SP_PLATFORM:-}" != linux ] || pats+=(-e 'Read-only file system' -e 'failed to create file via template')
+  grep -m 1 -F "${pats[@]}" -- "${1:-}" 2>/dev/null
+}
+
+# sp__gate_denials <stream> <log> — print the two network-denial clauses, each opening on `; `.
+sp__gate_denials() {
+  local stream="${1:-}" log="${2:-}" n line out=""
+  # The session's own outbound denials (api.anthropic.com, datadoghq.com): recorded, never graded.
+  if [ -f "$log" ]; then
+    n="$(grep -c -F -e '<sandbox_violations>' -e 'host is not on the allow list' -- "$log" 2>/dev/null)" || true
+    case "$n" in '' | *[!0-9]*) n=0 ;; esac
+    out="; network denials in the log, recorded and not graded: $n"
+    if [ "$n" -gt 0 ]; then
+      line="$(grep -m 1 -F -e '<sandbox_violations>' -e 'host is not on the allow list' -- "$log" 2>/dev/null)"
+      out="$out, first: $line"
+    fi
+  else
+    out="; network denials in the log, recorded and not graded: no log to count them in"
+  fi
+  # Claude Code annotates a sandboxed call's denials on that call's tool_result, so the session stream is
+  # where they appear (docs/sandbox-verification.md row T2, the 2026-10-27 run); the lane log rarely holds one.
+  n="$(grep -c -F -e '<sandbox_violations>' -e 'host is not on the allow list' -- "$stream" 2>/dev/null)" || true
+  case "$n" in '' | *[!0-9]*) n=0 ;; esac
+  printf '%s\n' "$out; network denials in the session stream, recorded and not graded: $n event(s)"
+}
+
+# sp__gate_log_failures <log> [verdict line] — print `gates failed: <every FAIL line, trimmed, joined by
+# `; `>; suite counts: tests <n>, pass <n>, fail <n>, skipped <n>`, each count the last one the log holds.
+# With no FAIL line it names the first non-zero gate exit line, then the verdict line. Status 1, printing
+# nothing, when the log is absent.
+sp__gate_log_failures() {
+  local log="${1:-}" vline="${2:-}" l failed="" counts="" found=0 name c
+  [ -f "$log" ] && [ -r "$log" ] || return 1
+  while IFS= read -r l || [ -n "$l" ]; do
+    case "$l" in
+      "  FAIL  "*)
+        l="${l#"${l%%[! ]*}"}"
+        failed="${failed:+$failed; }$l"
+        ;;
+    esac
+  done <"$log"
+  if [ -z "$failed" ]; then
+    failed="$(grep -m 1 -E '^== run-test-suite\.sh: gate .* exited [1-9][0-9]* ==$' -- "$log" 2>/dev/null)" ||
+      failed="${vline:-none} (no FAIL line or non-zero gate exit line in the log)"
+  fi
+  for name in tests pass fail skipped; do
+    c="$(grep -E "^[[:space:]]*(#|ℹ) $name [0-9]+\$" -- "$log" 2>/dev/null | tail -n 1)"
+    if [ -n "$c" ]; then
+      found=1
+      c="${c##* }"
+    else
+      c=none
+    fi
+    counts="${counts:+$counts, }$name $c"
+  done
+  [ "$found" -eq 1 ] || counts="none in the log"
+  printf '%s\n' "gates failed: $failed; suite counts: $counts"
+}
+
 # sp__t2_grade <stream> <run command> <verdict file> <log file> — sets SP_VERDICT and SP_EVIDENCE.
 sp__t2_grade() {
-  local stream="${1:-}" cmd="${2:-}" vfile="${3:-}" log="${4:-}" vline="" line n
-  local pats=(-e 'mkstemp failed' -e 'Operation not permitted') named="mkstemp failed, Operation not permitted"
-  if [ "${SP_PLATFORM:-}" = linux ]; then
-    pats+=(-e 'Read-only file system' -e 'failed to create file via template')
-    named="$named, Read-only file system, failed to create file via template"
-  fi
+  local stream="${1:-}" cmd="${2:-}" vfile="${3:-}" log="${4:-}" vline="" line named
+  named="$(sp__tmpfile_names)"
   sp_judge_call "$stream" ran "$cmd"
   if [ "${SP__COUNT:-0}" -eq 0 ] || [ "$SP_LAYER" = permission ]; then
     SP_VERDICT="not run"
@@ -101,7 +170,7 @@ sp__t2_grade() {
         SP_VERDICT=fail
         line=""
         if [ -f "$log" ]; then
-          line="$(grep -m 1 -F "${pats[@]}" -- "$log" 2>/dev/null)" ||
+          line="$(sp__tmpfile_line "$log")" ||
             line="$(grep -m 1 -E '^== run-test-suite\.sh: gate .* exited [1-9][0-9]* ==$' -- "$log" 2>/dev/null)" ||
             line=""
         fi
@@ -114,29 +183,15 @@ sp__t2_grade() {
         ;;
     esac
   fi
-  # The session's own outbound denials (api.anthropic.com, datadoghq.com): recorded, never graded.
-  if [ -f "$log" ]; then
-    n="$(grep -c -F -e '<sandbox_violations>' -e 'host is not on the allow list' -- "$log" 2>/dev/null)" || true
-    case "$n" in '' | *[!0-9]*) n=0 ;; esac
-    SP_EVIDENCE="$SP_EVIDENCE; network denials in the log, recorded and not graded: $n"
-    if [ "$n" -gt 0 ]; then
-      line="$(grep -m 1 -F -e '<sandbox_violations>' -e 'host is not on the allow list' -- "$log" 2>/dev/null)"
-      SP_EVIDENCE="$SP_EVIDENCE, first: $line"
-    fi
-  else
-    SP_EVIDENCE="$SP_EVIDENCE; network denials in the log, recorded and not graded: no log to count them in"
-  fi
-  # Claude Code annotates a sandboxed call's denials on that call's tool_result, so the session stream is
-  # where they appear (docs/sandbox-verification.md row T2, the 2026-10-27 run); the lane log rarely holds one.
-  n="$(grep -c -F -e '<sandbox_violations>' -e 'host is not on the allow list' -- "$stream" 2>/dev/null)" || true
-  case "$n" in '' | *[!0-9]*) n=0 ;; esac
-  SP_EVIDENCE="$SP_EVIDENCE; network denials in the session stream, recorded and not graded: $n event(s)"
+  SP_EVIDENCE="$SP_EVIDENCE$(sp__gate_denials "$stream" "$log")"
 }
 
 # sp__t3_grade <stream> <launch command> <verdict file> <log file> — sets SP_VERDICT and SP_EVIDENCE:
-# sp__t2_grade's, kept only when the launch call answered `pending`.
+# sp__t2_grade's, kept only when the launch call answered `pending`. A `fail` verdict's evidence is
+# rebuilt to lead with the failed gates and the suite counts (§5 PD30), then the temporary-file match,
+# labelled as possibly a gate's printed output, then sp__t2_grade's closing clauses.
 sp__t3_grade() {
-  local line
+  local line vline="" ev tmp
   sp__t2_grade "${1:-}" "${2:-}" "${3:-}" "${4:-}"
   # SP__TEXT is still the launch call's: sp__t2_grade judges no call after it. `pending` exits 3, so the
   # Bash tool opens the text on a bare `Exit code 3` header, which sp__message_line joins to the answer.
@@ -146,6 +201,15 @@ sp__t3_grade() {
     return 0
   fi
   if [ "$line" = pending ]; then
+    if [ "$SP_VERDICT" = fail ]; then
+      IFS= read -r vline <"${3:-}" || true
+      ev="$(sp__gate_log_failures "${4:-}" "$vline")" ||
+        ev="gates failed: $vline (no FAIL line or non-zero gate exit line in the log); suite counts: none in the log"
+      if [ -f "${4:-}" ] && tmp="$(sp__tmpfile_line "${4:-}")"; then
+        ev="$ev; first log line matching $(sp__tmpfile_names), which may be a gate's printed output: $tmp"
+      fi
+      SP_EVIDENCE="$ev; compare with the same call unsandboxed on the same tree before filing its row$(sp__gate_denials "${1:-}" "${4:-}")"
+    fi
     SP_EVIDENCE="the launcher answered pending; $SP_EVIDENCE"
   else
     SP_VERDICT="not run"
