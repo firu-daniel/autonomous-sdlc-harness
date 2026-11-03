@@ -66,7 +66,11 @@
 # (`hr_wrapper_main_of` their own location) for every configured value they
 # decide by — `defaultBranch`, `protectedBranches`, and the `githooksDir`
 # `hr_pinned_hooks_path` pins — never the worktree they act in, whose
-# `harness.config.json` the sandbox can rewrite. One worktree read remains and
+# `harness.config.json` the sandbox can rewrite. `launch-sandboxed-gates.sh`,
+# a main-checkout script the profile runs unsandboxed the same way, passes the
+# MAIN checkout for `scriptsDir`; its one target read, `stateDir`, is data that
+# places the lane it reads, and every target byte it runs runs inside its own
+# `bwrap` sandbox. One worktree read remains and
 # is inert: `hr_worktree_config_check_var` compares a worktree's
 # `config.worktree` `core.hooksPath` against `<worktree>/<githooksDir>` read
 # from that worktree's own copy. A rewritten copy can only make the check
@@ -835,9 +839,9 @@ hr_main_checkout_of() {
 }
 
 # Print the canonical main checkout of the wrapper whose own directory is
-# <script_dir>, for `push-branch.sh`, `refresh-branch.sh`, `commit-on-branch.sh`
-# and the watcher family's callers the header's JURISDICTION lists, and no
-# others. Return 1,
+# <script_dir>, for `push-branch.sh`, `refresh-branch.sh`, `commit-on-branch.sh`,
+# `launch-sandboxed-gates.sh` and the watcher family's callers the header's
+# JURISDICTION lists, and no others. Return 1,
 # printing nothing, when it cannot be placed. The checkout `hr_checkout_top_nogit`
 # finds from <script_dir> is taken as it stands when its `.git` is a real
 # directory — not a symbolic link — holding no `commondir`; one whose `.git` is
@@ -6284,8 +6288,8 @@ EOF
 # file`, `has content`, `writable` or `not owned by this user`. Removes nothing.
 # The write bits are read with `find -perm`, which BSD and GNU both take, because
 # `stat`'s format flags differ between them; a `find` that fails reads as
-# `writable`. Its callers: `hr_placeholder_sweep_var` below, and the no-git
-# main-checkout walk.
+# `writable`. Its callers: `hr_placeholder_sweep_paths_var` below, which
+# `hr_placeholder_sweep_var` delegates to, and the no-git main-checkout walk.
 hr_placeholder_leftover_var() {
   local path="${1-}" probe writable
   HR_PLACEHOLDER_REASON=""
@@ -6317,30 +6321,49 @@ hr_placeholder_leftover_var() {
 # `HR_PLACEHOLDER_REMOVED` (the removed paths) and `HR_PLACEHOLDER_KEPT`
 # (`<path>: <reason>` for each listed path that exists and was not removed), one
 # per line; an absent path is in neither. Never touches a path no manifest
-# lists. 0, or 1 when no manifest argument was readable.
+# lists. 0, or 1 when no manifest argument was readable. The per-path rule is
+# `hr_placeholder_sweep_paths_var`'s.
 hr_placeholder_sweep_var() {
-  local m p readable=0 nl='
-'
-  HR_PLACEHOLDER_REMOVED=""
-  HR_PLACEHOLDER_KEPT=""
+  local m p readable=0
+  local paths=()
   for m in "$@"; do
     [ -n "$m" ] && [ -f "$m" ] && [ -r "$m" ] || continue
     readable=1
     while IFS= read -r p || [ -n "$p" ]; do
       [ -n "$p" ] || continue
-      [ -e "$p" ] || [ -L "$p" ] || continue
-      if ! hr_placeholder_leftover_var "$p"; then
-        HR_PLACEHOLDER_KEPT="$HR_PLACEHOLDER_KEPT$p: $HR_PLACEHOLDER_REASON$nl"
-      elif rm -f -- "$p" 2>/dev/null && [ ! -e "$p" ] && [ ! -L "$p" ]; then
-        HR_PLACEHOLDER_REMOVED="$HR_PLACEHOLDER_REMOVED$p$nl"
-      else
-        HR_PLACEHOLDER_KEPT="$HR_PLACEHOLDER_KEPT$p: could not be removed$nl"
-      fi
+      paths+=("$p")
     done <"$m"
+  done
+  hr_placeholder_sweep_paths_var ${paths[@]+"${paths[@]}"}
+  [ "$readable" -eq 1 ] || return 1
+  return 0
+}
+
+# hr_placeholder_sweep_paths_var <path>... — THE ONE HOME of the per-path sweep
+# rule: for each argument naming a path that exists (`-e` or `-L`), remove it
+# with a non-recursive `rm -f` only when `hr_placeholder_leftover_var` answers
+# 0. Sets `HR_PLACEHOLDER_REMOVED` and `HR_PLACEHOLDER_KEPT` as
+# `hr_placeholder_sweep_var` documents; an empty or absent path is in neither.
+# Always 0. Its callers: `hr_placeholder_sweep_var` above, and
+# `launch-sandboxed-gates.sh`'s supervisor, for the placeholders it mounted.
+hr_placeholder_sweep_paths_var() {
+  local p nl='
+'
+  HR_PLACEHOLDER_REMOVED=""
+  HR_PLACEHOLDER_KEPT=""
+  for p in "$@"; do
+    [ -n "$p" ] || continue
+    [ -e "$p" ] || [ -L "$p" ] || continue
+    if ! hr_placeholder_leftover_var "$p"; then
+      HR_PLACEHOLDER_KEPT="$HR_PLACEHOLDER_KEPT$p: $HR_PLACEHOLDER_REASON$nl"
+    elif rm -f -- "$p" 2>/dev/null && [ ! -e "$p" ] && [ ! -L "$p" ]; then
+      HR_PLACEHOLDER_REMOVED="$HR_PLACEHOLDER_REMOVED$p$nl"
+    else
+      HR_PLACEHOLDER_KEPT="$HR_PLACEHOLDER_KEPT$p: could not be removed$nl"
+    fi
   done
   HR_PLACEHOLDER_REMOVED="${HR_PLACEHOLDER_REMOVED%"$nl"}"
   HR_PLACEHOLDER_KEPT="${HR_PLACEHOLDER_KEPT%"$nl"}"
-  [ "$readable" -eq 1 ] || return 1
   return 0
 }
 
@@ -6367,8 +6390,9 @@ hr_lane_mkdir() {
 # `stat` in this file. Two kinds of caller depend on the 0-for-missing-or-
 # unreadable answer: a lock directory whose `owner` file is missing or
 # unreadable, where the directory's own mtime is the only acquisition time
-# there is; and `run-test-suite.sh`'s `heartbeat_age`, which reads a run's
-# `<label>.running` heartbeat and treats 0 as "cannot be read", never as a time.
+# there is; and `run-test-suite.sh`'s `heartbeat_age` and
+# `launch-sandboxed-gates.sh`'s live check, which read a run's `<label>.running`
+# heartbeat and treat 0 as "cannot be read", never as a time.
 hr_lane_mtime() {
   local path="${1-}" m=""
   [ -n "$path" ] && [ -e "$path" ] || {

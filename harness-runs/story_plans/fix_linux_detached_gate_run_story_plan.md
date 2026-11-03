@@ -113,7 +113,7 @@ The Bash 3.2 floor binds every shell edit: no associative arrays, no `${var,,}`,
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_linux_detached_gate_run/task_<K>_plan.md`. They are in ship order, by dependency: first `cli` and `plugin`, then the `general` root copies and probe code, then the `cli` tests of that probe code, and last the `general` records.
 
 1. [x] **Task 1** — Give `run-test-suite.sh` a `--no-detach <label>` form that runs both gates in its own process, and test it _(layer: cli)_ _(points: 15)_
-2. [ ] **Task 2** — Add the `launch-sandboxed-gates.sh` template, which re-sandboxes the gate worker under its own `bwrap`, and a path-list placeholder sweep in the run library _(layer: cli)_ _(points: 20)_
+2. [x] **Task 2** — Add the `launch-sandboxed-gates.sh` template, which re-sandboxes the gate worker under its own `bwrap`, and a path-list placeholder sweep in the run library _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Register the launcher as an excluded, agent-invocable outer-loop row, and bring the doctor sentence, the profile `_README` and the script lists level with it _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Test the launcher end to end against a recording `bwrap` stub _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 5** — Declare the `<gate_launcher>` binding and make Phase G issue it before the run form _(layer: plugin)_ _(points: 20)_
