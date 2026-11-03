@@ -265,6 +265,14 @@ async function expectedVector(f, target, profile) {
     if (present(p)) v.push('--ro-bind', p, p);
     else v.push('--ro-bind', '/dev/null', p);
   }
+  for (const rel of ['.bash_profile', '.bashrc', '.gitconfig', '.gitmodules', '.idea', '.profile', '.ripgreprc', '.vscode', '.zprofile', '.zshrc']) {
+    const p = join(target, rel);
+    if (present(p)) v.push('--ro-bind', p, p);
+    else v.push('--ro-bind', '/dev/null', p);
+  }
+  const claude = join(target, '.claude');
+  if (present(claude)) v.push('--ro-bind', claude, claude);
+  else v.push('--ro-bind', '/dev/null', claude);
   if (present(join(target, '.git'))) v.push('--ro-bind', join(target, '.git'), join(target, '.git'));
   const homes = [f.home];
   const other = (await passwdHome(f)).replace(/\/$/, '');
@@ -486,6 +494,29 @@ test('(l) the vector binds the target\'s .git read-only after every denyWrite en
   assert.deepEqual(pinnedAfter, [], `a denyWrite placeholder follows the .git bind:\n${argv.join('\n')}`);
   for (const p of ['commondir', 'config.worktree', 'objects/info/http-alternates']) {
     assert.ok(!argv.includes(join(git, p)), `${p} is pinned path by path, which F9 forbids:\n${argv.join('\n')}`);
+  }
+  await f.until(() => existsSync(join(f.out, 'bwrap-exited')), 'the bwrap stub to exit');
+});
+
+test('(m) the vector pins Claude Code\'s built-in protected paths at the target\'s root, .claude read-only after every denyWrite entry', async (t) => {
+  const f = await launcherFixture(t);
+  const r = await f.launch([f.dir, LABEL]);
+  assert.deepEqual([r.status, r.stdout], [3, 'pending\n'], output(r));
+  const verdict = await f.collect(f.dir);
+  assert.deepEqual([verdict.status, verdict.stdout], [0, 'pass\n'], output(verdict));
+  const argv = lines(f.record);
+  const claude = join(f.dir, '.claude');
+  const at = argv.lastIndexOf(claude);
+  assert.deepEqual(argv.slice(at - 2, at + 1), ['--ro-bind', claude, claude], argv.join('\n'));
+  const after = argv.slice(at + 1, argv.indexOf('--'));
+  const underClaude = after.filter((a) => a.startsWith(`${claude}/`));
+  assert.deepEqual(underClaude, [], `a bind under .claude follows the .claude bind:\n${argv.join('\n')}`);
+  for (const rel of ['.bashrc', '.gitmodules', '.vscode']) {
+    const p = join(f.dir, rel);
+    const i = argv.indexOf(p);
+    const pinned = (i > 0 && argv[i - 1] === '--ro-bind' && argv[i + 1] === p)
+      || (i > 1 && argv[i - 2] === '--ro-bind' && argv[i - 1] === '/dev/null');
+    assert.ok(pinned, `${rel} is not pinned:\n${argv.join('\n')}`);
   }
   await f.until(() => existsSync(join(f.out, 'bwrap-exited')), 'the bwrap stub to exit');
 });

@@ -89,6 +89,14 @@
 #       <target>/. An absent one is pinned by a read-only placeholder, as
 #       bubblewrap does for the session (§5 AP2); one whose parent is absent is
 #       a refusal. The supervisor sweeps its placeholders after `bwrap` exits.
+#   --ro-bind <target>/.claude <target>/.claude, and --ro-bind <p> <p> or
+#   --ro-bind /dev/null <p> for each root-level built-in <p>
+#       NO WRITE TO CLAUDE CODE'S OWN PROTECTED PATHS: the session's sandbox
+#       write-protects them at its root whatever the profile says
+#       (`docs/sandbox-verification.md`, "Claude Code's built-in protected
+#       paths"); `.claude` whole, after the entries above, and `.bash_profile`,
+#       `.bashrc`, `.gitconfig`, `.gitmodules`, `.idea`, `.profile`,
+#       `.ripgreprc`, `.vscode`, `.zprofile`, `.zshrc` by path.
 #   --ro-bind <target>/.git <target>/.git, after the entries above
 #       NO WRITE TO THE RUN COPY'S GIT RECORDS: it closes `.git/commondir`,
 #       `.git/config.worktree` and `.git/objects/info/http-alternates`, which a
@@ -269,6 +277,28 @@ lsg_bwrap_args_var() {
   done <<EOF
 $list
 EOF
+
+  # Claude Code's own protected paths at the target's root, which its sandbox
+  # write-protects whatever the profile says (`docs/sandbox-verification.md`,
+  # the paragraph "Claude Code's built-in protected paths, new in this
+  # session."): `.claude` whole, read-only after the loop so the loop's
+  # placeholders under it are created first, and each root-level one by path.
+  # `.mcp.json` is left out: every profile's exact list carries it.
+  for rel in .bash_profile .bashrc .gitconfig .gitmodules .idea .profile .ripgreprc .vscode .zprofile .zshrc; do
+    c="$target/$rel"
+    if [ -e "$c" ] || [ -L "$c" ]; then
+      LSG_ARGS+=(--ro-bind "$c" "$c")
+    else
+      LSG_ARGS+=(--ro-bind /dev/null "$c")
+      LSG_PLACEHOLDERS="$LSG_PLACEHOLDERS$c$nl"
+    fi
+  done
+  if [ -e "$target/.claude" ] || [ -L "$target/.claude" ]; then
+    LSG_ARGS+=(--ro-bind "$target/.claude" "$target/.claude")
+  else
+    LSG_ARGS+=(--ro-bind /dev/null "$target/.claude")
+    LSG_PLACEHOLDERS="$LSG_PLACEHOLDERS$target/.claude$nl"
+  fi
 
   # The run copy's `.git`, read-only and last among the target's binds: it
   # closes the `omit` trio (`autonomous-watcher.sh` → RUN_PROFILE_COPY_GIT_PATHS),

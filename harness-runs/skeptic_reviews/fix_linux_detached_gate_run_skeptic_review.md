@@ -42,7 +42,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Pin Claude Code's built-in protected paths at the target's root in the gate worker's `bwrap` vector (`.claude` read-only whole, the root-level ones by path), with its test and the header and residual 13 updates _(layer: cli, general)_
+1. [x] **Finding 1** — Pin Claude Code's built-in protected paths at the target's root in the gate worker's `bwrap` vector (`.claude` read-only whole, the root-level ones by path), with its test and the header and residual 13 updates _(layer: cli, general)_
 
 ---
 
