@@ -63,10 +63,6 @@
 # is bounded by the Bash tool's limits (F6), so Phase G never issues it.
 # `.running` then holds the worker's PID inside its own namespace, which only
 # this script ever compares, against its own `$$`.
-# `launch-sandboxed-gates.sh` mirrors LABEL_PATTERN, STALE_SECONDS and the
-# LOG_SUBDIR / `log_dir` lane layout (with the branch it is composed from, which
-# this script takes from `hr_current_branch`), so a change to any of them is an
-# edit to both scripts.
 #
 # ONE RUN PER LABEL. The run form never starts a second run of a label whose
 # run is live: it collects that run's verdict as the wait form would. A run
@@ -171,7 +167,8 @@
 # free while the run still runs (above); a host suspended mid-run can wake with
 # a stale heartbeat before the worker refreshes it.
 #
-# THE BOUND. STALE_SECONDS (30) is below WAIT_SLICE_SECONDS (60), so one
+# THE BOUND. STALE_SECONDS, the run library's HR_TEST_RUN_STALE_SECONDS (30),
+# is below WAIT_SLICE_SECONDS (60), so one
 # `--wait` call ends for a crashed run. RUN_TEST_SUITE_STALE is its test seam,
 # accepted only as digits with a value >= 3, else the default stands: mtimes are
 # whole seconds, so a live run's age reads up to 2 and a smaller bound would
@@ -187,7 +184,7 @@
 # A refusal writes neither file, and no log.
 #
 # Usage:
-#   run-test-suite.sh <label>          start typecheck then test detached and print `pending`; label ^[A-Za-z0-9][A-Za-z0-9._-]*$
+#   run-test-suite.sh <label>          start typecheck then test detached and print `pending`; label matching the run library's HR_TEST_RUN_LABEL_PATTERN
 #   run-test-suite.sh --wait <label>   read the verdict of a run of <label>; never runs anything
 #   run-test-suite.sh --no-detach <label>   run typecheck then test in this process and print the verdict; for `launch-sandboxed-gates.sh` alone
 #
@@ -221,22 +218,26 @@ if [[ "${RUN_TEST_SUITE_WAIT_SLICE-}" =~ ^[0-9]+$ ]]; then
   WAIT_SLICE_SECONDS="$RUN_TEST_SUITE_WAIT_SLICE"
 fi
 
-HEARTBEAT_SECONDS=1
-STALE_SECONDS=30
-if [[ "${RUN_TEST_SUITE_STALE-}" =~ ^[0-9]+$ ]] && [ "$RUN_TEST_SUITE_STALE" -ge 3 ] 2>/dev/null; then
-  STALE_SECONDS="$RUN_TEST_SUITE_STALE"
-fi
-
-LOG_SUBDIR='test_run_logs'
-LABEL_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]*$'
-# Mirrors COMMAND_NONE_SENTINEL in the CLI's config model: exact and
-# case-sensitive on the whitespace-trimmed value.
-TYPECHECK_NONE_SENTINEL='<none>'
-
 refuse() {
   echo "run-test-suite.sh: $1" >&2
   exit 2
 }
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+hr_lib="$script_dir/lib/harness-run-lib.sh"
+[ -r "$hr_lib" ] || refuse "cannot read '$hr_lib'"
+# shellcheck source=lib/harness-run-lib.sh
+. "$hr_lib"
+
+HEARTBEAT_SECONDS=1
+STALE_SECONDS="$HR_TEST_RUN_STALE_SECONDS"
+if [[ "${RUN_TEST_SUITE_STALE-}" =~ ^[0-9]+$ ]] && [ "$RUN_TEST_SUITE_STALE" -ge 3 ] 2>/dev/null; then
+  STALE_SECONDS="$RUN_TEST_SUITE_STALE"
+fi
+
+# Mirrors COMMAND_NONE_SENTINEL in the CLI's config model: exact and
+# case-sensitive on the whitespace-trimmed value.
+TYPECHECK_NONE_SENTINEL='<none>'
 
 usage='usage: run-test-suite.sh <label> | run-test-suite.sh --wait <label> | run-test-suite.sh --no-detach <label>'
 mode=run
@@ -253,13 +254,7 @@ case "$#" in
   *) refuse "$usage" ;;
 esac
 [ "$label" != "--no-detach" ] || refuse "$usage"
-[[ "$label" =~ $LABEL_PATTERN ]] || refuse "label '$label' does not match $LABEL_PATTERN"
-
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-hr_lib="$script_dir/lib/harness-run-lib.sh"
-[ -r "$hr_lib" ] || refuse "cannot read '$hr_lib'"
-# shellcheck source=lib/harness-run-lib.sh
-. "$hr_lib"
+[[ "$label" =~ $HR_TEST_RUN_LABEL_PATTERN ]] || refuse "label '$label' does not match $HR_TEST_RUN_LABEL_PATTERN"
 
 root="$(hr_repo_root "$script_dir")" || refuse "'$script_dir' is not inside a git repository"
 cd "$root" || refuse "cannot enter '$root'"
@@ -268,9 +263,7 @@ state_dir="$(hr_state_dir "$root")" || refuse "cannot resolve '$root/harness.con
 
 branch="$(hr_current_branch "$root")"
 [ -n "$branch" ] || refuse "no current branch (detached HEAD?)"
-safe_branch="$(hr_sanitize_branch "$branch")" || refuse "no current branch (detached HEAD?)"
-
-log_dir="$state_dir/$LOG_SUBDIR/$safe_branch"
+log_dir="$(hr_test_run_lane_dir "$state_dir" "$branch")" || refuse "no current branch (detached HEAD?)"
 log_file="$log_dir/$label.log"
 running_file="$log_dir/$label.running"
 verdict_file="$log_dir/$label.verdict"
@@ -286,24 +279,10 @@ emit_verdict() {
   refuse "'$verdict_file' holds no verdict line"
 }
 
-# Print the heartbeat's age in whole seconds; fail, printing nothing, when the
-# mtime cannot be read (`hr_lane_mtime` prints 0 for that and for a missing path).
-heartbeat_age() {
-  local mtime now
-  mtime="$(hr_lane_mtime "$running_file")"
-  [ "$mtime" != 0 ] || return 1
-  now="$(date +%s)"
-  if [ "$now" -gt "$mtime" ]; then
-    printf '%s\n' "$((now - mtime))"
-  else
-    printf '0\n'
-  fi
-}
-
 run_alive() {
   local age
   [ -f "$running_file" ] || return 1
-  if age="$(heartbeat_age)"; then
+  if age="$(hr_heartbeat_age "$running_file")"; then
     [ "$age" -le "$STALE_SECONDS" ]
     return
   fi

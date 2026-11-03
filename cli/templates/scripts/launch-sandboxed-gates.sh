@@ -49,21 +49,14 @@
 #     `getent` answers, is masked as well, so redirecting `HOME` unmasks
 #     nothing that path names.
 #
-# MIRRORS of `run-test-suite.sh`, so a change to any of them is an edit to both:
-#   - LABEL_PATTERN, its label pattern;
-#   - STALE_SECONDS, its heartbeat bound (its `RUN_TEST_SUITE_STALE` seam is
-#     not honoured here);
-#   - LOG_SUBDIR and the `log_dir` assignment below, its
-#     `log_dir="$state_dir/$LOG_SUBDIR/$safe_branch"` lane layout. The two must
-#     agree on the branch: the worker takes it from `hr_current_branch "$root"`,
-#     this script from `hr_wrapper_branch_var` (check 7), and both pass it
-#     through `hr_sanitize_branch`. A drift makes the `pending` answer and the
-#     "did not start" refusal read the wrong lane, which refuses every
-#     sandboxed round while the gates run.
+# The label pattern, the staleness bound, the lane layout and the heartbeat
+# reader are the run library's (`HR_TEST_RUN_LABEL_PATTERN`,
+# `HR_TEST_RUN_STALE_SECONDS`, `hr_test_run_lane_dir`, `hr_heartbeat_age`);
+# `RUN_TEST_SUITE_STALE` is not honoured here.
 #
 # THE CHECKS, in this order, every one before anything is started:
 #   1. the library beside this file, then `hr_git_env_drop`;
-#   2. the argument count and form, and the label against LABEL_PATTERN;
+#   2. the argument count and form, and the label against HR_TEST_RUN_LABEL_PATTERN;
 #   3. the main checkout, `hr_wrapper_main_of` this file's directory;
 #   4. `hr_placeholder_host_probe_var`: not a bubblewrap host is `in-session`;
 #   5. the base profile, `<main>/.claude/settings.autonomous.json` (the path
@@ -75,9 +68,10 @@
 #      (job mode), else the per-run copy `hr_run_profile_file`, which must be a
 #      regular, non-link, readable file holding one JSON object;
 #   9. the lane: `scriptsDir` from the main checkout, `stateDir` from the
-#      target, and `log_dir`, whose canonical form must lie under <target>/;
-#  10. the live check: a `<label>.running` heartbeat no older than STALE_SECONDS
-#      is `pending`;
+#      target, and `log_dir` (`hr_test_run_lane_dir`, with the branch check 7
+#      read), whose canonical form must lie under <target>/;
+#  10. the live check: a `<label>.running` heartbeat no older than
+#      HR_TEST_RUN_STALE_SECONDS is `pending`;
 #  11. `bwrap` on `PATH`, an absolute path to an executable file;
 #  12. the preflight, `bwrap --ro-bind / / --dev /dev --unshare-all --proc /proc
 #      true`, the recipe's own check (§0, PD20).
@@ -108,7 +102,7 @@
 # START, SUPERVISE, WAIT. The launch form detaches the supervisor, this file
 # re-invoked with `--supervise`, through `nohup`, `setsid` where it resolves,
 # `</dev/null` and `disown`, then polls the lane each second for at most
-# STALE_SECONDS. The supervisor re-runs checks 1–9 and 11, runs `bwrap` in its
+# HR_TEST_RUN_STALE_SECONDS. The supervisor re-runs checks 1–9 and 11, runs `bwrap` in its
 # own foreground, sweeps its placeholders through
 # `hr_placeholder_sweep_paths_var`, and exits with `bwrap`'s status, printing
 # nothing on stdout. Issued directly, `--supervise` only runs that same
@@ -121,7 +115,7 @@
 #
 # Exit map (the launch form prints one stdout line, or nothing on a refusal):
 #   2  refusal — one stderr line `launch-sandboxed-gates.sh: <reason>`, nothing
-#      on stdout: bad arguments, a label outside LABEL_PATTERN, an unplaceable
+#      on stdout: bad arguments, a label outside HR_TEST_RUN_LABEL_PATTERN, an unplaceable
 #      main checkout, an unparseable base or per-run profile, a refused target,
 #      an unreadable branch, a lane outside <target>, an unreadable heartbeat,
 #      `bwrap` not on `PATH`, `bwrap` unable to start a sandbox, a protected
@@ -135,10 +129,6 @@
 # printing nothing on stdout.
 
 set -uo pipefail
-
-LABEL_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]*$'
-STALE_SECONDS=30
-LOG_SUBDIR='test_run_logs'
 
 refuse() {
   echo "launch-sandboxed-gates.sh: $1" >&2
@@ -166,7 +156,7 @@ case "$#" in
   *) refuse "$usage" ;;
 esac
 [ -n "$target_arg" ] || refuse "$usage"
-[[ "$label" =~ $LABEL_PATTERN ]] || refuse "label '$label' does not match $LABEL_PATTERN"
+[[ "$label" =~ $HR_TEST_RUN_LABEL_PATTERN ]] || refuse "label '$label' does not match $HR_TEST_RUN_LABEL_PATTERN"
 
 in_session() {
   [ "$mode" = supervise ] || echo in-session
@@ -226,8 +216,8 @@ state_dir="$(hr_state_dir "$target")" || refuse "cannot resolve stateDir from '$
 case "$state_dir" in
   /*) refuse "stateDir '$state_dir' in '$target/harness.config.json' is not repo-relative" ;;
 esac
-safe_branch="$(hr_sanitize_branch "$branch")" || refuse "cannot read the branch of '$target' (detached HEAD?)"
-log_dir="$target/$state_dir/$LOG_SUBDIR/$safe_branch"
+log_dir="$target/$(hr_test_run_lane_dir "$state_dir" "$branch")" ||
+  refuse "cannot read the branch of '$target' (detached HEAD?)"
 canonical_log_dir="$(hr_canonical_path_nogit "$log_dir")" || canonical_log_dir=""
 case "$canonical_log_dir" in
   "$target"/?*) ;;
@@ -352,24 +342,10 @@ lsg_mask_one() {
   fi
 }
 
-# Print `<label>.running`'s heartbeat age in whole seconds; fail, printing
-# nothing, when its mtime cannot be read.
-heartbeat_age() {
-  local mtime now
-  mtime="$(hr_lane_mtime "$running_file")"
-  [ "$mtime" != 0 ] || return 1
-  now="$(date +%s)"
-  if [ "$now" -gt "$mtime" ]; then
-    printf '%s\n' "$((now - mtime))"
-  else
-    printf '0\n'
-  fi
-}
-
 # 10.
 if [ "$mode" = launch ] && [ -f "$running_file" ]; then
-  if age="$(heartbeat_age)"; then
-    if [ "$age" -le "$STALE_SECONDS" ]; then
+  if age="$(hr_heartbeat_age "$running_file")"; then
+    if [ "$age" -le "$HR_TEST_RUN_STALE_SECONDS" ]; then
       echo pending
       exit 3
     fi
@@ -433,7 +409,7 @@ started() {
   return 1
 }
 
-deadline=$((SECONDS + STALE_SECONDS))
+deadline=$((SECONDS + HR_TEST_RUN_STALE_SECONDS))
 while :; do
   if started; then
     echo pending
@@ -453,4 +429,4 @@ while :; do
   [ "$SECONDS" -lt "$deadline" ] || break
   sleep 1
 done
-refuse "the sandboxed gate run of $label did not start within ${STALE_SECONDS}s"
+refuse "the sandboxed gate run of $label did not start within ${HR_TEST_RUN_STALE_SECONDS}s"

@@ -14,7 +14,8 @@
 # is graded as T2 is, and only once the launcher answered `pending`; any other answer from a call that
 # ran is `not run`, quoted. Its post-session wait tracks no PID, since `.running` holds the launcher's
 # namespace PID, never a host one, and stops once the heartbeat (`.running`'s mtime) is older than
-# SP_T2_STALE_SECONDS. On Linux the log search also quotes `Read-only file system` and
+# the run library's HR_TEST_RUN_STALE_SECONDS, read at call time because preflight sources that library
+# after this file. On Linux the log search also quotes `Read-only file system` and
 # `failed to create file via template`.
 #
 # W7's session carries `--debug-file`, a departure from the watcher's line; its path is exported as
@@ -49,8 +50,6 @@ SP_T2_LABEL=sbx_probe_t2
 SP_T2_MAX_WAITS=40
 SP_T2_COLLECT_SECONDS=1800
 SP_T2_POLL_SECONDS=5
-# Mirrors run-test-suite.sh's STALE_SECONDS: a change to either is an edit to both.
-SP_T2_STALE_SECONDS=30
 SP_W7_DEBUG=""
 
 # sp__local_session <name> <prompt file> [sp_session option]... — launch on SP_RUN_PROFILE; status 1,
@@ -322,8 +321,10 @@ sp_leg_gates() {
     sp_result_line gates "$row" "not run" "the clone is not spellable as one literal word, so the launcher call cannot be issued" ""
   elif [ "$row" = T3 ] && ! sp__ctl_literal "main scripts directory" "$SP_SCRIPTS"; then
     sp_result_line gates "$row" "not run" "the main checkout's scripts directory is not spellable as one literal word, so the launcher call cannot be issued" ""
+  elif ! lane="$(hr_test_run_lane_dir "$state_rel" "$SP_BRANCH")"; then
+    sp_result_line gates "$row" "not run" "the branch '$SP_BRANCH' has no Run gates lane: it does not sanitize" ""
   else
-    lane="$SP_CLONE/$state_rel/test_run_logs/$(hr_sanitize_branch "$SP_BRANCH")/$SP_T2_LABEL"
+    lane="$SP_CLONE/$lane/$SP_T2_LABEL"
     cmd="bash $scripts_rel/run-test-suite.sh $SP_T2_LABEL"
     [ "$row" != T3 ] || cmd="bash $SP_SCRIPTS/launch-sandboxed-gates.sh $SP_CLONE $SP_T2_LABEL"
     wait_cmd="bash $scripts_rel/run-test-suite.sh --wait $SP_T2_LABEL"
@@ -344,7 +345,7 @@ sp_leg_gates() {
         [ ! -f "$lane.verdict" ] || has_v=1
         has_r=0
         [ ! -f "$lane.running" ] || has_r=1
-        lane_state="$(sp__t2_lane_state "$has_v" "$has_r" "$(hr_lane_mtime "$lane.running")" "$(date +%s)" "$SP_T2_STALE_SECONDS")"
+        lane_state="$(sp__t2_lane_state "$has_v" "$has_r" "$(hr_lane_mtime "$lane.running")" "$(date +%s)" "$HR_TEST_RUN_STALE_SECONDS")"
         [ "$lane_state" = live ] && [ "$waited" -lt "$SP_T2_COLLECT_SECONDS" ] || break
         sleep "$SP_T2_POLL_SECONDS"
         waited=$((waited + SP_T2_POLL_SECONDS))
@@ -357,7 +358,7 @@ sp_leg_gates() {
         esac
       fi
       [ "$lane_state" != stale ] ||
-        note="the gate worker's heartbeat on .running went stale (older than ${SP_T2_STALE_SECONDS}s) ${waited}s after the session, without a verdict"
+        note="the gate worker's heartbeat on .running went stale (older than ${HR_TEST_RUN_STALE_SECONDS}s) ${waited}s after the session, without a verdict"
     elif [ ! -f "$lane.verdict" ] && [ -f "$lane.running" ]; then
       # Tracked before the wait, so the EXIT/INT/TERM teardown stops a live worker before it removes the
       # clone under it on every exit path, not only when the wait runs out.

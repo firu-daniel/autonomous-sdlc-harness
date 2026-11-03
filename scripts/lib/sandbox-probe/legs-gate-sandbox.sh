@@ -519,7 +519,7 @@ EOF
 }
 
 sp_leg_gate_sandbox() {
-  local scripts_rel state_rel branch safe lane lib outside="$SP_TMP/gate-sandbox.outside"
+  local scripts_rel state_rel branch lane lib outside="$SP_TMP/gate-sandbox.outside"
   local drops_file="$SP_TMP/gate-sandbox.outside.stderr" drops="" line p
   local script="$SP_CLONE/sbx_gs_test.sh" rec="$SP_CLONE/sbx_gs" vfile lfile lane_new=0 vfile_new=0 lfile_new=0
   local rewritten="$SP_TMP/gate-sandbox.rewritten.json"
@@ -544,12 +544,12 @@ sp_leg_gate_sandbox() {
     return 0
   fi
   branch="$(hr_current_branch "$SP_CLONE")"
-  if ! safe="$(hr_sanitize_branch "$branch")"; then
+  if ! lane="$(hr_test_run_lane_dir "$state_rel" "$branch")"; then
     sp__gs_all "the target '$SP_CLONE' has no current branch"
     return 0
   fi
   if [ "$scripts_rel" = . ]; then lib="$SP_CLONE/lib/harness-run-lib.sh"; else lib="$SP_CLONE/$scripts_rel/lib/harness-run-lib.sh"; fi
-  lane="$SP_CLONE/$state_rel/test_run_logs/$safe"
+  lane="$SP_CLONE/$lane"
   vfile="$lane/$SP_GS_LABEL.verdict"
   lfile="$lane/$SP_GS_LABEL.log"
   if ! sp__ctl_literal target "$SP_CLONE" || ! sp__ctl_literal "scripts directory" "$SP_SCRIPTS" ||
