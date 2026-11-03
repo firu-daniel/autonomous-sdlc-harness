@@ -50,7 +50,7 @@ The session's own profile is the per-run copy at `hr_run_profile_file "$(hr_repo
 **What reaches the session, and the fallback.** Phase G gains a mode-contract binding, `<gate_launcher>` (Tasks 5 and 6), on the precedent `<park_answer_lookup>` set: declared in both cores that run Phase G and bound by all four forks.
 
 - **The autonomous forks** bind it to the literal spelling `bash <MAIN_REPO>/<scripts_dir>/launch-sandboxed-gates.sh <repo_root> <gate_key>_round_<gate_round>`.
-- **The semi-autonomous forks** bind `none`. They run under the user's own settings, which `init` merges with no sandbox block, so F10 does not reach them. The supervised item loops do not change.
+- **The semi-autonomous forks** bind `none`. They run under the user's own settings, which `init` merges with no sandbox block, so F10 does not reach them unless the user's own settings turn the sandbox on under Linux. The supervised item loops do not change.
 
 G.1 step 2 issues the launcher first when the binding is not `none`, and branches on its line:
 

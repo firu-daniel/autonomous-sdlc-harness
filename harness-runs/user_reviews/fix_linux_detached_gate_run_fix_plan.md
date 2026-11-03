@@ -22,7 +22,7 @@ Both items still hold in the tree, so they are Findings 4 and 5.
 Each entry resolves to `harness-runs/user_reviews/fix_linux_detached_gate_run_fix_plan/finding_<K>.md` through its `**Finding K**` reference. The list runs from the lowest blast radius to the widest. Finding 4 edits the launcher header list that Finding 2 trims, so it comes after Finding 2. Finding 1 adds a library function, a launcher check and fixtures, so it comes last.
 
 1. [x] **Finding 3** — `.claude/context/conventions.md` → `## Shell assets`: name `launch-sandboxed-gates.sh` as the fourth main-checkout wrapper whose call carries no `$`. _(layer: general)_
-2. [ ] **Finding 5** — Drop *"on every host"* from the semi-autonomous `<gate_launcher>` `none` reason in both forks, and limit it to what `init` writes for that flow. _(layer: plugin, general)_
+2. [x] **Finding 5** — Drop *"on every host"* from the semi-autonomous `<gate_launcher>` `none` reason in both forks, and limit it to what `init` writes for that flow. _(layer: plugin, general)_
 3. [ ] **Finding 2** — The watcher records the per-run profile's absolute path in the run's registry record, and the launcher reads it from there. No environment variable chooses the profile. _(layer: cli, general)_
 4. [ ] **Finding 4** — State the launcher's remaining environment reads (`PATH`, `HOME`) together with the measured ground that keeps an assignment prefix from setting them. _(layer: cli, general)_
 5. [ ] **Finding 1** — Accept the main checkout as the launcher's target only in job mode, decided from the main checkout's run registry. Add fixtures for the local-mode refusal and the job-mode acceptance, and update residual 13. _(layer: cli, general)_

@@ -13,8 +13,10 @@
 
 **Fix:**
 
-- [ ] **1. Both fork rows.** Make the same edit in both files. Replace the row's reason with one limited to what `init` writes for that flow, and drop *"on every host"*:
+- [x] **1. Both fork rows.** Make the same edit in both files. Replace the row's reason with one limited to what `init` writes for that flow, and drop *"on every host"*:
   > `none` — this flow runs under the session's own settings, in which `init` writes no sandbox block, so the run form's detached worker outlives its call there and the core's G.1 issues the run form directly. A user whose own settings turn the sandbox on under Linux meets `docs/sandbox-verification.md` §5 F10 in this flow too.
 
   Keep the value `none` and the table shape. Confirm that `grep -n 'on every host' plugin/instructions/*_semi_autonomous.md` prints nothing.
-- [ ] **2. The story index's `## Context`.** Replace *"so F10 does not reach them"* with *"so F10 does not reach them unless the user's own settings turn the sandbox on under Linux"*. Edit no other line of that file, and never its `## Phase 2 Readiness — Ordered Fix List`.
+- [x] **2. The story index's `## Context`.** Replace *"so F10 does not reach them"* with *"so F10 does not reach them unless the user's own settings turn the sandbox on under Linux"*. Edit no other line of that file, and never its `## Phase 2 Readiness — Ordered Fix List`.
+- **Deviations from plan:** Sub-step 2 not implemented by the `plugin` layer dispatch: its target, `harness-runs/story_plans/fix_linux_detached_gate_run_story_plan.md`, lies outside this dispatch's path scope `plugin`, so the unit needs a split — sub-step 2 belongs to a `general` (path `.`) dispatch. Sub-step 1's check ran: `grep -n 'on every host' plugin/instructions/*_semi_autonomous.md` printed nothing.
+  - Sub-step 2 implemented by the follow-up `general` (path `.`) dispatch: only the `## Context` sentence was edited; `## Phase 2 Readiness — Ordered Fix List` was not touched.
