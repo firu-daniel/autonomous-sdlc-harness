@@ -4,26 +4,26 @@
 
 | Measure | Value |
 |---|---|
-| Sessions | 87 (83 incomplete) |
-| Span | 27h02m |
-| Wall | 9h21m |
-| Active | 9h12m |
+| Sessions | 89 (84 incomplete) |
+| Span | 27h58m |
+| Wall | 10h14m |
+| Active | 10h05m |
 | Host-suspended | 0.0s |
 | Idle | 9m 00s |
-| Cost | $200.13 |
-| Input tokens (uncached) | 7146 (4 of 87 sessions) |
-| Total input tokens (incl. cache) | 503801725 (4 of 87 sessions) |
-| Output tokens | 1974683 (4 of 87 sessions) |
-| Thinking tokens (main thread) | 9378 |
-| Cache read tokens | 492050615 (4 of 87 sessions) |
-| Cache write tokens | 11743964 (4 of 87 sessions) |
-| Cache write tokens, main thread (5m / 1h) | 0 / 733371 |
+| Cost | $211.99 |
+| Input tokens (uncached) | 7678 (5 of 89 sessions) |
+| Total input tokens (incl. cache) | 534496600 (5 of 89 sessions) |
+| Output tokens | 2065614 (5 of 89 sessions) |
+| Thinking tokens (main thread) | 11585 |
+| Cache read tokens | 522063444 (5 of 89 sessions) |
+| Cache write tokens | 12425478 (5 of 89 sessions) |
+| Cache write tokens, main thread (5m / 1h) | 0 / 807414 |
 | Cache hit ratio | 0.9767 |
-| Requests | 3416 |
-| Request latency p50 / p90 / p99 / max | 1.8s / 7.8s / 35.1s / 2m 23s |
+| Requests | 3673 |
+| Request latency p50 / p90 / p99 / max | 1.8s / 7.6s / 34.4s / 2m 23s |
 | Requests over the idle threshold | 2 |
 | API retries | 0 |
-| Permission denials | 37 |
+| Permission denials | 42 |
 | Sub-agents failed / killed | 0 / 0 |
 | Slowest sub-agent | autonomous-sdlc-harness:task-plan-writer — Write task plan — 24m 37s (session 1) |
 | Rate-limit peak | seven_day 0.64 |
@@ -8819,3 +8819,230 @@ Remainder: tokens the session total holds that neither the orchestrator's reques
 | Turns | 43 |
 | Time to first token | 1.4s |
 | Rate-limit peak | seven_day 0.06 |
+
+## Session 88 — 2026-11-03T17:26:16.435Z → 2026-11-03T17:27:41.862Z (incomplete — no result event)
+
+Session id: `261d33a7-ff4c-457b-a1a0-53ab7b3accca`
+
+### Time
+
+| Wall | duration_ms | duration_api_ms | Host-suspended | Idle | Active | Suspend source |
+|---|---|---|---|---|---|---|
+| 1m 25s | — | — | — | 0.0s | 1m 25s | none |
+
+### Idle gaps (over 120 s)
+
+None.
+
+### Request latency
+
+| Context | Requests | p50 | p90 | p99 | Max | Over threshold |
+|---|---|---|---|---|---|---|
+| all | 24 | 1.5s | 4.2s | 7.1s | 7.1s | 0 |
+| autonomous-sdlc-harness:layer-implementer | 9 | 1.5s | 7.1s | 7.1s | 7.1s | 0 |
+| orchestrator | 15 | 1.5s | 4.2s | 4.8s | 4.8s | 0 |
+
+### Tool time
+
+| Tool | Context | Calls | Total | Max |
+|---|---|---|---|---|
+| Agent — sub-agent wall time | orchestrator | 1 | 0.0s | 0.0s |
+| Bash | autonomous-sdlc-harness:layer-implementer | 10 | 3.5s | 2.4s |
+| Bash | orchestrator | 11 | 1.5s | 0.2s |
+| Edit | autonomous-sdlc-harness:layer-implementer | 1 | 0.0s | 0.0s |
+| Read | autonomous-sdlc-harness:layer-implementer | 2 | 0.0s | 0.0s |
+| Read | orchestrator | 10 | 1.1s | 0.2s |
+| Skill | orchestrator | 1 | 0.0s | 0.0s |
+
+`Agent` / `Task` rows are sub-agent wall time: how long the orchestrator was blocked on each dispatch, which `### Sub-agents` breaks down per dispatch. They are not time spent in a tool.
+
+#### Slowest calls (sub-agent dispatches excluded)
+
+| Tool | Context | Started | Duration | Result bytes | Error | Permission denied |
+|---|---|---|---|---|---|---|
+| Bash | autonomous-sdlc-harness:layer-implementer | 2026-11-03T17:27:21.301Z | 2.4s | 247 | false | false |
+| Bash | orchestrator | 2026-11-03T17:26:19.957Z | 0.2s | 2581 | false | false |
+| Read | orchestrator | 2026-11-03T17:26:33.176Z | 0.2s | 66531 | false | false |
+| Read | orchestrator | 2026-11-03T17:26:41.610Z | 0.2s | 64903 | false | false |
+| Read | orchestrator | 2026-11-03T17:26:47.250Z | 0.2s | 30457 | false | false |
+| Read | orchestrator | 2026-11-03T17:26:36.216Z | 0.2s | 58872 | false | false |
+| Bash | orchestrator | 2026-11-03T17:26:39.560Z | 0.1s | 5199 | true | false |
+| Bash | orchestrator | 2026-11-03T17:26:55.291Z | 0.1s | 1 | false | false |
+| Bash | orchestrator | 2026-11-03T17:26:24.852Z | 0.1s | 114 | false | false |
+| Bash | autonomous-sdlc-harness:layer-implementer | 2026-11-03T17:27:28.502Z | 0.1s | 31 | false | false |
+
+#### Polling loops
+
+None.
+
+### Sub-agents
+
+| Type | Description | Duration | Requests | Output tokens | Input tokens (uncached) | Total input tokens (incl. cache) | Cache read tokens | Cache write tokens | Wall share |
+|---|---|---|---|---|---|---|---|---|---|
+| autonomous-sdlc-harness:layer-implementer | Implement Finding 2 (general) | 0.0s | 9 | 3243 | 18 | 246209 | 214621 | 31570 | 0.0003 |
+
+### Cost and tokens
+
+| Measure | Value |
+|---|---|
+| Cost | — |
+| Input tokens (uncached) | — |
+| Total input tokens (incl. cache) | — |
+| Output tokens | — |
+| Thinking tokens (main thread) | — |
+| Cache read tokens | — |
+| Cache write tokens | — |
+| Cache write tokens, main thread (5m / 1h) | — / — |
+| Cache hit ratio | — |
+| Token source | not available |
+
+#### Token attribution
+
+| Context | Input tokens (uncached) | Total input tokens (incl. cache) | Output tokens | Cache read tokens | Cache write tokens |
+|---|---|---|---|---|---|
+| orchestrator | 30 | 1422568 | 226 | 1288136 | 134402 |
+| sub-agents | 18 | 246209 | 3243 | 214621 | 31570 |
+| remainder | — | — | — | — | — |
+
+Remainder: tokens the session total holds that neither the orchestrator's requests nor the dispatches' transcripts account for.
+
+### Reliability
+
+| Measure | Value |
+|---|---|
+| API retries | 0 |
+| Permission denials | — |
+| Sub-agents spawned / failed / killed | — / — / — |
+| terminal_reason | — |
+| stop_reason | — |
+| Turns | — |
+| Time to first token | — |
+| Rate-limit peak | seven_day 0.06 |
+
+## Session 89 — 2026-11-03T17:27:43.294Z → 2026-11-03T18:19:37.532Z
+
+Session id: `261d33a7-ff4c-457b-a1a0-53ab7b3accca#2`
+
+A resume of an earlier session: the result event's cost, per-model cost, `duration_api_ms` and sub-agent counts are cumulative, so this section shows this occurrence's share.
+
+### Time
+
+| Wall | duration_ms | duration_api_ms | Host-suspended | Idle | Active | Suspend source |
+|---|---|---|---|---|---|---|
+| 51m 54s | 51m 55s | 14m 14s | 0.0s | 0.0s | 51m 54s | none |
+
+### Idle gaps (over 120 s)
+
+None.
+
+### Request latency
+
+| Context | Requests | p50 | p90 | p99 | Max | Over threshold |
+|---|---|---|---|---|---|---|
+| all | 233 | 1.5s | 5.5s | 11.4s | 26.0s | 0 |
+| autonomous-sdlc-harness:committer | 17 | 1.7s | 4.0s | 6.9s | 6.9s | 0 |
+| autonomous-sdlc-harness:layer-implementer | 56 | 2.7s | 8.4s | 14.8s | 14.8s | 0 |
+| autonomous-sdlc-harness:layer-reviewer | 31 | 2.8s | 7.8s | 9.2s | 9.2s | 0 |
+| autonomous-sdlc-harness:statistics-plan-writer | 7 | 2.1s | 26.0s | 26.0s | 26.0s | 0 |
+| orchestrator | 122 | 1.4s | 1.7s | 7.2s | 8.9s | 0 |
+
+### Tool time
+
+| Tool | Context | Calls | Total | Max |
+|---|---|---|---|---|
+| Agent — sub-agent wall time | orchestrator | 8 | 11m 12s | 4m 32s |
+| Bash | autonomous-sdlc-harness:committer | 22 | 12.9s | 4.7s |
+| Bash | autonomous-sdlc-harness:layer-implementer | 36 | 1m 09s | 51.2s |
+| Bash | autonomous-sdlc-harness:layer-reviewer | 28 | 1m 15s | 51.3s |
+| Bash | autonomous-sdlc-harness:statistics-plan-writer | 10 | 1.2s | 0.1s |
+| Bash | orchestrator | 112 | 36m 32s | 1m 01s |
+| Edit | autonomous-sdlc-harness:committer | 2 | 0.1s | 0.0s |
+| Edit | autonomous-sdlc-harness:layer-implementer | 19 | 0.8s | 0.0s |
+| Edit | orchestrator | 5 | 0.2s | 0.0s |
+| Read | autonomous-sdlc-harness:committer | 2 | 0.0s | 0.0s |
+| Read | autonomous-sdlc-harness:layer-implementer | 18 | 1.0s | 0.2s |
+| Read | autonomous-sdlc-harness:layer-reviewer | 9 | 0.7s | 0.3s |
+| Read | autonomous-sdlc-harness:statistics-plan-writer | 5 | 0.3s | 0.3s |
+| Read | orchestrator | 6 | 0.4s | 0.3s |
+| Write | autonomous-sdlc-harness:layer-implementer | 2 | 0.0s | 0.0s |
+| Write | autonomous-sdlc-harness:layer-reviewer | 3 | 0.1s | 0.0s |
+| Write | autonomous-sdlc-harness:statistics-plan-writer | 1 | 0.0s | 0.0s |
+
+`Agent` / `Task` rows are sub-agent wall time: how long the orchestrator was blocked on each dispatch, which `### Sub-agents` breaks down per dispatch. They are not time spent in a tool.
+
+#### Slowest calls (sub-agent dispatches excluded)
+
+| Tool | Context | Started | Duration | Result bytes | Error | Permission denied |
+|---|---|---|---|---|---|---|
+| Bash | orchestrator | 2026-11-03T17:49:47.234Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-03T17:54:05.537Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-03T17:48:42.410Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-03T17:41:10.674Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-03T17:47:35.904Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-03T18:15:16.068Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-03T17:56:14.660Z | 1m 00s | 19 | true | false |
+| Bash | orchestrator | 2026-11-03T18:04:42.031Z | 1m 00s | 19 | true | false |
+| Bash | orchestrator | 2026-11-03T18:01:32.871Z | 1m 00s | 19 | true | false |
+| Bash | orchestrator | 2026-11-03T18:07:52.053Z | 1m 00s | 19 | true | false |
+
+#### Polling loops
+
+| Context | Command | Count | Total |
+|---|---|---|---|
+| autonomous-sdlc-harness:committer | git status --short | 4 | 0.5s |
+| autonomous-sdlc-harness:layer-reviewer | git rev-parse --show-toplevel | 3 | 0.3s |
+| orchestrator | bash <main_repo>/scripts/push-branch.sh <repo_root> | 6 | 27.3s |
+| orchestrator | bash scripts/run-test-suite.sh --wait review_2_round_1 | 36 | 35m 43s |
+| orchestrator | ls harness-runs/STOP harness-runs/PAUSE 2>/dev/null; echo ok | 37 | 13.6s |
+
+### Sub-agents
+
+| Type | Description | Duration | Requests | Output tokens | Input tokens (uncached) | Total input tokens (incl. cache) | Cache read tokens | Cache write tokens | Wall share |
+|---|---|---|---|---|---|---|---|---|---|
+| autonomous-sdlc-harness:layer-reviewer | Review Finding 2 (general) | 44.4s | 9 | 4589 | 20 | 379224 | 332836 | 46368 | 0.0143 |
+| autonomous-sdlc-harness:committer | Commit Finding 2 | 26.4s | 8 | 2121 | 18 | 213271 | 187655 | 25598 | 0.0085 |
+| autonomous-sdlc-harness:layer-implementer | Implement Finding 1 (cli) | 4m 32s | 38 | 23712 | 78 | 3603841 | 3484053 | 119710 | 0.0874 |
+| autonomous-sdlc-harness:layer-reviewer | Review Finding 1 (cli) | 1m 27s | 14 | 6897 | 30 | 702168 | 645000 | 57138 | 0.0282 |
+| autonomous-sdlc-harness:layer-implementer | Implement Finding 1 (general) | 1m 11s | 18 | 7324 | 38 | 1261819 | 1193885 | 67896 | 0.023 |
+| autonomous-sdlc-harness:layer-reviewer | Review Finding 1 (general) | 1m 22s | 8 | 3110 | 18 | 383144 | 338637 | 44489 | 0.0266 |
+| autonomous-sdlc-harness:committer | Commit Finding 1 | 30.4s | 9 | 2692 | 20 | 245721 | 218083 | 27618 | 0.0098 |
+| autonomous-sdlc-harness:statistics-plan-writer | Update branch statistics | 56.5s | 7 | 7189 | 16 | 314989 | 262291 | 52682 | 0.0181 |
+
+### Cost and tokens
+
+| Measure | Value |
+|---|---|
+| Cost | $11.86 |
+| Cost — claude-opus-5-5 | $11.86 |
+| Input tokens (uncached) | 532 |
+| Total input tokens (incl. cache) | 30694875 |
+| Output tokens | 90931 |
+| Thinking tokens (main thread) | 2207 |
+| Cache read tokens | 30012829 |
+| Cache write tokens | 681514 |
+| Cache write tokens, main thread (5m / 1h) | 0 / 74043 |
+| Cache hit ratio | 0.9778 |
+| Token source | result.modelUsage |
+
+#### Token attribution
+
+| Context | Input tokens (uncached) | Total input tokens (incl. cache) | Output tokens | Cache read tokens | Cache write tokens |
+|---|---|---|---|---|---|
+| orchestrator | 246 | 21921921 | 2720 | 21847632 | 74043 |
+| sub-agents | 238 | 7104177 | 57634 | 6662440 | 441499 |
+| remainder | 48 | 1668777 | 30577 | 1502757 | 165972 |
+
+Remainder: tokens the session total holds that neither the orchestrator's requests nor the dispatches' transcripts account for.
+
+### Reliability
+
+| Measure | Value |
+|---|---|
+| API retries | 0 |
+| Permission denials | 5 |
+| Sub-agents spawned / failed / killed | 9 / 0 / 0 |
+| terminal_reason | completed |
+| stop_reason | end_turn |
+| Turns | 132 |
+| Time to first token | 1.3s |
+| Rate-limit peak | seven_day 0.07 |
