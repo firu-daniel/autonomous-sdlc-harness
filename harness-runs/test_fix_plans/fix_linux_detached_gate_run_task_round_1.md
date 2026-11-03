@@ -13,7 +13,7 @@ The log also reports 13a, 13b and 13c as `BLOCKED` (Python environment not provi
 This list is the **single source of truth** for the fix loop. `[ ]` markers anywhere else in this plan or its per-finding files are informational only.
 
 1. [x] **Finding 1** — Remove the home-directory path from task 18's plan. _(layer: general)_
-2. [ ] **Finding 2** — Respell `unparseable` in the sandboxed-gates launcher and its self-adopted copy. _(layer: cli, general)_
+2. [x] **Finding 2** — Respell `unparseable` in the sandboxed-gates launcher and its self-adopted copy. _(layer: cli, general)_
 
 ## Must Fix
 

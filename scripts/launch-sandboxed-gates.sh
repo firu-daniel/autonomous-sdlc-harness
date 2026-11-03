@@ -130,7 +130,7 @@
 # Exit map (the launch form prints one stdout line, or nothing on a refusal):
 #   2  refusal — one stderr line `launch-sandboxed-gates.sh: <reason>`, nothing
 #      on stdout: bad arguments, a label outside HR_TEST_RUN_LABEL_PATTERN, an unplaceable
-#      main checkout, an unparseable base or per-run profile, a refused target,
+#      main checkout, an unparsable base or per-run profile, a refused target,
 #      an unreadable branch, a lane outside <target>, an unreadable heartbeat,
 #      `bwrap` not on `PATH`, `bwrap` unable to start a sandbox, a protected
 #      path whose parent is absent, or a run that did not start
