@@ -18,3 +18,26 @@
 - **category:** optimization
 - **evidence:** `harness-runs/architecture_reviews/fix_linux_detached_gate_run/` holds `review_0.md`–`review_4.md` (5 rounds); `harness-runs/task_plan_reviews/fix_linux_detached_gate_run/` holds `review_0.md`–`review_2.md` (3 rounds); `business_parity_reviews` has none (`phases.parity` is false). Total: 8 rounds. The plan also parked once at the 5-revision cap (`question_1.md`) before the resume that produced the converged plan. The findings carry no per-finding headings (only `## Must Fix` / `## Should Fix` / `## Nice to Have`), so the net-new vs re-raised split per round cannot be measured from headings and is not reported.
 - **cost this run:** one park plus 8 reviewer rounds before implementation started.
+
+# User-review fix round 1 — launcher job-mode and per-run-profile trust inputs, two unapplied plan-review items, one conventions rule
+
+## Finding 3 closed without a fix: the write to `.claude/context/conventions.md` was refused
+- **category:** tooling-gap
+- **evidence:** commit `1cf9c423` records `Record disposition of Finding 3 — tool-layer guard refused the write to .claude/context/conventions.md, which no profile entry can grant` (the cause recorded on the commit). The diagnosis is in `harness-runs/user_reviews/fix_linux_detached_gate_run_fix_plan/finding_3.md` → `## Disposition`.
+- **cost this run:** the unit was closed without a fix. `## Shell assets` still names three of the four main-checkout wrappers, and the edit has to be applied by hand.
+
+## Run gates needed 4 rounds, and rounds 1 and 2 did not fix the cause that round 3 found
+- **category:** flow-efficiency
+- **evidence:** `harness-runs/test_run_logs/fix_linux_detached_gate_run/review_1_round_1.log` … `review_1_round_3.log` each ended in `fail`, and round 4 printed `pass`. In round 1 the single finding was closed as already passing (`ac03c117`). In round 2, the `(q)` fix scaled the stale window (`ced9413b`) and the `(m)` finding was closed as already passing (`1d1954c9`). In round 3, `harness-runs/test_fix_plans/fix_linux_detached_gate_run_review_1_round_3/finding_1.md` traced `(l)` to the `bwrap` stub's 0-byte `scripts/.git` placeholder and stated that the same cause may explain the rounds 1–2 failures (`8833dfec`). The four failing cases across rounds were `(g)(h)`, `(q)`, `(m)` and `(l)`.
+- **cost this run:** three full gate runs before the passing one, each about 40 minutes by the round-2 planner's account. The round-2 timing fix may not be needed.
+- **hypothesis:** until `ced9413b`, the gate log kept only the `not ok` lines, so the first two planners could not see which assertion failed.
+
+## A `layer-reviewer` returned `verdict: PASS` while reporting a Should Fix
+- **category:** agent-contract
+- **evidence:** the cli-layer review of fix-plan Finding 1 (`harness-runs/user_review_fix_plan_point_reviews/fix_linux_detached_gate_run_fix_plan/item_1/review_0.md`) returned `verdict: PASS` and reported one Should Fix: the caller list in `hr_json_single_object`'s header in `cli/templates/scripts/lib/harness-run-lib.sh` does not name `hr_registry_foreign_copy_var`. `user_review_fixes_instructions_core.md` → `### D.2 Done summary` assumes that a Should Fix produces a FAIL.
+- **cost this run:** the loop committed the unit (`8e3175bf`) with that Should Fix unapplied.
+
+## `cp` and `printenv HOME` were refused for sub-agents again this round
+- **category:** tooling-gap
+- **evidence:** the general-layer `layer-implementer` returns for fix-plan Findings 1 and 2 report that `cp` from `cli/templates/scripts/…` to `scripts/…` was refused, so both root copies were rebuilt with the Edit tool and checked with `cmp`. Two `test-fix-plan-writer` returns (rounds 2 and 3) report that `printenv HOME` was denied during their machine-path check.
+- **cost this run:** a second hand-edit pass for each template copy, and the planners' home-directory check was done from a path taken out of the session instead of the command.
