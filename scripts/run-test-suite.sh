@@ -53,6 +53,21 @@
 # `pending` means only "issue the same call again", so the suite may take any
 # length of time.
 #
+# THE NO-DETACH FORM, AND WHO ISSUES IT. `--no-detach <label>` is for
+# `launch-sandboxed-gates.sh` alone. That script runs it as the one command of
+# its own `bwrap` sandbox on a bubblewrap host, because a process detached inside
+# a sandboxed call there did not outlive the call (`docs/sandbox-verification.md`
+# §5 F10; BG9, LB5, T3), and a worker detached inside a PID namespace would end
+# with it. So this form does the run form's checks, then runs both gates in its
+# own process and writes `.verdict`. Issued from a session's foreground call it
+# is bounded by the Bash tool's limits (F6), so Phase G never issues it.
+# `.running` then holds the worker's PID inside its own namespace, which only
+# this script ever compares, against its own `$$`.
+# `launch-sandboxed-gates.sh` mirrors LABEL_PATTERN, STALE_SECONDS and the
+# LOG_SUBDIR / `log_dir` lane layout (with the branch it is composed from, which
+# this script takes from `hr_current_branch`), so a change to any of them is an
+# edit to both scripts.
+#
 # ONE RUN PER LABEL. The run form never starts a second run of a label whose
 # run is live: it collects that run's verdict as the wait form would. A run
 # removes a `.running` file only while it still holds its own PID. `.running`'s
@@ -174,6 +189,7 @@
 # Usage:
 #   run-test-suite.sh <label>          start typecheck then test detached and print `pending`; label ^[A-Za-z0-9][A-Za-z0-9._-]*$
 #   run-test-suite.sh --wait <label>   read the verdict of a run of <label>; never runs anything
+#   run-test-suite.sh --no-detach <label>   run typecheck then test in this process and print the verdict; for `launch-sandboxed-gates.sh` alone
 #
 # Exit map:
 #   0  pass (wait form reading a `pass` verdict, or run form collecting a run already in flight)
@@ -187,6 +203,7 @@
 #      that neither claimed `.running` nor wrote `.verdict` within STALE_SECONDS:
 #      `the detached run of <label> did not start`
 #   3  pending — the run form's normal answer once its detached run has started, or the wait form (or run form) while a run is in flight; issue the wait form
+# The no-detach form exits 3 for a live label, and otherwise with the worker's verdict exit, 0 or 1.
 
 # Deliberately no `-e`: this script has to outlive the command's failure long
 # enough to write and print the verdict.
@@ -221,16 +238,21 @@ refuse() {
   exit 2
 }
 
+usage='usage: run-test-suite.sh <label> | run-test-suite.sh --wait <label> | run-test-suite.sh --no-detach <label>'
 mode=run
 case "$#" in
   1) label="$1" ;;
   2)
-    [ "$1" = "--wait" ] || refuse "usage: run-test-suite.sh <label> | run-test-suite.sh --wait <label>"
-    mode=wait
+    case "$1" in
+      --wait) mode=wait ;;
+      --no-detach) mode=nodetach ;;
+      *) refuse "$usage" ;;
+    esac
     label="$2"
     ;;
-  *) refuse "usage: run-test-suite.sh <label> | run-test-suite.sh --wait <label>" ;;
+  *) refuse "$usage" ;;
 esac
+[ "$label" != "--no-detach" ] || refuse "$usage"
 [[ "$label" =~ $LABEL_PATTERN ]] || refuse "label '$label' does not match $LABEL_PATTERN"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -367,6 +389,19 @@ typecheck_trimmed="${typecheck_line#"${typecheck_line%%[![:space:]]*}"}"
 typecheck_trimmed="${typecheck_trimmed%"${typecheck_trimmed##*[![:space:]]}"}"
 typecheck_is_none=0
 if [ "$typecheck_trimmed" = "$TYPECHECK_NONE_SENTINEL" ]; then typecheck_is_none=1; fi
+
+# THE NO-DETACH FORM: the block below up to its detach, then this process is the
+# worker. Nothing reads its stdout, so a live label answers `pending` at once
+# rather than through `wait_for_verdict`.
+if [ "$mode" = nodetach ] && [ "$worker_marker" != "$label" ]; then
+  if run_alive; then
+    echo pending
+    exit 3
+  fi
+  mkdir -p "$log_dir" || refuse "cannot create '$log_dir'"
+  rm -f "$verdict_file" "$verdict_file.tmp"
+  worker_marker="$label"
+fi
 
 if [ "$worker_marker" != "$label" ]; then
   # ONE RUN PER LABEL. A live run of this label — a session that re-entered the

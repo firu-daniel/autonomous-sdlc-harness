@@ -31,6 +31,8 @@ The templates are the source. This task makes no change of its own. Before this 
   - The story index's **Manual setup required** `init --force` writes it at `0755`.
 - [ ] Touch no other file under `scripts/`.
 
+**Deviations from plan:** The `cp` of each template and `chmod 755 scripts/launch-sandboxed-gates.sh` were both refused by the tool layer ("Permission to use Bash has been denied because Claude Code is running in don't ask mode"). The two existing files were brought level by applying the `git diff --no-index` template hunks with Edit, and the new launcher was written from the template with Write. All three `cmp` checks exit 0. The launcher was created at the working tree's default mode, not `0755`. As the work item permits, this is left for the story index's **Manual setup required** `init --force`; the script is invoked as `bash <path>` either way.
+
 **Verification:**
 
 - `cmp scripts/run-test-suite.sh cli/templates/scripts/run-test-suite.sh`, `cmp scripts/lib/harness-run-lib.sh cli/templates/scripts/lib/harness-run-lib.sh` and `cmp scripts/launch-sandboxed-gates.sh cli/templates/scripts/launch-sandboxed-gates.sh` each exit 0.
