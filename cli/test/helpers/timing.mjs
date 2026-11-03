@@ -44,8 +44,8 @@
  *      full.
  *    - The `delay(500)` after a kill in `watcher-remote-job.test.mjs` and
  *      `watcher-remote-park-sequence.test.mjs`: a settle window asserting the status stays `running`.
- *    - Stub lifetimes: `sleep 30` in the killed-job stubs, `HUNG_BODY`'s `sleep 60`, and the agent
- *      stub's `sleep 0.3` (`watcher.mjs`, choice 1).
+ *    - Stub lifetimes: `sleep 30` in the killed-job stubs and the agent stub's `sleep 0.3`
+ *      (`watcher.mjs`, choice 1).
  *    - Reset leads: `REPEAT_RESET_AHEAD_SECS` (15), `runOnce`'s 2-second lead and
  *      `rateLimitRejected(100)`, plus the `HARNESS_JOB_DEADLINE_EPOCH` offsets.
  *    - Every `*_SECS` tunable passed to a watcher or wrapper — `STALL_WARN_SECS` /
