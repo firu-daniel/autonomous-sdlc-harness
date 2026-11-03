@@ -309,6 +309,7 @@ const OUTER_LOOP_SCRIPT_FILES = [
   'docs-search-server.sh',
   'flow-walker.sh',
   'run-test-suite.sh',
+  'launch-sandboxed-gates.sh',
   'run-analytics.sh',
   'task-offer-check.sh',
 ];

@@ -1,7 +1,7 @@
 /**
  * Generator: the outer-loop scripts — the run watcher, the git wrappers, the worktree tooling, the
- * flow walker with its gate library and flow graph, the test-suite runner, the run-analytics script
- * with its two `jq` programs, the change-request fence's opt-out check, and the shared library
+ * flow walker with its gate library and flow graph, the test-suite runner, the gate launcher, the
+ * run-analytics script with its two `jq` programs, the change-request fence's opt-out check, and the shared library
  * they all source —
  * written into the adopter's configured `scriptsDir`.
  *
@@ -104,12 +104,16 @@ export interface OuterLoopScript {
    *
    * Set on the git wrappers an agent commits, pushes and refreshes through: sandboxed on macOS, a
    * commit cannot write a linked worktree's record (`docs/sandbox-verification.md` G1, F1) and a push
-   * or fetch cannot reach an SSH remote (P1, F3). Set it only on a script carrying the
+   * or fetch cannot reach an SSH remote (P1, F3). Set also on the gate launcher, whose main-checkout
+   * copy starts the gate worker under a `bwrap` sandbox of its own on a bubblewrap host, because a
+   * process a sandboxed call detaches there did not outlive the call (`docs/sandbox-verification.md`
+   * F10). Set it only on a script carrying the
    * excluded-wrapper checks `templates/scripts/lib/harness-run-lib.sh` → the header's `JURISDICTION`
    * paragraph names (`hr_wrapper_main_of`, `hr_wrapper_target_check_var`,
    * `hr_worktree_config_check_var`, `hr_pinned_hooks_path`, `hr_wrapper_branch_var`), plus
    * `hr_git_env_drop` and the main checkout's protected set, as `commit-on-branch.sh`'s header
-   * applies them.
+   * applies them. A script running no git command in its target — the launcher — owes
+   * `hr_pinned_hooks_path` and `hr_worktree_config_check_var` nothing.
    */
   readonly runsUnsandboxed?: true;
 }
@@ -191,6 +195,9 @@ export const OUTER_LOOP_SCRIPTS: ReadonlyArray<OuterLoopScript> = Object.freeze(
   // Run by the orchestrating session in the Run gates phase; no `DENY_SCRIPT_BASENAMES` entry,
   // because it must be reachable.
   Object.freeze({ file: 'run-test-suite.sh', mode: 0o755, agentInvocable: true }),
+  // Run by the orchestrating session's Phase G on a bubblewrap host; no `DENY_SCRIPT_BASENAMES`
+  // entry, because it must be reachable.
+  Object.freeze({ file: 'launch-sandboxed-gates.sh', mode: 0o755, agentInvocable: true, runsUnsandboxed: true }),
   Object.freeze({ file: 'create-worktree.sh', mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: 'setup-worktree.sh', mode: 0o755, agentInvocable: false }),
   // Started by the agent runner from `.mcp.json`, never by a dispatched agent's Bash call, so `false`
