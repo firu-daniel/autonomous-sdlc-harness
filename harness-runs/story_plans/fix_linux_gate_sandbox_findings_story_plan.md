@@ -26,7 +26,7 @@ What each finding gets:
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_linux_gate_sandbox_findings/task_<K>_plan.md`. They are in ship order, by dependency (see `## Context` → **Order.**).
 
-1. [ ] **Task 1** — F13: run `doctor-profile-sandbox` case `(d)` under the retrieval stub and an isolated cache, and lead its failure messages with the cause _(layer: cli)_ _(points: 10)_
+1. [x] **Task 1** — F13: run `doctor-profile-sandbox` case `(d)` under the retrieval stub and an isolated cache, and lead its failure messages with the cause _(layer: cli)_ _(points: 10)_
 2. [ ] **Task 2** — F12: make launcher case `(c)` hide only `bwrap`, and pin the shared-directory layout _(layer: cli)_ _(points: 10)_
 3. [ ] **Task 3** — F11: move gate 6a into `scripts/check-machine-paths.sh`, dropping only `Permission denied` on a character-device placeholder _(layer: general)_ _(points: 15)_
 4. [ ] **Task 4** — PD28: add CL5's `File exists` lock refusal to the judge's Linux table, and grade CL5 on it plus the placeholder readings _(layer: general)_ _(points: 15)_
