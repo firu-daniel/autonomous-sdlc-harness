@@ -21,9 +21,9 @@
 #
 # CS8 (b), the watcher's launch refusal, is probed without a launch: sp__cs8b_check <watcher script>
 # <profile> <copy> sources `<watcher script> status`, read-only, in a child `bash -c`, as sp__render does,
-# and calls the watcher's own run_profile_check on the unmodified per-run profile (the control) and on
-# CS8 (a)'s scratch <bad>; sp__cs8b_grade <rc> <refusal> <control rc> <control refusal> grades the pair.
-# The base profile and the live watcher are untouched. sp__cs8a_grade <stream> <exact command> <marker
+# takes hr_placeholder_host_probe_var as sp__render does (§5 PD26), and calls the watcher's own
+# run_profile_check on the unmodified per-run profile (the control) and on CS8 (a)'s scratch <bad>;
+# sp__cs8b_grade <rc> <refusal> <control rc> <control refusal> grades the pair. The base profile and the live watcher are untouched. sp__cs8a_grade <stream> <exact command> <marker
 # written: 1|0> grades (a); CS8's one line carries both halves.
 #
 # SOURCED, NEVER EXECUTED. It sets no shell option: the entry point owns `set -u`. Bash 3.2 floor.
@@ -378,11 +378,15 @@ sp__cs8a_grade() {
 }
 
 # sp__cs8b_check <watcher script> <profile> <copy> — sets SP__CS8B_RC (0 accepted, 1 refused, other: not
-# checked) and SP__CS8B_REFUSAL (the child's first printed line). Prints nothing.
+# checked) and SP__CS8B_REFUSAL (the child's first printed line). Prints nothing. The child takes
+# hr_placeholder_host_probe_var before the check, as sp__render and spawn_engine do: without it a bubblewrap
+# host's per-run profile, which leaves the clone's trio out, reads as differing from the base (§5 PD26).
 sp__cs8b_check() {
   local out
   out="$(bash -c '
     . "$1" status >/dev/null 2>&1
+    if ! declare -F hr_placeholder_host_probe_var >/dev/null; then printf "%s\n" "$1 defines no hr_placeholder_host_probe_var"; exit 2; fi
+    hr_placeholder_host_probe_var
     if ! declare -F run_profile_check >/dev/null; then printf "%s\n" "$1 defines no run_profile_check"; exit 2; fi
     if ! run_profile_check "$2" "$3"; then printf "%s\n" "$RUN_PROFILE_REFUSAL"; exit 1; fi
     exit 0' _ "${1:-}" "${2:-}" "${3:-}" 2>/dev/null)"

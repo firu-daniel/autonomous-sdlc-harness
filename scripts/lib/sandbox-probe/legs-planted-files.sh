@@ -11,6 +11,9 @@
 # names it. One file is planted at a time: hr_clone_target_check_var stops at the first of commondir,
 # config.worktree, http-alternates it finds, so two plants together would both be refused on one name.
 # A plant is removed before any probe git call judges the row.
+# On Linux, Claude Code leaves an empty .git/config.worktree at a session's start, so CS14 plants over one
+# that sp__pf_inert_worktree_config <path> <clone> accepts, says so in its departure, and removes it with the
+# plant (§5 PD25).
 #
 # JOB MODE (SP_JOB_MODE=1). CS12, CS13, CS14 and L2 are printed `not run` by sp_job_skip_clone_rows; only
 # L1 runs. On a main-checkout target push-branch.sh reaches its dash check through
@@ -169,8 +172,24 @@ EOF
   fi
 }
 
+# sp__pf_inert_worktree_config <path> <clone> — 0 only when <path> is a regular file, not a symbolic link, of
+# 0 bytes, and the clone's own .git/config holds extensions.worktreeConfig absent or false: the one
+# config.worktree shape hr_run_copy_check_var accepts (hr_clone_target_check_var's condition 3), whose read
+# this mirrors. Every other outcome, an unparseable value included, is 1.
+sp__pf_inert_worktree_config() {
+  local path="$1" clone="$2" val rc=0
+  if [ ! -f "$path" ] || [ -L "$path" ] || [ -s "$path" ]; then
+    return 1
+  fi
+  val="$(git -C / config --file "$clone/.git/config" --bool --get extensions.worktreeConfig 2>/dev/null)" || rc=$?
+  [ "$rc" -eq 1 ] && return 0
+  [ "$rc" -eq 0 ] && [ "$val" = false ] && return 0
+  return 1
+}
+
 # sp__pf_row <row> <name under .git> <content> — plant one file in the files-plant clone, one measured commit
-# call, its control last; the plant removed after the session and before any judgement.
+# call, its control last; the plant removed after the session and before any judgement. On Linux, CS14 plants
+# over an empty config.worktree that sp__pf_inert_worktree_config accepts (§5 PD25).
 sp__pf_row() {
   local row="$1" name="$2" content="$3" tag plant file abs pfile cmd want departure d ref launched=1 out
   tag="$(sp__pf_lower "$row")"
@@ -184,7 +203,10 @@ sp__pf_row() {
   # An uncommitted new file, so a commit that ran would move the ref.
   file="sbx_pf_$tag.txt"
   abs="$SP__PF_CLONE/$file"
-  if [ -e "$abs" ] || [ -L "$abs" ] || [ -e "$plant" ] || [ -L "$plant" ]; then
+  if [ "${SP_PLATFORM:-}" = linux ] && [ "$name" = config.worktree ] && [ ! -e "$abs" ] && [ ! -L "$abs" ] &&
+    sp__pf_inert_worktree_config "$plant" "$SP__PF_CLONE"; then
+    departure="$departure; Claude Code's own empty .git/config.worktree was present and was planted over (§5 PD25)"
+  elif [ -e "$abs" ] || [ -L "$abs" ] || [ -e "$plant" ] || [ -L "$plant" ]; then
     sp__pf_stop "$row" "$abs or $plant exists before the session" "$departure"
     return 0
   fi
