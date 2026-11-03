@@ -10,7 +10,9 @@
  * against one built here from the profile with `jq`, carries no `--share-net`, and the target's own
  * command runs only as the vector's command — the gate stub records whether `bwrap` ran it. The
  * supervisor sweeps every placeholder the stub leaves on the host (a `.git`-leaf one the stub
- * removes itself, below), and nothing else under the fixture changes but the lane files.
+ * removes itself, below), and nothing else under the fixture changes but the lane files. A clone
+ * whose `run_profile` only the sandbox probe's `sp__render` wrote is launched (case (r)), and a
+ * status-less control-clone record does not refuse job mode (case (s)).
  *
  * Not covered, because no suite can show it: whether the detached supervisor outlives a sandboxed
  * Bash call on Linux. That is the GS1 row's measurement. The stub emulates bubblewrap's placeholder
@@ -35,8 +37,12 @@ import { delimiter, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 
-import { createFixture, runBash, runCli, runGit, snapshotTree } from './helpers/fixture.mjs';
+import { createFixture, PACKAGE_ROOT, runBash, runCli, runGit, snapshotTree, WORKSPACE_ROOT } from './helpers/fixture.mjs';
 import { scaleBound } from './helpers/timing.mjs';
+
+/** The sandbox probe's own libraries, from this checkout: case (r) writes a clone record through `sp__render`. */
+const PROBE_LIB = join(WORKSPACE_ROOT, 'scripts', 'lib', 'sandbox-probe');
+const RENDER_STUB = join(PACKAGE_ROOT, 'test', 'fixtures', 'sandbox-probe', 'render-watcher-stub.sh');
 
 const STATE_DIR = 'sdlc-harness';
 const SCRIPTS = 'scripts';
@@ -468,12 +474,8 @@ test('(j) a protected path whose parent is absent: cannot protect, bwrap never c
 // The clone arm.
 // ---------------------------------------------------------------------------------------------
 
-/**
- * A clone of the fixture registered as {@link CLONE_BRANCH}, holding `protected.txt`, and its per-run
- * profile written where the watcher renders it — under the case's own `XDG_STATE_HOME` — protecting
- * that file and recorded as the branch's `run_profile`.
- */
-async function registeredClone(t, f) {
+/** A clone of the fixture registered as {@link CLONE_BRANCH}, holding `protected.txt`, with no `run_profile`. */
+async function bareClone(t, f) {
   await mkdir(join(f.dir, STATE_DIR, 'autonomous_logs'), { recursive: true });
   const created = await runBash(f.root, [
     '-c',
@@ -490,6 +492,15 @@ async function registeredClone(t, f) {
 
   const protectedPath = join(clone, 'protected.txt');
   await writeFile(protectedPath, 'kept\n');
+  return { clone, protectedPath };
+}
+
+/**
+ * {@link bareClone}, its per-run profile written where the watcher renders it — under the case's own
+ * `XDG_STATE_HOME` — protecting `protected.txt` and recorded as the branch's `run_profile`.
+ */
+async function registeredClone(t, f) {
+  const { clone, protectedPath } = await bareClone(t, f);
   const profileFile = await f.lib('hr_run_profile_file "$(hr_repo_slug "$1")" "$2"', f.dir, CLONE_BRANCH);
   assert.ok(profileFile.startsWith(`${f.state}/`), profileFile);
   await mkdir(profileFile.slice(0, profileFile.lastIndexOf('/')), { recursive: true });
@@ -528,6 +539,43 @@ test('(k) a registered clone takes its protected paths from the recorded per-run
   await rm(profileFile);
   const refused = await f.launch([clone, 'gates_round_2']);
   assertRefusal(refused, `no per-run profile for '${CLONE_BRANCH}' at ${profileFile}`);
+});
+
+test('(r) a clone whose record only the sandbox probe\'s sp__render wrote is launched, and refused before it', async (t) => {
+  const f = await launcherFixture(t);
+  const { clone, protectedPath } = await bareClone(t, f);
+
+  // The state the probe was in before sp__render recorded the field.
+  assertRefusal(await f.launch([clone, LABEL]), `the run registry records no per-run profile for '${CLONE_BRANCH}'`);
+
+  const stubScripts = join(f.root, 'stub-scripts');
+  await mkdir(stubScripts);
+  await writeFile(join(stubScripts, 'autonomous-watcher.sh'), readFileSync(RENDER_STUB, 'utf8'));
+  const profileFile = join(f.root, 'probe-rendered.json');
+  const rendered = await runBash(f.root, [
+    '-c',
+    'for lib in "$1" "$2" "$3"; do . "$lib"; done; SP_SCRIPTS="$4"; SP_REGISTRY="$5"; sp__render "$6" "$7" || { printf "%s\\n" "$SP__RENDER_REFUSAL" >&2; exit 1; }; printf "%s\\n" "$SP__RENDERED"',
+    '_',
+    join(WORKSPACE_ROOT, 'scripts', 'lib', 'harness-run-lib.sh'),
+    join(PROBE_LIB, 'core.sh'),
+    join(PROBE_LIB, 'session.sh'),
+    stubScripts,
+    join(f.dir, STATE_DIR, 'autonomous_logs', 'registry.json'),
+    CLONE_BRANCH,
+    clone,
+  ], f.env({
+    RENDER_STUB_PROFILE: profileFile,
+    RENDER_STUB_JSON: JSON.stringify({ sandbox: { filesystem: { denyWrite: [protectedPath] } } }),
+    SP_VERSION: '',
+    SP_CURRENT_LEG: '',
+  }), { timeoutMs: RUN_TIMEOUT_MS, signal: t.signal });
+  assert.deepEqual([rendered.status, rendered.stdout], [0, `${profileFile}\n`], output(rendered));
+
+  const expected = await expectedVector(f, clone, profileFile);
+  const argv = await launchClone(f, clone, LABEL);
+  assert.deepEqual(argv, expected);
+  const at = argv.indexOf(protectedPath);
+  assert.deepEqual(argv.slice(at - 1, at + 2), ['--ro-bind', protectedPath, protectedPath]);
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -570,6 +618,22 @@ test('(q) job mode: the registry run_job leaves accepts the main checkout, a fin
   const verdict = await f.collect(f.dir);
   assert.deepEqual([verdict.status, verdict.stdout], [0, 'pass\n'], output(verdict));
   assert.deepEqual(lines(f.record), expected);
+  await f.until(() => existsSync(join(f.out, 'bwrap-exited')), 'the bwrap stub to exit');
+});
+
+test('(s) job mode: the wrappers leg\'s control-clone record, which carries no status, does not refuse the main checkout', async (t) => {
+  const f = await launcherFixture(t);
+  const ctl = join(f.root, 'ctl-clone');
+  await mkdir(ctl);
+  const ctlBranch = `${BRANCH}_ctl`;
+  await writeRegistry(f, {
+    [BRANCH]: { branch: BRANCH, worktree: f.dir, status: 'running' },
+    [ctlBranch]: { branch: ctlBranch, worktree: ctl, copy_kind: 'clone', run_profile: join(f.root, 'ctl-profile.json') },
+  });
+  const r = await f.launch([f.dir, LABEL]);
+  assert.deepEqual([r.status, r.stdout], [3, 'pending\n'], output(r));
+  const verdict = await f.collect(f.dir);
+  assert.deepEqual([verdict.status, verdict.stdout], [0, 'pass\n'], output(verdict));
   await f.until(() => existsSync(join(f.out, 'bwrap-exited')), 'the bwrap stub to exit');
 });
 

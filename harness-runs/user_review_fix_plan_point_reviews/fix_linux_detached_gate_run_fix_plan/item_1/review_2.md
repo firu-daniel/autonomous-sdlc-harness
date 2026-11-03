@@ -1,0 +1,6 @@
+# cli review — 1. The probe's launcher legs never record the per-run profile in the registry — iteration 2
+
+## Nice to Have
+1. **Fixture (e) never shows that `run_profile` was in the record before teardown dropped it** — `cli/test/sandbox-probe-gate-sandbox-legs.test.mjs` (`(e) teardown drops the whole record, run_profile included`) — "`jq -c --arg b \"$3\" '.runs | has($b)' \"$SP_REGISTRY\"`"
+   The case asserts that `.runs[<branch>]` is absent after `sp_teardown`, but it never reads the field before teardown runs. Run against the current tree, where `session.sh` step 1 has not landed, it passes with no `run_profile` ever written: `node --test --test-name-pattern="sp__render" cli/test/sandbox-probe-gate-sandbox-legs.test.mjs` gives (a) and (b) as `not ok` and (e) as `ok`. So the "run_profile included" half of the case's name rests on (a) passing beside it, not on anything (e) itself checks. If (a) were later loosened or removed, (e) would still pass without proving the field is dropped.
+   **Fix:** Before `sp__register_clone`, add `hr_registry_peek "$SP_REGISTRY" "$3" run_profile` to the body and extend the expected `stdout` lines with `l.profile` at that position. That way (e) shows the field was present and then gone.

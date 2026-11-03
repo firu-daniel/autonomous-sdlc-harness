@@ -157,7 +157,10 @@ sp__clone_path() {
 # `autonomous-watcher.sh status` and then took the placeholder-host answer
 # (`hr_placeholder_host_probe_var`) as `spawn_engine` does before its render, so on a bubblewrap host
 # the clone's commondir, config.worktree and http-alternates are left out of denyWrite as in a real
-# launch. Sets SP__RENDERED, or SP__RENDER_REFUSAL quoting RUN_PROFILE_REFUSAL.
+# launch. Then records the rendered path as <branch>'s `run_profile` in SP_REGISTRY, from this shell,
+# as `spawn_engine` does after its launch check: `launch-sandboxed-gates.sh` check 8 reads it from there
+# and refuses a clone without it. Sets SP__RENDERED, or SP__RENDER_REFUSAL quoting RUN_PROFILE_REFUSAL,
+# or naming SP_REGISTRY when the record write fails.
 sp__render() {
   local out rc
   SP__RENDERED=""
@@ -173,6 +176,10 @@ sp__render() {
   if [ "$rc" -ne 0 ] || [ -z "$out" ]; then
     [ -n "$out" ] || out="the watcher's render printed nothing"
     SP__RENDER_REFUSAL="the per-run profile for '$1' was refused: $out"
+    return 1
+  fi
+  if ! hr_registry_set "$SP_REGISTRY" "$1" run_profile "$out"; then
+    SP__RENDER_REFUSAL="the per-run profile for '$1' was rendered at $out, but its path could not be recorded in the run registry '$SP_REGISTRY'"
     return 1
   fi
   SP__RENDERED="$out"
@@ -776,6 +783,7 @@ sp_teardown() {
   sp_restore_clear
 
   # In job mode the only registered clone is the wrappers leg's control clone, which the clone loop removes; the tracked-branch pass deletes the probe branch, no longer checked out.
+  # Its record carries no `status`, so `launch-sandboxed-gates.sh` check 6 never reads it as a live run copy.
   if declare -F sp_job_teardown >/dev/null; then
     sp_job_teardown
   fi
@@ -791,7 +799,7 @@ sp_teardown() {
         sp__td_fail "$HR_CLONE_REFUSAL"
       fi
     fi
-    # 2. Its registry record.
+    # 2. Its registry record, the `run_profile` field sp__render wrote with it.
     if hr_registry_peek "$SP_REGISTRY" "$b" worktree >/dev/null 2>&1; then
       if ! hr_registry_drop "$SP_REGISTRY" "$b"; then
         sp__td_fail "the registry record for '$b' in '$SP_REGISTRY' is left"

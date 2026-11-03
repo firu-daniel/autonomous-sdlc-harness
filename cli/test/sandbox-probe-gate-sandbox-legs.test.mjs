@@ -8,6 +8,12 @@
  * passes a path lying inside the target as an outside one, GS4's evidence never quotes a credential, and the
  * worker's script stores every step's reading whole.
  *
+ * Also `session.sh` → `sp__render` and `sp_teardown`, which the launcher legs depend on: the rendered
+ * per-run profile is recorded as the clone record's `run_profile`, where `launch-sandboxed-gates.sh`
+ * check 8 reads it, a failed record write is a refusal, and teardown's record drop removes the field.
+ * The watcher is `fixtures/sandbox-probe/render-watcher-stub.sh`; teardown's clone removal, branch
+ * deletion and snapshot check are stubbed.
+ *
  * Each case runs a `bash -c` through `runBash` sourcing `scripts/lib/harness-run-lib.sh` (GS1 reads the done
  * marker through its `hr_lane_mtime`), `core.sh`, `platform.sh`, `judge.sh`, `controls.sh`, `session.sh` and
  * `legs-gate-sandbox.sh`, then sets SP_PLATFORM to `linux`, since `platform.sh` empties it. Fixtures are
@@ -24,9 +30,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { runBash, WORKSPACE_ROOT } from './helpers/fixture.mjs';
+import { PACKAGE_ROOT, runBash, WORKSPACE_ROOT } from './helpers/fixture.mjs';
 
 const PROBE_LIB = join(WORKSPACE_ROOT, 'scripts', 'lib', 'sandbox-probe');
+const RENDER_STUB = join(PACKAGE_ROOT, 'test', 'fixtures', 'sandbox-probe', 'render-watcher-stub.sh');
+const RENDER_BRANCH = 'chore_sbx_probe_fixture';
 const LIBS = [
   join(WORKSPACE_ROOT, 'scripts', 'lib', 'harness-run-lib.sh'),
   ...['core.sh', 'platform.sh', 'judge.sh', 'controls.sh', 'session.sh', 'legs-gate-sandbox.sh'].map((f) =>
@@ -412,5 +420,80 @@ test('sp__wf5_grade: pass only on an advancing hr_lane_mtime', async (t) => {
       'pass',
       "hr_lane_mtime advanced 100..103 in the launcher's sandboxed gate-worker process (stat -f %m gave '?', so the GNU stat -c %Y arm answered)",
     ]);
+  });
+});
+
+/**
+ * A case directory holding `scripts/autonomous-watcher.sh` (the render stub), a clone directory, and a
+ * registry carrying the clone's record as `create-worktree.sh` leaves it: `worktree` and `copy_kind`.
+ */
+async function renderLayout(t) {
+  const dir = await caseDir(t);
+  const scripts = join(dir, 'scripts');
+  const clone = join(dir, 'clone');
+  const registry = join(dir, 'state', 'autonomous_logs', 'registry.json');
+  await mkdir(scripts);
+  await mkdir(clone);
+  await mkdir(join(dir, 'state', 'autonomous_logs'), { recursive: true });
+  await writeFile(join(scripts, 'autonomous-watcher.sh'), await readFile(RENDER_STUB, 'utf8'));
+  await writeFile(registry, `${JSON.stringify({ runs: { [RENDER_BRANCH]: { branch: RENDER_BRANCH, worktree: clone, copy_kind: 'clone' } } })}\n`);
+  return { dir, scripts, clone, registry, profile: join(dir, 'rendered.json') };
+}
+
+/** `sp__render`, then `body`, with SP_SCRIPTS and SP_REGISTRY set; prints status, rendered path, refusal. */
+function render(l, registry, body = '') {
+  return sourced(
+    l.dir,
+    [
+      'SP_SCRIPTS="$1"; SP_REGISTRY="$2"',
+      'sp__render "$3" "$4"; rc=$?',
+      `printf '%s\\n%s\\n%s\\n' "$rc" "$SP__RENDERED" "$SP__RENDER_REFUSAL"`,
+      body,
+    ].join('\n'),
+    [l.scripts, registry, RENDER_BRANCH, l.clone],
+    { RENDER_STUB_PROFILE: l.profile, XDG_STATE_HOME: l.dir },
+  );
+}
+
+test('sp__render: records the rendered profile as the clone record\'s run_profile, as spawn_engine does', async (t) => {
+  await t.test('(a) the rendered path lands in the registry record', async (t) => {
+    const l = await renderLayout(t);
+    const run = await render(l, l.registry, 'hr_registry_peek "$SP_REGISTRY" "$3" run_profile');
+    assert.equal(run.status, 0, run.stderr);
+    assert.deepEqual(run.stdout.split('\n'), ['0', l.profile, '', l.profile, '']);
+  });
+
+  await t.test('(b) a registry write that fails is a refusal naming the registry', async (t) => {
+    const l = await renderLayout(t);
+    // A regular file where the registry's directory should be: mktemp beside it fails, root included.
+    const blocked = join(l.dir, 'not-a-dir');
+    await writeFile(blocked, '');
+    const registry = join(blocked, 'registry.json');
+    const run = await render(l, registry);
+    assert.equal(run.status, 0, run.stderr);
+    const [rc, rendered, refusal] = run.stdout.split('\n');
+    assert.deepEqual([rc, rendered], ['1', ''], run.stdout);
+    assert.ok(refusal.includes(registry), refusal);
+  });
+
+  await t.test('(e) teardown drops the whole record, run_profile included', async (t) => {
+    const l = await renderLayout(t);
+    const run = await render(
+      l,
+      l.registry,
+      [
+        'sp__register_clone "$3"',
+        'sp__clone_set_path "$4"',
+        'hr_clone_remove_var() { return 0; }',
+        'sp__td_branch() { :; }',
+        'sp_snapshot_check() { :; }',
+        "SP_SLUG='fixture-slug'",
+        'sp_teardown',
+        `jq -c --arg b "$3" '.runs | has($b)' "$SP_REGISTRY"`,
+        'printf "exit=%s\\n" "$SP_EXIT"',
+      ].join('\n'),
+    );
+    assert.equal(run.status, 0, run.stderr);
+    assert.deepEqual(run.stdout.split('\n'), ['0', l.profile, '', 'false', 'exit=0', ''], run.stderr);
   });
 });
