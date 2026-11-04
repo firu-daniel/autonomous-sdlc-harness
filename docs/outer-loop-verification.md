@@ -214,6 +214,17 @@ The last three are each other's perturbation in the same way: one machine, one l
 
 The systemd-shaped row's perturbation is the message at its previous commit, driven against the same systemd-shaped recorder: identical calls (`daemon stop`, then `daemon install`), identical exit **0**, and one closing line — `restarted — the daemon is running the current file` — for a run in which nothing was restarted. That is what fixes the row to the message rather than to the exit status, which no recorder can move.
 
+**On a published release, against a real daemon.** Every row above drives a recorder; the real-daemon case is `sandbox1h` §3, taken by step 9 of `docs/development.md` → **Gate 12** → **The sandbox series round (#170 step 4) — not yet run.**, from the Gate 12 repository's checkout:
+
+```
+HARNESS_CLI="npx autonomous-sdlc-harness@<version>" bash <scriptsDir>/restart-watcher.sh
+```
+
+| Condition | Expected | Observed |
+|---|---|---|
+| macOS, the repository's daemon installed and idle, step 9 of the sandbox series round | exit **0**, with `daemon stop` and `daemon install` naming the repository's own label | **not yet measured.** |
+| Linux, a systemd host, step 9 of the sandbox series round; marked *not run* where no such host is available | exit **0**, the `systemctl --user` lines printed, nothing restarted | **not yet measured.** |
+
 ### 1.6 The `jq` floor: absent, pre-1.5, and how the watcher was driven
 
 `jq` **absent** is a different condition from `jq` **pre-1.5**, and the scripts do not distinguish them: both are "the configuration could not be resolved" and both take the closed path. Driven with a shim directory holding a symlink to every executable on the real `PATH` **except** `jq` — so this is absence rather than a broken `PATH`:
