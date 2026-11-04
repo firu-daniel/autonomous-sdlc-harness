@@ -58,3 +58,10 @@
 - `npm test --workspace cli -- test/gate12-sandbox-round-cli.test.mjs` passes. It is this task's own new test file.
 - No path under this checkout is created or changed by the run: every fixture sits under the system temp directory.
 - A grep of `cli/test/helpers/gate12-round.mjs` for `...process.env` finds only `spawnRound`'s, and that object also names `MAIN_REPO_ANCHOR_VARIABLE`.
+
+**Deviations from plan:**
+- `runRound` takes an optional `script` (default `<WORKSPACE_ROOT>/scripts/gate12-sandbox-round.sh`), so the own-repository refusal case runs the copy placed inside the fixture through the same `runBash` route rather than a launcher of its own.
+- `ghStub(dir, routes, state?)` takes an optional third argument `{ defaultBranch = 'main', variables = {} }` seeding the stub's mutable state; the state file is written only when absent or when that argument is passed, so re-routing between two runs keeps the allotted run IDs, the variables and the default branch. A matching route answers verbatim and leaves the state untouched; the stateful answers (`repo view`, `repo edit --default-branch`, `variable list|set|delete`, unrouted `run list` → `[]`) are the fallback when no route matches, and `--jq` is applied through `jq -r` to those and to synthesised runs only.
+- The `gh` stub is a bash shim `exec`-ing `node` on a sibling `gh-stub.cjs`, so a suite invokes it directly through `runBash`; `makeGate12Fixture` installs it with no routes, so every fixture carries a stub before a case re-routes it.
+- Additional exports, for later suites' assertions: `ghStubState(dir)`, `ghStubCalls(dir)` (the argv log as arrays), `GATE12_SLUG`, `ROUND_SCRIPT`, `INSTALL_STEP`. The fixture object carries `root`, `dir`, `origin`, `binDir`, `stateDir`, `scriptsDir`, `remoteRunLog` and `stateFile`.
+- `withInstallStep: false` replaces every `Install the sandbox prerequisites` in the copied workflow (the step name and one comment) with `Install prerequisites`, since the preflight matches the phrase anywhere in the file.
