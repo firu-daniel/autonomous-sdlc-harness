@@ -22,7 +22,7 @@ Beyond those two, the round assigns one `sandbox1h` §2 check to a step that doe
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 4** — Move the new `sandbox1h` §1 paragraph in `docs/cli.md` §5 below the "That first arm" paragraph _(layer: general)_
+1. [x] **Finding 4** — Move the new `sandbox1h` §1 paragraph in `docs/cli.md` §5 below the "That first arm" paragraph _(layer: general)_
 2. [ ] **Finding 5** — Put observation (xvi)'s `branch-prompt` drop command in its own fenced block _(layer: general)_
 3. [ ] **Finding 3** — Add a fresh-`init` command block to the round's step 4 for `sandbox1h` §2's managed-block check _(layer: general)_
 4. [ ] **Finding 1** — Correct FR1's "Read from" in both documents: no launch line carries `--settings`, and the session's output is not in the step log _(layer: general)_
