@@ -421,6 +421,7 @@ test('sp__git_cl5_grade: a permission-layer refusal of CL5’s git config is not
 test("PD28: on Linux, CL5's File exists refusal passes only where the lock path read as the placeholder inside the session", async (t) => {
   const PLACEHOLDER = 'crw-rw-rw- 1 nobody nogroup 1, 3 Nov  3 19:07 .git/config.lock';
   const REGULAR = '-rw-r--r-- 1 probe probe 0 Nov  3 19:07 .git/config.lock';
+  const OTHER_DEVICE = 'crw-rw-rw- 1 root root 11, 3 Nov  3 19:07 .git/config.lock';
   const EXISTS = 'error: could not lock config file .git/config: File exists';
   const NOT_PLACEHOLDER = `the File exists refusal is the sandbox's only where the lock path read as its /dev/null placeholder inside the session: ${EXISTS}`;
   const cl5 = (t, platform, readings) =>
@@ -431,6 +432,7 @@ test("PD28: on Linux, CL5's File exists refusal passes only where the lock path 
     { name: 'the placeholder readings pass', readings: ['absent', PLACEHOLDER, 'absent'], v: 'pass', e: EXISTS },
     { name: 'a lock present before the session is not run', readings: [REGULAR, PLACEHOLDER, 'absent'], v: 'not run', e: NOT_PLACEHOLDER },
     { name: 'a regular file inside the session is not run', readings: ['absent', REGULAR, 'absent'], v: 'not run', e: NOT_PLACEHOLDER },
+    { name: 'a character device other than 1, 3 inside the session is not run', readings: ['absent', OTHER_DEVICE, 'absent'], v: 'not run', e: NOT_PLACEHOLDER },
     { name: 'a lock left after the session is not run', readings: ['absent', PLACEHOLDER, REGULAR], v: 'not run', e: NOT_PLACEHOLDER },
   ];
   for (const c of cases) {

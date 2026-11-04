@@ -1235,7 +1235,7 @@ sp__git_cl5_grade() {
         sp__line_with "${SP__TEXT:-}" "could not lock config file .git/config: File exists" >/dev/null; then
         local placeholder=0
         if [ "$#" -ge 5 ] && [ "$3" = absent ] && [ "$5" = absent ]; then
-          case "$4" in c*"1, 3"*) placeholder=1 ;; esac
+          case "$4" in c*" 1, 3 "*) placeholder=1 ;; esac
         fi
         if [ "$placeholder" -eq 0 ]; then
           SP_VERDICT="not run"
