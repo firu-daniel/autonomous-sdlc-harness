@@ -6,8 +6,9 @@
  * `fixtures/sandbox-probe/` and over gate-lane files each case writes.
  *
  * **The rule these tests exist to enforce: T2 and T3 are graded from the gate lane's verdict and log,
- * T3's log search quoting a Linux refusal line on Linux only; T3 is graded only when Phase G's launcher
- * answered `pending`, and a stale `.running` heartbeat is read as a dead worker; TD2's control is a
+ * the log search quoting a Linux refusal line on Linux only; T3 is graded only when Phase G's launcher
+ * answered `pending`, its `fail` evidence leading with every failed gate and the suite's counts (§5 PD30)
+ * and keeping that log search labelled as possibly a gate's printed output; a stale `.running` heartbeat is read as a dead worker; TD2's control is a
  * literal path; TD4 is
  * graded against TD3's unsandboxed result, never TD2's, an error carrying no known text being `not run`;
  * and a permission-layer refusal of any measured call or control is `not run`, never `fail`.**
@@ -282,6 +283,77 @@ test('sp__t3_grade: T2’s grade kept only when the launcher answered pending', 
     const out = await graded(dir, 'sp__t3_grade', [fixture('t2-run-form'), command, verdict, log]);
     assert.ok(out.startsWith('not run|the run form did not reach the gates: '), out);
     assert.ok(!out.includes('the launcher answered'), out);
+  });
+});
+
+test("PD30: T3's fail evidence names every FAIL line and the suite's counts", async (t) => {
+  const exit = '== run-test-suite.sh: gate test exited 1 ==';
+  const named = 'mkstemp failed, Operation not permitted, Read-only file system, failed to create file via template';
+
+  /** The lane's verdict and `log`, and the pending launcher call, all under `dir`. */
+  async function lane(dir, log) {
+    const verdict = join(dir, 'sbx_probe_t2.verdict');
+    const logPath = join(dir, 'sbx_probe_t2.log');
+    await writeFile(verdict, `fail ${logPath}\n`);
+    await writeFile(logPath, log);
+    const command = `bash ${dir}/main/scripts/launch-sandboxed-gates.sh ${dir}/clone sbx_probe_t2`;
+    const stream = await launchStream(dir, 't3-pending', command, 'pending', 3);
+    return { verdict, log: logPath, command, stream };
+  }
+
+  // The gate's tail as scripts/run-gates.sh indents it: a 6a finding quoting a refusal string.
+  const printout =
+    "    ./docs/sandbox-verification.md:212:mktemp: failed to create file via template '/tmp/x': Read-only file system";
+  const failLog = [
+    printout,
+    '  FAIL  4 npm test (exit 1)',
+    '  FAIL  6a no machine paths (printed output, which is the finding)',
+    '        # tests 3307',
+    '        # pass 3283',
+    '        # fail 2',
+    '        # skipped 22',
+    exit,
+    '',
+  ].join('\n');
+
+  await t.test('FAIL lines and counts lead, the refusal line follows labelled', async (t) => {
+    const dir = await caseDir(t);
+    const { verdict, log, command, stream } = await lane(dir, failLog);
+    const out = await gradedOn(dir, 'linux', 'sp__t3_grade', [stream, command, verdict, log]);
+    const lead =
+      'fail|the launcher answered pending; gates failed: FAIL  4 npm test (exit 1); FAIL  6a no machine paths (printed output, which is the finding); suite counts: tests 3307, pass 3283, fail 2, skipped 22';
+    assert.ok(out.startsWith(lead), out);
+    assert.ok(
+      out
+        .slice(lead.length)
+        .startsWith(`; first log line matching ${named}, which may be a gate's printed output: ${printout}; ${COMPARE}`),
+      out,
+    );
+  });
+
+  await t.test('no FAIL line and no counts: the gate-exit line stands in; an absent log is status 1', async (t) => {
+    const dir = await caseDir(t);
+    const { verdict, log, command, stream } = await lane(dir, `${exit}\n`);
+    const out = await gradedOn(dir, 'linux', 'sp__t3_grade', [stream, command, verdict, log]);
+    assert.ok(
+      out.startsWith(`fail|the launcher answered pending; gates failed: ${exit}; suite counts: none in the log; ${COMPARE}`),
+      out,
+    );
+    const direct = await sourced(dir, 'sp__gate_log_failures "$1"', [log]);
+    assert.equal(direct.status, 0, direct.stderr);
+    assert.equal(direct.stdout, `gates failed: ${exit}; suite counts: none in the log\n`);
+    const absent = await sourced(dir, 'sp__gate_log_failures "$1"', [join(dir, 'absent.log')]);
+    assert.equal(absent.status, 1);
+    assert.equal(absent.stdout, '');
+  });
+
+  await t.test('T2 on the same verdict and log still opens on its first matching log line', async (t) => {
+    const dir = await caseDir(t);
+    const { verdict, log } = await lane(dir, failLog);
+    assert.equal(
+      await gradedOn(dir, 'linux', 'sp__t2_grade', [fixture('t2-run-form'), T2_COMMAND, verdict, log]),
+      `fail|${printout}; ${COMPARE}; ${DENIALS}: 0; ${STREAM_DENIALS}: 0 event(s)`,
+    );
   });
 });
 
