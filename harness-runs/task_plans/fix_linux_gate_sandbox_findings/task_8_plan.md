@@ -27,3 +27,9 @@ Task 4 owns the scripts, and this task only tests them.
 - `npm test --workspace cli -- test/sandbox-probe-protection-legs.test.mjs` passes.
 - `git grep -n "Permission denied, Device or resource busy'" -- cli/test` prints nothing: no test still pins the three-member table, where the closing quote right after `busy` marks the old string's end.
 - `git grep -n 'File exists is not a known sandbox refusal' -- cli/test` prints nothing, and both new titles are present byte for byte, because Task 13 cites them in `docs/sandbox-verification.md` §5 PD28.
+
+**Deviations from plan:**
+
+- Judge subtest (a): the plan says the Linux pass quotes `Exit code 255: error: could not lock config file .git/config: File exists`, but the judge quotes a Linux sandbox line without the `Exit code` prefix (`judge.sh` → `sp__layer`, the `sp__linux_refusal_line` arm), exactly as the PD23 pass cases do. Pinned the line `error: could not lock config file .git/config: File exists`; the `Exit code 255: …` form is the no-platform subtest (b)'s `fail` evidence. Both pins verified by the passing run of `npm test --workspace cli -- test/sandbox-probe-judge.test.mjs`. A direct `bash scripts/sandbox-probe.sh judge …` read of the macOS grade was refused (don't-ask mode); subtest (b)'s value rests on reading `sp__judge_matched` and that test run.
+- Protection-legs PD28 test: the replaced test's `Operation not permitted carries no readings clause` subtest was dropped, as the plan's subtest list does not carry it; `sp__git_cl5_grade: a permission-layer refusal of CL5’s git config is not run` still pins that stream's macOS pass.
+- The `main-anchor-isolation` tree guard was run with its output piped to `tail`, against the foreground no-pipe rule; it passed (`# tests 2`, `# pass 2`, `# fail 0`).

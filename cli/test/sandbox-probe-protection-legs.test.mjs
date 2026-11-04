@@ -14,8 +14,9 @@
  * PD23 (docs/sandbox-verification.md §5), are `Permission denied` and `Device or resource busy`, the judge's
  * whole Linux set applying to a dd and a rename alike; a dd, rename or CS3 fetch error carrying no refusal string the judge knows is `not run`, never
  * `fail`; with SP_PLATFORM empty each of those cases keeps its macOS verdict. From PD28, on Linux, CL5's
- * evidence carries its three `.git/config.lock` readings only when its result carries `File exists`, and its
- * verdict does not change.** The unknown dd and rename
+ * `File exists` lock refusal passes only where `.git/config.lock` read `absent` before and after the session
+ * and as the sandbox's `/dev/null` placeholder inside it, and is `not run` otherwise; its evidence carries the
+ * three readings whenever its result carries `File exists`.** The unknown dd and rename
  * error is `Input/output error`, which no layer-table arm matches; it was `Device or resource busy` until
  * PD23 made that a refusal.
  *
@@ -351,7 +352,10 @@ test('sp__linux_refusal_names: the Linux pass sentence names the judge’s whole
   const dir = await caseDir(t);
   const run = await sourced(dir, 'sp__linux_refusal_names');
   assert.equal(run.status, 0, run.stderr);
-  assert.equal(run.stdout, 'Read-only file system, Permission denied, Device or resource busy');
+  assert.equal(
+    run.stdout,
+    'Read-only file system, Permission denied, Device or resource busy, could not lock config file .git/config: File exists',
+  );
 });
 
 test('sp__git_cs3_fetch by platform: an unknown error is not run on Linux only', async (t) => {
@@ -414,28 +418,29 @@ test('sp__git_cl5_grade: a permission-layer refusal of CL5’s git config is not
   });
 });
 
-test('PD28: on Linux, CL5 carries the .git/config.lock readings only on File exists, its verdict unchanged', async (t) => {
-  const READINGS = ['absent', '-rw-r--r--  1 probe  probe  0 Nov  2 13:06 .git/config.lock', 'absent'];
-  const cl5 = (t, name) =>
-    gradedOn(t, 'linux', 'sp__git_cl5_grade', 'SP_VERDICT', 'SP_EVIDENCE', fixture(name), CL5_CMD, READINGS);
+test("PD28: on Linux, CL5's File exists refusal passes only where the lock path read as the placeholder inside the session", async (t) => {
+  const PLACEHOLDER = 'crw-rw-rw- 1 nobody nogroup 1, 3 Nov  3 19:07 .git/config.lock';
+  const REGULAR = '-rw-r--r-- 1 probe probe 0 Nov  3 19:07 .git/config.lock';
+  const EXISTS = 'error: could not lock config file .git/config: File exists';
+  const NOT_PLACEHOLDER = `the File exists refusal is the sandbox's only where the lock path read as its /dev/null placeholder inside the session: ${EXISTS}`;
+  const cl5 = (t, platform, readings) =>
+    gradedOn(t, platform, 'sp__git_cl5_grade', 'SP_VERDICT', 'SP_EVIDENCE', fixture('cl5-file-exists'), CL5_CMD, readings);
+  const tail = ([b, i, a]) => `; .git/config.lock read: before the session ${b}, inside the session ${i}, after it ${a}`;
 
-  await t.test('File exists is not run, and the evidence ends with all three readings verbatim', async (t) => {
-    const [v, e] = await cl5(t, 'cl5-file-exists');
-    assert.equal(v, 'not run');
-    assert.ok(e.startsWith(LINUX_UNRECOGNISED), e);
-    assert.ok(
-      e.endsWith(
-        `; .git/config.lock read: before the session ${READINGS[0]}, inside the session ${READINGS[1]}, after it ${READINGS[2]}`,
-      ),
-      e,
-    );
-  });
+  const cases = [
+    { name: 'the placeholder readings pass', readings: ['absent', PLACEHOLDER, 'absent'], v: 'pass', e: EXISTS },
+    { name: 'a lock present before the session is not run', readings: [REGULAR, PLACEHOLDER, 'absent'], v: 'not run', e: NOT_PLACEHOLDER },
+    { name: 'a regular file inside the session is not run', readings: ['absent', REGULAR, 'absent'], v: 'not run', e: NOT_PLACEHOLDER },
+    { name: 'a lock left after the session is not run', readings: ['absent', PLACEHOLDER, REGULAR], v: 'not run', e: NOT_PLACEHOLDER },
+  ];
+  for (const c of cases) {
+    await t.test(`Linux: ${c.name}, the evidence ending with all three readings verbatim`, async (t) => {
+      assert.deepEqual(await cl5(t, 'linux', c.readings), [c.v, `${c.e}${tail(c.readings)}`]);
+    });
+  }
 
-  await t.test('Operation not permitted carries no readings clause', async (t) => {
-    assert.deepEqual(await cl5(t, 'cl5-sandbox'), [
-      'pass',
-      'error: could not lock config file .git/config: Operation not permitted',
-    ]);
+  await t.test('no platform: the same stream keeps its macOS verdict and carries no readings', async (t) => {
+    assert.deepEqual(await cl5(t, '', ['absent', PLACEHOLDER, 'absent']), ['fail', `Exit code 255: ${EXISTS}`]);
   });
 });
 

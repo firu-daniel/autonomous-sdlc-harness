@@ -33,7 +33,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_linux_gate_sandbox_findi
 5. [x] **Task 5** — PD29: give the `gate-sandbox` leg a clone of its own, check it against the clone allow-list, and name the writer in the header _(layer: general)_ _(points: 20)_
 6. [x] **Task 6** — PD30: make T3's `fail` evidence name every `FAIL` line and the suite's counts _(layer: general)_ _(points: 10)_
 7. [x] **Task 7** — F11's fixture: test `check-machine-paths.sh` against throwaway trees _(layer: cli)_ _(points: 10)_
-8. [ ] **Task 8** — PD28's fixtures: replace the judge's PD28 pin and the CL5 readings cases _(layer: cli)_ _(points: 15)_
+8. [x] **Task 8** — PD28's fixtures: replace the judge's PD28 pin and the CL5 readings cases _(layer: cli)_ _(points: 15)_
 9. [ ] **Task 9** — PD29's fixtures: the writer, the allow-list check and the leg's target _(layer: cli)_ _(points: 15)_
 10. [ ] **Task 10** — PD30's fixture: T3's `fail` evidence over a lane log whose gate output quotes a refusal string _(layer: cli)_ _(points: 10)_
 11. [ ] **Task 11** — F14: rewrite the container home spelling out of the earlier sandbox-series run artifacts _(layer: general)_ _(points: 10)_
