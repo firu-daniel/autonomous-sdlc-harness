@@ -27,6 +27,7 @@ G12_STEP_RECORD="Record the default branch's commit"
 G12_STEP_PUSH="Push the branch"
 G12_FR1_SOURCE="cli/templates/scripts/autonomous-watcher.sh spawn_engine job-mode arm: --settings is the base profile unchanged; reaches neither hr_run_profile_file nor run_profile_render"
 G12_FR4_DEPARTURE="the denied call's full input is not carried off the runner (docs/cli.md §6, residual 1, item 5)"
+G12_FR5_DEPARTURE="graded on the two steps' conclusions, not their logs: Record the default branch's commit writes HARNESS_GITHUB_DEFAULT_COMMIT and HARNESS_DEFAULT_BRANCH_COMMIT to GITHUB_ENV, which its log does not show, and exits 1 on each failure"
 G12_FR7_TAIL="second clause not graded: a planning park reaches no gate round; recorded not run unless the run parked at run gates (observation (xvi))"
 
 G12_FR_JOBS=""
@@ -388,7 +389,7 @@ g12_grade_full_run() {
     g12_result_line FR2 "$result" "$why"
     g12_result_line FR3 "$result" "$why"
     g12_fr4 "$branch"
-    g12_result_line FR5 "$result" "$why"
+    g12_result_line FR5 "$result" "$why" "$G12_FR5_DEPARTURE"
     g12_result_line FR6 "$result" "$why"
     g12_result_line FR7 "$result" "$why; $G12_FR7_TAIL"
     return 0
@@ -408,7 +409,7 @@ g12_grade_full_run() {
   g12_fold_reset 1
   g12_fr5_arm
   g12_fold_add parked
-  g12_fr_print FR5
+  g12_fr_print FR5 "" "$G12_FR5_DEPARTURE"
 
   g12_fold_reset 2
   g12_fr6_save "$branch"
