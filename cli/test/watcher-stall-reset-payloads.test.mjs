@@ -9,12 +9,15 @@
  * never resets a clone whose `.git` carries a file or key a clone the harness made has not; a hung
  * honest run still resumes from its committed ledger.**
  *
- * The hung session is the shared recording stub with a body that, on its first launch, writes
- * `hung`, keeps its stream fresh until the test writes `go` after planting, writes `silent` and
- * sleeps; a relaunch snapshots the registry and exits 0. The shipped tunables are lowered through the
- * environment (`STALL_WARN_SECS=1`, `STALL_KILL_SECS=2`), the busy-not-hung guard is lifted
- * (`STALL_BUSY_CPU_PCT`), and the local pass back-dates both liveness files as the watcher header's
- * `a stall` REPRO row does. The local fixture is `createWatcherFixture`'s, adopted on a bare
+ * The hung session is the shared recording stub with `helpers/watcher.mjs` → `HUNG_BODY`: on its
+ * first launch it writes `hung`, keeps its stream fresh until the test writes `go` after planting,
+ * writes `silent` and waits for the test's release; a relaunch snapshots the registry and exits 0.
+ * The release comes after the watchdog has acted: in `localStall` after the second `tick`, in
+ * `jobStall` at the watchdog's `failed` or `resumed` notification. Outside the sandbox the
+ * watchdog has already killed the stub, so the release frees nothing. The shipped tunables are
+ * lowered through the environment (`STALL_WARN_SECS=1`, `STALL_KILL_SECS=2`), the busy-not-hung
+ * guard is lifted (`STALL_BUSY_CPU_PCT`), and the local pass back-dates both liveness files as the
+ * watcher header's `a stall` REPRO row does. The local fixture is `createWatcherFixture`'s, adopted on a bare
  * `origin`, with the copy cut by `create-worktree.sh` from a task drop: a clone, its record's
  * `copy_kind` `clone`. Its main `.git/config` sets the repo-relative `core.hooksPath` `githooks`, so
  * an unpinned hook-running call resolves hooks inside the copy, and `extensions.worktreeConfig=true`,
@@ -61,6 +64,10 @@
  * - (S4c) `hr_clone_config_check_var`'s off-allow-list test skipped → the same failure.
  * - (S10) `commondir` dropped from `hr_clone_target_check_var`'s absent-file loop → the same failure.
  * - (S4, legacy) the (S1) mutation → fails `a planted payload ran`, holding `S4-fsmonitor`.
+ * - (release) `collect_descendants() { :; }` defined in `localStall`'s script after the sourcing
+ *   line, which reproduces the sandbox's empty descendant list, with the release line removed → the
+ *   honest case fails `the hung session was never released`, after the stub's bound and before any
+ *   status or resume assertion.
  * - (S5) both `hr_run_path_safe` calls on the `PAUSE_PROGRESS.md` write skipped → the case resumes:
  *   fails on the record's `status`, `completed`, not `failed`.
  * - (S6) `hr_run_surface_check_var`'s merge base taken against the local
@@ -100,10 +107,14 @@ import test from 'node:test';
 import { CLI_ENTRY, INIT_SCRIPTS_DIR, runBash, runGit } from './helpers/fixture.mjs';
 import { scaleBound } from './helpers/timing.mjs';
 import {
+  assertHungReleased,
   createWatcherFixture,
   DEFAULT_KEEP_AWAKE_PROBE,
   DEFAULT_PLACEHOLDER_HOST_PROBE,
   DEFAULT_SANDBOX_PROBE,
+  HUNG_BODY,
+  HUNG_RELEASE,
+  stallVerdictNotified,
 } from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
@@ -125,18 +136,6 @@ const RUN_TIMEOUT_MS = scaleBound(180_000);
  * Scaled by `HARNESS_TEST_TIME_SCALE` (`helpers/timing.mjs`).
  */
 const HUNG_WAIT_MS = scaleBound(60_000);
-
-/** The session: hung on its first launch (see the header), a registry snapshot on a relaunch. */
-const HUNG_BODY = [
-  'if [ ! -e "$REC/hung" ]; then',
-  '  : > "$REC/hung"',
-  '  until [ -e "$REC/go" ]; do echo "{}"; sleep 0.2; done',
-  '  : > "$REC/silent"',
-  '  sleep 60',
-  'else',
-  '  cp "$REGISTRY" "$REC/resumed-registry.json"',
-  'fi',
-].join('\n');
 
 /** `gh`, recorded; `run list` answers no runs. */
 const GH_STUB = `#!/usr/bin/env node
@@ -234,10 +233,12 @@ async function createStallFixture(t, { job = false, legacy = false } = {}) {
   });
 
   /**
-   * Start `argv` under bash, wait for the hung session, run `plant`, release the session and
-   * return the finished run. A run that ends before the session hung fails naming its output.
+   * Start `argv` under bash, wait for the hung session, run `plant`, write `go` and return the
+   * finished run. A run that ends before the session hung fails naming its output. `release`, when
+   * not `null`, is polled until it resolves true or the run settles, and the session is then
+   * released; `null` means the script releases it.
    */
-  async function stalled(argv, env, plant) {
+  async function stalled(argv, env, plant, release) {
     let settled = null;
     const running = runBash(w.dir, argv, env, { timeoutMs: RUN_TIMEOUT_MS, signal: t.signal }).then((result) => {
       settled = result;
@@ -253,7 +254,13 @@ async function createStallFixture(t, { job = false, legacy = false } = {}) {
     }
     await plant();
     await writeFile(join(rec, 'go'), '', 'utf8');
+    if (release !== null) {
+      // No deadline here: the stub's own bound ends the run, and `RUN_TIMEOUT_MS` bounds `runBash`.
+      while (settled === null && !(await release())) await delay(100);
+      await writeFile(join(rec, HUNG_RELEASE), '', 'utf8');
+    }
     const result = await running;
+    assertHungReleased(rec);
     assert.equal(result.status, 0, `the run exited ${result.status}\n${result.stdout}\n${result.stderr}`);
     return result;
   }
@@ -281,6 +288,7 @@ async function createStallFixture(t, { job = false, legacy = false } = {}) {
         'until [ -e "$2" ]; do sleep 0.1; done',
         'touch -t 202001010000 "$3" "$4"',
         'tick',
+        `: > "$REC/${HUNG_RELEASE}"`,
         'wait',
       ].join('\n');
       const argv = ['-c', script, '_', w.watcherPath, join(rec, 'silent'), logPath, logPath.replace(/\.log$/, '.stream.jsonl')];
@@ -296,7 +304,7 @@ async function createStallFixture(t, { job = false, legacy = false } = {}) {
           await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`, 'utf8');
         }
         await plant();
-      });
+      }, null);
     },
     /** One `job` run of the branch, with `plant` run while the session hangs. */
     async jobStall(plant = async () => {}, env = {}) {
@@ -328,7 +336,12 @@ async function createStallFixture(t, { job = false, legacy = false } = {}) {
           ...env,
         }),
       );
-      return stalled([join(w.dir, INIT_SCRIPTS_DIR, 'autonomous-watcher.sh'), 'job', w.branch, 'task', 'none'], jobEnv, plant);
+      return stalled(
+        [join(w.dir, INIT_SCRIPTS_DIR, 'autonomous-watcher.sh'), 'job', w.branch, 'task', 'none'],
+        jobEnv,
+        plant,
+        async () => stallVerdictNotified(w.notifications(), w.branch),
+      );
     },
     /** Put `body` on `PATH` as `npx`, ahead of every other. */
     npx: (body) => writeFile(join(bin, 'npx'), body, { mode: 0o755 }),

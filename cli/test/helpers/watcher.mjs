@@ -10,7 +10,7 @@
  *
  * `node --test test` loads this file as a test file of its own, so nothing here runs at import time.
  *
- * ## Six non-obvious choices
+ * ## Seven non-obvious choices
  *
  * 1. **The stub sleeps before its body runs.** Not for the registry: its writes are serialized, so
  *    the pass's post-spawn `pid` write and the session's exit classification both survive whichever
@@ -53,6 +53,13 @@
  *    replaced by an executable `exit 0` that writes no file: `record_run_analytics` then commits
  *    nothing and logs nothing, where a non-executable or missing script would add a watcher-log line
  *    a suite asserting that log could trip on.
+ * 7. **The hung session ({@link HUNG_BODY}) ends on the test's release, never on a timer.** Inside
+ *    the sandbox `pgrep -P` cannot list processes, so the watchdog's kill reaches only the launch
+ *    subshell, and `tee` and the formatter hold the test's pipes until the stub exits. A case
+ *    releases it (creates `<REC>/`{@link HUNG_RELEASE}) only after the watchdog has acted: a stub
+ *    freed before the kill exits 0 under a live subshell and the run reads `completed`. The wait's
+ *    bound arm leaves `<REC>/`{@link HUNG_RELEASE_MISSED}, which {@link assertHungReleased} turns
+ *    into a failure naming the release that never came.
  */
 
 import assert from 'node:assert/strict';
@@ -87,6 +94,91 @@ export const DEFAULT_KEEP_AWAKE_PROBE = 'HR_KEEP_AWAKE_HOST=unsupported; HR_KEEP
 export const DEFAULT_PLACEHOLDER_HOST_PROBE = 'HR_PLACEHOLDER_HOST=0; return 0';
 
 const PLACEHOLDER_HOST_ON_PROBE = 'HR_PLACEHOLDER_HOST=1; return 0';
+
+/** The control file under the case's `REC` directory whose creation releases the hung session (choice 7). */
+export const HUNG_RELEASE = 'release';
+
+/** The marker the hung session leaves under `REC` when its bound passed with no release (choice 7). */
+export const HUNG_RELEASE_MISSED = 'release-missed';
+
+/**
+ * How long, in seconds, the hung session waits silently for {@link HUNG_RELEASE}. A ceiling, so it
+ * is scaled (`./timing.mjs`). At any scale of 2/3 or more (the default is 2) it is no shorter than
+ * the fixed `sleep 60` it replaces, which had been raised to 60 s because under load a shorter one
+ * ended before the watchdog's second check. It stays below
+ * the stalled-pass timeout at every scale: hung wait `scaleBound(60_000)` ms + this bound
+ * `scaleBound(90)` s = 150 × scale s, under `scaleBound(180_000)` ms = 180 × scale s
+ * (`watcher-stall-reset-payloads.test.mjs` → `RUN_TIMEOUT_MS`; `watcher-placeholder-host.test.mjs`
+ * → `STALL_TIMEOUT_MS`).
+ */
+export const HUNG_RELEASE_BOUND_SECS = scaleBound(90);
+
+/**
+ * The hung session's stub body. First launch: mark `hung`, print until `<REC>/go`, mark `silent`,
+ * then wait silently — nothing on stdout or stderr, so the watchdog keeps reading it as silent —
+ * for `<REC>/release`, leaving `<REC>/release-missed` if `boundSecs` pass first. Relaunch: copy
+ * the registry to `<REC>/resumed-registry.json`. Bash 3.2 forms only.
+ *
+ * @param {number} boundSecs whole seconds, measured on bash's own `SECONDS`.
+ * @returns {string}
+ */
+export function hungBody(boundSecs) {
+  return [
+    'if [ ! -e "$REC/hung" ]; then',
+    '  : > "$REC/hung"',
+    '  until [ -e "$REC/go" ]; do echo "{}"; sleep 0.2; done',
+    '  : > "$REC/silent"',
+    `  end=$((SECONDS + ${boundSecs}))`,
+    `  until [ -e "$REC/${HUNG_RELEASE}" ]; do`,
+    '    if [ "$SECONDS" -ge "$end" ]; then',
+    `      : > "$REC/${HUNG_RELEASE_MISSED}"`,
+    '      break',
+    '    fi',
+    '    sleep 0.2',
+    '  done',
+    'else',
+    '  cp "$REGISTRY" "$REC/resumed-registry.json"',
+    'fi',
+  ].join('\n');
+}
+
+/** {@link hungBody} at {@link HUNG_RELEASE_BOUND_SECS}. */
+export const HUNG_BODY = hungBody(HUNG_RELEASE_BOUND_SECS);
+
+/**
+ * The job-mode release trigger: whether `notifications` (the `notifications()` shape) holds a
+ * `failed` or `resumed` entry for `branch` whose detail names `stall-watchdog`. That notification
+ * is the watchdog's last act on either arm of `autonomous-watcher.sh` → `check_stalled_runs`: the
+ * give-up arm sends `notify failed "$b" "$log_path" "(stall-watchdog: $why)"` after
+ * `registry_set "$b" status failed pid ""`, and the resume arm sends
+ * `notify resumed … "(stall-watchdog restart #…)"` after `spawn_engine`. `notify` calls the
+ * recorder in job mode too.
+ *
+ * @param {{ event: string, branch: string, detail: string }[]} notifications
+ * @param {string} branch
+ * @returns {boolean}
+ */
+export function stallVerdictNotified(notifications, branch) {
+  return notifications.some(
+    (entry) =>
+      entry.branch === branch &&
+      (entry.event === 'failed' || entry.event === 'resumed') &&
+      entry.detail.includes('stall-watchdog'),
+  );
+}
+
+/**
+ * Fail when the hung session's bound passed with no release (choice 7).
+ *
+ * @param {string} rec the case's `REC` directory.
+ */
+export function assertHungReleased(rec) {
+  const missed = join(rec, HUNG_RELEASE_MISSED);
+  assert.ok(
+    !existsSync(missed),
+    `the hung session was never released: no ${join(rec, HUNG_RELEASE)} within ${HUNG_RELEASE_BOUND_SECS} s of \`silent\` — the case's release trigger did not fire`,
+  );
+}
 
 /** The seed `init`'s own tests use: a repository whose stack detection resolves every command. */
 function nodeProjectFiles() {

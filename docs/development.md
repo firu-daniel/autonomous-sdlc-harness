@@ -359,6 +359,27 @@ HARNESS_TEST_CONCURRENCY=1 npm test
 HARNESS_TEST_TIME_SCALE=4 npm test
 ```
 
+**The stall-watchdog suites' hung stub, measured.** `watcher-stall-reset-payloads.test.mjs` and `watcher-placeholder-host.test.mjs` drive a stub session that hangs so the stall watchdog kills it. Inside Claude Code's sandbox `pgrep -P` cannot list processes (`sysmon request failed with error: sysmond service not found` / `pgrep: Cannot get process list`, exit 3), so the watchdog's kill reaches only the launch subshell and the stub runs on. The stub used to end in `sleep 60`, which every case then waited out. It now stays hung until the case writes its release (`cli/test/helpers/watcher.mjs`, choice 7), and a release that never comes fails the case with `the hung session was never released: …`. Measured by hand on 2026-11-04 at `452aaedf` (`fix_stall_stub_release_marker`), on macOS 15.7.4 on an Apple M4 (10 cores), Claude Code 2.1.318, Node v22.23.2, `HARNESS_TEST_TIME_SCALE` unset, with no other run in flight. Each figure is one run of this command from `cli/`:
+
+```
+node --test --test-timeout=1800000 --test-reporter=spec test/<file>
+```
+
+The three-case row adds `--test-name-pattern='^an honest hung run resumes' --test-name-pattern='^\(S1\) ' --test-name-pattern='^\(S2\) '`. *Sandboxed* is that command run through `scratch-run.sh` by a headless session on the watcher's launch line (`docs/sandbox-verification.md` §0), under the run copy's per-run profile. In each of those runs `pgrep -P` answered exit 3 as above. *Outside* is the same command from a plain terminal, where `pgrep -P` exits 1. The *before* column is the sandboxed figure taken on 2026-11-03 on `dev` at `78cb7a8b` and recorded in issue #240. There the three cases ran alone, but each whole file ran inside a full sandboxed `run-gates.sh` pass beside the other test files. So the two whole-file rows compare a loaded run with a run alone, and they show the direction rather than an exact saving.
+
+| What | Sandboxed before (`dev`) | Sandboxed after | Outside after |
+|---|---|---|---|
+| `an honest hung run resumes…` | 68.5 s | 12.0 s | 5.7 s¹ |
+| `(S1)…` | 68.5 s | 10.5 s | 4.2 s¹ |
+| `(S2)…` | 68.5 s | 10.5 s | 4.2 s¹ |
+| The three cases, run alone | 206.5 s | 33.1 s | not taken |
+| `watcher-stall-reset-payloads.test.mjs`, 19 tests | 1298 s | 161.0 s | 91.0 s |
+| `watcher-placeholder-host.test.mjs`, 27 top-level tests | 504 s | 146.7 s | 85.4 s |
+
+¹ From the whole-file run, not a run alone.
+
+Every run passed: 3/3, 19/19 and 27/27 sandboxed, and 19/19 and 27/27 outside. Sandboxed, a hung-stub case now takes about 9–12 s in local mode and 4–6 s in job mode, against about 68 s before. The stall-reset file set a floor of about 22 minutes under every sandboxed gate round in #240, and now takes 161 s on its own. Outside the sandbox the watchdog kills the stub before the release lands, so the release frees nothing. Every hung-stub case passing outside the sandbox shows that ordering holds: a stub released before the kill would exit 0, the run would read `completed`, and the case would fail. A whole sandboxed gate round after this change is not yet measured.
+
 Rehearsing it by hand means running `node cli/dist/cli.js init --cwd <scratch>` twice against a scratch git repository **outside** this checkout; the second run reports every artifact as kept. Do not aim it at this repository — gate 2 says why.
 
 **Gate 5 — `doctor`'s exit contract.** Covered by the same suite, and worth exercising by hand against the scratch repository from gate 4:
