@@ -71,7 +71,7 @@ The five unroutable cases are SB2's `PAUSE_PROGRESS.md` arm, SB2's `remote_statu
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_gate12_sandbox_round_driver/task_<K>_plan.md`.
 
 1. [x] **Task 1** — Add the entry point and `core.sh`: the row table, `--list`, the result line and the exit accumulator _(layer: general)_ _(points: 20)_
-2. [ ] **Task 2** — Add `preflight.sh` and `state.sh`: the refusals, the Gate 12 configuration read and the atomic state file _(layer: general)_ _(points: 20)_
+2. [x] **Task 2** — Add `preflight.sh` and `state.sh`: the refusals, the Gate 12 configuration read and the atomic state file _(layer: general)_ _(points: 20)_
 3. [ ] **Task 3** — Add `plant.sh`: the plumbing branch builder, the dispatch, the run-ID lookup and the `plant` subcommand _(layer: general)_ _(points: 20)_
 4. [ ] **Task 4** — Add `plants.sh`: what each adversarial branch carries, for JS1, JS4, SB2 and RJ2 _(layer: general)_ _(points: 15)_
 5. [ ] **Task 5** — Add `default-branch.sh`: round step 8 for JS3, restoring the default branch and the stall variables on every exit path _(layer: general)_ _(points: 20)_
