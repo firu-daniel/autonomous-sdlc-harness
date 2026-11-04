@@ -89,7 +89,7 @@ Both were taken in Gate 15's container (`docs/development.md` → *A Linux run, 
 
 - **The rendered per-run profile.** Its `sandbox.filesystem.denyWrite` names the clone's `.git/commondir`, `.git/config.worktree` and `.git/objects/info/http-alternates` by **no** entry, neither exact nor glob. It names the sibling's three by exact path. Its `permissions.deny` still holds 18 `Edit` rules for the three files:
   - the clone's exact paths;
-  - the `/home/probe/autonomous-sdlc-harness-*/.git/…` globs;
+  - the `<home>/autonomous-sdlc-harness-*/.git/…` globs (the container user's home);
   - the sibling's exact paths;
   - each of these in both the `<p>` and `<p>/**` forms.
 - **AP1 — fail.**

@@ -24,12 +24,12 @@ AP1–AP5 (`docs/sandbox-verification.md` §5, *The route's re-take (owed)*) wer
 The per-run profile measured carries **no** exact entry for the trio: #212's omission works. Its `sandbox.filesystem.denyWrite` still carries these three, from the base profile:
 
 ```
-/home/probe/autonomous-sdlc-harness-*/.git/commondir
-/home/probe/autonomous-sdlc-harness-*/.git/config.worktree
-/home/probe/autonomous-sdlc-harness-*/.git/objects/info/http-alternates
+<home>/autonomous-sdlc-harness-*/.git/commondir
+<home>/autonomous-sdlc-harness-*/.git/config.worktree
+<home>/autonomous-sdlc-harness-*/.git/objects/info/http-alternates
 ```
 
-The clone `/home/probe/autonomous-sdlc-harness-chore_sbx_probe_20261030110027` matches that glob. The placeholders are the same `/null` tmpfs mounts the exact entries made in the 2026-10-29 check. So on Linux, Claude Code expands a `denyWrite` glob against the directories that exist when the sandbox starts, and mounts a placeholder at each absent path it yields.
+The clone `<home>/autonomous-sdlc-harness-chore_sbx_probe_20261030110027` (the container user's home) matches that glob. The placeholders are the same `/null` tmpfs mounts the exact entries made in the 2026-10-29 check. So on Linux, Claude Code expands a `denyWrite` glob against the directories that exist when the sandbox starts, and mounts a placeholder at each absent path it yields.
 
 That answers the question the generated profile's `_README` still leaves open: *"How the Linux sandbox treats a `denyWrite` entry containing `*` is unverified - it may skip one, or expand it to the paths that exist when the sandbox starts"* (`cli/src/generators/writeProtection.ts`). It expands, absent paths included. This is the case `docs/sandbox-verification.md` §5 *The route's re-take (owed)* → **The decision rule** names: *"the base profile's sibling-glob `denyWrite` entry for that path"*.
 

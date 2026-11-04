@@ -67,10 +67,11 @@ Carry each change that applies into the recipes that reuse the container's lines
   - *The copy-out step.* Add a bold-led paragraph immediately before **Recording a Linux run.**, as **Copy the evidence out before leaving the container.** It sits after the hand rows, so the HP1 sessions' logs are included. It says the container is `--rm` with no volume, so leaving it deletes everything. Its fenced block, run from a host terminal while the container still runs, one command per line:
 
     ```
+    probe_home="$(docker exec sbx-probe-linux getent passwd probe | cut -d: -f6)"
     docker cp sbx-probe-linux:/tmp/sandbox-probe-evidence.<suffix> <host dir>
-    docker cp sbx-probe-linux:/home/probe/.claude/projects <host dir>
-    docker cp sbx-probe-linux:/home/probe/sandbox-probe-run.log <host dir>
-    docker cp sbx-probe-linux:/home/probe/sandbox-probe-refusal.log <host dir>
+    docker cp "sbx-probe-linux:$probe_home/.claude/projects" <host dir>
+    docker cp "sbx-probe-linux:$probe_home/sandbox-probe-run.log" <host dir>
+    docker cp "sbx-probe-linux:$probe_home/sandbox-probe-refusal.log" <host dir>
     ```
 
   - *Prose with the block* states:
@@ -86,7 +87,7 @@ Carry each change that applies into the recipes that reuse the container's lines
 - `git grep -n 'PIPESTATUS' -- docs/development.md` reaches only the run block, the refusal block and **Recording a Linux run.**. `git grep -n 'echo "exit \$?"' -- docs/development.md` reaches only the CS6 job-mode block.
 - `git grep -n 'apparmor_restrict_unprivileged_userns=0' -- docs/development.md` reaches the host block, and the prose beside it names the line a departure and names §9 IS1–IS4 for the restricted case.
 - `git grep -n 'sbx-cred-check' -- docs/development.md` reaches the run block's first line, and the absent-path check's added sentence points to it.
-- `git grep -n '\.claude/projects' -- docs/development.md` reaches the copy-out block. No `docker cp` line in the file names `/home/probe/.claude` without `/projects`.
+- `git grep -n '\.claude/projects' -- docs/development.md` reaches the copy-out block. No `docker cp` line in the file names `$probe_home/.claude` without `/projects`.
 - Re-run the story index's scope-register derivation entries 1 and 2 verbatim. Every hit in `docs/development.md` falls inside a site the register names, and every site marked `change` and owned by Task 2 shows a diff. Every site marked `no-change` shows none.
 - **Deviations from plan:** `git grep -n 'PIPESTATUS' -- docs/development.md` also reaches two prose lines: the clause under the root block (the PD22 item 3 clause this plan requires, which names bash's `PIPESTATUS`) and the prose following the run block (the `${PIPESTATUS[0]}` explanation this plan requires). Every code-line hit is the run block, the refusal block or **Recording a Linux run.**; implemented as the plan's prose asks rather than paraphrasing the token away. Scope-register row 4 (the clone block) carries no line edit of its own: the placeholder and run blocks it names land after row 5's bullets, as this plan anchors them. Row 11's "the copied-out evidence are recorded" is met by the separate **Copy the evidence out before leaving the container.** step; **Recording a Linux run.** gains only the sysctl reading and whether it was set, as this plan's work list gives.
 - Read the edited section once top to bottom, as the person running the gate would. Each added command is in a fenced block on its own line, and no step depends on a later one: the `git status --porcelain` stop check and its **What the recipe places in the container, and how it is removed** bullets come before the placeholder block and the run block, and both blocks come before **What a Linux run expects, and the macOS result it compares against.**; the credential is cached before the first probe clone, the shell is bash before any `PIPESTATUS` read, and the copy-out comes before leaving the container.
