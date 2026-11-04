@@ -46,3 +46,11 @@ It also reads `stall_values_unconfirmed`, the optional `runs[]` key declared in 
 - `grade --row SB3` prints `SB3 not run` with the note. `grade` with no `--row` prints SB4 exactly once.
 - A JS3 step log carrying the `-> reset to the last commit and resume (restart #1)` line, with a `paused` `status.json`, prints `JS3 pass` and one `JS3 source` line; a step log carrying only a doctor report and no `stall-watchdog:` line prints `JS3 not run`.
 - `commands.typecheck` passes.
+
+**Deviations from plan:**
+- SB2 with no `harness-state` artifact, or with no `tokens.SB2` in the state file, grades that clause `not run` (the bundle cannot be inspected); the plan names only `expired` for the artifact. SB4 takes the same reading, as the plan states for it.
+- SB2 next job: the first `harness run <branch>` run (by `gh run list --workflow harness-run.yml --branch <branch>`, title `harness run <branch>`) whose `databaseId` exceeds the planted run's. A next job that exists but is not completed, or whose `Restore the previous job's state` did not run, is reported `not run` like an absent one; a completed one whose restore log lacks `restored the bundle of run <id>` is a planted-arm `fail`.
+- JS3: `stall-watchdog: '<b>'` lines with neither outcome line (a warn or deferral, the kill never reached) grade `not run`; a reset line with no `harness-state` artifact grades `not run`, since the recorded status was not read; an unparseable `status.json` grades `fail`, as RJ2 does.
+- JS3 `stall_values_unconfirmed: true` sets the departure of the graded JS3 line; the `source` line keeps `departure="none"` as the plan quotes it.
+- JS3 with no recorded run says `take the default-branch leg first` instead of the shared `plant JS3 first`.
+- Evidence downgrade: there is no test file yet (Task 13 adds one), so each Verification bullet was run through a throwaway probe under `harness-runs/scratch/` with `bash scripts/scratch-run.sh`, using a stubbed `gh` against a throwaway fixture repository under `$TMPDIR`, under `/bin/bash` 3.2.57: all 16 cases printed `OK` (SB2 `not run` with the planted arm passed and SB4 `pass`; token planted gives both `fail`; `--row SB3` gives `not run` with the note; plain `grade` prints SB4 once; JS3 reset + `paused` gives `pass` and one `source` line; a doctor report alone gives `not run`).
