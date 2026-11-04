@@ -18,3 +18,4 @@
 
 - `grep -rn 'prints `pending` at once' plugin/` lists exactly these three files, and the three matching lines are byte-identical to each other (compare the `grep -h` output lines).
 - `git diff --stat` touches only the three targets, one line each.
+  - **Deviations from plan:** The first Verification bullet's "byte-identical" holds for the bullet text after its leading whitespace only: `code_review_instructions.md` nests the bullet one list level deeper (6 spaces) than the two fix-flow files (3 spaces), an indentation that predates this task and that "Change nothing else in the block" leaves alone. `grep -rh 'prints `pending` at once' plugin/` returned exactly three lines, one per target, identical from the `- ` marker onward.
