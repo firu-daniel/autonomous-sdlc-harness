@@ -43,3 +43,10 @@
 **Verification:**
 
 - `npm test --workspace cli -- test/gate12-sandbox-round-full-run.test.mjs` passes. It is this task's own new test file.
+
+**Deviations from plan:**
+
+- "Without the resumed run" is canned as the parked job alone; a later non-resume job would grade the same through `g12_fr_find`'s search, and is not a separate case.
+- "No `run-analytics.json` on the branch" pushes the branch carrying another file. A branch absent from origin fails `git fetch` instead, which `g12_fr4` grades `not run` but also raises exit 3, a different path from the one the plan names.
+- FR2's passing case cans the install step's `The sandbox prerequisites are present.` line, read from `harness-run.yml`'s install step: `g12_fr2` keeps that line as evidence on a pass, and the plan does not name a source for it.
+- `cli/test/helpers/gate12-round.mjs` is unchanged. FR4's branch is pushed from a second clone under the fixture root, so the checkout the driver runs in stays on `main`.
