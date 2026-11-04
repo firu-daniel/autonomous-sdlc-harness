@@ -22,7 +22,7 @@
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 1** — The round driver re-derives the Gate 12 configuration read instead of using `harness-run-lib.sh`'s readers _(layer: general)_
-2. [ ] **Finding 2** — The scratch root is joined by hand instead of through `hr_state_path` _(layer: general)_
+2. [x] **Finding 2** — The scratch root is joined by hand instead of through `hr_state_path` _(layer: general)_
 
 ## Must Fix
 

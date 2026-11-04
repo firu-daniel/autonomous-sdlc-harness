@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
 # state.sh — the Gate 12 round driver's one state file, which every subcommand reads and writes, and
-# the one derivation of its scratch root. It reads G12_ROOT and G12_STATE_DIR, which g12_preflight
-# sets, and G12_REPO.
+# the one derivation of its scratch root. It reads G12_ROOT, which g12_preflight sets, and G12_REPO,
+# and builds the root through hr_state_path (scripts/lib/harness-run-lib.sh, which g12_preflight
+# sources), never by joining the state directory by hand.
 #
 # The file lives in the Gate 12 repository, at <stateDir>/scratch/gate12-sandbox-round/state.json,
 # which that repository's managed ignore block ignores by its contents. Every other path under the
 # scratch root (runs/<id>/..., evidence/<row>.log) is built on g12_scratch_dir, never on the literal.
+# Its `scratch` segment mirrors HR_SCRATCH_SUBDIR (set only inside hr_scratch_path_var) and the
+# `scratch` row of STATE_DIR_ENTRIES in cli/src/generators/stateDir.ts.
 #
-#   g12_scratch_dir                       prints $G12_ROOT/$G12_STATE_DIR/scratch/gate12-sandbox-round
+#   g12_scratch_dir                       prints hr_state_path "$G12_ROOT" scratch/gate12-sandbox-round
 #   g12_state_path                        prints $(g12_scratch_dir)/state.json
 #   g12_state_init                        creates the directory and the initial file when it is absent
 #   g12_state_get <filter> [jq args]...   jq -r over the file
 #   g12_state_update <program> [jq args]... rewrites the file through a mktemp sibling and mv
-# Each returns 1 after a g12_refuse line on a missing file, a failed jq or write, or a file whose
+# Each returns 1 after a g12_refuse line on an unresolvable state directory, a missing file, a failed jq or write, or a file whose
 # `repo` is not G12_REPO, and raises no exit code: the caller picks it.
 #
 # THE KEY SHAPES.
@@ -31,11 +34,14 @@
 # Bash 3.2 is the floor (macOS /bin/bash): no associative array.
 
 g12_scratch_dir() {
-  printf '%s\n' "$G12_ROOT/$G12_STATE_DIR/scratch/gate12-sandbox-round"
+  hr_state_path "$G12_ROOT" scratch/gate12-sandbox-round ||
+    { g12_refuse "the state directory of '$G12_ROOT/harness.config.json' does not resolve"; return 1; }
 }
 
 g12_state_path() {
-  printf '%s/state.json\n' "$(g12_scratch_dir)"
+  local dir
+  dir="$(g12_scratch_dir)" || return 1
+  printf '%s/state.json\n' "$dir"
 }
 
 g12_state_repo_check() {
@@ -69,8 +75,8 @@ g12_state_write() {
 
 g12_state_init() {
   local dir path
-  dir="$(g12_scratch_dir)"
-  path="$(g12_state_path)"
+  dir="$(g12_scratch_dir)" || return 1
+  path="$(g12_state_path)" || return 1
   if [ -f "$path" ]; then
     g12_state_repo_check "$path"
     return
