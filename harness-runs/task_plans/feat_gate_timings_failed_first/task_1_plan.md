@@ -31,3 +31,5 @@
 - `git diff -- cli/templates/scripts/run-test-suite.sh` touches no marker line `== run-test-suite.sh: gate … ==` and no verdict spelling (`pass`, `fail <log path>`, `pending`).
 - Reading the run form top to bottom: a live label still goes to `wait_for_verdict` first. The reuse test sits after it and before the `rm -f`. No path reaches `nohup` with `.verdict` and `.commit` still present.
 - `grep -n 'no-optional-locks' cli/templates/scripts/run-test-suite.sh` shows the one function above as the only `status` call site.
+
+**Deviations from plan:** The reuse test (`verdict_reusable`) also requires `.verdict` to hold a verdict line (`pass` or `fail <log>`), so a malformed `.verdict` beside a matching `.commit` starts a fresh run as today rather than reaching `emit_verdict`'s refusal. Task 2 may pin it.
