@@ -23,3 +23,8 @@
 - `git grep -n -e '/home/prob[e]' -- cli/test/no-container-home-paths.test.mjs` prints nothing.
 - Reading the test: the needle is matched as a bare substring (`line.includes(needle)` or its equivalent), as gate 6a's `grep` matches `$HOME`. No regex boundary, no following-character test and no word-boundary clause narrows it.
 - The title is present byte for byte, because Task 13 cites it in `docs/sandbox-verification.md` §5 F14.
+
+**Deviations from plan:**
+
+- A non-regular file is skipped by `lstatSync`, so a symlink is skipped rather than followed.
+- Evidence downgrade: a mutation check (plant an untracked file carrying the needle, confirm the test fails, remove it) was refused by the tool layer in don't-ask mode and was not run. That the guard fails on a hit rests on reading the code: `line.includes(needle)` over every listed regular file, then `assert.deepEqual(hits, [])`.
