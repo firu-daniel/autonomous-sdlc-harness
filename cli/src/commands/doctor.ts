@@ -90,8 +90,8 @@ const TEST_NOTIFICATION_FLAG = '--test-notification';
 const CHECK_REGISTRY_FLAG = '--check-registry';
 
 /**
- * An option this command takes of its own: it turns on the `remote-github` check's `gh` queries and
- * changes no other check.
+ * An option this command takes of its own: it turns on the `remote-github` and
+ * `github-protected-branches` checks' `gh` queries and changes no other check.
  *
  * Off by default for {@link CHECK_REGISTRY_FLAG}'s reason: a default run answers the same in CI,
  * offline and in an `&&` chain, and asking GitHub is a network round trip per question.
@@ -182,8 +182,9 @@ const DOCTOR_USAGE: readonly string[] = Object.freeze([
   '                       autonomous-notify.sh, after the report',
   `  ${CHECK_REGISTRY_FLAG}     Ask the registry whether each pinned MCP server package can be`,
   '                       fetched, inside the browser-wiring check',
-  `  ${CHECK_GITHUB_FLAG}       Ask GitHub, through gh, whether the remote-execution setup is`,
-  '                       complete, inside the remote-github check',
+  `  ${CHECK_GITHUB_FLAG}       Ask GitHub, through gh, whether remote execution and protected`,
+  '                       branches are configured, inside the remote-github and',
+  '                       github-protected-branches checks',
   `  ${REMOTE_JOB_FLAG}         Grade the permission profile for a remote job, where an unusable one`,
   '                       fails rather than warns',
   `  ${JOB_SURFACES_FLAG}=<branch>[@<commit>[@<base>]]`,
@@ -210,7 +211,10 @@ const DOCTOR_USAGE: readonly string[] = Object.freeze([
   'github-actions, remote-github asks gh whether it is authenticated, whether GitHub knows',
   'harness-run.yml and harness-resume.yml, which secret names are set (names only, never values) and',
   'which runner HARNESS_RUNNER selects. A call that times out or cannot reach GitHub warns rather than',
-  'fails. Every call is a read, so --dry-run does not suppress it either.',
+  'fails. With forge set to github, github-protected-branches also checks every configured protected',
+  'branch against rulesets and classic branch protection, warning when direct pushes, force pushes or',
+  'deletions are not blocked. Unauthenticated, unreadable or unsupported GitHub checks warn rather',
+  'than fail. Every call is a read, so --dry-run does not suppress it either.',
   '',
   `${REMOTE_JOB_FLAG} turns six warnings into failures: profile-paths, when no rule in the profile`,
   'covers this checkout; profile-tracked, when the profile is committed at HEAD; plugin-permissions,',
@@ -267,7 +271,7 @@ interface DoctorOptions {
    * is otherwise off.
    */
   readonly checkRegistry: boolean;
-  /** Whether {@link CHECK_GITHUB_FLAG} was given: the remote-github check's `gh` queries, otherwise off. */
+  /** Whether {@link CHECK_GITHUB_FLAG} was given: the GitHub checks' `gh` queries, otherwise off. */
   readonly checkGithub: boolean;
   /** Whether {@link REMOTE_JOB_FLAG} was given: the permission profile graded for a remote job. */
   readonly remoteJob: boolean;

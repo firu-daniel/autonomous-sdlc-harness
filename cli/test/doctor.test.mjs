@@ -5587,7 +5587,7 @@ const DATABASE_URL_VARIABLE = 'HARNESS_DOCS_RETRIEVAL_DATABASE_URL';
 const PRE_BRANCH_CHECK_IDS = Object.freeze([
   'git', 'jj-repository', 'default-branch', 'remote', 'base-freshness', 'pre-push-guard', 'protected-set', 'jq',
   'worktrees', 'daemon-backend', 'run-watcher', 'notifications', 'repo-registry', 'machine-footprint', 'daemon-path',
-  'remote-execution', 'remote-github', 'forge', 'config', 'command-wrappers', 'command-permissions', 'command-resolves',
+  'remote-execution', 'remote-github', 'github-protected-branches', 'forge', 'config', 'command-wrappers', 'command-permissions', 'command-resolves',
   'state-dir', 'artifact-tree', 'setup-analysis', 'task-offer-rules', 'layer-profile', 'layer-drift', 'tree-guards',
   'ignore-rules', 'plugin-wiring', 'permission-profile', 'profile-paths', 'profile-tracked', 'profile-browser-deny',
   'profile-deny-floor', 'profile-main-anchor', 'profile-sandbox', 'profile-write-protection', 'sandbox-prerequisites', 'keep-awake', 'plugin-permissions',
@@ -6353,9 +6353,50 @@ function answerGh(stub, overrides = {}) {
   }
 }
 
+const PROTECTED_GH_CALLS = Object.freeze({
+  branches: ['api', '--paginate', '--slurp', 'repos/{owner}/{repo}/branches?per_page=100'],
+});
+
+function answerProtectedGh(stub, { branches = [], rules = {}, protections = {}, rulesets = {} } = {}) {
+  const write = (args, value, status) => {
+    const stem = join(stub.answers, ghAnswerKey(args));
+    mkdirSync(dirname(stem), { recursive: true });
+    writeFileSync(`${stem}.out`, typeof value === 'string' ? value : JSON.stringify(value));
+    if (status !== undefined) writeFileSync(`${stem}.status`, String(status));
+  };
+  write(PROTECTED_GH_CALLS.branches, [branches]);
+  for (const [branch, answer] of Object.entries(rules)) {
+    write(['api', `repos/{owner}/{repo}/rules/branches/${encodeURIComponent(branch)}`], answer.value ?? answer, answer.status);
+  }
+  for (const [branch, answer] of Object.entries(protections)) {
+    write(['api', `repos/{owner}/{repo}/branches/${encodeURIComponent(branch)}/protection`], answer.value ?? answer, answer.status);
+  }
+  for (const [id, answer] of Object.entries(rulesets)) {
+    write(['api', `repos/{owner}/{repo}/rulesets/${id}`], answer.value ?? answer, answer.status);
+  }
+}
+
 /** The stub's logged invocations, one argv string each; empty when it was never run. */
-function ghInvocations(stub) {
+function allGhInvocations(stub) {
   return existsSync(stub.log) ? readFileSync(stub.log, 'utf8').split('\n').filter((line) => line !== '') : [];
+}
+
+/** Existing remote-github assertions exclude the later protected-branch probe. */
+function ghInvocations(stub) {
+  const seenAuth = { value: false };
+  return allGhInvocations(stub).filter((call) => {
+    if (call === GH_CALLS.auth.join(' ')) {
+      if (seenAuth.value) return false;
+      seenAuth.value = true;
+      return true;
+    }
+    return !(
+      call.startsWith('api --paginate --slurp repos/{owner}/{repo}/branches?per_page=100') ||
+      call.startsWith('api repos/{owner}/{repo}/rules/branches/') ||
+      call.startsWith('api repos/{owner}/{repo}/branches/') && call.endsWith('/protection') ||
+      call.startsWith('api repos/{owner}/{repo}/rulesets/')
+    );
+  });
 }
 
 /** A remote-on repository with its workflows pushed, so `remote-execution` passes and only this check varies. */
@@ -6412,7 +6453,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     const dir = await wiredFixture(subtest);
     const { status, stdout, stderr } = await runCli(dir, ['doctor', '--help']);
     assert.equal(status, 0, stderr);
-    assert.match(stdout + stderr, /--check-github\s+Ask GitHub, through gh, whether the remote-execution setup/);
+    assert.match(stdout + stderr, /--check-github\s+Ask GitHub, through gh, whether remote execution and protected/);
   });
 
   await t.test('a default run with remote execution on asks nothing and says how to ask', async (subtest) => {
@@ -6989,6 +7030,117 @@ test('the remote-github check asks GitHub only under --check-github and grades e
   });
 });
 
+test('the github-protected-branches check grades rulesets, classic protection, globs and unreadable answers', async (t) => {
+  const ids = CHECKS.map((check) => check.id);
+  assert.equal(ids[ids.indexOf('remote-github') + 1], 'github-protected-branches', ids.join(', '));
+
+  const dir = await wiredFixture(t);
+  await configure(dir, [['forge', 'github']]);
+
+  {
+    const stub = await answeringGhStub(t);
+    answerGh(stub);
+    answerProtectedGh(stub, {
+      rules: {
+        main: {
+          value: [
+            { type: 'deletion', ruleset_id: 1 },
+            { type: 'non_fast_forward', ruleset_id: 1 },
+            { type: 'pull_request', ruleset_id: 1 },
+          ],
+        },
+      },
+      protections: { main: { value: {}, status: 1 } },
+      rulesets: { 1: { value: { current_user_can_bypass: 'never' } } },
+    });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    assert.ok(reportLine(stdout, 'pass', 'github-protected-branches')?.includes('cover main'), `${stdout}\n${stderr}`);
+  }
+
+  {
+    const stub = await answeringGhStub(t);
+    answerGh(stub);
+    answerProtectedGh(stub, {
+      rules: { main: { value: [], status: 0 } },
+      protections: { main: { value: { message: 'Not Found (HTTP 404)' }, status: 1 } },
+    });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    assert.ok(reportLine(stderr, 'warn', 'github-protected-branches')?.includes('main: no ruleset or classic branch protection covers direct pushes, force pushes, deletions'), `${stdout}\n${stderr}`);
+  }
+
+  {
+    const stub = await answeringGhStub(t);
+    answerGh(stub);
+    answerProtectedGh(stub, {
+      rules: {
+        main: {
+          value: [{ type: 'deletion', ruleset_id: 2 }, { type: 'non_fast_forward', ruleset_id: 2 }],
+        },
+      },
+      protections: { main: { value: { message: 'Not Found (HTTP 404)' }, status: 1 } },
+      rulesets: { 2: { value: { current_user_can_bypass: 'never' } } },
+    });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    assert.ok(reportLine(stderr, 'warn', 'github-protected-branches')?.includes('main: no ruleset or classic branch protection covers direct pushes'), `${stdout}\n${stderr}`);
+  }
+
+  {
+    const stub = await answeringGhStub(t);
+    answerGh(stub);
+    answerProtectedGh(stub, {
+      rules: { main: { value: { message: 'Resource not accessible by integration' }, status: 1 } },
+      protections: { main: { value: { message: 'Resource not accessible by integration' }, status: 1 } },
+    });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'github-protected-branches');
+    assert.ok(line?.includes('could not be confirmed'), `${stdout}\n${stderr}`);
+    assert.equal(reportLine(stdout, 'pass', 'github-protected-branches'), undefined, `${stdout}\n${stderr}`);
+  }
+
+  await configure(dir, [['protectedBranches', '["release/*"]']]);
+  {
+    const stub = await answeringGhStub(t);
+    answerGh(stub);
+    answerProtectedGh(stub, {
+      branches: [{ name: 'release/one' }, { name: 'release/two' }, { name: 'feature/x' }],
+      rules: {
+        'release/one': {
+          value: [{ type: 'deletion', ruleset_id: 3 }, { type: 'non_fast_forward', ruleset_id: 3 }, { type: 'pull_request', ruleset_id: 3 }],
+        },
+        'release/two': {
+          value: [{ type: 'deletion', ruleset_id: 4 }, { type: 'non_fast_forward', ruleset_id: 4 }, { type: 'pull_request', ruleset_id: 4 }],
+        },
+      },
+      protections: {
+        'release/one': { value: { message: 'Not Found (HTTP 404)' }, status: 1 },
+        'release/two': { value: { message: 'Not Found (HTTP 404)' }, status: 1 },
+      },
+      rulesets: {
+        3: { value: { current_user_can_bypass: 'never' } },
+        4: { value: { current_user_can_bypass: 'never' } },
+      },
+    });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stdout, 'pass', 'github-protected-branches');
+    assert.ok(line?.includes('release/one') && line.includes('release/two'), `${stdout}\n${stderr}`);
+  }
+});
+
 /**
  * The `forge` check: the key's reporter, graded from local evidence and never worse than `warn`.
  * Every case runs `doctor` with the recording `gh` stub, so a case that spawned `gh` fails.
@@ -7009,7 +7161,7 @@ async function configure(dir, edits, { init = false } = {}) {
 test('the forge check names every forge state and never fails', async (t) => {
   await t.test('it is listed directly after remote-github', () => {
     const ids = CHECKS.map((check) => check.id);
-    assert.equal(ids[ids.indexOf('remote-github') + 1], 'forge', ids.join(', '));
+    assert.equal(ids[ids.indexOf('github-protected-branches') + 1], 'forge', ids.join(', '));
   });
 
   await t.test('with the key absent it passes and says the decision is not yet made', async (subtest) => {

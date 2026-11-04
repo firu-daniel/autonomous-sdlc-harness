@@ -412,6 +412,12 @@ const COLLABORATORS_ENDPOINT = 'repos/{owner}/{repo}/collaborators?per_page=100'
 /** A full {@link COLLABORATORS_ENDPOINT} page: at this many entries more collaborators may exist. */
 const COLLABORATORS_PAGE_SIZE = 100;
 
+/** The GitHub API reads used by {@link GITHUB_PROTECTED_BRANCHES_CHECK}. */
+const GITHUB_BRANCHES_ENDPOINT = 'repos/{owner}/{repo}/branches?per_page=100';
+const GITHUB_RULESET_BRANCH_ENDPOINT = 'repos/{owner}/{repo}/rules/branches';
+const GITHUB_CLASSIC_PROTECTION_ENDPOINT = 'repos/{owner}/{repo}/branches';
+const GITHUB_RULESET_ENDPOINT = 'repos/{owner}/{repo}/rulesets';
+
 /** Below this many days of artifact retention {@link REMOTE_GITHUB_CHECK} warns; argued there. */
 const ARTIFACT_RETENTION_WARN_DAYS = 30;
 
@@ -2826,8 +2832,8 @@ const GH_UNREACHABLE_PATTERN = /error connecting to|check your internet connecti
 /** One `gh` call's answer, sorted into the three outcomes {@link REMOTE_GITHUB_CHECK} grades differently. */
 type GhAnswer =
   | { readonly kind: 'answered'; readonly stdout: string }
-  | { readonly kind: 'refused'; readonly why: string }
-  | { readonly kind: 'unknown'; readonly why: string };
+  | { readonly kind: 'refused'; readonly why: string; readonly status: number }
+  | { readonly kind: 'unknown'; readonly why: string; readonly status?: number };
 
 /**
  * A stopped call — the bound in `runGh`, or any other signal — and one that could not reach GitHub
@@ -2837,8 +2843,8 @@ function classifyGh(result: GhResult): GhAnswer {
   if (result.status === 0) return { kind: 'answered', stdout: result.stdout };
   const said = firstLine(result.stderr) || firstLine(result.stdout);
   if (result.status === null) return { kind: 'unknown', why: 'it was stopped before it answered (timed out)' };
-  if (GH_UNREACHABLE_PATTERN.test(result.stderr)) return { kind: 'unknown', why: `it could not reach GitHub (${said})` };
-  return { kind: 'refused', why: said === '' ? `it exited ${result.status}` : `it exited ${result.status}: ${said}` };
+  if (GH_UNREACHABLE_PATTERN.test(result.stderr)) return { kind: 'unknown', why: `it could not reach GitHub (${said})`, status: result.status };
+  return { kind: 'refused', why: said === '' ? `it exited ${result.status}` : `it exited ${result.status}: ${said}`, status: result.status };
 }
 
 /** The `name` field of each element of a `gh … list --json` array, or `undefined` when it is not that shape. */
@@ -2945,6 +2951,335 @@ function writersOf(stdout: string): { readonly logins: readonly string[]; readon
   }
   return { logins, count: parsed.length };
 }
+
+interface GithubRuleGroup {
+  readonly id: number;
+  readonly types: readonly string[];
+}
+
+interface GithubMechanismCoverage {
+  readonly covered: boolean;
+  readonly missing: readonly string[];
+  readonly unreadable: readonly string[];
+}
+
+function githubBranchEndpoint(base: string, branch: string): string {
+  return `${base}/${encodeURIComponent(branch)}`;
+}
+
+function githubBranchNamesOf(stdout: string): readonly string[] | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+  const entries =
+    Array.isArray(parsed) && parsed.every((page) => Array.isArray(page))
+      ? parsed.flat()
+      : parsed;
+  if (!Array.isArray(entries)) return undefined;
+  const names: string[] = [];
+  for (const entry of entries as JsonValue[]) {
+    if (!isJsonObject(entry) || typeof entry.name !== 'string') return undefined;
+    names.push(entry.name);
+  }
+  return names;
+}
+
+function githubRuleGroupsOf(stdout: string): readonly GithubRuleGroup[] | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(parsed)) return undefined;
+  const groups = new Map<number, { readonly id: number; readonly types: Set<string> }>();
+  for (const entry of parsed as JsonValue[]) {
+    if (!isJsonObject(entry) || typeof entry.type !== 'string') return undefined;
+    const rawId = entry.ruleset_id;
+    if (typeof rawId !== 'number' || !Number.isInteger(rawId) || rawId <= 0) return undefined;
+    const existing = groups.get(rawId);
+    if (existing === undefined) groups.set(rawId, { id: rawId, types: new Set([entry.type]) });
+    else existing.types.add(entry.type);
+  }
+  return [...groups.values()].map(({ id, types }) => ({ id, types: [...types] }));
+}
+
+function githubNotFound(answer: Extract<GhAnswer, { readonly kind: 'refused' }>): boolean {
+  return answer.status === 404 || /\b404\b|not found/i.test(answer.why);
+}
+
+function githubRulesetBypassOf(stdout: string): boolean | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+  if (!isJsonObject(parsed)) return undefined;
+  const currentUserCanBypass = parsed.current_user_can_bypass;
+  if (currentUserCanBypass !== undefined && typeof currentUserCanBypass !== 'string') return undefined;
+  if (
+    currentUserCanBypass !== undefined &&
+    currentUserCanBypass !== 'always' &&
+    currentUserCanBypass !== 'pull_request' &&
+    currentUserCanBypass !== 'never'
+  ) {
+    return undefined;
+  }
+  if (currentUserCanBypass === 'always') return true;
+  const actors = parsed.bypass_actors;
+  if (actors === undefined) return false;
+  if (!Array.isArray(actors)) return undefined;
+  for (const actor of actors as JsonValue[]) {
+    if (!isJsonObject(actor) || typeof actor.bypass_mode !== 'string') return undefined;
+    if (actor.bypass_mode !== 'always' && actor.bypass_mode !== 'pull_request') return undefined;
+    if (actor.bypass_mode === 'always') return true;
+  }
+  return false;
+}
+
+function githubRuleMissing(types: ReadonlySet<string>): readonly string[] {
+  const missing: string[] = [];
+  if (!types.has('pull_request')) missing.push('direct pushes');
+  if (!types.has('non_fast_forward')) missing.push('force pushes');
+  if (!types.has('deletion')) missing.push('deletions');
+  return missing;
+}
+
+function githubClassicProtectionMissing(stdout: string): readonly string[] | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+  if (!isJsonObject(parsed)) return undefined;
+  const requiredReviews = parsed.required_pull_request_reviews;
+  const allowForcePushes = parsed.allow_force_pushes;
+  const allowDeletions = parsed.allow_deletions;
+  if (
+    requiredReviews === undefined ||
+    typeof allowForcePushes !== 'boolean' ||
+    typeof allowDeletions !== 'boolean'
+  ) {
+    return undefined;
+  }
+  if (requiredReviews !== null && !isJsonObject(requiredReviews as JsonValue)) return undefined;
+  const missing: string[] = [];
+  if (requiredReviews === null) missing.push('direct pushes');
+  if (allowForcePushes) missing.push('force pushes');
+  if (allowDeletions) missing.push('deletions');
+  return missing;
+}
+
+function globRegex(pattern: string): RegExp {
+  let source = '^';
+  for (let index = 0; index < pattern.length; index += 1) {
+    const character = pattern[index];
+    if (character === undefined) continue;
+    if (character === '*') {
+      source += '.*';
+      continue;
+    }
+    if (character === '?') {
+      source += '.';
+      continue;
+    }
+    if (character === '[') {
+      const close = pattern.indexOf(']', index + 1);
+      if (close > index + 1) {
+        const body = pattern.slice(index + 1, close);
+        const negated = body.startsWith('!') || body.startsWith('^');
+        const contents = (negated ? body.slice(1) : body).replace(/\\/g, '\\\\').replace(/]/g, '\\]');
+        source += `[${negated ? '^' : ''}${contents}]`;
+        index = close;
+        continue;
+      }
+    }
+    source += character.replace(/[\\^$+?.()|{}]/g, '\\$&');
+  }
+  source += '$';
+  try {
+    return new RegExp(source);
+  } catch {
+    return /^$/;
+  }
+}
+
+function githubRulesetCoverage(
+  branch: string,
+  ask: (args: readonly string[]) => { readonly call: string; readonly answer: GhAnswer | undefined },
+): GithubMechanismCoverage {
+  const rulesCall = ask(['api', githubBranchEndpoint(GITHUB_RULESET_BRANCH_ENDPOINT, branch)]);
+  if (rulesCall.answer === undefined) {
+    return { covered: false, missing: ['direct pushes', 'force pushes', 'deletions'], unreadable: [rulesCall.call] };
+  }
+  if (rulesCall.answer.kind === 'unknown') {
+    return { covered: false, missing: ['direct pushes', 'force pushes', 'deletions'], unreadable: [`${rulesCall.call}: ${rulesCall.answer.why}`] };
+  }
+  if (rulesCall.answer.kind === 'refused') {
+    if (githubNotFound(rulesCall.answer)) {
+      return { covered: false, missing: ['direct pushes', 'force pushes', 'deletions'], unreadable: [] };
+    }
+    return { covered: false, missing: ['direct pushes', 'force pushes', 'deletions'], unreadable: [`${rulesCall.call}: ${rulesCall.answer.why}`] };
+  }
+
+  const groups = githubRuleGroupsOf(rulesCall.answer.stdout);
+  if (groups === undefined) {
+    return { covered: false, missing: ['direct pushes', 'force pushes', 'deletions'], unreadable: [`${rulesCall.call} answered in an unreadable shape`] };
+  }
+  if (groups.length === 0) {
+    return { covered: false, missing: ['direct pushes', 'force pushes', 'deletions'], unreadable: [] };
+  }
+
+  const missing: string[] = [];
+  const unreadable: string[] = [];
+  let covered = false;
+  for (const group of groups) {
+    const groupMissing = [...githubRuleMissing(new Set(group.types))];
+    let bypasses = false;
+    if (group.id !== undefined) {
+      const detailCall = ask(['api', `${GITHUB_RULESET_ENDPOINT}/${group.id}`]);
+      if (detailCall.answer === undefined) {
+        unreadable.push(detailCall.call);
+      } else if (detailCall.answer.kind === 'unknown') {
+        unreadable.push(`${detailCall.call}: ${detailCall.answer.why}`);
+      } else if (detailCall.answer.kind === 'refused') {
+        unreadable.push(`${detailCall.call}: ${detailCall.answer.why}`);
+      } else {
+        const bypass = githubRulesetBypassOf(detailCall.answer.stdout);
+        if (bypass === undefined) unreadable.push(`${detailCall.call} answered in an unreadable shape`);
+        else bypasses = bypass;
+      }
+    }
+    if (bypasses) groupMissing.push('a ruleset bypass actor can bypass protections');
+    if (groupMissing.length === 0) covered = true;
+    else missing.push(...groupMissing);
+  }
+  return { covered, missing: [...new Set(missing)], unreadable };
+}
+
+function githubClassicCoverage(
+  branch: string,
+  ask: (args: readonly string[]) => { readonly call: string; readonly answer: GhAnswer | undefined },
+): GithubMechanismCoverage {
+  const protectionCall = ask(['api', githubBranchEndpoint(GITHUB_CLASSIC_PROTECTION_ENDPOINT, branch) + '/protection']);
+  if (protectionCall.answer === undefined) {
+    return { covered: false, missing: ['direct pushes', 'force pushes', 'deletions'], unreadable: [protectionCall.call] };
+  }
+  if (protectionCall.answer.kind === 'unknown') {
+    return { covered: false, missing: ['direct pushes', 'force pushes', 'deletions'], unreadable: [`${protectionCall.call}: ${protectionCall.answer.why}`] };
+  }
+  if (protectionCall.answer.kind === 'refused') {
+    if (githubNotFound(protectionCall.answer)) {
+      return { covered: false, missing: ['direct pushes', 'force pushes', 'deletions'], unreadable: [] };
+    }
+    return { covered: false, missing: ['direct pushes', 'force pushes', 'deletions'], unreadable: [`${protectionCall.call}: ${protectionCall.answer.why}`] };
+  }
+  const missing = githubClassicProtectionMissing(protectionCall.answer.stdout);
+  if (missing === undefined) {
+    return { covered: false, missing: ['direct pushes', 'force pushes', 'deletions'], unreadable: [`${protectionCall.call} answered in an unreadable shape`] };
+  }
+  return { covered: missing.length === 0, missing, unreadable: [] };
+}
+
+function githubProtectedBranchCoverage(
+  branch: string,
+  ask: (args: readonly string[]) => { readonly call: string; readonly answer: GhAnswer | undefined },
+): string | undefined {
+  const ruleset = githubRulesetCoverage(branch, ask);
+  const classic = githubClassicCoverage(branch, ask);
+  const unreadable = [...ruleset.unreadable, ...classic.unreadable];
+  if (unreadable.length > 0) {
+    const coverage = ruleset.covered || classic.covered ? 'a protection mechanism may cover it, but' : 'and';
+    return `${branch}: ${coverage} ${unreadable.join('; ')}`;
+  }
+  if (ruleset.covered || classic.covered) return undefined;
+  const missing = [...new Set([...ruleset.missing, ...classic.missing])];
+  return `${branch}: no ruleset or classic branch protection covers ${missing.join(', ')}`;
+}
+
+/**
+ * Whether GitHub's configured protected branches are protected remotely. This is deliberately a
+ * warning-only check: local hooks remain useful when GitHub is unavailable, and an unreadable API
+ * response must never be mistaken for a protected branch.
+ */
+const GITHUB_PROTECTED_BRANCHES_CHECK: Check = {
+  id: 'github-protected-branches',
+  title: "GitHub's protected branches block direct pushes, force pushes and deletions",
+  run: (ctx) => {
+    if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
+    if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
+    if (!ctx.probeGithub) return pass(`not asked — run \`${CLI} doctor --check-github\` to ask GitHub about protected branches`);
+    if (ctx.config.forge !== 'github') {
+      const forge = ctx.config.forge === undefined ? 'unset' : JSON.stringify(ctx.config.forge);
+      return warn(`not checked: forge is ${forge}, and this protected-branch check supports GitHub only`);
+    }
+
+    const root = ctx.repoRoot;
+    const gh = ghCli();
+    const ask = (args: readonly string[]): { readonly call: string; readonly answer: GhAnswer | undefined } => {
+      const result = runGh(args, root);
+      return { call: `\`gh ${args.join(' ')}\``, answer: result === undefined ? undefined : classifyGh(result) };
+    };
+    const auth = ask(['auth', 'status']);
+    if (auth.answer === undefined) return warn(`could not check GitHub protected branches: ${gh} could not be run`);
+    if (auth.answer.kind !== 'answered') {
+      return warn(`could not check GitHub protected branches: ${auth.call} ${auth.answer.why}`);
+    }
+
+    let configured: readonly string[];
+    try {
+      configured = resolveProtectedBranches(ctx.config, () => {})
+        .map((entry) => entry.trim())
+        .filter((entry) => entry !== '');
+    } catch (error) {
+      return warn(`could not check GitHub protected branches: protected branch configuration could not be read (${messageOf(error)})`);
+    }
+
+    const patterns = [...new Set(configured)];
+    const branches: string[] = [];
+    const findings: string[] = [];
+    const globs = patterns.filter((pattern) => isGlobPattern(pattern));
+    if (globs.length > 0) {
+      const listing = ask(['api', '--paginate', '--slurp', GITHUB_BRANCHES_ENDPOINT]);
+      if (listing.answer === undefined) {
+        findings.push(`could not enumerate remote branches: ${listing.call}`);
+      } else if (listing.answer.kind === 'unknown') {
+        findings.push(`could not enumerate remote branches: ${listing.call} ${listing.answer.why}`);
+      } else if (listing.answer.kind === 'refused') {
+        findings.push(`could not enumerate remote branches: ${listing.call} ${listing.answer.why}`);
+      } else {
+        const remoteBranches = githubBranchNamesOf(listing.answer.stdout);
+        if (remoteBranches === undefined) findings.push(`could not enumerate remote branches: ${listing.call} answered in an unreadable shape`);
+        else {
+          for (const pattern of globs) {
+            const matches = remoteBranches.filter((branch) => globRegex(pattern).test(branch));
+            if (matches.length === 0) findings.push(`${pattern}: no remote branch matched this protected pattern`);
+            else branches.push(...matches);
+          }
+        }
+      }
+    }
+    branches.push(...patterns.filter((pattern) => !isGlobPattern(pattern)));
+    const uniqueBranches = [...new Set(branches)];
+    for (const branch of uniqueBranches) {
+      const finding = githubProtectedBranchCoverage(branch, ask);
+      if (finding !== undefined) findings.push(finding);
+    }
+
+    if (findings.length > 0) {
+      return warn(`GitHub protected-branch coverage could not be confirmed: ${findings.join('; ')}`);
+    }
+    if (uniqueBranches.length === 0) {
+      return warn('GitHub protected-branch coverage could not be checked: no configured branch resolved');
+    }
+    return pass(`GitHub rulesets or classic branch protection cover ${nameList(uniqueBranches)} against direct pushes, force pushes and deletions`);
+  },
+};
 
 /**
  * What GitHub says about the remote setup — asked only under {@link CheckContext.probeGithub}.
@@ -6267,6 +6602,7 @@ export const CHECKS: readonly Check[] = Object.freeze([
   DAEMON_PATH_CHECK,
   REMOTE_EXECUTION_CHECK,
   REMOTE_GITHUB_CHECK,
+  GITHUB_PROTECTED_BRANCHES_CHECK,
   FORGE_CHECK,
   CONFIG_CHECK,
   COMMAND_WRAPPERS_CHECK,
