@@ -43,7 +43,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_gate_timings_failed_fir
 1. [x] **Task 1** — `run-test-suite.sh` tells its gates the label and log directory, records the commit a clean run used, and reuses a finished verdict on that commit _(layer: cli)_ _(points: 20)_
 2. [x] **Task 2** — Pin the verdict reuse and the gate environment in `cli/test/run-test-suite.test.mjs` _(layer: cli)_ _(points: 20)_
 3. [x] **Task 3** — The `test_run_logs/` and `scripts/` README templates describe `<label>.commit`, gate-written records and the reused verdict _(layer: cli)_ _(points: 8)_
-4. [ ] **Task 4** — Phase G's run step cites the reused verdict, and `test-fix-plan-writer` reads a round that ran only part of the suite _(layer: plugin)_ _(points: 10)_
+4. [x] **Task 4** — Phase G's run step cites the reused verdict, and `test-fix-plan-writer` reads a round that ran only part of the suite _(layer: plugin)_ _(points: 10)_
 5. [ ] **Task 5** — The three supervised gate-run blocks say the wrapper may answer a reused verdict at once _(layer: plugin)_ _(points: 5)_
 6. [ ] **Task 6** — Bring this repository's copies of `run-test-suite.sh`, the run library and the `test_run_logs/` README in line with their templates _(layer: general)_ _(points: 5)_
 7. [ ] **Task 7** — Add the per-file timing reporter `scripts/lib/test-timing-reporter.mjs` _(layer: general)_ _(points: 10)_
