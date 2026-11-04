@@ -132,6 +132,7 @@ const STEP = {
 };
 const installBlock = workflow.slice(workflow.indexOf(`- name: ${STEP.install}`));
 const [PRESENT_LINE] = extract(installBlock, /echo "(The sandbox prerequisites are present\.)"/, 'the install step present line');
+const [APT_COULD_NOT] = extract(installBlock, /echo "::warning::(apt-get could not install) \$\{missing/, 'the install step apt-get warning line');
 
 test('every step name this suite cans is a step of the run job', () => {
   for (const name of Object.values(STEP)) assert.ok(RUN_STEPS.includes(name), `${WORKFLOW}'s run job has no step ${name}`);
@@ -179,10 +180,11 @@ function job(id, minute, lines, { overrides = {}, expired = false } = {}) {
  * The three-job run at its expected shape, each option a departure from it.
  *
  * @param {{ resumed?: boolean, wrote?: boolean, preflight?: string, finalLine?: string | null,
- *   notLaunching?: boolean, saveExtra?: string[], parkedExpired?: boolean }} [options]
+ *   notLaunching?: boolean, saveExtra?: string[], parkedExpired?: boolean, install?: string[] }} [options]
  * @returns {Job[]}
  */
 function fullRun({
+  install = [PRESENT_LINE],
   resumed = true,
   wrote = true,
   preflight = 'success',
@@ -195,7 +197,7 @@ function fullRun({
     PARKED,
     0,
     [
-      [STEP.install, PRESENT_LINE],
+      ...install.map((text) => [STEP.install, text]),
       [STEP.harness, LAUNCH],
       ...(notLaunching ? [[STEP.harness, NOT_LAUNCHING]] : []),
       [STEP.harness, PARKED_STOP],
@@ -371,6 +373,19 @@ test('FR2: Preflight with doctor concluding failure is fail', async (t) => {
   const fr2 = one('FR2');
   assert.equal(fr2.result, 'fail', JSON.stringify(fr2));
   assert.ok(fr2.evidence.includes(STEP.preflight), fr2.evidence);
+});
+
+// The runner renders an `echo "::warning::…"` as `##[warning]…` in the step log.
+test('FR2: an install step that logged a ##[warning] line is pass, that line recorded', async (t) => {
+  const fixture = await fixtureFor(t);
+  const warning = `##[warning]${APT_COULD_NOT} bubblewrap.`;
+  await stage(fixture, fullRun({ install: [warning] }));
+  const { one } = await grade(fixture);
+  const fr2 = one('FR2');
+  assert.equal(fr2.result, 'pass', JSON.stringify(fr2));
+  assert.ok(fr2.evidence.includes(`1 ${STEP.install} line(s)`), fr2.evidence);
+  const record = await readFile(evidencePath(fixture, 'FR2'), 'utf8');
+  assert.ok(record.includes(warning), record);
 });
 
 test('FR3: a final job whose Run the harness succeeded but logged job: failed stop is fail quoting that line', async (t) => {

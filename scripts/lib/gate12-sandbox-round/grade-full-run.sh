@@ -179,8 +179,9 @@ g12_fr1_arm() {
   g12_arm_set pass "run $G12_ARM_ID launched in $wt, no not launching line after it"
 }
 
-# FR2: the install step's outcome line, or each of its ::warning:: lines, is kept on a pass too. The
-# step's `run:` block is echoed into its log, so a line carrying `echo "` is the echo, not the output.
+# FR2: the install step's outcome line, or each of its warning lines (`##[warning]…` in the step log, as
+# the runner renders `::warning::`), is kept on a pass too. The step's `run:` block is echoed into its
+# log, so a line carrying `echo "` is the echo, not the output.
 g12_fr2() {
   local inst pre lines n path evidence
   g12_fold_reset 1
@@ -192,12 +193,12 @@ g12_fr2() {
     elif g12_arm_log "$G12_STEP_INSTALL"; then
       inst="$G12_ARM_LOG"
       lines="$(printf '%s\n' "$inst" |
-        grep -F -e 'The sandbox prerequisites are present.' -e '::warning::' | grep -v -F 'echo "')"
+        grep -F -e 'The sandbox prerequisites are present.' -e '::warning::' -e '##[warning]' | grep -v -F 'echo "')"
       if [ -n "$lines" ]; then
         n="$(printf '%s\n' "$lines" | grep -c .)"
         evidence="$G12_STEP_PREFLIGHT concluded success in run $G12_ARM_ID; $n $G12_STEP_INSTALL line(s)"
       else
-        lines="$G12_STEP_INSTALL logged neither its present line nor a ::warning:: line; its whole log:"$'\n'"$inst"
+        lines="$G12_STEP_INSTALL logged neither its present line nor a warning line; its whole log:"$'\n'"$inst"
         evidence="$G12_STEP_PREFLIGHT concluded success in run $G12_ARM_ID; $G12_STEP_INSTALL logged no outcome line"
       fi
       if path="$(g12_evidence FR2 "run $G12_ARM_ID $G12_STEP_INSTALL:"$'\n'"$lines")"; then
