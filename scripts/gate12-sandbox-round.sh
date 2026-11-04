@@ -24,7 +24,8 @@
 #        | teardown --repo <owner>/<name>
 # Exit (several apply: the highest wins):
 #   0 nothing failed · 1 usage, or a library function not yet present
-#   2 a preflight refusal, nothing created · 3 a gh or git call failed
+#   2 a refusal: by the preflight, with nothing created; or of one plant arm, which alone is not created
+#   3 a gh or git call failed
 #   4 at least one row printed fail · 5 a restore or a removal left something behind, named on stderr
 #
 # The parsed values are globals, assigned here and never inherited from the environment:
@@ -98,7 +99,8 @@ Usage: gate12-sandbox-round.sh [--help] | --list
 Run it from the Gate 12 repository's root, never in this repository.
 
 Exit: 0 nothing failed; 1 usage or a library function not yet present;
-2 a preflight refusal, nothing created; 3 a gh or git call failed;
+2 a refusal: by the preflight, nothing created; or of one plant arm, which alone is not created;
+3 a gh or git call failed;
 4 at least one row printed fail; 5 a restore or a removal left something behind. The highest wins.
 EOF
 }

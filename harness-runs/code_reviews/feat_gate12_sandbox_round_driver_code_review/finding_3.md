@@ -25,3 +25,5 @@ By then `g12_state_init` has written the state file. In a `plant` with no `--row
   *"2 on a refusal — by the preflight, before anything is created, or of one `plant` arm, which alone is not created, while the arms its `planted` lines name were"*.
 
 Leave `g12_plant_arm`'s codes unchanged. None of the `cli/test/gate12-sandbox-round-*.test.mjs` suites matches the old wording (*"nothing created"*, *"before anything is created"*), so no test changes. The fix runs no test.
+
+- **Deviations from plan:** In `docs/development.md` the inserted phrase opens with an em dash, so it is closed with a second em dash before `3 when` rather than by the sentence's original comma, which would have left the dash unbalanced: the text reads *"… 2 on a refusal — by the preflight, before anything is created, or of one `plant` arm, which alone is not created, while the arms its `planted` lines name were — 3 when …"*. In `scripts/gate12-sandbox-round.sh` the longer exit-2 wording moved `3 a gh or git call failed` onto its own line in both the `# Exit` header block and the `usage` text; the wording of each line is as the fix gives it.
