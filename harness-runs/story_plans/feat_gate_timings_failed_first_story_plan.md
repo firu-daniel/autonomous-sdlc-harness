@@ -47,7 +47,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_gate_timings_failed_fir
 5. [x] **Task 5** — The three supervised gate-run blocks say the wrapper may answer a reused verdict at once _(layer: plugin)_ _(points: 5)_
 6. [x] **Task 6** — Bring this repository's copies of `run-test-suite.sh`, the run library and the `test_run_logs/` README in line with their templates _(layer: general)_ _(points: 5)_
 7. [x] **Task 7** — Add the per-file timing reporter `scripts/lib/test-timing-reporter.mjs` _(layer: general)_ _(points: 10)_
-8. [ ] **Task 8** — Add `scripts/lib/gate-round-lib.sh`: gate lines with durations, the round record, the previous round's failures and the focused-then-full driver _(layer: general)_ _(points: 20)_
+8. [x] **Task 8** — Add `scripts/lib/gate-round-lib.sh`: gate lines with durations, the round record, the previous round's failures and the focused-then-full driver _(layer: general)_ _(points: 20)_
 9. [ ] **Task 9** — Restructure `scripts/run-gates.sh` into gate units driven by the round library, with gate 4 writing the per-file record _(layer: general)_ _(points: 20)_
 10. [ ] **Task 10** — Test the per-file timing reporter in `cli/test/test-timing-reporter.test.mjs` _(layer: cli)_ _(points: 10)_
 11. [ ] **Task 11** — Test the round library in `cli/test/gate-round-lib.test.mjs`: first round, still failing, now passing, unreadable record _(layer: cli)_ _(points: 20)_
