@@ -11,9 +11,9 @@
  * Every case runs the script from a throwaway tree under `os.tmpdir()` with `HOME` set to a fake
  * path the tree names; `WORKSPACE_ROOT` is only where the script is read from.
  *
- * Deliberately not covered: a real `nodev` mount, which no suite can make without privilege. Case
- * (d)'s `grep` stub stands in for it, emitting the error lines a `nodev` placeholder produces in
- * front of the real `grep`'s output.
+ * Deliberately not covered: a real `nodev` mount, which no suite can make without privilege. The
+ * `F11: …` case's `grep` stub stands in for it, emitting the error lines a `nodev` placeholder
+ * produces in front of the real `grep`'s output.
  */
 
 import assert from 'node:assert/strict';

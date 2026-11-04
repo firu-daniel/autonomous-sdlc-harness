@@ -29,7 +29,7 @@ Every finding the task prompt names has a fixture in the suite. The new tree-rea
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Point `check-machine-paths.test.mjs`'s header at the `F11: …` case, not the nonexistent case `(d)` _(layer: cli)_
+1. [x] **Finding 1** — Point `check-machine-paths.test.mjs`'s header at the `F11: …` case, not the nonexistent case `(d)` _(layer: cli)_
 2. [ ] **Finding 3** — Tighten CL5's `/dev/null` placeholder test to the exact ` 1, 3 ` device pair, with a fixture for a different device _(layer: cli, general)_
 3. [ ] **Finding 2** — Keep git's lock line out of the write-protection leg's `dd` and rename refusal set and its Linux pass sentence _(layer: cli, general)_
 

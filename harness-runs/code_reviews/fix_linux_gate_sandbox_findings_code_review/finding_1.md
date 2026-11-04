@@ -29,3 +29,7 @@ with
 ```
 
 Change no case title. This edits a test file, so that file is the only test this fix runs: `npm test --workspace cli -- test/check-machine-paths.test.mjs`. The full suite runs later, in the Run gates phase.
+
+**Deviations from plan:**
+
+- Evidence downgrade: the fix's single-file run, `npm test --workspace cli -- test/check-machine-paths.test.mjs`, returned `# pass 4`, `# fail 1`. The failing case is `(b) the excluded places print nothing, while the clarifications README still prints`, at its `assert.equal(run.stdout, …)` assertion: expected `./harness-runs/clarifications/README.md:1:…`, actual empty. The edit is to the module header comment only, so it changes no code the case executes. On this machine `grep --version` reports `ugrep 7.8.4 aarch64-apple-macosx`, which is neither of the two greps whose behaviour `scripts/check-machine-paths.sh`'s header argues its exclusions for (GNU and BSD). The failure is therefore environmental and outside this change. A comparison run against `HEAD` with the change stashed was refused by the tool layer and was not run. The Run gates phase's whole-tree run verifies it. The other four cases, `F11: …` included, pass. The selected tree guard `test/main-anchor-isolation.test.mjs` passed (`# pass 2`, `# fail 0`).
