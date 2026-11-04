@@ -1204,10 +1204,65 @@ The round's teardown kept its GitHub evidence: issues #39 and #41, pull requests
 
 5. **The runner legs**, as Gate 15's **The GitHub-hosted runner legs, in the Gate 12 repository.** gives them, with their rows in `docs/sandbox-verification.md` → `## 9. The GitHub-hosted runner legs`. They come after the upgrade, because 0.6.7's `harness-run.yml` has neither `Install the sandbox prerequisites` nor `Sweep the sandbox placeholders`.
 6. **The full-run leg**, observation (xvi) below, on an honest branch: one task whose first job parks on a question, answered through `/autonomous-sdlc-harness:branch-answer`'s GitHub route, run to "branch ready for review". It comes before the adversarial legs, so no planted branch is in flight while it runs.
-7. **The adversarial legs**, each on its own throwaway branch, because each plants what the job must refuse or skip: `sandbox1c` §1 and §4, `sandbox1c2` §2–§4, `sandbox1e4` §10 item 2.
-8. **The default-branch leg.** Set the repository's GitHub default branch to differ from its configured `defaultBranch`, take `sandbox1c` §3, both arms, then set it back. It is the last of the job legs, so it disturbs none of the others.
 
-   `<other branch>` is a new branch cut from the default branch's tip, so it carries the adoption and every job surface unchanged; never one of step 7's throwaway branches:
+   **Steps 6, 7 and 8 have a driver**, `scripts/gate12-sandbox-round.sh` in this repository, written below as `<this repository>/scripts/gate12-sandbox-round.sh`. Run it from the Gate 12 repository's root, naming that repository with `--repo`, and never in this repository. It prints one line per row, `row="<ID>" result="pass|fail|not run|expired|source" evidence="…" departure="…"`; a `source` line is not graded, and names the file and symbol the row's clause is read from. Its exit status is 0 when nothing failed, 1 on a usage error, 2 on a refusal before anything is created, 3 when a `gh` or `git` call failed, 4 when a row printed `fail`, and 5 when a restore or a removal left something behind, which it names on stderr; the highest wins. For each row that does not pass, it keeps the evidence under `<stateDir>/scratch/gate12-sandbox-round/evidence/` in the Gate 12 repository, with its state file, `state.json`, beside that directory. It records no result: each row's cells are filled by hand, as **Where its results go.** under (xvi) gives it.
+
+   The run itself stays driven by hand, as (xvi) gives it. Once it reaches "branch ready for review", grade FR1–FR7 from its branch:
+
+   ```
+   bash <this repository>/scripts/gate12-sandbox-round.sh grade --repo <owner>/<scratch-repo> --full-run <branch>
+   ```
+
+7. **The adversarial legs**, each on its own throwaway branch, because each plants what the job must refuse or skip: `sandbox1c` §1 and §4, `sandbox1c2` §2–§4, `sandbox1e4` §10 item 2. `plant` builds one branch per arm by plumbing from the tip of `origin/<GitHub default branch>`, records it in the state file, pushes it with `--no-verify`, and dispatches its job through the Gate 12 repository's own `<scriptsDir>/remote-run.sh dispatch`:
+
+   ```
+   bash <this repository>/scripts/gate12-sandbox-round.sh plant --repo <owner>/<scratch-repo>
+   ```
+
+   The arms it plants:
+   - JS1 `settings`: `.claude/settings.json` as the default branch carries it, plus one key.
+   - JS1 `remote-run`: `<scriptsDir>/remote-run.sh` as the default branch carries it, plus one comment line.
+   - JS4 `npmrc`: a `.npmrc` whose `node-options` requires a committed marker script, which prints a fixed line on stderr each time it loads.
+   - JS4 `node-modules`: a committed `node_modules/autonomous-sdlc-harness` whose bin is that marker, with its `node_modules/.bin` link.
+   - SB2 `clarifications`: a token file at the root, and a link to it at `<stateDir>/clarifications/<branch>/gate12-link.md`, the second link the row names.
+   - RJ2 `profile`: `.claude/settings.autonomous.json` with `sandbox.enabled: false` and no opt-out marker.
+
+   Once every planted job has ended, grade them, every row or the rows named:
+
+   ```
+   bash <this repository>/scripts/gate12-sandbox-round.sh grade --repo <owner>/<scratch-repo>
+   bash <this repository>/scripts/gate12-sandbox-round.sh grade --repo <owner>/<scratch-repo> --row <ID>
+   ```
+
+   Without `--full-run`, `grade` prints FR1–FR7 `not run`, with the evidence `needs --full-run <branch>`; step 6's command grades them.
+
+   **The hand steps of this leg, and why the driver cannot take them.** SB4's bundle half has no plant of its own: `grade` reads it from SB2's planted job's `harness-state` artifact. The rest stay by hand:
+   - **SB2's `PAUSE_PROGRESS.md` arm.** The row's link points at a token file, a regular file, and `run_job`'s `[ -f "$state_abs/$HR_REMOTE_PAUSE_FILE" ]` follows a link, so on a `resume none` launch the committed link is moved aside through `hr_remote_move_aside` into `autonomous_logs/remote_superseded/`, which the bundle does not carry (`cli/templates/scripts/autonomous-watcher.sh` header → *"THE PAUSE NOTE belongs to the run that wrote it"*). The session cannot make the link either: the job's base profile allows no `ln` (`cli/templates/claude/settings.autonomous.json` → `permissions.allow`). This holds for the row's own link target: a dangling link, or a link to a directory, fails `-f` and is not moved aside; the row plants neither.
+   - **SB2's `autonomous_logs/remote_status.json` variant.** The watcher's last write of that file, through `hr_remote_status_write` (`cli/templates/scripts/lib/harness-run-lib.sh`), is a `mv` that replaces whatever is at the path; and the session cannot make a link, as above.
+   - **SB3.** `harness.config.json` is write-protected in the job's base profile (`cli/src/generators/writeProtection.ts` → `protectedPaths`, its `CONFIG_FILENAME` entry), so the session cannot rewrite it; and a committed rewrite is a job surface (`jobSurfacePaths`), which `Refuse a branch that changed the job's own files` refuses.
+   - **SB4's optional half** — the throwaway upload workflow and the background process — as the row states.
+
+   These, with JS3N under step 8 and RJ2's launch-check clause below, are the subject of `harness-runs/task_prompts/chore_gate12_unroutable_sandbox_rows_task_prompt.md`.
+
+   **RJ2 is refused before its launch check, settled from the source.** `.claude/settings.autonomous.json` is itself a job surface: `protectedPaths` carries `join(repoRoot, PROFILE_PATH)`, and `jobSurfacePaths` keeps every checkout-relative entry (`cli/src/generators/writeProtection.ts`). So `Refuse a branch that changed the job's own files` refuses the planted branch before the watcher's launch check runs. `grade` prints RJ2 `not run` with that refusal as its evidence; the row's launch-check clause has no route through the shipped workflow.
+
+   Every branch `plant` pushes stays until step 10, which deletes it, with `<other branch>` from step 8, through `teardown`. It deletes only the branches the state file records, then confirms that the GitHub default branch and both stall variables are the recorded ones, naming the command that finishes any that is not; the reset to the seed stays by hand:
+
+   ```
+   bash <this repository>/scripts/gate12-sandbox-round.sh teardown --repo <owner>/<scratch-repo>
+   ```
+
+8. **The default-branch leg.** Set the repository's GitHub default branch to differ from its configured `defaultBranch`, take `sandbox1c` §3, both arms, then set it back. It is the last of the job legs, so it disturbs none of the others. `default-branch` takes JS3's arm:
+
+   ```
+   bash <this repository>/scripts/gate12-sandbox-round.sh default-branch --repo <owner>/<scratch-repo>
+   ```
+
+   It refuses, changing nothing, while a run `plant` recorded is still in flight. It makes `<other branch>` the GitHub default, `gate12_other_<UTC yyyymmddHHMMSS>` unless `--other-branch <name>` names it; the default branch then reaches the job as `HARNESS_GITHUB_DEFAULT_BRANCH`, fixed at dispatch. It lowers `STALL_WARN_SECS` and `STALL_KILL_SECS`, 60 and 120 unless `--stall-warn-secs <n>` and `--stall-kill-secs <n>` name others, as repository variables, which the `run` job's `env:` reads. It then plants and dispatches an honest JS3 branch, and waits up to `--wait-secs <n>`, 600 by default, for its job to start. It restores the default branch and both variables on every exit path, an interrupt included, and keeps `<other branch>` for `teardown`. Grade JS3 with step 7's `grade` command once its job has ended.
+
+   **JS3N is a hand step.** Every job surface is a write-protected path in the session (`jobSurfacePaths` is derived from `placeholderProtectedPaths`, `cli/src/generators/writeProtection.ts`), so the session cannot commit one before the stall, and a pushed one is JS1's refusal.
+
+   By hand, the leg's default-branch changes are the commands below, which `default-branch` and `teardown` run. `<other branch>` is a new branch cut from the default branch's tip, so it carries the adoption and every job surface unchanged; never one of step 7's throwaway branches:
 
    ```
    git fetch origin
@@ -1222,7 +1277,7 @@ The round's teardown kept its GitHub evidence: issues #39 and #41, pull requests
    gh repo edit <owner>/<scratch-repo> --default-branch <default branch>
    ```
 
-   Then delete it:
+   Then delete it, which `teardown` does at step 10:
 
    ```
    git push --no-verify origin --delete <other branch>
@@ -1240,6 +1295,27 @@ The round's teardown kept its GitHub evidence: issues #39 and #41, pull requests
    ```
 
 10. **Clean-up**, as **Teardown.** gives it: the GitHub default branch confirmed restored, the throwaway branches deleted, and the repository reset to its seed. It is never deleted.
+
+**The rows the driver takes, and how.** Restated from `bash scripts/gate12-sandbox-round.sh --list`, run from this repository's root, one row per line in its order; *Taken by* names the subcommand that takes the row, or `hand`. Re-derive it from there when that table changes, as Gate 15 does for the probe:
+
+| Row | Round step | Taken by | Note |
+|---|---|---|---|
+| FR1 | 6 | grade --full-run | the job's copy, its profile and the launch check, graded from the full run that grade --full-run names |
+| FR2 | 6 | grade --full-run | Install the sandbox prerequisites on the hosted runner and the doctor preflight after it, graded from the full run that grade --full-run names |
+| FR3 | 6 | grade --full-run | commits and pushes through the wrappers, graded on the job: line of the Run the harness step log, since that step concludes success even on a failed run |
+| FR4 | 6 | grade --full-run | the permission_denials of the calls the flow needs, each quoted, graded from the full run that grade --full-run names |
+| FR5 | 6 | grade --full-run | the job-surface check on an honest branch and the recorded default-branch commit, graded from the full run that grade --full-run names |
+| FR6 | 6 | grade --full-run | the state bundle saved by the parked job and restored by the next, graded from the full run that grade --full-run names |
+| FR7 | 6 | grade --full-run | the park answered through the GitHub route and the resume in answer mode, graded from the full run that grade --full-run names |
+| JS1 | 7 | plant | a pushed plumbing commit of .claude/settings.json, and separately of remote-run.sh under scriptsDir, refused at Refuse a branch that changed the job's own files |
+| JS4 | 7 | plant | a pushed plumbing commit of a .npmrc, and separately of node_modules/autonomous-sdlc-harness, whose marker must not appear in the job's npm steps |
+| SB2 | 7 | plant | plants the second link inside the branch's clarifications directory; its PAUSE_PROGRESS.md arm, moved aside by hr_remote_move_aside before the session, and its autonomous_logs/remote_status.json variant, replaced by hr_remote_status_write, are hand steps |
+| SB4 | 7 | grade (SB2's run) | no plant and no hand step of its own for the bundle half: grade reads it from SB2's planted job's harness-state artifact; its optional half, a throwaway upload workflow and a background process, stays a hand step |
+| RJ2 | 7 | plant | plants .claude/settings.autonomous.json with sandbox.enabled false and no opt-out marker; that profile is itself a job surface (protectedPaths, its PROFILE_PATH entry, kept by jobSurfacePaths), so Refuse a branch that changed the job's own files refuses the branch before the launch check, and the launch-check clause has no route |
+| JS3 | 8 | default-branch | lowered STALL_WARN_SECS and STALL_KILL_SECS set as repository variables while the GitHub default branch differs from defaultBranch, both restored afterwards |
+| JS3N | 8 | hand | a hand step, because every job surface is a write-protected path in the session (jobSurfacePaths derives from placeholderProtectedPaths), so the session cannot commit one and a pushed one is JS1's refusal |
+| SB3 | 7 | hand | a hand step, because harness.config.json is write-protected in the job's base profile (protectedPaths, its CONFIG_FILENAME entry) and a committed rewrite is a job surface (jobSurfacePaths) that the job refuses |
+| RJ3 | 9 | hand | a hand step on round step 9, a local leg: remote-run.sh start and review run from a mirror of the Gate 12 repository on the operator's machine, not through a job |
 
 **The owed checks.** Each is named by the maintainer's private source file and section, with the expectation the round grades it on, its step and its row.
 
@@ -2407,6 +2483,14 @@ gh run download <run id> -n harness-state -D <dir>
 git fetch origin <branch>
 git show origin/<branch>:<stateDir>/run_analytics/<branch>/run-analytics.json
 ```
+
+The round's driver takes these reads, from the Gate 12 repository's root, as round step 6 gives it:
+
+```
+bash <this repository>/scripts/gate12-sandbox-round.sh grade --repo <owner>/<scratch-repo> --full-run <branch>
+```
+
+It grades FR1–FR7 on the reads each lists under **What it shows.** below, and prints FR1's clauses that are read from the source — the base profile passed unchanged as `--settings`, no per-run copy rendered and nothing written under the machine state directory — as a `source` line naming `spawn_engine`'s job-mode arm, rather than grading them.
 
 **What it shows.** Each item gives its row, its expected result, where it is read from, and the shipped source that reading rests on. Step names are `cli/templates/github/workflows/harness-run.yml`'s.
 
