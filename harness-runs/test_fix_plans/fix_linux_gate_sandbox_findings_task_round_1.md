@@ -12,7 +12,7 @@ Gate 13a–13c (`BLOCKED`, Python environment not provisioned), 13d and 14d (`SK
 
 This list is the **single source of truth** for the fix loop: walk it top-to-bottom and take the first `[ ]` entry. `[ ]` markers anywhere else — including the sub-step bullets inside the per-finding files — are informational only.
 
-1. [ ] **Finding 1** — Stop the clarifications filter swallowing the top-level README's hit. _(layer: general)_
+1. [x] **Finding 1** — Stop the clarifications filter swallowing the top-level README's hit. _(layer: general)_
 
 ## Must Fix
 

@@ -33,7 +33,10 @@
 # Node stack frame carries an absolute path. It anchors on the path rather than using
 # `--exclude-dir=clarifications`, which GNU and BSD grep match against the base name and so would
 # also skip the shipped `cli/templates/state-dir/clarifications/`. The tracked `README.md` at the
-# directory's top level is not below a subdirectory and stays covered.
+# directory's top level is not below a subdirectory and stays covered. The directory segment
+# excludes `:` so it cannot run past the `grep -n` `path:line:` separator into the hit text, which
+# always contains `$HOME` and therefore a `/`; a directory name carrying a `:` is printed, the
+# fail-closed direction.
 #
 # THE ONE DROPPED ERROR (docs/sandbox-verification.md §5 F11). Inside the gate launcher's Linux
 # `bwrap` worker, `grep -r` printed `grep: ./.bash_profile: Permission denied` and the like, and the
@@ -59,7 +62,7 @@ err="$(mktemp "${TMPDIR:-/tmp}/check-machine-paths.XXXXXX")" || {
 }
 trap 'rm -f "$err"' EXIT
 
-grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git --exclude-dir=test_run_logs --exclude-dir=scratch --exclude-dir=__pycache__ 2>"$err" | grep -v '^\./\.git:[0-9][0-9]*:' | grep -v '^\./harness-runs/clarifications/[^/][^/]*/'
+grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git --exclude-dir=test_run_logs --exclude-dir=scratch --exclude-dir=__pycache__ 2>"$err" | grep -v '^\./\.git:[0-9][0-9]*:' | grep -v '^\./harness-runs/clarifications/[^/:][^/:]*/'
 
 prefix='grep: '
 suffix=': Permission denied'
