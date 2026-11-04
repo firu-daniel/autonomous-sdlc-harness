@@ -22,8 +22,31 @@
 # names, and a re-run regenerates it. This file is hand-written, is not in the set `init --force`
 # rewrites, and is what that wrapper calls.
 #
-# Deliberately no `-e`: every gate runs on every invocation, because "which gates fail" is the
-# answer worth having and stopping at the first one hides it.
+# A ROUND, in two phases, driven by `scripts/lib/gate-round-lib.sh`. Each check is a unit
+# (`run_unit`), keyed by its gate id.
+#   focused — only where the previous round in the lane left a readable record with a FAIL row: the
+#     units that failed there, each with the prerequisite it depends on (2a for every check that runs
+#     `cli/dist`), and gate 4 on just the test files that failed there. Any failure here stops the
+#     round: nothing else runs, and the round exits 1.
+#   full — every unit, in order, skipping only a unit that passed in the focused phase; gate 4
+#     always runs the whole suite here. Every unit runs and nothing stops early, because "which gates
+#     fail" is the answer worth having — hence no `-e`.
+# Exit 0 needs a full phase with no failure: a focused gate-4 pass is counted among neither the
+# passes nor the failures, and a stopped round has pushed its failure onto `failed`.
+#
+# THE RECORDS. Under `RUN_TEST_SUITE_LOG_DIR` only — `run-test-suite.sh` exports it with
+# `RUN_TEST_SUITE_LABEL`, and the round library validates both — this round writes `<label>.gates.tsv`, one
+# row per unit, and gate 4 writes `<label>.<phase>.tests.tsv`, one row per test file. Run by hand,
+# there is no lane: no gate record is written, every round runs in full, and gate 4's per-file
+# record lives in this script's temporary directory until it exits.
+#
+# Every gate line ends with its duration in whole seconds. After the last unit, the ten slowest test
+# files of the last gate-4 run are printed, on a pass, a failure and a stopped round
+# alike.
+#
+# Gate 4 names its reporters, so it pins `tap` to stdout beside the per-file one: naming any reporter
+# drops Node's default, and the `not ok` diagnostic printer in `gate` reads TAP, which Node 20 and 22
+# already print to a non-terminal.
 set -uo pipefail
 
 # Anchor to the repository root from this script's own location, never the caller's directory —
@@ -35,19 +58,44 @@ if [ -z "$repo_root" ] || ! cd "$repo_root"; then
   exit 1
 fi
 
-log="$(mktemp "${TMPDIR:-/tmp}/harness-gates.XXXXXX")" || {
-  echo "run-gates: could not create a log file under '${TMPDIR:-/tmp}'" >&2
+# The run library first: the round library validates the lane against its
+# HR_TEST_RUN_LABEL_PATTERN and HR_TEST_RUN_LOG_SUBDIR.
+# shellcheck source=lib/harness-run-lib.sh
+. "$script_dir/lib/harness-run-lib.sh"
+# shellcheck source=lib/gate-round-lib.sh
+. "$script_dir/lib/gate-round-lib.sh"
+
+tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/harness-gates.XXXXXX")" || {
+  echo "run-gates: could not create a temporary directory under '${TMPDIR:-/tmp}'" >&2
   exit 1
 }
-trap 'rm -f "$log"' EXIT
+log="$tmp_dir/log"
+# The known files, then the directory: never a recursive removal.
+trap 'rm -f "$log" "$tmp_dir/focused.tests.tsv" "$tmp_dir/full.tests.tsv"; rmdir "$tmp_dir" 2>/dev/null' EXIT
+
+gr_init "$repo_root" "$tmp_dir"
+GR_PREREQUISITES='2a:2b,2c,2d,2e,11,13c,14a,14b,14c,14d'
+GR_NARROWED_IDS='4'
+GR_TEST_FILE_PATTERN='^test/[A-Za-z0-9._/-]+\.test\.mjs$'
+GR_TEST_ROOT='cli'
 
 failed=()
 passed=()
-# Gate 11's third outcome, which is neither of the two arrays: see that gate's own block below.
+# Gate 11's third outcome, which is neither of the two arrays: see that gate's own arm below.
 floor_blocked=0
-# Gate 13's BLOCKED and SKIPPED outcomes, also in neither array: see that gate's own block below.
+# Gate 13's BLOCKED and SKIPPED outcomes, also in neither array: see that gate's own arm below.
 python_blocked=()
 python_skip_reason=""
+typos_skip_reason=""
+actionlint_skip_reason=""
+zizmor_skip_reason=""
+# The last gate-4 run's per-file record and phase, for the slowest-files section.
+gate4_destination=""
+gate4_phase=""
+
+# Each check sets these; `run_unit` records them.
+unit_status=""
+unit_secs=0
 
 # Run one command and grade it by its EXIT STATUS. Output goes to a file rather than through a
 # pipe: §5's opening rule is that piping a gate into a pager or into `head` returns the *pager's*
@@ -55,13 +103,18 @@ python_skip_reason=""
 # pipes, run under `gate_silent`, which reads no exit status.
 gate() {
   local name="$1"; shift
+  local start=$SECONDS
   if "$@" >"$log" 2>&1; then
+    unit_secs=$((SECONDS - start))
+    unit_status=ok
     passed+=("$name")
-    echo "  ok    $name"
+    gr_gate_line ok "$name" "$unit_secs"
   else
     local status=$?
+    unit_secs=$((SECONDS - start))
+    unit_status=FAIL
     failed+=("$name")
-    echo "  FAIL  $name (exit $status)"
+    gr_gate_line FAIL "$name" "$unit_secs" "exit $status"
     # A TAP runner reports each failure inline as it happens and only counts in its closing
     # summary, so the tail below alone never names a failing test. Each `not ok` line is printed
     # with the YAML diagnostic block `node --test` writes right after it — `error:`, `expected:`,
@@ -93,58 +146,21 @@ gate() {
 # because `grep` exits 1 precisely when it finds nothing, which is its passing case.
 gate_silent() {
   local name="$1"; shift
+  local start=$SECONDS
   "$@" >"$log" 2>&1
+  unit_secs=$((SECONDS - start))
   if [ -s "$log" ]; then
+    unit_status=FAIL
     failed+=("$name")
-    echo "  FAIL  $name (printed output, which is the finding)"
+    gr_gate_line FAIL "$name" "$unit_secs" "printed output, which is the finding"
     sed 's/^/        /' "$log" | tail -25
   else
+    unit_status=ok
     passed+=("$name")
-    echo "  ok    $name"
+    gr_gate_line ok "$name" "$unit_secs"
   fi
 }
 
-echo "== gate 1 — manifests"
-if command -v claude >/dev/null 2>&1; then
-  gate "1a plugin manifest" claude plugin validate --strict plugin
-  gate "1b marketplace manifest" claude plugin validate --strict .
-else
-  # Not skipped quietly. A gate that cannot run is not a gate that passed, and this script exists
-  # because unreported silence is what it is here to prevent.
-  failed+=("1 manifests (BLOCKED: claude is not on PATH)")
-  echo "  BLOCKED  1 manifests — claude is not on PATH"
-fi
-
-echo "== gate 2 — CLI build and run"
-gate "2a build" npm run build
-gate "2b --version" node cli/dist/cli.js --version
-gate "2c --help" node cli/dist/cli.js --help
-gate "2d init --help" node cli/dist/cli.js init --help
-# The one arm graded by REFUSAL: the CLI must reject a command it does not have. `gate` grades a
-# zero exit as a pass, so this arm is inverted by hand rather than passed to it.
-if node cli/dist/cli.js not-a-command >"$log" 2>&1; then
-  failed+=("2e unknown command is refused")
-  echo "  FAIL  2e unknown command is refused (it exited 0)"
-else
-  passed+=("2e unknown command is refused")
-  echo "  ok    2e unknown command is refused"
-fi
-
-echo "== gate 3 — configuration and flow-graph schemas"
-gate "3a example validates" npm run validate:config
-gate "3b negative fixtures are refused" npm run validate:config:negative
-gate "3c flow graph validates" npm run validate:flow-graph
-gate "3d flow-graph negative fixtures are refused" npm run validate:flow-graph:negative
-gate "3e flow graph static checks" bash scripts/check-flow-graph.sh
-gate "3f each flow-graph check refuses its fixture" bash scripts/check-flow-graph.sh --negatives
-
-echo "== gate 4 — init against a throwaway fixture"
-gate "4 npm test" npm test
-
-echo "== gate 6 — self-containment"
-# Gate 6a's exclusions, filters and the one grep error it drops are argued in
-# `scripts/check-machine-paths.sh`'s header; it searches the working directory, the root here.
-gate_silent "6a no machine paths" bash scripts/check-machine-paths.sh
 # Two exclusions, not one. `examples/notes-app/.claude` is an adopted repository's own generated
 # output; `./.claude` is THIS repository's, once it adopts the harness itself. Neither is a
 # template committed into the namespace `init` generates, which is the breach this gate is for —
@@ -164,65 +180,8 @@ dot_namespace_hits() {
       fi
     done
 }
-gate_silent "6b no template in the dot-namespace" dot_namespace_hits
-gate "6c llms.txt links resolve on main" bash scripts/check-llms-txt.sh
-gate "6d plugin command spellings carry the prefix" bash scripts/check-command-spelling.sh
-# 6a greps for the running user's `$HOME` only, so a transcript ref under /tmp, /private/var or
-# another user's home, a `..`-climbing path, or a credential passes it; and 6a is red in a
-# self-adopted checkout by design, so a new hit there is invisible to a "no new failure" reading.
-gate_silent "6e no machine-local or credential material in eval artifacts" bash scripts/check-eval-artifacts.sh
-# Hand-written as 14c is: status 4 is `check-typos.sh`'s no-typos skip, pushed onto neither array.
-typos_skip_reason=""
-bash scripts/check-typos.sh >"$log" 2>&1
-typos_status=$?
-if [ "$typos_status" -eq 0 ]; then
-  passed+=("6f shipped files pass typos")
-  echo "  ok    6f shipped files pass typos"
-elif [ "$typos_status" -eq 4 ]; then
-  typos_skip_reason="typos 1.51.1 is available neither on PATH nor through uvx"
-  echo "  SKIPPED 6f shipped files pass typos — ${typos_skip_reason}"
-  sed 's/^/        /' "$log" | tail -25
-else
-  failed+=("6f shipped files pass typos")
-  echo "  FAIL  6f shipped files pass typos (exit $typos_status)"
-  sed 's/^/        /' "$log" | tail -25
-fi
 
-echo "== gate 11 — docs-retrieval relevance floor"
-# Written by hand rather than handed to `gate`, the way gate 2e is, because this gate has THREE
-# outcomes and that helper grades two: it pushes every non-zero onto `failed`, and anything on
-# `failed` makes this script exit 1. Status 3 is the model-cache status
-# `evals/docs-retrieval/check-floor.mjs` reserves, and an empty machine-shared cache is a
-# provisioning gap rather than a regression — counting it would turn `commands.test` red on every
-# contributor's machine and in every branch worktree without the several-hundred-megabyte download,
-# which is why §5 sorts real-model retrieval into gate 10. So it is reported below with the gates
-# this script cannot run and pushed onto neither array. Status 4 is the local-peers status: this
-# checkout's build cannot resolve the retrieval packages, which `npm ci` provisions the way the
-# download provisions the cache, and gates 2a and 4 need that same install and go red on their own
-# where it has not run — so it is BLOCKED on the same terms. The gate grades this checkout's build
-# and the workspace's peers, never the machine-wide retrieval runtime. A SHORTFALL against the
-# recorded floor is any other non-zero and still fails the script. It depends on gate 2a having
-# built `cli/dist`.
-node evals/docs-retrieval/check-floor.mjs >"$log" 2>&1
-floor_status=$?
-if [ "$floor_status" -eq 0 ]; then
-  passed+=("11 docs-retrieval relevance floor")
-  echo "  ok    11 docs-retrieval relevance floor"
-elif [ "$floor_status" -eq 3 ]; then
-  floor_blocked=1
-  echo "  BLOCKED 11 docs-retrieval relevance floor — the retrieval model cache is empty"
-  sed 's/^/        /' "$log" | tail -25
-elif [ "$floor_status" -eq 4 ]; then
-  floor_blocked=1
-  echo "  BLOCKED 11 docs-retrieval relevance floor — the workspace's retrieval packages are not installed"
-  sed 's/^/        /' "$log" | tail -25
-else
-  failed+=("11 docs-retrieval relevance floor")
-  echo "  FAIL  11 docs-retrieval relevance floor (exit $floor_status)"
-  sed 's/^/        /' "$log" | tail -25
-fi
-
-echo "== gate 13 — Python docs-retrieval service"
+# Gate 13's legs.
 # Hand-written beside gate 11 and for the same reason: `gate` grades two outcomes, and
 # `scripts/python-service.sh`'s exit contract has two more that are neither a pass nor a failure.
 # Status 3 is an unprovisioned toolchain (`uv` missing, or no synced environment), BLOCKED on gate
@@ -232,34 +191,281 @@ echo "== gate 13 — Python docs-retrieval service"
 # `cli/dist`, so 13c depends on gate 2a.
 python_gate() {
   local name="$1" skip4="$2"; shift 2
+  local start=$SECONDS
   "$@" >"$log" 2>&1
   local status=$?
+  unit_secs=$((SECONDS - start))
   if [ "$status" -eq 0 ]; then
+    unit_status=ok
     passed+=("$name")
-    echo "  ok    $name"
+    gr_gate_line ok "$name" "$unit_secs"
   elif [ "$status" -eq 3 ]; then
-    python_blocked+=("$name")
-    echo "  BLOCKED $name — uv or the synced Python environment is missing; run bash scripts/python-service.sh sync"
+    unit_status=BLOCKED
+    # A leg BLOCKED in the focused phase runs again in the full one; list it once.
+    case " ${python_blocked[*]-} " in
+      *" $name "*) ;;
+      *) python_blocked+=("$name") ;;
+    esac
+    gr_gate_line BLOCKED "$name" "$unit_secs" "uv or the synced Python environment is missing; run bash scripts/python-service.sh sync"
     sed 's/^/        /' "$log" | tail -25
   elif [ "$status" -eq 4 ] && [ "$skip4" = "skip4" ]; then
+    unit_status=SKIPPED
     python_skip_reason="docker is not on PATH"
-    echo "  SKIPPED $name — docker is not on PATH; the container leg needs Docker"
+    gr_gate_line SKIPPED "$name" "$unit_secs" "docker is not on PATH; the container leg needs Docker"
     sed 's/^/        /' "$log" | tail -25
   else
+    unit_status=FAIL
     failed+=("$name")
-    echo "  FAIL  $name (exit $status)"
+    gr_gate_line FAIL "$name" "$unit_secs" "exit $status"
     sed 's/^/        /' "$log" | tail -25
   fi
 }
-python_gate "13a Python lint" noskip bash scripts/python-service.sh lint
-python_gate "13b Python typecheck" noskip bash scripts/python-service.sh typecheck
-python_gate "13c Python tests" noskip bash scripts/python-service.sh test
-if [ "${HARNESS_GATES_CONTAINERS:-}" = "1" ]; then
-  python_gate "13d Python container tests" skip4 bash scripts/python-service.sh container-test
-else
-  python_skip_reason="not opted in; set HARNESS_GATES_CONTAINERS=1 on a machine with Docker"
-  echo "  SKIPPED 13d Python container tests — opt in with HARNESS_GATES_CONTAINERS=1 on a machine with Docker"
-fi
+
+# run_unit <id> — run one check, print its line(s), and record it once. The round library calls it
+# with GR_PHASE set, and GR_FOCUS_FILES for gate 4 in the focused phase.
+run_unit() {
+  local id="$1" start=$SECONDS status status_1a n f
+  unit_status=FAIL
+  unit_secs=0
+  case "$id" in
+    1)
+      echo "== gate 1 — manifests"
+      if command -v claude >/dev/null 2>&1; then
+        gate "1a plugin manifest" claude plugin validate --strict plugin
+        status_1a="$unit_status"
+        gate "1b marketplace manifest" claude plugin validate --strict .
+        [ "$status_1a" = FAIL ] && unit_status=FAIL
+      else
+        # Not skipped quietly. A gate that cannot run is not a gate that passed, and this script
+        # exists because unreported silence is what it is here to prevent. It is on `failed`, so
+        # it is recorded as a FAIL row.
+        failed+=("1 manifests (BLOCKED: claude is not on PATH)")
+        unit_status=FAIL
+        gr_gate_line BLOCKED "1 manifests" "$((SECONDS - start))" "claude is not on PATH"
+      fi
+      unit_secs=$((SECONDS - start))
+      ;;
+    2a)
+      echo "== gate 2 — CLI build and run"
+      gate "2a build" npm run build
+      ;;
+    2b) gate "2b --version" node cli/dist/cli.js --version ;;
+    2c) gate "2c --help" node cli/dist/cli.js --help ;;
+    2d) gate "2d init --help" node cli/dist/cli.js init --help ;;
+    2e)
+      # The one arm graded by REFUSAL: the CLI must reject a command it does not have. `gate`
+      # grades a zero exit as a pass, so this arm is inverted by hand rather than passed to it.
+      if node cli/dist/cli.js not-a-command >"$log" 2>&1; then
+        unit_secs=$((SECONDS - start))
+        unit_status=FAIL
+        failed+=("2e unknown command is refused")
+        gr_gate_line FAIL "2e unknown command is refused" "$unit_secs" "it exited 0"
+      else
+        unit_secs=$((SECONDS - start))
+        unit_status=ok
+        passed+=("2e unknown command is refused")
+        gr_gate_line ok "2e unknown command is refused" "$unit_secs"
+      fi
+      ;;
+    3a)
+      echo "== gate 3 — configuration and flow-graph schemas"
+      gate "3a example validates" npm run validate:config
+      ;;
+    3b) gate "3b negative fixtures are refused" npm run validate:config:negative ;;
+    3c) gate "3c flow graph validates" npm run validate:flow-graph ;;
+    3d) gate "3d flow-graph negative fixtures are refused" npm run validate:flow-graph:negative ;;
+    3e) gate "3e flow graph static checks" bash scripts/check-flow-graph.sh ;;
+    3f) gate "3f each flow-graph check refuses its fixture" bash scripts/check-flow-graph.sh --negatives ;;
+    4)
+      echo "== gate 4 — init against a throwaway fixture"
+      gate4_destination="$(gr_tests_destination)"
+      gate4_phase="$GR_PHASE"
+      # `tap` is pinned to stdout because naming any reporter drops Node's default, and `gate`'s
+      # `not ok` diagnostic printer reads TAP.
+      local gate4_args=(--test-reporter=tap --test-reporter-destination=stdout
+        "--test-reporter=$repo_root/scripts/lib/test-timing-reporter.mjs"
+        "--test-reporter-destination=$gate4_destination")
+      if [ "$GR_PHASE" = focused ]; then
+        n=0
+        for f in $GR_FOCUS_FILES; do
+          gate4_args+=("$f")
+          n=$((n + 1))
+        done
+        gate "4 npm test, focused on $n file(s)" npm run test --workspace cli -- "${gate4_args[@]}"
+        # Only the full run counts among the passes.
+        if [ "$unit_status" = ok ]; then
+          unset "passed[$((${#passed[@]} - 1))]"
+        fi
+      else
+        gate "4 npm test" npm run test --workspace cli -- "${gate4_args[@]}"
+      fi
+      ;;
+    6a)
+      echo "== gate 6 — self-containment"
+      # Gate 6a's exclusions, filters and the one grep error it drops are argued in
+      # `scripts/check-machine-paths.sh`'s header; it searches the working directory, the root here.
+      gate_silent "6a no machine paths" bash scripts/check-machine-paths.sh
+      ;;
+    6b) gate_silent "6b no template in the dot-namespace" dot_namespace_hits ;;
+    6c) gate "6c llms.txt links resolve on main" bash scripts/check-llms-txt.sh ;;
+    6d) gate "6d plugin command spellings carry the prefix" bash scripts/check-command-spelling.sh ;;
+    6e)
+      # 6a greps for the running user's `$HOME` only, so a transcript ref under /tmp, /private/var
+      # or another user's home, a `..`-climbing path, or a credential passes it; and 6a is red in a
+      # self-adopted checkout by design, so a new hit there is invisible to a "no new failure"
+      # reading.
+      gate_silent "6e no machine-local or credential material in eval artifacts" bash scripts/check-eval-artifacts.sh
+      ;;
+    6f)
+      # Hand-written as 14c is: status 4 is `check-typos.sh`'s no-typos skip, pushed onto neither
+      # array.
+      bash scripts/check-typos.sh >"$log" 2>&1
+      status=$?
+      unit_secs=$((SECONDS - start))
+      if [ "$status" -eq 0 ]; then
+        unit_status=ok
+        passed+=("6f shipped files pass typos")
+        gr_gate_line ok "6f shipped files pass typos" "$unit_secs"
+      elif [ "$status" -eq 4 ]; then
+        unit_status=SKIPPED
+        typos_skip_reason="typos 1.51.1 is available neither on PATH nor through uvx"
+        gr_gate_line SKIPPED "6f shipped files pass typos" "$unit_secs" "${typos_skip_reason}"
+        sed 's/^/        /' "$log" | tail -25
+      else
+        unit_status=FAIL
+        failed+=("6f shipped files pass typos")
+        gr_gate_line FAIL "6f shipped files pass typos" "$unit_secs" "exit $status"
+        sed 's/^/        /' "$log" | tail -25
+      fi
+      ;;
+    11)
+      echo "== gate 11 — docs-retrieval relevance floor"
+      # Written by hand rather than handed to `gate`, the way gate 2e is, because this gate has
+      # THREE outcomes and that helper grades two: it pushes every non-zero onto `failed`, and
+      # anything on `failed` makes this script exit 1. Status 3 is the model-cache status
+      # `evals/docs-retrieval/check-floor.mjs` reserves, and an empty machine-shared cache is a
+      # provisioning gap rather than a regression — counting it would turn `commands.test` red on
+      # every contributor's machine and in every branch worktree without the several-hundred-
+      # megabyte download, which is why §5 sorts real-model retrieval into gate 10. So it is
+      # reported with the gates this script cannot run and pushed onto neither array. Status 4 is
+      # the local-peers status: this checkout's build cannot resolve the retrieval packages, which
+      # `npm ci` provisions the way the download provisions the cache, and gates 2a and 4 need that
+      # same install and go red on their own where it has not run — so it is BLOCKED on the same
+      # terms. The gate grades this checkout's build and the workspace's peers, never the
+      # machine-wide retrieval runtime. A SHORTFALL against the recorded floor is any other non-zero
+      # and still fails the script. It depends on gate 2a having built `cli/dist`.
+      node evals/docs-retrieval/check-floor.mjs >"$log" 2>&1
+      status=$?
+      unit_secs=$((SECONDS - start))
+      if [ "$status" -eq 0 ]; then
+        unit_status=ok
+        passed+=("11 docs-retrieval relevance floor")
+        gr_gate_line ok "11 docs-retrieval relevance floor" "$unit_secs"
+      elif [ "$status" -eq 3 ]; then
+        unit_status=BLOCKED
+        floor_blocked=1
+        gr_gate_line BLOCKED "11 docs-retrieval relevance floor" "$unit_secs" "the retrieval model cache is empty"
+        sed 's/^/        /' "$log" | tail -25
+      elif [ "$status" -eq 4 ]; then
+        unit_status=BLOCKED
+        floor_blocked=1
+        gr_gate_line BLOCKED "11 docs-retrieval relevance floor" "$unit_secs" "the workspace's retrieval packages are not installed"
+        sed 's/^/        /' "$log" | tail -25
+      else
+        unit_status=FAIL
+        failed+=("11 docs-retrieval relevance floor")
+        gr_gate_line FAIL "11 docs-retrieval relevance floor" "$unit_secs" "exit $status"
+        sed 's/^/        /' "$log" | tail -25
+      fi
+      ;;
+    13a)
+      echo "== gate 13 — Python docs-retrieval service"
+      python_gate "13a Python lint" noskip bash scripts/python-service.sh lint
+      ;;
+    13b) python_gate "13b Python typecheck" noskip bash scripts/python-service.sh typecheck ;;
+    13c) python_gate "13c Python tests" noskip bash scripts/python-service.sh test ;;
+    13d)
+      if [ "${HARNESS_GATES_CONTAINERS:-}" = "1" ]; then
+        python_gate "13d Python container tests" skip4 bash scripts/python-service.sh container-test
+      else
+        unit_secs=$((SECONDS - start))
+        unit_status=SKIPPED
+        python_skip_reason="not opted in; set HARNESS_GATES_CONTAINERS=1 on a machine with Docker"
+        gr_gate_line SKIPPED "13d Python container tests" "$unit_secs" "opt in with HARNESS_GATES_CONTAINERS=1 on a machine with Docker"
+      fi
+      ;;
+    14a)
+      echo "== gate 14 — rendered workflows parse"
+      # 14a, 14c and 14d render through `cli/dist`, so they depend on gate 2a. 14c and 14d are
+      # hand-written as `python_gate` is: status 4 is `check-rendered-workflows.mjs`'s no-tool skip
+      # under --actionlint and --zizmor, pushed onto neither array.
+      gate "14a rendered workflows parse as YAML" node scripts/check-rendered-workflows.mjs
+      ;;
+    14b) gate "14b 0.6.1's harness-control.yml is refused" node scripts/check-rendered-workflows.mjs --negatives ;;
+    14c)
+      node scripts/check-rendered-workflows.mjs --actionlint >"$log" 2>&1
+      status=$?
+      unit_secs=$((SECONDS - start))
+      if [ "$status" -eq 0 ]; then
+        unit_status=ok
+        passed+=("14c actionlint over the rendered workflows")
+        gr_gate_line ok "14c actionlint over the rendered workflows" "$unit_secs"
+      elif [ "$status" -eq 4 ]; then
+        unit_status=SKIPPED
+        actionlint_skip_reason="actionlint is not on PATH"
+        gr_gate_line SKIPPED "14c actionlint over the rendered workflows" "$unit_secs" "actionlint is not on PATH"
+      else
+        unit_status=FAIL
+        failed+=("14c actionlint over the rendered workflows")
+        gr_gate_line FAIL "14c actionlint over the rendered workflows" "$unit_secs" "exit $status"
+        sed 's/^/        /' "$log" | tail -25
+      fi
+      ;;
+    14d)
+      node scripts/check-rendered-workflows.mjs --zizmor >"$log" 2>&1
+      status=$?
+      unit_secs=$((SECONDS - start))
+      if [ "$status" -eq 0 ]; then
+        unit_status=ok
+        passed+=("14d zizmor over the rendered workflows")
+        gr_gate_line ok "14d zizmor over the rendered workflows" "$unit_secs"
+      elif [ "$status" -eq 4 ]; then
+        unit_status=SKIPPED
+        zizmor_skip_reason="zizmor 1.30.1 is available neither on PATH nor through uvx"
+        gr_gate_line SKIPPED "14d zizmor over the rendered workflows" "$unit_secs" "${zizmor_skip_reason}"
+        sed 's/^/        /' "$log" | tail -25
+      else
+        unit_status=FAIL
+        failed+=("14d zizmor over the rendered workflows")
+        gr_gate_line FAIL "14d zizmor over the rendered workflows" "$unit_secs" "exit $status"
+        sed 's/^/        /' "$log" | tail -25
+      fi
+      ;;
+    16)
+      echo "== gate 16 — shell scripts parse"
+      # `bash -n` over every `*.sh` and every extensionless file on a bash shebang that git lists as
+      # tracked or as untracked and not ignored, under `/bin/bash` where it exists — bash 3.2 on
+      # macOS, the floor — and `bash` on PATH otherwise. A library with a syntax error still lets
+      # the suites that source it pass, because sourcing it only prints to stderr, and an unattended
+      # run refuses a free-standing `bash -n`; this gate is a route to one. `gate` prints the log on
+      # a failure only, so on a pass the check's closing line, which names the interpreter and its
+      # version, is printed here.
+      gate "16 shell scripts parse" bash scripts/check-shell-parse.sh
+      if [ "$unit_status" = ok ]; then
+        sed -n 's/^check-shell-parse: [0-9]/        &/p' "$log"
+      fi
+      ;;
+    *)
+      failed+=("$id (no such unit in run-gates.sh)")
+      gr_gate_line FAIL "$id" 0 "no such unit in run-gates.sh"
+      ;;
+  esac
+  gr_record "$id" "$unit_status" "$unit_secs"
+}
+
+# A stopped round returns 1 having pushed its failure onto `failed`, so the closing block exits 1.
+gr_run_round run_unit 1 2a 2b 2c 2d 2e 3a 3b 3c 3d 3e 3f 4 6a 6b 6c 6d 6e 6f 11 13a 13b 13c 13d 14a 14b 14c 14d 16
+
 python_blocked_list=""
 if [ ${#python_blocked[@]} -gt 0 ]; then
   for name in "${python_blocked[@]}"; do
@@ -267,54 +473,8 @@ if [ ${#python_blocked[@]} -gt 0 ]; then
   done
 fi
 
-echo "== gate 14 — rendered workflows parse"
-# 14a, 14c and 14d render through `cli/dist`, so they depend on gate 2a. 14c and 14d are
-# hand-written as `python_gate` is: status 4 is `check-rendered-workflows.mjs`'s no-tool skip under
-# --actionlint and --zizmor, pushed onto neither array.
-actionlint_skip_reason=""
-zizmor_skip_reason=""
-gate "14a rendered workflows parse as YAML" node scripts/check-rendered-workflows.mjs
-gate "14b 0.6.1's harness-control.yml is refused" node scripts/check-rendered-workflows.mjs --negatives
-node scripts/check-rendered-workflows.mjs --actionlint >"$log" 2>&1
-actionlint_status=$?
-if [ "$actionlint_status" -eq 0 ]; then
-  passed+=("14c actionlint over the rendered workflows")
-  echo "  ok    14c actionlint over the rendered workflows"
-elif [ "$actionlint_status" -eq 4 ]; then
-  actionlint_skip_reason="actionlint is not on PATH"
-  echo "  SKIPPED 14c actionlint over the rendered workflows — actionlint is not on PATH"
-else
-  failed+=("14c actionlint over the rendered workflows")
-  echo "  FAIL  14c actionlint over the rendered workflows (exit $actionlint_status)"
-  sed 's/^/        /' "$log" | tail -25
-fi
-node scripts/check-rendered-workflows.mjs --zizmor >"$log" 2>&1
-zizmor_status=$?
-if [ "$zizmor_status" -eq 0 ]; then
-  passed+=("14d zizmor over the rendered workflows")
-  echo "  ok    14d zizmor over the rendered workflows"
-elif [ "$zizmor_status" -eq 4 ]; then
-  zizmor_skip_reason="zizmor 1.30.1 is available neither on PATH nor through uvx"
-  echo "  SKIPPED 14d zizmor over the rendered workflows — ${zizmor_skip_reason}"
-  sed 's/^/        /' "$log" | tail -25
-else
-  failed+=("14d zizmor over the rendered workflows")
-  echo "  FAIL  14d zizmor over the rendered workflows (exit $zizmor_status)"
-  sed 's/^/        /' "$log" | tail -25
-fi
-
-echo "== gate 16 — shell scripts parse"
-# `bash -n` over every `*.sh` and every extensionless file on a bash shebang that git lists as
-# tracked or as untracked and not ignored, under `/bin/bash` where it exists — bash 3.2 on macOS,
-# the floor — and `bash` on PATH otherwise. A library with a syntax error still lets the suites that
-# source it pass, because sourcing it only prints to stderr, and an unattended run refuses a
-# free-standing `bash -n`; this gate is a route to one. `gate` prints the log on a failure only, so on a pass the
-# check's closing line, which names the interpreter and its version, is printed here.
-passed_before_16=${#passed[@]}
-gate "16 shell scripts parse" bash scripts/check-shell-parse.sh
-if [ "${#passed[@]}" -gt "$passed_before_16" ]; then
-  sed -n 's/^check-shell-parse: [0-9]/        &/p' "$log"
-fi
+echo
+gr_slowest "$gate4_destination" "$gate4_phase"
 
 echo
 echo "== gates this script cannot run"

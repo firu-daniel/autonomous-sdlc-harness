@@ -28,3 +28,10 @@
 - `grep -n 'harness-run-lib.sh\|gate-round-lib.sh' scripts/run-gates.sh` shows the run library sourced on an earlier line than the round library.
 - `grep -n 'gr_run_round\|gr_init\|gr_slowest' scripts/run-gates.sh` shows each called once; `grep -n 'echo "  ok\|echo "  FAIL\|echo "  BLOCKED\|echo "  SKIPPED' scripts/run-gates.sh` prints nothing (every status line goes through `gr_gate_line`).
 - Reading the closing block: exit 0 is reachable only with `failed` empty, and a stopped round always has a `FAIL` row, hence a `failed` entry. The script itself is first run whole by this branch's Run gates phase; the round driver it relies on is executed by Task 11's suite.
+
+**Deviations from plan:**
+
+- Gate 1's BLOCKED arm (`claude` not on PATH) prints a `BLOCKED` line but is recorded as a `FAIL` row, because it is pushed onto `failed` today. Recording `BLOCKED` would leave a failing unit out of the next round's focus, and would let a focused phase continue past it and push it onto `failed` a second time. Every row the script records as `FAIL` matches a `failed` entry, and every `failed` entry has a `FAIL` row.
+- `python_gate` adds a leg to `python_blocked` only once. A leg that failed in the previous round and is `BLOCKED` in this round's focused phase runs again in the full phase, so the closing block would otherwise name it twice.
+- `run_unit` has a default arm. It records an unknown id as a `FAIL` row and adds it to `failed`, so the round library's "exactly one `gr_record` per call" still holds when the id list has a typo.
+- The verification bullet's comparison commands were run bare, one at a time, and compared by reading. The combined `sort` / `comm` pipeline was refused by the tool layer.
