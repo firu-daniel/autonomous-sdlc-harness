@@ -40,7 +40,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Tell the operator, in round step 7, to answer SB2's parked job so its next job runs _(layer: general)_
+1. [x] **Finding 1** — Tell the operator, in round step 7, to answer SB2's parked job so its next job runs _(layer: general)_
 
 ---
 

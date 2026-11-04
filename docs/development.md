@@ -1227,6 +1227,8 @@ The round's teardown kept its GitHub evidence: issues #39 and #41, pull requests
    - SB2 `clarifications`: a token file at the root, and a link to it at `<stateDir>/clarifications/<branch>/gate12-link.md`, the second link the row names.
    - RJ2 `profile`: `.claude/settings.autonomous.json` with `sandbox.enabled: false` and no opt-out marker.
 
+   SB2's planted job parks on its task prompt's question, as the plant intends. Answer it through `/autonomous-sdlc-harness:branch-answer`'s GitHub route, as step 6 answers the full run's park; any answer will do. The answered job is the next job SB2's row reads: `grade` takes its `Restore the previous job's state` step log, and prints SB2's next-job clause `not run` until that job has ended. Answer it before step 8, which waits until no other run is in flight, and before step 10's `teardown` deletes the branch.
+
    Once every planted job has ended, grade them, every row or the rows named:
 
    ```
