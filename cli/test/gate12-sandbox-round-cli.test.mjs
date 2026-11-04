@@ -100,6 +100,7 @@ test('each preflight refusal exits 2 and creates nothing', async (t) => {
       join(fixture.dir, 'scripts', 'lib', 'gate12-sandbox-round'),
       { recursive: true },
     );
+    await cp(join(WORKSPACE_ROOT, 'scripts', 'lib', 'harness-run-lib.sh'), join(fixture.dir, 'scripts', 'lib', 'harness-run-lib.sh'));
     const result = await assertRefused(fixture, ['plant', '--repo', GATE12_SLUG], 2, { script });
     assert.match(result.stderr, /is the checkout this script sits in/);
   });
