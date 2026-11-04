@@ -12,7 +12,7 @@
  * depending on such a call is skipped rather than failed, and no probe helper writes `Broken pipe`. On
  * Linux, `Read-only file system` is a dd and rename refusal beside `Operation not permitted`, and so, from
  * PD23 (docs/sandbox-verification.md §5), are `Permission denied` and `Device or resource busy`, the judge's
- * whole Linux set applying to a dd and a rename alike; a dd, rename or CS3 fetch error carrying no refusal string the judge knows is `not run`, never
+ * Linux set less git's lock line applying to a dd and a rename alike; a dd, rename or CS3 fetch error carrying no refusal string the judge knows is `not run`, never
  * `fail`; with SP_PLATFORM empty each of those cases keeps its macOS verdict. From PD28, on Linux, CL5's
  * `File exists` lock refusal passes only where `.git/config.lock` read `absent` before and after the session
  * and as the sandbox's `/dev/null` placeholder inside it, and is `not run` otherwise; its evidence carries the
@@ -348,14 +348,14 @@ test('sp__wp_mv_class: one rename helper line’s class, by platform', async (t)
   }
 });
 
-test('sp__linux_refusal_names: the Linux pass sentence names the judge’s whole set', async (t) => {
+test('sp__linux_refusal_names: the Linux pass sentence names the judge’s set less git’s lock line', async (t) => {
   const dir = await caseDir(t);
-  const run = await sourced(dir, 'sp__linux_refusal_names');
+  const run = await sourced(dir, 'sp__linux_refusal_names "${SP__WP_LINUX_REFUSALS[@]}"');
   assert.equal(run.status, 0, run.stderr);
-  assert.equal(
-    run.stdout,
-    'Read-only file system, Permission denied, Device or resource busy, could not lock config file .git/config: File exists',
-  );
+  assert.equal(run.stdout, 'Read-only file system, Permission denied, Device or resource busy');
+  const stranger = await sourced(dir, 'sp__linux_refusal_names "File exists"');
+  assert.equal(stranger.status, 2);
+  assert.equal(stranger.stdout, '');
 });
 
 test('sp__git_cs3_fetch by platform: an unknown error is not run on Linux only', async (t) => {

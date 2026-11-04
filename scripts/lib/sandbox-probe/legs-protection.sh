@@ -48,12 +48,12 @@
 # run, else `pass`.
 #
 # ON LINUX (SP_PLATFORM `linux`): a dd or the CS3 fetch the judge files under layer `unrecognised` is
-# `not run`, and so is a rename line sp__wp_mv_class classes `unrecognised`; every string of the judge's
-# Linux set is a rename refusal beside Operation not permitted, and the row's pass sentence names them
-# all through judge.sh → sp__linux_refusal_names. With SP_PLATFORM empty or `macos`, every verdict and
-# evidence string is unchanged.
+# `not run`, and so is a rename line sp__wp_mv_class classes `unrecognised`; every string of
+# SP__WP_LINUX_REFUSALS, the judge's Linux set less git's lock line, is a rename refusal beside Operation
+# not permitted, and the row's pass sentence names them through judge.sh → sp__linux_refusal_names. With
+# SP_PLATFORM empty or `macos`, every verdict and evidence string is unchanged.
 #
-# PD23. On Linux sp__wp_mv_class classes every string of the judge's Linux set as `refused`, `Device or
+# PD23. On Linux sp__wp_mv_class classes every string of SP__WP_LINUX_REFUSALS as `refused`, `Device or
 # resource busy` and an `inter-device move failed: … unable to remove target` line among them, so CS1's
 # renames grade as the judge grades them.
 #
@@ -77,6 +77,10 @@
 SP__WP_PLUGIN_NAME="autonomous-sdlc-harness"
 # CS2's new-file name under <main>/.git; legs-settings.sh's parity checklist prints the same path.
 SP_CS2_NEW_NAME="sbx_cs2_new"
+# The judge's Linux strings a dd or a rename can print: every member of judge.sh's SP__LINUX_SANDBOX_STRINGS
+# but git's lock line, which only a .git/config write prints (§5 PD28). Named through judge.sh, which
+# refuses a non-member.
+SP__WP_LINUX_REFUSALS=("Read-only file system" "Permission denied" "Device or resource busy")
 
 # The dd and rename targets, one per index.
 SP__WP_T=()
@@ -499,7 +503,7 @@ EOF
 
 # sp__wp_mv_class <helper line> — print the line's class: landed, stage-failed, refused, or, when no
 # refusal string matches, unrecognised on Linux and other on macOS. Reads only its argument. On Linux its
-# refusal strings are the judge's whole Linux set, through judge.sh → sp__linux_refusal_line.
+# refusal strings are SP__WP_LINUX_REFUSALS, through judge.sh → sp__linux_refusal_line.
 sp__wp_mv_class() {
   case "$1" in
     *" landed")
@@ -516,7 +520,7 @@ sp__wp_mv_class() {
       ;;
   esac
   if [ "${SP_PLATFORM:-}" = linux ]; then
-    if sp__linux_refusal_line "$1" >/dev/null; then
+    if sp__linux_refusal_line "$1" "${SP__WP_LINUX_REFUSALS[@]}" >/dev/null; then
       printf '%s\n' refused
     else
       printf '%s\n' unrecognised
@@ -652,7 +656,7 @@ sp__wp_judge_row() {
     SP__WP_RE="no target for $row in the per-run profile"
   elif [ "${SP_PLATFORM:-}" = linux ]; then
     SP__WP_RV=pass
-    SP__WP_RE="$passed target(s): every dd and rename refused by the sandbox (one of: Operation not permitted, $(sp__linux_refusal_names)), every inode and shasum unchanged, no new name created"
+    SP__WP_RE="$passed target(s): every dd and rename refused by the sandbox (one of: Operation not permitted, $(sp__linux_refusal_names "${SP__WP_LINUX_REFUSALS[@]}")), every inode and shasum unchanged, no new name created"
   else
     SP__WP_RV=pass
     SP__WP_RE="$passed target(s): every dd and rename refused with Operation not permitted, every inode and shasum unchanged, no new name created"

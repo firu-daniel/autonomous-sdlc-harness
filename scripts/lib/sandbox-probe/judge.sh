@@ -161,11 +161,23 @@ sp__linux_refusal_line() {
   sp__line_with "$text" "$@"
 }
 
-# sp__linux_refusal_names — print SP__LINUX_SANDBOX_STRINGS joined by ", ", for an evidence sentence that
-# names the set it was graded against.
+# sp__linux_refusal_names [<string>...] — print SP__LINUX_SANDBOX_STRINGS, or the named subset, joined by ", ",
+# for an evidence sentence that names the set it was graded against; status 2 and nothing printed when a
+# named string is not a member.
 sp__linux_refusal_names() {
-  local s out=""
-  for s in "${SP__LINUX_SANDBOX_STRINGS[@]}"; do
+  local s out="" known found
+  if [ "$#" -eq 0 ]; then
+    set -- "${SP__LINUX_SANDBOX_STRINGS[@]}"
+  else
+    for s in "$@"; do
+      found=0
+      for known in "${SP__LINUX_SANDBOX_STRINGS[@]}"; do
+        [ "$s" = "$known" ] && found=1
+      done
+      [ "$found" -eq 1 ] || return 2
+    done
+  fi
+  for s in "$@"; do
     out="${out:+$out, }$s"
   done
   printf '%s' "$out"
