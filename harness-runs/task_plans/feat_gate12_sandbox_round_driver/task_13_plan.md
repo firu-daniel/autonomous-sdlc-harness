@@ -65,3 +65,11 @@
 **Verification:**
 
 - `npm test --workspace cli -- test/gate12-sandbox-round-grade.test.mjs` passes. It is this task's own new test file.
+
+**Deviations from plan:**
+
+- JS1's departure: the plan says it "names `remote-run.sh status`". `g12_grade_js1` (`scripts/lib/gate12-sandbox-round/grade-plant.sh`) prints `read through status, not sync: sync refuses a branch with no local record (remote-run.sh header exit map, exit 2)`, which carries `remote-run.sh` and `status` but not the contiguous phrase. That file is outside the `cli` layer, so the suite asserts both words in the departure field rather than the phrase; a reviewer who wants the phrase itself needs a `general`-layer edit to that departure text.
+- The state file is written directly by the suite (one `runs[]` entry per arm, `tokens.SB2` set) rather than produced by `plant`: `grade` reads nothing else from a plant, and Task 11's suite already covers `plant` writing it.
+- `gh run download` is answered by a file-local wrapper put in front of Task 10's `ghStub` (a route can only print, not write the `-D` directory); `cli/test/helpers/gate12-round.mjs` is unchanged.
+- The doctor-report line (JS1's path-naming line, JS3's step-log and `run.log` line) quotes `JOB_SURFACES_CHECK`'s title from `cli/src/doctor/checks.ts`, a source the plan's header list does not name; the report's layout is rendered at run time, so only the title is extracted.
+- No case cans `verb_restore`'s `restored the bundle of run` line: SB2's next job is absent in every case, which the grader reports `not run` beside the planted arm without changing the planted arm's verdict.
