@@ -218,7 +218,7 @@ HARNESS_SELF_ADOPT=1 node cli/dist/cli.js init --force --no-analyze --non-intera
 git status --short
 ```
 
-**The two wrappers keep their hand-set lines.** `commands.typecheck` and `commands.test` are the wrappers' own invocations here (`bash scripts/typecheck.sh`, `bash scripts/test.sh`), so a forced self-adopt run carries the line each wrapper already runs, `npm run build` and `bash scripts/run-gates.sh`, into the re-rendered template rather than replacing it from detection. The run's `== commands` section prints one carried row per wrapper, for example `commands.test -> bash scripts/test.sh -> bash scripts/run-gates.sh — the line test.sh already carries, kept by this self-adopt run and re-rendered into the current template`. Only a self-adopt run carries the line. An adopter's `--force` still re-renders both wrappers from detection (`docs/cli.md` §5).
+**The two wrappers keep their hand-set lines.** `commands.typecheck` and `commands.test` are the wrappers' own invocations here (`bash scripts/typecheck.sh`, `bash scripts/test.sh`), so a forced self-adopt run carries the line each wrapper already runs, `npm run build` and `bash scripts/run-gates.sh`, into the re-rendered template rather than replacing it from detection. The run's `== commands` section prints one carried row per wrapper, for example `commands.test -> bash scripts/test.sh -> bash scripts/run-gates.sh — the line test.sh already carries, kept by this self-adopt run and re-rendered into the current template`. Only a self-adopt run carries the line. An adopter's `--force` still re-renders both wrappers from detection (`docs/cli.md` §5). On a published release, that adopter side is `sandbox1h` §1 — a forced run shows no `kept by this self-adopt run` row in `== commands`, re-renders both wrappers from detection, and keeps every state-dir README that matches its template `= kept` with no `.bak` — and step 4 of Gate 12's **The sandbox series round (#170 step 4) — not yet run.** takes it: *not yet measured*.
 
 **What it still overwrites, and what to restore.** Measured on this branch at `e5da5416`: the dry run above printed these `would replace` lines for the files to restore:
 
@@ -244,7 +244,7 @@ The same run, taken with `--non-interactive` in a throwaway clone of that commit
 - `scripts/create-worktree.sh`: mode only, committed `100644`, written `100755`. Every other file under `scripts/`, the two wrappers included, came back byte-identical at that commit; `scripts/typecheck.sh` no longer does, and is in the restore list above.
 - `.gitattributes` is marked `would replace` but writes the same bytes, so only its `.bak` appears. `.gitignore` is `= would keep`, because the managed block merges nothing.
 
-**The `.bak` files are removed by hand once the review is done.** Those beside committed files, `scripts/` included, show as `??` in `git status --short`. Those inside a contents-ignored state-dir directory never appear there, so the run's `== notes` section names them. At `e5da5416` the note read: `harness-runs/autonomous_inbox/README.md.bak, harness-runs/autonomous_logs/README.md.bak, harness-runs/clarifications/README.md.bak, harness-runs/scratch/README.md.bak were written inside directories the managed .gitignore block ignores by their contents, so git status will not list them`.
+**The `.bak` files are removed by hand once the review is done.** Those beside committed files, `scripts/` included, show as `??` in `git status --short`. Those inside a contents-ignored state-dir directory never appear there, so the run's `== notes` section names them. At `e5da5416` the note read: `harness-runs/autonomous_inbox/README.md.bak, harness-runs/autonomous_logs/README.md.bak, harness-runs/clarifications/README.md.bak, harness-runs/scratch/README.md.bak were written inside directories the managed .gitignore block ignores by their contents, so git status will not list them`. Its adopter-side counterpart, `sandbox1h` §2, is taken by the same round's step 4, *not yet measured*: the hidden-`.bak` note on a repository adopted at 0.6.7, what git's short status lists without and with `--ignored`, the `--quiet` row (decided, not a defect), and the managed `.gitignore` block's comment a fresh `init` writes.
 
 **Restart the run daemon last, because it holds the copy of the watcher's scripts it started with.** `<root>` is this checkout's root, taken from `git rev-parse --show-toplevel`:
 
@@ -831,7 +831,7 @@ npm ci
 
 A shortfall is not exempt: it fails the script. The floor policy itself — the margin between a measured figure and its recorded floor, why the graded corpus is `fixture-catalog` alone, and when a floor is re-recorded — is stated in `docs/retrieval-eval.md` → `## The regression floor`, which `floor.json`'s own `see` field names.
 
-**Gate 12 — remote execution against a real GitHub repository.** Every remote-execution case in gate 4 drives a `gh` stub and an agent stub, so no gate above shows GitHub doing what the design in `docs/remote-execution.md` rests on; that document's `## 6. What is not verified here` lists each behaviour with its source, the issue trigger's behaviours live beside it in `docs/github-issue-trigger.md` → `## 7. What is not verified here`, and this gate is what records each one against a real repository. It is hand-run because it needs a real repository, a runner, a credential and billed minutes, none of which a suite may spend. Run it against a **private** scratch repository kept for the purpose — `firu-daniel/harness-gate12` since round 3, reset to its seed commit between rounds rather than recreated — never this repository, for the reason gate 2 gives and for those gate 2's **This repository cannot host its own remote runs.** states — from that repository's root on the machine that runs the local watcher, with `gh` logged in to an account that can push to it and dispatch its workflows. `<version>` throughout is the CLI version under test, pinned for the reason gate 10's pre-leg check gives; run that check here too. `<stateDir>` and `<scriptsDir>` are the values the scratch repository's own `harness.config.json` carries, `scripts` for the second by default. Run each command **without a pipe**. Fourteen observations, after a setup that is itself the first.
+**Gate 12 — remote execution against a real GitHub repository.** Every remote-execution case in gate 4 drives a `gh` stub and an agent stub, so no gate above shows GitHub doing what the design in `docs/remote-execution.md` rests on; that document's `## 6. What is not verified here` lists each behaviour with its source, the issue trigger's behaviours live beside it in `docs/github-issue-trigger.md` → `## 7. What is not verified here`, and this gate is what records each one against a real repository. It is hand-run because it needs a real repository, a runner, a credential and billed minutes, none of which a suite may spend. Run it against a **private** scratch repository kept for the purpose — `firu-daniel/harness-gate12` since round 3, reset to its seed commit between rounds rather than recreated — never this repository, for the reason gate 2 gives and for those gate 2's **This repository cannot host its own remote runs.** states — from that repository's root on the machine that runs the local watcher, with `gh` logged in to an account that can push to it and dispatch its workflows. `<version>` throughout is the CLI version under test, pinned for the reason gate 10's pre-leg check gives; run that check here too. `<stateDir>` and `<scriptsDir>` are the values the scratch repository's own `harness.config.json` carries, `scripts` for the second by default. Run each command **without a pipe**. Observations (i) to (xvi), after a setup that is itself the first.
 
 **Round 1 — 2026-09-28, CLI 0.4.0.** Run by hand against the scratch repository `firu-daniel/harness-gate12` (private, a small TypeScript library, `phases.qa`, `docs` and `parity` off, `execution.target: github-actions`), with one task dropped. It did not get past observation (ii): every run's session parked on its first read of a plugin instruction file. Run `36425634480`: the adoption commit had carried `.claude/settings.autonomous.json` with the adopting machine's absolute paths; the job's `init --plugin-root-entries` kept it; the preflight `doctor` printed `WARN  profile-paths  neither a path nor a pattern in .claude/settings.autonomous.json covers this repository root (/home/runner/work/harness-gate12/harness-gate12) …` and `PASS  plugin-permissions  not graded at this machine's plugin root (/home/runner/.claude/plugins/cache/autonomous-sdlc-harness/autonomous-sdlc-harness/0.4.0), because phases.qa is off, and the helper scripts are that phase's alone.` and exited 0; the session then parked asking for read access to the plugin's instruction files, every `Read` under the plugin cache asking permission and `cat`/`ls` refused as outside *"the allowed working directory `/home/runner/work/harness-gate12/harness-gate12`"*. Run `36426447207`: the profile untracked and gitignored in the scratch repository, so the job's `init` created one for the runner and `doctor` gave `PASS profile-paths` — but the generated profile carried no plugin-root entry, and the session parked the same way. Run `36428382006`: a `Read` rule and an `additionalDirectories` entry for the plugin cache added to the committed `.claude/settings.json`, which the session confirmed were in the file at `HEAD`; the same refusals, and the park-loop guard stopped the run. The eight findings, and what 0.4.1 changed for each:
 
@@ -1143,6 +1143,103 @@ What the round leaves open:
 The repository's actions setting reads `sha_pinning_required: false`; with every action now pinned, a later round could turn it on and check that the four workflows still start.
 
 The round's teardown kept its GitHub evidence: issues #39 and #41, pull requests #38 and #40, branches `feat_invoices_hardening` and `feat_money_clamp`, and every run with its artifact until retention expires. It closed the issues and pull requests before the seed reset, so each close job still found `harness.config.json`, deleted the round's variables and reset `main` to the seed. `harness-resume.yml` was left `disabled_manually` by the hand tick.
+
+**The sandbox series round (#170 step 4) — not yet run.** One release and one reset of `firu-daniel/harness-gate12` take every remote and after-the-release check the sandbox series still owes, in ten steps whose order is part of the round, because later steps depend on earlier ones. Its rows are `docs/sandbox-verification.md` → `## 10. The full-run leg and the Gate 12 sandbox round`, and, for the `sandbox1h` checks, which are not sandbox rows, the documents of record named against each below. Every one reads *not yet measured* until the round runs.
+
+**Scope.** The round is scoped to the sandbox series. Gate 12's other observations, the issue trigger (xiii) and run control from GitHub (xiv) among them, are not part of it.
+
+**The steps.**
+
+1. **Release `<version>`** from a `dev` carrying `feat_sandbox_probe_linux_legs` (#166), `feat_sandbox_probe_job_mode` (#194) and the branch that wrote this round, as `## 7. Releasing` gives it. A `harness-run.yml` job clones the plugin at the tag `autonomous-sdlc-harness--v<version>` and runs `init` and `doctor` from npm at its `HARNESS_CLI_VERSION` (`docs/remote-execution.md` → `### Upgrading`), and 0.6.7, the last release, predates the whole sandbox series.
+
+   ```
+   bash scripts/release.sh <version>
+   ```
+
+2. **Reset the scratch repository to its seed**, as **Teardown.** returns it, so the round starts from the tree earlier rounds started from.
+3. **Adopt at 0.6.7 first**, with **Setup.**'s commands at that version, then change one `README.md` under a contents-ignored state-dir directory (`autonomous_inbox/`, `autonomous_logs/`, `clarifications/` or `scratch/`) by hand. This is the old adoption `sandbox1h` §2 needs; adopting straight at `<version>` would skip it.
+
+   ```
+   npx --yes autonomous-sdlc-harness@0.6.7 init --non-interactive
+   npx --yes autonomous-sdlc-harness@0.6.7 config set execution.target github-actions
+   npx --yes autonomous-sdlc-harness@0.6.7 init
+   ```
+
+   Commit and push the adoption as **Setup.** gives it.
+4. **Upgrade locally.** First `init --force` at `<version>`, for `sandbox1h` §2: its note, then git's short status without and with `--ignored`. Then put the changed `README.md` back and run the forced `init` again with `--quiet`, for §2's `--quiet` row. Then `sandbox1h` §1 on the now-current adoption, with `HARNESS_SELF_ADOPT` unset. §2 comes first because it needs the 0.6.7 adoption still in place when the forced run meets it.
+
+   ```
+   npx --yes autonomous-sdlc-harness@<version> init --force
+   git status --short
+   git status --short --ignored
+   ```
+
+   ```
+   npx --yes autonomous-sdlc-harness@<version> init --force --quiet
+   ```
+
+   ```
+   npx --yes autonomous-sdlc-harness@<version> init --force
+   ```
+
+   Then re-render the workflows, and commit and push every path its report prints, as `docs/remote-execution.md` → `### Upgrading` gives it, with **Setup.**'s `workflow` scope and its `--no-verify` push. No `.bak` file is among the paths. Where the forced runs have already rendered the workflows at `<version>`, the upgrade reports that nothing was upgraded, and the paths to commit are the ones the forced runs reported writing.
+
+   ```
+   npx --yes autonomous-sdlc-harness@<version> init --upgrade-workflows
+   git add <every path on the git add line the upgrade's report prints>
+   git commit -m "Upgrade the harness workflows to <version>"
+   gh auth refresh -s workflow
+   git push --no-verify origin <default branch>
+   ```
+
+5. **The runner legs**, as Gate 15's **The GitHub-hosted runner legs, in the Gate 12 repository.** gives them, with their rows in `docs/sandbox-verification.md` → `## 9. The GitHub-hosted runner legs`. They come after the upgrade, because 0.6.7's `harness-run.yml` has neither `Install the sandbox prerequisites` nor `Sweep the sandbox placeholders`.
+6. **The full-run leg**, observation (xvi) below, on an honest branch: one task whose first job parks on a question, answered through `/autonomous-sdlc-harness:branch-answer`'s GitHub route, run to "branch ready for review". It comes before the adversarial legs, so no planted branch is in flight while it runs.
+7. **The adversarial legs**, each on its own throwaway branch, because each plants what the job must refuse or skip: `sandbox1c` §1 and §4, `sandbox1c2` §2–§4, `sandbox1e4` §10 item 2.
+8. **The default-branch leg.** Set the repository's GitHub default branch to differ from its configured `defaultBranch`, take `sandbox1c` §3, both arms, then set it back. It is the last of the job legs, so it disturbs none of the others.
+
+   ```
+   gh repo edit <owner>/<scratch-repo> --default-branch <other branch>
+   ```
+
+   ```
+   gh repo edit <owner>/<scratch-repo> --default-branch <default branch>
+   ```
+
+9. **The local legs**, on this machine rather than in a job: `sandbox1e4` §10 item 3 from a mirror of the scratch repository, and `sandbox1h` §3 with the repository's daemon installed and idle.
+
+   ```
+   bash <scriptsDir>/remote-run.sh start <branch> --prompt-file <file>
+   bash <scriptsDir>/remote-run.sh review <branch> --review-file <file>
+   ```
+
+   ```
+   HARNESS_CLI="npx autonomous-sdlc-harness@<version>" bash <scriptsDir>/restart-watcher.sh
+   ```
+
+10. **Clean-up**, as **Teardown.** gives it: the GitHub default branch confirmed restored, the throwaway branches deleted, and the repository reset to its seed. It is never deleted.
+
+**The owed checks.** Each is named by the maintainer's private source file and section, with the expectation the round grades it on, its step and its row.
+
+- `sandbox1c` §1, step 7, row JS1: a run branch that commits `.claude/settings.json`, and separately `<scriptsDir>/remote-run.sh`, through plumbing (`hash-object`, `update-index`, `commit-tree`, `update-ref`) and pushes it is refused at `Refuse a branch that changed the job's own files`: job `failure`, an `::error::` naming each path, no bundle saved, no notification, nothing chained, `remote-run.sh sync` records `paused` with `pause_reason: killed` where an older bundle exists, else `failed`, and no later step runs a script from the branch's tree.
+- `sandbox1c` §2, step 6, row FR5: an honest branch passes that step, and `Record the default branch's commit` writes `HARNESS_GITHUB_DEFAULT_COMMIT` and `HARNESS_DEFAULT_BRANCH_COMMIT`.
+- `sandbox1c` §3, step 8, rows JS3 and JS3N: with the GitHub default branch not the configured `defaultBranch`, a stalled honest job, with `STALL_WARN_SECS` and `STALL_KILL_SECS` lowered, has its watchdog run `doctor --job-surfaces=<branch>@…@…` from a temporary directory, pass, reset and resume from the ledger rather than end `failed` (JS3); with a job surface committed by the session before the stall, the reset is refused and the run ends `failed` with a notification naming the path (JS3N).
+- `sandbox1c` §4, step 7, row JS4: a branch carrying a committed `.npmrc` with `node-options=--require=<marker>`, and separately a `node_modules/autonomous-sdlc-harness` whose bin writes a marker, gets no marker from the refusal step, `Install the claude CLI when absent`, `Generate the job's permission profile` or `Preflight with doctor`. `Bootstrap the checkout`'s own install and build reading them is the known residual (`docs/cli.md` §6, residual 1), not a failure.
+- `sandbox1c2` §1, step 6, row FR6: an honest job's bundle prints `saved the bundle of <branch>`, no `skipped` line, with the same layout and bytes as its sources; the next job logs `restored the bundle of run <id>` and `placed <n> planning file(s)`.
+- `sandbox1c2` §2, step 7, row SB2: `PAUSE_PROGRESS.md` replaced by a link to a token file outside the state directory, plus a second link inside `clarifications/<branch>/`, gives one `skipped <path>: <linked> is a symbolic link` line each; the artifact holds no link and no token, the step ends `success`, and the next job restores the rest. Variant: `autonomous_logs/remote_status.json` linked gives `remote-run.sh: save: skipped …`, and the artifact's `status.json` is the registry-derived one, decision `stop`.
+- `sandbox1c2` §3, step 7, row SB3: the session's *uncommitted* rewrite of `stateDir` in `harness.config.json` is not followed: the `trusted configuration at <commit> names '<trusted>'; using '<trusted>'` line, `<commit>` equal to `HARNESS_GITHUB_DEFAULT_COMMIT`, and no token in the artifact.
+- `sandbox1c2` §4, step 7, row SB4: no link and no token in §2's artifact. Optional: a throwaway workflow on the same runner image uploads a directory holding a link with the pinned `actions/upload-artifact`, recording whether the artifact holds the bytes, a link or neither; and whether a background process the session started is still alive when `Save the state bundle` runs.
+- `sandbox1e4` §10 item 1, step 6, row FR1: the full-run leg itself.
+- `sandbox1e4` §10 item 2, step 7, row RJ2: a branch whose profile fails the launch check, such as `sandbox.enabled: false` with no opt-out marker, launches nothing, and the job records `failed` with the `not launching` reason.
+- `sandbox1e4` §10 item 3, step 9, row RJ3: from a mirror, `remote-run.sh`'s `start`, then its `review` on a run past review, each cut a clone at `hr_worktree_dir`, push, dispatch, and remove the clone, the branch it created, the registry record it wrote and a registry directory it made; a pre-existing record is restored byte for byte, and no new copy appears under the work root.
+- `sandbox2`, step 6, row FR2: `Install the sandbox prerequisites` runs on the hosted runner, what it installs is recorded, and the preflight then passes.
+- `sandbox2d` §7, step 6, row FR7: a parked run answered through `/autonomous-sdlc-harness:branch-answer`'s GitHub route resumes in answer mode; if the round's `test_run_logs/…log` is not in the restored bundle, the architecture gate still passes on the index's quoted failure lines rather than returning a blocker.
+- `sandbox1h` §2, step 4, recorded in this section's **Regenerating this repository's adoption after a `cli/templates/` change** block, under **The `.bak` files are removed by hand once the review is done.**, and in `docs/cli.md` §3: on a repository adopted at 0.6.7 with one changed state-dir `README.md`, the forced `init` at `<version>` names each hidden `README.md.bak` in `== notes` with `docs/cli.md` §3's wording; git's short status does not list them, and with `--ignored` it does. The `--quiet` row prints no hidden-`.bak` line but still writes the `.bak` files, which is decided, not a defect. A fresh `init` writes the managed `.gitignore` block's comment with the two new exception lines.
+- `sandbox1h` §1, step 4, recorded in the same block, under **The two wrappers keep their hand-set lines.**, and in `docs/cli.md` §5: an adopter's forced run at `<version>` shows no `kept by this self-adopt run` row in `== commands`, re-renders both wrappers from detection, and every state-dir README already matching its template shows `= kept` with no `.bak`.
+- `sandbox1h` §3, step 9, recorded in `docs/outer-loop-verification.md` §1.5: with the daemon installed and idle, `restart-watcher.sh` exits 0 on macOS, its `daemon stop` and `daemon install` naming the repository's own label. The Linux arm needs a systemd host, where it exits 0, prints the `systemctl --user` lines and restarts nothing; where no such host is available it is marked *not run*.
+
+**An artifact the round reads from expires.** `harness-state` is kept as long as the repository's artifact retention allows, and `sandbox-probe-evidence` for 3 days. An artifact found expired is recorded as expired and its step taken again; expiry never counts as an absence or a pass.
+
+**Departures.** The round changes no profile, generator, wrapper, guard, watcher or `harness-run.yml` behaviour. A defect a step finds is recorded with its command and exact message, and becomes a follow-up task prompt, never a fix inside the round.
 
 **Setup.**
 
@@ -2255,6 +2352,44 @@ Then repeat leg (a) as the second account, on a new issue. Passes when the secon
 
 **What it settles.** The row of `docs/remote-execution.md` → `## 6. What is not verified here` on *A `remote-run.sh continue` chain and a `harness-resume.yml` poller dispatch name `github-actions[bot]`*, and on `github.event.repository.owner.type` reading `User`, by legs (e) to (g); and `docs/team-accounts-research.md` → `## 7. Open questions`'s still-to-confirm sentence on the `continue` chain and the poller dispatch, by legs (e) and (f). The result is recorded under this gate, not by editing that research.
 
+**(xvi) The full-run leg: one task through `harness-run.yml`, end to end.** It observes one task run from the drop to "branch ready for review" on a GitHub-hosted runner, and what that run shows about the sandbox the job runs its session under. It is step 6 of **The sandbox series round (#170 step 4) — not yet run.**, above, and its rows are `docs/sandbox-verification.md` → `## 10. The full-run leg and the Gate 12 sandbox round`, FR1–FR7.
+
+**Preconditions.** That round's steps 1–4: `<version>` released from a `dev` carrying the sandbox series, the scratch repository reset to its seed, adopted at 0.6.7, then upgraded locally to `<version>` and its upgrade committed and pushed. A job rendered at 0.6.7 has neither `Install the sandbox prerequisites` nor `Sweep the sandbox placeholders`, so a run started before the upgrade answers nothing here.
+
+**The drop.** The run's branch is honest: no commit on it changes a path the job checks (`docs/remote-execution.md` → `## 11. Security` → **The branch's own files are checked before the job trusts them.**). In a `claude` session in the scratch repository, drop a small task that leaves one decision undecided — a limit it names without setting — so the task-plan writer parks, with `/autonomous-sdlc-harness:branch-prompt`. Then let the watcher dispatch it in one pass, as (ii) does:
+
+```
+bash <scriptsDir>/autonomous-watcher.sh tick
+gh run list --workflow harness-run.yml
+```
+
+**The park.** Wait for the first job's log to end with `job: parked stop`, the `job: <status> <decision>` line `run_job` prints in `cli/templates/scripts/autonomous-watcher.sh`. Answer the question through `/autonomous-sdlc-harness:branch-answer`'s GitHub route, as (xi) does:
+
+```
+/autonomous-sdlc-harness:branch-answer <branch>: <answer text>
+```
+
+Let the run go on, through every job it chains, to "branch ready for review". Read each job's log, then the branch it pushed:
+
+```
+gh run list --workflow harness-run.yml
+gh run view <run id> --log
+git fetch origin <branch>
+git show origin/<branch>:<stateDir>/run_analytics/<branch>/run-analytics.json
+```
+
+**What it shows.** Each item gives its row, its expected result, where it is read from, and the shipped source that reading rests on. Step names are `cli/templates/github/workflows/harness-run.yml`'s.
+
+- **FR1**, goal 1's first bullet and `sandbox1e4` §10 item 1. Expected: the job cuts no copy, renders no per-run copy, writes nothing under the machine state directory, and `run_profile_check` passes on the base profile, which is passed unchanged as `--settings`. Read from: observation (xvi): the `Run the harness` step log, whose watcher launch line carries `--settings`, with `run_profile_check` passing and no `not launching` line. Source: `Run the harness` runs `autonomous-watcher.sh job`; in `autonomous-watcher.sh`, `spawn_engine`'s job-mode arm takes the base profile as the `--settings` file without calling `run_profile_render`, then runs `run_profile_check` on it, and a refusal goes through `spawn_refuse`, which logs `not launching '<branch>': <reason>`. What the log shows and what it does not: a passing check prints no line of its own, so it is read as `job: launching run for '<branch>'` followed by the session's own output with no `not launching` line. The engine's command line, `--settings` included, is not logged; the one launch line that names a flag is the job-mode `job mode: '<branch>' also gets --add-dir from the profile's additionalDirectories:` line, printed only when the profile names such a directory.
+- **FR2**, goal 1's second bullet and `sandbox2`. Expected: `Install the sandbox prerequisites` runs on the hosted runner, what it installs is recorded, and `Preflight with doctor` then passes. Read from: observation (xvi): the `Install the sandbox prerequisites` and `Preflight with doctor` step logs. Source: the install step prints `The sandbox prerequisites are present.` when it installs nothing, and a `::warning::` line for each thing it could not install; the preflight is `doctor --remote-job`.
+- **FR3**, goal 1's third bullet. Expected: every commit and push goes through the wrappers, and no sandboxed git write is refused in a way that stops the run. Read from: observation (xvi): the `Run the harness` and `Push the branch` step logs. Source: `Push the branch` runs `push-branch.sh` under `always()`; the session's commits go through `commit-on-branch.sh`, and the watcher's own artifact commits through `watcher_commit`.
+- **FR4**, goal 1's fourth bullet. Expected: the `permission_denials` of the calls the flow needs, quoted, so a call the profile refuses is seen in a real run and not only in a probe leg. Read from: observation (xvi): the committed `<stateDir>/run_analytics/<branch>/run-analytics.json`, whose per-call records carry `permission_denied`, beside the `Run the harness` step log. No shipped surface carries the denied call's input off the runner (`docs/cli.md` §6, residual 1, item 5). Source: `record_run_analytics` in `autonomous-watcher.sh` writes the record after every session and commits it as `chore: Record run analytics for <branch>`, and `Push the branch` pushes it (`docs/watcher.md` → `### Run analytics`); `cli/templates/scripts/lib/run-analytics.jq` → `finalize` sets each call's `permission_denied`. What is read: every per-call record whose `permission_denied` is `true`, quoted whole. What is not: the denied call's input, because the raw `<stateDir>/autonomous_logs/<branch>.stream.jsonl` stays on the runner and is not a source of the state bundle. A leg that needs that input records that it is not carried, never a guess at it.
+- **FR5**, `sandbox1c` §2. Expected: an honest branch passes `Refuse a branch that changed the job's own files`, and `Record the default branch's commit` writes `HARNESS_GITHUB_DEFAULT_COMMIT` and `HARNESS_DEFAULT_BRANCH_COMMIT`. Read from: observation (xvi): the `Refuse a branch that changed the job's own files` and `Record the default branch's commit` step logs. Source: the first step runs `doctor --job-surfaces=<GitHub default branch>` and prints its `::error::` only on a refusal; the second writes both variables to `$GITHUB_ENV` and prints no value, so its log shows the step succeeded and later steps read the variables.
+- **FR6**, `sandbox1c2` §1. Expected: the parked job's bundle prints `saved the bundle of <branch>`, no `skipped` line, with the same layout and bytes as its sources; the next job logs `restored the bundle of run <id>` and `placed <n> planning file(s)`. Read from: observation (xvi): the first job's `Save the state bundle` step log and the next job's `Restore the previous job's state` step log. Source: `remote-run.sh save` and `remote-run.sh restore` in `cli/templates/scripts/remote-run.sh`, which print those lines.
+- **FR7**, `sandbox2d` §7. Expected: the parked run, answered through `/autonomous-sdlc-harness:branch-answer`'s GitHub route, resumes in answer mode; if the round's `test_run_logs/…log` is not in the restored bundle, the architecture gate still passes on the index's quoted failure lines rather than returning a blocker. Read from: observation (xvi): the resumed job's `Run the harness` step log and the committed index. Source: `run_job` logs `job: resuming parked run '<branch>' (answers <n>)` for an `answer` dispatch, and `remote-run.sh restore` logs `wrote answer_<n>.md for <branch>`.
+
+**Where its results go.** Each row's Observed and Verdict cells in `docs/sandbox-verification.md` → `## 10. The full-run leg and the Gate 12 sandbox round`, FR1–FR7, with the stamp that section asks for; and the `docs/remote-execution.md` records that point at this observation.
+
 **Teardown.** Deregister the self-hosted runner, stop any run still going with `bash <scriptsDir>/remote-run.sh stop <branch>`, and delete the repository variables the round set, `HARNESS_RUN_ACTORS` among them. Where (xiv) ran, close the round's pull request first, before any branch is deleted:
 
 ```
@@ -2627,7 +2762,7 @@ bash scripts/sandbox-probe.sh run --job <job> --leg job-layout
 echo "exit $?"
 ```
 
-**The GitHub-hosted runner legs, in the Gate 12 repository.** They are taken at the release #170 step 4 cuts, through `bash scripts/release.sh <version>` (`## 7. Releasing`), from a `dev` carrying `feat_sandbox_probe_job_mode` and `chore_sandbox_gate12_full_run_leg` (#195), in that step's one Gate 12 round. Not at 0.6.7, whose `harness-run.yml` has neither `Install the sandbox prerequisites` nor `Sweep the sandbox placeholders`. The Gate 12 repository, `firu-daniel/harness-gate12`, is first re-rendered at that version with `init --upgrade-workflows`, as `docs/remote-execution.md` → `### Upgrading` gives it.
+**The GitHub-hosted runner legs, in the Gate 12 repository.** They are taken at the release #170 step 4 cuts, through `bash scripts/release.sh <version>` (`## 7. Releasing`), from a `dev` carrying `feat_sandbox_probe_job_mode` and the branch that wrote Gate 12's observation (xvi) (#195), as step 5 of Gate 12's **The sandbox series round (#170 step 4) — not yet run.** Not at 0.6.7, whose `harness-run.yml` has neither `Install the sandbox prerequisites` nor `Sweep the sandbox placeholders`. The Gate 12 repository, `firu-daniel/harness-gate12`, is first re-rendered at that version with `init --upgrade-workflows`, as `docs/remote-execution.md` → `### Upgrading` gives it.
 
 - **What to commit.** Copy `scripts/sandbox-probe-runner.yml` by hand to that repository's default branch as `.github/workflows/sandbox-probe-runner.yml`. It never runs in this repository: it lives under `scripts/`, which `scripts/publish-main.sh` removes from `main` and every release tag.
 - **Which branch it measures.** The workflow checks out GitHub's default branch, then switches to `harness.config.json` → `defaultBranch` when the two differ, refusing and naming both when the configured branch is not on origin, because job-mode preflight accepts only the configured one. It runs on `${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}`, the job's own expression.
@@ -2663,7 +2798,7 @@ Record each row into `docs/sandbox-verification.md` → `## 9. The GitHub-hosted
 - `gate-sandbox`: the launcher's worker outlives the call and the session and reaches a verdict (GS1), writes outside its roots and to the checkout's `.git/config` are refused on disk while the control lands (GS2), a call to an outside host returns no body while the unsandboxed control reaches it (GS3), `~/.ssh/config` and the denied token variables read as absent while the control read succeeds (GS4), and `hr_lane_mtime` advances through the GNU `stat` arm (WF5);
 - the carried-over legs: `wrappers` (P1c, CW5, P1b, CW6) over the checkout's HTTPS origin, `planted-files` (L1, taken because job mode makes it reachable), `write-protection` (W6, W8) and `credentials` (S1, S2, S4, S5), each as its `--list` text states.
 
-**The rows this probe does not take, named so the list is complete.** The local-container Linux legs are this gate's, taken as above. The GitHub-hosted runner legs are job mode's, taken by the workflow above in #170 step 4's Gate 12 round, and the full run on the real job stays owed on `chore_sandbox_gate12_full_run_leg`. CS6 is no longer a hand row: job mode takes it, through the `job-layout` leg. One clone-layout row stays a **hand row**, measured by hand as its row in `docs/sandbox-verification.md` describes: **CS5**, which needs a legacy worktree run, one whose registry record carries no `copy_kind`, resumed by the watcher. The `invalid-profile` leg takes both halves of CS8: (a) through a session, and (b) by calling the watcher's own `run_profile_check` on a scratch per-run copy in a child shell that sources `autonomous-watcher.sh status`, so no run is launched and the live watcher is untouched.
+**The rows this probe does not take, named so the list is complete.** The local-container Linux legs are this gate's, taken as above. The GitHub-hosted runner legs are job mode's, taken by the workflow above in #170 step 4's Gate 12 round, and the full run on the real job is Gate 12's observation (xvi), its rows in `docs/sandbox-verification.md` §10, not yet measured. CS6 is no longer a hand row: job mode takes it, through the `job-layout` leg. One clone-layout row stays a **hand row**, measured by hand as its row in `docs/sandbox-verification.md` describes: **CS5**, which needs a legacy worktree run, one whose registry record carries no `copy_kind`, resumed by the watcher. The `invalid-profile` leg takes both halves of CS8: (a) through a session, and (b) by calling the watcher's own `run_profile_check` on a scratch per-run copy in a child shell that sources `autonomous-watcher.sh status`, so no run is launched and the live watcher is untouched.
 
 **Gate 16 — shell scripts parse.** Every shell script git would let into a commit must parse under the repository's bash floor. The type check runs it: `scripts/typecheck.sh`, which `commands.typecheck` names, runs `bash scripts/check-shell-parse.sh` before its `npm run build` line, so every unit's whole-tree type check parses the shell too, and its one verdict line fails when either step fails. `scripts/run-gates.sh` runs it as gate 16 and grades it by its exit status, so the Run gates phase parses the shell twice, once through `commands.typecheck` and once as gate 16, which is harmless and costs under a second. To run it by hand, run the type check from the repository root:
 
