@@ -57,7 +57,7 @@ Each entry below resolves 1:1 to `harness-runs/task_plans/chore_sandbox_gate12_f
 
 1. [x] **Task 1** — Add `docs/sandbox-verification.md` §10, the full-run leg's and the round's rows, all *not yet measured* _(layer: general)_ _(points: 20)_
 2. [x] **Task 2** — Write Gate 12 observation (xvi), the full-run leg, and the sandbox series round into `docs/development.md` _(layer: general)_ _(points: 20)_
-3. [ ] **Task 3** — Point `docs/remote-execution.md`'s unmeasured records at the round and add its Gate 12 rows _(layer: general)_ _(points: 15)_
+3. [x] **Task 3** — Point `docs/remote-execution.md`'s unmeasured records at the round and add its Gate 12 rows _(layer: general)_ _(points: 15)_
 4. [ ] **Task 4** — Record the `sandbox1h` checks as *not yet measured* in `docs/cli.md` and `docs/outer-loop-verification.md` _(layer: general)_ _(points: 10)_
 
 ## Scope register

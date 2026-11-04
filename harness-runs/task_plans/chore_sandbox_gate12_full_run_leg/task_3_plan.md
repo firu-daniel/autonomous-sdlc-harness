@@ -37,3 +37,8 @@
 - Every row id the file now cites, from `git grep -o -E "(FR[0-9]+|JS[0-9]+N?|SB[0-9]+|RJ[0-9]+)" -- docs/remote-execution.md`, is ⊆ Task 1's id set as the story index's `## Context` lists it.
 - The §6 table still has four cells in every row. The three new rows carry no measured result, no run id and no date of a run.
 - No new line carries a line-number citation or an absolute machine path. The four numbered steps of the job-surface bullet are byte-identical to before.
+
+**Deviations from plan:**
+
+- The plan cites job mode in `docs/remote-execution.md` §1 and §4. The job-mode design text is §2 (**Job mode runs exactly one run, in the job's own checkout**) and §4 (**The permission profile.**). The no-copy, no-per-run-copy, base-as-`--settings` statement is in `docs/cli.md` §6 (**A remote job passes the base profile, checked, and its checkout's `.git` stays write-denied.**). Row (a) cites those three. Rows (b) and (c) cite `docs/watcher.md` → **The launch check.**, the `` `start` IS THE ADAPTERS' ONE ENTRY `` paragraph and the `review` paragraph in the header of `cli/templates/scripts/remote-run.sh`, and `docs/github-issue-trigger.md` §1 step 5.
+- The §11 job-surface sentence is its own paragraph inside the bullet, after step 4, so the four numbered steps stay byte-identical.
