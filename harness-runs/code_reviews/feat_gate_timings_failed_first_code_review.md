@@ -17,7 +17,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — G.1's "the label is never run again" is false as stated _(layer: plugin)_
+1. [x] **Finding 1** — G.1's "the label is never run again" is false as stated _(layer: plugin)_
 2. [ ] **Finding 2** — A unit that runs without its gate's first unit prints under the wrong section heading _(layer: general)_
 
 ## Must Fix
