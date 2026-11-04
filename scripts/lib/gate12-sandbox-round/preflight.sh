@@ -6,12 +6,13 @@
 # THE REFUSALS, IN ORDER. Each prints one `g12_refuse` line naming its cause and makes g12_preflight
 # return non-zero. Nothing is created on any refusal; the only change before the last check is the
 # `git fetch origin` check 6 needs, which writes remote-tracking refs and nothing else.
-#   1. git, gh or jq is not on PATH.
+#   1. The run library (scripts/lib/harness-run-lib.sh, beside this directory) cannot be read, or
+#      git, gh or jq is not on PATH.
 #   2. The working directory is not inside a git checkout (a bare `git rev-parse --show-toplevel`,
 #      held in G12_ROOT), or that top level is this script's own (G12_SCRIPT_ROOT), compared
 #      canonically: this refuses this repository and any copy carrying the script.
-#   3. G12_ROOT/harness.config.json is absent or does not parse to an object: not adopted.
-#   4. The configuration read below refuses a value.
+#   3. G12_ROOT/harness.config.json is absent: not adopted.
+#   4. The configuration read below cannot resolve a value, or its screen refuses one.
 #   5. The raw `remote.origin.url` (the value the operator wrote, not `git remote get-url`) is not
 #      https://github.com/<o>/<n>[.git] or git@github.com:<o>/<n>[.git], or its <o>/<n> is not
 #      G12_REPO, compared case-insensitively.
@@ -20,11 +21,12 @@
 #      a workflow rendered before the sandbox series (docs/development.md, the round's step 5).
 # A refusal raises 2. A failed gh or git call raises 3.
 #
-# THE CONFIGURATION READ. Sets, with any trailing `/` stripped, and refuses a value that is not a
-# string, is empty, carries `..` or starts with `/`:
-#   G12_STATE_DIR       .stateDir, default sdlc-harness
-#   G12_SCRIPTS_DIR     .scriptsDir, default scripts
-#   G12_CONFIG_DEFAULT  .defaultBranch, which the schema requires, so no default
+# THE CONFIGURATION READ. The values come from scripts/lib/harness-run-lib.sh's readers on G12_ROOT,
+# so they resolve exactly as the Gate 12 repository's own outer-loop scripts resolve them; the one
+# check added here refuses a value that carries `..` or starts with `/`:
+#   G12_STATE_DIR       hr_state_dir
+#   G12_SCRIPTS_DIR     hr_scripts_dir
+#   G12_CONFIG_DEFAULT  hr_default_branch
 #
 # SOURCED, NEVER EXECUTED. It sets no shell option: the entry point owns `set -u`.
 # Bash 3.2 is the floor (macOS /bin/bash): no associative array, no ${var,,}.
@@ -47,33 +49,20 @@ g12_preflight_failed() {
   return 3
 }
 
-# g12_config_dir <key> <default, or empty for none> <variable> — one configuration value, validated.
-g12_config_dir() {
-  local key="$1" def="$2" var="$3" config="$G12_ROOT/harness.config.json" value kind
-  kind="$(jq -r --arg k "$key" 'if has($k) then (.[$k] | type) else "absent" end' "$config")" ||
-    { g12_preflight_refuse "'$config' could not be read for .$key"; return; }
-  case "$kind" in
-    absent)
-      [ -n "$def" ] || { g12_preflight_refuse "'$config' carries no .$key"; return; }
-      value="$def"
-      ;;
-    string)
-      value="$(jq -r --arg k "$key" '.[$k]' "$config")" ||
-        { g12_preflight_refuse "'$config' could not be read for .$key"; return; }
-      ;;
-    *)
-      g12_preflight_refuse "'$config' .$key is a $kind, not a string"
-      return
-      ;;
+# g12_config_screen <key> <hr_ reader> <variable> — the library's value for <key>, screened.
+g12_config_screen() {
+  local key="$1" reader="$2" var="$3" config="$G12_ROOT/harness.config.json" value status
+  value="$("$reader" "$G12_ROOT")"
+  status=$?
+  case "$status" in
+    0) ;;
+    1) g12_preflight_refuse "'$config' carries no .$key"; return ;;
+    *) g12_preflight_refuse "'$config' could not be read for .$key: it is unreadable, is not one JSON object, or carries no .defaultBranch"; return ;;
   esac
   case "$value" in
     /*) g12_preflight_refuse "'$config' .$key '$value' starts with /"; return ;;
     *..*) g12_preflight_refuse "'$config' .$key '$value' carries .."; return ;;
   esac
-  while [ "${value%/}" != "$value" ]; do
-    value="${value%/}"
-  done
-  [ -n "$value" ] || { g12_preflight_refuse "'$config' .$key is empty"; return; }
   printf -v "$var" '%s' "$value"
 }
 
@@ -82,7 +71,12 @@ g12_canonical_dir() {
 }
 
 g12_preflight() {
-  local tool root_canon script_canon url slug lower_slug lower_repo workflow
+  local lib tool root_canon script_canon url slug lower_slug lower_repo workflow
+
+  lib="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)/lib/harness-run-lib.sh"
+  [ -r "$lib" ] || { g12_preflight_refuse "cannot read the run library at '$lib'"; return; }
+  # shellcheck source=../harness-run-lib.sh
+  . "$lib"
 
   for tool in git gh jq; do
     command -v "$tool" >/dev/null 2>&1 || { g12_preflight_refuse "$tool is not on PATH"; return; }
@@ -102,12 +96,11 @@ g12_preflight() {
 
   [ -f "$G12_ROOT/harness.config.json" ] ||
     { g12_preflight_refuse "'$G12_ROOT' is not adopted: it carries no harness.config.json"; return; }
-  jq -e 'type == "object"' "$G12_ROOT/harness.config.json" >/dev/null 2>&1 ||
-    { g12_preflight_refuse "'$G12_ROOT/harness.config.json' does not parse to a JSON object"; return; }
-
-  g12_config_dir stateDir sdlc-harness G12_STATE_DIR || return
-  g12_config_dir scriptsDir scripts G12_SCRIPTS_DIR || return
-  g12_config_dir defaultBranch "" G12_CONFIG_DEFAULT || return
+  # Warmed unsubstituted so the three readers' subshells reuse one parse.
+  hr_config_load "$G12_ROOT" || :
+  g12_config_screen stateDir hr_state_dir G12_STATE_DIR || return
+  g12_config_screen scriptsDir hr_scripts_dir G12_SCRIPTS_DIR || return
+  g12_config_screen defaultBranch hr_default_branch G12_CONFIG_DEFAULT || return
 
   url="$(git -C "$G12_ROOT" config --get remote.origin.url)"
   case $? in
