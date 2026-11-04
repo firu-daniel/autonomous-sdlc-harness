@@ -2356,7 +2356,13 @@ Then repeat leg (a) as the second account, on a new issue. Passes when the secon
 
 **Preconditions.** That round's steps 1–4: `<version>` released from a `dev` carrying the sandbox series, the scratch repository reset to its seed, adopted at 0.6.7, then upgraded locally to `<version>` and its upgrade committed and pushed. A job rendered at 0.6.7 has neither `Install the sandbox prerequisites` nor `Sweep the sandbox placeholders`, so a run started before the upgrade answers nothing here.
 
-**The drop.** The run's branch is honest: no commit on it changes a path the job checks (`docs/remote-execution.md` → `## 11. Security` → **The branch's own files are checked before the job trusts them.**). In a `claude` session in the scratch repository, drop a small task that leaves one decision undecided — a limit it names without setting — so the task-plan writer parks, with `/autonomous-sdlc-harness:branch-prompt`. Then let the watcher dispatch it in one pass, as (ii) does:
+**The drop.** The run's branch is honest: no commit on it changes a path the job checks (`docs/remote-execution.md` → `## 11. Security` → **The branch's own files are checked before the job trusts them.**). In a `claude` session in the scratch repository, drop a small task that leaves one decision undecided — a limit it names without setting — so the task-plan writer parks:
+
+```
+/autonomous-sdlc-harness:branch-prompt <task text>
+```
+
+Then let the watcher dispatch it in one pass, as (ii) does:
 
 ```
 bash <scriptsDir>/autonomous-watcher.sh tick
