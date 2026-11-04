@@ -9,8 +9,9 @@
 #   1. The run library (scripts/lib/harness-run-lib.sh, beside this directory) cannot be read, or
 #      git, gh or jq is not on PATH.
 #   2. The working directory is not inside a git checkout (a bare `git rev-parse --show-toplevel`,
-#      held in G12_ROOT), or that top level is this script's own (G12_SCRIPT_ROOT), compared
-#      canonically: this refuses this repository and any copy carrying the script.
+#      held in G12_ROOT); or that top level is this script's own (G12_SCRIPT_ROOT), compared
+#      canonically; or it carries scripts/lib/gate12-sandbox-round/core.sh, so it is any checkout
+#      of the repository that ships this driver.
 #   3. G12_ROOT/harness.config.json is absent: not adopted.
 #   4. The configuration read below cannot resolve a value, or its screen refuses one.
 #   5. The raw `remote.origin.url` (the value the operator wrote, not `git remote get-url`) is not
@@ -92,6 +93,10 @@ g12_preflight() {
       g12_preflight_refuse "'$G12_ROOT' is the checkout this script sits in; run it from the Gate 12 repository, never here"
       return
     fi
+  fi
+  if [ -e "$G12_ROOT/scripts/lib/gate12-sandbox-round/core.sh" ]; then
+    g12_preflight_refuse "'$G12_ROOT' carries scripts/lib/gate12-sandbox-round/: it is a checkout of the repository that ships this driver; run it from the Gate 12 repository, never there"
+    return
   fi
 
   [ -f "$G12_ROOT/harness.config.json" ] ||

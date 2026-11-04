@@ -104,6 +104,15 @@ test('each preflight refusal exits 2 and creates nothing', async (t) => {
     const result = await assertRefused(fixture, ['plant', '--repo', GATE12_SLUG], 2, { script });
     assert.match(result.stderr, /is the checkout this script sits in/);
   });
+
+  await t.test('a checkout carrying the driver, run by another copy', async (t) => {
+    const fixture = await fixtureFor(t);
+    const lib = join(fixture.dir, 'scripts', 'lib', 'gate12-sandbox-round');
+    await mkdir(lib, { recursive: true });
+    await writeFile(join(lib, 'core.sh'), '');
+    const result = await assertRefused(fixture, ['plant', '--repo', GATE12_SLUG], 2);
+    assert.match(result.stderr, /it is a checkout of the repository that ships this driver/);
+  });
 });
 
 test('a failing gh repo view exits 3 and creates nothing', async (t) => {
