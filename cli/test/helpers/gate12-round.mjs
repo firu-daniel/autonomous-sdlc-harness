@@ -32,7 +32,7 @@ export const GATE12_SLUG = 'fixture/gate12';
 export const ROUND_SCRIPT = join(WORKSPACE_ROOT, 'scripts', 'gate12-sandbox-round.sh');
 
 /** The step name the preflight's last check looks for in the default branch's workflow. */
-export const INSTALL_STEP = 'Install the sandbox prerequisites';
+const INSTALL_STEP ='Install the sandbox prerequisites';
 
 const ORIGIN_URL = `https://github.com/${GATE12_SLUG}.git`;
 const WORKFLOW_TEMPLATE = join(WORKSPACE_ROOT, 'cli', 'templates', 'github', 'workflows', 'harness-run.yml');

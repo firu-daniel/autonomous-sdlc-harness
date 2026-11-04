@@ -33,7 +33,7 @@
 
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below from top to bottom, and the committing role flips each one to `[x]` as that fix's commit lands. Each entry resolves to `harness-runs/code_reviews/feat_gate12_sandbox_round_driver_code_review/finding_<K>.md` through its `**Finding K**` reference. The leading `N.` is the fix order. `K` is the finding's stable identity.
 
-1. [ ] **Finding 7** — Drop the unused `export` from `INSTALL_STEP` in the Gate 12 test helper. _(layer: cli)_
+1. [x] **Finding 7** — Drop the unused `export` from `INSTALL_STEP` in the Gate 12 test helper. _(layer: cli)_
 2. [ ] **Finding 1** — Copy `scripts/lib/harness-run-lib.sh` into the fixture in the copied-script preflight case, so it reaches check 2 again. _(layer: cli)_
 3. [ ] **Finding 5** — Check `g12_scratch_dir`'s status in `g12_run_dir` and `g12_evidence` before joining on it. _(layer: general)_
 4. [ ] **Finding 6** — Give FR5's result line the departure that it is graded on step conclusions, not logs. _(layer: general)_
