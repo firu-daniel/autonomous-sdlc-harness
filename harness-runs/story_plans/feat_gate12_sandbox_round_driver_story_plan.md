@@ -73,7 +73,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_gate12_sandbox_round_dr
 1. [x] **Task 1** — Add the entry point and `core.sh`: the row table, `--list`, the result line and the exit accumulator _(layer: general)_ _(points: 20)_
 2. [x] **Task 2** — Add `preflight.sh` and `state.sh`: the refusals, the Gate 12 configuration read and the atomic state file _(layer: general)_ _(points: 20)_
 3. [x] **Task 3** — Add `plant.sh`: the plumbing branch builder, the dispatch, the run-ID lookup and the `plant` subcommand _(layer: general)_ _(points: 20)_
-4. [ ] **Task 4** — Add `plants.sh`: what each adversarial branch carries, for JS1, JS4, SB2 and RJ2 _(layer: general)_ _(points: 15)_
+4. [x] **Task 4** — Add `plants.sh`: what each adversarial branch carries, for JS1, JS4, SB2 and RJ2 _(layer: general)_ _(points: 15)_
 5. [ ] **Task 5** — Add `default-branch.sh`: round step 8 for JS3, restoring the default branch and the stall variables on every exit path _(layer: general)_ _(points: 20)_
 6. [ ] **Task 6** — Add `runs.sh` and `grade-plant.sh`: the run readers, the expiry rule, and the JS1, JS4 and RJ2 grades _(layer: general)_ _(points: 20)_
 7. [ ] **Task 7** — Add `grade-state.sh`: the SB2, SB4 and JS3 grades and the hand-step rows _(layer: general)_ _(points: 15)_
