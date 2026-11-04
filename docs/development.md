@@ -1182,6 +1182,16 @@ The round's teardown kept its GitHub evidence: issues #39 and #41, pull requests
    npx --yes autonomous-sdlc-harness@<version> init --force
    ```
 
+   Then, for §2's fresh-`init` row, in a new directory outside the scratch repository, so the 0.6.7 adoption is left as it is:
+
+   ```
+   git init <scratch-fresh>
+   git -C <scratch-fresh> commit --allow-empty -m "Seed"
+   npx --yes autonomous-sdlc-harness@<version> init --cwd <scratch-fresh> --non-interactive
+   ```
+
+   Read the managed block's comment in `<scratch-fresh>/.gitignore`, record it, and delete `<scratch-fresh>` by hand afterwards.
+
    Then re-render the workflows, and commit and push every path its report prints, as `docs/remote-execution.md` → `### Upgrading` gives it, with **Setup.**'s `workflow` scope and its `--no-verify` push. No `.bak` file is among the paths. Where the forced runs have already rendered the workflows at `<version>`, the upgrade reports that nothing was upgraded, and the paths to commit are the ones the forced runs reported writing.
 
    ```
