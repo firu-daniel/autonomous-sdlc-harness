@@ -26,7 +26,7 @@ Beyond those two, the round assigns one `sandbox1h` §2 check to a step that doe
 2. [x] **Finding 5** — Put observation (xvi)'s `branch-prompt` drop command in its own fenced block _(layer: general)_
 3. [x] **Finding 3** — Add a fresh-`init` command block to the round's step 4 for `sandbox1h` §2's managed-block check _(layer: general)_
 4. [x] **Finding 1** — Correct FR1's "Read from" in both documents: no launch line carries `--settings`, and the session's output is not in the step log _(layer: general)_
-5. [ ] **Finding 2** — State in FR7 that the full-run leg's planning park does not reach the architecture gate's test-log clause _(layer: general)_
+5. [x] **Finding 2** — State in FR7 that the full-run leg's planning park does not reach the architecture gate's test-log clause _(layer: general)_
 
 ---
 
