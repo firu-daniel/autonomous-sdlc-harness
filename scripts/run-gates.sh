@@ -221,6 +221,18 @@ python_gate() {
   fi
 }
 
+# The heading of the gate a unit belongs to, printed once per phase before the first of its units
+# that runs: a phase may start a gate at any of its legs.
+header_gate=""
+header_phase=""
+gate_header() {
+  if [ "$1" != "$header_gate" ] || [ "$GR_PHASE" != "$header_phase" ]; then
+    echo "== gate $1 — $2"
+    header_gate="$1"
+    header_phase="$GR_PHASE"
+  fi
+}
+
 # run_unit <id> — run one check, print its line(s), and record it once. The round library calls it
 # with GR_PHASE set, and GR_FOCUS_FILES for gate 4 in the focused phase.
 run_unit() {
@@ -229,7 +241,7 @@ run_unit() {
   unit_secs=0
   case "$id" in
     1)
-      echo "== gate 1 — manifests"
+      gate_header 1 "manifests"
       if command -v claude >/dev/null 2>&1; then
         gate "1a plugin manifest" claude plugin validate --strict plugin
         status_1a="$unit_status"
@@ -246,13 +258,14 @@ run_unit() {
       unit_secs=$((SECONDS - start))
       ;;
     2a)
-      echo "== gate 2 — CLI build and run"
+      gate_header 2 "CLI build and run"
       gate "2a build" npm run build
       ;;
-    2b) gate "2b --version" node cli/dist/cli.js --version ;;
-    2c) gate "2c --help" node cli/dist/cli.js --help ;;
-    2d) gate "2d init --help" node cli/dist/cli.js init --help ;;
+    2b) gate_header 2 "CLI build and run"; gate "2b --version" node cli/dist/cli.js --version ;;
+    2c) gate_header 2 "CLI build and run"; gate "2c --help" node cli/dist/cli.js --help ;;
+    2d) gate_header 2 "CLI build and run"; gate "2d init --help" node cli/dist/cli.js init --help ;;
     2e)
+      gate_header 2 "CLI build and run"
       # The one arm graded by REFUSAL: the CLI must reject a command it does not have. `gate`
       # grades a zero exit as a pass, so this arm is inverted by hand rather than passed to it.
       if node cli/dist/cli.js not-a-command >"$log" 2>&1; then
@@ -268,16 +281,16 @@ run_unit() {
       fi
       ;;
     3a)
-      echo "== gate 3 — configuration and flow-graph schemas"
+      gate_header 3 "configuration and flow-graph schemas"
       gate "3a example validates" npm run validate:config
       ;;
-    3b) gate "3b negative fixtures are refused" npm run validate:config:negative ;;
-    3c) gate "3c flow graph validates" npm run validate:flow-graph ;;
-    3d) gate "3d flow-graph negative fixtures are refused" npm run validate:flow-graph:negative ;;
-    3e) gate "3e flow graph static checks" bash scripts/check-flow-graph.sh ;;
-    3f) gate "3f each flow-graph check refuses its fixture" bash scripts/check-flow-graph.sh --negatives ;;
+    3b) gate_header 3 "configuration and flow-graph schemas"; gate "3b negative fixtures are refused" npm run validate:config:negative ;;
+    3c) gate_header 3 "configuration and flow-graph schemas"; gate "3c flow graph validates" npm run validate:flow-graph ;;
+    3d) gate_header 3 "configuration and flow-graph schemas"; gate "3d flow-graph negative fixtures are refused" npm run validate:flow-graph:negative ;;
+    3e) gate_header 3 "configuration and flow-graph schemas"; gate "3e flow graph static checks" bash scripts/check-flow-graph.sh ;;
+    3f) gate_header 3 "configuration and flow-graph schemas"; gate "3f each flow-graph check refuses its fixture" bash scripts/check-flow-graph.sh --negatives ;;
     4)
-      echo "== gate 4 — init against a throwaway fixture"
+      gate_header 4 "init against a throwaway fixture"
       gate4_destination="$(gr_tests_destination)"
       gate4_phase="$GR_PHASE"
       # `tap` is pinned to stdout because naming any reporter drops Node's default, and `gate`'s
@@ -301,15 +314,16 @@ run_unit() {
       fi
       ;;
     6a)
-      echo "== gate 6 — self-containment"
+      gate_header 6 "self-containment"
       # Gate 6a's exclusions, filters and the one grep error it drops are argued in
       # `scripts/check-machine-paths.sh`'s header; it searches the working directory, the root here.
       gate_silent "6a no machine paths" bash scripts/check-machine-paths.sh
       ;;
-    6b) gate_silent "6b no template in the dot-namespace" dot_namespace_hits ;;
-    6c) gate "6c llms.txt links resolve on main" bash scripts/check-llms-txt.sh ;;
-    6d) gate "6d plugin command spellings carry the prefix" bash scripts/check-command-spelling.sh ;;
+    6b) gate_header 6 "self-containment"; gate_silent "6b no template in the dot-namespace" dot_namespace_hits ;;
+    6c) gate_header 6 "self-containment"; gate "6c llms.txt links resolve on main" bash scripts/check-llms-txt.sh ;;
+    6d) gate_header 6 "self-containment"; gate "6d plugin command spellings carry the prefix" bash scripts/check-command-spelling.sh ;;
     6e)
+      gate_header 6 "self-containment"
       # 6a greps for the running user's `$HOME` only, so a transcript ref under /tmp, /private/var
       # or another user's home, a `..`-climbing path, or a credential passes it; and 6a is red in a
       # self-adopted checkout by design, so a new hit there is invisible to a "no new failure"
@@ -317,6 +331,7 @@ run_unit() {
       gate_silent "6e no machine-local or credential material in eval artifacts" bash scripts/check-eval-artifacts.sh
       ;;
     6f)
+      gate_header 6 "self-containment"
       # Hand-written as 14c is: status 4 is `check-typos.sh`'s no-typos skip, pushed onto neither
       # array.
       bash scripts/check-typos.sh >"$log" 2>&1
@@ -339,7 +354,7 @@ run_unit() {
       fi
       ;;
     11)
-      echo "== gate 11 — docs-retrieval relevance floor"
+      gate_header 11 "docs-retrieval relevance floor"
       # Written by hand rather than handed to `gate`, the way gate 2e is, because this gate has
       # THREE outcomes and that helper grades two: it pushes every non-zero onto `failed`, and
       # anything on `failed` makes this script exit 1. Status 3 is the model-cache status
@@ -379,12 +394,13 @@ run_unit() {
       fi
       ;;
     13a)
-      echo "== gate 13 — Python docs-retrieval service"
+      gate_header 13 "Python docs-retrieval service"
       python_gate "13a Python lint" noskip bash scripts/python-service.sh lint
       ;;
-    13b) python_gate "13b Python typecheck" noskip bash scripts/python-service.sh typecheck ;;
-    13c) python_gate "13c Python tests" noskip bash scripts/python-service.sh test ;;
+    13b) gate_header 13 "Python docs-retrieval service"; python_gate "13b Python typecheck" noskip bash scripts/python-service.sh typecheck ;;
+    13c) gate_header 13 "Python docs-retrieval service"; python_gate "13c Python tests" noskip bash scripts/python-service.sh test ;;
     13d)
+      gate_header 13 "Python docs-retrieval service"
       if [ "${HARNESS_GATES_CONTAINERS:-}" = "1" ]; then
         python_gate "13d Python container tests" skip4 bash scripts/python-service.sh container-test
       else
@@ -395,14 +411,15 @@ run_unit() {
       fi
       ;;
     14a)
-      echo "== gate 14 — rendered workflows parse"
+      gate_header 14 "rendered workflows parse"
       # 14a, 14c and 14d render through `cli/dist`, so they depend on gate 2a. 14c and 14d are
       # hand-written as `python_gate` is: status 4 is `check-rendered-workflows.mjs`'s no-tool skip
       # under --actionlint and --zizmor, pushed onto neither array.
       gate "14a rendered workflows parse as YAML" node scripts/check-rendered-workflows.mjs
       ;;
-    14b) gate "14b 0.6.1's harness-control.yml is refused" node scripts/check-rendered-workflows.mjs --negatives ;;
+    14b) gate_header 14 "rendered workflows parse"; gate "14b 0.6.1's harness-control.yml is refused" node scripts/check-rendered-workflows.mjs --negatives ;;
     14c)
+      gate_header 14 "rendered workflows parse"
       node scripts/check-rendered-workflows.mjs --actionlint >"$log" 2>&1
       status=$?
       unit_secs=$((SECONDS - start))
@@ -422,6 +439,7 @@ run_unit() {
       fi
       ;;
     14d)
+      gate_header 14 "rendered workflows parse"
       node scripts/check-rendered-workflows.mjs --zizmor >"$log" 2>&1
       status=$?
       unit_secs=$((SECONDS - start))
@@ -442,7 +460,7 @@ run_unit() {
       fi
       ;;
     16)
-      echo "== gate 16 — shell scripts parse"
+      gate_header 16 "shell scripts parse"
       # `bash -n` over every `*.sh` and every extensionless file on a bash shebang that git lists as
       # tracked or as untracked and not ignored, under `/bin/bash` where it exists — bash 3.2 on
       # macOS, the floor — and `bash` on PATH otherwise. A library with a syntax error still lets
