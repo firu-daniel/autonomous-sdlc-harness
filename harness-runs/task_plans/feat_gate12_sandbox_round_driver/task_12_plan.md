@@ -49,3 +49,9 @@
 **Verification:**
 
 - `npm test --workspace cli -- test/gate12-sandbox-round-default-branch.test.mjs` passes. It is this task's own new test file.
+
+**Deviations from plan:**
+
+- The plan's example `run view` route stdout is `{"status":"in_progress"}`. The driver calls `gh run view … --json status --jq .status`, and the stub never applies `--jq` to a route's fixed stdout (`cli/test/helpers/gate12-round.mjs` header), so the routes print the bare status (`in_progress\n`, `queued\n`).
+- "Before the dispatch" is asserted against the first `run list` call in the stub log. `remote-run.sh` is not a `gh` call, and the driver's run-ID lookup follows it directly (`g12_dispatch`).
+- The `other_branch` refusal runs as a subtest of the failed-dispatch case, on the state that case leaves. It asserts no `repo edit` among the stub calls made after that case's own calls.
