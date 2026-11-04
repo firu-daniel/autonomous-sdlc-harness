@@ -41,7 +41,7 @@ A Run gates round of this repository takes 30 to 40 minutes inside the sandbox, 
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_gate_timings_failed_first/task_<K>_plan.md`. The entries follow the configured layer order (`cli`, `plugin`, `general`). The one exception is argued under **Ship order** in `## Context`: the two `cli/test/` suites that exercise root `scripts/` files ship after those files. The closing documentation task is last.
 
 1. [x] **Task 1** — `run-test-suite.sh` tells its gates the label and log directory, records the commit a clean run used, and reuses a finished verdict on that commit _(layer: cli)_ _(points: 20)_
-2. [ ] **Task 2** — Pin the verdict reuse and the gate environment in `cli/test/run-test-suite.test.mjs` _(layer: cli)_ _(points: 20)_
+2. [x] **Task 2** — Pin the verdict reuse and the gate environment in `cli/test/run-test-suite.test.mjs` _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — The `test_run_logs/` and `scripts/` README templates describe `<label>.commit`, gate-written records and the reused verdict _(layer: cli)_ _(points: 8)_
 4. [ ] **Task 4** — Phase G's run step cites the reused verdict, and `test-fix-plan-writer` reads a round that ran only part of the suite _(layer: plugin)_ _(points: 10)_
 5. [ ] **Task 5** — The three supervised gate-run blocks say the wrapper may answer a reused verdict at once _(layer: plugin)_ _(points: 5)_
