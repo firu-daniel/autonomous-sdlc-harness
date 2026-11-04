@@ -77,7 +77,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_gate12_sandbox_round_dr
 5. [x] **Task 5** — Add `default-branch.sh`: round step 8 for JS3, restoring the default branch and the stall variables on every exit path _(layer: general)_ _(points: 20)_
 6. [x] **Task 6** — Add `runs.sh` and `grade-plant.sh`: the run readers, the expiry rule, and the JS1, JS4 and RJ2 grades _(layer: general)_ _(points: 20)_
 7. [x] **Task 7** — Add `grade-state.sh`: the SB2, SB4 and JS3 grades and the hand-step rows _(layer: general)_ _(points: 15)_
-8. [ ] **Task 8** — Add `grade-full-run.sh`: FR1–FR7 from the full run's branch, with `source` lines _(layer: general)_ _(points: 20)_
+8. [x] **Task 8** — Add `grade-full-run.sh`: FR1–FR7 from the full run's branch, with `source` lines _(layer: general)_ _(points: 20)_
 9. [ ] **Task 9** — Add `teardown.sh`: delete the recorded branches and confirm the default branch _(layer: general)_ _(points: 10)_
 10. [ ] **Task 10** — Test the entry point, the row table and the preflight refusals, with a shared Gate 12 fixture helper _(layer: cli)_ _(points: 15)_
 11. [ ] **Task 11** — Test `plant`: the plumbing branches, the dispatch and the state file _(layer: cli)_ _(points: 20)_

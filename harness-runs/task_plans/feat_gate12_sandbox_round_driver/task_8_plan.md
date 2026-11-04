@@ -33,3 +33,10 @@
 
 - With the stubbed `gh`, a three-run branch (parked, resumed, final) shaped as observation (xvi) describes prints FR1 to FR7 `pass` and one `FR1 source` line. Removing the resumed run turns FR6 and FR7 into `not run`. Changing the final job's `Run the harness` log to end `job: failed stop`, its step still concluded `success`, turns FR3 into `fail` quoting that line.
 - `commands.typecheck` passes.
+
+**Deviations from plan:**
+
+- FR4's per-call records are read as `sessions[].tools.items[]` (the record shape in `cli/templates/scripts/lib/run-analytics.jq`), not every object carrying `permission_denied`: `tools.slowest` repeats items, so a whole-tree search would quote a denied call twice. A document that parses but is not `{sessions: [...]}` is graded `fail` alongside an unparseable one.
+- Cases the plan leaves open, graded `fail`: FR1 with neither a launch line nor a `not launching` line; FR5 with `Record the default branch's commit` concluded `failure`. FR2 with a preflight `success` but no outcome line in the install log stays `pass`, and its record keeps the whole install log in place of the missing line.
+- FR1's `source` line is printed directly after FR1's result line, so the output order is FR1, FR1 source, FR2 … FR7.
+- The stubbed-`gh` verification ran as a probe (`harness-runs/scratch/fr_probe.mjs`, run through `bash scripts/scratch-run.sh`), sourcing the libraries and calling `g12_grade_full_run` directly. That skips `g12_preflight` and `g12_grade_cmd`'s dispatch, so the probe does not exercise them. All three cases came out as the plan expects: three runs gave FR1–FR7 `pass` plus one `FR1 source` line; with the resumed run removed, FR6 and FR7 were `not run`; with the final job ending `job: failed stop`, FR3 was `fail` quoting `run 103: job: failed stop`.
