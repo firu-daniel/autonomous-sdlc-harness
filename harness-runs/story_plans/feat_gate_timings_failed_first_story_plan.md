@@ -45,7 +45,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_gate_timings_failed_fir
 3. [x] **Task 3** — The `test_run_logs/` and `scripts/` README templates describe `<label>.commit`, gate-written records and the reused verdict _(layer: cli)_ _(points: 8)_
 4. [x] **Task 4** — Phase G's run step cites the reused verdict, and `test-fix-plan-writer` reads a round that ran only part of the suite _(layer: plugin)_ _(points: 10)_
 5. [x] **Task 5** — The three supervised gate-run blocks say the wrapper may answer a reused verdict at once _(layer: plugin)_ _(points: 5)_
-6. [ ] **Task 6** — Bring this repository's copies of `run-test-suite.sh`, the run library and the `test_run_logs/` README in line with their templates _(layer: general)_ _(points: 5)_
+6. [x] **Task 6** — Bring this repository's copies of `run-test-suite.sh`, the run library and the `test_run_logs/` README in line with their templates _(layer: general)_ _(points: 5)_
 7. [ ] **Task 7** — Add the per-file timing reporter `scripts/lib/test-timing-reporter.mjs` _(layer: general)_ _(points: 10)_
 8. [ ] **Task 8** — Add `scripts/lib/gate-round-lib.sh`: gate lines with durations, the round record, the previous round's failures and the focused-then-full driver _(layer: general)_ _(points: 20)_
 9. [ ] **Task 9** — Restructure `scripts/run-gates.sh` into gate units driven by the round library, with gate 4 writing the per-file record _(layer: general)_ _(points: 20)_

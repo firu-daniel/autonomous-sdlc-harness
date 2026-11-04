@@ -6472,7 +6472,7 @@ hr_lane_mtime() {
 }
 
 # THE RUN GATES LANE:
-# `<state_dir>/test_run_logs/<sanitized branch>/<label>.{running,verdict,log}`,
+# `<state_dir>/test_run_logs/<sanitized branch>/<label>.{running,verdict,commit,log}`,
 # the labels it accepts, and the age past which a `.running` heartbeat is stale.
 # Its two callers, `run-test-suite.sh` and `launch-sandboxed-gates.sh`, take all
 # four from here and must agree on them: a drift makes the launcher's `pending`
