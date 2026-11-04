@@ -38,7 +38,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_linux_gate_sandbox_findi
 10. [x] **Task 10** — PD30's fixture: T3's `fail` evidence over a lane log whose gate output quotes a refusal string _(layer: cli)_ _(points: 10)_
 11. [x] **Task 11** — F14: rewrite the container home spelling out of the earlier sandbox-series run artifacts _(layer: general)_ _(points: 10)_
 12. [x] **Task 12** — F11 and F14 in `docs/development.md`: gate 6's command, the container recipe's home spellings, and the Gate 15 expectations _(layer: general)_ _(points: 20)_
-13. [ ] **Task 13** — Record F11–F14 and PD28–PD30 as fixed in `docs/sandbox-verification.md`, restate T3, WF5, CL5 (Linux) and GS1–GS4, and rewrite its home spellings _(layer: general)_ _(points: 20)_
+13. [x] **Task 13** — Record F11–F14 and PD28–PD30 as fixed in `docs/sandbox-verification.md`, restate T3, WF5, CL5 (Linux) and GS1–GS4, and rewrite its home spellings _(layer: general)_ _(points: 20)_
 14. [ ] **Task 14** — F14's fixture: a tree guard that fails on any file naming the Gate 15 container user's home _(layer: cli)_ _(points: 10)_
 15. [ ] **Task 15** — Register Task 14's tree guard in `harness.config.json` _(layer: general)_ _(points: 5)_
 

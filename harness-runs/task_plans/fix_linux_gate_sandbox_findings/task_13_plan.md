@@ -34,3 +34,9 @@
 - `git grep -n -e 'not yet measured' -- docs/sandbox-verification.md` still reaches each of GS1–GS4, and no GS row's verdict cell gains `pass` or `fail`.
 - Every fixture title cited in the rows matches the table above byte for byte.
 - No `+` line of `git diff -U0 -- docs/sandbox-verification.md` matches `Task [0-9]` unless it is a line already in the file that this task's edit only carried along: no plan task number of this branch lands in the document.
+
+**Deviations from plan:**
+
+- CL5 (Linux)'s verdict cell reads *… (§5 PD28); PD28 fixed by this branch; owed to the next Gate 15 container run; run 1 blocked: F9*. The Work bullet asks only for *owed to the next Gate 15 container run*; without *PD28 fixed by this branch* the row fails the Verification bullet that every derivation-entry-B row names this branch.
+- §0's placeholder sentence for `<home>` is appended to the first Linux run's *In the quoted evidence* sentence, the first place §0 defines the Linux placeholders; the plan names "§0's placeholder statement" without locating it.
+- CL5 (Linux)'s Observed cell keeps its run-3 parenthesis *(§5 PD28, owed to #242)* and F10's row keeps *after #242*: both are dated observations of run 3, and no Work bullet names them.
