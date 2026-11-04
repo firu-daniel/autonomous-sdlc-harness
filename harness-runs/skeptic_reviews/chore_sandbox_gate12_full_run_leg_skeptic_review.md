@@ -20,7 +20,7 @@
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 3** — Name where FR1's copy and machine-state clauses are read from, in both documents _(layer: general)_
-2. [ ] **Finding 2** — Create `<other branch>` from the default branch's tip before step 8 sets it as the GitHub default, and delete it after _(layer: general)_
+2. [x] **Finding 2** — Create `<other branch>` from the default branch's tip before step 8 sets it as the GitHub default, and delete it after _(layer: general)_
 3. [ ] **Finding 1** — Correct FR4: the `harness-state` artifact's `run.log` carries each call's clipped input descriptor, in both documents _(layer: general)_
 
 ---

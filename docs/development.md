@@ -1207,12 +1207,25 @@ The round's teardown kept its GitHub evidence: issues #39 and #41, pull requests
 7. **The adversarial legs**, each on its own throwaway branch, because each plants what the job must refuse or skip: `sandbox1c` §1 and §4, `sandbox1c2` §2–§4, `sandbox1e4` §10 item 2.
 8. **The default-branch leg.** Set the repository's GitHub default branch to differ from its configured `defaultBranch`, take `sandbox1c` §3, both arms, then set it back. It is the last of the job legs, so it disturbs none of the others.
 
+   `<other branch>` is a new branch cut from the default branch's tip, so it carries the adoption and every job surface unchanged; never one of step 7's throwaway branches:
+
+   ```
+   git fetch origin
+   git push --no-verify origin refs/remotes/origin/<default branch>:refs/heads/<other branch>
+   ```
+
    ```
    gh repo edit <owner>/<scratch-repo> --default-branch <other branch>
    ```
 
    ```
    gh repo edit <owner>/<scratch-repo> --default-branch <default branch>
+   ```
+
+   Then delete it:
+
+   ```
+   git push --no-verify origin --delete <other branch>
    ```
 
 9. **The local legs**, on this machine rather than in a job: `sandbox1e4` §10 item 3 from a mirror of the scratch repository, and `sandbox1h` §3 with the repository's daemon installed and idle.
