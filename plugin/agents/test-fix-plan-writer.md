@@ -71,7 +71,7 @@ Where the auto-loaded `CLAUDE.md` routing table names a document this definition
 
    The typecheck section comes first and closes with its `exited` line or its `not run` line, never both; the test section follows and is present even when the typecheck failed. A non-zero `exited` status is a failing gate. A `not run` line is neither a failure nor a pass and never yields a finding.
 
-2. **Classify each failure against the earlier logs**, where the prompt names any: *new this round* (absent from the previous round's log: a likely regression from that round's fix) or *persisting*. Record the class in `## Source failures` and in the finding's diagnosis.
+2. **Classify each failure against the earlier logs**, where the prompt names any: *new this round* (absent from the previous round's log: a likely regression from that round's fix) or *persisting*. Record the class in `## Source failures` and in the finding's diagnosis. Where the log says its round ran only part of a gate and names what it ran, those are this round's only results: classify only them, and never read a failure an earlier log shows that this round did not run as fixed or as persisting.
 
 3. **Diagnose each failure against the current tree**, not the log's snapshot alone.
 

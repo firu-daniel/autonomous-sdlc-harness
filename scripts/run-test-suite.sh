@@ -7,7 +7,9 @@
 # OUTPUT CONTRACT — one stdout line. The run form prints `pending` (exit 3) once
 # it has started a detached run of the label and that run has claimed `.running`
 # or already written `.verdict` (the next `--wait` reads it); for a label already
-# in flight it prints what the wait form would. A verdict is `pass` (exit 0) only
+# in flight it prints what the wait form would, and for a label whose finished
+# verdict it reuses (ONE RUN PER LABEL) it answers that verdict at once, as the
+# wait form would. A verdict is `pass` (exit 0) only
 # when the typecheck passed or was not run for `<none>` AND the test passed, else
 # `fail <log path>` (exit 1), the path repo-relative. No gate output reaches
 # stdout or stderr; the orchestrator never reads the log, only hands its path on.
@@ -25,6 +27,14 @@
 # counts gate runs, so a branch broken both ways spends one run and gets one fix
 # plan, not two.
 #
+# WHAT A GATE IS TOLD. Both gates run with RUN_TEST_SUITE_LABEL set to the
+# round's label and RUN_TEST_SUITE_LOG_DIR set to the directory holding its log,
+# `<state_dir>/test_run_logs/<sanitized branch>`, repo-relative as `stateDir` is
+# configured. A gate command may write its own per-round records beside the log,
+# named `<label>.<suffix>` with a suffix BESIDE THE LOG does not list; this
+# script reads none of them. A gate run by hand gets neither variable, and no
+# gate gets RUN_TEST_SUITE_WORKER.
+#
 # `<none>` IS NOT A PASS. A `commands.typecheck` whose trimmed value is exactly
 # `<none>` writes the header and the not-run line and runs nothing; the verdict
 # then rests on the test alone. The sentinel is never `eval`-ed — it would parse
@@ -38,7 +48,8 @@
 # The caller passes `<gate_key>_round_<gate_round>` as the label, so each round
 # keeps its own log and a fix planned against round N still finds round N's
 # output after round N+1 ran. Only a re-run of the SAME label — a resumed round —
-# truncates that label's log.
+# truncates that label's log, unless the run form reuses that label's finished
+# verdict (ONE RUN PER LABEL), which leaves the log as it is.
 #
 # THE WAIT FORM, AND WHY IT EXISTS. The run form never runs the gates itself: it
 # re-invokes this script as a WORKER detached from the calling shell (`nohup`,
@@ -59,13 +70,31 @@
 # a sandboxed call there did not outlive the call (`docs/sandbox-verification.md`
 # §5 F10; BG9, LB5, T3), and a worker detached inside a PID namespace would end
 # with it. So this form does the run form's checks, then runs both gates in its
-# own process and writes `.verdict`. Issued from a session's foreground call it
+# own process and writes `.verdict`. Its checks include the reuse (ONE RUN PER
+# LABEL); reusing, it rewrites `.verdict` with its own content through
+# `.verdict.tmp`, so the file's mtime is the current second — the launcher's
+# `started()` accepts only a verdict stamped at or after its own call — and
+# prints it. Issued from a session's foreground call it
 # is bounded by the Bash tool's limits (F6), so Phase G never issues it.
 # `.running` then holds the worker's PID inside its own namespace, which only
 # this script ever compares, against its own `$$`.
 #
 # ONE RUN PER LABEL. The run form never starts a second run of a label whose
-# run is live: it collects that run's verdict as the wait form would. A run
+# run is live: it collects that run's verdict as the wait form would. Nor does
+# it re-run a label whose finished verdict was reached with nothing the gates
+# read changed since: it answers that verdict as the wait form would, starts
+# nothing, and leaves the log, `.verdict` and `.commit` as they are. "Nothing
+# the gates read has changed" means HEAD equals `.commit`'s line, and
+# `git status --porcelain --untracked-files=all` over the repository with the
+# state directory excluded printed nothing at the worker's start, at its finish
+# and at reuse time. The state directory is excluded because the session
+# writes run artifacts there during and between rounds, and the gates do not
+# test them. Ignored files do not count: no commit carries them, and the status
+# query does not list them. Residual: a gate that scans the state directory's
+# committable files does not re-scan a change made there after the run. A
+# session can write `.commit` as it can write `.verdict`, so reuse adds no trust
+# surface. Not reusing, the run form removes `.verdict` and `.commit` before it
+# starts a run, so a stale `.commit` never outlives its verdict. A run
 # removes a `.running` file only while it still holds its own PID. `.running`'s
 # content is the worker's PID as an ownership token; its MTIME IS THE
 # HEARTBEAT, refreshed every HEARTBEAT_SECONDS while the worker is alive. A
@@ -181,15 +210,19 @@
 #                    gates run; its mtime is the heartbeat
 #   <label>.verdict  the verdict line, renamed into place whole once both gates
 #                    finished, so a reader never sees half a line
-# A refusal writes neither file, and no log.
+#   <label>.commit   the commit the gates ran against, one line, renamed into
+#                    place before `.verdict` and only by a worker that found the
+#                    tree clean outside the state directory on that same commit
+#                    at its start and its finish; what the reuse compares
+# A refusal writes none of these files, and no log.
 #
 # Usage:
-#   run-test-suite.sh <label>          start typecheck then test detached and print `pending`; label matching the run library's HR_TEST_RUN_LABEL_PATTERN
+#   run-test-suite.sh <label>          start typecheck then test detached and print `pending`, or print a finished verdict of <label> it reuses; label matching the run library's HR_TEST_RUN_LABEL_PATTERN
 #   run-test-suite.sh --wait <label>   read the verdict of a run of <label>; never runs anything
 #   run-test-suite.sh --no-detach <label>   run typecheck then test in this process and print the verdict; for `launch-sandboxed-gates.sh` alone
 #
 # Exit map:
-#   0  pass (wait form reading a `pass` verdict, or run form collecting a run already in flight)
+#   0  pass (wait form reading a `pass` verdict, run form collecting a run already in flight, or run form reusing a finished verdict of its label)
 #   1  fail (likewise)
 #   2  refusal — one stderr line `run-test-suite.sh: <reason>`, nothing on stdout:
 #      bad arguments, a label outside the pattern, an unresolvable configuration,
@@ -200,7 +233,7 @@
 #      that neither claimed `.running` nor wrote `.verdict` within STALE_SECONDS:
 #      `the detached run of <label> did not start`
 #   3  pending — the run form's normal answer once its detached run has started, or the wait form (or run form) while a run is in flight; issue the wait form
-# The no-detach form exits 3 for a live label, and otherwise with the worker's verdict exit, 0 or 1.
+# The no-detach form exits 3 for a live label, and otherwise with the verdict exit, 0 or 1 — of the verdict it reuses, or of its own run.
 
 # Deliberately no `-e`: this script has to outlive the command's failure long
 # enough to write and print the verdict.
@@ -267,6 +300,7 @@ log_dir="$(hr_test_run_lane_dir "$state_dir" "$branch")" || refuse "no current b
 log_file="$log_dir/$label.log"
 running_file="$log_dir/$label.running"
 verdict_file="$log_dir/$label.verdict"
+commit_file="$log_dir/$label.commit"
 
 # Print a verdict file's line and exit with its status.
 emit_verdict() {
@@ -277,6 +311,38 @@ emit_verdict() {
     "fail "?*) echo "$line"; exit 1 ;;
   esac
   refuse "'$verdict_file' holds no verdict line"
+}
+
+# clean_tree_commit_var <name> — set the variable <name> to HEAD's commit when
+# nothing outside the state directory is dirty, untracked files included, else
+# to empty; always empty for a state directory at the repository root, which
+# would exclude everything (ONE RUN PER LABEL). The only `status` call site.
+# `--no-optional-locks`: under the launcher `.git` is bound read-only, and a
+# plain `status` tries to write `.git/index.lock`.
+clean_tree_commit_var() {
+  local dir="$state_dir" head dirty
+  printf -v "$1" '%s' ''
+  while [ "${dir#./}" != "$dir" ]; do dir="${dir#./}"; done
+  case "$dir" in ''|.) return 0 ;; esac
+  head="$(git rev-parse --verify -q HEAD 2>/dev/null)" || return 0
+  dirty="$(git --no-optional-locks status --porcelain --untracked-files=all -- . ":(exclude)$dir" 2>/dev/null)" || return 0
+  [ -z "$dirty" ] || return 0
+  printf -v "$1" '%s' "$head"
+}
+
+# True when `.verdict` holds a verdict line and `.commit` names the commit a
+# clean tree is on now: that verdict answers this label without a run.
+verdict_reusable() {
+  local line recorded now
+  [ -f "$verdict_file" ] && [ -f "$commit_file" ] || return 1
+  line="$(cat "$verdict_file" 2>/dev/null)" || return 1
+  case "$line" in
+    pass|"fail "?*) ;;
+    *) return 1 ;;
+  esac
+  recorded="$(cat "$commit_file" 2>/dev/null)" || return 1
+  clean_tree_commit_var now
+  [ -n "$now" ] && [ "$recorded" = "$now" ]
 }
 
 run_alive() {
@@ -301,7 +367,11 @@ run_alive() {
 # never recreates a `.running` already removed.
 run_gate() {
   local gate_pid
-  ( set +u +o pipefail; eval "$1" ) < /dev/null >> "$log_file" 2>&1 &
+  (
+    set +u +o pipefail
+    export RUN_TEST_SUITE_LABEL="$label" RUN_TEST_SUITE_LOG_DIR="$log_dir"
+    eval "$1"
+  ) < /dev/null >> "$log_file" 2>&1 &
   gate_pid=$!
   while kill -0 "$gate_pid" 2>/dev/null; do
     touch -c "$running_file"
@@ -377,8 +447,14 @@ if [ "$mode" = nodetach ] && [ "$worker_marker" != "$label" ]; then
     echo pending
     exit 3
   fi
+  if verdict_reusable; then
+    reused="$(cat "$verdict_file" 2>/dev/null)" || refuse "cannot read '$verdict_file'"
+    printf '%s\n' "$reused" > "$verdict_file.tmp" && mv -f "$verdict_file.tmp" "$verdict_file" \
+      || refuse "cannot rewrite '$verdict_file'"
+    emit_verdict
+  fi
   mkdir -p "$log_dir" || refuse "cannot create '$log_dir'"
-  rm -f "$verdict_file" "$verdict_file.tmp"
+  rm -f "$verdict_file" "$verdict_file.tmp" "$commit_file" "$commit_file.tmp"
   worker_marker="$label"
 fi
 
@@ -389,9 +465,12 @@ if [ "$worker_marker" != "$label" ]; then
   if run_alive; then
     wait_for_verdict
   fi
+  if verdict_reusable; then
+    emit_verdict
+  fi
 
   mkdir -p "$log_dir" || refuse "cannot create '$log_dir'"
-  rm -f "$verdict_file" "$verdict_file.tmp"
+  rm -f "$verdict_file" "$verdict_file.tmp" "$commit_file" "$commit_file.tmp"
 
   # `nohup` by name on PATH: the suite shadows it to exercise the refusal below.
   RUN_TEST_SUITE_WORKER="$label" nohup bash "$script_dir/$(basename "${BASH_SOURCE[0]}")" "$label" </dev/null >/dev/null 2>&1 &
@@ -413,6 +492,7 @@ if [ "$worker_marker" != "$label" ]; then
 fi
 
 printf '%s\n' "$$" > "$running_file"
+clean_tree_commit_var start_commit
 trap 'on_signal 15' TERM
 trap 'on_signal 2' INT
 trap 'on_signal 1' HUP
@@ -439,6 +519,7 @@ run_gate "$command_line"
 test_status=$?
 finish_signalled
 marker "gate test exited $test_status"
+clean_tree_commit_var finish_commit
 
 status=0
 if [ "$typecheck_status" -ne 0 ] || [ "$test_status" -ne 0 ]; then status=1; fi
@@ -451,6 +532,9 @@ fi
 
 trap - TERM INT HUP
 finish_signalled
+if [ -n "$start_commit" ] && [ "$start_commit" = "$finish_commit" ]; then
+  printf '%s\n' "$start_commit" > "$commit_file.tmp" && mv -f "$commit_file.tmp" "$commit_file"
+fi
 printf '%s\n' "$verdict" > "$verdict_file.tmp" && mv -f "$verdict_file.tmp" "$verdict_file"
 if [ "$(cat "$running_file" 2>/dev/null)" = "$$" ]; then rm -f "$running_file"; fi
 

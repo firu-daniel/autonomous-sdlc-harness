@@ -7,7 +7,11 @@
  * `commands.typecheck` and then `commands.test` exactly once each under one verdict; no run starts
  * while one of the same label is live; each round keeps its log. Liveness is the heartbeat. The
  * no-detach form runs both gates in its own process, detaching nothing, and answers its verdict
- * itself, or `pending` at once for a live label.**
+ * itself, or `pending` at once for a live label. A finished verdict is reused — answered at once,
+ * no gate run — by either form only while HEAD is the commit `.commit` records and the tree outside
+ * the state directory is clean; `.commit` is written only by a run clean at its start and finish,
+ * and the no-detach form's reuse restamps `.verdict`. Both gates are told the label and the log
+ * directory.**
  * Every case seeds `commands.test` with a stub that counts its own runs, so "exactly once" is an
  * assertion on a counter file; the stub's own output must reach the log and neither stream. A
  * `<none>` typecheck is asserted as not run — a marker line and no counter — never as a pass.
@@ -19,13 +23,14 @@
  * at `pending` by design; a KILL to the worker's PID alone, after which the wrapper's `SIGNALS`
  * paragraph records the heartbeat stopping with the worker while an orphaned gate may still run;
  * and the second `stat` spelling, as only one of BSD `stat -f %m`
- * and GNU `stat -c %Y` yields under `hr_lane_mtime`. Each fixture's one teardown hook releases the
+ * and GNU `stat -c %Y` yields under `hr_lane_mtime`; and the reuse's `--no-optional-locks` status
+ * read under a read-only `.git`, which only the launcher's `bwrap` sets up. Each fixture's one teardown hook releases the
  * gate and outwaits `.running` before removing it. Runs the compiled `dist/cli.js`: build first.
  */
 
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -48,16 +53,22 @@ const COUNTER = 'stub-counter.txt';
 const PWD_RECORD = 'stub-pwd.txt';
 const STDOUT_MARKER = 'STUB-STDOUT-MARKER';
 const STDERR_MARKER = 'STUB-STDERR-MARKER';
+/** Each stub writes its `RUN_TEST_SUITE_LABEL` and `RUN_TEST_SUITE_LOG_DIR` here, one line each. */
+const GATE_ENV_RECORD = 'stub-gate-env.txt';
+const TC_GATE_ENV_RECORD = 'typecheck-stub-gate-env.txt';
 
 /**
- * The stub `commands.test` runs. Its exit status, a tag appended to both markers, and an optional
- * release file it blocks on come from the environment, which the wrapper's `eval` passes through.
+ * The stub `commands.test` runs. Its exit status, a tag appended to both markers, an optional
+ * release file it blocks on, and an optional file `STUB_DIRTY` names that it writes during its run
+ * come from the environment, which the wrapper's `eval` passes through.
  * Its paths are relative, so it only finds them from the repository root; a hold ends with its fixture.
  */
 const STUB = [
   '#!/usr/bin/env bash',
   `printf 'ran\\n' >> ${COUNTER}`,
   `pwd > ${PWD_RECORD}; printf '%s\\n' "$$" > stub-pid.txt; printf '%s\\n' "\${RUN_TEST_SUITE_WORKER-unset}" > stub-env.txt`,
+  `printf '%s\\n%s\\n' "\${RUN_TEST_SUITE_LABEL-unset}" "\${RUN_TEST_SUITE_LOG_DIR-unset}" > ${GATE_ENV_RECORD}`,
+  'if [ -n "${STUB_DIRTY-}" ]; then printf \'dirty\\n\' > "$STUB_DIRTY"; fi',
   `echo "${STDOUT_MARKER} \${STUB_TAG-}"`,
   `echo "${STDERR_MARKER} \${STUB_TAG-}" >&2`,
   'if [ -n "${STUB_RELEASE-}" ]; then',
@@ -76,6 +87,7 @@ const TC_STUB_COMMAND = 'bash typecheck-stub.sh';
 const TC_STUB = [
   '#!/usr/bin/env bash',
   `printf 'ran\\n' >> ${TC_COUNTER}`,
+  `printf '%s\\n%s\\n' "\${RUN_TEST_SUITE_LABEL-unset}" "\${RUN_TEST_SUITE_LOG_DIR-unset}" > ${TC_GATE_ENV_RECORD}`,
   `echo "${TC_STDOUT_MARKER}"`,
   `echo "${TC_STDERR_MARKER}" >&2`,
   'exit "${TC_STUB_EXIT:-0}"',
@@ -110,7 +122,9 @@ function seededConfig({ typecheck = 'echo typecheck' } = {}) {
 /**
  * A fixture on {@link BRANCH} with the stub wired as `commands.test` and `init` already run. Its one
  * `t.after` hook releases any held gate and outwaits the worker before the fixture goes, so the
- * order `node:test` runs hooks in cannot remove a fixture under a live worker.
+ * order `node:test` runs hooks in cannot remove a fixture under a live worker. It has no commit and
+ * the stubs' outputs are unignored, so no run here is reused unless {@link commitClean} is called:
+ * the re-run cases depend on that.
  */
 async function wiredFixture(t, { typecheck } = {}) {
   const fixture = await createFixture({
@@ -314,6 +328,76 @@ async function untilHolderAnswered(dir) {
   );
   assert.equal(text(dir, HOLDER_OUT), 'pending\n');
   return Number(text(dir, HOLDER_PID).trim());
+}
+
+const COMMIT = `${LOG_DIR}/task_round_1.commit`;
+
+/** Every file a stub or a teardown writes at the root, ignored by {@link commitClean}. */
+const STUB_OUTPUTS = Object.freeze([
+  COUNTER, PWD_RECORD, STUB_PID_RECORD, 'stub-env.txt', GATE_ENV_RECORD, TC_COUNTER, TC_GATE_ENV_RECORD, RELEASE,
+]);
+
+async function headOf(dir) {
+  return (await runGit(dir, ['rev-parse', 'HEAD'])).stdout.trim();
+}
+
+/** The wrapper's own cleanliness query, so a case's setup is judged as the reuse judges it. */
+async function cleanOutsideStateDir(dir) {
+  const { stdout } = await runGit(dir, ['status', '--porcelain', '--untracked-files=all', '--', '.', `:(exclude)${STATE_DIR}`]);
+  return stdout === '';
+}
+
+/** Ignores {@link STUB_OUTPUTS} and commits everything else, so the tree is clean before a run. */
+async function commitClean(dir) {
+  appendFileSync(join(dir, '.gitignore'), `${STUB_OUTPUTS.join('\n')}\n`);
+  await runGit(dir, ['add', '-A']);
+  await runGit(dir, ['commit', '--quiet', '--no-verify', '-m', 'fixture: clean tree']);
+  assert.equal(await cleanOutsideStateDir(dir), true, 'the fixture tree is not clean after its commit');
+}
+
+/** Commits one new tracked file, moving HEAD. */
+async function moveHead(dir) {
+  writeFileSync(join(dir, 'moved.txt'), `${Date.now()}\n`);
+  await runGit(dir, ['add', 'moved.txt']);
+  await runGit(dir, ['commit', '--quiet', '--no-verify', '-m', 'fixture: move HEAD']);
+}
+
+/** A collected run whose `.running` is gone, so a later run form cannot answer through the live-run path. */
+async function finishedRun(dir, env = {}) {
+  const run = await runAndCollect(dir, env);
+  await pollUntil(() => !existsSync(join(dir, RUNNING)), '.running removed after the verdict');
+  return run;
+}
+
+/** {@link finishedRun} on a clean tree, asserting `.commit` names HEAD. */
+async function finishedCleanRun(dir, env = {}) {
+  const run = await finishedRun(dir, env);
+  assert.equal(text(dir, COMMIT), `${await headOf(dir)}\n`, '.commit does not name HEAD');
+  return run;
+}
+
+/** Issues the run form and asserts it answered `line` from the finished run, touching nothing. */
+async function assertReused(dir, line, status) {
+  const before = {
+    counter: counterLines(dir),
+    log: text(dir, LOG),
+    verdict: text(dir, VERDICT),
+    commit: text(dir, COMMIT),
+    verdictMtime: statSync(join(dir, VERDICT)).mtimeMs,
+    commitMtime: statSync(join(dir, COMMIT)).mtimeMs,
+  };
+
+  const reused = await wrapper(dir, [LABEL]);
+
+  assert.equal(reused.stdout, line, 'the run form did not reuse the finished verdict');
+  assert.equal(reused.status, status);
+  assert.equal(reused.stderr, '');
+  assert.deepEqual(counterLines(dir), before.counter, 'the reusing run form ran the command');
+  assert.equal(text(dir, LOG), before.log, 'the reusing run form touched the log');
+  assert.equal(text(dir, VERDICT), before.verdict);
+  assert.equal(text(dir, COMMIT), before.commit);
+  assert.equal(statSync(join(dir, VERDICT)).mtimeMs, before.verdictMtime, 'the reusing run form rewrote .verdict');
+  assert.equal(statSync(join(dir, COMMIT)).mtimeMs, before.commitMtime, 'the reusing run form rewrote .commit');
 }
 
 for (const [name, stubExit, expectedStdout, expectedStatus] of [
@@ -966,4 +1050,108 @@ test('--no-detach with three arguments or no label refuses with exit 2 and the u
 
   assert.deepEqual(counterLines(dir), [], 'a refusal ran the command');
   assert.deepEqual(await snapshotTree(dir), before, 'a refusal wrote a file');
+});
+
+for (const [verdictName, stubExit, line, status] of [
+  ['pass', '0', 'pass\n', 0],
+  ['fail', '1', `fail ${LOG}\n`, 1],
+]) {
+  test(`a finished \`${verdictName}\` run on a clean tree is reused by the next run form on the same commit, starting nothing`, async (t) => {
+    const dir = await wiredFixture(t);
+    await commitClean(dir);
+
+    const run = await finishedCleanRun(dir, { STUB_EXIT: stubExit });
+    assert.equal(run.stdout, line);
+    assert.equal(run.status, status);
+
+    await assertReused(dir, line, status);
+  });
+}
+
+// Each case first proves its baseline is reused, so its "not reused" is the perturbation's doing.
+test('not reused after HEAD moved: the run form starts a fresh run, whose `.commit` names the new HEAD', async (t) => {
+  const dir = await wiredFixture(t);
+  await commitClean(dir);
+  await finishedCleanRun(dir);
+  await assertReused(dir, 'pass\n', 0);
+
+  await moveHead(dir);
+  const run = await finishedRun(dir);
+
+  assert.equal(run.stdout, 'pass\n');
+  assert.deepEqual(counterLines(dir), ['ran', 'ran'], 'the run form did not start a fresh run');
+  assert.equal(text(dir, COMMIT), `${await headOf(dir)}\n`, '.commit does not name the new HEAD');
+});
+
+test('not reused with an untracked, unignored file at the root: the run form starts a fresh run', async (t) => {
+  const dir = await wiredFixture(t);
+  await commitClean(dir);
+  await finishedCleanRun(dir);
+  await assertReused(dir, 'pass\n', 0);
+
+  writeFileSync(join(dir, 'untracked.txt'), 'dirty\n');
+  const run = await finishedRun(dir);
+
+  assert.equal(run.stdout, 'pass\n');
+  assert.deepEqual(counterLines(dir), ['ran', 'ran'], 'the run form did not start a fresh run');
+  assert.equal(existsSync(join(dir, COMMIT)), false, 'a run on a dirty tree wrote .commit');
+});
+
+test('reused with an untracked file under the state directory: the state directory is not the gates\' input', async (t) => {
+  const dir = await wiredFixture(t);
+  await commitClean(dir);
+  await finishedCleanRun(dir);
+
+  writeFileSync(join(dir, STATE_DIR, 'untracked-note.md'), 'run artifact\n');
+
+  await assertReused(dir, 'pass\n', 0);
+});
+
+test('a run whose gate dirties the tree writes no `.commit`, and the next run form starts a fresh run', async (t) => {
+  const dir = await wiredFixture(t);
+  await commitClean(dir);
+  await finishedCleanRun(dir);
+  await assertReused(dir, 'pass\n', 0);
+  const dirtied = 'dirtied-by-gate.txt';
+
+  // HEAD moves so this run is a fresh one; the stub then dirties the tree between start and finish.
+  await moveHead(dir);
+  assert.equal((await finishedRun(dir, { STUB_DIRTY: dirtied })).stdout, 'pass\n');
+  assert.equal(existsSync(join(dir, COMMIT)), false, 'a run dirty at its finish wrote .commit');
+  rmSync(join(dir, dirtied));
+  assert.equal(await cleanOutsideStateDir(dir), true, 'the tree is not clean again');
+
+  const run = await finishedRun(dir);
+
+  assert.equal(run.stdout, 'pass\n');
+  assert.deepEqual(counterLines(dir), ['ran', 'ran', 'ran'], 'the run form reused a verdict with no .commit');
+});
+
+test('--no-detach after a finished clean run reprints its verdict, runs no gate and restamps `.verdict`; both gates were told the label and log directory', async (t) => {
+  const dir = await wiredFixture(t, { typecheck: TC_STUB_COMMAND });
+  await commitClean(dir);
+  await finishedCleanRun(dir);
+
+  for (const record of [GATE_ENV_RECORD, TC_GATE_ENV_RECORD]) {
+    assert.equal(text(dir, record), `${LABEL}\n${LOG_DIR}\n`, `${record}: the gate's environment`);
+  }
+  assert.equal(text(dir, 'stub-env.txt'), 'unset\n', 'the worker marker reached the gate');
+
+  // Back-dated, so a reuse that does not rewrite `.verdict` shows.
+  const past = Date.now() / 1000 - 3600;
+  utimesSync(join(dir, VERDICT), past, past);
+  const callStartSecond = Math.floor(Date.now() / 1000);
+
+  const result = await wrapper(dir, ['--no-detach', LABEL]);
+
+  assert.equal(result.stdout, 'pass\n');
+  assert.equal(result.status, 0);
+  assert.equal(result.stderr, '');
+  assert.deepEqual(counterLines(dir, TC_COUNTER), ['ran'], 'the no-detach form ran the typecheck');
+  assert.deepEqual(counterLines(dir), ['ran'], 'the no-detach form ran the test');
+  assert.equal(text(dir, VERDICT), 'pass\n');
+  assert.ok(
+    Math.floor(statSync(join(dir, VERDICT)).mtimeMs / 1000) >= callStartSecond,
+    '.verdict\'s mtime is before the call\'s start second',
+  );
 });
