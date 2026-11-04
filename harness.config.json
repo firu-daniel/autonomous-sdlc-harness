@@ -76,6 +76,10 @@
     {
       "test": "test/jq-floor.test.mjs",
       "covers": "cli/templates/scripts/**/*.jq"
+    },
+    {
+      "test": "test/no-container-home-paths.test.mjs",
+      "covers": "**/*.md"
     }
   ]
 }
