@@ -24,3 +24,5 @@ The writer it guards against is `scripts/lib/sandbox-probe/legs-refresh.sh` → 
 
 - `npm test --workspace cli -- test/sandbox-probe-gate-sandbox-legs.test.mjs` passes. The three titles above are present byte for byte, because Task 13 cites them in `docs/sandbox-verification.md` §5 PD29.
 - Every git repository a case creates lives under `os.tmpdir()` and is removed when the case ends. None is inside this checkout.
+
+**Deviations from plan:** The `sp__render` case's fixture (`renderLayout`) builds no git repository, so it cannot yield a clone that passes `hr_clone_config_check_var`. The allow-list case instead uses a file-local `seedMain` (bare origin plus a main checkout on `main` with `harness.config.json` and `githooks/`, shaped like `cli/test/clone-trust-check.test.mjs` → `fixture`), built with `helpers/fixture.mjs` → `runGit`. Its clone is made by `hr_clone_create_var`, so the clean clone is the creator's own output. Everything sits under the case's `caseDir` in `os.tmpdir()`.
