@@ -1,12 +1,16 @@
 /**
  * The sandbox probe's gate-sandbox leg's grading and script functions (`sp__gs1_grade`,
  * `sp__gs2_outside_paths`, `sp__gs2_grade`, `sp__gs3_grade`, `sp__gs4_grade`, `sp__wf5_grade` and
- * `sp__gs_test_script` in `scripts/lib/sandbox-probe/legs-gate-sandbox.sh`).
+ * `sp__gs_test_script`, `sp__gs_target` and `sp__gs_target_check` in
+ * `scripts/lib/sandbox-probe/legs-gate-sandbox.sh`).
  *
  * **The rule these tests exist to enforce: a launcher answer other than `pending`, an absent control, or an
  * exit status alone never grades a row `pass`, and the grading reads what reached the disk.** GS2 never
  * passes a path lying inside the target as an outside one, GS4's evidence never quotes a credential, and the
- * worker's script stores every step's reading whole.
+ * worker's script stores every step's reading whole. The leg launches only on a target inside the clone
+ * allow-list, its own extra clone in the clone layout (`docs/sandbox-verification.md` §5 PD29); the PD29
+ * cases also pin the writer, `legs-refresh.sh` → `sp__rf_r4`'s `git branch`, and build their main
+ * checkout, bare origin and `hr_clone_create_var` clone under `os.tmpdir()`.
  *
  * Also `session.sh` → `sp__render` and `sp_teardown`, which the launcher legs depend on: the rendered
  * per-run profile is recorded as the clone record's `run_profile`, where `launch-sandboxed-gates.sh`
@@ -30,7 +34,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { PACKAGE_ROOT, runBash, WORKSPACE_ROOT } from './helpers/fixture.mjs';
+import { PACKAGE_ROOT, runBash, runGit, WORKSPACE_ROOT } from './helpers/fixture.mjs';
 
 const PROBE_LIB = join(WORKSPACE_ROOT, 'scripts', 'lib', 'sandbox-probe');
 const RENDER_STUB = join(PACKAGE_ROOT, 'test', 'fixtures', 'sandbox-probe', 'render-watcher-stub.sh');
@@ -495,5 +499,148 @@ test('sp__render: records the rendered profile as the clone record\'s run_profil
     );
     assert.equal(run.status, 0, run.stderr);
     assert.deepEqual(run.stdout.split('\n'), ['0', l.profile, '', 'false', 'exit=0', ''], run.stderr);
+  });
+});
+
+/** `legs-refresh.sh` → `sp__rf_r4`'s `git branch` argument shape, with `main` as the default branch. */
+const R4_BRANCH = ['-c', 'core.hooksPath=/dev/null', 'branch', 'main', 'refs/remotes/origin/main'];
+const PD29_PREFIX = "the gate-sandbox target's .git/config is outside the clone allow-list before the launch: ";
+
+/** `git config --file <file> --get <key>` as `{ status, value }`; status 1 is an absent key, not a fault. */
+async function configGet(cwd, file, key) {
+  const run = await runBash(cwd, ['-c', 'git config --file "$1" --get "$2"', '_', file, key]);
+  return { status: run.status, value: run.stdout.trim() };
+}
+
+/** A bare origin and a main checkout on `main` carrying `harness.config.json` and `githooks/`, pushed. */
+async function seedMain(dir) {
+  const origin = join(dir, 'origin.git');
+  const main = join(dir, 'main');
+  await mkdir(origin);
+  await mkdir(main);
+  await runGit(origin, ['init', '--bare', '--quiet', '-b', 'main']);
+  await runGit(main, ['init', '--quiet', '-b', 'main']);
+  await runGit(main, ['config', 'user.email', 'fixture@example.invalid']);
+  await runGit(main, ['config', 'user.name', 'Harness Fixture']);
+  const config = { version: 1, defaultBranch: 'main', stateDir: 'sdlc-harness/', githooksDir: 'githooks', layers: [], commands: {} };
+  await writeFile(join(main, 'harness.config.json'), `${JSON.stringify(config)}\n`);
+  await mkdir(join(main, 'githooks'));
+  await writeFile(join(main, 'githooks', 'README'), 'hooks\n');
+  await runGit(main, ['add', 'harness.config.json', 'githooks']);
+  await runGit(main, ['commit', '--quiet', '-m', 'fixture: seed']);
+  await runGit(main, ['config', 'core.hooksPath', 'githooks']);
+  await runGit(main, ['remote', 'add', 'origin', origin]);
+  await runGit(main, ['push', '--quiet', 'origin', 'main']);
+  await runGit(main, ['fetch', '--quiet', 'origin']);
+  await mkdir(join(main, 'sdlc-harness', 'autonomous_logs'), { recursive: true });
+  return { origin, main };
+}
+
+test("PD29: R4's git branch writes branch.<default>.remote and .merge", async (t) => {
+  const dir = await caseDir(t);
+  const { origin } = await seedMain(dir);
+  const clone = join(dir, 'clone');
+  await runGit(dir, ['clone', '--quiet', origin, clone]);
+  await runGit(clone, ['checkout', '--quiet', '-b', 'other']);
+  await runGit(clone, ['branch', '--quiet', '-D', 'main']);
+  const file = join(clone, '.git', 'config');
+  assert.equal((await configGet(dir, file, 'branch.main.remote')).status, 1);
+  assert.equal((await configGet(dir, file, 'branch.main.merge')).status, 1);
+
+  await runGit(dir, ['-C', clone, ...R4_BRANCH]);
+  assert.deepEqual(await configGet(dir, file, 'branch.main.remote'), { status: 0, value: 'origin' });
+  assert.deepEqual(await configGet(dir, file, 'branch.main.merge'), { status: 0, value: 'refs/heads/main' });
+});
+
+test("PD29: the gate-sandbox leg's target carries no key outside the clone allow-list", async (t) => {
+  const dir = await caseDir(t);
+  const { main } = await seedMain(dir);
+  const created = await sourced(
+    dir,
+    `hr_clone_create_var "$1" "$2" main; s=$?; printf '%s\\n%s\\n%s' "$s" "$HR_CLONE_DIR" "$HR_CLONE_REFUSAL"`,
+    [main, `${RENDER_BRANCH}_gs`],
+  );
+  const [createStatus, clone, createRefusal] = created.stdout.split('\n');
+  assert.equal(createStatus, '0', `${createRefusal}\n${created.stderr}`);
+
+  /** `sp__gs_target_check <main> <clone>`, after `prelude`, as `[status, SP__GS_WHY]`. */
+  async function check(prelude = '') {
+    const run = await sourced(
+      dir,
+      `${prelude}\nsp__gs_target_check "$1" "$2"; s=$?; printf '%s|%s' "$s" "$SP__GS_WHY"`,
+      [main, clone],
+    );
+    assert.equal(run.status, 0, run.stderr);
+    const bar = run.stdout.indexOf('|');
+    return [run.stdout.slice(0, bar), run.stdout.slice(bar + 1)];
+  }
+
+  await t.test('(a) the clean clone passes, status 0', async () => {
+    assert.deepEqual(await check(), ['0', '']);
+  });
+
+  await t.test("(b) after R4's git branch: status 1, naming both keys", async () => {
+    await runGit(dir, ['-C', clone, ...R4_BRANCH]);
+    const [status, why] = await check();
+    assert.equal(status, '1', why);
+    assert.ok(why.startsWith(PD29_PREFIX), why);
+    assert.ok(why.includes('branch.main.remote'), why);
+    assert.ok(why.includes('branch.main.merge'), why);
+  });
+
+  await t.test('(c) job mode: status 0 on the same dirty target', async () => {
+    assert.equal((await configGet(dir, join(clone, '.git', 'config'), 'branch.main.remote')).status, 0);
+    assert.deepEqual(await check('SP_JOB_MODE=1'), ['0', '']);
+  });
+});
+
+test("PD29: in the clone layout the leg's target is its own extra clone; in job mode it is the checkout", async (t) => {
+  /** `sp__gs_target` with `sp_extra_clone` stubbed to log its arguments and return `stubStatus`. */
+  async function target(t, { job = false, stubStatus = 0 } = {}) {
+    const dir = await caseDir(t);
+    const log = join(dir, 'extra-clone.args');
+    const run = await sourced(
+      dir,
+      [
+        'SP_TMP="$1"; SP_BRANCH=sbx_probe_branch; SP_CLONE="$1/probe-clone"; SP_RUN_PROFILE="$1/probe-profile.json"',
+        job ? 'SP_JOB_MODE=1' : '',
+        'case_dir="$1"; stub_log="$2"; stub_rc="$3"',
+        `sp_extra_clone() { printf '%s\\n' "$*" >>"$stub_log"; SP_EXTRA_CLONE="$case_dir/extra-clone"; SP_EXTRA_PROFILE="$case_dir/extra-profile.json"; [ "$stub_rc" = 0 ] || { echo 'stub refused' >&2; return 1; }; }`,
+        'sp__gs_target; s=$?',
+        `printf '%s\\n%s\\n%s\\n%s' "$s" "$SP__GS_TARGET" "$SP__GS_PROFILE" "$SP__GS_WHY"`,
+      ].join('\n'),
+      [dir, log, String(stubStatus)],
+    );
+    assert.equal(run.status, 0, run.stderr);
+    const [status, gsTarget, profile, why] = run.stdout.split('\n');
+    const calls = await readFile(log, 'utf8').catch((error) => {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    });
+    return { dir, status, gsTarget, profile, why, calls };
+  }
+
+  await t.test('clone layout: its own extra clone, cut with --no-bootstrap', async (t) => {
+    const r = await target(t);
+    assert.equal(r.status, '0', r.why);
+    assert.equal(r.calls, 'sbx_probe_branch_gs --no-bootstrap\n');
+    assert.equal(r.gsTarget, join(r.dir, 'extra-clone'));
+    assert.equal(r.profile, join(r.dir, 'extra-profile.json'));
+    assert.notEqual(r.gsTarget, join(r.dir, 'probe-clone'));
+    assert.notEqual(r.profile, join(r.dir, 'probe-profile.json'));
+  });
+
+  await t.test('job mode: the checkout and its profile, with no extra clone', async (t) => {
+    const r = await target(t, { job: true });
+    assert.equal(r.status, '0', r.why);
+    assert.equal(r.calls, null);
+    assert.equal(r.gsTarget, join(r.dir, 'probe-clone'));
+    assert.equal(r.profile, join(r.dir, 'probe-profile.json'));
+  });
+
+  await t.test('a refused extra clone: status 1 with SP__GS_WHY set', async (t) => {
+    const r = await target(t, { stubStatus: 1 });
+    assert.equal(r.status, '1');
+    assert.notEqual(r.why, '');
   });
 });

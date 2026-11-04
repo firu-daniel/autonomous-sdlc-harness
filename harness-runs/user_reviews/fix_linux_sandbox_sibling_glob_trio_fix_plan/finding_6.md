@@ -7,7 +7,7 @@
 
 **Rules for every edit:**
 - Write in the record's own style.
-- Use `<main>`, `<clone>` and `<sibling>` placeholders and **no machine path**. Do not copy `/home/probe/…`: the self-containment gate binds every commit.
+- Use `<main>`, `<clone>` and `<sibling>` placeholders and **no machine path**. Do not copy a path under the container user's home (`<home>/…`): the self-containment gate binds every commit.
 - **No measured result is invented.** A Linux claim the two sessions did not measure is labelled *derived* or *owed*.
 - Commit this as a research record (prefix `research`), or with the prefix the severity mapping names.
 

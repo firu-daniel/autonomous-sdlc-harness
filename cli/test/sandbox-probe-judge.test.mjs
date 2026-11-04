@@ -19,9 +19,9 @@
  * carrying no refusal string, judged against an expected `sandbox` or `network`, is `not run` (layer
  * `unrecognised`), never `fail`. The `unrecognised` cases use `Input/output error`, which no
  * layer-table arm matches; they used `Device or resource busy` until PD23 made it a refusal. Each
- * Linux case has a twin with no platform holding the macOS verdict. CL5's `File exists` stays out of the
- * Linux table (§5 PD28), so on Linux it is judged as an unknown refusal; the one case pinning that
- * table sources `judge.sh` and compares `sp__linux_refusal_names`' output instead. No case launches `claude`,
+ * Linux case has a twin with no platform holding the macOS verdict. From §5 PD28, CL5's whole lock line,
+ * `could not lock config file .git/config: File exists`, is the Linux table's fourth sandbox refusal;
+ * the one case pinning that table sources `judge.sh` and compares `sp__linux_refusal_names`' output. No case launches `claude`,
  * loads a model or reaches the network: the subcommand reads a fixture file and prints one result
  * line, and every assertion compares that printed line verbatim.
  *
@@ -264,27 +264,28 @@ test('PD23: Permission denied and Device or resource busy are sandbox refusals, 
   }
 });
 
-// docs/sandbox-verification.md §5 PD28: whether `File exists` on `could not lock config file` is a sandbox
-// refusal is undecided, so it stays out of the Linux table until a run's `.git/config.lock` readings decide it.
-test('PD28: on Linux, File exists is not a known sandbox refusal, and the Linux table is unchanged', async (t) => {
+test("PD28: on Linux, CL5's File exists lock refusal is a sandbox refusal, and the Linux table names it", async (t) => {
   const cl5 = 'git config sbx.probe true';
-  const exists = 'Exit code 255: error: could not lock config file .git/config: File exists';
+  const exists = 'error: could not lock config file .git/config: File exists';
 
-  await t.test('Linux: the CL5 File exists line is not run, as an unknown refusal', async () => {
-    assertJudged(
-      await judgeOnLinux('call', fixture('cl5-file-exists'), 'sandbox', cl5),
-      'not run',
-      `no refusal string this judge knows on Linux, so not graded: ${exists}`,
-    );
+  await t.test('Linux: the CL5 File exists line is a sandbox refusal, quoting the line', async () => {
+    assertJudged(await judgeOnLinux('call', fixture('cl5-file-exists'), 'sandbox', cl5), 'pass', exists);
   });
 
-  await t.test('the Linux table names exactly its three strings', async () => {
+  await t.test('no platform: the CL5 File exists line is ran, so an expected sandbox fails', async () => {
+    assertJudged(await judge('call', fixture('cl5-file-exists'), 'sandbox', cl5), 'fail', `Exit code 255: ${exists}`);
+  });
+
+  await t.test('the Linux table names exactly its four strings', async () => {
     const libs = ['core.sh', 'judge.sh'].map((f) => join(WORKSPACE_ROOT, 'scripts', 'lib', 'sandbox-probe', f));
     const run = await runBash(WORKSPACE_ROOT, ['-c', '. "$1"; . "$2"; sp__linux_refusal_names', '_', ...libs], {
       SP_VERSION: '',
     });
     assert.equal(run.status, 0, run.stderr);
-    assert.equal(run.stdout, 'Read-only file system, Permission denied, Device or resource busy');
+    assert.equal(
+      run.stdout,
+      'Read-only file system, Permission denied, Device or resource busy, could not lock config file .git/config: File exists',
+    );
   });
 });
 

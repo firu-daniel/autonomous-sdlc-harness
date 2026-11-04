@@ -12,7 +12,8 @@
  * supervisor sweeps every placeholder the stub leaves on the host (a `.git`-leaf one the stub
  * removes itself, below), and nothing else under the fixture changes but the lane files. A clone
  * whose `run_profile` only the sandbox probe's `sp__render` wrote is launched (case (r)), and a
- * status-less control-clone record does not refuse job mode (case (s)).
+ * status-less control-clone record does not refuse job mode (case (s)). Case (c) hides `bwrap` by
+ * shadowing its `PATH` directory, never by dropping it, because `bash` may share it (F12).
  *
  * Not covered, because no suite can show it: whether the detached supervisor outlives a sandboxed
  * Bash call on Linux. That is the GS1 row's measurement. The stub emulates bubblewrap's placeholder
@@ -31,7 +32,7 @@
 
 import assert from 'node:assert/strict';
 import { accessSync, constants, existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
-import { appendFile, chmod, mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { appendFile, chmod, mkdir, mkdtemp, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -140,19 +141,32 @@ function present(path) {
 
 const lines = (path) => (existsSync(path) ? readFileSync(path, 'utf8').split('\n').filter((l) => l !== '') : []);
 
-/** `PATH` with every directory holding an executable `bwrap` left out. */
-function pathWithoutBwrap() {
-  return (process.env.PATH ?? '')
-    .split(delimiter)
-    .filter((dir) => {
-      try {
-        accessSync(join(dir, 'bwrap'), constants.X_OK);
-        return false;
-      } catch {
-        return true;
-      }
-    })
-    .join(delimiter);
+/** True when `dir` holds an executable `name`. */
+function executableIn(dir, name) {
+  try {
+    accessSync(join(dir, name), constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `path` with each directory holding an executable `bwrap` replaced, at its position, by a shadow
+ * under `scratch` linking every other entry of it: `bash` may share that directory (F12).
+ */
+async function pathHidingBwrap(path, scratch) {
+  const dirs = path.split(delimiter);
+  for (const [i, dir] of dirs.entries()) {
+    if (dir === '' || !executableIn(dir, 'bwrap')) continue;
+    const shadow = join(scratch, `path-${i}`);
+    await mkdir(shadow, { recursive: true });
+    for (const entry of await readdir(dir)) {
+      if (entry !== 'bwrap') await symlink(join(dir, entry), join(shadow, entry));
+    }
+    dirs[i] = shadow;
+  }
+  return dirs.join(delimiter);
 }
 
 /**
@@ -214,10 +228,12 @@ async function launcherFixture(t, { host = 1, bwrap = true, setsid = false } = {
     `\nhr_placeholder_host_probe_var() {\n  HR_PLACEHOLDER_HOST=${host}\n  return 0\n}\nHR_TEST_RUN_STALE_SECONDS=${STALE_BOUND_S}\n`,
   );
 
+  const hostPath = process.env.PATH ?? '';
+  const path = `${bin}${delimiter}${bwrap ? hostPath : await pathHidingBwrap(hostPath, join(root, 'path'))}`;
   const env = (extra = {}) => ({
     HOME: home,
     XDG_STATE_HOME: state,
-    PATH: `${bin}${delimiter}${bwrap ? process.env.PATH ?? '' : pathWithoutBwrap()}`,
+    PATH: path,
     STUB_OUT: out,
     STUB_RECORD: join(out, 'bwrap-argv.txt'),
     STUB_PLACEHOLDERS: join(out, 'placeholders.txt'),
@@ -369,6 +385,24 @@ test('(c) no bwrap on PATH: the refusal, nothing recorded', async (t) => {
   assertRefusal(r, 'bwrap is not on PATH');
   assert.equal(existsSync(f.record), false);
   assert.deepEqual(f.gateRuns(), []);
+});
+
+test('(c2) F12: the no-bwrap PATH hides only bwrap where bwrap and bash share a directory', async (t) => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'launch-gates-path-')));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const bashDir = (process.env.PATH ?? '').split(delimiter).find((d) => d !== '' && executableIn(d, 'bash'));
+  assert.ok(bashDir, 'no bash on this process PATH');
+  const shared = join(root, 'shared');
+  await mkdir(shared);
+  await writeFile(join(shared, 'bwrap'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  await symlink(realpathSync(join(bashDir, 'bash')), join(shared, 'bash'));
+  const path = await pathHidingBwrap(shared, join(root, 'scratch'));
+  assert.notEqual(path, shared);
+  const bounded = { timeoutMs: RUN_TIMEOUT_MS, signal: t.signal };
+  const bwrap = await runBash(root, ['-c', 'command -v bwrap'], { PATH: path }, bounded);
+  assert.notEqual(bwrap.status, 0, output(bwrap));
+  const bash = await runBash(root, ['-c', 'command -v bash'], { PATH: path }, bounded);
+  assert.equal(bash.status, 0, output(bash));
 });
 
 test('(d) a preflight bwrap cannot pass: the refusal quotes it and names the AppArmor sysctl', async (t) => {

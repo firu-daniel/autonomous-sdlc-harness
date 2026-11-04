@@ -58,7 +58,7 @@
     - `claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness`;
     - `node cli/dist/cli.js doctor`.
   - **What the recipe places, and how it is removed** — the maintainer's decision, made when they run the gate:
-    - **The Claude Code credential** is the OAuth credential `claude` writes under `/home/probe/.claude/` when the maintainer signs in. `/logout` before leaving invalidates it, and the container's removal (`--rm`, no volume mounted) deletes the file.
+    - **The Claude Code credential** is the OAuth credential `claude` writes under `<home>/.claude/` (the container user's home) when the maintainer signs in. `/logout` before leaving invalidates it, and the container's removal (`--rm`, no volume mounted) deletes the file.
     - **The git credential** is a fine-grained token with contents read and write on this one repository, held only in memory by `git config --global credential.helper 'cache --timeout=7200'`. It is revoked at GitHub afterwards.
     - Nothing from the host's `~/.ssh`, `~/.claude` or keychain is mounted.
 - [ ] **The Linux legs, beside their macOS baselines.** A paragraph opening `**What a Linux run expects, and the macOS result it compares against.**`, then a table separated from the leg table by prose, with the header `| Leg | Linux rows | Expected on Linux | macOS baseline (latest) |`. Each row:

@@ -12,16 +12,23 @@
  * leftover `Write` rule is neither required nor reported.** Every case is one edit to a
  * freshly wired repository, so the edit is what the line is about; each suite's case (a) is the
  * end-to-end proof that the generator and the check agree on a fresh profile. No case reaches the
- * network.
+ * network: a case that turns docs retrieval on runs every later CLI call under `retrievalEnv` and a
+ * case-owned cache, never against the machine cache, whose runtime install `mkdir`s under a home the
+ * Linux launcher mounts read-only and then runs `npm install` (F13).
+ *
+ * A failure message leads with `failedRun`'s cause line, because the gate's diagnostic is cut after
+ * 40 lines and `init`'s stdout alone can fill them.
  */
 
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdtemp, realpath, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { it } from 'node:test';
 
 import { concurrentSuite } from './helpers/concurrency.mjs';
-import { createFixture, runCli } from './helpers/fixture.mjs';
+import { createFixture, retrievalEnv, runCli } from './helpers/fixture.mjs';
 import { COPY_GIT_PATHS } from '../dist/generators/writeProtection.js';
 
 const CONFIG_FILE = 'harness.config.json';
@@ -48,12 +55,18 @@ function nodeProjectFiles() {
   };
 }
 
+/** `<label> exited <status>: <last non-empty stderr line>`, then stderr, then stdout. */
+function failedRun(label, { status, stdout, stderr }) {
+  const cause = stderr.split('\n').map((line) => line.trim()).filter((line) => line !== '').pop() ?? '(no stderr)';
+  return `${label} exited ${status}: ${cause}\n${stderr}\n${stdout}`;
+}
+
 /** A repository `init` wired, torn down after `t`. */
 async function wiredFixture(t) {
   const fixture = await createFixture({ files: nodeProjectFiles() });
   t.after(fixture.cleanup);
   const init = await runCli(fixture.dir, ['init']);
-  assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
+  assert.equal(init.status, 0, failedRun('init', init));
   return fixture.dir;
 }
 
@@ -71,7 +84,7 @@ async function configureSandbox(dir, sandbox) {
     config.sandbox = sandbox;
   });
   const init = await runCli(dir, ['init', '--force']);
-  assert.equal(init.status, 0, `init --force exited ${init.status}\n${init.stdout}\n${init.stderr}`);
+  assert.equal(init.status, 0, failedRun('init --force', init));
 }
 
 /** The `id` line in `status`, from the stream the reporter puts it on, or `undefined`. */
@@ -80,11 +93,11 @@ function checkLine({ stdout, stderr }, status, id) {
   return stream.split('\n').find((line) => new RegExp(`^${prefix}${status}\\s+${id}\\s`).test(line));
 }
 
-/** Run `doctor` with `args` and return its `id` line in `status`, asserting there is one. */
-async function doctorLine(dir, status, args = [], id = CHECK_ID) {
-  const result = await runCli(dir, ['doctor', ...args]);
+/** Run `doctor` with `args` under `env` and return its `id` line in `status`, asserting there is one. */
+async function doctorLine(dir, status, args = [], id = CHECK_ID, env = {}) {
+  const result = await runCli(dir, ['doctor', ...args], env);
   const line = checkLine(result, status, id);
-  assert.ok(line !== undefined, `no ${status} ${id} line\n${result.stdout}\n${result.stderr}`);
+  assert.ok(line !== undefined, `no ${status} ${id} line; ${failedRun('doctor', result)}`);
   return { line, status: result.status };
 }
 
@@ -306,16 +319,19 @@ concurrentSuite('doctor profile-write-protection', () => {
 
   it('(d) warns when docs retrieval is on and the docs-search-server entry is gone', async (t) => {
     const dir = await wiredFixture(t);
+    const cacheHome = await realpath(await mkdtemp(join(tmpdir(), 'harness-profile-sandbox-cache-')));
+    t.after(() => rm(cacheHome, { recursive: true, force: true }));
+    const env = retrievalEnv(cacheHome);
     editJson(dir, CONFIG_FILE, (config) => {
       config.phases = { ...config.phases, docs: true };
       config.docs = { ...config.docs, retrieval: true };
     });
-    const init = await runCli(dir, ['init', '--force']);
-    assert.equal(init.status, 0, `init --force exited ${init.status}\n${init.stdout}\n${init.stderr}`);
-    await doctorLine(dir, 'PASS', [], WRITE_CHECK_ID);
+    const init = await runCli(dir, ['init', '--force'], env);
+    assert.equal(init.status, 0, failedRun('init --force', init));
+    await doctorLine(dir, 'PASS', [], WRITE_CHECK_ID, env);
     const path = mainCheckoutEntry(dir, DOCS_SERVER_SCRIPT);
     dropDenyWrite(dir, path);
-    const { line } = await doctorLine(dir, 'WARN', [], WRITE_CHECK_ID);
+    const { line } = await doctorLine(dir, 'WARN', [], WRITE_CHECK_ID, env);
     assert.ok(line.includes(`${path} (`), line);
   });
 

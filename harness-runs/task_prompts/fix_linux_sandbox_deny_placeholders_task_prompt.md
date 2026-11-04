@@ -144,12 +144,12 @@ set -u
 
 D=/tmp/sbxmeasure
 O=$D/out
-M=${M:-/home/probe/autonomous-sdlc-harness}
+M=${M:-$HOME/autonomous-sdlc-harness}
 MODEL=${MODEL:-opus}
 
 resolve() {
-  C=${C:-$(ls -d /home/probe/autonomous-sdlc-harness-chore_sbx_probe_* 2>/dev/null | head -1)}
-  P=${P:-$(ls /home/probe/.local/state/autonomous-sdlc-harness/run-profiles/*/*.json 2>/dev/null | head -1)}
+  C=${C:-$(ls -d ~/autonomous-sdlc-harness-chore_sbx_probe_* 2>/dev/null | head -1)}
+  P=${P:-$(ls ~/.local/state/autonomous-sdlc-harness/run-profiles/*/*.json 2>/dev/null | head -1)}
   if [ -z "$C" ] || [ ! -d "$C" ] || [ -z "$P" ] || [ ! -f "$P" ]; then
     echo "measure.sh: no held probe clone or per-run profile; start 'bash scripts/sandbox-probe.sh run --leg headless-parity' first, or set C= and P=" >&2
     exit 2

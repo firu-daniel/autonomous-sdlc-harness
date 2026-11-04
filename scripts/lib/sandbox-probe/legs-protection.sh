@@ -48,20 +48,21 @@
 # run, else `pass`.
 #
 # ON LINUX (SP_PLATFORM `linux`): a dd or the CS3 fetch the judge files under layer `unrecognised` is
-# `not run`, and so is a rename line sp__wp_mv_class classes `unrecognised`; every string of the judge's
-# Linux set is a rename refusal beside Operation not permitted, and the row's pass sentence names them
-# all through judge.sh → sp__linux_refusal_names. With SP_PLATFORM empty or `macos`, every verdict and
-# evidence string is unchanged.
+# `not run`, and so is a rename line sp__wp_mv_class classes `unrecognised`; every string of
+# SP__WP_LINUX_REFUSALS, the judge's Linux set less git's lock line, is a rename refusal beside Operation
+# not permitted, and the row's pass sentence names them through judge.sh → sp__linux_refusal_names. With
+# SP_PLATFORM empty or `macos`, every verdict and evidence string is unchanged.
 #
-# PD23. On Linux sp__wp_mv_class classes every string of the judge's Linux set as `refused`, `Device or
+# PD23. On Linux sp__wp_mv_class classes every string of SP__WP_LINUX_REFUSALS as `refused`, `Device or
 # resource busy` and an `inter-device move failed: … unable to remove target` line among them, so CS1's
 # renames grade as the judge grades them.
 #
 # PD28. On Linux the git leg reads $SP_CLONE/.git/config.lock before and after the session
 # (sp__git_lock_reading) and inside it (`ls -ld .git/config.lock`, after the `git config` call), and CL5's
-# evidence carries all three when the `git config` result carries `File exists`. The readings exist to
-# decide whether `File exists` is a sandbox refusal; until a run's readings decide it, the shape stays out
-# of judge.sh's Linux set and CL5 grades it `not run`.
+# evidence carries all three when the `git config` result carries `File exists`. As the third Linux run
+# (2026-11-03) decided, the readings also decide CL5's verdict with the shape judge.sh's Linux set now
+# holds, `could not lock config file .git/config: File exists`: `pass` only when the lock path read
+# absent before and after the session and as bubblewrap's /dev/null placeholder inside it, else `not run`.
 #
 # JOB MODE (SP_JOB_MODE=1). SP_CLONE and SP_MAIN are the job's checkout and SP_RUN_PROFILE its base
 # profile. The leg takes its job rows W6 and W8 only: one session carries W6's Write and Edit calls and a
@@ -76,6 +77,10 @@
 SP__WP_PLUGIN_NAME="autonomous-sdlc-harness"
 # CS2's new-file name under <main>/.git; legs-settings.sh's parity checklist prints the same path.
 SP_CS2_NEW_NAME="sbx_cs2_new"
+# The judge's Linux strings a dd or a rename can print: every member of judge.sh's SP__LINUX_SANDBOX_STRINGS
+# but git's lock line, which only a .git/config write prints (§5 PD28). Named through judge.sh, which
+# refuses a non-member.
+SP__WP_LINUX_REFUSALS=("Read-only file system" "Permission denied" "Device or resource busy")
 
 # The dd and rename targets, one per index.
 SP__WP_T=()
@@ -498,7 +503,7 @@ EOF
 
 # sp__wp_mv_class <helper line> — print the line's class: landed, stage-failed, refused, or, when no
 # refusal string matches, unrecognised on Linux and other on macOS. Reads only its argument. On Linux its
-# refusal strings are the judge's whole Linux set, through judge.sh → sp__linux_refusal_line.
+# refusal strings are SP__WP_LINUX_REFUSALS, through judge.sh → sp__linux_refusal_line.
 sp__wp_mv_class() {
   case "$1" in
     *" landed")
@@ -515,7 +520,7 @@ sp__wp_mv_class() {
       ;;
   esac
   if [ "${SP_PLATFORM:-}" = linux ]; then
-    if sp__linux_refusal_line "$1" >/dev/null; then
+    if sp__linux_refusal_line "$1" "${SP__WP_LINUX_REFUSALS[@]}" >/dev/null; then
       printf '%s\n' refused
     else
       printf '%s\n' unrecognised
@@ -651,7 +656,7 @@ sp__wp_judge_row() {
     SP__WP_RE="no target for $row in the per-run profile"
   elif [ "${SP_PLATFORM:-}" = linux ]; then
     SP__WP_RV=pass
-    SP__WP_RE="$passed target(s): every dd and rename refused by the sandbox (one of: Operation not permitted, $(sp__linux_refusal_names)), every inode and shasum unchanged, no new name created"
+    SP__WP_RE="$passed target(s): every dd and rename refused by the sandbox (one of: Operation not permitted, $(sp__linux_refusal_names "${SP__WP_LINUX_REFUSALS[@]}")), every inode and shasum unchanged, no new name created"
   else
     SP__WP_RV=pass
     SP__WP_RE="$passed target(s): every dd and rename refused with Operation not permitted, every inode and shasum unchanged, no new name created"
@@ -1218,8 +1223,11 @@ sp__git_lock_reading() {
 
 # sp__git_cl5_grade <stream> <exact command> [<lock before> <lock inside> <lock after>] — CL5's `git config`
 # when the key did not land: SP_VERDICT and SP_EVIDENCE. A permission-layer refusal never reached the
-# sandbox CL5 measures, so it is `not run`. On Linux, when the result carries `File exists`, the three
-# .git/config.lock readings are appended to the evidence (§5 PD28); the verdict is unchanged.
+# sandbox CL5 measures, so it is `not run`. On Linux the `could not lock config file .git/config: File
+# exists` shape passes only when the .git/config.lock readings are absent before the session, a `c`
+# reading carrying `1, 3` (bubblewrap's /dev/null placeholder) inside it, and absent after it, else it is
+# `not run` (§5 PD28, decided by the third Linux run, 2026-11-03); whenever the result carries
+# `File exists`, the three readings are appended to the evidence.
 sp__git_cl5_grade() {
   sp_judge_call "$1" sandbox "$2"
   case "$SP_LAYER" in
@@ -1227,6 +1235,16 @@ sp__git_cl5_grade() {
       if ! sp__line_with "${SP__TEXT:-}" "could not lock config file" >/dev/null; then
         SP_VERDICT=fail
         SP_EVIDENCE="refused, but with no 'could not lock config file' line: $SP_EVIDENCE"
+      elif [ "${SP_PLATFORM:-}" = linux ] &&
+        sp__line_with "${SP__TEXT:-}" "could not lock config file .git/config: File exists" >/dev/null; then
+        local placeholder=0
+        if [ "$#" -ge 5 ] && [ "$3" = absent ] && [ "$5" = absent ]; then
+          case "$4" in c*" 1, 3 "*) placeholder=1 ;; esac
+        fi
+        if [ "$placeholder" -eq 0 ]; then
+          SP_VERDICT="not run"
+          SP_EVIDENCE="the File exists refusal is the sandbox's only where the lock path read as its /dev/null placeholder inside the session: $SP_EVIDENCE"
+        fi
       fi
       ;;
     permission)

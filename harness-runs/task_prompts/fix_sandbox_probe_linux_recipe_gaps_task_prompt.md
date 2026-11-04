@@ -23,7 +23,7 @@ On a colima VM running Ubuntu 24.04, `kernel.apparmor_restrict_unprivileged_user
 
 ### PD21: no `~/.ssh/config`
 
-S1 and S2 print `not run` in the container: `/home/probe/.ssh/config does not exist on this machine, so a refusal could not be told from its absence`.
+S1 and S2 print `not run` in the container: `<home>/.ssh/config does not exist on this machine, so a refusal could not be told from its absence`.
 
 **The fix:** the recipe creates a placeholder `~/.ssh/config` as `probe` before the run. The placeholder holds no key or host entry.
 

@@ -134,8 +134,12 @@ sp__line_with() {
 }
 
 # The layer table's Linux `sandbox` strings, the only copy: a caller outside this file reads them through
-# sp__linux_refusal_line, or names them through sp__linux_refusal_names.
-SP__LINUX_SANDBOX_STRINGS=("Read-only file system" "Permission denied" "Device or resource busy")
+# sp__linux_refusal_line, or names them through sp__linux_refusal_names. The fourth member is git's whole
+# lock line, never a bare `File exists`, which any mkdir or ln collision on any Linux row would print
+# (§5 PD28); CL5 is the only row whose in-session command writes .git/config, and the push wrappers'
+# verdicts are graded by ls-remote, so the member moves no other row's verdict.
+SP__LINUX_SANDBOX_STRINGS=("Read-only file system" "Permission denied" "Device or resource busy"
+  "could not lock config file .git/config: File exists")
 
 # sp__linux_refusal_line <text> [<string>...] — the first line carrying one of SP__LINUX_SANDBOX_STRINGS,
 # or of the named subset; status 1 when none does, status 2 and nothing printed when a named string is
@@ -157,11 +161,23 @@ sp__linux_refusal_line() {
   sp__line_with "$text" "$@"
 }
 
-# sp__linux_refusal_names — print SP__LINUX_SANDBOX_STRINGS joined by ", ", for an evidence sentence that
-# names the set it was graded against.
+# sp__linux_refusal_names [<string>...] — print SP__LINUX_SANDBOX_STRINGS, or the named subset, joined by ", ",
+# for an evidence sentence that names the set it was graded against; status 2 and nothing printed when a
+# named string is not a member.
 sp__linux_refusal_names() {
-  local s out=""
-  for s in "${SP__LINUX_SANDBOX_STRINGS[@]}"; do
+  local s out="" known found
+  if [ "$#" -eq 0 ]; then
+    set -- "${SP__LINUX_SANDBOX_STRINGS[@]}"
+  else
+    for s in "$@"; do
+      found=0
+      for known in "${SP__LINUX_SANDBOX_STRINGS[@]}"; do
+        [ "$s" = "$known" ] && found=1
+      done
+      [ "$found" -eq 1 ] || return 2
+    done
+  fi
+  for s in "$@"; do
     out="${out:+$out, }$s"
   done
   printf '%s' "$out"
