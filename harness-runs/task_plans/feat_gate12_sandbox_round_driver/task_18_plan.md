@@ -38,3 +38,5 @@ The prompt is a proposal for a maintainer to drop. It changes nothing on this br
 
 - The file cites every source above by path and symbol or quoted anchor, carries no line number, and names no absolute machine path.
 - It names this branch's script commands only by repository-relative path.
+
+- **Deviations from plan:** The plan lists the source checks as `sandbox1c2` §2 and §3 and `sandbox1c` §3. RJ2's row in `docs/sandbox-verification.md` → `## 10.` gives `sandbox1e4` §10 item 2, so the prompt cites that for RJ2.

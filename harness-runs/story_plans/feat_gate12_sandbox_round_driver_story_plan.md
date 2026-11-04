@@ -87,7 +87,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_gate12_sandbox_round_dr
 15. [x] **Task 15** — Test `teardown`: only recorded branches, and the default-branch confirmation _(layer: cli)_ _(points: 10)_
 16. [x] **Task 16** — Give round steps 6, 7 and 8 and observation (xvi) the script's commands, and say why each hand step stays _(layer: general)_ _(points: 20)_
 17. [x] **Task 17** — Test that the gate's restated row table matches `--list` _(layer: cli)_ _(points: 10)_
-18. [ ] **Task 18** — Write the follow-up task prompt for the rows with no route _(layer: general)_ _(points: 8)_
+18. [x] **Task 18** — Write the follow-up task prompt for the rows with no route _(layer: general)_ _(points: 8)_
 
 ## Scope register
 
