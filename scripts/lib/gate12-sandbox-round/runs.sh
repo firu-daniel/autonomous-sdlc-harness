@@ -38,11 +38,12 @@
 G12_RUN_JOB=run
 
 g12_run_dir() {
-  local id="${1:-}"
+  local id="${1:-}" scratch
   case "$id" in
     "" | *[!0-9]*) g12_refuse "run id '$id' is not a number"; return 1 ;;
   esac
-  printf '%s/runs/%s\n' "$(g12_scratch_dir)" "$id"
+  scratch="$(g12_scratch_dir)" || return 1
+  printf '%s/runs/%s\n' "$scratch" "$id"
 }
 
 # g12_cache_put <path> — stdin into a mktemp sibling, then mv over <path>.
@@ -196,7 +197,8 @@ g12_artifact() {
 g12_evidence() {
   local row="${1:-}" text="${2:-}" dir path
   g12_row_field "$row" 1 >/dev/null || { g12_refuse "g12_evidence: row '$row' is not a row of G12_ROWS"; return 1; }
-  dir="$(g12_scratch_dir)/evidence"
+  dir="$(g12_scratch_dir)" || return 1
+  dir="$dir/evidence"
   path="$dir/$row.log"
   mkdir -p "$dir" || { g12_refuse "could not create '$dir'"; return 1; }
   # Appended, so a separator dates each grade's record.
