@@ -51,7 +51,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_gate_timings_failed_fir
 9. [x] **Task 9** — Restructure `scripts/run-gates.sh` into gate units driven by the round library, with gate 4 writing the per-file record _(layer: general)_ _(points: 20)_
 10. [x] **Task 10** — Test the per-file timing reporter in `cli/test/test-timing-reporter.test.mjs` _(layer: cli)_ _(points: 10)_
 11. [x] **Task 11** — Test the round library in `cli/test/gate-round-lib.test.mjs`: first round, still failing, now passing, unreadable record _(layer: cli)_ _(points: 20)_
-12. [ ] **Task 12** — Document the round's timings, record and failed-first phase in `docs/development.md` §5, and the reused verdict in `docs/watcher.md` _(layer: general)_ _(points: 10)_
+12. [x] **Task 12** — Document the round's timings, record and failed-first phase in `docs/development.md` §5, and the reused verdict in `docs/watcher.md` _(layer: general)_ _(points: 10)_
 
 ## Scope register
 
