@@ -31,7 +31,8 @@
  *   step's present line.
  * - `cli/templates/scripts/push-branch.sh`: the prefix of its `$HR_WT_CONFIG_REFUSAL` refusal, and
  *   its detached-HEAD refusal.
- * - `cli/templates/scripts/commit-on-branch.sh`: the prefix of its `$HR_WT_CONFIG_REFUSAL` refusal.
+ * - `cli/templates/scripts/commit-on-branch.sh`: the prefix of its `$HR_WT_CONFIG_REFUSAL` refusal,
+ *   and its detached-HEAD refusal.
  * A refusal's reason is composed at run time, so it is canned in round 13's shape.
  *
  * It reads those fixed files, not a tree, so it owes no `treeGuards` entry.
@@ -124,10 +125,16 @@ const [SKIP_PREFIX, SKIP_SUFFIX] = extract(
 const pushBranchText = source(PUSH_BRANCH);
 const [PUSH_REFUSAL_OPEN] = extract(pushBranchText, /echo "(push-branch\.sh: refusing to push: )\$HR_WT_CONFIG_REFUSAL"/, 'push-branch.sh worktree-config refusal');
 const [PUSH_DETACHED] = extract(pushBranchText, /echo "(push-branch\.sh: detached HEAD — refusing to push)"/, 'push-branch.sh detached HEAD refusal');
+const commitOnBranchText = source(COMMIT_ON_BRANCH);
 const [COMMIT_REFUSAL_OPEN] = extract(
-  source(COMMIT_ON_BRANCH),
+  commitOnBranchText,
   /echo "(commit-on-branch\.sh: refusing to commit: )\$HR_WT_CONFIG_REFUSAL" >&2/,
   'commit-on-branch.sh worktree-config refusal',
+);
+const [COMMIT_DETACHED] = extract(
+  commitOnBranchText,
+  /echo "(commit-on-branch\.sh: detached HEAD — refusing to commit)" >&2/,
+  'commit-on-branch.sh detached HEAD refusal',
 );
 
 const workflow = source(WORKFLOW);
@@ -506,6 +513,15 @@ test('FR3: the em-dash push-branch.sh refusal in a Push the branch that conclude
   const fr3 = one('FR3');
   assert.equal(fr3.result, 'fail', JSON.stringify(fr3));
   assert.ok(fr3.evidence.includes(`run ${COMPLETED}: ${PUSH_DETACHED}`), fr3.evidence);
+});
+
+test('FR3: the em-dash commit-on-branch.sh refusal in Run the harness is fail', async (t) => {
+  const fixture = await fixtureFor(t);
+  await stage(fixture, fullRun({ harnessExtra: [COMMIT_DETACHED] }));
+  const { one } = await grade(fixture);
+  const fr3 = one('FR3');
+  assert.equal(fr3.result, 'fail', JSON.stringify(fr3));
+  assert.ok(fr3.evidence.includes(`run ${COMPLETED}: ${COMMIT_DETACHED}`), fr3.evidence);
 });
 
 test('FR1: a not launching line after the launch line is fail', async (t) => {

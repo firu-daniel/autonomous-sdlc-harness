@@ -29,7 +29,7 @@ One finding remains. It is Nice to Have.
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Pin commit-on-branch.sh's em-dash refusal spelling with an FR3 case _(layer: cli)_
+1. [x] **Finding 1** — Pin commit-on-branch.sh's em-dash refusal spelling with an FR3 case _(layer: cli)_
 
 ---
 
