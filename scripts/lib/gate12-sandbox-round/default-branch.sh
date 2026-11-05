@@ -16,8 +16,11 @@
 # G12_WAIT_SECS has passed.
 #
 # An honest task does not go STALL_KILL_SECS silent on its own, so JS3's prompt plants one stall. It is
-# a scratch-run.sh call because that is allow-listed and guard-allowed in the job's profile, and an idle
-# `node` process stays under STALL_BUSY_CPU_PCT, so the watcher counts it silent. The file is `.mjs`
+# a scratch-run.sh call because that is allow-listed and guard-allowed in the job's profile. The watcher
+# kills a silent run only while its whole process tree, the agent CLI included, sums under
+# STALL_BUSY_CPU_PCT (autonomous-watcher.sh → check_stalled_runs), which harness-run.yml does not set; on
+# a Linux runner `ps -o %cpu` is each process's lifetime average, so whether the tree stays under it
+# during the stall is not measured, and a "deferring the kill" line in the job's watcher log is that guard. The file is `.mjs`
 # because scratch-run.sh's interpreter table omits `.sh` on purpose. With S = G12_STALL_KILL_SECS + 60,
 # the file sleeps S seconds printing nothing, and the call's Bash timeout is T = (S + 60) * 1000 ms. The
 # file first creates <stateDir>/scratch/gate12_js3_stalled and exits at once when it already exists, so a
