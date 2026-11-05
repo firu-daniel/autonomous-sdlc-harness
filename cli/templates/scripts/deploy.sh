@@ -19,7 +19,7 @@ harness_fail() {
 
 # Anchor to the repository root, derived from this script's own location and never from the
 # caller's directory: `commands.*` are command lines run from the repository root and every path
-# in `harness.config.json` is repo-relative. `git -C` on the script's own directory answers with
+# in `harness.config.json` is repo-relative. The placement below answers with
 # the checkout this copy belongs to, so every form the permission profiles list — the
 # repo-relative one and its absolute twin in the base profile, and a run copy's own exact path in
 # the run watcher's per-run copy — runs at the root of the checkout it was invoked out of,
