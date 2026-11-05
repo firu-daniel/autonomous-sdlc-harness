@@ -29,7 +29,7 @@ The claimed spec came from the task prompt and the story index. Findings were de
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 2** — Reword `scripts/run-gates.sh`'s anchoring comment so it no longer claims the wrappers' derivation _(layer: general)_
+1. [x] **Finding 2** — Reword `scripts/run-gates.sh`'s anchoring comment so it no longer claims the wrappers' derivation _(layer: general)_
 2. [ ] **Finding 1** — Restate JS3's busy-CPU justification in `default-branch.sh`'s header: the guard sums the whole process tree, and on Linux that sum is unmeasured _(layer: general)_
 
 ---
