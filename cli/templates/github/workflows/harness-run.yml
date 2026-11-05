@@ -66,7 +66,7 @@
 #                                     `Install the sandbox prerequisites` to
 #                                     read sandbox.optOut on its failing arm,
 #                                     held by workflow-sandbox-install.test.mjs
-#   harness-control.yml              the concurrency group
+#   harness-control.yml               the concurrency group
 #                                     `harness-review-<branch>`, shared by its
 #                                     review jobs and the `collect` job here;
 #                                     and, read by its `Fetch the pinned

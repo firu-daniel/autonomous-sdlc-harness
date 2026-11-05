@@ -33,7 +33,7 @@ The five findings below are what is left: four Should Fix and one Nice to Have.
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 5** — Restore the column alignment of the `harness-control.yml` row in the workflow's mirrors header _(layer: cli)_
+1. [x] **Finding 5** — Restore the column alignment of the `harness-control.yml` row in the workflow's mirrors header _(layer: cli)_
 2. [ ] **Finding 3** — Make row DP5's *Expected* cell name the load command the uncertain warning now prints _(layer: general)_
 3. [ ] **Finding 4** — Drop the three grading cases `SANDBOX_PREREQUISITES_CHECK`'s doc comment restates from `gradeSandboxPrerequisites` _(layer: cli)_
 4. [ ] **Finding 2** — Bound the run library's nested user-namespace check with `timeout 10`, as `doctor` bounds it _(layer: cli, general)_
