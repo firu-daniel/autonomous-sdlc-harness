@@ -18,8 +18,8 @@
  *   mirrors {@link SANDBOX_HOST_BINARIES} and the missing-piece order, and codes
  *   {@link SANDBOX_INSTALLERS} (each family's command, as {@link installCommands} renders it) and
  *   {@link WSL1_AGENT_MESSAGE} into its `HR_SANDBOX_REFUSAL` sentence; the judge also mirrors
- *   {@link NestedUsernsAnswer} and the stock-profile half of the refusal
- *   ({@link BWRAP_USERNS_RESTRICT_PROFILE_PATH}, {@link bwrapUsernsRestrictRemedy}). Held equal by
+ *   {@link NestedUsernsAnswer} and, in the stock-profile half of the refusal,
+ *   {@link BWRAP_USERNS_RESTRICT_PROFILE_PATH}. Held equal by
  *   `cli/test/sandbox-prerequisites-shell-mirror.test.mjs`.
  * - `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_sandbox_prereq_probe_var` mirrors
  *   {@link NESTED_USERNS_PROBE} (the nested check's argument vector), {@link NESTED_USERNS_HELPER}
