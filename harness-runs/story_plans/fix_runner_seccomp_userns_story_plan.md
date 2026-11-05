@@ -39,7 +39,7 @@ Task 1 lands the probe-runner test's extension first, while that file is still g
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_runner_seccomp_userns/task_<K>_plan.md`. The entries are ordered bottom-up by ship sequence, in the configured layer order `cli`, then `general`, with the catch-all `general` layer last.
 
-1. [ ] **Task 1** — Hold the probe runner to stopping before its session when the install step fails _(layer: cli)_ _(points: 5)_
+1. [x] **Task 1** — Hold the probe runner to stopping before its session when the install step fails _(layer: cli)_ _(points: 5)_
 2. [ ] **Task 2** — Declare the stock-profile remedy, the load command and the nested user-namespace check in `sandboxPrerequisites.ts`, and assess them _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Make `Install the sandbox prerequisites` disable `bwrap-userns-restrict`, load our profile, always verify, and fail before the session _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Make `doctor`'s `sandbox-prerequisites` check run the nested check and FAIL when it fails _(layer: cli)_ _(points: 20)_
