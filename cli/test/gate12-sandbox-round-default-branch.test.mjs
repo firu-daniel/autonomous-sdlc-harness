@@ -5,14 +5,19 @@
  * variables `STALL_WARN_SECS` and `STALL_KILL_SECS`, and restores every one of them on every exit
  * path — a failed dispatch, a job that never starts and an interrupt included; it keeps
  * `<other branch>` recorded for `teardown`; and it refuses, before changing anything, while another
- * planted run is in flight or an earlier leg's other branch is still recorded.**
+ * planted run is in flight, an earlier leg's other branch is still recorded or `--stall-kill-secs` is
+ * over 480. JS3's planted prompt asks for exactly one silent scratch-run stall of
+ * S = STALL_KILL_SECS + 60 seconds under a Bash timeout of (S + 60) * 1000 ms, before its README step.**
  *
  * It reads one fixed script, not a tree, so it owes no `treeGuards` entry.
  */
 
 import assert from 'node:assert/strict';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
 
 import { readJson, runGit } from './helpers/fixture.mjs';
@@ -27,6 +32,7 @@ import {
   runRound,
   spawnRound,
 } from './helpers/gate12-round.mjs';
+import { scaleBound } from './helpers/timing.mjs';
 
 const OTHER = 'gate12_other_fixture';
 
@@ -213,4 +219,98 @@ test('a recorded run the stub reports in_progress refuses the leg before anythin
   assert.equal(await originHeads(fixture), heads);
   assert.deepEqual((await ghStubCalls(fixture.binDir)).filter(isRepoEdit), []);
   assert.deepEqual(ghStubState(fixture.binDir).variables, START.variables);
+});
+
+/** Run a whole leg at `--stall-kill-secs <kill>` (the default when absent) and return JS3's committed prompt. */
+async function plantedPrompt(t, kill) {
+  const fixture = await fixtureFor(t);
+  await ghStub(fixture.binDir, routes('in_progress'), START);
+  const args = kill === undefined ? ARGS : [...ARGS, '--stall-kill-secs', String(kill)];
+  const result = await runRound(fixture, args, { env: ENV });
+  assert.equal(result.status, 0, show(result));
+  const branch = await assertJs3Branch(fixture, readJson(fixture.stateFile));
+  const path = `${fixture.stateDir}/task_prompts/${branch.name}_task_prompt.md`;
+  return { fixture, prompt: await git(fixture.origin, ['show', `${branch.commit}:${path}`]) };
+}
+
+/** The ```js block of the prompt's first step. */
+function stallBody(prompt) {
+  const match = /^```js\n([\s\S]*?)\n```$/m.exec(prompt);
+  assert.ok(match, prompt);
+  return `${match[1]}\n`;
+}
+
+test('JS3: the planted prompt asks for one silent scratch-run stall past STALL_KILL_SECS', async (t) => {
+  for (const [kill, s, ms] of [[undefined, 180, 240000], [200, 260, 320000]]) {
+    await t.test(`--stall-kill-secs ${kill ?? 'default (120)'}`, async (t) => {
+      const { fixture, prompt } = await plantedPrompt(t, kill);
+      const scratch = `${fixture.stateDir}/scratch`;
+      const file = `${scratch}/gate12_js3_stall.mjs`;
+      const command = `bash ${fixture.scriptsDir}/scratch-run.sh ${file}`;
+
+      assert.ok(prompt.includes(`1. Write the file \`${file}\``), prompt);
+      assert.ok(prompt.includes(`2. Run \`${command}\` once, in the foreground`), prompt);
+      assert.equal(prompt.split(command).length - 1, 1, 'the scratch-run command appears once');
+      assert.ok(prompt.includes(`timeout set to ${ms} milliseconds`), prompt);
+      assert.ok(prompt.includes(`returns after ${s} seconds`), prompt);
+
+      const body = stallBody(prompt);
+      assert.ok(body.includes(`const marker = '${scratch}/gate12_js3_stalled';`), body);
+      assert.ok(body.includes(`setTimeout(() => {}, ${s} * 1000);`), body);
+      assert.doesNotMatch(body, /console\.|process\.std(out|err)/);
+
+      const steps = prompt.split('\n').filter((l) => /^\d+\. /.test(l));
+      assert.equal(steps.length, 3, prompt);
+      assert.equal(steps.at(-1), '3. Add a line to README.md naming the date this repository was last checked.');
+    });
+  }
+});
+
+test('JS3: the stall body waits S seconds once and prints nothing', async (t) => {
+  const { fixture, prompt } = await plantedPrompt(t);
+  // S overridden to 1 so the case waits one second rather than 180; the second run's body is
+  // overridden to 600 s and bounded by scaleBound, so a broken marker guard is killed at the ceiling.
+  const body = stallBody(prompt).replace('setTimeout(() => {}, 180 * 1000);', 'setTimeout(() => {}, 1 * 1000);');
+  assert.ok(body.includes('setTimeout(() => {}, 1 * 1000);'), body);
+
+  const cwd = await mkdtemp(join(tmpdir(), 'gate12-js3-stall-'));
+  t.after(() => rm(cwd, { recursive: true, force: true }));
+  const scratch = join(cwd, fixture.stateDir, 'scratch');
+  await mkdir(scratch, { recursive: true });
+  const file = join(scratch, 'gate12_js3_stall.mjs');
+  await writeFile(file, body, 'utf8');
+  const marker = join(scratch, 'gate12_js3_stalled');
+
+  const timed = () => {
+    const start = Date.now();
+    const stdout = execFileSync(process.execPath, [file], { cwd, encoding: 'utf8' });
+    return { stdout, ms: Date.now() - start };
+  };
+
+  const first = timed();
+  assert.equal(first.stdout, '');
+  assert.ok(first.ms >= 1000, `first run returned after ${first.ms} ms`);
+  assert.ok(existsSync(marker), 'the marker is created');
+
+  // The marker now exists, so a body that would stall 600 s must return at once; the ceiling is
+  // an "until it exits" bound under helpers/timing.mjs's rule.
+  await writeFile(file, body.replace('setTimeout(() => {}, 1 * 1000);', 'setTimeout(() => {}, 600 * 1000);'), 'utf8');
+  const second = execFileSync(process.execPath, [file], { cwd, encoding: 'utf8', timeout: scaleBound(30_000) });
+  assert.equal(second, '');
+});
+
+test('JS3: a stall-kill threshold over 480 s is refused before anything changes', async (t) => {
+  const fixture = await fixtureFor(t);
+  await ghStub(fixture.binDir, routes('in_progress'), START);
+  const heads = await originHeads(fixture);
+
+  const result = await runRound(fixture, [...ARGS, '--stall-kill-secs', '481'], { env: ENV });
+  assert.equal(result.status, 2, show(result));
+  assert.match(result.stderr, /--stall-kill-secs 481 /);
+  assert.match(result.stderr, /600000 ms/);
+
+  assert.equal(await originHeads(fixture), heads);
+  const calls = await ghStubCalls(fixture.binDir);
+  assert.deepEqual(calls.filter((a) => isRepoEdit(a) || (a[0] === 'variable' && a[1] !== 'list')), []);
+  assert.deepEqual(ghStubState(fixture.binDir), { ...START, runs: {} });
 });

@@ -487,6 +487,15 @@
 #                     hr_config_file "$root"; echo $?                   -> 1, prints nothing
 #                     hr_config_load "$root"; echo $?                   -> 1
 #   not a repository  hr_repo_root /tmp; echo $?                        -> 1, prints nothing
+#   script root       a job layout, `scriptsDir` `harness-scripts`, with the
+#                     placeholder a bubblewrap host leaves:
+#                     : > "$root/harness-scripts/.git"
+#                     hr_repo_root "$root/harness-scripts"; echo $?   -> 1 where
+#                        git dies on the placeholder
+#                     hr_script_root "$root/harness-scripts"          -> $root
+#                     no configuration anywhere above the directory:
+#                     hr_script_root <dir>  -> exactly `hr_repo_root <dir>`'s
+#                        output and status
 #   anchors           hr_main_repo "$root"; hr_work_root "$root"
 #                     hr_worktree_dir "$root" feat/x; hr_repo_slug "$root"
 #                     hr_state_path "$root" autonomous_logs/registry.json
@@ -629,6 +638,53 @@ hr_repo_root() {
   top=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || return 1
   [ -n "$top" ] || return 1
   printf '%s\n' "$top"
+}
+
+# Print the repository root of the script whose own directory is <script_dir>:
+# the nearest of <script_dir> (made physical) and its ancestors, up to `/`, that
+# holds a regular `harness.config.json` and for which the bare
+# `git -C <d> rev-parse --show-toplevel` prints <d> itself. A candidate for
+# which git answers another directory, or refuses, is passed over. When none
+# confirms, `hr_repo_root <script_dir>`'s output and status, unchanged. Return 1,
+# printing nothing, when <script_dir> is empty or does not resolve.
+#
+# WHY IT EXISTS (F15). On a bubblewrap host the base profile's exact
+# `<scriptsDir>/.git` entry is mounted as a placeholder inside both sandboxes
+# (`cli/src/generators/writeProtection.ts` → `protectedPaths`), and git's
+# discovery from the scripts directory dies on it, so `hr_repo_root` called on
+# a script's own directory refuses. Asking git only at directories that already
+# hold the configuration never starts that discovery at a placeholder level.
+#
+# WHY THE WALK KEYS ON `harness.config.json`: it places the root by the file
+# every adopted root holds, so a script that cannot read the configuration
+# still learns how deep its `scriptsDir` is.
+#
+# A PLANTED `<scriptsDir>/harness.config.json` CANNOT MOVE THE ANSWER: git
+# confirms that candidate only with a `.git` beside it, and the profile
+# write-protects `<p>/.git` at every level `<p>` of `scriptsDir`, the same
+# protection `hr_wrapper_main_of` relies on.
+#
+# DECLARED MIRROR: the wrapper templates `typecheck.sh`, `test.sh`,
+# `start-dev-server.sh` and `deploy.sh` source no library and carry this
+# algorithm inline; a change here is an edit there in the same change.
+hr_script_root() {
+  local dir="${1-}" d top
+  [ -n "$dir" ] || return 1
+  d=$( CDPATH= cd -P -- "$dir" 2>/dev/null && pwd -P ) || return 1
+  while :; do
+    if [ -f "$d/harness.config.json" ]; then
+      if top=$(git -C "$d" rev-parse --show-toplevel 2>/dev/null); then
+        if [ "$top" = "$d" ]; then
+          printf '%s\n' "$d"
+          return 0
+        fi
+      fi
+    fi
+    [ "$d" != / ] || break
+    d=${d%/*}
+    [ -n "$d" ] || d=/
+  done
+  hr_repo_root "$dir"
 }
 
 # Print the MAIN checkout of the repository containing <dir> (default `$PWD`) —
