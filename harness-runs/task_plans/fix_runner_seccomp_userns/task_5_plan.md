@@ -62,3 +62,9 @@
 - `bash -n cli/templates/scripts/lib/harness-run-lib.sh` and `bash -n cli/templates/scripts/autonomous-watcher.sh` exit 0.
 - A grep of the library's two changed functions finds no construct newer than Bash 3.2: no `${var,,}`, no associative array, no `mapfile`.
 - The judge called with four arguments, as every existing caller and test override does, returns the same status and `HR_SANDBOX_REFUSAL` as before this change for each row of the existing matrix.
+
+**Deviations from plan:**
+
+- `bash -n cli/templates/scripts/lib/harness-run-lib.sh` and `bash -n cli/templates/scripts/autonomous-watcher.sh` were refused by the tool layer (`Permission to use Bash has been denied because Claude Code is running in don't ask mode`), so the parse claim rests instead on `bash scripts/typecheck.sh`, whose `check-shell-parse` step reported `122 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`, and on `test/sandbox-prerequisites-shell-mirror.test.mjs` sourcing the library in every case (10/10 pass).
+- The probe runs the nested check with `</dev/null` added to the plan's `>/dev/null 2>&1`, so the child cannot read the watcher's stdin; the argument vector is unchanged and the test asserts it equals `NESTED_USERNS_PROBE.slice(1)`.
+- The Bash-3.2 grep was run over the whole library (`grep -nE ',,}|\^\^}|declare -A|local -A|mapfile|readarray'`): the one hit is a comment in the library header, none in the two changed functions.
