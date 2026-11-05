@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # grade-state.sh — the grades of the bundle rows SB2 and SB4 and the default-branch row JS3 of
-# docs/sandbox-verification.md -> ## 10., read from the planted runs through runs.sh, and a `not run`
-# line naming the note for every `hand` row (JS3N, SB3, RJ3), so `grade` covers every row of ## 10.
+# docs/sandbox-verification.md -> ## 10., read from the planted runs through runs.sh; a `not run` line
+# naming the note for every `hand` row (RJ3), and one `source` line carrying the note for every `source`
+# row (SB3, JS3N), each found by its route, so `grade` covers every row of ## 10.
 # grade-plant.sh's g12_grade_cmd calls g12_grade_state; this file uses that file's arm and fold helpers.
 #
-#   SB2   never `pass`: its PAUSE_PROGRESS.md arm and remote_status.json variant are hand steps. `fail`
-#         when a planted-arm check fails, `expired` when a log or the artifact is, else `not run`.
-#   SB4   the bundle half of SB2's artifact: no link and no token is `pass`.
+#   SB2   two arms folded, clarifications and pause-note; `pass` when both pass; then one `source`
+#         line for the remote_status.json variant.
+#   SB4   the bundle half of the clarifications arm's artifact: no link and no token is `pass`.
 #   JS3   only the watchdog lines that reach the `Run the harness` step log, and status.json; then one
 #         `source` line for the "from a temporary directory" clause.
 #
-#   g12_grade_state   SB2, SB4, JS3 and each hand row, each when selected
+#   g12_grade_state   SB2, SB4, JS3, each hand row and each source row, each when selected
 #
 # SOURCED, NEVER EXECUTED. It sets no shell option: the entry point owns `set -u`.
 # Bash 3.2 is the floor (macOS /bin/bash): no associative array.
@@ -82,26 +83,110 @@ g12_sb2_bundle() {
 }
 
 # ---------------------------------------------------------------------------------------------
-# SB2. Each clause is one arm of a fold; the fold's verdict is never printed as `pass`.
+# SB2's pause-note run, read once. G12_SB2PN_ART takes the same values as G12_SB2_ART.
+G12_SB2PN_READ=0
+G12_SB2PN_ID=""
+G12_SB2PN_NOTDONE_RESULT=""
+G12_SB2PN_NOTDONE_WHY=""
+G12_SB2PN_ART=""
+G12_SB2PN_TOKEN=""
+G12_SB2PN_LINKS=""
+G12_SB2PN_HITS=""
+# The scratch file plants.sh's g12_plant_sb2 has the session write and run; its run.log lines are kept.
+G12_SB2PN_SCRIPT="gate12_sb2_pause_link.mjs"
+
+g12_sb2pn_read() {
+  [ "$G12_SB2PN_READ" -eq 0 ] || return 0
+  G12_SB2PN_READ=1
+  if ! g12_arm_run SB2 pause-note; then
+    G12_SB2PN_NOTDONE_RESULT="$G12_ARM_RESULT"
+    G12_SB2PN_NOTDONE_WHY="$G12_ARM_EVIDENCE"
+    return 0
+  fi
+  G12_SB2PN_ID="$G12_ARM_ID"
+  G12_SB2PN_TOKEN="$(g12_state_get '.tokens.SB2_PAUSE_NOTE // empty')" || { g12_exit_raise 3; G12_SB2PN_TOKEN=""; }
+  G12_SB2PN_ART="$(g12_artifact "$G12_SB2PN_ID")" || { g12_exit_raise 3; G12_SB2PN_ART=error; }
+  case "$G12_SB2PN_ART" in
+    none | expired | error) return 0 ;;
+  esac
+  G12_SB2PN_LINKS="$(find "$G12_SB2PN_ART" -type l 2>/dev/null)"
+  [ -z "$G12_SB2PN_TOKEN" ] ||
+    G12_SB2PN_HITS="$(grep -r -l -F -- "$G12_SB2PN_TOKEN" "$G12_SB2PN_ART" 2>/dev/null)"
+}
+
+# g12_sb2pn_arm — the pause-note arm's one verdict. `pass` rests only on Save the state bundle's skip
+# line for the PAUSE_PROGRESS.md leaf, never on the token's absence alone: a session that never ran
+# the scratch file leaves no token either.
+g12_sb2pn_arm() {
+  local leaf runlog
+  if [ -z "$G12_SB2PN_ID" ]; then
+    g12_arm_set "$G12_SB2PN_NOTDONE_RESULT" "$G12_SB2PN_NOTDONE_WHY"
+    return
+  fi
+  G12_ARM_ID="$G12_SB2PN_ID"
+  case "$G12_SB2PN_ART" in
+    none | expired | error) ;;
+    *)
+      if [ -n "$G12_SB2PN_LINKS" ]; then
+        g12_arm_set fail "run $G12_SB2PN_ID's harness-state artifact holds a link: ${G12_SB2PN_LINKS%%$'\n'*}" \
+          "links:"$'\n'"$G12_SB2PN_LINKS"$'\n'"token files:"$'\n'"$G12_SB2PN_HITS"
+        return
+      fi
+      if [ -n "$G12_SB2PN_HITS" ]; then
+        g12_arm_set fail "run $G12_SB2PN_ID's harness-state artifact holds the SB2_PAUSE_NOTE token: ${G12_SB2PN_HITS%%$'\n'*}" \
+          "token files:"$'\n'"$G12_SB2PN_HITS"
+        return
+      fi
+      ;;
+  esac
+  case "$G12_SB2PN_ART" in
+    expired) g12_arm_set expired "run $G12_SB2PN_ID's harness-state artifact is expired: re-take the step"; return ;;
+    error) g12_arm_set "not run" "a gh call reading run $G12_SB2PN_ID's artifact failed (named on stderr)"; return ;;
+    none) g12_arm_set "not run" "run $G12_SB2PN_ID has no harness-state artifact"; return ;;
+  esac
+  if [ -z "$G12_SB2PN_TOKEN" ]; then
+    g12_arm_set "not run" "the state file records no tokens.SB2_PAUSE_NOTE, so run $G12_SB2PN_ID's artifact was not searched for it"
+    return
+  fi
+
+  leaf="/$G12_STATE_DIR/PAUSE_PROGRESS.md"
+  g12_sb2_save_clause "$G12_SB2PN_ID" "$leaf" pause-note
+  [ "$G12_SB2_SAVE_NOLINE" -eq 1 ] || return 0
+  if [ -f "$G12_SB2PN_ART/run.log" ]; then
+    runlog="$(grep -F -- "$G12_SB2PN_SCRIPT" "$G12_SB2PN_ART/run.log")" || runlog="(none)"
+  else
+    runlog="(run.log is absent from $G12_SB2PN_ART)"
+  fi
+  g12_arm_set "not run" "$G12_STEP_SAVE in run $G12_SB2PN_ID logged no skip line for a path ending $leaf, and the artifact holds no link and no token: the link the planted task asks the session to make was not seen at $G12_STEP_SAVE" \
+    "$G12_STEP_SAVE log:"$'\n'"$G12_ARM_LOG"$'\n'"run.log lines carrying $G12_SB2PN_SCRIPT:"$'\n'"$runlog"
+}
+
+# ---------------------------------------------------------------------------------------------
+# SB2. Each clause is one arm of a fold over both arms; the fold's own verdict is printed.
 #
-# The skip line is hr_remote_copy_tree's (cli/templates/scripts/lib/harness-run-lib.sh), run by
-# hr_remote_bundle_write over the clarifications/<branch>/ directory source, which verb_save in
-# cli/templates/scripts/remote-run.sh calls. It names the link itself in both fields. `remote-run.sh:
-# save: skipped …` is printed only for a linked registry or remote_status.json, neither planted here.
+# The clarifications arm's skip line is hr_remote_copy_tree's (cli/templates/scripts/lib/
+# harness-run-lib.sh), run by hr_remote_bundle_write over the clarifications/<branch>/ directory
+# source; the pause-note arm's is hr_remote_bundle_source_ok's, for the PAUSE_PROGRESS.md source. Both
+# come from verb_save in cli/templates/scripts/remote-run.sh and name the link itself in both fields.
+# `remote-run.sh: save: skipped …` is printed only for a linked registry or remote_status.json,
+# neither planted here.
 G12_SB2_SKIP_PREFIX="remote state bundle: skipped "
 G12_SB2_SKIP_SUFFIX=" is a symbolic link"
+# 1 when the last save clause's step concluded success and its log carried no skip line for the leaf.
+G12_SB2_SAVE_NOLINE=0
 
+# g12_sb2_save_clause <run id> <leaf> <arm label>
 g12_sb2_save_clause() {
-  local concl leaf line body p1 p2
-  G12_ARM_ID="$G12_SB2_ID"
-  concl="$(g12_step_conclusion "$G12_SB2_ID" "$G12_STEP_SAVE")" || { g12_arm_gh_failed; return; }
+  local id="$1" leaf="$2" label="$3" concl line body p1 p2
+  G12_SB2_SAVE_NOLINE=0
+  G12_ARM_ID="$id"
+  concl="$(g12_step_conclusion "$id" "$G12_STEP_SAVE")" || { g12_arm_gh_failed; return; }
   case "$concl" in
     success) ;;
-    failure) g12_arm_set fail "$G12_STEP_SAVE concluded failure in run $G12_SB2_ID"; return ;;
-    *) g12_arm_set "not run" "$G12_STEP_SAVE did not run in run $G12_SB2_ID (${concl:-absent})"; return ;;
+    failure) g12_arm_set fail "$G12_STEP_SAVE concluded failure in run $id"; return ;;
+    *) g12_arm_set "not run" "$G12_STEP_SAVE did not run in run $id (${concl:-absent})"; return ;;
   esac
   g12_arm_log "$G12_STEP_SAVE" || return 0
-  leaf="/clarifications/$G12_SB2_BRANCH/gate12-link.md"
   while IFS= read -r line; do
     body="${line#*"$G12_SB2_SKIP_PREFIX"}"
     case "$body" in *"$G12_SB2_SKIP_SUFFIX") ;; *) continue ;; esac
@@ -111,13 +196,16 @@ g12_sb2_save_clause() {
     if [ "$p1" = "$p2" ]; then
       case "$p1" in
         *"$leaf")
-          g12_arm_set pass "$G12_STEP_SAVE concluded success in run $G12_SB2_ID and skipped $p1 as a symbolic link"
+          g12_arm_set pass "$G12_STEP_SAVE concluded success in run $id and skipped $p1 as a symbolic link"
           return
           ;;
       esac
     fi
   done <<<"$(printf '%s\n' "$G12_ARM_LOG" | tr -d '\r' | grep -F -- "$G12_SB2_SKIP_PREFIX")"
-  g12_arm_set fail "$G12_STEP_SAVE's log in run $G12_SB2_ID carries no ${G12_SB2_SKIP_PREFIX}<path>: <path>${G12_SB2_SKIP_SUFFIX} line for a path ending $leaf" \
+  # The clarifications arm's link is committed, so a missing line is `fail`; the pause-note caller
+  # decides its missing line together with the artifact.
+  G12_SB2_SAVE_NOLINE=1
+  g12_arm_set fail "$G12_STEP_SAVE's log in run $id ($label) carries no ${G12_SB2_SKIP_PREFIX}<path>: <path>${G12_SB2_SKIP_SUFFIX} line for a path ending $leaf" \
     "$G12_ARM_LOG"
 }
 
@@ -161,44 +249,46 @@ g12_sb2_restore_clause() {
 }
 
 g12_grade_sb2() {
-  local note path evidence result restore=""
-  note="$(g12_row_field SB2 5)"
+  local path evidence runs restore=""
   g12_sb2_read
+  g12_sb2pn_read
+  g12_fold_reset 2
   if [ -z "$G12_SB2_ID" ]; then
     g12_arm_set "$G12_SB2_NOTDONE_RESULT" "$G12_SB2_NOTDONE_WHY"
-    g12_fold_reset 1
     g12_fold_add clarifications
   else
-    g12_fold_reset 2
-    g12_sb2_save_clause
-    g12_fold_add "$G12_STEP_SAVE"
+    g12_sb2_save_clause "$G12_SB2_ID" "/clarifications/$G12_SB2_BRANCH/gate12-link.md" clarifications
+    g12_fold_add "clarifications $G12_STEP_SAVE"
     g12_sb2_bundle
-    g12_fold_add artifact
+    g12_fold_add "clarifications artifact"
     g12_sb2_restore_clause
     # A next job that never ran is reported `not run` and leaves the planted arm's verdict standing.
     if [ "$G12_ARM_RESULT" = "not run" ]; then
-      restore="next job not run: $G12_ARM_EVIDENCE"
-      G12_FOLD_RECORD="${G12_FOLD_RECORD}[next job] not run: $G12_ARM_EVIDENCE"$'\n'
+      restore="clarifications next job not run: $G12_ARM_EVIDENCE"
+      G12_FOLD_RECORD="${G12_FOLD_RECORD}[clarifications next job] not run: $G12_ARM_EVIDENCE"$'\n'
     else
-      g12_fold_add "next job"
+      g12_fold_add "clarifications next job"
     fi
   fi
+  g12_sb2pn_arm
+  g12_fold_add pause-note
 
+  runs="clarifications run ${G12_SB2_ID:-none}, pause-note run ${G12_SB2PN_ID:-none}"
   if [ "$G12_FOLD_RESULT" = pass ]; then
-    evidence="planted arm (clarifications, run $G12_SB2_ID) passed: $G12_FOLD_PASSES"
-    result="not run"
+    evidence="both arms passed ($runs): $G12_FOLD_PASSES"
   else
-    evidence="planted arm (clarifications${G12_SB2_ID:+, run $G12_SB2_ID}) $G12_FOLD_RESULT: $G12_FOLD_EVIDENCE"
-    result="$G12_FOLD_RESULT"
+    evidence="$G12_FOLD_RESULT ($runs): $G12_FOLD_EVIDENCE"
   fi
   [ -z "$restore" ] || evidence="$evidence; $restore"
-  evidence="$evidence; the PAUSE_PROGRESS.md arm and the remote_status.json variant are hand steps: $note"
-  if path="$(g12_evidence SB2 "$G12_FOLD_RECORD")"; then
-    evidence="$evidence; record in $path"
-  else
-    evidence="$evidence; the record could not be written"
+  if [ "$G12_FOLD_RESULT" != pass ]; then
+    if path="$(g12_evidence SB2 "$G12_FOLD_RECORD")"; then
+      evidence="$evidence; record in $path"
+    else
+      evidence="$evidence; the record could not be written"
+    fi
   fi
-  g12_result_line SB2 "$result" "$evidence"
+  g12_result_line SB2 "$G12_FOLD_RESULT" "$evidence"
+  g12_result_line SB2 source "cli/templates/scripts/lib/harness-run-lib.sh hr_remote_status_write: a link at autonomous_logs/remote_status.json is removed before each of the watcher's renames, so the remote_status.json variant is unreachable by construction"
 }
 
 g12_grade_sb4() {
@@ -320,6 +410,7 @@ g12_grade_state() {
   g12_need g12_arm_run g12_arm_log g12_fold_print g12_artifact g12_step_log g12_evidence
   path="$(g12_state_path)"
   G12_SB2_READ=0
+  G12_SB2PN_READ=0
   for row in SB2 SB4 JS3; do
     g12_row_selected "$row" || continue
     if [ ! -f "$path" ]; then
@@ -341,5 +432,10 @@ g12_grade_state() {
     [ "$(g12_row_field "$row" 3)" = hand ] || continue
     g12_row_selected "$row" || continue
     g12_result_line "$row" "not run" "hand step: $(g12_row_field "$row" 5)"
+  done
+  for row in $(g12_row_names); do
+    [ "$(g12_row_field "$row" 3)" = source ] || continue
+    g12_row_selected "$row" || continue
+    g12_result_line "$row" source "$(g12_row_field "$row" 5)"
   done
 }
