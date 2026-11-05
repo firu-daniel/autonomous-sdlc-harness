@@ -4,21 +4,33 @@
  * **The rule this suite enforces: a host missing a piece the sandbox needs is reported, naming the
  * piece, its package and the command that installs it and never offering the opt-out — a `warn` in a
  * default run, a `fail` under `--remote-job`, and told the watcher refuses its launches only where it
- * would: never in a job, never where `execution.target` is `github-actions` — while macOS passes naming Seatbelt and a taken
- * `sandbox.optOut` passes naming its reason in both modes.** Its expectations depend on the host by
- * design: the check probes the real platform, so (a) and (b) each skip, naming why, on a host they
- * are not about, and (c) runs on every host because a taken opt-out probes nothing. No case reaches
- * the network.
+ * would: never in a job, never where `execution.target` is `github-actions` — a host where bwrap's
+ * child cannot create a nested user namespace fails in both modes, while macOS passes naming Seatbelt
+ * and a taken `sandbox.optOut` passes naming its reason in both modes.** The four verdicts the task
+ * names are each graded through `assessSandboxHost` by `cli/test/sandbox-prerequisites.test.mjs`, and
+ * the check's grade and message for each, in both modes, by (g) here, on every host. (d)–(f) prove
+ * the spawn and its wiring on a Linux host, against stub executables the test writes, so no real
+ * `bwrap` is spawned. The check probes the real platform, so (a), (b), (d), (e) and (f) each skip,
+ * naming why, on a host they are not about; (c) runs on every host because a taken opt-out probes
+ * nothing. No case reaches the network.
  */
 
 import assert from 'node:assert/strict';
-import { accessSync, constants, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { accessSync, chmodSync, constants, existsSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { release, tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { it } from 'node:test';
 
 import { concurrentSuite } from './helpers/concurrency.mjs';
 import { createFixture, runCli } from './helpers/fixture.mjs';
+import { gradeSandboxPrerequisites, NESTED_USERNS_PROBE_ENV } from '../dist/doctor/checks.js';
+import {
+  assessSandboxHost,
+  BWRAP_USERNS_RESTRICT_PROFILE_PATH,
+  describeMissingPieces,
+  describeNestedUserns,
+  NESTED_USERNS_HELPER,
+} from '../dist/doctor/sandboxPrerequisites.js';
 
 const CONFIG_FILE = 'harness.config.json';
 const CHECK_ID = 'sandbox-prerequisites';
@@ -91,6 +103,25 @@ function gitOnlyPath(t) {
   return directory;
 }
 
+/**
+ * {@link gitOnlyPath} plus stub `bwrap`, {@link NESTED_USERNS_HELPER} and `socat` executables; the
+ * stub `bwrap` exits `bwrapExit`, so the nested check's outcome is the test's choice.
+ */
+function stubbedPath(t, bwrapExit) {
+  const directory = gitOnlyPath(t);
+  for (const [name, exit] of [['bwrap', bwrapExit], [NESTED_USERNS_HELPER, 0], ['socat', 0]]) {
+    const path = join(directory, name);
+    writeFileSync(path, `#!/bin/sh\nexit ${exit}\n`, 'utf8');
+    chmodSync(path, 0o755);
+  }
+  return directory;
+}
+
+/** The environment (d)–(f) run under: the stubbed `PATH`, and the nested check enabled unless `probe` is `off`. */
+function nestedEnv(t, bwrapExit, probe = '') {
+  return { PATH: stubbedPath(t, bwrapExit), [NESTED_USERNS_PROBE_ENV]: probe };
+}
+
 /** Run `doctor` with `args` and return this check's line in `status`, asserting there is one. */
 async function doctorLine(dir, status, args = [], env = {}) {
   const result = await runCli(dir, ['doctor', ...args], env);
@@ -129,13 +160,111 @@ concurrentSuite('doctor sandbox-prerequisites', () => {
     assert.ok(line.includes('refuses none here'), `a github-actions repository is told its launches are refused:\n${line}`);
   });
 
-  it('(c) passes under a taken opt-out naming its reason, in both modes and with the git-only PATH', async (t) => {
+  it('(c) passes under a taken opt-out naming its reason, in both modes, with the git-only PATH and with a failing nested check', async (t) => {
     const dir = await wiredFixture(t);
     takeOptOut(dir);
     const env = { PATH: gitOnlyPath(t) };
-    for (const [args, runEnv] of [[[], {}], [['--remote-job'], {}], [['--remote-job'], env]]) {
+    const failing = nestedEnv(t, 1);
+    for (const [args, runEnv] of [[[], {}], [['--remote-job'], {}], [['--remote-job'], env], [[], failing], [['--remote-job'], failing]]) {
       const { line } = await doctorLine(dir, 'PASS', args, runEnv);
       assert.ok(line.includes(`not required: sandbox.optOut is taken — ${OPT_OUT_REASON}`), line);
+    }
+  });
+
+  it('(d) passes naming the nested check when the stub bwrap exits 0, with and without --remote-job', { skip: IS_LINUX ? false : NOT_LINUX }, async (t) => {
+    const dir = await wiredFixture(t);
+    const env = nestedEnv(t, 0);
+    for (const remoteJob of [false, true]) {
+      const { line } = await doctorLine(dir, 'PASS', remoteJob ? ['--remote-job'] : [], env);
+      assert.ok(line.includes(describeNestedUserns('passed', '', remoteJob)), `the nested check is not named:\n${line}`);
+    }
+  });
+
+  it('(e) fails in both modes when the stub bwrap exits 1', { skip: IS_LINUX ? false : NOT_LINUX }, async (t) => {
+    const dir = await wiredFixture(t);
+    const env = nestedEnv(t, 1);
+    const stock = existsSync(BWRAP_USERNS_RESTRICT_PROFILE_PATH);
+    const answer = stock ? 'failed-stock-restrict' : 'failed';
+    for (const remoteJob of [false, true]) {
+      const { line } = await doctorLine(dir, 'FAIL', remoteJob ? ['--remote-job'] : [], env);
+      assert.ok(line.includes(describeNestedUserns(answer, 'exited 1', remoteJob)), `the ${answer} sentence is not carried:\n${line}`);
+      assert.equal(line.includes(`The cause is \`${BWRAP_USERNS_RESTRICT_PROFILE_PATH}\``), stock, `the stock profile is named as the cause iff present:\n${line}`);
+      if (stock) {
+        const owner = remoteJob ? 'Install the sandbox prerequisites' : 'trade-off';
+        assert.ok(line.includes(owner), `${owner} not named:\n${line}`);
+      }
+      assert.ok(!line.includes('optOut'), `the remedy offers the opt-out:\n${line}`);
+    }
+  });
+
+  it('(f) falls back to the file-based grade when the failing nested check is turned off', { skip: IS_LINUX ? false : NOT_LINUX }, async (t) => {
+    const dir = await wiredFixture(t);
+    const env = nestedEnv(t, 1, 'off');
+    for (const args of [[], ['--remote-job']]) {
+      const result = await runCli(dir, ['doctor', ...args], env);
+      const lines = `${result.stdout}\n${result.stderr}`.split('\n');
+      assert.ok(!lines.some((entry) => new RegExp(`^!! FAIL\\s+${CHECK_ID}\\s`).test(entry)), `the check failed:\n${result.stderr}`);
+      const line = lines.find((entry) => new RegExp(`^(! )?(PASS|WARN)\\s+${CHECK_ID}\\s`).test(entry));
+      assert.ok(line !== undefined, `no PASS or WARN ${CHECK_ID} line\n${result.stdout}\n${result.stderr}`);
+      assert.ok(!line.includes("bwrap's child"), `the nested check ran:\n${line}`);
+    }
+  });
+
+  it('(g) grades every verdict in both modes, on every host', () => {
+    const release = '6.8.0-45-generic';
+    const uncertain = { appArmorRestrict: { state: 'read', text: '1\n' }, bwrapProfile: { state: 'absent' } };
+    const clear = { appArmorRestrict: { state: 'absent' }, bwrapProfile: { state: 'absent' } };
+    const failed = { state: 'failed', detail: 'exited 1' };
+    const facts = (binaries, rest) => ({ platform: 'linux', kernelRelease: release, resolvedBinaries: new Set(binaries), ...rest });
+    const missingSentence = (pieces) => describeMissingPieces(pieces, release, 'linux').join(' ');
+    const rows = [
+      {
+        name: 'probe passes, AppArmor files uncertain',
+        facts: facts(['bwrap', 'socat'], { ...uncertain, nestedUserns: { state: 'passed' } }),
+        grade: () => 'pass',
+        carries: (remoteJob) => [describeNestedUserns('passed', '', remoteJob)],
+      },
+      {
+        name: 'probe fails, stock file present',
+        facts: facts(['bwrap', 'socat'], { ...clear, nestedUserns: failed, stockRestrictProfile: true }),
+        grade: () => 'fail',
+        carries: (remoteJob) => [describeNestedUserns('failed-stock-restrict', failed.detail, remoteJob), 'AppArmor files, for context:'],
+      },
+      {
+        name: 'probe fails, no stock file',
+        facts: facts(['bwrap', 'socat'], { ...clear, nestedUserns: failed, stockRestrictProfile: false }),
+        grade: () => 'fail',
+        carries: (remoteJob) => [describeNestedUserns('failed', failed.detail, remoteJob), 'AppArmor files, for context:'],
+      },
+      {
+        name: 'no bwrap',
+        facts: facts(['socat'], clear),
+        grade: (remoteJob) => (remoteJob ? 'fail' : 'warn'),
+        carries: () => [missingSentence(['bwrap'])],
+      },
+      {
+        name: 'missing piece and failed probe',
+        facts: facts(['bwrap'], { ...clear, nestedUserns: failed }),
+        grade: () => 'fail',
+        carries: (remoteJob) => [missingSentence(['socat']), `; ${describeNestedUserns('failed', failed.detail, remoteJob)}`],
+      },
+    ];
+    for (const row of rows) {
+      for (const remoteJob of [false, true]) {
+        const { grade, message } = gradeSandboxPrerequisites({
+          assessment: assessSandboxHost(row.facts),
+          facts: row.facts,
+          remoteJob,
+          remoteExecution: false,
+          resolvedPaths: [...row.facts.resolvedBinaries].map((binary) => `\`${binary}\` in /usr/bin`),
+        });
+        const where = `${row.name}, remoteJob ${remoteJob}`;
+        assert.equal(grade, row.grade(remoteJob), `${where}: ${message}`);
+        for (const expected of row.carries(remoteJob)) {
+          assert.ok(message.includes(expected), `${where}: does not carry ${expected}\n${message}`);
+        }
+        assert.ok(!message.includes('optOut'), `${where}: offers the opt-out\n${message}`);
+      }
     }
   });
 });

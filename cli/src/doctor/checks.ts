@@ -63,7 +63,9 @@
  *    reaches no network, so it answers the same in CI, in an `&&` chain and offline — and the run that
  *    did not ask says so, rather than leaving an adopter to read a pass as a promise the packages can
  *    be fetched. The one host-side effect is {@link probeKeepAwakeHost}'s logind test lock, bounded by
- *    {@link KEEP_AWAKE_PROBE_TIMEOUT_MS} and released the moment its `true` exits.
+ *    {@link KEEP_AWAKE_PROBE_TIMEOUT_MS} and released the moment its `true` exits. {@link probeSandboxHost}'s
+ *    nested user-namespace check is a spawn that leaves nothing behind, bounded by
+ *    {@link NESTED_USERNS_PROBE_TIMEOUT_MS}.
  *
  *    **Remote setup keeps the same line: it is graded from local evidence by default and asks GitHub
  *    only under `--check-github`.** {@link REMOTE_EXECUTION_CHECK} and {@link FORGE_CHECK} read files,
@@ -336,12 +338,19 @@ import {
   APPARMOR_USERNS_SYSCTL_PATH,
   assessSandboxHost,
   BWRAP_APPARMOR_PROFILE_PATH,
+  BWRAP_USERNS_RESTRICT_PROFILE_PATH,
   describeAppArmor,
   describeMissingPieces,
+  describeNestedUserns,
+  NESTED_USERNS_HELPER,
+  NESTED_USERNS_PROBE,
   SANDBOX_HOST_BINARIES,
+  sandboxHostKind,
   type FileRead,
+  type NestedUsernsProbe,
   type SandboxHostFacts,
   type SandboxHostKind,
+  type SandboxPrerequisites,
 } from './sandboxPrerequisites.js';
 
 /**
@@ -702,27 +711,64 @@ function readHostFile(path: string): FileRead {
 
 /**
  * The host facts {@link SANDBOX_PREREQUISITES_CHECK} grades: the platform, the kernel release, which
- * {@link SANDBOX_HOST_BINARIES} resolve on this process's `PATH`, and the two AppArmor files.
+ * {@link SANDBOX_HOST_BINARIES} resolve on this process's `PATH`, the two AppArmor files, whether
+ * {@link BWRAP_USERNS_RESTRICT_PROFILE_PATH} is present, and the nested user-namespace check.
  *
- * It spawns nothing and reaches no network. It answers for the `PATH` `doctor` was typed at, not the
- * daemon's: the watcher's own launch-time probe is the authority for the `PATH` a run starts under.
+ * It spawns exactly one child, {@link NESTED_USERNS_PROBE}, as a fixed vector bounded by
+ * {@link NESTED_USERNS_PROBE_TIMEOUT_MS} with its output discarded, and only where the host is Linux
+ * or WSL2, both `bwrap` and {@link NESTED_USERNS_HELPER} resolve on `PATH`, and
+ * {@link NESTED_USERNS_PROBE_ENV} is not `off`; otherwise the check is `not-run`. It reaches no
+ * network. It answers for the `PATH` `doctor` was typed at, not the daemon's: the watcher's own
+ * launch-time probe is the authority for the `PATH` a run starts under.
  *
  * **DECLARED MIRROR** — `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_sandbox_prereq_probe_var`
- * mirrors its platform, kernel-release and `PATH` reads, held equal by
- * `cli/test/sandbox-prerequisites-shell-mirror.test.mjs`. A rename of this function or a change to
- * what it reads is an edit to that shell function.
+ * mirrors its platform, kernel-release and `PATH` reads, the nested check and its gate, and the
+ * stock-profile presence test, held equal by `cli/test/sandbox-prerequisites-shell-mirror.test.mjs`.
+ * A rename of this function or a change to what it reads or runs is an edit to that shell function.
  */
 function probeSandboxHost(): SandboxHostFacts {
+  const platform = process.platform;
+  const release = kernelRelease();
+  const resolvedBinaries = new Set(
+    SANDBOX_HOST_BINARIES.filter((entry) => resolvesOnPath(entry.binary)).map((entry) => entry.binary),
+  );
+  const host = sandboxHostKind(platform, release);
+  const runNested =
+    (host === 'linux' || host === 'wsl2') &&
+    resolvedBinaries.has('bwrap') &&
+    resolvesOnPath(NESTED_USERNS_HELPER) &&
+    process.env[NESTED_USERNS_PROBE_ENV] !== 'off';
+  let nestedUserns: NestedUsernsProbe = { state: 'not-run' };
+  if (runNested) {
+    const [command = '', ...args] = NESTED_USERNS_PROBE;
+    try {
+      execFileSync(command, args, { stdio: 'ignore', timeout: NESTED_USERNS_PROBE_TIMEOUT_MS, windowsHide: true });
+      nestedUserns = { state: 'passed' };
+    } catch (error) {
+      nestedUserns = { state: 'failed', detail: boundedProbeFailure(error, NESTED_USERNS_PROBE_TIMEOUT_MS) };
+    }
+  }
   return {
-    platform: process.platform,
-    kernelRelease: kernelRelease(),
-    resolvedBinaries: new Set(
-      SANDBOX_HOST_BINARIES.filter((entry) => resolvesOnPath(entry.binary)).map((entry) => entry.binary),
-    ),
+    platform,
+    kernelRelease: release,
+    resolvedBinaries,
     appArmorRestrict: readHostFile(APPARMOR_USERNS_SYSCTL_PATH),
     bwrapProfile: readHostFile(BWRAP_APPARMOR_PROFILE_PATH),
+    stockRestrictProfile: readHostFile(BWRAP_USERNS_RESTRICT_PROFILE_PATH).state !== 'absent',
+    nestedUserns,
   };
 }
+
+/** What a bounded host probe that threw reports: `timed out after <n> s` or `exited <status>`. */
+function boundedProbeFailure(error: unknown, timeoutMs: number): string {
+  const failure = error as { code?: unknown; status?: unknown } | null;
+  return failure?.code === 'ETIMEDOUT'
+    ? `timed out after ${timeoutMs / 1000} s`
+    : `exited ${typeof failure?.status === 'number' ? String(failure.status) : 'without a status'}`;
+}
+
+/** How long {@link probeSandboxHost}'s nested user-namespace check may take before it is reported as failed. */
+const NESTED_USERNS_PROBE_TIMEOUT_MS = 10_000;
 
 /** How long {@link probeKeepAwakeHost}'s test lock may take before it is reported as not taken. */
 const KEEP_AWAKE_PROBE_TIMEOUT_MS = 10_000;
@@ -738,6 +784,14 @@ const GITHUB_ACTIONS_VARIABLE = 'GITHUB_ACTIONS';
  * (`.claude/context/cli.md` → `## What "done" means here`). **No shipped path ever sets it.**
  */
 export const KEEP_AWAKE_LOCK_PROBE_ENV = 'AUTONOMOUS_SDLC_HARNESS_KEEP_AWAKE_LOCK_PROBE';
+
+/**
+ * The environment variable that turns {@link probeSandboxHost}'s nested user-namespace check off,
+ * reporting it `not-run`; this constant is its only spelling in `cli/src`, and it is read through this
+ * constant alone. It exists so the test tree never spawns a real `bwrap` unasked: inside a sandboxed
+ * Linux gate run, that nested check fails by design. **No shipped path ever sets it.**
+ */
+export const NESTED_USERNS_PROBE_ENV = 'AUTONOMOUS_SDLC_HARNESS_NESTED_USERNS_PROBE';
 
 /**
  * The host facts {@link KEEP_AWAKE_CHECK} grades through `doctor/keepAwake.ts`'s {@link assessKeepAwake}.
@@ -788,12 +842,7 @@ function probeKeepAwakeHost(ctx: CheckContext): KeepAwakeHostFacts {
     execFileSync(command, args, { stdio: 'ignore', timeout: KEEP_AWAKE_PROBE_TIMEOUT_MS, windowsHide: true });
     return { ...facts, lock: { taken: true, context, detail: 'exited 0' } };
   } catch (error) {
-    const failure = error as { code?: unknown; status?: unknown } | null;
-    const detail =
-      failure?.code === 'ETIMEDOUT'
-        ? `timed out after ${KEEP_AWAKE_PROBE_TIMEOUT_MS / 1000} s`
-        : `exited ${typeof failure?.status === 'number' ? String(failure.status) : 'without a status'}`;
-    return { ...facts, lock: { taken: false, context, detail } };
+    return { ...facts, lock: { taken: false, context, detail: boundedProbeFailure(error, KEEP_AWAKE_PROBE_TIMEOUT_MS) } };
   }
 }
 
@@ -5263,20 +5312,78 @@ const SANDBOX_HOST_LABELS: Readonly<Record<SandboxHostKind, string>> = {
   unsupported: 'an unsupported platform',
 };
 
+/** What {@link gradeSandboxPrerequisites} grades: the probe's facts, their assessment, and the run's mode. */
+export interface SandboxPrerequisitesGradeInput {
+  readonly assessment: SandboxPrerequisites;
+  readonly facts: SandboxHostFacts;
+  readonly remoteJob: boolean;
+  /** Whether `execution.target` is `github-actions` ({@link remoteExecutionApplies}); `false` without a config. */
+  readonly remoteExecution: boolean;
+  /** One `` `<binary>` in <dir> `` string per resolved binary, in {@link SANDBOX_HOST_BINARIES} order. */
+  readonly resolvedPaths: readonly string[];
+}
+
+/**
+ * The `sandbox-prerequisites` grade and message for one host. Pure: it reads no environment, file or
+ * `PATH`, and spawns nothing.
+ *
+ * - **A failed nested check** (`failed` or `failed-stock-restrict`) is a `fail` in both modes: every
+ *   sandboxed command would fail. The message is {@link describeNestedUserns}'s, followed by the
+ *   AppArmor file reading as context; with a missing piece, both sentences are joined with `; `.
+ * - **A definite missing piece** is a `warn`, and a `fail` under `--remote-job`: a local repository's
+ *   watcher refuses every fresh local launch, a job's session would exit at startup under
+ *   `failIfUnavailable`, and a `github-actions` repository's watcher refuses nothing here.
+ * - **A passed nested check** settles AppArmor: an `uncertain` file reading no longer warns.
+ * - **Where the nested check did not run**, an `uncertain` AppArmor answer is a `warn` in both modes —
+ *   no file reading settles it. With a missing piece, the worse grade wins and both sentences are
+ *   joined with `; `.
+ * - Otherwise a `pass`, naming the host kind, where each binary resolved, the nested check where it
+ *   passed, and the AppArmor answer — as context wherever the nested check ran.
+ */
+export function gradeSandboxPrerequisites(input: SandboxPrerequisitesGradeInput): {
+  grade: 'pass' | 'warn' | 'fail';
+  message: string;
+} {
+  const { assessment, facts, remoteJob, remoteExecution, resolvedPaths } = input;
+  const { host, missing, appArmor, nestedUserns } = assessment;
+  const sentences: string[] = [];
+  if (missing.length > 0) {
+    const agent = `\`${DEFAULT_AGENT_CLI}\`, or \`$${AGENT_CLI_VARIABLE}\``;
+    const consequence = remoteJob
+      ? `This job's agent session (${agent}) would exit at startup under \`failIfUnavailable\``
+      : remoteExecution
+        ? `\`execution.target\` is \`github-actions\`, so the watcher dispatches every drop to GitHub Actions and refuses none here, but a session started on this host (${agent}) exits at startup under \`failIfUnavailable\``
+        : `Until then the watcher refuses every fresh local launch, and the agent CLI (${agent}) exits at startup under \`failIfUnavailable\``;
+    sentences.push(`${describeMissingPieces(missing, facts.kernelRelease, facts.platform).join(' ')} ${consequence}`);
+  }
+  const context = `AppArmor files, for context: ${describeAppArmor(appArmor)}`;
+  if (nestedUserns === 'failed' || nestedUserns === 'failed-stock-restrict') {
+    const detail = facts.nestedUserns?.state === 'failed' ? facts.nestedUserns.detail : '';
+    sentences.push(`${describeNestedUserns(nestedUserns, detail, remoteJob)} ${context}`);
+    return { grade: 'fail', message: sentences.join('; ') };
+  }
+  if (nestedUserns !== 'passed' && appArmor === 'uncertain') sentences.push(describeAppArmor(appArmor));
+  if (missing.length > 0) return { grade: remoteJob ? 'fail' : 'warn', message: sentences.join('; ') };
+  if (sentences.length > 0) return { grade: 'warn', message: sentences.join('; ') };
+
+  const label = `${SANDBOX_HOST_LABELS[host]}${resolvedPaths.length > 0 ? `, with ${resolvedPaths.join(' and ')}` : ''}.`;
+  const message =
+    nestedUserns === 'passed'
+      ? `${label} ${describeNestedUserns(nestedUserns, '', remoteJob)} ${context}`
+      : `${label} ${describeAppArmor(appArmor)}`;
+  return { grade: 'pass', message };
+}
+
 /**
  * Can this host start the sandbox an unattended run needs? Graded from {@link probeSandboxHost}'s
- * facts by `doctor/sandboxPrerequisites.ts`'s {@link assessSandboxHost}; no table value is re-spelled.
+ * facts by `doctor/sandboxPrerequisites.ts`'s {@link assessSandboxHost}, then by
+ * {@link gradeSandboxPrerequisites}, whose doc comment lists the cases; no table value is re-spelled.
  *
- * - **A taken opt-out** ({@link sandboxOptedOut}; a `ctx.config` of `undefined` is not one) is a `pass`:
- *   the sandbox is not required, and `profile-sandbox` reports the choice.
- * - **A definite missing piece** is a `warn`, and a `fail` under `--remote-job`
- *   ({@link CheckContext.remoteJob}): a local repository's watcher refuses every fresh local launch, a
- *   job's session would exit at startup under `failIfUnavailable`, and a `github-actions`
- *   repository's watcher refuses nothing here.
- * - **An `uncertain` AppArmor answer** is a `warn` in both modes — the probe cannot settle it, so it
- *   is never a pass and never a failure. With a missing piece, the worse grade wins and both
- *   sentences are joined with `; `.
- * - Otherwise a `pass`, naming the host kind, where each binary resolved and the AppArmor answer.
+ * - **A taken opt-out** ({@link sandboxOptedOut}; a `ctx.config` of `undefined` is not one) is a `pass`
+ *   ahead of the probe: the sandbox is not required, and `profile-sandbox` reports the choice.
+ * - **A failed nested check** is a `fail` in both modes, the AppArmor file reading as context.
+ * - **A missing piece** is a `warn`, a `fail` under `--remote-job` ({@link CheckContext.remoteJob}).
+ * - **An `uncertain` AppArmor answer** warns only where the nested check did not run.
  */
 const SANDBOX_PREREQUISITES_CHECK: Check = {
   id: 'sandbox-prerequisites',
@@ -5288,27 +5395,17 @@ const SANDBOX_PREREQUISITES_CHECK: Check = {
       );
     }
     const facts = probeSandboxHost();
-    const { host, missing, appArmor } = assessSandboxHost(facts);
-    const sentences: string[] = [];
-    if (missing.length > 0) {
-      const agent = `\`${DEFAULT_AGENT_CLI}\`, or \`$${AGENT_CLI_VARIABLE}\``;
-      const consequence = ctx.remoteJob
-        ? `This job's agent session (${agent}) would exit at startup under \`failIfUnavailable\``
-        : ctx.config !== undefined && remoteExecutionApplies(ctx.config)
-          ? `\`execution.target\` is \`github-actions\`, so the watcher dispatches every drop to GitHub Actions and refuses none here, but a session started on this host (${agent}) exits at startup under \`failIfUnavailable\``
-          : `Until then the watcher refuses every fresh local launch, and the agent CLI (${agent}) exits at startup under \`failIfUnavailable\``;
-      sentences.push(`${describeMissingPieces(missing, facts.kernelRelease, facts.platform).join(' ')} ${consequence}`);
-    }
-    if (appArmor === 'uncertain') sentences.push(describeAppArmor(appArmor));
-    if (missing.length > 0) return (ctx.remoteJob ? fail : warn)(sentences.join('; '));
-    if (sentences.length > 0) return warn(sentences.join('; '));
-
-    const resolved = SANDBOX_HOST_BINARIES.filter((entry) => facts.resolvedBinaries.has(entry.binary)).map(
+    const resolvedPaths = SANDBOX_HOST_BINARIES.filter((entry) => facts.resolvedBinaries.has(entry.binary)).map(
       (entry) => `\`${entry.binary}\` in ${locateOnPath(entry.binary, process.env['PATH'] ?? '') ?? 'an explicit path'}`,
     );
-    return pass(
-      `${SANDBOX_HOST_LABELS[host]}${resolved.length > 0 ? `, with ${resolved.join(' and ')}` : ''}. ${describeAppArmor(appArmor)}`,
-    );
+    const { grade, message } = gradeSandboxPrerequisites({
+      assessment: assessSandboxHost(facts),
+      facts,
+      remoteJob: ctx.remoteJob,
+      remoteExecution: ctx.config !== undefined && remoteExecutionApplies(ctx.config),
+      resolvedPaths,
+    });
+    return { pass, warn, fail }[grade](message);
   },
 };
 
