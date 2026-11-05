@@ -43,7 +43,7 @@
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_job_mode_scripts_git_placeholder/task_<K>_plan.md`. Entries are ordered bottom-up by ship sequence, in the configured layer order `cli`, `plugin`, `general`. The catch-all `general` layer comes last, except for the two probe and driver capabilities whose code precedes their `cli` fixtures (see `## Context`). No task is in the `plugin` layer.
 
-1. [ ] **Task 1** — Add `hr_script_root`, which places a script's root from the nearest confirmed `harness.config.json` ancestor, and the runner-git test shim _(layer: cli)_ _(points: 20)_
+1. [x] **Task 1** — Add `hr_script_root`, which places a script's root from the nearest confirmed `harness.config.json` ancestor, and the runner-git test shim _(layer: cli)_ _(points: 20)_
 2. [ ] **Task 2** — Place `run-test-suite.sh`'s and `scratch-run.sh`'s root through `hr_script_root`, held on a job-layout fixture with a placeholder `<scriptsDir>/.git` _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Switch the six other library-sourcing scripts to `hr_script_root` _(layer: cli)_ _(points: 10)_
 4. [ ] **Task 4** — Inline the same placement in the four wrapper templates, held through `init` on a job-layout fixture _(layer: cli)_ _(points: 20)_
