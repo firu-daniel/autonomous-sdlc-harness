@@ -2,10 +2,12 @@
  * `scripts/gate12-sandbox-round.sh`'s entry point, its row table and its preflight refusals.
  *
  * **The rule this suite enforces: the round driver refuses to run anywhere but an adopted, explicitly
- * named Gate 12 repository, and creates nothing when it refuses; `--list` is the single row table.**
- * Each refusal is asserted on the bytes on disk, not on the message. The last three cases hold the
- * shared fixture (`helpers/gate12-round.mjs`) to the ignore rule, stub exit and run synthesis the
- * other round-driver suites rely on.
+ * named Gate 12 repository, and creates nothing when it refuses; `--list` is the single row table.
+ * An origin given as an SSH host alias is accepted only when `ssh -G` resolves it to github.com.**
+ * The `ssh` the driver meets is this file's {@link sshStub}, so no case reads the machine's ssh
+ * configuration. Each refusal is asserted on the bytes on disk, not on the message. The last three
+ * cases hold the shared fixture (`helpers/gate12-round.mjs`) to the ignore rule, stub exit and run
+ * synthesis the other round-driver suites rely on.
  *
  * It reads one fixed script, not a tree, so it owes no `treeGuards` entry.
  */
@@ -48,6 +50,46 @@ async function assertRefused(fixture, args, status, options) {
   assert.deepEqual(await snapshotTree(fixture.dir), before);
   return result;
 }
+
+/**
+ * Write a stub `ssh` into `fixture.binDir`, the directory `runRound` puts first on `PATH`. Each call
+ * appends its argv as one line to the returned log; `-G <alias>` prints `ssh -G`'s `key value` lines
+ * with `hostname <hostname>` and exits 0, and any other argv exits 1.
+ *
+ * @returns {Promise<string>} the argv log's path
+ */
+async function sshStub(fixture, hostname) {
+  const log = join(fixture.root, 'ssh.log');
+  const q = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
+  await writeFile(
+    join(fixture.binDir, 'ssh'),
+    [
+      '#!/usr/bin/env bash',
+      `printf '%s\\n' "$*" >>${q(log)}`,
+      'if [ "$#" -eq 2 ] && [ "$1" = "-G" ]; then',
+      `  printf 'user git\\nhostname %s\\nport 22\\n' ${q(hostname)}`,
+      '  exit 0',
+      'fi',
+      'exit 1',
+      '',
+    ].join('\n'),
+    { mode: 0o755 },
+  );
+  return log;
+}
+
+/**
+ * Point the checkout's `remote.origin.url` at `git@<alias>:<slug>.git`, with an `insteadOf` sending
+ * it to the bare origin so the preflight's `git fetch origin` still lands there.
+ */
+async function aliasOrigin(fixture, alias, slug = GATE12_SLUG) {
+  const url = `git@${alias}:${slug}.git`;
+  await runGit(fixture.dir, ['config', 'remote.origin.url', url]);
+  await runGit(fixture.dir, ['config', `url.${fixture.origin}.insteadOf`, url]);
+}
+
+/** The stub's argv log, or `''` when it was never called. */
+const sshCalls = async (log) => (existsSync(log) ? readFile(log, 'utf8') : '');
 
 test('--help exits 0 and --list prints one line per row, in table order', async (t) => {
   const fixture = await fixtureFor(t);
@@ -113,6 +155,44 @@ test('each preflight refusal exits 2 and creates nothing', async (t) => {
     const result = await assertRefused(fixture, ['plant', '--repo', GATE12_SLUG], 2);
     assert.match(result.stderr, /it is a checkout of the repository that ships this driver/);
   });
+
+  await t.test('an ssh host alias resolving to another host', async (t) => {
+    const fixture = await fixtureFor(t);
+    await sshStub(fixture, 'gitlab.example.invalid');
+    await aliasOrigin(fixture, 'github-fixture');
+    const result = await assertRefused(fixture, ['plant', '--repo', GATE12_SLUG], 2);
+    assert.match(result.stderr, /host alias 'github-fixture', which ssh -G resolves to 'gitlab\.example\.invalid'/);
+  });
+
+  await t.test('an ssh host alias for github.com naming another repository', async (t) => {
+    const fixture = await fixtureFor(t);
+    await sshStub(fixture, 'github.com');
+    await aliasOrigin(fixture, 'github-fixture', 'other/repo');
+    const result = await assertRefused(fixture, ['plant', '--repo', GATE12_SLUG], 2);
+    assert.match(result.stderr, /origin is 'other\/repo', not --repo 'fixture\/gate12'/);
+  });
+
+  await t.test('an ssh host alias that is not a bare host name, refused before ssh runs', async (t) => {
+    const fixture = await fixtureFor(t);
+    const log = await sshStub(fixture, 'github.com');
+    await aliasOrigin(fixture, '-oProxyCommand=true');
+    const result = await assertRefused(fixture, ['plant', '--repo', GATE12_SLUG], 2);
+    assert.match(result.stderr, /host alias '-oProxyCommand=true', which is not a bare host name/);
+    assert.equal(await sshCalls(log), '');
+  });
+});
+
+test('an ssh host alias that ssh -G resolves to github.com is accepted', async (t) => {
+  const fixture = await fixtureFor(t);
+  const log = await sshStub(fixture, 'github.com');
+  await aliasOrigin(fixture, 'github-fixture');
+  const result = await runRound(fixture, ['grade', '--repo', GATE12_SLUG, '--row', 'JS3N']);
+  assert.equal(result.status, 0, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  const lines = result.stdout.split('\n').filter((l) => l !== '');
+  assert.equal(lines.length, 1, result.stdout);
+  assert.ok(lines[0].startsWith('row="JS3N" result="not run"'), lines[0]);
+  assert.doesNotMatch(result.stderr, /refusing to start/);
+  assert.match(await sshCalls(log), /^-G github-fixture$/m);
 });
 
 test('a failing gh repo view exits 3 and creates nothing', async (t) => {
