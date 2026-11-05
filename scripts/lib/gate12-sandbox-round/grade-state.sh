@@ -5,8 +5,9 @@
 # row (SB3, JS3N), each found by its route, so `grade` covers every row of ## 10.
 # grade-plant.sh's g12_grade_cmd calls g12_grade_state; this file uses that file's arm and fold helpers.
 #
-#   SB2   two arms folded, clarifications and pause-note; `pass` when both pass; then one `source`
-#         line for the remote_status.json variant.
+#   SB2   two arms folded, clarifications (its save, its artifact and its next job) and pause-note;
+#         `pass` only when every clause passes, so a next job that has not run makes SB2 `not run`;
+#         then one `source` line for the remote_status.json variant.
 #   SB4   the bundle half of the clarifications arm's artifact: no link and no token is `pass`.
 #   JS3   only the watchdog lines that reach the `Run the harness` step log, and status.json; then one
 #         `source` line for the "from a temporary directory" clause.
@@ -249,7 +250,7 @@ g12_sb2_restore_clause() {
 }
 
 g12_grade_sb2() {
-  local path evidence runs restore=""
+  local path evidence runs
   g12_sb2_read
   g12_sb2pn_read
   g12_fold_reset 2
@@ -261,17 +262,14 @@ g12_grade_sb2() {
     g12_fold_add "clarifications $G12_STEP_SAVE"
     g12_sb2_bundle
     g12_fold_add "clarifications artifact"
-    g12_sb2_restore_clause
-    # A next job that never ran is reported `not run` and leaves the planted arm's verdict standing.
-    if [ "$G12_ARM_RESULT" = "not run" ]; then
-      restore="clarifications next job not run: $G12_ARM_EVIDENCE"
-      G12_FOLD_RECORD="${G12_FOLD_RECORD}[clarifications next job] not run: $G12_ARM_EVIDENCE"$'\n'
-    else
-      g12_fold_add "clarifications next job"
-    fi
   fi
   g12_sb2pn_arm
   g12_fold_add pause-note
+  # After pause-note, so a pause-note `not run` or `expired` still decides the row's evidence.
+  if [ -n "$G12_SB2_ID" ]; then
+    g12_sb2_restore_clause
+    g12_fold_add "clarifications next job"
+  fi
 
   runs="clarifications run ${G12_SB2_ID:-none}, pause-note run ${G12_SB2PN_ID:-none}"
   if [ "$G12_FOLD_RESULT" = pass ]; then
@@ -279,7 +277,6 @@ g12_grade_sb2() {
   else
     evidence="$G12_FOLD_RESULT ($runs): $G12_FOLD_EVIDENCE"
   fi
-  [ -z "$restore" ] || evidence="$evidence; $restore"
   if [ "$G12_FOLD_RESULT" != pass ]; then
     if path="$(g12_evidence SB2 "$G12_FOLD_RECORD")"; then
       evidence="$evidence; record in $path"

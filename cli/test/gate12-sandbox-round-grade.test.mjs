@@ -26,8 +26,7 @@
  * - `cli/templates/scripts/remote-run.sh` → `status_from_github`: its first line and its
  *   `printf '  state: %s\n'` format, for the JS1 and RJ2 `status` stub; `save_link_free`: the
  *   `remote-run.sh: save: skipped ` form SB2's `clarifications` arm must not accept. No case cans
- *   `verb_restore`'s line: the SB2 next job is absent throughout, which the grader leaves `not run`
- *   beside the planted arm.
+ *   `verb_restore`'s line: the SB2 next job is absent throughout, which makes SB2 `not run`.
  * - `cli/templates/scripts/autonomous-watcher.sh` → `log`'s `[watcher]` tag, `run_job`'s
  *   `job: launching run for '<b>'`, and `check_stalled_runs`'s
  *   `-> reset to the last commit and resume (restart #`, `-> failed (` and the reason
@@ -536,19 +535,22 @@ test('RJ2: the refusal step skipped is not run', async (t) => {
 
 const SB_ROWS = ['--row', 'SB2', '--row', 'SB4'];
 
-test('SB2 at its expected shape is pass on both arms, then one source line naming hr_remote_status_write, and SB4 is pass', async (t) => {
+test('SB2 at its expected shape with no next job is not run, both arms passed in its record, then one source line naming hr_remote_status_write, and SB4 is pass', async (t) => {
   const fixture = await fixtureFor(t);
   await stage(fixture, [sb2Run(), sb2PauseRun()]);
   const { lines, one } = await grade(fixture, SB_ROWS);
   const sb2 = one('SB2');
-  assert.equal(sb2.result, 'pass', JSON.stringify(sb2));
-  assert.ok(sb2.evidence.includes(`skipped ${SB2_LINK} as a symbolic link`), sb2.evidence);
-  assert.ok(sb2.evidence.includes(`skipped ${PAUSE_LINK} as a symbolic link`), sb2.evidence);
+  assert.equal(sb2.result, 'not run', JSON.stringify(sb2));
+  assert.ok(sb2.evidence.includes('clarifications next job: '), sb2.evidence);
+  const record = await readFile(evidencePath(fixture, 'SB2'), 'utf8');
+  assert.ok(record.includes(`[clarifications ${STEP.save}] pass: `), record);
+  assert.ok(record.includes('[pause-note] pass: '), record);
+  assert.ok(record.includes(`skipped ${SB2_LINK} as a symbolic link`), record);
+  assert.ok(record.includes(`skipped ${PAUSE_LINK} as a symbolic link`), record);
   const src = lines.filter((l) => l.row === 'SB2' && l.result === 'source');
   assert.equal(src.length, 1, JSON.stringify(lines));
   assert.match(src[0].evidence, /\bhr_remote_status_write\b/);
   assert.equal(one('SB4').result, 'pass');
-  assert.equal(existsSync(evidencePath(fixture, 'SB2')), false);
 });
 
 test('SB2: only the remote-run.sh save: skipped form for the clarifications arm\'s planted path is fail', async (t) => {
@@ -732,7 +734,7 @@ test('a plain grade over every row at its expected shape exits 0, FR1-FR7 printe
   };
   assert.deepEqual(
     Object.fromEntries(['JS1', 'JS4', 'SB2', 'SB4', 'RJ2', 'JS3', 'JS3N', 'SB3', 'RJ3'].map((r) => [r, resultOf(r)])),
-    { JS1: 'pass', JS4: 'pass', SB2: 'pass', SB4: 'pass', RJ2: 'pass', JS3: 'pass', JS3N: 'source', SB3: 'source', RJ3: 'not run' },
+    { JS1: 'pass', JS4: 'pass', SB2: 'not run', SB4: 'pass', RJ2: 'pass', JS3: 'pass', JS3N: 'source', SB3: 'source', RJ3: 'not run' },
   );
   // The 16 `--list` rows plus the `source` lines of SB2, RJ2 and JS3; catches a stray or duplicated line `resultOf` collapses.
   assert.equal(lines.length, 19, lines.map((l) => `${l.row}:${l.result}`).join(' '));
