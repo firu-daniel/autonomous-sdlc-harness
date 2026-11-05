@@ -26,7 +26,7 @@
 #   runs[]          {row, arm, branch, run_id, dispatched_at[, stall_values_unconfirmed]}
 #                   stall_values_unconfirmed: boolean, read as false when absent; written only by the
 #                   default-branch leg, on the JS3 entry, when its wait for the run to start times out
-#   tokens          keyed by row
+#   tokens          keyed by row, or by <row>_<ARM> for an arm with its own token, such as SB2_PAUSE_NOTE
 #   other_branch    the branch the default-branch leg pushed, or null
 #   variables       keyed by name, each {present, value, restored}
 #

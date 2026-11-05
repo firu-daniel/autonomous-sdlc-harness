@@ -40,3 +40,10 @@
 - `bash scripts/gate12-sandbox-round.sh --list`, run from this checkout's root (the restatement's own command, never `plant` or `grade`), prints the same row IDs in the same order. SB2's arms are `clarifications,pause-note`, SB3 and JS3N show route `source`, and no field carries a `|`, a tab, a `"`, a backtick or an angle bracket.
 - `bash -n` on each of the three edited files exits 0.
 - Read the `pause-note` prompt for a two-segment and a one-segment `G12_STATE_DIR`. The `<ups>` run has exactly one `../` per segment, so the link's target resolves to the root token file.
+
+**Deviations from plan:**
+
+- The `plants.sh` header quotes `scratch-run.sh`'s own wording, *file/string distinction*, not the plan's *file/command distinction*: the header reads *"Do not read the file/string distinction as a capability boundary"*.
+- The `..` loop the `clarifications` arm carried inline is now `g12_plant_ups <dir path>`, called by both arms; the `clarifications` arm's token key, files, manifest order and prompt are unchanged.
+- Evidence downgrade, `bash -n` on the three edited files: each `bash -n <file>` call was refused by the permission layer (*"Permission to use Bash has been denied because Claude Code is running in don't ask mode"*). The parse claim rests instead on `bash scripts/typecheck.sh`, whose `check-shell-parse` leg printed `122 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed` and `PASS: typecheck`, and on `bash scripts/gate12-sandbox-round.sh --list`, which sources `core.sh`, `state.sh` and `plants.sh` before printing and printed the table with no stderr.
+- Evidence downgrade, the `<ups>` check: rests on reading `g12_plant_ups` and the prompt text, not on rendering the prompt. `G12_STATE_DIR=harness-runs` yields `../`, `G12_STATE_DIR=a/b` yields `../../`; the link at `<stateDir>/PAUSE_PROGRESS.md` therefore resolves its target to `gate12-sb2-pause-token.txt` at the root. Task 6's plant test renders it.

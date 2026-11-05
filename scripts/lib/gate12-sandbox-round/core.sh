@@ -15,6 +15,9 @@
 #   reads-SB2       SB4 alone: no plant and no hand row of its own; `grade` reads SB2's planted job
 #   default-branch  JS3 alone: the `default-branch` leg
 #   hand            a hand step the script cannot take; `grade` prints it `not run` with its note
+#   source          closed upstream: no plant and no hand step; `grade` prints one `source` line
+#                   whose evidence is the row's note, which names the file and symbol the row's
+#                   Expected is read from
 # The gate restates every field as a Markdown table cell, so no field carries a `|`, a tab, a
 # double quote, a backtick or an angle bracket (Markdown reads `<word>` as an HTML tag).
 #
@@ -58,18 +61,18 @@ g12_row_declare JS1 7 plant settings,remote-run \
   "a pushed plumbing commit of .claude/settings.json, and separately of remote-run.sh under scriptsDir, refused at Refuse a branch that changed the job's own files"
 g12_row_declare JS4 7 plant npmrc,node-modules \
   "a pushed plumbing commit of a .npmrc, and separately of node_modules/autonomous-sdlc-harness, whose marker must not appear in the job's npm steps"
-g12_row_declare SB2 7 plant clarifications \
-  "plants the second link inside the branch's clarifications directory; its PAUSE_PROGRESS.md arm, moved aside by hr_remote_move_aside before the session, and its autonomous_logs/remote_status.json variant, replaced by hr_remote_status_write, are hand steps"
+g12_row_declare SB2 7 plant clarifications,pause-note \
+  "clarifications is a committed link inside the branch's clarifications directory; pause-note is a link at PAUSE_PROGRESS.md that the session makes during its run through scratch-run.sh, on its own branch; the autonomous_logs/remote_status.json variant is read from the source, since hr_remote_status_write removes a link at its target before each rename"
 g12_row_declare SB4 7 reads-SB2 - \
   "no plant and no hand step of its own for the bundle half: grade reads it from SB2's planted job's harness-state artifact; its optional half, a throwaway upload workflow and a background process, stays a hand step"
 g12_row_declare RJ2 7 plant profile \
-  "plants .claude/settings.autonomous.json with sandbox.enabled false and no opt-out marker; that profile is itself a job surface (protectedPaths, its PROFILE_PATH entry, kept by jobSurfacePaths), so Refuse a branch that changed the job's own files refuses the branch before the launch check, and the launch-check clause has no route"
+  "plants .claude/settings.autonomous.json with sandbox.enabled false and no opt-out marker; that profile is a job surface (protectedPaths, its PROFILE_PATH entry, kept by jobSurfacePaths), so the row is graded on its refusal at Refuse a branch that changed the job's own files, and the launch-check clause is read from the source, unreachable from a branch by construction"
 g12_row_declare JS3 8 default-branch stall \
   "lowered STALL_WARN_SECS and STALL_KILL_SECS set as repository variables while the GitHub default branch differs from defaultBranch, both restored afterwards"
-g12_row_declare JS3N 8 hand - \
-  "a hand step, because every job surface is a write-protected path in the session (jobSurfacePaths derives from placeholderProtectedPaths), so the session cannot commit one and a pushed one is JS1's refusal"
-g12_row_declare SB3 7 hand - \
-  "a hand step, because harness.config.json is write-protected in the job's base profile (protectedPaths, its CONFIG_FILENAME entry) and a committed rewrite is a job surface (jobSurfacePaths) that the job refuses"
+g12_row_declare JS3N 8 source - \
+  "read from the source, unreachable by construction: every job surface is write-protected in the session, because jobSurfacePaths derives from placeholderProtectedPaths in writeProtection.ts, and so is the checkout's whole .git, so the session cannot commit one before the stall, and a pushed one is JS1's refusal"
+g12_row_declare SB3 7 source - \
+  "read from the source, unreachable by construction: harness.config.json is write-protected in the session by protectedPaths, its CONFIG_FILENAME entry, and the sandbox's allowWrite names only the state directory; a committed rewrite is a job surface (jobSurfacePaths), which the job refuses"
 g12_row_declare RJ3 9 hand - \
   "a hand step on round step 9, a local leg: remote-run.sh start and review run from a mirror of the Gate 12 repository on the operator's machine, not through a job"
 
