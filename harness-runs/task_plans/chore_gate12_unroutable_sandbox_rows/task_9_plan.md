@@ -42,3 +42,15 @@ This is a catch-all task: read every configured layer's conventions document (`.
 - The restated table's rows equal `--list`'s row IDs and steps, in order. Every `source` and `hand` row's note contains `--list`'s note verbatim.
 - Re-run the story index's register entries A and B. Every `docs/development.md` hit is a register row, and each `change` row owned by Task 9 has been edited.
 - Each command the round names stays inside a fenced block (`harness-runs/lessons.md` → *"Every command an adopter is meant to run sits in a fenced block"*).
+
+**Deviations from plan:**
+
+- **The table's lead sentence** (*"*Taken by* names the subcommand that takes the row, or `hand`."*) also gains `source` for a row read from the source, since two rows now carry it; no row was touched beyond SB2, RJ2, JS3N and SB3.
+- **The `pause-note` bullet quotes `bash <scriptsDir>/scratch-run.sh <stateDir>/scratch/gate12_sb2_pause_link.mjs` inline, not fenced.** It is the command the planted task prompt has the *session* run, not one an operator runs, and it follows step 8's inline spelling of JS3's stall call; every operator command in the round stays fenced.
+- **The old bullet's sentence on the row's own link target** (*"a dangling link, or a link to a directory, fails `-f` and is not moved aside"*) moved with the bullet into the `pause-note` arm, worded as *"the arm plants neither"*.
+
+**Verification evidence (this session):**
+
+- Table vs `--list`: a scratch probe (`harness-runs/scratch/task9_table_check.mjs`, run through `bash scripts/scratch-run.sh`) split `bash scripts/gate12-sandbox-round.sh --list` and the restated table, mapped each route with the docs test's `TAKEN_BY` plus `source` → `source`, and printed `ok` for all 16 rows and `ALL OK`: same IDs in order, same steps, *Taken by* equal to the mapped route, every row's note containing `--list`'s note verbatim (all rows, not only `hand` and `source`).
+- Register entries A and B, re-run over `docs/development.md`: every hit is register row 1–19's site (the new `pause-note` bullet carries row 5's moved premise, now corrected); no hit still states that the session cannot make the link or that the watcher's `mv` replaces a link.
+- `cli/test/gate12-sandbox-round-docs.test.mjs` was not run: this unit did not create or edit it, and its `TAKEN_BY` has no `source` entry until Task 10.
