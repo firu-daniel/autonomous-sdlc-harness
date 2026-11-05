@@ -55,13 +55,19 @@ G12_DB_DEFAULT=""
 G12_DB_SWITCHED=0
 G12_DB_RUN_ID=""
 
+# g12_js3_durations — JS3's stall S = G12_STALL_KILL_SECS + 60 seconds and its Bash tool timeout
+# T = (S + 60) * 1000 ms, into G12_JS3_STALL_SECS and G12_JS3_TIMEOUT_MS. The one producer of both.
+g12_js3_durations() {
+  G12_JS3_STALL_SECS=$((G12_STALL_KILL_SECS + 60))
+  G12_JS3_TIMEOUT_MS=$(((G12_JS3_STALL_SECS + 60) * 1000))
+}
+
 g12_js3_files() {
-  local branch="${1:-}" dir="${2:-}" scratch stall_secs timeout_ms
+  local branch="${1:-}" dir="${2:-}" scratch
   [ -n "$branch" ] && [ -d "$dir" ] || { g12_refuse "g12_js3_files needs <branch> <dir>"; return 1; }
   : >"$dir/manifest" || { g12_refuse "could not write '$dir/manifest'"; return 1; }
   scratch="$G12_STATE_DIR/scratch"
-  stall_secs=$((G12_STALL_KILL_SECS + 60))
-  timeout_ms=$(((stall_secs + 60) * 1000))
+  g12_js3_durations
   printf '%s\n' \
     'This task has three steps. Take them in this order.' \
     '' \
@@ -73,21 +79,21 @@ g12_js3_files() {
     "const marker = '$scratch/gate12_js3_stalled';" \
     'if (existsSync(marker)) process.exit(0);' \
     "writeFileSync(marker, '');" \
-    "setTimeout(() => {}, $stall_secs * 1000);" \
+    "setTimeout(() => {}, $G12_JS3_STALL_SECS * 1000);" \
     '```' \
     '' \
-    "2. Run \`bash $G12_SCRIPTS_DIR/scratch-run.sh $scratch/gate12_js3_stall.mjs\` once, in the foreground, with the Bash tool's timeout set to $timeout_ms milliseconds. Append nothing to the command. It prints nothing and returns after $stall_secs seconds, or at once if it has run before." \
+    "2. Run \`bash $G12_SCRIPTS_DIR/scratch-run.sh $scratch/gate12_js3_stall.mjs\` once, in the foreground, with the Bash tool's timeout set to $G12_JS3_TIMEOUT_MS milliseconds. Append nothing to the command. It prints nothing and returns after $G12_JS3_STALL_SECS seconds, or at once if it has run before." \
     '' \
     '3. Add a line to README.md naming the date this repository was last checked.' \
     >"$dir/task_prompt.md" ||
     { g12_refuse "could not write '$dir/task_prompt.md'"; return 1; }
 }
 
-# JS3's prompt sets the Bash tool's timeout to (G12_STALL_KILL_SECS + 120) * 1000 ms.
+# JS3's prompt sets the Bash tool's timeout to g12_js3_durations' G12_JS3_TIMEOUT_MS.
 g12_db_stall_fits() {
-  local timeout_ms=$(((G12_STALL_KILL_SECS + 120) * 1000))
-  [ "$timeout_ms" -le 600000 ] && return 0
-  g12_db_refuse "--stall-kill-secs $G12_STALL_KILL_SECS needs a Bash tool timeout of ${timeout_ms} ms for JS3's stall, past the tool's 600000 ms ceiling; pass 480 or less"
+  g12_js3_durations
+  [ "$G12_JS3_TIMEOUT_MS" -le 600000 ] && return 0
+  g12_db_refuse "--stall-kill-secs $G12_STALL_KILL_SECS needs a Bash tool timeout of ${G12_JS3_TIMEOUT_MS} ms for JS3's stall, past the tool's 600000 ms ceiling; pass 480 or less"
 }
 
 g12_db_refuse() {
