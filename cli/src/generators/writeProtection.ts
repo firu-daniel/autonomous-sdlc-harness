@@ -225,8 +225,10 @@ function libraryDir(): string {
  * level of the scripts directory. The configuration file and the `.git` levels are protected because the wrappers place
  * their main checkout from their own location, as the nearest directory holding a `.git` that is a
  * real directory without a `commondir` (`cli/templates/scripts/lib/harness-run-lib.sh` →
- * `hr_wrapper_main_of`); the run registry because the clone arm of the wrappers' target check reads
- * which run copy a branch has from it.
+ * `hr_wrapper_main_of`). On a bubblewrap host each absent `.git` level is a placeholder inside the
+ * sandbox, which is why the sandboxed scripts place their root through `hr_script_root` rather than
+ * by git's discovery from their own directory (F15). The run registry is protected because the
+ * clone arm of the wrappers' target check reads which run copy a branch has from it.
  *
  * The main checkout's `.git` is protected as one directory: objects reach it only through sync-in's
  * fetch, which runs outside the sandbox, and git and the unsandboxed wrappers follow its

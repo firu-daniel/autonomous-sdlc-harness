@@ -9,8 +9,10 @@
  * collected by the target's own `run-test-suite.sh --wait`. The vector, compared element by element
  * against one built here from the profile with `jq`, carries no `--share-net`, and the target's own
  * command runs only as the vector's command — the gate stub records whether `bwrap` ran it. The
- * supervisor sweeps every placeholder the stub leaves on the host (a `.git`-leaf one the stub
- * removes itself, below), and nothing else under the fixture changes but the lane files. A clone
+ * supervisor sweeps every placeholder the stub leaves on the host, a `.git` leaf's included, and
+ * nothing else under the fixture changes but the lane files. Until that sweep a `scripts/.git`
+ * leftover stands, and the worker and the `--wait` collector place their root past it (F15,
+ * `hr_script_root`); case (t) shows a job-mode run reaching its verdict so. A clone
  * whose `run_profile` only the sandbox probe's `sp__render` wrote is launched (case (r)), and a
  * status-less control-clone record does not refuse job mode (case (s)). Case (c) hides `bwrap` by
  * shadowing its `PATH` directory, never by dropping it, because `bash` may share it (F12).
@@ -18,9 +20,9 @@
  * Not covered, because no suite can show it: whether the detached supervisor outlives a sandboxed
  * Bash call on Linux. That is the GS1 row's measurement. The stub emulates bubblewrap's placeholder
  * at a `--ro-bind /dev/null <p>` mount point ({@link BWRAP_STUB}) and honours `--unsetenv` and
- * `--chdir`; it applies no namespace, mount or `--setenv`, and that emulation is not measured. Nor is
- * the host-side leftover at a `.git` leaf, which the stub removes so the unsandboxed `--wait`
- * collector's `git rev-parse` never meets an empty regular `.git`.
+ * `--chdir`; it applies no namespace, mount or `--setenv`, and that emulation is not measured. Every
+ * case's `PATH` puts the runner-git shim first (`helpers/runner-git-shim.mjs`), so the worker and the
+ * collector meet the runner's git, which dies on either placeholder shape.
  *
  * The host answer is `hr_placeholder_host_probe_var` redefined at the end of the fixture's installed
  * library, as `watcher-placeholder-host.test.mjs` overrides it. The library's `HR_TEST_RUN_STALE_SECONDS`
@@ -39,6 +41,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 
 import { createFixture, PACKAGE_ROOT, runBash, runCli, runGit, snapshotTree, WORKSPACE_ROOT } from './helpers/fixture.mjs';
+import { installRunnerGitShim } from './helpers/runner-git-shim.mjs';
 import { scaleBound } from './helpers/timing.mjs';
 
 /** The sandbox probe's own libraries, from this checkout: case (r) writes a clone record through `sp__render`. */
@@ -76,12 +79,10 @@ const GATE_STUB = [
  * `STUB_BWRAP_PREFLIGHT_ERR` on stderr; `STUB_BWRAP_BOOM` exits 1 at once with that line. Otherwise
  * it records its argv, honours `--unsetenv` and `--chdir`, and runs the words after `--`. Each absent
  * `--ro-bind /dev/null <p>` is a link to `/dev/null` while the command runs — the device the
- * sandbox shows there, which git's discovery passes over where it dies on an empty regular `.git` —
- * and the 0-byte 0444 file bubblewrap leaves on the host once it exits. A `.git`-leaf placeholder is
- * removed instead: this suite's `--wait` collector runs unsandboxed and places its root by
- * `git rev-parse` from `scripts/`, so an empty regular `scripts/.git` between the stub's exit and the
- * supervisor's sweep refused it (`'…/scripts' is not inside a git repository`). A real session's
- * `--wait` is sandboxed and sees the `/dev/null` device there.
+ * sandbox shows there, on which the runner's git dies (round 14) — and the 0-byte 0444 file
+ * bubblewrap leaves on the host once it exits, a `.git` leaf included. That leftover stays until the
+ * supervisor's sweep; the unsandboxed `--wait` collector places its root past it (F15,
+ * `hr_script_root`).
  */
 const BWRAP_STUB = [
   '#!/usr/bin/env bash',
@@ -113,12 +114,7 @@ const BWRAP_STUB = [
   'done',
   'STUB_IN_BWRAP=1 "${args[@]:i}"',
   'status=$?',
-  'for p in ${made[@]+"${made[@]}"}; do',
-  '  case "${p##*/}" in',
-  '    .git) rm -f "$p" ;;',
-  '    *) rm -f "$p"; : > "$p"; chmod 444 "$p" ;;',
-  '  esac',
-  'done',
+  'for p in ${made[@]+"${made[@]}"}; do rm -f "$p"; : > "$p"; chmod 444 "$p"; done',
   ': > "$STUB_OUT/bwrap-exited"',
   'exit "$status"',
   '',
@@ -172,7 +168,7 @@ async function pathHidingBwrap(path, scratch) {
 /**
  * An adopted fixture on {@link BRANCH}, committed, its library answering `host` for the host probe;
  * and a case root beside it holding `home/` (with `.ssh/config` and `.netrc`), `state/`, `bin/`
- * (the `bwrap` stub, and with `setsid` its stub) and `out/` (every record).
+ * (the runner-git shim, the `bwrap` stub, and with `setsid` its stub) and `out/` (every record).
  *
  * @param {import('node:test').TestContext} t
  * @param {{ host?: 0 | 1, bwrap?: boolean, setsid?: boolean }} [options]
@@ -215,6 +211,7 @@ async function launcherFixture(t, { host = 1, bwrap = true, setsid = false } = {
   await mkdir(bin);
   await mkdir(out);
   await mkdir(state);
+  await installRunnerGitShim(bin);
   if (bwrap) await writeFile(join(bin, 'bwrap'), BWRAP_STUB, { mode: 0o755 });
   if (setsid) await writeFile(join(bin, 'setsid'), SETSID_STUB, { mode: 0o755 });
 
@@ -669,6 +666,39 @@ test('(s) job mode: the wrappers leg\'s control-clone record, which carries no s
   const verdict = await f.collect(f.dir);
   assert.deepEqual([verdict.status, verdict.stdout], [0, 'pass\n'], output(verdict));
   await f.until(() => existsSync(join(f.out, 'bwrap-exited')), 'the bwrap stub to exit');
+});
+
+test('(t) F15: job mode with <main>/scripts/.git protected and absent reaches its verdict past the placeholder', async (t) => {
+  const f = await launcherFixture(t);
+  await writeRegistry(f, { [BRANCH]: { branch: BRANCH, worktree: f.dir, status: 'running' } });
+  const base = join(f.dir, BASE_PROFILE);
+  const scriptsGit = join(f.dir, SCRIPTS, '.git');
+  assert.ok((await f.jq('.sandbox.filesystem.denyWrite[] | strings', base)).includes(scriptsGit), `the base profile does not protect ${scriptsGit}`);
+  assert.equal(present(scriptsGit), false);
+  const expected = await expectedVector(f, f.dir, base);
+  const before = await snapshotTree(f.dir);
+
+  const r = await f.launch([f.dir, LABEL]);
+  assert.deepEqual([r.status, r.stdout, r.stderr], [3, 'pending\n', ''], output(r));
+  const verdict = await f.collect(f.dir);
+  assert.deepEqual([verdict.status, verdict.stdout], [0, 'pass\n'], output(verdict));
+
+  const argv = lines(f.record);
+  assert.deepEqual(argv, expected);
+  const at = argv.indexOf(scriptsGit);
+  assert.deepEqual(argv.slice(at - 2, at + 1), ['--ro-bind', '/dev/null', scriptsGit], argv.join('\n'));
+  assert.deepEqual(argv.slice(argv.indexOf('--') + 1), ['bash', join(f.dir, RUNNER), '--no-detach', LABEL]);
+  assert.deepEqual(f.gateRuns(), ['ran']);
+  assert.deepEqual(lines(join(f.out, 'gate-in-bwrap.txt')), ['1']);
+
+  await f.until(() => existsSync(join(f.out, 'bwrap-exited')), 'the bwrap stub to exit');
+  assert.ok(f.placeholders().includes(scriptsGit), f.placeholders().join('\n'));
+  await f.until(() => !present(scriptsGit), `the sweep of ${scriptsGit}`);
+  await f.until(() => !present(join(f.dir, LANE, `${LABEL}.running`)), 'the run to end');
+  const after = await snapshotTree(f.dir);
+  const changed = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((k) => before[k] !== after[k]);
+  const outside = changed.filter((k) => !`${k}/`.startsWith(`${STATE_DIR}/test_run_logs/`));
+  assert.deepEqual(outside, [], changed.join('\n'));
 });
 
 test('(n) a redirected XDG_STATE_HOME or HOME does not choose the clone\'s profile', async (t) => {
