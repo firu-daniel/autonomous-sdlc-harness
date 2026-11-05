@@ -5381,9 +5381,6 @@ export function gradeSandboxPrerequisites(input: SandboxPrerequisitesGradeInput)
  *
  * - **A taken opt-out** ({@link sandboxOptedOut}; a `ctx.config` of `undefined` is not one) is a `pass`
  *   ahead of the probe: the sandbox is not required, and `profile-sandbox` reports the choice.
- * - **A failed nested check** is a `fail` in both modes, the AppArmor file reading as context.
- * - **A missing piece** is a `warn`, a `fail` under `--remote-job` ({@link CheckContext.remoteJob}).
- * - **An `uncertain` AppArmor answer** warns only where the nested check did not run.
  */
 const SANDBOX_PREREQUISITES_CHECK: Check = {
   id: 'sandbox-prerequisites',
