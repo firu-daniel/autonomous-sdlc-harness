@@ -39,3 +39,5 @@ This task changes nothing in the library, the helper, or any other script.
 
 - `cli/test/job-layout-root.test.mjs` passes. With the two edits reverted, cases (a) and (b) fail under the shim with the round-14 refusal. Check this once during the unit with a throwaway revert, then restore.
 - `git diff` of both scripts changes only the placement line and its comment. The refusal strings and exit codes are byte-identical.
+  - **Deviations from plan:** `run-test-suite.sh` had no comment directly above the placement line (a blank line separates it from the label checks), so the F15 sentence was added as a new two-line comment immediately above it rather than appended to an existing one.
+  - **Revert check, executed:** with both placement lines switched back to `hr_repo_root`, `npm test --workspace cli -- test/job-layout-root.test.mjs` failed (a) and (b) under both shapes with the round-14 refusals (`run-test-suite.sh: '<fixture>/harness-scripts' is not inside a git repository`, exit 2; `scratch-run.sh: '<fixture>/harness-scripts' is not inside a git repository — refusing to run anything`, exit 68) while (c) passed; restored, all 6 cases pass.
