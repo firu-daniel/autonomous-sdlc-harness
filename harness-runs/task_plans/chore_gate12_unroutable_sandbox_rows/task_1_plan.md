@@ -25,3 +25,8 @@
 - `npm test --workspace cli -- test/remote-save-links.test.mjs`, run from the checkout root as one foreground command, passes. This is the test file this task edits.
 - The (M8) entry records a failure you observed, not one you predicted. Under the mutation, (W1) fails on what the outside directory holds, which is the defect the user approved fixing.
 - `git diff` of `harness-run-lib.sh` touches `hr_remote_status_write` and its doc comment only.
+
+**Deviations from plan:**
+
+- `git diff` of `harness-run-lib.sh` also touches one sentence of the library header's fence item 3 (THE REMOTE STATE BUNDLE): *"nothing there but a writer's own failed temp file is ever removed"* became *"nothing there but a writer's own failed temp file, or a symbolic link `hr_remote_status_write` removes at its `<out_json>`, is ever removed"*. The watcher's `job_write_status` passes an `<out_json>` under the state directory, so the new link removal falsified that sentence; `.claude/context/cli.md` → `## What "done" means here` requires a change to amend a header rule it would otherwise break. The `Written only by hr_remote_status_write` index entries are unchanged and still true.
+- (M8) was observed with `npm test --workspace cli -- test/remote-save-links.test.mjs` under the mutation (its output filtered through `grep` for reading; the exit status was not relied on): `# tests 19`, `# pass 18`, `# fail 1`, `not ok 9 - (W1) …` with `the status write landed in the linked directory`. This also measures the defect the Goal reasoned about: an unremoved link to a directory took the rename as a move into that directory. The mutation was reverted before the task's own run.
