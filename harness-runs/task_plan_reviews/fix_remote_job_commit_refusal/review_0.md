@@ -1,0 +1,16 @@
+# Task plan review — iteration 0
+
+## Must Fix
+1. **Scope register: derivation entry 1 misses the falsified absent-ledger sites; corrected entry needed** — story index (`fix_remote_job_commit_refusal_story_plan.md`), `## Scope register`; consequential edit to `task_8_plan.md`.
+   I re-ran entries 1–5 verbatim, and every hit is a row. But entry 1's pattern (`no readable ledger|absent or unreadable ledger|absent ledger|exit code alone|ledger-less`) misses sentences that state the same absent-ledger rule in other words. The clearest is `docs/watcher.md`, in the terminal-states table: the `completed` row reads *"the session ended cleanly with no park or pause signal **and its ledger finished** — or its ledger is absent or unreadable (step 7) — the branch is ready for review"*. Task 3 makes this false: after a resume, a stall restart or an earlier park, an absent or unreadable ledger is `paused` / `unfinished`, not `completed`. No derivation entry reaches it, it is not a row, and no task owns it. Task 8 rewrites §1 step 7 and leaves this row contradicting it.
+   A wider command reaches these sites, which are not rows today:
+   - `docs/watcher.md`, terminal-states table, `completed` row ("— or its ledger is absent or unreadable (step 7) —"). Falsified, so `change`.
+   - `docs/watcher.md`, terminal-states table, `paused` row ("or its session exited 0 before its ledger finished (`pause_reason` `unfinished`, §4)"). It no longer lists every way a run reaches `unfinished`.
+   - `docs/watcher.md` §4, the paragraph headed **"A zero exit over an unfinished ledger is a pause, not a completion."** (the sentence "The ledger check in §1 step 7 is the backstop: a zero exit over an unfinished ledger is recorded `paused` …").
+   - `plugin/commands/branch-status.md`, the `paused` local-run bullet "`pause_reason` `unfinished`: say the session ended (exit 0) before its ledger finished … and that the resume continues at its first `[ ]` entry". After this branch, an `unfinished` record can have no ledger at all.
+   - `docs/development.md`, the gates paragraph "An absent or unreadable previous record runs the round in full". This one is unrelated, so `no-change` with a reason.
+   **Fix:** Replace derivation entry 1 with this wider command and keep its exclusions: `git grep -nE "no readable ledger|absent or unreadable|ledger is absent|absent ledger|exit code alone|ledger-less|before its ledger finished" -- '*.md' ':(exclude)harness-runs/**' ':(exclude)examples/**'`. Give each site above a register row with its disposition and reason. The `docs/watcher.md` `completed` row is falsified, so it takes `change`: add it to `task_8_plan.md`'s `### Targets` and to its `docs/watcher.md` Work bullet. For example: "keeps `completed` only on a first launch; after a resume, a stall restart or an earlier park it is `paused` / `unfinished`". Decide the `paused` row, the §4 paragraph and the `branch-status.md` bullet one by one. A `change` on `plugin/commands/branch-status.md` is a plugin-layer site, so it needs its own single-layer `plugin` task, ordered after the `cli` tasks and before the `general` tasks. Do not put it in Task 8. Then re-run the closure check: every hit of the new command is a row.
+
+## Should Fix
+
+## Nice to Have
