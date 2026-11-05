@@ -15,8 +15,19 @@
 # the dispatch and the variables are kept lowered until the run is in_progress or completed, or until
 # G12_WAIT_SECS has passed.
 #
+# An honest task does not go STALL_KILL_SECS silent on its own, so JS3's prompt plants one stall. It is
+# a scratch-run.sh call because that is allow-listed and guard-allowed in the job's profile, and an idle
+# `node` process stays under STALL_BUSY_CPU_PCT, so the watcher counts it silent. The file is `.mjs`
+# because scratch-run.sh's interpreter table omits `.sh` on purpose. With S = G12_STALL_KILL_SECS + 60,
+# the file sleeps S seconds printing nothing, and the call's Bash timeout is T = (S + 60) * 1000 ms. The
+# file first creates <stateDir>/scratch/gate12_js3_stalled and exits at once when it already exists, so a
+# resumed session does not stall again where the reset keeps scratch/; where it does not,
+# STALL_MAX_RESTARTS bounds the repeats.
+#
 #   g12_js3_files <branch> <dir>
-#       JS3's honest task prompt and an empty manifest, so g12_branch_build makes the prompt commit only.
+#       JS3's stalling task prompt and an empty manifest, so g12_branch_build makes the prompt commit only.
+#       The prompt has the job write <stateDir>/scratch/gate12_js3_stall.mjs, run it once through
+#       `bash <scriptsDir>/scratch-run.sh`, then add the README line.
 #   g12_db_restore <why>
 #       Runs once: the default branch, then each variable, back to what was recorded; `restored: true`
 #       per variable. <why> is `return` (the leg's own end), EXIT, INT, TERM or HUP. A failed step prints
@@ -26,7 +37,8 @@
 #       The `default-branch` subcommand. Stdout: `planted JS3 stall <branch> run <id|null>`, then
 #       `run <id> is <status>` once the job has started, then `restored ...` per restored change.
 #
-# Refusals, before anything changes, raise 2: a recorded run still in flight; a recorded default_branch
+# Refusals, before anything changes, raise 2: a G12_STALL_KILL_SECS over 480, whose T would pass the Bash
+# tool's 600000 ms timeout ceiling; a recorded run still in flight; a recorded default_branch
 # that differs from the live one; a recorded other_branch; G12_OTHER_BRANCH already on origin.
 # A failed gh or git call raises 3.
 #
@@ -44,11 +56,38 @@ G12_DB_SWITCHED=0
 G12_DB_RUN_ID=""
 
 g12_js3_files() {
-  local branch="${1:-}" dir="${2:-}"
+  local branch="${1:-}" dir="${2:-}" scratch stall_secs timeout_ms
   [ -n "$branch" ] && [ -d "$dir" ] || { g12_refuse "g12_js3_files needs <branch> <dir>"; return 1; }
   : >"$dir/manifest" || { g12_refuse "could not write '$dir/manifest'"; return 1; }
-  printf 'Add a line to README.md naming the date this repository was last checked.\n' >"$dir/task_prompt.md" ||
+  scratch="$G12_STATE_DIR/scratch"
+  stall_secs=$((G12_STALL_KILL_SECS + 60))
+  timeout_ms=$(((stall_secs + 60) * 1000))
+  printf '%s\n' \
+    'This task has three steps. Take them in this order.' \
+    '' \
+    "1. Write the file \`$scratch/gate12_js3_stall.mjs\` with exactly this body:" \
+    '' \
+    '```js' \
+    "import { existsSync, writeFileSync } from 'node:fs';" \
+    '' \
+    "const marker = '$scratch/gate12_js3_stalled';" \
+    'if (existsSync(marker)) process.exit(0);' \
+    "writeFileSync(marker, '');" \
+    "setTimeout(() => {}, $stall_secs * 1000);" \
+    '```' \
+    '' \
+    "2. Run \`bash $G12_SCRIPTS_DIR/scratch-run.sh $scratch/gate12_js3_stall.mjs\` once, in the foreground, with the Bash tool's timeout set to $timeout_ms milliseconds. Append nothing to the command. It prints nothing and returns after $stall_secs seconds, or at once if it has run before." \
+    '' \
+    '3. Add a line to README.md naming the date this repository was last checked.' \
+    >"$dir/task_prompt.md" ||
     { g12_refuse "could not write '$dir/task_prompt.md'"; return 1; }
+}
+
+# JS3's prompt sets the Bash tool's timeout to (G12_STALL_KILL_SECS + 120) * 1000 ms.
+g12_db_stall_fits() {
+  local timeout_ms=$(((G12_STALL_KILL_SECS + 120) * 1000))
+  [ "$timeout_ms" -le 600000 ] && return 0
+  g12_db_refuse "--stall-kill-secs $G12_STALL_KILL_SECS needs a Bash tool timeout of ${timeout_ms} ms for JS3's stall, past the tool's 600000 ms ceiling; pass 480 or less"
 }
 
 g12_db_refuse() {
@@ -279,6 +318,7 @@ g12_db_leg() {
 g12_default_branch_cmd() {
   g12_need g12_state_init g12_state_get g12_state_update g12_branch_build g12_branch_push g12_dispatch \
     g12_plant_dir_remove
+  g12_db_stall_fits || return
   g12_state_init || { g12_exit_raise 3; return 3; }
   g12_db_runs_idle || return
   g12_db_record || return
