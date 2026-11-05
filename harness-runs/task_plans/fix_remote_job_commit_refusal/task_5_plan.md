@@ -56,5 +56,9 @@ Run each command from the repository root, one per command, as plain foreground 
 
 Further checks:
 - `npm test --workspace cli -- test/helpers/watcher.mjs` loads the edited helper as a test file of its own and exits 0. The module header states that `node --test` loads it that way.
+
+**Deviations from plan:**
+- `watcher-running-count.test.mjs`: the case table is declared outside the test, where `f` is not in scope, so each row's stub became a function of the branch — `(branch) => 'sleep 1; ' + finishedLedgerBody(branch)` and `() => 'sleep 1; exit 3'`, called as `f.setStub(stub(f.branch))`. The `failed` row's stub text is unchanged.
+- The sweep edited no file beyond the six named suites. Every other `completed` in the hits is either seeded or in a comment (`restart-watcher-cli`, `sandbox-probe-shell`, `watcher-remote-dispatch` `patchRecord`, the mutation-witness comments in `watcher-review-drop-payloads` and `watcher-stall-reset-payloads`), or comes from a session with no resume marker: a first launch from a drop (`watcher-remote-dispatch` → `with the key absent the same drop…` and `a running remote record is never reconciled…`, `watcher-sandbox-refusal` → `(d)`, `watcher-review-drop-payloads` → `assertLaunched`), or a `classify_run_exit` call over a `seedRecord` that sets no `resume_kind` or `stall_restarts` and has no answered pair (`watcher-run-profile` → `a clone run's exit with no placed main checkout…`). This rests on reading the files. The test-run rule bars running suites this unit did not edit, so the Run gates phase's full suite verifies them.
 - No assertion in any edited suite was removed or weakened: `git diff -- cli/test` shows only stub bodies, the import of `finishedLedgerBody`, and the helper's addition.
 - Every file `git diff --name-only -- cli/test` lists is a target this file names: one of the six listed suites, the helper, or a file the sweep found.

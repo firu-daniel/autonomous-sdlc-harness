@@ -180,6 +180,31 @@ export function assertHungReleased(rec) {
   );
 }
 
+/** The task engine's ledger ids, in ledger order: the set `hr_ledger_phases` must find all closed. */
+const TASK_LEDGER_IDS = ['P1', 'P2', 'P3', 'A', 'A1.5g', 'A1.5f', 'A2g', 'A2f', 'Bg', 'Bm', 'C', 'C2g', 'C2m', 'C2f', 'E', 'G', 'D'];
+
+/**
+ * A stub body (Bash 3.2) writing a finished task ledger — every id `[x]` — at
+ * `<stateDir>/flow_progress/<branch>_progress.md`, relative to the session's working directory, which
+ * is the run's working copy. `autonomous-watcher.sh` → `classify_run_exit` reads it: a resumed,
+ * stall-restarted or previously parked session's zero exit is `completed` only over a finished
+ * ledger, and `paused` / `unfinished` without one. The line shape is
+ * `watcher-ledger-classification.test.mjs` → `ledger`'s.
+ *
+ * @param {string} branch
+ * @param {string} [stateDir]
+ * @returns {string}
+ */
+export function finishedLedgerBody(branch, stateDir = STATE_DIR) {
+  const lines = [`# Flow progress — ${branch}   (engine: task)`, '', '## Run mode', '- skipped: none', ''];
+  for (const id of TASK_LEDGER_IDS) lines.push(`- [x] ${`${id}.`.padEnd(8)} label for ${id}`);
+  const dir = `${stateDir}/flow_progress`;
+  return [
+    `mkdir -p ${shellQuote(dir)}`,
+    `printf '%s\\n' ${lines.map(shellQuote).join(' ')} > ${shellQuote(`${dir}/${branch}_progress.md`)}`,
+  ].join('\n');
+}
+
 /** The seed `init`'s own tests use: a repository whose stack detection resolves every command. */
 function nodeProjectFiles() {
   return {

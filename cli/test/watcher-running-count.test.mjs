@@ -24,7 +24,7 @@ import { dirname, join } from 'node:path';
 import test from 'node:test';
 
 import { runBash } from './helpers/fixture.mjs';
-import { createWatcherFixture, TICK_TIMEOUT_MS } from './helpers/watcher.mjs';
+import { createWatcherFixture, finishedLedgerBody, TICK_TIMEOUT_MS } from './helpers/watcher.mjs';
 
 const REGISTRY_PATH = 'sdlc-harness/autonomous_logs/registry.json';
 
@@ -121,8 +121,8 @@ test('a running record whose process is gone is reconciled to failed with its pi
 });
 
 for (const [label, stub, status] of [
-  ['completed', 'sleep 1; :', 'completed'],
-  ['failed', 'sleep 1; exit 3', 'failed'],
+  ['completed', (branch) => 'sleep 1; ' + finishedLedgerBody(branch), 'completed'],
+  ['failed', () => 'sleep 1; exit 3', 'failed'],
 ]) {
   test(`a parked run resumed on its answer ends ${label} and drops its pid`, async (t) => {
     const f = await createWatcherFixture(t);
@@ -131,7 +131,7 @@ for (const [label, stub, status] of [
     await f.seedRecord();
     await f.writeQuestion(1, '## Q1\n');
     await f.writeAnswer(1, 'a1\n');
-    await f.setStub(stub);
+    await f.setStub(stub(f.branch));
     await f.tick();
 
     assert.equal(f.prompts().length, 1, `expected one resume:\n${f.watcherLog()}`);
