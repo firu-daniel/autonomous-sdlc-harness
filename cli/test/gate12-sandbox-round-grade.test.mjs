@@ -734,6 +734,8 @@ test('a plain grade over every row at its expected shape exits 0, FR1-FR7 printe
     Object.fromEntries(['JS1', 'JS4', 'SB2', 'SB4', 'RJ2', 'JS3', 'JS3N', 'SB3', 'RJ3'].map((r) => [r, resultOf(r)])),
     { JS1: 'pass', JS4: 'pass', SB2: 'pass', SB4: 'pass', RJ2: 'pass', JS3: 'pass', JS3N: 'source', SB3: 'source', RJ3: 'not run' },
   );
+  // The 16 `--list` rows plus the `source` lines of SB2, RJ2 and JS3; catches a stray or duplicated line `resultOf` collapses.
+  assert.equal(lines.length, 19, lines.map((l) => `${l.row}:${l.result}`).join(' '));
   assert.equal(lines.some((l) => l.result === 'fail'), false);
 });
 
