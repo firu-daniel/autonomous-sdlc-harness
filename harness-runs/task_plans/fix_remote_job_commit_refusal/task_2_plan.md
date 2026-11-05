@@ -50,3 +50,8 @@ It removes each of `core.sparseCheckout`, `core.sparseCheckoutCone` and `index.s
 - `npm test --workspace cli -- test/setup-worktree-checkout-sparse.test.mjs`, from the repository root, as one plain foreground command: every case passes.
 - Cases (a), (c) and (e) fail when `setup-worktree.sh`'s calls to the drop are removed in a fixture copy, never in the tracked template. Confirm this once by hand and record it in the file's header as the red-once mutation, as `cli/test/watcher-ledger-classification.test.mjs`'s header records its own. Case (b) passes either way: it is the reproduction, not the fix's guard.
 - `grep -n "tmpdir()" cli/test/setup-worktree-checkout-sparse.test.mjs` shows the only fixture root. No path in the file points into this checkout.
+
+**Deviations from plan:**
+
+- (d)'s foreign key is planted as `user.name sandbox-written-value`, not `user.name x`: a one-letter value cannot carry the "never its value" assertion, because `x` occurs elsewhere in the wrapper's output. This is the value `push-branch-worktree-config.test.mjs` → case (b) uses.
+- Red-once mutation: run on 2026-11-05 through `bash scripts/scratch-run.sh harness-runs/scratch/sparse-drop-mutation.mjs`. The script copies `cli/templates/scripts` to a temp directory, replaces the copy's `drop_inert_sparse "$f"` line with `:`, and runs a copy of the suite against that copy; the tracked template was not touched. Result: `# pass 1`, `# fail 5`. (a), (c) and (e) failed on the `removed` line, as the plan expected. Both (d) cases failed as well: one on the `removed` line, the other on the file still holding `core.sparsecheckoutcone=false` and `index.sparse=false`. (b) passed. The plan said only (a), (c) and (e) would fail; the file header records the result that was measured.
