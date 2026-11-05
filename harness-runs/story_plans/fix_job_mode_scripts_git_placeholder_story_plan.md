@@ -52,7 +52,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_job_mode_scripts_git_pla
 7. [x] **Task 7** — PD31's fixtures: the indirected commands, their allow rules, the PID substitution and the grading _(layer: cli)_ _(points: 15)_
 8. [x] **Task 8** — Give JS3's plant a one-time silent stall past `STALL_KILL_SECS` through `scratch-run.sh` _(layer: general)_ _(points: 10)_
 9. [x] **Task 9** — JS3's fixtures: the stalling prompt, its derived durations and the refusal of a threshold no Bash call can outlast _(layer: cli)_ _(points: 10)_
-10. [ ] **Task 10** — Refresh this repository's self-adopted `scripts/` copies and `examples/notes-app/scripts/` wrappers _(layer: general)_ _(points: 10)_
+10. [x] **Task 10** — Refresh this repository's self-adopted `scripts/` copies and `examples/notes-app/scripts/` wrappers _(layer: general)_ _(points: 10)_
 11. [ ] **Task 11** — Record F15 and PD31 in `docs/sandbox-verification.md`, restate the rows the fixes change, and describe the new anchoring and JS3's plant _(layer: general)_ _(points: 20)_
 
 ## Scope register

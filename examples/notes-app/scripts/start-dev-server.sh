@@ -49,8 +49,25 @@ fi
 # repo-relative one and its absolute twin in the base profile, and a run copy's own exact path in
 # the run watcher's per-run copy — runs at the root of the checkout it was invoked out of,
 # whatever directory the caller stood in.
+# The root is the nearest of the script's own directory and its ancestors that holds
+# `harness.config.json` and that git confirms as its own top level, so git's discovery never
+# starts at a `<scriptsDir>/.git` placeholder a bubblewrap host mounts (F15); it is the run
+# library's `hr_script_root`, inlined because this wrapper sources no library.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(git -C "$script_dir" rev-parse --show-toplevel 2>/dev/null)"
+repo_root=""
+candidate="$(CDPATH= cd -P -- "$script_dir" 2>/dev/null && pwd -P)"
+while [ -n "$candidate" ]; do
+  if [ -f "$candidate/harness.config.json" ] && [ "$(git -C "$candidate" rev-parse --show-toplevel 2>/dev/null)" = "$candidate" ]; then
+    repo_root="$candidate"
+    break
+  fi
+  [ "$candidate" != / ] || break
+  candidate="${candidate%/*}"
+  [ -n "$candidate" ] || candidate=/
+done
+if [ -z "$repo_root" ]; then
+  repo_root="$(git -C "$script_dir" rev-parse --show-toplevel 2>/dev/null)"
+fi
 if [ -z "$repo_root" ] || ! cd "$repo_root"; then
   harness_fail "devServer: could not resolve a repository root from '${script_dir}' (is git on PATH?)"
 fi
