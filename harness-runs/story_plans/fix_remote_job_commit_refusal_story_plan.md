@@ -72,7 +72,7 @@ The GitHub confirmation is not this branch's: it is owed to the next Gate 12 rou
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_remote_job_commit_refusal/task_<K>_plan.md`, where `K` is the task number the entry names. The entries are ordered bottom-up by ship sequence in the configured layer order (`cli`, `plugin`, then the catch-all `general`), so entry 7 is Task 9, and entries 8 and 9 are Tasks 7 and 8.
 
-1. [ ] **Task 1** — Drop `actions/checkout`'s three inert sparse keys from `config.worktree` in `setup-worktree.sh`, through a new library function _(layer: cli)_ _(points: 15)_
+1. [x] **Task 1** — Drop `actions/checkout`'s three inert sparse keys from `config.worktree` in `setup-worktree.sh`, through a new library function _(layer: cli)_ _(points: 15)_
 2. [ ] **Task 2** — Replay the checkout's two commands on a fixture and show `commit-on-branch.sh` and `push-branch.sh` accept the bootstrapped target _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Classify a resumed, stall-restarted or previously parked run's ledger-less zero exit as `paused` / `unfinished` _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Job-mode cases for the ledger-less resume, and the job-mode cases that resumed without a ledger re-cast _(layer: cli)_ _(points: 15)_
