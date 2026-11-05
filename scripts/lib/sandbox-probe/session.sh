@@ -9,11 +9,11 @@
 #                            SP_CLONE is the checkout SP_MAIN, SP_RUN_PROFILE is its base profile, and no
 #                            clone or per-run profile exists
 #   sp_session <name> <settings> <prompt file> [--mode dontAsk|acceptEdits] [--allowed <rule>]...
-#              [--debug-file <f>] [--cwd <dir>]
+#              [--debug-file <f>] [--cwd <dir>] [--token-file <path>]...
 #                            one headless session on the watcher's launch line; sets SP_STREAM. In job
 #                            mode it first sweeps the job's placeholders and writes job.sh's placeholder
-#                            manifest. Every @SP_AGENT_PID@ in
-#                            the prompt or an --allowed rule becomes the launching subshell's PID, also
+#                            manifest. Every @SP_AGENT_PID@ in the prompt, an --allowed rule or a
+#                            --token-file (rewritten in place) becomes the launching subshell's PID, also
 #                            written to SP_TMP/<name>.agent-pid: after `exec` the agent CLI holds that
 #                            PID, though a CLI launched through a wrapper that forks would hold another
 #   sp_departures            the last session's --allowedTools rules, as a result line's departure, with
@@ -444,14 +444,17 @@ sp_launch_args() {
 }
 
 # sp_session <name> <settings file> <prompt file> [--mode dontAsk|acceptEdits] [--allowed <rule>]...
-#            [--debug-file <f>] [--cwd <dir>]
+#            [--debug-file <f>] [--cwd <dir>] [--token-file <path>]...
 # The watcher's launch line (autonomous-watcher.sh → spawn_engine), departing only by the --allowedTools
-# and --debug-file flags named. Status is the agent CLI's.
+# and --debug-file flags named. Status is the agent CLI's. Each --token-file has @SP_AGENT_PID@ replaced
+# in place before `exec`; a missing or unwritable one exits 96 naming it, as a PID failure does.
 sp_session() {
   local name="${1:-}" settings="${2:-}" pfile="${3:-}" mode=dontAsk cwd="$SP_CLONE" debug="" prompt cli rc
-  local allowed_args debug_args pid_token="@SP_AGENT_PID@" has_pid_token=0 pid_file agent_pid i
+  local allowed_args debug_args token_files pid_token="@SP_AGENT_PID@" has_pid_token=0 pid_file agent_pid i
+  local tf body
   allowed_args=()
   debug_args=()
+  token_files=()
   SP_SESSION_ALLOWED=""
   SP_STREAM=""
   if [ $# -lt 3 ]; then
@@ -485,6 +488,11 @@ sp_session() {
         cwd="$2"
         shift 2
         ;;
+      --token-file)
+        [ $# -ge 2 ] || { sp_refuse "sp_session: --token-file needs a path"; return 1; }
+        token_files[${#token_files[@]}]="$2"
+        shift 2
+        ;;
       *) sp_refuse "sp_session: unknown option '$1'"; return 1 ;;
     esac
   done
@@ -506,6 +514,7 @@ sp_session() {
   case "$prompt$SP_SESSION_ALLOWED" in
     *"$pid_token"*) has_pid_token=1 ;;
   esac
+  [ ${#token_files[@]} -eq 0 ] || has_pid_token=1
   cli="${SANDBOX_PROBE_AGENT_CLI:-}"
   [ -n "$cli" ] || cli=claude
   SP_STREAM="$SP_TMP/$name.stream.jsonl"
@@ -530,6 +539,13 @@ sp_session() {
       while [ "$i" -lt ${#allowed_args[@]} ]; do
         allowed_args[$i]="${allowed_args[$i]//"$pid_token"/$agent_pid}"
         i=$((i + 1))
+      done
+      for tf in ${token_files[@]+"${token_files[@]}"}; do
+        if [ ! -f "$tf" ] || [ ! -w "$tf" ] || ! body="$(cat -- "$tf")" ||
+          ! printf '%s\n' "${body//"$pid_token"/$agent_pid}" >"$tf"; then
+          printf 'sandbox-probe: sp_session %s: token file %s is missing or not writable\n' "$name" "$tf" >&2
+          exit 96
+        fi
       done
     fi
     exec "$cli" -p "$prompt" \

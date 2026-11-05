@@ -169,7 +169,7 @@ fi
 # anchor that moved with `$PWD` would key a notification on another repository.
 root=""
 if [ "$have_lib" -eq 1 ]; then
-  root="$(hr_repo_root "$script_dir")" || root=""
+  root="$(hr_script_root "$script_dir")" || root=""
 fi
 
 slug="${HARNESS_REPO_SLUG:-}"

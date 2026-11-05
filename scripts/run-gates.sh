@@ -50,7 +50,8 @@
 set -uo pipefail
 
 # Anchor to the repository root from this script's own location, never the caller's directory —
-# the same derivation, and the same reasoning, as the wrappers `init` writes.
+# the same reasoning as the wrappers `init` writes, but by git's discovery from this script's own
+# directory rather than their `harness.config.json` walk (`docs/sandbox-verification.md` §5 F15).
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(git -C "$script_dir" rev-parse --show-toplevel 2>/dev/null)"
 if [ -z "$repo_root" ] || ! cd "$repo_root"; then

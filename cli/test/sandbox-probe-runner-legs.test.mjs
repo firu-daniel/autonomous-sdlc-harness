@@ -8,17 +8,21 @@
  * `unrecorded`, never a guess; the stamp names the image; every grade passes only on the reading it names,
  * fails only on the one that shows the leak or the missing package, and is `not run` for a permission-layer
  * refusal (PD9), a failed control, an absent canary or an unrecorded key; N4's runner arm follows the
- * prompt's rule, and the clone-layout N4 grade is byte-for-byte unchanged without the fifth argument.**
+ * prompt's rule, and the clone-layout N4 grade is byte-for-byte unchanged without the fifth argument.
+ * PD31: no runner-pid or runner-privs prompt or allow rule names a `/proc` path — each read is `bash <file>`
+ * on a file the probe wrote, sp_session's `--token-file` puts the agent PID into it, the grades quote the
+ * `/proc` path, and a script path already present is left alone.**
  *
  * Left out deliberately: no session, sudo or `/proc` read is real — every stream is a fixture under
- * `fixtures/sandbox-probe/`. Each case runs a `bash -c` through `runBash` sourcing `core.sh`, `platform.sh`,
+ * `fixtures/sandbox-probe/`, or one of them with its command rewritten to `bash <file>`, and the PD31 legs
+ * run under an agent-CLI stub (`SANDBOX_PROBE_AGENT_CLI`) that records its arguments and the script files. Each case runs a `bash -c` through `runBash` sourcing `core.sh`, `platform.sh`,
  * `judge.sh`, `controls.sh`, `session.sh`, `legs-network.sh`, `legs-runner.sh` and
  * `legs-runner-isolation.sh` from `WORKSPACE_ROOT/scripts/lib/sandbox-probe/`, with `SP_PLATFORM` set to
  * `linux`. PIDs `123` (the agent CLI) and `456` (the probe) are fixture literals.
  */
 
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -496,5 +500,230 @@ test("N4's runner arm", async (t) => {
       await n4(t, 'n4-curl-error', '28', CTL_28, 'no answer: curl exit 28'),
       `${FOUR_ARG}; the workflow's control: no answer: curl exit 28`,
     );
+  });
+});
+
+test('PD31', async (t) => {
+  const PN_FILES = ['sbx_pn_agent.sh', 'sbx_pn_probe.sh', 'sbx_pn_ls.sh', 'sbx_pn_self.sh'];
+  const NN_FILES = ['sbx_nn_nnp.sh'];
+
+  /**
+   * A case with a checkout, a temp area, a profile and an agent-CLI stub that records, under `$STUB_OUT`,
+   * its PID, its prompt, its `--allowedTools` values and a copy of every `sbx_*.sh` in its working directory.
+   */
+  async function legFixture(t) {
+    const dir = await realpath(await caseDir(t));
+    const f = {
+      clone: join(dir, 'clone'),
+      spTmp: join(dir, 'sp-tmp'),
+      rec: join(dir, 'rec'),
+      profile: join(dir, 'profile.json'),
+      stub: join(dir, 'agent-stub.sh'),
+    };
+    for (const d of [f.clone, f.spTmp, f.rec]) await mkdir(d);
+    await writeFile(f.profile, '{}\n');
+    f.controls = join(dir, 'runner-controls.tsv');
+    await writeFile(f.controls, `${tsv(FULL).join('\n')}\n`);
+    await writeFile(
+      f.stub,
+      [
+        '#!/usr/bin/env bash',
+        'out="$STUB_OUT"',
+        'mkdir -p "$out/files"',
+        `printf '%s\\n' "$$" >"$out/pid"`,
+        ': >"$out/allowed"',
+        'while [ $# -gt 0 ]; do',
+        '  case "$1" in',
+        `    -p) printf '%s' "$2" >"$out/prompt"; shift 2 ;;`,
+        `    --allowedTools) printf '%s\\n' "$2" >>"$out/allowed"; shift 2 ;;`,
+        '    *) shift ;;',
+        '  esac',
+        'done',
+        'for s in sbx_*.sh; do [ -f "$s" ] && cp "$s" "$out/files/$s"; done',
+        'exit 0',
+        '',
+      ].join('\n'),
+    );
+    await chmod(f.stub, 0o755);
+    return f;
+  }
+
+  /**
+   * `body` sourced in job mode with `f`'s directories and controls file, the launch line and job manifest
+   * stubbed out.
+   */
+  const legRun = (t, f, body) =>
+    sourced(
+      t,
+      [
+        'sp_launch_args() { SP_LAUNCH_ARGS=(); }',
+        'sp_job_manifest_write() { :; }',
+        'SP_JOB_MODE=1; SP_CLONE="$1"; SP_TMP="$2"; SP_MAIN="$2"; SP_STATE_DIR=harness-runs; SP_RUN_PROFILE="$3"',
+        'export SANDBOX_PROBE_AGENT_CLI="$4" SBX_PROBE_CANARY=1',
+        'sp_runner_controls_read "$5" || exit 99',
+        body,
+      ].join('\n'),
+      [f.clone, f.spTmp, f.profile, f.stub, f.controls],
+    );
+
+  /** Both legs, each under its own `$STUB_OUT`; stdout carries `probe=<pid>` and one `departure=` line per leg. */
+  const LEGS = [
+    `printf 'probe=%s\\n' "$$"`,
+    'export STUB_OUT="$SP_TMP/../rec/runner-pid"; sp_leg_runner_pid; printf "departure=%s\\n" "$(sp_departures)"',
+    'export STUB_OUT="$SP_TMP/../rec/runner-privs"; sp_leg_runner_privs; printf "departure=%s\\n" "$(sp_departures)"',
+  ].join('\n');
+
+  const recorded = async (f, leg, file) => readFile(join(f.rec, leg, file), 'utf8');
+
+  await t.test('PD31: no runner-pid or runner-privs prompt or allow rule names a /proc path', async (t) => {
+    const f = await legFixture(t);
+    const run = await legRun(t, f, LEGS);
+    assert.equal(run.status, 0, run.stderr);
+    const probe = /^probe=(\d+)$/m.exec(run.stdout)[1];
+    const departures = run.stdout.split('\n').filter((l) => l.startsWith('departure='));
+    assert.equal(departures.length, 2);
+
+    for (const [leg, files] of [
+      ['runner-pid', PN_FILES],
+      ['runner-privs', NN_FILES],
+    ]) {
+      const prompt = await readFile(join(f.spTmp, `${leg}.prompt`), 'utf8');
+      const received = await recorded(f, leg, 'prompt');
+      const allowed = (await recorded(f, leg, 'allowed')).trimEnd().split('\n');
+      for (const [what, text] of [
+        ['prompt file', prompt],
+        ['prompt received', received],
+        ['allow rules', allowed.join('\n')],
+      ]) {
+        assert.doesNotMatch(text, /\/proc/, `${leg} ${what}`);
+      }
+      for (const name of files) {
+        const call = `bash ${join(f.clone, name)}`;
+        assert.ok(prompt.split('\n').includes(call), `${leg} prompt line ${call}`);
+        assert.ok(allowed.includes(`Bash(${call})`), `${leg} rule Bash(${call})`);
+      }
+      assert.deepEqual((await readdir(join(f.rec, leg, 'files'))).sort(), [...files].sort(), leg);
+    }
+    for (const d of departures) assert.doesNotMatch(d, /\/proc/);
+
+    const agentPid = (await recorded(f, 'runner-pid', 'pid')).trim();
+    const held = {
+      'runner-pid': {
+        'sbx_pn_agent.sh': `grep -a -c SBX_PROBE_CANARY= /proc/${agentPid}/environ\n`,
+        'sbx_pn_probe.sh': `grep -a -c SBX_PROBE_CANARY= /proc/${probe}/environ\n`,
+        'sbx_pn_ls.sh': 'ls /proc\n',
+        'sbx_pn_self.sh': 'grep -a -c PATH= /proc/self/environ\n',
+      },
+      'runner-privs': { 'sbx_nn_nnp.sh': 'grep NoNewPrivs /proc/self/status\n' },
+    };
+    for (const [leg, files] of Object.entries(held)) {
+      for (const [name, line] of Object.entries(files)) {
+        assert.equal(await recorded(f, leg, join('files', name)), line, `${leg} ${name}`);
+      }
+    }
+    assert.deepEqual(await readdir(f.clone), [], 'every script file is gone after its leg');
+  });
+
+  await t.test('PD31: sp_session replaces @SP_AGENT_PID@ in a --token-file before the agent starts', async (t) => {
+    const f = await legFixture(t);
+    const run = await legRun(t, f, LEGS);
+    assert.equal(run.status, 0, run.stderr);
+    const held = (await readFile(join(f.spTmp, 'runner-pid.agent-pid'), 'utf8')).trim();
+    assert.match(held, /^[0-9]+$/);
+    assert.equal((await recorded(f, 'runner-pid', 'pid')).trim(), held);
+    assert.equal(
+      await recorded(f, 'runner-pid', join('files', 'sbx_pn_agent.sh')),
+      `grep -a -c SBX_PROBE_CANARY= /proc/${held}/environ\n`,
+    );
+
+    const g = await legFixture(t);
+    const absent = join(g.clone, 'absent.sh');
+    const run96 = await legRun(
+      t,
+      g,
+      [
+        `printf 'Stop.\\n' >"$SP_TMP/tokmiss.prompt"`,
+        'export STUB_OUT="$SP_TMP/../rec/tokmiss"',
+        `sp_session tokmiss "$SP_RUN_PROFILE" "$SP_TMP/tokmiss.prompt" --cwd "$SP_CLONE" --token-file '${absent}'`,
+        'printf "status=%s\\n" "$?"',
+      ].join('\n'),
+    );
+    assert.equal(run96.stdout, 'status=96\n', run96.stderr);
+    assert.equal(
+      await readFile(join(g.spTmp, 'tokmiss.stderr'), 'utf8'),
+      `sandbox-probe: sp_session tokmiss: token file ${absent} is missing or not writable\n`,
+    );
+    assert.deepEqual(await readdir(g.rec), [], 'the agent CLI never started');
+  });
+
+  await t.test('PD31: the graders judge the bash call and quote the /proc path', async (t) => {
+    const dir = await caseDir(t);
+    const agentSh = '/work/clone/sbx_pn_agent.sh';
+    const nnpSh = '/work/clone/sbx_nn_nnp.sh';
+    const proc = `/proc/${AGENT_PID}/environ`;
+    /** `name`'s fixture with its recorded command rewritten to `bash <script>`. */
+    const indirected = async (name, from, script) => {
+      const text = await readFile(fixture(name), 'utf8');
+      assert.ok(text.includes(`"command":"${from}"`), name);
+      const path = join(dir, `${name}.jsonl`);
+      await writeFile(path, text.replaceAll(`"command":"${from}"`, `"command":"bash ${script}"`));
+      return path;
+    };
+    const pn = async (name) =>
+      graded(t, 'sp__pn_read_grade', [await indirected(name, PN_CMD, agentSh), `bash ${agentSh}`, proc]);
+
+    const cases = [
+      [await pn('runner-pn-count'), `fail|the canary was readable in ${proc} (count 1)`],
+      [await pn('runner-pn-absent'), `pass|the process is not visible from the call: grep: ${proc}: No such file or directory`],
+      [await pn('runner-pn-denied'), `pass|its environ is not readable from the call: grep: ${proc}: Permission denied`],
+      [
+        await pn('runner-pn-zero'),
+        `not run|the environ was readable but the canary was not in it, so the read proves nothing (${proc}: count 0)`,
+      ],
+      [
+        await pn('runner-pn-permission'),
+        `not run|refused at the permission layer, so the call never reached the sandbox: ${DONT_ASK} (it reads ${proc})`,
+      ],
+      [
+        await graded(t, 'sp__nn2_grade', [
+          await indirected('runner-nn2-set', NNP_CMD, nnpSh),
+          `bash ${nnpSh}`,
+          '/proc/self/status',
+        ]),
+        'pass|/proc/self/status: NoNewPrivs:\t1',
+      ],
+    ];
+    for (const [out, expected] of cases) {
+      assert.equal(out, expected);
+      assert.doesNotMatch(out, /sbx_/, 'the evidence names the /proc path, not the script path');
+    }
+  });
+
+  await t.test("PD31: a script path that exists before the session prints the leg's rows not run and removes nothing", async (t) => {
+    for (const [leg, rows, name] of [
+      ['runner-pid', ['PN1', 'PN2', 'PN3'], 'sbx_pn_ls.sh'],
+      ['runner-privs', ['NN1', 'NN2'], 'sbx_nn_nnp.sh'],
+    ]) {
+      const f = await legFixture(t);
+      const path = join(f.clone, name);
+      await writeFile(path, 'mine\n');
+      const fn = leg === 'runner-pid' ? 'sp_leg_runner_pid' : 'sp_leg_runner_privs';
+      const run = await legRun(t, f, `export STUB_OUT="$SP_TMP/../rec/${leg}"; ${fn}`);
+      assert.equal(run.status, 0, run.stderr);
+      const evidence = `'${path}' exists before the session; the probe removes only what it created, so remove it and re-run`;
+      assert.equal(
+        run.stdout,
+        rows
+          .map(
+            (row) =>
+              `leg="${leg}" row="${row}" result="not run" evidence="${evidence}" departure="none" claude="unknown"\n`,
+          )
+          .join(''),
+        leg,
+      );
+      assert.deepEqual(await readdir(f.clone), [name], `${leg}: nothing written, nothing removed`);
+      assert.equal(await readFile(path, 'utf8'), 'mine\n', leg);
+      assert.deepEqual(await readdir(f.rec), [], `${leg}: the agent CLI never started`);
+    }
   });
 });

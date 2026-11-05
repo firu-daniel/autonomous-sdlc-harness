@@ -194,9 +194,10 @@ requested="$1"
 # The repository is THIS FILE's own checkout, never the caller's directory: the
 # forms the permission profiles allow-list include a run copy's own copy,
 # and each copy must answer for the checkout it belongs to whatever directory the
-# caller stood in.
+# caller stood in. It is placed by `hr_script_root` (F15) because inside a
+# sandbox `<scriptsDir>/.git` is a placeholder git's discovery dies on.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(hr_repo_root "$script_dir")"
+repo_root="$(hr_script_root "$script_dir")"
 if [ -z "$repo_root" ]; then
   echo "scratch-run.sh: '$script_dir' is not inside a git repository — refusing to run anything" >&2
   exit 68

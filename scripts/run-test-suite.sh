@@ -289,7 +289,9 @@ esac
 [ "$label" != "--no-detach" ] || refuse "$usage"
 [[ "$label" =~ $HR_TEST_RUN_LABEL_PATTERN ]] || refuse "label '$label' does not match $HR_TEST_RUN_LABEL_PATTERN"
 
-root="$(hr_repo_root "$script_dir")" || refuse "'$script_dir' is not inside a git repository"
+# F15: inside a sandbox `<scriptsDir>/.git` is a placeholder git's discovery
+# dies on, so the root is placed by `hr_script_root`, which never starts there.
+root="$(hr_script_root "$script_dir")" || refuse "'$script_dir' is not inside a git repository"
 cd "$root" || refuse "cannot enter '$root'"
 
 state_dir="$(hr_state_dir "$root")" || refuse "cannot resolve '$root/harness.config.json'"

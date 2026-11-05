@@ -257,7 +257,7 @@ fi
 # --- Anchors. Derived, never remembered: this copy of the script may be sitting
 # in the main checkout or in a sibling working copy of the same repository.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-top="$(hr_repo_root "$script_dir")" || top=""
+top="$(hr_script_root "$script_dir")" || top=""
 if [ -z "$top" ]; then
   echo "cleanup-merged-worktrees.sh: '$script_dir' is not inside a git repository — refusing to delete anything"
   exit 0
