@@ -27,7 +27,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { createWatcherFixture } from './helpers/watcher.mjs';
+import { createWatcherFixture, finishedLedgerBody } from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
 const CEILING = 'CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS';
@@ -101,7 +101,7 @@ test('stopped line: one watcher.log line names the branch, and the record is com
   const f = await createWatcherFixture(t);
   if (f === null) return;
 
-  await resumeOnce(f, printStopped);
+  await resumeOnce(f, `${printStopped}\n${finishedLedgerBody(f.branch)}`);
 
   assert.equal(stoppedLines(f).length, 1, f.watcherLog());
   assert.equal(f.record().status, 'completed', f.watcherLog());

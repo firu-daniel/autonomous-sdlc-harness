@@ -872,10 +872,34 @@ jobs:
 
       # Runs under always(), so a cancelled or failed job still pushes its commits. push-branch.sh
       # pushes nothing back for a branch origin no longer has, so a run stopped by its branch's
-      # deletion does not re-create it (Gate 12 round 9, finding 1).
+      # deletion does not re-create it (Gate 12 round 9, finding 1). push-branch.sh must never fail
+      # the job, so the step turns each refusal or given-up push line into an ::error:: annotation
+      # and a job-summary line and still exits 0: in Gate 12 round 13 this step printed
+      # `push-branch.sh: refusing to push: …` and concluded `success`, with nothing on the run page.
       - name: Push the branch
         if: always() && env.SCRIPTS_DIR != ''
-        run: bash "$SCRIPTS_DIR/push-branch.sh"
+        run: |
+          log="$RUNNER_TEMP/push-branch.log"
+          if ! { : > "$log"; } 2>/dev/null; then
+            bash "$SCRIPTS_DIR/push-branch.sh" || true
+            exit 0
+          fi
+          bash "$SCRIPTS_DIR/push-branch.sh" 2>&1 | tee "$log" || true
+          matched=''
+          while IFS= read -r line || [ -n "$line" ]; do
+            case "$line" in
+              *'refusing to push'*) ;;
+              *'retrying in'*) continue ;;
+              'push-branch.sh: push failed for '*) ;;
+              *) continue ;;
+            esac
+            echo "::error title=Push the branch::${line//'%'/%25}"
+            matched="$matched- $line"$'\n'
+          done < "$log" || true
+          if [ -n "$matched" ] && [ -n "$GITHUB_STEP_SUMMARY" ]; then
+            { printf '### Push the branch\n\n%s' "$matched" >> "$GITHUB_STEP_SUMMARY"; } 2>/dev/null || true
+          fi
+          exit 0
 
       - name: Save the state bundle
         if: always() && env.SCRIPTS_DIR != ''
