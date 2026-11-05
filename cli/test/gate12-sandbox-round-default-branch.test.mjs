@@ -32,6 +32,7 @@ import {
   runRound,
   spawnRound,
 } from './helpers/gate12-round.mjs';
+import { scaleBound } from './helpers/timing.mjs';
 
 const OTHER = 'gate12_other_fixture';
 
@@ -267,7 +268,8 @@ test('JS3: the planted prompt asks for one silent scratch-run stall past STALL_K
 
 test('JS3: the stall body waits S seconds once and prints nothing', async (t) => {
   const { fixture, prompt } = await plantedPrompt(t);
-  // S overridden to 1 so the case waits one second rather than 180.
+  // S overridden to 1 so the case waits one second rather than 180; the second run's body is
+  // overridden to 600 s and bounded by scaleBound, so a broken marker guard is killed at the ceiling.
   const body = stallBody(prompt).replace('setTimeout(() => {}, 180 * 1000);', 'setTimeout(() => {}, 1 * 1000);');
   assert.ok(body.includes('setTimeout(() => {}, 1 * 1000);'), body);
 
@@ -290,9 +292,11 @@ test('JS3: the stall body waits S seconds once and prints nothing', async (t) =>
   assert.ok(first.ms >= 1000, `first run returned after ${first.ms} ms`);
   assert.ok(existsSync(marker), 'the marker is created');
 
-  const second = timed();
-  assert.equal(second.stdout, '');
-  assert.ok(second.ms < 1000, `second run returned after ${second.ms} ms`);
+  // The marker now exists, so a body that would stall 600 s must return at once; the ceiling is
+  // an "until it exits" bound under helpers/timing.mjs's rule.
+  await writeFile(file, body.replace('setTimeout(() => {}, 1 * 1000);', 'setTimeout(() => {}, 600 * 1000);'), 'utf8');
+  const second = execFileSync(process.execPath, [file], { cwd, encoding: 'utf8', timeout: scaleBound(30_000) });
+  assert.equal(second, '');
 });
 
 test('JS3: a stall-kill threshold over 480 s is refused before anything changes', async (t) => {

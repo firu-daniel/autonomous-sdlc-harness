@@ -31,7 +31,7 @@ The three findings below are what is left.
 
 1. [x] **Finding 3** — Replace "`git -C` on the script's own directory answers with" by "The placement below answers with" in the four wrapper templates and their five rendered copies _(layer: cli, general)_
 2. [x] **Finding 2** — Derive JS3's stall and Bash-timeout durations once, in `g12_js3_durations`, and read them in both `g12_js3_files` and `g12_db_stall_fits` _(layer: general)_
-3. [ ] **Finding 1** — Bound the JS3 stall-body case's second run by `scaleBound` against a 600 s body instead of an unscaled `< 1000` ms ceiling _(layer: cli)_
+3. [x] **Finding 1** — Bound the JS3 stall-body case's second run by `scaleBound` against a 600 s body instead of an unscaled `< 1000` ms ceiling _(layer: cli)_
 
 ---
 
