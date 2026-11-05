@@ -2,19 +2,22 @@
  * Generator: the unattended-run permission profile — the renderer, and the write that lands it.
  *
  * **The rule this module exists to enforce: the generator must be incapable of producing an entry
- * that stalls an unattended run.** In print mode a tool call that matches neither `allow` nor
- * `deny` does not prompt and does not fail — it hangs, and the run parks with no diagnostic. Every
+ * that costs an unattended run a step.** Under the default `dontAsk` mode a tool call that matches
+ * neither `allow` nor `deny` is refused at once rather than prompting a session nobody can answer:
+ * the call does not run, and the run carries on without that step. Every
  * shape below is the way it is because some run already paid for the alternative, and each of those
  * three prices is stated once here and once in the template's own `_README`:
  *
  * 1. **Wrapper paths are unquoted literals.** The allow-list guard matches the raw command string,
- *    so a quoted path fails a `*.sh` match, falls through to a prompt and stalls.
+ *    so a quoted path fails a `*.sh` match and the call is refused.
  * 2. **One command per entry, never a compound.** A single `mkdir && cp && rm` block is refused
  *    where each of those commands succeeds on its own, because the joined string matches no entry.
- * 3. **The checkout *and* its sibling worktrees.** A glob that misses the worktree a run is
+ * 3. **The checkout *and* its sibling worktrees.** A file glob that misses the worktree a run is
  *    executing in does not fail loudly; it silently skips whatever phase needed the path. A
  *    single-checkout adopter simply has no sibling for the second entry to match, which is why the
- *    worktree entries are unconditional rather than a second template.
+ *    worktree file globs are unconditional rather than a second template. A wrapper rule takes no
+ *    glob — a `*` before its trailing `:*` is matched literally (`docs/sandbox-verification.md` F4) —
+ *    so the run copy's exact wrapper path is added by the watcher's per-run copy instead.
  *
  * {@link assertRunnable} turns 1 and 2 from prose into a check: an entry carrying a quote or a
  * shell operator throws {@link EXIT.INTERNAL} before the profile can be written. That code is
@@ -26,15 +29,17 @@
  *
  * ## Three non-obvious choices, and where each comes from
  *
- * 1. **Every wrapper is allow-listed in three forms, not one.** `commands.*` is repo-relative —
- *    every path in `harness.config.json` is (`docs/config.md` §5) — while a profile entry is
- *    conventionally absolute. A profile carrying only the absolute form would leave the configured
- *    verification command matching neither `allow` nor `deny`. So each selected wrapper contributes
- *    the repo-relative invocation an agent runs verbatim from the repository root, its
- *    repo-root-absolute twin for a caller that resolves the path first, and its sibling-worktree
- *    twin for a run executing in a second working copy. The agent-invocable outer-loop scripts land
- *    in the same directory and are emitted through the same row family, so they take the same three
- *    forms for the same reason rather than a shape of their own.
+ * 1. **Every wrapper is allow-listed in two forms here, not one, and a third per run.** `commands.*`
+ *    is repo-relative — every path in `harness.config.json` is (`docs/config.md` §5) — while a
+ *    profile entry is conventionally absolute. A profile carrying only the absolute form would leave
+ *    the configured verification command matching neither `allow` nor `deny`, and so refused. So
+ *    each selected wrapper contributes the repo-relative invocation an agent runs verbatim from the
+ *    repository root and its repo-root-absolute twin for a caller that resolves the path first. The
+ *    third form, the run copy's own exact path, is not a glob here — a `*` before a rule's trailing
+ *    `:*` is matched literally — but a twin the watcher's per-run copy appends beside each
+ *    repo-root-absolute row (see the mirror below). The agent-invocable outer-loop scripts land in the
+ *    same directory and are emitted through the same row family, so they take the same forms for the
+ *    same reason rather than a shape of their own.
  * 2. **The wrapper set comes from {@link WRAPPER_SCRIPTS} and the invocation string from
  *    {@link wrapperInvocation}** — never from parsing a `commands.*` value back into a path. That
  *    value may legitimately be a raw command line an adopter wrote by hand, and parsing it is how
@@ -95,7 +100,7 @@
  *   it is about to replace; under `init --plugin-root-entries`, the agent runner's plugin records.**
  *   {@link writePermissionProfile} enqueues the rendered profile into the
  *   command's write plan under the `create-if-absent` contract — the profile is hand-tuned after
- *   generation, and an overwrite silently drops the allow entries an adopter added to close a stall —
+ *   generation, and an overwrite silently drops the allow entries an adopter added to close a gap —
  *   and the write itself belongs to the write engine. `--force` is the one flag that suspends that
  *   contract, and therefore the one run under which those hand-added entries can be lost, so
  *   {@link carriedPluginRootEntries} reads the profile back and {@link renderProfile} carries forward
@@ -141,7 +146,7 @@
  *   inside a remote job the plugin is installed immediately before `init` runs and the profile dies
  *   with the job, so neither reason above holds there, while both still hold for the default.
  *   Moving the helpers somewhere a rule can name unconditionally — the adopter's own
- *   `scriptsDir`, which the three wrapper forms already reach — would remove the manual step but
+ *   `scriptsDir`, which the wrapper forms already reach — would remove the manual step but
  *   change the invocation form everywhere the shipped instruction corpus calls them, so it belongs
  *   to the item that ships them (`plugin/scripts/README.md`) and not to this module.
  * - **It emits no entry for an outer-loop script the table does not mark agent-invocable.** See
@@ -156,7 +161,7 @@
  * rather than a new mechanism.
  *
  * Only the rows {@link OUTER_LOOP_SCRIPTS} marks {@link OuterLoopScript.agentInvocable} get entries,
- * and each gets the same three forms a wrapper does, built by the same row family from the same
+ * and each gets the same two forms a wrapper does, built by the same row family from the same
  * {@link scriptInvocation} return value. The set is taken from {@link writeOuterLoopScripts}'s own
  * `written` result when `init` supplies it — exactly as the wrapper set prefers `written` over
  * {@link selectWrapperScripts} — so this file cannot name a script that generator did not write.
@@ -164,9 +169,9 @@
  * Two properties of those entries are load-bearing:
  *
  * - **They are `allow`, never `ask`.** The corpus invokes them on the unattended commit path, and
- *   `ask` is evaluated before `allow`, so an `ask` there is precisely the stall this module exists to
- *   prevent. The deploy wrapper's `ask` treatment is unaffected — it is a wrapper row, and a deploy
- *   is a decision a person makes.
+ *   `ask` is evaluated before `allow`, so an `ask` there is a refusal under the default `dontAsk`
+ *   mode — precisely the missing step this module exists to prevent. The deploy wrapper's `ask`
+ *   treatment is unaffected — it is a wrapper row, and a deploy is a decision a person makes.
  * - **Every other row gets nothing, deliberately.** The shared library is only ever sourced, and
  *   every remaining row — the watcher, the worktree and cleanup scripts, the notification helpers —
  *   is run by the watcher process or by a person. An entry for one of those would hand a dispatched
@@ -187,13 +192,40 @@
  * neither; and the guard withholds on properties of the *command* — the constructs above — that
  * these rows, written as literal invocation prefixes, do not range over at all. Neither mechanism
  * is derivable from the other, so removing either narrows what an unattended run can spell.
+ *
+ * ## The sandbox block
+ *
+ * The template ships the `sandbox` block's static half; `sandboxProfile.ts` → `applySandbox` fills
+ * the configuration-dependent half — the excluded commands, the allowed domains, the opt-out —
+ * and owns the rule for which command may run unsandboxed. {@link assertRunnable} scans the block's
+ * lists with the same table it scans the permission lists with. `writeProtection.ts` →
+ * `applyWriteProtection` adds the write protection last, once `permissions.additionalDirectories` is
+ * final. Both modules take the profile primitives they share with this one from `profileEntries.ts`
+ * and import nothing from here.
+ *
+ * ## The main-checkout anchor read
+ *
+ * The profile also carries the one `allow` rule a plugin reader needs to find the main checkout,
+ * whose name and rule `core/mainRepoAnchor.ts` → `MAIN_REPO_ANCHOR_RULE` owns; {@link renderProfile}
+ * appends it after the fragments merge, so the template carries no second spelling of the name.
+ *
+ * Mirrors outside this package, each held equal by the suite named:
+ * - `cli/templates/scripts/autonomous-watcher.sh` → `run_profile_wrapper_prefixes` holds a copy of
+ *   the main-checkout wrapper-row prefix the repo-root-absolute rows of {@link WRAPPER_ROW_TOKENS},
+ *   {@link OUTER_LOOP_ROW_TOKENS} and {@link DEPLOY_ROW_TOKENS} render to:
+ *   `Bash(bash <repoRoot>/<scriptsDir>/`, a `.` scripts directory collapsing to `Bash(bash <repoRoot>/`
+ *   as `join(repoRoot, scriptsDir)` does (`cli/test/watcher-run-profile.test.mjs`). Any change to that
+ *   row spelling is an edit to `run_profile_wrapper_prefixes` in the same change.
+ *
+ * A mirror this header does not declare is a defect.
  */
 
 import { basename, dirname, isAbsolute, join, sep } from 'node:path';
 
 import { browserWiringApplies, CONFIG_FILENAME, DEFAULTS, retrievalApplies, type HarnessConfig } from '../config/model.js';
 import { HarnessError, internal } from '../core/errors.js';
-import { isJsonObject, readJsonFile, type JsonObject, type JsonValue } from '../core/json.js';
+import { MAIN_REPO_ANCHOR_READ, MAIN_REPO_ANCHOR_RULE } from '../core/mainRepoAnchor.js';
+import { isJsonObject, readJsonFile, valueAt, type JsonObject, type JsonValue } from '../core/json.js';
 import { defaultProjectName, readTemplate, workRoot as resolveWorkRoot, worktreeGlob } from '../core/paths.js';
 import { normalizeRepoDir } from '../core/repoPaths.js';
 import { containsToken, renderTemplate } from '../core/templating.js';
@@ -214,6 +246,19 @@ import {
   type WrittenOuterLoopScript,
 } from './outerLoopScripts.js';
 import {
+  appendReadme,
+  assertUsableInEntry,
+  bashScriptRule,
+  FORBIDDEN_IN_ENTRY,
+  INVOCATION_PREFIX,
+  normalizedRoot,
+  PROFILE_PATH,
+  QA_TEMPLATE_PATH,
+  RETRIEVAL_TEMPLATE_PATH,
+  TEMPLATE_PATH,
+} from './profileEntries.js';
+import { applySandbox, SANDBOX_KEY } from './sandboxProfile.js';
+import {
   scriptInvocation,
   selectWrapper,
   WRAPPER_SCRIPTS,
@@ -222,55 +267,7 @@ import {
   type WrapperKey,
   type WrittenWrapper,
 } from './scripts.js';
-
-/**
- * The template's home under `cli/templates/`, addressed as {@link readTemplate} wants it.
- *
- * Exported for the same reason {@link QA_TEMPLATE_PATH} is: the shipped template is the single
- * declaration of the profile's own floor, and `doctor` compares an adopter's `permissions.deny`
- * against it rather than keeping a second copy of the entries that must be there
- * (`doctor/checks.ts`).
- */
-export const TEMPLATE_PATH = 'claude/settings.autonomous.json';
-
-/**
- * The interactive-test fragment, merged into the base only when the phase is on and its driver is
- * the browser one — see the module header.
- *
- * A **partial** profile — see the module header. It is stored beside the base under the same
- * dot-less directory, and neither file is ever named with the adopter's leading dot inside this
- * repository (`cli/templates/claude/README.md`).
- *
- * Exported because the fragment's `enabledMcpjsonServers` list is the single declaration of which
- * browser servers a run starts, and the generator that writes the repository's own MCP wiring
- * checks its declared servers against it rather than keeping a second copy of the names
- * (`generators/repoRoot.ts`).
- */
-export const QA_TEMPLATE_PATH = 'claude/settings.autonomous.qa.json';
-
-/**
- * The docs-retrieval fragment, merged into the base only when `phases.docs` and `docs.retrieval` are
- * both on — see the module header.
- *
- * Exported for the reason {@link QA_TEMPLATE_PATH} is: its `enabledMcpjsonServers` list is the
- * declaration `generators/repoRoot.ts` checks the retrieval half of `.mcp.json` against.
- */
-export const RETRIEVAL_TEMPLATE_PATH = 'claude/settings.autonomous.retrieval.json';
-
-/** The adopter-side directory the rendered profile lands in. The dot is added here, at `init` time. */
-const CLAUDE_DIR = '.claude';
-
-/**
- * Where the rendered profile is written, relative to the adopting repository's root — and the path
- * an unattended run names in its own `--settings` flag.
- *
- * Exported because more than one caller has to say it: `init`'s summary points at it, and `doctor`
- * checks that the file is there and that the absolute paths inside it still resolve.
- */
-export const PROFILE_PATH = `${CLAUDE_DIR}/settings.autonomous.json`;
-
-/** The profile's rationale block: the array every generated explanation is appended to. */
-const README_KEY = '_README';
+import { applyWriteProtection } from './writeProtection.js';
 
 /** The key that starts the repository's declared MCP servers for the run. Absent unless a fragment adds it. */
 const ENABLED_SERVERS_KEY = 'enabledMcpjsonServers';
@@ -279,17 +276,15 @@ const ENABLED_SERVERS_KEY = 'enabledMcpjsonServers';
 const MCP_ENTRY_PREFIX = 'mcp__';
 const MCP_SERVER_PATTERN = /^mcp__(.+?)__/;
 
-/** The interpreter every wrapper invocation starts with, per {@link wrapperInvocation}. */
-const INVOCATION_PREFIX = 'bash ';
-
-/** The three token names one row family marks its rows with — one per wrapper form. */
+/**
+ * The two token names one row family marks its rows with — one per form the base profile carries.
+ * The run copy's exact form is the watcher's per-run twin of form (ii): the module header's mirror.
+ */
 interface RowTokens {
   /** Form (i): the repo-relative `bash <scriptsDir>/<file>` the config holds. */
   readonly invocation: string;
   /** Form (ii): the bare file name, joined to the repo-root-absolute `scriptsDir`. */
   readonly file: string;
-  /** Form (iii): the repo-relative path, joined to the sibling-worktree glob. */
-  readonly path: string;
 }
 
 /**
@@ -299,11 +294,10 @@ interface RowTokens {
 const WRAPPER_ROW_TOKENS: RowTokens = Object.freeze({
   invocation: 'scriptInvocation',
   file: 'scriptFile',
-  path: 'scriptPath',
 });
 
 /**
- * The same three forms, for the outer-loop rows a dispatched agent is the thing that runs.
+ * The same two forms, for the outer-loop rows a dispatched agent is the thing that runs.
  *
  * A separate token family rather than more values on the wrapper one, because the two sets are
  * selected by different rules and are answered for by different generators: a wrapper exists only
@@ -317,62 +311,51 @@ const WRAPPER_ROW_TOKENS: RowTokens = Object.freeze({
 const OUTER_LOOP_ROW_TOKENS: RowTokens = Object.freeze({
   invocation: 'outerLoopInvocation',
   file: 'outerLoopFile',
-  path: 'outerLoopPath',
 });
 
 /**
- * The same three forms, restricted to the deploy wrapper.
+ * The same two forms, restricted to the deploy wrapper; the watcher's per-run copy twins the
+ * repo-root-absolute one into `ask` as well.
  *
  * The deploy rows live in `ask`, so a deploy stays a decision a person makes rather than one an
- * unattended run makes for them — and because `ask` is evaluated before `allow`, all three forms
- * are asked about rather than one. Asking about a single spelling would leave the other two
- * matching `allow` and running unattended, which is the opposite of what an `ask` entry is for. A
+ * unattended run makes for them — and because `ask` is evaluated before `allow`, every form is
+ * asked about rather than one. Asking about a single spelling would leave the others matching
+ * `allow` and running unattended, which is the opposite of what an `ask` entry is for. A
  * configuration with no `deploy.command` selects no deploy wrapper, and these rows then expand to
  * nothing at all.
  */
 const DEPLOY_ROW_TOKENS: RowTokens = Object.freeze({
   invocation: 'deployInvocation',
   file: 'deployFile',
-  path: 'deployPath',
 });
 
 /** A row family's token names as a list, for the "is this a form row?" test and the known-token set. */
 function tokenNames(tokens: RowTokens): readonly string[] {
-  return [tokens.invocation, tokens.file, tokens.path];
+  return [tokens.invocation, tokens.file];
 }
-
-/**
- * What may never appear in a permission entry, and how a message names it.
- *
- * The quote characters are failure mode 1 and the operators are failure mode 2 (module header).
- * `$` is on the list for the same reason as the operators: a substitution is a different string to
- * whatever the guard matched, so an entry containing one cannot be relied on to match anything.
- * `///` is the third: a file rule marks an absolute path with a `//` prefix and the substituted
- * path brings its own leading slash, so a template row that adds a second one produces a rule that
- * silently matches no file — the same class of failure as a missed worktree glob, and just as quiet.
- */
-const FORBIDDEN_IN_ENTRY: ReadonlyArray<readonly [needle: string, described: string]> = Object.freeze([
-  ['///', 'a third slash on the `//` absolute-path prefix, which leaves a rule matching no file'],
-  ['"', 'a double quote'],
-  ["'", 'a single quote'],
-  ['`', 'a backquote'],
-  ['&', 'a shell operator (&)'],
-  [';', 'a shell operator (;)'],
-  ['|', 'a shell operator (|)'],
-  ['$', 'a shell substitution ($)'],
-  ['>', 'a shell redirect (>)'],
-  ['<', 'a shell redirect (<)'],
-  ['\n', 'a newline'],
-] as const);
 
 /** The permission lists checked by {@link assertRunnable}, in the order the template writes them. */
 const PERMISSION_LISTS: readonly string[] = Object.freeze(['allow', 'deny', 'ask']);
 
-/** How many `allow` entries one selected script must contribute — the three forms of choice 1. */
-const FORMS_PER_SCRIPT = 3;
+/** The `sandbox` block's lists {@link assertRunnable} checks, as dotted paths under `sandbox`. */
+const SANDBOX_LISTS: readonly string[] = Object.freeze([
+  'excludedCommands',
+  'filesystem.allowWrite',
+  'filesystem.denyWrite',
+  'network.allowedDomains',
+]);
+
+/** The `sandbox.credentials` lists {@link assertRunnable} checks, each with the field it names an entry by. */
+const CREDENTIAL_LISTS: ReadonlyArray<readonly [list: string, field: string]> = Object.freeze([
+  ['files', 'path'],
+  ['envVars', 'name'],
+] as const);
+
+/** How many `allow` entries one selected script must contribute to the base — the two forms of choice 1. */
+const FORMS_PER_SCRIPT = 2;
 
 /**
- * One script under `scriptsDir` the profile allow-lists, with everything the three forms are built
+ * One script under `scriptsDir` the profile allow-lists, with everything its forms are built
  * from — a wrapper or an agent-invocable outer-loop script alike.
  *
  * The two families differ in how they are *selected* and in nothing else once selected, which is why
@@ -387,7 +370,7 @@ export interface SelectedScript {
   readonly file: string;
   /** `bash <scriptsDir>/<file>` — {@link scriptInvocation}'s return value, unmodified. */
   readonly invocation: string;
-  /** The repo-relative path that invocation names, i.e. the invocation without its interpreter. */
+  /** The repo-relative path that invocation names, i.e. the invocation without its interpreter; {@link invokedPath}'s check. */
   readonly path: string;
 }
 
@@ -541,18 +524,17 @@ function mergeInto(base: JsonObject, fragment: JsonObject, at: string, label: st
 /**
  * The repo-relative path inside a script invocation — `bash scripts/test.sh` → `scripts/test.sh`.
  *
- * Derived from the invocation rather than re-joined from `scriptsDir` and the file name, so forms
- * (ii) and (iii) name the same file form (i) does even where the two spellings would differ: a
+ * Derived from the invocation rather than re-joined from `scriptsDir` and the file name: a
  * `scriptsDir` of `.` makes {@link scriptInvocation} return `bash test.sh`, while a naive join would
  * produce `./test.sh`. It throws rather than guessing if the invocation stops looking like
- * `bash <one path>`, because at that point this module's three forms no longer describe the string
- * the config holds.
+ * `bash <one path>`, because at that point form (ii) here — and the run copy's exact form the
+ * watcher's per-run copy re-prefixes from it — no longer name the file the config's string runs.
  */
 function invokedPath(invocation: string): string {
   const path = invocation.startsWith(INVOCATION_PREFIX) ? invocation.slice(INVOCATION_PREFIX.length) : '';
   if (path === '' || path.includes(' ')) {
     throw internal(
-      `the script invocation ${JSON.stringify(invocation)} is not of the form "${INVOCATION_PREFIX}<path>", so the permission profile cannot derive its absolute and worktree forms from it`,
+      `the script invocation ${JSON.stringify(invocation)} is not of the form "${INVOCATION_PREFIX}<path>", so the permission profile cannot derive its absolute forms from it`,
     );
   }
   return path;
@@ -645,7 +627,6 @@ function rowValues(script: SelectedScript, tokens: RowTokens): Readonly<Record<s
   return {
     [tokens.invocation]: script.invocation,
     [tokens.file]: script.file,
-    [tokens.path]: script.path,
   };
 }
 
@@ -671,7 +652,7 @@ function usesAny(text: string, tokens: readonly string[]): boolean {
  *
  * `assertNoneSurvive` is off: the post-substitution sweep for this generator is
  * {@link assertRunnable}, which runs over every rendered *entry* rather than each string as it is
- * produced, and reports a leftover token as the stall it would cause.
+ * produced, and reports a leftover token as the refusal it would cause.
  */
 function substitute(text: string, values: Readonly<Record<string, string>>, known: ReadonlySet<string>): string {
   return renderTemplate(text, values, { describe: 'the permission-profile template', known });
@@ -681,7 +662,7 @@ function substitute(text: string, values: Readonly<Record<string, string>>, know
  * Render one array, expanding its **form rows**.
  *
  * A run of consecutive rows belonging to one family is expanded script-major: the whole run is
- * emitted once per selected script, so a script's three forms stay together and read as the unit
+ * emitted once per selected script, so a script's forms stay together and read as the unit
  * they are. A family with no selected script contributes nothing at all — which is how a
  * configuration without `deploy.command` produces a profile with no deploy entry rather than one
  * naming a wrapper that was never written.
@@ -743,7 +724,7 @@ function permissionsOf(profile: JsonObject): JsonObject {
   const permissions = profile['permissions'];
   if (permissions === null || typeof permissions !== 'object' || Array.isArray(permissions)) {
     throw internal(
-      'the permission-profile template has no `permissions` object, so nothing could be checked for the shapes that stall an unattended run',
+      'the permission-profile template has no `permissions` object, so nothing could be checked for the shapes that get a call refused in an unattended run',
     );
   }
   return permissions;
@@ -776,17 +757,8 @@ export function readRule(absolutePath: string): string {
 }
 
 /**
- * A wrapper-script rule, in the unquoted `Bash(bash <path>:*)` form every generated one uses — and
- * the other plugin-root form, for a helper under the plugin's own scripts directory. Same consumers,
- * and the same decision, as {@link readRule}.
- */
-export function bashScriptRule(absolutePath: string): string {
-  return `Bash(${INVOCATION_PREFIX}${absolutePath}:*)`;
-}
-
-/**
- * The fixed halves of the two builders above, taken from the builders themselves over a path none of
- * those halves can contain — so the inverse below recognises each form rather than spelling it a
+ * The fixed halves of {@link readRule} and {@link bashScriptRule}, taken from the builders themselves
+ * over a path none of those halves can contain — so the inverse below recognises each form rather than spelling it a
  * second time, and a change to either builder cannot leave that inverse matching the old shape. Same
  * derivation, and the same reason, as `doctor/checks.ts`'s `HELPER_RULE_OPEN`.
  */
@@ -825,7 +797,7 @@ function bashScriptRuleTarget(entry: string): string | undefined {
  * `undefined` for everything else: an `mcp__…` entry, a command rule with no `bash ` prefix, a rule
  * whose path is repo-relative (`Bash(bash scripts/test.sh:*)`, the form {@link scriptInvocation}
  * returns), and a rule whose directory carries a glob character, which names a pattern rather than a
- * directory — the sibling-worktree spelling.
+ * directory — the sibling-worktree spelling a profile an earlier release wrote carries.
  *
  * **Telling a plugin root from the repository root is deliberately the caller's job.** Under the
  * default `scriptsDir`, a wrapper's repo-root-absolute entry renders byte-identically to what
@@ -839,15 +811,6 @@ export function pluginRootEntryTarget(entry: string): string | undefined {
   const directory = between(entry, READ_RULE_OPEN, READ_RULE_CLOSE) ?? bashScriptRuleTarget(entry);
   if (directory === undefined || !isAbsolute(directory)) return undefined;
   return GLOB_CHARACTERS.some((character) => directory.includes(character)) ? undefined : directory;
-}
-
-/**
- * A directory in the one spelling {@link isUnderDirectory} compares against: no trailing separator,
- * no `.` or `..` segment. Exported so the normalisation the predicate assumes is stated once, beside
- * the predicate, rather than at each root a caller happens to resolve.
- */
-export function normalizedRoot(path: string): string {
-  return join(path, '.');
 }
 
 /**
@@ -884,19 +847,42 @@ export function entryWord(count: number): string {
  */
 function assertRunnable(profile: JsonObject): void {
   const permissions = permissionsOf(profile);
+  const lists: Array<readonly [where: string, entries: readonly string[]]> = PERMISSION_LISTS.map((list) => [
+    `permissions.${list}`,
+    entriesOf(permissions, list),
+  ]);
+  for (const dotted of SANDBOX_LISTS) {
+    const where = `${SANDBOX_KEY}.${dotted}`;
+    const value = valueAt(profile, where.split('.'));
+    if (value === undefined) continue;
+    if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) {
+      throw internal(`the generated \`${where}\` is not a list of strings`);
+    }
+    lists.push([where, value as string[]]);
+  }
+  for (const [list, field] of CREDENTIAL_LISTS) {
+    const where = `${SANDBOX_KEY}.credentials.${list}`;
+    const value = valueAt(profile, where.split('.'));
+    if (value === undefined) continue;
+    const named = Array.isArray(value) ? value.map((entry) => (isJsonObject(entry) ? entry[field] : undefined)) : [];
+    if (!Array.isArray(value) || named.some((name) => typeof name !== 'string')) {
+      throw internal(`the generated \`${where}\` is not a list of entries each with a string \`${field}\``);
+    }
+    lists.push([`${where}[].${field}`, named as string[]]);
+  }
 
-  for (const list of PERMISSION_LISTS) {
-    for (const entry of entriesOf(permissions, list)) {
+  for (const [where, list] of lists) {
+    for (const entry of list) {
       for (const [needle, described] of FORBIDDEN_IN_ENTRY) {
         if (entry.includes(needle)) {
           throw internal(
-            `the generated permission entry ${JSON.stringify(entry)} in \`permissions.${list}\` contains ${described}, which the guard matches literally: the entry would fall through to a prompt and stall an unattended run`,
+            `the generated permission entry ${JSON.stringify(entry)} in \`${where}\` contains ${described}, which the guard matches literally: the entry would match no call, so an unattended run's call would be refused`,
           );
         }
       }
       if (containsToken(entry)) {
         throw internal(
-          `the generated permission entry ${JSON.stringify(entry)} in \`permissions.${list}\` still carries an unsubstituted token`,
+          `the generated permission entry ${JSON.stringify(entry)} in \`${where}\` still carries an unsubstituted token`,
         );
       }
     }
@@ -908,8 +894,10 @@ function assertRunnable(profile: JsonObject): void {
  * agent-invocable outer-loop row alike — contributes exactly {@link FORMS_PER_SCRIPT} `allow`
  * entries.
  *
- * Checked rather than assumed because the three forms live in the template, where a well-meaning
- * edit can drop one — and a dropped form is invisible until the run that used that spelling hangs.
+ * Checked rather than assumed because the base profile's two forms live in the template, where a
+ * well-meaning edit can drop one, and a dropped form is invisible until the run that used that
+ * spelling is refused. The watcher's per-run copy twins only the repo-root-absolute form, so
+ * dropping that one here drops the run copy's exact form as well.
  * The other direction (no entry names a script that was not written, and none names one an agent
  * must not run) is the fixture tests', which can see the filesystem this module deliberately never
  * touches.
@@ -1060,34 +1048,6 @@ function assertBrowserWiring(profile: JsonObject): void {
 /** The flag supplying the reference toolchain's directory, as a message should name it. */
 const TOOLCHAIN_FLAG = '--reference-toolchain-path';
 
-/**
- * {@link FORBIDDEN_IN_ENTRY} minus its `///` row, which is about a **file** rule's `//` absolute-path
- * prefix and says nothing about a command entry. Every other row applies to both.
- */
-const FORBIDDEN_IN_COMMAND = FORBIDDEN_IN_ENTRY.filter(([needle]) => needle !== '///');
-
-/** The fix for a *command* value: the one place a command carrying shell syntax can still live. */
-const COMMAND_REMEDY =
-  "Take it out of the value, or put the command in a wrapper script and let that script's literal path be what is allow-listed";
-
-/**
- * Refuse an adopter-supplied value that cannot be made into an entry the guard will match.
- *
- * The same shapes {@link assertRunnable} catches, raised **before** the entry is built and with the
- * ordinary exit code: a toolchain path, a configured command or a configured directory carrying a
- * quote or a shell operator is a repository-side mistake with a repository-side fix, not the
- * packaging fault that check reports. `remedy` is what makes the message actionable, and it differs
- * per value — a command moves into a wrapper, a directory is renamed — so it is the caller's.
- */
-function assertUsableInEntry(value: string, described: string, remedy: string = COMMAND_REMEDY): void {
-  for (const [needle, why] of FORBIDDEN_IN_COMMAND) {
-    if (!value.includes(needle)) continue;
-    throw new HarnessError(
-      `${described} contains ${why}, and the permission guard matches an entry literally: an entry built from it would match neither allow nor deny, which stalls an unattended run rather than failing it. ${remedy}`,
-    );
-  }
-}
-
 /** The repository-side values {@link assertRepositoryValuesUsable} screens, as `renderProfile` resolved them. */
 interface RepositoryValues {
   readonly repoRoot: string;
@@ -1133,17 +1093,6 @@ function assertRepositoryValuesUsable({ repoRoot, projectName, scriptsDir, state
     `the configured stateDir ${JSON.stringify(stateDir)}`,
     `Set stateDir in ${CONFIG_FILENAME} to a directory whose path carries no such character (\`config set stateDir <dir>\`), then run init again`,
   );
-}
-
-/** Append a generated line to the profile's rationale block. */
-function appendReadme(profile: JsonObject, line: string): void {
-  const readme = profile[README_KEY];
-  if (!Array.isArray(readme)) {
-    throw internal(
-      `the permission-profile template has no \`${README_KEY}\` list, so a generated group of entries could not be explained in the file it was written into`,
-    );
-  }
-  readme.push(line);
 }
 
 /** Append `values` to one `permissions` list after the template's own, adding none twice; returns how many were added. */
@@ -1540,7 +1489,7 @@ function appendCarriedPluginRootEntries(
 
 /**
  * Render the permission profile for one repository: the template, with every token resolved from
- * the runtime paths and the config in effect, and one group of three `allow` entries per wrapper
+ * the runtime paths and the config in effect, and one group of two `allow` entries per wrapper
  * script that was written.
  *
  * Nothing here reads a path out of a file that ships and nothing here touches the filesystem beyond
@@ -1619,9 +1568,17 @@ export function renderProfile({
     mergeInto(profile, fragment, '', 'docs-retrieval');
   }
 
+  // After both fragments, through `appendAllow`, so a template or fragment already carrying the rule
+  // is not given it twice (module header).
+  appendAllow(profile, [MAIN_REPO_ANCHOR_RULE]);
+  appendReadme(
+    profile,
+    `THE MAIN CHECKOUT IS READ FROM ONE ENVIRONMENT VARIABLE: the plugin's readers find the main checkout with a bare ${MAIN_REPO_ANCHOR_READ}, which the watcher sets for every session it launches, and when it prints nothing fall back to the main checkout a run clone's alternates file names and its run registry confirms, or else to the first git worktree list entry, so removing the ${MAIN_REPO_ANCHOR_RULE} entry costs only that fallback.`,
+  );
+
   // Before the toolchain entries and after the fragment, which is the window in which every `.sh`
   // entry in the profile came from a wrapper or outer-loop row: a toolchain command that happened
-  // to be named like one of them would otherwise be counted as a fourth form of it.
+  // to be named like one of them would otherwise be counted as a third form of it.
   assertEveryScriptListed(profile, [...scripts, ...outerLoop]);
 
   appendToolchainAllowances(profile, {
@@ -1656,7 +1613,7 @@ export function renderProfile({
   pluginRootOutcome?.(outcome);
 
   // In the same window and for the same reason: a carried plugin helper whose basename happens to
-  // match a wrapper's would be counted as a fourth form of that wrapper above. Gated on `force`,
+  // match a wrapper's would be counted as a third form of that wrapper above. Gated on `force`,
   // which is the only run that replaces the file these entries are read out of — an unforced render
   // reads nothing and produces exactly what it did before this step existed.
   if (force) {
@@ -1667,6 +1624,13 @@ export function renderProfile({
       note: note ?? ((): void => {}),
     });
   }
+
+  applySandbox(profile, { repoRoot, config });
+
+  // Last, after the plugin roots and the carry-forward, so `additionalDirectories` is final; and
+  // under the opt-out too. Its `deny` entries name the wrapper files, which `assertEveryScriptListed`
+  // above never sees: it counts `allow` only.
+  applyWriteProtection(profile, { repoRoot, workRoot, config });
 
   assertRunnable(profile);
   assertNoBrowserDeny(profile);
@@ -1691,7 +1655,10 @@ export interface PermissionProfileOptions
 export interface PermissionProfileResult {
   /** Absolute path of the profile. */
   readonly path: string;
-  /** The same path repo-relative — the value an unattended run passes to its own `--settings` flag. */
+  /**
+   * The same path repo-relative — the base profile the watcher renders each run's per-run profile
+   * from, and the file job mode passes to `--settings` unchanged.
+   */
   readonly repoPath: string;
   /** Things needing attention, one line each, for the reporter's `warn`. */
   readonly warnings: readonly string[];
@@ -1705,7 +1672,7 @@ export interface PermissionProfileResult {
  * Render the profile and enqueue it at {@link PROFILE_PATH} under the `create-if-absent` contract.
  *
  * That contract is the whole reason this is a separate step from rendering. The profile is
- * **hand-tuned after generation** — the entry an adopter adds to close a stall is the most valuable
+ * **hand-tuned after generation** — the entry an adopter adds to close a gap is the most valuable
  * line in the file and the least reproducible — so a second `init` leaves an existing one
  * byte-identical, and `--force` regenerates it only after the write engine has copied it to a `.bak`
  * sibling — carrying the plugin-root entries of the file it replaces into the one it writes, which is

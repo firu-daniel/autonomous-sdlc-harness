@@ -1,0 +1,7 @@
+{"type":"system","subtype":"init","session_id":"sp-p1c-permission","cwd":"@FIXTURE_ROOT@"}
+{"type":"user","timestamp":"2026-01-01T00:00:00.000Z","message":{"role":"user","content":"Run the commands."}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:01.000Z","message":{"id":"m1","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"bash @FIXTURE_ROOT@/scripts/push-branch.sh @FIXTURE_ROOT@/clone; git status"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","is_error":true,"content":"Permission to use Bash has been denied because Claude Code is running in don't ask mode."}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:03.000Z","message":{"id":"m2","content":[{"type":"tool_use","id":"tu2","name":"Bash","input":{"command":"bash @FIXTURE_ROOT@/scripts/commit-on-branch.sh --repo @FIXTURE_ROOT@/clone sbx_wr_compound.txt -- \"chore: Sandbox probe CW5\"; git status"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:04.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu2","is_error":true,"content":"Permission to use Bash has been denied because Claude Code is running in don't ask mode."}]}}
+{"type":"result","subtype":"success","timestamp":"2026-01-01T00:00:05.000Z","duration_ms":5000,"permission_denials":[]}

@@ -7,7 +7,7 @@
  * writer, and `doctor` asks {@link selectedStateDirs} what should be there instead of re-deriving
  * the list from its own copy. A second copy of this table anywhere is a copy that will drift.
  *
- * ## Three non-obvious choices, and where each comes from
+ * ## Four non-obvious choices, and where each comes from
  *
  * 1. **A phase that is off gets no directories at all.** An adopter who never runs the parity phase
  *    has no reference implementation to compare against, so a `business_parity_*` directory in
@@ -23,6 +23,11 @@
  *    wrapper-script generator renders `{{token}}`s because a wrapper's body is a *detected* value;
  *    nothing in this tree depends on one, and a README that named its own configured path would go
  *    stale the moment the adopter moved the tree. A path a reader wants is read from the config.
+ * 4. **`--force` keeps a README whose bytes already are its template.** The engine's `.bak` is
+ *    single-generation, as for the ledgers in choice 2, so a forced rewrite with identical bytes would
+ *    back up nothing new and overwrite the one `.bak` an earlier forced run may have left holding an
+ *    adopter's sentence. A README whose bytes differ is still replaced after a `.bak`
+ *    ({@link writeStateDir}).
  *
  * ## Scope this release
  *
@@ -44,13 +49,22 @@
  * rather than leaving a rule pointing at nothing.
  */
 
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { DEFAULTS, STATE_DIR_DOT_PATTERN, type HarnessConfig, type HarnessPhases } from '../config/model.js';
 import { HarnessError } from '../core/errors.js';
 import { readTemplate } from '../core/paths.js';
 import { normalizeRepoDir } from '../core/repoPaths.js';
-import type { WritePlan } from '../core/writer.js';
+import type { WritePlan, WriteRequest } from '../core/writer.js';
+
+/**
+ * Where one repository keeps its run registry: {@link RUN_LOGS_DIR} beneath `stateDir`, and
+ * {@link RUN_REGISTRY_FILENAME} inside it. `autonomous-watcher.sh`'s `REGISTRY="$LOGS_DIR/registry.json"`
+ * is the definition of record.
+ */
+export const RUN_LOGS_DIR = 'autonomous_logs';
+export const RUN_REGISTRY_FILENAME = 'registry.json';
 
 /** The phase a directory belongs to. A row without one is written whatever the phases are. */
 export type StateDirPhase = keyof HarnessPhases;
@@ -92,8 +106,9 @@ export const STATE_DIR_ENTRIES: ReadonlyArray<StateDirEntry> = Object.freeze([
   Object.freeze({ dir: 'user_review_fix_plan_point_reviews' }),
   Object.freeze({ dir: 'flow_progress' }),
   Object.freeze({ dir: 'branch_statistics' }),
+  Object.freeze({ dir: 'run_analytics' }),
   Object.freeze({ dir: 'autonomous_inbox' }),
-  Object.freeze({ dir: 'autonomous_logs' }),
+  Object.freeze({ dir: RUN_LOGS_DIR }),
   Object.freeze({ dir: 'clarifications' }),
   // The fourth of the runtime surfaces whose contents are machine-local, and the reason it sits with
   // the three above rather than under a phase: an implementer or a reviewer in *any* phase may need
@@ -148,7 +163,7 @@ export interface StateDirOptions {
   readonly repoRoot: string;
   /** The config `init` is about to write, or the one already on disk on a re-run. */
   readonly config: HarnessConfig;
-  /** The command's write plan; this generator enqueues into it and never touches `fs` itself. */
+  /** The command's write plan; this generator enqueues into it and never writes through `fs` itself. */
   readonly plan: WritePlan;
 }
 
@@ -210,6 +225,35 @@ export function selectedStateDirs(phases: HarnessPhases | undefined): readonly S
 }
 
 /**
+ * Whether the file at `path` exists and its bytes are exactly `content`'s UTF-8 encoding.
+ *
+ * Absent, unreadable and differing all answer `false`, so the caller falls back to the run's own
+ * `--force` rather than guessing. Reads and never writes.
+ */
+function holdsExactly(path: string, content: string): boolean {
+  try {
+    return readFileSync(path).equals(Buffer.from(content, 'utf8'));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * One README's `create-if-absent` request, with `forceOverride: 'never'` exactly when the file on
+ * disk already is `template`'s bytes ({@link writeStateDir}).
+ */
+function readmeRequest(path: string, template: string, label: string): WriteRequest {
+  const content = readTemplate(template);
+  return {
+    path,
+    policy: 'create-if-absent',
+    content,
+    label,
+    ...(holdsExactly(path, content) ? { forceOverride: 'never' as const } : {}),
+  };
+}
+
+/**
  * Enqueue the run-artifact tree: `ensure-dir` for the root and for every selected directory, and
  * `create-if-absent` for the tree's README, each directory's README and both ledgers.
  *
@@ -220,14 +264,19 @@ export function selectedStateDirs(phases: HarnessPhases | undefined): readonly S
  * the ledgers because they accumulate and an overwrite would destroy history.
  *
  * The two differ in what `--force` may do to them. A README is template content, so `--force`
- * replaces one after the write engine has taken a `.bak`, and the adopter's sentence is a `.bak`
- * away. **The ledgers are outside `--force` entirely** (`forceOverride: 'never'`): nothing can
+ * replaces one whose bytes differ from its template after the write engine has taken a `.bak`, and
+ * the adopter's sentence is a `.bak` away. A README whose bytes already **are** its template is kept
+ * (`forceOverride: 'never'`, {@link readmeRequest}): replacing it would put nothing new in the `.bak`
+ * and, the `.bak` being single-generation, overwrite whatever an earlier forced run left there — the
+ * rule `generators/claudeContext.ts` applies to `.claude/CLAUDE.md`.
+ * **The ledgers are outside `--force` entirely** (`forceOverride: 'never'`): nothing can
  * re-derive an accumulating ledger, and the engine's `.bak` is single-generation — it is
  * overwritten rather than chained — so "recoverable" would only ever have meant "recoverable until
  * the next forced run". `--force` is an operation this CLI's own remedy messages routinely send an
  * adopter to, so a ledger has to survive it however many times it is run.
  *
- * Nothing here touches the filesystem: the generator plans, and `init` applies the plan once.
+ * Nothing here writes to the filesystem — the README keep only reads — so the generator plans, and
+ * `init` applies the plan once.
  */
 export function writeStateDir({ repoRoot, config, plan }: StateDirOptions): StateDirResult {
   const stateDir = assertWritableStateDir(config.stateDir ?? DEFAULTS.stateDir);
@@ -237,12 +286,7 @@ export function writeStateDir({ repoRoot, config, plan }: StateDirOptions): Stat
   const notes: string[] = [];
 
   plan.add({ path: root, policy: 'ensure-dir', label: 'run-artifact tree' });
-  plan.add({
-    path: join(root, README_FILENAME),
-    policy: 'create-if-absent',
-    content: readTemplate(`${TEMPLATE_DIR}/${ROOT_README_TEMPLATE}`),
-    label: 'run-artifact tree README',
-  });
+  plan.add(readmeRequest(join(root, README_FILENAME), `${TEMPLATE_DIR}/${ROOT_README_TEMPLATE}`, 'run-artifact tree README'));
 
   for (const ledger of STATE_DIR_LEDGERS) {
     plan.add({
@@ -267,12 +311,13 @@ export function writeStateDir({ repoRoot, config, plan }: StateDirOptions): Stat
     }
 
     plan.add({ path: join(root, entry.dir), policy: 'ensure-dir', label: `artifact directory ${entry.dir}` });
-    plan.add({
-      path: join(root, entry.dir, README_FILENAME),
-      policy: 'create-if-absent',
-      content: readTemplate(`${TEMPLATE_DIR}/${entry.dir}/${README_FILENAME}`),
-      label: `artifact directory README ${entry.dir}`,
-    });
+    plan.add(
+      readmeRequest(
+        join(root, entry.dir, README_FILENAME),
+        `${TEMPLATE_DIR}/${entry.dir}/${README_FILENAME}`,
+        `artifact directory README ${entry.dir}`,
+      ),
+    );
     directories.push(relative);
   }
 

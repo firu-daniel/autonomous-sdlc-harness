@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"sp-network-ssh-proxy","cwd":"@FIXTURE_ROOT@"}
+{"type":"user","timestamp":"2026-01-01T00:00:00.000Z","message":{"role":"user","content":"Run the command."}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:01.000Z","message":{"id":"m1","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"git -C @FIXTURE_ROOT@ fetch origin"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","is_error":true,"content":"Received disconnect from UNKNOWN port 65535:1: This proxy requires authentication\nfatal: Could not read from remote repository."}]}}
+{"type":"result","subtype":"success","timestamp":"2026-01-01T00:00:03.000Z","duration_ms":3000,"permission_denials":[]}

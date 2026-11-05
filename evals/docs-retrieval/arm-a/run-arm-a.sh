@@ -8,9 +8,8 @@
 #
 # HAND-RUN ONLY. Arm A needs a nested agent subprocess. The unattended permission
 # profile carries no grant for the agent binary, and per that profile's own
-# `_README` a tool call matching neither `allow` nor `deny` STALLS in print mode
-# rather than prompting — so an unattended attempt hangs the run instead of
-# reporting a refusal. The `scripts/scratch-run.sh` route to the same subprocess
+# `_README` a tool call matching neither `allow` nor `deny` is refused in an
+# unattended run — so an unattended attempt is refused rather than run. The `scripts/scratch-run.sh` route to the same subprocess
 # is technically open and is declined on purpose: it would put an unsupervised
 # nested agent session, with its own auth and no token cap, inside an unattended
 # run to take a measurement. So this file is run by an operator at a terminal and

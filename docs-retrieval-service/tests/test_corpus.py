@@ -106,7 +106,7 @@ def test_conventions_document_under_docs_root_appears_once(tmp_path: Path) -> No
     assert result.warnings == ()
 
 
-def test_symlinked_directory_is_not_descended_and_symlinked_file_is_kept(tmp_path: Path) -> None:
+def test_symlinked_directory_is_not_descended_and_escaping_file_is_skipped(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     _write(repo, "docs/real.md")
     _write(tmp_path, "shared/linked-dir/inner.md")
@@ -115,7 +115,78 @@ def test_symlinked_directory_is_not_descended_and_symlinked_file_is_kept(tmp_pat
     os.symlink(tmp_path / "shared" / "target.md", repo / "docs" / "linked.md")
     os.symlink(tmp_path / "shared" / "absent.md", repo / "docs" / "dangling.md")
     result = corpus_files(str(repo), _config("docs"))
-    assert result.files == ("docs/linked.md", "docs/real.md")
+    assert result.files == ("docs/real.md",)
+    assert result.warnings == (
+        "docs.root file docs/linked.md resolves outside the repository and was skipped",
+    )
+
+
+def test_walked_link_inside_the_repository_is_kept_under_its_link_path(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _write(repo, "docs/real.md")
+    _write(repo, "other/target.md")
+    os.symlink(repo / "other" / "target.md", repo / "docs" / "inside.md")
+    result = corpus_files(str(repo), _config("docs"))
+    assert result.files == ("docs/inside.md", "docs/real.md")
+    assert result.warnings == ()
+
+
+def test_symlinked_conventions_documents_are_checked_physically(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    (repo / "docs").mkdir(parents=True)
+    (repo / ".claude" / "context").mkdir(parents=True)
+    _write(tmp_path, "shared/out.md")
+    _write(repo, "real/in.md")
+    os.symlink(tmp_path / "shared" / "out.md", repo / ".claude" / "context" / "out.md")
+    os.symlink(repo / "real" / "in.md", repo / ".claude" / "context" / "in.md")
+    config = _config(
+        "docs",
+        _layer("cli", ".claude/context/out.md"),
+        _layer("plugin", ".claude/context/in.md"),
+    )
+    result = corpus_files(str(repo), config)
+    assert result.files == (".claude/context/in.md",)
+    assert result.warnings == (
+        "conventions document .claude/context/out.md of layer cli resolves outside the repository "
+        "and was skipped",
+    )
+
+
+def test_docs_root_symlinked_to_an_outside_directory_warns(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _write(tmp_path, "shared/a.md")
+    os.symlink(tmp_path / "shared", repo / "docs")
+    result = corpus_files(str(repo), _config("docs"))
+    assert result.files == ()
+    assert result.warnings == ("docs.root docs resolves outside the repository and was skipped",)
+
+
+def test_repo_root_passed_through_an_alias_keeps_the_inside_link(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _write(repo, "docs/real.md")
+    _write(repo, "other/target.md")
+    os.symlink(repo / "other" / "target.md", repo / "docs" / "inside.md")
+    alias = tmp_path / "alias"
+    os.symlink(repo, alias)
+    result = corpus_files(str(alias), _config("docs"))
+    assert result.files == ("docs/inside.md", "docs/real.md")
+    assert result.warnings == ()
+
+
+def test_escaping_link_warnings_are_in_utf16_code_unit_order(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    (repo / "docs").mkdir(parents=True)
+    _write(tmp_path, "shared/z.md")
+    _write(tmp_path, "shared/B.md")
+    os.symlink(tmp_path / "shared" / "z.md", repo / "docs" / "z.md")
+    os.symlink(tmp_path / "shared" / "B.md", repo / "docs" / "B.md")
+    result = corpus_files(str(repo), _config("docs"))
+    assert result.files == ()
+    assert result.warnings == (
+        "docs.root file docs/B.md resolves outside the repository and was skipped",
+        "docs.root file docs/z.md resolves outside the repository and was skipped",
+    )
 
 
 def test_layer_with_empty_or_non_string_conventions_is_skipped_silently(tmp_path: Path) -> None:

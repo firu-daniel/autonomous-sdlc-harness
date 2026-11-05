@@ -105,8 +105,8 @@
 # never refuses an ordinary feature-branch push WHEN THE BRANCH IS NAMED —
 # a target naming a SET is refused whatever it would have matched, so
 # `push <remote> <feature>*` is refused even though the glob matches nothing
-# protected (condition (c)). A named ordinary push stalls at the `git push`
-# `ask` entry in the adopter's permission profile instead, so do NOT move
+# protected (condition (c)). A named ordinary push is refused at the `git push`
+# `ask` entry in an unattended run instead, so do NOT move
 # `git push` out of `ask` on the strength of this guard.
 #
 # THAT SET REFUSAL IS ALSO WHAT CLOSED A PREVIOUSLY-DISCLOSED RESIDUAL,

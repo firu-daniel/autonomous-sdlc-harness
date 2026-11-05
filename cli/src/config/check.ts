@@ -31,7 +31,11 @@
  * `docs.retrieval` is `true` only while `phases.docs` is `true`, mirroring the schema's top-level
  * `allOf` clause — the one cross-field error, graded beside the phase-section warnings rather than
  * among them; and a legal `docs.retrievalBackend` with docs retrieval off is a warning, since it
- * selects nothing.
+ * selects nothing. Under `sandbox`, every `allowedDomains` entry carries both `domain` and
+ * `reason`, `domain` matches `SANDBOX_DOMAIN_PATTERN`, and an `optOut` is an object carrying a
+ * `reason`; both `reason`s must hold more than whitespace, because `sandboxOptedOut` treats a blank
+ * one as no opt-out taken. `treeGuards` is an array whose every entry carries exactly a non-empty
+ * `test` and `covers`.
  *
  * **An absent `scriptsDir` is a warning, and it is the one optional key reported for absence
  * alone.** Every other absent optional key means what `init` would write for it; this one means
@@ -46,8 +50,9 @@
  * - **`$schema`'s URI form.** It is editor metadata resolved against the file's own location; the
  *   CLI never dereferences it.
  * - **Anything about the filesystem** — whether a configured directory exists, is writable, or
- *   whether a `conventions` document is really there. That is `doctor`'s job, not a shape check's,
- *   and a shape check that touched the disk could not be run against a config held in memory.
+ *   whether a `conventions` document or a `treeGuards[].test` file is really there. That is
+ *   `doctor`'s job, not a shape check's, and a shape check that touched the disk could not be run
+ *   against a config held in memory.
  */
 
 import {
@@ -69,6 +74,7 @@ import {
   PORT_SEED_MIN,
   QA_DRIVERS,
   RETRIEVAL_BACKENDS,
+  SANDBOX_DOMAIN_PATTERN,
   STATE_DIR_DOT_PATTERN,
   STATE_DIR_PATTERN,
 } from './model.js';
@@ -110,6 +116,8 @@ const TOP_LEVEL_KEYS = [
   'deploy',
   'design',
   'execution',
+  'sandbox',
+  'treeGuards',
 ] as const;
 
 /** The schema's top-level `required`. */
@@ -148,7 +156,11 @@ const PARITY_KEYS = ['referenceName', 'referenceImplPath', 'toolchainCommands'] 
 const PARITY_STRING_KEYS = ['referenceName', 'referenceImplPath'] as const;
 const DEPLOY_KEYS = ['provider', 'target', 'command'] as const;
 const DESIGN_KEYS = ['source'] as const;
-const EXECUTION_KEYS = ['target', 'progressComments'] as const;
+const EXECUTION_KEYS = ['target', 'progressComments', 'keepAwake'] as const;
+const SANDBOX_KEYS = ['allowedDomains', 'optOut'] as const;
+const SANDBOX_DOMAIN_KEYS = ['domain', 'reason'] as const;
+const SANDBOX_OPT_OUT_KEYS = ['reason'] as const;
+const TREE_GUARD_KEYS = ['test', 'covers'] as const;
 
 /** A plain object — not `null`, not an array. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -258,7 +270,7 @@ function checkStringArray(parent: Record<string, unknown>, key: string, prefix: 
   });
 }
 
-/** A declared boolean key: the three `phases` toggles, `docs.retrieval` and `execution.progressComments`. */
+/** A declared boolean key: the three `phases` toggles, `docs.retrieval`, `execution.progressComments` and `execution.keepAwake`. */
 function checkBoolean(parent: Record<string, unknown>, key: string, prefix: string, problems: Problems): void {
   const value = parent[key];
   if (value === undefined) return;
@@ -562,6 +574,86 @@ function checkRetrievalBackend(
   );
 }
 
+/** A required reason string: present, a string, and not blank — whitespace alone explains nothing. */
+function checkReason(parent: Record<string, unknown>, prefix: string, consequence: string, problems: Problems): void {
+  const value = parent['reason'];
+  const path = join(prefix, 'reason');
+  if (value === undefined) {
+    problems.error(path, `is required: ${consequence}`);
+    return;
+  }
+  if (typeof value !== 'string') {
+    problems.error(path, `must be a string, not ${describe(value)}`);
+    return;
+  }
+  if (value.trim() === '') problems.error(path, `must not be blank: ${consequence}`);
+}
+
+/** `sandbox`: each allowed domain is a bare host with its reason, and an opt-out is a reasoned object. */
+function checkSandbox(sandbox: Record<string, unknown>, problems: Problems): void {
+  const domains = sandbox['allowedDomains'];
+  if (domains !== undefined) {
+    if (!Array.isArray(domains)) {
+      problems.error('sandbox.allowedDomains', `must be an array of objects, not ${describe(domains)}`);
+    } else {
+      domains.forEach((entry, index) => {
+        const prefix = `sandbox.allowedDomains[${index}]`;
+        if (!isObject(entry)) {
+          problems.error(prefix, `must be an object, not ${describe(entry)}`);
+          return;
+        }
+        checkUnknownKeys(entry, SANDBOX_DOMAIN_KEYS, prefix, problems);
+        const domain = entry['domain'];
+        if (domain === undefined) problems.error(join(prefix, 'domain'), 'is required');
+        else checkString(entry, 'domain', prefix, problems);
+        if (typeof domain === 'string' && domain !== '' && !SANDBOX_DOMAIN_PATTERN.test(domain)) {
+          problems.error(
+            join(prefix, 'domain'),
+            `${JSON.stringify(domain)} is not a bare hostname or IPv4 address: write the host alone, with no scheme, port, path or wildcard`,
+          );
+        }
+        checkReason(
+          entry,
+          prefix,
+          'the generated profile repeats each allowed domain with its reason, and an unexplained entry is a network grant nobody can audit',
+          problems,
+        );
+      });
+    }
+  }
+
+  const optOut = section(sandbox, 'optOut', SANDBOX_OPT_OUT_KEYS, problems, 'sandbox');
+  if (optOut !== undefined) {
+    checkReason(
+      optOut,
+      'sandbox.optOut',
+      'the opt-out runs every unattended command unsandboxed, so it must say why, and one with no reason is not taken',
+      problems,
+    );
+  }
+}
+
+/** `treeGuards`: an array of entries, each carrying exactly a non-empty `test` and `covers`. */
+function checkTreeGuards(value: unknown, problems: Problems): void {
+  if (value === undefined) return;
+  if (!Array.isArray(value)) {
+    problems.error('treeGuards', `must be an array of objects, not ${describe(value)}`);
+    return;
+  }
+  value.forEach((entry, index) => {
+    const prefix = `treeGuards[${index}]`;
+    if (!isObject(entry)) {
+      problems.error(prefix, `must be an object, not ${describe(entry)}`);
+      return;
+    }
+    checkUnknownKeys(entry, TREE_GUARD_KEYS, prefix, problems);
+    for (const key of TREE_GUARD_KEYS) {
+      if (entry[key] === undefined) problems.error(join(prefix, key), 'is required');
+      else checkString(entry, key, prefix, problems);
+    }
+  });
+}
+
 /**
  * Check a parsed value against the shape `harness.config.json` must have, and return everything
  * wrong with it — never throwing, so one pass names every problem.
@@ -720,7 +812,12 @@ export function checkConfigShape(value: unknown): ConfigProblem[] {
       problems,
     );
     checkBoolean(execution, 'progressComments', 'execution', problems);
+    checkBoolean(execution, 'keepAwake', 'execution', problems);
   }
+
+  const sandbox = section(value, 'sandbox', SANDBOX_KEYS, problems);
+  if (sandbox !== undefined) checkSandbox(sandbox, problems);
+  checkTreeGuards(value['treeGuards'], problems);
 
   checkPhaseSections(value, phases, problems);
   checkRetrievalPhase(docs, phases, problems);

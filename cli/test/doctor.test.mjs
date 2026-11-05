@@ -110,6 +110,9 @@ const { readProtectedCaseLabel } = await loadCompiled('generators/githooks.js');
  */
 const { DEFAULTS } = await loadCompiled('config/model.js');
 
+/** The run-copy `.git` rows, for the rows a bubblewrap host's per-run copy leaves out of `denyWrite`. */
+const { COPY_GIT_PATHS } = await loadCompiled('generators/writeProtection.js');
+
 /**
  * What this host can install a daemon into, and a skip reason when it can install one nowhere.
  *
@@ -307,6 +310,23 @@ test('doctor exits 0 on a freshly wired repository, warnings and all, and writes
   assert.match(stdout, passLine('run-watcher'));
   assert.doesNotMatch(stderr, warnLine('run-watcher'));
   assert.deepEqual(await snapshotTree(dir), before, 'doctor wrote to the repository it was asked about');
+});
+
+test('a passing profile-write-protection line names the Linux placeholder finding and the rows the per-run copy omits', async (t) => {
+  const dir = await wiredFixture(t);
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor']);
+
+  assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+  assert.match(stdout, passLine('profile-write-protection'));
+  const line = reportLine(stdout, 'pass', 'profile-write-protection');
+  assert.ok(
+    line.includes('On Linux an exact entry for a path that does not exist is enforced by a placeholder at that path'),
+    `the pass does not carry the placeholder clause:\n${line}`,
+  );
+  const omitted = COPY_GIT_PATHS.filter(({ bubblewrapDenyWrite }) => bubblewrapDenyWrite === false).map(({ path }) => path);
+  assert.deepEqual(omitted, ['.git/commondir', '.git/config.worktree', '.git/objects/info/http-alternates']);
+  for (const path of omitted) assert.ok(line.includes(path), `the pass does not name ${path}:\n${line}`);
 });
 
 test('the run-watcher check follows a custom scriptsDir', async (t) => {
@@ -702,19 +722,18 @@ const PASTE_HEADING = 'permissions.allow:';
 const WRAPPER_NOT_READABLE = 'is not readable under';
 
 /**
- * The three `permissions.allow` entries one wrapper implies: the repo-relative invocation, its
- * repo-root-absolute twin, and its sibling-worktree twin.
+ * The two `permissions.allow` entries one wrapper implies in the base profile: the repo-relative
+ * invocation and its repo-root-absolute twin. The run copy's exact form is the watcher's per-run
+ * copy's, never the base's.
  *
  * Spelled here rather than read back from the generator the check itself calls — a case that derived
  * its expectation from the producer under test would go on passing against a producer that had
- * changed shape. `init.test.mjs` states the same three forms for the writer's side.
+ * changed shape. `init.test.mjs` states the same two forms for the writer's side.
  */
-function wrapperAllowEntries(dir, projectName, file) {
-  const worktreeGlob = join(dirname(dir), `${projectName}-*`);
+function wrapperAllowEntries(dir, file) {
   return [
     `Bash(bash ${SCRIPTS_DIR}/${file}:*)`,
     `Bash(bash ${join(dir, SCRIPTS_DIR, file)}:*)`,
-    `Bash(bash ${join(worktreeGlob, SCRIPTS_DIR, file)}:*)`,
   ];
 }
 
@@ -768,11 +787,6 @@ async function handFilledFixture(t) {
   return fixture.dir;
 }
 
-/** The `projectName` the generated config carries, which the worktree form of every entry is built on. */
-function projectNameOf(dir) {
-  return readJson(join(dir, CONFIG_FILE)).projectName;
-}
-
 /**
  * The entries a filled `commands.*` key implies are graded, in both directions Finding 41 owes: a
  * repository whose keys were filled after `init` is warned and told what to paste, and a normally
@@ -796,7 +810,7 @@ test('doctor grades the permission entries a filled commands key implies', async
     assert.ok(block, `the report carried no command-permissions warning:\n${stderr}`);
     assert.ok(block.includes(PASTE_HEADING), `the warning named no list to paste into:\n${block}`);
     for (const { file } of HAND_FILLED) {
-      for (const entry of wrapperAllowEntries(dir, projectNameOf(dir), file)) {
+      for (const entry of wrapperAllowEntries(dir, file)) {
         assert.ok(block.includes(entry), `the warning did not name ${entry}:\n${block}`);
       }
     }
@@ -824,7 +838,7 @@ test('doctor grades the permission entries a filled commands key implies', async
     // check having stopped grading the keys it was warning about.
     const { permissions } = readJson(join(dir, PROFILE_FILE));
     for (const { file } of HAND_FILLED) {
-      for (const entry of wrapperAllowEntries(dir, projectNameOf(dir), file)) {
+      for (const entry of wrapperAllowEntries(dir, file)) {
         assert.ok(permissions.allow.includes(entry), `init --force left ${entry} out of ${PROFILE_FILE}`);
       }
     }
@@ -836,7 +850,7 @@ test('doctor grades the permission entries a filled commands key implies', async
     // so a pass is the check finding them rather than finding nothing to grade.
     const { permissions } = readJson(join(dir, PROFILE_FILE));
     for (const { file } of HAND_FILLED) {
-      for (const entry of wrapperAllowEntries(dir, projectNameOf(dir), file)) {
+      for (const entry of wrapperAllowEntries(dir, file)) {
         assert.ok(permissions.allow.includes(entry), `a freshly wired repository does not carry ${entry}`);
       }
     }
@@ -939,6 +953,53 @@ test('a jq whose version string is unrecognizable warns and leaves the exit stat
   assert.equal(status, 0, `doctor exited ${status} on a condition that only warns\n${stdout}\n${stderr}`);
   assert.match(stderr, warnLine('jq'));
   assert.match(stdout, CLEAN_SUMMARY);
+});
+
+/**
+ * A temp directory holding a `git` that prints one chosen line for `git --version` and hands every
+ * other call to the real git, to be put **first** on `PATH` — so the version floor is graded on a
+ * real executable while every repository check keeps answering from the real git.
+ *
+ * @param {import('node:test').TestContext} t
+ * @param {string} line what the stub prints for `git --version`.
+ * @returns {Promise<string>} a `PATH` value with the stub ahead of everything else.
+ */
+async function gitVersionStubPath(t, line) {
+  const real = resolveOnPath('git');
+  assert.ok(real, 'git does not resolve on PATH, so a git version stub cannot be built for this test');
+  const dir = await mkdtemp(join(tmpdir(), 'harness-git-stub-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  writeFileSync(
+    join(dir, 'git'),
+    `#!/bin/sh\nif [ "$#" -eq 1 ] && [ "$1" = --version ]; then printf '%s\\n' ${JSON.stringify(line)}; exit 0; fi\nexec ${JSON.stringify(real)} "$@"\n`,
+    { mode: 0o755 },
+  );
+  return `${dir}${delimiter}${process.env.PATH ?? ''}`;
+}
+
+test('a git at or above the 2.38 floor passes and names the version', async (t) => {
+  const dir = await wiredFixture(t);
+  const PATH = await gitVersionStubPath(t, 'git version 2.38.0');
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor'], { PATH });
+
+  assert.equal(status, 0, `doctor exited ${status} with a git at the floor\n${stdout}\n${stderr}`);
+  assert.match(stdout, passLine('git'));
+  assert.match(stdout, /git 2\.38 answered/);
+});
+
+test('a git below the 2.38 floor warns, names refresh-branch.sh, and leaves the exit status at 0', async (t) => {
+  const dir = await wiredFixture(t);
+  const PATH = await gitVersionStubPath(t, 'git version 2.37.9');
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor'], { PATH });
+
+  // A warning: only the stale-base repair needs the floor, so a run still starts on this git.
+  assert.equal(status, 0, `doctor exited ${status} on a condition that only warns\n${stdout}\n${stderr}`);
+  assert.match(stderr, warnLine('git'));
+  assert.match(stderr, /2\.37/);
+  assert.match(stderr, /refresh-branch\.sh/);
+  assert.match(stderr, /merge-tree --write-tree/);
 });
 
 test('the jq check answers the same in a repository whose config is gone', async (t) => {
@@ -3083,9 +3144,9 @@ test('the machine-footprint check reports the machine, and never fails or writes
     const dir = await wiredFixture(subtest);
     const machine = await footprintMachine(subtest, { cap: FOOTPRINT_CAP });
     const unitPath = await seededUnitFile(subtest);
-    // Three records, one live. The third is what makes the case discriminate: a bare `kill -0` walk
-    // — the watcher's own `running_count`, which applies no status filter — would report 2, so this
-    // fails if either half of the predicate drops the `status === 'running'` condition.
+    // Three records, one live. The third is what makes the case discriminate: a bare `kill -0` walk,
+    // one with no status filter, would report 2, so this fails if either half of the predicate drops
+    // the `status === 'running'` condition.
     seedRunRegistry(dir, {
       'run-alive-and-running': { status: 'running', pid: process.pid },
       'run-running-but-dead': { status: 'running', pid: DEAD_PID },
@@ -3387,8 +3448,10 @@ test('the daemon-path check grades the installed unit, and never above a warning
     assert.equal(status, 0, `doctor exited ${status} on a condition that only warns\n${stdout}\n${stderr}`);
     assert.match(stderr, warnLine('daemon-path'));
     const line = reportLine(stderr, 'warn', 'daemon-path');
-    assert.ok(line.includes(FIXTURE_AGENT_CLI), `the warning does not name the CLI the unit launches:\n${line}`);
-    assert.ok(!line.includes(DEFAULT_AGENT_CLI), `the warning grades the default the unit overrides:\n${line}`);
+    // The line carries temp paths, and a sandbox's temp directory sits under `claude-<uid>`, so a bare
+    // name match is satisfied by a path alone. Match the `<name> (` entry shape the check writes.
+    assert.ok(line.includes(`${FIXTURE_AGENT_CLI} (`), `the warning does not name the CLI the unit launches:\n${line}`);
+    assert.ok(!line.includes(`${DEFAULT_AGENT_CLI} (`), `the warning grades the default the unit overrides:\n${line}`);
   }));
 
   subtests.push(t.test('a toolchain reached only through a wrapper is graded, and the warning says which wrapper', { skip: NO_BACKEND }, async (subtest) => {
@@ -4136,6 +4199,112 @@ test('a rules file no fence names warns, names both remedies, and leaves the exi
 });
 
 /**
+ * The fence's opt-out script, the invocation item 4 renders for it and the exact allow rule
+ * `.claude/settings.json` carries for that invocation, spelled as a wired tree carries them for the
+ * reason `TASK_OFFER_FILE` is.
+ */
+const TASK_OFFER_CHECK_FILE = `${SCRIPTS_DIR}/task-offer-check.sh`;
+const TASK_OFFER_CHECK_INVOCATION = `bash ${TASK_OFFER_CHECK_FILE}`;
+const TASK_OFFER_CHECK_RULE = `Bash(${TASK_OFFER_CHECK_INVOCATION})`;
+
+/** The one report line `task-offer-rules` printed, on whichever stream its grade went to. */
+function taskOfferRulesLine(output) {
+  return output.split('\n').find((line) => /^(! WARN|PASS)\s+task-offer-rules\s/.test(line)) ?? '';
+}
+
+/** Rewrite `.claude/settings.json`'s `permissions.allow`, asserting the rule really is gone or there. */
+function setAllowList(dir, allow) {
+  const path = join(dir, SETTINGS_FILE);
+  const settings = JSON.parse(readFileSync(path, 'utf8'));
+  assert.ok(
+    settings.permissions?.allow?.includes(TASK_OFFER_CHECK_RULE),
+    `init did not allow-list ${TASK_OFFER_CHECK_RULE}, so this case proves nothing`,
+  );
+  if (allow === undefined) delete settings.permissions;
+  else settings.permissions.allow = allow;
+  writeFileSync(path, `${JSON.stringify(settings, null, 2)}\n`);
+}
+
+// Each case below was run red once against a mutation of `TASK_OFFER_RULES_CHECK` in
+// `cli/src/doctor/checks.ts`, then the mutation reverted:
+//   (a) the pass line returned without its script-and-rule clause — the line names neither;
+//   (b) the script existence test removed — the deleted script passes;
+//   (c) the rule compared with `:*` appended — the freshly wired control (a) warns instead, and (c)'s
+//       warning names the wrong rule;
+//   (d) the by-hand remedy replaced with the `init` one — the warning no longer says "by hand";
+//   (e) the gate on the project file naming the invocation dropped — the deleted script warns.
+test('(a) a freshly wired fence passes task-offer-rules, naming its opt-out script', async (t) => {
+  const dir = await wiredFixture(t);
+  assert.ok(
+    readFileSync(join(dir, CLAUDE_MD_FILE), 'utf8').includes(TASK_OFFER_CHECK_INVOCATION),
+    `${CLAUDE_MD_FILE} does not name ${TASK_OFFER_CHECK_INVOCATION}, so this case proves nothing`,
+  );
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor']);
+
+  assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+  assert.doesNotMatch(stderr, warnLine('task-offer-rules'));
+  const line = taskOfferRulesLine(stdout);
+  assert.ok(line.includes(TASK_OFFER_CHECK_INVOCATION), `the pass line does not name the script:\n${line}`);
+  assert.ok(line.includes(TASK_OFFER_CHECK_RULE), `the pass line does not name the allow rule:\n${line}`);
+});
+
+test('(b) a deleted fence opt-out script warns, naming its path and init, and leaves the exit status at 0', async (t) => {
+  const dir = await wiredFixture(t);
+  await rm(join(dir, TASK_OFFER_CHECK_FILE));
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor']);
+
+  assert.equal(status, 0, `doctor exited ${status} on a condition that only warns\n${stdout}\n${stderr}`);
+  const line = taskOfferRulesLine(stderr);
+  assert.match(line, warnLine('task-offer-rules'));
+  assert.ok(line.includes(join(dir, TASK_OFFER_CHECK_FILE)), `the warning does not name the script's path:\n${line}`);
+  assert.match(line, /autonomous-sdlc-harness init/);
+  assert.match(stdout, CLEAN_SUMMARY);
+});
+
+test('(c) a settings file without the fence allow rule warns, naming the exact rule', async (t) => {
+  const dir = await wiredFixture(t);
+  setAllowList(dir, undefined);
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor']);
+
+  assert.equal(status, 0, `doctor exited ${status} on a condition that only warns\n${stdout}\n${stderr}`);
+  const line = taskOfferRulesLine(stderr);
+  assert.match(line, warnLine('task-offer-rules'));
+  assert.ok(line.includes(`\`${TASK_OFFER_CHECK_RULE}\``), `the warning does not name the exact rule:\n${line}`);
+  assert.match(line, /autonomous-sdlc-harness init/);
+});
+
+test('(d) an allow list holding only another entry warns and says to add the rule by hand', async (t) => {
+  const dir = await wiredFixture(t);
+  setAllowList(dir, ['Bash(git status)']);
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor']);
+
+  assert.equal(status, 0, `doctor exited ${status} on a condition that only warns\n${stdout}\n${stderr}`);
+  const line = taskOfferRulesLine(stderr);
+  assert.match(line, warnLine('task-offer-rules'));
+  assert.ok(line.includes(`\`${TASK_OFFER_CHECK_RULE}\``), `the warning does not name the exact rule:\n${line}`);
+  assert.match(line, /by hand/);
+});
+
+test('(e) a fence that does not name the opt-out script passes with the script deleted, as before it existed', async (t) => {
+  const dir = await wiredFixture(t);
+  const path = join(dir, CLAUDE_MD_FILE);
+  const projectFile = readFileSync(path, 'utf8');
+  assert.ok(projectFile.includes(TASK_OFFER_CHECK_INVOCATION), `${CLAUDE_MD_FILE} does not name the invocation, so this case proves nothing`);
+  writeFileSync(path, projectFile.split(TASK_OFFER_CHECK_INVOCATION).join('test ! -e .claude/harness-no-offer'));
+  await rm(join(dir, TASK_OFFER_CHECK_FILE));
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor']);
+
+  assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+  assert.match(stdout, passLine('task-offer-rules'));
+  assert.doesNotMatch(stderr, warnLine('task-offer-rules'));
+});
+
+/**
  * The layer-profile contract literals, spelled here for the reason the section above spells its
  * own: a fixture edited through the constant the check reads would assert only that one module
  * agrees with itself. These are the values an adopter's file actually carries.
@@ -4742,7 +4911,7 @@ function reportLines(output) {
  *
  * **The pasteable lines are asserted verbatim, as whole lines**, because that is the entire value of
  * the check: an entry whose form drifted by one character matches nothing at run time and costs a
- * silent stall, and a substring assertion would go on passing through exactly that drift.
+ * refusal, and a substring assertion would go on passing through exactly that drift.
  */
 test('the plugin-permissions check prints the entries to paste, and never above a warning', { concurrency: CASE_CONCURRENCY }, async (t) => {
   const subtests = [];
@@ -5115,6 +5284,21 @@ test('the plugin-permissions check prints the entries to paste, and never above 
 });
 
 /**
+ * A `--remote-job` run the case expects clean: exit 0 — or, where this host lacks a sandbox
+ * prerequisite, exit 1 with `sandbox-prerequisites` as its only `FAIL` line, since that check grades
+ * the host rather than the fixture.
+ */
+function assertRemoteJobClean(job) {
+  const failed = job.stderr.split('\n').filter((line) => /^!! FAIL\s/.test(line));
+  if (failLine('sandbox-prerequisites').test(job.stderr)) {
+    assert.equal(failed.length, 1, `a FAIL besides sandbox-prerequisites:\n${job.stdout}\n${job.stderr}`);
+    assert.equal(job.status, 1, `doctor --remote-job exited ${job.status}\n${job.stdout}\n${job.stderr}`);
+    return;
+  }
+  assert.equal(job.status, 0, `doctor --remote-job exited ${job.status}\n${job.stdout}\n${job.stderr}`);
+}
+
+/**
  * `doctor --remote-job`: the remote job's preflight, under which a profile that cannot work on the
  * runner is a `fail` — exit 1, so the job stops before it spends a session — where a default run warns.
  *
@@ -5134,10 +5318,15 @@ test('doctor --remote-job fails an unusable profile where a default run warns', 
     return { root, env: home.env };
   }
 
-  /** Add directories to the generated profile's `permissions.additionalDirectories`. */
+  /**
+   * Add directories to the generated profile's `permissions.additionalDirectories`, write-protected as
+   * `init --plugin-root-entries` writes them, so `profile-write-protection` passes the edit.
+   */
   function grantDirectories(dir, directories) {
     editJson(dir, PROFILE_FILE, (profile) => {
       profile.permissions.additionalDirectories = [...(profile.permissions.additionalDirectories ?? []), ...directories];
+      profile.sandbox.filesystem.denyWrite.push(...directories);
+      profile.permissions.deny.push(...directories.map((root) => `Edit(/${root}/**)`));
     });
   }
 
@@ -5212,7 +5401,7 @@ test('doctor --remote-job fails an unusable profile where a default run warns', 
 
     const job = await runCli(dir, ['doctor', '--remote-job'], env);
 
-    assert.equal(job.status, 0, `doctor --remote-job exited ${job.status}\n${job.stdout}\n${job.stderr}`);
+    assertRemoteJobClean(job);
     assert.match(job.stdout, passLine('plugin-permissions'));
     assert.match(detailLine(job.stdout, passLine('plugin-permissions')), /additionalDirectories/);
     assert.match(job.stdout, passLine('profile-paths'));
@@ -5227,7 +5416,7 @@ test('doctor --remote-job fails an unusable profile where a default run warns', 
 
     // The ignored, untracked profile `init` leaves is the passing state, and the job is otherwise clean.
     const untracked = await runCli(dir, ['doctor', '--remote-job'], env);
-    assert.equal(untracked.status, 0, `doctor --remote-job exited ${untracked.status}\n${untracked.stdout}\n${untracked.stderr}`);
+    assertRemoteJobClean(untracked);
     assert.match(untracked.stdout, passLine('profile-tracked'));
 
     await runGit(dir, ['add', '--force', '--', PROFILE_FILE]);
@@ -5394,15 +5583,16 @@ const PYTHON_INSTALL_REMEDY_TEXT = 'install the package with its `models` extra'
 const COMPOSE_DEFAULT_DATABASE_URL = 'postgresql://harness:harness@127.0.0.1:5432/docs_retrieval';
 const DATABASE_URL_VARIABLE = 'HARNESS_DOCS_RETRIEVAL_DATABASE_URL';
 
-/** The ids `CHECKS` held before `docs.retrievalBackend` existed, frozen so an added id is visible. */
+/** The ids `CHECKS` holds other than the Python backend's, frozen so an added id is visible. */
 const PRE_BRANCH_CHECK_IDS = Object.freeze([
   'git', 'jj-repository', 'default-branch', 'remote', 'base-freshness', 'pre-push-guard', 'protected-set', 'jq',
   'worktrees', 'daemon-backend', 'run-watcher', 'notifications', 'repo-registry', 'machine-footprint', 'daemon-path',
   'remote-execution', 'remote-github', 'forge', 'config', 'command-wrappers', 'command-permissions', 'command-resolves',
-  'state-dir', 'artifact-tree', 'setup-analysis', 'task-offer-rules', 'layer-profile', 'layer-drift', 'ignore-rules',
-  'plugin-wiring', 'permission-profile', 'profile-paths', 'profile-tracked', 'profile-browser-deny',
-  'profile-deny-floor', 'plugin-permissions', 'browser-wiring', 'retrieval-dependencies', 'retrieval-model-cache',
-  'retrieval-index',
+  'state-dir', 'artifact-tree', 'setup-analysis', 'task-offer-rules', 'layer-profile', 'layer-drift', 'tree-guards',
+  'ignore-rules', 'plugin-wiring', 'permission-profile', 'profile-paths', 'profile-tracked', 'profile-browser-deny',
+  'profile-deny-floor', 'profile-main-anchor', 'profile-sandbox', 'profile-write-protection', 'sandbox-prerequisites', 'keep-awake', 'plugin-permissions',
+  'browser-wiring',
+  'retrieval-dependencies', 'retrieval-model-cache', 'retrieval-index',
 ]);
 
 /** A real `harness-docs-retrieval` on a directory the check always searches, which no case may run. */

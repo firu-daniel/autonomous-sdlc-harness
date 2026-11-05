@@ -1,0 +1,11 @@
+{"type":"system","subtype":"init","session_id":"sp-t2-run-form","cwd":"@FIXTURE_ROOT@"}
+{"type":"user","timestamp":"2026-01-01T00:00:00.000Z","message":{"role":"user","content":"Run the commands."}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:01.000Z","message":{"id":"m1","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"bash scripts/run-test-suite.sh sbx_probe_t2"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":[{"type":"text","text":"pending"}]}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:03.000Z","message":{"id":"m2","content":[{"type":"tool_use","id":"tu2","name":"Bash","input":{"command":"bash scripts/run-test-suite.sh --wait sbx_probe_t2"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:04.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu2","content":[{"type":"text","text":"pending"}]}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:05.000Z","message":{"id":"m3","content":[{"type":"tool_use","id":"tu3","name":"Bash","input":{"command":"bash scripts/run-test-suite.sh --wait sbx_probe_t2"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:06.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu3","content":[{"type":"text","text":"pending"}]}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:07.000Z","message":{"id":"m4","content":[{"type":"tool_use","id":"tu4","name":"Bash","input":{"command":"bash scripts/run-test-suite.sh --wait sbx_probe_t2"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:08.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu4","content":[{"type":"text","text":"pass"}]}]}}
+{"type":"result","subtype":"success","timestamp":"2026-01-01T00:00:09.000Z","duration_ms":9000,"permission_denials":[]}

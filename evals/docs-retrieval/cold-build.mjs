@@ -23,7 +23,7 @@
  * **Both size figures, because the two answers differ.** The apparent size is the sum of `size`, which
  * is what a copy of the directory transfers; the allocated size is the sum of `blocks * 512`, which is
  * what the filesystem spends. Both are walked in process: shelling out to `du` has no entry in
- * `.claude/settings.autonomous.json` and stalls an unattended run, and the recursive removal is in
+ * `.claude/settings.autonomous.json` and is refused in an unattended run, and the recursive removal is in
  * process because `.claude/context/conventions.md` → `## Shell assets` requires it of every teardown.
  *
  * It is driven by a launcher under the run's scratch directory (`bash scripts/scratch-run.sh`), one

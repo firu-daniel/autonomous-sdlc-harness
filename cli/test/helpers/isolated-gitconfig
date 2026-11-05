@@ -1,0 +1,3 @@
+# The per-user git configuration every fixture subprocess reads (fixture.mjs -> ISOLATED_ENV): it makes git refuse to guess a commit identity, on every host.
+[user]
+	useConfigOnly = true

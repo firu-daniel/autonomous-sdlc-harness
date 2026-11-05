@@ -28,7 +28,7 @@
  * in-process index through `buildIndex`, and both sessions are scored by the same `scoreArm`.
  *
  * Nothing here is reached by a bare `node evals/…` tool call, which matches no entry in the
- * unattended permission profile and stalls the run. The two routes are
+ * unattended permission profile and is refused in an unattended run. The two routes are
  * `bash scripts/scratch-run.sh <file under harness-runs/scratch/>` and a command inside
  * `scripts/run-gates.sh`, which is why {@link main} exists.
  */

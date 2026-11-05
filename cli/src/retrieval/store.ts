@@ -4,14 +4,18 @@
  *
  * **The rule this module exists to enforce: every value reaches SQL as a bound parameter, and the SQL
  * stays plain Postgres plus the `vector` and `pg_textsearch` extensions.** A search query comes from an
- * agent and is untrusted, so no input is ever spliced into a statement; the two spliced tokens are the
- * `vector(<dimensions>)` column type, taken from a checked integer, and the constant index name inside
- * `to_bm25query($1, 'chunks_bm25')`. Keeping the dialect plain is what would let a real Postgres
- * implement {@link DocStore} by connection string; this module builds no such implementation.
+ * agent and is untrusted, so no input is ever spliced into a statement; the four spliced tokens are the
+ * `vector(<dimensions>)` column type, taken from a checked integer, the constant index name inside
+ * `to_bm25query($1, 'chunks_bm25')`, the extension name in each `ALTER EXTENSION <name> UPDATE`,
+ * taken from the constant record {@link EXTENSION_UPDATE_STATEMENTS}, and the constant index or table
+ * name in each {@link END_STATE_STATEMENTS} entry. Keeping the dialect plain is what
+ * would let a real Postgres implement {@link DocStore} by connection string; this module builds no such
+ * implementation.
  *
  * **The shapes the lexical plan's cost depends on are exported, and a caller composes them rather than
  * retyping them:** {@link CHUNKS_TABLE}, {@link BM25_INDEX}, {@link BM25_INDEX_DEFINITION},
- * {@link BM25_ORDER_CLAUSE}, {@link CHUNK_TEXT_COLUMN} and {@link chunkEmbeddingColumn}. They exist for
+ * {@link BM25_ORDER_CLAUSE}, {@link CHUNK_TEXT_COLUMN} and {@link chunkEmbeddingColumn}, and the
+ * statement {@link LEXICAL_SEARCH_STATEMENT} an `EXPLAIN` of the arm is composed from. They exist for
  * `cli/test/docs-retrieval-store.test.mjs`, which measures the row count at which the planner chooses
  * the BM25 index scan and must build that index *after* the rows — which this module's open path cannot
  * do. The statements below are issued from those same constants, so there is no second copy inside the
@@ -55,6 +59,19 @@ export const BM25_INDEX_DEFINITION = `ON ${CHUNKS_TABLE} USING bm25 (text) WITH 
 /** The lexical arm's ordering clause; `$1` is the bound query text. */
 export const BM25_ORDER_CLAUSE = `text <@> to_bm25query($1, '${BM25_INDEX}')`;
 
+/**
+ * The lexical arm's statement: `id` and the ordering expression's value as `score`, so the caller can
+ * drop the score-`0` rows a plan other than the index scan returns. `$1` is the query, `$2` the limit.
+ */
+export const LEXICAL_SEARCH_STATEMENT = `SELECT id, ${BM25_ORDER_CLAUSE} AS score FROM ${CHUNKS_TABLE} ORDER BY ${BM25_ORDER_CLAUSE} LIMIT $2`;
+
+/**
+ * The statements that bring every index to the state a rebuild over the stored rows leaves, issued in
+ * order by {@link DocStore.rebuildIndexes}. No vector-index statement is among them. Exported for the
+ * Python port's parity bridge, which reads it.
+ */
+export const END_STATE_STATEMENTS: readonly string[] = Object.freeze([`REINDEX INDEX ${BM25_INDEX}`]);
+
 /** The BM25-indexed column's declaration. */
 export const CHUNK_TEXT_COLUMN = 'text text NOT NULL';
 
@@ -95,17 +112,24 @@ export interface DocStore {
   /** Removes every chunk; meta is kept. */
   clear(): Promise<void>;
   /**
-   * The best-scoring chunks for the query, lower-is-better score first, up to `limit`.
-   * **Not necessarily only matching chunks:** the filter to matching rows belongs to the BM25 index
-   * scan rather than to the `<@>` operator, so a plan that falls back to a sequential scan — which a
-   * small corpus does — returns non-matching rows at score `0` after the matches. Measured in
-   * `docs/retrieval.md` → `## Measured, and how`, item (b), and open under `## Still open`.
+   * The best-scoring chunks for the query, lower-is-better score first, up to `limit`, and **only
+   * chunks carrying a query term, on every plan.** The BM25 index scan filters to matching rows, but
+   * the `<@>` operator does not, so the `Seq Scan` a small corpus takes after a `REINDEX` returns
+   * non-matching rows at score `0` (`docs/retrieval.md` → `## Measured, and how`, item (b)). The
+   * filter runs over the rows the plan returns rather than as a `WHERE`, which would add a `Filter` to
+   * the scan, so {@link LEXICAL_SEARCH_STATEMENT} keeps the plan the crossover was measured on. A row at
+   * score `0` carries no lexical evidence, so the result can be shorter than `limit`.
    */
   lexicalSearch(query: string, limit: number): Promise<readonly RankedId[]>;
   /** Nearest chunks by cosine distance, best first. */
   vectorSearch(embedding: readonly number[], limit: number): Promise<readonly RankedId[]>;
   /** The chunks with these ids, in the order the ids were given; an unknown id is skipped. */
   getChunks(ids: readonly number[]): Promise<readonly StoredChunk[]>;
+  /**
+   * Brings every index to the state a rebuild over the stored rows leaves, by issuing
+   * {@link END_STATE_STATEMENTS} in order, outside any transaction. The refresh decides when to call it.
+   */
+  rebuildIndexes(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -119,6 +143,30 @@ const DIMENSIONS_META_KEY = 'dimensions';
 /** The meta key refresh compares against the embedder's id; cleared when the column is recreated. */
 export const EMBEDDER_META_KEY = 'embedder';
 
+/** The meta key recording whether the indexes are in the end state; cleared when the column is recreated. */
+export const INDEX_STATE_META_KEY = 'index_state';
+
+/** {@link INDEX_STATE_META_KEY}'s value from before a refresh's first write until its {@link DocStore.rebuildIndexes} returns. */
+export const INDEX_STATE_PENDING = 'pending';
+
+/** {@link INDEX_STATE_META_KEY}'s value once {@link DocStore.rebuildIndexes} has returned over the stored rows. */
+export const INDEX_STATE_REBUILT = 'rebuilt';
+
+/** Each extension the store creates, to the statement that moves an older installed version to the library's. */
+export const EXTENSION_UPDATE_STATEMENTS: Readonly<Record<'vector' | 'pg_textsearch', string>> = Object.freeze({
+  vector: 'ALTER EXTENSION vector UPDATE',
+  pg_textsearch: 'ALTER EXTENSION pg_textsearch UPDATE',
+});
+
+/**
+ * The store's extensions whose installed `extversion` differs from the loaded library's
+ * `default_version`, by name — the ones {@link EXTENSION_UPDATE_STATEMENTS} must be issued for. It
+ * compares the two catalogs rather than naming a version, so a package bump needs no edit here.
+ */
+export const STALE_EXTENSIONS_QUERY =
+  'SELECT e.extname FROM pg_extension e JOIN pg_available_extensions a ON a.name = e.extname ' +
+  "WHERE e.extname IN ('vector', 'pg_textsearch') AND e.extversion IS DISTINCT FROM a.default_version ORDER BY e.extname";
+
 /** A vector as pgvector's text input form, bound as `$n::vector`. */
 function vectorLiteral(embedding: readonly number[]): string {
   return `[${embedding.map((value) => String(value)).join(',')}]`;
@@ -127,8 +175,13 @@ function vectorLiteral(embedding: readonly number[]): string {
 /**
  * Opens the index. `dataDir: undefined` is an in-memory store; a path is created and persisted into.
  *
- * An existing index built at another width has its `chunks` table dropped and its embedder record
- * removed, so the next refresh rebuilds rather than failing on the column type.
+ * An existing index built at another width has its `chunks` table dropped and its embedder and
+ * index-state records removed, so the next refresh rebuilds rather than failing on the column type, and
+ * the recreated table's indexes are not taken to be in the end state.
+ *
+ * An index an older `vector` or `pg_textsearch` built is brought to the loaded libraries' versions by
+ * issuing {@link EXTENSION_UPDATE_STATEMENTS}' entry for each extension {@link STALE_EXTENSIONS_QUERY}
+ * lists, before any other statement reads it, and nothing when it lists none.
  */
 export async function openPgliteStore(options: { dataDir: string | undefined; dimensions: number }): Promise<DocStore> {
   const { dataDir, dimensions } = options;
@@ -148,6 +201,8 @@ export async function openPgliteStore(options: { dataDir: string | undefined; di
   const db = await PGlite.create({ dataDir, extensions: { vector, pg_textsearch } });
 
   await db.exec('CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_textsearch;');
+  const stale = await db.query<{ extname: keyof typeof EXTENSION_UPDATE_STATEMENTS }>(STALE_EXTENSIONS_QUERY);
+  for (const { extname } of stale.rows) await db.exec(EXTENSION_UPDATE_STATEMENTS[extname]);
   await db.exec('CREATE TABLE IF NOT EXISTS meta (key text PRIMARY KEY, value text NOT NULL)');
 
   const readMeta = async (key: string): Promise<string | undefined> => {
@@ -164,7 +219,7 @@ export async function openPgliteStore(options: { dataDir: string | undefined; di
   const width = String(dimensions);
   if ((await readMeta(DIMENSIONS_META_KEY)) !== width) {
     await db.exec(`DROP TABLE IF EXISTS ${CHUNKS_TABLE}`);
-    await db.query('DELETE FROM meta WHERE key = $1', [EMBEDDER_META_KEY]);
+    await db.query('DELETE FROM meta WHERE key = ANY($1::text[])', [[EMBEDDER_META_KEY, INDEX_STATE_META_KEY]]);
   }
   await db.exec(
     `CREATE TABLE IF NOT EXISTS ${CHUNKS_TABLE} (id serial PRIMARY KEY, key text UNIQUE NOT NULL, path text NOT NULL, ` +
@@ -218,14 +273,10 @@ export async function openPgliteStore(options: { dataDir: string | undefined; di
 
     async lexicalSearch(query, limit) {
       if (query.trim() === '') return [];
-      // pg_textsearch scores lower-is-better; a non-matching row scores 0, so matches sort first.
-      // Filtering to matching rows alone is the index scan's behaviour, not the operator's — see the
-      // interface comment above.
-      const result = await db.query<{ id: number }>(
-        `SELECT id FROM ${CHUNKS_TABLE} ORDER BY ${BM25_ORDER_CLAUSE} LIMIT $2`,
-        [query, limit],
-      );
-      return ranked(result.rows);
+      // pg_textsearch scores lower-is-better and a non-matching row scores exactly 0. Only the index
+      // scan leaves those rows out, so they are dropped here, before ranking keeps ranks contiguous.
+      const result = await db.query<{ id: number; score: number }>(LEXICAL_SEARCH_STATEMENT, [query, limit]);
+      return ranked(result.rows.filter((row) => row.score !== 0));
     },
 
     async vectorSearch(embedding, limit) {
@@ -247,6 +298,10 @@ export async function openPgliteStore(options: { dataDir: string | undefined; di
         const row = byId.get(id);
         return row === undefined ? [] : [row];
       });
+    },
+
+    async rebuildIndexes() {
+      for (const statement of END_STATE_STATEMENTS) await db.exec(statement);
     },
 
     async close() {

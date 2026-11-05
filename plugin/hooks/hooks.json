@@ -29,6 +29,15 @@
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/allow-qa-credentials-read.sh\""
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/git-trust-file-guard.sh\""
+          }
+        ]
       }
     ]
   }

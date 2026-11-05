@@ -6,13 +6,27 @@
  * committed on `origin/<branch>`, and a refusal sends nothing.** A protected branch, a target other
  * than `github-actions` and a missing prompt file send nothing and push nothing; a branch cut that
  * fails sends no `workflow run`; a dispatch that fails still leaves the prompt commit on origin. And
- * **a start leaves no working copy and no local branch it created, on success or on any failure after
- * the cut, while one that existed before the cut is never touched.**
+ * **a start leaves no clone, no local branch, no `branch.<branch>` configuration section and no
+ * registry record it created, on success or on any failure after the cut, while a copy, branch,
+ * section or record that existed before the cut is never touched.**
  *
  * Each case drives a fixture `init` wired, with `execution.target` set and the adopted tree committed
  * and pushed to the fixture's bare `origin` as its default branch, so `create-worktree.sh` cuts a real
- * sibling working copy from it. `gh` is a recorder stub reached through `HARNESS_GH_CLI`, appending
- * each argument vector as one JSON line, as in `remote-run.test.mjs`. No case reaches the network.
+ * clone from it at the derived sibling path. A pre-existing copy at that path is a clone with its own
+ * registry record, made by the library's `hr_clone_create_var`; one legacy case plants a linked
+ * worktree there instead. `gh` is a recorder stub reached through `HARNESS_GH_CLI`, appending each
+ * argument vector as one JSON line, as in `remote-run.test.mjs`. No case reaches the network.
+ *
+ * RED ONCE — each mutation applied once to `cli/templates/scripts/remote-run.sh`, the file run, the
+ * failure observed, the mutation reverted:
+ * - (S1) `start_remove_copy`'s `hr_registry_drop` skipped → fails `the registry record of feat_x was
+ *   left behind`.
+ * - (S2) `start_remove_copy`'s `had_copy` / `had_record` tests dropped, so it removes whatever stands
+ *   at the derived path → fails on the pre-existing clone's `keep.txt`, which is gone.
+ * - (S3) `start_remove_copy`'s `config --remove-section "branch.$branch"` skipped → fails `the
+ *   branch.feat_x configuration section was left behind`.
+ * - (S4) `start_remove_copy`'s `hr_registry_restore` skipped, in the fixture's copy → fails `the registry record of feat_x
+ *   was not put back`.
  */
 
 import assert from 'node:assert/strict';
@@ -103,19 +117,34 @@ async function startFixture(t, target = 'github-actions') {
     originHas: async (branch) =>
       (await runBash(origin, ['-c', 'git show-ref --verify --quiet "refs/heads/$1"', '_', branch])).status === 0,
     git,
-    /** Neither the sibling copy, its `git worktree list` entry, nor `refs/heads/feat_x` remains. */
+    /** The registry file's bytes, or `null` when it does not exist. */
+    registry: () => (existsSync(join(dir, REGISTRY)) ? readFileSync(join(dir, REGISTRY), 'utf8') : null),
+    /** `hr_clone_create_var` for `feat_x`, cut at the default branch: a clone at the derived path, with its record. */
+    clone: async () => {
+      mkdirSync(join(dir, STATE_DIR, 'autonomous_logs'), { recursive: true });
+      const made = await runBash(dir, [
+        '-c',
+        '. "$1" || exit 99; hr_clone_create_var "$2" feat_x "$3" || { echo "$HR_CLONE_REFUSAL" >&2; exit 1; }',
+        '_', join(dir, INIT_SCRIPTS_DIR, 'lib', 'harness-run-lib.sh'), dir, `refs/heads/${config.defaultBranch}`,
+      ]);
+      assert.equal(made.status, 0, made.stderr);
+    },
+    /** No derived directory, no `refs/heads/feat_x`, no `branch.feat_x` section and no registry record of `feat_x` remains. */
     assertNothingLeft: async () => {
-      assert.equal(existsSync(worktree), false, 'the working copy was left behind');
+      assert.equal(existsSync(worktree), false, 'the clone was left behind');
       const ref = await runBash(dir, ['-c', 'git show-ref --verify --quiet refs/heads/feat_x']);
       assert.notEqual(ref.status, 0, 'the local branch feat_x was left behind');
-      assert.doesNotMatch((await runGit(dir, ['worktree', 'list'])).stdout, /-feat_x\b/);
+      const section = await runBash(dir, ['-c', "git config --get-regexp '^branch\\.feat_x\\.'"]);
+      assert.notEqual(section.status, 0, 'the branch.feat_x configuration section was left behind');
+      const registry = existsSync(join(dir, REGISTRY)) ? JSON.parse(readFileSync(join(dir, REGISTRY), 'utf8')) : null;
+      assert.equal(registry?.runs?.feat_x, undefined, 'the registry record of feat_x was left behind');
     },
   };
 }
 
 test('a start commits the prompt on origin/feat_x, then sends exactly one task dispatch', async (t) => {
   const f = await startFixture(t);
-  const registryBefore = existsSync(join(f.dir, REGISTRY)) ? readFileSync(join(f.dir, REGISTRY), 'utf8') : null;
+  const registryBefore = f.registry();
 
   const result = await f.start(['feat_x', '--prompt-file', f.prompt]);
   assert.equal(result.status, 0, result.stderr);
@@ -132,8 +161,7 @@ test('a start commits the prompt on origin/feat_x, then sends exactly one task d
   await f.assertNothingLeft();
 
   assert.deepEqual(f.calls(), [TASK_DISPATCH]);
-  const registryAfter = existsSync(join(f.dir, REGISTRY)) ? readFileSync(join(f.dir, REGISTRY), 'utf8') : null;
-  assert.equal(registryAfter, registryBefore, 'start wrote the registry');
+  assert.equal(f.registry(), registryBefore, 'start left the registry changed');
 });
 
 test('a relative --prompt-file resolves against the caller\'s directory', async (t) => {
@@ -199,7 +227,25 @@ test('a feat_x already on origin exits 4 and sends no workflow run', async (t) =
   await f.assertNothingLeft();
 });
 
-test('a refused start leaves a working copy that already stood at the copy\'s path untouched', async (t) => {
+test('a refused start leaves a live clone at the copy\'s path, its record and its branch untouched', async (t) => {
+  const f = await startFixture(t);
+  // A clone the registry records, so `hr_clone_remove_var` would delete it were the guard gone.
+  await f.clone();
+  writeFileSync(join(f.worktree, 'keep.txt'), 'not start\'s\n');
+  const registry = f.registry();
+  const tip = await f.git(f.dir, ['rev-parse', 'refs/heads/feat_x']);
+
+  const result = await f.start(['feat_x', '--prompt-file', f.prompt]);
+  assert.equal(result.status, 4, result.stderr);
+  assert.deepEqual(f.calls(), []);
+  assert.equal(readFileSync(join(f.worktree, 'keep.txt'), 'utf8'), 'not start\'s\n');
+  assert.equal(f.registry(), registry, 'the clone\'s registry record changed');
+  assert.equal(await f.git(f.dir, ['rev-parse', 'refs/heads/feat_x']), tip);
+  assert.equal(await f.git(f.worktree, ['rev-parse', 'refs/heads/feat_x']), tip);
+  assert.equal(await f.originHas('feat_x'), false);
+});
+
+test('a refused start leaves a legacy linked worktree at the copy\'s path untouched', async (t) => {
   const f = await startFixture(t);
   // A registered working tree, so `git worktree remove --force` would delete it were the guard gone.
   await runGit(f.dir, ['worktree', 'add', '--quiet', '--detach', f.worktree]);
@@ -211,6 +257,33 @@ test('a refused start leaves a working copy that already stood at the copy\'s pa
   assert.equal(readFileSync(join(f.worktree, 'keep.txt'), 'utf8'), 'not start\'s\n');
   assert.match((await runGit(f.dir, ['worktree', 'list'])).stdout, /-feat_x\b/);
   assert.equal(await f.originHas('feat_x'), false);
+});
+
+test('a start keeps a branch.feat_x configuration section that existed before the cut', async (t) => {
+  const f = await startFixture(t);
+  await runGit(f.dir, ['config', 'branch.feat_x.remote', 'origin']);
+  await runGit(f.dir, ['config', 'branch.feat_x.merge', 'refs/heads/feat_x']);
+
+  const result = await f.start(['feat_x', '--prompt-file', f.prompt]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(await f.git(f.dir, ['config', '--get', 'branch.feat_x.remote']), 'origin');
+  assert.equal(await f.git(f.dir, ['config', '--get', 'branch.feat_x.merge']), 'refs/heads/feat_x');
+});
+
+test('a start keeps a registry record of feat_x that existed before the cut, byte for byte', async (t) => {
+  const f = await startFixture(t);
+  // A record naming no live copy, so the cut rewrites it to name the clone and the cleanup must put it back.
+  const gone = join(f.dir, STATE_DIR, 'stub', 'no-such-copy');
+  mkdirSync(join(f.dir, STATE_DIR, 'autonomous_logs'), { recursive: true });
+  writeFileSync(join(f.dir, REGISTRY),
+    `${JSON.stringify({ runs: { feat_x: { branch: 'feat_x', status: 'completed', worktree: gone } } }, null, 2)}\n`);
+  const seeded = f.registry();
+
+  const result = await f.start(['feat_x', '--prompt-file', f.prompt]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(f.calls(), [TASK_DISPATCH]);
+  assert.equal(existsSync(f.worktree), false, 'the clone was left behind');
+  assert.equal(f.registry(), seeded, 'the registry record of feat_x was not put back');
 });
 
 test('a refused start leaves a local feat_x that existed before the cut untouched', async (t) => {

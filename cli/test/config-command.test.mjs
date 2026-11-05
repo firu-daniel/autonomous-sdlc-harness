@@ -23,8 +23,8 @@
  *    the structural check run over the result of the edit — so these tests exercise the same route an
  *    adopter's own mistake takes rather than a list that would have to be kept in step with it.
  *
- * **`execution.target` takes exactly `local` or `github-actions`, `execution.progressComments` only a
- * boolean, and nothing else under `execution` is accepted.** Every reader treats any other target as
+ * **`execution.target` takes exactly `local` or `github-actions`, `execution.progressComments` and
+ * `execution.keepAwake` only a boolean, and nothing else under `execution` is accepted.** Every reader treats any other target as
  * local, so a misspelt target is refused at `set` rather than stored as a remote setting that silently
  * keeps runs on this machine.
  */
@@ -351,6 +351,31 @@ test('execution.progressComments is reported when it is not a boolean, and accep
     assert.doesNotMatch(listed.stderr, /progressComments/, `${JSON.stringify(execution)} was reported`);
     await configOk(dir, ['get', 'defaultBranch']);
   }
+});
+
+test('execution.keepAwake is reported when it is not a boolean, accepted true or false, and set as a JSON boolean', async (t) => {
+  const dir = await wiredFixture(t);
+  const path = join(dir, CONFIG_FILE);
+  const wired = readJson(path);
+  const withExecution = (execution) => `${JSON.stringify({ ...wired, execution }, null, 2)}\n`;
+
+  writeFileSync(path, withExecution({ keepAwake: 'yes' }));
+  const { stderr } = await configOk(dir, ['list']);
+  assert.match(stderr, /execution\.keepAwake: must be true or false/);
+  const refused = await runCli(dir, ['config', 'get', 'defaultBranch']);
+  assert.equal(refused.status, 1, 'config get did not refuse a non-boolean execution.keepAwake');
+  assert.match(refused.stderr, /execution\.keepAwake/);
+
+  for (const execution of [{ keepAwake: false }, { keepAwake: true }]) {
+    writeFileSync(path, withExecution(execution));
+    const listed = await configOk(dir, ['list']);
+    assert.doesNotMatch(listed.stderr, /keepAwake/, `${JSON.stringify(execution)} was reported`);
+    await configOk(dir, ['get', 'defaultBranch']);
+  }
+
+  writeFileSync(path, `${JSON.stringify(wired, null, 2)}\n`);
+  await configOk(dir, ['set', 'execution.keepAwake', 'false']);
+  assert.equal(readJson(path).execution.keepAwake, false, 'execution.keepAwake was not stored as the boolean false');
 });
 
 test('set stores a legal value for a key init writes no line for', async (t) => {

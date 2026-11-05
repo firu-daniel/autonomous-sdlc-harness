@@ -2,12 +2,15 @@
  * The written watcher's inbox pass with `execution.target` `github-actions`: a drop is prepared as
  * today — working copy, artifact committed and pushed — and then handed to `remote-run.sh dispatch`
  * instead of spawned. Driven against a fixture whose own files are committed and pushed to a bare
- * `origin`, so `create-worktree.sh` cuts a real sibling working copy, with the agent CLI, the
+ * `origin`, so `create-worktree.sh` cuts a real sibling clone — a `.git` directory whose `alternates`
+ * names the main checkout's objects, its record's `copy_kind` `clone` — with the agent CLI, the
  * notifier and `gh` recorded.
  *
  * **The rule these tests exist to enforce: a remote drop reaches GitHub only once its artifact is on
- * `origin/<branch>`, and with the key absent the inbox pass is today's.** A failed push sends no
- * `workflow run` at all; the key-absent case launches the agent stub and sends nothing to `gh`.
+ * `origin/<branch>`, its copy is a clone, a task re-drop while that clone is live is refused by
+ * `create-worktree.sh`'s one-live-copy rule, and with the key absent the inbox pass is today's.** A
+ * failed push sends no `workflow run` at all; the key-absent case launches the agent stub and sends
+ * nothing to `gh`.
  *
  * The later cases seed a remote record as `launch_remote_run` leaves it and hold the watcher to
  * relaying nothing: the user's commands send pause, resume and answer to GitHub themselves, so a
@@ -17,7 +20,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { rm, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -78,6 +81,7 @@ async function createDispatchFixture(t, { target = 'github-actions', branch } = 
   await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
 
   const worktree = `${w.dir}-${w.branch}`;
+  const runLogPath = join(w.dir, STATE_DIR, 'autonomous_logs', `${w.branch}.log`);
   const origin = `${w.dir}-origin.git`;
   t.after(() => rm(worktree, { recursive: true, force: true }));
 
@@ -121,8 +125,23 @@ async function createDispatchFixture(t, { target = 'github-actions', branch } = 
     subject: (rev = 'HEAD') => git(worktree, ['log', '-1', '--format=%s', rev]),
     head: () => git(worktree, ['rev-parse', 'HEAD']),
     originTip: () => git(origin, ['rev-parse', `refs/heads/${w.branch}`]),
+    /** The branch's run log, where the watcher sends `create-worktree.sh`'s output. */
+    runLog: () => (existsSync(runLogPath) ? readFileSync(runLogPath, 'utf8') : ''),
     git,
   };
+}
+
+/** `create-worktree.sh`'s one-live-copy refusal for `feat_x`, naming the clone the first drop cut. */
+const LIVE_COPY_REFUSAL = /create-worktree\.sh: branch 'feat_x' is already checked out at \S*-feat_x — refusing/;
+
+/**
+ * The cut copy is a clone: a `.git` directory whose `alternates` names the main checkout's object
+ * store, recorded with `copy_kind` `clone`.
+ */
+function assertClone(f) {
+  assert.ok(lstatSync(join(f.worktree, '.git')).isDirectory(), `${f.worktree}/.git is not a directory`);
+  assert.equal(readFileSync(join(f.worktree, '.git', 'objects', 'info', 'alternates'), 'utf8'), `${join(f.dir, '.git', 'objects')}\n`);
+  assert.equal(f.record().copy_kind, 'clone');
 }
 
 const failures = (f) => f.notifications().filter((n) => n.event === 'failed');
@@ -137,6 +156,7 @@ test('a remote task drop is committed, pushed and dispatched, never spawned', as
   assert.equal(await f.subject(), 'chore: add task prompt for feat_x');
   assert.equal(await f.originTip(), await f.head(), 'the prompt commit is not on origin/feat_x');
   assert.deepEqual(f.workflowRuns(), [taskDispatch('feat_x', 'task')]);
+  assertClone(f);
 
   const record = f.record();
   assert.equal(record.execution, 'github-actions');
@@ -201,8 +221,55 @@ test('a push origin refuses blocks the dispatch', async (t) => {
   assert.deepEqual(f.prompts(), []);
 });
 
-// A task or docs re-drop never reaches the placement: `create-worktree.sh` refuses the branch the first
-// drop cut. A review re-drop reuses the working copy, so it is where an identical re-drop is pushed.
+// A task or docs re-drop never reaches the placement: the first drop's clone is a live copy of the
+// branch, so `create-worktree.sh` refuses it under the one-live-copy rule. A review re-drop reuses
+// the working copy, so it is where an identical re-drop is pushed (the next case).
+test('a task re-drop is refused by the one-live-copy rule, and proceeds once the copy and branch are gone', async (t) => {
+  const f = await createDispatchFixture(t);
+  if (f === null) return;
+
+  await f.drop('feat_x_task_prompt.md', 'do the thing\n');
+  await f.tick();
+  assertClone(f);
+  await f.patchRecord({ status: 'completed' });
+  const committed = await f.head();
+
+  await t.test('with the clone in place, create-worktree.sh refuses it as a live copy', async () => {
+    const from = f.runLog().length;
+    await f.drop('feat_x_task_prompt.md', 'do the thing\n');
+    await f.tick();
+    assert.match(f.runLog().slice(from), LIVE_COPY_REFUSAL);
+    assert.equal(f.record().status, 'failed');
+    assert.equal(await f.head(), committed, 'the re-drop reached the placement');
+    assert.deepEqual(f.workflowRuns(), [taskDispatch('feat_x', 'task')]);
+  });
+
+  await t.test('with the clone removed, the refusal is no longer the live-copy one', async () => {
+    await rm(f.worktree, { recursive: true, force: true });
+    const from = f.runLog().length;
+    await f.drop('feat_x_task_prompt.md', 'do the thing\n');
+    await f.tick();
+    const log = f.runLog().slice(from);
+    assert.doesNotMatch(log, LIVE_COPY_REFUSAL);
+    assert.match(log, /create-worktree\.sh: a local branch 'feat_x' already exists in \S+ — refusing/);
+    assert.deepEqual(f.workflowRuns(), [taskDispatch('feat_x', 'task')]);
+  });
+
+  await t.test('with the branch also gone in the main checkout and on origin, the drop is cut, pushed and dispatched', async () => {
+    // A stale `refs/remotes/origin/feat_x` would reach the new clone and fail its mirror sync-out.
+    await runGit(f.dir, ['branch', '--quiet', '-D', 'feat_x']);
+    await runGit(f.dir, ['update-ref', '-d', 'refs/remotes/origin/feat_x']);
+    await runGit(f.origin, ['update-ref', '-d', 'refs/heads/feat_x']);
+    await f.drop('feat_x_task_prompt.md', 'do the thing\n');
+    await f.tick();
+    assertClone(f);
+    assert.equal(await f.subject(), 'chore: add task prompt for feat_x');
+    assert.equal(await f.originTip(), await f.head(), 'the prompt commit is not on origin/feat_x');
+    assert.deepEqual(f.workflowRuns(), [taskDispatch('feat_x', 'task'), taskDispatch('feat_x', 'task')]);
+    assert.equal(f.record().status, 'running');
+  });
+});
+
 test('an identical re-drop after a refused push skips the commit, lands the push and dispatches once', async (t) => {
   const f = await createDispatchFixture(t);
   if (f === null) return;
@@ -295,7 +362,9 @@ test('with the key absent the same drop launches the agent and sends nothing to 
   assert.equal(record.status, 'completed');
   assert.equal(record.engine, 'task');
   assert.equal(record.worktree, f.worktree);
-  assert.match(String(record.pid), /^\d+$/);
+  assertClone(f);
+  // A completed run drops its pid, unless the session ended before spawn_engine's pid write landed.
+  if (record.pid !== '') assert.throws(() => process.kill(Number(record.pid), 0), { code: 'ESRCH' });
   assert.equal('execution' in record, false);
   assert.equal('remote_dispatched_at' in record, false);
   const launched = f.notifications().filter((n) => n.event === 'launched');
@@ -314,6 +383,7 @@ test('with the key absent a drop routes through the library: task engine on its 
   const record = f.record();
   assert.equal(record.engine, 'task');
   assert.equal(record.worktree, f.worktree);
+  assertClone(f);
   assert.equal(await f.subject(), 'chore: add task prompt for feat_x_review');
 
   assert.equal(f.inInbox('notes.md'), false, 'the unroutable drop was left in the inbox');
