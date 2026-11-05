@@ -4853,8 +4853,10 @@ process_inbox_file() {
   # with `failed`. It judges only a fresh LOCAL launch: the resume passes, job
   # mode and a remote drop are left to the run profile's `failIfUnavailable`, and
   # the remote job is refused by its own `doctor --remote-job` preflight. It
-  # refuses only on a definite missing piece; an `uncertain` AppArmor answer
-  # never refuses, and the library's probe does not read AppArmor at all. A taken
+  # refuses on a definite missing piece, and on Linux and WSL2 when bwrap's
+  # nested user-namespace check fails; an `uncertain` AppArmor answer never
+  # refuses, and the probe reads one AppArmor path, `bwrap-userns-restrict`'s
+  # presence, only to word the refusal. A taken
   # `sandbox.optOut`, read from the main checkout only, exempts the drop. The
   # prerequisite table is owned by cli/src/doctor/sandboxPrerequisites.ts and
   # reaches this script through the library's mirror
