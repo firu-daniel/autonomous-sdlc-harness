@@ -4,9 +4,11 @@
  *
  * **The rule this suite enforces: a row is graded on its named log line, artifact or ref; a step
  * that did not run is `not run`, never a pass; an expired log or artifact is `expired`, never an
- * absence or a pass; every hand row prints `not run` with its note; and the exit status is 4 when a
- * line printed `fail`, 0 otherwise.** A plain `grade` also prints FR1–FR7 `not run` with
- * `needs --full-run <branch>`, which never counts as a fail.
+ * absence or a pass; every `hand` row prints `not run` with its note, and every `source` row prints
+ * one `source` line with its note; RJ2's refusal at the job-surface step is its `pass`; SB2's
+ * `pause-note` arm is graded on the bundle's skip line and contents, never on the session's call;
+ * and the exit status is 4 when a line printed `fail`, 0 otherwise.** A plain `grade` also prints
+ * FR1–FR7 `not run` with `needs --full-run <branch>`, which never counts as a fail.
  *
  * THE CANNED ANSWERS. The state file is written directly, one `runs[]` entry per arm. The `gh` stub
  * (Task 10's `ghStub`) answers each run's `run view <id> --repo <slug> --json status,conclusion,jobs`,
@@ -16,14 +18,16 @@
  *
  * Every log string a canned answer carries is read at test time out of the shipped file that prints
  * it, never retyped, wherever a fixed substring can be extracted:
- * - `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_remote_copy_tree`: SB2's
- *   `remote state bundle: skipped ` prefix and ` is a symbolic link` suffix.
+ * - `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_remote_copy_tree`: the
+ *   `remote state bundle: skipped ` prefix and ` is a symbolic link` suffix of both SB2 arms' skip
+ *   lines, the `pause-note` arm's around `<root>/<stateDir>/PAUSE_PROGRESS.md`.
  * - `cli/templates/scripts/remote-run.sh` → `status_from_github`: its first line and its
- *   `printf '  state: %s\n'` format, for the JS1 `status` stub; `save_link_free`: the
- *   `remote-run.sh: save: skipped ` form SB2 must not accept. No case cans `verb_restore`'s line: the
- *   SB2 next job is absent throughout, which the grader leaves `not run` beside the planted arm.
- * - `cli/templates/scripts/autonomous-watcher.sh` → `log`'s `[watcher]` tag, `spawn_refuse`'s
- *   `not launching '<b>': `, `run_job`'s `job: launching run for '<b>'`, and `check_stalled_runs`'s
+ *   `printf '  state: %s\n'` format, for the JS1 and RJ2 `status` stub; `save_link_free`: the
+ *   `remote-run.sh: save: skipped ` form SB2's `clarifications` arm must not accept. No case cans
+ *   `verb_restore`'s line: the SB2 next job is absent throughout, which the grader leaves `not run`
+ *   beside the planted arm.
+ * - `cli/templates/scripts/autonomous-watcher.sh` → `log`'s `[watcher]` tag, `run_job`'s
+ *   `job: launching run for '<b>'`, and `check_stalled_runs`'s
  *   `-> reset to the last commit and resume (restart #`, `-> failed (` and the reason
  *   `the branch's own commits change a job surface, or that could not be checked`.
  * - `cli/templates/github/workflows/harness-run.yml`: the `run` job's step names, and the refusal
@@ -91,11 +95,6 @@ const [SAVE_SKIP_PREFIX, SAVE_SKIP_SUFFIX] = extract(
 
 const watcher = source(WATCHER);
 const [WATCHER_TAG] = extract(watcher, /^log\(\) \{ printf '%s (\[watcher\]) %s\\n'/m, 'log() format');
-const [NOT_LAUNCHING_OPEN, NOT_LAUNCHING_CLOSE] = extract(
-  fnBody(watcher, 'spawn_refuse', WATCHER),
-  /log "(not launching ')\$1(': )\$2"/,
-  'spawn_refuse line',
-);
 const [LAUNCHING_OPEN] = extract(fnBody(watcher, 'run_job', WATCHER), /log "(job: launching run for ')\$branch' \(engine=/, 'run_job launch line');
 const stalled = fnBody(watcher, 'check_stalled_runs', WATCHER);
 const [WATCHDOG_OPEN, RESET] = extract(
@@ -174,15 +173,15 @@ function logFor(view, extra = []) {
  * @property {'none' | 'expired' | Record<string, string | { link: string }>} artifact a tree is present
  */
 
-function js1Arm(arm, id, { refuse = 'failure', config, status = 'completed' } = {}) {
-  const path = arm === 'settings' ? '.claude/settings.json' : 'scripts/remote-run.sh';
+/** A run refused at the refusal step naming `path`: every later step skipped, no artifact. */
+function refusedRun(row, arm, id, path, { refuse = 'failure', config, status = 'completed' } = {}) {
   const at = RUN_STEPS.indexOf(STEP.refuse);
   const overrides = Object.fromEntries(RUN_STEPS.slice(at + 1).map((n) => [n, 'skipped']));
   overrides[STEP.refuse] = refuse;
   if (config !== undefined) overrides[STEP.config] = config;
   const view = { status, conclusion: status === 'completed' ? 'failure' : null, steps: steps(overrides) };
   return {
-    row: 'JS1',
+    row,
     arm,
     id,
     view,
@@ -196,6 +195,7 @@ function js1Arm(arm, id, { refuse = 'failure', config, status = 'completed' } = 
   };
 }
 
+const js1Arm = (arm, id, opts) => refusedRun('JS1', arm, id, arm === 'settings' ? '.claude/settings.json' : 'scripts/remote-run.sh', opts);
 const js1 = (settings = {}, remote = {}) => [js1Arm('settings', 101, settings), js1Arm('remote-run', 102, remote)];
 
 function js4Arm(arm, id, extra = []) {
@@ -205,21 +205,10 @@ function js4Arm(arm, id, extra = []) {
 
 const MARKER_LINES = [`${JS4_MARKER} pid=2101 cwd=/home/runner/work/gate12/gate12`, `${JS4_MARKER} pid=2117 cwd=/home/runner/work/gate12/gate12/cli`];
 
-function rj2Run({ refuse = 'success', artifact = { 'status.json': '{"status":"failed"}\n' } } = {}) {
-  const b = branchOf('RJ2', 'profile');
-  const view = { status: 'completed', conclusion: 'success', steps: steps({ [STEP.refuse]: refuse }) };
-  return {
-    row: 'RJ2',
-    arm: 'profile',
-    id: 401,
-    view,
-    log: logFor(view, [
-      [STEP.harness, watcherLine(`${LAUNCHING_OPEN}${b}' (engine=task) in /home/runner/work/gate12/gate12 (log: /tmp/run.log)`)],
-      [STEP.harness, watcherLine(`${NOT_LAUNCHING_OPEN}${b}${NOT_LAUNCHING_CLOSE}the launch check refused the profile`)],
-    ]),
-    artifact,
-  };
-}
+const RJ2_PROFILE = '.claude/settings.autonomous.json';
+const rj2Run = (opts) => refusedRun('RJ2', 'profile', 401, RJ2_PROFILE, opts);
+
+const skipLine = (path) => `${SKIP_PREFIX}${path}: ${path}${SKIP_SUFFIX}`;
 
 const SB2_BRANCH = branchOf('SB2', 'clarifications');
 const SB2_LINK = `${RUNNER_STATE}/clarifications/${SB2_BRANCH}/gate12-link.md`;
@@ -229,7 +218,7 @@ const SB2_TREE = {
   [`clarifications/${SB2_BRANCH}/question_1.md`]: 'a question\n',
 };
 
-function sb2Run({ save = [`${SKIP_PREFIX}${SB2_LINK}: ${SB2_LINK}${SKIP_SUFFIX}`], log, artifact = SB2_TREE } = {}) {
+function sb2Run({ save = [skipLine(SB2_LINK)], log, artifact = SB2_TREE } = {}) {
   const view = { status: 'completed', conclusion: 'success', steps: steps() };
   return {
     row: 'SB2',
@@ -239,6 +228,16 @@ function sb2Run({ save = [`${SKIP_PREFIX}${SB2_LINK}: ${SB2_LINK}${SKIP_SUFFIX}`
     log: log ?? logFor(view, save.map((text) => [STEP.save, text])),
     artifact,
   };
+}
+
+const PAUSE_TOKEN = 'fedcba9876543210fedcba9876543210';
+const PAUSE_LINK = `${RUNNER_STATE}/PAUSE_PROGRESS.md`;
+const PAUSE_TREE = { 'status.json': '{"status":"paused"}\n', 'run.log': 'session log\n' };
+
+/** SB2's `pause-note` run: the session's link skipped at the save step, the bundle clean. */
+function sb2PauseRun({ save = [skipLine(PAUSE_LINK)], artifact = PAUSE_TREE } = {}) {
+  const view = { status: 'completed', conclusion: 'success', steps: steps() };
+  return { row: 'SB2', arm: 'pause-note', id: 302, view, log: logFor(view, save.map((text) => [STEP.save, text])), artifact };
 }
 
 const JS3_BRANCH = branchOf('JS3', 'stall');
@@ -258,7 +257,7 @@ function js3Run(lines, status = 'paused') {
 }
 
 /** Every planted row at the shape the round expects of it. */
-const expectedShape = () => [...js1(), js4Arm('npmrc', 201), js4Arm('node-modules', 202), sb2Run(), rj2Run(), js3Run([JS3_RESET])];
+const expectedShape = () => [...js1(), js4Arm('npmrc', 201), js4Arm('node-modules', 202), sb2Run(), sb2PauseRun(), rj2Run(), js3Run([JS3_RESET])];
 
 // ---------------------------------------------------------------------------------------------
 // The fixture.
@@ -286,7 +285,7 @@ async function stage(fixture, runs, extraRoutes = {}) {
     default_branch: null,
     branches: runs.map((r) => ({ name: branchOf(r.row, r.arm), row: r.row, arm: r.arm, commit: '0'.repeat(40) })),
     runs: runs.map((r) => ({ row: r.row, arm: r.arm, branch: branchOf(r.row, r.arm), run_id: r.id, dispatched_at: '2026-11-04T09:59:00Z' })),
-    tokens: { SB2: TOKEN },
+    tokens: { SB2: TOKEN, SB2_PAUSE_NOTE: PAUSE_TOKEN },
     other_branch: null,
     variables: {},
   };
@@ -489,31 +488,39 @@ test('JS4: the marker in Preflight with doctor is fail', async (t) => {
   assert.ok(line.evidence.includes(STEP.preflight), line.evidence);
 });
 
-test('RJ2: a not launching line and a failed bundle is pass', async (t) => {
+test('RJ2: refused at the refusal step naming the profile is pass, then exactly one source line', async (t) => {
   const fixture = await fixtureFor(t);
   await stage(fixture, [rj2Run()]);
-  const { one } = await grade(fixture, ['--row', 'RJ2']);
-  const line = one('RJ2');
-  assert.equal(line.result, 'pass', JSON.stringify(line));
-  assert.ok(line.evidence.includes(`${NOT_LAUNCHING_OPEN}${branchOf('RJ2', 'profile')}${NOT_LAUNCHING_CLOSE}`), line.evidence);
-  assert.match(line.evidence, /status\.json status failed/);
+  const { lines } = await grade(fixture, ['--row', 'RJ2']);
+  assert.deepEqual(lines.map((l) => [l.row, l.result]), [['RJ2', 'pass'], ['RJ2', 'source']], JSON.stringify(lines));
+  const [graded, src] = lines;
+  assert.ok(graded.evidence.includes(`refused at ${STEP.refuse} naming ${RJ2_PROFILE}`), graded.evidence);
+  assert.match(graded.evidence, /status state: failed/);
+  assert.match(graded.departure, /read through status, not sync/);
+  assert.ok(src.evidence.startsWith('cli/src/generators/writeProtection.ts protectedPaths'), src.evidence);
+  const calls = (await readFile(fixture.remoteRunLog, 'utf8')).split('\n').filter((l) => l !== '');
+  assert.deepEqual(calls, [`status ${branchOf('RJ2', 'profile')}`]);
 });
 
-test('RJ2: a refusal step concluding failure is not run, naming the job surface', async (t) => {
+test('RJ2: the refusal step concluding success is fail, and the plain grade exits 4', async (t) => {
   const fixture = await fixtureFor(t);
-  await stage(fixture, [rj2Run({ refuse: 'failure' })]);
+  await stage(fixture, [...expectedShape().filter((r) => r.row !== 'RJ2'), rj2Run({ refuse: 'success' })]);
+  const { result, lines, one } = await grade(fixture);
+  const line = one('RJ2');
+  assert.equal(line.result, 'fail', JSON.stringify(line));
+  assert.ok(line.evidence.includes(`${STEP.refuse} concluded success in run 401`), line.evidence);
+  assert.equal(lines.filter((l) => l.row === 'RJ2' && l.result === 'source').length, 1);
+  assert.deepEqual(lines.filter((l) => l.result === 'fail').map((l) => l.row), ['RJ2'], show(result));
+  assert.equal(result.status, 4);
+});
+
+test('RJ2: the refusal step skipped is not run', async (t) => {
+  const fixture = await fixtureFor(t);
+  await stage(fixture, [rj2Run({ refuse: 'skipped' })]);
   const { one } = await grade(fixture, ['--row', 'RJ2']);
   const line = one('RJ2');
   assert.equal(line.result, 'not run', JSON.stringify(line));
-  assert.match(line.evidence, /refused before launch: \.claude\/settings\.autonomous\.json is a job surface/);
-});
-
-test('RJ2: an expired artifact is expired', async (t) => {
-  const fixture = await fixtureFor(t);
-  await stage(fixture, [rj2Run({ artifact: 'expired' })]);
-  const { one } = await grade(fixture, ['--row', 'RJ2']);
-  const line = one('RJ2');
-  assert.equal(line.result, 'expired', JSON.stringify(line));
+  assert.ok(line.evidence.includes(`${STEP.refuse} did not run in run 401 (skipped)`), line.evidence);
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -521,24 +528,74 @@ test('RJ2: an expired artifact is expired', async (t) => {
 
 const SB_ROWS = ['--row', 'SB2', '--row', 'SB4'];
 
-test('SB2 at its expected shape is not run with the planted arm passed in its evidence, and SB4 is pass', async (t) => {
+test('SB2 at its expected shape is pass on both arms, then one source line naming hr_remote_status_write, and SB4 is pass', async (t) => {
   const fixture = await fixtureFor(t);
-  await stage(fixture, [sb2Run()]);
-  const { one } = await grade(fixture, SB_ROWS);
+  await stage(fixture, [sb2Run(), sb2PauseRun()]);
+  const { lines, one } = await grade(fixture, SB_ROWS);
   const sb2 = one('SB2');
-  assert.equal(sb2.result, 'not run', JSON.stringify(sb2));
-  assert.match(sb2.evidence, /^planted arm \(clarifications, run 301\) passed: /);
+  assert.equal(sb2.result, 'pass', JSON.stringify(sb2));
   assert.ok(sb2.evidence.includes(`skipped ${SB2_LINK} as a symbolic link`), sb2.evidence);
+  assert.ok(sb2.evidence.includes(`skipped ${PAUSE_LINK} as a symbolic link`), sb2.evidence);
+  const src = lines.filter((l) => l.row === 'SB2' && l.result === 'source');
+  assert.equal(src.length, 1, JSON.stringify(lines));
+  assert.match(src[0].evidence, /\bhr_remote_status_write\b/);
   assert.equal(one('SB4').result, 'pass');
+  assert.equal(existsSync(evidencePath(fixture, 'SB2')), false);
 });
 
-test('SB2: only the remote-run.sh save: skipped form for the planted path is fail', async (t) => {
+test('SB2: only the remote-run.sh save: skipped form for the clarifications arm\'s planted path is fail', async (t) => {
   const fixture = await fixtureFor(t);
-  await stage(fixture, [sb2Run({ save: [`${SAVE_SKIP_PREFIX}${SB2_LINK}: ${RUNNER_STATE}/gate12-sb2-token.txt${SAVE_SKIP_SUFFIX}`] })]);
+  await stage(fixture, [sb2Run({ save: [`${SAVE_SKIP_PREFIX}${SB2_LINK}: ${RUNNER_STATE}/gate12-sb2-token.txt${SAVE_SKIP_SUFFIX}`] }), sb2PauseRun()]);
   const { one } = await grade(fixture, SB_ROWS);
   const sb2 = one('SB2');
   assert.equal(sb2.result, 'fail', JSON.stringify(sb2));
-  assert.ok(sb2.evidence.includes(STEP.save), sb2.evidence);
+  assert.ok(sb2.evidence.includes(`clarifications ${STEP.save}: `), sb2.evidence);
+});
+
+test('SB2 pause-note: the pause token in its artifact\'s PAUSE_PROGRESS.md is fail, naming that file', async (t) => {
+  const fixture = await fixtureFor(t);
+  await stage(fixture, [sb2Run(), sb2PauseRun({ artifact: { ...PAUSE_TREE, 'PAUSE_PROGRESS.md': `${PAUSE_TOKEN}\n` } })]);
+  const { one } = await grade(fixture, SB_ROWS);
+  const sb2 = one('SB2');
+  assert.equal(sb2.result, 'fail', JSON.stringify(sb2));
+  assert.match(sb2.evidence, /pause-note: run 302's harness-state artifact holds the SB2_PAUSE_NOTE token: \S*\/PAUSE_PROGRESS\.md[;,]/);
+  assert.equal(one('SB4').result, 'pass');
+});
+
+test('SB2 pause-note: no skip line for PAUSE_PROGRESS.md and a clean artifact is not run, the whole save log kept', async (t) => {
+  const fixture = await fixtureFor(t);
+  // A skip line for another PAUSE_PROGRESS.md: the leaf is the state directory's own, not the name.
+  const other = `${RUNNER_STATE}/clarifications/${SB2_BRANCH}/PAUSE_PROGRESS.md`;
+  const run = sb2PauseRun({ save: [skipLine(other)] });
+  await stage(fixture, [sb2Run(), run]);
+  const { one } = await grade(fixture, SB_ROWS);
+  const sb2 = one('SB2');
+  assert.equal(sb2.result, 'not run', JSON.stringify(sb2));
+  assert.ok(sb2.evidence.includes(`pause-note: ${STEP.save} in run 302 logged no skip line`), sb2.evidence);
+  assert.ok(sb2.evidence.includes(`record in ${evidencePath(fixture, 'SB2')}`), sb2.evidence);
+  const record = await readFile(evidencePath(fixture, 'SB2'), 'utf8');
+  assert.ok(record.includes(`${STEP.save} log:\n`), record);
+  for (const [step, text] of run.log) if (step === STEP.save) assert.ok(record.includes(`${TS} ${text}\n`), `${text} in\n${record}`);
+});
+
+test('SB2 pause-note: its artifact expired is expired', async (t) => {
+  const fixture = await fixtureFor(t);
+  await stage(fixture, [sb2Run(), sb2PauseRun({ artifact: 'expired' })]);
+  const { one } = await grade(fixture, SB_ROWS);
+  const sb2 = one('SB2');
+  assert.equal(sb2.result, 'expired', JSON.stringify(sb2));
+  assert.match(sb2.evidence, /pause-note: run 302's harness-state artifact is expired/);
+});
+
+test('SB2: the clarifications arm alone failing keeps SB2 fail while pause-note passes', async (t) => {
+  const fixture = await fixtureFor(t);
+  await stage(fixture, [sb2Run({ save: [] }), sb2PauseRun()]);
+  const { one } = await grade(fixture, SB_ROWS);
+  const sb2 = one('SB2');
+  assert.equal(sb2.result, 'fail', JSON.stringify(sb2));
+  assert.ok(sb2.evidence.includes(`clarifications ${STEP.save}: `), sb2.evidence);
+  const record = await readFile(evidencePath(fixture, 'SB2'), 'utf8');
+  assert.ok(record.includes(`[pause-note] pass: ${STEP.save} concluded success in run 302 and skipped ${PAUSE_LINK} as a symbolic link`), record);
 });
 
 test('SB2 and SB4: the token in the downloaded artifact is fail on both', async (t) => {
@@ -615,14 +672,38 @@ test('JS3: a doctor report in the step log with no stall-watchdog line is not ru
 // ---------------------------------------------------------------------------------------------
 // Hand rows, the FR dispatch and the exit status
 
-test('the hand rows each print not run with a hand step: note', async (t) => {
+/** Row -> note, from `--list` (tab-separated, the note last). */
+async function listedNotes(fixture) {
+  const listed = await runRound(fixture, ['--list']);
+  assert.equal(listed.status, 0, show(listed));
+  return Object.fromEntries(
+    listed.stdout
+      .split('\n')
+      .filter((l) => l !== '')
+      .map((l) => {
+        const f = l.split('\t');
+        return [f[0], f[4]];
+      }),
+  );
+}
+
+test('RJ3, the hand row, prints not run with hand step: and its --list note', async (t) => {
   const fixture = await fixtureFor(t);
-  const { lines } = await grade(fixture, ['--row', 'JS3N', '--row', 'SB3', '--row', 'RJ3']);
-  assert.deepEqual(lines.map((l) => l.row), ['JS3N', 'SB3', 'RJ3']);
-  for (const l of lines) {
-    assert.equal(l.result, 'not run');
-    assert.ok(l.evidence.startsWith('hand step: '), l.evidence);
+  const notes = await listedNotes(fixture);
+  const { lines } = await grade(fixture, ['--row', 'RJ3']);
+  assert.deepEqual(lines, [{ row: 'RJ3', result: 'not run', evidence: `hand step: ${notes.RJ3}`, departure: 'none' }]);
+});
+
+test('SB3 and JS3N, the source rows, each print exactly one source line carrying their --list note', async (t) => {
+  const fixture = await fixtureFor(t);
+  const notes = await listedNotes(fixture);
+  const { lines } = await grade(fixture, ['--row', 'SB3', '--row', 'JS3N']);
+  for (const row of ['SB3', 'JS3N']) {
+    assert.ok(notes[row], `--list has no ${row} note`);
+    const mine = lines.filter((l) => l.row === row);
+    assert.deepEqual(mine, [{ row, result: 'source', evidence: notes[row], departure: 'none' }], JSON.stringify(lines));
   }
+  assert.equal(lines.length, 2, JSON.stringify(lines));
 });
 
 const FR_ROWS = ['FR1', 'FR2', 'FR3', 'FR4', 'FR5', 'FR6', 'FR7'];
@@ -635,11 +716,16 @@ test('a plain grade over every row at its expected shape exits 0, FR1-FR7 printe
     assert.equal(one(row).result, 'not run');
     assert.equal(one(row).evidence, 'needs --full-run <branch>');
   }
+  // Each row's non-`source` line; a `source`-route row has only its `source` line.
+  const resultOf = (row) => {
+    const mine = lines.filter((l) => l.row === row);
+    const graded = mine.filter((l) => l.result !== 'source');
+    return (graded.length > 0 ? graded : mine).map((l) => l.result).join(',');
+  };
   assert.deepEqual(
-    Object.fromEntries(['JS1', 'JS4', 'SB2', 'SB4', 'RJ2', 'JS3', 'JS3N', 'SB3', 'RJ3'].map((r) => [r, one(r).result])),
-    { JS1: 'pass', JS4: 'pass', SB2: 'not run', SB4: 'pass', RJ2: 'pass', JS3: 'pass', JS3N: 'not run', SB3: 'not run', RJ3: 'not run' },
+    Object.fromEntries(['JS1', 'JS4', 'SB2', 'SB4', 'RJ2', 'JS3', 'JS3N', 'SB3', 'RJ3'].map((r) => [r, resultOf(r)])),
+    { JS1: 'pass', JS4: 'pass', SB2: 'pass', SB4: 'pass', RJ2: 'pass', JS3: 'pass', JS3N: 'source', SB3: 'source', RJ3: 'not run' },
   );
-  assert.equal(lines.length, 17, lines.map((l) => l.row).join(' '));
   assert.equal(lines.some((l) => l.result === 'fail'), false);
 });
 
