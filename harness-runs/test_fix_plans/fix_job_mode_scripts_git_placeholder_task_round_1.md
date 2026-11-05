@@ -12,7 +12,7 @@ The log's gate 13a/13b/13c lines are `BLOCKED` (Python environment not provision
 
 This list is the **single source of truth** for the fix loop. Any `[ ]` markers elsewhere in this plan or in its per-finding files are informational only.
 
-1. [ ] **Finding 1** — Replace the absolute home path in the branch's task prompt. _(layer: general)_
+1. [x] **Finding 1** — Replace the absolute home path in the branch's task prompt. _(layer: general)_
 2. [ ] **Finding 2** — Wait for the whole placeholder sweep before case (t)'s after-snapshot. _(layer: cli)_
 
 ## Must Fix

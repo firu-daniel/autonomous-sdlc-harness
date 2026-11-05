@@ -34,7 +34,7 @@ It also takes a probe defect the round found (PD31) and the route gap that left 
 
 ## The cause
 
-1. The base profile write-protects `<checkout>/<scriptsDir>/.git` at each scripts-directory level by exact path, by design. Locally: `/Users/daniel/Work/harness-gate12/harness-scripts/.git`. The path does not exist.
+1. The base profile write-protects `<checkout>/<scriptsDir>/.git` at each scripts-directory level by exact path, by design. Locally: `<home>/Work/harness-gate12/harness-scripts/.git`. The path does not exist.
 2. On Linux, an exact entry for an absent path is enforced by a placeholder mounted at that path (F9). Claude Code's own bubblewrap sandbox does it for the session, and `lsg_bwrap_args_var` does the same for the gate worker (`--ro-bind /dev/null <path>`). So inside both sandboxes, `<scriptsDir>/.git` is an empty non-directory.
 3. Every script listed above places its root with `git -C <scriptsDir> rev-parse --show-toplevel`. Git's discovery stops at a `.git` that is not a directory and fails: `fatal: invalid gitfile format` for an empty file (reproduced on macOS with `: > r/harness-scripts/.git`, rc 128), `fatal: not a regular file` for the character device. `hr_repo_root` returns 1.
 4. **Why only job mode.** In the clone layout the entry names the *main* checkout, and the run copy is a sibling: the session's and the launcher's placeholders land in the main checkout, which no sandboxed call places its root from, and the launcher's `"$target"/?*` filter skips the entry outright. Gate 15's container (#242, #249) passed GS1–GS4 that way. In job mode the run copy *is* the checkout the base profile was generated for, so the entry lands in the scripts directory the session's wrappers run from. Every job is hit, whatever the task.

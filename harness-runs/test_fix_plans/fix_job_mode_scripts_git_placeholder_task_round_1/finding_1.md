@@ -17,3 +17,5 @@
 
 - [ ] Rewrite the `Locally:` path on the matching line.
 - [ ] Grep the file for the literal home directory and confirm nothing else matches.
+
+**Deviations from plan:** The finding names no test file (`none — no machine paths`), so the row-`G.4` check took the fix-site fallback: the fix site still carried the absolute path, so the fix was implemented as `Locally: \`<home>/Work/harness-gate12/harness-scripts/.git\`.`. Gate 6a (`scripts/check-machine-paths.sh`) was not run — a gate script, which no unit runs; it is deferred to the Run gates phase, since `scripts/run-gates.sh` (named by `commands.test`) runs it. The close rests instead on `grep -c` for the literal home directory over the task prompt returning `0`, plus the selected tree guard `test/no-container-home-paths.test.mjs` passing (`# pass 1`, `# fail 0`).
