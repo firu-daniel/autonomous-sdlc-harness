@@ -32,7 +32,7 @@ This branch fixes three defects in `scripts/gate12-sandbox-round.sh` that its fi
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_gate12_round_driver_findings/task_<K>_plan.md`.
 
-1. [ ] **Task 1** — Accept an SSH host alias that `ssh -G` resolves to github.com in the preflight's origin check _(layer: general)_ _(points: 10)_
+1. [x] **Task 1** — Accept an SSH host alias that `ssh -G` resolves to github.com in the preflight's origin check _(layer: general)_ _(points: 10)_
 2. [ ] **Task 2** — Fail FR3 on a wrapper's refusal line, and grade FR6's `placed` clause only where the parked bundle holds a planning file _(layer: general)_ _(points: 20)_
 3. [ ] **Task 3** — Test the preflight's host-alias acceptance and its refusals _(layer: cli)_ _(points: 10)_
 4. [ ] **Task 4** — Test FR3's wrapper refusals and FR6's zero-plan restore, replaying round 13 _(layer: cli)_ _(points: 20)_

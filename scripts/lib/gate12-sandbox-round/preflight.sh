@@ -15,8 +15,12 @@
 #   3. G12_ROOT/harness.config.json is absent: not adopted.
 #   4. The configuration read below cannot resolve a value, or its screen refuses one.
 #   5. The raw `remote.origin.url` (the value the operator wrote, not `git remote get-url`) is not
-#      https://github.com/<o>/<n>[.git] or git@github.com:<o>/<n>[.git], or its <o>/<n> is not
-#      G12_REPO, compared case-insensitively.
+#      https://github.com/<o>/<n>[.git], git@github.com:<o>/<n>[.git], or git@<alias>:<o>/<n>[.git]
+#      whose `ssh -G <alias>` resolves `hostname github.com`; or its <o>/<n> is not G12_REPO,
+#      compared case-insensitively. <alias> must be a bare host name ([A-Za-z0-9._-], no leading -)
+#      and is refused before ssh runs otherwise. ssh is needed only for that form, so check 1 does
+#      not list it. `ssh -G` evaluates the operator's own ssh configuration, so a `Match exec` there
+#      runs; it opens no connection, so its failure is a refusal, not a failed call.
 #   6. origin's GitHub default branch (`gh repo view`, held in G12_GITHUB_DEFAULT) carries no
 #      .github/workflows/harness-run.yml, or one without the step `Install the sandbox prerequisites`:
 #      a workflow rendered before the sandbox series (docs/development.md, the round's step 5).
@@ -73,6 +77,7 @@ g12_canonical_dir() {
 
 g12_preflight() {
   local lib tool root_canon script_canon url slug lower_slug lower_repo workflow
+  local alias ssh_config ssh_key ssh_value host
 
   lib="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)/lib/harness-run-lib.sh"
   [ -r "$lib" ] || { g12_preflight_refuse "cannot read the run library at '$lib'"; return; }
@@ -116,7 +121,31 @@ g12_preflight() {
   case "$url" in
     https://github.com/*) slug="${url#https://github.com/}" ;;
     git@github.com:*) slug="${url#git@github.com:}" ;;
-    *) g12_preflight_refuse "remote.origin.url '$url' is not a github.com https or git@ URL"; return ;;
+    git@*:*)
+      alias="${url#git@}"
+      alias="${alias%%:*}"
+      case "$alias" in
+        "" | -* | *[!A-Za-z0-9._-]*)
+          g12_preflight_refuse "remote.origin.url '$url' names the host alias '$alias', which is not a bare host name"
+          return
+          ;;
+      esac
+      command -v ssh >/dev/null 2>&1 ||
+        { g12_preflight_refuse "ssh is not on PATH, so the host alias '$alias' in remote.origin.url '$url' cannot be resolved"; return; }
+      ssh_config="$(ssh -G "$alias" 2>/dev/null)" ||
+        { g12_preflight_refuse "ssh -G $alias failed, so remote.origin.url '$url' cannot be resolved"; return; }
+      host=""
+      while read -r ssh_key ssh_value _; do
+        [ "$ssh_key" = "hostname" ] && { host="$ssh_value"; break; }
+      done <<<"$ssh_config"
+      host="$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')"
+      [ -n "$host" ] ||
+        { g12_preflight_refuse "ssh -G $alias printed no hostname, so remote.origin.url '$url' cannot be resolved"; return; }
+      [ "$host" = "github.com" ] ||
+        { g12_preflight_refuse "remote.origin.url '$url' names the host alias '$alias', which ssh -G resolves to '$host', not github.com"; return; }
+      slug="${url#git@*:}"
+      ;;
+    *) g12_preflight_refuse "remote.origin.url '$url' is not a github.com https URL, a git@github.com: URL, or git@<alias>: for an ssh host alias of github.com"; return ;;
   esac
   slug="${slug%.git}"
   case "$slug" in
