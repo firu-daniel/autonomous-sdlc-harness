@@ -788,8 +788,7 @@ jobs:
             bash "$SCRIPTS_DIR/push-branch.sh" || true
             exit 0
           fi
-          bash "$SCRIPTS_DIR/push-branch.sh" > "$log" 2>&1 || true
-          cat "$log" || true
+          bash "$SCRIPTS_DIR/push-branch.sh" 2>&1 | tee "$log" || true
           matched=''
           while IFS= read -r line || [ -n "$line" ]; do
             case "$line" in
