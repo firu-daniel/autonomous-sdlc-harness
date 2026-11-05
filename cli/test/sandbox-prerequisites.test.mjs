@@ -4,7 +4,8 @@
  * **The rule these tests exist to enforce: the sandbox's host prerequisites are declared once, in
  * that module, and every other copy is a declared mirror held equal by a test.** This suite holds the
  * owner itself to its rows: the host kinds, the missing-piece order, the AppArmor answers, the
- * install commands and the sentences, none of which may offer the opt-out.
+ * nested user-namespace answers, the stock-profile remedy, the install commands and the sentences,
+ * none of which may offer the opt-out.
  *
  * The module is imported compiled, so `npm run build` precedes `npm test`. No case touches the host.
  */
@@ -13,16 +14,22 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-  APPARMOR_RELOAD_COMMAND,
+  APPARMOR_DISABLE_DIR,
+  APPARMOR_LOAD_COMMAND,
   APPARMOR_USERNS_SYSCTL,
   BWRAP_APPARMOR_PROFILE_PATH,
   BWRAP_INSTALLED_PATH,
+  BWRAP_USERNS_RESTRICT_PROFILE_PATH,
+  NESTED_USERNS_HELPER,
+  NESTED_USERNS_PROBE,
   SANDBOX_HOST_BINARIES,
   SANDBOX_INSTALLERS,
   WSL1_AGENT_MESSAGE,
   assessSandboxHost,
   bwrapAppArmorProfile,
+  bwrapUsernsRestrictRemedy,
   describeAppArmor,
+  describeNestedUserns,
   describeMissingPieces,
   installCommands,
   sandboxHostKind,
@@ -44,6 +51,10 @@ function linuxFacts(overrides = {}) {
 }
 
 const read = (text) => ({ state: 'read', text });
+
+const NESTED_ANSWERS = ['not-applicable', 'not-run', 'passed', 'failed', 'failed-stock-restrict'];
+const DETAIL = 'write /proc/self/setgroups: Permission denied';
+const failedProbe = { state: 'failed', detail: DETAIL };
 
 test('sandboxHostKind classifies every platform and release row', () => {
   assert.equal(sandboxHostKind('darwin', '23.6.0'), 'macos');
@@ -78,16 +89,21 @@ test('missing binaries are reported in table order', () => {
 
 test('macOS needs no binary and AppArmor does not apply', () => {
   const result = assessSandboxHost(linuxFacts({ platform: 'darwin', kernelRelease: '23.6.0', resolvedBinaries: new Set() }));
-  assert.deepEqual(result, { host: 'macos', missing: [], appArmor: 'not-applicable' });
+  assert.deepEqual(result, { host: 'macos', missing: [], appArmor: 'not-applicable', nestedUserns: 'not-applicable' });
 });
 
 test('wsl1 and unsupported hosts report one id and no binary id', () => {
   const none = new Set();
   const wsl1 = assessSandboxHost(linuxFacts({ kernelRelease: '4.4.0-19041-Microsoft', resolvedBinaries: none }));
-  assert.deepEqual(wsl1, { host: 'wsl1', missing: ['wsl1'], appArmor: 'not-applicable' });
+  assert.deepEqual(wsl1, { host: 'wsl1', missing: ['wsl1'], appArmor: 'not-applicable', nestedUserns: 'not-applicable' });
   for (const platform of ['win32', 'freebsd']) {
     const result = assessSandboxHost(linuxFacts({ platform, resolvedBinaries: none }));
-    assert.deepEqual(result, { host: 'unsupported', missing: ['unsupported-platform'], appArmor: 'not-applicable' });
+    assert.deepEqual(result, {
+      host: 'unsupported',
+      missing: ['unsupported-platform'],
+      appArmor: 'not-applicable',
+      nestedUserns: 'not-applicable',
+    });
   }
 });
 
@@ -153,7 +169,7 @@ test('the sentences name each piece and its fix, and never offer the opt-out', (
   assert.deepEqual(describeMissingPieces([], LINUX_RELEASE, 'linux'), []);
 
   const uncertain = describeAppArmor('uncertain');
-  for (const part of [APPARMOR_USERNS_SYSCTL, BWRAP_APPARMOR_PROFILE_PATH, APPARMOR_RELOAD_COMMAND, 'any filename']) {
+  for (const part of [APPARMOR_USERNS_SYSCTL, BWRAP_APPARMOR_PROFILE_PATH, APPARMOR_LOAD_COMMAND, BWRAP_USERNS_RESTRICT_PROFILE_PATH, 'any filename']) {
     assert.ok(uncertain.includes(part), part);
   }
 
@@ -164,6 +180,7 @@ test('the sentences name each piece and its fix, and never offer the opt-out', (
     ...describeMissingPieces(['wsl1'], '4.4.0-19041-Microsoft', 'linux'),
     ...describeMissingPieces(['unsupported-platform'], '10.0.19045', 'win32'),
     ...['not-applicable', 'clear', 'allowed', 'uncertain'].map(describeAppArmor),
+    ...NESTED_ANSWERS.flatMap((answer) => [false, true].map((remote) => describeNestedUserns(answer, DETAIL, remote))),
   ];
   for (const sentence of all) {
     assert.ok(!sentence.includes('optOut'), sentence);
@@ -179,4 +196,91 @@ test('bwrapAppArmorProfile grants userns to the installed bwrap path', () => {
     profile,
     'abi <abi/4.0>,\ninclude <tunables/global>\n\nprofile bwrap /usr/bin/bwrap flags=(unconfined) {\n  userns,\n\n  include if exists <local/bwrap>\n}\n',
   );
+});
+
+test('bwrapUsernsRestrictRemedy is the four commands in order, ending with the load command', () => {
+  assert.deepEqual(bwrapUsernsRestrictRemedy(), [
+    `sudo mkdir -p ${APPARMOR_DISABLE_DIR}`,
+    `sudo ln -sf ${BWRAP_USERNS_RESTRICT_PROFILE_PATH} ${APPARMOR_DISABLE_DIR}/bwrap-userns-restrict`,
+    `sudo apparmor_parser -R ${BWRAP_USERNS_RESTRICT_PROFILE_PATH}`,
+    APPARMOR_LOAD_COMMAND,
+  ]);
+  assert.ok(APPARMOR_LOAD_COMMAND.endsWith(BWRAP_APPARMOR_PROFILE_PATH));
+  assert.equal(NESTED_USERNS_PROBE[NESTED_USERNS_PROBE.indexOf('--') + 1], NESTED_USERNS_HELPER);
+});
+
+test('the nested user-namespace verdict follows the probe and the stock profile, never adding to missing', () => {
+  for (const kernelRelease of [LINUX_RELEASE, '5.15.153.1-microsoft-standard-WSL2']) {
+    const cases = [
+      ['probe passes', { nestedUserns: { state: 'passed' } }, 'passed'],
+      ['probe fails with the stock profile', { nestedUserns: failedProbe, stockRestrictProfile: true }, 'failed-stock-restrict'],
+      ['probe fails without it', { nestedUserns: failedProbe, stockRestrictProfile: false }, 'failed'],
+      ['probe fails, stock field absent', { nestedUserns: failedProbe }, 'failed'],
+      ['probe not run', { nestedUserns: { state: 'not-run' }, stockRestrictProfile: true }, 'not-run'],
+    ];
+    for (const [label, overrides, expected] of cases) {
+      const result = assessSandboxHost(linuxFacts({ kernelRelease, ...overrides }));
+      assert.equal(result.nestedUserns, expected, `${label} on ${kernelRelease}`);
+      assert.deepEqual(result.missing, [], `${label}: missing unchanged`);
+    }
+  }
+  const noBwrap = assessSandboxHost(linuxFacts({ resolvedBinaries: new Set(['socat']) }));
+  assert.equal(noBwrap.nestedUserns, 'not-run');
+  assert.deepEqual(noBwrap.missing, ['bwrap']);
+});
+
+test('facts without the two new fields answer as before, with the nested check not run', () => {
+  assert.deepEqual(assessSandboxHost(linuxFacts()), {
+    host: 'linux',
+    missing: [],
+    appArmor: 'clear',
+    nestedUserns: 'not-run',
+  });
+  assert.deepEqual(assessSandboxHost(linuxFacts({ appArmorRestrict: read('1\n'), bwrapProfile: read(bwrapAppArmorProfile()) })), {
+    host: 'linux',
+    missing: [],
+    appArmor: 'allowed',
+    nestedUserns: 'not-run',
+  });
+});
+
+test('hosts the sandbox does not run nested on answer not-applicable whatever the probe says', () => {
+  const hosts = [
+    { platform: 'darwin', kernelRelease: '23.6.0' },
+    { platform: 'linux', kernelRelease: '4.4.0-19041-Microsoft' },
+    { platform: 'win32', kernelRelease: '10.0.19045' },
+  ];
+  for (const host of hosts) {
+    const result = assessSandboxHost(linuxFacts({ ...host, nestedUserns: failedProbe, stockRestrictProfile: true }));
+    assert.equal(result.nestedUserns, 'not-applicable', host.platform);
+  }
+});
+
+test('describeNestedUserns names the cause and its remedy, and who applies it', () => {
+  const local = describeNestedUserns('failed-stock-restrict', DETAIL, false);
+  const remote = describeNestedUserns('failed-stock-restrict', DETAIL, true);
+  for (const sentence of [local, remote]) {
+    for (const part of [BWRAP_USERNS_RESTRICT_PROFILE_PATH, NESTED_USERNS_PROBE.join(' '), DETAIL, 'unpriv_bwrap', BWRAP_APPARMOR_PROFILE_PATH]) {
+      assert.ok(sentence.includes(part), part);
+    }
+    for (const command of bwrapUsernsRestrictRemedy()) assert.ok(sentence.includes(command), command);
+  }
+  assert.ok(local.includes('hardening'));
+  assert.ok(local.includes('trade-off'));
+  assert.ok(!local.includes('Install the sandbox prerequisites'));
+  assert.ok(remote.includes('Install the sandbox prerequisites'));
+  assert.ok(!remote.includes('hardening'));
+  assert.ok(!remote.includes('trade-off'));
+
+  const failed = describeNestedUserns('failed', DETAIL, false);
+  for (const part of [APPARMOR_LOAD_COMMAND, BWRAP_APPARMOR_PROFILE_PATH, BWRAP_USERNS_RESTRICT_PROFILE_PATH, DETAIL]) {
+    assert.ok(failed.includes(part), part);
+  }
+  assert.ok(!failed.includes('apparmor_parser -R'));
+
+  assert.ok(describeNestedUserns('passed', '', false).length > 0);
+  for (const remoteJob of [false, true]) {
+    assert.equal(describeNestedUserns('not-run', '', remoteJob), '');
+    assert.equal(describeNestedUserns('not-applicable', '', remoteJob), '');
+  }
 });

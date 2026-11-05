@@ -17,21 +17,35 @@
  *   `hr_sandbox_prereq_judge_var` and called by it, mirrors {@link sandboxHostKind}; the judge
  *   mirrors {@link SANDBOX_HOST_BINARIES} and the missing-piece order, and codes
  *   {@link SANDBOX_INSTALLERS} (each family's command, as {@link installCommands} renders it) and
- *   {@link WSL1_AGENT_MESSAGE} into its `HR_SANDBOX_REFUSAL` sentence. Held equal by
- *   `cli/test/sandbox-prerequisites-shell-mirror.test.mjs`. That library's
- *   `hr_sandbox_prereq_probe_var` is not a mirror of this module: it mirrors the live probe, and
- *   `probeSandboxHost`'s doc comment in `cli/src/doctor/checks.ts` declares it.
+ *   {@link WSL1_AGENT_MESSAGE} into its `HR_SANDBOX_REFUSAL` sentence; the judge also mirrors
+ *   {@link NestedUsernsAnswer} and the stock-profile half of the refusal
+ *   ({@link BWRAP_USERNS_RESTRICT_PROFILE_PATH}, {@link bwrapUsernsRestrictRemedy}). Held equal by
+ *   `cli/test/sandbox-prerequisites-shell-mirror.test.mjs`.
+ * - `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_sandbox_prereq_probe_var` mirrors
+ *   {@link NESTED_USERNS_PROBE} (the nested check's argument vector), {@link NESTED_USERNS_HELPER}
+ *   (the `command -v unshare` read that gates it) and {@link BWRAP_USERNS_RESTRICT_PROFILE_PATH}
+ *   (the `[ -e … ]` presence test). Held equal by
+ *   `cli/test/sandbox-prerequisites-shell-mirror.test.mjs`, which asserts all three against this
+ *   module's exports. Its platform, kernel-release and `PATH` reads still mirror `probeSandboxHost`,
+ *   as `cli/src/doctor/checks.ts` declares.
  * - `cli/templates/github/workflows/harness-run.yml`, step `Install the sandbox prerequisites`,
  *   mirrors {@link SANDBOX_INSTALLERS}' installer families in this order (`apt-get`, then `dnf`; the
  *   step's `-y -qq` and `sudo -n` flags legitimately differ from the adopter-facing commands here),
  *   {@link SANDBOX_HOST_BINARIES}' packages, {@link APPARMOR_USERNS_SYSCTL_PATH},
- *   {@link BWRAP_APPARMOR_PROFILE_PATH}, {@link bwrapAppArmorProfile} and
- *   {@link APPARMOR_RELOAD_COMMAND}. Held equal by `cli/test/workflow-sandbox-install.test.mjs`.
+ *   {@link BWRAP_APPARMOR_PROFILE_PATH}, {@link bwrapAppArmorProfile},
+ *   {@link BWRAP_USERNS_RESTRICT_PROFILE_PATH}, {@link APPARMOR_DISABLE_DIR},
+ *   {@link bwrapUsernsRestrictRemedy}, {@link APPARMOR_LOAD_COMMAND}, {@link NESTED_USERNS_PROBE} and
+ *   {@link NESTED_USERNS_HELPER} (the step's `command -v unshare` gate before the verification).
+ *   Held equal by `cli/test/workflow-sandbox-install.test.mjs`.
  *
  * **The AppArmor choice.** An AppArmor profile may sit under any filename, so the absence of
  * `/etc/apparmor.d/bwrap` is not proof that `userns` is blocked: a restricting sysctl of `1` without
  * that profile is `uncertain`, never a missing piece. Source: https://code.claude.com/docs/en/sandboxing,
- * "Set up Linux and WSL2" and its "Ubuntu 24.04 and later" accordion, checked 2026-10-12.
+ * "Set up Linux and WSL2" and its "Ubuntu 24.04 and later" accordion, checked 2026-10-12. A profile
+ * granting `userns` is not sufficient either: on Ubuntu 26.04 {@link BWRAP_USERNS_RESTRICT_PROFILE_PATH}
+ * confines bwrap's children whatever that profile grants, so no file reading shows a block or its
+ * absence, and the nested user-namespace check is the verdict wherever it runs. Measured in the Gate 12
+ * sandbox series round 13, 2026-11-05, runs `41980588326` and `41985478942`.
  */
 
 /** One missing prerequisite, as an id the shell mirror reports in the same order. */
@@ -77,8 +91,41 @@ export const BWRAP_APPARMOR_PROFILE_PATH = '/etc/apparmor.d/bwrap';
 /** The `bwrap` path the documented profile attaches to. */
 export const BWRAP_INSTALLED_PATH = '/usr/bin/bwrap';
 
-/** The command that loads a newly written AppArmor profile. */
-export const APPARMOR_RELOAD_COMMAND = 'sudo systemctl reload apparmor';
+/** The stock Ubuntu 26.04 profile that confines bwrap's children under `unpriv_bwrap`. */
+export const BWRAP_USERNS_RESTRICT_PROFILE_PATH = '/etc/apparmor.d/bwrap-userns-restrict';
+
+/** The directory whose symlinks AppArmor skips when it loads profiles at boot. */
+export const APPARMOR_DISABLE_DIR = '/etc/apparmor.d/disable';
+
+/** Loads {@link BWRAP_APPARMOR_PROFILE_PATH} directly; reloading the AppArmor service lets the stock profile win. */
+export const APPARMOR_LOAD_COMMAND = `sudo apparmor_parser -r ${BWRAP_APPARMOR_PROFILE_PATH}`;
+
+/** The second binary the nested check needs on `PATH`; {@link NESTED_USERNS_PROBE} runs it after `--`. */
+export const NESTED_USERNS_HELPER = 'unshare';
+
+/** The nested check's argument vector: bwrap's child must itself create a user namespace. */
+export const NESTED_USERNS_PROBE: readonly string[] = [
+  'bwrap',
+  '--unshare-user',
+  '--dev-bind',
+  '/',
+  '/',
+  '--',
+  NESTED_USERNS_HELPER,
+  '-U',
+  '-r',
+  'true',
+];
+
+/** Disables the stock restriction, unloads it, then loads ours — in this order. */
+export function bwrapUsernsRestrictRemedy(): readonly string[] {
+  return [
+    `sudo mkdir -p ${APPARMOR_DISABLE_DIR}`,
+    `sudo ln -sf ${BWRAP_USERNS_RESTRICT_PROFILE_PATH} ${APPARMOR_DISABLE_DIR}/bwrap-userns-restrict`,
+    `sudo apparmor_parser -R ${BWRAP_USERNS_RESTRICT_PROFILE_PATH}`,
+    APPARMOR_LOAD_COMMAND,
+  ];
+}
 
 /** The agent CLI's own refusal text on a WSL1 host, quoted so an operator can match it. */
 export const WSL1_AGENT_MESSAGE = 'Sandboxing requires WSL2';
@@ -92,6 +139,12 @@ export type AppArmorAnswer = 'not-applicable' | 'clear' | 'allowed' | 'uncertain
 /** The outcome of reading one host file, distinguishing absent from unreadable. */
 export type FileRead = { state: 'absent' } | { state: 'unreadable' } | { state: 'read'; text: string };
 
+/** The outcome of running {@link NESTED_USERNS_PROBE}; `detail` is what the failed run reported. */
+export type NestedUsernsProbe = { state: 'not-run' } | { state: 'passed' } | { state: 'failed'; detail: string };
+
+/** The nested user-namespace verdict; `failed-stock-restrict` means the stock profile was present. */
+export type NestedUsernsAnswer = 'not-applicable' | 'not-run' | 'passed' | 'failed' | 'failed-stock-restrict';
+
 /** The host facts the live probe gathers and hands to {@link assessSandboxHost}. */
 export interface SandboxHostFacts {
   platform: string;
@@ -99,13 +152,18 @@ export interface SandboxHostFacts {
   resolvedBinaries: ReadonlySet<string>;
   appArmorRestrict: FileRead;
   bwrapProfile: FileRead;
+  /** Absent means not run. */
+  nestedUserns?: NestedUsernsProbe;
+  /** Whether {@link BWRAP_USERNS_RESTRICT_PROFILE_PATH} exists; absent means not present. */
+  stockRestrictProfile?: boolean;
 }
 
-/** A host's assessment: its class, the missing pieces in report order, and the AppArmor answer. */
+/** A host's assessment: its class, the missing pieces in report order, and the two AppArmor answers. */
 export interface SandboxPrerequisites {
   host: SandboxHostKind;
   missing: readonly SandboxPiece[];
   appArmor: AppArmorAnswer;
+  nestedUserns: NestedUsernsAnswer;
 }
 
 /** The AppArmor profile granting `userns` to {@link BWRAP_INSTALLED_PATH}, with a trailing newline. */
@@ -147,16 +205,28 @@ function judgeAppArmor(restrict: FileRead, profile: FileRead): AppArmorAnswer {
   return 'uncertain';
 }
 
+function judgeNestedUserns(probe: NestedUsernsProbe | undefined, stockRestrictProfile: boolean | undefined): NestedUsernsAnswer {
+  if (probe === undefined || probe.state === 'not-run') return 'not-run';
+  if (probe.state === 'passed') return 'passed';
+  return stockRestrictProfile === true ? 'failed-stock-restrict' : 'failed';
+}
+
 /** Assesses a host's facts against the table; pure, so every row is testable without a host. */
 export function assessSandboxHost(facts: SandboxHostFacts): SandboxPrerequisites {
   const host = sandboxHostKind(facts.platform, facts.kernelRelease);
-  if (host === 'unsupported') return { host, missing: ['unsupported-platform'], appArmor: 'not-applicable' };
-  if (host === 'wsl1') return { host, missing: ['wsl1'], appArmor: 'not-applicable' };
-  if (host === 'macos') return { host, missing: [], appArmor: 'not-applicable' };
+  const notApplicable = { appArmor: 'not-applicable', nestedUserns: 'not-applicable' } as const;
+  if (host === 'unsupported') return { host, missing: ['unsupported-platform'], ...notApplicable };
+  if (host === 'wsl1') return { host, missing: ['wsl1'], ...notApplicable };
+  if (host === 'macos') return { host, missing: [], ...notApplicable };
   const missing = SANDBOX_HOST_BINARIES.filter((entry) => !facts.resolvedBinaries.has(entry.binary)).map(
     (entry) => entry.binary,
   );
-  return { host, missing, appArmor: judgeAppArmor(facts.appArmorRestrict, facts.bwrapProfile) };
+  return {
+    host,
+    missing,
+    appArmor: judgeAppArmor(facts.appArmorRestrict, facts.bwrapProfile),
+    nestedUserns: judgeNestedUserns(facts.nestedUserns, facts.stockRestrictProfile),
+  };
 }
 
 function missingBinaries(missing: readonly SandboxPiece[]): readonly SandboxBinary[] {
@@ -207,8 +277,35 @@ export function describeAppArmor(answer: AppArmorAnswer): string {
     case 'clear':
       return `\`${APPARMOR_USERNS_SYSCTL}\` does not restrict unprivileged user namespaces.`;
     case 'allowed':
-      return `\`${APPARMOR_USERNS_SYSCTL}\` is 1 and \`${BWRAP_APPARMOR_PROFILE_PATH}\` grants \`userns\` to \`${BWRAP_INSTALLED_PATH}\`.`;
+      return `\`${APPARMOR_USERNS_SYSCTL}\` is 1 and the file \`${BWRAP_APPARMOR_PROFILE_PATH}\` grants \`userns\` to \`${BWRAP_INSTALLED_PATH}\` — that is what the file grants, not proof bwrap's children can use it.`;
     case 'uncertain':
-      return `\`${APPARMOR_USERNS_SYSCTL}\` could not be read as 0 or 1, or is 1 and no \`${BWRAP_APPARMOR_PROFILE_PATH}\` granting \`userns\` was read — a profile may sit under any filename, so whether \`bwrap\` is blocked cannot be certain; if it is, write that profile and run \`${APPARMOR_RELOAD_COMMAND}\`.`;
+      return `\`${APPARMOR_USERNS_SYSCTL}\` could not be read as 0 or 1, or is 1 and no \`${BWRAP_APPARMOR_PROFILE_PATH}\` granting \`userns\` was read — a profile may sit under any filename, so whether \`bwrap\` is blocked cannot be certain; the profile that grants it is \`${BWRAP_APPARMOR_PROFILE_PATH}\`, loaded with \`${APPARMOR_LOAD_COMMAND}\`, and on Ubuntu 26.04 \`${BWRAP_USERNS_RESTRICT_PROFILE_PATH}\` can confine bwrap's children whatever that profile grants.`;
+  }
+}
+
+/** The one-line sentence for a nested user-namespace answer, `''` when there is nothing to say; never offers the opt-out. */
+export function describeNestedUserns(answer: NestedUsernsAnswer, detail: string, remoteJob: boolean): string {
+  const failure = `bwrap's child could not create a user namespace (\`${NESTED_USERNS_PROBE.join(' ')}\` reported: ${detail}), so every sandboxed command would fail`;
+  switch (answer) {
+    case 'not-run':
+    case 'not-applicable':
+      return '';
+    case 'passed':
+      return `bwrap's child created a nested user namespace (\`${NESTED_USERNS_PROBE.join(' ')}\`).`;
+    case 'failed':
+      return `${failure}; no \`${BWRAP_USERNS_RESTRICT_PROFILE_PATH}\` is present, so write the profile at \`${BWRAP_APPARMOR_PROFILE_PATH}\` that grants \`userns\` to \`${BWRAP_INSTALLED_PATH}\` and run \`${APPARMOR_LOAD_COMMAND}\`.`;
+    case 'failed-stock-restrict': {
+      const remedy = bwrapUsernsRestrictRemedy();
+      const steps = [
+        ...remedy.slice(0, -1).map((command) => `\`${command}\``),
+        `write the profile at \`${BWRAP_APPARMOR_PROFILE_PATH}\` that grants \`userns\` to \`${BWRAP_INSTALLED_PATH}\``,
+        `\`${remedy[remedy.length - 1]}\``,
+      ].join(', then ');
+      const cause = `${failure}. The cause is \`${BWRAP_USERNS_RESTRICT_PROFILE_PATH}\`, which confines bwrap's children under \`unpriv_bwrap\`, a profile that denies every capability. The remedy is: ${steps}.`;
+      const owner = remoteJob
+        ? ` The job's \`Install the sandbox prerequisites\` step applies this remedy, so a failure here means that step did not.`
+        : ` \`doctor\` changes nothing: disabling Ubuntu's restriction weakens a desktop's hardening of unprivileged user namespaces, and that trade-off is yours to make.`;
+      return `${cause}${owner}`;
+    }
   }
 }
