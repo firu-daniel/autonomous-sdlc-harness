@@ -48,9 +48,15 @@
 #                                     SANDBOX_HOST_BINARIES' packages,
 #                                     APPARMOR_USERNS_SYSCTL_PATH,
 #                                     BWRAP_APPARMOR_PROFILE_PATH,
-#                                     bwrapAppArmorProfile() and
-#                                     APPARMOR_RELOAD_COMMAND, in `Install the
-#                                     sandbox prerequisites`
+#                                     bwrapAppArmorProfile(),
+#                                     BWRAP_USERNS_RESTRICT_PROFILE_PATH,
+#                                     APPARMOR_DISABLE_DIR,
+#                                     bwrapUsernsRestrictRemedy(),
+#                                     APPARMOR_LOAD_COMMAND, NESTED_USERNS_PROBE
+#                                     and NESTED_USERNS_HELPER (the `command -v
+#                                     unshare` gate before the verification), in
+#                                     `Install the sandbox prerequisites`, held
+#                                     by workflow-sandbox-install.test.mjs
 #   remote-run.sh (the scriptsDir copy) RUN_JOB_NAME (`run`): the `run` job has no
 #                                     `name:`, so GitHub names it by its key,
 #                                     and the settledness test reads that
@@ -312,12 +318,27 @@
 # THE SANDBOX PREREQUISITES. The generated profile sets `failIfUnavailable`, so
 # on a runner without `bubblewrap` or `socat` the agent session would end at
 # startup. `Install the sandbox prerequisites` installs them where the runner
-# lets it (root or passwordless sudo), and writes the `bwrap` AppArmor profile
-# where Ubuntu 24.04's policy would block unprivileged user namespaces. It never
-# fails the job itself: `Preflight with doctor` refuses the job on whatever is
-# still missing, through `sandbox-prerequisites`, unless `sandbox.optOut` is
-# taken. The step has not yet run on GitHub: it runs first in a job whose
-# workflow a CLI carrying it rendered (docs/remote-execution.md, section 8).
+# lets it (root or passwordless sudo). Where Ubuntu 26.04's stock
+# `bwrap-userns-restrict` profile exists, it disables it (a symlink in the
+# AppArmor disable directory, then `apparmor_parser -R`): that profile confines
+# bwrap's children under `unpriv_bwrap` and wins over ours. It writes our
+# `bwrap` profile where the stock one exists or Ubuntu 24.04's policy would
+# block unprivileged user namespaces, and loads it with `apparmor_parser -r`.
+# Then, on Linux, it always verifies that bwrap's child can itself create a
+# user namespace, and a failed verification fails the job unless
+# `sandbox.optOut` is taken, so `Run the harness` never starts a session that
+# cannot run Bash: no step from this one to `Run the harness` carries a status
+# function. What still runs after that failure: the `run` job's bundle-saving
+# and reporting steps, and the `collect` job, which is `needs: run` under
+# `!cancelled()`. The `run` job has started, so remote-run.sh's
+# `run_not_started_var` answers `started` and `collect` passes through its
+# ordinary stops, exactly as after a failed `Preflight with doctor`. The run's
+# one notification is `Continue, wait or stop`: `continue` with no
+# `status.json` sends one `failed` naming the run URL and dispatches nothing,
+# and `Open the pull request and report` runs `deliver`, which sends nothing.
+# The step ran in Gate 12 round 13 (2026-11-05), where the stock profile
+# defeated it; the fixed step's runner result is owed to the Gate 12 redo
+# (docs/sandbox-verification.md, section 9).
 #
 # WHY retention-days IS SET. The `harness-state` bundle is the only remote copy
 # of a run's clarifications, uncommitted planning drafts and carried counts; a
@@ -675,6 +696,8 @@ jobs:
         run: |
           sysctl_file=/proc/sys/kernel/apparmor_restrict_unprivileged_userns
           profile=/etc/apparmor.d/bwrap
+          stock=/etc/apparmor.d/bwrap-userns-restrict
+          disable_dir=/etc/apparmor.d/disable
           missing=()
           command -v bwrap >/dev/null 2>&1 || missing+=(bubblewrap)
           command -v socat >/dev/null 2>&1 || missing+=(socat)
@@ -684,37 +707,66 @@ jobs:
               needs_profile=1
             fi
           fi
+          stock_found=0
+          stock_state="was not found"
+          if [ -e "$stock" ]; then
+            stock_found=1
+            needs_profile=1
+            stock_state="was found but not disabled"
+          fi
+          profile_state="was not needed"
+          if [ "$needs_profile" = 1 ]; then
+            profile_state="was needed but not written"
+          fi
           if [ "${#missing[@]}" -eq 0 ] && [ "$needs_profile" = 0 ]; then
             echo "The sandbox prerequisites are present."
-            exit 0
-          fi
-          if [ "$(uname -s)" != Linux ]; then
-            echo "::warning::not a Linux runner, so nothing was installed; missing packages: ${missing[*]:-none}."
-            exit 0
-          fi
-          if [ "$(id -u)" = 0 ]; then
-            as_root=()
-          elif sudo -n true >/dev/null 2>&1; then
-            as_root=(sudo -n)
           else
-            echo "::warning::no root and no passwordless sudo on this runner, so nothing was installed; missing packages: ${missing[*]:-none}; bwrap AppArmor profile needed: $needs_profile."
-            exit 0
-          fi
-          if [ "${#missing[@]}" -gt 0 ]; then
-            if command -v apt-get >/dev/null 2>&1; then
-              if ! { "${as_root[@]}" apt-get update -qq && "${as_root[@]}" apt-get install -y -qq "${missing[@]}"; }; then
-                echo "::warning::apt-get could not install ${missing[*]}."
-              fi
-            elif command -v dnf >/dev/null 2>&1; then
-              if ! "${as_root[@]}" dnf install -y "${missing[@]}"; then
-                echo "::warning::dnf could not install ${missing[*]}."
-              fi
-            else
-              echo "::warning::neither apt-get nor dnf is on this runner, so ${missing[*]} was not installed."
+            if [ "$(uname -s)" != Linux ]; then
+              echo "::warning::not a Linux runner, so nothing was installed; missing packages: ${missing[*]:-none}."
+              exit 0
             fi
-          fi
-          if [ "$needs_profile" = 1 ]; then
-            if "${as_root[@]}" tee "$profile" >/dev/null <<'PROFILE'
+            can_change=1
+            if [ "$(id -u)" = 0 ]; then
+              as_root=()
+            elif sudo -n true >/dev/null 2>&1; then
+              as_root=(sudo -n)
+            else
+              can_change=0
+              echo "::warning::no root and no passwordless sudo on this runner, so nothing was installed; missing packages: ${missing[*]:-none}; bwrap AppArmor profile needed: $needs_profile."
+            fi
+            if [ "$can_change" = 1 ] && [ "${#missing[@]}" -gt 0 ]; then
+              if command -v apt-get >/dev/null 2>&1; then
+                if ! { "${as_root[@]}" apt-get update -qq && "${as_root[@]}" apt-get install -y -qq "${missing[@]}"; }; then
+                  echo "::warning::apt-get could not install ${missing[*]}."
+                fi
+              elif command -v dnf >/dev/null 2>&1; then
+                if ! "${as_root[@]}" dnf install -y "${missing[@]}"; then
+                  echo "::warning::dnf could not install ${missing[*]}."
+                fi
+              else
+                echo "::warning::neither apt-get nor dnf is on this runner, so ${missing[*]} was not installed."
+              fi
+            fi
+            if [ "$can_change" = 1 ] && [ "$stock_found" = 1 ]; then
+              stock_ok=1
+              if ! "${as_root[@]}" mkdir -p "$disable_dir"; then
+                stock_ok=0
+                echo "::warning::mkdir -p $disable_dir failed."
+              fi
+              if ! "${as_root[@]}" ln -sf "$stock" "$disable_dir/bwrap-userns-restrict"; then
+                stock_ok=0
+                echo "::warning::ln -sf $stock $disable_dir/bwrap-userns-restrict failed."
+              fi
+              if ! "${as_root[@]}" apparmor_parser -R "$stock"; then
+                stock_ok=0
+                echo "::warning::apparmor_parser -R $stock failed."
+              fi
+              if [ "$stock_ok" = 1 ]; then
+                stock_state="was disabled"
+              fi
+            fi
+            if [ "$can_change" = 1 ] && [ "$needs_profile" = 1 ]; then
+              if "${as_root[@]}" tee "$profile" >/dev/null <<'PROFILE'
           abi <abi/4.0>,
           include <tunables/global>
 
@@ -724,13 +776,52 @@ jobs:
             include if exists <local/bwrap>
           }
           PROFILE
-            then
-              if ! "${as_root[@]}" systemctl reload apparmor; then
-                echo "::warning::systemctl could not reload apparmor after writing $profile."
+              then
+                if "${as_root[@]}" apparmor_parser -r "$profile"; then
+                  profile_state="was written and loaded"
+                else
+                  profile_state="was written but not loaded"
+                  echo "::warning::apparmor_parser -r $profile failed after writing it."
+                fi
+              else
+                echo "::warning::could not write $profile."
               fi
-            else
-              echo "::warning::could not write $profile."
             fi
+          fi
+          if [ "$(uname -s)" = Linux ]; then
+            nl=$(printf '\n_')
+            nl=${nl%_}
+            attr="not read, the check did not run"
+            check_ok=0
+            if ! command -v bwrap >/dev/null 2>&1; then
+              check_err="bwrap not on PATH"
+            elif ! command -v unshare >/dev/null 2>&1; then
+              check_err="unshare not on PATH"
+            elif check_err=$(bwrap --unshare-user --dev-bind / / -- unshare -U -r true 2>&1 >/dev/null); then
+              check_ok=1
+            else
+              attr=$(bwrap --unshare-user --dev-bind / / -- cat /proc/self/attr/current 2>&1) || true
+              attr=${attr:-empty}
+            fi
+            if [ "$check_ok" = 1 ]; then
+              echo "Ubuntu's bwrap-userns-restrict $stock_state; the bwrap AppArmor profile $profile_state; the nested user-namespace check inside bwrap passed."
+              exit 0
+            fi
+            if [ -n "${SCRIPTS_DIR-}" ] && [ -f "$SCRIPTS_DIR/lib/harness-run-lib.sh" ] && ( . "$SCRIPTS_DIR/lib/harness-run-lib.sh" && hr_sandbox_opted_out "$PWD" ); then
+              echo "::warning::bwrap's child cannot create a user namespace, so the sandbox cannot run on this runner, but sandbox.optOut is taken, so the job goes on. Check stderr: ${check_err//$nl/ }."
+              exit 0
+            fi
+            notes=""
+            if [ "$stock_found" = 1 ]; then
+              notes=" Ubuntu's bwrap-userns-restrict $stock_state."
+            fi
+            if [ "$check_err" = "bwrap not on PATH" ]; then
+              still_missing=""
+              command -v socat >/dev/null 2>&1 || still_missing=" socat"
+              notes="$notes Packages still missing: bubblewrap$still_missing."
+            fi
+            echo "::error::bwrap's child cannot create a user namespace, so every sandboxed command would fail; the job stops before its session. Check stderr: ${check_err//$nl/ }. bwrap's child confinement (/proc/self/attr/current): ${attr//$nl/ }.$notes"
+            exit 1
           fi
 
       - name: Preflight with doctor

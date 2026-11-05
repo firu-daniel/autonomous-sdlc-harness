@@ -41,7 +41,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_runner_seccomp_userns/ta
 
 1. [x] **Task 1** — Hold the probe runner to stopping before its session when the install step fails _(layer: cli)_ _(points: 5)_
 2. [x] **Task 2** — Declare the stock-profile remedy, the load command and the nested user-namespace check in `sandboxPrerequisites.ts`, and assess them _(layer: cli)_ _(points: 20)_
-3. [ ] **Task 3** — Make `Install the sandbox prerequisites` disable `bwrap-userns-restrict`, load our profile, always verify, and fail before the session _(layer: cli)_ _(points: 20)_
+3. [x] **Task 3** — Make `Install the sandbox prerequisites` disable `bwrap-userns-restrict`, load our profile, always verify, and fail before the session _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Make `doctor`'s `sandbox-prerequisites` check run the nested check and FAIL when it fails _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 5** — Refuse a fresh local launch when bwrap's nested user-namespace check fails, in the run library's mirror _(layer: cli)_ _(points: 20)_
 6. [ ] **Task 6** — Copy the new install step into `scripts/sandbox-probe-runner.yml`, and correct IS3's write rule comment _(layer: general)_ _(points: 10)_
