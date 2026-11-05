@@ -46,7 +46,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_job_mode_scripts_git_pla
 1. [x] **Task 1** — Add `hr_script_root`, which places a script's root from the nearest confirmed `harness.config.json` ancestor, and the runner-git test shim _(layer: cli)_ _(points: 20)_
 2. [x] **Task 2** — Place `run-test-suite.sh`'s and `scratch-run.sh`'s root through `hr_script_root`, held on a job-layout fixture with a placeholder `<scriptsDir>/.git` _(layer: cli)_ _(points: 15)_
 3. [x] **Task 3** — Switch the six other library-sourcing scripts to `hr_script_root` _(layer: cli)_ _(points: 10)_
-4. [ ] **Task 4** — Inline the same placement in the four wrapper templates, held through `init` on a job-layout fixture _(layer: cli)_ _(points: 20)_
+4. [x] **Task 4** — Inline the same placement in the four wrapper templates, held through `init` on a job-layout fixture _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 5** — Keep the launcher suite's `.git`-leaf placeholder in place, and show a job-mode gate run reaching its verdict past it _(layer: cli)_ _(points: 15)_
 6. [ ] **Task 6** — PD31: run the probe's `/proc` reads and their controls through probe-written scripts _(layer: general)_ _(points: 15)_
 7. [ ] **Task 7** — PD31's fixtures: the indirected commands, their allow rules, the PID substitution and the grading _(layer: cli)_ _(points: 15)_
