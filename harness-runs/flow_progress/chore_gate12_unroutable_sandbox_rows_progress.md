@@ -7,7 +7,7 @@ Source: harness-runs/task_prompts/chore_gate12_unroutable_sandbox_rows_task_prom
 - remote-skipped: none
 
 ## Planning
-- [ ] P1. Task plan converged (business_parity + architecture + task-plan-reviewer all PASS)
+- [x] P1. Task plan converged (business_parity + architecture + task-plan-reviewer all PASS)
 - [-] P2. UI-test plan converged (ui-tests-plan-reviewer PASS) — or no_ui
 - [ ] P3. Plans committed & pushed (story index + per-task dir + UI-test plan)
 
