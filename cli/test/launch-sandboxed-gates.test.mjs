@@ -692,8 +692,10 @@ test('(t) F15: job mode with <main>/scripts/.git protected and absent reaches it
   assert.deepEqual(lines(join(f.out, 'gate-in-bwrap.txt')), ['1']);
 
   await f.until(() => existsSync(join(f.out, 'bwrap-exited')), 'the bwrap stub to exit');
-  assert.ok(f.placeholders().includes(scriptsGit), f.placeholders().join('\n'));
-  await f.until(() => !present(scriptsGit), `the sweep of ${scriptsGit}`);
+  const placeholders = f.placeholders();
+  assert.ok(placeholders.includes(scriptsGit), placeholders.join('\n'));
+  // The sweep runs in vector order, scripts/.git before the root dotfiles: waiting on it alone races the snapshot.
+  await f.until(() => placeholders.every((p) => !present(p)), `the sweep of ${placeholders.join(', ')}`);
   await f.until(() => !present(join(f.dir, LANE, `${LABEL}.running`)), 'the run to end');
   const after = await snapshotTree(f.dir);
   const changed = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((k) => before[k] !== after[k]);
