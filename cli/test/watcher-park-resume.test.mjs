@@ -16,7 +16,7 @@ import { mkdir, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { createWatcherFixture } from './helpers/watcher.mjs';
+import { createWatcherFixture, finishedLedgerBody } from './helpers/watcher.mjs';
 
 /** Every `answer_<n>.md` a prompt names under the branch's clarification directory, as numbers. */
 function answersNamed(prompt, branch) {
@@ -147,6 +147,7 @@ test('a run parked under the old layout, partly archived, resumes once for every
   await assertNoLaunch(w, 0, 0);
 
   await w.writeAnswer(4, 'a4\n');
+  await w.setStub(finishedLedgerBody(w.branch));
   await w.tick();
 
   assert.equal(w.prompts().length, 1, `expected exactly one resume:\n${w.watcherLog()}`);

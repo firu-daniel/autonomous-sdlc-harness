@@ -27,7 +27,7 @@ import test from 'node:test';
 import { COPY_GIT_PATHS } from '../dist/generators/writeProtection.js';
 import { INIT_SCRIPTS_DIR, runBash, runGit } from './helpers/fixture.mjs';
 import { scaleBound } from './helpers/timing.mjs';
-import { createWatcherFixture } from './helpers/watcher.mjs';
+import { createWatcherFixture, finishedLedgerBody } from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
 const LEGACY = 'feat_legacy';
@@ -101,6 +101,7 @@ async function legacyFixture(t, status) {
           '  printf "legacy\\n" > legacy.txt',
           `  bash "$HARNESS_MAIN_REPO/${INIT_SCRIPTS_DIR}/commit-on-branch.sh" --repo "$PWD" legacy.txt -- '${subject}' >> '${wrapperLog}' 2>&1 || echo COMMIT_FAILED >> '${wrapperLog}'`,
           `  bash "$HARNESS_MAIN_REPO/${INIT_SCRIPTS_DIR}/push-branch.sh" "$PWD" >> '${wrapperLog}' 2>&1 || echo PUSH_FAILED >> '${wrapperLog}'`,
+          ...finishedLedgerBody(LEGACY).split('\n').map((line) => `  ${line}`),
           'fi',
         ].join('\n'),
       );

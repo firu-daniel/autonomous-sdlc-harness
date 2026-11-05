@@ -8,6 +8,8 @@
  * - **Nothing leaks:** it keeps no response body and prints no secret.
  * - **Only its evidence leaves:** it uploads exactly the probe's evidence, kept 3 days.
  * - **Never here:** it sits under `scripts/` and nothing under `.github/` names it.
+ * - **Stops before its session:** the copied install step is not `continue-on-error`, and no step from it up to
+ *   `Run the probe in job mode` runs after a failure.
  *
  * It reads two fixed files — the workflow and `cli/templates/` + `WORKFLOW_TEMPLATE_DIR` + `WORKFLOW_RUN_FILE`
  * — and no tree, so it is not a tree guard and owes no `treeGuards` entry. The canary name and the controls
@@ -169,6 +171,16 @@ test("the job's own steps are copied, byte for byte", () => {
   assert.ok(at('Read the configuration') < at(SWITCH));
   assert.ok(at(SWITCH) < at('Install the claude CLI when absent'));
   assert.match(step(SWITCH).run, /jq -r '\.defaultBranch[^']*' harness\.config\.json/);
+});
+
+test('a failed install step stops the job before the probe session', () => {
+  const install = 'Install the sandbox prerequisites';
+  assert.notEqual(step(install)['continue-on-error'], true, `${install} is not continue-on-error`);
+  // An `if:` naming no status function carries GitHub's implicit success(), so a failed step skips it.
+  for (const s of STEPS.slice(at(install), at(RUN) + 1)) {
+    if (s.if === undefined) continue;
+    assert.doesNotMatch(String(s.if), /\b(always|failure|cancelled)\s*\(/, `${s.name} runs only after success: ${s.if}`);
+  }
 });
 
 test('it keeps no body and prints no secret', async () => {

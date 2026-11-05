@@ -41,7 +41,11 @@
 # without it. (It is deliberately not spelled out anywhere in this file; its
 # literal presence here is exactly the defect this paragraph prevents.) The
 # project-command wrappers and `autonomous-format-stream.sh` need nothing from
-# this library and do not source it.
+# this library and do not source it. The one sourcer that is not a script is
+# the `harness-run.yml` step `Install the sandbox prerequisites`: it sources this
+# file in a subshell from `$SCRIPTS_DIR/lib/harness-run-lib.sh` (a value read
+# from configuration, not a hardcoded path) and calls only
+# `hr_sandbox_opted_out`, so renaming that function is an edit to the workflow.
 #
 # ONE SCRIPT MUST NOT USE THAT SPELLING, AND THE REASON GENERALISES.
 # `autonomous-watcher.sh` sources this file BEFORE it settles `PATH`, because its
@@ -240,13 +244,20 @@
 # `SANDBOX_HOST_BINARIES`, the missing-piece order, `SANDBOX_INSTALLERS` and
 # `WSL1_AGENT_MESSAGE`; `hr_host_kind_var` codes the first, and
 # `hr_sandbox_prereq_judge_var` the rest, the last two into
-# `HR_SANDBOX_REFUSAL`. AppArmor is not mirrored: no shell decision reads
-# it.
+# `HR_SANDBOX_REFUSAL`; the judge also mirrors `NestedUsernsAnswer` into
+# `HR_SANDBOX_NESTED`. `hr_sandbox_prereq_probe_var` mirrors three of the
+# owner's values: `NESTED_USERNS_PROBE` (the argument vector it runs),
+# `NESTED_USERNS_HELPER` (the `command -v unshare` read that gates the check)
+# and `BWRAP_USERNS_RESTRICT_PROFILE_PATH` (the stock-profile path whose
+# presence words the refusal). `cli/test/sandbox-prerequisites-shell-mirror.test.mjs`
+# holds them equal.
 #
 # MIRROR OF `cli/src/doctor/checks.ts` → `probeSandboxHost`;
 # `hr_sandbox_prereq_probe_var` mirrors its platform, kernel-release and `PATH`
-# reads (`uname -s`, `uname -r`, `command -v`). A change to the probe is an edit
-# here.
+# reads (`uname -s`, `uname -r`, `command -v`), its nested user-namespace check
+# with that check's gate (a `linux` or `wsl2` host on which `bwrap` and `unshare`
+# both resolve), and its stock-profile presence test. A change to the probe is
+# an edit here.
 #
 # MIRROR OF `cli/src/config/model.ts` → `sandboxOptedOut`;
 # `hr_sandbox_opted_out` and the `sandbox.optedOut` flag `hr_config_load`
@@ -1315,6 +1326,46 @@ hr_worktree_config_check_var() {
   return 1
 }
 
+# Remove from the per-working-copy configuration file <file> each of
+# `core.sparseCheckout`, `core.sparseCheckoutCone` and `index.sparse` that it
+# sets exactly once, to the literal value `false`; leave every other entry —
+# such a key absent, repeated, value-less or set to anything else — untouched.
+# Set `HR_WT_SPARSE_DROPPED` to the removed names, `, `-separated, or empty.
+# Return 0 when <file> does not exist. Return 1, with `HR_WT_SPARSE_REFUSAL`
+# set to one sentence, when <file> is a symbolic link, not a regular file or
+# not readable (nothing written), or when an `--unset` fails (naming the key).
+# Prints nothing. Call it directly, never inside `$(…)`.
+#
+# The shape it removes is what `actions/checkout` v7.0.1 leaves
+# (`docs/sandbox-verification.md`, rows CS6 (runner) and FR3, measured in Gate
+# 12 round 13): `git sparse-checkout disable` writes all three at `false`, then
+# `git config --local --unset-all extensions.worktreeConfig` turns the
+# extension off and leaves the file, and `setup-worktree.sh` turning the
+# extension back on makes the keys live again. Only these three at `false` are
+# inert: `false` is git's own default for each, and the other two are unread
+# while `core.sparseCheckout` is not on. `hr_worktree_config_check_var` is
+# deliberately unchanged, so any other shape is still refused.
+hr_worktree_config_drop_inert_sparse_var() {
+  local f="${1-}" key value
+  HR_WT_SPARSE_DROPPED=""
+  HR_WT_SPARSE_REFUSAL=""
+  [ -e "$f" ] || [ -L "$f" ] || return 0
+  if [ -L "$f" ] || [ ! -f "$f" ] || [ ! -r "$f" ]; then
+    HR_WT_SPARSE_REFUSAL="$f is not a readable regular file, so its sparse-checkout keys were not touched"
+    return 1
+  fi
+  for key in core.sparseCheckout core.sparseCheckoutCone index.sparse; do
+    value=$(git -C / config --file "$f" --get-all "$key" 2>/dev/null) || continue
+    [ "$value" = false ] || continue
+    if ! git -C / config --file "$f" --unset "$key" >/dev/null 2>&1; then
+      HR_WT_SPARSE_REFUSAL="cannot remove $key from $f"
+      return 1
+    fi
+    HR_WT_SPARSE_DROPPED="${HR_WT_SPARSE_DROPPED:+$HR_WT_SPARSE_DROPPED, }$key"
+  done
+  return 0
+}
+
 # THE CLONE CONFIGURATION ALLOW-LIST — one contract. `hr_clone_create_var`
 # writes a clone's `.git/config` from exactly this set, and
 # `setup-worktree.sh --target` adds only `core.hooksPath`; the check below
@@ -2142,32 +2193,58 @@ hr_host_kind_var() {
   return 0
 }
 
-# Judge a host's facts: <uname_s> <uname_r> <bwrap> <socat>, each binary `1`
-# when it resolves and `0` when it does not. Pure and bash-3.2-safe. Sets
+# Judge a host's facts: <uname_s> <uname_r> <bwrap> <socat> [<nested>
+# [<stock>]], each binary `1` when it resolves and `0` when it does not;
+# <nested> is the nested user-namespace check's outcome (`not-run`, `passed`,
+# `failed`; default `not-run`) and <stock> is `1` when
+# `/etc/apparmor.d/bwrap-userns-restrict` exists (default `0`), so a
+# four-argument call answers as before. Pure and bash-3.2-safe. Sets
 # `HR_SANDBOX_HOST` (`macos`, `linux`, `wsl2`, `wsl1`, `unsupported`),
 # `HR_SANDBOX_MISSING` (space-separated ids in the owner's order: `bwrap`,
-# `socat`, `wsl1`, `unsupported-platform`) and `HR_SANDBOX_REFUSAL` (one line
-# naming each missing piece and its fix, never the opt-out). 0 when nothing is
-# missing; 1 otherwise.
+# `socat`, `wsl1`, `unsupported-platform`), `HR_SANDBOX_NESTED` (the owner's
+# `NestedUsernsAnswer`: `not-applicable`, `not-run`, `passed`, `failed`,
+# `failed-stock-restrict`) and `HR_SANDBOX_REFUSAL` (one line naming each
+# missing piece and its fix, then any failed nested check, joined with `; `;
+# never the opt-out, and never `doctor`: the watcher's message adds that once).
+# 0 when nothing is missing and the nested check did not fail; 1 otherwise.
 hr_sandbox_prereq_judge_var() {
-  local uname_s="${1-}" uname_r="${2-}" have_bwrap="${3-0}" have_socat="${4-0}" packages="" named=""
+  local uname_s="${1-}" uname_r="${2-}" have_bwrap="${3-0}" have_socat="${4-0}" nested="${5-not-run}" stock="${6-0}" packages="" named="" nested_sentence=""
   HR_SANDBOX_HOST=""
   HR_SANDBOX_MISSING=""
+  HR_SANDBOX_NESTED=""
   HR_SANDBOX_REFUSAL=""
   hr_host_kind_var "$uname_s" "$uname_r"
   HR_SANDBOX_HOST="$HR_HOST_KIND"
   case "$HR_SANDBOX_HOST" in
     unsupported)
+      HR_SANDBOX_NESTED="not-applicable"
       HR_SANDBOX_MISSING="unsupported-platform"
       HR_SANDBOX_REFUSAL='The sandbox does not run on platform `'"$uname_s"'`; it runs on macOS, Linux and WSL2.'
       return 1
       ;;
     wsl1)
+      HR_SANDBOX_NESTED="not-applicable"
       HR_SANDBOX_MISSING="wsl1"
       HR_SANDBOX_REFUSAL='This is a WSL1 host (kernel release `'"$uname_r"'`), where the agent CLI refuses with "Sandboxing requires WSL2"; run the harness under WSL2.'
       return 1
       ;;
-    macos) return 0 ;;
+    macos)
+      HR_SANDBOX_NESTED="not-applicable"
+      return 0
+      ;;
+  esac
+  case "$nested" in
+    passed) HR_SANDBOX_NESTED="passed" ;;
+    failed)
+      if [ "$stock" = "1" ]; then
+        HR_SANDBOX_NESTED="failed-stock-restrict"
+        nested_sentence='`bwrap` cannot create a user namespace inside its sandbox, so every sandboxed command would fail; `/etc/apparmor.d/bwrap-userns-restrict` is present and confines bwrap'"'"'s children.'
+      else
+        HR_SANDBOX_NESTED="failed"
+        nested_sentence='`bwrap` cannot create a user namespace inside its sandbox, so every sandboxed command would fail.'
+      fi
+      ;;
+    *) HR_SANDBOX_NESTED="not-run" ;;
   esac
   if [ "$have_bwrap" != "1" ]; then
     HR_SANDBOX_MISSING="bwrap"
@@ -2179,26 +2256,58 @@ hr_sandbox_prereq_judge_var() {
     packages="${packages:+$packages }socat"
     named="${named:+$named and }"'`socat` (package `socat`)'
   fi
-  [ -n "$HR_SANDBOX_MISSING" ] || return 0
-  HR_SANDBOX_REFUSAL='The sandbox needs '"$named"' on PATH; install with `sudo apt-get install '"$packages"'` (Ubuntu/Debian) or `sudo dnf install '"$packages"'` (Fedora).'
+  if [ -n "$HR_SANDBOX_MISSING" ]; then
+    HR_SANDBOX_REFUSAL='The sandbox needs '"$named"' on PATH; install with `sudo apt-get install '"$packages"'` (Ubuntu/Debian) or `sudo dnf install '"$packages"'` (Fedora).'
+  fi
+  if [ -n "$nested_sentence" ]; then
+    HR_SANDBOX_REFUSAL="${HR_SANDBOX_REFUSAL:+$HR_SANDBOX_REFUSAL; }$nested_sentence"
+  fi
+  [ -n "$HR_SANDBOX_REFUSAL" ] || return 0
   return 1
 }
 
 # Probe this host for the judge: `uname -s`, `uname -r`, and `command -v bwrap`
-# / `command -v socat` against the caller's `PATH`; returns the judge's status.
-# A `uname` that fails is no definite answer: the three variables are cleared and
-# this returns 0, leaving the run to the agent CLI's `failIfUnavailable`.
+# / `command -v socat` against the caller's `PATH`; then, only on a `linux` or
+# `wsl2` host where both `bwrap` and `unshare` resolve, the nested
+# user-namespace check `bwrap --unshare-user --dev-bind / / -- unshare -U -r
+# true` (otherwise `not-run`), bounded by `timeout 10` where `timeout`
+# resolves, as `probeSandboxHost` bounds it with
+# `NESTED_USERNS_PROBE_TIMEOUT_MS`, a timeout answering `failed`, and the
+# presence of
+# `/etc/apparmor.d/bwrap-userns-restrict`, which only words the refusal.
+# Returns the judge's status. A `uname` that fails is no definite answer: the
+# variables are cleared and this returns 0, leaving the run to the agent CLI's
+# `failIfUnavailable`.
 hr_sandbox_prereq_probe_var() {
-  local uname_s uname_r have_bwrap=0 have_socat=0
+  local uname_s uname_r have_bwrap=0 have_socat=0 nested="not-run" stock=0 rc=0
   HR_SANDBOX_HOST=""
   HR_SANDBOX_MISSING=""
+  HR_SANDBOX_NESTED=""
   HR_SANDBOX_REFUSAL=""
   uname_s=$(uname -s 2>/dev/null) || return 0
   [ -n "$uname_s" ] || return 0
   uname_r=$(uname -r 2>/dev/null) || return 0
   if command -v bwrap >/dev/null 2>&1; then have_bwrap=1; fi
   if command -v socat >/dev/null 2>&1; then have_socat=1; fi
-  hr_sandbox_prereq_judge_var "$uname_s" "$uname_r" "$have_bwrap" "$have_socat"
+  hr_host_kind_var "$uname_s" "$uname_r"
+  case "$HR_HOST_KIND" in
+    linux|wsl2)
+      if [ "$have_bwrap" = "1" ] && command -v unshare >/dev/null 2>&1; then
+        if command -v timeout >/dev/null 2>&1; then
+          timeout 10 bwrap --unshare-user --dev-bind / / -- unshare -U -r true </dev/null >/dev/null 2>&1 || rc=$?
+        else
+          bwrap --unshare-user --dev-bind / / -- unshare -U -r true </dev/null >/dev/null 2>&1 || rc=$?
+        fi
+        if [ "$rc" = "0" ]; then
+          nested="passed"
+        else
+          nested="failed"
+        fi
+      fi
+      ;;
+  esac
+  if [ -e /etc/apparmor.d/bwrap-userns-restrict ]; then stock=1; fi
+  hr_sandbox_prereq_judge_var "$uname_s" "$uname_r" "$have_bwrap" "$have_socat" "$nested" "$stock"
 }
 
 # ---------------------------------------------------------------------------

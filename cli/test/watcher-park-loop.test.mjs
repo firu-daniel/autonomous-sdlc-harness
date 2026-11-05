@@ -14,7 +14,7 @@ import { mkdir, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { createWatcherFixture } from './helpers/watcher.mjs';
+import { createWatcherFixture, finishedLedgerBody } from './helpers/watcher.mjs';
 
 /** Writes an unanswered question at the lowest index with no question file in either location. */
 const LOWEST_FREE_INDEX_STUB = [
@@ -98,7 +98,7 @@ test('forced no progress trips the guard, and PARK_LOOP_CLEAR releases it', asyn
   await t.test('the clear action: the sentinel is spent and the run resumes in the same pass', async () => {
     const clearFile = join(w.clarDir, 'PARK_LOOP_CLEAR');
     await writeFile(clearFile, '', 'utf8');
-    await w.setStub(':');
+    await w.setStub(finishedLedgerBody(w.branch));
     await w.tick(env);
 
     assert.equal(existsSync(clearFile), false);
@@ -177,7 +177,7 @@ test('a legacy in-flight park spends at most one cycle, and a pause-resume is no
   assert.equal(events(w).includes('park_loop'), false);
 
   await w.writeAnswer(5, 'a5\n');
-  await w.setStub(':');
+  await w.setStub(finishedLedgerBody(w.branch));
   await w.tick();
   assert.equal(w.prompts().length, 2, w.watcherLog());
   assert.equal(w.record().status, 'completed', w.watcherLog());

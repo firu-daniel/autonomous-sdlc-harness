@@ -27,6 +27,8 @@
  * into the file; and the `Preflight with doctor` step runs `doctor --remote-job` after the step
  * generating the job's permission profile and before the harness runs — the option spelled as
  * `cli/src/commands/doctor.ts` → `REMOTE_JOB_FLAG` declares it, which that module does not export.
+ * `Push the branch` keeps its `always()` condition and turns each refusing or given-up push line into
+ * an `::error::` annotation and a job-summary line, exiting 0.
  * The run-actor gate: the first step of `run` and of `collect`, its `run:` body identical in both and
  * no `secrets.` step of `run` before it, both jobs' `env:` passing `RUN_ACTORS_VARIABLE` from
  * `vars.`, each gate step's `env:` exactly `IN_TRIGGERING_ACTOR`, `IN_OWNER` and `IN_OWNER_TYPE`; and
@@ -515,6 +517,57 @@ test('the placeholder sweep runs under always(), never failing the job, directly
   assert.deepEqual(runBodies(step), [
     'HARNESS_JOB_MODE=1 bash "$SCRIPTS_DIR/autonomous-watcher.sh" job-sweep "$HARNESS_INPUT_BRANCH"',
   ]);
+});
+
+// The rule: push-branch.sh exits 0 on every path, so a refused or given-up push reaches the run
+// page only as an annotation, and the step never fails the job.
+test('Push the branch annotates a refusal or a given-up push, and never fails the job', () => {
+  const body = dedent(runBodies(stepCarrying('push-branch.sh').split('\n'))[0]);
+  const refusal = 'push-branch.sh: refusing to push: /w/.git/config.worktree sets core.sparsecheckout, which a sandboxed command can write';
+  // [stub line, annotated]
+  const cases = [
+    [refusal, true],
+    ['push-branch.sh: push failed for feat_x after 3 attempts (see output above)', true],
+    ['push-branch.sh: pushed feat_x to origin', false],
+    ['push-branch.sh: push failed for feat_x (attempt 1 of 3); retrying in 5s', false],
+    ['push-branch.sh: refusing to push: 100% of /w/.git/config', true],
+  ];
+  for (const [line, annotated] of cases) {
+    const dir = mkdtempSync(join(tmpdir(), 'push-step-'));
+    try {
+      const scripts = join(dir, 'scripts');
+      const temp = join(dir, 'temp');
+      mkdirSync(scripts);
+      mkdirSync(temp);
+      writeFileSync(join(scripts, 'push-branch.sh'), `printf '%s\\n' '${line}'\nexit 0\n`);
+      const summary = join(dir, 'summary.md');
+      const r = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', body], {
+        env: {
+          ...process.env,
+          [MAIN_REPO_ANCHOR_VARIABLE]: '',
+          SCRIPTS_DIR: scripts,
+          RUNNER_TEMP: temp,
+          GITHUB_STEP_SUMMARY: summary,
+        },
+        encoding: 'utf8',
+      });
+      assert.equal(r.error, undefined);
+      assert.equal(r.status, 0, `${line}: ${r.stdout}${r.stderr}`);
+      assert.ok(r.stdout.split('\n').includes(line), `the wrapper's line is printed: ${line}`);
+      const errors = r.stdout.split('\n').filter((l) => l.startsWith('::error'));
+      if (annotated) {
+        assert.deepEqual(errors, [`::error title=Push the branch::${line.replaceAll('%', '%25')}`]);
+        const written = readFileSync(summary, 'utf8');
+        assert.ok(written.includes('### Push the branch'), written);
+        assert.ok(written.includes(line), written);
+      } else {
+        assert.deepEqual(errors, [], line);
+        assert.throws(() => readFileSync(summary, 'utf8'), { code: 'ENOENT' }, `no summary for ${line}`);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
 });
 
 test('the uploaded artifact is the one remote-run.sh downloads: STATE_ARTIFACT_NAME in both mirrors', () => {
