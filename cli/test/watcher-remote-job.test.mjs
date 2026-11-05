@@ -32,7 +32,10 @@
  *
  * **A job ends `completed` only over a finished ledger. An unfinished one is auto-resumed under its
  * own name, bounded, then reported, unless a `user`, `usage` or `budget` pause is pending, which
- * outranks it.** The
+ * outranks it.** A resumed job whose session never wrote its ledger is `unfinished` too: the
+ * `resumed, no ledger:` cases assert it for an `answer` and a `pause` resume, and every other case
+ * that resumes and asserts completion stages a finished ledger in the launch it asserts on. The
+ * `none:` case's ledger-less `job: completed stop` is the first-launch control for that rule. The
  * `unfinished:` cases assert the decision, the prompt count, `pause_reason` and the notifications.
  * RED ONCE, each against the fixture's installed copy of the watcher or its library, never the
  * tracked template: `run_job`'s `unfinished)` arm removed -> the exhausted pause's notification
@@ -45,7 +48,9 @@
  * dropped from its held-reason write -> the in-job usage relaunch case fails, and the user, usage
  * and budget cases with it; `pause_note_stale` dropped from `hr_remote_status_write` -> the
  * auto-resume, user, usage and budget cases show it absent from the bundle; `run_job`'s
- * `prev_note_stale` read dropped -> both restored `pause_note_stale` pause-note cases fail.
+ * `prev_note_stale` read dropped -> both restored `pause_note_stale` pause-note cases fail;
+ * `classify_run_exit`'s resume signal ignored -> both `resumed, no ledger:` cases end
+ * `job: completed stop`.
  *
  * **A job commits each session's run analytics on its branch and pushes nothing for them:** the
  * workflow's `Push the branch` step does. The `run analytics:` case drives a job with the real
@@ -447,6 +452,7 @@ test('answer: the prompt names the restored answer', async (t) => {
 
   await j.writeQuestion(1, '## Q1\n');
   await j.writeAnswer(1, 'a1\n');
+  await j.setStub(await stageLedger(j, taskLedger(j.branch, TASK_LEDGER_IDS)));
   const result = await j.job([j.branch, 'task', 'answer']);
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(j.prompts().at(-1), /clarifications\/feat_x\/answer_1\.md/);
@@ -481,6 +487,7 @@ test('a pause resume launched with an answered pair at the top level ends comple
 
   await j.writeQuestion(1, '## Q1\n');
   await j.writeAnswer(1, 'a1\n');
+  await j.setStub(await stageLedger(j, taskLedger(j.branch, TASK_LEDGER_IDS)));
   const result = await j.job([j.branch, 'task', 'pause']);
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.equal(j.status().status, 'completed');
@@ -502,6 +509,7 @@ test('pause note: kept only for a pause resume of a paused job of the same engin
   const fixture = async (t, { restored, note }) => {
     const j = await createJobFixture(t);
     if (j === null) return null;
+    await j.setStub(await stageLedger(j, taskLedger(j.branch, TASK_LEDGER_IDS)));
     if (restored) await j.restoreStatus(restored);
     if (note) await writeFile(join(j.dir, STATE_DIR, 'PAUSE_PROGRESS.md'), NOTE, 'utf8');
     const notePath = join(j.dir, STATE_DIR, 'PAUSE_PROGRESS.md');
@@ -825,7 +833,7 @@ test('budget: a hosted self-pause continues, silently', async (t) => {
   });
 
   await t.test('self-hosted with the variable unset -> no self-pause', async () => {
-    await j.setStub(HONOUR_PAUSE(30));
+    await j.setStub(`${HONOUR_PAUSE(30)}\n${await stageLedger(j, taskLedger(j.branch, TASK_LEDGER_IDS))}`);
     const result = await j.job([j.branch, 'task', 'none'], {
       HARNESS_JOB_STARTED_EPOCH: String(nowSecs() - 100000),
       RUNNER_ENVIRONMENT: 'self-hosted',
@@ -840,8 +848,9 @@ test('usage: a short reset is waited out in the job, a reset past the deadline g
     const runOnce = async (label, aheadSecs, pauseTenths) => {
       const j = await createJobFixture(t);
       if (j === null) return;
+      const copy = await stageLedger(j, taskLedger(j.branch, TASK_LEDGER_IDS));
       await j.setStub(
-        `${COUNT_LAUNCH}\nif [ "$n" = 1 ]; then ${rateLimitRejected(aheadSecs)}; ${HONOUR_PAUSE(pauseTenths)}; fi`,
+        `${COUNT_LAUNCH}\nif [ "$n" = 1 ]; then ${rateLimitRejected(aheadSecs)}; ${HONOUR_PAUSE(pauseTenths)}; else ${copy}; fi`,
       );
       const result = await j.job([j.branch, 'task', 'none'], {
         USAGE_CHECK_INTERVAL_SECS: '1',
@@ -978,7 +987,8 @@ test('auto-resume: bounded, and reset by a user action', async (t) => {
   await t.test('an unrequested PAUSE_ACK, then exit 0 on relaunch -> one auto-resume, completed', async (t) => {
     const j = await createJobFixture(t);
     if (j === null) return;
-    await j.setStub(`${COUNT_LAUNCH}\nif [ "$n" = 1 ]; then : > "$STATE/PAUSE_ACK"; exit 0; fi`);
+    const copy = await stageLedger(j, taskLedger(j.branch, TASK_LEDGER_IDS));
+    await j.setStub(`${COUNT_LAUNCH}\nif [ "$n" = 1 ]; then : > "$STATE/PAUSE_ACK"; exit 0; fi\n${copy}`);
     const result = await j.job([j.branch, 'task', 'none']);
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
     assert.equal(lastLine(result.stdout), 'job: completed stop');
@@ -1347,6 +1357,48 @@ test('unfinished: a zero exit over an unfinished ledger is resumed, bounded, the
   });
 });
 
+test('resumed, no ledger: an answer resume that exits 0 before any ledger is never completed', async (t) => {
+  const j = await createJobFixture(t);
+  if (j === null) return;
+
+  await j.writeQuestion(1, '## Q1\n');
+  await j.writeAnswer(1, 'a1\n');
+  await j.setStub(':');
+  const result = await j.job([j.branch, 'task', 'answer'], {
+    REMOTE_AUTO_RESUME_DELAY_SECS: '0',
+    REMOTE_AUTO_RESUME_MAX: '1',
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(lastLine(result.stdout), 'job: paused stop');
+  assert.equal(j.prompts().length, 2);
+  assert.equal(j.status().status, 'paused');
+  assert.equal(j.status().pause_reason, 'unfinished');
+  assert.equal(j.status().decision, 'stop');
+  const notes = j.notifications();
+  assert.equal(notes.some((n) => n.event === 'completed'), false, JSON.stringify(notes));
+  const paused = notes.filter((n) => n.event === 'paused');
+  assert.equal(paused.length, 1, JSON.stringify(notes));
+  assert.match(paused[0].detail, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+  const log = j.watcherLog();
+  assert.match(log, /has no readable ledger \(absent: .*\) after an answer resume — not classifying it completed/);
+  assert.doesNotMatch(log, /completed — branch ready for review/);
+});
+
+test('resumed, no ledger: a pause resume that exits 0 before any ledger is never completed', async (t) => {
+  const j = await createJobFixture(t);
+  if (j === null) return;
+
+  await j.restoreStatus({ status: 'paused' });
+  await j.setStub(':');
+  const result = await j.job([j.branch, 'task', 'pause'], { REMOTE_AUTO_RESUME_MAX: '0' });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(lastLine(result.stdout), 'job: paused stop');
+  assert.equal(j.prompts().length, 1);
+  assert.equal(j.status().pause_reason, 'unfinished');
+  const notes = j.notifications();
+  assert.equal(notes.some((n) => n.event === 'completed'), false, JSON.stringify(notes));
+});
+
 test('runner wait: logged from the run createdAt, and noted on a resumed comment only when long', async (t) => {
   for (const [name, waitSecs, expectNote] of [
     ['a long wait on a user resume', 600, true],
@@ -1357,6 +1409,7 @@ test('runner wait: logged from the run createdAt, and noted on a resumed comment
       if (j === null) return;
       await wireForge(j, 'github');
       await j.restoreStatus({ pause_reason: 'user' });
+      await j.setStub(await stageLedger(j, taskLedger(j.branch, TASK_LEDGER_IDS)));
       const start = nowSecs();
       const result = await j.job([j.branch, 'task', 'pause'], {
         HARNESS_INPUT_CHAIN: '0',
@@ -1381,6 +1434,7 @@ test('runner wait: logged from the run createdAt, and noted on a resumed comment
     if (j === null) return;
     await wireForge(j, 'github');
     await j.restoreStatus({ pause_reason: 'user' });
+    await j.setStub(await stageLedger(j, taskLedger(j.branch, TASK_LEDGER_IDS)));
     const start = nowSecs();
     const result = await j.job([j.branch, 'task', 'pause'], {
       HARNESS_INPUT_CHAIN: '0',
@@ -1402,7 +1456,8 @@ test('runner wait: logged from the run createdAt, and noted on a resumed comment
     const j = await createJobFixture(t);
     if (j === null) return;
     await wireForge(j, 'github');
-    await j.setStub(`${COUNT_LAUNCH}\nif [ "$n" = 1 ]; then : > "$STATE/PAUSE_ACK"; exit 0; fi`);
+    const copy = await stageLedger(j, taskLedger(j.branch, TASK_LEDGER_IDS));
+    await j.setStub(`${COUNT_LAUNCH}\nif [ "$n" = 1 ]; then : > "$STATE/PAUSE_ACK"; exit 0; fi\n${copy}`);
     const start = nowSecs();
     const result = await j.job([j.branch, 'task', 'none'], {
       HARNESS_JOB_STARTED_EPOCH: String(start),
