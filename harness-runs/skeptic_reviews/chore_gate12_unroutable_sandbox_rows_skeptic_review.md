@@ -33,7 +33,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Drop SB3's false `allowWrite` ground from its `--list` note, the restated table, the step 7 bullet and the §10 row, keeping `protectedPaths` as the ground _(layer: general)_
+1. [x] **Finding 1** — Drop SB3's false `allowWrite` ground from its `--list` note, the restated table, the step 7 bullet and the §10 row, keeping `protectedPaths` as the ground _(layer: general)_
 
 ---
 
