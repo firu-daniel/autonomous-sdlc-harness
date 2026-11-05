@@ -186,11 +186,11 @@ test('an ssh host alias that ssh -G resolves to github.com is accepted', async (
   const fixture = await fixtureFor(t);
   const log = await sshStub(fixture, 'github.com');
   await aliasOrigin(fixture, 'github-fixture');
-  const result = await runRound(fixture, ['grade', '--repo', GATE12_SLUG, '--row', 'JS3N']);
+  const result = await runRound(fixture, ['grade', '--repo', GATE12_SLUG, '--row', 'RJ3']);
   assert.equal(result.status, 0, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
   const lines = result.stdout.split('\n').filter((l) => l !== '');
   assert.equal(lines.length, 1, result.stdout);
-  assert.ok(lines[0].startsWith('row="JS3N" result="not run"'), lines[0]);
+  assert.ok(lines[0].startsWith('row="RJ3" result="not run"'), lines[0]);
   assert.doesNotMatch(result.stderr, /refusing to start/);
   assert.match(await sshCalls(log), /^-G github-fixture$/m);
 });

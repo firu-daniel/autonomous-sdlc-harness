@@ -46,7 +46,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_gate12_unroutable_sand
 3. [x] **Task 3** — Add the `source` route and re-route SB3 and JS3N in `core.sh`, and plant SB2's `pause-note` arm in `plants.sh` _(layer: general)_ _(points: 20)_
 4. [x] **Task 4** — Grade RJ2 on its refusal at the job-surface step, with a `source` line for the launch-check clause _(layer: general)_ _(points: 15)_
 5. [x] **Task 5** — Grade SB2's two arms and its `remote_status.json` variant's `source` line, and print a `source` line for every `source`-route row _(layer: general)_ _(points: 20)_
-6. [ ] **Task 6** — Test the `pause-note` plant, and move the alias-acceptance case off JS3N _(layer: cli)_ _(points: 10)_
+6. [x] **Task 6** — Test the `pause-note` plant, and move the alias-acceptance case off JS3N _(layer: cli)_ _(points: 10)_
 7. [ ] **Task 7** — Test the new RJ2, SB2 and `source`-row grades _(layer: cli)_ _(points: 20)_
 8. [ ] **Task 8** — Rewrite SB2, SB3, JS3N and RJ2 in `docs/sandbox-verification.md` §10, and align `docs/cli.md` §6 and `docs/remote-execution.md` _(layer: general)_ _(points: 20)_
 9. [ ] **Task 9** — Rewrite Gate 12's round steps 7 and 8 and the owed checks in `docs/development.md`, and re-derive the restated table from `--list` _(layer: general)_ _(points: 20)_
