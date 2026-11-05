@@ -26,7 +26,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 2** — Can the `pause-note` arm's skip line from `hr_remote_bundle_source_ok`, the function that prints it, not from `hr_remote_copy_tree` _(layer: cli)_
+1. [x] **Finding 2** — Can the `pause-note` arm's skip line from `hr_remote_bundle_source_ok`, the function that prints it, not from `hr_remote_copy_tree` _(layer: cli)_
 2. [ ] **Finding 3** — Restore the plain-grade case's total line count at 19 _(layer: cli)_
 3. [ ] **Finding 1** — Fold SB2's next-job clause into the row's verdict, after the `pause-note` arm, so a next job not yet run makes SB2 `not run`, and update the grade suite's expectations _(layer: cli, general)_
 

@@ -19,8 +19,10 @@
  * Every log string a canned answer carries is read at test time out of the shipped file that prints
  * it, never retyped, wherever a fixed substring can be extracted:
  * - `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_remote_copy_tree`: the
- *   `remote state bundle: skipped ` prefix and ` is a symbolic link` suffix of both SB2 arms' skip
- *   lines, the `pause-note` arm's around `<root>/<stateDir>/PAUSE_PROGRESS.md`.
+ *   `remote state bundle: skipped ` prefix and ` is a symbolic link` suffix of the `clarifications`
+ *   arm's skip line.
+ * - `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_remote_bundle_source_ok`: the same prefix
+ *   and suffix of the `pause-note` arm's skip line, around `<root>/<stateDir>/PAUSE_PROGRESS.md`.
  * - `cli/templates/scripts/remote-run.sh` → `status_from_github`: its first line and its
  *   `printf '  state: %s\n'` format, for the JS1 and RJ2 `status` stub; `save_link_free`: the
  *   `remote-run.sh: save: skipped ` form SB2's `clarifications` arm must not accept. No case cans
@@ -82,6 +84,12 @@ const [SKIP_PREFIX, SKIP_SUFFIX] = extract(
   /printf '(remote state bundle: skipped )%s: %s( is a symbolic link)\\n'/,
   'hr_remote_copy_tree skip line',
 );
+const [SOURCE_SKIP_PREFIX, SOURCE_SKIP_SUFFIX] = extract(
+  fnBody(source(LIB), 'hr_remote_bundle_source_ok', LIB),
+  /printf '(remote state bundle: skipped )%s: %s( is a symbolic link)\\n'/,
+  'hr_remote_bundle_source_ok skip line',
+);
+const sourceSkipLine = (path) => `${SOURCE_SKIP_PREFIX}${path}: ${path}${SOURCE_SKIP_SUFFIX}`;
 
 const remoteRun = source(REMOTE_RUN);
 const statusFromGithub = fnBody(remoteRun, 'status_from_github', REMOTE_RUN);
@@ -235,7 +243,7 @@ const PAUSE_LINK = `${RUNNER_STATE}/PAUSE_PROGRESS.md`;
 const PAUSE_TREE = { 'status.json': '{"status":"paused"}\n', 'run.log': 'session log\n' };
 
 /** SB2's `pause-note` run: the session's link skipped at the save step, the bundle clean. */
-function sb2PauseRun({ save = [skipLine(PAUSE_LINK)], artifact = PAUSE_TREE } = {}) {
+function sb2PauseRun({ save = [sourceSkipLine(PAUSE_LINK)], artifact = PAUSE_TREE } = {}) {
   const view = { status: 'completed', conclusion: 'success', steps: steps() };
   return { row: 'SB2', arm: 'pause-note', id: 302, view, log: logFor(view, save.map((text) => [STEP.save, text])), artifact };
 }
@@ -566,7 +574,7 @@ test('SB2 pause-note: no skip line for PAUSE_PROGRESS.md and a clean artifact is
   const fixture = await fixtureFor(t);
   // A skip line for another PAUSE_PROGRESS.md: the leaf is the state directory's own, not the name.
   const other = `${RUNNER_STATE}/clarifications/${SB2_BRANCH}/PAUSE_PROGRESS.md`;
-  const run = sb2PauseRun({ save: [skipLine(other)] });
+  const run = sb2PauseRun({ save: [sourceSkipLine(other)] });
   await stage(fixture, [sb2Run(), run]);
   const { one } = await grade(fixture, SB_ROWS);
   const sb2 = one('SB2');
