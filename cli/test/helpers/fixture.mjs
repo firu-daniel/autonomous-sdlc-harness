@@ -19,7 +19,7 @@
  * why nothing here runs at import time: the module defines functions and resolves paths, and every
  * subprocess, temp directory and refusal happens inside a call a real test makes.
  *
- * ## Six non-obvious choices, and where each comes from
+ * ## Seven non-obvious choices, and where each comes from
  *
  * 1. **The fixture directory is `realpath`-resolved.** `git rev-parse --show-toplevel` answers with
  *    the physical path, while `os.tmpdir()` is a symlink on macOS. Without this, every absolute path
@@ -31,10 +31,18 @@
  *    allow and cannot be overridden, so a shelled-out teardown is silently blocked — which would
  *    leave a fixture behind on every run with no error to notice. That is the CLI's own standing
  *    rule (`cli.ts`'s header), and it holds for the tests too.
- * 3. **git runs with every configuration source it reads pointed away — the per-user file, the
- *    system file, and a bundled system configuration that neither redirect reaches.** A machine's
- *    own `init.defaultBranch` or `core.hooksPath` would otherwise decide what a test observes, so
- *    the same test would pass on one machine and fail on another for a reason no assertion names.
+ * 3. **git runs with every configuration source it reads pointed away from the host — the per-user
+ *    file at the checked-in `isolated-gitconfig` beside this module, the system file at `/dev/null`,
+ *    and a bundled system configuration that neither redirect reaches suppressed.** A machine's own
+ *    `init.defaultBranch` or `core.hooksPath` would otherwise decide what a test observes, so the
+ *    same test would pass on one machine and fail on another for a reason no assertion names. The
+ *    per-user file is not empty because of the commit identity: with none in any configuration
+ *    file, git guesses one from the host name, so the same commit passes on a host whose name
+ *    carries a domain (macOS) and fails on one whose name does not (a container:
+ *    `fatal: unable to auto-detect email address (got 'probe@b6e01aa5ca60.(none)')`). The file sets
+ *    `user.useConfigOnly`, so a commit with no configured identity is refused on every host, and a
+ *    repository that commits — the fixture, its {@link seedOrigin} — carries its own. That Linux
+ *    failure in `remote-start.test.mjs` was a test assumption, not a fault in a shipped script.
  *    This closes the git-**config** axis and only that one: which git version is installed, whether
  *    `jq` is on `PATH`, and whether the host schedules with launchd or with systemd all still reach
  *    these tests, so this is not a claim that they are host-independent.
@@ -57,6 +65,14 @@
  *    command. Under Node 20.19.5 a `--test-timeout` expiry never aborts `t.signal`: the runner
  *    kills the file's process first, which leaves a detached group running. `timeoutMs` below the
  *    test timeout is the half that reaps (`cli/test/test-timeout.test.mjs`).
+ * 7. **No single argument or environment string over 131072 bytes is spawned.** Linux refuses
+ *    any one string of `execve`'s argument vector or environment longer than `MAX_ARG_STRLEN`,
+ *    counting its terminating NUL; macOS bounds only the total, so a test that hands a script one
+ *    oversized argument passes there and fails with `E2BIG` on Linux. {@link oversizedArgString}
+ *    checks the caller's `args` and `env` overrides — never `process.env`, which is the host's —
+ *    before {@link run} or {@link runBounded} spawns, and a call over the bound rejects without
+ *    spawning (choice 4). 131072 is `MAX_ARG_STRLEN` on 4 KiB pages, the smallest it gets; a
+ *    kernel with larger pages allows more, so it is the bound every Linux host enforces.
  */
 
 import { execFile, spawn } from 'node:child_process';
@@ -65,6 +81,8 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, readdir, readFile, lstat, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
+import { MAIN_REPO_ANCHOR_VARIABLE } from '../../dist/core/mainRepoAnchor.js';
+import { KEEP_AWAKE_LOCK_PROBE_ENV } from '../../dist/doctor/checks.js';
 
 /**
  * The directory a fresh `init` writes its scripts into. A suite addressing scripts that an `init`
@@ -104,23 +122,77 @@ const DEFAULT_EXCLUDES = Object.freeze(['.git']);
 /** Enough for an `init` run's action log, which is one line per written path. */
 const MAX_BUFFER = 16 * 1024 * 1024;
 
+/** The per-user git configuration of choice 3; no leading dot, for the self-containment gate. */
+const ISOLATED_GITCONFIG = resolve(import.meta.dirname, 'isolated-gitconfig');
+
+/** `MAX_ARG_STRLEN` on 4 KiB pages, terminating NUL included (choice 7 in the module header). */
+export const MAX_ARG_STRING_BYTES = 131072;
+
+/**
+ * The refusal of choice 7: the message naming the first caller-supplied string over
+ * {@link MAX_ARG_STRING_BYTES}, or `undefined` when every one fits.
+ *
+ * @param {readonly string[]} args
+ * @param {Record<string, string>} env the caller's overrides only.
+ * @returns {string | undefined}
+ */
+function oversizedArgString(args, env) {
+  const refusal = (what, bytes) =>
+    `fixture: ${what} is ${bytes} bytes (${bytes + 1} with its NUL), over the ${MAX_ARG_STRING_BYTES}-byte bound ` +
+    'Linux enforces per string (MAX_ARG_STRLEN) and macOS does not';
+  for (const [index, arg] of args.entries()) {
+    const bytes = Buffer.byteLength(arg);
+    if (bytes + 1 > MAX_ARG_STRING_BYTES) return refusal(`argument ${index}`, bytes);
+  }
+  for (const [name, value] of Object.entries(env)) {
+    const bytes = Buffer.byteLength(`${name}=${value}`);
+    if (bytes + 1 > MAX_ARG_STRING_BYTES) return refusal(`environment variable ${name}`, bytes);
+  }
+  return undefined;
+}
+
 /**
  * The environment every subprocess gets, over `process.env`.
  *
  * The three `GIT_CONFIG_*` values are choice 3 in the module header, and it takes three rather than
- * two. `/dev/null` is a readable, empty configuration file rather than a missing one, which is what
- * git wants for both redirects — but some git builds ship a **bundled** system configuration that
+ * two. The system redirect is `/dev/null`, a readable, empty configuration file rather than a
+ * missing one — but some git builds ship a **bundled** system configuration that
  * `GIT_CONFIG_SYSTEM` does not redirect at all, reachable only by suppressing the system scope
  * outright, and the `init.defaultBranch` such a build sets is `main`: the same string as the schema
  * default. Without that third value, a case on one of those hosts asserts that two coincidentally
  * equal values are equal, and would go on passing against detection that had stopped reading the
  * repository entirely.
+ *
+ * The per-user redirect is {@link ISOLATED_GITCONFIG}, which sets only `user.useConfigOnly`: with
+ * no identity in any configuration file git otherwise guesses one from the host name, so a commit
+ * passes on a host whose name carries a domain and fails on one whose name does not. It is a file
+ * rather than `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_0` (the form `init.test.mjs` → `NO_COMMIT_IDENTITY`
+ * uses) because the wrappers under test drop `GIT_CONFIG_COUNT` and `GIT_CONFIG_PARAMETERS` through
+ * `hr_git_env_drop`, and several tests pass their own `GIT_CONFIG_COUNT`: an environment-borne key
+ * would collide with both. Residual: `hr_git_env_drop` also unsets `GIT_CONFIG_GLOBAL`, so a git
+ * call a wrapper makes after that drop reads the host's own `~/.gitconfig`; such a call is outside
+ * this isolation, as it already was.
+ *
+ * `HARNESS_GITHUB_DEFAULT_COMMIT` is blanked because the remote bundle library switches to the
+ * trusted configuration whenever it is non-empty, and a `harness-run` job exports it to every later
+ * step, a session's gate runs included; a case that exercises trusted mode passes it explicitly.
+ *
+ * {@link MAIN_REPO_ANCHOR_VARIABLE} is blanked because the plugin's readers act on the main checkout
+ * it names, and the watcher exports it to every session it launches, a session's gate runs
+ * included; a case whose subject is the anchor passes it explicitly.
+ *
+ * {@link KEEP_AWAKE_LOCK_PROBE_ENV} is set to `off` because `doctor`'s `keep-awake` check otherwise
+ * takes a real logind lock on a Linux host, and no test takes one unasked; no shipped path ever sets
+ * it, and a case whose subject is the real lock passes `{ [KEEP_AWAKE_LOCK_PROBE_ENV]: '' }` explicitly.
  */
 const ISOLATED_ENV = Object.freeze({
-  GIT_CONFIG_GLOBAL: '/dev/null',
+  GIT_CONFIG_GLOBAL: ISOLATED_GITCONFIG,
   GIT_CONFIG_NOSYSTEM: '1',
   GIT_CONFIG_SYSTEM: '/dev/null',
   GIT_TERMINAL_PROMPT: '0',
+  HARNESS_GITHUB_DEFAULT_COMMIT: '',
+  [MAIN_REPO_ANCHOR_VARIABLE]: '',
+  [KEEP_AWAKE_LOCK_PROBE_ENV]: 'off',
 });
 
 /**
@@ -144,6 +216,11 @@ const ISOLATED_ENV = Object.freeze({
  */
 function run(command, args, cwd, env = {}) {
   return new Promise((resolveRun, rejectRun) => {
+    const oversized = oversizedArgString(args, env);
+    if (oversized !== undefined) {
+      rejectRun(new Error(oversized));
+      return;
+    }
     const options = {
       cwd,
       encoding: 'utf8',
@@ -242,6 +319,13 @@ function insideFixture(dir, relativePath) {
  * `<branch>` is read off the unborn `HEAD` rather than chosen, so it is the same name `init`'s
  * detection reads from this checkout and writes into `defaultBranch`.
  *
+ * **The origin carries the fixture's own identity**, the one {@link seedRepository} gives the
+ * fixture, because a commit can happen inside it — a test's own `commit-tree` there, a
+ * `post-receive` hook's — and every fixture's origin is a copy of this one, hooks included. Without
+ * it, git guessed an identity from the host name, and two `remote-start.test.mjs` cases failed on
+ * Linux with `fatal: unable to auto-detect email address (got 'probe@b6e01aa5ca60.(none)')`.
+ * Verdict: a test assumption, not a fault in a shipped script (choice 3 in the module header).
+ *
  * @param {string} dir the fixture repository.
  * @returns {Promise<string>} the bare repository's path, for teardown.
  */
@@ -249,6 +333,8 @@ async function seedOrigin(dir) {
   const bare = `${dir}${ORIGIN_SUFFIX}`;
   await mkdir(bare, { recursive: true });
   await runGit(bare, ['init', '--bare', '--quiet']);
+  await runGit(bare, ['config', 'user.email', 'fixture@example.invalid']);
+  await runGit(bare, ['config', 'user.name', 'Harness Fixture']);
   await runGit(dir, ['remote', 'add', 'origin', bare]);
 
   const branch = (await runGit(dir, ['symbolic-ref', '--short', 'HEAD'])).stdout.trim();
@@ -466,6 +552,11 @@ function killGroup(pid) {
 function runBounded(command, args, cwd, env, { timeoutMs, signal }) {
   const argv = [command, ...args].join(' ');
   return new Promise((resolveRun, rejectRun) => {
+    const oversized = oversizedArgString(args, env);
+    if (oversized !== undefined) {
+      rejectRun(new Error(oversized));
+      return;
+    }
     if (signal?.aborted) {
       rejectRun(new Error(`runBash aborted: ${argv}`));
       return;

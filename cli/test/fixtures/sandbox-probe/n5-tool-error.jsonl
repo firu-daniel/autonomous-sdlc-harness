@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"sp-n5-tool-error","cwd":"@FIXTURE_ROOT@"}
+{"type":"user","timestamp":"2026-01-01T00:00:00.000Z","message":{"role":"user","content":"Run the command with allowed_domains."}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:01.000Z","message":{"id":"m1","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"curl -sS -o /dev/null https://n5.example.invalid/","allowed_domains":["n5.example.invalid"]}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","is_error":true,"content":"<tool_use_error>allowed_domains applies only to a command that runs in the sandbox, and this one would not (dangerouslyDisableSandbox, an excluded command, or no sandbox for this shell): remove it, or run the command sandboxed.</tool_use_error>"}]}}
+{"type":"result","subtype":"success","timestamp":"2026-01-01T00:00:03.000Z","duration_ms":3000,"permission_denials":[]}

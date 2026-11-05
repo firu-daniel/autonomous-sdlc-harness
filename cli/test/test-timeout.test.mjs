@@ -5,10 +5,16 @@
  * leaves no process of its fixture behind.** One case writes a child test file that runs the
  * written watcher's endless `watch` loop through `runBash`'s bounded form
  * (`helpers/fixture.mjs`, choice 6), runs it in a child `node --test`, and reads the child's TAP
- * and the process table. The child runs under the parent's environment **minus `NODE_TEST_CONTEXT`**:
+ * and the process table. The process-table read is skipped, with `pgrep`'s own status and stderr
+ * quoted, when `pgrep` exits with anything but 0 or 1: it then could not read the table, and its
+ * answer says nothing about survivors. The child runs under the parent's environment **minus `NODE_TEST_CONTEXT`**:
  * the runner sets it in every test-file subprocess, and a nested `node --test` that inherits it does
  * not run as a top-level TAP runner — a probe run outside the runner passes where this case, left
  * inheriting it, fails.
+ *
+ * `CHILD_BOUND_MS` stays fixed under `HARNESS_TEST_TIME_SCALE`: it is the bound under test. The child
+ * inherits the parent's scale, but its `runBash` bound is the literal `CHILD_BOUND_MS` written into
+ * its source, so nothing in the child scales it.
  *
  * These run against the **compiled** CLI at `dist/cli.js`, because `init` is what writes the
  * watcher into the child's fixture; `npm run build` precedes `npm test`.
@@ -20,7 +26,9 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
+import { MAIN_REPO_ANCHOR_VARIABLE } from '../dist/core/mainRepoAnchor.js';
 import { createFixture } from './helpers/fixture.mjs';
+import { scaleBound } from './helpers/timing.mjs';
 
 const CHILD_TEST_NAME = 'a watch loop that never returns';
 
@@ -28,10 +36,11 @@ const CHILD_TEST_NAME = 'a watch loop that never returns';
  * The child runner's `--test-timeout`. Under Node 20.19.5 it bounds the child **file's** whole run —
  * start-up, its own fixture seeding and `init` on a loaded gate host — and it must never fire before
  * `CHILD_BOUND_MS`: if it did, the child's TAP would name the file and leave the watcher group
- * running, which is what this case asserts cannot happen. Kept below the parent suite's own
- * `--test-timeout` (`cli/package.json` → `scripts.test`).
+ * running, which is what this case asserts cannot happen. Scaled by `HARNESS_TEST_TIME_SCALE`, so it
+ * is always above the fixed `CHILD_BOUND_MS`; at the cap of 5 it is 1 200 000 ms, below the parent
+ * suite's own `--test-timeout` of 1 800 000 ms (`cli/package.json` → `scripts.test`).
  */
-const CHILD_TEST_TIMEOUT_MS = 240_000;
+const CHILD_TEST_TIMEOUT_MS = scaleBound(240_000);
 
 /**
  * The child's explicit `runBash` bound, which is what reaps: under Node 20.19.5 a `--test-timeout`
@@ -55,7 +64,7 @@ function execResult(command, args, options = {}) {
 /** The parent's environment minus the runner's child marker, plus `extra`. */
 function topLevelRunnerEnv(extra) {
   const { NODE_TEST_CONTEXT: _childMarker, ...env } = process.env;
-  return { ...env, ...extra };
+  return { ...env, [MAIN_REPO_ANCHOR_VARIABLE]: '', ...extra };
 }
 
 function childSource() {
@@ -102,7 +111,15 @@ test('a hung watcher case fails by name with a timeout and leaves no process beh
   const fixtureDir = readFileSync(recordPath, 'utf8');
   assert.notEqual(fixtureDir, '', 'the child never recorded its watcher fixture');
   await new Promise((resolveWait) => setTimeout(resolveWait, REAP_GRACE_MS));
-  // `pgrep` exits 1 when nothing matches, and 0 with the matches listed.
   const left = await execResult('pgrep', ['-f', fixtureDir]);
+  // `pgrep` exits 1 when nothing matches, and 0 with the matches listed. Any other status means it
+  // could not read the process table at all, so the survivor check cannot be made on this machine.
+  if (left.status !== 0 && left.status !== 1) {
+    t.skip(
+      `pgrep cannot read the process table on this machine (exit ${left.status}: ${left.stderr.trim()}), ` +
+        'so the hung fixture cannot be checked for survivors here',
+    );
+    return;
+  }
   assert.equal(left.status, 1, `processes of the hung fixture survived:\n${left.stdout}${left.stderr}`);
 });

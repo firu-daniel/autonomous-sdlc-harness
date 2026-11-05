@@ -1,7 +1,10 @@
 """The rule this file exists to enforce, carried over from `refresh.ts`: the Markdown is the source
 of truth and the index is always rebuildable from it, so a refresh never keeps a chunk the corpus no
 longer has, re-embeds only a chunk whose key is new or whose hash moved, and an embedder change
-discards every stored vector rather than mixing two models' vectors in one index.
+discards every stored vector rather than mixing two models' vectors in one index. The end-state
+rule, that every refresh that wrote and every index not marked rebuilt ends with
+`rebuild_indexes()`, is asserted here on the fake, by call count, and on a real Postgres in
+`tests/test_refresh_end_state_postgres.py`.
 
 Each case builds a throwaway corpus under `tmp_path` and refreshes an `InMemoryDocStore` with the
 `hash-v1` stub embedder, wrapped to record the size of every `embed_documents` batch.
@@ -15,9 +18,15 @@ from typing import Any
 import pytest
 
 from fakes import InMemoryDocStore, doc_chunk
+from harness_docs_retrieval.chunk import DocChunk
 from harness_docs_retrieval.models import Embedder
 from harness_docs_retrieval.refresh import EMBED_BATCH_SIZE, RefreshResult, refresh_index
-from harness_docs_retrieval.store import EMBEDDER_META_KEY
+from harness_docs_retrieval.store import (
+    EMBEDDER_META_KEY,
+    INDEX_STATE_META_KEY,
+    INDEX_STATE_PENDING,
+    INDEX_STATE_REBUILT,
+)
 from harness_docs_retrieval.stubs import RETRIEVAL_STUB_ENV, resolve_models
 
 CONFIG: dict[str, Any] = {
@@ -196,3 +205,97 @@ def test_a_missing_conventions_document_warning_is_passed_through(
         "conventions document context/cli.md of layer cli is missing and was skipped",
     )
     assert (result.files, result.chunks) == (3, 4)
+
+
+class _FailingUpsertStore(InMemoryDocStore):
+    async def upsert_chunks(
+        self, chunks: Sequence[DocChunk], embeddings: Sequence[Sequence[float]]
+    ) -> None:
+        raise RuntimeError("upsert failed")
+
+
+def test_a_first_build_rebuilds_once_and_marks_the_index_rebuilt(
+    tmp_path: Path, embedder: _RecordingEmbedder
+) -> None:
+    _corpus(tmp_path)
+    store = InMemoryDocStore()
+    _refresh(tmp_path, store, embedder)
+    assert store.rebuilds == 1
+    assert store.meta[INDEX_STATE_META_KEY] == INDEX_STATE_REBUILT
+
+
+def test_an_unchanged_refresh_over_a_rebuilt_index_does_not_rebuild(
+    tmp_path: Path, embedder: _RecordingEmbedder
+) -> None:
+    _corpus(tmp_path)
+    store = InMemoryDocStore()
+    _refresh(tmp_path, store, embedder)
+    store.rebuilds = 0
+    _refresh(tmp_path, store, embedder)
+    assert store.rebuilds == 0
+    assert store.meta[INDEX_STATE_META_KEY] == INDEX_STATE_REBUILT
+
+
+@pytest.mark.parametrize("index_state", [INDEX_STATE_PENDING, None])
+def test_an_unchanged_refresh_over_an_index_not_marked_rebuilt_rebuilds_once(
+    tmp_path: Path, embedder: _RecordingEmbedder, index_state: str | None
+) -> None:
+    # `None` is the database the shipped code left: rows and no index-state record.
+    _corpus(tmp_path)
+    store = InMemoryDocStore()
+    _refresh(tmp_path, store, embedder)
+    if index_state is None:
+        del store.meta[INDEX_STATE_META_KEY]
+    else:
+        store.meta[INDEX_STATE_META_KEY] = index_state
+    store.rebuilds = 0
+    result = _refresh(tmp_path, store, embedder)
+    assert (result.embedded, result.deleted) == (0, 0)
+    assert store.rebuilds == 1
+    assert store.meta[INDEX_STATE_META_KEY] == INDEX_STATE_REBUILT
+
+
+def test_an_edit_rebuilds_once(tmp_path: Path, embedder: _RecordingEmbedder) -> None:
+    _corpus(tmp_path)
+    store = InMemoryDocStore()
+    _refresh(tmp_path, store, embedder)
+    store.rebuilds = 0
+    _write(tmp_path, "docs/a.md", ALPHA.replace("second body", "second body, edited"))
+    _refresh(tmp_path, store, embedder)
+    assert store.rebuilds == 1
+    assert store.meta[INDEX_STATE_META_KEY] == INDEX_STATE_REBUILT
+
+
+def test_a_deletion_rebuilds_once(tmp_path: Path, embedder: _RecordingEmbedder) -> None:
+    _corpus(tmp_path)
+    store = InMemoryDocStore()
+    _refresh(tmp_path, store, embedder)
+    store.rebuilds = 0
+    (tmp_path / "docs/a.md").unlink()
+    result = _refresh(tmp_path, store, embedder)
+    assert (result.embedded, result.deleted) == (0, 2)
+    assert store.rebuilds == 1
+    assert store.meta[INDEX_STATE_META_KEY] == INDEX_STATE_REBUILT
+
+
+def test_an_embedder_change_rebuilds_once(tmp_path: Path, embedder: _RecordingEmbedder) -> None:
+    _corpus(tmp_path)
+    store = InMemoryDocStore()
+    _refresh(tmp_path, store, embedder)
+    store.meta[EMBEDDER_META_KEY] = "some-other-embedder"
+    store.rebuilds = 0
+    result = _refresh(tmp_path, store, embedder)
+    assert result.rebuilt
+    assert store.rebuilds == 1
+    assert store.meta[INDEX_STATE_META_KEY] == INDEX_STATE_REBUILT
+
+
+def test_a_refresh_interrupted_after_a_write_leaves_the_index_pending(
+    tmp_path: Path, embedder: _RecordingEmbedder
+) -> None:
+    _corpus(tmp_path)
+    store = _FailingUpsertStore()
+    with pytest.raises(RuntimeError, match="upsert failed"):
+        _refresh(tmp_path, store, embedder)
+    assert store.rebuilds == 0
+    assert store.meta[INDEX_STATE_META_KEY] == INDEX_STATE_PENDING

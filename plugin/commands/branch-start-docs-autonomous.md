@@ -16,7 +16,7 @@ The tokens below are not ordinary **path placeholders** (`<branch>`, `<slug>`, `
 | `<docs_root>` | config value | `docs.root` — the repo-relative directory holding the documentation corpus this flow builds. Read **only** when `phases.docs` is `true`, which is the same gate that decides whether this flow runs at all. |
 | `<scripts_dir>` | config value | `scriptsDir` — the directory the outer-loop scripts live in. This file names two of them — `autonomous-watcher.sh`, as the owner of the responsibilities this command deliberately does not have, and `push-branch.sh`, in the hard boundary — and invokes neither. |
 | `<default_branch>` | config value | `defaultBranch` — the branch work starts from and merges back into. Never a remembered branch name. Bound for completeness — no step in this file consumes it. |
-| `<protected_branches>` | config value | `protectedBranches` — the branches the hard boundary below forbids merging into, pushing to, or opening a PR against. The effective set is these together with `<default_branch>`. The `pre-push` git hook enforces that set; above it, the plugin's `PreToolUse` protected-branch guard together with the generated permission profile's `Bash(git push:*)` **`ask`** entry — evaluated before any `allow`, and unanswerable in an unattended run — is the best-effort layer. |
+| `<protected_branches>` | config value | `protectedBranches` — the branches the hard boundary below forbids merging into, pushing to, or opening a PR against. The effective set is these together with `<default_branch>`. The `pre-push` git hook enforces that set; above it, the plugin's `PreToolUse` protected-branch guard together with the generated permission profile's `Bash(git push:*)` **`ask`** entry — evaluated before any `allow`, and refused in an unattended run — is the best-effort layer. |
 
 ---
 
@@ -34,19 +34,19 @@ It is **much leaner than the code engine** because documentation has no code-sha
 
 You are the **orchestrator** for the whole session. You do not write docs and you do not review them — you dispatch `docs-writer` / `docs-reviewer`, flip checklist boxes, and commit. Everything else you delegate.
 
-**This command is execution-context-agnostic.** Worktree creation, central logging, and exit notification are the **watcher's** responsibility (`<scripts_dir>/autonomous-watcher.sh`), NOT this command's. Assume you already run in the correct checkout and resolve every path relative to it.
+**This command is execution-context-agnostic.** Run-copy creation, central logging, and exit notification are the **watcher's** responsibility (`<scripts_dir>/autonomous-watcher.sh`), NOT this command's. Assume you already run in the correct checkout and resolve every path relative to it.
 
 ## Two entry points, one engine
 
 - **(a) Manual / interactive** — you invoke `/autonomous-sdlc-harness:branch-start-docs-autonomous` yourself in the branch's checkout and watch the `[docs · <slug> · …]` heartbeat live. Simplest for validating the flow on a short checklist.
-- **(b) Watcher / headless** — the watcher (`<scripts_dir>/autonomous-watcher.sh`) launches this same command with `-p` plus the generated permission profile via `--settings`, inside the per-branch worktree it created from a `<branch>_docs.md` inbox drop. Usage-gated auto-pause/resume is the watcher's, and this engine honors `<state_dir>/PAUSE` so it yields cleanly.
+- **(b) Watcher / headless** — the watcher (`<scripts_dir>/autonomous-watcher.sh`) launches this same command with `-p` plus the generated permission profile via `--settings`, inside the per-branch run copy it created from a `<branch>_docs.md` inbox drop. Usage-gated auto-pause/resume is the watcher's, and this engine honors `<state_dir>/PAUSE` so it yields cleanly.
 
 ## Steps
 
 1. **Derive anchors once, at session start — never hardcode an absolute machine path:**
-   - `REPO_ROOT=$(git rev-parse --show-toplevel)` — the current checkout (the worktree, or the main repo in the manual entry point). Obtain it with a **bare** `git rev-parse --show-toplevel` and build every literal path from the result; never embed the `$(…)` substitution inside another shell command, and never stash it in a shell variable across separate Bash calls — separate calls do not share shell state.
+   - `REPO_ROOT=$(git rev-parse --show-toplevel)` — the current checkout (the run copy, or the main repo in the manual entry point). Obtain it with a **bare** `git rev-parse --show-toplevel` and build every literal path from the result; never embed the `$(…)` substitution inside another shell command, and never stash it in a shell variable across separate Bash calls — separate calls do not share shell state.
 
-2. **Global kill switch — check at session start.** If `<MAIN_REPO>/<state_dir>/AUTONOMOUS_STOP` exists (the global switch in the **main** repo — the first entry of `git worktree list` (`git worktree list --porcelain | head -1 | sed 's/^worktree //'`), or the watcher-supplied env), halt immediately and report it. Do NOT delete it.
+2. **Global kill switch — check at session start.** If `<MAIN_REPO>/<state_dir>/AUTONOMOUS_STOP` exists (the global switch in the **main** repo — `<MAIN_REPO>` is the path a bare `printenv HARNESS_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none), halt immediately and report it. Do NOT delete it.
 
 3. **Determine the current git branch** with `git branch --show-current` → `<branch>`.
 
@@ -56,6 +56,6 @@ You are the **orchestrator** for the whole session. You do not write docs and yo
 
 ## Hard boundary
 
-The flow ends at **"branch ready for review."** It must **never** merge to a branch in `<protected_branches>`, push to one, or open/push a PR. Two layers enforce this at the harness level — the `pre-push` git hook, and above it the plugin's `PreToolUse` protected-branch guard together with the generated permission profile's `Bash(git push:*)` **`ask`** entry, which is evaluated before any `allow` and which an unattended run cannot answer — and this command states the intent so the orchestrator never attempts it. The user does the final review and opens the PR out-of-band.
+The flow ends at **"branch ready for review."** It must **never** merge to a branch in `<protected_branches>`, push to one, or open/push a PR. Two layers enforce this at the harness level — the `pre-push` git hook, and above it the plugin's `PreToolUse` protected-branch guard together with the generated permission profile's `Bash(git push:*)` **`ask`** entry, which is evaluated before any `allow` and which an unattended run's permission mode refuses — and this command states the intent so the orchestrator never attempts it. The user does the final review and opens the PR out-of-band.
 
-The flow **does** push its own **non-protected** worktree branch to its upstream after each commit (via `<scripts_dir>/push-branch.sh`) — expected behaviour, not a boundary violation (`push-branch.sh` self-refuses a branch in `<protected_branches>`).
+The flow **does** push its own **non-protected** run branch to its upstream after each commit (via `<scripts_dir>/push-branch.sh`) — expected behaviour, not a boundary violation (`push-branch.sh` self-refuses a branch in `<protected_branches>`).

@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"sp-cw6-permission","cwd":"@FIXTURE_ROOT@"}
+{"type":"user","timestamp":"2026-01-01T00:00:00.000Z","message":{"role":"user","content":"Run the command."}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:01.000Z","message":{"id":"m1","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"GIT_DIR=@FIXTURE_ROOT@/tmp/wr-cw6-scratch/.git bash @FIXTURE_ROOT@/scripts/commit-on-branch.sh --repo @FIXTURE_ROOT@/clone sbx_wr_prefix.txt -- \"chore: Sandbox probe CW6\""}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","is_error":true,"content":"Permission to use Bash has been denied because Claude Code is running in don't ask mode."}]}}
+{"type":"result","subtype":"success","timestamp":"2026-01-01T00:00:03.000Z","duration_ms":3000,"permission_denials":[]}

@@ -12,6 +12,8 @@
  * to stderr and exits non-zero.
  *
  *   corpus <fixture-catalog|self-docs>     the eval's corpus, enumerated and chunked
+ *   corpus-at <repoRoot> (stdin)           `corpusFiles` of the stdin config at `repoRoot`, which is
+ *                                          passed as given, so an alias spelling reaches it unchanged
  *   constants                              the exported constants of search, store, server, models
  *   render (stdin)                         `renderResults` of a `SearchResult`
  *   stub-models (stdin)                    the stub embedder's vectors and the stub reranker's scores
@@ -48,6 +50,13 @@ import {
   CHUNKS_TABLE,
   CHUNK_TEXT_COLUMN,
   EMBEDDER_META_KEY,
+  END_STATE_STATEMENTS,
+  EXTENSION_UPDATE_STATEMENTS,
+  INDEX_STATE_META_KEY,
+  INDEX_STATE_PENDING,
+  INDEX_STATE_REBUILT,
+  LEXICAL_SEARCH_STATEMENT,
+  STALE_EXTENSIONS_QUERY,
   chunkEmbeddingColumn,
 } from '../../cli/dist/retrieval/store.js';
 import { BUILT_IN_CORPORA, corpusConfig } from '../../evals/docs-retrieval/corpora.mjs';
@@ -83,6 +92,14 @@ function corpus(id) {
   return { repoRoot, config, files, warnings, chunks };
 }
 
+function corpusAt(repoRoot) {
+  if (repoRoot === undefined) {
+    throw new Error('corpus-at needs <repoRoot>');
+  }
+  const { files, warnings } = corpusFiles(repoRoot, readStdinJson());
+  return { files, warnings };
+}
+
 function constants() {
   return {
     search: {
@@ -100,8 +117,15 @@ function constants() {
       BM25_INDEX,
       BM25_INDEX_DEFINITION,
       BM25_ORDER_CLAUSE,
+      LEXICAL_SEARCH_STATEMENT,
+      END_STATE_STATEMENTS,
       CHUNK_TEXT_COLUMN,
       EMBEDDER_META_KEY,
+      INDEX_STATE_META_KEY,
+      INDEX_STATE_PENDING,
+      INDEX_STATE_REBUILT,
+      EXTENSION_UPDATE_STATEMENTS,
+      STALE_EXTENSIONS_QUERY,
       embeddingColumn384: chunkEmbeddingColumn(384),
     },
     server: { DOCS_SERVER_NAME, SEARCH_TOOL_NAME, SEARCH_TOOL_PERMISSION },
@@ -152,6 +176,8 @@ async function answer(subCommand, args) {
   switch (subCommand) {
     case 'corpus':
       return corpus(args[0]);
+    case 'corpus-at':
+      return corpusAt(args[0]);
     case 'constants':
       return constants();
     case 'render':
@@ -163,7 +189,7 @@ async function answer(subCommand, args) {
     default:
       throw new Error(
         `unknown sub-command ${JSON.stringify(subCommand)}; ` +
-          'expected corpus, constants, render, stub-models or prepare-ts-fixture',
+          'expected corpus, corpus-at, constants, render, stub-models or prepare-ts-fixture',
       );
   }
 }

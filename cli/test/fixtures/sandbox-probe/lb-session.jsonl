@@ -1,0 +1,13 @@
+{"type":"system","subtype":"init","session_id":"sp-lb-session","cwd":"@FIXTURE_ROOT@/proj-sbx"}
+{"type":"user","timestamp":"2026-01-01T00:00:00.000Z","message":{"role":"user","content":"Run the calls."}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:01.000Z","message":{"id":"m1","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"bash @FIXTURE_ROOT@/sp-tmp/lb-proxy.sh"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"sbx_lb_proxy http_proxy localhost:3128\nsbx_lb_proxy HTTP_PROXY unset\nsbx_lb_proxy https_proxy unset\nsbx_lb_proxy HTTPS_PROXY localhost:3128\nsbx_lb_proxy all_proxy unset\nsbx_lb_proxy ALL_PROXY unset\nsbx_lb_proxy no_proxy localhost,127.0.0.1\nsbx_lb_proxy NO_PROXY unset"}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:03.000Z","message":{"id":"m2","content":[{"type":"tool_use","id":"tu2","name":"Bash","input":{"command":"curl -sS --max-time 5 http://127.0.0.1:8765/sbx_n3.txt"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:04.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu2","content":[{"type":"text","text":"sbx_n3_tok"}]}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:05.000Z","message":{"id":"m3","content":[{"type":"tool_use","id":"tu3","name":"Bash","input":{"command":"curl -sS --max-time 5 --noproxy '*' http://127.0.0.1:8765/sbx_n3.txt"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:06.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu3","is_error":true,"content":"Exit code 7\ncurl: (7) Failed to connect to 127.0.0.1 port 8765 after 0 ms: Couldn't connect to server"}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:07.000Z","message":{"id":"m4","content":[{"type":"tool_use","id":"tu4","name":"Bash","input":{"command":"curl -sS --max-time 5 http://localhost:8765/sbx_n3.txt"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:08.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu4","is_error":true,"content":"Exit code 56\ncurl: (56) CONNECT tunnel failed, response 403"}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:09.000Z","message":{"id":"m5","content":[{"type":"tool_use","id":"tu5","name":"Bash","input":{"command":"curl -sS --max-time 5 --noproxy '*' http://localhost:8765/sbx_n3.txt"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:10.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu5","is_error":true,"content":"Exit code 56\ncurl: (56) CONNECT tunnel failed, response 403"}]}}
+{"type":"result","subtype":"success","timestamp":"2026-01-01T00:00:11.000Z","duration_ms":11000,"permission_denials":[]}

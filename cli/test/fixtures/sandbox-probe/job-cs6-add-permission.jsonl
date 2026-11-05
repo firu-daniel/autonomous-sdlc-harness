@@ -1,0 +1,12 @@
+{"type":"system","subtype":"init","session_id":"sp-job-layout-add","cwd":"@FIXTURE_ROOT@"}
+{"type":"user","timestamp":"2026-01-01T00:00:00.000Z","message":{"role":"user","content":"Run the commands."}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:01.000Z","message":{"id":"m1","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"git status"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"On branch chore_sbx_probe_1\nUntracked files:\n  sbx_cs6.txt"}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:03.000Z","message":{"id":"m2","content":[{"type":"tool_use","id":"tu2","name":"Bash","input":{"command":"git add sbx_cs6.txt"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:04.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu2","is_error":true,"content":"Permission to use Bash has been denied because Claude Code is running in don't ask mode."}]}}
+{"type":"result","subtype":"success","timestamp":"2026-01-01T00:00:05.000Z","duration_ms":5000,"permission_denials":[]}
+{"type":"system","subtype":"init","session_id":"sp-job-layout-commit","cwd":"@FIXTURE_ROOT@"}
+{"type":"user","timestamp":"2026-01-01T00:01:00.000Z","message":{"role":"user","content":"Run the command."}}
+{"type":"assistant","timestamp":"2026-01-01T00:01:01.000Z","message":{"id":"m3","content":[{"type":"tool_use","id":"tu3","name":"Bash","input":{"command":"bash @FIXTURE_ROOT@/scripts/commit-on-branch.sh --repo @FIXTURE_ROOT@ sbx_cs6.txt -- \"sbx probe CS6\""}}]}}
+{"type":"user","timestamp":"2026-01-01T00:01:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu3","content":"[chore_sbx_probe_1 bbbbbbb] sbx probe CS6\n 1 file changed, 1 insertion(+)"}]}}
+{"type":"result","subtype":"success","timestamp":"2026-01-01T00:01:03.000Z","duration_ms":3000,"permission_denials":[]}

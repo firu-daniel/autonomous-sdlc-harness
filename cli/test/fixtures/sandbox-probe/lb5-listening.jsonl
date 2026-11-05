@@ -1,0 +1,7 @@
+{"type":"system","subtype":"init","session_id":"sp-lb5-listening","cwd":"@FIXTURE_ROOT@/proj-sbx"}
+{"type":"user","timestamp":"2026-01-01T00:00:00.000Z","message":{"role":"user","content":"Run the calls."}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:01.000Z","message":{"id":"m1","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"bash @FIXTURE_ROOT@/lb5-start.sh"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"sbx_lb5_listening 9876"}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:03.000Z","message":{"id":"m2","content":[{"type":"tool_use","id":"tu2","name":"Bash","input":{"command":"bash @FIXTURE_ROOT@/lb5-start-no-listener.sh"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:04.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu2","content":"sbx_lb5_no_listener OSError: [Errno 98] Address already in use"}]}}
+{"type":"result","subtype":"success","timestamp":"2026-01-01T00:00:05.000Z","duration_ms":5000,"permission_denials":[]}

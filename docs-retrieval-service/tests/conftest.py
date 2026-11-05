@@ -8,6 +8,7 @@ database a test creates is dropped on every exit path. No fixture is created ins
 import os
 import uuid
 from collections.abc import Iterator
+from contextlib import contextmanager
 
 import psycopg
 import pytest
@@ -31,8 +32,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(skip)
 
 
-@pytest.fixture
-def fresh_database_url() -> Iterator[str]:
+@contextmanager
+def _throwaway_database() -> Iterator[str]:
     admin_url = os.environ.get(TEST_DATABASE_URL_ENV)
     if not admin_url:
         pytest.skip(CONTAINER_SKIP_REASON)
@@ -46,3 +47,15 @@ def fresh_database_url() -> Iterator[str]:
         # A fresh connection, so a test that broke its own still has its database removed.
         with psycopg.connect(admin_url, autocommit=True) as admin:
             admin.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(name))
+
+
+@pytest.fixture
+def fresh_database_url() -> Iterator[str]:
+    with _throwaway_database() as url:
+        yield url
+
+
+@pytest.fixture
+def reference_database_url() -> Iterator[str]:
+    with _throwaway_database() as url:
+        yield url

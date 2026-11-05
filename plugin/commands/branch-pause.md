@@ -1,5 +1,5 @@
 ---
-description: Pause a running autonomous run so it yields at a clean checkpoint and can be resumed later — one PAUSE marker in a local run's worktree, or a pause dispatch sent straight to GitHub for a run that executes there.
+description: Pause a running autonomous run so it yields at a clean checkpoint and can be resumed later — one PAUSE marker in a local run's run copy, or a pause dispatch sent straight to GitHub for a run that executes there.
 argument-hint: "[<branch>:] [reason]"
 ---
 
@@ -22,7 +22,7 @@ table the body uses each one as an ordinary placeholder.
 ## Context
 
 The autonomous flow has no way to *suspend* a run short of the hard `STOP` (which ends it and cannot be
-auto-resumed). This command drops a **`<state_dir>/PAUSE`** request into a running run's **worktree**. At its
+auto-resumed). This command drops a **`<state_dir>/PAUSE`** request into a running run's **run copy**. At its
 next safety-contract checkpoint, if the tree has no uncommitted tracked changes (a clean boundary), the
 orchestrator appends a note to `<state_dir>/PAUSE_PROGRESS.md`, writes `<state_dir>/PAUSE_ACK`, and **ends its
 session** — the watcher marks the run `paused` and notifies. Resume later with `/autonomous-sdlc-harness:branch-resume <branch>`
@@ -45,7 +45,7 @@ written and the reason is not sent.
 
 ## Steps
 
-1. Resolve `<MAIN_REPO>` as the first entry of `git worktree list`; the registry is
+1. Resolve `<MAIN_REPO>` as the path a bare `printenv HARNESS_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none; the registry is
    `<MAIN_REPO>/<state_dir>/autonomous_logs/registry.json` (shaped `{"runs": {"<branch>": {...}}}`).
 2. **Which-branch resolution.** If `$ARGUMENTS` starts with `<branch>: `, parse it and strip the prefix
    (the remainder is the optional reason). Otherwise read the registry: if **exactly one** run has
@@ -90,7 +90,7 @@ written and the reason is not sent.
 5. Report: the run will honor the pause at its **next clean tracked-tree checkpoint** (it lets any pending
    commit finish first, so an in-flight unit is not left half-done), then write `PAUSE_PROGRESS.md` and end
    its session; the watcher will mark it `paused` and notify. Tell the user to resume later with
-   `/autonomous-sdlc-harness:branch-resume <branch>` (or by dropping `<state_dir>/RESUME` in the worktree). Note that the pause is
+   `/autonomous-sdlc-harness:branch-resume <branch>` (or by dropping `<state_dir>/RESUME` in the run copy). Note that the pause is
    not instantaneous — the checkpoint is reached between sub-agent dispatches, so an in-flight dispatch
    (e.g. a long interactive-test or review) finishes first.
 

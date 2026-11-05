@@ -12,7 +12,7 @@
  *
  * 1. **`execFileSync` with an argv array, never a shell string** — no `shell: true`, no `which`
  *    pipeline, no interpolation. A pipeline would be a compound command, which an unattended run's
- *    permission profile cannot allow-list as one literal, and which stalls rather than failing.
+ *    permission profile cannot allow-list as one literal, and which an unattended run refuses.
  * 2. **Every probe is bounded and its output discarded.** A service manager that hangs must cost a
  *    timeout rather than the run: `doctor` is the command an operator reaches for *because*
  *    something is wrong with the host, and it has to answer.

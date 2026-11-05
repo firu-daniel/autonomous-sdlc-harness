@@ -72,6 +72,8 @@
 # and of the permission profile. The upgrade's report names each workflow copy in a diff command, and
 # the profile copy carries this machine's absolute paths just as the profile does. Every other .bak a
 # forced run writes is left visible on purpose.
+# The exception is a .bak landing inside a directory whose contents are ignored above: git hides it
+# all the same, so the forced run names each such .bak in its notes.
 {{harnessBackups}}
 {{qaBrowserArtifacts}}
 {{docsRetrievalIndex}}

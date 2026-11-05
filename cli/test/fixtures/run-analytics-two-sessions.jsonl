@@ -1,0 +1,30 @@
+{"type":"system","subtype":"init","session_id":"sess-one","cwd":"@FIXTURE_ROOT@"}
+{"type":"user","timestamp":"2026-01-01T00:00:00.000Z","message":{"role":"user","content":"Implement the unit."}}
+{"type":"assistant","timestamp":"2026-01-01T00:05:00.000Z","message":{"id":"m1","usage":{"output_tokens":10,"input_tokens":5},"content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"@FIXTURE_ROOT@/scripts/x.sh"}}]}}
+{"type":"tool_progress","tool_use_id":"tu1","elapsed_time_seconds":1}
+{"type":"user","timestamp":"2026-01-01T00:05:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":[{"type":"text","text":"ok — done"}]}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:05:03.000Z","message":{"id":"m2","content":[{"type":"tool_use","id":"tu2","name":"Bash","input":{"command":"@FIXTURE_ROOT@/scripts/x.sh"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:05:06.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu2","content":[{"type":"text","text":"ok — done"}]}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:05:07.000Z","message":{"id":"m3","content":[{"type":"tool_use","id":"tu3","name":"Bash","input":{"command":"@FIXTURE_ROOT@/scripts/x.sh"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:05:11.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu3","content":[{"type":"text","text":"ok — done"}]}]}}
+{"type":"system","subtype":"api_retry","error_status":529,"attempt":1}
+{"type":"assistant","timestamp":"2026-01-01T00:05:15.000Z","message":{"id":"m4","content":[{"type":"tool_use","id":"tu4","name":"Bash","input":{"command":"@MAIN_REPO@/scripts/y.sh"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:05:16.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu4","content":[{"type":"text","text":"ok"}]}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:05:17.000Z","message":{"id":"m5","content":[{"type":"tool_use","id":"tu5","name":"Bash","input":{"command":"@MAIN_REPO@/scripts/y.sh"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:05:18.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu5","content":[{"type":"text","text":"ok"}]}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:05:19.000Z","message":{"id":"m6","content":[{"type":"tool_use","id":"tu6","name":"Bash","input":{"command":"@MAIN_REPO@/scripts/y.sh"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:05:20.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu6","content":[{"type":"text","text":"ok"}]}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:05:22.000Z","message":{"id":"m7","content":[{"type":"text","text":"Done."}]}}
+{"type":"result","subtype":"success","timestamp":"2026-01-01T00:20:00.000Z","duration_ms":600000,"duration_api_ms":30000,"total_cost_usd":1.25,"num_turns":7,"usage":{"input_tokens":100,"output_tokens":50,"cache_read_input_tokens":900,"cache_creation_input_tokens":0}}
+this line is not JSON
+{"type":"system","subtype":"init","session_id":"sess-two","cwd":"@FIXTURE_ROOT@"}
+{"type":"user","timestamp":"2026-01-01T01:00:00.000Z","message":{"role":"user","content":"Plan the unit."}}
+{"type":"assistant","timestamp":"2026-01-01T01:00:02.000Z","message":{"id":"m8","content":[{"type":"tool_use","id":"ag1","name":"Agent","input":{"subagent_type":"task-plan-writer","description":"Write the plan","prompt":"Write it."}}]}}
+{"type":"tool_progress","tool_use_id":"ag1","elapsed_time_seconds":1}
+{"type":"user","parent_tool_use_id":"ag1","timestamp":"2026-01-01T01:00:03.000Z","message":{"role":"user","content":"Write it."}}
+{"type":"assistant","parent_tool_use_id":"ag1","timestamp":"2026-01-01T01:00:05.000Z","message":{"id":"sa1","usage":{"output_tokens":7},"content":[{"type":"text","text":"Reading."}]}}
+{"type":"system","subtype":"thinking_tokens","tokens":12}
+{"type":"assistant","parent_tool_use_id":"ag1","timestamp":"2026-01-01T01:00:09.000Z","message":{"id":"sa2","usage":{"output_tokens":9},"content":[{"type":"text","text":"Written."}]}}
+{"type":"user","timestamp":"2026-01-01T01:00:12.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ag1","content":[{"type":"text","text":"plan written"}]}]}}
+{"type":"assistant","timestamp":"2026-01-01T01:00:14.000Z","message":{"id":"m9","content":[{"type":"text","text":"Planned."}]}}
+{"type":"result","subtype":"success","timestamp":"2026-01-01T01:00:20.000Z","duration_ms":20000,"duration_api_ms":8000,"total_cost_usd":0.5,"num_turns":2,"usage":{"input_tokens":40,"output_tokens":20,"cache_read_input_tokens":360,"cache_creation_input_tokens":0}}

@@ -27,7 +27,10 @@
  *    edit to both. `cli/templates/github/workflows/harness-run.yml` mirrors {@link machineCacheDir}'s
  *    resolution too — `XDG_CACHE_HOME`, else `$HOME/.cache`, then {@link MACHINE_DIR_NAME} — in its
  *    retrieval-cache path, so a change to that resolution or to {@link MACHINE_DIR_NAME} is an edit
- *    to the workflow template as well. A variable holding a relative path yields a relative directory here exactly as it
+ *    to the workflow template as well. `cli/templates/scripts/run-analytics.sh` mirrors
+ *    {@link claudeHome} — `CLAUDE_CONFIG_DIR` when non-empty, else `$HOME/.claude`, one trailing
+ *    slash stripped — to locate sub-agent transcripts, so a change to that resolution is an edit to
+ *    the script as well. A variable holding a relative path yields a relative directory here exactly as it
  *    does there. Only a target on a `WritePlan` is refused for that, and of these two directories
  *    the one that goes on a plan is {@link machineConfigDir} — `generators/notifications.ts`
  *    enqueues it under `allowOutsideRepo`. `machine/registry.ts` writes {@link machineStateDir}
@@ -80,8 +83,12 @@ function resolveMachineDir(variable: string, fallback: string): string {
  * The machine-local **state** directory — `${XDG_STATE_HOME:-$HOME/.local/state}/autonomous-sdlc-harness`.
  *
  * What lives in it is machine-scoped run state that no single repository owns: the usage lane's two
- * artifacts, published by `docs/watcher.md` §5, and the registry of initialized repositories, which
- * that section is explicit is a different artifact defined elsewhere.
+ * artifacts, published by `docs/watcher.md` §5; the watcher's per-run profiles,
+ * `run-profiles/<slug>/<branch>.json`, whose path `hr_run_profile_file` in the generated
+ * `lib/harness-run-lib.sh` owns and `docs/watcher.md` §2 `### The per-run profile` publishes; beside
+ * each, on a bubblewrap host, its absent-path manifest, `run-profiles/<slug>/<branch>.absent`, whose
+ * path `hr_run_profile_absent_file` in the same library owns and the same section publishes; and the
+ * registry of initialized repositories, which §5 is explicit is a different artifact defined elsewhere.
  */
 export function machineStateDir(): string {
   return resolveMachineDir('XDG_STATE_HOME', '.local/state');

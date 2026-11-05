@@ -7,8 +7,8 @@
  *
  * **The rule this module exists to enforce: `rawCommands` holds the command line a human would
  * type, never a wrapper invocation.** Three files are three views of one string and drift between
- * them is invisible until an unattended run stalls on a command that is neither allowed nor
- * denied, so each view has exactly one owner:
+ * them is invisible until an unattended run's command that is neither allowed nor denied is
+ * refused, so each view has exactly one owner:
  *
  * 1. **here** — the raw line (`npm run build`, `pytest`), derived only from files that exist;
  * 2. **the wrapper-script writer** — inlines a raw line into `<scriptsDir>/<name>.sh`;
@@ -874,7 +874,7 @@ function nodeCommands(context: DetectContext): Partial<RawCommands> | undefined 
   // control attributing b1's silence to that character rather than to the shape). The anchoring is
   // left unconditional anyway: §(b) is an **open recorded residual** whose own bound is *do not widen
   // the class to buy it back*, and declining the anchor there would restore the silent no-install —
-  // a prompt parks an unattended run, a green-but-empty install does not announce itself.
+  // a refused command shows in the run, a green-but-empty install does not announce itself.
   const site = findNodeInstallSite(context);
   if (site !== undefined && site.dir !== '.' && !isWorkspaceRoot(context)) {
     commands.depInstall = anchoredDepInstall(

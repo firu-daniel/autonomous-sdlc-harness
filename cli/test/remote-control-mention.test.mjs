@@ -18,7 +18,12 @@
  * its own: `init`, `execution.target` `github-actions`, `forge` `github`, `feat_x` pushed with its task
  * prompt and ledger, and `gh` a stub through `HARNESS_GH_CLI` that also records, per call, whether
  * `IN_OAUTH`, `IN_API`, `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` is set, and answers the item read
- * with `STUB_ITEM` and `pr diff` with `STUB_PR_DIFF` (`FAIL` fails it). The agent is a stub
+ * with `STUB_ITEM` and `pr diff` with `STUB_PR_DIFF` (`FAIL` fails it). A diff over the per-string
+ * bound travels as the path `STUB_PR_DIFF_FILE` instead: Linux's per-string `MAX_ARG_STRLEN` refused it
+ * as an environment value with `spawn E2BIG` (measured 2026-10-30). A test assumption, not a code
+ * fault: `remote-run.sh` → `control_mention_context_extra` keeps the diff in the unexported `GH_OUT`
+ * and writes it to `diff.patch` with the builtin `printf`, so no argument or environment value carries
+ * it. The agent is a stub
  * through `HARNESS_AGENT_CLI` that logs its argv, cwd, the files under its cwd and which of `GH_TOKEN`,
  * `CLAUDE_CODE_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` it sees, then prints `STUB_AGENT_OUTPUT` and exits
  * `STUB_AGENT_EXIT`. `HARNESS_MENTION_PLUGIN_DIR` is a throwaway directory under the fixture; no case
@@ -71,7 +76,8 @@ if (args[0] === 'pr' && args[1] === 'view') {
   }
 } else if (args[0] === 'pr' && args[1] === 'diff') {
   if (process.env.STUB_PR_DIFF === 'FAIL') fail('stub diff failure');
-  process.stdout.write(process.env.STUB_PR_DIFF || ${JSON.stringify(DIFF)});
+  if (process.env.STUB_PR_DIFF_FILE) process.stdout.write(readFileSync(process.env.STUB_PR_DIFF_FILE));
+  else process.stdout.write(process.env.STUB_PR_DIFF || ${JSON.stringify(DIFF)});
 } else if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/issues\\/[0-9]+$/.test(args[1] ?? '')) {
   process.stdout.write(process.env.STUB_ITEM || ${JSON.stringify(JSON.stringify(ITEM))});
 } else if (args[0] === 'api' && permission) {
@@ -234,6 +240,7 @@ async function controlFixture(t, settings = {}) {
         STUB_BUNDLE_FIELDS: '',
         STUB_BUNDLE_QUESTIONS: '',
         STUB_PR_DIFF: '',
+        STUB_PR_DIFF_FILE: '',
         STUB_ITEM: '',
         HARNESS_AGENT_CLI: agent,
         STUB_AGENT_LOG: agentLog,
@@ -511,7 +518,9 @@ test('35 earlier comments leave exactly the last 30', async (t) => {
 
 test('an oversized diff is cut at a whole line with the cut note', async (t) => {
   const f = await controlFixture(t);
-  const run = await f.control('@sdlc-harness review the diff', {}, { STUB_PR_DIFF: `+${'x'.repeat(98)}\n`.repeat(2100) });
+  const diffFile = join(f.dir, STATE_DIR, 'stub', 'oversized-diff.patch');
+  writeFileSync(diffFile, `+${'x'.repeat(98)}\n`.repeat(2100));
+  const run = await f.control('@sdlc-harness review the diff', {}, { STUB_PR_DIFF_FILE: diffFile });
   assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
   const diff = f.agentCalls()[0].files['diff.patch'];
   assert.ok(diff.endsWith('\n(cut at 200000 bytes)\n'), diff.slice(-200));

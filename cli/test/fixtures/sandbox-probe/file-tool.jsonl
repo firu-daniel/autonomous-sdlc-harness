@@ -1,0 +1,9 @@
+{"type":"system","subtype":"init","session_id":"sp-file-tool","cwd":"@FIXTURE_ROOT@"}
+{"type":"user","timestamp":"2026-01-01T00:00:00.000Z","message":{"role":"user","content":"Edit, write and read the files."}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:01.000Z","message":{"id":"m1","content":[{"type":"tool_use","id":"tu1","name":"Edit","input":{"file_path":"@FIXTURE_ROOT@/.claude/settings.json","old_string":"{","new_string":"{ "}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","is_error":true,"content":"File is in a directory that is denied by your permission settings."}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:03.000Z","message":{"id":"m2","content":[{"type":"tool_use","id":"tu2","name":"Write","input":{"file_path":"@FIXTURE_ROOT@/.claude/hooks/probe.sh","content":"echo probe\n"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:04.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu2","is_error":true,"content":[{"type":"text","text":"File is in a directory that is denied by your permission settings."}]}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:05.000Z","message":{"id":"m3","content":[{"type":"tool_use","id":"tu3","name":"Read","input":{"file_path":"@FIXTURE_ROOT@/README.md"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:06.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu3","content":"     1\t# fixture readme"}]}}
+{"type":"result","subtype":"success","timestamp":"2026-01-01T00:00:07.000Z","duration_ms":7000,"permission_denials":[]}

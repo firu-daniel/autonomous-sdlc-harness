@@ -11,21 +11,25 @@
  *    on. `init` generating one and `config set` editing one both go through that guard, so the CLI
  *    cannot be the thing that leaves an adopter with a config the schema gate then rejects.
  *
+ * It also parses a configuration read from a git ref ({@link loadConfigText}): `fileAtRef` in
+ * `core/git.ts` supplies those bytes and `parseJsonText` in `core/json.ts` parses them, so this module
+ * is still the only place that checks `harness.config.json`, whatever read it.
+ *
  * Every write is enqueued on the caller's {@link WritePlan} rather than performed here, so
  * `--dry-run` and `--force` keep meaning what the write engine says they mean and this module has
  * no filesystem-mutating call of its own.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { HarnessError } from '../core/errors.js';
-import { readJsonFile, type JsonObject } from '../core/json.js';
+import { parseJsonText, type JsonObject } from '../core/json.js';
 import type { WritePlan } from '../core/writer.js';
 import { checkConfigShape, formatProblem, hasErrors, type ConfigProblem } from './check.js';
 import { CONFIG_FILENAME, type HarnessConfig } from './model.js';
 
-/** What {@link loadConfig} answers with. */
+/** What {@link loadConfig} and {@link loadConfigText} answer with. */
 export interface LoadedConfig {
   /**
    * The parsed config, or `undefined` when the file is absent, unparsable, or not a JSON object.
@@ -38,7 +42,10 @@ export interface LoadedConfig {
   readonly config: HarnessConfig | undefined;
   /** Everything wrong with the file, in report order. Empty means it is loadable and well-shaped. */
   readonly problems: readonly ConfigProblem[];
-  /** Absolute path the config was looked for at, whether or not anything was there. */
+  /**
+   * Where the config was looked for, whether or not anything was there: the absolute disk path for
+   * {@link loadConfig}, the `<ref>:<file>` label for a configuration read from a git ref.
+   */
   readonly path: string;
 }
 
@@ -81,31 +88,53 @@ export function configExists(repoRoot: string): boolean {
 export function loadConfig(repoRoot: string): LoadedConfig {
   const path = configPath(repoRoot);
 
-  let parsed: unknown;
+  let text: string | undefined;
   try {
-    parsed = readJsonFile(path);
+    text = readFileSync(path, 'utf8');
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    return { config: undefined, problems: [{ path: '', message: detail, severity: 'error' }], path };
+    if ((error as NodeJS.ErrnoException | null)?.code !== 'ENOENT') return unreadable(error, path);
   }
+  return loadConfigText(text, path);
+}
 
-  if (parsed === undefined) {
+/**
+ * Parse and structurally check a configuration's text, whoever read it — {@link loadConfig}'s body,
+ * and the read of a configuration from a git ref.
+ *
+ * `undefined` text is the *not found* problem and unparsable text the *unparsable* one, both naming
+ * `origin`, which is also the returned {@link LoadedConfig.path}.
+ */
+export function loadConfigText(text: string | undefined, origin: string): LoadedConfig {
+  if (text === undefined) {
     return {
       config: undefined,
       problems: [
         {
           path: '',
-          message: `${CONFIG_FILENAME} not found at ${path}: this repository is not wired yet — run \`npx autonomous-sdlc-harness init\``,
+          message: `${CONFIG_FILENAME} not found at ${origin}: this repository is not wired yet — run \`npx autonomous-sdlc-harness init\``,
           severity: 'error',
         },
       ],
-      path,
+      path: origin,
     };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = parseJsonText(text, origin);
+  } catch (error) {
+    return unreadable(error, origin);
   }
 
   const problems = checkConfigShape(parsed);
   const usable = typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed);
-  return { config: usable ? (parsed as HarnessConfig) : undefined, problems, path };
+  return { config: usable ? (parsed as HarnessConfig) : undefined, problems, path: origin };
+}
+
+/** A read or parse failure as the single `error` problem carrying its message. */
+function unreadable(error: unknown, path: string): LoadedConfig {
+  const detail = error instanceof Error ? error.message : String(error);
+  return { config: undefined, problems: [{ path: '', message: detail, severity: 'error' }], path };
 }
 
 /**
