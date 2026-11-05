@@ -41,7 +41,11 @@
 # without it. (It is deliberately not spelled out anywhere in this file; its
 # literal presence here is exactly the defect this paragraph prevents.) The
 # project-command wrappers and `autonomous-format-stream.sh` need nothing from
-# this library and do not source it.
+# this library and do not source it. The one sourcer that is not a script is
+# the `harness-run.yml` step `Install the sandbox prerequisites`: it sources this
+# file in a subshell from `$SCRIPTS_DIR/lib/harness-run-lib.sh` (a value read
+# from configuration, not a hardcoded path) and calls only
+# `hr_sandbox_opted_out`, so renaming that function is an edit to the workflow.
 #
 # ONE SCRIPT MUST NOT USE THAT SPELLING, AND THE REASON GENERALISES.
 # `autonomous-watcher.sh` sources this file BEFORE it settles `PATH`, because its

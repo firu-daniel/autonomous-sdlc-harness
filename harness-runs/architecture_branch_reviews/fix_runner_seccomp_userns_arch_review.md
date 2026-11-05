@@ -7,7 +7,7 @@ Branch `fix_runner_seccomp_userns`, reviewed 2026-11-05. This is the architectur
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 1** — Drop the undeclared-in-fact `bwrapUsernsRestrictRemedy` mirror claim from the owner's header _(layer: cli)_
-2. [ ] **Finding 2** — Declare the workflow step's sourcing of `harness-run-lib.sh` → `hr_sandbox_opted_out` on both sides _(layer: cli, general)_
+2. [x] **Finding 2** — Declare the workflow step's sourcing of `harness-run-lib.sh` → `hr_sandbox_opted_out` on both sides _(layer: cli, general)_
 
 ## Must Fix
 

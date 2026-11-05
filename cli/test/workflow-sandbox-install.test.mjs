@@ -342,6 +342,14 @@ test('(j) a failed check with sandbox.optOut taken warns and passes', { skip: SK
   assert.deepEqual(annotated(result, 'error'), []);
 });
 
+// (j) stubs the library, so this is the case that fails when the real function is renamed.
+test('(j2) the function the opt-out arm calls is defined in the real run library', () => {
+  const call = stepBody(STEP).match(/\/lib\/harness-run-lib\.sh" && (\w+) /);
+  assert.ok(call, 'the step sources the run library and calls one function from it');
+  const library = readFileSync(join(PACKAGE_ROOT, 'templates', 'scripts', 'lib', 'harness-run-lib.sh'), 'utf8');
+  assert.match(library, new RegExp(`^${call[1]}\\(\\) \\{$`, 'm'));
+});
+
 test('(k) a non-Linux runner with something missing makes no bwrap call', { skip: SKIP }, async (t) => {
   const w = world(t, { sysctl: '0', uname: 'Darwin' });
   const result = await runStep(w);

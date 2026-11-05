@@ -61,7 +61,12 @@
 #                                     `name:`, so GitHub names it by its key,
 #                                     and the settledness test reads that
 #                                     job's status by that name
-#   harness-control.yml               the concurrency group
+#   cli/templates/scripts/lib/harness-run-lib.sh hr_sandbox_opted_out, sourced
+#                                     in a subshell from $SCRIPTS_DIR/lib/ by
+#                                     `Install the sandbox prerequisites` to
+#                                     read sandbox.optOut on its failing arm,
+#                                     held by workflow-sandbox-install.test.mjs
+#   harness-control.yml              the concurrency group
 #                                     `harness-review-<branch>`, shared by its
 #                                     review jobs and the `collect` job here;
 #                                     and, read by its `Fetch the pinned
