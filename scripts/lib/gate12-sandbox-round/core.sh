@@ -45,7 +45,7 @@ g12_row_declare FR1 6 full-run - \
 g12_row_declare FR2 6 full-run - \
   "Install the sandbox prerequisites on the hosted runner and the doctor preflight after it, graded from the full run that grade --full-run names"
 g12_row_declare FR3 6 full-run - \
-  "commits and pushes through the wrappers, graded on the job: line of the Run the harness step log, since that step concludes success even on a failed run"
+  "commits and pushes through the wrappers, graded on the job: line of the Run the harness step log and on a wrapper's refusing line, since push-branch.sh exits 0 on a refusal and Run the harness concludes success even on a failed run"
 g12_row_declare FR4 6 full-run - \
   "the permission_denials of the calls the flow needs, each quoted, graded from the full run that grade --full-run names"
 g12_row_declare FR5 6 full-run - \
