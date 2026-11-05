@@ -1315,6 +1315,46 @@ hr_worktree_config_check_var() {
   return 1
 }
 
+# Remove from the per-working-copy configuration file <file> each of
+# `core.sparseCheckout`, `core.sparseCheckoutCone` and `index.sparse` that it
+# sets exactly once, to the literal value `false`; leave every other entry —
+# such a key absent, repeated, value-less or set to anything else — untouched.
+# Set `HR_WT_SPARSE_DROPPED` to the removed names, `, `-separated, or empty.
+# Return 0 when <file> does not exist. Return 1, with `HR_WT_SPARSE_REFUSAL`
+# set to one sentence, when <file> is a symbolic link, not a regular file or
+# not readable (nothing written), or when an `--unset` fails (naming the key).
+# Prints nothing. Call it directly, never inside `$(…)`.
+#
+# The shape it removes is what `actions/checkout` v7.0.1 leaves (the task
+# prompt `fix_remote_job_commit_refusal` → `## What was measured (2026-11-05,
+# verbatim)`): `git sparse-checkout disable` writes all three at `false`, then
+# `git config --local --unset-all extensions.worktreeConfig` turns the
+# extension off and leaves the file, and `setup-worktree.sh` turning the
+# extension back on makes the keys live again. Only these three at `false` are
+# inert: `false` is git's own default for each, and the other two are unread
+# while `core.sparseCheckout` is not on. `hr_worktree_config_check_var` is
+# deliberately unchanged, so any other shape is still refused.
+hr_worktree_config_drop_inert_sparse_var() {
+  local f="${1-}" key value
+  HR_WT_SPARSE_DROPPED=""
+  HR_WT_SPARSE_REFUSAL=""
+  [ -e "$f" ] || [ -L "$f" ] || return 0
+  if [ -L "$f" ] || [ ! -f "$f" ] || [ ! -r "$f" ]; then
+    HR_WT_SPARSE_REFUSAL="$f is not a readable regular file, so its sparse-checkout keys were not touched"
+    return 1
+  fi
+  for key in core.sparseCheckout core.sparseCheckoutCone index.sparse; do
+    value=$(git -C / config --file "$f" --get-all "$key" 2>/dev/null) || continue
+    [ "$value" = false ] || continue
+    if ! git -C / config --file "$f" --unset "$key" >/dev/null 2>&1; then
+      HR_WT_SPARSE_REFUSAL="cannot remove $key from $f"
+      return 1
+    fi
+    HR_WT_SPARSE_DROPPED="${HR_WT_SPARSE_DROPPED:+$HR_WT_SPARSE_DROPPED, }$key"
+  done
+  return 0
+}
+
 # THE CLONE CONFIGURATION ALLOW-LIST — one contract. `hr_clone_create_var`
 # writes a clone's `.git/config` from exactly this set, and
 # `setup-worktree.sh --target` adds only `core.hooksPath`; the check below

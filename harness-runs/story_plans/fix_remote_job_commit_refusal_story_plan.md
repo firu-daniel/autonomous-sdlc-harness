@@ -79,7 +79,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_remote_job_commit_refusa
 5. [x] **Task 5** — Give the local watcher suites' resumed sessions a finished ledger where completion is the case's point _(layer: cli)_ _(points: 20)_
 6. [x] **Task 6** — Surface a refused or given-up push in `Push the branch` as an `::error::` annotation and a job-summary line _(layer: cli)_ _(points: 15)_
 7. [x] **Task 9** — Make `/autonomous-sdlc-harness:branch-status`'s `unfinished` bullet cover a ledger-less resume _(layer: plugin)_ _(points: 8)_
-8. [ ] **Task 7** — Refresh the self-adopted `scripts/` copies of the library, `setup-worktree.sh` and the watcher from their templates _(layer: general)_ _(points: 10)_
+8. [x] **Task 7** — Refresh the self-adopted `scripts/` copies of the library, `setup-worktree.sh` and the watcher from their templates _(layer: general)_ _(points: 10)_
 9. [ ] **Task 8** — Record the cause and the fixes in `docs/sandbox-verification.md` §9 and §10, `docs/remote-execution.md`, `docs/watcher.md` and `ARCHITECTURE.md`, confirmation owed to the next Gate 12 round _(layer: general)_ _(points: 20)_
 
 ## Scope register

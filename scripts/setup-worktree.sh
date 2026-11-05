@@ -76,7 +76,10 @@
 #   4. The pre-push backstop at `githooksDir`, installed for the bootstrapped
 #      working copy alone (see the note at the step itself). A missing hook
 #      file is a skip with one line, so a checkout that predates the hook still
-#      bootstraps.
+#      bootstraps. First, hook file or not, it removes from each live
+#      `config.worktree` (not a clone's) only `core.sparseCheckout`,
+#      `core.sparseCheckoutCone` and `index.sparse`, each only when set once to
+#      `false` (`hr_worktree_config_drop_inert_sparse_var`).
 #   5. `commands.depInstall`, then `commands.build`, each run from the root of
 #      the bootstrapped checkout. An UNSET key is skipped with one printed line rather
 #      than being an error — a project with no build step is ordinary. A build
@@ -124,6 +127,11 @@
 #                   -> exit 0; "$d/deps.marker" exists; the build step prints its
 #                      skip line; `git -C "$d" config --worktree core.hooksPath`
 #                      is "$d/githooks"
+#   checkout's      git -C "$d" sparse-checkout disable
+#   sparse keys     git -C "$d" config --local --unset-all extensions.worktreeConfig
+#                   re-run -> exit 0; a `removed core.sparseCheckout, …` line;
+#                      `git -C / config --file "$d/.git/config.worktree" --list`
+#                      prints only core.hookspath=$d/githooks
 #   no hook file    rm "$d/githooks/pre-push"; re-run -> exit 0 with a skip line
 #   env symlink     printf 'K=v\n' > "$(git -C "$d" worktree list --porcelain |
 #                     head -1 | sed 's/^worktree //')/.env"
@@ -282,6 +290,32 @@ hooks_config_write() {
       git -C "$top" config --worktree core.hooksPath "$hooks_dir"
   fi
 }
+drop_inert_sparse() {
+  if hr_worktree_config_drop_inert_sparse_var "$1"; then
+    [ -z "$HR_WT_SPARSE_DROPPED" ] ||
+      echo "setup-worktree.sh: removed $HR_WT_SPARSE_DROPPED (each false) from $1, which actions/checkout's sparse-checkout disable leaves there"
+  else
+    echo "setup-worktree.sh: $HR_WT_SPARSE_REFUSAL — leaving it" >&2
+    status=1
+  fi
+}
+# Outside the hook-file test: the wrappers refuse these keys whether or not the
+# extension is on. The extension is repository-global, so the main checkout's
+# file is cleaned too whenever it is not the one being bootstrapped. A clone is
+# skipped: `hr_clone_target_check_var` already held its file to an empty one.
+sparse_files=()
+if [ "$target_mode" -eq 0 ]; then
+  f="$(hr_worktree_config_file "$top")" && sparse_files+=("$f")
+  if [ "$main_repo" != "$top" ]; then
+    f="$(hr_worktree_config_file "$main_repo")" && sparse_files+=("$f")
+  fi
+elif [ "$target_kind" != clone ]; then
+  sparse_files+=("$target_gitdir/config.worktree")
+  f="$(hr_worktree_config_file "$main_repo")" && sparse_files+=("$f")
+fi
+for f in ${sparse_files[@]+"${sparse_files[@]}"}; do
+  drop_inert_sparse "$f"
+done
 if [ -n "$hooks_dir" ] && [ -f "$hooks_dir/pre-push" ]; then
   chmod +x "$hooks_dir/pre-push" || true
   # NOTE: `extensions.worktreeConfig true` is a one-way, REPOSITORY-GLOBAL
@@ -290,7 +324,9 @@ if [ -n "$hooks_dir" ] && [ -f "$hooks_dir/pre-push" ]; then
   # It is safe here because `core.hooksPath` is the only worktree-scoped value
   # and every active working copy re-runs this script; keep that invariant if
   # you add another `--worktree` setting — push-branch.sh refuses to push from
-  # a working copy whose `config.worktree` holds any other key.
+  # a working copy whose `config.worktree` holds any other key. The extension
+  # also makes live the sparse keys `actions/checkout` leaves in that file, so
+  # this step removes them first (`drop_inert_sparse`), and only at `false`.
   if hooks_config_write; then
     echo "setup-worktree.sh: pre-push hook installed (core.hooksPath -> $hooks_dir)"
   else

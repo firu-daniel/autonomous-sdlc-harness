@@ -3721,11 +3721,23 @@ record_run_analytics() {
 # answers `finished`; `unfinished` makes it a `paused` record with pause_reason
 # `unfinished` (in job mode a pending `user`, `usage` or `budget` pause is kept
 # instead).
-# An absent or unreadable ledger keeps `completed`, with one log line: planner
-# and fix-plan Setup create the ledger before the first dispatch, and the
-# watcher commits the docs checklist before launch, so a session cut short
-# mid-dispatch always has one, while a ledger-less exit is a pre-Setup halt or a
-# flow that writes none. An unresolvable state directory skips the read.
+# An absent or unreadable ledger is `unfinished` too when the session was not a
+# first launch: after a resume (`resume_kind` `answer` or `pause`), a stall
+# restart (`stall_restarts` > 0) or an earlier park (an archived question). A
+# first launch with none of these keeps `completed`, logging that it classified
+# on the exit code alone. `task` and `user_review` write
+# `flow_progress/<branch>_progress.md`, created by planner and fix-plan Setup
+# before the first dispatch; `docs` writes `docs_catalog/<branch>_docs.md`,
+# committed by the watcher before launch. So a ledger-less first launch is a
+# pre-Setup halt. In job mode the reclassified record reaches run_job's
+# `paused)` → `unfinished)` arm: job_auto_resume relaunches it up to
+# REMOTE_AUTO_RESUME_MAX times, then it notifies, breaks with the default
+# `decision=stop`, and the job prints `job: paused stop`. `paused`, not
+# `failed`, because of the measured case, Gate 12 round 13's job 41981613528: a
+# `resume answer` session stopped short, exited 0 with no ledger, and was
+# classified `completed` with nothing planned — a session that did not fail but
+# did not finish, which is what `unfinished` records and a resume continues.
+# An unresolvable state directory skips the read.
 classify_run_exit() {
   local branch="$1" worktree="$2" log_path="$3" rc="$4"
 
@@ -3915,6 +3927,30 @@ classify_run_exit() {
       ledger="$(hr_run_ledger_state "$state_abs" "$branch" "$(registry_get "$branch" engine)")" || :
       ledger_state="${ledger%% *}"
       ledger_detail="${ledger#* }"
+    fi
+    if [ "$ledger_state" = "absent" ] || [ "$ledger_state" = "unreadable" ]; then
+      # Only a first launch's ledger-less exit is a pre-Setup halt — see the
+      # function's comment. First reason that holds wins.
+      local why="" restarts
+      if [ -n "$resume_kind" ]; then
+        case "$resume_kind" in
+          [aeiou]*) why="an $resume_kind resume" ;;
+          *) why="a $resume_kind resume" ;;
+        esac
+      else
+        restarts="$(registry_get "$branch" stall_restarts)"
+        case "$restarts" in '' | *[!0-9]*) restarts=0 ;; esac
+        if [ "$((10#$restarts))" -gt 0 ]; then
+          why="a stall restart"
+        elif [ -n "$clar_dir" ] && [ "$(max_question_index "$clar_dir")" -gt 0 ]; then
+          why="an earlier park"
+        fi
+      fi
+      if [ -n "$why" ]; then
+        log "classify: '$branch' has no readable ledger ($ledger_state: $ledger_detail) after $why — not classifying it completed"
+        ledger_detail="$ledger_state: $ledger_detail, after $why"
+        ledger_state=unfinished
+      fi
     fi
     if [ "$ledger_state" = "unfinished" ]; then
       # pid and the watchdog counters are left as the pause arm leaves them.
