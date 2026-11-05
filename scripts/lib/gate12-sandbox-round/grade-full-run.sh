@@ -236,10 +236,22 @@ g12_fr5_arm() {
 # FR3: Run the harness concludes success even on a failed run, because run_job ends
 # `echo "job: $final $decision"` then `exit 0`, and its parked-on-answer stop prints `job: parked stop`
 # then `exit 0`; `decision` is `stop` by default and set to `continue` or `wait-poller` in its
-# supervision loop (run_job in cli/templates/scripts/autonomous-watcher.sh). So the verdict is the
-# last such line of each job's log.
+# supervision loop (run_job in cli/templates/scripts/autonomous-watcher.sh). So the verdict starts
+# from the last such line of each job's log.
+# push-branch.sh exits 0 on every refusal (cli/templates/scripts/push-branch.sh -> EVERY FAILURE PATH
+# IS NON-FATAL (exit 0)), so Push the branch concludes success on one, and the arm reads that step's
+# log too. A refusal by either wrapper fails the arm: push-branch.sh's in the Push the branch log, and
+# commit-on-branch.sh's in the Run the harness log should one ever reach it. A session's own
+# commit-on-branch.sh refusal does not: it is the stderr of the session's tool call, which
+# spawn_engine sends into the run's log file through autonomous-format-stream.sh, and that
+# formatter drops tool_result bodies, so neither this step log nor the bundle's run.log carries
+# it. A pass is therefore no evidence that no session commit was refused.
+# Each wrapper spells a refusal two ways,
+# `<script>: refusing to <verb>: <reason>` and `<script>: <reason> — refusing to <verb>`, so a line
+# matches on carrying both `<script>: ` and `refusing to <verb>`. No other line fails the arm:
+# `push failed for …` is not a refusal.
 g12_fr3_arm() {
-  local id="$1" line final push
+  local id="$1" line final push refusal
   g12_fr_done "$id" || return 0
   g12_fr_ran "$G12_STEP_HARNESS" || return 0
   g12_fr_ran "$G12_STEP_PUSH" || return 0
@@ -257,9 +269,21 @@ g12_fr3_arm() {
     g12_arm_set fail "run $id: $line" "$line"
     return
   fi
+  refusal="$(printf '%s\n' "$G12_ARM_LOG" | grep -F 'commit-on-branch.sh: ' | grep -F 'refusing to commit' | head -n 1)"
+  if [ -n "$refusal" ]; then
+    g12_arm_set fail "run $id: $(g12_trim "commit-on-branch.sh: ${refusal#*commit-on-branch.sh: }")" "$G12_ARM_LOG"
+    return
+  fi
   push="$(g12_step_conclusion "$id" "$G12_STEP_PUSH")"
   if [ "$push" = failure ]; then
     g12_arm_set fail "run $id: $G12_STEP_PUSH concluded failure" "$line"
+    return
+  fi
+  # g12_arm_log overwrites G12_ARM_LOG; the pass still quotes the job: line kept in `line`.
+  g12_arm_log "$G12_STEP_PUSH" || return 0
+  refusal="$(printf '%s\n' "$G12_ARM_LOG" | grep -F 'push-branch.sh: ' | grep -F 'refusing to push' | head -n 1)"
+  if [ -n "$refusal" ]; then
+    g12_arm_set fail "run $id: $(g12_trim "push-branch.sh: ${refusal#*push-branch.sh: }")" "$G12_ARM_LOG"
     return
   fi
   g12_arm_set pass "run $id: $line"
@@ -326,6 +350,12 @@ g12_fr4() {
 # `remote state bundle: skipped …` (hr_remote_copy_tree and hr_remote_bundle_source_ok in
 # cli/templates/scripts/lib/harness-run-lib.sh, run by hr_remote_bundle_write). The saved, restored
 # and placed lines are verb_save's and verb_restore's in remote-run.sh.
+# verb_restore prints the placed line only when HR_REMOTE_PLANNING_PLACED + HR_REMOTE_PLANNING_KEPT is
+# non-zero. So with no such line, the parked job's artifact decides whether a planning file was saved:
+# read through g12_artifact at planning/, the bundle's planning directory (HR_REMOTE_PLANNING_DIR in
+# cli/templates/scripts/lib/harness-run-lib.sh), counting regular files only, as neither of
+# hr_remote_bundle_restore's tallies counts a link. FR6 is graded on the save and restore lines plus
+# that artifact read, which is what its Read from names, so the header's sentence holds for it.
 g12_fr6_save() {
   local branch="$1" skipped
   g12_fr_job parked || return 0
@@ -344,7 +374,7 @@ g12_fr6_save() {
 }
 
 g12_fr6_restore() {
-  local restored placed
+  local restored placed art files count
   g12_fr_job resumed || return 0
   g12_fr_ran "$G12_STEP_RESTORE" || return 0
   g12_arm_log "$G12_STEP_RESTORE" || return 0
@@ -352,12 +382,39 @@ g12_fr6_restore() {
   placed="$(printf '%s\n' "$G12_ARM_LOG" | grep -E 'placed [0-9]+ planning file\(s\)' | head -n 1)"
   if [ -z "$restored" ]; then
     g12_arm_set fail "$G12_STEP_RESTORE in run $G12_ARM_ID carries no restored the bundle of run $G12_FR_PARKED line" "$G12_ARM_LOG"
-  elif [ -z "$placed" ]; then
-    g12_arm_set fail "$G12_STEP_RESTORE in run $G12_ARM_ID carries no placed <n> planning file(s) line" "$G12_ARM_LOG"
-  else
+    return
+  fi
+  if [ -n "$placed" ]; then
     placed="placed${placed#*placed}"
     g12_arm_set pass "run $G12_ARM_ID restored the bundle of run $G12_FR_PARKED; ${placed%% for *}"
+    return
   fi
+  # Not g12_arm_gh_failed: its evidence names G12_ARM_ID, the resumed job, not the parked one read here.
+  art="$(g12_artifact "$G12_FR_PARKED")" || {
+    g12_exit_raise 3
+    g12_arm_set "not run" "a gh call reading run $G12_FR_PARKED's artifact failed (named on stderr)"
+    return
+  }
+  case "$art" in
+    expired)
+      g12_arm_set expired "run $G12_FR_PARKED's harness-state artifact is expired, so whether its bundle held a planning file was not read"
+      return
+      ;;
+    none)
+      g12_arm_set "not run" "run $G12_FR_PARKED has no harness-state artifact"
+      return
+      ;;
+  esac
+  files=""
+  [ ! -d "$art/planning" ] || files="$(find "$art/planning" -type f)"
+  count=0
+  [ -z "$files" ] || count="$(printf '%s\n' "$files" | grep -c .)"
+  if [ "$count" -eq 0 ]; then
+    g12_arm_set pass "run $G12_ARM_ID restored the bundle of run $G12_FR_PARKED; placed: none to place, the park preceded any plan file"
+    return
+  fi
+  g12_arm_set fail "$G12_STEP_RESTORE in run $G12_ARM_ID carries no placed <n> planning file(s) line, but run $G12_FR_PARKED's bundle holds $count planning file(s)" \
+    "$G12_ARM_LOG"$'\n'"run $G12_FR_PARKED's bundle planning files:"$'\n'"$files"
 }
 
 # FR7: graded on the resumed job's Run the harness alone. verb_restore's `wrote answer_<n>.md for
