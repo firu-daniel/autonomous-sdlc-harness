@@ -331,7 +331,7 @@ async function playSequence(t, { job2Env = () => ({}), job2Stub = HONOUR_PAUSE(P
   // Before job 3 runs, so the stop case cannot pass on a bundle that is not a stopped one.
   if (killJob2) assert.equal(s.status().status, 'running', 'the restored status is not a stopped run');
   await s.setStub(finishedLedgerBody(s.branch));
-  const job3 =await s.job('pause', job3Env);
+  const job3 = await s.job('pause', job3Env);
   assert.equal(job3.status, 0, `job 3: ${job3.stdout}\n${job3.stderr}`);
   // First, so the pre-fix outcome — job 3 re-parked on the pair it launched with — fails here by name.
   assert.equal(s.status().status, 'completed', `job 3\n${job3.stdout}\n${s.watcherLog()}`);
