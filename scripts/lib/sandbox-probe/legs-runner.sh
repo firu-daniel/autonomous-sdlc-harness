@@ -154,7 +154,11 @@ sp__is3_grade() {
   local sysctl="${1:-}" pb="${2:-}" pa="${3:-}"
   sp__runner_unrecorded sysctl-before "$sysctl" apparmor-profile-before "$pb" \
     apparmor-profile-after "$pa" && return 0
-  # The step writes /etc/apparmor.d/bwrap exactly when the sysctl reads 1 and the file is absent or carries no userns, line.
+  # The step writes /etc/apparmor.d/bwrap when the sysctl reads 1 and the file is absent or carries no userns, line,
+  # or when /etc/apparmor.d/bwrap-userns-restrict exists.
+  # IS3 grades on the sysctl and the bwrap profile alone: the controls file records no stock-profile key, so a write
+  # made only because the stock profile exists, with the sysctl not at 1 and the file absent or carrying no userns, line
+  # before, matches no rule below and reads `not run`.
   if [ "$sysctl" = 1 ] && [ "$pa" != present ]; then
     SP_VERDICT=fail
     SP_EVIDENCE="the sysctl read 1 before the install step and /etc/apparmor.d/bwrap is $pa after it (before: $pb)"

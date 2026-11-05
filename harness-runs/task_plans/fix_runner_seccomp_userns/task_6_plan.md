@@ -26,3 +26,8 @@
 - Compare the step's `run: |` block in both files by reading them side by side, de-indented. Every line is identical, the four path lines included.
 - `bash -n scripts/lib/sandbox-probe/legs-runner.sh` exits 0, and `git diff` on that file shows comment lines only.
 - Re-read the file around the step to check that its `run: |` block is indented under its `- name:` exactly as its neighbours' blocks are, and that the following `- name: Record the readings after the install step` line keeps its indentation. The YAML must still parse as the same list of steps.
+
+**Deviations from plan:**
+
+- Evidence downgrade: the standalone `bash -n scripts/lib/sandbox-probe/legs-runner.sh` was refused by the tool layer ("Permission to use Bash has been denied … don't ask mode"). The parse claim rests instead on `bash scripts/typecheck.sh`, whose `check-shell-parse` runs `/bin/bash -n` over every tracked `*.sh`: "122 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed", then `PASS: typecheck`. `git diff scripts/lib/sandbox-probe/legs-runner.sh` shows one hunk, all comment lines.
+- Evidence downgrade: the byte-for-byte check rests on a whole-file `diff cli/templates/github/workflows/harness-run.yml scripts/sandbox-probe-runner.yml` rather than a side-by-side reading. Its hunks around the step are `695d271` (the template's `if: env.HARNESS_STOPPED != '1'` line only) then `827,830c403,423`, so template lines 696–826 and probe lines 272–402 (the `run: |` line, the body and the trailing blank line) are identical at the same indentation. The YAML was not run through a parser, because no parser command was run in this session; the indentation claim rests on that diff and on re-reading the step.

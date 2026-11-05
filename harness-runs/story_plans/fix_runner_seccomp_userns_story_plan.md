@@ -44,7 +44,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_runner_seccomp_userns/ta
 3. [x] **Task 3** — Make `Install the sandbox prerequisites` disable `bwrap-userns-restrict`, load our profile, always verify, and fail before the session _(layer: cli)_ _(points: 20)_
 4. [x] **Task 4** — Make `doctor`'s `sandbox-prerequisites` check run the nested check and FAIL when it fails _(layer: cli)_ _(points: 20)_
 5. [x] **Task 5** — Refuse a fresh local launch when bwrap's nested user-namespace check fails, in the run library's mirror _(layer: cli)_ _(points: 20)_
-6. [ ] **Task 6** — Copy the new install step into `scripts/sandbox-probe-runner.yml`, and correct IS3's write rule comment _(layer: general)_ _(points: 10)_
+6. [x] **Task 6** — Copy the new install step into `scripts/sandbox-probe-runner.yml`, and correct IS3's write rule comment _(layer: general)_ _(points: 10)_
 7. [ ] **Task 7** — Record the round-13 cause and the fix in `docs/sandbox-verification.md` §9, and restate the rows the fix changes _(layer: general)_ _(points: 20)_
 8. [ ] **Task 8** — Describe the step, the check and the watcher's refusal as they now behave in `docs/cli.md`, `docs/remote-execution.md` and `docs/watcher.md` _(layer: general)_ _(points: 20)_
 9. [ ] **Task 9** — Refresh the self-adopted run library and watcher from their templates _(layer: general)_ _(points: 5)_
