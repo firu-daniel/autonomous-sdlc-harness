@@ -44,3 +44,7 @@ Task 2 owns the driver, and this task changes nothing under `scripts/`.
 - `npm test --workspace cli -- test/gate12-sandbox-round-full-run.test.mjs`, from the repository root, as one plain foreground command, exits 0. Its counts show the new cases passing beside the existing ones.
 - The `grade` helper's own assertions hold in every new case: FR rows only, in order, FR1's `source` line second, no state file before or after, and exit 4 exactly when a line printed `fail`. Round 13's replay therefore exits 4.
 - Every wrapper refusal string in the file is built from an `extract` over the shipped `push-branch.sh` or `commit-on-branch.sh`, apart from the canned run-time reason. Grep the file for a literal `refusing to` outside those `extract` regexes and find none.
+
+**Deviations from plan:**
+- The FR6 expired case is a two-row loop that also pins `artifacts: { [PARKED]: 'none' }` as FR6 `not run`. That is the contract's *"an absent one `not run`"* bullet, which the work list named no case for, and it is the only route that exercises `stage`'s `'none'` value.
+- Round 13's parked and resumed jobs each also log the install step's present line, so FR2 grades on a job that has the shape of a real one. No assertion reads it.

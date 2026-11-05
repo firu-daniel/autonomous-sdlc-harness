@@ -35,7 +35,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_gate12_round_driver_find
 1. [x] **Task 1** — Accept an SSH host alias that `ssh -G` resolves to github.com in the preflight's origin check _(layer: general)_ _(points: 10)_
 2. [x] **Task 2** — Fail FR3 on a wrapper's refusal line, and grade FR6's `placed` clause only where the parked bundle holds a planning file _(layer: general)_ _(points: 20)_
 3. [x] **Task 3** — Test the preflight's host-alias acceptance and its refusals _(layer: cli)_ _(points: 10)_
-4. [ ] **Task 4** — Test FR3's wrapper refusals and FR6's zero-plan restore, replaying round 13 _(layer: cli)_ _(points: 20)_
+4. [x] **Task 4** — Test FR3's wrapper refusals and FR6's zero-plan restore, replaying round 13 _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 5** — Align FR3 and FR6 in `docs/development.md` and `docs/sandbox-verification.md` §10, and re-derive the FR3 `--list` row _(layer: general)_ _(points: 15)_
 
 ## Scope register

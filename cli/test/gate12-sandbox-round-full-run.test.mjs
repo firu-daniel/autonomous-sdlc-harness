@@ -5,12 +5,18 @@
  * **The rule this suite enforces: the full-run grade reads only what each FR row's Read from names,
  * prints a source clause as `source` rather than grading it, and keeps FR4's quotes in full.** A
  * missing job is `not run` and a gone log is `expired`, never a pass. It prints no JS, SB or RJ line
- * and reads no state file.
+ * and reads no state file. A wrapper's refusal line in either spelling fails FR3 although its step
+ * concluded success, and a restore with no placed line passes FR6 only when the parked job's bundle
+ * holds no planning file; an expired bundle is `expired`. Round 13's two jobs are replayed on both.
  *
  * THE CANNED ANSWERS. `gh run list … --branch <b>` lists the branch's `harness run <b>` jobs; the
  * `gh` stub (Task 10's `ghStub`) answers each job's `run view <id> --repo <slug> --json
  * status,conclusion,jobs` and its `--log` (tab-separated `run\t<step>\t<line>`) by route. FR4's
  * `run-analytics.json` is committed on the branch and pushed to the fixture's bare origin.
+ * A parked job's `harness-state` artifact is pre-seeded as `runs.sh`'s cache,
+ * `<stateDir>/scratch/gate12-sandbox-round/runs/<id>/harness-state/`, because a route cannot write
+ * the files `gh run download` would; `g12_artifact`'s download path is the adversarial-grade suite's
+ * to prove. An expired or absent artifact is the `gh api …/artifacts` route alone.
  *
  * Every log string a canned answer carries is read at test time out of the shipped file that prints
  * it, never retyped:
@@ -23,6 +29,10 @@
  *   `remote state bundle: skipped ` prefix and ` is a symbolic link` suffix.
  * - `cli/templates/github/workflows/harness-run.yml`: the `run` job's step names, and the install
  *   step's present line.
+ * - `cli/templates/scripts/push-branch.sh`: the prefix of its `$HR_WT_CONFIG_REFUSAL` refusal, and
+ *   its detached-HEAD refusal.
+ * - `cli/templates/scripts/commit-on-branch.sh`: the prefix of its `$HR_WT_CONFIG_REFUSAL` refusal.
+ * A refusal's reason is composed at run time, so it is canned in round 13's shape.
  *
  * It reads those fixed files, not a tree, so it owes no `treeGuards` entry.
  */
@@ -58,6 +68,8 @@ function extract(text, re, what) {
 }
 
 const LIB = 'cli/templates/scripts/lib/harness-run-lib.sh';
+const PUSH_BRANCH = 'cli/templates/scripts/push-branch.sh';
+const COMMIT_ON_BRANCH = 'cli/templates/scripts/commit-on-branch.sh';
 const REMOTE_RUN = 'cli/templates/scripts/remote-run.sh';
 const WATCHER = 'cli/templates/scripts/autonomous-watcher.sh';
 const WORKFLOW = 'cli/templates/github/workflows/harness-run.yml';
@@ -107,6 +119,15 @@ const [SKIP_PREFIX, SKIP_SUFFIX] = extract(
   fnBody(source(LIB), 'hr_remote_copy_tree', LIB),
   /printf '(remote state bundle: skipped )%s: %s( is a symbolic link)\\n'/,
   'hr_remote_copy_tree skip line',
+);
+
+const pushBranchText = source(PUSH_BRANCH);
+const [PUSH_REFUSAL_OPEN] = extract(pushBranchText, /echo "(push-branch\.sh: refusing to push: )\$HR_WT_CONFIG_REFUSAL"/, 'push-branch.sh worktree-config refusal');
+const [PUSH_DETACHED] = extract(pushBranchText, /echo "(push-branch\.sh: detached HEAD — refusing to push)"/, 'push-branch.sh detached HEAD refusal');
+const [COMMIT_REFUSAL_OPEN] = extract(
+  source(COMMIT_ON_BRANCH),
+  /echo "(commit-on-branch\.sh: refusing to commit: )\$HR_WT_CONFIG_REFUSAL" >&2/,
+  'commit-on-branch.sh worktree-config refusal',
 );
 
 const workflow = source(WORKFLOW);
@@ -160,6 +181,16 @@ const WROTE = `${WROTE_OPEN}1${WROTE_FOR}${B}`;
 const LINK = `${WORKTREE}/sdlc-harness/clarifications/${B}/link.md`;
 const COPY_SKIP = `${SKIP_PREFIX}${LINK}: ${LINK}${SKIP_SUFFIX}`;
 const SAVE_SKIP = `${SAVE_SKIP_PREFIX}${LINK}: ${WORKTREE}/outside.txt${SAVE_SKIP_SUFFIX}`;
+const WT_CONFIG_REASON = `${WORKTREE}/.git/config.worktree sets core.sparsecheckout; remove the file, then re-run setup-worktree.sh in that working copy`;
+const PUSH_REFUSAL = `${PUSH_REFUSAL_OPEN}${WT_CONFIG_REASON}`;
+const COMMIT_REFUSAL = `${COMMIT_REFUSAL_OPEN}${WT_CONFIG_REASON}`;
+
+/** A `harness-state` bundle holding two planning files, as `PLACED`'s `placed 2` implies. */
+const PLANNED_BUNDLE = {
+  'status.json': '{"status":"paused"}\n',
+  [`planning/story_plans/${B}_story_plan.md`]: '# Story\n',
+  [`planning/task_plans/${B}/task_1_plan.md`]: '### Task 1\n',
+};
 
 /**
  * @typedef {object} Job
@@ -180,17 +211,22 @@ function job(id, minute, lines, { overrides = {}, expired = false } = {}) {
  * The three-job run at its expected shape, each option a departure from it.
  *
  * @param {{ resumed?: boolean, wrote?: boolean, preflight?: string, finalLine?: string | null,
- *   notLaunching?: boolean, saveExtra?: string[], parkedExpired?: boolean, install?: string[] }} [options]
+ *   notLaunching?: boolean, saveExtra?: string[], parkedExpired?: boolean, install?: string[],
+ *   placed?: boolean, pushExtra?: string[], harnessExtra?: string[] }} [options] `pushExtra` and
+ *   `harnessExtra` are appended to the completed job's `Push the branch` and `Run the harness` logs.
  * @returns {Job[]}
  */
 function fullRun({
   install = [PRESENT_LINE],
   resumed = true,
   wrote = true,
+  placed = true,
   preflight = 'success',
   finalLine = `${JOB_FINAL}completed stop`,
   notLaunching = false,
   saveExtra = [],
+  pushExtra = [],
+  harnessExtra = [],
   parkedExpired = false,
 } = {}) {
   const parked = job(
@@ -210,7 +246,7 @@ function fullRun({
   const resumedJob = job(RESUMED, 10, [
     [STEP.install, PRESENT_LINE],
     [STEP.restore, RESTORED],
-    [STEP.restore, PLACED],
+    ...(placed ? [[STEP.restore, PLACED]] : []),
     ...(wrote ? [[STEP.restore, WROTE]] : []),
     [STEP.harness, RESUME],
     [STEP.harness, `${JOB_FINAL}paused continue`],
@@ -219,9 +255,41 @@ function fullRun({
     [STEP.install, PRESENT_LINE],
     [STEP.harness, LAUNCH],
     ...(finalLine === null ? [] : [[STEP.harness, finalLine]]),
+    ...harnessExtra.map((text) => [STEP.harness, text]),
+    ...pushExtra.map((text) => [STEP.push, text]),
   ]);
   return [parked, resumedJob, completed];
 }
+
+/**
+ * Round 13's two jobs: a park before any plan file, then one job that resumed and completed the run,
+ * each with its push refused. Its bundle is `ROUND13_BUNDLE`.
+ *
+ * @returns {Job[]}
+ */
+function round13() {
+  const parked = job(PARKED, 0, [
+    [STEP.install, PRESENT_LINE],
+    [STEP.harness, LAUNCH],
+    [STEP.harness, PARKED_STOP],
+    [STEP.push, PUSH_REFUSAL],
+    [STEP.save, SAVED],
+  ]);
+  const resumed = job(RESUMED, 10, [
+    [STEP.install, PRESENT_LINE],
+    [STEP.restore, RESTORED],
+    [STEP.restore, WROTE],
+    [STEP.harness, RESUME],
+    [STEP.harness, `${JOB_FINAL}completed stop`],
+    [STEP.push, PUSH_REFUSAL],
+  ]);
+  return [parked, resumed];
+}
+
+const ROUND13_BUNDLE = {
+  'status.json': '{"status":"paused"}\n',
+  [`clarifications/${B}/question_1.md`]: '# Question 1\n',
+};
 
 /** Two denied records and one allowed, in `run-analytics.jq`'s `tools.items[]` shape. */
 const DENIED = [
@@ -265,13 +333,16 @@ async function pushBranch(fixture, files) {
 
 /**
  * Route the stub to list `jobs` for `B` and answer each; push `B` carrying `analytics` unless it is
- * `null`, which pushes the branch without the file.
+ * `null`, which pushes the branch without the file. `artifacts`, keyed by run id: a `{ <relative
+ * path>: <body> }` object is written into that run's artifact cache; `'expired'` or `'none'` is the
+ * `gh api …/artifacts` answer instead. The default stands in for every path that reads the bundle,
+ * whether or not the case reaches the read.
  *
  * @param {Awaited<ReturnType<typeof makeGate12Fixture>>} fixture
  * @param {Job[]} jobs
- * @param {{ analytics?: string | null }} [options]
+ * @param {{ analytics?: string | null, artifacts?: Record<number, Record<string, string> | 'expired' | 'none'> }} [options]
  */
-async function stage(fixture, jobs, { analytics = ANALYTICS } = {}) {
+async function stage(fixture, jobs, { analytics = ANALYTICS, artifacts = { [PARKED]: PLANNED_BUNDLE } } = {}) {
   await pushBranch(fixture, analytics === null ? { 'notes.md': 'no analytics\n' } : { [analyticsRel(fixture)]: analytics });
 
   // Listed newest first, as `gh run list` answers: the grader orders by createdAt.
@@ -287,6 +358,18 @@ async function stage(fixture, jobs, { analytics = ANALYTICS } = {}) {
     routes[`${base} --log`] = Array.isArray(j.log)
       ? { stdout: j.log.map(([step, text]) => `run\t${step}\t${TS} ${text}\n`).join('') }
       : { stderr: 'HTTP 410: Gone (https://api.github.com/repos/fixture/gate12/actions/runs/logs)\n', exit: 1 };
+  }
+  for (const [id, bundle] of Object.entries(artifacts)) {
+    if (bundle === 'expired' || bundle === 'none') {
+      const listed = bundle === 'expired' ? [{ name: 'harness-state', expired: true }] : [];
+      routes[`api repos/${GATE12_SLUG}/actions/runs/${id}/artifacts`] = { stdout: `${JSON.stringify({ artifacts: listed })}\n` };
+      continue;
+    }
+    const dir = join(scratch(fixture), 'runs', id, 'harness-state');
+    for (const [rel, body] of Object.entries(bundle)) {
+      await mkdir(join(dir, rel, '..'), { recursive: true });
+      await writeFile(join(dir, rel), body, 'utf8');
+    }
   }
   await ghStub(fixture.binDir, routes);
 }
@@ -407,6 +490,24 @@ test('FR3: a final job with no job: <final> <decision> line is fail', async (t) 
   assert.ok(fr3.evidence.includes(`run ${COMPLETED}`), fr3.evidence);
 });
 
+test('FR3: a commit-on-branch.sh refusal in the final job\'s Run the harness log is fail quoting that line', async (t) => {
+  const fixture = await fixtureFor(t);
+  await stage(fixture, fullRun({ harnessExtra: [COMMIT_REFUSAL] }));
+  const { one } = await grade(fixture);
+  const fr3 = one('FR3');
+  assert.equal(fr3.result, 'fail', JSON.stringify(fr3));
+  assert.ok(fr3.evidence.includes(`run ${COMPLETED}: ${COMMIT_REFUSAL}`), fr3.evidence);
+});
+
+test('FR3: the em-dash push-branch.sh refusal in a Push the branch that concluded success is fail', async (t) => {
+  const fixture = await fixtureFor(t);
+  await stage(fixture, fullRun({ pushExtra: [PUSH_DETACHED] }));
+  const { one } = await grade(fixture);
+  const fr3 = one('FR3');
+  assert.equal(fr3.result, 'fail', JSON.stringify(fr3));
+  assert.ok(fr3.evidence.includes(`run ${COMPLETED}: ${PUSH_DETACHED}`), fr3.evidence);
+});
+
 test('FR1: a not launching line after the launch line is fail', async (t) => {
   const fixture = await fixtureFor(t);
   await stage(fixture, fullRun({ notLaunching: true }));
@@ -429,6 +530,51 @@ for (const [form, line] of [
     assert.ok(fr6.evidence.includes(line), fr6.evidence);
   });
 }
+
+test('FR6: no placed line over a bundle holding two planning files is fail naming the count', async (t) => {
+  const fixture = await fixtureFor(t);
+  await stage(fixture, fullRun({ placed: false }));
+  const { one } = await grade(fixture);
+  const fr6 = one('FR6');
+  assert.equal(fr6.result, 'fail', JSON.stringify(fr6));
+  assert.ok(fr6.evidence.includes('carries no placed <n> planning file(s) line'), fr6.evidence);
+  assert.ok(fr6.evidence.includes(`run ${PARKED}'s bundle holds 2 planning file(s)`), fr6.evidence);
+});
+
+for (const [artifact, result] of [
+  ['expired', 'expired'],
+  ['none', 'not run'],
+]) {
+  test(`FR6: no placed line with the parked job's artifact ${artifact} is ${result}`, async (t) => {
+    const fixture = await fixtureFor(t);
+    await stage(fixture, fullRun({ placed: false }), { artifacts: { [PARKED]: artifact } });
+    const { one } = await grade(fixture);
+    const fr6 = one('FR6');
+    assert.equal(fr6.result, result, JSON.stringify(fr6));
+    assert.ok(fr6.evidence.includes(`run ${PARKED}`), fr6.evidence);
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Round 13's replay.
+
+test('round 13: both pushes refused is FR3 fail; a park before any plan file is FR6 pass', async (t) => {
+  const fixture = await fixtureFor(t);
+  await stage(fixture, round13(), { artifacts: { [PARKED]: ROUND13_BUNDLE } });
+  const { result, one } = await grade(fixture);
+  assert.equal(result.status, 4, show(result));
+
+  const fr3 = one('FR3');
+  assert.equal(fr3.result, 'fail', JSON.stringify(fr3));
+  assert.ok(fr3.evidence.includes(`run ${PARKED}: ${PUSH_REFUSAL}`), fr3.evidence);
+  assert.ok(fr3.evidence.includes(evidencePath(fixture, 'FR3')), fr3.evidence);
+  const record = await readFile(evidencePath(fixture, 'FR3'), 'utf8');
+  for (const id of [PARKED, RESUMED]) assert.ok(record.includes(`run ${id}: ${PUSH_REFUSAL}`), `run ${id} in\n${record}`);
+
+  const fr6 = one('FR6');
+  assert.equal(fr6.result, 'pass', JSON.stringify(fr6));
+  assert.ok(fr6.evidence.endsWith('placed: none to place, the park preceded any plan file'), fr6.evidence);
+});
 
 // ---------------------------------------------------------------------------------------------
 // Expired, absent and unparseable.
