@@ -2230,13 +2230,16 @@ hr_sandbox_prereq_judge_var() {
 # / `command -v socat` against the caller's `PATH`; then, only on a `linux` or
 # `wsl2` host where both `bwrap` and `unshare` resolve, the nested
 # user-namespace check `bwrap --unshare-user --dev-bind / / -- unshare -U -r
-# true` (otherwise `not-run`), and the presence of
+# true` (otherwise `not-run`), bounded by `timeout 10` where `timeout`
+# resolves, as `probeSandboxHost` bounds it with
+# `NESTED_USERNS_PROBE_TIMEOUT_MS`, a timeout answering `failed`, and the
+# presence of
 # `/etc/apparmor.d/bwrap-userns-restrict`, which only words the refusal.
 # Returns the judge's status. A `uname` that fails is no definite answer: the
 # variables are cleared and this returns 0, leaving the run to the agent CLI's
 # `failIfUnavailable`.
 hr_sandbox_prereq_probe_var() {
-  local uname_s uname_r have_bwrap=0 have_socat=0 nested="not-run" stock=0
+  local uname_s uname_r have_bwrap=0 have_socat=0 nested="not-run" stock=0 rc=0
   HR_SANDBOX_HOST=""
   HR_SANDBOX_MISSING=""
   HR_SANDBOX_NESTED=""
@@ -2250,7 +2253,12 @@ hr_sandbox_prereq_probe_var() {
   case "$HR_HOST_KIND" in
     linux|wsl2)
       if [ "$have_bwrap" = "1" ] && command -v unshare >/dev/null 2>&1; then
-        if bwrap --unshare-user --dev-bind / / -- unshare -U -r true </dev/null >/dev/null 2>&1; then
+        if command -v timeout >/dev/null 2>&1; then
+          timeout 10 bwrap --unshare-user --dev-bind / / -- unshare -U -r true </dev/null >/dev/null 2>&1 || rc=$?
+        else
+          bwrap --unshare-user --dev-bind / / -- unshare -U -r true </dev/null >/dev/null 2>&1 || rc=$?
+        fi
+        if [ "$rc" = "0" ]; then
           nested="passed"
         else
           nested="failed"
