@@ -110,6 +110,7 @@ function assertResumedAbsent(f) {
   const paused = events(f, 'paused');
   assert.equal(paused.length, 1, f.watcherLog());
   assert.ok(paused[0].detail.includes(RESUME_COMMAND), paused[0].detail);
+  assert.doesNotMatch(paused[0].detail, /continue from the ledger/, paused[0].detail);
   assert.match(f.watcherLog(), /'feat_x' has no readable ledger \(absent: .*\) after a pause resume — not classifying it completed/);
 }
 

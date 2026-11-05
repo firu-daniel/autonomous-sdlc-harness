@@ -31,7 +31,7 @@
 2. [x] **Finding 4** — Name `git --version` when the replay of the checkout's two commands itself fails _(layer: cli)_
 3. [x] **Finding 3** — Stream `push-branch.sh`'s output through `tee` in `Push the branch` so a killed step still shows it _(layer: cli)_
 4. [x] **Finding 2** — Cite the document of record, not this repository's task prompt, in the new library function's comment _(layer: cli, general)_
-5. [ ] **Finding 1** — Stop the local `paused` notification for a ledger-less exit from saying "continue from the ledger" _(layer: cli, general)_
+5. [x] **Finding 1** — Stop the local `paused` notification for a ledger-less exit from saying "continue from the ledger" _(layer: cli, general)_
 
 ---
 

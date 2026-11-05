@@ -45,3 +45,7 @@ Task 9 changed `/autonomous-sdlc-harness:branch-status` for exactly this case: i
    ```
 
 Run only that file: `npm test --workspace cli -- test/watcher-ledger-classification.test.mjs`. The `task, unfinished` case still expects the existing wording, which this fix keeps for a ledger that exists.
+
+**Deviations from plan:**
+- Fix steps 1–2 were applied to `cli/templates/scripts/autonomous-watcher.sh` only. The self-adopted copy `scripts/autonomous-watcher.sh` lies outside this dispatch's `cli` path scope and was not edited; the two files now differ by exactly the step 1–2 edits until a dispatch on the layer owning `scripts/` (the catch-all `general` layer) makes the same edit there.
+- The `general`-layer dispatch then applied steps 1–2 to `scripts/autonomous-watcher.sh`; `cmp` of the two copies now exits 0 with no output (byte-identical). Step 3's single-file run is not repeated by this dispatch: that test file was edited by the `cli` dispatch, not this one, and it grades the template, not `scripts/`.

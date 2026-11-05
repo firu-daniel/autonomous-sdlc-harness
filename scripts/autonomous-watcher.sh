@@ -3922,7 +3922,7 @@ classify_run_exit() {
     fi
   elif [ "$rc" -eq 0 ]; then
     # THE LEDGER SPLITS ONLY THIS ARM — see the function's comment.
-    local ledger="" ledger_state="" ledger_detail=""
+    local ledger="" ledger_state="" ledger_detail="" why=""
     if [ -n "$state_abs" ]; then
       ledger="$(hr_run_ledger_state "$state_abs" "$branch" "$(registry_get "$branch" engine)")" || :
       ledger_state="${ledger%% *}"
@@ -3931,7 +3931,7 @@ classify_run_exit() {
     if [ "$ledger_state" = "absent" ] || [ "$ledger_state" = "unreadable" ]; then
       # Only a first launch's ledger-less exit is a pre-Setup halt — see the
       # function's comment. First reason that holds wins.
-      local why="" restarts
+      local restarts
       if [ -n "$resume_kind" ]; then
         case "$resume_kind" in
           [aeiou]*) why="an $resume_kind resume" ;;
@@ -3987,7 +3987,11 @@ classify_run_exit() {
       log "run '$branch' paused (unfinished) — the session exited 0 before its ledger finished ($ledger_detail); resume with /autonomous-sdlc-harness:branch-resume $branch"
       # In job mode run_job decides and notifies, as for every reason but `user`.
       if [ "$JOB_MODE" != "1" ]; then
-        notify paused "$branch" "$log_path" "the session ended before its ledger finished ($ledger_detail) — run /autonomous-sdlc-harness:branch-resume $branch to continue from the ledger"
+        if [ -n "$why" ]; then
+          notify paused "$branch" "$log_path" "the session exited 0 with no readable ledger ($ledger_detail) — run /autonomous-sdlc-harness:branch-resume $branch to continue"
+        else
+          notify paused "$branch" "$log_path" "the session ended before its ledger finished ($ledger_detail) — run /autonomous-sdlc-harness:branch-resume $branch to continue from the ledger"
+        fi
       fi
       return 0
     fi
