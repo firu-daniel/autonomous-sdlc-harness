@@ -36,3 +36,8 @@
 
 - `npm test --workspace cli -- test/workflow-templates.test.mjs`, from the repository root, as one plain foreground command: every case passes. That includes the existing ones asserting that the final push runs under `always()`, that no input or secret expression reaches a `run:` block, and that `{{cliVersion}}` is the only token.
 - `git diff -- cli/templates/github/workflows/harness-run.yml` touches only the `Push the branch` step and its comment.
+
+**Deviations from plan:**
+
+- Each summary line is written as a `- <line>` list item under the heading, so consecutive lines render as separate items rather than one Markdown paragraph; the captured line itself is unchanged.
+- The new case's `spawnSync` env blanks `MAIN_REPO_ANCHOR_VARIABLE`, as the run-actor gate case does; the plan did not name it, and the tree guard `cli/test/main-anchor-isolation.test.mjs` (selected by `cli/test/**/*.mjs`) failed until it was added.
