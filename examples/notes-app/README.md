@@ -18,9 +18,13 @@ without running anything. It has **no auth, no network, no backend and no creden
 that needs a login is a fixture nobody can run.
 
 **A snapshot, not a live adoption.** `init`, `doctor` and every wrapper under `scripts/` derive the
-repository root from git — the wrappers with `git -C "$script_dir" rev-parse --show-toplevel`
-followed by a `cd`, `init` and `doctor` through the same command (`cli/src/core/git.ts`) — and this
-directory carries no `.git` of its own, so all of them resolve to the repository that **contains**
+repository root from git — the wrappers by walking up from their own directory to the nearest one
+holding `harness.config.json` that `git -C <dir> rev-parse --show-toplevel` confirms as its own
+top, falling back to asking git which checkout their directory belongs to, so git never starts at
+a `<scriptsDir>/.git` placeholder (`docs/sandbox-verification.md` §5 F15), followed by a `cd`;
+`init` and `doctor` through `rev-parse --show-toplevel` too (`cli/src/core/git.ts`) — and this
+directory carries no `.git` of its own, so git does not confirm the `harness.config.json` here as a
+top, the wrappers' walk goes on upward, and all of them resolve to the repository that **contains**
 it rather than to it. `node cli/dist/cli.js doctor --cwd examples/notes-app` is therefore not a
 thing to run here, and neither is `bash scripts/typecheck.sh`: it `cd`s out of this directory and
 runs `npm run typecheck` at the enclosing repository's root, which declares no such script. The

@@ -67,7 +67,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PATH="$(hr_path_with_fallbacks)"
 export PATH
 
-if ! root="$(hr_repo_root "$script_dir")"; then
+if ! root="$(hr_script_root "$script_dir")"; then
   echo "docs-search-server: $script_dir is not inside a git repository, so there is no checkout to serve" >&2
   exit 1
 fi

@@ -262,7 +262,8 @@ fi
 # --- Anchors. Derived, never remembered. `pwd -P`, because the placement test
 # below compares this directory's checkout with the main checkout canonically.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-top="$(hr_repo_root "$script_dir")" || top=""
+# Not git's discovery out of $script_dir, which a leftover <scriptsDir>/.git would stop.
+top="$(hr_script_root "$script_dir")" || top=""
 if [ -z "$top" ]; then
   echo "create-worktree.sh: '$script_dir' is not inside a git repository — refusing" >&2
   exit 1

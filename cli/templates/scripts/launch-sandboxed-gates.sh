@@ -95,6 +95,11 @@
 #       <target>/. An absent one is pinned by a read-only placeholder, as
 #       bubblewrap does for the session (§5 AP2); one whose parent is absent is
 #       a refusal. The supervisor sweeps its placeholders after `bwrap` exits.
+#       A `<target>/<scripts_dir>/.git` entry is pinned like every other absent
+#       one, and the worker's scripts place their root past it from the nearest
+#       confirmed `harness.config.json` (`lib/harness-run-lib.sh` →
+#       `hr_script_root`), never by git's discovery from the scripts
+#       directory (F15).
 #   --ro-bind <target>/.claude <target>/.claude, and --ro-bind <p> <p> or
 #   --ro-bind /dev/null <p> for each root-level built-in <p>
 #       NO WRITE TO CLAUDE CODE'S OWN PROTECTED PATHS: the session's sandbox
