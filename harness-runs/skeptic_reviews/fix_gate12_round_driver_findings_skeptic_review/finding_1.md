@@ -34,3 +34,5 @@ Round 13's own evidence shows this. The task prompt's measurement 2 says "The se
 - [ ] In `cli/test/gate12-sandbox-round-full-run.test.mjs`, append this sentence to the header's `commit-on-branch.sh` bullet: "Its two FR3 cases put the line in `Run the harness`, where the shipped watcher never writes a session's refusal; they pin the arm's matcher, not a path a real run reaches."
 
 No code or test assertion changes, so this fix needs no suite run. The prose edits are verified by reading them back.
+
+**Deviations from plan:** The `cli/test/gate12-sandbox-round-full-run.test.mjs` header sentence was already present, uncommitted and byte-identical to the fix, in the working tree when this unit started; it was kept as found rather than re-applied. The other three sites were edited by this unit.

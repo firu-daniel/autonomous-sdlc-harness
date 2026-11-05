@@ -32,7 +32,9 @@
  * - `cli/templates/scripts/push-branch.sh`: the prefix of its `$HR_WT_CONFIG_REFUSAL` refusal, and
  *   its detached-HEAD refusal.
  * - `cli/templates/scripts/commit-on-branch.sh`: the prefix of its `$HR_WT_CONFIG_REFUSAL` refusal,
- *   and its detached-HEAD refusal.
+ *   and its detached-HEAD refusal. Its two FR3 cases put the line in `Run the harness`, where the
+ *   shipped watcher never writes a session's refusal; they pin the arm's matcher, not a path a real
+ *   run reaches.
  * A refusal's reason is composed at run time, so it is canned in round 13's shape.
  *
  * It reads those fixed files, not a tree, so it owes no `treeGuards` entry.

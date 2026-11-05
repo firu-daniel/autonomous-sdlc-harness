@@ -25,7 +25,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — State that FR3's Run the harness log never carries a session's commit-on-branch.sh refusal _(layer: cli, general)_
+1. [x] **Finding 1** — State that FR3's Run the harness log never carries a session's commit-on-branch.sh refusal _(layer: cli, general)_
 
 ---
 

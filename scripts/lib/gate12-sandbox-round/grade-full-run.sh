@@ -240,8 +240,13 @@ g12_fr5_arm() {
 # from the last such line of each job's log.
 # push-branch.sh exits 0 on every refusal (cli/templates/scripts/push-branch.sh -> EVERY FAILURE PATH
 # IS NON-FATAL (exit 0)), so Push the branch concludes success on one, and the arm reads that step's
-# log too. A refusal by either wrapper fails the arm: commit-on-branch.sh's in the Run the harness
-# log, push-branch.sh's in the Push the branch log. Each wrapper spells a refusal two ways,
+# log too. A refusal by either wrapper fails the arm: push-branch.sh's in the Push the branch log, and
+# commit-on-branch.sh's in the Run the harness log should one ever reach it. A session's own
+# commit-on-branch.sh refusal does not: it is the stderr of the session's tool call, which
+# spawn_engine sends into the run's log file through autonomous-format-stream.sh, and that
+# formatter drops tool_result bodies, so neither this step log nor the bundle's run.log carries
+# it. A pass is therefore no evidence that no session commit was refused.
+# Each wrapper spells a refusal two ways,
 # `<script>: refusing to <verb>: <reason>` and `<script>: <reason> — refusing to <verb>`, so a line
 # matches on carrying both `<script>: ` and `refusing to <verb>`. No other line fails the arm:
 # `push failed for …` is not a refusal.
