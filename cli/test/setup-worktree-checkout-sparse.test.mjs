@@ -86,8 +86,13 @@ async function fixture(t) {
     origin,
     configWorktree: join(main, '.git', 'config.worktree'),
     checkoutCommands: async () => {
-      await runGit(main, ['sparse-checkout', 'disable']);
-      await runGit(main, ['config', '--local', '--unset-all', 'extensions.worktreeConfig']);
+      const version = (await runGit('/', ['--version'])).stdout.trim();
+      try {
+        await runGit(main, ['sparse-checkout', 'disable']);
+        await runGit(main, ['config', '--local', '--unset-all', 'extensions.worktreeConfig']);
+      } catch (error) {
+        throw new Error(`actions/checkout's two commands could not be replayed under ${version}: ${error.message}`);
+      }
     },
     plant: async (file, key, value) => runGit('/', ['config', '--file', file, key, value]),
     list: async (file) => (await runGit('/', ['config', '--file', file, '--list'])).stdout.trim(),
