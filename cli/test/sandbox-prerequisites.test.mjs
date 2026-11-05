@@ -278,6 +278,12 @@ test('describeNestedUserns names the cause and its remedy, and who applies it', 
   }
   assert.ok(!failed.includes('apparmor_parser -R'));
 
+  const clearFailed = describeNestedUserns('failed', DETAIL, false, 'clear');
+  assert.ok(clearFailed.includes(DETAIL));
+  assert.ok(clearFailed.includes(APPARMOR_USERNS_SYSCTL));
+  assert.ok(!clearFailed.includes(APPARMOR_LOAD_COMMAND));
+  assert.ok(!clearFailed.includes('optOut'));
+
   assert.ok(describeNestedUserns('passed', '', false).length > 0);
   for (const remoteJob of [false, true]) {
     assert.equal(describeNestedUserns('not-run', '', remoteJob), '');

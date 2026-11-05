@@ -187,7 +187,8 @@ concurrentSuite('doctor sandbox-prerequisites', () => {
     const answer = stock ? 'failed-stock-restrict' : 'failed';
     for (const remoteJob of [false, true]) {
       const { line } = await doctorLine(dir, 'FAIL', remoteJob ? ['--remote-job'] : [], env);
-      assert.ok(line.includes(describeNestedUserns(answer, 'exited 1', remoteJob)), `the ${answer} sentence is not carried:\n${line}`);
+      const sentences = [undefined, 'clear'].map((appArmor) => describeNestedUserns(answer, 'exited 1', remoteJob, appArmor));
+      assert.ok(sentences.some((sentence) => line.includes(sentence)), `the ${answer} sentence is not carried:\n${line}`);
       assert.equal(line.includes(`The cause is \`${BWRAP_USERNS_RESTRICT_PROFILE_PATH}\``), stock, `the stock profile is named as the cause iff present:\n${line}`);
       if (stock) {
         const owner = remoteJob ? 'Install the sandbox prerequisites' : 'trade-off';
@@ -234,7 +235,7 @@ concurrentSuite('doctor sandbox-prerequisites', () => {
         name: 'probe fails, no stock file',
         facts: facts(['bwrap', 'socat'], { ...clear, nestedUserns: failed, stockRestrictProfile: false }),
         grade: () => 'fail',
-        carries: (remoteJob) => [describeNestedUserns('failed', failed.detail, remoteJob), 'AppArmor files, for context:'],
+        carries: (remoteJob) => [describeNestedUserns('failed', failed.detail, remoteJob, 'clear'), 'AppArmor files, for context:'],
       },
       {
         name: 'no bwrap',
@@ -246,7 +247,7 @@ concurrentSuite('doctor sandbox-prerequisites', () => {
         name: 'missing piece and failed probe',
         facts: facts(['bwrap'], { ...clear, nestedUserns: failed }),
         grade: () => 'fail',
-        carries: (remoteJob) => [missingSentence(['socat']), `; ${describeNestedUserns('failed', failed.detail, remoteJob)}`],
+        carries: (remoteJob) => [missingSentence(['socat']), `; ${describeNestedUserns('failed', failed.detail, remoteJob, 'clear')}`],
       },
     ];
     for (const row of rows) {

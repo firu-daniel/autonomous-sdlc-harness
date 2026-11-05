@@ -283,8 +283,16 @@ export function describeAppArmor(answer: AppArmorAnswer): string {
   }
 }
 
-/** The one-line sentence for a nested user-namespace answer, `''` when there is nothing to say; never offers the opt-out. */
-export function describeNestedUserns(answer: NestedUsernsAnswer, detail: string, remoteJob: boolean): string {
+/**
+ * The one-line sentence for a nested user-namespace answer, `''` when there is nothing to say; never offers the opt-out.
+ * The AppArmor answer selects the `failed` remedy: under `clear` no AppArmor profile is the cause, so none is prescribed.
+ */
+export function describeNestedUserns(
+  answer: NestedUsernsAnswer,
+  detail: string,
+  remoteJob: boolean,
+  appArmor: AppArmorAnswer = 'uncertain',
+): string {
   const failure = `bwrap's child could not create a user namespace (\`${NESTED_USERNS_PROBE.join(' ')}\` reported: ${detail}), so every sandboxed command would fail`;
   switch (answer) {
     case 'not-run':
@@ -293,7 +301,9 @@ export function describeNestedUserns(answer: NestedUsernsAnswer, detail: string,
     case 'passed':
       return `bwrap's child created a nested user namespace (\`${NESTED_USERNS_PROBE.join(' ')}\`).`;
     case 'failed':
-      return `${failure}; no \`${BWRAP_USERNS_RESTRICT_PROFILE_PATH}\` is present, so write the profile at \`${BWRAP_APPARMOR_PROFILE_PATH}\` that grants \`userns\` to \`${BWRAP_INSTALLED_PATH}\` and run \`${APPARMOR_LOAD_COMMAND}\`.`;
+      return appArmor === 'clear'
+        ? `${failure}; no \`${BWRAP_USERNS_RESTRICT_PROFILE_PATH}\` is present and \`${APPARMOR_USERNS_SYSCTL}\` does not restrict unprivileged user namespaces, so no AppArmor profile is the cause: this host, or a container or sandbox \`doctor\` is running inside, denies unprivileged user namespaces.`
+        : `${failure}; no \`${BWRAP_USERNS_RESTRICT_PROFILE_PATH}\` is present, so write the profile at \`${BWRAP_APPARMOR_PROFILE_PATH}\` that grants \`userns\` to \`${BWRAP_INSTALLED_PATH}\` and run \`${APPARMOR_LOAD_COMMAND}\`.`;
     case 'failed-stock-restrict': {
       const remedy = bwrapUsernsRestrictRemedy();
       const steps = [

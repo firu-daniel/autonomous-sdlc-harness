@@ -5359,7 +5359,7 @@ export function gradeSandboxPrerequisites(input: SandboxPrerequisitesGradeInput)
   const context = `AppArmor files, for context: ${describeAppArmor(appArmor)}`;
   if (nestedUserns === 'failed' || nestedUserns === 'failed-stock-restrict') {
     const detail = facts.nestedUserns?.state === 'failed' ? facts.nestedUserns.detail : '';
-    sentences.push(`${describeNestedUserns(nestedUserns, detail, remoteJob)} ${context}`);
+    sentences.push(`${describeNestedUserns(nestedUserns, detail, remoteJob, appArmor)} ${context}`);
     return { grade: 'fail', message: sentences.join('; ') };
   }
   if (nestedUserns !== 'passed' && appArmor === 'uncertain') sentences.push(describeAppArmor(appArmor));
