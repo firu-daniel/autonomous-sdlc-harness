@@ -29,3 +29,9 @@
 - `bash -n scripts/lib/gate12-sandbox-round/grade-plant.sh` exits 0.
 - Grep `grade-plant.sh` for `not launching` and for `job: launching run for`: no grading code is left on either.
 - Read `g12_js1_arm` against its pre-change body: every string it passes to `g12_arm_set`, and the departure, is unchanged.
+
+**Deviations from plan:**
+
+- Evidence downgrade, `bash -n scripts/lib/gate12-sandbox-round/grade-plant.sh`: the bare call was refused by the permission layer (twice, as a standalone command). The claim rests instead on `bash scripts/typecheck.sh`, whose `scripts/check-shell-parse.sh` runs `/bin/bash -n --` over every `git ls-files`-listed `*.sh` and printed `check-shell-parse: 122 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`, then `PASS: typecheck`.
+- `g12_refused_arm` keeps the signature `<row> <arm> <path>`. To let RJ2 word its own `success` failure while JS1's stays byte-identical, it also sets `G12_ARM_REFUSE_CONCL` to the refusal step's conclusion, and `g12_rj2_arm` re-sets the arm's evidence when that is `success`.
+- Run on reading, not execution: `cli/test/gate12-sandbox-round-grade.test.mjs` cases `RJ2: a not launching line and a failed bundle is pass`, `RJ2: a refusal step concluding failure is not run, naming the job surface`, `RJ2: an expired artifact is expired`, and the all-rows case expecting `RJ2: 'pass'`, pin the old grade. They were not run, because this unit did not edit that file. Task 7 rewrites them, and the Run gates phase runs the suite.
