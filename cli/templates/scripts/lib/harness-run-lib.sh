@@ -1325,9 +1325,9 @@ hr_worktree_config_check_var() {
 # not readable (nothing written), or when an `--unset` fails (naming the key).
 # Prints nothing. Call it directly, never inside `$(…)`.
 #
-# The shape it removes is what `actions/checkout` v7.0.1 leaves (the task
-# prompt `fix_remote_job_commit_refusal` → `## What was measured (2026-11-05,
-# verbatim)`): `git sparse-checkout disable` writes all three at `false`, then
+# The shape it removes is what `actions/checkout` v7.0.1 leaves
+# (`docs/sandbox-verification.md`, rows CS6 (runner) and FR3, measured in Gate
+# 12 round 13): `git sparse-checkout disable` writes all three at `false`, then
 # `git config --local --unset-all extensions.worktreeConfig` turns the
 # extension off and leaves the file, and `setup-worktree.sh` turning the
 # extension back on makes the keys live again. Only these three at `false` are

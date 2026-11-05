@@ -23,3 +23,6 @@ The comment also names no path. It names a branch, and a reader has to know the 
 ```
 
 Leave the rest of the comment unchanged. This edit changes a comment only, so it owes no test run of its own.
+
+- **Deviations from plan:** The `cli` layer dispatch applied the replacement to `cli/templates/scripts/lib/harness-run-lib.sh` only. The self-adopted copy `scripts/lib/harness-run-lib.sh` lies outside the `cli` path scope (it belongs to the `general` layer, path `.`), so it is unedited, and the two files are not byte-identical until that layer's dispatch makes the same three-line edit.
+  - The `general` layer dispatch then made the same three-line edit to `scripts/lib/harness-run-lib.sh`; `cmp` of the two files now reports them identical.
