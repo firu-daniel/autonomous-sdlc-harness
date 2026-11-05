@@ -61,7 +61,7 @@
 #                                     `name:`, so GitHub names it by its key,
 #                                     and the settledness test reads that
 #                                     job's status by that name
-#   cli/templates/scripts/lib/harness-run-lib.sh hr_sandbox_opted_out, sourced
+#   lib/harness-run-lib.sh (the scriptsDir copy) hr_sandbox_opted_out, sourced
 #                                     in a subshell from $SCRIPTS_DIR/lib/ by
 #                                     `Install the sandbox prerequisites` to
 #                                     read sandbox.optOut on its failing arm,

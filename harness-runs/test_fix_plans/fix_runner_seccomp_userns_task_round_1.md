@@ -12,7 +12,7 @@ The log also reports some sub-gate rows as BLOCKED or SKIPPED: 13a, 13b and 13c 
 
 This list is the **single source of truth** for the fix loop. `[ ]` markers anywhere else in this plan or its per-finding files are informational only.
 
-1. [ ] **Finding 1** — Remove the frozen `scripts/` path from the run workflow template's DECLARED MIRRORS entry. _(layer: cli)_
+1. [x] **Finding 1** — Remove the frozen `scripts/` path from the run workflow template's DECLARED MIRRORS entry. _(layer: cli)_
 
 ## Must Fix
 
