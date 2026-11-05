@@ -4,8 +4,8 @@
  * **The rule this suite enforces: the round's restated table carries every `--list` row, in order,
  * with its round step and its route, and no other row; and the round names each subcommand's
  * command inside a fenced block.** A route maps to *Taken by* through {@link TAKEN_BY}; a route
- * outside it fails. Only a `hand` row's note is held to `--list`'s, because its note is the reason
- * the row stays by hand.
+ * outside it fails. Only a `hand` or `source` row's note is held to `--list`'s: a `hand` row's note
+ * is the reason the row stays by hand, and a `source` row's is the source the row is read from.
  *
  * It reads two fixed files — the script's `--list` output and `docs/development.md` — and no tree,
  * so it owes no `treeGuards` entry.
@@ -26,6 +26,7 @@ const TAKEN_BY = {
   'reads-SB2': "grade (SB2's run)",
   'default-branch': 'default-branch',
   hand: 'hand',
+  source: 'source',
 };
 
 const ROUND_HEADING = '**The sandbox series round (#170 step 4) — not yet run.**';
@@ -98,9 +99,9 @@ test("Gate 12's restated row table matches --list, row for row", async (t) => {
     assert.equal(table[sb4]?.takenBy, "grade (SB2's run)");
   });
 
-  await t.test("each hand row's note carries --list's note verbatim", () => {
+  await t.test("each hand or source row's note carries --list's note verbatim", () => {
     for (const [i, entry] of listed.entries()) {
-      if (entry.route !== 'hand') continue;
+      if (entry.route !== 'hand' && entry.route !== 'source') continue;
       assert.ok(table[i]?.note.includes(entry.note), `${entry.row}: ${JSON.stringify(table[i]?.note)}`);
     }
   });

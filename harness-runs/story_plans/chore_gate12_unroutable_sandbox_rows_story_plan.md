@@ -50,7 +50,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_gate12_unroutable_sand
 7. [x] **Task 7** — Test the new RJ2, SB2 and `source`-row grades _(layer: cli)_ _(points: 20)_
 8. [x] **Task 8** — Rewrite SB2, SB3, JS3N and RJ2 in `docs/sandbox-verification.md` §10, and align `docs/cli.md` §6 and `docs/remote-execution.md` _(layer: general)_ _(points: 20)_
 9. [x] **Task 9** — Rewrite Gate 12's round steps 7 and 8 and the owed checks in `docs/development.md`, and re-derive the restated table from `--list` _(layer: general)_ _(points: 20)_
-10. [ ] **Task 10** — Hold the restated table's `source` rows to `--list` in `gate12-sandbox-round-docs.test.mjs` _(layer: cli)_ _(points: 10)_
+10. [x] **Task 10** — Hold the restated table's `source` rows to `--list` in `gate12-sandbox-round-docs.test.mjs` _(layer: cli)_ _(points: 10)_
 
 ## Scope register
 
