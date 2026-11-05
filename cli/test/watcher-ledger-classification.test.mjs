@@ -1,11 +1,15 @@
 /**
  * The written watcher's zero-exit classification over the run's own ledger — `classify_run_exit`
  * in `autonomous-watcher.sh`, reading `hr_run_ledger_state` — driven through a pause-resume launch:
- * a `paused` record, an empty `sdlc-harness/RESUME`, one `tick`.
+ * a `paused` record, an empty `sdlc-harness/RESUME`, one `tick`; through a park resume for the
+ * answer case; and, for the inputs no resume pass isolates (a first launch, a stall restart, an
+ * earlier park), by calling `classify_run_exit` in a shell that sourced the installed watcher.
  *
  * **The rule this suite enforces: a zero exit is `completed` only over a finished ledger; over an
  * unfinished one it is `paused` with `pause_reason` `unfinished` and sends no `completed`
- * notification; an absent ledger keeps `completed`; and a pause or a park outranks the ledger.**
+ * notification; an absent ledger keeps `completed` only on a first launch; after a resume, a stall
+ * restart or an earlier park it is `paused` / `unfinished`; and a pause or a park outranks the
+ * ledger.**
  *
  * The stub writes its ledger into its own working copy, so the file classified is the one the
  * session left behind.
@@ -14,7 +18,8 @@
  * template, under the mutation it names:
  * - the reader's result ignored (always `completed`) → `task, unfinished`, `user_review, stale
  *   round` and `docs, one open entry` fail, and `hygiene` with them;
- * - `absent` treated as `unfinished` → `task, absent` and `docs, absent` fail;
+ * - the resume signal ignored → the resumed cases fail;
+ * - `absent` always treated as `unfinished` → the first-launch cases fail;
  * - the ledger check moved above the `PAUSE_ACK` arm → both `order` cases fail, and `task,
  *   unfinished` with them;
  * - the `pause_reason` clear removed from `begin_pause_resume` → `hygiene` fails;
@@ -27,7 +32,8 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { createWatcherFixture } from './helpers/watcher.mjs';
+import { runBash } from './helpers/fixture.mjs';
+import { createWatcherFixture, TICK_TIMEOUT_MS } from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
 const RESUME_COMMAND = '/autonomous-sdlc-harness:branch-resume feat_x';
@@ -98,6 +104,26 @@ function assertUnfinished(f) {
   assert.deepEqual(events(f, 'completed'), [], log);
 }
 
+/** A pause-resumed session's ledger-less zero exit: `unfinished`, with its one `paused` notification. */
+function assertResumedAbsent(f) {
+  assertUnfinished(f);
+  const paused = events(f, 'paused');
+  assert.equal(paused.length, 1, f.watcherLog());
+  assert.ok(paused[0].detail.includes(RESUME_COMMAND), paused[0].detail);
+  assert.match(f.watcherLog(), /'feat_x' has no readable ledger \(absent: .*\) after a pause resume — not classifying it completed/);
+}
+
+/**
+ * Seed a `running` record carrying `fields`, write no ledger, and call `classify_run_exit` for a
+ * zero exit in one shell that sourced the installed watcher, as `tick` does.
+ */
+async function classifyDirect(f, fields) {
+  await f.seedRecord({ status: 'running', ...fields });
+  const script = `. "$1" status >/dev/null\nclassify_run_exit feat_x ${shellQuote(f.dir)} ${shellQuote(f.record().log_path)} 0`;
+  const result = await runBash(f.dir, ['-c', script, '_', f.watcherPath], f.watcherEnv(), { timeoutMs: TICK_TIMEOUT_MS });
+  assert.equal(result.status, 0, `classify_run_exit exited ${result.status}\n${result.stdout}\n${result.stderr}`);
+}
+
 test('task, finished: a settled ledger is completed', async (t) => {
   const f = await createWatcherFixture(t);
   if (f === null) return;
@@ -120,14 +146,38 @@ test('task, unfinished: an open ledger is paused unfinished, with one paused not
   assert.match(f.watcherLog(), /run 'feat_x' paused \(unfinished\)/);
 });
 
-test('task, absent: no ledger keeps completed and logs the missing ledger', async (t) => {
+test('task, absent after a pause resume: paused unfinished, never completed', async (t) => {
   const f = await createWatcherFixture(t);
   if (f === null) return;
 
   await resumeOnce(f, ':');
 
-  assertCompleted(f);
-  assert.match(f.watcherLog(), /'feat_x' has no readable ledger \(absent/);
+  assertResumedAbsent(f);
+});
+
+test('task, absent after an answer resume: paused unfinished, the pair archived', async (t) => {
+  const f = await createWatcherFixture(t);
+  if (f === null) return;
+  await f.seedRecord();
+  await f.writeQuestion(1, 'q\n');
+  await f.writeAnswer(1, 'a\n');
+  await f.setStub(':');
+
+  await f.tick();
+
+  assertUnfinished(f);
+  assert.match(f.watcherLog(), /'feat_x' has no readable ledger \(absent: .*\) after an answer resume — not classifying it completed/);
+  assert.deepEqual(await f.archived(), ['answer_1.md', 'question_1.md']);
+  assert.deepEqual(await f.topLevel(), []);
+});
+
+test('user_review, absent after a pause resume: paused unfinished, never completed', async (t) => {
+  const f = await createWatcherFixture(t);
+  if (f === null) return;
+
+  await resumeOnce(f, ':', 'user_review');
+
+  assertResumedAbsent(f);
 });
 
 test('user_review, stale round: a finished round-1 ledger under a round-2 review is unfinished', async (t) => {
@@ -171,14 +221,56 @@ test('docs, one open entry: the checklist is unfinished', async (t) => {
   assertUnfinished(f);
 });
 
-test('docs, absent: no checklist keeps completed', async (t) => {
+test('docs, absent after a pause resume: paused unfinished, never completed', async (t) => {
   const f = await createWatcherFixture(t);
   if (f === null) return;
 
   await resumeOnce(f, ':', 'docs');
 
+  assertResumedAbsent(f);
+});
+
+test('task, absent on a first launch keeps completed', async (t) => {
+  const f = await createWatcherFixture(t);
+  if (f === null) return;
+
+  await classifyDirect(f, { resume_kind: '', stall_restarts: '0' });
+
   assertCompleted(f);
-  assert.match(f.watcherLog(), /'feat_x' has no readable ledger \(absent/);
+  assert.match(f.watcherLog(), /'feat_x' has no readable ledger \(absent: .*\) — classifying on the exit code alone/);
+});
+
+test('docs, absent on a first launch keeps completed', async (t) => {
+  const f = await createWatcherFixture(t);
+  if (f === null) return;
+
+  await classifyDirect(f, { engine: 'docs', resume_kind: '', stall_restarts: '0' });
+
+  assertCompleted(f);
+  assert.match(f.watcherLog(), /'feat_x' has no readable ledger \(absent: .*\) — classifying on the exit code alone/);
+});
+
+test('task, absent after a stall restart: paused unfinished', async (t) => {
+  const f = await createWatcherFixture(t);
+  if (f === null) return;
+
+  await classifyDirect(f, { resume_kind: '', stall_restarts: '1' });
+
+  assertUnfinished(f);
+  assert.match(f.watcherLog(), /'feat_x' has no readable ledger \(absent: .*\) after a stall restart — not classifying it completed/);
+});
+
+test('task, absent after an earlier park: paused unfinished', async (t) => {
+  const f = await createWatcherFixture(t);
+  if (f === null) return;
+  await mkdir(join(f.clarDir, 'answered'), { recursive: true });
+  await writeFile(join(f.clarDir, 'answered', 'question_1.md'), 'q\n', 'utf8');
+  await writeFile(join(f.clarDir, 'answered', 'answer_1.md'), 'a\n', 'utf8');
+
+  await classifyDirect(f, { resume_kind: '', stall_restarts: '0' });
+
+  assertUnfinished(f);
+  assert.match(f.watcherLog(), /'feat_x' has no readable ledger \(absent: .*\) after an earlier park — not classifying it completed/);
 });
 
 test('order, park: an unanswered question outranks an unfinished ledger', async (t) => {

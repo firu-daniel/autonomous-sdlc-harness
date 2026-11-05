@@ -45,6 +45,7 @@
   - `docs, absent on a first launch keeps completed`: as above, engine `docs`.
   - `task, absent after a stall restart`: `stall_restarts: '1'`. Assert `assertUnfinished` and `after a stall restart`.
   - `task, absent after an earlier park`: `answered/question_1.md` and `answered/answer_1.md` written, `resume_kind` empty. Assert `assertUnfinished` and `after an earlier park`.
+- **Deviations from plan:** The signal's first bullet gives `why="a <resume_kind> resume"`, which renders `after a answer resume` for `resume_kind` `answer`; the new-cases bullet expects `after an answer resume`. Implemented with the article chosen by the kind's first letter (`an answer resume`, `a pause resume`). The red-once mutations ran through `harness-runs/scratch/ledgerless-resume-mutation.mjs`, which rewrites each fixture's installed watcher after `init`: resume signal ignored → the four resumed cases failed (15 pass / 4 fail); `absent` always `unfinished` → the two first-launch cases failed (17 pass / 2 fail).
 
 **Verification:**
 

@@ -74,7 +74,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_remote_job_commit_refusa
 
 1. [x] **Task 1** — Drop `actions/checkout`'s three inert sparse keys from `config.worktree` in `setup-worktree.sh`, through a new library function _(layer: cli)_ _(points: 15)_
 2. [x] **Task 2** — Replay the checkout's two commands on a fixture and show `commit-on-branch.sh` and `push-branch.sh` accept the bootstrapped target _(layer: cli)_ _(points: 20)_
-3. [ ] **Task 3** — Classify a resumed, stall-restarted or previously parked run's ledger-less zero exit as `paused` / `unfinished` _(layer: cli)_ _(points: 20)_
+3. [x] **Task 3** — Classify a resumed, stall-restarted or previously parked run's ledger-less zero exit as `paused` / `unfinished` _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Job-mode cases for the ledger-less resume, and the job-mode cases that resumed without a ledger re-cast _(layer: cli)_ _(points: 15)_
 5. [ ] **Task 5** — Give the local watcher suites' resumed sessions a finished ledger where completion is the case's point _(layer: cli)_ _(points: 20)_
 6. [ ] **Task 6** — Surface a refused or given-up push in `Push the branch` as an `::error::` annotation and a job-summary line _(layer: cli)_ _(points: 15)_
