@@ -1,0 +1,15 @@
+## The Gate 12 round driver's libraries are covered only by the `general` catch-all layer
+- **category:** tooling-gap
+- **evidence:** the `task-plan-writer` return for this run carried a `## Corpus staleness` section with one `undescribed-layer` entry: `scripts/lib/gate12-sandbox-round/`, the hand-written Gate 12 round driver's sourced libraries, which this branch edited (Tasks 3–5). Only the `general` catch-all covers that directory; `.claude/context/conventions.md` → `## The layers` lists `general` as owning `schemas/`, `docs/`, `examples/`, `evals/` and the root documents, and `## Documents of record` describes `scripts/` only as `init`'s output, which this driver is not.
+- **cost this run:** none on this branch. The supervised remedy is still owed, in the writer's own words: run `/autonomous-sdlc-harness:harness-analyze` in a session in this repository, answering `skip` for every document already filled (never the `--yes` spelling), and apply any profile change with `npx autonomous-sdlc-harness config set layers`.
+
+## Implementers' verification commands refused by the run profile
+- **category:** tooling-gap
+- **evidence:** `layer-implementer` returns in this run reported these refusals at the permission layer: `bash -n` on an edited shell file, in Task 3 (`scripts/lib/gate12-sandbox-round/*.sh`), Task 4 (`grade-plant.sh`) and Task 5 (`grade-state.sh`); and `cp`, compound Bash commands and `git hash-object` in Task 2. In Task 2 the byte copy from `cli/templates/scripts/lib/harness-run-lib.sh` to `scripts/lib/harness-run-lib.sh` was done instead by applying four hunks with the Edit tool. The `branch-reviewer` (Phase B.1) also reported that two read-only commands were refused: a comparison of the §10 table cells, and the driver's `--list`.
+- **cost this run:** three units recorded an evidence downgrade: the per-file syntax check rested on `bash scripts/typecheck.sh`'s shell-parse step. In Task 2, a `cp` became a hand-applied four-hunk edit, checked afterwards with `git diff --no-index --stat`.
+- **hypothesis:** (guess) the unattended profile's `allow` list has no entry matching `bash -n <path>` or `cp`.
+
+## The configured `defaultBranch` has no local ref in the run copy
+- **category:** agent-contract
+- **evidence:** `git log --format='%h %s%n%b' --name-only dev..HEAD`, the command `plugin/instructions/improvement_observations_instructions.md` → `## Dispositioned units` prescribes, exited 128 at Phase D: `fatal: ambiguous argument 'dev..HEAD': unknown revision or path not in the working tree.` Three agents reported the same missing ref and each substituted `origin/dev` on its own: the `branch-reviewer` (B.1), the `skeptic-reviewer` (C2.1) and the `statistics-plan-writer` (D.1, which says so in the `## Notes` of `harness-runs/branch_statistics/chore_gate12_unroutable_sandbox_rows/statistics.md`). Phase A2's dispatch passed `diff_base: dev`.
+- **cost this run:** none visible. Every agent fell back to `origin/dev` and the derivations above were rerun against `origin/dev..HEAD`. But each fallback was an agent's own guess, not something the contract stated.

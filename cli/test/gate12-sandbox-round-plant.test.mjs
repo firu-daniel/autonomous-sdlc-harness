@@ -4,7 +4,7 @@
  * **The rule this suite enforces: each plant is one pushed branch per arm, built by plumbing from the
  * GitHub default branch's tip and carrying exactly its arm's paths; it is recorded before it is pushed
  * and dispatched through the repository's own `remote-run.sh`; and the operator's checkout, index and
- * `HEAD` are unchanged.**
+ * `HEAD` are unchanged. A session-made link is planted as a prompt, never as a committed link.**
  *
  * It reads one fixed script, not a tree, so it owes no `treeGuards` entry.
  */
@@ -16,7 +16,7 @@ import { readFile } from 'node:fs/promises';
 import { join, posix } from 'node:path';
 import test from 'node:test';
 
-import { readJson, runGit } from './helpers/fixture.mjs';
+import { readJson, runGit, WORKSPACE_ROOT } from './helpers/fixture.mjs';
 import {
   cleanup,
   GATE12_SLUG,
@@ -28,6 +28,11 @@ import {
 } from './helpers/gate12-round.mjs';
 
 const STAMP = /^\d{14}$/;
+
+const PLANTS = await readFile(join(WORKSPACE_ROOT, 'scripts', 'lib', 'gate12-sandbox-round', 'plants.sh'), 'utf8');
+const PAUSE_TOKEN_FILE = PLANTS.match(/^\s*pause-note\) key=SB2_PAUSE_NOTE file=(\S+) ;;$/m)?.[1];
+assert.ok(PAUSE_TOKEN_FILE, "plants.sh no longer names the pause-note arm's token file");
+const PAUSE_LINK_SCRIPT = 'scratch/gate12_sb2_pause_link.mjs';
 
 /** Each arm's planted `<new mode> <path>` lines, path-sorted as `diff-tree` lists them. */
 const ARMS = [
@@ -51,6 +56,7 @@ const ARMS = [
       `120000 ${stateDir}/clarifications/${branch}/gate12-link.md`,
     ],
   },
+  { row: 'SB2', arm: 'pause-note', paths: () => [`100644 ${PAUSE_TOKEN_FILE}`] },
   { row: 'RJ2', arm: 'profile', paths: () => ['100644 .claude/settings.autonomous.json'] },
 ];
 
@@ -129,7 +135,7 @@ test('plant with no --row pushes one plumbing branch per arm, dispatches and rec
       assert.equal(runs[0].run_id, allotted[branch]);
       assert.match(result.stdout, new RegExp(`^planted ${row} ${arm} ${branch} run ${allotted[branch]}$`, 'm'));
 
-      if (row === 'SB2') {
+      if (row === 'SB2' && arm === 'clarifications') {
         const link = `${fixture.stateDir}/clarifications/${branch}/gate12-link.md`;
         const target = await git(fixture.origin, ['cat-file', 'blob', `${tip}:${link}`]);
         assert.equal(posix.isAbsolute(target), false, target);
@@ -137,10 +143,34 @@ test('plant with no --row pushes one plumbing branch per arm, dispatches and rec
         assert.match(state.tokens.SB2, /^[0-9a-f]{32}$/);
         assert.equal(await git(fixture.origin, ['cat-file', 'blob', `${tip}:gate12-sb2-token.txt`]), state.tokens.SB2);
       }
+
+      if (row === 'SB2' && arm === 'pause-note') {
+        assert.match(state.tokens.SB2_PAUSE_NOTE, /^[0-9a-f]{32}$/);
+        assert.equal(await git(fixture.origin, ['cat-file', 'blob', `${tip}:${PAUSE_TOKEN_FILE}`]), state.tokens.SB2_PAUSE_NOTE);
+
+        const clarifications = branches.find((b) => b.startsWith('gate12_sb2_clarifications_'));
+        assert.ok(clarifications, branches.join('\n'));
+        assert.equal(
+          await git(fixture.origin, ['cat-file', 'blob', `refs/heads/${clarifications}:gate12-sb2-token.txt`]),
+          state.tokens.SB2,
+        );
+
+        const tree = await git(fixture.origin, ['ls-tree', '-r', tip]);
+        assert.doesNotMatch(tree, /^120000 /m, tree);
+
+        const promptText = await git(fixture.origin, [
+          'cat-file', 'blob', `${prompt}:${fixture.stateDir}/task_prompts/${branch}_task_prompt.md`,
+        ]);
+        const script = `${fixture.stateDir}/${PAUSE_LINK_SCRIPT}`;
+        assert.ok(promptText.includes(`\`${script}\``), promptText);
+        assert.ok(promptText.includes(`bash ${fixture.scriptsDir}/scratch-run.sh ${script}`), promptText);
+        const ups = '../'.repeat(fixture.stateDir.split('/').filter((s) => s !== '').length);
+        assert.ok(promptText.includes(`symlinkSync('${ups}${PAUSE_TOKEN_FILE}', `), promptText);
+      }
     });
   }
 
-  await t.test('one dispatch per branch, six distinct run IDs', async () => {
+  await t.test('one dispatch per branch, one distinct run ID per arm', async () => {
     const log = (await readFile(fixture.remoteRunLog, 'utf8')).split('\n').filter((l) => l !== '').sort();
     assert.deepEqual(log, branches.map((b) => `dispatch ${b} --engine task`));
     assert.deepEqual(state.branches.map((b) => b.name).sort(), branches);

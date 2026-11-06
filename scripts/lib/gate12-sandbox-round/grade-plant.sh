@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 # grade-plant.sh — the `grade` subcommand's dispatch (g12_grade_cmd), and the grades of the three
 # rows a pushed plant decides from its own job: JS1, JS4 and RJ2 of docs/sandbox-verification.md ->
-# ## 10. Each reads its runs through runs.sh and nothing else, and prints one result line per row.
+# ## 10. Each reads its runs through runs.sh and nothing else, and prints one result line per row;
+# RJ2 then prints a second, its `source` line.
+#
+# JS1 AND RJ2 ARE GRADED ON A REFUSAL, both through g12_refused_arm: each plant is a job surface, so
+# its run ending at Refuse a branch that changed the job's own files is `pass`, and passing that step
+# is `fail`. RJ2's launch-check clause runs only after that step, so no branch reaches it:
+# g12_grade_rj2 always follows its folded line with one `source` line naming where it is read from.
 #
 # THE DISPATCH, restated by Tasks 8 and 13:
 #   without --full-run   g12_grade_full_run is never called. Each selected FR row prints `not run`
@@ -170,17 +176,17 @@ g12_trim() {
 }
 
 # ---------------------------------------------------------------------------------------------
-# JS1: a plumbing commit of a job surface, refused at the refusal step.
-g12_js1_arm() {
-  local arm="$1" path concl steps name later="" seen=0 errs named art out rc line state
-  case "$arm" in
-    settings) path=.claude/settings.json ;;
-    remote-run) path="$G12_SCRIPTS_DIR/remote-run.sh" ;;
-    *) g12_arm_set fail "JS1 has no arm '$arm'"; return ;;
-  esac
-  g12_arm_run JS1 "$arm" || return 0
+# g12_refused_arm <row> <arm> <path> — an arm whose plant is a job surface, so its run must end at
+# the refusal step naming <path>. G12_ARM_REFUSE_CONCL keeps that step's conclusion for a caller
+# that words a `success` itself.
+G12_ARM_REFUSE_CONCL=""
+g12_refused_arm() {
+  local row="$1" arm="$2" path="$3" concl steps name later="" seen=0 errs named art out rc line state
+  G12_ARM_REFUSE_CONCL=""
+  g12_arm_run "$row" "$arm" || return 0
 
   concl="$(g12_step_conclusion "$G12_ARM_ID" "$G12_STEP_REFUSE")" || { g12_arm_gh_failed; return; }
+  G12_ARM_REFUSE_CONCL="$concl"
   case "$concl" in
     failure) ;;
     success) g12_arm_set fail "$G12_STEP_REFUSE concluded success in run $G12_ARM_ID: the branch was not refused"; return ;;
@@ -243,6 +249,17 @@ g12_js1_arm() {
     { g12_arm_set fail "remote-run.sh status $G12_ARM_BRANCH: $(g12_trim "$line")" "$out"; return; }
 
   g12_arm_set pass "run $G12_ARM_ID refused at $G12_STEP_REFUSE naming $path, every later step skipped, no harness-state artifact, status state: failed"
+}
+
+# JS1: a plumbing commit of a job surface, refused at the refusal step.
+g12_js1_arm() {
+  local arm="$1" path
+  case "$arm" in
+    settings) path=.claude/settings.json ;;
+    remote-run) path="$G12_SCRIPTS_DIR/remote-run.sh" ;;
+    *) g12_arm_set fail "JS1 has no arm '$arm'"; return ;;
+  esac
+  g12_refused_arm JS1 "$arm" "$path"
 }
 
 g12_grade_js1() {
@@ -320,52 +337,16 @@ g12_grade_js4() {
 }
 
 # ---------------------------------------------------------------------------------------------
-# RJ2: a branch whose profile fails the launch check. Its one plant is itself a job surface, so the
-# refusal step normally ends it first (plants.sh, g12_plant_rj2).
+# RJ2: its one plant, the profile, is itself a job surface, so the row is graded as JS1 is, through
+# g12_refused_arm: refused at the refusal step is `pass`, passing that step is `fail`. The launch
+# check runs only after that step, so its clause is read from the source: g12_grade_rj2 then prints
+# one `source` line, whatever the folded result.
 g12_rj2_arm() {
-  local arm="$1" concl launch notl art status
-  g12_arm_run RJ2 "$arm" || return 0
-  concl="$(g12_step_conclusion "$G12_ARM_ID" "$G12_STEP_REFUSE")" || { g12_arm_gh_failed; return; }
-  case "$concl" in
-    success) ;;
-    failure)
-      g12_arm_set "not run" "refused before launch: .claude/settings.autonomous.json is a job surface (writeProtection.ts protectedPaths, PROFILE_PATH)" \
-        "$G12_STEP_REFUSE concluded failure in run $G12_ARM_ID"
-      return
-      ;;
-    *) g12_arm_set "not run" "$G12_STEP_REFUSE did not run in run $G12_ARM_ID (${concl:-absent})"; return ;;
-  esac
-  concl="$(g12_step_conclusion "$G12_ARM_ID" "$G12_STEP_HARNESS")" || { g12_arm_gh_failed; return; }
-  case "$concl" in
-    success | failure) ;;
-    *) g12_arm_set "not run" "$G12_STEP_HARNESS did not run in run $G12_ARM_ID (${concl:-absent})"; return ;;
-  esac
-  g12_arm_log "$G12_STEP_HARNESS" || return 0
-
-  # run_job logs `job: launching run for '<branch>'` and then calls spawn_engine, whose launch check
-  # refuses through spawn_refuse's `not launching '<branch>': <reason>`
-  # (cli/templates/scripts/autonomous-watcher.sh). A launch line is a fail only with no refusal after it.
-  launch="$(printf '%s\n' "$G12_ARM_LOG" | grep -n -F -- "job: launching run for '$G12_ARM_BRANCH'" | tail -n 1)"
-  notl="$(printf '%s\n' "$G12_ARM_LOG" | grep -n -F -- "not launching '$G12_ARM_BRANCH': " | tail -n 1)"
-  if [ -z "$notl" ] || { [ -n "$launch" ] && [ "${notl%%:*}" -lt "${launch%%:*}" ]; }; then
-    if [ -n "$launch" ]; then
-      g12_arm_set fail "run $G12_ARM_ID launched: ${launch#*:}" "$G12_ARM_LOG"
-    else
-      g12_arm_set fail "$G12_STEP_HARNESS in run $G12_ARM_ID carries no not launching '$G12_ARM_BRANCH' line" "$G12_ARM_LOG"
-    fi
-    return
-  fi
-
-  art="$(g12_artifact "$G12_ARM_ID")" || { g12_arm_gh_failed; return; }
-  case "$art" in
-    expired) g12_arm_set expired "run $G12_ARM_ID's harness-state artifact is expired: re-take the step"; return ;;
-    none) g12_arm_set "not run" "run $G12_ARM_ID has no harness-state artifact, so its recorded status was not read"; return ;;
-  esac
-  status="$(jq -r '.status // empty' "$art/status.json" 2>/dev/null)" ||
-    { g12_arm_set fail "$art/status.json is absent or does not parse" "${notl#*:}"; return; }
-  [ "$status" = failed ] ||
-    { g12_arm_set fail "$art/status.json status is '${status:-none}', not failed" "${notl#*:}"; return; }
-  g12_arm_set pass "${notl#*:}; status.json status failed"
+  local arm="$1"
+  [ "$arm" = profile ] || { g12_arm_set fail "RJ2 has no arm '$arm'"; return; }
+  g12_refused_arm RJ2 profile .claude/settings.autonomous.json
+  [ "$G12_ARM_RESULT" = fail ] && [ "$G12_ARM_REFUSE_CONCL" = success ] || return 0
+  g12_arm_set fail "$G12_STEP_REFUSE concluded success in run $G12_ARM_ID: the branch passed $G12_STEP_REFUSE, so .claude/settings.autonomous.json was not refused as a job surface, and the source this row is read from does not hold for that job"
 }
 
 g12_grade_rj2() {
@@ -376,7 +357,9 @@ g12_grade_rj2() {
     g12_rj2_arm "$arm"
     g12_fold_add "$arm"
   done
-  g12_fold_print RJ2
+  g12_fold_print RJ2 "" \
+    "read through status, not sync: sync refuses a branch with no local record (remote-run.sh header exit map, exit 2)"
+  g12_result_line RJ2 source "cli/src/generators/writeProtection.ts protectedPaths: join(repoRoot, PROFILE_PATH), kept by jobSurfacePaths, so Refuse a branch that changed the job's own files ends a branch that plants a profile before run_profile_check (cli/templates/scripts/autonomous-watcher.sh) runs"
 }
 
 # ---------------------------------------------------------------------------------------------

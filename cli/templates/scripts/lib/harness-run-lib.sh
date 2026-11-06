@@ -149,7 +149,8 @@
 #      `hr_remote_move_aside` alone. Written only by `hr_remote_status_write`,
 #      `hr_remote_bundle_write`, `hr_remote_copy_tree`, `hr_remote_bundle_restore`
 #      and `hr_remote_move_aside`, and nothing there but a writer's own failed temp
-#      file is ever removed. Also `hr_remote_state_dir_var`'s private
+#      file, or a symbolic link `hr_remote_status_write` removes at its
+#      `<out_json>`, is ever removed. Also `hr_remote_state_dir_var`'s private
 #      `mktemp -d` directory and the one `harness.config.json` it holds, removed
 #      (`rm -f`, then `rmdir`) before it returns.
 #   4. THE ARTIFACT PLACEMENT writes one artifact into a working copy and
@@ -5688,9 +5689,18 @@ ui_test_plan_reviews/$branch"
 #
 # Reads <branch>'s record through `hr_registry_get` and replaces <out_json> by
 # rename, so a concurrent reader sees the old file or the new one, never half.
-# Prints nothing. 1 — writing nothing — when an argument is missing, <decision>
-# is outside its vocabulary, the record has no in-vocabulary `status`, or the
-# write fails. A `pause_reason` outside the bundle's vocabulary is written empty.
+# A symbolic link at <out_json>, whatever it names or if it names nothing, is
+# removed itself before the rename, so the write never follows it and no link
+# there survives a write. Prints nothing. 1 — writing nothing — when an
+# argument is missing, <decision> is outside its vocabulary, the record has no
+# in-vocabulary `status`, <out_json> is a directory, removing a link there
+# fails, or the write fails. A `pause_reason` outside the bundle's vocabulary
+# is written empty.
+#
+# Residual, not closed here: the link test and the rename are separate
+# operations, so a process the session started and left running could put a
+# link at <out_json> between them — the gap `docs/cli.md` §6 residual 1,
+# item 5, first bullet, states for `save`.
 hr_remote_status_write() {
   local registry="${1-}" branch="${2-}" out="${3-}" decision="${4-}" detail="${5-}"
   local status engine reason chain run_id run_url tmp
@@ -5722,6 +5732,10 @@ hr_remote_status_write() {
   fi
   detail=${detail//$'\r'/ }
   detail=${detail//$'\n'/ }
+  # A real directory would take the `mv` as a move into it.
+  if [ -d "$out" ] && [ ! -L "$out" ]; then
+    return 1
+  fi
   # The temp file sits beside <out_json> so the `mv` is a same-filesystem rename.
   tmp=$(mktemp "${out}.tmp.XXXXXX" 2>/dev/null) || return 1
   if jq -n \
@@ -5751,8 +5765,16 @@ hr_remote_status_write() {
       chain: $chain, control_polled_at: $control_polled_at,
       decision: $decision, detail: $detail,
       run_id: $run_id, run_url: $run_url, written_at: $written_at}' \
-    >"$tmp" 2>/dev/null && mv "$tmp" "$out" 2>/dev/null; then
-    return 0
+    >"$tmp" 2>/dev/null; then
+    # `rm -f` removes the link itself; `mv` onto a link to a directory would
+    # move the file into that directory instead of replacing the link.
+    if [ -L "$out" ] && ! rm -f "$out" 2>/dev/null; then
+      rm -f "$tmp"
+      return 1
+    fi
+    if mv "$tmp" "$out" 2>/dev/null; then
+      return 0
+    fi
   fi
   rm -f "$tmp"
   return 1
