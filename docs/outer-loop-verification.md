@@ -16,7 +16,7 @@ These are the only shipped assets that mutate a repository — `git commit`, `gi
 - `cleanup-merged-worktrees.sh` — `run_bounded()` and the `HARNESS_FETCH_TIMEOUT`-bounded `fetch --prune` with its changed skip line (PR #15, *cleanup fetch hang*), and `park_loop` added to the active-status `jq` selection (PR #9, *watcher multi question resume loop*).
 - `autonomous-notify.sh` — the `park_loop)` case and its usage line (PR #9, *watcher multi question resume loop*).
 
-The other two — `commit-on-branch.sh`, `setup-worktree.sh` — have comment-only diffs since the stamp, so no §1 row's mechanism moved. Any later touch to a template re-stales this count; re-run the recipe rather than editing the number. Since that sentence was written, `fix_sandbox_worktree_record_writes` moved the commit wrapper's mechanism — a target check, a `config.worktree` check and a plumbing commit with no hook — so §1.1 is owed a re-drive; the count above has not been re-derived.
+The other two — `commit-on-branch.sh`, `setup-worktree.sh` — have comment-only diffs since the stamp, so no §1 row's mechanism moved. Any later touch to a template re-stales this count; re-run the recipe rather than editing the number. Since that sentence was written, `fix_sandbox_worktree_record_writes` moved the commit wrapper's mechanism — a target check, a `config.worktree` check and a plumbing commit with no hook — so §1.1 was owed a re-drive. That re-drive was taken on 2026-11-06, as its own dated block in §1.1, and the count above has not been re-derived.
 
 **The recipe cannot be re-run in this tree, and what `feat_clone_per_run_switch` changed instead.** This repository's history begins on 2026-09-09 (`git log --reverse --date=short --format='%h %ad' | head -1` prints `2c01123c 2026-09-09`), so no commit is dated at or before the stamp, and the grading baseline the recipe names does not exist here. The count above therefore stands as last derived, and cannot be re-derived here. This branch's own change was graded by the same rule against its merge base with `dev`, `fb44db76`: `git diff fb44db76 HEAD -U0 -- <path> | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) ' | grep -vE '^[+-][[:space:]]*#'`, over the eleven files.
 
@@ -24,7 +24,7 @@ The other two — `commit-on-branch.sh`, `setup-worktree.sh` — have comment-on
 - **Comment-only:** `setup-worktree.sh`.
 - **Untouched:** `autonomous-notify.sh`, `restart-watcher.sh` and `autonomous-format-stream.sh`.
 
-§1.1, §1.3 and §1.4 each carry their own clone-layout note.
+§1.4 carries its own clone-layout note. §1.1 and §1.3 were re-driven on the clone layout on 2026-11-06, each in its own dated block.
 
 **Not re-confirmed by a run:** §2 in full — except §2.4's machine-lane block, re-driven whole on 2026-09-03 and stamped there — and every §1 row that reads configuration through the run library. §0's write precondition is the exception the §1.8 round closed — its generator, `cli/src/generators/outerLoopScripts.ts`, changed after the stamp too, and that round re-ran the precondition for all eleven files on a real `init` fixture. No row here measures the effort flag at all. Restamping means re-running §0's recipe whole; this note is what the re-run deletes, never what it edits. Three cells — the shim-reach sentence in §1.6, the `hr_main_repo` row of §2.4 and §1.2's deleted-on-origin row — rest on a `node:test` case against an `init`-built fixture rather than a §0 recipe row, and are marked as such where they appear.
 
@@ -56,6 +56,19 @@ Every fixture is built that way and they differ only in what their rows need: a 
 
 **Shell and versions, named.** `/bin/bash` **3.2.57(1)-release**, arm64 macOS (Darwin 24.6.0), `jq` **1.7.1**, `git` from the same host. These are `bash` 3.2 numbers because 3.2 is the floor the port targets.
 
+**The 2026-11-06 round: §1.1 and §1.3, re-driven.** Taken by hand from an ordinary terminal, against the tree at `9da255b6`. Stamp: `/bin/bash` **3.2.57(1)-release**, `jq` **1.8.2**, `git` **2.50.1 (Apple Git-155)**, macOS **15.7.4** (Darwin 24.6.0), arm64.
+- **The fixture** is this recipe's, built by a real `init` (`--project-name demo --default-branch trunk --state-dir sdlc-harness --non-interactive --no-analyze`), widened to `protectedBranches: ["trunk", "release/*"]`, with `commands.depInstall` writing `deps.marker`.
+  - `init`'s default `scriptsDir`, `harness-scripts`, is kept.
+  - `XDG_STATE_HOME` and `XDG_CONFIG_HOME` point at fixture directories.
+- **The three targets:**
+  - the main checkout itself;
+  - a linked worktree from `git worktree add`;
+  - clones cut by the fixture's own `create-worktree.sh`, each at its derived `<work_root>/demo-<branch>` with its registry record.
+- **The write precondition was re-taken** over the eleven files this file names:
+  - each is byte-identical to `cli/templates/scripts/` (`cmp -s`);
+  - the ten executed files land `0755` and `lib/harness-run-lib.sh` lands `0644` (`stat -f '%OLp'`).
+  - The live `OUTER_LOOP_SCRIPTS` set has grown past eleven since this recipe was written. The files added since then are not in it.
+
 **What `init` writes, checked as part of the recipe.** Every row below runs against files an `init` produced, so the write itself is a precondition worth stating: all eleven templates land **byte-identical** to `cli/templates/scripts/`, the ten executed ones land `0755` and the sourced library lands `0644`, while the committed templates are all `0644` (the mode an adopter gets is the generator row's, not the template's). Verified with `cmp -s` and `stat -f '%OLp'` over the ten files of the 2026-08-13 run of record, and over the eleventh — `refresh-branch.sh`, which post-dates that stamp — in the §1.8 round, which re-ran this precondition for all eleven. For ten of the eleven that check exists **only here** — see §4's residuals.
 
 **Where a round's fixtures live.** Under the system temp directory, and they are not durable. Cite this recipe; never a path. Fixture paths appear in this file only as `<fixture>`, `<work_root>` and `<state_dir>`.
@@ -68,25 +81,27 @@ One row per (script, condition, outcome). "Effect" is what was observed in the r
 
 ### 1.1 `commit-on-branch.sh` — refuses **loudly**
 
-**Owed a re-drive.** These eleven rows were driven against the wrapper as it stood before `fix_sandbox_worktree_record_writes` rebuilt it. They are owed a re-drive against the rebuilt wrapper, with the main checkout and then a linked worktree as the target. Until then, `cli/test/commit-on-branch-target-check.test.mjs` and `cli/test/commit-on-branch-plumbing.test.mjs` assert the same rows automatically.
+**Re-driven 2026-11-06, on three targets** (§0's 2026-11-06 round). Every call is the main checkout's `commit-on-branch.sh --repo <target>`, and every outcome was judged by `git rev-parse refs/heads/<branch>` in both the target and the main checkout. On the main-checkout target, every cell of the 2026-08-13 record reproduced against the rebuilt wrapper, so this table replaces that one. On a clone, the clone arm's trust check (`hr_clone_target_check_var`) runs before every branch and configuration decision, so the rows that change HEAD are reached differently there, as each cell says.
 
-**Owed a re-drive on the clone layout, too.** `feat_clone_per_run_switch` made every new run copy a clone, so that re-drive also owes a clone as the target, and two mechanisms there are new since any row here was taken. On a clone, `commit-on-branch.sh` syncs in, builds the commit in the main checkout, then moves the clone's `refs/heads/<branch>` first and the main checkout's second (`hr_copy_ref_swap_var`). A commit landing in the clone after sync-in loses the clone's compare-and-swap: exit 1, nothing moved on either side. `push-branch.sh` (§1.2) gains a pre-push check on the same arm: immediately before the push, the clone's ref is verified still at the tip sync-in read. A commit landing after sync-in is a `refusing to push:` line, exit 0, with nothing pushed and no ref moved. Until a §0 round drives them, `cli/test/clone-ref-order.test.mjs` and `cli/test/wrapper-clone-arm.test.mjs` assert both automatically.
+| Condition | Main checkout | Linked worktree | Clone | Perturbation |
+|---|---|---|---|---|
+| ordinary branch, one existing path | **0**. `committed <sha> on <branch>` on stdout; `git log -1 --pretty=%B` shows the subject and body as separate paragraphs; `git diff --cached` is empty | **0**, the same | **0**, the same. The clone's and the main checkout's `refs/heads/<branch>` are equal afterwards | — (the positive control) |
+| the same command again, nothing changed | **3**, no ref moved | **3** | **3** | change the file → **0**, on each |
+| HEAD on `trunk` (the `defaultBranch`) | **2**. `git status --porcelain` is byte-identical and nothing is staged | **2**, the same | **1**. The clone's HEAD was flipped to `trunk` with `symbolic-ref`. The trust check refuses it first: `… nor a worktree it lists: its .git is not a regular pointer file, and the run registry records no clone of <main> at that path`. Neither the main checkout's `trunk` nor the clone's branch moved. A harness clone of `trunk` cannot be cut: `create-worktree.sh --existing trunk` is exit **2**, `… harness.config.json' protects it`, and it is rolled back | see the next two rows |
+| HEAD on `release/1.0` (matched by the pattern) | **2**, nothing staged | **2**, nothing staged | *The clone arm's form:* the clone's own branch, matched by an added pattern `feat_clone_*`, is **2**, with `status` byte-identical and nothing staged. `create-worktree.sh --existing release/1.0` is exit **2**, and it is rolled back | remove the pattern from `protectedBranches` → **0**: `release/*` on the main checkout and the worktree, `feat_clone_*` on the clone |
+| HEAD on `trunk`, `protectedBranches: []` | **2**, nothing staged | **2**, nothing staged | not reachable: the third row's refusal comes first | emptying the list does **not** move the row |
+| HEAD on `main`, a name not in this fixture's set | **0** | **0** | **0**, on a clone cut by `create-worktree.sh --existing main` | the same clone with `main` added to `protectedBranches` → **2** |
+| detached HEAD | **1**, `detached HEAD — refusing to commit` | **1**, the same line | **1**, but from the trust check: a detached clone HEAD names no branch, so its message is the third row's registry line. HEAD is unchanged | check a branch out → **0**, on each |
+| a directory that is not a repository | **1**, `'<dir>' is not a git repository — refusing to commit`. The target is never resolved, so this was taken once | — | — | — |
+| the main checkout's `harness.config.json` truncated to invalid JSON | **1**, `cannot resolve '<main>/harness.config.json' — refusing to commit`, and the ref is unchanged | **1**, the same | **1** with the ref unchanged, but the message is the third row's registry line. The registry's path is itself read from that configuration, so the trust check cannot find the clone's record | restore → **0**, on each. The **target's** own `harness.config.json` truncated, with the main checkout's intact, → **0** on the worktree and the clone: the configuration is read from the main checkout |
+| a pre-1.5 `jq` first on `PATH` | **1**, the previous row's `cannot resolve` line | **1**, the same | **1**, the third row's registry line, for the previous row's reason | drop the shim → **0**, on each |
+| an existing path plus one that does not exist | **0**. A warn-and-skip line on stderr names the missing path, and `git show --name-only` lists **only** the existing one | **0**, the same | **0**, the same, with nothing left staged in the clone | — |
 
-| Condition | Exit | Effect | Perturbation |
-|---|---|---|---|
-| ordinary branch, one existing path | **0** | short SHA on stdout; `git log -1 --pretty=%B` shows subject and body as separate paragraphs; `git diff --cached` empty | — (the positive control for every row below) |
-| the same command again, nothing changed | **3** | no commit | change the file → 0 |
-| HEAD on `trunk` (the `defaultBranch`) | **2** | `git status --porcelain` byte-identical before and after — nothing staged | see the two rows below |
-| HEAD on `release/1.0` (matched by the pattern) | **2** | nothing staged | remove `release/*` from `protectedBranches` → **0**, same command, same branch |
-| HEAD on `trunk`, `protectedBranches: []` | **2** | nothing staged | the `defaultBranch` is protected whatever the list says; emptying the list does **not** move this row |
-| HEAD on `main` — a name not in this fixture's set | **0** | commits | this is the assertion that the set is *configured*, not remembered: the same command refuses on `trunk` two rows up |
-| detached HEAD | **1** | no commit | check a branch out → 0 |
-| a directory that is not a repository | **1** | no commit | — |
-| `harness.config.json` truncated to invalid JSON | **1** | `HEAD` unchanged | restore the file → **0**, same command |
-| a pre-1.5 `jq` first on `PATH` | **1** | `HEAD` unchanged; the message is the same unresolvable-configuration one | drop the shim → **0**, same command |
-| an existing path plus one that does not exist | **0** | warn-and-skip on stderr for the missing one; `git show --name-only` lists **only** the existing path | — |
+**The clone's configuration allow-list, met by accident.** The clone's first pass switched branches with `git switch trunk`. Git's remote-branch guess wrote `branch.trunk.remote` and `branch.trunk.merge` into the clone's `.git/config`, and every later call on that clone was refused at exit 1 with `<clone>/.git/config sets branch.trunk.remote, branch.trunk.merge, which the clo…`. That was `hr_clone_config_check_var` doing its job. The affected calls were taken again after the section was removed, and HEAD was then flipped with `symbolic-ref`, which writes no configuration.
 
-The two unresolvable rows are the load-bearing ones: they are the same closed outcome reached two different ways, and their shared perturbation (restore, re-run, it commits) is what attributes the refusal to the configuration read rather than to anything else in the script.
+**Not driven by this round.** On a clone, `commit-on-branch.sh` syncs in, builds the commit in the main checkout, then moves the clone's `refs/heads/<branch>` first and the main checkout's second (`hr_copy_ref_swap_var`). A commit landing in the clone after sync-in loses the clone's compare-and-swap: exit 1, and nothing moves on either side. `push-branch.sh` (§1.2) runs the matching check just before the push, and a commit landing after sync-in gives a `refusing to push:` line, exit 0. Both need a write racing the wrapper, which a terminal round cannot schedule. `cli/test/clone-ref-order.test.mjs` and `cli/test/wrapper-clone-arm.test.mjs` assert them. `cli/test/commit-on-branch-target-check.test.mjs` and `cli/test/commit-on-branch-plumbing.test.mjs` assert the rows above automatically.
+
+The two unresolvable rows are the load-bearing ones: they are the same closed outcome reached two different ways, and their shared perturbation (restore, re-run, it commits) is what attributes the refusal to the configuration read rather than to anything else in the script. On a clone they close one step earlier, with a message that names the registry rather than the configuration. The outcome is the same, but the message is less useful for diagnosis.
 
 ### 1.2 `push-branch.sh` — refuses **visibly and non-fatally**
 
@@ -106,15 +121,26 @@ Every row exits **0**. That is the contract: a stale remote is recoverable, a ha
 
 ### 1.3 `create-worktree.sh` and `setup-worktree.sh`
 
-**Owed a re-drive on the clone layout.** Every row in this section was driven on the linked-worktree layout, before `feat_clone_per_run_switch`. Each row's cells are the record of their date; this note states what the shipped script now expects, and a §0 round re-driving these rows replaces it. What moved:
+**Re-driven 2026-11-06 on the clone layout** (§0's 2026-11-06 round). Each row below was driven on the fixture's own `create-worktree.sh`; the first table under it is the 2026-08-13 linked-worktree record, kept as the record of its date.
 
-- **The copy is a clone** (`hr_clone_create_var`: `git clone --shared`, recorded in the registry with `copy_kind` `clone`), in all three modes. Every row that observes "the working copy" observes a clone now.
-- **The bootstrap is always the main checkout's** `setup-worktree.sh --target <clone>`, in every bootstrapped mode. The new copy's own script is never run, so the bootstrap-resolution rows below — the first path, the retry and the configuration-drift row — range over a resolution the script no longer makes.
-- **A `[worktree-dir]` override is refused**: exit 1, nothing created. The copy goes only at the derived `<work_root>/<projectName>-<sanitized-branch>`.
-- **Exit 4 now removes what it made.** The bootstrap-resolution table's first row records the un-bootstrapped working copy *left in place*. The shipped script removes the clone, the branch it cut or created, its registry record and a registry directory it made. Nothing is pushed, as before. The watcher leg below it changes the same way: the copy is no longer on disk after the failed tick.
-- **A failed push, or a failed mirror sync-out after the push, is exit 2** with the same rollback. A failed sync-out also deletes the remote branch its own push created, from the main checkout, under a lease on the pushed tip.
+| Condition | Exit | Effect | Perturbation |
+|---|---|---|---|
+| default mode, a new branch | **0** | The copy is a **clone** at `<work_root>/demo-<branch>`: its `.git` is a directory, and `objects/info/alternates` holds the single line `<main>/.git/objects`. The registry records `copy_kind` `clone` with that `worktree`. It is bootstrapped: `deps.marker` is written, and `core.hooksPath` in the clone's `.git/config` is `<clone>/githooks`. The branch is pushed, `git rev-list --count origin/<branch>..HEAD` in the copy is `0`, and the main checkout's `branch.<branch>.merge` is `refs/heads/<branch>` | — |
+| **the bootstrap is the main checkout's.** The base's committed `setup-worktree.sh` was replaced with one that creates `COPY_SETUP_RAN` at its checkout root, then pushed to `trunk` (`0d677cc`) | **0** | The new clone is at `0d677cc` and carries the replaced script. `deps.marker` is written and `setup-worktree.sh: bootstrap complete for <clone>` is printed, both from the main checkout's script, while **no** `COPY_SETUP_RAN` exists anywhere under `<work_root>`. The copy's own script never ran | — |
+| a `[worktree-dir]` argument | **1** | `a run copy lives only at the path derived from the main checkout's configuration … — refusing the directory argument '<dir>'`, then the usage line. Nothing was created: the sibling listing, the bare repository's refs, the main checkout's refs and the registry are all byte-identical, and `<dir>` does not exist | the same branch without the argument → **0**, at the derived path |
+| `--existing`, the branch live in another copy | **2** | `branch '<b>' is already checked out at <clone> — refusing`, and the sibling listing is unchanged | remove that copy (`hr_clone_remove_var`) → **0**, re-created and bootstrapped. The bare repository's refs are **unchanged** (no push) |
+| `--existing`, the branch neither local nor on `origin` | **2** | `… is not local and not on origin — cannot check out an existing branch`. Nothing was created and no registry record was made | — |
+| `--existing` on a protected branch (`trunk`, `release/1.0`) | **2** | `cannot create a clone for branch '<b>': '<main>/harness.config.json' protects it`, then `removing what this run created` | `--existing main`, a branch the set does not name → **0** |
+| default mode on a branch that already exists locally | **2** | `a local branch '<b>' already exists in <main> — refusing; nothing was created`, with the `--existing` / `branch -D` hint. The siblings, the bare refs and the local ref are unchanged. **This row moved:** the 2026-08-13 record has **255**, git's own status | pass `--existing` → **0** |
+| configuration invalid | **1** | `cannot resolve '<main>/harness.config.json' — refusing to create a worktree`, and the sibling listing is unchanged | restore → **0**, the copy is created |
+| no branch name | **1** | `no branch name given`, then the usage line | — |
+| `$PWD` outside any repository | **0** | **unchanged**: the anchor is the script's own directory | — |
+| the whole scripts directory copied outside a repository | **1** | `'<dir>/harness-scripts' is not inside a git repository — refusing`, and the sibling listing is unchanged | — |
+| the bootstrap fails (`commands.depInstall` set to `false`) | **4** | `bootstrap finished with failures`, then `'<b>' was not pushed` and `removing what this run created`. Afterwards the sibling listing and the bare refs are unchanged, the local branch is gone and no registry record is left. **The copy is not left in place**, unlike the bootstrap-resolution table's first row | restore `commands.depInstall` → **0**, bootstrapped and pushed |
 
-Until then, `cli/test/create-worktree.test.mjs` drives these expectations against an `init`-built fixture.
+**What no longer applies as written.** The bootstrap-resolution table, its watcher leg and the `setup-worktree.sh`-re-run table further down each range over a working copy's **own** `setup-worktree.sh`. That is the resolution this script no longer makes. A copy `create-worktree.sh` makes is bootstrapped only by `<main>/<scripts_dir>/setup-worktree.sh --target <clone>`, as the second row above shows. Those rows are the record of their date and were **not** re-driven. Two paths are still owed a row: a failed push, and a failed mirror sync-out after the push, each exit 2 with the rollback. `cli/test/create-worktree.test.mjs` asserts them.
+
+The 2026-08-13 linked-worktree record:
 
 | Condition | Exit | Effect | Perturbation |
 |---|---|---|---|
