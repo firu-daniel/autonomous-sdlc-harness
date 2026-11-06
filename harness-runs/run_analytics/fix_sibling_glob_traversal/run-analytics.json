@@ -1,0 +1,1268 @@
+{
+  "branch": "fix_sibling_glob_traversal",
+  "run": {
+    "active_ms": 198121,
+    "api_retries": 0,
+    "cache_hit_ratio": 0.9384,
+    "cache_read_tokens": 4694812,
+    "cache_write_1h_tokens": 137180,
+    "cache_write_5m_tokens": 0,
+    "cache_write_tokens": 308270,
+    "complete_sessions": 1,
+    "duration_api_ms": 188703,
+    "duration_ms": 199721,
+    "first_at": "2026-11-06T22:03:28.316Z",
+    "host_suspended_ms": 0,
+    "idle_ms": 0,
+    "input_tokens": 88,
+    "last_at": "2026-11-06T22:06:46.437Z",
+    "output_tokens": 18383,
+    "permission_denials": 2,
+    "rate_limit_peak": {
+      "seven_day": 0.5
+    },
+    "requests": {
+      "count": 43,
+      "max_ms": 7170,
+      "over_threshold": 0,
+      "p50_ms": 1892,
+      "p90_ms": 3707,
+      "p99_ms": 7170
+    },
+    "sessions": 1,
+    "slowest_subagent": {
+      "description": "Write task plan",
+      "duration_ms": 129685,
+      "session": 1,
+      "type": "autonomous-sdlc-harness:task-plan-writer"
+    },
+    "span_ms": 198121,
+    "subagents_failed": 0,
+    "subagents_killed": 0,
+    "thinking_tokens": 765,
+    "token_sessions": 1,
+    "total_cost_usd": 3.259864,
+    "wall_ms": 198121
+  },
+  "schema": 1,
+  "sessions": [
+    {
+      "complete": true,
+      "cost": {
+        "by_model": {
+          "claude-opus-5-5": 3.2598643999999997
+        },
+        "cache_hit_ratio": 0.9384,
+        "cache_read_tokens": 4694812,
+        "cache_write_1h_tokens": 137180,
+        "cache_write_5m_tokens": 0,
+        "cache_write_tokens": 308270,
+        "input_tokens": 88,
+        "output_tokens": 18383,
+        "thinking_tokens": 765,
+        "token_source": "model_usage",
+        "total_cost_usd": 3.2598643999999997
+      },
+      "first_at": "2026-11-06T22:03:28.316Z",
+      "last_at": "2026-11-06T22:06:46.437Z",
+      "reliability": {
+        "api_retries": 0,
+        "api_retry_errors": {},
+        "num_turns": 26,
+        "permission_denials": 2,
+        "rate_limit_peak": {
+          "seven_day": 0.5
+        },
+        "stop_reason": "end_turn",
+        "subagents_failed": 0,
+        "subagents_killed": 0,
+        "subagents_spawned": 1,
+        "terminal_reason": "completed",
+        "ttft_ms": 1592
+      },
+      "requests": {
+        "by_context": {
+          "autonomous-sdlc-harness:task-plan-writer": {
+            "count": 25,
+            "max_ms": 5342,
+            "over_threshold": 0,
+            "p50_ms": 2283,
+            "p90_ms": 4036,
+            "p99_ms": 5342
+          },
+          "orchestrator": {
+            "count": 18,
+            "max_ms": 7170,
+            "over_threshold": 0,
+            "p50_ms": 1519,
+            "p90_ms": 3707,
+            "p99_ms": 7170
+          }
+        },
+        "items": [
+          {
+            "after_retry": false,
+            "cache_read_tokens": 11661,
+            "cache_write_tokens": 23160,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": null,
+            "message_id": "msg_011CgnRvX9WMzoZ1j78ad5oa",
+            "output_tokens": 8,
+            "started_at": "2026-11-06T22:03:28.316Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 34821,
+            "cache_write_tokens": 8621,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1202,
+            "message_id": "msg_011CgnRvdocFQRBLCQji7jKR",
+            "output_tokens": 8,
+            "started_at": "2026-11-06T22:03:29.560Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 43442,
+            "cache_write_tokens": 834,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 2306,
+            "message_id": "msg_011CgnRvtoFN26UC4ryYHVN6",
+            "output_tokens": 16,
+            "started_at": "2026-11-06T22:03:34.173Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 44276,
+            "cache_write_tokens": 690,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1165,
+            "message_id": "msg_011CgnRw5YAdocrJyeFLjUPw",
+            "output_tokens": 7,
+            "started_at": "2026-11-06T22:03:35.540Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 44966,
+            "cache_write_tokens": 397,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1356,
+            "message_id": "msg_011CgnRwDgYzks3zmLqvrCxz",
+            "output_tokens": 8,
+            "started_at": "2026-11-06T22:03:37.649Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 45363,
+            "cache_write_tokens": 21004,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1822,
+            "message_id": "msg_011CgnRwMboYg9rm3ofcvCh3",
+            "output_tokens": 8,
+            "started_at": "2026-11-06T22:03:39.947Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 66367,
+            "cache_write_tokens": 26023,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 919,
+            "message_id": "msg_011CgnRwbdAYhyVqytERdDks",
+            "output_tokens": 29,
+            "started_at": "2026-11-06T22:03:42.339Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 92390,
+            "cache_write_tokens": 15584,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 972,
+            "message_id": "msg_011CgnRwieqsLLD2XowoAGvG",
+            "output_tokens": 42,
+            "started_at": "2026-11-06T22:03:44.058Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 107974,
+            "cache_write_tokens": 33661,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1519,
+            "message_id": "msg_011CgnRwtoXtNbYJ356cghHz",
+            "output_tokens": 4,
+            "started_at": "2026-11-06T22:03:46.972Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 141635,
+            "cache_write_tokens": 806,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1492,
+            "message_id": "msg_011CgnRx5r3i2eayMs8PXWNK",
+            "output_tokens": 6,
+            "started_at": "2026-11-06T22:03:49.530Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 142441,
+            "cache_write_tokens": 1101,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1890,
+            "message_id": "msg_011CgnRxckuY1rRq1TSYHZhr",
+            "output_tokens": 16,
+            "started_at": "2026-11-06T22:03:57.153Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 143542,
+            "cache_write_tokens": 259,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1570,
+            "message_id": "msg_011CgnRxoCD5gMBKFaG7bRRw",
+            "output_tokens": 16,
+            "started_at": "2026-11-06T22:03:59.262Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 143801,
+            "cache_write_tokens": 358,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 878,
+            "message_id": "msg_011CgnRyEk7aqfuvuLxiwtbY",
+            "output_tokens": 37,
+            "started_at": "2026-11-06T22:04:04.562Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 144159,
+            "cache_write_tokens": 371,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1655,
+            "message_id": "msg_011CgnRyR3UsGW4hdiMUdKGU",
+            "output_tokens": 16,
+            "started_at": "2026-11-06T22:04:07.712Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 144530,
+            "cache_write_tokens": 302,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 873,
+            "message_id": "msg_011CgnRyafgGF4MaTzbkTxD9",
+            "output_tokens": 41,
+            "started_at": "2026-11-06T22:04:09.212Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 21748,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 1512,
+            "message_id": "msg_011CgnRynW4onMNhUzpTeSpU",
+            "output_tokens": 85,
+            "started_at": "2026-11-06T22:04:12.504Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 21748,
+            "cache_write_tokens": 1107,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 1564,
+            "message_id": "msg_011CgnRyu2jW1FFCsJskdbxt",
+            "output_tokens": 206,
+            "started_at": "2026-11-06T22:04:14.199Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 22855,
+            "cache_write_tokens": 4252,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 1762,
+            "message_id": "msg_011CgnRz3M352UKYAaWBsufd",
+            "output_tokens": 310,
+            "started_at": "2026-11-06T22:04:16.334Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 27107,
+            "cache_write_tokens": 33803,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 1937,
+            "message_id": "msg_011CgnRzGLdgNFBBGrcXLtzR",
+            "output_tokens": 444,
+            "started_at": "2026-11-06T22:04:19.248Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 60910,
+            "cache_write_tokens": 11070,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 2136,
+            "message_id": "msg_011CgnRzXMXM1Y9WXMGJ4YEH",
+            "output_tokens": 202,
+            "started_at": "2026-11-06T22:04:23.262Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 71980,
+            "cache_write_tokens": 4611,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 1521,
+            "message_id": "msg_011CgnRzh3gV1BCnrDRUq2vk",
+            "output_tokens": 132,
+            "started_at": "2026-11-06T22:04:24.934Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 76591,
+            "cache_write_tokens": 1621,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 2609,
+            "message_id": "msg_011CgnRzoiGffTtWUHAv52Eg",
+            "output_tokens": 279,
+            "started_at": "2026-11-06T22:04:27.563Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 78212,
+            "cache_write_tokens": 1422,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 1591,
+            "message_id": "msg_011CgnS11XS8vYqp9wZmFTQ2",
+            "output_tokens": 151,
+            "started_at": "2026-11-06T22:04:29.312Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 79634,
+            "cache_write_tokens": 12009,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 2821,
+            "message_id": "msg_011CgnS18QRMrda17PnVvcWj",
+            "output_tokens": 313,
+            "started_at": "2026-11-06T22:04:32.147Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 91643,
+            "cache_write_tokens": 2044,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 1392,
+            "message_id": "msg_011CgnS1LwywgdSS4yaeuy54",
+            "output_tokens": 105,
+            "started_at": "2026-11-06T22:04:33.665Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 93687,
+            "cache_write_tokens": 11006,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 2283,
+            "message_id": "msg_011CgnS1TuvznBVWHUuKHaiS",
+            "output_tokens": 214,
+            "started_at": "2026-11-06T22:04:36.168Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 104693,
+            "cache_write_tokens": 11872,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 3485,
+            "message_id": "msg_011CgnS1ebcZM52dU7m335Wz",
+            "output_tokens": 287,
+            "started_at": "2026-11-06T22:04:39.871Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 116565,
+            "cache_write_tokens": 16634,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 4843,
+            "message_id": "msg_011CgnS1ve2GeUpMEBkC5zNr",
+            "output_tokens": 398,
+            "started_at": "2026-11-06T22:04:44.960Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 133199,
+            "cache_write_tokens": 10386,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 4036,
+            "message_id": "msg_011CgnS2HLyCgx3i8R5rmJxE",
+            "output_tokens": 325,
+            "started_at": "2026-11-06T22:04:49.016Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 143585,
+            "cache_write_tokens": 1641,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 2068,
+            "message_id": "msg_011CgnS2b5ZySmffUqjVNMZB",
+            "output_tokens": 139,
+            "started_at": "2026-11-06T22:04:51.203Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 145226,
+            "cache_write_tokens": 12755,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 3621,
+            "message_id": "msg_011CgnS2m3bYaq95SGTRdxyN",
+            "output_tokens": 303,
+            "started_at": "2026-11-06T22:04:55.058Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 157981,
+            "cache_write_tokens": 410,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 2683,
+            "message_id": "msg_011CgnS33HA9brfVnMT8FkHw",
+            "output_tokens": 200,
+            "started_at": "2026-11-06T22:04:57.904Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 158391,
+            "cache_write_tokens": 5340,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 5342,
+            "message_id": "msg_011CgnS3GCHqZ4wFUPrWdvVb",
+            "output_tokens": 479,
+            "started_at": "2026-11-06T22:05:03.611Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 163731,
+            "cache_write_tokens": 555,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 2646,
+            "message_id": "msg_011CgnS3fhuDYAkuxfQahyVj",
+            "output_tokens": 179,
+            "started_at": "2026-11-06T22:05:06.421Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 164286,
+            "cache_write_tokens": 408,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 2210,
+            "message_id": "msg_011CgnS3sZHv3zr2Xhuuf5Z7",
+            "output_tokens": 135,
+            "started_at": "2026-11-06T22:05:08.726Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 164694,
+            "cache_write_tokens": 327,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 2582,
+            "message_id": "msg_011CgnS43U5yD8depbpAduaM",
+            "output_tokens": 219,
+            "started_at": "2026-11-06T22:05:11.463Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 165021,
+            "cache_write_tokens": 411,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 2091,
+            "message_id": "msg_011CgnS4FBHgB5jaqWUdQoNU",
+            "output_tokens": 121,
+            "started_at": "2026-11-06T22:05:13.700Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 165432,
+            "cache_write_tokens": 136,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 1892,
+            "message_id": "msg_011CgnS4RA4m2kr2HQwwJdwk",
+            "output_tokens": 118,
+            "started_at": "2026-11-06T22:05:15.844Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 165568,
+            "cache_write_tokens": 215,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 2465,
+            "message_id": "msg_011CgnS4ZoyYtUu4Te5eJrMQ",
+            "output_tokens": 174,
+            "started_at": "2026-11-06T22:05:18.431Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 165783,
+            "cache_write_tokens": 522,
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "input_tokens": 2,
+            "latency_ms": 2364,
+            "message_id": "msg_011CgnS4nFLFgXoPpwN1EMpZ",
+            "output_tokens": 133,
+            "started_at": "2026-11-06T22:05:20.949Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 144832,
+            "cache_write_tokens": 1830,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 3707,
+            "message_id": "msg_011CgnS9LYeJgrqmhLZcbQMG",
+            "output_tokens": 8,
+            "started_at": "2026-11-06T22:06:24.369Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 146662,
+            "cache_write_tokens": 461,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1787,
+            "message_id": "msg_011CgnS9ggMMXkx45mJ6VLPs",
+            "output_tokens": 3,
+            "started_at": "2026-11-06T22:06:27.197Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 147123,
+            "cache_write_tokens": 1718,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 7170,
+            "message_id": "msg_011CgnSAg1TVi2Mi6HDdRQi6",
+            "output_tokens": 8,
+            "started_at": "2026-11-06T22:06:45.968Z"
+          }
+        ],
+        "overall": {
+          "count": 43,
+          "max_ms": 7170,
+          "over_threshold": 0,
+          "p50_ms": 1892,
+          "p90_ms": 3707,
+          "p99_ms": 7170
+        }
+      },
+      "session_id": "42f27908-26fc-418d-acf8-9c723962d4e8",
+      "subagents": [
+        {
+          "agent_id": "a069ec7b36725efac",
+          "cache_read_tokens": 2904827,
+          "cache_write_tokens": 171090,
+          "description": "Write task plan",
+          "duration_ms": 129685,
+          "input_tokens": 52,
+          "output_tokens": 11422,
+          "requests": 25,
+          "started_at": "2026-11-06T22:04:10.977Z",
+          "token_source": "transcript",
+          "type": "autonomous-sdlc-harness:task-plan-writer",
+          "wall_share": 0.6546
+        }
+      ],
+      "time": {
+        "active_ms": 198121,
+        "duration_api_ms": 188703,
+        "duration_ms": 199721,
+        "host_suspended_ms": 0,
+        "idle_gaps": [],
+        "idle_ms": 0,
+        "idle_threshold_s": 120,
+        "suspend_source": "none",
+        "wall_ms": 198121
+      },
+      "tools": {
+        "by_tool": [
+          {
+            "context": "orchestrator",
+            "count": 1,
+            "max_ms": 129685,
+            "tool": "Agent",
+            "total_ms": 129685
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "count": 15,
+            "max_ms": 365,
+            "tool": "Bash",
+            "total_ms": 2464
+          },
+          {
+            "context": "orchestrator",
+            "count": 14,
+            "max_ms": 4422,
+            "tool": "Bash",
+            "total_ms": 7037
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "count": 17,
+            "max_ms": 246,
+            "tool": "Read",
+            "total_ms": 1522
+          },
+          {
+            "context": "orchestrator",
+            "count": 6,
+            "max_ms": 278,
+            "tool": "Read",
+            "total_ms": 1182
+          },
+          {
+            "context": "orchestrator",
+            "count": 1,
+            "max_ms": 35,
+            "tool": "Skill",
+            "total_ms": 35
+          },
+          {
+            "context": "orchestrator",
+            "count": 2,
+            "max_ms": 161,
+            "tool": "Write",
+            "total_ms": 219
+          }
+        ],
+        "items": [
+          {
+            "context": "orchestrator",
+            "duration_ms": 35,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 69,
+            "started_at": "2026-11-06T22:03:28.326Z",
+            "tool": "Skill"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 276,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 69,
+            "started_at": "2026-11-06T22:03:29.906Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 132,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 42,
+            "started_at": "2026-11-06T22:03:30.340Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 145,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 26,
+            "started_at": "2026-11-06T22:03:30.841Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 192,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 479,
+            "started_at": "2026-11-06T22:03:31.675Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 202,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 967,
+            "started_at": "2026-11-06T22:03:34.173Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 112,
+            "is_error": true,
+            "permission_denied": true,
+            "result_bytes": 727,
+            "started_at": "2026-11-06T22:03:36.181Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 238,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 61151,
+            "started_at": "2026-11-06T22:03:37.887Z",
+            "tool": "Read"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 25,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 6778,
+            "started_at": "2026-11-06T22:03:40.650Z",
+            "tool": "Read"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 278,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 62190,
+            "started_at": "2026-11-06T22:03:41.142Z",
+            "tool": "Read"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 214,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 40575,
+            "started_at": "2026-11-06T22:03:42.872Z",
+            "tool": "Read"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 214,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 59236,
+            "started_at": "2026-11-06T22:03:44.716Z",
+            "tool": "Read"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 213,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 30457,
+            "started_at": "2026-11-06T22:03:45.240Z",
+            "tool": "Read"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 198,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1148,
+            "started_at": "2026-11-06T22:03:47.840Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 161,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 233,
+            "started_at": "2026-11-06T22:03:55.102Z",
+            "tool": "Write"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 539,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 69,
+            "started_at": "2026-11-06T22:03:57.153Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 4422,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 451,
+            "started_at": "2026-11-06T22:03:59.262Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 126,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 31,
+            "started_at": "2026-11-06T22:04:05.159Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 209,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 152,
+            "started_at": "2026-11-06T22:04:05.848Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 163,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1,
+            "started_at": "2026-11-06T22:04:07.712Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 112,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 31,
+            "started_at": "2026-11-06T22:04:08.227Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 129685,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 4208,
+            "started_at": "2026-11-06T22:04:10.977Z",
+            "tool": "Agent"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 131,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 69,
+            "started_at": "2026-11-06T22:04:12.504Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 18,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 6778,
+            "started_at": "2026-11-06T22:04:14.199Z",
+            "tool": "Read"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 18,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 2643,
+            "started_at": "2026-11-06T22:04:14.554Z",
+            "tool": "Read"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 243,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 42029,
+            "started_at": "2026-11-06T22:04:16.334Z",
+            "tool": "Read"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 226,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 31120,
+            "started_at": "2026-11-06T22:04:17.085Z",
+            "tool": "Read"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 18,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 18927,
+            "started_at": "2026-11-06T22:04:17.220Z",
+            "tool": "Read"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 5,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 10538,
+            "started_at": "2026-11-06T22:04:19.248Z",
+            "tool": "Read"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 5,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 8475,
+            "started_at": "2026-11-06T22:04:19.485Z",
+            "tool": "Read"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 5,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 3465,
+            "started_at": "2026-11-06T22:04:20.037Z",
+            "tool": "Read"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 7,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 4237,
+            "started_at": "2026-11-06T22:04:20.586Z",
+            "tool": "Read"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 5,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 3380,
+            "started_at": "2026-11-06T22:04:21.121Z",
+            "tool": "Read"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 151,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 12273,
+            "started_at": "2026-11-06T22:04:23.262Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 20,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 3948,
+            "started_at": "2026-11-06T22:04:24.934Z",
+            "tool": "Read"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 158,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 2149,
+            "started_at": "2026-11-06T22:04:27.563Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 14,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 27277,
+            "started_at": "2026-11-06T22:04:29.312Z",
+            "tool": "Read"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 126,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 3714,
+            "started_at": "2026-11-06T22:04:32.147Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 220,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 28795,
+            "started_at": "2026-11-06T22:04:33.665Z",
+            "tool": "Read"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 218,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 30243,
+            "started_at": "2026-11-06T22:04:36.168Z",
+            "tool": "Read"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 246,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 40489,
+            "started_at": "2026-11-06T22:04:39.871Z",
+            "tool": "Read"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 20,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 24320,
+            "started_at": "2026-11-06T22:04:44.960Z",
+            "tool": "Read"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 119,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 3413,
+            "started_at": "2026-11-06T22:04:49.016Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 234,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 31755,
+            "started_at": "2026-11-06T22:04:51.203Z",
+            "tool": "Read"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 163,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 260,
+            "started_at": "2026-11-06T22:04:55.058Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 365,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 13986,
+            "started_at": "2026-11-06T22:04:57.904Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 164,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 154,
+            "started_at": "2026-11-06T22:05:03.611Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 95,
+            "is_error": true,
+            "permission_denied": true,
+            "result_bytes": 727,
+            "started_at": "2026-11-06T22:05:06.421Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 155,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 416,
+            "started_at": "2026-11-06T22:05:08.726Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 146,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 416,
+            "started_at": "2026-11-06T22:05:11.463Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 252,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 31,
+            "started_at": "2026-11-06T22:05:13.700Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 122,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 210,
+            "started_at": "2026-11-06T22:05:15.844Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 154,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 811,
+            "started_at": "2026-11-06T22:05:18.431Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 163,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 11753,
+            "started_at": "2026-11-06T22:05:20.949Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 209,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 92,
+            "started_at": "2026-11-06T22:06:25.201Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 58,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 236,
+            "started_at": "2026-11-06T22:06:38.740Z",
+            "tool": "Write"
+          }
+        ],
+        "polling": [],
+        "slowest": [
+          {
+            "context": "orchestrator",
+            "duration_ms": 4422,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 451,
+            "started_at": "2026-11-06T22:03:59.262Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 539,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 69,
+            "started_at": "2026-11-06T22:03:57.153Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 365,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 13986,
+            "started_at": "2026-11-06T22:04:57.904Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 278,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 62190,
+            "started_at": "2026-11-06T22:03:41.142Z",
+            "tool": "Read"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 276,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 69,
+            "started_at": "2026-11-06T22:03:29.906Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 252,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 31,
+            "started_at": "2026-11-06T22:05:13.700Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 246,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 40489,
+            "started_at": "2026-11-06T22:04:39.871Z",
+            "tool": "Read"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 243,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 42029,
+            "started_at": "2026-11-06T22:04:16.334Z",
+            "tool": "Read"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 238,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 61151,
+            "started_at": "2026-11-06T22:03:37.887Z",
+            "tool": "Read"
+          },
+          {
+            "context": "autonomous-sdlc-harness:task-plan-writer",
+            "duration_ms": 234,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 31755,
+            "started_at": "2026-11-06T22:04:51.203Z",
+            "tool": "Read"
+          }
+        ]
+      }
+    }
+  ]
+}
