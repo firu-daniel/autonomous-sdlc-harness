@@ -1,0 +1,8 @@
+## question_1 — Which author identity the run's remaining commits carry, after the main checkout's `user.name` changed mid-run
+- **raised by:** the implementation orchestrator (`/autonomous-sdlc-harness:branch-start-plan-autonomous`), at the flow-progress ledger commit recording Run gates entry `G` as passed, just before Phase D. The commit wrapper refused with `refusing to commit: <run copy>/.git/config sets user.name to a value the clone allow-list does not allow, so this clone's configuration is not trusted`. The run copy's `.git/config` set `user.name = Firu Daniel`, and the main checkout's had been changed mid-run to `Firu Daniel sbx`.
+- **asked:** Q1 — which author identity the remaining commits (`G` flip, branch statistics, improvement observations, terminal `D` flip) should carry, and how to resolve the mismatch. Options:
+  1. **Restore the main checkout's identity.** Set `user.name` in the main checkout's `.git/config` back to `Firu Daniel`, then resume. The clone's copy matches again, and the remaining commits land under `Firu Daniel`.
+  2. **Keep `Firu Daniel sbx` and recreate the clone's identity.** Have the operator or the outer loop bring the run copy's `.git/config` `user.name` to `Firu Daniel sbx` (or recreate the run copy), then resume. The remaining commits then land under `Firu Daniel sbx`, while the earlier ones remain under `Firu Daniel`.
+  3. **Stop here.** Leave the branch as it is (all code and review work is pushed). The operator closes the `G` and `D` ledger entries and writes the statistics out of band.
+- **answered:** Q1: Option 1. The main checkout's `user.name` was changed on purpose to probe this refusal (#275 §4), and it is back to `Firu Daniel`. Resume.
+- **carries beyond this branch:** nothing beyond this branch
