@@ -47,7 +47,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_sibling_glob_traversal/t
 3. [x] **Task 3** — Describe the vetoed arms in the four guards' headers and REPRO blocks and in `plugin/hooks/README.md` _(layer: plugin)_ _(points: 15)_
 4. [x] **Task 4** — Drive the `(m)` row set, its fault injections and the fork counts on paired trees _(layer: general)_ _(points: 20)_
 5. [x] **Task 5** — Re-drive §2.1, §2.2 and §2.5's piece-matching matrices on paired trees _(layer: general)_ _(points: 20)_
-6. [ ] **Task 6** — Re-drive §2.3's fail-closed matrix, §2.4's rows a–l and §2.6's file-tool rows on paired trees _(layer: general)_ _(points: 20)_
+6. [x] **Task 6** — Re-drive §2.3's fail-closed matrix, §2.4's rows a–l and §2.6's file-tool rows on paired trees _(layer: general)_ _(points: 20)_
 7. [ ] **Task 7** — Record the closure in `docs/guard-verification.md` — §2.4 row `(m)`, the §2.4 (a) correction, the §2 re-drive, §3.1, §1.2, §1.3 and §1.5 _(layer: general)_ _(points: 20)_
 
 ## Scope register

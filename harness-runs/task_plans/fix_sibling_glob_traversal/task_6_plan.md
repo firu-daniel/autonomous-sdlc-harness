@@ -45,3 +45,35 @@ The task prompt requires this: *"Re-drive §2's standing matrices against the fi
 - Every `moved-by-branch` line is a `cd` or tail-free `--prefix` shape whose `after` is `SILENT`, or is reported in your return by section and row.
 - No §2.6 row reads `moved-by-branch`. If one does, report it as a finding, because that guard sources nothing this branch changed.
 - After the run, the fixture configurations are byte-identical to their pristine copies, which the driver diffs and reports.
+
+**Deviations from plan:**
+
+- **Result, for Task 7.** Two runs of `bash scripts/scratch-run.sh harness-runs/scratch/sgt_redrive_config.mjs`, before = `7f7bb33d2f4ec6c56cad963dbe598e4f9990eb3f` (merge base with `origin/dev`), after = `db6c3596e5308cef755d0aa759ba6f91a6d92214` (`HEAD`). The `#counts` line reads `2.3: rows=257 hold=257; 2.4: rows=209 hold=208 stale-before-branch=1; 2.6: rows=84 hold=84`. No row is `moved-by-branch` in any section, and no field reads `ERROR(` or `unclassified`.
+  - The six reachable §2.4 rows (a3, b2, b3, b7, i8, l16) all hold on both trees: no veto fires on any of them.
+  - **One `stale-before-branch` row: §2.4 `i19b`**, `cat <creds>.sorted` on the credentials guard — recorded `allow`, `before` = `after` = `SILENT`. It is the (l) lookalike shape (`<creds>` as a prefix, as in l1 `<creds>.bak`), so the (l) narrowing to basename equality moved it before this branch, and the i-table was not re-driven then. The record was already wrong; this branch did not move it. `i19a` (`grep sortkey <creds>`) holds `allow`.
+- **The driver's own checks**, printed on both runs: §2.3 closed-span cells reading `after` = `allow` where `recorded` is not `allow`: 0. The first control sweep and all 22 re-takes (one after each of the 12 conditions and each of the 10 gates) are identical cell for cell, on both trees. §2.6 `moved-by-branch` rows: 0. Every fixture configuration (primary, scoped, (j)–(k), qa-sort, not-a-repo copy) is byte-identical to its pristine copy afterwards, and the primary's mode is unchanged.
+- **Byte identity, checked through a probe.** `harness-runs/scratch/sgt_redrive_config_hash.mjs` was run after each driver run. Both runs printed sha256 `b4d1e0270e6d365c9c6b146960d8586e65d19ce391a53fdaeb34d9ae11c7e285`, and the second printed `IDENTICAL to previous`, with 553 lines.
+- **§2.3 arm suffixes are read off reason strings.** On the deny guard, "could not be resolved" / "stopped resolving" gives `ᵘ` and "while HEAD is on protected branch" gives `ᵖ`. On the commit guard, "HEAD is detached" gives `ᵈ`, "Branch … is protected (" gives `ᵖ`, and "Could not resolve" gives `ᵘ`. An unmatched `ask` would read `ask[unclassified reason: …]`, and none did.
+- **§2.3 interpretations.**
+  - The permittable-bytes payload row hands each probe its **own command** as the raw payload.
+  - `jq` absent is a `PATH` of one directory symlinking every entry of `/bin` and `/usr/bin` except `jq`, plus the session's `git`. The driver prints `command -v jq` failing and `git` resolving there. macOS 15 ships a `/usr/bin/jq`, so a bare `/usr/bin:/bin` would not have removed it.
+  - The pre-1.5 stand-in answers `--version` with `jq-1.4`. It exits 3 when an argument matches `input`/`inputs`, `@tsv`, `try`, `catch`, `error(` or a `def name($…` value parameter, and otherwise execs the real `jq`. The driver prints its `--version` and an `input` program exiting 3.
+  - "anchor not inside a git repository" is a copy of the primary's working files with no `.git`, and every probe's `<repo>` points at that copy.
+  - The file-tool guard's two fail-closed cells are driven as §2.3 rows too. For `jq` absent they use the same no-`jq` `PATH`.
+- **§2.4 interpretations.**
+  - `<link>` is `<primary>/link-out`, untracked, pointing at `<outside>`. `<runner>` is `npm` and `<sub>` is `ci`.
+  - a3, b3, i8 and l16 are their own compounds. The other compounds-guard pieces take `git status &&`, as §2.2's composition rule says.
+  - (c) adds an `:arm` row per command, recording the arm named by the reason string. The process-cwd sweep is driven over all of c1–c9, not only c1 and c3, with their own recorded values. Its three cwds are an empty directory, a directory holding `refs/heads/feat_probe`, and the primary's real `.git`.
+  - (d)'s sweep drives the union of both trees' `hc_safe_prefixes` output: 45 on each, identical.
+  - (i)'s `qa-sort.env` cost paragraph is driven as `i-sort1` and `i-sort2` on a third fixture.
+  - The (j)–(k) fixture's `<S>` is spelled relative (`scripts`), `<wrapper>` is `typecheck`, `<url>` is `https://example.invalid` and `<remote>` is `origin`.
+  - l14's fixture is a `git init` repository with no configuration.
+  - §2.4's four fault injections are not driven: the Work list does not ask for them.
+- **§2.6 interpretations.** The fixture is the suite's: `.git/objects/info`, `sub/`, `notes/`, `index.ts`, `<gl>` → `<repo>/.git` and `innocent` → `.git/config.worktree`. T8 runs with the process cwd at the fixture's parent. T15 is the suite's five malformed payloads. T17 uses `PATH=/nonexistent`, per the `REPRO` block, on a `Write` payload and on `{}`, and is recorded as `deny[reason names jq]` when the reason contains `jq`.
+- **Fixture additions beyond §0.** These are not stated in the document:
+  - a tracked `scripts/typecheck.sh` in the primary, for the schema-default gate rows;
+  - an untracked `.claude/qa-accounts.env`;
+  - a tracked `sdlc-harness/.keep`;
+  - a bare repository added as `origin`.
+- **Environment.** `/bin/bash` was 3.2.57(1)-release, matching §0, but `jq` was 1.8.2 (`/opt/homebrew/bin/jq`), not §0's 1.7.1.
+- **TSV encoding.** A backslash is written `\\`, a newline `\n` and a tab `\t`. Nothing is truncated. `command` holds `payload: <bytes>` wherever the row hands the guard a payload other than §0's form. `condition` names the fixture and the cwd.
