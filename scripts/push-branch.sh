@@ -386,6 +386,18 @@ if ! main_top="$(hr_wrapper_main_of "$script_dir")"; then
   echo "push-branch.sh: refusing to push: cannot place this script in a main checkout (its .git is a symbolic link, or a directory holding a commondir)"
   exit 0
 fi
+# THE TARGET'S `harness.config.json` IS NOT TRUSTED EITHER (header): fail
+# closed, non-fatally, on a main configuration that cannot be read — the line
+# the protected-branch decision below prints for the same state. Loaded
+# unsubstituted, ahead of the target check, so a clone target gets this line
+# rather than the clone arm's registry sentence, and ahead of the pin, so on
+# the main checkout and a worktree it replaces the pin's `cannot resolve
+# githooksDir from …` line. It reads only `<main_top>/harness.config.json` and
+# makes no git call.
+if ! hr_config_load "$main_top"; then
+  echo "push-branch.sh: cannot resolve '$main_top/harness.config.json' — refusing to push"
+  exit 0
+fi
 if ! hr_wrapper_target_check_var "$main_top" "$top_nogit"; then
   echo "push-branch.sh: refusing to push: $HR_TARGET_REFUSAL"
   exit 0
