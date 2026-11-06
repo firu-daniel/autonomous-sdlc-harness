@@ -83,3 +83,11 @@
   - `v4` equals `before` on every row.
   A row breaking any of these is reported in your return with its line, never smoothed.
 - After the run, the fixture configurations are byte-identical to their pristine copies, which each driver diffs and reports.
+
+**Deviations from plan:**
+- Each fixture commits three files, not `## 0. Method`'s one: `tracked.txt`, `packages/storefront/scripts/typecheck.sh` and `.claude/qa-accounts.env`, as Task 1's suite does, so `<copy>` (a clone) and `<W>` carry the script m5/m12 name and the file m3/m13 read. The configuration is `examples/harness.config.json` verbatim for P; S and D are it with `appDir` (S) or `projectName` and `appDir` (D) replaced. D lives at `<work_root>/dotshop`; S at `<root>/swork/acme-shop`.
+- Row ids: m9's two commands are `m9a` and `m9b`. m28 and m33 each carry two lines, told apart by the `guard` column: `allow-safe-compounds.sh` with Task 1's command, and `git-rewrite-branch-guard.sh` with `&& rm tracked.txt` appended, as Task 1's suite drives them.
+- `sgt_mrows.tsv` and `sgt_forks.tsv` open with a header line of their column names. The summary line has id `#moved`; its `after` cell counts rows whose `after` differs from `before`, and each `vN` cell counts rows whose `vN` differs from `after`.
+- The fixture roots are fixed names under the resolved system temp directory, `sgt-mrows` and `sgt-forks`, which each driver removes in process before building and after finishing, instead of a random `mkdtemp` suffix. The `cwd` and `command` columns carry absolute paths, so this is what makes a second run byte-identical.
+- The child environment drops `HARNESS_MAIN_REPO`, the `GIT_*` location variables, `PWD` and `OLDPWD`. Fixture git commands run with `core.hooksPath` set to an empty directory and `commit.gpgsign=false`.
+- Byte-identity across two runs was checked with a throwaway sha256 probe under `harness-runs/scratch/` (`sgt_hash.mjs`), run through `scripts/scratch-run.sh`. All three outputs read identical on the second run.
