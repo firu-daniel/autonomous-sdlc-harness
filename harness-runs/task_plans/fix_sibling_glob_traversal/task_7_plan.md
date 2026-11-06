@@ -104,3 +104,14 @@ The formats, restated:
 - The story index's derivation entry A, re-run verbatim from the checkout root, prints only lines that are rows of the story index's `## Scope register` or lines this branch added. The register rows this task owns are rows 7, 8, 9, 13 (§2.4 inventory row `g`), 14, 15, 24 (§2.4 inventory row `a`), 26, 27 and 28 (§2.1's multi-line residual), and each reads as its disposition says.
 - `grep -n '§2.4 row' plugin/hooks/*.sh plugin/hooks/README.md plugin/hooks/lib/harness-config-lib.sh` lists the citations Tasks 2 and 3 wrote, and `docs/guard-verification.md` now carries an inventory row `m` and a `#### (m)` subsection for each of them to resolve to.
 - No line added anywhere names `622d4ca0` or `chore_record_guards_from_clone`, and the i19 row is byte-identical to the merge base's.
+
+**Deviations from plan:**
+- §3.1's block carries the three costs m40–m42 as N150–N152 beside the 26 holes (N124–N149). The plan asked for one row per hole, but the costs also read `allow` → SILENT, and §3 is the consolidated record of every decision that changed.
+- §1.3: re-driving moved one cell, and that cell is a finding: `allow-safe-compounds.sh` on m1, 3 → 2 `jq` (`sgt_forks.tsv`). That payload is not one of §1.3's table payloads (`git status && ls`, `ls`), and neither of those moved, so the table was not edited. The finding is named in the §1.3 dated line and in §3.1's "What §1 owes" paragraph. The missing `jq` is the guard's closing `jq -nc` permit emit (`allow-safe-compounds.sh`), which I read rather than measured separately.
+- §2.4 re-drive: `stale-before-branch` is i19b (`cat <creds>.sorted`), recorded `allow` and SILENT on both trees. It is listed in §2.4's dated line, and the i19 row is left byte-identical per the binding clarification.
+- §2.1 D/F table: it gained a `first refusal` column, filled from Task 5's derived-leg rows, so register row 6 (`no-change`) got one new cell. Its decisions and its argument are unchanged.
+- The `(m)` argument cell also names **THE VETOES ARE GLOBS TOO**, the paragraph directly under **THEY ARE GLOBS, NOT FILESYSTEM LOOKUPS** in the library.
+- The `jq` 1.8.2 in §3.1's tree paragraph comes from the two re-drive drivers' output in the same session. `sgt_mrows.mjs` does not print a `jq` version.
+- The §1.2 recipe was written and not executed, because the binding forbids an in-run wall-clock figure. It times with `/bin/bash`'s `time` keyword under `TIMEFORMAT=%3R`.
+- Verification bullet 3: the re-run of entry A prints only register rows 1–25 and 28 plus lines this branch added (§1.3, §1.5, §2.1, §2.4, the `(m)` subsection and §3.1).
+- Tree guard `test/no-container-home-paths.test.mjs` was selected by `**/*.md` and passed (tests 1, pass 1, fail 0). `bash scripts/typecheck.sh`: PASS.
