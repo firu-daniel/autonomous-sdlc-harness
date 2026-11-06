@@ -30,7 +30,7 @@ On top of the four conditions, the artifact holds no link and no token, and `Sav
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_gate12_sb2_pause_note_refusal_grade/task_<K>_plan.md`.
 
 1. [x] **Task 1** — Grade a `pause-note` run parked on a refusal of the plant `pass` in `g12_sb2pn_arm`, and restate SB2's `--list` note _(layer: general)_ _(points: 15)_
-2. [ ] **Task 2** — Hold the refusal grade and each of its preconditions in `gate12-sandbox-round-grade.test.mjs` _(layer: cli)_ _(points: 15)_
+2. [x] **Task 2** — Hold the refusal grade and each of its preconditions in `gate12-sandbox-round-grade.test.mjs` _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Expect the `pause-note` job to park on a refusal in `docs/development.md` step 7 and in `docs/sandbox-verification.md` §10 SB2 _(layer: general)_ _(points: 10)_
 
 ## Scope register
