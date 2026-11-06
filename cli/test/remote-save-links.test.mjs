@@ -5,8 +5,12 @@
  *
  * **The rule these tests exist to enforce: a symbolic link a sandboxed session planted under the
  * state directory never carries a byte of its target, or a link, into the `harness-state` bundle, an
- * honest source beside it is still saved byte-for-byte, and `save` reads, and `restore` writes, the
- * state directory the trusted configuration names.**
+ * honest source beside it is still saved byte-for-byte, `save` reads, and `restore` writes, the
+ * state directory the trusted configuration names, and a status write never follows a link at its
+ * target and leaves none there.**
+ *
+ * (W1)–(W4) drive `hr_remote_status_write` itself, the watcher's own status write, at a link to a
+ * directory, a link to a file, a dangling link and a real directory.
  *
  * The sentinel is one file **outside** the fixture's state directory whose bytes carry a random
  * token. It is shaped as a registry whose `feat_x` record's `engine` is the token, so a status
@@ -49,6 +53,10 @@
  * - (M7) `state=$(hr_state_dir "$root")` in place of `hr_remote_bundle_restore`'s
  *   `state=$HR_REMOTE_STATE_DIR` → (TR) fails, `PAUSE_PROGRESS.md was not restored under
  *   sdlc-harness`: the bundle went to `planted-state` instead. Every other case stays green.
+ * - (M8) `hr_remote_status_write`'s `[ -L "$out" ]` removal deleted → (W1) fails, `the status
+ *   write landed in the linked directory`: `mv` moved the file into the directory the link names.
+ *   (W2), (W3), (W4) and every other case stay green, since `mv` onto a link to a file or a
+ *   dangling link replaces the link itself.
  */
 
 import assert from 'node:assert/strict';
@@ -335,6 +343,72 @@ test('(T) save reads the stateDir of the trusted configuration, not the checkout
     result.stderr.includes(`remote-run.sh: save: the checkout's harness.config.json names stateDir 'planted-state', the trusted configuration at ${commit} names '${STATE_DIR}'; using '${STATE_DIR}'`),
     `no difference line\n${result.stderr}`,
   );
+});
+
+/** `hr_remote_status_write` of `feat_x`'s record from the fixture's registry to `out_json`. */
+function statusWrite(fx, outJson) {
+  return runBash(fx.dir, ['-c',
+    `. ${INIT_SCRIPTS_DIR}/lib/harness-run-lib.sh && hr_remote_status_write "$1" feat_x "$2" stop "parked | on a question"`,
+    '_', join(fx.base, REGISTRY), outJson], { GITHUB_RUN_ID: '' });
+}
+
+/** Assert `outJson` is a regular file, not a link, holding `feat_x`'s status. */
+function assertStatusFile(outJson, stderr) {
+  assert.ok(lstatSync(outJson).isFile(), `${outJson} is not a regular file\n${stderr}`);
+  assert.equal(JSON.parse(readFileSync(outJson, 'utf8')).branch, 'feat_x', stderr);
+}
+
+/** Assert no `remote_status.json.tmp.*` sits beside `outJson`. */
+function assertNoTempBeside(outJson, stderr) {
+  const left = readdirSync(dirname(outJson)).filter((name) => name.includes('.tmp.'));
+  assert.deepEqual(left, [], `a temp file was left beside ${outJson}\n${stderr}`);
+}
+
+test('(W1) a status write onto a link to a directory replaces the link and writes nothing there', async (t) => {
+  const fx = await saveFixture(t);
+  const linked = join(fx.outside, 'linked');
+  put(join(linked, 'keep.txt'), 'keep\n');
+  const before = readdirSync(linked).sort();
+  const outJson = fx.plant(STATUS_SOURCE, linked);
+  const result = await statusWrite(fx, outJson);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(readdirSync(linked).sort(), before, `the status write landed in the linked directory\n${result.stderr}`);
+  assertStatusFile(outJson, result.stderr);
+  assertNoTempBeside(outJson, result.stderr);
+});
+
+test('(W2) a status write onto a link to a file replaces the link and leaves the file\'s bytes', async (t) => {
+  const fx = await saveFixture(t);
+  const sentinelBytes = readFileSync(fx.sentinel);
+  const outJson = fx.plant(STATUS_SOURCE, fx.sentinel);
+  const result = await statusWrite(fx, outJson);
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(readFileSync(fx.sentinel).equals(sentinelBytes), `the linked file's bytes changed\n${result.stderr}`);
+  assertStatusFile(outJson, result.stderr);
+  assertNoTempBeside(outJson, result.stderr);
+});
+
+test('(W3) a status write onto a dangling link replaces the link and creates nothing at its target', async (t) => {
+  const fx = await saveFixture(t);
+  const absent = join(fx.outside, 'absent.json');
+  const outJson = fx.plant(STATUS_SOURCE, absent);
+  const result = await statusWrite(fx, outJson);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(existsSync(absent), false, `the status write created the dangling link's target\n${result.stderr}`);
+  assertStatusFile(outJson, result.stderr);
+  assertNoTempBeside(outJson, result.stderr);
+});
+
+test('(W4) a status write onto a real directory is refused and writes nothing', async (t) => {
+  const fx = await saveFixture(t);
+  const outJson = join(fx.base, STATUS_SOURCE);
+  rmSync(outJson);
+  put(join(outJson, 'keep.txt'), 'keep\n');
+  const before = readdirSync(outJson).sort();
+  const result = await statusWrite(fx, outJson);
+  assert.equal(result.status, 1, result.stderr);
+  assert.deepEqual(readdirSync(outJson).sort(), before, `the status write landed in the directory\n${result.stderr}`);
+  assertNoTempBeside(outJson, result.stderr);
 });
 
 test('(TR) restore places the bundle under the trusted stateDir, not the checkout\'s', async (t) => {
