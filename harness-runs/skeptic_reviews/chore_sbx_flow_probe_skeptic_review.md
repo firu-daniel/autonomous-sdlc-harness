@@ -14,7 +14,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Stop presenting the `run_profile` field as a second record that this spawn passed _(layer: general)_
+1. [x] **Finding 1** — Stop presenting the `run_profile` field as a second record that this spawn passed _(layer: general)_
 
 ---
 
