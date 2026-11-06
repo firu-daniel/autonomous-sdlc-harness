@@ -303,7 +303,7 @@ Every test gets its **own** fixture repository under the system temp directory, 
 HARNESS_JOB_USAGE_REPEAT=40 node --test --test-timeout=1800000 test/watcher-remote-job.test.mjs
 ```
 
-It runs the case *"a reset 2 seconds ahead -> the run completes in the same job"* as N concurrent job-mode watchers, each on its own fixture, each driving a stub that polls for `PAUSE` every 0.1 s and exits once it appears — the load that exposed the race. A pass is every repetition ending `job: completed stop`; a failure names its repetition. The figure is taken by hand, outside any headless session, on an otherwise idle machine, and recorded here with the date, the host, the Node version, N and the pass count. **Not yet measured.**
+It runs the case *"a reset inside the in-job wait -> the run completes in the same job"* as N concurrent job-mode watchers, each on its own fixture, each driving a stub that polls for `PAUSE` every 0.1 s and exits once it appears — the load that exposed the race. A pass is every repetition ending `job: completed stop`; a failure names its repetition. The figure is taken by hand, outside any headless session, on an otherwise idle machine, and recorded here with the date, the host, the Node version, N and the pass count. **Not yet measured.**
 
 **Run time, measured.** Measured by hand on 2026-09-26 on a 10-core macOS host (Darwin arm64, `os.availableParallelism()` 10), Node v22.23.2, git 2.50.1 (Apple Git-155), outside any headless session and with no other heavy process running, one host command each, from the repository root:
 

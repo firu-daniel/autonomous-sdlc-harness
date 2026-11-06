@@ -14,7 +14,7 @@ Gate 13a/13b/13c (`BLOCKED`, the Python service environment is not provisioned) 
 
 **This section is the single source of truth for the fix loop.** The loop walks the `[ ]` entries below from top to bottom, and the committer flips each one to `[x]` when that fix's commit lands. Any `[ ]` marker outside this list, such as a sub-step bullet inside a per-finding file, is informational only. It is never the iteration source.
 
-1. [ ] **Finding 1** — Give the "reset … ahead -> completes in the same job" usage case the load-tolerant reset lead and PAUSE wait. _(layer: cli, general)_
+1. [x] **Finding 1** — Give the "reset … ahead -> completes in the same job" usage case the load-tolerant reset lead and PAUSE wait. _(layer: cli, general)_
 
 ---
 
