@@ -3127,10 +3127,16 @@ spawn_engine() {
   # Trusted instruction layer. It NAMES the artifact's path; it never inlines the
   # untrusted body. The engine reads the file itself.
   #
-  # On a RESUME, name every top-level answer file the watcher just unblocked so
-  # the engine consumes all of them (the planning fork detects the resume from
-  # those top-level answer_<n>.md files; the watcher archives exactly that set
-  # only after this run exits — the consume-then-archive contract).
+  # On a RESUME, name every top-level answer file the watcher just unblocked and
+  # assign no reader: the flow's own resume step decides who reads each pair.
+  # Before Phase D, a pair whose question names an origin that opens `Phase G`
+  # is read only by test-fix-plan-writer, through G.0
+  # (plugin/instructions/plan_orchestration_instructions_core.md → `### G.0
+  # Resolve the round`); Phase D's clarification digest
+  # (plugin/instructions/clarification_digest_instructions.md) is its one later
+  # reader. The planning fork detects the resume from those top-level
+  # answer_<n>.md files; the watcher archives exactly that set only after this
+  # run exits — the consume-then-archive contract.
   local resume_clause=""
   if [ -n "$resume_indexes" ]; then
     local i resume_files=""
@@ -3138,8 +3144,11 @@ spawn_engine() {
       [ -z "$resume_files" ] || resume_files="${resume_files}, "
       resume_files="${resume_files}${state_rel}/clarifications/${branch}/answer_${i}.md"
     done
-    resume_clause="This is a RESUME: every question file of this park has been answered — consume ALL of these answer \
-files, each paired by index with its question_<i>.md, and resume from the park point rather than restarting: ${resume_files}. "
+    resume_clause="This is a RESUME: every question file of this park has been answered. Its answer files, each paired \
+by index with its question_<i>.md, are: ${resume_files}. Resume from the park point rather than restarting; each answer \
+file is read only by the step your flow's instructions name for it. Before Phase D, never open or quote an answer file \
+whose question file names an origin that opens Phase G: Phase G's G.0 finds that pair and passes its paths to \
+test-fix-plan-writer, its only reader until Phase D's clarification digest quotes it. "
   fi
 
   # Pause-resume clause: set (via the 5th argument) when the paused-run resume
