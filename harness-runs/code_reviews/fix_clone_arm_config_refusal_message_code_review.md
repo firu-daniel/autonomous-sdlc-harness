@@ -28,7 +28,7 @@ One finding remains: a stale count in the document-of-record drift note.
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Restate the drift note's unit-measurement cell list in `docs/outer-loop-verification.md` as five cells, adding §1.1's two clone cells and their non-`init` fixture _(layer: general)_
+1. [x] **Finding 1** — Restate the drift note's unit-measurement cell list in `docs/outer-loop-verification.md` as five cells, adding §1.1's two clone cells and their non-`init` fixture _(layer: general)_
 
 ---
 
