@@ -30,7 +30,9 @@ import {
 const STAMP = /^\d{14}$/;
 
 const PLANTS = await readFile(join(WORKSPACE_ROOT, 'scripts', 'lib', 'gate12-sandbox-round', 'plants.sh'), 'utf8');
-const PAUSE_TOKEN_FILE = PLANTS.match(/^\s*pause-note\) key=SB2_PAUSE_NOTE file=(\S+) ;;$/m)?.[1];
+const PAUSE_TOKEN_FILE = PLANTS.match(/^\s*pause-note\) key=SB2_PAUSE_NOTE file=\$G12_SB2PN_TOKEN_FILE ;;$/m)
+  ? PLANTS.match(/^G12_SB2PN_TOKEN_FILE='([^']+)'$/m)?.[1]
+  : undefined;
 assert.ok(PAUSE_TOKEN_FILE, "plants.sh no longer names the pause-note arm's token file");
 const PAUSE_LINK_SCRIPT = 'scratch/gate12_sb2_pause_link.mjs';
 
