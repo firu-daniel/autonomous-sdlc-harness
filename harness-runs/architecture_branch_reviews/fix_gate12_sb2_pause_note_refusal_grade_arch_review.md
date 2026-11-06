@@ -6,7 +6,7 @@ Branch `fix_gate12_sb2_pause_note_refusal_grade`, reviewed 2026-11-06 against di
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Take the pause-note token file's name from `plants.sh` instead of retyping it in `grade-state.sh` _(layer: general)_
+1. [x] **Finding 1** — Take the pause-note token file's name from `plants.sh` instead of retyping it in `grade-state.sh` _(layer: general)_
 
 ## Must Fix
 

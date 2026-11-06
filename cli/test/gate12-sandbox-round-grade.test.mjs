@@ -34,7 +34,7 @@
  *   `the branch's own commits change a job surface, or that could not be checked`.
  * - `cli/templates/github/workflows/harness-run.yml`: the `run` job's step names, and the refusal
  *   step's `::error::` message and its echo line.
- * - `scripts/lib/gate12-sandbox-round/plants.sh` → `G12_JS4_MARKER`.
+ * - `scripts/lib/gate12-sandbox-round/plants.sh` → `G12_JS4_MARKER`, and `G12_SB2PN_TOKEN_FILE` as a link target.
  * - `cli/src/doctor/checks.ts` → `JOB_SURFACES_CHECK`'s title, for the doctor-report line: its
  *   layout is rendered at run time, so only the title is quoted. In JS3 it goes in the artifact's
  *   `run.log`, and in the step log only in the case proving a grader keyed on it cannot pass.
@@ -140,6 +140,7 @@ const refuseBlock = workflow.slice(workflow.indexOf(`- name: ${STEP.refuse}`));
 const [REFUSE_ECHO, REFUSE_ERROR] = extract(refuseBlock, /^\s*(\|\| \{ echo "::error::([^"]+)"; exit 1; \})$/m, 'the refusal step ::error:: line');
 
 const [JS4_MARKER] = extract(source(PLANTS), /^G12_JS4_MARKER='([^']+)'$/m, 'G12_JS4_MARKER');
+const [SB2PN_TOKEN_FILE] = extract(source(PLANTS), /^G12_SB2PN_TOKEN_FILE='([^']+)'$/m, 'G12_SB2PN_TOKEN_FILE');
 const [SURFACES_TITLE] = extract(source(CHECKS), /JOB_SURFACES_CHECK: Check = \{\s*id: 'job-surfaces',\s*title: "([^"]+)"/, 'JOB_SURFACES_CHECK title');
 
 test('every step name this suite cans is a step of the run job', () => {
@@ -680,7 +681,7 @@ test('SB2 pause-note: parked on the refusal with the pause token in PAUSE_PROGRE
 
 test('SB2 pause-note: parked on the refusal with PAUSE_PROGRESS.md a link is fail', async (t) => {
   const fixture = await fixtureFor(t);
-  await stage(fixture, [sb2Run(), sb2PauseRun({ save: [], artifact: { ...PARKED_REFUSAL_TREE, 'PAUSE_PROGRESS.md': { link: 'gate12-sb2-pause-token.txt' } } })]);
+  await stage(fixture, [sb2Run(), sb2PauseRun({ save: [], artifact: { ...PARKED_REFUSAL_TREE, 'PAUSE_PROGRESS.md': { link: SB2PN_TOKEN_FILE } } })]);
   const { one } = await grade(fixture, SB_ROWS);
   const sb2 = one('SB2');
   assert.equal(sb2.result, 'fail', JSON.stringify(sb2));

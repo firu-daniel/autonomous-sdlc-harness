@@ -143,6 +143,9 @@ g12_plant_ups() {
   printf '%s' "$ups"
 }
 
+# grade-state.sh's refusal rule matches a parked question against this name.
+G12_SB2PN_TOKEN_FILE='gate12-sb2-pause-token.txt'
+
 # The pause-note arm commits no link: a committed one at PAUSE_PROGRESS.md is moved aside on a `resume
 # none` launch before any save reads it (autonomous-watcher.sh header -> "THE PAUSE NOTE belongs to the
 # run that wrote it", hr_remote_move_aside), while one the session makes during its run is not.
@@ -150,7 +153,7 @@ g12_plant_sb2() {
   local arm="$1" branch="$2" dir="$3" token key file ups scratch
   case "$arm" in
     clarifications) key=SB2 file=gate12-sb2-token.txt ;;
-    pause-note) key=SB2_PAUSE_NOTE file=gate12-sb2-pause-token.txt ;;
+    pause-note) key=SB2_PAUSE_NOTE file=$G12_SB2PN_TOKEN_FILE ;;
     *) g12_refuse "SB2 has no arm '$arm'"; return 1 ;;
   esac
   token="$(od -An -N16 -tx1 /dev/urandom)" || { g12_refuse "od could not read /dev/urandom"; return 1; }
