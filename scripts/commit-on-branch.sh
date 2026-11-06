@@ -387,6 +387,17 @@ if ! main_top="$(hr_wrapper_main_of "$script_dir")"; then
   echo "commit-on-branch.sh: refusing to commit: cannot place this script in a main checkout (its .git is a symbolic link, or a directory holding a commondir)" >&2
   exit 1
 fi
+# Fail closed: a configuration that cannot be read is a branch that cannot be
+# judged. Loaded unsubstituted, so the clone arm's registry lookup, the pin and
+# the protected-branch decision below read the warmed cache. It runs ahead of
+# the target check, so a clone target gets this refusal rather than the clone
+# arm's registry sentence, and ahead of the pin, so it is not the pin's either.
+# It reads only `<main_top>/harness.config.json` and makes no git call.
+if ! hr_config_load "$main_top"; then
+  echo "commit-on-branch.sh: cannot resolve '$main_top/harness.config.json' — refusing to commit" >&2
+  echo "  (no configuration there, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)" >&2
+  exit 1
+fi
 if ! hr_wrapper_target_check_var "$main_top" "$top_nogit"; then
   echo "commit-on-branch.sh: refusing to commit: $HR_TARGET_REFUSAL" >&2
   exit 1
@@ -395,15 +406,6 @@ wt_gitdir="$HR_TARGET_GITDIR"
 # A CLONE IS A TARGET TOO (header): the clone arm judged its configuration.
 if [ "$HR_TARGET_KIND" != clone ] && ! hr_worktree_config_check_var "$top_nogit"; then
   echo "commit-on-branch.sh: refusing to commit: $HR_WT_CONFIG_REFUSAL" >&2
-  exit 1
-fi
-# Fail closed: a configuration that cannot be read is a branch that cannot be
-# judged. Loaded here, unsubstituted, so the pin and the protected-branch
-# decision below read the warmed cache, and so this is the refusal a broken
-# main configuration gets rather than the pin's.
-if ! hr_config_load "$main_top"; then
-  echo "commit-on-branch.sh: cannot resolve '$main_top/harness.config.json' — refusing to commit" >&2
-  echo "  (no configuration there, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)" >&2
   exit 1
 fi
 if ! hr_pinned_hooks_path "$main_top"; then
