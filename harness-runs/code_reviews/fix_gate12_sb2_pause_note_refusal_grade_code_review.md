@@ -16,7 +16,7 @@
 
 Each entry resolves 1:1 to `harness-runs/code_reviews/fix_gate12_sb2_pause_note_refusal_grade_code_review/finding_<K>.md`.
 
-1. [ ] **Finding 1** — Make `plants.sh` own the scratch file's name as `G12_SB2PN_SCRIPT` and have `grade-state.sh` read it instead of retyping it _(layer: general)_
+1. [x] **Finding 1** — Make `plants.sh` own the scratch file's name as `G12_SB2PN_SCRIPT` and have `grade-state.sh` read it instead of retyping it _(layer: general)_
 2. [ ] **Finding 2** — Hold the token-file and scratch-file names of the refusal rule's plant-name list with one case each _(layer: cli)_
 
 ---

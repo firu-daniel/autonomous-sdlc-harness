@@ -97,8 +97,7 @@ G12_SB2PN_ART=""
 G12_SB2PN_TOKEN=""
 G12_SB2PN_LINKS=""
 G12_SB2PN_HITS=""
-# The scratch file plants.sh's g12_plant_sb2 has the session write and run; its run.log lines are kept.
-G12_SB2PN_SCRIPT="gate12_sb2_pause_link.mjs"
+# The scratch file's name is plants.sh's G12_SB2PN_SCRIPT, sourced before this file; its run.log lines are kept.
 # The strings a question must carry to be about the plant, one per line. The token file's name is
 # plants.sh's G12_SB2PN_TOKEN_FILE, sourced before this file.
 G12_SB2PN_PLANT_NAMES="PAUSE_PROGRESS.md
