@@ -1069,7 +1069,11 @@ hr_wrapper_target_check_var() {
 # `HR_TARGET_KIND` (`clone`) and `HR_TARGET_BRANCH` set when, in order:
 #   1. `<target>/.git/HEAD` is one line `ref: refs/heads/<branch>`, and the
 #      registry at `hr_state_path <main> autonomous_logs/registry.json` gives
-#      `copy_kind` `clone` for <branch> and a `worktree` that is <target>;
+#      `copy_kind` `clone` for <branch> and a `worktree` that is <target>. A
+#      registry path `hr_state_path` cannot derive, because
+#      `<main>/harness.config.json` cannot be resolved, is refused with its own
+#      sentence naming that file; only a resolvable configuration with no
+#      matching record gets the "records no clone" sentence;
 #   2. <target> is `hr_worktree_dir <main> <branch>`;
 #   3. `.git/commondir` is absent, symbolic links included;
 #      `.git/config.worktree` and `.git/objects/info/http-alternates` are each
@@ -1116,19 +1120,24 @@ hr_clone_target_check_var() {
   fi
   kind=""
   wt_c=""
-  if [ -n "$branch" ] && registry=$(hr_state_path "$main" autonomous_logs/registry.json) \
-    && [ -f "$registry" ] && [ -r "$registry" ] \
-    && line=$(jq -r --arg b "$branch" '
-      .runs[$b] | if type == "object"
-        then [(.copy_kind // "" | tostring), (.worktree // "" | tostring)] | @tsv
-        else error("absent") end
-    ' "$registry" 2>/dev/null); then
-    hr_tsv_unescape_var "${line%%"$tab"*}"
-    kind=$HR_CFG_VALUE
-    hr_tsv_unescape_var "${line#*"$tab"}"
-    wt=$HR_CFG_VALUE
-    if [ -n "$wt" ]; then
-      wt_c=$(hr_canonical_path_nogit "$wt") || wt_c=""
+  if [ -n "$branch" ]; then
+    if ! registry=$(hr_state_path "$main" autonomous_logs/registry.json); then
+      HR_TARGET_REFUSAL="$refused: its .git is not a regular pointer file, and the run registry that would record a clone of $main cannot be located, because '$main/harness.config.json' cannot be resolved"
+      return 1
+    fi
+    if [ -f "$registry" ] && [ -r "$registry" ] \
+      && line=$(jq -r --arg b "$branch" '
+        .runs[$b] | if type == "object"
+          then [(.copy_kind // "" | tostring), (.worktree // "" | tostring)] | @tsv
+          else error("absent") end
+      ' "$registry" 2>/dev/null); then
+      hr_tsv_unescape_var "${line%%"$tab"*}"
+      kind=$HR_CFG_VALUE
+      hr_tsv_unescape_var "${line#*"$tab"}"
+      wt=$HR_CFG_VALUE
+      if [ -n "$wt" ]; then
+        wt_c=$(hr_canonical_path_nogit "$wt") || wt_c=""
+      fi
     fi
   fi
   if [ "$kind" != clone ] || [ "$wt_c" != "$target" ]; then
