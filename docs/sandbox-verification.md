@@ -235,6 +235,26 @@ G6 (a) asks the same question for a `--no-hardlinks` clone with no relocated rec
 
 **What the rows settle.** Sandboxed ordinary git works in a clone; what closed it in CL1–CL3 was the profile's own sibling-glob `.git` rules, written for a worktree's `.git` pointer file. An `Edit(…)` permission deny rule alone closes that path to sandboxed commands, not only to the file tools. The runtime itself refuses sandboxed writes to the cwd repository's `.git/config`, `.git/hooks/` and `objects/info/alternates`, and leaves the rest of that `.git` open. CL6 shows that refusal holds against a rename staged from a writable spot, too. So the clone arm's refusal of `commondir`, `objects/info/http-alternates` and other planted files is load-bearing (`cli/templates/scripts/lib/harness-run-lib.sh` → `hr_wrapper_target_check_var`). No profile entry changed on the strength of these rows.
 
+**The intake-file recovery and a real refresh (2026-11-06).**
+
+**Stamp.** Claude Code 2.1.319 · git 2.50.1 (Apple Git-155) · macOS 15.7.4, arm64 · tree `9da255b6`. Taken by hand by the maintainer, from issue #275 → section 3.
+
+**Setup.**
+- A throwaway branch was cut in the main checkout at `dev~1` (`6dfde986`). Its clone was cut by `create-worktree.sh --existing --no-bootstrap`.
+- The clone's per-run profile was rendered and checked by the watcher's own `run_profile_render` and `run_profile_check`, and recorded as the clone's `run_profile`, as `sandbox-probe.sh` → `sp__render` does.
+- Each session is §0's launch line with cwd = the clone and `--settings <run profile>`, with `HARNESS_MAIN_REPO` exported as the watcher does. Each makes one exact call, with no `--allowedTools`.
+
+**Departures.**
+- **(1)** The exit 1 that leaves the intake path staged is the branch moving under the wrapper, which needs a write racing it. The residue was made by hand instead: a new `harness-runs/improvement_observations/<branch>.md`, `git add`-ed from a terminal.
+- **(2)** CL9 lands no new commit on `origin/dev`. The branch was cut one commit behind it, so `origin/dev`'s tip (`9da255b6`, #285) is the commit the refresh takes.
+- **(3)** CL7 was taken twice. The second session, identical except for `--debug-file`, names the layer that decided.
+
+| # | Check | Expected | Observed | Verdict |
+|---|---|---|---|---|
+| CL7 | The improvement-observations recovery step's `rm` (`plugin/instructions/improvement_observations_instructions.md` → *Wrapper exit status*), from the clone: `rm <clone>/harness-runs/improvement_observations/<branch>.md`, with that new file staged | refused or run. The deciding guard hook or permission rule is named | **Run.** The tool result is `(Bash completed with no output)`, with `permission_denials` `[]`. Afterwards the file is gone and `git status` shows it `AD`, still staged. The profile has no `rm` rule. Per the debug log, the plugin's `git-rewrite-branch-guard.sh` returned `permissionDecision: allow`, *Auto-allowed git mv/rm/rm-tracked on branch chore_sbx_s3_probe in <clone>*, and every other `PreToolUse` hook exited 0 with no decision. The call then ran inside the sandbox. | **pass**: the recovery step's `rm` is reachable unattended |
+| CL8 | CL7's second call, same session shape: `bash <main>/scripts/commit-on-branch.sh --repo <clone> harness-runs/improvement_observations -- "chore: Log improvement observations for <branch>"`, the parent directory as the instructions say | exit 3, nothing staged | `Exit code 3` / `commit-on-branch.sh: nothing to commit`, with `permission_denials` `[]`. Afterwards `git status --porcelain` is empty. Neither the clone's nor the main checkout's `refs/heads/<branch>` moved | **pass** |
+| CL9 | A real refresh: `bash <main>/scripts/refresh-branch.sh <clone>`, with the branch one commit behind `origin/dev` | exit 0, and `git -C <clone> rev-parse refs/heads/<b>` equals `git -C <main> rev-parse refs/heads/<b>` | Exit 0: `From github-firu:firu-daniel/autonomous-sdlc-harness` / ` * branch dev -> FETCH_HEAD` / `refresh-branch.sh: merged origin/dev into chore_sbx_s3_probe`, with `permission_denials` `[]`. The fetch reached GitHub, so the call ran outside the sandbox. Before the call both refs were `6dfde986ed57f160e6d77f70525db527ac0a6052`. After it, `git -C <clone> rev-parse` and `git -C <main> rev-parse` each print `9da255b6280fc482d7adb4abde0c34657645c6ba`, which is `origin/dev`: a fast-forward. The clone's tree is clean, and `ls-remote origin <b>` lists nothing: no push | **pass** |
+
 ### The main-checkout anchor (2026-10-20)
 
 The anchor is `HARNESS_MAIN_REPO`, which `spawn_engine` in `scripts/autonomous-watcher.sh` exports inside the engine subshell, set to the main checkout, before the `"$AGENT_CLI" -p` launch. The plugin's `<MAIN_REPO>` readers take it through a bare `printenv HARNESS_MAIN_REPO`, which the profile allows as the exact rule `Bash(printenv HARNESS_MAIN_REPO)`; the QA-lock helpers take it through `hc_main_root` in `plugin/hooks/lib/harness-config-lib.sh`. A sandboxed call sees the variable only if it inherits it from that launch. If it does not, every reader silently falls back to its pre-anchor resolution, so these rows decide whether `feat_clone_per_run_anchor` merges.
