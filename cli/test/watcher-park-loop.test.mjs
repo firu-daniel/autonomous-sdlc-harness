@@ -1,11 +1,10 @@
 /**
  * The written watcher's park-loop guard, driven pass by pass against a fixture.
  *
- * **The rule these tests exist to enforce: a park-resume that makes no progress is bounded, the
- * bound is a distinct status an operator can clear, and a run that makes progress is never
- * caught.** Every window case sets `PARK_LOOP_WINDOW_SECS` to `0` or `3600`, so no case waits for
- * a window; the legacy case runs under the shipped defaults on purpose. The measured basis for
- * those defaults is `docs/watcher.md` §4 → **A resume that makes no progress is bounded.**
+ * **The rule these tests exist to enforce: a park-resume that raises no question above its
+ * baseline is bounded, the bound is a distinct status an operator can clear, and a run that raises
+ * one is never caught, however fast it re-parks.** The measured basis for the shipped default is
+ * `docs/watcher.md` §4 → **A resume that makes no progress is bounded.**
  */
 
 import assert from 'node:assert/strict';
@@ -61,21 +60,19 @@ const events = (w) => w.notifications().map((n) => n.event);
 test('forced no progress trips the guard, and PARK_LOOP_CLEAR releases it', async (t) => {
   const w = await createWatcherFixture(t);
   if (w === null) return;
-  const env = { PARK_LOOP_WINDOW_SECS: '0' };
-
   await t.test('index detector: two resumes that raise nothing above index 5 become park_loop', async () => {
     await w.writeQuestion(5, '## Q5\n');
     await w.writeAnswer(5, 'a5\n');
     await w.seedRecord();
     await w.setStub(LOWEST_FREE_INDEX_STUB);
 
-    await w.tick(env);
+    await w.tick();
     assert.equal(w.record().status, 'parked', w.watcherLog());
     assert.equal(w.record().park_loop_cycles, '1');
 
     await answerOpenQuestion(w);
     const before = w.notifications().length;
-    await w.tick(env);
+    await w.tick();
 
     assert.equal(w.prompts().length, 2, w.watcherLog());
     assert.equal(w.record().status, 'park_loop', w.watcherLog());
@@ -89,7 +86,7 @@ test('forced no progress trips the guard, and PARK_LOOP_CLEAR releases it', asyn
 
     await answerOpenQuestion(w);
     const notificationsBefore = w.notifications().length;
-    await w.tick(env);
+    await w.tick();
     assert.equal(w.prompts().length, 2, `a held run was resumed:\n${w.watcherLog()}`);
     assert.equal(w.notifications().length, notificationsBefore);
     assert.equal(w.record().status, 'park_loop');
@@ -99,7 +96,7 @@ test('forced no progress trips the guard, and PARK_LOOP_CLEAR releases it', asyn
     const clearFile = join(w.clarDir, 'PARK_LOOP_CLEAR');
     await writeFile(clearFile, '', 'utf8');
     await w.setStub(finishedLedgerBody(w.branch));
-    await w.tick(env);
+    await w.tick();
 
     assert.equal(existsSync(clearFile), false);
     assert.match(w.watcherLog(), new RegExp(`park loop cleared for '${w.branch}' \\(PARK_LOOP_CLEAR found\\)`));
@@ -109,31 +106,32 @@ test('forced no progress trips the guard, and PARK_LOOP_CLEAR releases it', asyn
   });
 });
 
-test('window detector: progress by index, but re-parked instantly, is caught', async (t) => {
+test('run B: two fast re-parks that each raise a higher-indexed question stay parked', async (t) => {
   const w = await createWatcherFixture(t);
   if (w === null) return;
-  const env = { PARK_LOOP_WINDOW_SECS: '3600' };
+  // Built from parts so the retired knob's name appears nowhere under cli/.
+  const retiredKnob = new RegExp(['PARK', 'LOOP', 'WINDOW', 'SECS'].join('_'));
 
   await w.writeQuestion(1, '## Q1\n');
   await w.writeAnswer(1, 'a1\n');
   await w.seedRecord();
   await w.setStub(NEXT_INDEX_STUB);
 
-  await w.tick(env);
-  assert.equal(w.record().status, 'parked', w.watcherLog());
-  await answerOpenQuestion(w);
-  await w.tick(env);
-
-  assert.equal(w.record().status, 'park_loop', w.watcherLog());
-  assert.equal(w.record().park_loop_cycles, '2');
-  assert.match(w.watcherLog(), /cycle 2\/2: re-parked after \d+s, inside PARK_LOOP_WINDOW_SECS=3600\)/);
-  assert.equal(events(w).filter((e) => e === 'park_loop').length, 1);
+  // Shipped defaults: no PARK_LOOP_* variable is passed.
+  for (let round = 1; round <= 2; round += 1) {
+    if (round > 1) await answerOpenQuestion(w);
+    await w.tick();
+    assert.equal(w.record().status, 'parked', `round ${round}:\n${w.watcherLog()}`);
+    assert.equal(w.record().park_loop_cycles, '0', `round ${round}`);
+    assert.equal(events(w).includes('park_loop'), false, `round ${round}`);
+    assert.doesNotMatch(w.watcherLog(), /made no progress/);
+    assert.doesNotMatch(w.watcherLog(), retiredKnob);
+  }
 });
 
 test('a real multi-park is never caught', async (t) => {
   const w = await createWatcherFixture(t);
   if (w === null) return;
-  const env = { PARK_LOOP_WINDOW_SECS: '0' };
 
   await w.writeQuestion(1, '## Q1\n');
   await w.writeAnswer(1, 'a1\n');
@@ -142,7 +140,7 @@ test('a real multi-park is never caught', async (t) => {
 
   for (let round = 1; round <= 3; round += 1) {
     if (round > 1) await answerOpenQuestion(w);
-    await w.tick(env);
+    await w.tick();
     assert.equal(w.prompts().length, round, w.watcherLog());
     assert.equal(w.record().status, 'parked', `round ${round}:\n${w.watcherLog()}`);
     assert.equal(w.record().park_loop_cycles, '0', `round ${round}`);
@@ -151,7 +149,7 @@ test('a real multi-park is never caught', async (t) => {
   assert.doesNotMatch(w.watcherLog(), /made no progress/);
 });
 
-test('a legacy in-flight park spends at most one cycle, and a pause-resume is not counted', async (t) => {
+test('a legacy in-flight park is not caught, and a pause-resume is not counted', async (t) => {
   const w = await createWatcherFixture(t);
   if (w === null) return;
 
@@ -168,12 +166,12 @@ test('a legacy in-flight park spends at most one cycle, and a pause-resume is no
   await w.seedRecord({ resumed_for_index: '' });
   await w.setStub('printf "## Q5\\n" > "$CLAR/question_5.md"');
 
-  // Shipped defaults: no PARK_LOOP_* variable is passed, and the log line below names both values.
+  // Shipped defaults: no PARK_LOOP_* variable is passed.
   await w.tick();
   assert.equal(w.prompts().length, 1, w.watcherLog());
   assert.equal(w.record().status, 'parked', w.watcherLog());
-  assert.equal(w.record().park_loop_cycles, '1');
-  assert.match(w.watcherLog(), /made no progress \(cycle 1\/2: re-parked after \d+s, inside PARK_LOOP_WINDOW_SECS=300\)/);
+  assert.equal(w.record().park_loop_cycles, '0');
+  assert.doesNotMatch(w.watcherLog(), /made no progress/);
   assert.equal(events(w).includes('park_loop'), false);
 
   await w.writeAnswer(5, 'a5\n');
@@ -190,14 +188,15 @@ test('a legacy in-flight park spends at most one cycle, and a pause-resume is no
     await writeFile(join(stateDir, 'PAUSE_ACK'), '', 'utf8');
     await writeFile(join(stateDir, 'RESUME'), '', 'utf8');
     await w.setStub('printf "## Q3\\n" > "$CLAR/question_3.md"');
-    const noProgressLines = w.watcherLog().match(/made no progress/g).length;
+    const noProgressCount = () => (w.watcherLog().match(/made no progress/g) ?? []).length;
+    const noProgressLines = noProgressCount();
 
-    await w.tick({ PARK_LOOP_WINDOW_SECS: '3600' });
+    await w.tick();
 
     assert.equal(w.prompts().length, 3, w.watcherLog());
     assert.match(w.watcherLog(), new RegExp(`resuming paused run '${w.branch}'`));
     assert.equal(w.record().status, 'parked', w.watcherLog());
     assert.equal(w.record().park_loop_cycles, '1');
-    assert.equal(w.watcherLog().match(/made no progress/g).length, noProgressLines);
+    assert.equal(noProgressCount(), noProgressLines);
   });
 });

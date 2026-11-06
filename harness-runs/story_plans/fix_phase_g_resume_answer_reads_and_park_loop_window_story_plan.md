@@ -60,7 +60,7 @@ The guard runs unchanged in job mode, because job mode calls the same `classify_
 Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/fix_phase_g_resume_answer_reads_and_park_loop_window/task_<K>_plan.md`. The entries are listed in ship order. Task 5 is a `cli` task that ships after the `plugin` tasks it pins; `## Context` → **Ship order** gives the reason.
 
 1. [x] **Task 1** — Name the answer files in the watcher's resume prompt without telling the session to consume them, and hand a Phase G pair to G.0 _(layer: cli)_ _(points: 15)_
-2. [ ] **Task 2** — Judge a park-resume's progress on the question index alone, and retire `PARK_LOOP_WINDOW_SECS` _(layer: cli)_ _(points: 20)_
+2. [x] **Task 2** — Judge a park-resume's progress on the question index alone, and retire `PARK_LOOP_WINDOW_SECS` _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Keep the task flow's orchestrator and the Phase G architecture reviewer out of Phase G answer files _(layer: plugin)_ _(points: 15)_
 4. [ ] **Task 4** — Keep the user-review fix flow's orchestrator out of Phase G answer files _(layer: plugin)_ _(points: 8)_
 5. [ ] **Task 5** — Pin the Phase G no-read rules in `cli/test/run-gates-park-answer.test.mjs` _(layer: cli)_ _(points: 10)_

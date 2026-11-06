@@ -792,7 +792,7 @@
 #                    further tick with no answer_4.md does NOT resume
 #   a park loop   from that resume setup, a stub that writes an unanswered
 #                 question_<n>.md with an index no higher than any already there
-#                 before it exits, and PARK_LOOP_WINDOW_SECS=0; answer each park
+#                 before it exits; answer each park
 #                 and tick, twice -> after the second resumed session exits it is
 #                 `park_loop`, park_loop_cycles is 2, ONE `park_loop`
 #                 notification and no `parked` one fire for that exit, and
@@ -1457,14 +1457,10 @@ STALL_WAKE_GAP_SECS="${STALL_WAKE_GAP_SECS:-300}"
 # The park-loop guard (classify_run_exit; clear_park_loops). How many CONSECUTIVE
 # park-resumes that made no progress mark the run `park_loop`, after which it is
 # resumed no further until an operator creates PARK_LOOP_CLEAR. Set 0 to turn the
-# guard off. Both defaults are sized from measured park-resumed sessions; the
+# guard off. The default is sized from measured park-resumed sessions; the
 # measurements are in the harness repository's docs/watcher.md §4, "A resume
 # that makes no progress is bounded.".
 PARK_LOOP_MAX_CYCLES="${PARK_LOOP_MAX_CYCLES:-2}"
-# A park-resumed session that parks again inside this many seconds made no
-# progress, whatever question it parked on. Set 0 to judge progress on the
-# question index alone.
-PARK_LOOP_WINDOW_SECS="${PARK_LOOP_WINDOW_SECS:-300}"
 
 # The usage gate (usage_gate; see the header for what it acts on and why only the
 # watcher can). Set 0 to turn the whole pass off — a run then spends the account's
@@ -1754,8 +1750,6 @@ job_report() {
 #                       otherwise. Read and cleared by classify_run_exit on every
 #                       non-pause exit; it is how the park-loop guard counts only
 #                       park-resumed sessions. Cleared on a fresh launch
-#   resumed_at_epoch    the epoch second of the most recent resume, stamped by
-#                       both resume paths; the guard's window is measured from it
 #   resume_max_question_index
 #                       the highest numbered question_<n>.md index, top level and
 #                       answered/ together, when the park resume launched. An
@@ -2216,7 +2210,7 @@ print_status() {
   # observable. Nothing else the override file may have set is printed. The cap
   # printed is the one enforced.
   RUN_CAP="$(effective_max_parallel_runs)"
-  echo "tunables: MAX_PARALLEL_RUNS=$RUN_CAP POLL_INTERVAL_SECS=$POLL_INTERVAL_SECS PERMISSION_MODE=$PERMISSION_MODE CLEANUP_INTERVAL_SECS=$CLEANUP_INTERVAL_SECS AUTO_TAIL_TERMINAL=$AUTO_TAIL_TERMINAL STALL_CHECK_ENABLED=$STALL_CHECK_ENABLED STALL_WARN_SECS=$STALL_WARN_SECS STALL_KILL_SECS=$STALL_KILL_SECS STALL_MAX_RESTARTS=$STALL_MAX_RESTARTS STALL_BUSY_CPU_PCT=$STALL_BUSY_CPU_PCT PARK_LOOP_MAX_CYCLES=$PARK_LOOP_MAX_CYCLES PARK_LOOP_WINDOW_SECS=$PARK_LOOP_WINDOW_SECS USAGE_CHECK_ENABLED=$USAGE_CHECK_ENABLED USAGE_CHECK_INTERVAL_SECS=$USAGE_CHECK_INTERVAL_SECS USAGE_PAUSE_TRIGGER=$USAGE_PAUSE_TRIGGER USAGE_WARNING_DEBOUNCE=$USAGE_WARNING_DEBOUNCE USAGE_RESUME_MARGIN_SECS=$USAGE_RESUME_MARGIN_SECS USAGE_SEVEN_DAY_PAUSE_PCT=$USAGE_SEVEN_DAY_PAUSE_PCT USAGE_LANE_STATE_ENABLED=$USAGE_LANE_STATE_ENABLED USAGE_LANE_LOCK_ENABLED=$USAGE_LANE_LOCK_ENABLED REMOTE_CONTROL_POLL_SECS=$REMOTE_CONTROL_POLL_SECS REMOTE_WAIT_MAX_SECS=$REMOTE_WAIT_MAX_SECS REMOTE_AUTO_RESUME_MAX=$REMOTE_AUTO_RESUME_MAX REMOTE_AUTO_RESUME_DELAY_SECS=$REMOTE_AUTO_RESUME_DELAY_SECS STALL_WAKE_GAP_SECS=$STALL_WAKE_GAP_SECS KEEP_AWAKE=$KEEP_AWAKE_MODE"
+  echo "tunables: MAX_PARALLEL_RUNS=$RUN_CAP POLL_INTERVAL_SECS=$POLL_INTERVAL_SECS PERMISSION_MODE=$PERMISSION_MODE CLEANUP_INTERVAL_SECS=$CLEANUP_INTERVAL_SECS AUTO_TAIL_TERMINAL=$AUTO_TAIL_TERMINAL STALL_CHECK_ENABLED=$STALL_CHECK_ENABLED STALL_WARN_SECS=$STALL_WARN_SECS STALL_KILL_SECS=$STALL_KILL_SECS STALL_MAX_RESTARTS=$STALL_MAX_RESTARTS STALL_BUSY_CPU_PCT=$STALL_BUSY_CPU_PCT PARK_LOOP_MAX_CYCLES=$PARK_LOOP_MAX_CYCLES USAGE_CHECK_ENABLED=$USAGE_CHECK_ENABLED USAGE_CHECK_INTERVAL_SECS=$USAGE_CHECK_INTERVAL_SECS USAGE_PAUSE_TRIGGER=$USAGE_PAUSE_TRIGGER USAGE_WARNING_DEBOUNCE=$USAGE_WARNING_DEBOUNCE USAGE_RESUME_MARGIN_SECS=$USAGE_RESUME_MARGIN_SECS USAGE_SEVEN_DAY_PAUSE_PCT=$USAGE_SEVEN_DAY_PAUSE_PCT USAGE_LANE_STATE_ENABLED=$USAGE_LANE_STATE_ENABLED USAGE_LANE_LOCK_ENABLED=$USAGE_LANE_LOCK_ENABLED REMOTE_CONTROL_POLL_SECS=$REMOTE_CONTROL_POLL_SECS REMOTE_WAIT_MAX_SECS=$REMOTE_WAIT_MAX_SECS REMOTE_AUTO_RESUME_MAX=$REMOTE_AUTO_RESUME_MAX REMOTE_AUTO_RESUME_DELAY_SECS=$REMOTE_AUTO_RESUME_DELAY_SECS STALL_WAKE_GAP_SECS=$STALL_WAKE_GAP_SECS KEEP_AWAKE=$KEEP_AWAKE_MODE"
   if [ "$KEEP_AWAKE_MODE" = "off" ]; then
     echo "keep-awake: $KEEP_AWAKE_MODE — $KEEP_AWAKE_REASON"
   else
@@ -3869,35 +3863,28 @@ classify_run_exit() {
     done
   fi
 
-  # THE PARK-LOOP GUARD. Counts consecutive park-resumed sessions that parked
-  # again without progress, whatever the cause, and past PARK_LOOP_MAX_CYCLES
-  # holds the run as `park_loop` so no resume pass offers it again. Only a
-  # session the PARK resume launched is judged — resume_kind tells it apart from
-  # a fresh launch and a pause resume, whose parked exits leave the count as it
-  # is. Placed after the parked decision above, which it never changes.
+  # THE PARK-LOOP GUARD. A park-resumed session that parks again without raising
+  # a question_<n>.md above resume_max_question_index made no progress; one that
+  # raised one made progress, whatever its duration — a new question waits on a
+  # person's answer, so how soon it was raised says nothing about a loop (the
+  # harness repository's docs/watcher.md §4, "A resume that makes no progress is
+  # bounded."). Consecutive no-progress sessions past PARK_LOOP_MAX_CYCLES hold
+  # the run as `park_loop` so no resume pass offers it again. Only a session the
+  # PARK resume launched is judged — resume_kind tells it apart from a fresh
+  # launch and a pause resume, whose parked exits leave the count as it is.
+  # Placed after the parked decision above, which it never changes.
   local resume_kind
   resume_kind="$(registry_get "$branch" resume_kind)"
   if [ -n "$resume_kind" ]; then
     registry_set "$branch" resume_kind ""
   fi
   if [ "$parked" = 1 ] && [ "$resume_kind" = "answer" ] && [ "$PARK_LOOP_MAX_CYCLES" != "0" ]; then
-    local base_max now_max resumed_epoch elapsed cycles loop_reason=""
+    local base_max now_max cycles loop_reason=""
     base_max="$(registry_get "$branch" resume_max_question_index)"
     case "$base_max" in '' | *[!0-9]*) base_max=0 ;; esac
     now_max="$(max_question_index "$clar_dir")"
-    resumed_epoch="$(registry_get "$branch" resumed_at_epoch)"
     if [ "$now_max" -le "$((10#$base_max))" ]; then
       loop_reason="no question above index $((10#$base_max))"
-    else
-      case "$resumed_epoch" in
-        '' | *[!0-9]*) ;;
-        *)
-          elapsed=$(($(date +%s) - resumed_epoch))
-          if [ "$elapsed" -lt "$PARK_LOOP_WINDOW_SECS" ]; then
-            loop_reason="re-parked after ${elapsed}s, inside PARK_LOOP_WINDOW_SECS=$PARK_LOOP_WINDOW_SECS"
-          fi
-          ;;
-      esac
     fi
     if [ -n "$loop_reason" ]; then
       cycles="$(registry_get "$branch" park_loop_cycles)"
@@ -4103,7 +4090,6 @@ begin_park_resume() {
   registry_set "$branch" resumed_at "$(date '+%Y-%m-%dT%H:%M:%S')"
   registry_set "$branch" resumed_for_index "$answered_set"
   registry_set "$branch" resume_kind answer
-  registry_set "$branch" resumed_at_epoch "$(date +%s)"
   registry_set "$branch" resume_max_question_index "$(max_question_index "$clar_dir")"
 }
 
@@ -4285,7 +4271,6 @@ begin_pause_resume() {
   registry_set "$branch" status running pause_reason ""
   registry_set "$branch" resumed_at "$(date '+%Y-%m-%dT%H:%M:%S')"
   registry_set "$branch" resume_kind pause
-  registry_set "$branch" resumed_at_epoch "$(date +%s)"
 }
 
 # resume_paused_run <branch>
