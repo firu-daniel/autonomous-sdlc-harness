@@ -19,7 +19,7 @@ Pass 2 found no per-task review folder at the supplied root, so it carried nothi
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Exclude the stall-watchdog restart that gives the run up before the spawn from the "passed" record _(layer: general)_
+1. [x] **Finding 1** — Exclude the stall-watchdog restart that gives the run up before the spawn from the "passed" record _(layer: general)_
 2. [ ] **Finding 2** — Point "that line" at the launch line and split the `run_profile` fact out of the `because` clause _(layer: general)_
 
 ---
