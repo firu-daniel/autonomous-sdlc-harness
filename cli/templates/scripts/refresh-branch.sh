@@ -379,6 +379,21 @@ if ! main_top="$(hr_wrapper_main_of "$script_dir")"; then
   echo "refresh-branch.sh: refusing to refresh: cannot place this script in a main checkout (its .git is a symbolic link, or a directory holding a commondir)" >&2
   exit 1
 fi
+# THE TARGET'S `harness.config.json` IS NOT TRUSTED EITHER (header): every
+# configured value below is read at the main checkout, never at "$top".
+cfg_root="$main_top"
+
+# Warm the library's cache once, unsubstituted, and fail closed here rather than
+# letting each reader below fail separately: a configuration that cannot be read
+# is a protected set that cannot be judged. It runs ahead of the target check,
+# so a clone target gets this refusal rather than the clone arm's registry
+# sentence, and ahead of the pin and the git-version check. It reads only
+# `<cfg_root>/harness.config.json` and makes no git call.
+if ! hr_config_load "$cfg_root"; then
+  echo "refresh-branch.sh: cannot resolve '$cfg_root/harness.config.json' — refusing to merge" >&2
+  echo "  (no configuration there, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)" >&2
+  exit 1
+fi
 if ! hr_wrapper_target_check_var "$main_top" "$top_nogit"; then
   echo "refresh-branch.sh: refusing to refresh: $HR_TARGET_REFUSAL" >&2
   exit 1
@@ -440,19 +455,6 @@ esac
 if [ -z "$git_major" ] || [ -z "$git_minor" ] ||
   [ "$git_major" -lt 2 ] || { [ "$git_major" -eq 2 ] && [ "$git_minor" -lt 38 ]; }; then
   echo "refresh-branch.sh: needs git 2.38 or newer (for 'git merge-tree --write-tree'); 'git --version' printed '$git_version' — refusing to merge" >&2
-  exit 1
-fi
-
-# THE TARGET'S `harness.config.json` IS NOT TRUSTED EITHER (header): every
-# configured value below is read at the main checkout, never at "$top".
-cfg_root="$main_top"
-
-# Warm the library's cache once, unsubstituted, and fail closed here rather than
-# letting each reader below fail separately: a configuration that cannot be read
-# is a protected set that cannot be judged.
-if ! hr_config_load "$cfg_root"; then
-  echo "refresh-branch.sh: cannot resolve '$cfg_root/harness.config.json' — refusing to merge" >&2
-  echo "  (no configuration there, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)" >&2
   exit 1
 fi
 

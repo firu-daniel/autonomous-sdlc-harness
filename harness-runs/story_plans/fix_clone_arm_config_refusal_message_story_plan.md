@@ -23,7 +23,7 @@ This repository's own `scripts/` directory is `init`'s output for this checkout 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_clone_arm_config_refusal_message/task_<K>_plan.md`. Entries are in bottom-up ship order, with the catch-all layer last.
 
 1. [x] **Task 1** — Make `hr_clone_target_check_var` refuse an unresolvable configuration as such, not as a missing registry record _(layer: cli)_ _(points: 10)_
-2. [ ] **Task 2** — Resolve the main checkout's configuration before the target check in `commit-on-branch.sh`, `push-branch.sh` and `refresh-branch.sh`, with a clone-target suite _(layer: cli)_ _(points: 20)_
+2. [x] **Task 2** — Resolve the main checkout's configuration before the target check in `commit-on-branch.sh`, `push-branch.sh` and `refresh-branch.sh`, with a clone-target suite _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Bring `docs/outer-loop-verification.md` §1.1 and `docs/cli.md`'s target-check paragraph in line with the new order and message _(layer: general)_ _(points: 10)_
 
 ## Scope register
