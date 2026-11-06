@@ -64,7 +64,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/fix_phase_g
 3. [x] **Task 3** — Keep the task flow's orchestrator and the Phase G architecture reviewer out of Phase G answer files _(layer: plugin)_ _(points: 15)_
 4. [x] **Task 4** — Keep the user-review fix flow's orchestrator out of Phase G answer files _(layer: plugin)_ _(points: 8)_
 5. [x] **Task 5** — Pin the Phase G no-read rules in `cli/test/run-gates-park-answer.test.mjs` _(layer: cli)_ _(points: 10)_
-6. [ ] **Task 6** — Describe the index-only park-loop guard and the path-only resume prompt in `docs/watcher.md`, `docs/remote-execution.md` and `ARCHITECTURE.md` _(layer: general)_ _(points: 18)_
+6. [x] **Task 6** — Describe the index-only park-loop guard and the path-only resume prompt in `docs/watcher.md`, `docs/remote-execution.md` and `ARCHITECTURE.md` _(layer: general)_ _(points: 18)_
 
 ## Scope register
 

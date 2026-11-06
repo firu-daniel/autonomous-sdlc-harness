@@ -581,7 +581,6 @@ All are set on the GitHub repository (Settings → Secrets and variables → Act
 | `USAGE_RESUME_MARGIN_SECS` | variable | as above | 120 | no |
 | `USAGE_SEVEN_DAY_PAUSE_PCT` | variable | as above | 0.95 | no |
 | `PARK_LOOP_MAX_CYCLES` | variable | the watcher's park-loop guard, in job mode | 2 | no |
-| `PARK_LOOP_WINDOW_SECS` | variable | as above | 300 | no |
 | `REMOTE_WAIT_MAX_SECS` | variable | job mode: the longest usage-pause wait a hosted job takes in the job, and how far past the gate's last resume pass after the reset any in-job wait, self-hosted included, stays paused before it ends in `wait-poller` | 600 | no |
 | `REMOTE_AUTO_RESUME_MAX` | variable | job mode: automatic resumes per run after a failure or an overload pause | 2 | no |
 | `REMOTE_AUTO_RESUME_DELAY_SECS` | variable | job mode: the wait before each automatic resume | 300 | no |
