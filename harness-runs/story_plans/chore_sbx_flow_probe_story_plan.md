@@ -27,7 +27,7 @@ On a **bubblewrap host** the clone's trust check (`hr_run_copy_check_var`) runs 
 
 Each entry resolves 1:1 to `harness-runs/task_plans/chore_sbx_flow_probe/task_<K>_plan.md`.
 
-1. [ ] **Task 1** — Add the one sentence on what `watcher.log` carries when the per-run profile renders and passes its check _(layer: general)_ _(points: 5)_
+1. [x] **Task 1** — Add the one sentence on what `watcher.log` carries when the per-run profile renders and passes its check _(layer: general)_ _(points: 5)_
 
 ## Scope register
 
