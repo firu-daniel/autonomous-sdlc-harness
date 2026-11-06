@@ -30,7 +30,7 @@
 
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below from top to bottom. The committing role flips each one to `[x]` as that fix's commit lands. Each entry resolves 1:1 to `harness-runs/code_reviews/fix_phase_g_resume_answer_reads_and_park_loop_window_code_review/finding_<K>.md`.
 
-1. [ ] **Finding 2** — Say "The default is sized" and fix the run-on sentence in `docs/watcher.md` §4's sizing paragraph _(layer: general)_
+1. [x] **Finding 2** — Say "The default is sized" and fix the run-on sentence in `docs/watcher.md` §4's sizing paragraph _(layer: general)_
 2. [ ] **Finding 1** — Have the resume prompt and `docs/watcher.md` say G.0 decides whether a Phase G pair reaches `test-fix-plan-writer`, and update its pin _(layer: cli, general)_
 
 ---
