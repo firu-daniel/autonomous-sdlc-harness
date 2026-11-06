@@ -44,7 +44,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_sibling_glob_traversal/t
 
 1. [x] **Task 1** — Add the path-anchored-arms decision suite and record it red against the unfixed guards _(layer: cli)_ _(points: 20)_
 2. [x] **Task 2** — Pair every wildcard-bearing path-anchored arm with veto globs and honour them in `hc_matches_any_pattern` _(layer: plugin)_ _(points: 20)_
-3. [ ] **Task 3** — Describe the vetoed arms in the four guards' headers and REPRO blocks and in `plugin/hooks/README.md` _(layer: plugin)_ _(points: 15)_
+3. [x] **Task 3** — Describe the vetoed arms in the four guards' headers and REPRO blocks and in `plugin/hooks/README.md` _(layer: plugin)_ _(points: 15)_
 4. [ ] **Task 4** — Drive the `(m)` row set, its fault injections and the fork counts on paired trees _(layer: general)_ _(points: 20)_
 5. [ ] **Task 5** — Re-drive §2.1, §2.2 and §2.5's piece-matching matrices on paired trees _(layer: general)_ _(points: 20)_
 6. [ ] **Task 6** — Re-drive §2.3's fail-closed matrix, §2.4's rows a–l and §2.6's file-tool rows on paired trees _(layer: general)_ _(points: 20)_

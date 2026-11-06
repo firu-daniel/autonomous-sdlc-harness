@@ -80,13 +80,16 @@
 # that match no prefix. Each piece is then trimmed and has subshell grouping
 # parens peeled — a piece written `(<cmd> arg)` is matched on its inner command,
 # not on `(<cmd>`. An empty piece is safe. A piece matches when it equals a safe
-# prefix or begins with that prefix followed by a space.
+# prefix or begins with that prefix followed by a space. A path-anchored arm
+# (below) is not a prefix: it is a `case` glob over the whole piece, so a `cd`
+# arm carries no trailing argument beyond one redirection word.
 #
 # PREFIX MATCHING IS EXACTLY THAT, AND THE LIMIT IS INHERITED FROM THE PROFILE.
-# A piece is judged by its leading words only: whatever follows the matched
-# prefix rides along on the allow — a pipe, a redirect, a here-string, a closed
-# command substitution. That is the same limit a `Bash(<prefix>:*)` rule carries
-# on the bare spelling of that piece, and holding to it IS the contract here: a
+# A piece matched by a safe prefix is judged by its leading words only: whatever
+# follows the matched prefix rides along on the allow — a pipe, a redirect, a
+# here-string, a closed command substitution. That is the same limit a
+# `Bash(<prefix>:*)` rule carries on the bare spelling of that piece, and
+# holding to it IS the contract here: a
 # compound costs what its pieces cost separately, no more and no less. Narrowing
 # it closes nothing — each piece stays allowed on its own, one prompt at a time
 # — and would move the real limit out of the profile an adopter can read into a
@@ -149,8 +152,14 @@
 # built by the shared library's `hc_path_anchored_patterns`, which both guards
 # call and which documents the mechanism, the derivation and why the arms are
 # `case` globs rather than filesystem lookups. They cover `cd <dir>` and the
-# exact, tail-free `<pkg-manager> --prefix <dir>`. THE TWO SHAPES THAT CARRY A
-# SUBCOMMAND AFTER THE DIRECTORY — `git -C <dir> …` and
+# exact, tail-free `<pkg-manager> --prefix <dir>`. Each wildcard-bearing arm
+# carries veto globs that `hc_matches_any_pattern` honours: they withdraw the arm
+# when its `*` matched a `/../`, a trailing `/..` or a character outside
+# `[A-Za-z0-9._/-]` — a space, so a subcommand inside a `--prefix` wildcard, too
+# — and they hold a `cd <dir>` arm's tail to one redirection word, because zsh
+# reads a second operand as `cd <old> <new>`. The library states each arm's
+# vetoes; the record is `docs/guard-verification.md` §2.4 row `(m)`. THE TWO
+# SHAPES THAT CARRY A SUBCOMMAND AFTER THE DIRECTORY — `git -C <dir> …` and
 # `<pkg-manager> --prefix <dir> …` — ARE DELIBERATELY NOT ARMS: an arm matches on
 # the directory alone, so the subcommand rides along on it. They go through
 # `hc_git_piece_in_workspace` / `hc_runner_piece_in_workspace`, which rewrite the
@@ -201,8 +210,9 @@
 # wildcards.
 #
 # REPRO — reproduce any decision by hand; the payload goes in on stdin. <repo> is
-# a checkout that has adopted the harness, <work_root> its parent directory and
-# <project_name> its configured name:
+# a checkout that has adopted the harness, <work_root> its parent directory,
+# <project_name> its configured name and <outside> a directory outside the
+# workspace:
 #
 #   printf '{"tool_input":{"command":"git status && ls"},"cwd":"<repo>"}' \
 #     | bash plugin/hooks/allow-safe-compounds.sh
@@ -215,6 +225,7 @@
 #     (git status) && pwd                       grouped piece, parens peeled
 #     git add a \<newline>  b && git status     continuation joined first
 #     cd <repo> && git status                   path-anchored arm
+#     cd <repo> 2>/dev/null && git status       ...its one redirection-word tail
 #     cd <work_root>/<project_name>-<branch> && git status
 #                                               sibling-worktree arm
 #     git -C <repo> status && git -C <repo> log directory-scoped, safe subcommand
@@ -289,6 +300,22 @@
 #     cat a.txt | grep x                        a pipe is not a compound
 #     if [ -f a ]; then bash b.sh; fi           control flow
 #     cd /somewhere/else && git status          outside the workspace
+#     git -C <repo> status && cd <work_root>/<project_name>-x/../../<outside> && <commands.depInstall>
+#                                               the sibling arm's `*` carries a
+#                                               `/../`, which its veto refuses
+#     git status && <runner> --prefix <work_root>/<project_name>-x/../../<outside>/<app_dir>
+#                                               ...and the sibling `--prefix` arm's
+#     git status && <runner> --prefix <work_root>/<project_name>-x <subcommand not in commands.*> /<app_dir>
+#                                               a subcommand inside the wildcard:
+#                                               the space is outside the class veto
+#     git -C <repo> status && cd <repo> <outside> && <commands.depInstall>
+#                                               a second `cd` operand: zsh reads
+#                                               `cd <old> <new>` against `$PWD`, so
+#                                               the tail may only be a redirection
+#     git -C <repo> status && cd <repo>/../../<outside> && ls
+#                                               from a run copy, where <repo> is
+#                                               itself `<work_root>/<project_name>-*`
+#                                               and the stem arm matches it
 #     any of the above with <commands.*> that this <repo> does not configure
 #     any of the above in a <repo> whose config is invalid JSON
 #     any of the above in a <repo> with no harness.config.json
