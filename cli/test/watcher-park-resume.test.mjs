@@ -8,6 +8,11 @@
  * behind to trigger the next resume — the run re-launched once per answered question, re-reading
  * answers it had consumed.
  *
+ * **The second rule: the resume prompt names every answer it unblocked by path and assigns no
+ * reader, and before Phase D it hands a Phase G pair to G.0 rather than to the session.** The
+ * defect it replays: a prompt telling the session to consume every answer file had each Phase G
+ * resume open the answer before G.0 ran.
+ *
  * Loop-guard behaviour is out of scope here: no case parks more than once without progress.
  */
 
@@ -127,6 +132,35 @@ test('a question that appears after the park holds the resume back until it is a
   assert.equal(w.prompts().length, 1, `expected one resume:\n${w.watcherLog()}`);
   assert.deepEqual(answersNamed(w.prompts()[0], w.branch), [1, 2]);
 });
+
+for (const engine of ['task', 'user_review']) {
+  test(`the ${engine} resume prompt names a Phase G answer without handing it to the session`, async (t) => {
+    const w = await createWatcherFixture(t);
+    if (w === null) return;
+
+    await w.writeQuestion(1, 'Raised by: Phase G test-fix-plan-writer\n\n## Q1\n');
+    await w.seedRecord({ engine });
+    await w.writeAnswer(1, 'a1\n');
+    await w.setStub(':');
+    await w.tick();
+
+    assert.equal(w.prompts().length, 1, `expected one resume:\n${w.watcherLog()}`);
+    const prompt = w.prompts()[0];
+    assert.deepEqual(answersNamed(prompt, w.branch), [1]);
+    assert.doesNotMatch(prompt, /consume/i);
+    assert.ok(
+      prompt.includes(
+        'Before Phase D, never open or quote an answer file whose question file names an origin that opens Phase G',
+      ),
+    );
+    assert.ok(
+      prompt.includes(
+        "Phase G's G.0 decides whether that pair reaches test-fix-plan-writer, its only possible reader until Phase D's clarification digest quotes it.",
+      ),
+    );
+    assert.ok(prompt.includes('This is a RESUME: every question file of this park has been answered'));
+  });
+}
 
 test('a run parked under the old layout, partly archived, resumes once for everything left', async (t) => {
   const w = await createWatcherFixture(t);
