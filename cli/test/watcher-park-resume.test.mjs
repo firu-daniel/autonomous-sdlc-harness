@@ -155,7 +155,7 @@ for (const engine of ['task', 'user_review']) {
     );
     assert.ok(
       prompt.includes(
-        "Phase G's G.0 finds that pair and passes its paths to test-fix-plan-writer, its only reader until Phase D's clarification digest quotes it.",
+        "Phase G's G.0 decides whether that pair reaches test-fix-plan-writer, its only possible reader until Phase D's clarification digest quotes it.",
       ),
     );
     assert.ok(prompt.includes('This is a RESUME: every question file of this park has been answered'));

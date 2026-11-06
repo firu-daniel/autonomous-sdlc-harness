@@ -3124,7 +3124,7 @@ spawn_engine() {
   # On a RESUME, name every top-level answer file the watcher just unblocked and
   # assign no reader: the flow's own resume step decides who reads each pair.
   # Before Phase D, a pair whose question names an origin that opens `Phase G`
-  # is read only by test-fix-plan-writer, through G.0
+  # can be read only by test-fix-plan-writer, and only when G.0 passes it
   # (plugin/instructions/plan_orchestration_instructions_core.md → `### G.0
   # Resolve the round`); Phase D's clarification digest
   # (plugin/instructions/clarification_digest_instructions.md) is its one later
@@ -3141,8 +3141,8 @@ spawn_engine() {
     resume_clause="This is a RESUME: every question file of this park has been answered. Its answer files, each paired \
 by index with its question_<i>.md, are: ${resume_files}. Resume from the park point rather than restarting; each answer \
 file is read only by the step your flow's instructions name for it. Before Phase D, never open or quote an answer file \
-whose question file names an origin that opens Phase G: Phase G's G.0 finds that pair and passes its paths to \
-test-fix-plan-writer, its only reader until Phase D's clarification digest quotes it. "
+whose question file names an origin that opens Phase G: Phase G's G.0 decides whether that pair reaches \
+test-fix-plan-writer, its only possible reader until Phase D's clarification digest quotes it. "
   fi
 
   # Pause-resume clause: set (via the 5th argument) when the paused-run resume
