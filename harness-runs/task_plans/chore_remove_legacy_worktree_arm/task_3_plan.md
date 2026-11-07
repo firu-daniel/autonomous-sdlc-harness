@@ -24,3 +24,8 @@
 - `watcher-review-drop-payloads.test.mjs` and `watcher-stall-reset-payloads.test.mjs` pass — the two test files this task edits.
 - `grep -n -i 'legacy\|migration coverage' cli/test/watcher-review-drop-payloads.test.mjs cli/test/watcher-stall-reset-payloads.test.mjs` prints no line describing a legacy worktree run that resumes or is reused.
 - `remote-start.test.mjs` passes — the third test file this task edits — and `grep -n -i -E 'legacy|worktree remove' cli/test/remote-start.test.mjs` prints no hit.
+
+**Deviations from plan:**
+
+- The new review-drop case is `(W1)`; the fixture option is `kindlessWorktree`. Plan predicted the RED ONCE outcome *"the drop is reused and launched"*; measured (a scratch copy of the suite holding only W1, each mutation applied to the fixture's own written `lib/harness-run-lib.sh`, run with `bash scripts/scratch-run.sh`), both mutations — the `worktree` refusal in `hr_run_target_check_var` replaced by `if false`, and `hr_run_copy_check_var` calling `hr_wrapper_target_check_var` — let the copy check accept the worktree, and the drop is then refused by the clean test (*"has uncommitted tracked changes"*), so W1 fails on the failure notification's detail, not on a launch. The header's W1 entry records the measured failure.
+- The fixtures' `extensions.worktreeConfig=true` setting is kept; the header sentences that justified it by *"a legacy copy's `config.worktree`"* now name a linked worktree's (review-drop) and the main checkout's (stall) `config.worktree`.
