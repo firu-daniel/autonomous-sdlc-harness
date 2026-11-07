@@ -15,14 +15,14 @@
  * `hooks_config_write`), and the wrappers skip `hr_worktree_config_check_var` for a clone.
  *
  * Run red once against the fixture's copy of `setup-worktree.sh`, never the tracked template, with
- * its `drop_inert_sparse "$f"` call removed: (a), (c), (e) and both (d) cases fail; (b) passes.
+ * its `drop_inert_sparse "$f"` call removed: (a), (c) and both (d) cases fail; (b) and (e) pass.
  *
  * The fixture is built by hand rather than by `init`, as `push-branch-worktree-config.test.mjs`
  * builds its own, so the configuration under test is exactly the one each case sets.
  */
 
 import assert from 'node:assert/strict';
-import { chmod, cp, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -203,30 +203,15 @@ test('(d) A foreign key beside the three survives the bootstrap and is refused b
   assert.doesNotMatch(output(refused), /sandbox-written-value/);
 });
 
-test('(e) A linked worktree through --target: both files cleaned, and both wrappers accept', async (t) => {
+test('(e) A linked worktree through --target is refused, and both config.worktree files are left as they were', async (t) => {
   const f = await fixture(t);
   for (const key of SPARSE_KEYS) await f.plant(f.configWorktree, key, 'false');
   const wt = join(f.root, 'wt');
   await runGit(f.main, ['worktree', 'add', '--quiet', '-b', WT_BRANCH, wt]);
 
   const result = await f.setup('--target', wt);
-  assert.equal(result.status, 0, output(result));
-  assert.match(result.stdout, REMOVED, output(result));
-  assert.equal(await f.list(f.configWorktree), '');
-  assert.equal(
-    await f.list(join(f.main, '.git', 'worktrees', 'wt', 'config.worktree')),
-    `core.hookspath=${join(wt, 'githooks')}`,
-  );
-
-  const pushed = await f.push(wt);
-  assert.equal(pushed.status, 0, output(pushed));
-  assert.match(pushed.stdout, new RegExp(`^push-branch\\.sh: pushed ${WT_BRANCH} to origin$`, 'm'), output(pushed));
-  assert.equal(await f.originTip(WT_BRANCH), await f.tip(wt));
-
-  const before = await f.tip(f.main);
-  await writeFile(join(f.main, 'sparse.txt'), 'replayed\n');
-  const committed = await f.commit(f.main, 'sparse.txt', 'feat: Sparse replay');
-  assert.equal(committed.status, 0, output(committed));
-  const after = (await runGit(f.main, ['rev-parse', `refs/heads/${MAIN_BRANCH}`])).stdout.trim();
-  assert.equal((await runGit(f.main, ['rev-parse', `${after}^`])).stdout.trim(), before);
+  assert.equal(result.status, 1, output(result));
+  assert.match(result.stderr, /is a linked worktree of .* — refusing to bootstrap$/m, output(result));
+  assert.equal(await f.list(f.configWorktree), SPARSE_LISTED);
+  await assert.rejects(stat(join(f.main, '.git', 'worktrees', 'wt', 'config.worktree')), { code: 'ENOENT' });
 });
