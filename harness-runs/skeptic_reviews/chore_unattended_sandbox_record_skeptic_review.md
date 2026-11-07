@@ -21,7 +21,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Repoint row CL5 (Linux)'s procedure-cell citation from `docs/cli.md` §6 to `docs/sandbox-record.md` residual 1, item 3 _(layer: general)_
+1. [x] **Finding 1** — Repoint row CL5 (Linux)'s procedure-cell citation from `docs/cli.md` §6 to `docs/sandbox-record.md` residual 1, item 3 _(layer: general)_
 2. [ ] **Finding 2** — Repoint the `effective_max_parallel_runs` and `push-branch.sh` watcher-family comments to `docs/sandbox-record.md` residuals 12 and 1 _(layer: cli)_
 
 ---
