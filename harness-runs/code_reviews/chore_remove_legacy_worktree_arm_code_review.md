@@ -44,7 +44,7 @@ The two findings below are what remains.
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 1** — Update the run library's three stale comments: the module header's `setup-worktree.sh --target` check, and the "record's index" wording in `hr_run_worktree_diff_var` and `hr_run_surface_check_var` _(layer: cli)_
-2. [ ] **Finding 2** — Drop the duplicate main-checkout `config.worktree` entry from `setup-worktree.sh --target`'s non-clone `sparse_files` arm _(layer: cli)_
+2. [x] **Finding 2** — Drop the duplicate main-checkout `config.worktree` entry from `setup-worktree.sh --target`'s non-clone `sparse_files` arm _(layer: cli)_
 
 ---
 

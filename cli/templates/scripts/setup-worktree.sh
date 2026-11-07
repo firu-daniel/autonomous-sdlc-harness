@@ -319,7 +319,6 @@ if [ "$target_mode" -eq 0 ]; then
   fi
 elif [ "$target_kind" != clone ]; then
   sparse_files+=("$target_gitdir/config.worktree")
-  f="$(hr_worktree_config_file "$main_repo")" && sparse_files+=("$f")
 fi
 for f in ${sparse_files[@]+"${sparse_files[@]}"}; do
   drop_inert_sparse "$f"
