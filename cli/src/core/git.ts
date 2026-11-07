@@ -309,7 +309,8 @@ export function probeRepoRoot(cwd: string): RepoProbe {
  * `git rev-parse --show-toplevel`.
  *
  * In a git worktree this is the **worktree's** root, not the main checkout's, which is the
- * whole point of resolving it per run: a worktree run must write into its own checkout.
+ * whole point of resolving it per run: a session in a linked worktree or a run copy must write
+ * into its own checkout.
  *
  * Throws a `HarnessError` when `cwd` is not inside a repository, or when `git` is not on PATH.
  * Both are adopter-fixable, so both carry the default exit code.
@@ -406,8 +407,9 @@ export function currentBranch(repoRoot: string): string | undefined {
  * main working copy even when there is only one, so nothing to report means the probe did not work
  * rather than that there are no checkouts. The one caller is `doctor`'s `worktrees` check, which
  * asks whether the one-live-copy rule (`hr_run_copy_live_var`) and sync-in can see which checkout
- * has a branch checked out — a legacy worktree run is listed there and nowhere else in git — and
- * reports a `warn` either way, so the distinction between the ways it can fail buys nothing.
+ * has a branch checked out — each refuses a branch any checkout git lists, the main checkout or a
+ * linked worktree a person made, has checked out — and reports a `warn` either way, so the
+ * distinction between the ways it can fail buys nothing.
  *
  * It lives here rather than in that check, for the reason in the module header: every
  * repository-state probe has one definition and one place a review checks that it stayed read-only.

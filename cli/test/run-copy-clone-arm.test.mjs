@@ -1,15 +1,17 @@
 /**
  * The watcher family's git on a clone, in `cli/templates/scripts/lib/harness-run-lib.sh`: the copy
- * check (`hr_run_copy_check_var`), the artifact commit (`hr_commit_placed`, `hr_commit_paths_var`), the
- * fast-forward (`hr_run_fast_forward_var`), the watchdog's reset (`hr_run_reset_var`) and the surface
- * check under them.
+ * check (`hr_run_copy_check_var`) and the target check under it (`hr_run_target_check_var`), the
+ * artifact commit (`hr_commit_placed`, `hr_commit_paths_var`), the fast-forward
+ * (`hr_run_fast_forward_var`), the watchdog's reset (`hr_run_reset_var`) and the surface check under
+ * them.
  *
- * **The rule these tests exist to enforce: on a clone, the watcher family's git runs under the same
- * pins as on a worktree — no hook, no fsmonitor, no submodule recursion, history as stored, and
+ * **The rule these tests exist to enforce: a run copy is the main checkout or a clone the run
+ * registry records, never a linked worktree; on a clone, the watcher family's git runs under the same
+ * pins as on the main checkout — no hook, no fsmonitor, no submodule recursion, history as stored, and
  * `refs/heads/<branch>` named — reads objects from the main checkout alone, syncs the run's ref in at
  * the copy check and heals a clone behind the main checkout there, moves the clone's ref before the
- * main checkout's for every ref it moves, and refuses a protected-path change exactly as on a
- * worktree.**
+ * main checkout's for every ref it moves, and refuses a protected-path change exactly as on the main
+ * checkout.**
  *
  * Each case builds, under the system temp directory, a main checkout carrying a hand-written
  * `harness.config.json` (`githooksDir` `githooks`) and its `autonomous_logs/` directory, a local bare
@@ -25,7 +27,8 @@
  *
  * RED ONCE — `hr_run_copy_git`'s `GIT_DIR` pointed at `$HR_RUN_COPY_GITDIR` when the kind is `clone`:
  * case (h) fails. The clone's swap removed from `hr_copy_ref_swap_var`'s clone arm: case (e) fails on
- * the clone's own ref.
+ * the clone's own ref. The `worktree` refusal dropped from `hr_run_target_check_var`: case (i) fails
+ * on the copy check's status.
  */
 
 import assert from 'node:assert/strict';
@@ -236,6 +239,28 @@ test('(b) The copy check refuses a branch the main checkout has checked out, and
     assert.equal(await f.mainTip(), commit);
     assert.equal(await f.cloneTip(), commit);
   });
+});
+
+/** `hr_run_target_check_var` alone. `$1` main, `$2` dir. */
+const TARGET = `hr_run_target_check_var "$1" "$2"; s=$?
+printf 'status=%s\\nkind=%s\\nrefusal=%s\\n' "$s" "$HR_TARGET_KIND" "$HR_TARGET_REFUSAL"`;
+
+test('(i) The copy check refuses a linked worktree; the target check accepts only the main checkout and a clone', async (t) => {
+  const f = await fixture(t);
+  const wt = join(f.root, 'linked');
+  await runGit(f.main, ['worktree', 'add', '--quiet', '-b', 'feat_wt', wt]);
+
+  const g = globals(await lib(f.root, CHECK, [f.main, wt]));
+  assert.equal(g.status, '1', JSON.stringify(g));
+  assert.match(g.refusal, /is a linked worktree of /);
+  assert.equal(g.kind, '');
+
+  const target = async (dir) => globals(await lib(f.root, TARGET, [f.main, dir]));
+  assert.deepEqual(await target(f.main), { status: '0', kind: 'main', refusal: '' });
+  assert.deepEqual(await target(f.clone), { status: '0', kind: 'clone', refusal: '' });
+  const refused = await target(wt);
+  assert.equal(refused.status, '1', JSON.stringify(refused));
+  assert.equal(refused.refusal, `'${wt}' is a linked worktree of ${f.main}, and a run copy is a clone the run registry records`);
 });
 
 // ---------------------------------------------------------------------------

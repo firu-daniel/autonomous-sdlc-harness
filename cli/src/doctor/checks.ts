@@ -1705,8 +1705,8 @@ const JQ_CHECK: Check = {
  *
  * A run copy is a clone and is not created through it. What reads it: the one-live-copy rule
  * (`hr_run_copy_live_var` in the generated `lib/harness-run-lib.sh`) and sync-in, which each refuse a
- * branch the main checkout or one of its worktrees has checked out; and a legacy worktree run, which
- * is listed there and nowhere else in git. The id stays `worktrees`.
+ * branch any checkout git lists — the main checkout or a linked worktree a person made — has checked
+ * out. The id stays `worktrees`.
  *
  * A `warn` rather than a `fail`: with no answer, both of those checks refuse rather than guess, so
  * a run that needs one stops at it, and nothing else in the flow reads this.
@@ -1719,11 +1719,11 @@ const WORKTREE_CHECK: Check = {
     const checkouts = worktreeList(ctx.repoRoot);
     if (checkouts === undefined) {
       return warn(
-        `git worktree list did not answer in ${ctx.repoRoot}, so the one-live-copy rule and sync-in cannot see which checkout has a branch checked out and each refuses rather than guess: creating a run copy, and a wrapper syncing a clone's branch in, stop there; a legacy worktree run is not listed either`,
+        `git worktree list did not answer in ${ctx.repoRoot}, so the one-live-copy rule and sync-in cannot see which checkout has a branch checked out and each refuses rather than guess: creating a run copy, and a wrapper syncing a clone's branch in, stop there`,
       );
     }
     return pass(
-      `git worktree list answers with ${checkouts.length} checkout${checkouts.length === 1 ? '' : 's'}, so the one-live-copy rule and sync-in can see which of them has a branch checked out, and any legacy worktree run is among them`,
+      `git worktree list answers with ${checkouts.length} checkout${checkouts.length === 1 ? '' : 's'}, so the one-live-copy rule and sync-in can see which of them has a branch checked out`,
     );
   },
 };

@@ -377,8 +377,7 @@
 # — is the one that holds the inbox, the logs, the registry and the kill switch,
 # so every run is tailable and stoppable from ONE place while executing in its own
 # sibling working copy — a clone (`copy_kind` `clone` in its registry record),
-# or, for a run started before clones, a legacy linked worktree, supported
-# until none is left — except under `job`, where the main checkout and the
+# never a linked worktree — except under `job`, where the main checkout and the
 # working copy are the same directory, the job's own checkout (see JOB MODE);
 # and except for a record with `execution: github-actions`, whose run executes
 # in a GitHub Actions job, whose local working copy is a mirror that
@@ -1190,8 +1189,7 @@ placeholder_start_recover "${1-}"
 
 # -----------------------------------------------------------------------------
 # Anchors. All central state lives in the MAIN checkout; a run executes in a
-# sibling clone, or a legacy linked worktree for a run started before clones —
-# under `job`, the main checkout and the working copy are
+# sibling clone — under `job`, the main checkout and the working copy are
 # the same directory, the job's own checkout, which the first working copy
 # `git worktree list` reports already yields (see JOB MODE in the header); for
 # a record with `execution: github-actions` the run executes in a GitHub Actions
@@ -1911,6 +1909,30 @@ record_is_remote() {
   [ "$(registry_get "$1" execution)" = "github-actions" ]
 }
 
+# record_has_no_copy_kind <branch> — outside job mode, true when <branch>'s
+# record carries no `copy_kind`: a run made as a linked worktree before the
+# clone layout, which this watcher no longer resumes. Logs the skip once per
+# watcher process per branch (NO_COPY_KIND_NOTED, newline-delimited); writes
+# nothing to the registry and prunes nothing.
+NO_COPY_KIND_NOTED=""
+record_has_no_copy_kind() {
+  local branch="$1"
+  [ "$JOB_MODE" != "1" ] || return 1
+  [ -z "$(registry_get "$branch" copy_kind)" ] || return 1
+  case "
+$NO_COPY_KIND_NOTED" in
+    *"
+$branch
+"*) ;;
+    *)
+      NO_COPY_KIND_NOTED="${NO_COPY_KIND_NOTED}${branch}
+"
+      log "skipping '$branch': its run-registry record carries no copy_kind — a run made as a linked worktree before the clone layout, which this watcher no longer resumes; finish or remove it by hand"
+      ;;
+  esac
+  return 0
+}
+
 # Self-healing pass: a record still marked `running` whose process is gone is
 # reconciled to `failed` and notified. Run ONCE per pass, before anything reads
 # the cap. It is deliberately NOT part of running_count(): that function is
@@ -2520,7 +2542,7 @@ run_profile_wrapper_prefixes() {
 
 # run_profile_entries <copy> <kind> — print one
 # `<absolute path><TAB><kind><TAB><deny|omit>` line per entry the per-run
-# profile adds for the run copy <copy> of <kind> (`clone` or `worktree`), kind
+# profile adds for the run copy <copy> of <kind> (`clone`, the only kind), kind
 # being `file`, `directory` or `entry` as writeProtection.ts → ProtectedKind
 # means them. The third column is `omit` only for a clone row marked `omit`
 # while HR_PLACEHOLDER_HOST is `1` (bubblewrap would plant a placeholder at that
@@ -2528,11 +2550,10 @@ run_profile_wrapper_prefixes() {
 # then carries neither the line's denyWrite entry nor its `Edit` rules. The
 # column is `deny` for every other line:
 #   * each `hr_run_protected_rel_paths` line re-rooted at <copy>, as `entry`;
-#   * on a clone, each RUN_PROFILE_COPY_GIT_PATHS row re-rooted at <copy>;
-#   * on a legacy worktree, <copy>/.git as `file`;
-#   * the `.git` pointer of every other linked worktree the main checkout
-#     lists, as `file`;
-#   * while HR_PLACEHOLDER_HOST is `1`, on either kind, for each
+#   * each RUN_PROFILE_COPY_GIT_PATHS row re-rooted at <copy>;
+#   * the `.git` pointer of every linked worktree the main checkout lists —
+#     checkouts a person made by hand — as `file`;
+#   * while HR_PLACEHOLDER_HOST is `1`, for each
 #     run_profile_glob_drops line <g> and its `omit` row <p>, each path <d>/<p>
 #     `hr_deny_glob_expand <g> <copy>` prints, as `entry`, when <d>/.git is a
 #     directory and not a symbolic link and <d>/<p>'s parent directory exists.
@@ -2553,12 +2574,12 @@ run_profile_wrapper_prefixes() {
 # (every row but `///`; the loop above covers the quotes), which the copy's
 # wrapper twins would otherwise carry. Exit 1 the protected set or the base's
 # denyWrite list is unreadable, 2 the worktree list failed, 3 a path was
-# refused, 4 <kind> is neither kind, 5 a base sibling-glob trio entry has a
+# refused, 4 <kind> is not `clone`, 5 a base sibling-glob trio entry has a
 # shape hr_deny_glob_expand cannot expand; nothing useful is printed on a
 # non-zero exit.
 run_profile_entries() {
   local copy="${1%/}" kind="${2-}" rel p k a list line first=1 out="" drops g sib="" d
-  case "$kind" in clone | worktree) ;; *) return 4 ;; esac
+  [ "$kind" = clone ] || return 4
   drops="$(run_profile_glob_drops)" || return 1
   list="$(hr_run_protected_rel_paths "$MAIN_REPO")" || return 1
   while IFS= read -r rel; do
@@ -2568,19 +2589,14 @@ run_profile_entries() {
   done <<EOF
 $list
 EOF
-  if [ "$kind" = clone ]; then
-    while IFS=' ' read -r p k a; do
-      [ -n "$p" ] || continue
-      [ "$a" = omit ] && [ "${HR_PLACEHOLDER_HOST:-0}" = 1 ] || a=deny
-      out="${out}${copy}/${p}	${k}	${a}
+  while IFS=' ' read -r p k a; do
+    [ -n "$p" ] || continue
+    [ "$a" = omit ] && [ "${HR_PLACEHOLDER_HOST:-0}" = 1 ] || a=deny
+    out="${out}${copy}/${p}	${k}	${a}
 "
-    done <<EOF
+  done <<EOF
 $RUN_PROFILE_COPY_GIT_PATHS
 EOF
-  else
-    out="${out}${copy}/.git	file	deny
-"
-  fi
   list="$(git -C "$MAIN_REPO" worktree list --porcelain 2>/dev/null)" || return 2
   while IFS= read -r line; do
     case "$line" in
@@ -2680,7 +2696,7 @@ run_profile_render() {
     1) RUN_PROFILE_REFUSAL="the run copy's protected paths could not be read from harness.config.json, or the denyWrite list from $SETTINGS_PROFILE"; return 1 ;;
     2) RUN_PROFILE_REFUSAL="git worktree list failed in $MAIN_REPO"; return 1 ;;
     3) RUN_PROFILE_REFUSAL="a per-run profile entry carries a quote, a '*' or a tab, or the run copy's path carries a '\$', a backquote, '&', ';', '|', '<', '>' or a newline"; return 1 ;;
-    4) RUN_PROFILE_REFUSAL="the run copy's kind '$kind' is neither clone nor worktree"; return 1 ;;
+    4) RUN_PROFILE_REFUSAL="the run copy's kind '$kind' is not clone"; return 1 ;;
     *) RUN_PROFILE_REFUSAL="a sibling-glob denyWrite entry of $SETTINGS_PROFILE for a run copy's .git/commondir, .git/config.worktree or .git/objects/info/http-alternates cannot be re-rooted: the watcher expands only an absolute entry with one '*' ending its segment"; return 1 ;;
   esac
   if ! hr_json_single_object "$SETTINGS_PROFILE"; then
@@ -3075,7 +3091,12 @@ spawn_engine() {
     settings_file="$SETTINGS_PROFILE"
   else
     copy_kind="$(registry_get "$branch" copy_kind)"
-    [ -n "$copy_kind" ] || copy_kind="worktree"
+    # A backstop: every caller skips such a record or has it refused by the
+    # run-copy check before reaching here.
+    if [ "$copy_kind" != "clone" ]; then
+      spawn_refuse "$branch" "its run-registry record carries no 'clone' copy_kind, so it is not launched"
+      return 1
+    fi
     # Read by run_profile_entries, and by the manifest write below.
     hr_placeholder_host_probe_var
     if [ "$HR_PLACEHOLDER_HOST" = "1" ]; then
@@ -3086,15 +3107,13 @@ spawn_engine() {
       # commondir, or a non-empty or non-regular config.worktree or
       # http-alternates, is refused here, before Claude Code's own startup git
       # reads the copy.
-      if [ "$copy_kind" = "clone" ]; then
-        if [ -z "$RUN_MAIN" ]; then
-          spawn_refuse "$branch" "$RUN_MAIN_REFUSAL"
-          return 1
-        fi
-        if ! hr_run_copy_check_var "$RUN_MAIN" "$worktree"; then
-          spawn_refuse "$branch" "the run copy failed its trust check before launch: $HR_RUN_REFUSAL"
-          return 1
-        fi
+      if [ -z "$RUN_MAIN" ]; then
+        spawn_refuse "$branch" "$RUN_MAIN_REFUSAL"
+        return 1
+      fi
+      if ! hr_run_copy_check_var "$RUN_MAIN" "$worktree"; then
+        spawn_refuse "$branch" "the run copy failed its trust check before launch: $HR_RUN_REFUSAL"
+        return 1
       fi
     fi
     if ! run_profile_render "$branch" "$worktree" "$copy_kind"; then
@@ -3638,9 +3657,8 @@ EOF
 # equal to `refs/remotes/origin/<branch>`, fetching that ref once when they
 # differ. Any non-zero answer — the push refused or skipped, origin naming no
 # URL, the fetch failing, or origin moved past the branch — is one watcher-log
-# WARNING; the push's and the fetch's own output go to the run's log. That
-# reading holds for a clone and a legacy worktree alike: on a clone the commit
-# has already moved the main checkout's ref with the clone's, so push-branch.sh's
+# WARNING; the push's and the fetch's own output go to the run's log. On a
+# clone the commit has already moved the main checkout's ref with the clone's, so push-branch.sh's
 # sync-in is a no-op, the push runs from the main checkout, and
 # classify_run_exit's sync after it finds the two equal.
 # In a job (JOB_MODE=1) it pushes nothing: the workflow's `Push the branch` step
@@ -4100,7 +4118,9 @@ begin_park_resume() {
 # for the cap and 11 when it deferred for the kill switch — the same three-way
 # vocabulary the inbox pass returns, so a caller that already distinguishes them
 # needs no second one. A remote record returns 1 and logs nothing: its answers
-# reach GitHub through the user's own command (REMOTE DISPATCH).
+# reach GitHub through the user's own command (REMOTE DISPATCH). A record with
+# no `copy_kind` returns 1, its status, files and channel untouched
+# (record_has_no_copy_kind).
 #
 # THE PARK IS THE UNIT. A partly answered park is not resumed, and a resume
 # consumes every answered pair at once: resuming on a subset would leave pairs
@@ -4115,6 +4135,7 @@ resume_parked_run() {
   local branch="$1"
   local worktree log_path
   record_is_remote "$branch" && return 1
+  record_has_no_copy_kind "$branch" && return 1
   worktree="$(registry_get "$branch" worktree)"
   log_path="$(registry_get "$branch" log_path)"
   [ -n "$worktree" ] || return 1
@@ -4278,11 +4299,12 @@ begin_pause_resume() {
 # Resume one paused run if a RESUME trigger has landed in its working copy.
 # Return codes, the missing-working-copy outcome and the kill-switch/cap ordering
 # are resume_parked_run's, for the same reasons. A remote record returns 1 and
-# logs nothing, as there.
+# logs nothing, and a record with no `copy_kind` is skipped, as there.
 resume_paused_run() {
   local branch="$1"
   local worktree log_path
   record_is_remote "$branch" && return 1
+  record_has_no_copy_kind "$branch" && return 1
   worktree="$(registry_get "$branch" worktree)"
   log_path="$(registry_get "$branch" log_path)"
   [ -n "$worktree" ] || return 1

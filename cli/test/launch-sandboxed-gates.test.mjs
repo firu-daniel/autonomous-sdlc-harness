@@ -14,7 +14,8 @@
  * leftover stands, and the worker and the `--wait` collector place their root past it (F15,
  * `hr_script_root`); case (t) shows a job-mode run reaching its verdict so. A clone
  * whose `run_profile` only the sandbox probe's `sp__render` wrote is launched (case (r)), and a
- * status-less control-clone record does not refuse job mode (case (s)). Case (c) hides `bwrap` by
+ * status-less control-clone record does not refuse job mode (case (s)). A linked worktree is refused at
+ * the target check, a recorded `run_profile` notwithstanding (case (u)). Case (c) hides `bwrap` by
  * shadowing its `PATH` directory, never by dropping it, because `bash` may share it (F12).
  *
  * Not covered, because no suite can show it: whether the detached supervisor outlives a sandboxed
@@ -746,6 +747,24 @@ test('(o) an unusable run_profile field is a refusal, bwrap never called past it
 
   assert.equal(existsSync(f.record), false);
   assert.deepEqual(f.gateRuns(), []);
+});
+
+test('(u) a linked worktree is refused at the target check, its recorded run_profile notwithstanding', async (t) => {
+  const f = await launcherFixture(t);
+  const wtBranch = 'feat_wt';
+  const wt = join(f.root, 'wt');
+  await runGit(f.dir, ['worktree', 'add', '--quiet', '-b', wtBranch, wt]);
+  const scratch = join(f.root, 'u-scratch');
+  await mkdir(scratch);
+  const profileFile = join(scratch, 'wt-profile.json');
+  await writeFile(profileFile, readFileSync(join(f.dir, BASE_PROFILE), 'utf8'));
+  await mkdir(join(f.dir, STATE_DIR, 'autonomous_logs'), { recursive: true });
+  await f.recordProfile(wtBranch, profileFile);
+
+  assertRefusal(await f.launch([wt, LABEL]), 'is a linked worktree');
+  assert.equal(existsSync(f.record), false);
+  assert.deepEqual(f.gateRuns(), []);
+  assert.equal(present(join(wt, STATE_DIR, 'test_run_logs', wtBranch)), false);
 });
 
 test('(l) the vector binds the target\'s .git read-only after every denyWrite entry, closing the omit trio', async (t) => {
