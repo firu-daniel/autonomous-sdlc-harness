@@ -1,0 +1,35 @@
+### Task 2 — Rewrite the profile template's `_README` lines on what the sandbox contains, leaves open and was measured
+
+**Goal:** The shipped unattended profile's `_README`, which an adopter reads when editing the profile, states in a few lines what the sandbox contains and what it does not, carries no claim stronger than `docs/sandbox-record.md`, and points at that record for the rest. Six template lines change; every entry of the profile stays as it is.
+
+**Where this layer stops.** This task edits the **template** `cli/templates/claude/settings.autonomous.json` only, and only strings inside its `_README` array. The generated write-protection line (`cli/src/generators/writeProtection.ts`) and the test that pins this task's text are **Task 3's**. The rendered notes-app example and this checkout's untracked profile follow after merge (the story index's **Manual setup required**).
+
+**The line openings below are a contract with Task 3**, whose test finds each line by them. Spell each exactly as given, in upper case as the array's other headings are:
+
+- unchanged opening: `THE SANDBOX IS STRICT:`
+- unchanged opening: `THE PROBE ROUTE GRANTS AN INTERPRETER AT ONE REMOVE`
+- new opening, replacing `WHETHER A HEADLESS \`-p\` SESSION …`: `A HEADLESS \`-p\` SESSION WAS COMPARED WITH AN INTERACTIVE ONE ON ONE CALL:`
+- new opening, replacing `TWO RESIDUALS, STATED RATHER THAN HIDDEN:`: `WHAT THE SANDBOX STILL LEAVES OPEN IS NUMBERED IN THE HARNESS'S DOCUMENT OF RECORD:`
+
+**What the record says** (`docs/sandbox-record.md`): §1 — inside, every Bash command and every process it starts; outside, with the user's full access, the file tools, hooks, local MCP servers, plugin monitors, LSP servers, the status line and `apiKeyHelper` (from Claude Code's documentation, not measured); the file tools held by the `Edit` and `Read` deny rules (W5, W6, S2, **pass**); HP1 **pass** — an interactive session matched a headless one on RT1's call (§4 has HP1 and HP1 (Linux)). §3 — `strictAllowlist` honoured from `--settings` under `dontAsk` and `acceptEdits` (N1, N2, **pass**), on Linux too, and §4's `network` leg passes on the runner. §4 `scratch` leg — SR2 **pass**. §6 — residual 2 (Linux glob `denyWrite` entries relied on against sandboxed commands on macOS only), residual 3 (the interactive-test phase unmeasured under the sandbox), residual 12 (on a bubblewrap host the run copy's trio is held by the launch check, the wrappers and `plugin/hooks/git-trust-file-guard.sh`). §3 and §4 — no WSL2 row; §7 — MC1 never run.
+
+### Targets
+
+- `cli/templates/claude/settings.autonomous.json` → `_README`, the six lines named in **Work**.
+
+**Work:**
+
+- [ ] **`THE SANDBOX IS STRICT:`** Keep every sentence. Append, in two or three sentences: what the sandbox does **not** contain — the file tools (`Edit`, `Write`, `Read` and the rest), hooks, local MCP servers, plugin monitors, LSP servers, the status line and `apiKeyHelper` run outside it with your full access, and the file tools are held by this file's `Edit` and `Read` deny rules instead; the excluded commands below run outside it by design; and *what each statement rests on, measured or documented, is docs/sandbox-record.md §1*.
+- [ ] **`THE PROBE ROUTE GRANTS AN INTERPRETER AT ONE REMOVE …`** Keep its opening clause, its trade sentence, its `pre-push` sentence and its removal sentence. Replace the clause *"it reaches everything the `deny` floor below, the `ask` list below and the plugin guard's own deny list withhold from a COMMAND STRING"* with: the file runs inside the sandbox like any Bash command, held to its write roots and network allowlist (a write outside the roots from a probe was refused, docs/sandbox-record.md §4, SR2), and inside those it reaches everything the `deny` floor, the `ask` list and the plugin guard's deny list withhold from a COMMAND STRING.
+- [ ] **`` `strictAllowlist` IS SET … ``** Keep it, and widen the measurement sentence to the record's: refused at once under both modes on macOS and on Linux (rows N1 and N2, and their Linux rows; docs/sandbox-record.md §3). Remove nothing else.
+- [ ] **The headless line.** Replace the whole string *"WHETHER A HEADLESS `-p` SESSION HONOURS ALL OF THIS EXACTLY AS AN INTERACTIVE ONE DOES IS UNRESOLVED: …"* with one opening `A HEADLESS \`-p\` SESSION WAS COMPARED WITH AN INTERACTIVE ONE ON ONE CALL:` that says an interactive session matched a headless one on RT1's call, on macOS and on Linux (row HP1, docs/sandbox-record.md §1), that nothing else was compared, and that an unattended run is a `-p` session. Say no more than that.
+- [ ] **`FOUR COMMANDS RUN OUTSIDE THE SANDBOX, EACH IN ONE SPELLING:`** append one sentence: *"Why each is excluded, and what was measured for each, is docs/sandbox-record.md §2."* **The residual line:** replace *"TWO RESIDUALS, STATED RATHER THAN HIDDEN: …"* with one string opening `WHAT THE SANDBOX STILL LEAVES OPEN IS NUMBERED IN THE HARNESS'S DOCUMENT OF RECORD:` that names, in a few sentences: on Linux a `denyWrite` entry carrying `*` is relied on against sandboxed commands on macOS only and against the file tools everywhere, its measurements as the old line gave them (AP2 2026-10-30, Claude Code 2.1.314, bubblewrap 0.8.0; GW1 2026-10-29, Claude Code 2.1.312) — residual 2; on a bubblewrap host the run copy's `.git/commondir`, `.git/config.worktree` and `.git/objects/info/http-alternates` are held by the watcher's launch check, the wrappers' clone check and a harness plugin guard hook rather than by an entry here — residual 12 (the guard is named the way Task 3's generated line names it, with no `plugin/` file name, so the two adjacent rendered `_README` lines treat the same guard alike; residual 12 names the file for the reader); the interactive-test phase is unmeasured under the sandbox, and on Linux its dev server and readiness poll cannot meet — residual 3; no result is recorded on WSL2; *each residual, and every measurement still owed, is docs/sandbox-record.md §6 and §7*.
+
+**Verification:**
+
+- `jq empty cli/templates/claude/settings.autonomous.json` exits 0.
+- `jq -r '._README[]' cli/templates/claude/settings.autonomous.json` lists the four openings above exactly as spelled, finds no line opening `WHETHER A HEADLESS` or `TWO RESIDUALS`, and every changed line carries `docs/sandbox-record.md`.
+- `git diff -- cli/templates/claude/settings.autonomous.json` touches lines inside the `_README` array only: no entry of `permissions` or `sandbox` changed.
+- No `{{…}}` token is added or removed: `git grep -c "{{" -- cli/templates/claude/settings.autonomous.json` prints the same count before and after the edit.
+- `jq -r '._README[]' cli/templates/claude/settings.autonomous.json | grep -F "WHAT THE SANDBOX STILL LEAVES OPEN" | grep -c -F "git-trust-file-guard"` prints `0`: the residual line names the guard as a harness plugin guard hook, as Task 3's generated line does.
+- Re-read each verdict written (HP1, N1, N2, SR2, AP2, GW1) against `docs/sandbox-record.md` and its row; none is stronger than the row.
