@@ -50,7 +50,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_sandbox_honesty_paragr
 8. [x] **Task 8** — Bring `docs/remote-execution.md`'s sandbox-series statuses and post-session containment bullets in line with the record _(layer: general)_ _(points: 15)_
 9. [x] **Task 9** — Add the paragraph on what the sandbox changes after `docs/outer-loop-verification.md` §3's measurement _(layer: general)_ _(points: 8)_
 10. [x] **Task 10** — Add the sandbox to `README.md` → `## Scope and limits`, and bring `ROADMAP.md`, `llms.txt` and the README's index line in line _(layer: general)_ _(points: 12)_
-11. [ ] **Task 11** — Mark roadmap items 22, 23 and 25 shipped, close their `docs/sandbox-record.md` §7 bullets, and correct row 20's install-step status _(layer: general)_ _(points: 12)_
+11. [x] **Task 11** — Mark roadmap items 22, 23 and 25 shipped, close their `docs/sandbox-record.md` §7 bullets, and correct row 20's install-step status _(layer: general)_ _(points: 12)_
 
 ## Scope register
 
