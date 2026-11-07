@@ -342,8 +342,8 @@
 # `status.json` sends one `failed` naming the run URL and dispatches nothing,
 # and `Open the pull request and report` runs `deliver`, which sends nothing.
 # The step ran in Gate 12 round 13 (2026-11-05), where the stock profile
-# defeated it; the fixed step's runner result is owed to the Gate 12 redo
-# (docs/sandbox-verification.md, section 9).
+# defeated it; the fixed step passed in rounds 14-16 and its failing arm was
+# taken in round 17 (docs/sandbox-verification.md, section 9).
 #
 # WHY retention-days IS SET. The `harness-state` bundle is the only remote copy
 # of a run's clarifications, uncommitted planning drafts and carried counts; a
