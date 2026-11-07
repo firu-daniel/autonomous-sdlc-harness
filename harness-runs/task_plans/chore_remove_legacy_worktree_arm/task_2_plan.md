@@ -26,3 +26,4 @@
 - `watcher-run-profile.test.mjs` passes — the test file this task edits — including the two skip cases and the other-worktree pointer case.
 - `grep -n -E 'copy_kind="worktree"|clone \| worktree' cli/templates/scripts/autonomous-watcher.sh` prints nothing.
 - `cli/test/run-copy-migration.test.mjs` no longer exists.
+- **Deviations from plan:** The "second pass in the same process adds no second line" check cannot read the log between two passes of one `runBash`, so each skip case asserts one line after the first `tick` (its own process), then runs a second process doing `tick; wait; tick; wait` and asserts the count is exactly 2 — one line for that process's two passes. `docs/watcher.md` still cites the deleted `cli/test/run-copy-migration.test.mjs` in its legacy-worktree-run paragraph; that file is outside this task's targets and the `cli` layer (Task 5's legacy docs).
