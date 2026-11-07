@@ -1380,7 +1380,8 @@ RUN_CAP_CLAMP_LOGGED=0
 # effective_max_parallel_runs — print 1 on a placeholder host when
 # MAX_PARALLEL_RUNS is above 1, else MAX_PARALLEL_RUNS unchanged: concurrent
 # runs of one repository share the main checkout's sandbox placeholders
-# (docs/cli.md §6). Job mode runs one run and is never clamped.
+# (docs/sandbox-record.md residual 12). Job mode runs one run and is never
+# clamped.
 effective_max_parallel_runs() {
   if [ "$JOB_MODE" != "1" ]; then
     case "$MAX_PARALLEL_RUNS" in
