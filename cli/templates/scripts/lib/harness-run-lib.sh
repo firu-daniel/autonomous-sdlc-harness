@@ -102,7 +102,8 @@
 # `cleanup-merged-worktrees.sh` and `setup-worktree.sh --target` — also pass the
 # main checkout for every configured value and keep git off the target's
 # records. `setup-worktree.sh --target <dir>` places its own checkout with
-# `hr_wrapper_main_of`, checks `<dir>` with `hr_wrapper_target_check_var`, and
+# `hr_wrapper_main_of`, checks `<dir>` with `hr_run_target_check_var`, which
+# refuses a linked worktree, and
 # reads every configured value (`appDir`, `qa.credentialsPath`, `githooksDir`,
 # `commands.*`) from the main checkout. They skip
 # `hr_worktree_config_check_var` because no runner lets git read the record's
@@ -4099,7 +4100,7 @@ EOF
 # hr_run_worktree_diff_var <tip> <path>... — set `HR_RUN_WT_DIFF` to the paths
 # under <path>... where the copy's working tree differs from <tip>, plus every
 # file there <tip> does not hold, ignored ones included. Judged through a fresh
-# temporary index read from <tip>, never the record's `index`: a sandboxed
+# temporary index read from <tip>, never the copy's own `.git/index`: a sandboxed
 # session can write that index's skip-worktree / assume-unchanged bits and stat
 # data, which make git skip a file. 0 compared (`HR_RUN_WT_DIFF` may be empty);
 # 1 the temporary index or a git call failed.
@@ -4140,7 +4141,7 @@ hr_run_worktree_diff_var() {
 #   copy   `tree`, plus the copy's working tree on the set against <tip>
 #          through a fresh index, untracked and ignored files included;
 #   reset  the same as `copy`: a reset cannot be relied on to overwrite a
-#          file the record's index marks skip-worktree.
+#          file the copy's own index marks skip-worktree.
 hr_run_surface_check_var() {
   local tip="${1-}" mode="${2-}" set base out status p names=""
   local -a paths
