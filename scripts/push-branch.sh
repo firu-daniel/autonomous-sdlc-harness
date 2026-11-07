@@ -239,10 +239,12 @@
 # can write.
 #
 # Usage: push-branch.sh [<repo-dir>]
-#        bash <main checkout>/<scripts_dir>/push-branch.sh <worktree>
-#   <repo-dir>  worktree/repository to operate in (default: $PWD)
-#   The second form, the main checkout's copy aimed at a worktree, is the one
-#   the permission profile runs unsandboxed.
+#        bash <main checkout>/<scripts_dir>/push-branch.sh <run copy>
+#   <repo-dir>  the main checkout, a run copy (a clone), or a linked worktree
+#               made by hand, to operate in (default: $PWD)
+#   The second form, the main checkout's copy aimed at a run copy or a
+#   hand-made linked worktree, is the one the permission profile runs
+#   unsandboxed.
 #
 # REPRO — reproduce any decision by hand, against a throwaway fixture:
 #
