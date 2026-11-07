@@ -26,3 +26,9 @@
 - `git grep -c -F "sandbox-record.md" -- docs/watcher.md` is not lower than before the edit: no sandbox3c pointer was removed.
 - Re-read each verdict written against residual 12 and its rows; none is stronger.
 - Re-run the story index's derivation entry C over `docs/watcher.md` and confirm every reached hit is a register row.
+
+**Deviations from plan:**
+
+- The reachability paragraph cites the record as `` `docs/sandbox-record.md` §4, the `scratch` leg, SR2 `` rather than the plan's link form `` [`sandbox-record.md`](sandbox-record.md) §4 ``: every other record citation in `docs/watcher.md` uses the backtick path form, and the story index's citation-forms decision admits either. The new bold lead reads *"That is a bound on command strings; what bounds a probe is the sandbox."*, naming the sandbox as the verification bullet asks.
+- Derivation entry C re-run over `docs/watcher.md` (`git grep -n -I -i -E "sandbox|containment|not yet measured|owed" -- docs/watcher.md`): the hits at register rows 44–49 and 70 are rows. Three hits are not rows and may be read as clause (a) candidates; left unchanged as true as written and outside this task's targets, for the orchestrator to register or dismiss: the outer-loop table's `commit-on-branch.sh` row (*"the main checkout's copy is a `sandbox.excludedCommands` entry, so it runs outside the sandbox (`docs/cli.md` §6)"*, matching record §2), the `launch-sandboxed-gates.sh` row (a pointer to residual 13), and the `**Not read.**` paragraph's *"an assignment prefix on a call that runs outside the sandbox could set it"*. The remaining non-row hits are host prerequisites, `doctor`, the main-checkout anchor (AN5–AN6) or non-containment uses of *owed*, which the decision rule excludes.
+- Verification results: the Finding 6 / `AP1–AP7 … owed` / old bound-sentence grep returns nothing; the `WHAT THIS DOES NOT CONTAIN` citation is still found; the `sandbox-record.md` count rose from 9 to 10.

@@ -46,7 +46,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_sandbox_honesty_paragr
 4. [x] **Task 4** — Rewrite the hooks README's containment sentences and the whiteboard's sandbox row, containment list and two other sandbox claims _(layer: plugin)_ _(points: 18)_
 5. [x] **Task 5** — Carry Task 1's edits into the self-adopted `scripts/scratch-run.sh`, `scripts/commit-on-branch.sh` and `harness-runs/scratch/README.md` _(layer: general)_ _(points: 5)_
 6. [x] **Task 6** — Bring `docs/cli.md` §6's containment sentences in line with the record, roadmap items 22, 23 and 25 included _(layer: general)_ _(points: 20)_
-7. [ ] **Task 7** — Bring `docs/watcher.md`'s containment sentences in line with the record _(layer: general)_ _(points: 10)_
+7. [x] **Task 7** — Bring `docs/watcher.md`'s containment sentences in line with the record _(layer: general)_ _(points: 10)_
 8. [ ] **Task 8** — Bring `docs/remote-execution.md`'s sandbox-series statuses and post-session containment bullets in line with the record _(layer: general)_ _(points: 15)_
 9. [ ] **Task 9** — Add the paragraph on what the sandbox changes after `docs/outer-loop-verification.md` §3's measurement _(layer: general)_ _(points: 8)_
 10. [ ] **Task 10** — Add the sandbox to `README.md` → `## Scope and limits`, and bring `ROADMAP.md`, `llms.txt` and the README's index line in line _(layer: general)_ _(points: 12)_
