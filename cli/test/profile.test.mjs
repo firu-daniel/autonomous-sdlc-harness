@@ -9,7 +9,8 @@
  * file glob listed for the checkout but not for its sibling worktrees, a wrapper rule spelled under a
  * glob the guard matches literally, and a browser tool named in
  * `deny`, which is evaluated before any allow and would revoke the interactive-test agent's own
- * grant. A later edit to the shipped template cannot silently reintroduce any of them without failing here.
+ * grant, and a `_README` that states a sandbox result the document of record does not, or fails to
+ * point at it. A later edit to the shipped template cannot silently reintroduce any of them without failing here.
  *
  * These run against the **compiled** CLI at `dist/cli.js`, so `npm run build` precedes `npm test`.
  *
@@ -1253,6 +1254,38 @@ test('every path that runs outside the sandbox is write-protected on both sides'
     `the write-protection _README line does not state the launch check's accepted shape: ${protectionLine}`,
   );
   assertEntriesRunnable(profile);
+});
+
+test('the _README says what the sandbox leaves outside and points at its document of record', async (t) => {
+  const { profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ scriptsDir: SCRIPTS_DIR }) });
+  const lines = profile._README;
+  const startingWith = (prefix) => lines.filter((line) => line.startsWith(prefix));
+  const exactlyOne = (prefix) => {
+    const found = startingWith(prefix);
+    assert.equal(found.length, 1, `expected one _README line starting ${prefix}, found: ${JSON.stringify(found)}`);
+    return found[0];
+  };
+
+  const strict = exactlyOne('THE SANDBOX IS STRICT:');
+  assert.ok(strict.includes('apiKeyHelper'), `the strict-sandbox _README line does not name apiKeyHelper: ${strict}`);
+  assert.ok(strict.includes('docs/sandbox-record.md'), `the strict-sandbox _README line does not cite the record: ${strict}`);
+
+  const probe = exactlyOne('THE PROBE ROUTE GRANTS AN INTERPRETER AT ONE REMOVE');
+  assert.ok(probe.includes('SR2'), `the probe-route _README line does not cite SR2: ${probe}`);
+
+  const headless = exactlyOne('A HEADLESS `-p` SESSION WAS COMPARED WITH AN INTERACTIVE ONE ON ONE CALL:');
+  assert.ok(headless.includes('HP1'), `the headless _README line does not cite HP1: ${headless}`);
+  for (const line of startingWith('WHETHER A HEADLESS')) assert.fail(`the _README still carries the old headless line: ${line}`);
+
+  const residuals = exactlyOne("WHAT THE SANDBOX STILL LEAVES OPEN IS NUMBERED IN THE HARNESS'S DOCUMENT OF RECORD:");
+  assert.ok(residuals.includes('docs/sandbox-record.md'), `the residuals _README line does not cite the record: ${residuals}`);
+  for (const line of startingWith('TWO RESIDUALS')) assert.fail(`the _README still carries the old residuals line: ${line}`);
+
+  const protection = exactlyOne('WHAT RUNS OUTSIDE THE SANDBOX CANNOT BE WRITTEN');
+  assert.ok(
+    protection.includes('residual 12') && protection.includes('docs/sandbox-record.md'),
+    `the write-protection _README line does not cite the record's residual 12: ${protection}`,
+  );
 });
 
 test('copySurfacePaths leaves out every path inside a run copy\'s .git', () => {

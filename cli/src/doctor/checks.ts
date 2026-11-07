@@ -5120,7 +5120,7 @@ const PROFILE_MAIN_ANCHOR_CHECK: Check = {
  * What a `runsUnsandboxed` script loses when its excluded entry is missing or inert, worded to hold
  * for every such row. A git wrapper — commit, push or refresh — cannot move the main checkout's
  * branch from a clone, because the profile write-denies the main checkout's whole `.git`
- * (`docs/cli.md` §6; `docs/sandbox-verification.md` CL4, and CS2, owed), and a linked worktree's git
+ * (`docs/cli.md` §6; `docs/sandbox-verification.md` CL4, and CS2, pass), and a linked worktree's git
  * record and an SSH remote are out of reach on macOS (`docs/sandbox-verification.md` F1, F3). The
  * gate launcher cannot start its own `bwrap` sandbox on a bubblewrap host, so Run gates refuse and an
  * unattended run parks (`docs/sandbox-verification.md` F10).
