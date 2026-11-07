@@ -30,7 +30,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_remove_legacy_worktree
 4. [x] **Task 4** — Sweep: remove the `git worktree remove` arm and skip a record with no `copy_kind` _(layer: cli)_ _(points: 15)_
 5. [x] **Task 11** — Gate launcher: refuse a linked-worktree target _(layer: cli)_ _(points: 12)_
 6. [x] **Task 12** — `setup-worktree.sh --target`: refuse a linked-worktree target _(layer: cli)_ _(points: 15)_
-7. [ ] **Task 5** — Reframe the wrapper and outer-loop script headers: a linked worktree is a hand-made checkout, never a run copy _(layer: cli)_ _(points: 10)_
+7. [x] **Task 5** — Reframe the wrapper and outer-loop script headers: a linked worktree is a hand-made checkout, never a run copy _(layer: cli)_ _(points: 10)_
 8. [ ] **Task 6** — Reword the legacy-worktree-run prose in `cli/src` comments and the autonomous profile template _(layer: cli)_ _(points: 10)_
 9. [ ] **Task 7** — Drop the legacy-worktree-run clause from the three autonomous commit instructions _(layer: plugin)_ _(points: 8)_
 10. [ ] **Task 8** — `docs/watcher.md` and `docs/cli.md` §6: remove the migration section and the legacy-run sentences _(layer: general)_ _(points: 15)_

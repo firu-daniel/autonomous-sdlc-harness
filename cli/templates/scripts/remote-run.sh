@@ -169,8 +169,9 @@
 # verb because a local round's file exists only on the caller's machine, so no
 # later collection could pick it up. The bundle it reads is
 # downloaded to `sync`'s directory, the one write a refusal makes. The copy: the main
-# checkout's remote record's mirror when its `worktree` (a clone or a legacy
-# linked worktree) exists and is on the branch, never removed; otherwise
+# checkout's remote record's mirror when its `worktree` (a clone) exists and
+# is on the branch, never removed — a mirror that is a linked worktree is not
+# used, since `hr_run_copy_check_var` refuses one; otherwise
 # `create-worktree.sh --existing --no-bootstrap`, a clone at `hr_worktree_dir`,
 # removed on every exit with the local branch it DWIM-created, the registry
 # record it wrote and the registry directory it created, each only when absent

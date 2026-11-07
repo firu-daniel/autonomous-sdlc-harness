@@ -167,13 +167,15 @@
 # afterwards, for the working-tree calls only.
 #
 # Usage: refresh-branch.sh [--local] [<repo-dir>]
-#        bash <main checkout>/<scripts_dir>/refresh-branch.sh <worktree>
+#        bash <main checkout>/<scripts_dir>/refresh-branch.sh <run copy>
 #   --local     merge the local `<base>` branch instead of `origin/<base>`, and
 #               skip the fetch
-#   <repo-dir>  the checkout to refresh is the one holding it. Default: THIS
-#               FILE's own location, never $PWD, because the caller runs it from
-#               wherever it happens to be. The second form, the main checkout's
-#               copy aimed at a worktree, is the one the permission profile runs
+#   <repo-dir>  the checkout to refresh — the main checkout, a run copy (a
+#               clone), or a linked worktree made by hand — is the one holding
+#               it. Default: THIS FILE's own location, never $PWD, because the
+#               caller runs it from wherever it happens to be. The second form,
+#               the main checkout's copy aimed at a run copy or a hand-made
+#               linked worktree, is the one the permission profile runs
 #               unsandboxed.
 #
 # Exit map a caller can switch on:

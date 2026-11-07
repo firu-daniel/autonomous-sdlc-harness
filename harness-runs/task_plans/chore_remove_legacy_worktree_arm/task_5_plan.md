@@ -26,3 +26,8 @@
 - `git diff -- cli/templates/scripts/commit-on-branch.sh cli/templates/scripts/push-branch.sh cli/templates/scripts/refresh-branch.sh cli/templates/scripts/remote-run.sh cli/templates/scripts/restart-watcher.sh` changes only lines that start with `#` (after leading spaces).
 - `grep -n -i -E 'legacy (linked )?worktree|worktree run' <each target>` prints nothing.
 - Each changed script still parses: `bash -n <file>` exits 0 for each.
+
+**Deviations from plan:**
+
+- Verification bullet 3 (`bash -n <file>` for each target) was not executed: each `bash -n /…/cli/templates/scripts/<file>.sh` call was refused by the tool layer ("Permission to use Bash has been denied … don't ask mode"). The claim rests instead on bullet 1, executed: `git diff -U0` over the five targets shows every removed and added line begins with `#`, so no executable line changed and parsing cannot have changed. The configured `bash scripts/typecheck.sh`, run from the checkout root, also printed `check-shell-parse: 122 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed` and `PASS: typecheck`. That shell-parse pass is what the parse claim rests on.
+- `push-branch.sh` and `refresh-branch.sh` named no linked worktree as a run copy, so the only edits there are to Usage: the second form's argument now reads `<run copy>`, `<repo-dir>` lists the main checkout, a run copy (a clone), or a linked worktree made by hand, and the "aimed at a worktree" sentence names a run copy or a hand-made linked worktree, the same wording used in `commit-on-branch.sh`'s Usage. `commit-on-branch.sh`'s second-form sentence got the same rewording. The target-check and `config.worktree` paragraphs had no "run" qualifying the worktree and were left alone.
