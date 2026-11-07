@@ -21,7 +21,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 2** — Stop `plugin/hooks/README.md` crediting the `scratch` leg with the network-allowlist claim _(layer: plugin)_
+1. [x] **Finding 2** — Stop `plugin/hooks/README.md` crediting the `scratch` leg with the network-allowlist claim _(layer: plugin)_
 2. [ ] **Finding 1** — Correct the `docs/remote-execution.md` lead that still calls the real-job check "not yet run" _(layer: general)_
 
 ---
