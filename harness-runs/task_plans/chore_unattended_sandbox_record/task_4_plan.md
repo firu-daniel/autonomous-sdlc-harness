@@ -38,3 +38,8 @@ Every cell is read off `docs/sandbox-verification.md`. A leg that was not run on
 - For every §4 and §5 row, the verdict and date match the cited rows in `docs/sandbox-verification.md`. Spot-check every row whose verdict is not `pass`, and every row of §9.
 - `grep -n "^## 5\. " docs/sandbox-record.md` prints `## 5. The Linux runner's PID namespace and no-new-privileges` exactly.
 - No §4 or §5 cell carries an observed quote, and none fills one platform's cell from another platform's row.
+  - **Deviations from plan:**
+    - `job-layout` is job-mode only, so its macOS row cites CS6 from the macOS job-mode runs (2026-11-02, 2.1.316). The macOS job-mode results of the other job-mode legs stay in §9's *macOS baseline* column, and §4 says so, rather than adding a fifth platform the plan does not list.
+    - For a row whose verdict cell names an earlier run than the latest run that printed it, the Date and Claude Code cells take the latest run that printed it. That covers N5 and W6, which §0 *The probe's third run* re-passed, and the §8 rows that §8's run-3 stamp covers. Each mismatch with a verdict cell is a §7 bullet.
+    - The runner image in §5 is read from §9 → *Taken*, because §9's `Stamp.` paragraph is still the fill-in template. That mismatch is a §7 bullet.
+    - The *"none missing"* verification was taken by reading `development.md` → **Gate 15**'s two leg tables and Gate 12's full-run leg against §4's rows. Verdicts and dates were read with throwaway extractors under `harness-runs/scratch/`, run through `scratch-run.sh`.
