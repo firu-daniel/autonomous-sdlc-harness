@@ -5745,8 +5745,8 @@ ui_test_plan_reviews/$branch"
 #
 # Residual, not closed here: the link test and the rename are separate
 # operations, so a process the session started and left running could put a
-# link at <out_json> between them — the gap `docs/cli.md` §6 residual 1,
-# item 5, first bullet, states for `save`.
+# link at <out_json> between them — the gap
+# `docs/sandbox-record.md` residual 1, item 5, first bullet, states for `save`.
 hr_remote_status_write() {
   local registry="${1-}" branch="${2-}" out="${3-}" decision="${4-}" detail="${5-}"
   local status engine reason chain run_id run_url tmp

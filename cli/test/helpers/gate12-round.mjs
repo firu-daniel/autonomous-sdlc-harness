@@ -271,10 +271,13 @@ const stubPath = (fixture) => `${fixture.binDir}${delimiter}${process.env.PATH ?
  *
  * @param {Gate12Fixture} fixture
  * @param {readonly string[]} args
- * @param {{ env?: Record<string, string>, script?: string }} [options] `script` runs a copy instead of {@link ROUND_SCRIPT}
+ * @param {{ env?: Record<string, string>, script?: string, timeoutMs?: number }} [options] `script` runs a
+ *   copy instead of {@link ROUND_SCRIPT}; `timeoutMs` goes to `runBash`'s process-group bound, and
+ *   without it the call is unbounded.
  */
-export function runRound(fixture, args, { env = {}, script = ROUND_SCRIPT } = {}) {
-  return runBash(fixture.dir, [script, ...args], { PATH: stubPath(fixture), ...env });
+export function runRound(fixture, args, { env = {}, script = ROUND_SCRIPT, timeoutMs } = {}) {
+  const bound = timeoutMs === undefined ? undefined : { timeoutMs };
+  return runBash(fixture.dir, [script, ...args], { PATH: stubPath(fixture), ...env }, bound);
 }
 
 /**

@@ -21,7 +21,7 @@
  * shim first on `PATH`, the technique `cli/test/wrapper-target-check.test.mjs` uses: it moves the
  * clone's ref just before the operation's first `update-ref`, which on a clone is the clone's own
  * swap, so the operation refuses with nothing moved. A substituted object is planted by the method
- * `docs/cli.md` §6 residual 1, item 5 describes. Sync in isolation is
+ * `docs/sandbox-record.md` residual 1, item 5 describes. Sync in isolation is
  * `cli/test/clone-sync.test.mjs`'s, the clone-first order under every race
  * `cli/test/clone-ref-order.test.mjs`'s, and the wrappers on a clone are another suite's.
  *

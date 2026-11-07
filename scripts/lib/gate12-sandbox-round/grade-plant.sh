@@ -296,7 +296,7 @@ g12_js4_arm() {
     [ -z "$lines" ] || found="${found}$step:"$'\n'"$lines"$'\n'
   done <<<"$G12_JS4_STEPS"
 
-  # docs/cli.md §6, residual 1: Bootstrap the checkout's install and build read the branch's files.
+  # docs/sandbox-record.md residual 1: Bootstrap the checkout's install and build read the branch's files.
   if g12_step_ran "$G12_ARM_ID" "$G12_STEP_BOOTSTRAP"; then
     g12_arm_log "$G12_STEP_BOOTSTRAP" || return 0
     lines="$(printf '%s\n' "$G12_ARM_LOG" | grep -F -- "$G12_JS4_MARKER")"
