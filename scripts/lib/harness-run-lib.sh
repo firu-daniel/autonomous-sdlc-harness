@@ -4320,6 +4320,10 @@ hr_run_reset_var() {
 #   symbolic link   `120000`, its link text hashed;
 #   regular file    <file_mode>, its content hashed;
 #   anything else   (a directory, a submodule, a special file) 1.
+# A path that passes these checks but whose hash cannot be written to the main
+# repository's object store returns 2, so a caller can tell a refused path from
+# a failed write (a sandboxed copy of a wrapper, which cannot write
+# `<main>/.git/objects`, ends here).
 # Both hashes are `hash-object -w --no-filters` (`hr_commit_paths_var` states
 # why). A parent swapped for a symbolic link between this walk and the hash is
 # the same race `hr_commit_placed` already carried.
@@ -4352,7 +4356,7 @@ hr_run_blob_var() {
     link=${link%?}
     link=${link%$'\n'}
     HR_RUN_BLOB=$(printf '%s' "$link" | hr_run_main_git hash-object -w --no-filters --stdin) || HR_RUN_BLOB=""
-    [ -n "$HR_RUN_BLOB" ] || return 1
+    [ -n "$HR_RUN_BLOB" ] || return 2
     HR_RUN_BLOB_MODE=120000
     return 0
   fi
@@ -4362,7 +4366,7 @@ hr_run_blob_var() {
   fi
   [ -f "$leaf" ] || return 1
   HR_RUN_BLOB=$(hr_run_main_git hash-object -w --no-filters -- "$leaf") || HR_RUN_BLOB=""
-  [ -n "$HR_RUN_BLOB" ] || return 1
+  [ -n "$HR_RUN_BLOB" ] || return 2
   if [ "$file_mode" = auto ] && [ -x "$leaf" ]; then
     HR_RUN_BLOB_MODE=100755
   else
@@ -4409,7 +4413,7 @@ hr_run_blob_var() {
 hr_commit_paths_var() {
   local main="${1-}" top="${2-}" gitdir="${3-}" branch="${4-}" tip="${5-}"
   local file_mode="${6-}" sync="${7-}" reflog="${8-}"
-  local tmpdir records tip_c tip_tree null tree commit rel saw_sep=0 n swap
+  local tmpdir records tip_c tip_tree null tree commit rel saw_sep=0 n swap blob_rc
   local -a rels msg_args
   rels=()
   msg_args=()
@@ -4488,9 +4492,15 @@ hr_commit_paths_var() {
   while [ "$n" -lt "${#rels[@]}" ]; do
     rel=${rels[$n]}
     n=$((n + 1))
-    if ! hr_run_blob_var "$rel" "$file_mode"; then
+    blob_rc=0
+    hr_run_blob_var "$rel" "$file_mode" || blob_rc=$?
+    if [ "$blob_rc" -ne 0 ]; then
       rm -rf "$tmpdir"
-      HR_COMMIT_REFUSAL="'$rel' is not a regular file or a symbolic link reached without a symbolic link in '$top'"
+      if [ "$blob_rc" -eq 2 ]; then
+        HR_COMMIT_REFUSAL="cannot write the content of '$rel' to the object store of '$HR_RUN_MAIN' (git hash-object -w failed; a sandboxed command cannot write it)"
+      else
+        HR_COMMIT_REFUSAL="'$rel' is not a regular file or a symbolic link reached without a symbolic link in '$top'"
+      fi
       return 1
     fi
     if [ "$HR_RUN_BLOB_MODE" = 0 ]; then
