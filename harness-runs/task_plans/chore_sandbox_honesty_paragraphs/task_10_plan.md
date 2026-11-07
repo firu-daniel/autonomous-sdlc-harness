@@ -26,3 +26,7 @@
 - `README.md` → `## Scope and limits` gains one bullet and loses none: `git diff -- README.md` shows only additions in that section plus the one changed index line.
 - `git diff -- ROADMAP.md` touches no line under `## Index`, and the *OS-level sandbox in the autonomous profile* row's last cell reads `In progress`.
 - Re-read every claim against `docs/sandbox-record.md` §1, §4, §6 and §7; none is stronger.
+
+**Deviations from plan:**
+
+- *Threat model* row: the plan's outside-the-sandbox list (file tools, hooks, MCP servers, the four excluded scripts) also names the bootstrap's configured install and build commands (`commands.depInstall`, `commands.build`), because `docs/sandbox-record.md` §2 and residual 1 item 1 record them as running unsandboxed. Without them, "builds run inside the sandbox" would be a stronger claim than the record makes. The old *"note the sandbox covers shell commands, not MCP servers or hooks"* clause is folded into that list, and the row cites §1 and §2.
