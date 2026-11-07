@@ -44,7 +44,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_sandbox_honesty_paragr
 2. [x] **Task 2** — Rewrite the profile template's `_README` lines on what the sandbox contains, leaves open and was measured _(layer: cli)_ _(points: 15)_
 3. [x] **Task 3** — Point the generated write-protection `_README` line at the trio guard and the record, pin the new `_README` text in `profile.test.mjs`, and cite CS2's verdict in `checks.ts`'s doc comment _(layer: cli)_ _(points: 18)_
 4. [x] **Task 4** — Rewrite the hooks README's containment sentences and the whiteboard's sandbox row, containment list and two other sandbox claims _(layer: plugin)_ _(points: 18)_
-5. [ ] **Task 5** — Carry Task 1's edits into the self-adopted `scripts/scratch-run.sh`, `scripts/commit-on-branch.sh` and `harness-runs/scratch/README.md` _(layer: general)_ _(points: 5)_
+5. [x] **Task 5** — Carry Task 1's edits into the self-adopted `scripts/scratch-run.sh`, `scripts/commit-on-branch.sh` and `harness-runs/scratch/README.md` _(layer: general)_ _(points: 5)_
 6. [ ] **Task 6** — Bring `docs/cli.md` §6's containment sentences in line with the record, roadmap items 22, 23 and 25 included _(layer: general)_ _(points: 20)_
 7. [ ] **Task 7** — Bring `docs/watcher.md`'s containment sentences in line with the record _(layer: general)_ _(points: 10)_
 8. [ ] **Task 8** — Bring `docs/remote-execution.md`'s sandbox-series statuses and post-session containment bullets in line with the record _(layer: general)_ _(points: 15)_

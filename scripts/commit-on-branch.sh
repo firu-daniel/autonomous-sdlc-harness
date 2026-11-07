@@ -32,7 +32,7 @@
 # permission profile write-denies the main checkout's whole `.git`, so a
 # sandboxed commit in a clone lands on the clone's own ref alone
 # (docs/sandbox-verification.md -> CL4; the whole-`.git` deny itself is row
-# CS2, owed). A hand-made linked worktree is closed one step earlier: a sandboxed git
+# CS2, pass). A hand-made linked worktree is closed one step earlier: a sandboxed git
 # cannot write a linked worktree's record, `<main>/.git/worktrees/<name>/`:
 # `git add` and `git commit` there fail with `Operation not permitted` on
 # `index.lock` (docs/sandbox-verification.md -> G1, G2 and F1, measured on
