@@ -215,10 +215,12 @@
 # which stays sandboxed — and an operator may rely on it for the SSH push this
 # script exists to make outside the sandbox. Measured on Claude Code 2.1.299,
 # macOS, headless (docs/sandbox-verification.md -> P1a): a sandboxed command carries
-# `GIT_SSH_COMMAND=ssh ... -o ProxyCommand='nc -X 5 -x localhost:<port> %h %p'`,
-# and an excluded call inherits none of the sandbox's proxy variables. A call
-# that does carry that value is running sandboxed, where SSH has no route but
-# that proxy, so dropping it would only stop the push. Residual: the rest of that
+# a proxy `GIT_SSH_COMMAND=ssh ... -o ProxyCommand=...` (since 2.1.319 one that
+# evaluates `SRT_SSH_PROXY_COMMAND`, before it a literal `nc -X 5 -x
+# localhost:<port>`), and an excluded call inherits none of the sandbox's proxy
+# variables. A call that does carry that value is running sandboxed, where SSH
+# has no route but that proxy, so dropping it would only stop the push.
+# Residual: the rest of that
 # environment is trusted as it arrives — `PATH`, which chooses the `git` and
 # `jq` run, and `BASH_ENV`, which `bash` sources before this file's first line.
 #
