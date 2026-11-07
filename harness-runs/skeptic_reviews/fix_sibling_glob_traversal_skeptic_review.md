@@ -23,7 +23,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Record the scoped-`appDir` subpath cost the stem arm's class veto introduced (m46–m47), and correct the library comment and rows `b` / `K13` / `(m)` that say the `cd` arms are unaffected _(layer: plugin, general)_
+1. [x] **Finding 1** — Record the scoped-`appDir` subpath cost the stem arm's class veto introduced (m46–m47), and correct the library comment and rows `b` / `K13` / `(m)` that say the `cd` arms are unaffected _(layer: plugin, general)_
 
 ---
 

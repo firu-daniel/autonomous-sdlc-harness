@@ -1520,7 +1520,9 @@ EOF
 # class (a scoped `packages/@acme/storefront`): the `--prefix` spelling of a
 # configured command then costs ONE PROMPT, in EACH of the two allow-only
 # guards, while the tail-free `--prefix` arm, the `cd` arms and every bare
-# configured command are unaffected — measured, with this cost's standing
+# configured command are unaffected, except a `cd` below that directory under a
+# sibling worktree or a run copy, which the stem arm's class veto refuses (see
+# the next paragraph) — measured, with this cost's standing
 # status, in `docs/guard-verification.md` §2.4. DO NOT widen the
 # class to buy that back — every character added has to be argued incapable of
 # introducing an expansion in every position, which is the enumerate-the-refused
@@ -1530,8 +1532,13 @@ EOF
 # (`hc_path_anchored_patterns` below): a `/..` veto for the first and a
 # `[!A-Za-z0-9._/-]` veto for the second, each written against the text an arm's
 # `*` matched and nothing else. A literal arm — `cd <root>`, `cd <app_dir>`,
-# `<runner> --prefix <app_dir>` — carries no `*` and so no veto, which leaves it,
-# and the scoped-`appDir` cost above, exactly as they were. The DO NOT widen rule
+# `<runner> --prefix <app_dir>` — carries no `*` and so no veto, which leaves it
+# exactly as it was. The scoped-`appDir` cost above grows by one shape: under a
+# sibling worktree or a run copy, the stem arm's class veto refuses a `cd` to any
+# path carrying a character outside the class, so a path BELOW a scoped `appDir`
+# (`<stem>x/packages/@acme/storefront/src`) costs one prompt, while the app
+# directory itself keeps its allow through the subsumed `cd <stem>*/<appDir>` arm
+# (`docs/guard-verification.md` §2.4 row `(m)`, m46–m47). The DO NOT widen rule
 # binds the vetoes' class too: it is the same class, and a character added to one
 # copy and not the other is a hole in whichever guard reads the narrower one.
 #
