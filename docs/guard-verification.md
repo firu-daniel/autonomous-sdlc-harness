@@ -196,14 +196,29 @@ Three candidates fall out of that table, in descending size:
 
 **2026-10-20: `hc_main_root` changed, and no guard calls it.** `feat_clone_per_run_anchor` changed `hc_main_root` in `plugin/hooks/lib/harness-config-lib.sh` to read `HARNESS_MAIN_REPO` first, and changed nothing else in the library. `grep -n 'hc_main_root' plugin/hooks/*.sh`, run against `dc53f1d0`, printed nothing and exited 1. The per-Bash-call path the §1.2 composite measures is therefore unchanged, and no latency row is re-taken.
 
-**2026-10-20: `feat_clone_per_run_switch` changed no file under `plugin/hooks/`, and the guards now run with their cwd in a clone.** The first command below prints the branch's merge base with `dev`, the `defaultBranch` in `harness.config.json`; `<merge-base>` in the second stands for the hash it printed (`fb44db76ca53b84586ed5be0b3786370a1ac6f02` when this note was written). Run from this repository's root on the branch, the second printed nothing and exited 0:
+**2026-11-07: §2 re-driven with the payload's `cwd` in a clone, and every recorded row holds.** This replaces the 2026-10-20 note. That note recorded that `feat_clone_per_run_switch` changed no file under `plugin/hooks/` while making every new run copy a `git clone --shared`, and that §2 was owed a re-run from one. Tree `35b9ee09`, which carries `fix_sibling_glob_traversal`; `/bin/bash` 3.2.57, `jq` 1.7.1 (the system binary, put ahead of a newer one on `PATH` so the run matches §0), `git` 2.50.1, macOS 15.7.4 arm64.
 
-```sh
-git merge-base HEAD origin/dev
-git diff --stat <merge-base>..HEAD -- plugin/hooks
-```
+**What was driven.** One driver took every decision §2 records **on the shipped tree**, 843 cells in all:
+- §2.1: A–G and the redirect rows;
+- §2.2: every row, plus the anchor note's four claims;
+- §2.3: the 14 conditions × 7 probes, the 10 single-guard gates and the file-tool cells;
+- §2.4: a–e, (c)'s cwd sweep, (d)'s prefix sweep (45 prefixes, as recorded), and the shipped columns of (i), (j)–(k) with the s-rows, and (l);
+- §2.5: Q1–Q15 and the quoted-spelling sweep (27 + 6 subcommands × 3 spellings, as recorded);
+- §2.6: T1–T17, for each of the three tools.
 
-No guard code moved, so no §1.2 latency row is re-taken. The layout the guards are judged in did move: every new run copy is now a `git clone --shared`, whose `.git` is a directory, where a linked worktree's is a pointer file. A guard's own `git` calls from a session in a run copy now resolve the clone's `.git`, not a worktree's pointer. §2's standing decision matrices were taken with the payload's `cwd` at §0's primary fixture, and §2.1 adds a real sibling **linked worktree** for the `<work_root>/<project_name>-*` arms. None of them was taken from a clone, so they are owed a re-run with the `cwd`, and §2.1's sibling, in a clone. The measured rows below stand as the record of their date until that re-run.
+No fault injection was re-run, because those attribute legs and are not decisions. The driver ran on three layouts, each built fresh:
+- **W**, §0's own: the primary is a `git init` repository and §2.1's sibling a `git worktree add`.
+- **C**: a `git init` main checkout at `<work_root>/acme-shop`. The payload's `cwd` and `<repo>` are a `git clone --shared` of it at `<work_root>/acme-shop-feat_probe`, HEAD on `feat_probe`, whose `.git` is a directory with `objects/info/alternates`. §2.1's sibling is a second clone at `<work_root>/acme-shop-sib`, and the scoped fixture, the (j) fixture and l14's non-adopting repository are clones too.
+- **L**: C with every clone replaced by a linked worktree at the same path. It is the attribution control.
+
+**Results.**
+- **W** reproduces every recorded decision except one stale cell, i19's second shape, corrected in its row: `cat <creds>.sorted` is SILENT, because since (l)'s narrowing it is l1's lookalike shape. `grep sortkey <creds>` still allows. §2.4's 2026-11-07 re-drive line lists the same cell as stale-before-branch.
+- **C** agrees with W in 840 of 843 cells. The three that differ are SILENT in W and `allow` in C: `cd <repo>/sub && ls`, and `cd <repo>/sub && ls` and `cd <repo>/<link> && ls` behind `git -C <repo> status &&`. All three are the run-copy route §2.4 (a) now records (a8): the copy sits at `<work_root>/<project_name>-<branch>`, so the sibling arm `cd <work_root>/<project_name>-*` reaches every path under it. No recorded decision is among them.
+- **L** agrees with C in every cell it can build, so the cause is the copy's **position**, not its `.git`. It cannot build the cells that need `.git` to be a directory: (c)'s `.git` cwd rows and T4.
+- The guards' own `git` calls (`rev-parse --show-toplevel`, `symbolic-ref`, `ls-files`) resolve the clone's `.git`, and no decision depends on that. Every fixture configuration was byte-identical to its pristine copy afterwards.
+- The same driver on `plugin/hooks` at `7f7bb33d`, the fix's merge base, gave the same decision in every one of the 843 cells, in all three layouts.
+
+**The route out, re-taken from a clone.** The run-copy route was first taken on 2026-11-06, at `7f7bb33d`. There it also left the workspace: `git -C <repo> status && cd <work_root>/<project_name>-x/../…/tmp/tv && npm ci` was `allow` in every layout, and so was `cd <repo>/../…/tmp/tv && ls` from a clone. `fix_sibling_glob_traversal` closed it, and row `(m)` carries the closure. A separate 31-row probe re-took the route from W, C and L, on `plugin/hooks` at `7f7bb33d` and at `35b9ee09`. It covered the table the fix was filed with, the run-copy rows, and the `.`, trailing-slash, quoted, `$HOME`, backtick, `~`, zsh numeric-glob and second-operand spellings. Every shape that was `allow` at `7f7bb33d` is SILENT at `35b9ee09`, in every layout. The controls keep their allow: `cd <sibling> && git status`, `git -C <sibling> status --short`, the tail-free `--prefix` on a real sibling, `cd <sibling>/<appDir> && npm ci`, `cd <repo> 2>/dev/null && git status`, and the credentials read after `cd <sibling>`.
 
 **2026-10-29: `hc_main_root` changed again, `hc_main_root_var` was added, and no guard calls either.** `fix_clone_main_repo_resolution` gave `hc_main_root` in `plugin/hooks/lib/harness-config-lib.sh` a clone arm, moved its body into the new `hc_main_root_var`, and changed nothing else in the library beyond the header comments describing those two functions. `git log --format='%h %s' 74618b02..6436ad77 -- plugin/hooks`, from the branch's merge base with `origin/dev` to its tip, listed one commit, `1d03a74a`. `grep -n 'hc_main_root' plugin/hooks/*.sh`, run against `6436ad77`, printed nothing and exited 1. The per-Bash-call path the §1.2 composite measures is therefore unchanged, and no latency row is re-taken.
 
@@ -713,7 +728,7 @@ Three trees, driven back to back in one session on §0's primary fixture with `p
 | i16 | `cat <creds> \| uniq` | **allow** | **allow** | SILENT ← the cost |
 | i17 | `cat <creds> && ls \| sort` | **allow** | **allow** | SILENT ← the cost's widest shape: a benign `sort` in a compound that also reads the file |
 | i18 | `git status \| sort` / `ls \| sort` / `cat <other file> \| sort` | SILENT | SILENT | SILENT — a command naming no configured basename was never this guard's to grant, so the two new names cost nothing outside the file they are about |
-| i19 | `grep sortkey <creds>` / `cat <creds>.sorted` | allow | allow | allow — the word boundary does not fire on a name merely containing the letters |
+| i19 | `grep sortkey <creds>` / `cat <creds>.sorted` | allow | allow | allow / **SILENT** — the word boundary does not fire on a name merely containing the letters; `cat <creds>.sorted` has been SILENT since (l)'s narrowing made it l1's shape (2026-11-07 note in §1.5) |
 
 **The bound:** i5–i9 are the whole read surface the shipped corpus spells and none of them moves in any column; i18 bounds the addition to commands that name the configured file, and i19 to the word rather than the letters. What the closure costs is i15–i17 — `cat <creds> | sort`, `| uniq`, and any compound naming the file that also names either binary — one prompt each, never a permit, and none of the three is spelled anywhere in the shipped corpus.
 
