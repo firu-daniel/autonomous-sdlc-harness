@@ -44,7 +44,7 @@ No parity review exists, because `phases.parity` is `false`.
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Correct `hr_run_target_check_var`'s doc comment: its clone acceptance reads the run registry through `hr_clone_target_check_var` _(layer: cli)_
+1. [x] **Finding 1** — Correct `hr_run_target_check_var`'s doc comment: its clone acceptance reads the run registry through `hr_clone_target_check_var` _(layer: cli)_
 
 ---
 

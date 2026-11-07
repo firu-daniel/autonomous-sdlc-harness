@@ -1211,8 +1211,10 @@ hr_clone_target_check_var() {
 # sentence naming <dir> and <main> as passed, and `HR_TARGET_GITDIR` and
 # `HR_TARGET_KIND` cleared, as every other refusal leaves them. Otherwise 0
 # with `HR_TARGET_KIND` (`main` or `clone`), `HR_TARGET_GITDIR` and
-# `HR_TARGET_BRANCH` as that check set them. Reads no run registry and no tip,
-# prints nothing; call it directly, never inside `$(…)`. Its callers:
+# `HR_TARGET_BRANCH` as that check set them. Adds no read of its own: the run
+# registry is read only by that check's clone arm (`hr_clone_target_check_var`),
+# and no tip is read. Prints nothing; call it directly, never inside `$(…)`.
+# Its callers:
 # `hr_run_copy_check_var`, `launch-sandboxed-gates.sh` check 6 and
 # `setup-worktree.sh --target`.
 hr_run_target_check_var() {
