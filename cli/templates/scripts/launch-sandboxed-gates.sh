@@ -22,8 +22,10 @@
 # checkout, which the profile write-protects as it does the git wrappers, and it
 # carries their checks: `hr_wrapper_main_of` places the main checkout from this
 # file's own location, `hr_git_env_drop` drops the inherited git environment,
-# `hr_wrapper_target_check_var` accepts only the main checkout or a run copy it
-# lists, and `hr_wrapper_branch_var` reads the branch from the main checkout.
+# `hr_run_target_check_var` runs `hr_wrapper_target_check_var` — accepting the
+# main checkout, a clone the run registry records, or a worktree the main
+# repository lists — and then refuses the linked worktree, because a run copy
+# is a clone, and `hr_wrapper_branch_var` reads the branch from the main checkout.
 # `hr_pinned_hooks_path` and `hr_worktree_config_check_var` are not called: they
 # guard git commands run in or for the target, and this script runs none — its
 # only git calls are the library's, in the main checkout.
@@ -64,7 +66,8 @@
 #   5. the base profile, `<main>/.claude/settings.autonomous.json` (the path
 #      `autonomous-watcher.sh`'s SETTINGS_PROFILE defaults to): one JSON object
 #      (`hr_json_single_object`, as in step 8), else a refusal; `.sandbox.enabled` `false` is `in-session`;
-#   6. `hr_wrapper_target_check_var <main> <target>`, and, when the target is
+#   6. `hr_run_target_check_var <main> <target>` — a target it classifies as a
+#      linked worktree is a refusal — and, when the target is
 #      the main checkout, `hr_registry_foreign_copy_var` over the main
 #      checkout's run registry: a live record naming another working copy is a
 #      refusal (local mode); the main checkout is the target only in job mode;
@@ -141,8 +144,8 @@
 # Exit map (the launch form prints one stdout line, or nothing on a refusal):
 #   2  refusal — one stderr line `launch-sandboxed-gates.sh: <reason>`, nothing
 #      on stdout: bad arguments, a label outside HR_TEST_RUN_LABEL_PATTERN, an unplaceable
-#      main checkout, an unparsable base or per-run profile, a refused target,
-#      the main checkout as the target outside job mode, an unreadable run
+#      main checkout, an unparsable base or per-run profile, a refused target
+#      (a linked worktree included), the main checkout as the target outside job mode, an unreadable run
 #      registry, an unreadable branch, a lane outside <target>, an unreadable heartbeat,
 #      `bwrap` not on `PATH`, `bwrap` unable to start a sandbox, a protected
 #      path whose parent is absent, or a run that did not start
@@ -208,7 +211,7 @@ enabled="$(jq -r 'if .sandbox.enabled == false then "off" else "on" end' "$base"
 # 6. The canonical form is the one every later path is built on.
 target="$( CDPATH= cd -P -- "$target_arg" 2>/dev/null && pwd -P )" ||
   refuse "the target '$target_arg' is not a directory"
-hr_wrapper_target_check_var "$main" "$target" || refuse "$HR_TARGET_REFUSAL"
+hr_run_target_check_var "$main" "$target" || refuse "$HR_TARGET_REFUSAL"
 if [ "$HR_TARGET_KIND" = main ]; then
   registry="$(hr_state_path "$main" autonomous_logs/registry.json)" ||
     refuse "cannot resolve the run registry of '$main' to tell job mode from local mode"

@@ -28,7 +28,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_remove_legacy_worktree
 2. [x] **Task 2** — Watcher: drop the `worktree` copy kind, skip a parked or paused record with no `copy_kind`, and seed test records as clones _(layer: cli)_ _(points: 20)_
 3. [x] **Task 3** — Remove the legacy-worktree cases from the watcher review-drop and stall payload suites, and reword `remote-start.test.mjs`'s worktree case as a hand-made one _(layer: cli)_ _(points: 18)_
 4. [x] **Task 4** — Sweep: remove the `git worktree remove` arm and skip a record with no `copy_kind` _(layer: cli)_ _(points: 15)_
-5. [ ] **Task 11** — Gate launcher: refuse a linked-worktree target _(layer: cli)_ _(points: 12)_
+5. [x] **Task 11** — Gate launcher: refuse a linked-worktree target _(layer: cli)_ _(points: 12)_
 6. [ ] **Task 12** — `setup-worktree.sh --target`: refuse a linked-worktree target _(layer: cli)_ _(points: 15)_
 7. [ ] **Task 5** — Reframe the wrapper and outer-loop script headers: a linked worktree is a hand-made checkout, never a run copy _(layer: cli)_ _(points: 10)_
 8. [ ] **Task 6** — Reword the legacy-worktree-run prose in `cli/src` comments and the autonomous profile template _(layer: cli)_ _(points: 10)_

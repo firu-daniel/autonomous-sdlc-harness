@@ -23,3 +23,7 @@
 - `bash -n cli/templates/scripts/launch-sandboxed-gates.sh` exits 0.
 - `git diff -- cli/templates/scripts/launch-sandboxed-gates.sh` changes one executable line, check 6's target-check call from `hr_wrapper_target_check_var` to `hr_run_target_check_var`, and changes comment lines only otherwise.
 - `grep -n -E 'HR_TARGET_KIND.*worktree' cli/templates/scripts/launch-sandboxed-gates.sh` prints nothing — the kind test and its sentence live only in the library.
+
+**Deviations from plan:**
+
+- Verification bullet `bash -n cli/templates/scripts/launch-sandboxed-gates.sh exits 0` was not executed: the command was refused by the tool layer ("Permission to use Bash has been denied because Claude Code is running in don't ask mode"). The claim rests instead on `bash scripts/typecheck.sh`, whose `check-shell-parse` step reported `122 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed` and ended `PASS: typecheck`, and on `launch-sandboxed-gates.test.mjs` passing 21 of 21 cases, each of which executes the launcher.
