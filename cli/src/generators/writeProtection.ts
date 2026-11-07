@@ -233,9 +233,9 @@ function libraryDir(): string {
  * The main checkout's `.git` is protected as one directory: objects reach it only through sync-in's
  * fetch, which runs outside the sandbox, and git and the unsandboxed wrappers follow its
  * configuration, hooks, `commondir`, worktree records and legacy remotes, so no sandboxed write into
- * it is needed and any could redirect them. A legacy worktree run's record lies under it too; the
- * runtime already keeps a record outside the session's cwd closed to sandboxed git
- * (`docs/sandbox-verification.md` G2), so such a run's commits go through the excluded
+ * it is needed and any could redirect them. The record of a linked worktree a person made by hand
+ * lies under it too; the runtime already keeps a record outside the session's cwd closed to
+ * sandboxed git (`docs/sandbox-verification.md` G2), so commits there go through the excluded
  * `commit-on-branch.sh` either way.
  */
 export function protectedPaths({
