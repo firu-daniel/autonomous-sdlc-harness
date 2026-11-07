@@ -341,8 +341,14 @@ export async function createWatcherFixture(t, { branch = 'feat_x', runAnalytics 
     archived: () => sortedNames(join(clarDir, 'answered')),
     /** The body the stub runs in the run's working copy, with `CLAR` set to `clarDir`, before exit 0. */
     setStub: (shellBody) => writeFile(stubBodyPath, `${shellBody}\n`, 'utf8'),
+    /**
+     * Writes the one registry record. It defaults to `copy_kind: 'clone'` because the watcher
+     * skips a parked or paused record with no `copy_kind` instead of resuming it; the fixture's
+     * copy is the main checkout itself, which the run-copy check accepts. A `fields` key overrides
+     * the default, and `copy_kind: undefined` drops it from the written record.
+     */
     async seedRecord(fields = {}) {
-      const record = { status: 'parked', worktree: dir, log_path: logPath, engine: 'task', ...fields };
+      const record = { status: 'parked', worktree: dir, log_path: logPath, engine: 'task', copy_kind: 'clone', ...fields };
       await writeFile(join(dir, REGISTRY_PATH), `${JSON.stringify({ runs: { [branch]: record } }, null, 2)}\n`, 'utf8');
     },
     record: () => JSON.parse(readFileSync(join(dir, REGISTRY_PATH), 'utf8')).runs[branch],

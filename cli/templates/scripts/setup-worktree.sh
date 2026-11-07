@@ -13,7 +13,10 @@
 #
 # `--target <dir>` is for a copy whose tree a run wrote. It refuses unless this
 # script's own checkout is a main checkout (`hr_wrapper_main_of` places it as
-# itself) and <dir> passes `hr_wrapper_target_check_var` against it. It then
+# itself) and <dir> passes `hr_run_target_check_var` against it. A linked
+# worktree as <dir> is refused, because a run copy is a clone; a checkout a
+# person made with `git worktree add` is bootstrapped by running its own
+# scripts directory's copy of this script with no argument. It then
 # reads EVERY configured value — `appDir`, `qa.credentialsPath`, `githooksDir`,
 # `commands.depInstall`, `commands.build` — from the main checkout's
 # `harness.config.json`, runs each step in <dir>, and writes the main
@@ -107,13 +110,15 @@
 # Usage: setup-worktree.sh [--target <dir>]
 #   No arguments: the checkout is this script's own location, not $PWD, because
 #   the caller runs it from wherever it happens to be. `--target <dir>`: the
-#   working copy at <dir>, configured from this script's main checkout.
+#   registered clone at <dir>, configured from this script's main checkout; a
+#   linked worktree as <dir> is refused.
 #
 # Exit map:
 #
 #   0  every step ran or was deliberately skipped
 #   1  refusal (the library or the configuration could not be read, or a
-#      `--target` this checkout or <dir> fails the placement), or a step
+#      `--target` this checkout or <dir> fails the placement — `--target` takes a
+#      registered clone, and a linked worktree is refused), or a step
 #      that was meant to run failed — the message above the exit says which
 #
 # REPRO — reproduce any decision by hand, against a throwaway fixture:
@@ -172,7 +177,7 @@ if [ "$target_mode" -eq 1 ]; then
     echo "setup-worktree.sh: --target runs only from a main checkout's own scripts directory, and '$script_dir' is not in one — refusing to bootstrap" >&2
     exit 1
   fi
-  if ! hr_wrapper_target_check_var "$main_repo" "$2"; then
+  if ! hr_run_target_check_var "$main_repo" "$2"; then
     echo "setup-worktree.sh: $HR_TARGET_REFUSAL — refusing to bootstrap" >&2
     exit 1
   fi
@@ -268,11 +273,12 @@ fi
 # The value comes from the library because push-branch.sh refuses any other
 # value here (`hr_worktree_config_check_var`).
 #
-# Under `--target` the value is `<dir>/<the main checkout's githooksDir>`, and
-# both writes go through the main checkout and the record
-# `hr_wrapper_target_check_var` checked, so git reads none of the copy's own
-# records or configuration. A clone has no record and its own `.git/config`,
-# so its one write goes to that file and the main checkout's is left alone.
+# Under `--target` the value is `<dir>/<the main checkout's githooksDir>`. A
+# clone has its own `.git/config`, so its one write goes to that file and the
+# main checkout's is left alone. A linked worktree never reaches here
+# (`hr_run_target_check_var`), so the second arm is taken only by the main
+# checkout given as <dir>: both its writes go to the main checkout's own
+# configuration, at the gitdir `hr_run_target_check_var` returned.
 if [ "$target_mode" -eq 1 ]; then
   hooks_rel="$(hr_githooks_dir "$main_repo")" || hooks_rel=""
   hooks_dir=""
@@ -304,6 +310,7 @@ drop_inert_sparse() {
 # extension is on. The extension is repository-global, so the main checkout's
 # file is cleaned too whenever it is not the one being bootstrapped. A clone is
 # skipped: `hr_clone_target_check_var` already held its file to an empty one.
+# Under `--target` the non-clone arm is the main checkout given as <dir>.
 sparse_files=()
 if [ "$target_mode" -eq 0 ]; then
   f="$(hr_worktree_config_file "$top")" && sparse_files+=("$f")
@@ -312,7 +319,6 @@ if [ "$target_mode" -eq 0 ]; then
   fi
 elif [ "$target_kind" != clone ]; then
   sparse_files+=("$target_gitdir/config.worktree")
-  f="$(hr_worktree_config_file "$main_repo")" && sparse_files+=("$f")
 fi
 for f in ${sparse_files[@]+"${sparse_files[@]}"}; do
   drop_inert_sparse "$f"

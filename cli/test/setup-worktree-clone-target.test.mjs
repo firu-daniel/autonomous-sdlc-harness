@@ -3,9 +3,10 @@
  *
  * **The rule these tests exist to enforce: `setup-worktree.sh --target`, run as the main checkout's
  * copy, writes a clone's hooks path into that clone's own configuration and nothing into the main
- * checkout's; a clone so configured is still trusted; and an unregistered directory is refused before
- * anything is written.** One control gives a linked worktree as the target and expects the worktree
- * arm's two writes unchanged.
+ * checkout's; a clone so configured is still trusted; and an unregistered directory or a linked
+ * worktree is refused before anything is written.** One control gives a linked worktree as the target
+ * and expects it refused, with nothing written to the main checkout's configuration or the worktree's
+ * record.
  *
  * The fixture is built by hand, as `cli/test/wrapper-clone-arm.test.mjs` builds its own, and the
  * clone is the one `hr_clone_create_var` makes. `commands.depInstall` and `commands.build` are unset,
@@ -13,7 +14,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -126,23 +127,14 @@ test('(b) An unregistered repository at another branch’s derived path is refus
   assert.ok((await f.mainConfig()).equals(mainBefore), 'the main checkout’s .git/config changed');
 });
 
-test('(c) A linked worktree target still takes extensions.worktreeConfig in the main checkout and core.hooksPath in its config.worktree', async (t) => {
+test('(c) A linked worktree target is refused before anything is written', async (t) => {
   const f = await fixture(t);
   const wt = join(f.root, 'wt');
   await runGit(f.main, ['worktree', 'add', '--quiet', '-b', 'feat_w', wt]);
-  const hooks = join(wt, 'githooks');
+  const before = await f.mainConfig();
   const result = await f.setup(wt);
-  assert.equal(result.status, 0, output(result));
-  assert.ok(
-    result.stdout.includes(`setup-worktree.sh: pre-push hook installed (core.hooksPath -> ${hooks})`),
-    output(result),
-  );
-  assert.deepEqual(await f.get(join(f.main, '.git', 'config'), 'extensions.worktreeConfig'), {
-    status: 0,
-    value: 'true',
-  });
-  assert.deepEqual(await f.get(join(f.main, '.git', 'worktrees', 'wt', 'config.worktree'), 'core.hooksPath'), {
-    status: 0,
-    value: hooks,
-  });
+  assert.equal(result.status, 1, output(result));
+  assert.match(result.stderr, /is a linked worktree of .* — refusing to bootstrap$/m, output(result));
+  assert.ok((await f.mainConfig()).equals(before), 'the main checkout’s .git/config changed');
+  await assert.rejects(stat(join(f.main, '.git', 'worktrees', 'wt', 'config.worktree')), { code: 'ENOENT' });
 });

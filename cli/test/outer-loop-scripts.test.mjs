@@ -592,20 +592,38 @@ function plantMarkerHook(dir, relativePath, marker) {
   chmodSync(join(dir, relativePath), 0o755);
 }
 
+/**
+ * Make the registered clone of `feat_x` cut at the fixture's default branch, the run copy the copy
+ * check accepts, with `XDG_STATE_HOME` under the fixture; tear it down after the test and return its
+ * path.
+ */
+async function runClone(t, dir) {
+  mkdirSync(join(dir, STATE_DIR, 'autonomous_logs'), { recursive: true });
+  const defaultBranch = (await runGit(dir, ['symbolic-ref', '--short', 'HEAD'])).stdout.trim();
+  const created = await libCall(
+    dir,
+    'hr_clone_create_var "$PWD" feat_x "$1" || { printf "%s" "$HR_CLONE_REFUSAL" >&2; exit 1; }; printf "%s" "$HR_CLONE_DIR"',
+    [defaultBranch],
+    { XDG_STATE_HOME: join(dir, '.xdg-state') },
+  );
+  assert.equal(created.status, 0, `the clone was not created: ${created.stderr}`);
+  const clone = created.stdout;
+  t.after(() => rm(clone, { recursive: true, force: true }));
+  return clone;
+}
+
 test('the artifact commit carries only its path and runs no hook', async (t) => {
   const dir = await fixtureFor(t, { files: nodeProjectFiles() });
   await initOk(dir);
   assert.equal((await runGit(dir, ['config', 'core.hooksPath'])).stdout.trim(), 'githooks');
-  const wt = `${dir}-wt`;
   const markers = `${dir}-markers`;
-  t.after(() => rm(wt, { recursive: true, force: true }));
   t.after(() => rm(markers, { recursive: true, force: true }));
   mkdirSync(markers);
   const preCommitMarker = join(markers, 'pre-commit.marker');
   const refTxMarker = join(markers, 'ref-tx.marker');
   const unpinned = (cwd, args) => runGit(cwd, ['-c', 'core.hooksPath=/dev/null', ...args]);
 
-  await unpinned(dir, ['worktree', 'add', '--quiet', '-b', 'feat_x', wt]);
+  const wt = await runClone(t, dir);
   plantMarkerHook(wt, 'githooks/pre-commit', preCommitMarker);
   await unpinned(wt, ['add', 'githooks/pre-commit']);
   await unpinned(wt, ['commit', '--quiet', '-m', 'a pre-commit hook in the copy']);
@@ -615,7 +633,8 @@ test('the artifact commit carries only its path and runs no hook', async (t) => 
   plant(dir, 'watcher-test/prompt.md', 'do the thing\n');
 
   const rel = `${STATE_DIR}/task_prompts/feat_x_task_prompt.md`;
-  const tipBefore = (await runGit(dir, ['rev-parse', 'refs/heads/feat_x'])).stdout.trim();
+  // The clone's own ref: the main checkout's catches up only at the copy check's sync-in.
+  const tipBefore = (await runGit(wt, ['rev-parse', 'refs/heads/feat_x'])).stdout.trim();
   const committed = await libCall(
     dir,
     'hr_place_artifact "$1" watcher-test/prompt.md "$2" || exit 10; hr_commit_placed "$PWD" "$1" "$2" "$(hr_task_prompt_subject feat_x)"',
@@ -645,12 +664,10 @@ test('the artifact commit carries only its path and runs no hook', async (t) => 
 test('the copy fast-forward leaves a copy already ahead of the target as it is, and refuses a diverged one', async (t) => {
   const dir = await fixtureFor(t, { files: nodeProjectFiles() });
   await initOk(dir);
-  const wt = `${dir}-wt`;
-  t.after(() => rm(wt, { recursive: true, force: true }));
-  await runGit(dir, ['worktree', 'add', '--quiet', '-b', 'feat_x', wt]);
+  const wt = await runClone(t, dir);
   const base = (await runGit(dir, ['rev-parse', 'refs/heads/feat_x'])).stdout.trim();
   await runGit(wt, ['commit', '--quiet', '--no-verify', '--allow-empty', '-m', 'unpushed round']);
-  const ahead = (await runGit(dir, ['rev-parse', 'refs/heads/feat_x'])).stdout.trim();
+  const ahead = (await runGit(wt, ['rev-parse', 'refs/heads/feat_x'])).stdout.trim();
   const fastForward = `hr_run_copy_check_var "$PWD" "$1" || exit 10; hr_run_fast_forward_var "$2"; printf '%s|%s|%s' "$?" "$HR_RUN_COPY_TIP" "$HR_RUN_FF_REFUSAL"`;
 
   const behind = await libCall(dir, fastForward, [wt, base]);

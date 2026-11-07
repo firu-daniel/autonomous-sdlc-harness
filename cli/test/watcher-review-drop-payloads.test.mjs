@@ -4,22 +4,22 @@
  * `autonomous-watcher.sh` against a copy a sandboxed session could have written to.
  *
  * **The rule these tests exist to enforce: a review drop never runs code a sandboxed session
- * planted in the copy, never installs a run-authored protected path, and never reuses a clone whose
- * `.git` carries a file or key a clone the harness made has not; an honest copy's outcome is
- * unchanged.**
+ * planted in the copy, never installs a run-authored protected path, never reuses a clone whose
+ * `.git` carries a file or key a clone the harness made has not, and never reuses a linked worktree
+ * at the copy's path; an honest copy's outcome is unchanged.**
  *
  * The fixture is `createWatcherFixture`'s, adopted on a bare `origin`, with the run's copy cut by
  * `create-worktree.sh` from a task drop: a clone, its record's `copy_kind` `clone`. Its main
  * `.git/config` sets the repo-relative `core.hooksPath` `githooks`, so an unpinned hook-running call
- * resolves hooks inside the copy, and `extensions.worktreeConfig=true`, so a legacy copy's
+ * resolves hooks inside the copy, and `extensions.worktreeConfig=true`, so a linked worktree's
  * `config.worktree` is live for an unpinned call; without them the mutations below could not reach
  * their payloads. A protected path is committed the way a session in a clone commits one it cannot
  * write: `hash-object` / `update-index` / `write-tree` / `commit-tree` in the clone and an
  * `update-ref` of the clone's own branch, with no working-tree write; the review drop's sync-in
- * brings it into the main checkout. `{ legacy: true }` replaces the clone with a linked worktree of
- * the main checkout on the branch, its record carrying no `copy_kind` — a parked run from before the
- * clone layout. Every planted hook, fsmonitor, filter driver, `sshCommand` and `uploadpack` writes
- * a marker file named for itself.
+ * brings it into the main checkout. `{ kindlessWorktree: true }` replaces the clone with a linked
+ * worktree of the main checkout on the branch, its record carrying no `copy_kind`. Every planted
+ * hook, fsmonitor, filter driver, `sshCommand` and `uploadpack` writes a marker file named for
+ * itself.
  *
  * Where each plant lives on the clone layout:
  * - Clone-applicable, re-pointed at the clone: the nested repository behind a gitlink (L2), the
@@ -31,23 +31,22 @@
  *   `.git/config.worktree`; L1c and L4: the same keys in `.git/config`, off the allow-list), the
  *   `.git` pointer (L11: a planted `.git/commondir`), the record's `HEAD` (L7: the clone's own
  *   `.git/HEAD`).
- * - Worktree-only, kept as migration coverage on a legacy worktree: L1, L7 and R1, each the
- *   original plant, because the worktree arm still serves a parked legacy run and the clone layout
- *   cannot reach the behaviour each asserts.
+ * - A linked worktree at the copy's path, its record carrying no `copy_kind` (W1): the reuse path's
+ *   `hr_run_copy_check_var` refuses it through `hr_run_target_check_var`, the library's one owner of
+ *   the rule that a linked worktree is not a run copy, and the drop fails before launch with that
+ *   refusal inside the *"is not one this repository lists"* line, the worktree untouched.
  *
  * RED ONCE — each mutation applied once to the fixture's own written copy of
  * `autonomous-watcher.sh` (L6, L8, L9, L10, R2's second, R4, R5 and every clone-check mutation: to
  * its `lib/harness-run-lib.sh`), never to the template, the file run, the failure observed;
- * measured on the clone layout unless the case is a legacy one:
+ * measured on the clone layout unless the case says otherwise:
  * - (L1) `config.worktree` dropped from `hr_clone_target_check_var`'s absent-file loop → fails on the
  *   record's `status`: `completed`, not `failed`.
  * - (L1c) `hr_clone_config_check_var`'s off-allow-list test skipped → fails on the record's
  *   `status`: `completed`, not `failed`.
- * - (L1, legacy) `git -C "$worktree" status --short | grep -v '^??'` restored as the reuse path's
- *   clean test in place of `hr_run_copy_clean` → fails `a planted payload ran`, holding
- *   `L1-fsmonitor`.
- * - (L2) the (L1, legacy) mutation → fails `a planted payload ran`, holding `L2-fsmonitor`.
- * - (L3) the (L1, legacy) mutation → fails `a planted payload ran`, holding `L3-fsmonitor`.
+ * - (L2) `git -C "$worktree" status --short | grep -v '^??'` restored as the reuse path's clean
+ *   test in place of `hr_run_copy_clean` → fails `a planted payload ran`, holding `L2-fsmonitor`.
+ * - (L3) the (L2) mutation → fails `a planted payload ran`, holding `L3-fsmonitor`.
  * - (L4) the (L1c) mutation → fails on the record's `status`: `completed`, not `failed`.
  * - (L5) the reuse path's `hr_run_surface_check_var "refs/heads/$branch" copy` dropped → fails on
  *   the record's `status`: `completed`, not `failed`.
@@ -55,8 +54,6 @@
  *   record's `status`: `completed`, not `failed`.
  * - (L7) the registry test in `hr_clone_target_check_var` skipped → fails on the refusal, which
  *   names the derived path rather than the registry.
- * - (L7, legacy) the reuse path's compare of the inbox branch with `HR_RUN_COPY_BRANCH` dropped →
- *   fails on the record's `status`: `completed`, not `failed`.
  * - (L8) both `hr_run_path_safe` calls in `hr_place_artifact` dropped → fails `the placement wrote
  *   outside the copy`, holding `feat_x_review.md`.
  * - (L9) `hr_run_surface_check_var`'s merge base taken against the local
@@ -67,8 +64,6 @@
  * - (L11) `commondir` dropped from `hr_clone_target_check_var`'s absent-file loop → fails on the
  *   record's `status`: `completed`, not `failed`.
  * - (R1) the (L1) mutation → fails on the record's `status`: `running`, not `failed`.
- * - (R1, legacy) `git -C "$worktree" fetch origin "$branch"` restored in place of the pinned
- *   main-checkout fetch → fails `a planted payload ran`, holding `R1-uploadpack`.
  * - (R2) `git -C "$worktree" merge --ff-only "origin/$branch"` restored in place of
  *   `hr_run_fast_forward_var` → fails `refs/heads/feat_x moved`. Separately, the surface check
  *   inside `hr_run_fast_forward_var` skipped → fails `refs/heads/feat_x moved`.
@@ -79,6 +74,10 @@
  *   fails on the commit's paths, which carry `extra`.
  * - (R5) the L9 mutation → fails `refs/heads/feat_x moved`: the job tip was fast-forwarded, and the
  *   review committed and dispatched on it.
+ * - (W1) the `worktree` refusal in `hr_run_target_check_var` dropped, or `hr_run_copy_check_var`
+ *   calling `hr_wrapper_target_check_var` directly again → the copy check accepts the worktree and
+ *   the drop is refused later, for uncommitted tracked changes: fails on the failure notification's
+ *   detail, which carries no linked-worktree refusal.
  */
 
 import assert from 'node:assert/strict';
@@ -122,16 +121,16 @@ const git = (cwd, args, env = {}) => sh(cwd, 'git "$@"', [...PIN, ...args], env)
 /**
  * A watcher fixture adopted on `origin`'s default branch, whose main `.git/config` sets
  * `extensions.worktreeConfig=true` and the repo-relative `core.hooksPath` `githooks`, with the run's
- * clone cut by `create-worktree.sh` from a task drop and its record left `completed`. `legacy`
- * replaces the clone with a linked worktree on the branch at the same path and drops the record's
- * `copy_kind`. `remote` sets `execution.target` `github-actions` with `gh` recorded; `baseHooks`
+ * clone cut by `create-worktree.sh` from a task drop and its record left `completed`.
+ * `kindlessWorktree` replaces the clone with a linked worktree on the branch at the same path and
+ * drops the record's `copy_kind`. `remote` sets `execution.target` `github-actions` with `gh` recorded; `baseHooks`
  * commits a marker-writing `githooks/pre-commit` and `githooks/commit-msg` on the default branch
  * first.
  *
  * @param {import('node:test').TestContext} t
- * @param {{ remote?: boolean, baseHooks?: boolean, legacy?: boolean }} [options]
+ * @param {{ remote?: boolean, baseHooks?: boolean, kindlessWorktree?: boolean }} [options]
  */
-async function createReviewFixture(t, { remote = false, baseHooks = false, legacy = false } = {}) {
+async function createReviewFixture(t, { remote = false, baseHooks = false, kindlessWorktree = false } = {}) {
   const w = await createWatcherFixture(t);
   if (w === null) return null;
 
@@ -181,7 +180,7 @@ async function createReviewFixture(t, { remote = false, baseHooks = false, legac
   assert.ok(existsSync(copy), `create-worktree.sh cut no working copy\n${w.watcherLog()}`);
   assert.equal(w.record().copy_kind, 'clone', `create-worktree.sh cut no clone\n${w.watcherLog()}`);
   await patchRecord({ status: 'completed' });
-  if (legacy) {
+  if (kindlessWorktree) {
     await rm(copy, { recursive: true, force: true });
     await git(w.dir, ['worktree', 'add', '--quiet', copy, w.branch]);
     await patchRecord({ copy_kind: undefined });
@@ -197,7 +196,7 @@ async function createReviewFixture(t, { remote = false, baseHooks = false, legac
     payloads,
     outside,
     ref,
-    /** The copy's git directory: the clone's `.git`, or a legacy worktree's record. */
+    /** The copy's git directory: the clone's `.git`, or a linked worktree's record. */
     recordDir: await git(copy, ['rev-parse', '--absolute-git-dir']),
     tick,
     patchRecord,
@@ -657,48 +656,25 @@ test('(R5) a forged base on the remote arm: the job tip the local default-branch
 });
 
 // ---------------------------------------------------------------------------------------------
-// Migration coverage: a parked legacy worktree run, its record carrying no copy_kind.
+// A linked worktree at the copy's path.
 // ---------------------------------------------------------------------------------------------
 
-test("(L1, legacy) migration coverage: a core.fsmonitor in a legacy worktree's config.worktree is never read: the drop launches", async (t) => {
-  const f = await createReviewFixture(t, { legacy: true });
+test('(W1) a drop whose record has no copy_kind and names a linked worktree on the branch is refused, never reused', async (t) => {
+  const f = await createReviewFixture(t, { kindlessWorktree: true });
   if (f === null) return;
   const before = f.prompts().length;
-  await git(f.dir, ['config', '--file', join(f.recordDir, 'config.worktree'), 'core.fsmonitor', await f.payload('L1-fsmonitor')]);
+  const tip = await f.tip();
+  const worktrees = await git(f.dir, ['worktree', 'list', '--porcelain']);
+  const head = readFileSync(join(f.recordDir, 'HEAD'), 'utf8');
 
   await f.drop();
   await f.tick();
 
-  assertLaunched(f, before);
-});
-
-test("(L7, legacy) migration coverage: a legacy worktree's record HEAD naming another branch is refused with today's message", async (t) => {
-  const f = await createReviewFixture(t, { legacy: true });
-  if (f === null) return;
-  const before = f.prompts().length;
-  await git(f.dir, ['branch', 'other', f.ref]);
-  await writeFile(join(f.recordDir, 'HEAD'), 'ref: refs/heads/other\n', 'utf8');
-
-  await f.drop();
-  await f.tick();
-
-  assertRefused(f, before, /is on branch 'other', not 'feat_x'/);
-});
-
-test("(R1, legacy) migration coverage: a legacy worktree's config.worktree sshCommand and uploadpack never run; push-branch.sh's own check refuses the push", async (t) => {
-  const f = await createReviewFixture(t, { remote: true, legacy: true });
-  if (f === null) return;
-  const before = f.prompts().length;
-  const runs = f.workflowRuns().length;
-  const configWorktree = join(f.recordDir, 'config.worktree');
-  await git(f.dir, ['config', '--file', configWorktree, 'core.sshCommand', await f.payload('R1-sshCommand')]);
-  await git(f.dir, ['config', '--file', configWorktree, 'remote.origin.uploadpack', await f.payload('R1-uploadpack')]);
-
-  await f.drop();
-  await f.tick();
-
-  assertRefused(f, before, /push-branch\.sh did not push/, { placed: true });
-  const runLog = readFileSync(join(f.dir, STATE_DIR, 'autonomous_logs', `${f.branch}.log`), 'utf8');
-  assert.match(runLog, /push-branch\.sh: refusing to push: .*(core\.sshcommand|remote\.origin\.uploadpack)/i);
-  assert.equal(f.workflowRuns().length, runs, 'a workflow run was sent');
+  const refusal = /is not one this repository lists \('[^']*' is a linked worktree of [^)]*, and a run copy is a clone the run registry records\)/;
+  assertRefused(f, before, refusal);
+  assert.match(f.watcherLog(), refusal);
+  assert.equal(await f.tip(), tip, `${f.ref} moved`);
+  assert.equal(await git(f.dir, ['worktree', 'list', '--porcelain']), worktrees, 'the worktree registration changed');
+  assert.equal(readFileSync(join(f.recordDir, 'HEAD'), 'utf8'), head, "the worktree's HEAD changed");
+  assert.equal(existsSync(join(f.copy, REVIEW_REL)), false, 'the review was placed in the worktree');
 });

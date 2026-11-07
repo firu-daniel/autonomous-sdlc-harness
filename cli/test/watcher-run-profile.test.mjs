@@ -11,7 +11,8 @@
  * glob, are left out, and the launch check accepts exactly those drops.**
  * And **a clone run's exit brings its branch into the main checkout, while a sync
  * that cannot run — RUN_MAIN unplaced included — is one log line and never changes the
- * classification.**
+ * classification.** And **a parked or paused record with no `copy_kind` is never resumed: its
+ * status is left alone and the skip is logged once per watcher process.**
  *
  * The watcher holds declared mirrors of TypeScript owners; the last test holds each equal to its
  * owner, imported from `cli/dist`:
@@ -49,7 +50,13 @@ import { FORBIDDEN_IN_ENTRY } from '../dist/generators/profileEntries.js';
 import { COPY_GIT_PATHS, copySurfacePaths, fileToolDenyRules } from '../dist/generators/writeProtection.js';
 import { SANDBOX_OPT_OUT_MARKER, shippedSandboxSettings } from '../dist/generators/sandboxProfile.js';
 import { INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
-import { TICK_TIMEOUT_MS, createWatcherFixture } from './helpers/watcher.mjs';
+import {
+  DEFAULT_KEEP_AWAKE_PROBE,
+  DEFAULT_PLACEHOLDER_HOST_PROBE,
+  DEFAULT_SANDBOX_PROBE,
+  TICK_TIMEOUT_MS,
+  createWatcherFixture,
+} from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
 const BASE_PROFILE = '.claude/settings.autonomous.json';
@@ -293,30 +300,61 @@ test('a launch outside job mode records the per-run copy\'s absolute path as the
   assert.ok(existsSync(record.run_profile), `${record.run_profile} does not exist`);
 });
 
-test('a parked legacy worktree run, resumed, carries its own .git pointer and no clone .git path', async (t) => {
+/**
+ * A record with no `copy_kind`, its `worktree` a linked worktree, seeded `status` and readied for a
+ * resume by `ready(wt)`: one `tick` launches nothing, leaves the status and logs one skip line; a
+ * second process running two passes logs exactly one more, so the note is once per process.
+ */
+async function assertNoCopyKindSkipped(t, status, ready) {
   const f = await adoptedFixture(t);
   if (f === null) return;
 
-  const wt = `${f.dir}-legacy`;
+  const wt = `${f.dir}-pre-clone`;
   t.after(() => rm(wt, { recursive: true, force: true }));
   await runGit(f.dir, ['worktree', 'add', '--quiet', '-b', f.branch, wt]);
-  const clar = join(wt, STATE_DIR, 'clarifications', f.branch);
-  await runBash(wt, ['-c', 'mkdir -p "$1" && printf "## Q1\\n" > "$1/question_1.md" && printf "a1\\n" > "$1/answer_1.md"', '_', clar]);
-  await f.seedRecord({ worktree: wt });
+  await ready(wt, f.branch);
+  await f.seedRecord({ status, worktree: wt, copy_kind: undefined });
+  assert.equal('copy_kind' in f.record(), false, 'the seeded record carries copy_kind');
+
+  const skipLines = () =>
+    f
+      .watcherLog()
+      .split('\n')
+      .filter((line) => line.includes(`skipping '${f.branch}': `) && line.includes('carries no copy_kind')).length;
 
   await f.tick();
+  assert.equal(f.settingsArg(), undefined, `a session was launched:\n${f.watcherLog()}`);
+  assert.equal(f.record().status, status);
+  assert.equal(skipLines(), 1, f.watcherLog());
 
-  const settings = f.settingsArg();
-  assert.ok(settings, `the parked run was not resumed:\n${f.watcherLog()}`);
-  assert.equal(settings, await f.profileFileFor(f.branch));
-  const profile = JSON.parse(readFileSync(settings, 'utf8'));
-  const denyWrite = profile.sandbox.filesystem.denyWrite;
-  assert.ok(denyWrite.includes(`${wt}/.git`), `${wt}/.git is not in denyWrite`);
-  assert.ok(profile.permissions.deny.includes(`Edit(/${wt}/.git)`), `Edit(/${wt}/.git) is not in deny`);
-  assert.deepEqual(profile.permissions.deny.filter((rule) => rule.startsWith('Write(')), []);
-  for (const row of COPY_GIT_PATHS) {
-    assert.ok(!denyWrite.includes(`${wt}/${row.path}`), `${row.path} was added for a legacy worktree`);
-  }
+  const script = [
+    '. "$1" status >/dev/null',
+    `hr_sandbox_prereq_probe_var() {\n${DEFAULT_SANDBOX_PROBE}\n}`,
+    `hr_keep_awake_probe_var() {\n${DEFAULT_KEEP_AWAKE_PROBE}\n}`,
+    `hr_placeholder_host_probe_var() {\n${DEFAULT_PLACEHOLDER_HOST_PROBE}\n}`,
+    'tick; wait; tick; wait',
+  ].join('\n');
+  const result = await runBash(f.dir, ['-c', script, '_', f.watcherPath], f.watcherEnv(), {
+    timeoutMs: TICK_TIMEOUT_MS,
+    signal: t.signal,
+  });
+  assert.equal(result.status, 0, `the two passes exited ${result.status}\n${result.stdout}\n${result.stderr}`);
+  assert.equal(f.settingsArg(), undefined, `a session was launched:\n${f.watcherLog()}`);
+  assert.equal(f.record().status, status);
+  assert.equal(skipLines(), 2, `the second process's two passes did not log exactly one line:\n${f.watcherLog()}`);
+}
+
+test('a parked record with no copy_kind is skipped with one note per process, never resumed', async (t) => {
+  await assertNoCopyKindSkipped(t, 'parked', (wt, branch) => {
+    const clar = join(wt, STATE_DIR, 'clarifications', branch);
+    return runBash(wt, ['-c', 'mkdir -p "$1" && printf "## Q1\\n" > "$1/question_1.md" && printf "a1\\n" > "$1/answer_1.md"', '_', clar]);
+  });
+});
+
+test('a paused record with no copy_kind is skipped with one note per process, never resumed', async (t) => {
+  await assertNoCopyKindSkipped(t, 'paused', (wt) =>
+    runBash(wt, ['-c', 'mkdir -p "$1" && : > "$1/RESUME"', '_', join(wt, STATE_DIR)]),
+  );
 });
 
 test('another live linked worktree\'s .git pointer is in the clone run\'s per-run copy', async (t) => {
