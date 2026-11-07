@@ -1273,7 +1273,7 @@ test('the _README says what the sandbox leaves outside and points at its documen
   const probe = exactlyOne('THE PROBE ROUTE GRANTS AN INTERPRETER AT ONE REMOVE');
   assert.ok(probe.includes('SR2'), `the probe-route _README line does not cite SR2: ${probe}`);
 
-  const headless = exactlyOne('A HEADLESS `-p` SESSION WAS COMPARED WITH AN INTERACTIVE ONE ON ONE CALL:');
+  const headless = exactlyOne('A HEADLESS `-p` SESSION WAS COMPARED WITH AN INTERACTIVE ONE ON THREE CALLS:');
   assert.ok(headless.includes('HP1'), `the headless _README line does not cite HP1: ${headless}`);
   for (const line of startingWith('WHETHER A HEADLESS')) assert.fail(`the _README still carries the old headless line: ${line}`);
 
