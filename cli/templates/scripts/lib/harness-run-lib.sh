@@ -172,14 +172,14 @@
 #      `hr_run_blob_var`'s walk and its hash is the same race
 #      `hr_commit_placed` already carried.
 #   5. THE WATCHER FAMILY'S GIT IN A RUN'S COPY moves a copy's branch and tree.
-#      Fence: `refs/heads/<branch>`, moved on a worktree or the main checkout
+#      Fence: `refs/heads/<branch>`, moved on the main checkout
 #      only by a compare-and-swap `update-ref` against the tip
 #      `hr_run_copy_check_var` read; on a clone the copy check itself first
 #      moves that ref, by `hr_copy_sync_in_var`'s compare-and-swap against the
 #      main checkout's previous value (writing objects there too), and every
 #      later move in this section is a compare-and-swap against the tip the
 #      copy check read after that sync-in; plus the copy's index
-#      (`<record>/index`, `<clone>/.git/index`) and working tree; a `mktemp`
+#      (`<main>/.git/index`, `<clone>/.git/index`) and working tree; a `mktemp`
 #      temporary index, removed on every exit path;
 #      `hr_run_trusted_base_var`'s fetch, which writes objects and `FETCH_HEAD`
 #      in the main repository and moves no ref; and, on a clone, the clone's
@@ -192,7 +192,7 @@
 #      `hr_copy_sync_in_var`, writes objects into the main repository and
 #      moves the main checkout's `refs/heads/<branch>` by compare-and-swap,
 #      may also heal the clone's `refs/heads/<branch>` by compare-and-swap,
-#      with its index and working tree, and on `main` and `worktree` writes nothing.
+#      with its index and working tree, and on `main` writes nothing.
 #      `hr_run_main_git`, `hr_run_copy_git` and `hr_copy_git_at` are
 #      general-purpose runners that
 #      write only what their caller's arguments ask, so a caller that drives a
@@ -694,8 +694,8 @@ hr_script_root() {
 #
 # WHY THE MAIN CHECKOUT IS A SEPARATE ANCHOR: the inbox, the logs, the registry
 # and the kill switch live in ONE place so every run is tailable and stoppable
-# from it, while a run itself executes in a sibling worktree. A script that used
-# its own checkout for both would write a second, invisible inbox per worktree.
+# from it, while a run itself executes in its own clone beside it. A script that
+# used its own checkout for both would write a second, invisible inbox per copy.
 #
 # Inside a clone it answers the clone itself. It never reads HARNESS_MAIN_REPO,
 # because its callers run unsandboxed and place the main checkout from their own
@@ -721,7 +721,7 @@ EOF
   return 1
 }
 
-# Print the directory above <repo_root> — where sibling worktrees live. Matches
+# Print the directory above <repo_root> — where a run's clone lives. Matches
 # the CLI's `workRoot()` (the repository root's parent) byte for byte, because
 # the generated permission profile is materialized from that one.
 hr_work_root() {
@@ -1203,6 +1203,28 @@ hr_clone_target_check_var() {
   return 0
 }
 
+# hr_run_target_check_var <main> <dir> — the one place this library decides a
+# linked worktree is not a run copy. `hr_wrapper_target_check_var <main> <dir>`,
+# refused with that check's own `HR_TARGET_REFUSAL` when it fails; when it
+# accepts a linked worktree, return 1 with `HR_TARGET_REFUSAL` set to one
+# sentence naming <dir> and <main> as passed, and `HR_TARGET_GITDIR` and
+# `HR_TARGET_KIND` cleared, as every other refusal leaves them. Otherwise 0
+# with `HR_TARGET_KIND` (`main` or `clone`), `HR_TARGET_GITDIR` and
+# `HR_TARGET_BRANCH` as that check set them. Reads no run registry and no tip,
+# prints nothing; call it directly, never inside `$(…)`. Its callers:
+# `hr_run_copy_check_var`, `launch-sandboxed-gates.sh` check 6 and
+# `setup-worktree.sh --target`.
+hr_run_target_check_var() {
+  hr_wrapper_target_check_var "${1-}" "${2-}" || return 1
+  if [ "$HR_TARGET_KIND" = worktree ]; then
+    HR_TARGET_REFUSAL="'${2-}' is a linked worktree of ${1-}, and a run copy is a clone the run registry records"
+    HR_TARGET_GITDIR=""
+    HR_TARGET_KIND=""
+    return 1
+  fi
+  return 0
+}
+
 # Set `HR_WRAPPER_BRANCH` to the branch the checkout whose canonical gitdir is
 # <gitdir> has out, asked of the main checkout <main> alone, for the
 # unsandboxed wrappers after `hr_wrapper_target_check_var` set <gitdir>.
@@ -1210,7 +1232,9 @@ hr_clone_target_check_var() {
 # that is not a valid branch name. Prints nothing; call it directly, never
 # inside `$(…)`.
 #
-# The main checkout's own HEAD is `HEAD` there; a worktree's is
+# The main checkout's own HEAD is `HEAD` there; a linked worktree's — which
+# reaches a wrapper only as a checkout a person made by hand with `git worktree
+# add`, a run copy being a clone — is
 # `worktrees/<name>/HEAD`, which git resolves from the main repository without
 # reading that worktree's `.git` pointer, its record's `commondir` or its
 # `config.worktree`. The wrapper reads the branch once and names it as
@@ -1251,10 +1275,12 @@ hr_wrapper_branch_var() {
   return 0
 }
 
-# Print which run copy the gitdir <gitdir> of the main checkout <main> is:
-# `main` for `<main>/.git`, `worktree` for a path directly under
-# `<main>/.git/worktrees/`, `clone` otherwise. Purely lexical: call it only on
-# a gitdir `hr_wrapper_target_check_var` has already accepted.
+# Print which kind of checkout the gitdir <gitdir> of the main checkout <main>
+# is: `main` for `<main>/.git`, `worktree` for a path directly under
+# `<main>/.git/worktrees/` — a linked worktree, which reaches the wrappers only
+# as a checkout a person made by hand with `git worktree add`; a run copy is a
+# clone — and `clone` otherwise. Purely lexical: call it only on a gitdir
+# `hr_wrapper_target_check_var` has already accepted.
 hr_copy_kind() {
   local main="${1-}" gitdir="${2-}" rest
   [ -n "$main" ] && [ -n "$gitdir" ] || return 1
@@ -2981,7 +3007,7 @@ hr_sanitize_branch() {
 
 # `<work_root>/<projectName>-<sanitized branch>` — byte-identical to what the
 # CLI's `worktreeGlob()` materializes into the generated permission profile, so
-# a worktree this creates is one that profile matches. Derive it here; never
+# a run's clone created there is one that profile matches. Derive it here; never
 # re-build the string in a caller.
 hr_worktree_dir() {
   local root="${1-}" branch="${2-}" work name safe
@@ -3832,13 +3858,12 @@ hr_derive_branch() {
 # THE WATCHER FAMILY'S GIT IN A RUN'S COPY.
 #
 # The watcher family runs git outside the sandbox in a working copy a run has
-# written — a worktree, the main checkout or a clone — so every call made here
-# holds four rules on every arm:
+# written — the main checkout or a clone the run registry records; the copy
+# check refuses a linked worktree (`hr_run_target_check_var`) — so every call
+# made here holds four rules on both arms:
 #   - No hook runs: `core.hooksPath=/dev/null` holds none.
 #   - The copy's record is read once, by the checks, and never again. For a
-#     worktree only `<record>/index` is borrowed, so git never reads the copy's
-#     `.git` pointer, the record's `commondir`, its `HEAD` or its
-#     `config.worktree`. For a clone the checks read the registry, `HEAD`,
+#     clone the checks read the registry, `HEAD`,
 #     `alternates` and `.git/config` once; the copy check's sync-in then runs
 #     `git-upload-pack` in the clone, which reads the clone's `.git/config`,
 #     refs and objects (through `alternates`) again under the measured fetch
@@ -3860,10 +3885,11 @@ hr_derive_branch() {
 # through `hr_copy_ref_swap_var`, the clone's ref first. `hr_run_surface_check_var` and
 # `hr_run_worktree_diff_var` need no arm of their own: they read refs and
 # objects from the main checkout and the copy's working tree through a fresh
-# index, which holds for a clone as for a worktree.
+# index, which holds for a clone as for the main checkout.
 # `hr_worktree_config_check_var` is skipped here because no runner below lets
-# git read the record's `config.worktree`; `push-branch.sh` and
-# `refresh-branch.sh` keep it under their own headers. Write exception 5 in the
+# git read a `config.worktree`; `push-branch.sh` and `refresh-branch.sh`, which
+# still accept a linked worktree a person made by hand, keep it under their own
+# headers. Write exception 5 in the
 # header is this section's.
 #
 # Every function suffixed `_var` sets globals and must be called directly, never
@@ -3902,23 +3928,26 @@ hr_run_main_set_var() {
   return 0
 }
 
-# hr_run_copy_check_var <main> <copy> — judge <copy> against <main> and set
+# hr_run_copy_check_var <main> <copy> — judge <copy> against <main> through
+# `hr_run_target_check_var`, which accepts the main checkout and a clone the
+# run registry records and refuses a linked worktree, and set
 # `HR_RUN_MAIN`, `HR_RUN_COPY_TOP` (canonical), `HR_RUN_COPY_GITDIR`
-# (`HR_TARGET_GITDIR`), `HR_RUN_COPY_KIND` (`HR_TARGET_KIND`),
-# `HR_RUN_COPY_BRANCH` (empty on a detached, unreadable or invalid HEAD, or a
-# name starting with `-`) and `HR_RUN_COPY_TIP`: the copy's HEAD commit read
-# from the main repository, empty when unborn. On a clone with a branch it
-# first syncs that branch in (`hr_copy_sync_in_var`), so the tip is the main
-# checkout's `refs/heads/<branch>` after the sync. 0 trusted; 1 untrusted or
-# the sync-in refused, with `HR_RUN_REFUSAL` set.
+# (`HR_TARGET_GITDIR`), `HR_RUN_COPY_KIND` (`HR_TARGET_KIND`: `main` or
+# `clone`), `HR_RUN_COPY_BRANCH` (empty on a detached, unreadable or invalid
+# HEAD, or a name starting with `-`) and `HR_RUN_COPY_TIP`: the copy's HEAD
+# commit read from the main repository, empty when unborn. On a clone with a
+# branch it first syncs that branch in (`hr_copy_sync_in_var`), so the tip is
+# the main checkout's `refs/heads/<branch>` after the sync. 0 trusted; 1
+# untrusted or the sync-in refused, with `HR_RUN_REFUSAL` set; a refused
+# target leaves every `HR_RUN_COPY_*` value empty.
 hr_run_copy_check_var() {
-  local main="${1-}" copy="${2-}" top head
+  local main="${1-}" copy="${2-}" top
   hr_run_main_set_var "$main" || return 1
   if [ -z "$copy" ] || ! top=$(hr_checkout_top_nogit "$copy"); then
     HR_RUN_REFUSAL="'$copy' is not inside a git checkout"
     return 1
   fi
-  if ! hr_wrapper_target_check_var "$HR_RUN_MAIN" "$top"; then
+  if ! hr_run_target_check_var "$HR_RUN_MAIN" "$top"; then
     HR_RUN_REFUSAL=$HR_TARGET_REFUSAL
     return 1
   fi
@@ -3940,12 +3969,7 @@ hr_run_copy_check_var() {
     HR_RUN_COPY_TIP=$(hr_run_main_git rev-parse --verify --quiet "refs/heads/$HR_RUN_COPY_BRANCH^{commit}" 2>/dev/null) || HR_RUN_COPY_TIP=""
     return 0
   fi
-  if [ "$HR_RUN_COPY_GITDIR" = "$HR_RUN_MAIN/.git" ]; then
-    head=HEAD
-  else
-    head="worktrees/${HR_RUN_COPY_GITDIR##*/}/HEAD"
-  fi
-  HR_RUN_COPY_TIP=$(hr_run_main_git rev-parse --verify --quiet "$head^{commit}" 2>/dev/null) || HR_RUN_COPY_TIP=""
+  HR_RUN_COPY_TIP=$(hr_run_main_git rev-parse --verify --quiet "HEAD^{commit}" 2>/dev/null) || HR_RUN_COPY_TIP=""
   return 0
 }
 

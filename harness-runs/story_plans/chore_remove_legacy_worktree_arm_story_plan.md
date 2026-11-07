@@ -24,7 +24,7 @@ Every run since `feat_clone_per_run_switch` executes in a clone, recorded in the
 
 Each entry resolves 1:1 to `harness-runs/task_plans/chore_remove_legacy_worktree_arm/task_<K>_plan.md`. Ordered bottom-up by ship sequence, with the catch-all layer last.
 
-1. [ ] **Task 1** — Make the run-copy check refuse a linked worktree, and reframe the library's worktree prose as a hand-made checkout _(layer: cli)_ _(points: 20)_
+1. [x] **Task 1** — Make the run-copy check refuse a linked worktree, and reframe the library's worktree prose as a hand-made checkout _(layer: cli)_ _(points: 20)_
 2. [ ] **Task 2** — Watcher: drop the `worktree` copy kind, skip a parked or paused record with no `copy_kind`, and seed test records as clones _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Remove the legacy-worktree cases from the watcher review-drop and stall payload suites, and reword `remote-start.test.mjs`'s worktree case as a hand-made one _(layer: cli)_ _(points: 18)_
 4. [ ] **Task 4** — Sweep: remove the `git worktree remove` arm and skip a record with no `copy_kind` _(layer: cli)_ _(points: 15)_
