@@ -12,7 +12,7 @@ The branch keeps to its no-behaviour-change constraint: the only runtime-visible
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Stop the whiteboard's `**5. The sandbox**` row saying hooks and MCP servers are held by the permission profile _(layer: plugin)_
+1. [x] **Finding 1** — Stop the whiteboard's `**5. The sandbox**` row saying hooks and MCP servers are held by the permission profile _(layer: plugin)_
 2. [ ] **Finding 3** — Qualify the whiteboard's "every command the run executes" with the excluded scripts _(layer: plugin)_
 3. [ ] **Finding 2** — Make the profile `_README`'s headless-parity line name HP1's three calls, and repoint its test _(layer: cli)_
 
