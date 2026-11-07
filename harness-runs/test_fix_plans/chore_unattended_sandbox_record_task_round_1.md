@@ -12,7 +12,7 @@ Not failures, and so not planned: gate 13a/13b/13c are reported `BLOCKED` (the P
 
 This list is the **single source of truth** for the fix loop: it walks these entries top to bottom and acts on the first `[ ]`. `[ ]` markers anywhere else — including the `- [ ]` sub-step bullets inside the per-finding files — are informational only.
 
-1. [ ] **Finding 1** — Bound the gate12 default-branch suite's child waits so a stuck round fails fast and names itself. _(layer: cli, general)_
+1. [x] **Finding 1** — Bound the gate12 default-branch suite's child waits so a stuck round fails fast and names itself. _(layer: cli, general)_
 
 ## Must Fix
 
