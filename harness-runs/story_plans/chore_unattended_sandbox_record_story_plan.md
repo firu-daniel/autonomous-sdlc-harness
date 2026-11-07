@@ -47,7 +47,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_unattended_sandbox_rec
 
 1. [x] **Task 1** — Repoint the cli layer's residual citations in shipped script comments and a test header _(layer: cli)_ _(points: 8)_
 2. [x] **Task 2** — Repoint `git-trust-file-guard.sh`'s residual citation in its header and its deny reason _(layer: plugin)_ _(points: 8)_
-3. [ ] **Task 3** — Create `docs/sandbox-record.md`: opening, §1 contents, §2 what runs outside, §3 the domain list _(layer: general)_ _(points: 20)_
+3. [x] **Task 3** — Create `docs/sandbox-record.md`: opening, §1 contents, §2 what runs outside, §3 the domain list _(layer: general)_ _(points: 20)_
 4. [ ] **Task 4** — Write §4, the measured results per leg, and §5, the Linux runner's PID namespace and no-new-privileges _(layer: general)_ _(points: 20)_
 5. [ ] **Task 5** — Move residuals 1–13 into §6, append the new residuals, and turn `docs/cli.md` §6's list into a pointer _(layer: general)_ _(points: 20)_
 6. [ ] **Task 6** — Repoint residual citations in `docs/watcher.md`, `docs/remote-execution.md` and `docs/sandbox-placeholder-upstream-report.md` _(layer: general)_ _(points: 12)_
