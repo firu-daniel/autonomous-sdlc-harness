@@ -9,7 +9,8 @@
  * It never asks git to read the worktree's `.git` pointer, its record's `HEAD`, its `commondir` or
  * its `config.worktree` after its checks, and it runs no commit hook.** Cases (a)–(f) re-prove
  * `docs/outer-loop-verification.md` §1.1 on a worktree; (g) is the hooks; (k) the filter refusal;
- * (l) a submodule under a passed directory; (m) a landed commit whose index sync failed.
+ * (l) a submodule under a passed directory; (m) a landed commit whose index sync failed; (n) a
+ * content hash the object store refuses, reported as a failed write rather than as a bad path.
  *
  * A race cannot be staged reliably, so cases (h)–(j) and (m) stage its outcome deterministically
  * instead, as `cli/test/wrapper-target-check.test.mjs`'s header explains for its (i)–(k): a `git`
@@ -329,4 +330,29 @@ test('(m) A commit whose index sync fails is reported as landed', async (t) => {
   assert.equal(again.status, 3, output(again));
   assert.equal(await f.tip(), after);
   assert.equal(await f.wtGit('status', '--porcelain', '--', 'new.txt'), '');
+});
+
+test('(n) A content hash the object store refuses is named as a failed write, not as a bad path', async (t) => {
+  const f = await fixture(t);
+  // As a sandboxed copy of the wrapper finds it: `<main>/.git/objects` is not writable, so
+  // `hash-object -w` fails on a path that passed every check (#275 §7a, CW2).
+  const realGit = (await runBash(f.root, ['-c', 'command -v git'])).stdout.trim();
+  const bin = join(f.root, 'shim-bin');
+  await mkdir(bin);
+  await writeFile(
+    join(bin, 'git'),
+    `#!/bin/sh\ncase " $* " in *" hash-object -w "*) echo 'error: unable to create temporary file: Operation not permitted' >&2; exit 128 ;; esac\nexec '${realGit}' "$@"\n`,
+  );
+  await chmod(join(bin, 'git'), 0o755);
+  await writeFile(join(f.wt, 'tracked.txt'), 'edited\n');
+  const before = await f.tip();
+  const result = await f.commit(['tracked.txt'], undefined, { PATH: `${bin}:${process.env.PATH}` });
+  assert.equal(result.status, 1, output(result));
+  assert.match(
+    result.stderr,
+    /^commit-on-branch\.sh: refusing to commit: cannot write the content of 'tracked\.txt' to the object store of '.+' \(git hash-object -w failed; a sandboxed command cannot write it\)$/m,
+    output(result),
+  );
+  assert.doesNotMatch(result.stderr, /is not a regular file/, output(result));
+  assert.equal(await f.tip(), before);
 });
