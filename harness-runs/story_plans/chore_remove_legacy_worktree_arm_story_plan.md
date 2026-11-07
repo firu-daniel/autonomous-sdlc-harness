@@ -34,7 +34,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_remove_legacy_worktree
 8. [x] **Task 6** — Reword the legacy-worktree-run prose in `cli/src` comments and the autonomous profile template _(layer: cli)_ _(points: 10)_
 9. [x] **Task 7** — Drop the legacy-worktree-run clause from the three autonomous commit instructions _(layer: plugin)_ _(points: 8)_
 10. [x] **Task 8** — `docs/watcher.md` and `docs/cli.md` §6: remove the migration section and the legacy-run sentences _(layer: general)_ _(points: 15)_
-11. [ ] **Task 9** — `docs/sandbox-verification.md`, `docs/development.md` and `docs/outer-loop-verification.md`: close CS5 and re-target the worktree rows at a hand-made worktree _(layer: general)_ _(points: 15)_
+11. [x] **Task 9** — `docs/sandbox-verification.md`, `docs/development.md` and `docs/outer-loop-verification.md`: close CS5 and re-target the worktree rows at a hand-made worktree _(layer: general)_ _(points: 15)_
 12. [ ] **Task 10** — Re-render the `notes-app` example profile's `_README` line and record the re-render _(layer: general)_ _(points: 5)_
 
 ## Scope register
