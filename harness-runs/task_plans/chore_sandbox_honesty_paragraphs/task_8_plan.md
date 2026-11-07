@@ -35,3 +35,7 @@
 - `git diff -- docs/remote-execution.md` leaves every fenced block byte-identical.
 - Re-read each verdict written against its row's verdict cell in `docs/sandbox-verification.md`; none is stronger and none drops its round.
 - Re-run the story index's derivation entry C over `docs/remote-execution.md` and confirm every reached hit is a register row.
+
+**Deviations from plan:**
+
+- In **The post-session steps on a job that passed.**, the sentence *"Those three are verified by local fixtures only; … and will observe the skip line …"* was also reworded to *"Those three were first verified by local fixtures; … and looks for the skip line …"*: the Work list did not name it, but left as written it contradicts the SB2 / SB4 / FR6 verdicts the same bullet now states. No verdict is attached to it, because §10 does not record the skip line's observation as its own row.
