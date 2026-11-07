@@ -1005,6 +1005,8 @@ A change to the `-C` de-quote, to either directory whitelist or to the reconstru
 
 **2026-11-07, re-driven for `fix_sibling_glob_traversal`** on paired trees — `plugin/hooks` at the branch's merge base with `origin/dev` and at its tip, each taken by `git archive`: **84** rows driven (T1–T6 for each trio path and each of the three tools, T7–T13 for each tool, T14, T15's five payloads, T16 and T17's two), **84** `hold`; `moved-by-branch`: none; `stale-before-branch`: none.
 
+**2026-11-07, re-driven for `chore_unattended_sandbox_record`** on paired trees — `plugin/hooks` at the branch's merge base with `origin/dev` and at its tip, each taken by `git archive`: **84** rows driven (T1–T6 for each trio path and each of the three tools, T7–T13 for each tool, T14, T15's five payloads, T16 and T17's two), **84** `hold`; `moved-by-branch`: none; `stale-before-branch`: none. The branch's change to the guard is its header comment and the `deny` reason's trailing citation only, so the 60 trio `deny` rows (T1–T8) carry a different reason tail between the trees and the same decision.
+
 #### The rows
 
 | # | target, or payload | decision | source |

@@ -51,7 +51,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_unattended_sandbox_rec
 4. [x] **Task 4** — Write §4, the measured results per leg, and §5, the Linux runner's PID namespace and no-new-privileges _(layer: general)_ _(points: 20)_
 5. [x] **Task 5** — Move residuals 1–13 into §6, append the new residuals, and turn `docs/cli.md` §6's list into a pointer _(layer: general)_ _(points: 20)_
 6. [x] **Task 6** — Repoint residual citations in `docs/watcher.md`, `docs/remote-execution.md` and `docs/sandbox-placeholder-upstream-report.md` _(layer: general)_ _(points: 12)_
-7. [ ] **Task 7** — Repoint residual citations in `docs/development.md`, `docs/sandbox-verification.md` and the Gate 12 graders, add the roadmap rows §7 names, and record the trio guard's re-measurement _(layer: general)_ _(points: 15)_
+7. [x] **Task 7** — Repoint residual citations in `docs/development.md`, `docs/sandbox-verification.md` and the Gate 12 graders, add the roadmap rows §7 names, and record the trio guard's re-measurement _(layer: general)_ _(points: 15)_
 8. [ ] **Task 8** — Register the document in `README.md` → `## Where to read more` and in `llms.txt` _(layer: general)_ _(points: 5)_
 
 ## Scope register
