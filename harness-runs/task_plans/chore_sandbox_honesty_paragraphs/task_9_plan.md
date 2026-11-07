@@ -25,3 +25,5 @@
 - `git diff -- docs/outer-loop-verification.md` shows added lines only, all inside §3, after **The consequence, stated as the measurement.**
 - Every *derived* in the new paragraph is labelled as such, and every *measured* claim names its row (SR2, CS2, CL4) as `docs/sandbox-record.md` grades it.
 - `git grep -n -F "sandbox-record.md" -- docs/outer-loop-verification.md` finds the new pointer.
+
+- **Deviations from plan:** The plan's wording "held to its write roots and network allowlist (SR2, **pass**)" overstates SR2, which measures only a write outside the allowed roots (`docs/sandbox-verification.md` → row SR2). Implemented as: write-root refusal cited to SR1 and SR2 (**pass**, macOS and Linux container); network-allowlist containment labelled as derived from record §1, not measured by either row. The `deny`-floor sentence is otherwise as planned, with CL4 and CS2 each labelled *derived … not re-driven*.
