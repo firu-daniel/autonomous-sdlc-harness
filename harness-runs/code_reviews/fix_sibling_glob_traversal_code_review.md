@@ -20,7 +20,7 @@
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 2** — Add the scoped-`appDir` keeper m39 to `cli/test/path-anchored-arms.test.mjs`, so the sibling `cd <stem>*/<appDir>` arm has a regression test _(layer: cli)_
-2. [ ] **Finding 1** — Restrict the `cd <dir>` redirection twin and the rewrite guard's strip to `>`, so a zsh numeric-glob `<->/…` operand is vetoed; test and record it _(layer: cli, plugin, general)_
+2. [x] **Finding 1** — Restrict the `cd <dir>` redirection twin and the rewrite guard's strip to `>`, so a zsh numeric-glob `<->/…` operand is vetoed; test and record it _(layer: cli, plugin, general)_
 
 ---
 

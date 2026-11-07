@@ -1608,8 +1608,8 @@ EOF
 # of what the stem arm matches; they exist so a scoped directory such as
 # `packages/@acme/storefront` keeps under a sibling the allow the stem arm's
 # class veto would otherwise cost it. Each non-worktree `cd` arm is emitted
-# twice: an exact match, and the prefix followed by a space and a tail that must
-# carry a redirection operator — the tail may be ONLY a redirection, because
+# twice: an exact match, and the prefix followed by a space and a `*>*` tail that
+# must carry an output redirection — the tail may be ONLY a redirection, because
 # zsh reads a second operand as `cd <old> <new>`, substituting <new> for <old>
 # in `$PWD`, so `cd <repo> <anywhere>` and `cd <repo> ..` leave the workspace.
 # Each `--prefix` arm is emitted ONCE, exact — its `*`-terminated twin is what
@@ -1670,25 +1670,27 @@ hc_path_anchored_patterns() {
     sib="$sib${nl}cd $wt*/$state_rel${nl}!cd $wt*[!$cls]*/$state_rel${nl}!cd $wt*/../*"
   fi
 
-  # The three operand vetoes under each ` *[<>]*` twin: the tail is one word in a
+  # The three operand vetoes under each ` *>*` twin: the tail is one word in a
   # redirection's class; it opens like a redirection; and a digit-led word is a
-  # descriptor number and nothing more.
+  # descriptor number and nothing more. A `<` is refused because zsh reads
+  # `<x-y>` as a numeric-range glob, so a `<`-bearing word can be a second `cd`
+  # operand.
   cat <<EOF
 cd $root
-cd $root *[<>]*
-!cd $root *[!0-9<>&A-Za-z/._-]*
-!cd $root [!0-9<>&]*
-!cd $root [0-9]*[!0-9]*[<>]*
+cd $root *>*
+!cd $root *[!0-9>&A-Za-z/._-]*
+!cd $root [!0-9>&]*
+!cd $root [0-9]*[!0-9]*>*
 cd $app_abs
-cd $app_abs *[<>]*
-!cd $app_abs *[!0-9<>&A-Za-z/._-]*
-!cd $app_abs [!0-9<>&]*
-!cd $app_abs [0-9]*[!0-9]*[<>]*
+cd $app_abs *>*
+!cd $app_abs *[!0-9>&A-Za-z/._-]*
+!cd $app_abs [!0-9>&]*
+!cd $app_abs [0-9]*[!0-9]*>*
 cd $state_abs
-cd $state_abs *[<>]*
-!cd $state_abs *[!0-9<>&A-Za-z/._-]*
-!cd $state_abs [!0-9<>&]*
-!cd $state_abs [0-9]*[!0-9]*[<>]*
+cd $state_abs *>*
+!cd $state_abs *[!0-9>&A-Za-z/._-]*
+!cd $state_abs [!0-9>&]*
+!cd $state_abs [0-9]*[!0-9]*>*
 cd $wt*
 !cd $wt*[!$cls]*
 !cd $wt*/..

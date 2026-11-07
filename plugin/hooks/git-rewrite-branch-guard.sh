@@ -51,7 +51,10 @@
 # is disclosed rather than closed — the identical capability is reachable
 # through `allow-safe-compounds.sh` on any safe prefix, so refusing it only here
 # would move nothing, and closing the class means judging redirect targets in
-# both guards, which is its own change with its own matrix.
+# both guards, which is its own change with its own matrix. Only a `>`-bearing
+# word is stripped: a `<`-led word can be a zsh numeric glob (`<->`) and so a
+# second `cd` operand. The cost is one prompt for a trailing input redirect on an
+# `rm` piece.
 #
 # STAYS SILENT (exit 0, no output) on every one of:
 #   - the payload does not parse, or `jq` is absent      (no command to judge)
@@ -404,7 +407,7 @@ while IFS= read -r piece; do
   [ -z "$piece" ] && continue
 
   # Strip a trailing redirect like `2>/dev/null` so it doesn't confuse matching.
-  piece=$(printf '%s' "$piece" | sed -E 's/[[:space:]]+[0-9]*[<>][^[:space:]]+[[:space:]]*$//')
+  piece=$(printf '%s' "$piece" | sed -E 's/[[:space:]]+[0-9]*>[^[:space:]]+[[:space:]]*$//')
 
   if is_safe_prefix "$piece"; then
     update_cwd_from_cd "$piece"

@@ -142,6 +142,8 @@ test('path-anchored arms: hole spellings are silent and ordinary spellings keep 
     ['m25', COMPOUNDS, `git -C ${repo} status && cd ${repo} ${outside} && npm ci`, repo],
     ['m26', COMPOUNDS, `git -C ${repo} status && cd ${repo} .. && ls`, repo],
     ['m27', COMPOUNDS, `git -C ${repo} status && cd ${repo}/packages/storefront ${outside} && ls`, repo],
+    ['m44', COMPOUNDS, `git -C ${repo} status && mkdir -p 1 && cd ${repo} <->/../../outside && npm ci`, repo],
+    ['m45', REWRITE, `git -C ${repo} status && cd ${repo} <->/../../outside && rm tracked.txt`, repo],
   ];
 
   /** [id, command, cwd] — each must be `allow` from `allow-safe-compounds.sh`. */
