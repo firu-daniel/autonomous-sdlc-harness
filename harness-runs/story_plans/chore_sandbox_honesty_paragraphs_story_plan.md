@@ -40,7 +40,7 @@ The work is cut by layer, in ship order: the three `cli` tasks (the shipped comm
 
 Each entry resolves 1:1 to `harness-runs/task_plans/chore_sandbox_honesty_paragraphs/task_<K>_plan.md`. The entries are ordered bottom-up by ship sequence, with the catch-all layer last.
 
-1. [ ] **Task 1** — Rewrite `scratch-run.sh`'s `WHAT THIS DOES NOT CONTAIN`, the scratch README's boundary paragraph and `commit-on-branch.sh`'s CS2 citation in the templates _(layer: cli)_ _(points: 15)_
+1. [x] **Task 1** — Rewrite `scratch-run.sh`'s `WHAT THIS DOES NOT CONTAIN`, the scratch README's boundary paragraph and `commit-on-branch.sh`'s CS2 citation in the templates _(layer: cli)_ _(points: 15)_
 2. [ ] **Task 2** — Rewrite the profile template's `_README` lines on what the sandbox contains, leaves open and was measured _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Point the generated write-protection `_README` line at the trio guard and the record, pin the new `_README` text in `profile.test.mjs`, and cite CS2's verdict in `checks.ts`'s doc comment _(layer: cli)_ _(points: 18)_
 4. [ ] **Task 4** — Rewrite the hooks README's containment sentences and the whiteboard's sandbox row, containment list and two other sandbox claims _(layer: plugin)_ _(points: 18)_
