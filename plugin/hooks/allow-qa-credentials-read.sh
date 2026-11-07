@@ -153,7 +153,9 @@
 # tests, in the same order, that `allow-safe-compounds.sh` applies — deliberately,
 # so the two guards cannot drift into judging the same piece differently, and so
 # `cd <repo> && cat <creds path>` keeps working through the `cd` arm rather than
-# through a special case here.
+# through a special case here. That `cd` arm carries the library's vetoes, so a
+# `cd` whose wildcard matched a `/../` — `cd <work_root>/<project_name>-x/../..`
+# — is refused before a relative `<creds path>` behind it is read from outside.
 #
 # CONTROL FLOW FALLS THROUGH, as it does in `allow-safe-compounds.sh` and for the
 # same reason: splitting `if [ -f "$f" ]; then cat "$f"; fi` on `;` yields pieces
@@ -276,7 +278,9 @@
 # REPRO — reproduce any decision by hand; the payload goes in on stdin. <repo> is
 # a checkout that has adopted the harness with `phases.qa: true` and
 # `qa.credentialsPath: "<creds path>"` (a repo-relative path, e.g.
-# `.secrets/test-accounts.env`):
+# `.secrets/test-accounts.env`), <work_root> its parent directory,
+# <project_name> its configured name and <outside> a directory outside the
+# workspace:
 #
 #   printf '{"tool_input":{"command":"cat <creds path>"},"cwd":"<repo>"}' \
 #     | bash plugin/hooks/allow-qa-credentials-read.sh
@@ -335,6 +339,10 @@
 #                                                 matching no safe prefix
 #     if [ -f <creds path> ]; then cat <creds path>; fi
 #                                                 control flow falls through
+#     git -C <repo> status && cd <work_root>/<project_name>-x/../../<outside> && cat <creds path>
+#                                                 the sibling `cd` arm's `/../`
+#                                                 veto: the relative <creds path>
+#                                                 would be read from <outside>
 #     sed -n 's/=.*/=<redacted>/p' <creds path>   the redacted-print idiom the old
 #                                                 header protected: refused twice
 #                                                 over, as a token and as a piece

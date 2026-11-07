@@ -51,7 +51,10 @@
 # is disclosed rather than closed — the identical capability is reachable
 # through `allow-safe-compounds.sh` on any safe prefix, so refusing it only here
 # would move nothing, and closing the class means judging redirect targets in
-# both guards, which is its own change with its own matrix.
+# both guards, which is its own change with its own matrix. Only a `>`-bearing
+# word is stripped: a `<`-led word can be a zsh numeric glob (`<->`) and so a
+# second `cd` operand. The cost is one prompt for a trailing input redirect on an
+# `rm` piece.
 #
 # STAYS SILENT (exit 0, no output) on every one of:
 #   - the payload does not parse, or `jq` is absent      (no command to judge)
@@ -128,8 +131,18 @@
 # built by the shared library's `hc_path_anchored_patterns`, which both guards
 # call and which documents the mechanism, the derivation and why the arms are
 # `case` globs rather than filesystem lookups. They cover `cd <dir>` and the
-# exact, tail-free `<pkg-manager> --prefix <dir>`. THE TWO SHAPES THAT CARRY A
-# SUBCOMMAND AFTER THE DIRECTORY — `git -C <dir> …` and
+# exact, tail-free `<pkg-manager> --prefix <dir>`. Each wildcard-bearing arm
+# carries veto globs that `hc_matches_any_pattern` honours: they withdraw the arm
+# when its `*` matched a `/../`, a trailing `/..` or a character outside
+# `[A-Za-z0-9._/-]` — a space, so a subcommand inside a `--prefix` wildcard, too
+# — and they hold a `cd <dir>` arm's tail to one redirection word, because zsh
+# reads a second operand as `cd <old> <new>`. The library states each arm's
+# vetoes; the record is `docs/guard-verification.md` §2.4 row `(m)`. A `cd`
+# piece reaches `update_cwd_from_cd` only after an arm has granted it with none
+# of that arm's vetoes matching, so a traversal `cd` can no longer thread a
+# directory outside the workspace into a later bare `git rm` / `git mv`, which
+# carries no `-C` for the reconstruction below to judge. THE TWO SHAPES THAT
+# CARRY A SUBCOMMAND AFTER THE DIRECTORY — `git -C <dir> …` and
 # `<pkg-manager> --prefix <dir> …` — ARE DELIBERATELY NOT ARMS: an arm matches on
 # the directory alone, so the subcommand rides along on it, and here that also
 # meant a `git -C <sibling worktree> rm -r .` was granted by `is_safe_prefix`
@@ -150,7 +163,8 @@
 #
 # REPRO — reproduce any decision by hand; the payload goes in on stdin. <repo> is
 # a checkout that has adopted the harness and is on an ordinary branch, <tracked>
-# a file `git ls-files` reports there, <untracked> one it does not:
+# a file `git ls-files` reports there, <untracked> one it does not, and
+# <outside> a directory outside the workspace:
 #
 #   printf '{"tool_input":{"command":"cd <repo> && rm <tracked>"},"cwd":"<repo>"}' \
 #     | bash plugin/hooks/git-rewrite-branch-guard.sh
@@ -199,6 +213,14 @@
 #     rm <tracked> |& bash <script>                 …`|&` included: its `&` separates
 #     echo $(rm -rf <dir>; rm <tracked>)            torn command substitution
 #     echo $(rm -rf <dir> $(date); rm <tracked>)    …with a nested closed one inside
+#     git -C <repo> status && cd <work_root>/<project_name>-x/../../<outside> && git rm <path>
+#                                                   the sibling arm's `/../` veto
+#                                                   refuses the `cd`, so no outside
+#                                                   directory reaches the bare `git rm`
+#     git -C <repo> status && cd <repo>/../../<outside> && git rm <path>
+#                                                   the same from a run copy, where
+#                                                   <repo> is itself
+#                                                   `<work_root>/<project_name>-*`
 #     any of the above with <repo> on a protected branch, or detached
 #     any of the above in a <repo> whose config is invalid JSON
 #     any of the above in a <repo> with no harness.config.json
@@ -308,7 +330,8 @@ EOF
 # ---------------------------------------------------------------------------
 # Piece walking. A leading `cd` in an earlier piece moves the directory a later
 # piece's relative path resolves against, so the pieces are walked in order and
-# the cwd is threaded through them.
+# the cwd is threaded through them. Only a `cd` the path-anchored arms granted,
+# vetoes included, is threaded.
 # ---------------------------------------------------------------------------
 
 piece_cwd="$cwd"
@@ -384,7 +407,7 @@ while IFS= read -r piece; do
   [ -z "$piece" ] && continue
 
   # Strip a trailing redirect like `2>/dev/null` so it doesn't confuse matching.
-  piece=$(printf '%s' "$piece" | sed -E 's/[[:space:]]+[0-9]*[<>][^[:space:]]+[[:space:]]*$//')
+  piece=$(printf '%s' "$piece" | sed -E 's/[[:space:]]+[0-9]*>[^[:space:]]+[[:space:]]*$//')
 
   if is_safe_prefix "$piece"; then
     update_cwd_from_cd "$piece"
