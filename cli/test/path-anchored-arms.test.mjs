@@ -16,7 +16,7 @@
  * Not covered: what the executing shell then does with a granted `cd` — the guard is a string test,
  * and zsh's two-operand `cd` is recorded in `docs/guard-verification.md` §2.4 row `(m)`, not
  * asserted here; the symlink residual, which is open by design, so a test asserting it would lock a
- * hole in; and the scoped-`appDir` and cost rows, which `docs/guard-verification.md` carries.
+ * hole in; and the cost rows, which `docs/guard-verification.md` carries.
  *
  * RED ONCE — 2026-11-07, on branch `fix_sibling_glob_traversal` before Task 2's fix to
  * `hc_path_anchored_patterns`: `tests 35`, `pass 13`, `fail 22`. Every hole case failed, an `allow`
@@ -100,9 +100,12 @@ test('path-anchored arms: hole spellings are silent and ordinary spellings keep 
   const copy = join(workRoot, 'acme-shop-run_x');
   const dotshop = join(workRoot, 'dotshop');
   const outside = join(root, 'outside');
+  const scopedWork = join(root, 'scoped-work');
+  const scoped = join(scopedWork, 'scoped-shop');
 
   await seed(repo, configFor('acme-shop', 'packages/storefront'));
   await seed(dotshop, configFor('dotshop', '.'));
+  await seed(scoped, configFor('scoped-shop', 'packages/@acme/storefront'));
   await mkdir(outside);
   await runGit(repo, ['worktree', 'add', '--quiet', '-b', 'feat_x', W]);
   await runGit(workRoot, ['clone', '--quiet', '--shared', repo, copy]);
@@ -154,6 +157,7 @@ test('path-anchored arms: hole spellings are silent and ordinary spellings keep 
     ['m36', `git -C ${repo} status && cd ${repo} 2>/dev/null && ls`, repo],
     ['m37', `git status && npm --prefix ${workRoot}/dotshop-x`, dotshop],
     ['m38', `git -C ${repo} status && cd ${repo}/packages/storefront && npm ci`, repo],
+    ['m39', `git -C ${scoped} status && cd ${scopedWork}/scoped-shop-x/packages/@acme/storefront && ls`, scoped],
   ];
 
   /** Keepers also driven through `git-rewrite-branch-guard.sh` with `&& rm tracked.txt` appended. */
