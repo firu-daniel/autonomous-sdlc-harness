@@ -23,7 +23,7 @@ One accompanying-set item is missing. The `examples/notes-app` rendered profile 
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — The notes-app example's rendered profile was not re-rendered with the token-carrying template it is rendered from _(layer: general)_
+1. [x] **Finding 1** — The notes-app example's rendered profile was not re-rendered with the token-carrying template it is rendered from _(layer: general)_
 
 ## Must Fix
 

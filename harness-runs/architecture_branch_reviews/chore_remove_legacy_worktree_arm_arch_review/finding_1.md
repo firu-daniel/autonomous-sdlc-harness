@@ -24,3 +24,16 @@ Then confirm the result:
 - `grep -n 'legacy worktree run' examples/notes-app/.claude/settings.autonomous.json` finds no match.
 
 Commit both files: `examples/notes-app/.claude/settings.autonomous.json` and `examples/notes-app/README.md`.
+
+## Disposition
+
+- **(a) Attempted:** an `Edit` of `examples/notes-app/.claude/settings.autonomous.json`, replacing `in a legacy worktree run, it cannot write the linked worktree's record` with `in a linked worktree a person made by hand, it cannot write that worktree's record` in the `FOUR COMMANDS RUN OUTSIDE THE SANDBOX` `_README` line. I did not edit `examples/notes-app/README.md`, because its sentence would record a re-render that never happened. I did not run the finding's `perl` commands through `Bash`, because that would route the write around the refusal. `git status --short` was empty before I added this section.
+- **(b) Refusal, quoted (two attempts, same text both times):** `Permission to use Edit has been denied because Claude Code is running in don't ask mode.` This matches the Task 10 disposition's refusal of the same edit.
+- **(c) Why no permission entry lifts it:** the target is under a `.claude/` directory. The tool layer's guard on `.claude/**` writes covers that path and is evaluated before the permission profile, so no `permissions.allow` entry grants the write. Profile read: `.claude/settings.json` holds only `permissions.allow: ["Bash(bash scripts/task-offer-check.sh)"]`, and the checkout has no `.claude/settings.local.json`.
+- **(d) Operator remedy, one paste:** from the checkout root, in an interactive session whose tool layer allows writes under `examples/notes-app/.claude/`:
+
+  ```sh
+  perl -0pi -e "s/in a legacy worktree run, it cannot write the linked worktree's record/in a linked worktree a person made by hand, it cannot write that worktree's record/" examples/notes-app/.claude/settings.autonomous.json && perl -0pi -e 's/(`CREDENTIALS ARE DENIED ON BOTH SIDES` lines, and changed no other entry\.) The file now carries 174/$1 A later re-render of the `FOUR COMMANDS RUN OUTSIDE THE SANDBOX` `_README` line, through the same three clauses, replaced the legacy-worktree-run clause with the hand-made linked worktree and changed no entry. The file now carries 174/' examples/notes-app/README.md && grep -o 'in a linked worktree a person made by hand[^.]*' cli/templates/claude/settings.autonomous.json examples/notes-app/.claude/settings.autonomous.json && ! grep -n 'legacy worktree run' examples/notes-app/.claude/settings.autonomous.json
+  ```
+
+  Then commit `examples/notes-app/.claude/settings.autonomous.json` and `examples/notes-app/README.md`.
