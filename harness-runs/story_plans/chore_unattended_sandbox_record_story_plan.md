@@ -45,7 +45,7 @@ The work is cut by layer, in ship order: the cli comments, then the plugin guard
 
 Each entry resolves 1:1 to `harness-runs/task_plans/chore_unattended_sandbox_record/task_<K>_plan.md`. The entries are ordered bottom-up by ship sequence, with the catch-all layer last.
 
-1. [ ] **Task 1** — Repoint the cli layer's residual citations in shipped script comments and a test header _(layer: cli)_ _(points: 8)_
+1. [x] **Task 1** — Repoint the cli layer's residual citations in shipped script comments and a test header _(layer: cli)_ _(points: 8)_
 2. [ ] **Task 2** — Repoint `git-trust-file-guard.sh`'s residual citation in its header and its deny reason _(layer: plugin)_ _(points: 8)_
 3. [ ] **Task 3** — Create `docs/sandbox-record.md`: opening, §1 contents, §2 what runs outside, §3 the domain list _(layer: general)_ _(points: 20)_
 4. [ ] **Task 4** — Write §4, the measured results per leg, and §5, the Linux runner's PID namespace and no-new-privileges _(layer: general)_ _(points: 20)_
