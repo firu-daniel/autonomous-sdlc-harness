@@ -21,3 +21,17 @@
 - `grep -o 'in a linked worktree a person made by hand[^.]*' cli/templates/claude/settings.autonomous.json examples/notes-app/.claude/settings.autonomous.json` prints the same clause for both files.
 - `git diff --stat -- examples/` lists exactly the two target files.
 - `grep -n 'legacy worktree run' examples/notes-app/.claude/settings.autonomous.json` finds no match.
+
+## Disposition
+
+- **(a) Attempted:** an `Edit` of `examples/notes-app/.claude/settings.autonomous.json`, replacing `in a legacy worktree run, it cannot write the linked worktree's record` with `in a linked worktree a person made by hand, it cannot write that worktree's record` in the `FOUR COMMANDS RUN OUTSIDE THE SANDBOX` `_README` line. The companion `examples/notes-app/README.md` sentence was written, then reverted so the README records no re-render that did not happen; `git status --short` is empty after the revert.
+- **(b) Refusal, quoted (twice, identical):** `Permission to use Edit has been denied because Claude Code is running in don't ask mode.` The same `Edit` call on `examples/notes-app/README.md` (outside any `.claude/` directory) succeeded in the same session, so the refusal follows the target's `.claude/` path segment.
+- **(c) Why no permission entry lifts it:** the target sits under a `.claude/` directory, which the tool layer's guard on `.claude/**` writes covers; that guard is evaluated ahead of the permission profile, and no `permissions.allow` entry grants it. Profile read: `.claude/settings.json` holds only `permissions.allow: ["Bash(bash scripts/task-offer-check.sh)"]`; there is no `.claude/settings.local.json`. The per-run profile under `~/.local/state/autonomous-sdlc-harness/run-profiles/` could not be read (Read and Bash both refused in don't-ask mode), so its contents are not reported.
+- **(d) Operator remedy, one paste:** run this from the checkout root in an interactive session, then commit both files:
+
+  ```sh
+  perl -0pi -e "s/in a legacy worktree run, it cannot write the linked worktree's record/in a linked worktree a person made by hand, it cannot write that worktree's record/" examples/notes-app/.claude/settings.autonomous.json
+  perl -0pi -e 's/(`CREDENTIALS ARE DENIED ON BOTH SIDES` lines, and changed no other entry\.) The file now carries 174/$1 A later re-render of the `FOUR COMMANDS RUN OUTSIDE THE SANDBOX` `_README` line, through the same three clauses, replaced the legacy-worktree-run clause with the hand-made linked worktree and changed no entry. The file now carries 174/' examples/notes-app/README.md
+  ```
+
+  Then run the README's six measuring commands from `examples/notes-app/` (the edited phrase holds no `/workspace` path, so every figure should be unchanged) and this file's three `**Verification:**` commands.
