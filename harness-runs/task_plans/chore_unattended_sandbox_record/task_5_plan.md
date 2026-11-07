@@ -59,3 +59,10 @@
 - Within §6, the unindented numbered items run from 1 through the last appended number, in order, with no gap. Read them with `grep -nE "^[0-9]+\. " docs/sandbox-record.md`, limited to the lines between the `## 6.` and `## 7.` headings.
 - `git grep -nIE "[Rr]esiduals? [0-9]" -- docs/cli.md`: every hit's line names `sandbox-record.md`. `git grep -nIF "Residuals, stated rather than hidden" -- docs/cli.md` returns the one pointer line.
 - Every row id added in §6 exists in `docs/sandbox-verification.md`, and the verdict stated is that row's verdict or weaker.
+
+- **Deviations from plan:**
+  - *"the profile's own entry (see below)"* (residual 12, **Claude Code's own placeholders**) is left as written, not rewritten to a `docs/cli.md` link: its referent is residual 12's own sub-bullet *They are untracked clutter, not a breach*, which names `.mcp.json` among the profile's own entries and moved with it, so the reference still resolves and a `cli.md` link would misdirect it.
+  - One more `docs/cli.md`-only reference than the plan lists was rewritten: residual 12's *"`--no-recurse-submodules` and `-c submodule.recurse=false` (above)"*, now a link to `cli.md` §6 → the paragraph **The excluded rule's `:*` accepts any argument…**.
+  - Residual 3 gets no *Since then* sentence: it names no row. LB5, the interactive-test shape, is `not run` (F10) in the container and on the runner, so nothing narrowed it.
+  - Two §7 bullets beyond the plan's, as "every other mismatch found": the gate launcher's `bwrap is not on PATH … (docs/cli.md §6)` refusal, which is residual 13's content; and residual 12's bare `§0` / `§5` citations of `sandbox-verification.md`, which collide with this file's own §5.
+  - The move was applied by a throwaway script under `harness-runs/scratch/` (`task5_move_residuals.py`, run through `scripts/scratch-run.sh`), asserting each rewrite's match count and the fence count; `task5_check_move.py` then confirmed every removed `docs/cli.md` line other than the seven repointed citation paragraphs is either verbatim in `docs/sandbox-record.md` or one of the rewritten/extended residual lines. Neither file is committed.
