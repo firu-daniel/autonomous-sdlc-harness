@@ -12,7 +12,7 @@ The log also reports gate 13a–13c as `BLOCKED` (the Python docs-retrieval envi
 
 This list is the **single source of truth** for the fix loop: walk it top to bottom and take the first `[ ]` entry. `[ ]` markers anywhere else in this plan or its per-finding files are informational only.
 
-1. [ ] **Finding 1** — Reword the watcher comment that trips the typos gate. _(layer: cli)_
+1. [x] **Finding 1** — Reword the watcher comment that trips the typos gate. _(layer: cli)_
 
 ## Must Fix
 

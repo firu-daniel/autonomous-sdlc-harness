@@ -452,8 +452,8 @@
 #     sandbox's PID namespace and no-new-privileges, measured `pass` on the
 #     GitHub-hosted `ubuntu-26.04` image `20261101.186.1` alone
 #     (docs/sandbox-record.md → `## 5. The Linux runner's PID namespace and
-#     no-new-privileges`, PN1–PN3, NN1–NN2), and unverified on other images and
-#     on self-hosted runners.
+#     no-new-privileges`, its `runner-pid` and `runner-privs` legs), and
+#     unverified on other images and on self-hosted runners.
 #   * WHAT BREAKS UNDER THE ALLOW-LIST. A variable a gate, a Bedrock/Vertex
 #     setup or an API gateway's credential (ANTHROPIC_AUTH_TOKEN,
 #     ANTHROPIC_CUSTOM_HEADERS) needs is gone until `sandbox.passEnv` lists it;

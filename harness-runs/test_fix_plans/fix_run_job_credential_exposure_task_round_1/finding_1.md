@@ -39,3 +39,6 @@ Do **not** instead add `cli/templates/scripts/autonomous-watcher.sh|PN` to the d
 
 - [ ] Reword the comment as above.
 - [ ] Confirm with a grep that no `PN1`, `PN2` or `PN3` remains under `cli/templates`, `plugin`, `schemas` or `cli/src`.
+
+- **Deviations from plan:**
+  - Evidence downgrade: the finding names no test file (`none — gate 6f shipped files pass typos`), so the fix-site fallback applied and `scripts/check-typos.sh` was not run (a gate script, which no unit runs). The after-result rests on reading the fix site plus `grep -rn "PN[123]" cli/templates plugin schemas cli/src` (exit 1, no match) after the edit; leg names `runner-pid` / `runner-privs` confirmed in `docs/sandbox-record.md` → `## 5.`'s table rows. Gate 6f's run in the Run gates phase (`scripts/run-gates.sh`) verifies it.
