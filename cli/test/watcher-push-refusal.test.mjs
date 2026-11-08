@@ -9,7 +9,8 @@
  * in a job it also prints an `::error title=Push refused::` annotation, stops the job with decision
  * `stop`, and writes nothing to `$GITHUB_STEP_SUMMARY`. A session that exits 0 after its push was
  * refused ends `failed`, not `completed`. A record for another branch changes nothing, and one
- * branch's exit never acts on another branch's record.
+ * branch's exit never acts on another branch's record. A record that predates a launch is filed as
+ * handled, and it does not fail that launch.
  *
  * The stub writes the record from inside the session, then, where the case needs the tick pass,
  * waits for the registry to show `failed` before it exits — bounded — because inside the sandbox
@@ -181,6 +182,26 @@ test('locally, one branch\'s exit never acts on another branch\'s record', async
   assert.equal(pending(f).length, 1);
   assert.equal(handled(f).length, 0);
   assert.equal(f.notifications().some((n) => n.branch === other), false, JSON.stringify(f.notifications()));
+});
+
+test('locally, a record written before a launch is filed as handled and does not fail that launch', async (t) => {
+  const f = await createWatcherFixture(t);
+  if (f === null) return;
+  const written = await runBash(f.dir, ['-c', recordLines(f, f.branch, CREDENTIAL_REASON).join('\n')], f.watcherEnv());
+  assert.equal(written.status, 0, written.stderr);
+  assert.equal(pending(f).length, 1);
+  await arm(f);
+  // A resumed session is `completed` only over a finished ledger.
+  await f.setStub(finishedLedgerBody(f.branch));
+
+  await f.tick();
+
+  const record = f.record();
+  assert.equal(record.status, 'completed', `${JSON.stringify(record)}\n${f.watcherLog()}`);
+  assert.ok(!record.push_refused, JSON.stringify(record));
+  assert.equal(f.notifications().some((n) => n.event === 'failed'), false, JSON.stringify(f.notifications()));
+  assert.equal(pending(f).length, 0, `pending: ${pending(f).join(' ')}`);
+  assert.equal(handled(f).length, 1, `handled: ${handled(f).join(' ')}`);
 });
 
 test('in a job, a refused push is annotated, stops the job, and writes no step summary', async (t) => {

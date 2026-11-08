@@ -34,7 +34,7 @@ Two failure paths turn the branch's design against goal 2 and against a fresh ru
 
 1. [x] **Finding 3** — Remove the uncalled `sandboxPassEnv` export and its doc-comment link _(layer: cli)_
 2. [x] **Finding 1** — Make a `push-credential store` that writes no usable credential exit 1, so the `run` job stops before its session _(layer: cli)_
-3. [ ] **Finding 2** — File push-refusal records that predate a launch as handled in `spawn_engine`, so they cannot fail the new session _(layer: cli)_
+3. [x] **Finding 2** — File push-refusal records that predate a launch as handled in `spawn_engine`, so they cannot fail the new session _(layer: cli)_
 
 ---
 

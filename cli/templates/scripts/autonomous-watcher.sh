@@ -480,7 +480,9 @@
 # behind the `push_refusing` marker; classify_run_exit checks its own branch
 # only, after the engine has exited, and tears nothing down. The job summary's
 # row comes from `remote-run.sh save`, never from this file. A record for a
-# branch with no `running` run is left in place.
+# branch with no `running` run is left in place until that branch's next
+# launch, which files it as handled with one log line (spawn_engine), so a
+# refusal from a supervised or by-hand push never fails a later session.
 #
 # THE REGISTRY IS A CONTRACT, NOT AN IMPLEMENTATION DETAIL.
 # `<state_dir>/autonomous_logs/registry.json` is a single JSON object shaped
@@ -3317,6 +3319,16 @@ EOF
   fi
   unset_logged="${session_unset_names[*]+${session_unset_names[*]}}"
   log "session environment for '$branch': removing ${unset_logged:-nothing}"
+  # A record already here predates this session (PUSH REFUSALS, in the
+  # header): file it, so it cannot fail the run this launch starts. The
+  # session's own first push re-scans the same commits.
+  if hr_push_refusals_for_var "$MAIN_REPO" "$branch"; then
+    log "push refusal: filing ${#HR_PUSH_REFUSAL_FILES[@]} record(s) older than this launch of '$branch' as handled (the first: $HR_PUSH_REFUSAL_REASON)"
+    local stale_refusal
+    for stale_refusal in "${HR_PUSH_REFUSAL_FILES[@]}"; do
+      hr_push_refusal_handled "$stale_refusal" || log "push refusal: could not move $stale_refusal to handled/ for '$branch'"
+    done
+  fi
   # `launch-sandboxed-gates.sh` reads this record, never `hr_run_profile_file`:
   # an environment variable must not choose the profile its worker's protected
   # paths come from. Job mode writes nothing — its launcher target is the main
@@ -4968,7 +4980,8 @@ push_refusal_fail() {
 # stall watchdog's kill tier raises stall_killing, so a session exiting under
 # the kill is neither classified nor notified by its own subshell; a run its
 # subshell already classified is skipped. A record whose branch has no
-# `running` run is left in place.
+# `running` run is left in place until that branch's next launch, which
+# files it as handled (spawn_engine).
 check_push_refusals() {
   local b pid descendants log_path
   while IFS= read -r b; do
