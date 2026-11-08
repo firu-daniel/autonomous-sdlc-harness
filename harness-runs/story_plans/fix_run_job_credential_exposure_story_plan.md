@@ -49,7 +49,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_run_job_credential_expos
 1. [x] **Task 1** — Add the `sandbox.passEnv` model field, reader and check _(layer: cli)_ _(points: 10)_
 2. [x] **Task 2** — Add the shared credential predicate, the push-refusal record and the pass-env reader to `lib/harness-run-lib.sh` _(layer: cli)_ _(points: 20)_
 3. [x] **Task 3** — Make `push-branch.sh` refuse to send commits that carry a credential, or, in a job, change a workflow file _(layer: cli)_ _(points: 20)_
-4. [ ] **Task 4** — Strip and scrub the session's environment in `spawn_engine`, and act on a push-refusal record _(layer: cli)_ _(points: 20)_
+4. [x] **Task 4** — Strip and scrub the session's environment in `spawn_engine`, and act on a push-refusal record _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 5** — Give `remote-run.sh` the shared mention check, the `push-credential` verb and a `HARNESS_GIT_TOKEN` ready flip on every run _(layer: cli)_ _(points: 20)_
 6. [ ] **Task 6** — Move every `HARNESS_GIT_TOKEN` use out of `harness-run.yml`'s `run` job and take its push credential out of the checkout _(layer: cli)_ _(points: 20)_
 7. [ ] **Task 13** — Reword the `HARNESS_GIT_TOKEN` setup step `init` prints for the new CI trigger _(layer: cli)_ _(points: 10)_

@@ -10,7 +10,7 @@
  *
  * `node --test test` loads this file as a test file of its own, so nothing here runs at import time.
  *
- * ## Seven non-obvious choices
+ * ## Eight non-obvious choices
  *
  * 1. **The stub sleeps before its body runs.** Not for the registry: its writes are serialized, so
  *    the pass's post-spawn `pid` write and the session's exit classification both survive whichever
@@ -60,6 +60,9 @@
  *    freed before the kill exits 0 under a live subshell and the run reads `completed`. The wait's
  *    bound arm leaves `<REC>/`{@link HUNG_RELEASE_MISSED}, which {@link assertHungReleased} turns
  *    into a failure naming the release that never came.
+ * 8. **The fixture's `sandbox.passEnv` lists {@link RECORDER_PASS_ENV}.** A local launch removes
+ *    every exported name outside `autonomous-watcher.sh` → `SESSION_ENV_BASE` and that key, so a
+ *    stub reading `$CLAR`, `$REC`, `$REGISTRY` or `$PLANT` would otherwise see nothing.
  */
 
 import assert from 'node:assert/strict';
@@ -94,6 +97,12 @@ export const DEFAULT_KEEP_AWAKE_PROBE = 'HR_KEEP_AWAKE_HOST=unsupported; HR_KEEP
 export const DEFAULT_PLACEHOLDER_HOST_PROBE = 'HR_PLACEHOLDER_HOST=0; return 0';
 
 const PLACEHOLDER_HOST_ON_PROBE = 'HR_PLACEHOLDER_HOST=1; return 0';
+
+/**
+ * The variables the suites hand a session's stub through the watcher's environment, written to the
+ * fixture's `sandbox.passEnv` (choice 8). A suite that sets its own `passEnv` replaces this list.
+ */
+export const RECORDER_PASS_ENV = Object.freeze(['CLAR', 'REC', 'REGISTRY', 'PLANT']);
 
 /** The control file under the case's `REC` directory whose creation releases the hung session (choice 7). */
 export const HUNG_RELEASE = 'release';
@@ -265,6 +274,12 @@ export async function createWatcherFixture(t, { branch = 'feat_x', runAnalytics 
 
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
+
+  // Choice 8: a local session keeps only the allow-list, so the recorders' own variables are listed.
+  const configPath = join(dir, 'harness.config.json');
+  const config = JSON.parse(readFileSync(configPath, 'utf8'));
+  config.sandbox = { ...(config.sandbox ?? {}), passEnv: [...RECORDER_PASS_ENV] };
+  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
 
   if (!runAnalytics) {
     const analyticsPath = join(dir, RUN_ANALYTICS_PATH);
