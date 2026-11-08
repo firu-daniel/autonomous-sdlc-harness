@@ -33,7 +33,7 @@ Two failure paths turn the branch's design against goal 2 and against a fresh ru
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below top to bottom, and the committing role flips each one to `[x]` as that fix's commit lands. Each entry resolves to `harness-runs/code_reviews/fix_run_job_credential_exposure_code_review/finding_<K>.md` through its `**Finding K**` reference.
 
 1. [x] **Finding 3** — Remove the uncalled `sandboxPassEnv` export and its doc-comment link _(layer: cli)_
-2. [ ] **Finding 1** — Make a `push-credential store` that writes no usable credential exit 1, so the `run` job stops before its session _(layer: cli)_
+2. [x] **Finding 1** — Make a `push-credential store` that writes no usable credential exit 1, so the `run` job stops before its session _(layer: cli)_
 3. [ ] **Finding 2** — File push-refusal records that predate a launch as handled in `spawn_engine`, so they cannot fail the new session _(layer: cli)_
 
 ---

@@ -150,7 +150,7 @@ test('erase removes only the path-scoped entry and all three keys', async (t) =>
 test('a HOME whose path carries a space stores nothing and sets no key', async (t) => {
   const f = await credentialFixture(t, { homePrefix: 'push credential home-' });
   const result = await f.run('store');
-  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.status, 1, result.stderr);
   assert.equal(readFileSync(f.store, 'utf8'), OPERATOR_STORE);
   assert.equal(f.configGet(USE_HTTP_PATH_KEY), null);
   assert.equal(f.configGet(HELPER_KEY), null);
@@ -161,7 +161,7 @@ test('a HOME whose path carries a space stores nothing and sets no key', async (
 test('without GH_TOKEN nothing is written and no marker is set', async (t) => {
   const f = await credentialFixture(t);
   const result = await f.run('store', { GH_TOKEN: '' });
-  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.status, 1, result.stderr);
   assert.equal(readFileSync(f.store, 'utf8'), OPERATOR_STORE);
   assert.equal(f.configGet(HELPER_KEY), null);
   assert.equal(await f.markerStatus(), 1);
@@ -171,7 +171,7 @@ test('without GH_TOKEN nothing is written and no marker is set', async (t) => {
 test('a non-https origin writes nothing and sets no marker', async (t) => {
   const f = await credentialFixture(t, { origin: `git@${HOST}:${REPO_PATH}` });
   const result = await f.run('store');
-  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.status, 1, result.stderr);
   assert.equal(readFileSync(f.store, 'utf8'), OPERATOR_STORE);
   assert.equal(f.configGet(USE_HTTP_PATH_KEY), null);
   assert.equal(await f.markerStatus(), 1);

@@ -42,7 +42,9 @@
 #                 (its own exit map: its paragraph)
 #   remote-run.sh push-credential store|erase   (no --repo: it runs in the
 #                 job's checkout root)
-#                 (always 0, 1 only on a usage error: its paragraph)
+#                 (store: 0 once the entry and its keys are written, 1 on a
+#                 usage error or when it writes no usable credential; erase:
+#                 always 0, 1 only on a usage error: its paragraph)
 #     0  sent (for stop: the action=stop marker was dispatched, and every
 #        queued, waiting or in-progress `harness run` run of that branch was
 #        asked to cancel, or there was none); for status and fetch: printed
@@ -1292,9 +1294,11 @@
 # <absolute path>`, else `$HOME/.git-credentials`, then `--unset`s the marker
 # first and the other two keys; one line. An entry for the same host with no
 # path, or another path, survives both: git's store matches a path-scoped
-# entry only by its path. Every failure is one `::warning::` line; it always
-# exits 0, and 1 only on a usage error (no `store|erase`, another word, a
-# further argument or `--repo`).
+# entry only by its path. A `store` that writes no usable credential is one
+# `::error::` line and exit 1, so the `run` job stops before its session, as a
+# checkout with no credential would; every `erase` failure is one `::warning::`
+# line and exit 0. Both exit 1 on a usage error (no `store|erase`, another
+# word, a further argument or `--repo`).
 #
 # THE PUSH CREDENTIAL STAYS OUT OF THE CHECKOUT. The store file is
 # `~/.git-credentials` because the unattended profile names it in
@@ -2142,12 +2146,12 @@ fi
 # ---------------------------------------------------------------------------
 
 # setup_fail <message> — a configuration problem: exit 1, except for save,
-# report, open, deliver, collect and push-credential, which never fail the step
-# that calls them.
+# report, open, deliver, collect and push-credential erase, which never fail
+# the step that calls them.
 setup_fail() {
   echo "remote-run.sh: $1" >&2
   [ "$verb" != save ] && [ "$verb" != report ] && [ "$verb" != open ] && [ "$verb" != deliver ] \
-    && [ "$verb" != collect ] && [ "$verb" != push-credential ] || exit "$EXIT_OK"
+    && [ "$verb" != collect ] && { [ "$verb" != push-credential ] || [ "$pc_action" = erase ]; } || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
 }
 
@@ -8172,11 +8176,15 @@ push_credential_target_var() {
 }
 
 # verb_push_credential — `push-credential store|erase`, per its paragraph.
-# Always exit 0.
+# `store` exits 1 whenever it leaves no usable credential; `erase` always 0.
 verb_push_credential() {
   local store_file helper_key value rc failed="" nl='
 ' file_chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_./-'
   if ! push_credential_target_var; then
+    if [ "$pc_action" = store ]; then
+      echo "::error::remote-run.sh: push-credential: store: $PC_WHY; nothing written"
+      exit 1
+    fi
     echo "remote-run.sh: push-credential: $pc_action: $PC_WHY; nothing written"
     exit "$EXIT_OK"
   fi
@@ -8184,35 +8192,35 @@ verb_push_credential() {
 
   if [ "$pc_action" = store ]; then
     if [ -z "${GH_TOKEN-}" ]; then
-      echo "remote-run.sh: push-credential: store: GH_TOKEN is not set; nothing written"
-      exit "$EXIT_OK"
+      echo "::error::remote-run.sh: push-credential: store: GH_TOKEN is not set; nothing written"
+      exit 1
     fi
     case "$GH_TOKEN" in *"$nl"*)
-      echo "::warning::remote-run.sh: push-credential: store: GH_TOKEN carries a newline; nothing written"
-      exit "$EXIT_OK" ;;
+      echo "::error::remote-run.sh: push-credential: store: GH_TOKEN carries a newline; nothing written"
+      exit 1 ;;
     esac
     store_file=""
     [ -z "${HOME-}" ] || store_file="${HOME%/}/.git-credentials"
     case "$store_file" in
       /?*) ;;
-      *) echo "remote-run.sh: push-credential: store: HOME is not an absolute path; nothing written"; exit "$EXIT_OK" ;;
+      *) echo "::error::remote-run.sh: push-credential: store: HOME is not an absolute path; nothing written"; exit 1 ;;
     esac
     case "$store_file" in *[!$file_chars]*)
-      echo "remote-run.sh: push-credential: store: the store file path under HOME carries a character outside [A-Za-z0-9_./-]; nothing written"
-      exit "$EXIT_OK" ;;
+      echo "::error::remote-run.sh: push-credential: store: the store file path under HOME carries a character outside [A-Za-z0-9_./-]; nothing written"
+      exit 1 ;;
     esac
     if ! ( umask 077
       printf 'protocol=https\nhost=%s\npath=%s\nusername=x-access-token\npassword=%s\n\n' "$PC_HOST" "$PC_PATH" "$GH_TOKEN" \
         | git credential-store --file "$store_file" store ) 2>/dev/null; then
-      echo "::warning::remote-run.sh: push-credential: store: writing the entry for https://$PC_HOST/$PC_PATH to $store_file failed; nothing configured"
-      exit "$EXIT_OK"
+      echo "::error::remote-run.sh: push-credential: store: writing the entry for https://$PC_HOST/$PC_PATH to $store_file failed; nothing configured"
+      exit 1
     fi
     # The marker last, once both credential keys are set.
     if ! git -C "$root" config --replace-all "credential.https://$PC_HOST.useHttpPath" true 2>/dev/null \
       || ! git -C "$root" config --replace-all "$helper_key" "store --file $store_file" 2>/dev/null \
       || ! git -C "$root" config --replace-all "$HR_PUSH_CREDENTIAL_KEY" "$HR_PUSH_CREDENTIAL_JOB_TOKEN" 2>/dev/null; then
-      echo "::warning::remote-run.sh: push-credential: store: the entry for https://$PC_HOST/$PC_PATH is in $store_file, but setting the checkout's credential keys failed"
-      exit "$EXIT_OK"
+      echo "::error::remote-run.sh: push-credential: store: the entry for https://$PC_HOST/$PC_PATH is in $store_file, but setting the checkout's credential keys failed"
+      exit 1
     fi
     echo "remote-run.sh: push-credential: stored the job token for https://$PC_HOST/$PC_PATH in $store_file"
     exit "$EXIT_OK"
