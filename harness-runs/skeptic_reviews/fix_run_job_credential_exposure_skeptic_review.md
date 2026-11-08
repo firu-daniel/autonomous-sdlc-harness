@@ -46,7 +46,7 @@ Separately, the whiteboard's new citation of the job's credential design omits i
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 2** — Name `deliver` as a dependant of §6's in-progress-artifact row and add its download to roadmap item 35 _(layer: general)_
-2. [ ] **Finding 1** — Correct the miscited `round` precedent for the job-token calls under `contents: read`, and have roadmap item 35 measure them _(layer: cli, general)_
+2. [x] **Finding 1** — Correct the miscited `round` precedent for the job-token calls under `contents: read`, and have roadmap item 35 measure them _(layer: cli, general)_
 3. [ ] **Finding 3** — Anchor the whiteboard's citation of the job's credential design to `## 11. Security`, **The job's credential design.** _(layer: plugin)_
 
 ---

@@ -462,8 +462,10 @@
 # is not a draft — no drafts on the plan, a person marked it ready, a round's
 # `--undo` refused, a resumed run — is first turned back to a draft with the
 # job's token (`gh pr ready --undo`, one line) and then flipped as a draft is,
-# on every run. The conversion needs only the `pull-requests: write` grant the
-# flip already holds, the same one `round` runs `--undo` under, and starts none
+# on every run. The conversion runs under the `pull-requests: write` grant the
+# flip holds, beside `deliver`'s `contents: read`; `round`'s `--undo` and every
+# earlier flip ran beside `contents: write`, so that this grant suffices is
+# unmeasured (`docs/development.md` → roadmap item 35). It starts none
 # of the harness's own workflows (`WORKFLOW_CONTROL_FILE` listens to
 # `pull_request` `closed` only). A refused conversion is one `::warning::` line
 # naming gh's error and saying no `ready_for_review` fires on this tip, so the

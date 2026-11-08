@@ -56,3 +56,5 @@ Each failure is one `::warning::` line in a green, `continue-on-error` step. The
    ```
 
 No test changes. These are comment and documentation edits only, so the fix runs no test.
+
+**Deviations from plan:** Step 3 appends its sentence after "leg (e) the conversion to draft", which carries no terminal period in the cell; a `.` was inserted after "draft" so the appended "Both legs ran …" sentence reads as a new sentence. No other wording changed.
