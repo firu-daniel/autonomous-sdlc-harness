@@ -27,19 +27,24 @@
 # WHAT THIS DOES NOT CONTAIN. The first argument is a path and every remaining
 # argument is forwarded to the file, so nothing here takes an inline program — no
 # `-c`, no `-e`, no `bash -c`. That fence is over WHICH FILE RUNS and over nothing
-# the file does. A probe is a program the agent composed one tool call earlier and
-# it runs with the session's own privileges, so everything the generated profile's
-# `deny` floor and its `ask` list, and the script-allowlist guard's
-# `DENY_SCRIPT_BASENAMES`, withhold from a COMMAND STRING is reachable from inside
-# one — directly, or one `subprocess` / `child_process` call further on. Do not
-# read the file/string distinction as a capability boundary: it costs an extra
-# tool call. The layer that still holds is the `pre-push` git hook, because git
-# runs it however git was invoked, subprocess included — the ranking
-# `plugin/docs/AUTONOMOUS_FLOW_WHITEBOARD.md`'s protected-branch bullet states.
-# The two mitigations that do apply are narrower than containment and are named as
-# what they are: `<state_dir>/scratch/` is gitignored by its contents, so nothing
-# run from here reaches a commit, and the agent instructions require a MUTATION
-# CHECK to be reverted before the task's own verification runs.
+# the file does. Under the unattended profile the file runs as a Bash process
+# inside Claude Code's sandbox, so it is held to the sandbox's write roots,
+# network allowlist and credential denies: a write outside the roots from a
+# probe was refused (`docs/sandbox-record.md` §4, the `scratch` leg, SR2).
+# Inside those it still reaches everything the generated profile's `deny` floor
+# and its `ask` list, and the script-allowlist guard's `DENY_SCRIPT_BASENAMES`,
+# withhold from a COMMAND STRING — directly, or one `subprocess` /
+# `child_process` call further on. Do not read the file/string distinction as a
+# capability boundary: it costs an extra tool call. With `sandbox.optOut` taken
+# the sandbox holds nothing. The layer that holds for a push git performs is the
+# `pre-push` git hook, because git runs it however git was invoked, subprocess
+# included — the ranking `plugin/docs/AUTONOMOUS_FLOW_WHITEBOARD.md`'s
+# protected-branch bullet states. The two mitigations that do apply are narrower
+# than containment and are named as what they are: `<state_dir>/scratch/` is
+# gitignored by its contents, so nothing run from here reaches a commit, and the
+# agent instructions require a MUTATION CHECK to be reverted before the task's
+# own verification runs. What the sandbox contains, leaves outside and was
+# measured to hold is `docs/sandbox-record.md` §1; its residuals, §6.
 #
 # THE REFUSAL IS THE WHOLE OF THE SAFETY — over WHICH FILE, and over nothing
 # else, per the paragraph above. This script executes what it is given, so the
