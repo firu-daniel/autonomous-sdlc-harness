@@ -44,7 +44,7 @@ The suites also cover a resumed label as `<label>#2`, the stale per-phase record
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Re-point `docs/watcher.md`'s two `lib/run-analytics.jq` → *Record* citations at *Session record* and mode `rounds` → *Round record* _(layer: general)_
+1. [x] **Finding 1** — Re-point `docs/watcher.md`'s two `lib/run-analytics.jq` → *Record* citations at *Session record* and mode `rounds` → *Round record* _(layer: general)_
 2. [ ] **Finding 2** — Name `lib/run-analytics.jq` → mode `rounds` → *Round record* as the round entry's format of record in the `run_analytics/` README and its self-adopted copy _(layer: cli, general)_
 3. [ ] **Finding 3** — Say in the two deny-list exemption comments that `run-analytics.sh` also appends the finished rounds it reads from the lane _(layer: cli, plugin)_
 
