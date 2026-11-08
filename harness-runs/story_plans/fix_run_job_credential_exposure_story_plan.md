@@ -47,7 +47,7 @@ Under Q2 both adopter-visible choices are accepted, each with the change above: 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_run_job_credential_exposure/task_<K>_plan.md`, where `K` is the task number the entry names, not its position. Entries are ordered bottom-up by ship sequence, with the catch-all layer last.
 
 1. [x] **Task 1** — Add the `sandbox.passEnv` model field, reader and check _(layer: cli)_ _(points: 10)_
-2. [ ] **Task 2** — Add the shared credential predicate, the push-refusal record and the pass-env reader to `lib/harness-run-lib.sh` _(layer: cli)_ _(points: 20)_
+2. [x] **Task 2** — Add the shared credential predicate, the push-refusal record and the pass-env reader to `lib/harness-run-lib.sh` _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Make `push-branch.sh` refuse to send commits that carry a credential, or, in a job, change a workflow file _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Strip and scrub the session's environment in `spawn_engine`, and act on a push-refusal record _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 5** — Give `remote-run.sh` the shared mention check, the `push-credential` verb and a `HARNESS_GIT_TOKEN` ready flip on every run _(layer: cli)_ _(points: 20)_
