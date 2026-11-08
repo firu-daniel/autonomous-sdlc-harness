@@ -71,6 +71,7 @@
 
 **Verification:**
 
+- **Deviations from plan:** The REPRO rows were not reproduced by hand against the header's fixture; that claim rests on `cli/test/push-branch-credential-scan.test.mjs`, which runs the same four scenarios (raw token, base64 form, clean push, job workflow edit with and without the marker) against an `init`-adopted fixture and passed 17/17. The suite also adds one case the plan did not list: a merge whose first-parent diff brings in a `.github/workflows/` file is refused. That case is the measured evidence for the `-m --first-parent` form, which was chosen because the library states a git 2.23 floor and `--diff-merges` needs 2.31. The workflow-path filter is a function, `first_workflow_path`, because bash 3.2 failed to parse a `case` inside `$(…)`; that failure was measured on the fixture's `/bin/bash`.
 - `cli/test/push-branch-credential-scan.test.mjs` passes, every case graded on the bare remote's refs.
 - The new header paragraph names the place in the order the scan takes, and the REPRO rows reproduce by hand against the header's fixture.
 - Grep the script for any `echo`/`printf` of `HR_CREDENTIAL_VALUES` or of the scanned stream: none.
