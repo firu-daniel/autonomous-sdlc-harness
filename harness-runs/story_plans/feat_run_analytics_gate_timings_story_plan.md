@@ -42,7 +42,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_run_analytics_gate_timi
 2. [x] **Task 2** — Accept schema 2 in `run-analytics-report.jq` and render the `## Gate rounds` section _(layer: cli)_ _(points: 20)_
 3. [x] **Task 3** — Read finished rounds from the lane in `run-analytics.sh`, merge them and write schema 2 only when rounds exist _(layer: cli)_ _(points: 20)_
 4. [x] **Task 4** — Describe the round records in the adopter-facing READMEs under `cli/` _(layer: cli)_ _(points: 8)_
-5. [ ] **Task 5** — Widen `branch-status`'s schema check to 1 or 2 and update the run-analytics row of `AUTONOMOUS_FLOW.md` _(layer: plugin)_ _(points: 5)_
+5. [x] **Task 5** — Widen `branch-status`'s schema check to 1 or 2 and update the run-analytics row of `AUTONOMOUS_FLOW.md` _(layer: plugin)_ _(points: 5)_
 6. [ ] **Task 6** — Bring the self-adopted run-analytics scripts and state-dir READMEs to the template bytes, and name the new reader in the record producers' headers _(layer: general)_ _(points: 10)_
 7. [ ] **Task 7** — Update `docs/watcher.md` and `docs/development.md` for round records in the run analytics _(layer: general)_ _(points: 10)_
 
