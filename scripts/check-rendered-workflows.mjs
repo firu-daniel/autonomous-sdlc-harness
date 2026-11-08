@@ -54,12 +54,13 @@ const NEGATIVE = 'cli/test/fixtures/harness-control-0.6.1.yml';
 const ZIZMOR_VERSION = '1.30.1';
 /**
  * The zizmor findings the shipped workflows keep, as `<file> <audit> <job>`, each justified in its
- * template's header. `artipacked`: the job pushes, or runs `git ls-remote`, through the checkout's
- * credential. `adhoc-packages`: the latest Claude Code CLI is installed on purpose, and a pinned
- * install is flagged too.
+ * template's header. `artipacked`: the job fetches, runs `git ls-remote` or pushes through the
+ * checkout's credential. `adhoc-packages`: the latest Claude Code CLI is installed on purpose, and a
+ * pinned install is flagged too.
  */
 const RESIDUAL = [
-  'harness-run.yml artipacked run',
+  'harness-run.yml artipacked open',
+  'harness-run.yml artipacked deliver',
   'harness-run.yml artipacked collect',
   'harness-run.yml adhoc-packages run',
   'harness-resume.yml artipacked poll',
