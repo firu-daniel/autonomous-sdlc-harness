@@ -2,9 +2,11 @@
  * The `sandbox` key's structural check, through `doctor`'s `config` line, against the compiled CLI.
  *
  * **The rule this suite exists to enforce: every allowed domain is a bare host that states its
- * reason, and the opt-out is a reasoned object, never a bare switch or a blank reason.** An
- * unexplained domain is a network grant nobody can audit, and an opt-out with no reason turns the
- * sandbox off without saying why — so each is an error naming the dotted key an adopter edits.
+ * reason, the opt-out is a reasoned object, never a bare switch or a blank reason, and every
+ * `passEnv` entry is a unique bare environment-variable name.** An unexplained domain is a network
+ * grant nobody can audit, an opt-out with no reason turns the sandbox off without saying why, and a
+ * `passEnv` entry that is not a bare name cannot be matched against the session's environment — so
+ * each is an error naming the dotted key an adopter edits.
  *
  * One fixture serves every case: `doctor` repairs nothing, so the cases rewrite `sandbox` in turn and
  * run in order. `doctor` runs without `--check-github`, so no case reaches the network.
@@ -61,6 +63,8 @@ test('doctor grades the sandbox key on its config line', async (t) => {
     ['an IPv4 literal as a domain', { allowedDomains: [{ domain: '10.0.0.1', reason: 'the internal mirror' }] }],
     ['a taken opt-out', { optOut: { reason: 'the toolchain needs a socket the sandbox blocks' } }],
     ['an absent sandbox', undefined],
+    ['a valid two-name passEnv', { passEnv: ['JAVA_HOME', '_PRIVATE_TOOL_DIR'] }],
+    ['a sandbox with no passEnv key', { allowedDomains: [DOMAIN] }],
   ];
   for (const [name, sandbox] of passing) {
     await t.test(`${name} passes`, async () => {
@@ -83,6 +87,10 @@ test('doctor grades the sandbox key on its config line', async (t) => {
     ['optOut without reason', { optOut: {} }, 'sandbox.optOut.reason: is required'],
     // A blank reason is not a taken opt-out (`sandboxOptedOut` answers false), so it must not pass as one.
     ['optOut with a blank reason', { optOut: { reason: '  ' } }, 'sandbox.optOut.reason: must not be blank'],
+    ['passEnv that is not an array', { passEnv: 'JAVA_HOME' }, 'sandbox.passEnv: must be an array of environment-variable names, not a string'],
+    ['a passEnv entry carrying "="', { passEnv: ['FOO=bar'] }, 'sandbox.passEnv[0]: "FOO=bar" is not a bare environment-variable name'],
+    ['a wildcard passEnv entry', { passEnv: ['AWS_*'] }, 'sandbox.passEnv[0]: "AWS_*" is not a bare environment-variable name'],
+    ['a duplicate passEnv entry', { passEnv: ['JAVA_HOME', 'JAVA_HOME'] }, 'sandbox.passEnv[1]: "JAVA_HOME" is listed more than once'],
   ];
   for (const [name, sandbox, expected] of failing) {
     await t.test(`${name} is an error naming the key`, async () => {

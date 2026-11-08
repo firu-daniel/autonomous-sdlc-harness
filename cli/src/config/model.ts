@@ -164,12 +164,14 @@ export interface HarnessSandboxOptOut {
   readonly reason: string;
 }
 
-/** The unattended run's Bash sandbox. Read through {@link sandboxOptedOut} and {@link sandboxAllowedDomains}. */
+/** The unattended run's Bash sandbox. Read through {@link sandboxOptedOut}, {@link sandboxAllowedDomains} and {@link sandboxPassEnv}. */
 export interface HarnessSandbox {
   /** This repository's own additions to the sandbox's network allowlist, each with its reason; absent means none. */
   readonly allowedDomains?: readonly HarnessSandboxDomain[];
   /** Run every unattended command unsandboxed, for the reason stated. */
   readonly optOut?: HarnessSandboxOptOut;
+  /** Unique bare environment-variable names ({@link SANDBOX_PASS_ENV_PATTERN}) a **local** unattended session keeps beyond the watcher's base set; no effect in job mode, and a name in the watcher's credential strip set is removed whatever this lists; absent means none. */
+  readonly passEnv?: readonly string[];
 }
 
 /** One test file a change under a glob must run. Read through {@link configuredTreeGuards}. */
@@ -740,6 +742,20 @@ export function sandboxOptedOut(config: HarnessConfig): boolean {
  */
 export function sandboxAllowedDomains(config: HarnessConfig): readonly HarnessSandboxDomain[] {
   return config.sandbox?.allowedDomains ?? DEFAULTS.sandbox.allowedDomains;
+}
+
+/**
+ * A `sandbox.passEnv` entry: a bare environment-variable name — no `=`, no wildcard, no `$`. The
+ * schema's `sandbox.passEnv` `items.pattern` must match it verbatim.
+ *
+ * Its shell mirror is `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_session_pass_env`; no
+ * test holds the pair equal.
+ */
+export const SANDBOX_PASS_ENV_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/** The configured `sandbox.passEnv` names; an absent key is none. Import it; do not re-spell the fallback. */
+export function sandboxPassEnv(config: HarnessConfig): readonly string[] {
+  return config.sandbox?.passEnv ?? [];
 }
 
 /** The configured tree guards; an absent key is none. Import it; do not re-spell the fallback. */
