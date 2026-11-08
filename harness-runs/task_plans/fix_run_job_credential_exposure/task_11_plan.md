@@ -29,7 +29,7 @@
 
 **Work:**
 
-- [ ] **The decision, stated once.** Put it in `## 11. Security`, as a new bold-led block after **The workflows are hardened…**, or in `## 9. Credentials and billing` if that section reads better. It covers:
+- [x] **The decision, stated once.** Put it in `## 11. Security`, as a new bold-led block after **The workflows are hardened…**, or in `## 9. Credentials and billing` if that section reads better. It covers:
   - **The boundary.** It is the job and the OS user, not which agent pushes. Cite `docs/sandbox-record.md` → `## 5. The Linux runner's PID namespace and no-new-privileges` (PN1–PN3, NN1–NN2, **pass**, hosted `ubuntu-26.04` `20261101.186.1` only) rather than re-arguing it. State that it covers no other image and no self-hosted runner, and nothing outside the sandbox: the `claude` process, the file tools, hooks, local MCP servers and the four excluded commands.
   - **Goal 1, as hygiene.** The agent's environment carries no GitHub API token, push credential or webhook (cite `docs/watcher.md` → `### The session's environment` for the sets).
   - **The baseline.** `HARNESS_GIT_TOKEN` is never referenced in `run`; only `github.token` pushes there. That token is repository-scoped, expires with the job, and cannot write `.github/workflows/` (cite `docs/github-integration-research.md` S1). Whether a job's runner receives every secret the job references at job start is unverified and not relied on. The design keeps the secret out of the job instead.
@@ -41,17 +41,17 @@
   - **The channel for a refused push.** In session, the watcher stops the run, marks it `failed` with the record's reason and annotates the job (`::error title=Push refused::`). The job summary's row is `remote-run.sh save`'s `### harness run <branch>` row, which carries that `failed` detail; the watcher writes no summary of its own. At the job's end, the `Push the branch` step's existing annotation and summary line. Two reasons reach this channel: a credential in the commits to send, and, in a job, a change to a file under `.github/workflows/`. Residual: a commit refused only by the end-of-job push, after the session classified, leaves `deliver` free to mark the pull request ready.
 
   Name roadmap item 35 as the measurement still owed, and say a disagreeing result is a follow-up fix.
-- [ ] **The checkout bullets of `## 11.`**
+- [x] **The checkout bullets of `## 11.`**
   - **A checkout persists its credential only where its job uses it.** It now names `open`, `deliver`, `collect`, `trigger`, `control` and `poll` as keeping theirs, each with why, and `warm` and `run` as not, `run` with the stored entry.
   - **The `artipacked` sub-bullet** becomes six times, once on each of those six, each running no agent session that inherits a token (the mention reader already unsets its tokens), or reading origin through it.
   - Re-word **Who can spend the credential.**'s run-actor-gate sentences: the gate is now the first step of `open`, `run`, `deliver` and `collect`.
-- [ ] **The `HARNESS_GIT_TOKEN` sites.**
+- [x] **The `HARNESS_GIT_TOKEN` sites.**
   - The §6 row *"A push made with `GITHUB_TOKEN` starts no workflow"*: pushes never trigger CI now, whatever the secret. Say what does.
   - Step **5a.**
   - The `### Every secret and variable` row: what reads `HARNESS_GIT_TOKEN` now (the `open` and `deliver` jobs only) and the scopes it needs (Contents read, Pull requests write; Workflows no longer helps).
   - The §11 bullet *"A run whose task edits `.github/workflows/*` cannot push that edit without a workflow-capable `HARNESS_GIT_TOKEN`"*. It now says such a task cannot push from a job at all. Its first workflow-touching commit would make every later push of that run fail, which would break per-commit pushing silently. So `push-branch.sh` refuses that first push through the push-refusal record, and the watcher fails the run at once with that reason (still exit 0 from the wrapper). It names the local run as the route for such a task. It says a file under any other `workflows/` directory, such as `cli/templates/github/workflows/` in this repository, is an ordinary file and is not refused. It also says that a refresh merging a default-branch workflow edit in counts as a workflow change, and that whether GitHub refuses that push is owed to roadmap item 35. Keep the S1 citation and the quoted refusal message.
   - `## 1.` step **8. Done.**: *"the job's `deliver` step now marks it ready for review"* becomes the `deliver` job, and says it turns a ready pull request back to a draft first when `HARNESS_GIT_TOKEN` is set. Keep the citation of `github-run-control.md` → `## 4. The draft pull request`.
-- [ ] **`### Upgrading` → What it carries, and what it does not.** Add a bullet for this release, which the release's notes carry. It names:
+- [x] **`### Upgrading` → What it carries, and what it does not.** Add a bullet for this release, which the release's notes carry. It names:
   - the commands an adopter runs, each in its own fenced block, one per line, as the section's existing commands are: `npx autonomous-sdlc-harness@<version> init --upgrade-workflows`, then the `git add` / `git commit` / `git push` lines the section already gives;
   - that the new `open` and `deliver` jobs and the stored push credential arrive with it;
   - the one CI change: add `ready_for_review` to the CI workflow's `pull_request` `types` for it to run on the final tip;
@@ -59,7 +59,13 @@
   - that `HARNESS_GIT_TOKEN` no longer needs Workflows write and no longer pushes;
   - that a task editing `.github/workflows/*` must run locally: in a job, `push-branch.sh` refuses its first push and the run fails with that reason;
   - for local runs, that `sandbox.passEnv` (see `docs/config.md` §5) brings back a variable the session now loses.
-- [ ] **`## 3.`/`## 4.` and `## 1.`** Wherever the job's per-commit push or the end-of-job `Push the branch` step is described, add that both authenticate through the stored entry and that per-commit durability is unchanged. Grep this file for `persisted credential`, `extraheader` and `Open the pull request and report`. Re-point the last of these at the `deliver` job. Leave `## 1.` step 5 (*`spawn_engine`*) as it is: it stays true.
+- [x] **`## 3.`/`## 4.` and `## 1.`** Wherever the job's per-commit push or the end-of-job `Push the branch` step is described, add that both authenticate through the stored entry and that per-commit durability is unchanged. Grep this file for `persisted credential`, `extraheader` and `Open the pull request and report`. Re-point the last of these at the `deliver` job. Leave `## 1.` step 5 (*`spawn_engine`*) as it is: it stays true.
+  - **Deviations from plan:**
+    - The upgrade bullet also tells the adopter to run `init --force` in its own fenced block. The re-rendered `run` job's `Store the push credential outside the checkout` step calls `remote-run.sh push-credential store` and is not `continue-on-error` (`cli/templates/github/workflows/harness-run.yml`, read), and `--upgrade-workflows` writes no script, so without the forced re-run that step fails the job. The `It does not re-render harness-trigger.yml or harness-control.yml` bullet's `deliver` sentence gained the same note. Established by reading the template and `remote-run.sh`'s verb list, not by running an old-scripts job.
+    - Sites outside the plan's target list, edited because they stated the old flow: `## 1.` step 4 (the run checkout persists no credential; the store step's place in the setup order); `## 5.`'s **The draft pull request is the job's, not the flow's.** (`open` and `deliver` are jobs, not steps); the `HARNESS_RUN_ACTORS` row of `### Every secret and variable` (the gate is the first step of `open`, `run`, `deliver` and `collect`); the §11 post-session-steps bullet (`Open the pull request and report` re-pointed at the `deliver` job, `Erase the push credential` added); and the §11 `Bootstrap the checkout` residual (*"the checkout's persisted credential"* became the stored push credential and the job-level `GH_TOKEN`).
+    - The §6 row *"A push made with `GITHUB_TOKEN` starts no workflow"* sits in `### Verified in Gate 12 round 3`, a dated record. Only its *What rests on it* cell changed; its *Evidence* and *Date* cells are untouched.
+    - The decision block was placed in `## 11.` under the bold lead **The job's credential design.**, and every new citation in the file names that lead.
+    - The upgrade bullet's `ready_for_review` sentence names GitHub's default `pull_request` activity types (`opened`, `synchronize`, `reopened`) with the events page URL, marked *not retrieved in this branch*, as other carried sources in this file are.
 
 **Verification:**
 
