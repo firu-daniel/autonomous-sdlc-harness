@@ -44,7 +44,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_run_analytics_gate_timi
 4. [x] **Task 4** — Describe the round records in the adopter-facing READMEs under `cli/` _(layer: cli)_ _(points: 8)_
 5. [x] **Task 5** — Widen `branch-status`'s schema check to 1 or 2 and update the run-analytics row of `AUTONOMOUS_FLOW.md` _(layer: plugin)_ _(points: 5)_
 6. [x] **Task 6** — Bring the self-adopted run-analytics scripts and state-dir READMEs to the template bytes, and name the new reader in the record producers' headers _(layer: general)_ _(points: 10)_
-7. [ ] **Task 7** — Update `docs/watcher.md` and `docs/development.md` for round records in the run analytics _(layer: general)_ _(points: 10)_
+7. [x] **Task 7** — Update `docs/watcher.md` and `docs/development.md` for round records in the run analytics _(layer: general)_ _(points: 10)_
 
 ## Scope register
 
