@@ -38,7 +38,7 @@ A resumed attempt can leave an earlier attempt's `<phase>.tests.tsv` behind, bec
 
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_run_analytics_gate_timings/task_<K>_plan.md`. They are ordered bottom-up by ship sequence, `cli` then `plugin`, with the catch-all `general` last.
 
-1. [ ] **Task 1** — Add mode `rounds` to `run-analytics.jq`: parse, validate and de-duplicate Run gates round records _(layer: cli)_ _(points: 20)_
+1. [x] **Task 1** — Add mode `rounds` to `run-analytics.jq`: parse, validate and de-duplicate Run gates round records _(layer: cli)_ _(points: 20)_
 2. [ ] **Task 2** — Accept schema 2 in `run-analytics-report.jq` and render the `## Gate rounds` section _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Read finished rounds from the lane in `run-analytics.sh`, merge them and write schema 2 only when rounds exist _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Describe the round records in the adopter-facing READMEs under `cli/` _(layer: cli)_ _(points: 8)_
