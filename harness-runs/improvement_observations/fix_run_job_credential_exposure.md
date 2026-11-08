@@ -18,3 +18,20 @@
 - **category:** tooling-gap
 - **evidence:** `branch-reviewer` (dispatch #31) reported "this checkout has no local `dev` ref, so I diffed against `origin/dev`"; `statistics-plan-writer` (dispatch #59) reported `git log dev..HEAD` failed and it used `origin/dev..HEAD` instead. Both dispatch blocks pass `diff_base: dev` / the configured `defaultBranch` as the base.
 - **cost this run:** none measured. The fallback gave a merge base (`77f386db`) that matches the branch's own cut, but only because each agent improvised it.
+
+# User-review fix round 1 — workflow-file refusal extended to every unattended run
+
+## The user-review fix-plan fork met a task-engine ledger, which the per-round create/re-seed rule has no case for
+- **category:** agent-contract
+- **evidence:** at this session's start `harness-runs/flow_progress/fix_run_job_credential_exposure_progress.md` opened `# Flow progress — fix_run_job_credential_exposure   (engine: task)`, with no round in its header and the task-engine `## Planning` / `## Implementation` entries. The rule in `plugin/instructions/autonomous_pause_and_ledger.md` → `### 1.4 Creation` decides by comparing "the existing ledger's header round" with the active round, and names only three cases: equal, older, absent. The orchestrator treated the ledger as older and re-seeded it from the user-review template as round 1 (commit `60b9b235`).
+- **cost this run:** none measured. The choice was the orchestrator's own reading, not stated anywhere.
+
+## The `cli` per-unit layer reviewer ran four test suites the unit had not edited, and the run went to the background uncollected
+- **category:** agent-contract
+- **evidence:** the return of dispatch `[A · Item 1 · cli · iter 0] → layer-reviewer (#2)` says it started `remote-start`, `remote-collect`, `watcher-remote-job` and `watcher-remote-dispatch`, that "the run hit the timeout, went to the background, and I didn't wait for it", and that whether three of them still pass "is unconfirmed". That dispatch took 804531 ms. The other three reviewer dispatches this round took 40216 to 83928 ms.
+- **cost this run:** about 13 minutes on one review dispatch, and no verdict on those four suites from it. Phase G's round-1 `pass` later covered the full suite.
+
+## The orchestrator's own `git log … dev..HEAD` failed again in the run copy
+- **category:** tooling-gap
+- **evidence:** this session's Phase-D command `git log --format='%h %s' -i --grep='record disposition of ' --grep='mark .* done — ' dev..HEAD` exited 128 with `fatal: ambiguous argument 'dev..HEAD': unknown revision or path not in the working tree.` It was re-issued against `origin/dev..HEAD`. The derivation in `plugin/instructions/improvement_observations_instructions.md` → `## Dispositioned units` names the local `<default_branch>` ref.
+- **cost this run:** one refused command, re-issued against `origin/dev`.
