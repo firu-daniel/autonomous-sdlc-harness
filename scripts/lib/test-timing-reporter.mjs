@@ -5,9 +5,10 @@
 // WHAT IT OWNS. The record's bytes, and nothing else: it prints nothing to stdout (the `tap`
 // reporter given beside it does), decides nothing about rounds and knows no lane path — its
 // destination is whatever `--test-reporter-destination` names. `scripts/run-gates.sh` passes it;
-// `scripts/lib/gate-round-lib.sh` reads the record; `cli/test/test-timing-reporter.test.mjs` tests it.
+// `scripts/lib/gate-round-lib.sh` and `scripts/run-analytics.sh` read the record;
+// `cli/test/test-timing-reporter.test.mjs` tests it.
 //
-// THE RECORD — the contract those three share. First line `file\tstatus\tseconds\ttests\tfailed`.
+// THE RECORD — the contract those four share. First line `file\tstatus\tseconds\ttests\tfailed`.
 // One row per test file, sorted by `seconds` descending then `file` ascending: `file` relative to
 // the working directory with `/` separators, `status` `fail` when `failed > 0` else `pass`,
 // `seconds` the sum of the file's top-level test durations in seconds with one decimal, `tests` the

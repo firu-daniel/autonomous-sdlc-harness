@@ -9,12 +9,15 @@
 # jq keyword as a $ variable, . field or object key (jq 1.7 accepts one, jq 1.6
 # does not), and every `if` has an `else`.
 #
-# Document: {schema: 1, branch, sessions: [<session record>, …], run}, sessions
-# oldest first, each record as lib/run-analytics.jq's header states it. A schema
-# other than 1 is an error naming it.
+# Document: {schema: 1, branch, sessions: [<session record>, …], run}, or
+# {schema: 2, branch, sessions, run, rounds: [<round record>, …]}; sessions
+# oldest first, each record as lib/run-analytics.jq's header states it, and each
+# round record as its mode `rounds` states it. A schema other than 1 or 2 is an
+# error naming it; so is a schema-1 document carrying `rounds`, or a schema-2
+# one whose `rounds` is not an array.
 #
 # Mode `rollup`:   jq -S -f run-analytics-report.jq --arg mode rollup
-#   document in -> the same document with `.run` replaced:
+#   document in -> the same document with `.run` replaced, `.rounds` untouched:
 #   {sessions, complete_sessions, first_at, last_at, span_ms, wall_ms,
 #    duration_ms, duration_api_ms, host_suspended_ms, idle_ms, active_ms,
 #    total_cost_usd, input_tokens, output_tokens, thinking_tokens,
@@ -38,9 +41,16 @@
 #   sessions, total_cost_usd, cache_hit_ratio and slowest_subagent: fixed names.
 #
 # Mode `markdown`: jq -r -f run-analytics-report.jq --arg mode markdown
-#   document in -> Markdown text: `## Whole run`, then `## Session <k>` per
+#   document in -> Markdown text: `## Whole run`, then `## Gate rounds` when
+#   `.rounds` is non-empty (nothing at all otherwise), then `## Session <k>` per
 #   session, oldest first. `.run` is recomputed, never read. Nothing in the text
 #   varies between two renders of one document.
+#   - `## Gate rounds`: one `### Round` per round, in document order. Its wait is
+#     the summed total_ms of every session's orchestrator polling rows whose
+#     command ends in `--wait <label>`, — when none matches. Per test phase, only
+#     the slowest_test_files (N = 10) rows show, by seconds descending, then file
+#     ascending; the JSON keeps every row in record order. Test seconds render
+#     with one decimal.
 #   - Input tokens are labelled (uncached): the API's input_tokens counts only
 #     the uncached tail of each request. Wherever an input-token row or column
 #     is rendered, `Total input tokens (incl. cache)` follows it: input + cache
@@ -195,10 +205,16 @@ def run_of:
                                | select((.value | type) == "number")) as $w
                          ({}; .[$w.key] = ([.[$w.key], $w.value] | max)))};
 
+def slowest_test_files: 10;
+
 def check_doc:
   if type != "object" then error("run-analytics-report.jq: input is not a run-analytics document")
-  elif .schema != 1 then
-    error("run-analytics-report.jq: document schema \(.schema | tojson) is not supported; expected 1")
+  elif .schema != 1 and .schema != 2 then
+    error("run-analytics-report.jq: document schema \(.schema | tojson) is not supported; expected 1 or 2")
+  elif .schema == 1 and has("rounds") then
+    error("run-analytics-report.jq: a schema 1 document carries .rounds; only schema 2 may")
+  elif .schema == 2 and (.rounds | type) != "array" then
+    error("run-analytics-report.jq: schema 2 document's .rounds is not an array")
   elif (.sessions | type) != "array" then error("run-analytics-report.jq: .sessions is not an array")
   else . end;
 
@@ -409,11 +425,59 @@ def session_md($k; $sh):
              ["Time to first token", ($rl.ttft_ms | fmt_dur)],
              ["Rate-limit peak", ($rl.rate_limit_peak | fmt_map)]]);
 
+# One decimal, so a float sum never renders a long tail.
+def fmt1: if type != "number" then "—" else (. * 10 + 0.5 | floor) as $d | "\($d / 10 | floor).\($d % 10)" end;
+
+# Summed total_ms of every session's orchestrator polling rows whose command's
+# last two space-separated tokens are `--wait` and $lb; null when none matches.
+def label_wait($ss; $lb):
+  [$ss[] | (.tools.polling // [])[]
+   | select(.context == "orchestrator" and (.command | type) == "string")
+   | select((.command | split(" ") | map(select(length > 0))) as $t
+            | ($t | length) >= 2 and $t[-2] == "--wait" and $t[-1] == $lb)
+   | .total_ms]
+  | num_sum(.);
+
+def round_md($ss):
+  (.round_id | tostring | split("#")[0]) as $lb
+  | (.tests | if type == "object" then . else {} end) as $ts
+  | [["focused", "full"][] as $p | select($ts | has($p)) | {phase: $p, rows: ($ts[$p] // [])}] as $ph
+  | ["### Round \(.round_id | fmt) — \(.verdict | fmt)", ""]
+    + table(["Measure", "Value"];
+            [["Wait (every run of \($lb))", (label_wait($ss; $lb) | fmt_dur)],
+             ["Gate rows", (.gates | if . == null then null else "\(.rows | length) (\(.outcome | fmt))" end)]]
+            + [$ph[] | ["Test files — \(.phase)",
+                        "\(.rows | length) files, \(.rows | num_sum(.seconds) // 0 | fmt1) s summed"]])
+    + (if .gates == null then []
+       else [""]
+            + table(["Phase", "Gate", "Status", "Seconds"];
+                    [(.gates.rows // [])[]
+                     | [.phase, .gate, .status, (.seconds | if type == "number" then "\(.) s" else null end)]])
+       end)
+    + [$ph[] | (.rows | sort_by([0 - .seconds, .file]) | .[0:slowest_test_files]) as $top
+       | (["", "#### Slowest test files — \(.phase) (\($top | length) of \(.rows | length))", ""]
+          + table(["File", "Status", "Seconds", "Tests", "Failed"];
+                  [$top[] | [.file, .status, (.seconds | fmt1), .tests, .failed]]))[]]
+    + (if (.unreadable // []) | length > 0
+       then ["", "Records not read: \(.unreadable | join(", "))"]
+       else [] end);
+
+def gate_rounds($ss):
+  (.rounds // []) as $rs
+  | if ($rs | length) == 0 then []
+    else ["", "## Gate rounds", "",
+          "Wait is the orchestrator's wait on `run-test-suite.sh --wait <label>`, summed over every polling row whose command ends in that label; — when none matches, as for a label waited on fewer than three times in a session (no polling row is written for it) or a command cut at 160 characters.",
+          "",
+          "A phase's test-file total sums each file's own seconds, so it exceeds the gate's wall time when files run in parallel."]
+         + [$rs[] | ([""] + round_md($ss))[]]
+    end;
+
 def markdown:
   .branch as $b
   | .sessions as $ss
   | ($ss | shares) as $sh
   | ($ss | whole_run($b))
+    + gate_rounds($ss)
     + [range(0; $ss | length) as $i | ([""] + ($ss[$i] | session_md($i + 1; $sh[$i])))[]]
   | join("\n");
 

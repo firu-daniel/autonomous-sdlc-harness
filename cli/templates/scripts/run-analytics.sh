@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 # run-analytics.sh — record every not-yet-recorded headless session of one
 # run's `stream-json` file into `<state_dir>/run_analytics/<branch>/run-analytics.json`
-# and regenerate `run-analytics.md` beside it. It decides which sessions are new
-# (by `session_id`, the merge key), whether host suspend intervals are worth
-# reading, and whether either file's bytes changed.
+# and regenerate `run-analytics.md` beside it, together with every finished,
+# not-yet-recorded Run gates round of the branch. It decides which sessions are
+# new (by `session_id`, the merge key), whether host suspend intervals are worth
+# reading, and whether either file's bytes changed. Which rounds are new is
+# decided by `lib/run-analytics.jq`'s mode `rounds`, not here: this script only
+# finds the round records, hands them over and appends what comes back.
 #
 # THREE FILES, ONE DRIVER. `lib/run-analytics.jq` computes the session records
 # (`sessions` mode), re-classes idle gaps against suspend intervals
-# (`overlay`), sums sub-agent transcripts per agent id (`transcripts`) and
-# attaches those sums to the new records (`attach`); `lib/run-analytics-report.jq`
+# (`overlay`), sums sub-agent transcripts per agent id (`transcripts`),
+# attaches those sums to the new records (`attach`), and parses and validates
+# the round records and decides which rounds are new (`rounds`); `lib/run-analytics-report.jq`
 # recomputes `.run` (`rollup`) and renders the Markdown (`markdown`). Both
 # headers state their calls; this script makes them as stated and resolves both
 # beside itself under `lib/`.
@@ -25,17 +29,43 @@
 # launch in the watcher's `spawn_engine` carries no `--no-session-persistence`;
 # only `remote-run.sh`'s mention session sets it.
 #
+# GATE ROUNDS. The lane is `<state_dir>/test_run_logs/<sanitized branch>/`,
+# resolved by the library's one owner of that path, `hr_test_run_lane_dir
+# "<state_dir>" "$branch"`, with `<state_dir>` from `hr_state_dir "$top"` and a
+# relative answer anchored to `$top`, as `run-test-suite.sh` does — never
+# assembled from `hr_state_path`, `HR_TEST_RUN_LOG_SUBDIR` and
+# `hr_sanitize_branch`, never a retyped directory name. A non-zero return from
+# either function, or no lane directory, means no rounds, silently. A finished
+# round is a regular, non-symlink `<label>.verdict` whose label matches
+# `HR_TEST_RUN_LABEL_PATTERN`; a running round has no `.verdict` yet and is
+# picked up by a later call. Read beside it, each only when a regular,
+# non-symlink file: `<label>.gates.tsv`, `<label>.focused.tests.tsv`,
+# `<label>.full.tests.tsv`. Only a label with at least one of the three counts,
+# so a lane of logs and verdicts alone contributes nothing. Handed over is not
+# recorded: a `<phase>.tests.tsv` an earlier attempt of the label left is
+# refused by mode `rounds` unless this attempt's `gates.tsv` has rows of that
+# phase (its header states the rule and the residual); no file-age test is added
+# here, because no lane file carries an attempt's start time. The recorded
+# rounds reach the mode through a file (`--slurpfile known`), never an
+# argument: their size outgrows Linux's per-argument limit. No failure on this
+# path stops the run: it is named on stderr and the sessions are still written.
+#
 # WHERE IT STOPS. It writes those two files in the named checkout and nothing
 # else: it commits nothing, pushes nothing, notifies nothing and never touches
 # the stream. It reads the agent runner's sub-agent transcripts, never writes
 # there. The watcher commits the result after each session, and outside a job
 # pushes it.
 #
-# THE MERGE. A recorded session is never rewritten, reordered or re-derived:
-# new records are appended in stream order, then `.run` and the Markdown are
-# regenerated from the whole document every time, so a hand-deleted `.md` comes
-# back. An existing `run-analytics.json` that does not parse as one schema-1
-# document is refused and left byte-for-byte as it is — it is the only copy of
+# THE MERGE. A recorded session or round is never rewritten, reordered or
+# re-derived: new records are appended in stream order, new rounds in the order
+# mode `rounds` returns them — a changed record under a recorded label as
+# `<label>#<N>` — then `.run` and the Markdown are regenerated from the whole
+# document every time, so a hand-deleted `.md` comes back. A document is schema
+# 2 exactly when it carries a round; an existing schema-1 document is read and
+# extended. An existing `run-analytics.json` that does not parse as one
+# schema-1 document without `rounds`, or one schema-2 document whose `rounds`
+# is an array of objects with a string `round_id`, is refused and left
+# byte-for-byte as it is — it is the only copy of
 # the sessions it holds. A file is replaced only when its bytes differ, and
 # nothing written carries a wall-clock value, so a re-run over the same stream
 # leaves both files byte-identical.
@@ -47,6 +77,10 @@
 # checkout is `--main-repo` when given and non-empty, else `hr_main_repo`'s
 # answer for the checkout — which, inside a clone, is the clone itself, so the
 # watcher passes `--main-repo` explicitly. `HARNESS_MAIN_REPO` is never read.
+# Round ids, gate ids and file paths pass through the same pairs, through mode
+# `rounds`' `redact_path`: the pairs only, without the home step and without
+# the 160-character cut free-text fields get, so a long path or label is
+# recorded in full and a relative path containing `/home/` is not collapsed.
 #
 # TUNABLES, from the environment:
 #   RUN_ANALYTICS_IDLE_SECS       idle-gap threshold in seconds; default 120, a
@@ -69,8 +103,12 @@
 #
 # Exit map, each with exactly one line:
 #   0  stdout: `recorded <n> session(s) for <branch>` (n is 0 when only
-#      regenerated bytes changed), `unchanged: no new session for <branch>`, or
-#      `no session in <stream_file>` (no session and no record: nothing written)
+#      regenerated bytes changed), `recorded <n> session(s) and <m> round(s)
+#      for <branch>` when m new rounds were recorded, `unchanged: no new
+#      session for <branch>`, or `no session in <stream_file>` (no session, no
+#      new round and no record: nothing written). stderr may also carry
+#      `run-analytics: round record skipped: <label>.<record> — <reason>` lines
+#      and one `run-analytics: round records not read: <reason>` line.
 #   1  stderr: `run-analytics: <reason>` — nothing was replaced
 #   2  stderr: `run-analytics: <reason>; usage: …` — bad usage
 #
@@ -98,6 +136,12 @@
 #              CLAUDE_CONFIG_DIR=$d/home, same call
 #                -> that dispatch's subagents[] entry carries the transcript's four
 #                   token totals and token_source `transcript`
+#   round      no record yet; l=$d/sdlc-harness/test_run_logs/feat_x; mkdir -p "$l"
+#              printf 'pass\n' > "$l/r_round_1.verdict"
+#              printf 'phase\tgate\tstatus\tseconds\nfull\ttest\tok\t3\nend\tcomplete\n' > "$l/r_round_1.gates.tsv"
+#              same call -> `recorded 1 session(s) and 1 round(s) for feat_x`, schema 2
+#   running    as `round` without the .verdict      -> `recorded 1 session(s) for feat_x`,
+#              schema 1; write the .verdict, same call -> `recorded 0 session(s) and 1 round(s) for feat_x`
 
 # Deliberately no `-e`: every failure below is an explicit exit with its line.
 set -uo pipefail
@@ -255,11 +299,14 @@ work=$(mktemp -d "${TMPDIR:-/tmp}/run-analytics.XXXXXX") || die "cannot create a
 have_record=0
 if [ -e "$json_out" ]; then
   have_record=1
-  jq -s -e 'length == 1 and (.[0] | type == "object" and .schema == 1
+  jq -s -e 'length == 1 and (.[0] | type == "object"
+            and ((.schema == 1 and (has("rounds") | not))
+                 or (.schema == 2 and (.rounds | type) == "array"
+                     and all(.rounds[]; type == "object" and (.round_id | type) == "string")))
             and (.sessions | type) == "array"
             and all(.sessions[]; type == "object" and (.session_id | type) == "string"))' \
     "$json_out" >/dev/null 2>&1 \
-    || die "'$json_out' is not a schema-1 run-analytics document; left untouched"
+    || die "'$json_out' is not a schema-1 or schema-2 run-analytics document; left untouched"
   cp "$json_out" "$work/old.json" || die "cannot read '$json_out'"
 else
   printf '%s\n' '{"schema":1,"sessions":[]}' > "$work/old.json" || die "cannot write the working copy"
@@ -274,7 +321,62 @@ if ! jq -n -R -c -S -f "$sessions_jq" --arg mode sessions --argjson idle_thresho
 fi
 n=$(jq 'length' "$work/new.json") || die "lib/run-analytics.jq wrote no array"
 
-if [ "$n" -eq 0 ] && [ "$have_record" -eq 0 ]; then
+# --- Gate rounds (GATE ROUNDS above): nothing on this path reaches `die`.
+m=0
+rounds_err=""
+rounds_file=/dev/null
+lane=""
+if state_dir=$(hr_state_dir "$top") && lane=$(hr_test_run_lane_dir "$state_dir" "$branch"); then
+  case "$lane" in
+    /*) ;;
+    *) lane="$top/$lane" ;;
+  esac
+else
+  lane=""
+fi
+if [ -n "$lane" ] && [ -d "$lane" ]; then
+  for v in "$lane"/*.verdict; do
+    [ -f "$v" ] && [ ! -L "$v" ] || continue
+    label=${v##*/}
+    label=${label%.verdict}
+    [[ "$label" =~ $HR_TEST_RUN_LABEL_PATTERN ]] || continue
+    recs=""
+    for r in gates.tsv focused.tests.tsv full.tests.tsv; do
+      if [ -f "$lane/$label.$r" ] && [ ! -L "$lane/$label.$r" ]; then recs="$recs $r"; fi
+    done
+    [ -n "$recs" ] || continue
+    for r in verdict $recs; do
+      { printf '{"run_analytics_round":"%s","record":"%s"}\n' "$label" "$r" \
+          && cat "$lane/$label.$r" && printf '\n'; } >> "$work/rounds.jsonl" 2>/dev/null \
+        || rounds_err="cannot copy '$label.$r' into the working copy"
+    done
+  done
+fi
+if [ -z "$rounds_err" ] && [ -s "$work/rounds.jsonl" ]; then
+  if ! jq -c '.rounds // []' "$work/old.json" > "$work/known_rounds.json" 2> "$work/err"; then
+    IFS= read -r why < "$work/err" || why=""
+    rounds_err="${why:-cannot write the recorded rounds}"
+  elif ! jq -n -R -c -S -f "$sessions_jq" --arg mode rounds --argjson idle_threshold_s 1 \
+       --slurpfile known "$work/known_rounds.json" --argjson redact "$redact" --argjson suspend '[]' \
+       --arg suspend_source none < "$work/rounds.jsonl" > "$work/rounds_out.json" 2> "$work/err"; then
+    IFS= read -r why < "$work/err" || why=""
+    rounds_err="${why:-lib/run-analytics.jq rounds failed}"
+  elif ! m=$(jq '.rounds | length' "$work/rounds_out.json" 2>/dev/null); then
+    rounds_err="lib/run-analytics.jq rounds wrote no rounds array"
+  else
+    jq -r '.skipped[]? | "run-analytics: round record skipped: \(.record) — \(.reason)"' \
+      "$work/rounds_out.json" >&2 2>/dev/null
+    rounds_file="$work/rounds_out.json"
+  fi
+fi
+if [ -n "$rounds_err" ]; then
+  printf 'run-analytics: round records not read: %s\n' "$rounds_err" >&2
+  m=0
+  rounds_file=/dev/null
+fi
+case "$m" in '' | *[!0-9]*) m=0; rounds_file=/dev/null ;; esac
+
+if [ "$n" -eq 0 ] && [ "$m" -eq 0 ] && [ "$have_record" -eq 0 ]; then
   printf 'no session in %s\n' "$stream"
   exit 0
 fi
@@ -416,8 +518,12 @@ if [ "$src" != "none" ]; then
 fi
 
 # --- Merge, roll up, render.
+# `$rounds_file` is `/dev/null` (slurped as `[]`) when the rounds step recorded nothing.
 jq -n -S --arg branch "$branch" --slurpfile old "$work/old.json" --slurpfile new "$work/new.json" \
-  '{schema: 1, branch: $branch, sessions: ($old[0].sessions + $new[0]), run: null}' \
+  --slurpfile r "$rounds_file" \
+  '(($old[0].rounds // []) + ($r[0].rounds // [])) as $rounds
+   | {schema: 1, branch: $branch, sessions: ($old[0].sessions + $new[0]), run: null}
+   | if ($rounds | length) > 0 then .schema = 2 | .rounds = $rounds else . end' \
   > "$work/merged.json" 2> "$work/err" || die "cannot merge the new sessions"
 if ! jq -S -f "$report_jq" --arg mode rollup < "$work/merged.json" > "$work/doc.json" 2> "$work/err"; then
   IFS= read -r why < "$work/err" || why=""
@@ -447,7 +553,9 @@ if ! cmp -s "$md_tmp" "$md_out"; then
   changed=1
 fi
 
-if [ "$n" -gt 0 ] || [ "$changed" -eq 1 ]; then
+if [ "$m" -gt 0 ]; then
+  printf 'recorded %s session(s) and %s round(s) for %s\n' "$n" "$m" "$branch"
+elif [ "$n" -gt 0 ] || [ "$changed" -eq 1 ]; then
   printf 'recorded %s session(s) for %s\n' "$n" "$branch"
 else
   printf 'unchanged: no new session for %s\n' "$branch"

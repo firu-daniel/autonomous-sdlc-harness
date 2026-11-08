@@ -1,9 +1,12 @@
-# run-analytics.jq — per-session records from one headless stream file.
+# run-analytics.jq — per-session records from one headless stream file, and Run
+# gates round records from a branch's finished rounds.
 #
 # Owns: turning one `<state_dir>/autonomous_logs/<branch>.stream.jsonl`'s raw
 # `stream-json` events into one record per headless session, re-classing
-# those records' idle gaps against host suspend intervals, and turning sub-agent
-# transcripts into final per-request and per-dispatch token figures. It reads no file of
+# those records' idle gaps against host suspend intervals, turning sub-agent
+# transcripts into final per-request and per-dispatch token figures, and turning
+# a branch's finished Run gates round records (mode `rounds`) into round records,
+# deciding which are new. It reads no file of
 # its own, resolves no path, consults no host and merges nothing: the roll-up and
 # the Markdown are lib/run-analytics-report.jq's; locating files, reading suspend
 # intervals, merging and writing are run-analytics.sh's, its only caller.
@@ -15,8 +18,12 @@
 # EVERY MODE TAKES EVERY VARIABLE: $mode, $idle_threshold_s, $known, $redact,
 # $suspend, $suspend_source. jq resolves every $name the program references at
 # compile time, not when the branch holding it runs, so a call omitting one
-# aborts with `$<name> is not defined` whatever its mode. Each mode ignores the
-# ones it does not use; pass those as the neutral values shown.
+# aborts with `$<name> is not defined` whatever its mode — sessions, overlay,
+# transcripts, attach or rounds. Each mode ignores the ones it does not use; pass
+# those as the neutral values shown. The variable set is unchanged, and a variable
+# may be bound by --slurpfile as well as by --arg / --argjson: mode `rounds` binds
+# $known that way, as the recorded rounds array wrapped in a one-element array,
+# not session ids. Every other mode keeps --argjson known.
 #
 # Mode `sessions`:
 #   jq -n -R -c -S -f run-analytics.jq --arg mode sessions
@@ -41,6 +48,10 @@
 #     through `redact`: each $redact pair replaced literally, in order, then any
 #     remaining /Users/<segment> or /home/<segment> -> ~, then cut to 160
 #     characters. The init event's working-directory field is never read.
+#     Mode `rounds`' round ids, gate ids and file paths go through `redact_path`,
+#     the replace pairs only, with neither the home step nor the 160-character
+#     cut, because they are keys and record values, not display text, and the
+#     home step matches /home/ inside a relative path.
 #
 # Mode `overlay`:
 #   jq -c -S -f run-analytics.jq --arg mode overlay
@@ -70,7 +81,84 @@
 #   requests.items[] entry whose message_id is in any agent's requests takes those
 #   four values. Nothing else changes.
 #
-# Record (top-level keys exactly these):
+# Mode `rounds` (the only mode that reads Run gates records):
+#   jq -n -R -c -S -f run-analytics.jq --arg mode rounds
+#      --argjson idle_threshold_s 1 --slurpfile known <file holding the document's
+#      .rounds array, or []> --argjson redact '<pairs>' --argjson suspend '[]'
+#      --arg suspend_source none < <concatenated records>
+#   $known reaches this mode through a file, never through argv: one recorded
+#   round carries every test file's row, so the recorded rounds of a busy branch
+#   outgrow Linux's per-argument limit MAX_ARG_STRLEN (131072 bytes on 4 KiB
+#   pages; in the harness's own repository, cli/test/helpers/fixture.mjs →
+#   MAX_ARG_STRING_BYTES records it), and an --argjson of them would make exec of
+#   jq fail with E2BIG. --slurpfile binds $known to a one-element array holding
+#   the file's value, read here as $known[0]; when $known is not exactly one
+#   element that is an array, the mode stops with an error, so the call exits
+#   non-zero.
+#   Input: raw lines, read with `inputs`. A line that `fromjson?` parses to an
+#   object with string run_analytics_round (the round's label) and string record
+#   starts that record; the lines up to the next such marker are its lines, less
+#   exactly one empty line at its end (the caller appends a newline after each
+#   file). Lines before the first marker are ignored.
+#   Records, as this reader's contract. A gate command may write its own
+#   `<label>.<suffix>` records beside the round's log (run-test-suite.sh → WHAT A
+#   GATE IS TOLD); in the harness's own repository, scripts/lib/gate-round-lib.sh
+#   and scripts/lib/test-timing-reporter.mjs write them. A gate that writes these
+#   shapes is read. A record failing a check is unreadable, its reason naming the
+#   first failed check:
+#   - verdict: exactly one line, `pass`, or `fail` optionally followed by a space
+#     and anything; only the first word is kept.
+#   - gates.tsv: first line `phase\tgate\tstatus\tseconds`, last line
+#     `end\tcomplete` or `end\tstopped`; every row between has four tab-separated
+#     fields: phase `focused` or `full`, gate non-empty with no space, status
+#     `ok`, `FAIL`, `BLOCKED` or `SKIPPED`, seconds all digits.
+#   - focused.tests.tsv, full.tests.tsv: first line
+#     `file\tstatus\tseconds\ttests\tfailed`, last line `end`; every row between
+#     has five fields: file non-empty, not starting `/`, with no space and no `.`
+#     or `..` segment; status `pass` or `fail`; seconds digits, optionally
+#     followed by `.` and digits; tests and failed all digits.
+#   - any other record name is refused as unknown.
+#   The caller's test-file pattern and gate-id set are not checked: they are not
+#   known here.
+#   A valid <phase>.tests.tsv belongs to the round only when the label's gates.tsv
+#   is readable and has a row of that phase; otherwise it is named in skipped only
+#   (`no <phase> rows in gates.tsv`, or `no readable gates.tsv`), never in the
+#   round's unreadable. A round truncates only its gates.tsv at its start, the
+#   per-file record is written only in a phase where the test gate runs, and a
+#   finished label re-runs when the tree changed (run-test-suite.sh → ONE RUN PER
+#   LABEL), so a per-phase record can be an earlier attempt's.
+#   Residual: a stale <phase>.tests.tsv still passes when this attempt's
+#   gates.tsv has rows of that phase but the test gate wrote no record in it
+#   (BLOCKED by a prerequisite, or the attempt killed first). It is narrow: a
+#   label's focus set is computed from the newest other label's record, never its
+#   own, so a resumed attempt normally gets the earlier attempt's focus set; the
+#   test gate is then in both focused phases or in neither, and the narrowed test
+#   gate always runs in full. No file-age test closes it, because no record
+#   carries the attempt's start time: gates.tsv's mtime is its last append, which
+#   postdates the attempt's own per-file record, and <label>.commit is renamed
+#   into place at the run's end, just before .verdict (run-test-suite.sh → BESIDE
+#   THE LOG), so a stale record and a fresh one compare the same way against
+#   both. Closing it is the producer's: truncate or remove
+#   <label>.<phase>.tests.tsv at round start.
+#   Output: {"rounds": [<round record>, …], "skipped": [{"record":
+#   "<label>.<record>", "reason": "<one line>"}, …]}, skipped sorted by record.
+#   Round record: {round_id, verdict: "pass"|"fail", gates: {outcome:
+#   "complete"|"stopped", rows: [{phase, gate, status, seconds}]}, tests:
+#   {focused?, full?: [{file, status, seconds, tests, failed}]}, unreadable:
+#   [<record name>, …] sorted}. Rows keep record order; nothing is sorted by
+#   seconds. gates null means no readable gates.tsv, which this mode never emits.
+#   A round is emitted only for a label with a readable verdict and a readable
+#   gates.tsv; every record of a label not emitted is named in skipped, and so is
+#   every unreadable or refused record of one emitted.
+#   New versus recorded: the parse's {verdict, gates, tests, unreadable} is
+#   compared with the LAST $known[0] entry whose round_id | split("#")[0] is the
+#   label. None: emitted as the label. Equal: emitted nowhere. Different: emitted
+#   as "<label>#<k + 1>", k the number of entries carrying that label. A recorded
+#   entry is never altered. Order: labels ending `_round_<digits>` first, by the
+#   text before the last `_round_` and then that number as a number; any other
+#   label after them, by its text.
+#
+# Session record, of modes sessions, overlay and attach (top-level keys exactly these):
 #   session_id, complete, first_at, last_at  (ISO timestamps, verbatim)
 #   time: {wall_ms, duration_ms, duration_api_ms, host_suspended_ms, idle_ms,
 #          active_ms, idle_threshold_s, suspend_source,
@@ -163,15 +251,24 @@ def strip_home($pre):
   split($pre)
   | (.[0] // "") + (.[1:] | map(seg_len as $n | "~" + .[$n:]) | join(""));
 
-def redact:
+# The replace pairs alone, for mode rounds' keys and record values. No home step:
+# strip_home splits on its prefix anywhere in the string, so the relative
+# `src/home/a.test.ts` and `src/home/b.test.ts` would both become `src~`, and
+# validation already refuses a file starting with `/`. No cut: it would shorten
+# the record and merge two values sharing a 160-character prefix. `redact` is this
+# followed by its own home steps and cut, so its output is unchanged.
+def redact_path:
   if type != "string" then .
   else
     reduce ($redact[]?
             | select(type == "array" and length == 2
                      and (.[0] | type) == "string" and (.[0] | length) > 0)) as $p
       (.; split($p[0]) | join($p[1] | tostring))
-    | strip_home("/Users/") | strip_home("/home/")
-    | .[0:160]
+  end;
+
+def redact:
+  if type != "string" then .
+  else redact_path | strip_home("/Users/") | strip_home("/home/") | .[0:160]
   end;
 
 def req_usage:
@@ -487,6 +584,142 @@ def attach:
                                     then . + $bymsg[.message_id] else . end)
            else . end));
 
+def all_digits:
+  length > 0 and ([explode[] | select(. < 48 or . > 57)] | length) == 0;
+
+def decimal:
+  split(".") as $p
+  | (($p | length) == 1 and ($p[0] | all_digits))
+    or (($p | length) == 2 and ($p[0] | all_digits) and ($p[1] | all_digits));
+
+def rel_path:
+  length > 0 and (startswith("/") | not) and (contains(" ") | not)
+  and ([split("/")[] | select(. == "." or . == "..")] | length) == 0;
+
+def shown: split("\t") | join("\\t");
+
+def gate_row_reason:
+  split("\t") as $f
+  | if ($f | length) != 4 then "expected 4 tab-separated fields"
+    elif $f[0] != "focused" and $f[0] != "full" then "phase is neither focused nor full"
+    elif $f[1] == "" or ($f[1] | contains(" ")) then "gate is empty or holds a space"
+    elif ([$f[2] | . == "ok", . == "FAIL", . == "BLOCKED", . == "SKIPPED"] | any | not)
+    then "status is not ok, FAIL, BLOCKED or SKIPPED"
+    elif ($f[3] | all_digits | not) then "seconds is not all digits"
+    else null end;
+
+def test_row_reason:
+  split("\t") as $f
+  | if ($f | length) != 5 then "expected 5 tab-separated fields"
+    elif ($f[0] | rel_path | not)
+    then "file is empty, absolute, holds a space or has a . or .. segment"
+    elif $f[1] != "pass" and $f[1] != "fail" then "status is neither pass nor fail"
+    elif ($f[2] | decimal | not) then "seconds is not a decimal number"
+    elif ($f[3] | all_digits | not) then "tests is not all digits"
+    elif ($f[4] | all_digits | not) then "failed is not all digits"
+    else null end;
+
+# The first failed check of a header / rows / terminator table, or null.
+def table_reason($header; $terminators; row_reason):
+  if length == 0 or .[0] != $header then "first line is not \($header | shown)"
+  elif length < 2 or ([.[-1] | . == $terminators[]] | any | not)
+  then "last line is not \($terminators | map(shown) | join(" or "))"
+  else
+    [range(1; length - 1) as $i | (.[$i] | row_reason) as $r
+     | select($r != null) | "line \($i + 1): \($r)"][0]
+  end;
+
+# A record's lines -> {reason: null, value} when valid, else {reason}.
+def round_record($rec):
+  if $rec == "verdict" then
+    if length != 1 then {reason: "expected exactly one line"}
+    elif .[0] == "pass" or .[0] == "fail" or (.[0] | startswith("fail "))
+    then {reason: null, value: (.[0] | split(" ")[0])}
+    else {reason: "line is neither pass nor fail"} end
+  elif $rec == "gates.tsv" then
+    table_reason("phase\tgate\tstatus\tseconds"; ["end\tcomplete", "end\tstopped"]; gate_row_reason)
+      as $r
+    | if $r != null then {reason: $r}
+      else
+        {reason: null,
+         value: {outcome: (.[-1] | split("\t")[1]),
+                 rows: [.[1:-1][] | split("\t")
+                        | {phase: .[0], gate: (.[1] | redact_path), status: .[2],
+                           seconds: (.[3] | tonumber)}]}}
+      end
+  elif $rec == "focused.tests.tsv" or $rec == "full.tests.tsv" then
+    table_reason("file\tstatus\tseconds\ttests\tfailed"; ["end"]; test_row_reason) as $r
+    | if $r != null then {reason: $r}
+      else
+        {reason: null,
+         value: [.[1:-1][] | split("\t")
+                 | {file: (.[0] | redact_path), status: .[1], seconds: (.[2] | tonumber),
+                    tests: (.[3] | tonumber), failed: (.[4] | tonumber)}]}
+      end
+  else {reason: "unknown record name"} end;
+
+def round_sort_key:
+  split("_round_") as $p
+  | if ($p | length) >= 2 and ($p[-1] | all_digits)
+    then [0, ($p[0:-1] | join("_round_")), ($p[-1] | tonumber), .]
+    else [1, .] end;
+
+# One label's parsed records -> {sort, round: <round record>|null, skipped}.
+def build_round($kn):
+  (.[0].name | redact_path) as $lb
+  | (map({key: .rec, value: .}) | from_entries) as $by
+  | ($by.verdict != null and $by.verdict.reason == null) as $v_ok
+  | ($by["gates.tsv"] != null and $by["gates.tsv"].reason == null) as $g_ok
+  | def named($reason): {record: ($lb + "." + .rec), reason: $reason};
+    if ($v_ok and $g_ok) | not then
+      {sort: null, round: null,
+       skipped: map(if .reason != null then named(.reason)
+                    elif $v_ok | not then named("no readable verdict")
+                    else named("no readable gates.tsv") end)}
+    else
+      [$by["gates.tsv"].value.rows[].phase] as $phases
+      | (reduce (.[] | select(.rec == "focused.tests.tsv" or .rec == "full.tests.tsv")) as $t
+           ({tests: {}, unreadable: [], skipped: []};
+            ($t.rec | split(".")[0]) as $ph
+            | if $t.reason != null then
+                .unreadable += [$t.rec] | .skipped += [$t | named($t.reason)]
+              elif ([$phases[] | . == $ph] | any) then .tests[$ph] = $t.value
+              else .skipped += [$t | named("no \($ph) rows in gates.tsv")] end)) as $acc
+      | {verdict: $by.verdict.value, gates: $by["gates.tsv"].value, tests: $acc.tests,
+         unreadable: ($acc.unreadable | sort)} as $parse
+      | [$kn[] | select((.round_id | split("#")[0]) == $lb)] as $same
+      | {sort: ($lb | round_sort_key),
+         round: (if ($same | length) == 0 then $parse + {round_id: $lb}
+                 elif ($same[-1] | {verdict, gates, tests, unreadable}) == $parse then null
+                 else $parse + {round_id: ($lb + "#" + (($same | length) + 1 | tostring))} end),
+         skipped: ($acc.skipped
+                   + [.[] | select(.reason != null and .rec != "focused.tests.tsv"
+                                   and .rec != "full.tests.tsv") | named(.reason)])}
+    end;
+
+def rounds:
+  if ($known | type) != "array" or ($known | length) != 1 or ($known[0] | type) != "array" then
+    error("run-analytics.jq: mode rounds needs --slurpfile known naming a file that holds one JSON array")
+  else
+    [$known[0][] | select(type == "object" and (.round_id | type) == "string")] as $kn
+    | reduce inputs as $line ({cur: null, recs: {}};
+        [$line | fromjson? | select(type == "object" and (.run_analytics_round | type) == "string"
+                                    and (.record | type) == "string")][0] as $m
+        | if $m != null then
+            ([$m.run_analytics_round, $m.record] | tojson) as $k
+            | .cur = $k | .recs[$k] = {name: $m.run_analytics_round, rec: $m.record, lines: []}
+          elif .cur != null then .cur as $k | .recs[$k].lines += [$line]
+          else . end)
+    | [.recs[]
+       | .rec as $rc
+       | (.lines | if length > 0 and .[-1] == "" then .[0:-1] else . end) as $ls
+       | {name, rec} + ($ls | round_record($rc))]
+    | group_by(.name)
+    | map(build_round($kn))
+    | {rounds: ([.[] | select(.round != null)] | sort_by(.sort) | map(.round)),
+       skipped: ([.[].skipped[]] | sort_by(.record))}
+  end;
+
 if $mode == "sessions" then
   reduce (inputs | fromjson? | select(type == "object")) as $e
     ({out: [], emitted: {}, seen: {}, active: false,
@@ -500,6 +733,8 @@ elif $mode == "transcripts" then
   transcripts
 elif $mode == "attach" then
   attach
+elif $mode == "rounds" then
+  rounds
 else
-  error("run-analytics.jq: unknown --arg mode \"\($mode)\"; expected sessions, overlay, transcripts or attach")
+  error("run-analytics.jq: unknown --arg mode \"\($mode)\"; expected sessions, overlay, transcripts, attach or rounds")
 end

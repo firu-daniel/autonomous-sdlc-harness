@@ -54,7 +54,10 @@
 #     (its THE RECORD paragraph).
 # A record that breaks its shape in any way, or names an id the caller did not
 # pass or a file outside `GR_TEST_FILE_PATTERN`, is unreadable, and an
-# unreadable previous record means the round runs in full.
+# unreadable previous record means the round runs in full. A finished round's
+# records are also read, never written, by `scripts/run-analytics.sh` (its
+# `GATE ROUNDS` paragraph), which copies their rows into the committed run
+# analytics, so the shape stated here is a contract with that reader too.
 #
 # THE UNIT FUNCTION. Called as `<unit_fn> <id>`. It reads `GR_PHASE` and, for a
 # narrowed id in the `focused` phase, `GR_FOCUS_FILES`; prints its own lines

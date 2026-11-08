@@ -14,8 +14,9 @@
 # answers whether a launch holds the host awake (`hr_keep_awake`,
 # `hr_keep_awake_probe_var`, `hr_keep_awake_mode_var`), whether it is on mains
 # power (`hr_on_mains_power`) and starts that hold (`hr_keep_awake_hold_var`),
-# owns the Run gates lane for `run-test-suite.sh` and
-# `launch-sandboxed-gates.sh` — its layout (`hr_test_run_lane_dir`), label
+# owns the Run gates lane for `run-test-suite.sh`,
+# `launch-sandboxed-gates.sh` and `run-analytics.sh` — its layout
+# (`hr_test_run_lane_dir`), label
 # pattern and staleness bound (`HR_TEST_RUN_*`) and heartbeat reader
 # (`hr_heartbeat_age`) — places a dropped
 # artifact in a working copy and commits and pushes it, and derives the
@@ -6707,10 +6708,13 @@ hr_lane_mtime() {
 # THE RUN GATES LANE:
 # `<state_dir>/test_run_logs/<sanitized branch>/<label>.{running,verdict,commit,log}`,
 # the labels it accepts, and the age past which a `.running` heartbeat is stale.
-# Its two callers, `run-test-suite.sh` and `launch-sandboxed-gates.sh`, take all
-# four from here and must agree on them: a drift makes the launcher's `pending`
-# answer and its "did not start" refusal read the wrong lane. Only
-# `run-test-suite.sh` lets `RUN_TEST_SUITE_STALE` override the bound.
+# Its three callers take what they use from here: `run-test-suite.sh` and
+# `launch-sandboxed-gates.sh` take all four and must agree on them: a drift
+# makes the launcher's `pending` answer and its "did not start" refusal read the
+# wrong lane. `run-analytics.sh` is a read-only reader of finished rounds'
+# `.verdict` and record files, and takes the lane directory and the label
+# pattern. Only `run-test-suite.sh` lets `RUN_TEST_SUITE_STALE` override the
+# bound.
 HR_TEST_RUN_LABEL_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]*$'
 HR_TEST_RUN_STALE_SECONDS=30
 HR_TEST_RUN_LOG_SUBDIR='test_run_logs'
@@ -6718,7 +6722,8 @@ HR_TEST_RUN_LOG_SUBDIR='test_run_logs'
 # hr_test_run_lane_dir <state_dir> <branch> — print the lane directory
 # `<state_dir>/test_run_logs/<hr_sanitize_branch branch>`, as given (relative
 # when <state_dir> is); 1, printing nothing, when the branch does not sanitize.
-# Callers: `run-test-suite.sh` and `launch-sandboxed-gates.sh` (check 9).
+# Callers: `run-analytics.sh`, `run-test-suite.sh` and
+# `launch-sandboxed-gates.sh` (check 9).
 hr_test_run_lane_dir() {
   local state_dir="${1-}" safe
   safe=$(hr_sanitize_branch "${2-}") || return 1
