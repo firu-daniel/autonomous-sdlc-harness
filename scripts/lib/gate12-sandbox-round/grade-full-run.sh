@@ -303,7 +303,7 @@ g12_fr3() {
 
 # ---------------------------------------------------------------------------------------------
 # FR4: the per-call records are run-analytics.sh's sessions[].tools.items[], each carrying
-# permission_denied (cli/templates/scripts/lib/run-analytics.jq, the Record block).
+# permission_denied (cli/templates/scripts/lib/run-analytics.jq, the Session record block).
 g12_fr4() {
   local branch="$1" rel="$G12_STATE_DIR/run_analytics/$1/run-analytics.json" ref="origin/$1"
   local json denied n path

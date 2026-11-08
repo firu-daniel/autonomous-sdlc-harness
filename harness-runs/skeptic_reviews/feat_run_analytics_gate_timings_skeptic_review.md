@@ -31,7 +31,7 @@ No parity review exists: `phases.parity` is `false`.
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Re-point `grade-full-run.sh`'s `lib/run-analytics.jq` "Record block" citation at the *Session record* block _(layer: general)_
+1. [x] **Finding 1** — Re-point `grade-full-run.sh`'s `lib/run-analytics.jq` "Record block" citation at the *Session record* block _(layer: general)_
 
 ---
 
