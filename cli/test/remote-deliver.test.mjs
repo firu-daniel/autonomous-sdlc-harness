@@ -3,10 +3,13 @@
  *
  * **The rule these tests exist to enforce: a completed run or round ends with its pull request marked ready
  * and one `completed` comment on the pull request and one on its issue; any other bundle status posts
- * nothing, and a refused flip never fails the step.** Each arm is driven: an open draft (flipped with the
- * job's token), an open non-draft (no flip), a refused flip (one warning, both comments still posted), no
- * pull request open (the fallback draft create, then the flip), a round's bundle, no issue, `HARNESS_PR_TOKEN`
- * scoping the create alone, GitHub's Actions refusal (no retry, the setting named on the issue alone), any
+ * nothing, and a refused flip never fails the step.** Each arm is driven: an open draft (flipped with
+ * `HARNESS_PR_TOKEN` when set, so the adopter's CI gets `ready_for_review`, else with the job's token, the
+ * log line naming which), a refusal with `HARNESS_PR_TOKEN` (one retry with the job's token), an open
+ * non-draft (with `HARNESS_PR_TOKEN`, turned back to a draft with the job's token and then flipped; a refused
+ * conversion is one warning and no flip; without it, no call), a refused flip (one warning, both comments
+ * still posted), no pull request open (the fallback draft create, then the flip), a round's bundle, no issue,
+ * `HARNESS_PR_TOKEN` scoping the create and the flip alone, GitHub's Actions refusal (no retry, the setting named on the issue alone), any
  * other create failure (one retry without `--draft`, then the compare link on the issue alone), a bundle
  * that is not `completed` or is missing, the forge coupling off, and `phases.qa` naming the local
  * interactive-test step still owed.
@@ -169,12 +172,16 @@ const labelAdds = (calls, n) =>
     .map((call) => call.args.at(-1));
 const MARKER = '<!-- sdlc-harness event=completed branch=feat_x -->\n';
 
-/** Every `pr ready` call carries the job's token, never `HARNESS_PR_TOKEN`. */
+const FLIP_ARGS = ['pr', 'ready', '12', '--repo', REPOSITORY];
+const UNDO_ARGS = [...FLIP_ARGS, '--undo'];
+const warningsOf = (result) => `${result.stdout}\n${result.stderr}`.split('\n').filter((line) => line.startsWith('::warning::'));
+
+/** Every `pr ready` call carries the job's token: the case with `HARNESS_PR_TOKEN` unset. */
 function assertReadyTokens(calls) {
   for (const call of readies(calls)) assert.equal(call.token, JOB_TOKEN, call.line);
 }
 
-test('an open draft is marked ready with the job token, commented on it and on its issue, and set done', async (t) => {
+test('an open draft is marked ready with HARNESS_PR_TOKEN, commented on it and on its issue, and set done', async (t) => {
   const f = await deliverFixture(t);
   const result = await f.deliver({ STUB_PRS: openDraft, HARNESS_PR_TOKEN: PR_TOKEN });
   assert.equal(result.status, 0, result.stderr);
@@ -182,8 +189,10 @@ test('an open draft is marked ready with the job token, commented on it and on i
   assert.equal(creates(calls).length, 0);
   const flips = readies(calls);
   assert.equal(flips.length, 1);
-  assert.deepEqual(flips[0].args, ['pr', 'ready', '12', '--repo', REPOSITORY]);
-  assertReadyTokens(calls);
+  assert.deepEqual(flips[0].args, FLIP_ARGS);
+  assert.equal(flips[0].token, PR_TOKEN);
+  assert.match(result.stdout, /^remote-run\.sh: deliver: marked pull request #12 ready for review with HARNESS_GIT_TOKEN$/m);
+  for (const call of calls) if (call !== flips[0]) assert.notEqual(call.token, PR_TOKEN, call.line);
   assert.equal(allComments(calls).length, 2);
   const [onPr] = commentsOn(calls, 12);
   assert.match(onPr.body, /run on `feat_x` completed, and this pull request is now marked ready for your review/);
@@ -198,7 +207,75 @@ test('an open draft is marked ready with the job token, commented on it and on i
   assert.deepEqual(labelAdds(calls, 12), ['labels[]=sdlc-harness: done']);
 });
 
-test('an open non-draft gets no flip and the not-a-draft sentence', async (t) => {
+test('with HARNESS_PR_TOKEN unset, an open draft is marked ready with the job token and the line says so', async (t) => {
+  const f = await deliverFixture(t);
+  const result = await f.deliver({ STUB_PRS: openDraft });
+  assert.equal(result.status, 0, result.stderr);
+  const flips = readies(f.calls());
+  assert.equal(flips.length, 1);
+  assert.deepEqual(flips[0].args, FLIP_ARGS);
+  assert.equal(flips[0].token, JOB_TOKEN);
+  assert.match(result.stdout, /^remote-run\.sh: deliver: marked pull request #12 ready for review with the job's token$/m);
+});
+
+test('a flip refused with HARNESS_PR_TOKEN is retried once with the job token, as one warning line', async (t) => {
+  const f = await deliverFixture(t);
+  const result = await f.deliver({
+    STUB_PRS: openDraft, HARNESS_PR_TOKEN: PR_TOKEN, STUB_FAIL_ON: 'pr ready', STUB_FAIL_MESSAGE: 'nope', STUB_FAIL_TIMES: '1',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls();
+  const flips = readies(calls);
+  assert.equal(flips.length, 2);
+  assert.deepEqual(flips.map((call) => [call.args, call.token]), [[FLIP_ARGS, PR_TOKEN], [FLIP_ARGS, JOB_TOKEN]]);
+  const warnings = warningsOf(result);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /HARNESS_GIT_TOKEN was refused: .*nope.*retrying once with the job's token/);
+  assert.match(result.stdout, /^remote-run\.sh: deliver: marked pull request #12 ready for review with the job's token$/m);
+  assert.match(commentsOn(calls, 12)[0].body, /now marked ready for your review/);
+});
+
+test('with HARNESS_PR_TOKEN set, an open non-draft is turned back to a draft with the job token, then flipped with HARNESS_PR_TOKEN', async (t) => {
+  const f = await deliverFixture(t);
+  const result = await f.deliver({ STUB_PRS: openReady, HARNESS_PR_TOKEN: PR_TOKEN });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls();
+  const ready = readies(calls);
+  assert.deepEqual(ready.map((call) => [call.args, call.token]), [[UNDO_ARGS, JOB_TOKEN], [FLIP_ARGS, PR_TOKEN]]);
+  assert.ok(calls.indexOf(ready[0]) < calls.indexOf(ready[1]));
+  assert.match(
+    result.stdout,
+    /^remote-run\.sh: deliver: turned pull request #12 back to a draft so marking it ready fires ready_for_review on this tip$/m,
+  );
+  assert.match(result.stdout, /ready for review with HARNESS_GIT_TOKEN$/m);
+  assert.deepEqual(warningsOf(result), []);
+  assert.match(commentsOn(calls, 12)[0].body, /now marked ready for your review/);
+});
+
+test('a refused conversion back to a draft is one warning, no flip, and the not-a-draft comment', async (t) => {
+  const f = await deliverFixture(t);
+  const result = await f.deliver({
+    STUB_PRS: openReady,
+    HARNESS_PR_TOKEN: PR_TOKEN,
+    STUB_FAIL_ON: UNDO_ARGS.join(' '),
+    STUB_FAIL_MESSAGE: 'Draft pull requests are not supported',
+    STUB_FAIL_TIMES: '5',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls();
+  const ready = readies(calls);
+  assert.deepEqual(ready.map((call) => call.args), [UNDO_ARGS]);
+  assert.equal(ready[0].token, JOB_TOKEN);
+  const warnings = warningsOf(result);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /Draft pull requests are not supported/);
+  assert.match(warnings[0], /no ready_for_review fires on this tip/);
+  const [onPr] = commentsOn(calls, 12);
+  assert.match(onPr.body, /This pull request is not a draft/);
+  assert.match(onPr.body, /left as it is/);
+});
+
+test('with HARNESS_PR_TOKEN unset, an open non-draft gets no pr ready call of either form and the not-a-draft sentence', async (t) => {
   const f = await deliverFixture(t);
   const result = await f.deliver({ STUB_PRS: openReady });
   assert.equal(result.status, 0, result.stderr);
@@ -253,8 +330,8 @@ test('with no pull request open, the fallback draft create runs with HARNESS_PR_
   const flips = readies(calls);
   assert.equal(flips.length, 1);
   assert.ok(calls.indexOf(flips[0]) > createAt);
-  assertReadyTokens(calls);
-  for (const call of calls) if (call !== made[0]) assert.notEqual(call.token, PR_TOKEN, call.line);
+  assert.equal(flips[0].token, PR_TOKEN);
+  for (const call of calls) if (call !== made[0] && call !== flips[0]) assert.notEqual(call.token, PR_TOKEN, call.line);
   assert.match(commentsOn(calls, 12)[0].body, /now marked ready/);
   assert.match(commentsOn(calls, 7)[0].body, /\/pull\/12/);
 });
