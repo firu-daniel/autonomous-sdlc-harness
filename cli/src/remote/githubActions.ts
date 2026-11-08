@@ -30,7 +30,7 @@
  * `cli/templates/scripts/lib/harness-run-lib.sh`, which mirrors {@link WORKFLOW_RUN_FILE} and
  * {@link STATE_ARTIFACT_NAME} for the GitHub route its notification producers print,
  * {@link GIT_TOKEN_SECRET} as the `HARNESS_GIT_TOKEN` source of `hr_credential_values_var`, and
- * {@link WORKFLOWS_DIR} as `HR_REMOTE_WORKFLOWS_DIR`, for `push-branch.sh`'s job workflow-file
+ * {@link WORKFLOWS_DIR} as `HR_REMOTE_WORKFLOWS_DIR`, for `push-branch.sh`'s workflow-file
  * check, and `cli/templates/scripts/autonomous-watcher.sh`, for {@link PUSH_URL_SECRET} and
  * {@link GIT_TOKEN_SECRET} only: its `SESSION_ENV_STRIP_EXTRA` names them as variables it strips
  * from the engine session's environment. The watcher still reaches GitHub only through

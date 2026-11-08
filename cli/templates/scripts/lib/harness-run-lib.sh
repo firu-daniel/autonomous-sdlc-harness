@@ -14,10 +14,7 @@
 # this host holds (`hr_credential_values_var`, `hr_text_has_credential`,
 # `hr_stream_has_credential`), records a push refused inside a session
 # (`hr_push_refusal_dir`, `hr_push_refusal_record`, `hr_push_refusals_for_var`,
-# `hr_push_refusal_handled`), answers whether a job's pushes authenticate with
-# the stored job token (`hr_push_credential_is_job_token`, over
-# `HR_PUSH_CREDENTIAL_KEY` and `HR_PUSH_CREDENTIAL_JOB_TOKEN`),
-# and whether this host has a definite missing sandbox
+# `hr_push_refusal_handled`), and whether this host has a definite missing sandbox
 # prerequisite (`hr_sandbox_prereq_probe_var`, judged by
 # `hr_sandbox_prereq_judge_var`, which classifies through `hr_host_kind_var`),
 # answers whether a launch holds the host awake (`hr_keep_awake`,
@@ -466,9 +463,8 @@
 # and `HR_CREDENTIAL_HIT_FORM` (`hr_text_has_credential`,
 # `hr_stream_has_credential`), the push-refusal record's
 # `HR_PUSH_REFUSAL_FILES` and `HR_PUSH_REFUSAL_REASON`
-# (`hr_push_refusals_for_var`), and the job push-credential marker's
-# `HR_PUSH_CREDENTIAL_KEY`, `HR_PUSH_CREDENTIAL_JOB_TOKEN` and
-# `HR_REMOTE_WORKFLOWS_DIR` (assigned at source time).
+# (`hr_push_refusals_for_var`), and `HR_REMOTE_WORKFLOWS_DIR` (assigned at
+# source time).
 # Every one of them is assigned
 # before it is read by the function that owns it, so an inherited value from a
 # parent process is overwritten rather than believed — except
@@ -5954,40 +5950,9 @@ hr_push_refusal_handled() {
   return 0
 }
 
-# ---------------------------------------------------------------------------
-# THE JOB PUSH-CREDENTIAL MARKER — the main checkout's local-config key
-# `HR_PUSH_CREDENTIAL_KEY` holding `HR_PUSH_CREDENTIAL_JOB_TOKEN`, present
-# exactly while a job's pushes authenticate through the stored `github.token`.
-# One writer: `remote-run.sh` → `push-credential store` sets it and `erase`
-# unsets it. One reader: `push-branch.sh`'s workflow-file check, through
-# `hr_push_credential_is_job_token`. Every caller spells the key and the value
-# through these two constants, never as a literal; no TypeScript owner holds
-# them, so they mirror nothing.
-#
-# THE PREDICATE READS THE MAIN CHECKOUT'S `.git/config`, A RECORD THE SESSION
-# CANNOT WRITE, NEVER THE ENVIRONMENT, which a session controls. It only reads,
-# so it is not a write exception.
-# ---------------------------------------------------------------------------
-
-HR_PUSH_CREDENTIAL_KEY='harness.pushCredential'
-HR_PUSH_CREDENTIAL_JOB_TOKEN='job-token'
 # Mirror of `cli/src/remote/githubActions.ts` → `WORKFLOWS_DIR`; read by
 # `push-branch.sh`'s workflow-file check.
 HR_REMOTE_WORKFLOWS_DIR='.github/workflows'
-
-# hr_push_credential_is_job_token <main_top> — 0 only when
-# `<main_top>/.git/config` holds `HR_PUSH_CREDENTIAL_KEY` with exactly
-# `HR_PUSH_CREDENTIAL_JOB_TOKEN`; 1 otherwise, including an empty <main_top>, a
-# missing file and an absent key. Prints nothing.
-hr_push_credential_is_job_token() {
-  local main_top="${1-}" cfg value
-  [ -n "$main_top" ] || return 1
-  cfg="${main_top%/}/.git/config"
-  [ -f "$cfg" ] || return 1
-  value=$(git config --file "$cfg" --get "$HR_PUSH_CREDENTIAL_KEY" 2>/dev/null) || return 1
-  [ "$value" = "$HR_PUSH_CREDENTIAL_JOB_TOKEN" ] || return 1
-  return 0
-}
 
 # ---------------------------------------------------------------------------
 # THE REMOTE STATE BUNDLE.

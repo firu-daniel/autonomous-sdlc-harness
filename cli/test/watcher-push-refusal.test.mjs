@@ -45,7 +45,7 @@ const FAILED_WAIT_TENTHS = scaleBound(600);
 const CREDENTIAL_REASON =
   'the commits to send carry a credential value; rewrite those commits without it, then push by hand';
 const WORKFLOW_REASON =
-  'the commits to send change a file under .github/workflows/, which a job push may not; run this task locally';
+  'the commits to send change a file under .github/workflows/, and a workflow edit is supervised-only; nothing was pushed — review these commits and push them by hand, or rewrite them without that change';
 
 function shellQuote(value) {
   return `'${value.replaceAll("'", `'\\''`)}'`;

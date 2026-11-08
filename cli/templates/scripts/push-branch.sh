@@ -28,7 +28,7 @@
 # it does not trust, a per-working-copy configuration it does not trust, a
 # hooks directory it will not pin, a branch name starting with `-`, a remote
 # whose URL the main `.git/config` does not name, commits to send that carry a
-# credential or cannot be scanned for one, in a job commits to send that change
+# credential or cannot be scanned for one, commits to send that change
 # a workflow file or whose paths cannot be listed, or a failed
 # push (a transient network, say) is made VISIBLE with a one-line message but
 # must NEVER abort the calling
@@ -94,15 +94,13 @@
 # `XDG_CONFIG_HOME` place the extra credential files and arrive with the
 # environment, as `PATH` does below; they never place the job's.
 #
-# IN A JOB, A WORKFLOW-FILE CHANGE IS REFUSED AT THE FIRST PUSH. A job pushes
-# only with `github.token`, which cannot write `.github/workflows/`, so one
-# commit changing a file there fails that push and every later one of the run.
-# The mode is the job push-credential marker in the main `.git/config`, read
-# through `lib/harness-run-lib.sh` → `hr_push_credential_is_job_token`, never
-# from the environment; the library owns its key and value
-# (`HR_PUSH_CREDENTIAL_KEY`, `HR_PUSH_CREDENTIAL_JOB_TOKEN`) and
-# `remote-run.sh` → `push-credential store` writes it through them. After the
-# credential scan, which wins when both hold, one `git log --name-only
+# NO UNATTENDED PUSH CHANGES A WORKFLOW FILE. Every caller is an unattended
+# commit point or a job step, so the check runs on every call with no mode
+# test; a supervised session pushes a workflow edit with its own `git push`. In
+# a local run the refusal keeps the operator's credential, which may carry the
+# `workflow` scope, from changing CI. In a job, `github.token` could not push
+# the change anyway, and refusing early stops every later push of the run from
+# failing. After the credential scan, which wins when both hold, one `git log --name-only
 # --no-renames -m --first-parent -z` over the same commits lists the paths they
 # change: both sides of a rename, and a merge's changes against its first
 # parent (`-m --first-parent` rather than `--diff-merges=first-parent`, which
@@ -112,8 +110,10 @@
 # `workflows/` directory is an ordinary file. A hit prints the `refusing to
 # push:` line and one more naming the first such path (`printf '%q'`), records
 # the reason without the path through the same record, and exits 0; a failing
-# `log` refuses the same way. Such a task runs locally, where the push uses the
-# operator's own credential. Whether GitHub refuses a merge that brings a
+# `log` refuses the same way. A merge counts against its first parent, so a
+# refresh that merges in a default-branch workflow edit is refused too; its way
+# on is to push that merge by hand in a supervised session, after which it is no
+# longer among the commits to send. Whether GitHub refuses a merge that brings a
 # default-branch workflow edit in is unmeasured; that measurement is owed.
 #
 # DEFENCE IN DEPTH, NOT THE SOLE GUARD. The caller-agnostic backstop is the
@@ -343,12 +343,10 @@
 #                     `printf 'x-access-token:%s' "$GH_TOKEN" | base64`
 #                     -> the same, the line naming `base64`
 #   clean             no token in any commit: it pushes as before
-#   job workflow edit git -C "$d" config harness.pushCredential job-token
-#                     mkdir -p "$d/.github/workflows"; : > "$d/.github/workflows/x.yml"
+#   workflow edit     mkdir -p "$d/.github/workflows"; : > "$d/.github/workflows/x.yml"
 #                     git -C "$d" add -A; git -C "$d" commit -qm w; push-branch.sh "$d"
 #                     -> exit 0, "refusing to push: ... .github/workflows/ ...",
-#                     "$b" unchanged, one .refusal file; the same commit
-#                     without the marker pushes
+#                     "$b" unchanged, one .refusal file
 #
 #   The per-working-copy check and the pin, from a linked worktree (`githooksDir`
 #   takes its default, `githooks`):
@@ -594,8 +592,8 @@ first_workflow_path() {
   [ -z "$wf" ] || printf '%q' "$wf"
 }
 
-# NO COMMIT IT SENDS CARRIES A CREDENTIAL (header), then, in a job only, IN A
-# JOB, A WORKFLOW-FILE CHANGE IS REFUSED AT THE FIRST PUSH (header). Both read
+# NO COMMIT IT SENDS CARRIES A CREDENTIAL (header), then NO UNATTENDED PUSH
+# CHANGES A WORKFLOW FILE (header). Both read
 # the same commit list; both refuse through one record and exit 0.
 if git -C "$main_top" -c core.hooksPath="$pinned" rev-parse --verify --quiet "refs/remotes/$remote/$branch" >/dev/null 2>&1; then
   send_exclusion="refs/remotes/$remote/$branch"
@@ -635,7 +633,7 @@ elif [ -n "$send_commits" ]; then
     esac
   fi
 
-  if [ -z "$send_refusal" ] && hr_push_credential_is_job_token "$main_top"; then
+  if [ -z "$send_refusal" ]; then
     # `--no-renames` lists both sides of a move; `-m --first-parent` diffs a
     # merge against its first parent on git 2.23, which `--diff-merges` is not.
     send_first_path="$(git -C "$main_top" -c core.hooksPath="$pinned" log --no-walk=unsorted --format= --name-only --no-renames -m --first-parent -z --stdin <<<"$send_commits" 2>/dev/null |
@@ -645,7 +643,7 @@ elif [ -n "$send_commits" ]; then
       send_first_path=""
       send_refusal="could not list the paths the commits to send change"
     elif [ -n "$send_first_path" ]; then
-      send_refusal="the commits to send change a file under $HR_REMOTE_WORKFLOWS_DIR/, which the job's token cannot push; nothing was pushed — run this task locally, where the push uses your own credential"
+      send_refusal="the commits to send change a file under $HR_REMOTE_WORKFLOWS_DIR/, and a workflow edit is supervised-only; nothing was pushed — review these commits and push them by hand, or rewrite them without that change"
     fi
   fi
 fi

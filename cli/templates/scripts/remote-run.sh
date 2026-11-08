@@ -1280,21 +1280,17 @@
 # `protocol=https`, `host`, `path`, `username=x-access-token` and
 # `password=<GH_TOKEN>` fed by `printf` on stdin to `git credential-store
 # --file <store file> store` under `umask 077`, then sets in the checkout's
-# local config `credential.https://<host>.useHttpPath true`,
-# `credential.https://<host>/<path>.helper "store --file <store file>"` and,
-# last, the job push-credential marker: `HR_PUSH_CREDENTIAL_KEY` holding
-# `HR_PUSH_CREDENTIAL_JOB_TOKEN`, both owned by `lib/harness-run-lib.sh`, whose
-# `hr_push_credential_is_job_token` is how `push-branch.sh` knows its pushes
-# authenticate with `github.token`, which cannot write `.github/workflows/`.
+# local config `credential.https://<host>.useHttpPath true` and
+# `credential.https://<host>/<path>.helper "store --file <store file>"`.
 # In a job the checkout is the main checkout, whose `.git/` the profile
-# write-protects from the session, so the helper's absolute path and the
-# marker are records the session cannot write, and `push-branch.sh`'s
+# write-protects from the session, so the helper's absolute path is a record
+# the session cannot write, and `push-branch.sh`'s
 # credential scan reads the store file from there, never from `HOME`. One line
 # names the host and path, never the token. `erase` feeds the same fields
 # without the password to `git credential-store --file <store file> erase`,
 # the store file being the path the helper key names when it is `store --file
-# <absolute path>`, else `$HOME/.git-credentials`, then `--unset`s the marker
-# first and the other two keys; one line. An entry for the same host with no
+# <absolute path>`, else `$HOME/.git-credentials`, then `--unset`s both keys;
+# one line. An entry for the same host with no
 # path, or another path, survives both: git's store matches a path-scoped
 # entry only by its path. A `store` that writes no usable credential is one
 # `::error::` line and exit 1, so the `run` job stops before its session, as a
@@ -1366,10 +1362,10 @@
 # force-writing `refs/remotes/origin/<branch>`, plus what its `review` child
 # writes. `stop`, `continue` and `poll` also make
 # `report`'s writes for each event they report. `push-credential store` writes
-# one path-scoped entry in the store file, created under `umask 077`, and three
-# keys in the checkout's local config — `credential.https://<host>.useHttpPath`,
-# `credential.https://<host>/<path>.helper` and the job push-credential marker;
-# `erase` removes exactly that entry and `--unset`s all three keys; neither
+# one path-scoped entry in the store file, created under `umask 077`, and two
+# keys in the checkout's local config — `credential.https://<host>.useHttpPath`
+# and `credential.https://<host>/<path>.helper`;
+# `erase` removes exactly that entry and `--unset`s both keys; neither
 # pushes. Every other verb's only writes are the
 # registry record (`stop`, `sync`) and, for `sync`, the download directory
 # `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/` and
@@ -8217,10 +8213,8 @@ verb_push_credential() {
       echo "::error::remote-run.sh: push-credential: store: writing the entry for https://$PC_HOST/$PC_PATH to $store_file failed; nothing configured"
       exit 1
     fi
-    # The marker last, once both credential keys are set.
     if ! git -C "$root" config --replace-all "credential.https://$PC_HOST.useHttpPath" true 2>/dev/null \
-      || ! git -C "$root" config --replace-all "$helper_key" "store --file $store_file" 2>/dev/null \
-      || ! git -C "$root" config --replace-all "$HR_PUSH_CREDENTIAL_KEY" "$HR_PUSH_CREDENTIAL_JOB_TOKEN" 2>/dev/null; then
+      || ! git -C "$root" config --replace-all "$helper_key" "store --file $store_file" 2>/dev/null; then
       echo "::error::remote-run.sh: push-credential: store: the entry for https://$PC_HOST/$PC_PATH is in $store_file, but setting the checkout's credential keys failed"
       exit 1
     fi
@@ -8241,9 +8235,6 @@ verb_push_credential() {
     failed="erasing the entry from $store_file failed"
   fi
   # `git config --unset` exits 5 for a key that is not set: nothing to undo.
-  rc=0
-  git -C "$root" config --unset "$HR_PUSH_CREDENTIAL_KEY" 2>/dev/null || rc=$?
-  [ "$rc" -eq 0 ] || [ "$rc" -eq 5 ] || failed="${failed:+$failed; }unsetting the job push-credential marker failed"
   for value in "$helper_key" "credential.https://$PC_HOST.useHttpPath"; do
     rc=0
     git -C "$root" config --unset "$value" 2>/dev/null || rc=$?

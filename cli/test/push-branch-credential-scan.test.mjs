@@ -1,15 +1,14 @@
 /**
- * The written `push-branch.sh`'s credential scan and its in-job workflow-file check, against a
- * fixture `init` adopted and its throwaway bare origin.
+ * The written `push-branch.sh`'s credential scan and its workflow-file check, against a fixture
+ * `init` adopted and its throwaway bare origin.
  *
  * **The rule these tests exist to enforce: a commit carrying a credential never reaches the remote,
- * and the wrapper still exits 0.** In a job — the job push-credential marker set in the main
- * `.git/config` — a commit changing a file under the root workflow directory never reaches it
- * either. Every case is graded on the bare remote's refs, never on the exit status alone.
+ * and the wrapper still exits 0.** A commit changing a file under the root workflow directory never
+ * reaches it either, with or without a job. Every case is graded on the bare remote's refs, never on
+ * the exit status alone.
  *
  * Every case runs under a fake `HOME` and `XDG_CONFIG_HOME` and blanks the four token variables, so
- * the host's own credentials are never a source. The marker is set by sourcing the fixture's copy
- * of the run library and naming its own constants, so this suite cannot drift from their owner.
+ * the host's own credentials are never a source.
  */
 
 import assert from 'node:assert/strict';
@@ -22,7 +21,6 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
 const SCRIPT = join(INIT_SCRIPTS_DIR, 'push-branch.sh');
-const LIB = join(INIT_SCRIPTS_DIR, 'lib', 'harness-run-lib.sh');
 const BRANCH = 'feat_x';
 const TOKEN = 'ghs_example0123456789abcdef';
 const TOKEN_B64 = Buffer.from(`x-access-token:${TOKEN}`).toString('base64');
@@ -72,15 +70,10 @@ async function adoptedFixture(t) {
       await runGit(dir, ['add', '--', path]);
       await runGit(dir, ['commit', '--quiet', '-m', message]);
     },
-    async setMarker() {
-      const r = await runBash(dir, [
-        '-c',
-        '. "$1" && git -C "$2" config "$HR_PUSH_CREDENTIAL_KEY" "$HR_PUSH_CREDENTIAL_JOB_TOKEN"',
-        'bash',
-        join(dir, LIB),
-        dir,
-      ]);
-      assert.equal(r.status, 0, output(r));
+    /** Seed origin's branch with a plain push, which the wrapper would refuse for a workflow file. */
+    async seedOrigin() {
+      await runGit(dir, [...NO_HOOKS, 'push', '--quiet', 'origin', BRANCH]);
+      assert.equal(await this.originTip(), await this.head());
     },
     head: () => git(['rev-parse', 'HEAD']),
     originTip: async () =>
@@ -234,7 +227,7 @@ test('fail closed: a scan that cannot run (no grep on PATH) is refused, with a r
   );
 });
 
-const WORKFLOW = /push-branch\.sh: refusing to push: the commits to send change a file under \.github\/workflows\/, which the job's token cannot push; nothing was pushed — run this task locally, where the push uses your own credential/;
+const WORKFLOW = /push-branch\.sh: refusing to push: the commits to send change a file under \.github\/workflows\/, and a workflow edit is supervised-only; nothing was pushed — review these commits and push them by hand, or rewrite them without that change/;
 
 async function assertWorkflowRefused(f, r, before) {
   const record = await assertRefused(f, r, before, WORKFLOW);
@@ -243,39 +236,35 @@ async function assertWorkflowRefused(f, r, before) {
   assert.match(r.stdout, /push-branch\.sh: the first such path: \.github\/workflows\/ci\.yml$/m, output(r));
 }
 
-test('job: a commit adding .github/workflows/ci.yml is refused', async (t) => {
+test('a commit adding .github/workflows/ci.yml is refused', async (t) => {
   const f = await adoptedFixture(t);
-  await f.setMarker();
   const before = await f.originTip();
   await f.commitFile('.github/workflows/ci.yml', 'on: push\n');
   await assertWorkflowRefused(f, await f.push(), before);
 });
 
-test('job: a commit deleting a workflow file is refused', async (t) => {
+test('a commit deleting a workflow file is refused', async (t) => {
   const f = await adoptedFixture(t);
   await f.commitFile('.github/workflows/ci.yml', 'on: push\n');
-  await assertPushed(f, await f.push());
-  await f.setMarker();
+  await f.seedOrigin();
   const before = await f.originTip();
   await runGit(f.dir, ['rm', '--quiet', '.github/workflows/ci.yml']);
   await runGit(f.dir, ['commit', '--quiet', '-m', 'delete the workflow']);
   await assertWorkflowRefused(f, await f.push(), before);
 });
 
-test('job: a rename of a workflow file out of the directory is refused', async (t) => {
+test('a rename of a workflow file out of the directory is refused', async (t) => {
   const f = await adoptedFixture(t);
   await f.commitFile('.github/workflows/ci.yml', 'on: push\nname: a long enough body to be a rename\n');
-  await assertPushed(f, await f.push());
-  await f.setMarker();
+  await f.seedOrigin();
   const before = await f.originTip();
   await runGit(f.dir, ['mv', '.github/workflows/ci.yml', 'ci.yml']);
   await runGit(f.dir, ['commit', '--quiet', '-m', 'move the workflow out']);
   await assertWorkflowRefused(f, await f.push(), before);
 });
 
-test('job: the workflow commit second of two unpushed commits: the first is not pushed either', async (t) => {
+test('the workflow commit second of two unpushed commits: the first is not pushed either', async (t) => {
   const f = await adoptedFixture(t);
-  await f.setMarker();
   const before = await f.originTip();
   await f.commitFile('clean.txt', 'clean\n');
   await f.commitFile('.github/workflows/ci.yml', 'on: push\n');
@@ -283,7 +272,7 @@ test('job: the workflow commit second of two unpushed commits: the first is not 
   assert.equal(before, '');
 });
 
-test('job: a merge bringing a workflow edit in counts against its first parent', async (t) => {
+test('a merge bringing a workflow edit in counts against its first parent', async (t) => {
   const f = await adoptedFixture(t);
   await assertPushed(f, await f.push());
   await runGit(f.dir, ['checkout', '--quiet', '-b', 'side']);
@@ -293,31 +282,33 @@ test('job: a merge bringing a workflow edit in counts against its first parent',
   await runGit(f.dir, ['merge', '--quiet', '--no-ff', '--no-edit', 'side']);
   // Only the merge itself is sent: `side` is excluded through `--remotes=origin`.
   await runGit(f.dir, ['update-ref', '-d', `refs/remotes/origin/${BRANCH}`]);
-  await f.setMarker();
   const before = await f.originTip();
   const sent = await f.git(['rev-list', BRANCH, '--not', '--remotes=origin']);
   assert.equal(sent.split('\n').length, 1);
   await assertWorkflowRefused(f, await f.push(), before);
 });
 
-test('no marker: the same workflow commit pushes, with GITHUB_ACTIONS=true or without', async (t) => {
-  const f = await adoptedFixture(t);
-  await f.commitFile('.github/workflows/ci.yml', 'on: push\n');
-  await assertPushed(f, await f.push());
-  await f.commitFile('.github/workflows/ci.yml', 'on: [push]\n', 'edit the workflow');
-  await assertPushed(f, await f.push({ GITHUB_ACTIONS: 'true' }));
+test('a workflow edit is refused with GITHUB_ACTIONS=true and without', async (t) => {
+  for (const actions of ['true', '']) {
+    await t.test(`GITHUB_ACTIONS=${actions}`, async (t) => {
+      const f = await adoptedFixture(t);
+      await f.commitFile('.github/workflows/ci.yml', 'on: push\n');
+      await f.seedOrigin();
+      const before = await f.originTip();
+      await f.commitFile('.github/workflows/ci.yml', 'on: [push]\n', 'edit the workflow');
+      await assertWorkflowRefused(f, await f.push({ GITHUB_ACTIONS: actions }), before);
+    });
+  }
 });
 
-test('job: a nested workflows directory is an ordinary file and pushes', async (t) => {
+test('a nested workflows directory is an ordinary file and pushes', async (t) => {
   const f = await adoptedFixture(t);
-  await f.setMarker();
   await f.commitFile('cli/templates/github/workflows/harness-run.yml', 'on: push\n');
   await assertPushed(f, await f.push());
 });
 
-test('job: a commit carrying both a token and a workflow file is refused with the credential reason', async (t) => {
+test('a commit carrying both a token and a workflow file is refused with the credential reason', async (t) => {
   const f = await adoptedFixture(t);
-  await f.setMarker();
   const before = await f.originTip();
   await f.commitFile('.github/workflows/ci.yml', `# ${TOKEN}\n`);
   const r = await f.push({ GH_TOKEN: TOKEN });

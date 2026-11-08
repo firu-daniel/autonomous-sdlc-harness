@@ -1,8 +1,8 @@
 /**
  * The run library's credential check, push-refusal record, `sandbox.passEnv` reader, profile
- * credential-name reader and job push-credential marker — `hr_credential_values_var`,
+ * credential-name reader and workflow-directory constant — `hr_credential_values_var`,
  * `hr_text_has_credential`, `hr_stream_has_credential`, `hr_push_refusal_*`,
- * `hr_session_pass_env`, `hr_profile_env_var_names` and `hr_push_credential_is_job_token` in
+ * `hr_session_pass_env`, `hr_profile_env_var_names` and `HR_REMOTE_WORKFLOWS_DIR` in
  * `cli/templates/scripts/lib/harness-run-lib.sh`.
  *
  * **The rule this suite enforces: one credential check, and it never puts a value on a command
@@ -242,21 +242,9 @@ test('hr_profile_env_var_names prints the valid names in file order and refuses 
   assert.equal((await read('')).stdout, 'status=1\n', 'an empty argument');
 });
 
-test('hr_push_credential_is_job_token reads the main .git/config marker, never the environment', async (t) => {
+test('HR_REMOTE_WORKFLOWS_DIR is the root workflow directory', async (t) => {
   const f = await fixture(t);
-  const probe = (env = {}) => f.call('hr_push_credential_is_job_token "$1"; echo "$?"', [f.repo], env);
-  assert.equal((await probe()).stdout, '1\n', 'the key absent');
-  assert.equal((await probe({ GITHUB_ACTIONS: 'true' })).stdout, '1\n', 'the key absent under GITHUB_ACTIONS=true');
-  assert.equal((await f.call('hr_push_credential_is_job_token ""; echo "$?"')).stdout, '1\n', 'an empty main_top');
-
-  const set = (suffix) =>
-    f.call(`git config --file "$1/.git/config" "$HR_PUSH_CREDENTIAL_KEY" "\${HR_PUSH_CREDENTIAL_JOB_TOKEN}${suffix}"`, [f.repo]);
-  const setX = await set('x');
-  assert.equal(setX.status, 0, setX.stderr);
-  assert.equal((await probe()).stdout, '1\n', 'another value');
-  assert.equal((await set('')).status, 0);
-  assert.equal((await probe()).stdout, '0\n', 'the marker set through the constants');
-  assert.equal((await f.call('printf "%s|%s|%s" "$HR_PUSH_CREDENTIAL_KEY" "$HR_PUSH_CREDENTIAL_JOB_TOKEN" "$HR_REMOTE_WORKFLOWS_DIR"')).stdout, 'harness.pushCredential|job-token|.github/workflows');
+  assert.equal((await f.call('printf "%s" "$HR_REMOTE_WORKFLOWS_DIR"')).stdout, '.github/workflows');
 });
 
 test('no credential value reaches a command line or a file (source guard)', async () => {

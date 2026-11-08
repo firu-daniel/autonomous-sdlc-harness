@@ -14,7 +14,7 @@
 
 Each entry resolves to a self-contained `harness-runs/user_reviews/fix_run_job_credential_exposure_fix_plan/finding_<K>.md` file through its `**Finding K**` reference. Entries are sorted from lowest blast radius to widest refactor.
 
-1. [ ] **Finding 1** — Make `push-branch.sh` refuse a `.github/workflows/` change in every unattended run, not only in a job, through the same refusal record. Retire the job push-credential marker, whose only reader that check was, and say "workflow edits are supervised-only" in `harness-run.yml`'s header, `docs/remote-execution.md` (upgrade note included), `docs/watcher.md` and the other citations. _(layer: cli, general)_
+1. [x] **Finding 1** — Make `push-branch.sh` refuse a `.github/workflows/` change in every unattended run, not only in a job, through the same refusal record. Retire the job push-credential marker, whose only reader that check was, and say "workflow edits are supervised-only" in `harness-run.yml`'s header, `docs/remote-execution.md` (upgrade note included), `docs/watcher.md` and the other citations. _(layer: cli, general)_
 
 ---
 

@@ -3,10 +3,8 @@
  *
  * **The rule these tests exist to enforce: the stored entry pushes, and nothing else in the operator's
  * store is touched.** `store` writes one path-scoped entry first in `$HOME/.git-credentials`, mode
- * `0600`, and sets the checkout's `useHttpPath`, its path-scoped `helper` naming that file by absolute
- * path, and the job push-credential marker; `erase` removes exactly that entry and the three keys. The
- * marker is graded by the reader `push-branch.sh` uses — the fixture's own copy of
- * `lib/harness-run-lib.sh` → `hr_push_credential_is_job_token` — never by a literal of this file's.
+ * `0600`, and sets the checkout's `useHttpPath` and its path-scoped `helper` naming that file by
+ * absolute path, and no other key; `erase` removes exactly that entry and both keys.
  *
  * The fixture is an adopted repository under the system temp directory whose `origin` is rewritten to an
  * `https://` URL on a fake `GITHUB_SERVER_URL` host, with a fake `HOME` already holding the operator's
@@ -86,7 +84,6 @@ async function credentialFixture(t, { homePrefix = 'push-credential-home-', orig
   const globalConfig = join(home, 'gitconfig');
   writeFileSync(globalConfig, '[credential]\n\thelper = store\n');
   const gitEnv = { HOME: home, XDG_CONFIG_HOME: join(home, '.config'), GIT_CONFIG_GLOBAL: globalConfig };
-  const lib = join(dir, INIT_SCRIPTS_DIR, 'lib', 'harness-run-lib.sh');
 
   return {
     dir,
@@ -100,11 +97,8 @@ async function credentialFixture(t, { homePrefix = 'push-credential-home-', orig
       const got = git(dir, ['config', '--local', '--get', key]);
       return got.status === 0 ? got.stdout.replace(/\n$/, '') : null;
     },
-    /** The marker as `push-branch.sh` reads it: 0 when set to the job token, else 1. */
-    markerStatus: async () => {
-      const read = await runBash(dir, ['-c', '. "$1" && hr_push_credential_is_job_token "$2"', 'marker', lib, dir]);
-      return read.status;
-    },
+    /** Every `credential.*` and `harness.*` key in the checkout's local config, one `<key> <value>` per line. */
+    harnessKeys: () => git(dir, ['config', '--local', '--get-regexp', '^(credential|harness)\\.']).stdout,
     /** @param {string} url @param {string} cwd */
     fill: (url, cwd = dir) => git(cwd, ['credential', 'fill'], { env: gitEnv, input: `url=${url}\n\n` }),
   };
@@ -113,7 +107,7 @@ async function credentialFixture(t, { homePrefix = 'push-credential-home-', orig
 /** @param {{ stdout: string }} filled */
 const passwordOf = (filled) => (filled.stdout.split('\n').find((line) => line.startsWith('password=')) ?? '').slice('password='.length);
 
-test('store writes the path-scoped entry first, mode 0600, and the three keys; it pushes and the token is in no output line', async (t) => {
+test('store writes the path-scoped entry first, mode 0600, and the two keys, no other; it pushes and the token is in no output line', async (t) => {
   const f = await credentialFixture(t);
   const result = await f.run('store');
   assert.equal(result.status, 0, result.stderr);
@@ -123,7 +117,7 @@ test('store writes the path-scoped entry first, mode 0600, and the three keys; i
   assert.equal(statSync(f.store).mode & 0o777, 0o600);
   assert.equal(f.configGet(USE_HTTP_PATH_KEY), 'true');
   assert.equal(f.configGet(HELPER_KEY), `store --file ${f.store}`);
-  assert.equal(await f.markerStatus(), 0);
+  assert.equal(f.harnessKeys(), `${USE_HTTP_PATH_KEY.replace('useHttpPath', 'usehttppath')} true\n${HELPER_KEY} store --file ${f.store}\n`);
   assert.match(result.stdout, new RegExp(`${HOST}/${REPO_PATH.replace('.', '\\.')}`));
   for (const line of `${result.stdout}\n${result.stderr}`.split('\n')) assert.ok(!line.includes(TOKEN), line);
 
@@ -133,7 +127,7 @@ test('store writes the path-scoped entry first, mode 0600, and the three keys; i
   assert.ok(!other.stdout.includes(TOKEN));
 });
 
-test('erase removes only the path-scoped entry and all three keys', async (t) => {
+test('erase removes only the path-scoped entry and both keys', async (t) => {
   const f = await credentialFixture(t);
   assert.equal((await f.run('store')).status, 0);
   const result = await f.run('erase', { GH_TOKEN: '' });
@@ -141,7 +135,7 @@ test('erase removes only the path-scoped entry and all three keys', async (t) =>
   assert.equal(readFileSync(f.store, 'utf8'), OPERATOR_STORE);
   assert.equal(f.configGet(USE_HTTP_PATH_KEY), null);
   assert.equal(f.configGet(HELPER_KEY), null);
-  assert.equal(await f.markerStatus(), 1);
+  assert.equal(f.harnessKeys(), '');
   assert.doesNotMatch(result.stdout, /::warning::/);
   // Outside the checkout, a host-wide query reaches the operator's host entry again.
   assert.equal(passwordOf(f.fill(`${SERVER}/anything.git`, f.home)), 'operator-host-secret');
@@ -154,27 +148,27 @@ test('a HOME whose path carries a space stores nothing and sets no key', async (
   assert.equal(readFileSync(f.store, 'utf8'), OPERATOR_STORE);
   assert.equal(f.configGet(USE_HTTP_PATH_KEY), null);
   assert.equal(f.configGet(HELPER_KEY), null);
-  assert.equal(await f.markerStatus(), 1);
+  assert.equal(f.harnessKeys(), '');
   assert.match(result.stdout, /nothing written/);
 });
 
-test('without GH_TOKEN nothing is written and no marker is set', async (t) => {
+test('without GH_TOKEN nothing is written and no key is set', async (t) => {
   const f = await credentialFixture(t);
   const result = await f.run('store', { GH_TOKEN: '' });
   assert.equal(result.status, 1, result.stderr);
   assert.equal(readFileSync(f.store, 'utf8'), OPERATOR_STORE);
   assert.equal(f.configGet(HELPER_KEY), null);
-  assert.equal(await f.markerStatus(), 1);
+  assert.equal(f.harnessKeys(), '');
   assert.match(result.stdout, /GH_TOKEN is not set; nothing written/);
 });
 
-test('a non-https origin writes nothing and sets no marker', async (t) => {
+test('a non-https origin writes nothing and sets no key', async (t) => {
   const f = await credentialFixture(t, { origin: `git@${HOST}:${REPO_PATH}` });
   const result = await f.run('store');
   assert.equal(result.status, 1, result.stderr);
   assert.equal(readFileSync(f.store, 'utf8'), OPERATOR_STORE);
   assert.equal(f.configGet(USE_HTTP_PATH_KEY), null);
-  assert.equal(await f.markerStatus(), 1);
+  assert.equal(f.harnessKeys(), '');
   assert.match(result.stdout, /origin is not https:\/\/git\.example\.test\/<path>; nothing written/);
 });
 
@@ -185,6 +179,6 @@ test('a missing or unknown action, or --repo, is a usage error that writes nothi
     assert.equal(result.status, 1, `${args.join(' ')}\n${result.stdout}\n${result.stderr}`);
   }
   assert.equal(readFileSync(f.store, 'utf8'), OPERATOR_STORE);
-  assert.equal(await f.markerStatus(), 1);
+  assert.equal(f.harnessKeys(), '');
   assert.ok(!existsSync(join(f.dir, '.git', 'harness-push-refusals')));
 });

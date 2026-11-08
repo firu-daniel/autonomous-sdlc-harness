@@ -223,13 +223,13 @@
 #   harness.config.json, at run time: `scriptsDir` and whether docs retrieval
 #     applies. No configured value is frozen into this file.
 #
-# A WORKFLOW-FILE CHANGE CANNOT BE PUSHED FROM THIS WORKFLOW. `run` pushes only
-# with GITHUB_TOKEN, which cannot write a file under `.github/workflows/`. So,
-# while `push-credential store`'s marker is set, push-branch.sh refuses, at the
-# first push, a commit that changes a file under `.github/workflows/`, and the
-# watcher fails the run at once with that reason instead of letting every later
-# push fail. Run such a task locally. A file under any other `workflows/`
-# directory, such as a template tree, is an ordinary file.
+# A WORKFLOW-FILE CHANGE CANNOT BE PUSHED FROM THIS WORKFLOW. A workflow edit is
+# supervised-only: push-branch.sh refuses, at the first push of every unattended
+# run, local or in a job, a commit that changes a file under
+# `.github/workflows/`, and the watcher fails the run at once with that reason.
+# Here `run` pushes only with GITHUB_TOKEN, which could not push such a commit
+# anyway. A file under any other `workflows/` directory, such as a template
+# tree, is an ordinary file.
 #
 # THE PERMISSIONS. `permissions: {}` at workflow level grants nothing, and each
 # job's own block sets every permission it does not list to `none`. Each grant
