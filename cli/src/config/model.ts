@@ -164,7 +164,7 @@ export interface HarnessSandboxOptOut {
   readonly reason: string;
 }
 
-/** The unattended run's Bash sandbox. Read through {@link sandboxOptedOut}, {@link sandboxAllowedDomains} and {@link sandboxPassEnv}. */
+/** The unattended run's Bash sandbox. Read through {@link sandboxOptedOut} and {@link sandboxAllowedDomains}; `passEnv` has no TypeScript reader, and the run watcher reads it through `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_session_pass_env`. */
 export interface HarnessSandbox {
   /** This repository's own additions to the sandbox's network allowlist, each with its reason; absent means none. */
   readonly allowedDomains?: readonly HarnessSandboxDomain[];
@@ -752,11 +752,6 @@ export function sandboxAllowedDomains(config: HarnessConfig): readonly HarnessSa
  * test holds the pair equal.
  */
 export const SANDBOX_PASS_ENV_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
-
-/** The configured `sandbox.passEnv` names; an absent key is none. Import it; do not re-spell the fallback. */
-export function sandboxPassEnv(config: HarnessConfig): readonly string[] {
-  return config.sandbox?.passEnv ?? [];
-}
 
 /** The configured tree guards; an absent key is none. Import it; do not re-spell the fallback. */
 export function configuredTreeGuards(config: HarnessConfig): readonly HarnessTreeGuard[] {
