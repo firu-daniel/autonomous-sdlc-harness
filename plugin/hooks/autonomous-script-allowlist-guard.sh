@@ -685,8 +685,10 @@ esac
 # destructive, and narrowing past a measured need is a change nothing has justified.
 # `docs-search-server.sh` is started by the agent runner from `.mcp.json`, not by
 # a dispatched agent, and reaches only the read-only `docs serve`.
-# `run-analytics.sh` only appends sessions to `<state_dir>/run_analytics/<branch>/`
-# for the branch and checkout it is given, and never rewrites a recorded one.
+# `run-analytics.sh` only appends sessions, and the finished Run gates rounds it
+# reads from the branch's `<state_dir>/test_run_logs/` lane, to
+# `<state_dir>/run_analytics/<branch>/` for the branch and checkout it is given,
+# and never rewrites a recorded one.
 # `task-offer-check.sh` is run by an interactive session's change-request fence,
 # reads the checkout and its main checkout's run registry, writes nothing, and
 # prints at most one path.
