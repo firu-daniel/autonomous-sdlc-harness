@@ -52,7 +52,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_run_job_credential_expos
 4. [x] **Task 4** — Strip and scrub the session's environment in `spawn_engine`, and act on a push-refusal record _(layer: cli)_ _(points: 20)_
 5. [x] **Task 5** — Give `remote-run.sh` the shared mention check, the `push-credential` verb and a `HARNESS_GIT_TOKEN` ready flip on every run _(layer: cli)_ _(points: 20)_
 6. [x] **Task 6** — Move every `HARNESS_GIT_TOKEN` use out of `harness-run.yml`'s `run` job and take its push credential out of the checkout _(layer: cli)_ _(points: 20)_
-7. [ ] **Task 13** — Reword the `HARNESS_GIT_TOKEN` setup step `init` prints for the new CI trigger _(layer: cli)_ _(points: 10)_
+7. [x] **Task 13** — Reword the `HARNESS_GIT_TOKEN` setup step `init` prints for the new CI trigger _(layer: cli)_ _(points: 10)_
 8. [ ] **Task 7** — Rewrite the whiteboard's containment paragraph for the session's environment and the push credential _(layer: plugin)_ _(points: 5)_
 9. [ ] **Task 8** — Describe the session's environment and the push scan in `watcher.md`, `sandbox-record.md` and `ARCHITECTURE.md` _(layer: general)_ _(points: 15)_
 10. [ ] **Task 9** — Add `sandbox.passEnv` to the schema, with its negative fixture and its `docs/config.md` row _(layer: general)_ _(points: 10)_
