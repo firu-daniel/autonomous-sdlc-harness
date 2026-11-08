@@ -35,3 +35,5 @@ Roadmap item 35 does not check this download either.
    ```
 
 No test changes. These are documentation edits only, so the fix runs no test.
+
+- **Deviations from plan:** Fix step 1's "If it is wrong" append begins with a space, but the existing cell ends "records which it is" with no period, so appending verbatim would have run two sentences together. Implemented as ". For `deliver`, …" (a period inserted before the appended text); the appended text itself is verbatim.
