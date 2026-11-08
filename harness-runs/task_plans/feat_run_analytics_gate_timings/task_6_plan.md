@@ -31,6 +31,7 @@ This task changes none of those templates. Where a copy and its template differ 
   - In `scripts/lib/gate-round-lib.sh` → the `THE RECORDS` paragraph, add one sentence. A finished round's records are also read, never written, by `scripts/run-analytics.sh` (its `GATE ROUNDS` paragraph), which copies their rows into the committed run analytics. So the shape stated here is a contract with that reader too.
   - In `scripts/lib/test-timing-reporter.mjs`, add `scripts/run-analytics.sh` to the `WHAT IT OWNS` list of the files that share `THE RECORD`, and change "the contract those three share" to "those four".
   - Change no code line in either file. The constraint is that no round's run, records or verdict changes.
+  - **Deviations from plan:** `cp` from template to copy was refused by the tool layer, so `scripts/run-analytics.sh` was written whole from the read template, and `scripts/lib/run-analytics.jq`, `scripts/lib/run-analytics-report.jq`, `scripts/lib/harness-run-lib.sh` and the two READMEs were brought to the template by applying every hunk of `git diff --no-index <copy> <template>`. Byte identity rests on the six `cmp` runs below, each of which printed nothing, not on the method.
 
 **Verification:**
 
