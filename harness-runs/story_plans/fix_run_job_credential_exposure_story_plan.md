@@ -58,7 +58,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_run_job_credential_expos
 10. [x] **Task 9** — Add `sandbox.passEnv` to the schema, with its negative fixture and its `docs/config.md` row _(layer: general)_ _(points: 10)_
 11. [x] **Task 10** — Re-key the rendered-workflow zizmor residual set and add roadmap item 35 _(layer: general)_ _(points: 10)_
 12. [x] **Task 11** — Record the credential design, its hygiene limits and the upgrade note in `docs/remote-execution.md` _(layer: general)_ _(points: 20)_
-13. [ ] **Task 12** — Bring `github-run-control.md`, `cli.md` and `github-issue-trigger.md` in line with the new token flow _(layer: general)_ _(points: 15)_
+13. [x] **Task 12** — Bring `github-run-control.md`, `cli.md` and `github-issue-trigger.md` in line with the new token flow _(layer: general)_ _(points: 15)_
 
 ## Scope register
 
