@@ -30,7 +30,9 @@
  *    to the workflow template as well. `cli/templates/scripts/run-analytics.sh` mirrors
  *    {@link claudeHome} — `CLAUDE_CONFIG_DIR` when non-empty, else `$HOME/.claude`, one trailing
  *    slash stripped — to locate sub-agent transcripts, so a change to that resolution is an edit to
- *    the script as well. A variable holding a relative path yields a relative directory here exactly as it
+ *    the script as well. `cli/templates/scripts/autonomous-watcher.sh` names
+ *    {@link CLAUDE_HOME_VARIABLE}'s value in `SESSION_ENV_BASE`, the names a local engine session
+ *    keeps, so a rename of that variable is an edit to the watcher's list as well. A variable holding a relative path yields a relative directory here exactly as it
  *    does there. Only a target on a `WritePlan` is refused for that, and of these two directories
  *    the one that goes on a plan is {@link machineConfigDir} — `generators/notifications.ts`
  *    enqueues it under `allowOutsideRepo`. `machine/registry.ts` writes {@link machineStateDir}

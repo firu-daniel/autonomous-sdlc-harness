@@ -25,7 +25,7 @@ One header-declaration gap remains. It is non-blocking.
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — The owner of `CLAUDE_CONFIG_DIR` does not declare the watcher's new mirror of it _(layer: cli)_
+1. [x] **Finding 1** — The owner of `CLAUDE_CONFIG_DIR` does not declare the watcher's new mirror of it _(layer: cli)_
 
 ## Must Fix
 
