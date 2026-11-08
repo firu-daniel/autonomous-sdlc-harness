@@ -172,7 +172,8 @@
 # The watcher family's own git calls in a run's copy no longer go through this
 # check: they run no hook, never read the record's `config.worktree`, and refuse
 # a tree that changes a protected path (`lib/harness-run-lib.sh` → the section
-# THE WATCHER FAMILY'S GIT IN A RUN'S COPY; `docs/cli.md` §6).
+# THE WATCHER FAMILY'S GIT IN A RUN'S COPY; `docs/sandbox-record.md`
+# residual 1).
 #
 # A CLONE IS A TARGET TOO. The target may also be a run copy made as a clone,
 # accepted only on the library's clone conditions (`lib/harness-run-lib.sh` →

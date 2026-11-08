@@ -41,8 +41,9 @@
 # an excluded call could set one, as `autonomous-watcher.sh`'s header says of
 # `HARNESS_MAIN_REPO`; nothing here reads that or any other `HARNESS_*` name.
 # What the environment does reach, as residuals:
-#   - `PATH` finds `bwrap`, `jq`, `git` and `setsid`, the trust `docs/cli.md` §6
-#     residual 5 states for the wrappers; `BASH_ENV` arrives as it does for them.
+#   - `PATH` finds `bwrap`, `jq`, `git` and `setsid`, the trust
+#     `docs/sandbox-record.md` residual 5 states for the wrappers; `BASH_ENV`
+#     arrives as it does for them.
 #   - `HOME` reads a credential path's `~/`. The account's passwd home, where
 #     `getent` answers, is masked as well, so redirecting `HOME` unmasks
 #     nothing that path names.
