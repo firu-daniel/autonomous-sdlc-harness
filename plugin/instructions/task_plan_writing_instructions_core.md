@@ -167,7 +167,7 @@ Per-task files: <state_dir>/task_plans/<branch>/
 
 The writer returns `story_file`, `task_files_dir`, and `tasks_count` — note these for the hand-off; do not read the files themselves. **When `phases.parity` is `true` in `harness.config.json`**, the writer **also** surfaces any excluded or deferred `<parity_vocabulary>` behaviours in a `## Parity exclusions / deferrals` section of its return. Note that section's contents (each entry's authorising task-prompt line or `TODO: @claude` marker) for the convergence summary — path-only discipline still applies, so this is the writer's own return text, not the plan files. When `phases.parity` is `false` the writer returns no such section and you do not ask for one.
 
-If the writer returns a `## Questions` section in its output, pass `questions`; on the walker's `binding: <ask>`, **stop and route the questions through `<ask>` verbatim**. If an answer comes back, pass `answered` and dispatch the writer the walker then prints with the answers appended to the prompt. Do not invent answers.
+If the writer returns a `## Questions` section in its output, pass `questions`; on the walker's `binding: <ask>`, **stop and route the questions through `<ask>` verbatim**. If an answer comes back, pass `answered` and dispatch the writer the walker then prints with each answer appended to the prompt between the markers of `${CLAUDE_PLUGIN_ROOT}/instructions/untrusted_input.md` → `## The markers`. Do not invent answers.
 
 ### 2. Business-parity review (plan-review mode)
 
@@ -252,7 +252,7 @@ The writer returns `ui_test_index`, `ui_test_files_dir`, and `tests_count` — n
 
 **No-UI short-circuit.** If the writer returns `no_ui: true` (it wrote no plan because the branch renders no interactively-testable UI), pass `no_ui`: there is no plan to review, and the walker dispatches no reviewer. Note the no-UI outcome (and the writer's `reason`) for the hand-off. Do **not** treat the absent index as an error.
 
-If the writer returns a `## Questions` section in its output, pass `questions`; on the walker's `binding: <ask>`, **stop and route the questions through `<ask>` verbatim** (same handling as the task-plan-writer). If an answer comes back, pass `answered` and dispatch the writer the walker then prints with the answers appended to the prompt. Do not invent answers.
+If the writer returns a `## Questions` section in its output, pass `questions`; on the walker's `binding: <ask>`, **stop and route the questions through `<ask>` verbatim** (same handling as the task-plan-writer). If an answer comes back, pass `answered` and dispatch the writer the walker then prints with each answer appended to the prompt between the markers of `${CLAUDE_PLUGIN_ROOT}/instructions/untrusted_input.md` → `## The markers`. Do not invent answers.
 
 ### 2. Spawn `ui-tests-plan-reviewer`
 
