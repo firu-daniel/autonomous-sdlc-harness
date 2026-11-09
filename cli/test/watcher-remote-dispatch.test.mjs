@@ -509,12 +509,13 @@ test('while the protected set cannot be resolved any drop is refused at intake',
     'tick',
     'wait',
   ].join('\n');
-  await runBash(
+  const result = await runBash(
     f.dir,
     ['-c', script, '_', f.watcherPath, brokenPath, join(f.dir, 'harness.config.json')],
     f.watcherEnv(),
     { timeoutMs: TICK_TIMEOUT_MS, signal: t.signal },
   );
+  assert.equal(result.status, 0, `the watcher pass exited ${result.status}\n${result.stdout}\n${result.stderr}`);
 
   assertRefusedAtIntake(f, [['feat_x_task_prompt.md', 'feat_x']]);
   assert.match(f.watcherLog(), rejectionLine('feat_x_task_prompt.md', UNRESOLVABLE_REASON('feat_x')));
