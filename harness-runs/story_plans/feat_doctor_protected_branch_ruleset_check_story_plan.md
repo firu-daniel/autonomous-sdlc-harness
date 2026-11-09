@@ -24,7 +24,7 @@ The work is four `cli` tasks and one `general` task, in bottom-up order. Task 1 
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_doctor_protected_branch_ruleset_check/task_<K>_plan.md`. They are ordered bottom-up by ship sequence, with the catch-all layer last.
 
 1. [x] **Task 1** — Add `cli/src/doctor/branchProtection.ts`, the pure grading of GitHub's ruleset and branch-protection answers _(layer: cli)_ _(points: 15)_
-2. [ ] **Task 2** — Add the `branch-protection` check to `cli/src/doctor/checks.ts` and register it after `forge` _(layer: cli)_ _(points: 20)_
+2. [x] **Task 2** — Add the `branch-protection` check to `cli/src/doctor/checks.ts` and register it after `forge` _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Name `branch-protection` in `doctor --help`'s `--check-github` text and in `cli/README.md` _(layer: cli)_ _(points: 10)_
 4. [ ] **Task 4** — Drive `branch-protection` end to end against a stubbed `gh`: covered, not covered, partially covered, unreadable _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 5** — Document `branch-protection` in `docs/cli.md` §7 and §6 and in `docs/config.md` _(layer: general)_ _(points: 15)_
