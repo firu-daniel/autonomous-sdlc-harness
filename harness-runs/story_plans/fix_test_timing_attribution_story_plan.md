@@ -40,7 +40,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_test_timing_attribution/
 3. [x] **Task 3** — The timing reporter counts Node's file-level entry for a module with no tests as no test _(layer: general)_ _(points: 10)_
 4. [x] **Task 4** — The round library refuses a record crediting tests to a non-test file, and names why a record is unreadable _(layer: general)_ _(points: 15)_
 5. [x] **Task 5** — Pin attribution with a real `node --test` run in `cli/test/test-timing-reporter.test.mjs` _(layer: cli)_ _(points: 15)_
-6. [ ] **Task 6** — Pin the zero-test row, the attribution refusal and the named reason in `cli/test/gate-round-lib.test.mjs` _(layer: cli)_ _(points: 15)_
+6. [x] **Task 6** — Pin the zero-test row, the attribution refusal and the named reason in `cli/test/gate-round-lib.test.mjs` _(layer: cli)_ _(points: 15)_
 7. [ ] **Task 7** — Correct `docs/development.md` on the per-file record and the helper's row _(layer: general)_ _(points: 8)_
 
 ## Scope register
