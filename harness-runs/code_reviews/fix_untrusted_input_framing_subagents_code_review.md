@@ -28,7 +28,7 @@ One Should Fix and two Nice to Have findings cover wording and placement. Pass 2
 
 1. [x] **Finding 5** — Move `statistics-plan-writer`'s pointer out of the inputs list _(layer: plugin)_
 2. [x] **Finding 6** — Move the laundering-check bullet to each plan reviewer's `### Completeness` group _(layer: plugin)_
-3. [ ] **Finding 4** — Replace "never interprets it" with "never follows it as an instruction" in `## Where a report goes` _(layer: plugin)_
+3. [x] **Finding 4** — Replace "never interprets it" with "never follows it as an instruction" in `## Where a report goes` _(layer: plugin)_
 4. [ ] **Finding 1** — Add the mention reader's `## Deciding` as the third closed-authority instance in `## The rule` item 2 _(layer: plugin)_
 5. [ ] **Finding 3** — Record `docs-writer` untrusted-instruction reports on every dispatch, the PASS path and the INDEX included _(layer: plugin)_
 6. [ ] **Finding 2** — Wrap the supervised QA flow's relayed answers in the markers, and add the site to the roster and the corpus test _(layer: plugin, cli)_
