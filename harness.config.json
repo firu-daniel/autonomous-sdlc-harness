@@ -80,6 +80,10 @@
     {
       "test": "test/no-container-home-paths.test.mjs",
       "covers": "**/*.md"
+    },
+    {
+      "test": "test/untrusted-input-corpus.test.mjs",
+      "covers": "plugin/**/*.md"
     }
   ]
 }

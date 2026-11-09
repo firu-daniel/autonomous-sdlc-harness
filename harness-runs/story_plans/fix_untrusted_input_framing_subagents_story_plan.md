@@ -37,7 +37,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_untrusted_input_framing_
 6. [x] **Task 6** — Point the run-mode reader, the digest, the docs loop and the mention reader at the rule _(layer: plugin)_ _(points: 15)_
 7. [x] **Task 7** — Point the supervised readers and the flow document at the rule, and show the wrapped review copy in the sample fix plan _(layer: plugin)_ _(points: 10)_
 8. [x] **Task 8** — Pin every reader's pointer, and fail a new agent that reads task data without one _(layer: cli)_ _(points: 15)_
-9. [ ] **Task 9** — Register the untrusted-input corpus check as a tree guard _(layer: general)_ _(points: 5)_
+9. [x] **Task 9** — Register the untrusted-input corpus check as a tree guard _(layer: general)_ _(points: 5)_
 
 ## Scope register
 
