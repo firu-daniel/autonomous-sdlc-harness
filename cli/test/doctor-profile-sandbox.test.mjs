@@ -25,9 +25,9 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { it } from 'node:test';
+import { describe, it } from 'node:test';
 
-import { concurrentSuite } from './helpers/concurrency.mjs';
+import { CASE_CONCURRENCY } from './helpers/concurrency.mjs';
 import { createFixture, retrievalEnv, runCli } from './helpers/fixture.mjs';
 import { COPY_GIT_PATHS } from '../dist/generators/writeProtection.js';
 
@@ -168,7 +168,7 @@ function dropEditRule(dir, path) {
   return rule;
 }
 
-concurrentSuite('doctor profile-sandbox', () => {
+describe('doctor profile-sandbox', { concurrency: CASE_CONCURRENCY }, () => {
   it('(a) passes on a freshly generated profile', async (t) => {
     const dir = await wiredFixture(t);
     await doctorLine(dir, 'PASS');
@@ -264,7 +264,7 @@ concurrentSuite('doctor profile-sandbox', () => {
   });
 });
 
-concurrentSuite('doctor profile-write-protection', () => {
+describe('doctor profile-write-protection', { concurrency: CASE_CONCURRENCY }, () => {
   it('(a) passes on a freshly generated profile, stating the Linux residual', async (t) => {
     const dir = await wiredFixture(t);
     const { line } = await doctorLine(dir, 'PASS', [], WRITE_CHECK_ID);
