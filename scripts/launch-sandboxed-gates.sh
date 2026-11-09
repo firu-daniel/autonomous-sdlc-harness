@@ -121,7 +121,8 @@
 #   --tmpfs <dir> / --ro-bind /dev/null <file>, --unsetenv <name>
 #       NO READ OF A DENIED CREDENTIAL: each base-profile
 #       `.sandbox.credentials.files` path that exists, and its canonical form,
-#       is masked; each `.sandbox.credentials.envVars` name, and
+#       is masked; each `.sandbox.credentials.envVars` name
+#       (`hr_profile_env_var_names`, in the library), and
 #       `RUN_TEST_SUITE_WORKER`, is unset.
 #   --setenv TMPDIR /tmp --chdir <target>
 #     -- bash <target>/<scripts_dir>/run-test-suite.sh --no-detach <label>
@@ -372,9 +373,7 @@ EOF
 $list
 EOF
 
-  if ! list="$(jq -r '(.sandbox.credentials.envVars // [])
-      | if type == "array" then .[] | objects | .name | strings | select(length > 0 and (contains("\n") | not))
-        else error("envVars is not a list") end' "$base" 2>/dev/null)"; then
+  if ! list="$(hr_profile_env_var_names "$base")"; then
     LSG_REFUSAL="cannot read .sandbox.credentials.envVars as a list from '$base'"
     return 1
   fi

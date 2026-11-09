@@ -27,7 +27,9 @@
 # HEAD, a protected branch, a configuration that cannot be resolved, a target
 # it does not trust, a per-working-copy configuration it does not trust, a
 # hooks directory it will not pin, a branch name starting with `-`, a remote
-# whose URL the main `.git/config` does not name, or a failed
+# whose URL the main `.git/config` does not name, commits to send that carry a
+# credential or cannot be scanned for one, commits to send that change
+# a workflow file or whose paths cannot be listed, or a failed
 # push (a transient network, say) is made VISIBLE with a one-line message but
 # must NEVER abort the calling
 # run — a stale remote is recoverable and a halted run is not. That is why this script uses `set -uo pipefail` deliberately
@@ -62,6 +64,57 @@
 # and a branch whose name already exists on the remote while its
 # `branch.<branch>.merge` still names `<base>` has that tracking re-pointed at
 # `refs/heads/<branch>` by its first push, as any first push would.
+#
+# NO COMMIT IT SENDS CARRIES A CREDENTIAL. The commits to send are
+# `rev-list refs/heads/<branch> --not refs/remotes/<remote>/<branch>`, or
+# `--not --remotes=<remote>` when that ref does not resolve; none skips the
+# scan. Their messages, paths and patch text, from one `git log -p --text
+# --no-ext-diff --no-textconv` fed the list on stdin, are scanned by
+# `lib/harness-run-lib.sh` → `hr_stream_has_credential` against the values
+# `hr_credential_values_var` collects once: `GH_TOKEN`/`GITHUB_TOKEN`,
+# `HARNESS_PR_TOKEN`/`HARNESS_GIT_TOKEN`, each `http.*.extraheader` in the main
+# `.git/config`, the passwords in each file a `credential.*.helper` there of
+# exactly `store --file <absolute path>` names, and those in `$HOME/.git-credentials`
+# and the XDG credential file — each raw and as the base64 of
+# `x-access-token:<value>`. It runs after every check above, the clone's
+# sync-in and the deleted-on-its-remote check included, so it scans the commits
+# that would really be sent, and before the clone's verify and the push, so a
+# hit sends nothing. A hit prints a `refusing to push:` line naming the source's
+# label and the form, never the value, a matched line or a hunk; a scan that
+# fails — `rev-list`, `log` or the scan itself — refuses the same way (fail
+# closed). Either writes `hr_push_refusal_record`'s record under the main
+# `.git/harness-push-refusals/`, which the watcher's pass reads to stop the run,
+# and which a job's `Push the branch` step also sees as the `refusing to push`
+# line; the script still exits 0. In a job, the session's environment carries no
+# `GH_TOKEN` (the watcher strips it), so the job token reaches the scan only
+# through the stored entry, whose file is named by the main `.git/config`'s
+# helper value — a record the session cannot write — and never through `HOME`.
+# Residual: an encoded or split copy, or one in a form other than these two, is
+# not caught, as `remote-run.sh`'s mention check states. Residual: `HOME` and
+# `XDG_CONFIG_HOME` place the extra credential files and arrive with the
+# environment, as `PATH` does below; they never place the job's.
+#
+# NO UNATTENDED PUSH CHANGES A WORKFLOW FILE. Every caller is an unattended
+# commit point or a job step, so the check runs on every call with no mode
+# test; a supervised session pushes a workflow edit with its own `git push`. In
+# a local run the refusal keeps the operator's credential, which may carry the
+# `workflow` scope, from changing CI. In a job, `github.token` could not push
+# the change anyway, and refusing early stops every later push of the run from
+# failing. After the credential scan, which wins when both hold, one `git log --name-only
+# --no-renames -m --first-parent -z` over the same commits lists the paths they
+# change: both sides of a rename, and a merge's changes against its first
+# parent (`-m --first-parent` rather than `--diff-merges=first-parent`, which
+# needs git 2.31). A path is matched only at the repository root, on the prefix
+# `lib/harness-run-lib.sh` → `HR_REMOTE_WORKFLOWS_DIR`, the mirror of
+# `cli/src/remote/githubActions.ts` → `WORKFLOWS_DIR`, so a nested
+# `workflows/` directory is an ordinary file. A hit prints the `refusing to
+# push:` line and one more naming the first such path (`printf '%q'`), records
+# the reason without the path through the same record, and exits 0; a failing
+# `log` refuses the same way. A merge counts against its first parent, so a
+# refresh that merges in a default-branch workflow edit is refused too; its way
+# on is to push that merge by hand in a supervised session, after which it is no
+# longer among the commits to send. Whether GitHub refuses a merge that brings a
+# default-branch workflow edit in is unmeasured; that measurement is owed.
 #
 # DEFENCE IN DEPTH, NOT THE SOLE GUARD. The caller-agnostic backstop is the
 # committed pre-push hook `init` writes into the configured `githooksDir`, which
@@ -280,6 +333,20 @@
 #                     git -C "$c" commit -qm other --allow-empty; git -C "$c" push -q
 #                     git -C "$d" commit -qm mine --allow-empty; push-branch.sh "$d"
 #                     -> exit 0, a "(not retried)" line, one push attempt
+#   a carried token   export GH_TOKEN=ghs_example0123456789
+#                     printf '%s\n' "$GH_TOKEN" > "$d/t"; git -C "$d" add t
+#                     git -C "$d" commit -qm t; push-branch.sh "$d"
+#                     -> exit 0, "refusing to push: ... (the job token, raw)",
+#                     "$b" unchanged, one .refusal file under
+#                     "$d/.git/harness-push-refusals/"
+#   base64 form       as above, the file holding
+#                     `printf 'x-access-token:%s' "$GH_TOKEN" | base64`
+#                     -> the same, the line naming `base64`
+#   clean             no token in any commit: it pushes as before
+#   workflow edit     mkdir -p "$d/.github/workflows"; : > "$d/.github/workflows/x.yml"
+#                     git -C "$d" add -A; git -C "$d" commit -qm w; push-branch.sh "$d"
+#                     -> exit 0, "refusing to push: ... .github/workflows/ ...",
+#                     "$b" unchanged, one .refusal file
 #
 #   The per-working-copy check and the pin, from a linked worktree (`githooksDir`
 #   takes its default, `githooks`):
@@ -512,6 +579,81 @@ if [ "$track_merge" = "$track_ref" ] ||
       echo "push-branch.sh: could not ask $remote whether it still has $branch (ls-remote exited $ls_status); pushing as before"
       ;;
   esac
+fi
+
+# Read NUL-separated paths on stdin, drain it, and print the first one under
+# `HR_REMOTE_WORKFLOWS_DIR` at the root, `%q`-quoted; nothing when none. A
+# function because bash 3.2 cannot parse a `case` inside `$(…)`.
+first_workflow_path() {
+  local p wf=""
+  while IFS= read -r -d '' p || [ -n "$p" ]; do
+    case "$p" in "$HR_REMOTE_WORKFLOWS_DIR"/*) [ -n "$wf" ] || wf="$p" ;; esac
+  done
+  [ -z "$wf" ] || printf '%q' "$wf"
+}
+
+# NO COMMIT IT SENDS CARRIES A CREDENTIAL (header), then NO UNATTENDED PUSH
+# CHANGES A WORKFLOW FILE (header). Both read
+# the same commit list; both refuse through one record and exit 0.
+if git -C "$main_top" -c core.hooksPath="$pinned" rev-parse --verify --quiet "refs/remotes/$remote/$branch" >/dev/null 2>&1; then
+  send_exclusion="refs/remotes/$remote/$branch"
+else
+  send_exclusion="--remotes=$remote"
+fi
+send_refusal=""
+send_first_path=""
+if ! send_commits="$(git -C "$main_top" -c core.hooksPath="$pinned" rev-list "refs/heads/$branch" --not "$send_exclusion" 2>/dev/null)"; then
+  send_refusal="could not scan the commits to send for a credential"
+elif [ -n "$send_commits" ]; then
+  hr_credential_values_var "$main_top"
+  # A pipeline into a group, so the scan's status, label and form come back out
+  # of its subshell and, under pipefail, a failing `log` fails the whole. The
+  # scanned stream never reaches a file or this script's output.
+  scan_report="$(git -C "$main_top" -c core.hooksPath="$pinned" log --no-walk=unsorted --format=%H%n%B -p --text --no-color --no-ext-diff --no-textconv --stdin <<<"$send_commits" 2>/dev/null |
+    {
+      hr_stream_has_credential
+      printf '%s\n%s\n%s\n' "$?" "$HR_CREDENTIAL_HIT_LABEL" "$HR_CREDENTIAL_HIT_FORM"
+    })"
+  scan_pipe=$?
+  scan_status=""
+  hit_label=""
+  hit_form=""
+  {
+    IFS= read -r scan_status
+    IFS= read -r hit_label
+    IFS= read -r hit_form
+  } <<<"$scan_report"
+  if [ "$scan_pipe" -ne 0 ]; then
+    send_refusal="could not scan the commits to send for a credential"
+  else
+    case "$scan_status" in
+      0) send_refusal="the commits to send carry a credential ($hit_label, $hit_form); nothing was pushed — rewrite those commits without it, then push by hand" ;;
+      1) ;;
+      *) send_refusal="could not scan the commits to send for a credential" ;;
+    esac
+  fi
+
+  if [ -z "$send_refusal" ]; then
+    # `--no-renames` lists both sides of a move; `-m --first-parent` diffs a
+    # merge against its first parent on git 2.23, which `--diff-merges` is not.
+    send_first_path="$(git -C "$main_top" -c core.hooksPath="$pinned" log --no-walk=unsorted --format= --name-only --no-renames -m --first-parent -z --stdin <<<"$send_commits" 2>/dev/null |
+      first_workflow_path)"
+    wf_pipe=$?
+    if [ "$wf_pipe" -ne 0 ]; then
+      send_first_path=""
+      send_refusal="could not list the paths the commits to send change"
+    elif [ -n "$send_first_path" ]; then
+      send_refusal="the commits to send change a file under $HR_REMOTE_WORKFLOWS_DIR/, and a workflow edit is supervised-only; nothing was pushed — review these commits and push them by hand, or rewrite them without that change"
+    fi
+  fi
+fi
+if [ -n "$send_refusal" ]; then
+  echo "push-branch.sh: refusing to push: $send_refusal"
+  [ -z "$send_first_path" ] || echo "push-branch.sh: the first such path: $send_first_path"
+  if ! hr_push_refusal_record "$main_top" "$branch" "refusing to push: $send_refusal"; then
+    echo "push-branch.sh: the push-refusal record for $branch could not be written under $main_top/.git"
+  fi
+  exit 0
 fi
 
 # Push the branch, by an explicit refspec from the main checkout; the
