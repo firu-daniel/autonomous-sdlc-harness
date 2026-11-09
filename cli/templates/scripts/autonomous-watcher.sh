@@ -833,7 +833,7 @@
 #                    a name `git check-ref-format --branch` refuses
 #                    (a..b_task_prompt.md, foo.lock_review_2.md), and when the
 #                    protected set cannot be resolved
-#                 README.md           -> left in place, never archived
+#                 README.md            -> left in place, never archived
 #   a guard       with "$d/sdlc-harness/AUTONOMOUS_STOP" present, or the registry
 #                 already at MAX_PARALLEL_RUNS live runs, the dropped file STAYS
 #                 in the inbox and nothing launches; with a `parked`, `paused` or
