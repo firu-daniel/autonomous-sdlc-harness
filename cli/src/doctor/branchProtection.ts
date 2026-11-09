@@ -197,7 +197,7 @@ const REASON =
   "the commit, push and refresh wrappers run outside the sandbox from the main checkout, which the harness protects on this machine only — the remote's protection is yours";
 
 const REMEDY =
-  'add a ruleset under Settings → Rules → Rulesets targeting the branch, with Restrict deletions, Block force pushes and Require a pull request before merging';
+  'add a ruleset under Settings → Rules → Rulesets targeting the branch, with Restrict deletions, Block force pushes and Require a pull request before merging; a ruleset binds administrators too, so a direct push to that branch that another doctor line prints (git push --no-verify origin <branch>) then needs you on the ruleset\'s bypass list, or goes through a pull request instead';
 
 /**
  * The grade and one-line sentence for every assessed branch and every glob left unchecked: `pass`

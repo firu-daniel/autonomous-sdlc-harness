@@ -33,7 +33,7 @@ One net-new Should Fix: the remedy recommends a ruleset that requires a pull req
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Say in the `branch-protection` remedy and its docs bullet that a pull-request ruleset refuses the harness's own direct default-branch pushes _(layer: cli, general)_
+1. [x] **Finding 1** — Say in the `branch-protection` remedy and its docs bullet that a pull-request ruleset refuses the harness's own direct default-branch pushes _(layer: cli, general)_
 
 ---
 
