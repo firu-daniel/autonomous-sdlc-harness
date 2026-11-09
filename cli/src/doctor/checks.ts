@@ -337,8 +337,10 @@ import {
   classicProtectionEndpoint,
   classicProtectionOf,
   describeCoverage,
+  RULES_PAGE_SIZE,
   rulesetBlocksOf,
   rulesetsSettle,
+  rulesPageIsFull,
   type BranchCoverage,
   type ClassicRead,
   type RulesetRead,
@@ -3566,7 +3568,12 @@ const BRANCH_PROTECTION_CHECK: Check = {
           ? { kind: 'unreadable', why: `\`gh api ${rulesPath}\` gave no answer, because ${rulesAnswer.why}` }
           : blocks === undefined
             ? { kind: 'unreadable', why: `\`gh api ${rulesPath}\` answered in a shape this check does not read` }
-            : { kind: 'read', blocks };
+            : rulesPageIsFull(rulesAnswer.stdout) && !rulesetsSettle({ kind: 'read', blocks })
+              ? {
+                  kind: 'unreadable',
+                  why: `\`gh api ${rulesPath}\` returned a full page of ${RULES_PAGE_SIZE} rules, so rules past it were not read`,
+                }
+              : { kind: 'read', blocks };
 
       let classic: ClassicRead;
       if (rulesetsSettle(rulesets)) {

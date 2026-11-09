@@ -40,9 +40,12 @@ export const RULESET_RULE_NEED: Readonly<Record<string, ProtectionNeed>> = {
   deletion: 'deletion',
 };
 
+/** The page size of the rules read; a page this full may not be the whole answer. */
+export const RULES_PAGE_SIZE = 100;
+
 /** The rules in force on one branch; `gh` fills `{owner}`/`{repo}` from the checkout. */
 export function branchRulesEndpoint(branch: string): string {
-  return `repos/{owner}/{repo}/rules/branches/${encodeURIComponent(branch)}?per_page=100`;
+  return `repos/{owner}/{repo}/rules/branches/${encodeURIComponent(branch)}?per_page=${RULES_PAGE_SIZE}`;
 }
 
 /** One branch's classic branch protection; `gh` fills `{owner}`/`{repo}` from the checkout. */
@@ -112,6 +115,12 @@ export function rulesetBlocksOf(stdout: string): ReadonlySet<ProtectionNeed> | u
     if (Object.hasOwn(RULESET_RULE_NEED, type)) blocks.add(RULESET_RULE_NEED[type] as ProtectionNeed);
   }
   return blocks;
+}
+
+/** Whether a rules answer filled its page, so rules past it may exist unread. */
+export function rulesPageIsFull(stdout: string): boolean {
+  const parsed = parseJson(stdout);
+  return Array.isArray(parsed) && parsed.length >= RULES_PAGE_SIZE;
 }
 
 /** What a classic protection answer blocks, or `undefined` for a shape it does not read. */

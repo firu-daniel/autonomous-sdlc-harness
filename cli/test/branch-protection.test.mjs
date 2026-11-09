@@ -17,12 +17,14 @@ import {
   CLASSIC_UNPROTECTED_PATTERN,
   PROTECTION_NEEDS,
   PROTECTION_NEED_LABEL,
+  RULES_PAGE_SIZE,
   assessBranch,
   branchRulesEndpoint,
   classicProtectionEndpoint,
   classicProtectionOf,
   describeCoverage,
   rulesetBlocksOf,
+  rulesPageIsFull,
 } from '../dist/doctor/branchProtection.js';
 
 const ALL = new Set(['push', 'force-push', 'deletion']);
@@ -44,6 +46,13 @@ test('the needs and their labels', () => {
 test('the endpoints encode a branch carrying `/`', () => {
   assert.equal(branchRulesEndpoint('release/1.0'), 'repos/{owner}/{repo}/rules/branches/release%2F1.0?per_page=100');
   assert.equal(classicProtectionEndpoint('release/1.0'), 'repos/{owner}/{repo}/branches/release%2F1.0/protection');
+});
+
+test('rulesPageIsFull: only a parsed array filling the page', () => {
+  const fullPage = JSON.stringify(Array.from({ length: RULES_PAGE_SIZE }, () => ({ type: 'required_signatures' })));
+  assert.equal(rulesPageIsFull(fullPage), true);
+  assert.equal(rulesPageIsFull('[]'), false);
+  assert.equal(rulesPageIsFull('not json'), false);
 });
 
 test('the classic refusal text that means no protection', () => {
