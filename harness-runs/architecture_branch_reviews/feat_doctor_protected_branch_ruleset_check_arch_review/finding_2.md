@@ -1,0 +1,12 @@
+### 2. `checks.ts` re-derives "the rulesets block every need", a predicate `assessBranch` already defines
+
+**Site:** `cli/src/doctor/checks.ts` → `BRANCH_PROTECTION_CHECK`, the per-branch loop's `if (blocks !== undefined && PROTECTION_NEEDS.every((need) => blocks.has(need))) {` (around line 3574 as a navigation hint), against `cli/src/doctor/branchProtection.ts` → `assessBranch` → `const rulesetsBlockAll = rulesets.kind === 'read' && PROTECTION_NEEDS.every((need) => rulesets.blocks.has(need));`.
+
+**Problem.** Whether the ruleset answer alone settles a branch is part of the grading `branchProtection.ts` owns: `assessBranch` uses `rulesetsBlockAll` to decide whether a `not-asked` classic read leaves needs undetermined. The check decides whether to ask the classic endpoint at all from a second, hand-written copy of the same predicate. The two copies agree today; if they drift (for instance `assessBranch` starts requiring something more of a ruleset answer), the check stops asking for classic protection on a branch the grader then marks `unknown` — no false pass, but a needless *cannot tell* line and no test pointing at the cause.
+
+Rules this bears on: `.claude/context/cli.md` → `## How a module in this layer is written`, **`doctor` asks, grades and repairs nothing** (*"nothing it reports is re-derived from a second copy"*), and `.claude/context/conventions.md` → `### Where a new responsibility goes` (*"A responsibility that already has a home does not get a second one"*); and `BRANCH_PROTECTION_CHECK`'s doc comment item 4, which assigns *"how a branch grades"* to `doctor/branchProtection.ts`. Graded Should Fix because a divergence degrades to a `warn`, never to a wrong `pass`.
+
+**Fix.**
+
+- [x] In `cli/src/doctor/branchProtection.ts`, export one predicate, e.g. `export function rulesetsSettle(rulesets: RulesetRead): boolean` (true exactly when `rulesets.kind === 'read'` and every `PROTECTION_NEEDS` member is in `rulesets.blocks`), with a one-line doc comment saying the classic read is skipped exactly when it holds; use it for `rulesetsBlockAll` inside `assessBranch`.
+- [x] In `cli/src/doctor/checks.ts`, import it alongside the existing `./branchProtection.js` names and replace the loop's `blocks !== undefined && PROTECTION_NEEDS.every(…)` with `rulesetsSettle(rulesets)` (the `rulesets` value is already built just above). Drop `PROTECTION_NEEDS` from the import if nothing else in the file uses it, since `noUnusedLocals` is on.

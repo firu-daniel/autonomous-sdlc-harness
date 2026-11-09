@@ -31,7 +31,9 @@
  *    issue-trigger switch its {@link forgeTriggerApplies}, the workflow paths and the binary run as
  *    `gh` are `remote/githubActions.ts`'s ({@link WORKFLOW_RUN_PATH}, {@link WORKFLOW_RESUME_PATH},
  *    {@link WORKFLOW_TRIGGER_PATH}, {@link WORKFLOW_CONTROL_PATH}, {@link GH_CLI_VARIABLE}, {@link ghCli}), whether a ref carries a
- *    file is `core/git.ts`'s {@link pathAtRef}, and
+ *    file is `core/git.ts`'s {@link pathAtRef}, the protected set is `generators/githooks.ts`'s
+ *    {@link resolveProtectedBranches} and {@link isGlobPattern} and its remote coverage grading
+ *    `doctor/branchProtection.ts`'s ({@link assessBranch}, {@link describeCoverage}), and
  *    the writability probe is the write engine's {@link probeWritable}. A
  *    check that wanted a slightly different answer would be a second definition of the thing being
  *    checked, which is how a green `doctor` starts disagreeing with the run it is supposed to
@@ -69,8 +71,9 @@
  *
  *    **Remote setup keeps the same line: it is graded from local evidence by default and asks GitHub
  *    only under `--check-github`.** {@link REMOTE_EXECUTION_CHECK} and {@link FORGE_CHECK} read files,
- *    refs and `PATH`, and spawn no `gh` subcommand; {@link REMOTE_GITHUB_CHECK} spawns them only under
- *    {@link CheckContext.probeGithub}, and each is a read.
+ *    refs and `PATH`, and spawn no `gh` subcommand; {@link REMOTE_GITHUB_CHECK} and
+ *    {@link BRANCH_PROTECTION_CHECK} spawn them only under {@link CheckContext.probeGithub}, and each
+ *    is a read.
  *
  *    **The three docs-retrieval checks keep that line.** `retrieval-dependencies` and
  *    `retrieval-model-cache` are file tests answered by `retrieval/runtime.ts`'s
@@ -327,6 +330,22 @@ import {
 } from '../retrieval/runtime.js';
 import { DOCS_SERVER_NAME } from '../retrieval/server.js';
 import {
+  ALL_PROTECTION_NEEDS_PHRASE,
+  assessBranch,
+  branchRulesEndpoint,
+  CLASSIC_UNPROTECTED_PATTERN,
+  classicProtectionEndpoint,
+  classicProtectionOf,
+  describeCoverage,
+  RULES_PAGE_SIZE,
+  rulesetBlocksOf,
+  rulesetsSettle,
+  rulesPageIsFull,
+  type BranchCoverage,
+  type ClassicRead,
+  type RulesetRead,
+} from './branchProtection.js';
+import {
   assessKeepAwake,
   KEEP_AWAKE_WHAT,
   KEEP_AWAKE_WHO,
@@ -359,6 +378,9 @@ import {
  * beside its own `CLI`.
  */
 const CLI = 'npx autonomous-sdlc-harness';
+
+/** The remedy every check that needs `gh` gives when it cannot run it. */
+const GH_INSTALL_REMEDY = `install the GitHub CLI (https://cli.github.com) and run \`gh auth login\`, or point ${GH_CLI_VARIABLE} at it`;
 
 /**
  * The outer-loop script whose precondition {@link REMOTE_CHECK} reports on, named the way this
@@ -517,7 +539,7 @@ export interface CheckContext {
    */
   readonly probeRegistry: boolean;
   /**
-   * Whether the run asked {@link REMOTE_GITHUB_CHECK} to query GitHub through `gh`, which
+   * Whether the run asked {@link REMOTE_GITHUB_CHECK} and {@link BRANCH_PROTECTION_CHECK} to query GitHub through `gh`, which
    * `doctor --check-github` turns on and nothing else reads. `false` in every default run, for
    * {@link probeRegistry}'s reason.
    */
@@ -2804,7 +2826,7 @@ const REMOTE_EXECUTION_CHECK: Check = {
     const gh = ghCli();
     if (!resolvesOnPath(gh)) {
       failures.push(
-        `${gh} does not resolve on this shell's PATH, and the watcher dispatches every remote run through it (${REMOTE_RUN_SCRIPT}): install the GitHub CLI (https://cli.github.com) and run \`gh auth login\`, or point ${GH_CLI_VARIABLE} at it`,
+        `${gh} does not resolve on this shell's PATH, and the watcher dispatches every remote run through it (${REMOTE_RUN_SCRIPT}): ${GH_INSTALL_REMEDY}`,
       );
     }
 
@@ -3074,8 +3096,7 @@ const REMOTE_GITHUB_CHECK: Check = {
       const result = runGh(args, root);
       return { call: `\`gh ${args.join(' ')}\``, answer: result === undefined ? undefined : classifyGh(result) };
     };
-    const ghRemedy = `install the GitHub CLI (https://cli.github.com) and run \`gh auth login\`, or point ${GH_CLI_VARIABLE} at it`;
-    const noSpawn = `${gh} could not be run, so GitHub was not asked: ${ghRemedy}`;
+    const noSpawn = `${gh} could not be run, so GitHub was not asked: ${GH_INSTALL_REMEDY}`;
     const cannotTell = (call: string, why: string, what: string): string => `cannot tell ${what}: ${call} gave no answer, because ${why}`;
 
     const auth = ask(['auth', 'status']);
@@ -3465,6 +3486,122 @@ const FORGE_CHECK: Check = {
     return pass(
       `${on}: ${WORKFLOW_TRIGGER_PATH} and ${WORKFLOW_CONTROL_PATH} are present${carried}. Labelling an issue with the ${TRIGGER_LABEL_VARIABLE} label (default \`${DEFAULT_TRIGGER_LABEL}\`) starts a task run; a \`${COMMAND_HANDLE} <verb>\` comment (${nameList([...COMMAND_VERBS])}) steers it; a mention of \`${COMMAND_HANDLE}\` anywhere else in a comment is read by an agent, which carries out ${nameList([...MENTION_ACT_VERBS])} and asks the commenter to confirm ${nameList([...MENTION_CONFIRM_VERBS])}; a review requesting changes on the run's pull request starts a user-review round; and a run opens a draft pull request when it starts, marked ready for review when it completes. What this cannot see lives on GitHub — the label, the workflows GitHub knows (${WORKFLOW_TRIGGER_FILE}, ${WORKFLOW_CONTROL_FILE}) and the pull-request setting; ${asked}`,
     );
+  },
+};
+
+/**
+ * Whether GitHub blocks direct pushes, force pushes and deletion on every branch of the effective
+ * protected set — the remote half of what {@link PRE_PUSH_GUARD_CHECK} and {@link PROTECTED_SET_CHECK}
+ * answer locally.
+ *
+ * 1. **It never fails.** Every arm is `pass` or `warn`, its preconditions included, so it never uses
+ *    {@link unevaluated}: an unprotected remote leaves the flow runnable.
+ * 2. **A pass is only a proven pass.** `gh` not running, no usable login, a refused or timed-out read,
+ *    an answer in a shape not read, `forge` other than `github` (unset included) and a run not asked to
+ *    reach GitHub are each a `warn` saying what went unasked; *cannot tell* is never reported as missing.
+ * 3. **GitHub is reached only under {@link CheckContext.probeGithub}** (the module header's choice 3),
+ *    and only to read: `gh auth status` and plain `gh api <path>` GETs, with no method or field flag.
+ * 4. **Read order per branch:** the rules in force on it ({@link branchRulesEndpoint}), then — only when
+ *    those do not block all three — its classic protection ({@link classicProtectionEndpoint}), which
+ *    needs admin access; a refusal matching {@link CLASSIC_UNPROTECTED_PATTERN} is *no protection*, not
+ *    *unreadable*. What each answer counts for and how a branch grades is `doctor/branchProtection.ts`'s.
+ * 5. **A glob entry is not asked about**: the per-branch endpoint takes one name, so {@link describeCoverage}
+ *    lists it as unchecked, and the line cannot pass.
+ * 6. **Its prose uses GitHub's own terms**, *ruleset* and *branch protection*.
+ *
+ * The protected set is {@link resolveProtectedBranches}' with a no-op sink, for
+ * {@link PRE_PUSH_GUARD_CHECK}'s reason; a set that throws is that check's to report.
+ */
+const BRANCH_PROTECTION_CHECK: Check = {
+  id: 'branch-protection',
+  title: `every protected branch is covered on GitHub by a ruleset or branch protection that blocks ${ALL_PROTECTION_NEEDS_PHRASE}`,
+  run: (ctx) => {
+    if (ctx.repoRoot === undefined) return warn('not checked, because the repository root did not resolve (see the git check)');
+    if (ctx.config === undefined) return warn(`not checked, because ${CONFIG_FILENAME} could not be read (see the config check)`);
+
+    let protectedSet: readonly string[];
+    try {
+      protectedSet = resolveProtectedBranches(ctx.config, () => {});
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return warn(`not checked, because the protected set does not resolve: ${message} (see the pre-push-guard check)`);
+    }
+    const branches = protectedSet.filter((entry) => !isGlobPattern(entry));
+    const globs = protectedSet.filter((entry) => isGlobPattern(entry));
+
+    const forge = ctx.config.forge;
+    if (forge !== 'github') {
+      return warn(
+        `not checked, because forge is ${forge === undefined ? 'not set' : JSON.stringify(forge)}: only GitHub's rulesets and branch protection are read, so whether the remote protects ${nameList(protectedSet)} is unknown here; confirm on your forge that each blocks ${ALL_PROTECTION_NEEDS_PHRASE}`,
+      );
+    }
+    if (!ctx.probeGithub) {
+      return warn(
+        `not checked — run \`${CLI} doctor --check-github\` to ask GitHub whether a ruleset or branch protection blocks ${ALL_PROTECTION_NEEDS_PHRASE} on ${nameList(protectedSet)}`,
+      );
+    }
+
+    const root = ctx.repoRoot;
+    const noSpawn = warn(`not checked, because ${ghCli()} could not be run, so GitHub was not asked: ${GH_INSTALL_REMEDY}`);
+    const ask = (args: readonly string[]): GhAnswer | undefined => {
+      const result = runGh(args, root);
+      return result === undefined ? undefined : classifyGh(result);
+    };
+
+    const auth = ask(['auth', 'status']);
+    if (auth === undefined) return noSpawn;
+    if (auth.kind === 'unknown') {
+      return warn(`not checked: cannot tell whether gh is authenticated, because ${auth.why}, so GitHub was not asked about ${nameList(protectedSet)}`);
+    }
+    if (auth.kind === 'refused') {
+      return warn(`not checked, because \`gh auth status\` reports no usable login (${auth.why}): run \`gh auth login\``);
+    }
+
+    const coverages: BranchCoverage[] = [];
+    for (const branch of branches) {
+      const rulesPath = branchRulesEndpoint(branch);
+      const rulesAnswer = ask(['api', rulesPath]);
+      if (rulesAnswer === undefined) return noSpawn;
+      const blocks = rulesAnswer.kind === 'answered' ? rulesetBlocksOf(rulesAnswer.stdout) : undefined;
+      const rulesets: RulesetRead =
+        rulesAnswer.kind !== 'answered'
+          ? { kind: 'unreadable', why: `\`gh api ${rulesPath}\` gave no answer, because ${rulesAnswer.why}` }
+          : blocks === undefined
+            ? { kind: 'unreadable', why: `\`gh api ${rulesPath}\` answered in a shape this check does not read` }
+            : rulesPageIsFull(rulesAnswer.stdout) && !rulesetsSettle({ kind: 'read', blocks })
+              ? {
+                  kind: 'unreadable',
+                  why: `\`gh api ${rulesPath}\` returned a full page of ${RULES_PAGE_SIZE} rules, so rules past it were not read`,
+                }
+              : { kind: 'read', blocks };
+
+      let classic: ClassicRead;
+      if (rulesetsSettle(rulesets)) {
+        classic = { kind: 'not-asked' };
+      } else {
+        const classicPath = classicProtectionEndpoint(branch);
+        const classicAnswer = ask(['api', classicPath]);
+        if (classicAnswer === undefined) return noSpawn;
+        if (classicAnswer.kind === 'answered') {
+          const protection = classicProtectionOf(classicAnswer.stdout);
+          classic = protection === undefined
+            ? { kind: 'unreadable', why: `\`gh api ${classicPath}\` answered in a shape this check does not read` }
+            : { kind: 'read', protection };
+        } else if (classicAnswer.kind === 'refused' && CLASSIC_UNPROTECTED_PATTERN.test(classicAnswer.why)) {
+          classic = { kind: 'none' };
+        } else {
+          const adminNote = classicAnswer.kind === 'refused' ? ' (reading branch protection needs admin access)' : '';
+          classic = {
+            kind: 'unreadable',
+            why: `\`gh api ${classicPath}\` gave no answer, because ${classicAnswer.why}${adminNote}`,
+          };
+        }
+      }
+      coverages.push(assessBranch(branch, rulesets, classic));
+    }
+
+    const { grade, detail } = describeCoverage(coverages, globs);
+    return grade === 'pass' ? pass(detail) : warn(detail);
   },
 };
 
@@ -6325,6 +6462,8 @@ const RETRIEVAL_PYTHON_INDEX_CHECK: Check = {
  * the watcher dispatches to GitHub rather than spawns here, and `remote-github` follows that because it
  * asks GitHub the half of the same question local evidence cannot answer. `forge` closes that block
  * because the trigger it grades starts a run through the same remote setup the two above it grade.
+ * `branch-protection` follows `forge` because it reads the same key and asks GitHub the remote half
+ * of the question `pre-push-guard` and `protected-set` answer locally.
  *
  * `profile-tracked` sits under `profile-paths` because the two name the same file carried somewhere it
  * does not belong, and a committed profile is the usual reason a job's `profile-paths` fails.
@@ -6362,6 +6501,7 @@ export const CHECKS: readonly Check[] = Object.freeze([
   REMOTE_EXECUTION_CHECK,
   REMOTE_GITHUB_CHECK,
   FORGE_CHECK,
+  BRANCH_PROTECTION_CHECK,
   CONFIG_CHECK,
   COMMAND_WRAPPERS_CHECK,
   COMMAND_PERMISSIONS_CHECK,

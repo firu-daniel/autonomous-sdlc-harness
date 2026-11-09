@@ -5589,7 +5589,7 @@ const DATABASE_URL_VARIABLE = 'HARNESS_DOCS_RETRIEVAL_DATABASE_URL';
 const PRE_BRANCH_CHECK_IDS = Object.freeze([
   'git', 'jj-repository', 'default-branch', 'remote', 'base-freshness', 'pre-push-guard', 'protected-set', 'jq',
   'worktrees', 'daemon-backend', 'run-watcher', 'notifications', 'repo-registry', 'machine-footprint', 'daemon-path',
-  'remote-execution', 'remote-github', 'forge', 'config', 'command-wrappers', 'command-permissions', 'command-resolves',
+  'remote-execution', 'remote-github', 'forge', 'branch-protection', 'config', 'command-wrappers', 'command-permissions', 'command-resolves',
   'state-dir', 'artifact-tree', 'setup-analysis', 'task-offer-rules', 'layer-profile', 'layer-drift', 'tree-guards',
   'ignore-rules', 'plugin-wiring', 'permission-profile', 'profile-paths', 'profile-tracked', 'profile-browser-deny',
   'profile-deny-floor', 'profile-main-anchor', 'profile-sandbox', 'profile-write-protection', 'sandbox-prerequisites', 'keep-awake', 'plugin-permissions',
