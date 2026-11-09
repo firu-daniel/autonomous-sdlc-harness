@@ -271,6 +271,11 @@
 #     machine lane. The job gates itself, and no local component gates a remote
 #     run. The kill switch still defers it, and a parked, paused or park-loop
 #     record still rejects it.
+#   * THE INTAKE REFUSAL APPLIES BEFORE THE TARGET IS EVEN READ: a drop on a
+#     protected, unjudgeable or invalid branch is archived as rejected_ in
+#     process_inbox_file with no `remote-run.sh sync`, commit, push or
+#     launch_remote_run, so the user reads the reason in the local log and
+#     notification rather than in the job's own refusal.
 #   * THE RECORD CARRIES `execution: github-actions`, and a run keeps the
 #     execution it started with for its whole life: the record's field, never
 #     the current key, is what later passes read. Before the duplicate test on
@@ -821,7 +826,14 @@
 #                 foo_task_prompt_review.md -> branch foo_task_prompt, review
 #                 notes.md             -> archived as rejected_<ts>_notes.md,
 #                    with no registry record written at all
-#                 README.md            -> left in place, never archived
+#                 trunk_task_prompt.md -> archived as
+#                    rejected_<ts>_trunk_task_prompt.md, ONE `failed`
+#                    notification, no registry record and no working copy;
+#                    the same for trunk_review[_<n>].md and trunk_docs.md, for
+#                    a name `git check-ref-format --branch` refuses
+#                    (a..b_task_prompt.md, foo.lock_review_2.md), and when the
+#                    protected set cannot be resolved
+#                 README.md           -> left in place, never archived
 #   a guard       with "$d/sdlc-harness/AUTONOMOUS_STOP" present, or the registry
 #                 already at MAX_PARALLEL_RUNS live runs, the dropped file STAYS
 #                 in the inbox and nothing launches; with a `parked`, `paused` or
@@ -5034,7 +5046,9 @@ fail_before_launch() {
 # Used when the record already there (`parked`, `paused`, `park_loop`) has to survive
 # untouched so the resume pass can still pick that run up once its clarification
 # answer or its RESUME sentinel lands. Stamping `failed` over it would strand a
-# run that nothing ever goes back for.
+# run that nothing ever goes back for. Also used by process_inbox_file's intake
+# refusal of a protected, unjudgeable or invalid branch, where there is no record
+# at all and none may be created.
 reject_preserving_status() {
   local branch="$1" file="$2" fname="$3" reason="$4"
   mv "$file" "$ARCHIVE_DIR/rejected_$(date '+%Y%m%d%H%M%S')_$fname" 2>/dev/null || rm -f "$file"
@@ -5104,6 +5118,13 @@ remote_commit_and_push() {
 # A filename matching none of the three is logged and ARCHIVED rather than left
 # where it is, so it is not re-logged on every pass for as long as the watcher
 # runs.
+#
+# A routed name whose branch `hr_inbox_branch_refusal_var` refuses — protected,
+# a protected set that cannot be resolved, or not a valid branch name — is
+# archived as rejected_ too, with one `failed` notification and no registry
+# record. It sits ahead of the shared guards and of the `execution.target` read
+# because it is a property of the name, which no waiting changes; that is why a
+# GitHub-bound drop on such a branch never reaches remote-run.sh.
 # -----------------------------------------------------------------------------
 process_inbox_file() {
   local file="$1"
@@ -5119,6 +5140,13 @@ process_inbox_file() {
   fi
   branch="$HR_INBOX_BRANCH"
   engine_kind="$HR_INBOX_KIND"
+
+  # The intake refusal — see above. Nothing above it may write a file.
+  if ! hr_inbox_branch_refusal_var "$MAIN_REPO" "$branch"; then
+    log "rejecting '$fname': $HR_INBOX_REFUSAL — nothing created, committed or launched"
+    reject_preserving_status "$branch" "$file" "$fname" "(refused at intake: $HR_INBOX_REFUSAL — nothing created, committed or launched; drop it again under an unprotected, valid branch name)"
+    return 0
+  fi
 
   # The central log every step below appends to. A branch derived from a FILENAME
   # cannot contain a `/`, so this name needs no sanitizing — unlike the

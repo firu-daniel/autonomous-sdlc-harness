@@ -19,7 +19,7 @@ This repository's self-adopted copies of the changed templates (`scripts/autonom
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_inbox_drop_branch_refusal/task_<K>_plan.md`. They are ordered bottom-up by ship sequence, with the catch-all layer last.
 
 1. [x] **Task 1** — Add `hr_inbox_branch_refusal_var` to the run library, reusing `hr_branch_is_protected` _(layer: cli)_ _(points: 15)_
-2. [ ] **Task 2** — Refuse a protected, unresolvable or invalid branch at the top of `process_inbox_file`, and document it in the watcher header and the inbox README template _(layer: cli)_ _(points: 15)_
+2. [x] **Task 2** — Refuse a protected, unresolvable or invalid branch at the top of `process_inbox_file`, and document it in the watcher header and the inbox README template _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Cover the intake refusal for every engine, both targets and an unresolvable protected set in the watcher intake suite _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Add the intake refusal to `docs/watcher.md` §1 step 2 _(layer: general)_ _(points: 5)_
 
