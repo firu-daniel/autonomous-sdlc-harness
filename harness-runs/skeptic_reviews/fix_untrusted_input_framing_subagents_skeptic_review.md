@@ -19,7 +19,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Carry `layer-implementer`'s untrusted-instruction report onto the unit loop's progress line _(layer: plugin)_
+1. [x] **Finding 1** — Carry `layer-implementer`'s untrusted-instruction report onto the unit loop's progress line _(layer: plugin)_
 
 ---
 
