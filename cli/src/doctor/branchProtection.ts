@@ -176,6 +176,9 @@ function needsPhrase(needs: readonly ProtectionNeed[]): string {
   return joinWords(needs.map((need) => PROTECTION_NEED_LABEL[need]));
 }
 
+/** Every need a protected branch has, as one phrase — the one spelling every line naming the whole set prints. */
+export const ALL_PROTECTION_NEEDS_PHRASE = needsPhrase(PROTECTION_NEEDS);
+
 const REASON =
   "the commit, push and refresh wrappers run outside the sandbox from the main checkout, which the harness protects on this machine only — the remote's protection is yours";
 
@@ -198,7 +201,7 @@ export function describeCoverage(
     const proved =
       coveredNames.length === 0
         ? 'no protected branch names one branch to check'
-        : `a ruleset or branch protection blocks ${needsPhrase(PROTECTION_NEEDS)} on ${joinWords(coveredNames)}`;
+        : `a ruleset or branch protection blocks ${ALL_PROTECTION_NEEDS_PHRASE} on ${joinWords(coveredNames)}`;
     return { grade: 'pass', detail: oneLine([proved, ...notes].join('; ')) };
   }
 

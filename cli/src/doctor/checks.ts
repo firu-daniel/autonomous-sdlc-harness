@@ -330,6 +330,7 @@ import {
 } from '../retrieval/runtime.js';
 import { DOCS_SERVER_NAME } from '../retrieval/server.js';
 import {
+  ALL_PROTECTION_NEEDS_PHRASE,
   assessBranch,
   branchRulesEndpoint,
   CLASSIC_UNPROTECTED_PATTERN,
@@ -3486,9 +3487,6 @@ const FORGE_CHECK: Check = {
   },
 };
 
-/** What a protected branch needs blocked on the remote, as {@link BRANCH_PROTECTION_CHECK} names it. */
-const PROTECTED_BRANCH_NEEDS = 'direct pushes, force pushes and deletion';
-
 /**
  * Whether GitHub blocks direct pushes, force pushes and deletion on every branch of the effective
  * protected set — the remote half of what {@link PRE_PUSH_GUARD_CHECK} and {@link PROTECTED_SET_CHECK}
@@ -3514,7 +3512,7 @@ const PROTECTED_BRANCH_NEEDS = 'direct pushes, force pushes and deletion';
  */
 const BRANCH_PROTECTION_CHECK: Check = {
   id: 'branch-protection',
-  title: `every protected branch is covered on GitHub by a ruleset or branch protection that blocks ${PROTECTED_BRANCH_NEEDS}`,
+  title: `every protected branch is covered on GitHub by a ruleset or branch protection that blocks ${ALL_PROTECTION_NEEDS_PHRASE}`,
   run: (ctx) => {
     if (ctx.repoRoot === undefined) return warn('not checked, because the repository root did not resolve (see the git check)');
     if (ctx.config === undefined) return warn(`not checked, because ${CONFIG_FILENAME} could not be read (see the config check)`);
@@ -3532,12 +3530,12 @@ const BRANCH_PROTECTION_CHECK: Check = {
     const forge = ctx.config.forge;
     if (forge !== 'github') {
       return warn(
-        `not checked, because forge is ${forge === undefined ? 'not set' : JSON.stringify(forge)}: only GitHub's rulesets and branch protection are read, so whether the remote protects ${nameList(protectedSet)} is unknown here; confirm on your forge that each blocks ${PROTECTED_BRANCH_NEEDS}`,
+        `not checked, because forge is ${forge === undefined ? 'not set' : JSON.stringify(forge)}: only GitHub's rulesets and branch protection are read, so whether the remote protects ${nameList(protectedSet)} is unknown here; confirm on your forge that each blocks ${ALL_PROTECTION_NEEDS_PHRASE}`,
       );
     }
     if (!ctx.probeGithub) {
       return warn(
-        `not checked — run \`${CLI} doctor --check-github\` to ask GitHub whether a ruleset or branch protection blocks ${PROTECTED_BRANCH_NEEDS} on ${nameList(protectedSet)}`,
+        `not checked — run \`${CLI} doctor --check-github\` to ask GitHub whether a ruleset or branch protection blocks ${ALL_PROTECTION_NEEDS_PHRASE} on ${nameList(protectedSet)}`,
       );
     }
 

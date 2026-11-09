@@ -6,7 +6,7 @@ Branch `feat_doctor_protected_branch_ruleset_check`, reviewed 2026-11-09 against
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — `checks.ts` retypes the protection-needs phrase that `branchProtection.ts` owns _(layer: cli)_
+1. [x] **Finding 1** — `checks.ts` retypes the protection-needs phrase that `branchProtection.ts` owns _(layer: cli)_
 2. [ ] **Finding 2** — `checks.ts` re-derives "the rulesets block every need", a predicate `assessBranch` already defines _(layer: cli)_
 
 ## Must Fix
