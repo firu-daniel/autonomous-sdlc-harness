@@ -35,7 +35,7 @@ An unattended run's profile sets `sandbox.network.strictAllowlist: true`, and it
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_network_refusal_report/task_<K>_plan.md`. They are ordered bottom-up by ship sequence, `cli` then `plugin`, with the catch-all `general` last.
 
 1. [x] **Task 1** — Recognise network refusals in `run-analytics.jq`: each session's `network_refusals`, and mode `gate_logs` _(layer: cli)_ _(points: 20)_
-2. [ ] **Task 2** — Accept schema 3 in `run-analytics-report.jq`, roll up `.run.network` and render the two network sections _(layer: cli)_ _(points: 20)_
+2. [x] **Task 2** — Accept schema 3 in `run-analytics-report.jq`, roll up `.run.network` and render the two network sections _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Hand finished rounds' logs to mode `gate_logs` in `run-analytics.sh`, merge them and write schema 3 _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Describe the network report in the adopter-facing READMEs under `cli/` _(layer: cli)_ _(points: 8)_
 5. [ ] **Task 5** — Show the network report in `branch-status` and name it in `AUTONOMOUS_FLOW.md`'s run-analytics row _(layer: plugin)_ _(points: 8)_
