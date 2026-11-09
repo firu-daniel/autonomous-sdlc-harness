@@ -36,7 +36,7 @@ Gate 4's per-file timing record (`<label>.<phase>.tests.tsv`, written by `script
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_test_timing_attribution/task_<K>_plan.md`.
 
 1. [x] **Task 1** — Open the five doctor-family concurrent suites with `describe` in their own files _(layer: cli)_ _(points: 10)_
-2. [ ] **Task 2** — Open the `init` and `stack presets` suites in their own files, and reduce `cli/test/helpers/concurrency.mjs` to the bound _(layer: cli)_ _(points: 10)_
+2. [x] **Task 2** — Open the `init` and `stack presets` suites in their own files, and reduce `cli/test/helpers/concurrency.mjs` to the bound _(layer: cli)_ _(points: 10)_
 3. [ ] **Task 3** — The timing reporter counts Node's file-level entry for a module with no tests as no test _(layer: general)_ _(points: 10)_
 4. [ ] **Task 4** — The round library refuses a record crediting tests to a non-test file, and names why a record is unreadable _(layer: general)_ _(points: 15)_
 5. [ ] **Task 5** — Pin attribution with a real `node --test` run in `cli/test/test-timing-reporter.test.mjs` _(layer: cli)_ _(points: 15)_

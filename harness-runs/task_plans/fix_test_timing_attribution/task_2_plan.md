@@ -31,3 +31,8 @@
 - `git grep -n "from 'node:test'" -- cli/test/helpers/` prints nothing. The JSDoc `import('node:test')` type references in `run-copy-layouts.mjs` and `watcher.mjs` do not match this pattern.
 - `git grep -n -F "{ concurrency: CASE_CONCURRENCY }, () => {" -- cli/test/init.test.mjs cli/test/stack-presets.test.mjs` prints the two converted `describe(` lines.
 - Run `npm test --workspace cli -- test/init.test.mjs` and `npm test --workspace cli -- test/stack-presets.test.mjs`. Each passes with the case count it reported before the edit. Then run `npm test --workspace cli -- test/helpers/concurrency.mjs`, which loads the edited helper as a test file. It passes with no test of its own, and the import-time refusal of a bad `HARNESS_TEST_CONCURRENCY` value is unchanged.
+
+**Deviations from plan:**
+
+- Evidence downgrade: the claim *"the import-time refusal of a bad `HARNESS_TEST_CONCURRENCY` value is unchanged"* was to be executed as `HARNESS_TEST_CONCURRENCY=abc npm test --workspace cli -- test/helpers/concurrency.mjs`; the tool layer refused that command ("Permission to use Bash has been denied because Claude Code is running in don't ask mode"). The claim rests instead on reading the edited `cli/test/helpers/concurrency.mjs`: `caseConcurrency()` and its `throw new Error(…)` are byte-identical to the pre-edit file, and `CASE_CONCURRENCY = caseConcurrency()` still runs at import time.
+- The helper's file-level run (`npm test --workspace cli -- test/helpers/concurrency.mjs`) reported `# tests 1`, `# suites 0`, `# pass 1`: Node's own row for a file that registers no test, not a test the helper opens. Making that row read `tests 0` is Task 3's.
