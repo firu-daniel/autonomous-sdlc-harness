@@ -32,7 +32,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_untrusted_input_framing_
 1. [x] **Task 1** — Add `plugin/instructions/untrusted_input.md`, the one canonical statement of how task data is read _(layer: plugin)_ _(points: 15)_
 2. [x] **Task 2** — Point the five writer agents that read task data at the rule, and wrap the fix plan's review copy in the markers _(layer: plugin)_ _(points: 15)_
 3. [x] **Task 3** — Point the branch-level reviewers, the docs pair and the implementer at the rule _(layer: plugin)_ _(points: 10)_
-4. [ ] **Task 4** — Give the four plan reviewers the rule and the laundering check, and point `qa-tester` at the rule _(layer: plugin)_ _(points: 15)_
+4. [x] **Task 4** — Give the four plan reviewers the rule and the laundering check, and point `qa-tester` at the rule _(layer: plugin)_ _(points: 15)_
 5. [ ] **Task 5** — Wrap every clarification answer an orchestrator appends to a dispatch in the markers _(layer: plugin)_ _(points: 15)_
 6. [ ] **Task 6** — Point the run-mode reader, the digest, the docs loop and the mention reader at the rule _(layer: plugin)_ _(points: 15)_
 7. [ ] **Task 7** — Point the supervised readers and the flow document at the rule, and show the wrapped review copy in the sample fix plan _(layer: plugin)_ _(points: 10)_
