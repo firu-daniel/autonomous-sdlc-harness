@@ -5144,7 +5144,7 @@ process_inbox_file() {
   # The intake refusal — see above. Nothing above it may write a file.
   if ! hr_inbox_branch_refusal_var "$MAIN_REPO" "$branch"; then
     log "rejecting '$fname': $HR_INBOX_REFUSAL — nothing created, committed or launched"
-    reject_preserving_status "$branch" "$file" "$fname" "(refused at intake: $HR_INBOX_REFUSAL — nothing created, committed or launched; drop it again under an unprotected, valid branch name)"
+    reject_preserving_status "$branch" "$file" "$fname" "(refused at intake: $HR_INBOX_REFUSAL — nothing created, committed or launched; rename the drop to an unprotected, valid branch name, or, when the protected set cannot be resolved, repair harness.config.json, then drop it again)"
     return 0
   fi
 

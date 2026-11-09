@@ -12,7 +12,7 @@ The refusal does what the task prompt asks. It sits immediately after routing an
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Make the intake-refusal notification's remedy correct for the unresolvable-configuration reason _(layer: cli)_
+1. [x] **Finding 1** — Make the intake-refusal notification's remedy correct for the unresolvable-configuration reason _(layer: cli)_
 2. [ ] **Finding 4** — Restore the `README.md` column alignment in the watcher header's `routing` hand-test entry _(layer: cli)_
 3. [ ] **Finding 5** — Assert the exit status of the unresolvable-set case's inline watcher pass _(layer: cli)_
 4. [ ] **Finding 2** — Name `watcher.log` rather than a never-written run log in the intake-refusal notification _(layer: cli)_
