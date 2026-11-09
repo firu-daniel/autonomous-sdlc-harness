@@ -32,7 +32,7 @@ Four Should Fix findings remain. A full page of 100 rules is read as the complet
 
 1. [x] **Finding 4** — Name `branch-protection` beside `remote-github` in `docs/cli.md` §7's "Nothing is repaired" network-reach sentence _(layer: general)_
 2. [x] **Finding 3** — State in `docs/cli.md`'s `branch-protection` bullet that a pass does not grade ruleset bypass actors _(layer: general)_
-3. [ ] **Finding 2** — Append the admin-access note only to a refused classic read, not to a timeout or an unreachable GitHub _(layer: cli)_
+3. [x] **Finding 2** — Append the admin-access note only to a refused classic read, not to a timeout or an unreachable GitHub _(layer: cli)_
 4. [ ] **Finding 1** — Grade a full page of 100 ruleset rules that does not settle the branch as *cannot tell*, not as *missing* _(layer: cli)_
 
 ---

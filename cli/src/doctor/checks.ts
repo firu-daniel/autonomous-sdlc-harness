@@ -3583,9 +3583,10 @@ const BRANCH_PROTECTION_CHECK: Check = {
         } else if (classicAnswer.kind === 'refused' && CLASSIC_UNPROTECTED_PATTERN.test(classicAnswer.why)) {
           classic = { kind: 'none' };
         } else {
+          const adminNote = classicAnswer.kind === 'refused' ? ' (reading branch protection needs admin access)' : '';
           classic = {
             kind: 'unreadable',
-            why: `\`gh api ${classicPath}\` gave no answer, because ${classicAnswer.why} (reading branch protection needs admin access)`,
+            why: `\`gh api ${classicPath}\` gave no answer, because ${classicAnswer.why}${adminNote}`,
           };
         }
       }

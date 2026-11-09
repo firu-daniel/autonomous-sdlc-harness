@@ -261,6 +261,7 @@ describe('doctor branch-protection', { concurrency: CASE_CONCURRENCY }, () => {
 
     assert.ok(warn.includes(`\`${branch}\`: cannot tell whether direct pushes, force pushes and deletion are blocked`), warn);
     assert.ok(!warn.includes(MISSING), warn);
+    assert.ok(warn.includes('admin access'), warn);
   });
 
   test('with two protected branches only the uncovered one is named as lacking protection', async (t) => {
@@ -310,6 +311,20 @@ describe('doctor branch-protection', { concurrency: CASE_CONCURRENCY }, () => {
     assert.ok(warn.includes(`\`${branch}\`: cannot tell`), warn);
     assert.ok(warn.includes('timed out'), warn);
     assert.ok(!warn.includes(MISSING), warn);
+  });
+
+  test('a timed-out classic read warns cannot tell without blaming admin access', async (t) => {
+    const { dir, branch } = await githubFixture(t);
+    const stub = await answeringGhStub(t);
+    answer(stub, AUTH, AUTH_OK);
+    answer(stub, rulesCall(branch), RULES_NONE);
+    answer(stub, classicCall(branch), { kill: true });
+
+    const warn = line(await doctor(dir, stub, ['--check-github']), 'warn');
+
+    assert.ok(warn.includes(`\`${branch}\`: cannot tell`), warn);
+    assert.ok(warn.includes('timed out'), warn);
+    assert.ok(!warn.includes('admin access'), warn);
   });
 
   test('a rules answer that is not JSON warns naming its shape', async (t) => {
