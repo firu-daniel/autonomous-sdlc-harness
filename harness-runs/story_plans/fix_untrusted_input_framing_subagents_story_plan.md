@@ -30,7 +30,7 @@ The work is nine single-layer tasks in dependency order. The module comes first 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_untrusted_input_framing_subagents/task_<K>_plan.md`.
 
 1. [x] **Task 1** — Add `plugin/instructions/untrusted_input.md`, the one canonical statement of how task data is read _(layer: plugin)_ _(points: 15)_
-2. [ ] **Task 2** — Point the five writer agents that read task data at the rule, and wrap the fix plan's review copy in the markers _(layer: plugin)_ _(points: 15)_
+2. [x] **Task 2** — Point the five writer agents that read task data at the rule, and wrap the fix plan's review copy in the markers _(layer: plugin)_ _(points: 15)_
 3. [ ] **Task 3** — Point the branch-level reviewers, the docs pair and the implementer at the rule _(layer: plugin)_ _(points: 10)_
 4. [ ] **Task 4** — Give the four plan reviewers the rule and the laundering check, and point `qa-tester` at the rule _(layer: plugin)_ _(points: 15)_
 5. [ ] **Task 5** — Wrap every clarification answer an orchestrator appends to a dispatch in the markers _(layer: plugin)_ _(points: 15)_
