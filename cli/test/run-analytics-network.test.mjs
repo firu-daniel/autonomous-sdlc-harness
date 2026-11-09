@@ -14,7 +14,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { copyFileSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -221,6 +221,25 @@ test('a symlinked log is not followed and the sessions are still written', async
   assert.equal(doc.schema, 1);
   assert.equal('gate_logs' in doc, false);
   assert.ok(doc.sessions.length > 0);
+});
+
+test('an unreadable round log is one stderr line, and the sessions are still written', async (t) => {
+  if (typeof process.getuid === 'function' && process.getuid() === 0) {
+    t.skip('root reads a mode-000 file, so the copy cannot be made to fail');
+    return;
+  }
+  const f = await adopted(t);
+  f.put(LABEL, 'log', [CONNECT]);
+  f.put(LABEL, 'verdict', ['pass']);
+  chmodSync(join(f.lane, `${LABEL}.log`), 0o000);
+  const r = await f.run();
+  assert.equal(r.status, 0, output(r));
+  assert.ok(r.stderr.includes(`run-analytics: gate logs not read: cannot copy '${LABEL}.log' into the working copy`), output(r));
+  const doc = f.doc();
+  assert.equal(doc.schema, 1);
+  assert.equal('gate_logs' in doc, false);
+  assert.ok(doc.sessions.length > 0);
+  assert.equal(r.stdout, `recorded ${doc.sessions.length} session(s) for ${BRANCH}\n`, output(r));
 });
 
 test('round records and a round log together give schema 3 with both arrays', async (t) => {

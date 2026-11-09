@@ -19,7 +19,7 @@ The four findings below are all Should Fix: one surface that disagrees with the 
 1. [x] **Finding 4** — Name the log lines in the script-allowlist guard's reason for leaving `run-analytics.sh` allowed _(layer: plugin)_
 2. [x] **Finding 3** — Correct `run-analytics.sh`'s exit-map clause for `recorded 0 session(s)` in the template and its self-adopted copy _(layer: cli, general)_
 3. [x] **Finding 1** — Give `branch-status` a `Network refusals: no session scanned` arm _(layer: plugin)_
-4. [ ] **Finding 2** — Add the unreadable-log case that `run-analytics-network.test.mjs`'s header claims _(layer: cli)_
+4. [x] **Finding 2** — Add the unreadable-log case that `run-analytics-network.test.mjs`'s header claims _(layer: cli)_
 
 ---
 
