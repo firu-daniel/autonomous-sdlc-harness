@@ -125,13 +125,18 @@ export function classicProtectionOf(stdout: string): ClassicProtection | undefin
   return { blocks, adminsExempt: !enabledIs(parsed['enforce_admins'], true) };
 }
 
+/** Whether the rules answer alone blocks every need — exactly when the classic endpoint is not asked. */
+export function rulesetsSettle(rulesets: RulesetRead): boolean {
+  return rulesets.kind === 'read' && PROTECTION_NEEDS.every((need) => rulesets.blocks.has(need));
+}
+
 /** Grades one branch from its two answers; pure, so every state is testable without a remote. */
 export function assessBranch(branch: string, rulesets: RulesetRead, classic: ClassicRead): BranchCoverage {
   const blocked = new Set<ProtectionNeed>();
   if (rulesets.kind === 'read') for (const need of rulesets.blocks) blocked.add(need);
   if (classic.kind === 'read') for (const need of classic.protection.blocks) blocked.add(need);
 
-  const rulesetsBlockAll = rulesets.kind === 'read' && PROTECTION_NEEDS.every((need) => rulesets.blocks.has(need));
+  const rulesetsBlockAll = rulesetsSettle(rulesets);
   const classicUnread = classic.kind === 'unreadable' || (classic.kind === 'not-asked' && !rulesetsBlockAll);
   const anyUnread = rulesets.kind === 'unreadable' || classicUnread;
 

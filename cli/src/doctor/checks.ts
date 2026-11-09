@@ -337,8 +337,8 @@ import {
   classicProtectionEndpoint,
   classicProtectionOf,
   describeCoverage,
-  PROTECTION_NEEDS,
   rulesetBlocksOf,
+  rulesetsSettle,
   type BranchCoverage,
   type ClassicRead,
   type RulesetRead,
@@ -3569,7 +3569,7 @@ const BRANCH_PROTECTION_CHECK: Check = {
             : { kind: 'read', blocks };
 
       let classic: ClassicRead;
-      if (blocks !== undefined && PROTECTION_NEEDS.every((need) => blocks.has(need))) {
+      if (rulesetsSettle(rulesets)) {
         classic = { kind: 'not-asked' };
       } else {
         const classicPath = classicProtectionEndpoint(branch);
