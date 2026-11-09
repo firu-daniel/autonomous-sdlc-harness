@@ -22,7 +22,7 @@ Headline conclusion: one Must Fix. The new module is reached by two cores and by
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 2** — Drop the rule paraphrase `AUTONOMOUS_FLOW.md` keeps beside its pointer _(layer: plugin)_
+1. [x] **Finding 2** — Drop the rule paraphrase `AUTONOMOUS_FLOW.md` keeps beside its pointer _(layer: plugin)_
 2. [ ] **Finding 1** — Record placeholder resolution and the `<ask>` binding owner in `untrusted_input.md` _(layer: plugin)_
 
 ## Must Fix
