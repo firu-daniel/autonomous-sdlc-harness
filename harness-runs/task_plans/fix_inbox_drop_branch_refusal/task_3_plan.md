@@ -37,3 +37,5 @@ This task changes no shipped file.
 
 - `npm test --workspace cli -- test/watcher-remote-dispatch.test.mjs` passes, with the three new cases among those counted.
 - Each new case would fail against the watcher as it stood before Task 2. The local case's `${f.dir}-${D}` and registry assertions and the remote case's empty `ghCalls()` are the checks a missing or late refusal breaks.
+
+- **Deviations from plan:** The red-once check was run as one mutation of `cli/templates/scripts/autonomous-watcher.sh` → `process_inbox_file` (the intake `if` made `if false && …`), then reverted, with `npm test --workspace cli -- test/watcher-remote-dispatch.test.mjs` (`# pass 19`, `# fail 3`). All three new cases failed, each on `<fname> was not archived as rejected_ exactly once`. In the remote case `f.ghCalls()` was still `[]` under that mutation: the master drop made no `gh` call without the refusal either, so that case is held red by its archive assertion, not by its empty `ghCalls()` as the Verification bullet expected. The empty-`ghCalls()` assertion stays as the plan specifies.
