@@ -32,9 +32,9 @@
  *    another the file uses one core. The cases sit in one `describe` opened in this file with
  *    `{ concurrency: CASE_CONCURRENCY }` (`test/helpers/concurrency.mjs`), because Node credits a
  *    suite to the file that calls `describe`, so a suite opened by a helper is timed against the
- *    helper; the three slowest — the
- *    machine-footprint, daemon-path and plugin-permissions cases — also start their subtests together
- *    and await them as one. `HARNESS_TEST_CONCURRENCY=1` runs all of it in series. That is safe
+ *    helper; the three slowest — the machine-footprint, daemon-path and plugin-permissions cases —
+ *    also start their subtests together and await them as one. `HARNESS_TEST_CONCURRENCY=1` runs
+ *    all of it in series. That is safe
  *    because no case shares anything with another: each builds its own repository with
  *    `wiredFixture`, every machine directory it points the CLI at (`HOME`, `XDG_STATE_HOME`,
  *    `XDG_CONFIG_HOME`, `CLAUDE_CONFIG_DIR`, the stub directories put first on `PATH`) is its own temp

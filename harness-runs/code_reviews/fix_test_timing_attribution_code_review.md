@@ -32,7 +32,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 2** — Reflow `cli/test/doctor.test.mjs`'s header choice 4 so "the three slowest — the" is not broken onto a stub line _(layer: cli)_
+1. [x] **Finding 2** — Reflow `cli/test/doctor.test.mjs`'s header choice 4 so "the three slowest — the" is not broken onto a stub line _(layer: cli)_
 2. [ ] **Finding 1** — Name `fix_test_timing_attribution` in place of "until this change" in `docs/development.md`'s clarifying sentence _(layer: general)_
 
 ---
