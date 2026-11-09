@@ -2,7 +2,8 @@
 # harness-run-lib.sh — the one place every generated outer-loop script resolves
 # the repository it is operating on, reads that repository's
 # `harness.config.json` at run time, answers "is this branch protected?",
-# routes an inbox filename to its engine and branch (`hr_inbox_route_var`),
+# routes an inbox filename to its engine and branch (`hr_inbox_route_var`) and
+# judges whether that branch may be taken in (`hr_inbox_branch_refusal_var`),
 # derives a branch name from a title (`hr_derive_branch`), judges whether a
 # path lies strictly inside the state directory's scratch directory
 # (`hr_scratch_path_var`), answers whether the progress comment is on
@@ -342,7 +343,9 @@
 # COULD NOT READ. Every caller therefore has a closed outcome for 2 and states
 # it in its own header: the commit wrapper refuses loudly (non-zero), the push
 # wrapper refuses visibly but non-fatally (exit 0 with a message, because its
-# never-abort-the-caller contract is load-bearing), the watcher logs and defers.
+# never-abort-the-caller contract is load-bearing), the watcher's inbox intake
+# archives the drop as `rejected_` (through `hr_inbox_branch_refusal_var`), and
+# its `job` subcommand refuses with exit 2.
 #
 # THE SAME THREE STATES REACH EVERY TYPED READER: `hr_state_dir`,
 # `hr_command`, `hr_project_name` and the rest print their value and return 0,
@@ -2977,6 +2980,41 @@ hr_inbox_route_var() {
   fi
   HR_INBOX_BRANCH="$branch"
   return 0
+}
+
+# Judge whether <branch>, as `hr_inbox_route_var` derived it from a drop under
+# <root>, may be acted on. 0 with `HR_INBOX_REFUSAL` empty; otherwise 1 with
+# `HR_INBOX_REFUSAL` set to exactly one of:
+#   '<branch>' is not a valid branch name (git check-ref-format --branch)
+#   '<branch>' is a protected branch in '<root>/harness.config.json'
+#   whether '<branch>' is protected cannot be judged: the protected set in '<root>/harness.config.json' cannot be resolved
+# Never any other status. Validity is judged first, so a name git rejects is
+# reported as such even when the configuration is also unreadable.
+#
+# THE PRINTED NAME MUST EQUAL THE INPUT: `--branch` expands `@{-N}` to the
+# branch it names and exits 0, so its exit status alone would admit `@{-1}`.
+# An unresolvable protected set (2) is refused, never read as not protected.
+hr_inbox_branch_refusal_var() {
+  local root="${1-}" branch="${2-}" printed status
+  HR_INBOX_REFUSAL=""
+  case "$branch" in
+    '' | -*)
+      HR_INBOX_REFUSAL="'$branch' is not a valid branch name (git check-ref-format --branch)"
+      return 1
+      ;;
+  esac
+  if ! printed=$(git -C "$root" check-ref-format --branch "$branch" 2>/dev/null) || [ "$printed" != "$branch" ]; then
+    HR_INBOX_REFUSAL="'$branch' is not a valid branch name (git check-ref-format --branch)"
+    return 1
+  fi
+  status=0
+  hr_branch_is_protected "$root" "$branch" || status=$?
+  case "$status" in
+    1) return 0 ;;
+    0) HR_INBOX_REFUSAL="'$branch' is a protected branch in '$root/harness.config.json'" ;;
+    *) HR_INBOX_REFUSAL="whether '$branch' is protected cannot be judged: the protected set in '$root/harness.config.json' cannot be resolved" ;;
+  esac
+  return 1
 }
 
 # ---------------------------------------------------------------------------
