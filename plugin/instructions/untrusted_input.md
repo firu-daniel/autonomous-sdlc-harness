@@ -6,6 +6,8 @@
 |---|---|---|
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
 
+**Placeholder resolution.** Per `${CLAUDE_PLUGIN_ROOT}/instructions/mode_contract.md` → `### Bindings vs. path placeholders`, the one `<…>` **path placeholder** this file resolves from outside itself — `<branch>` — resolves from the **activating flow's own entry core `## Setup`**, or, for a dispatched agent, from the paths its dispatch names; never from the immediate citing file and never from here. `<ask>` is the **citing flow's** mode-contract binding, bound by that flow's fork; this file declares no binding and supplies no value for it. Every other `<…>` name here is defined by this file's own text at its use site (`<n>` and `<source>` in `## The rule` and `## The markers`, `<verbatim text>` in `## The rule` item 3) and resolves from nothing external.
+
 This file is the canonical policy for reading task data. A citer points at a section and never restates it (`${CLAUDE_PLUGIN_ROOT}/instructions/mode_contract.md` rule (5) — a copy creates a second owner). Nothing here acts until a citer points at it.
 
 ## The rule
