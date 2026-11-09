@@ -37,7 +37,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_network_refusal_report/
 1. [x] **Task 1** — Recognise network refusals in `run-analytics.jq`: each session's `network_refusals`, and mode `gate_logs` _(layer: cli)_ _(points: 20)_
 2. [x] **Task 2** — Accept schema 3 in `run-analytics-report.jq`, roll up `.run.network` and render the two network sections _(layer: cli)_ _(points: 20)_
 3. [x] **Task 3** — Hand finished rounds' logs to mode `gate_logs` in `run-analytics.sh`, merge them and write schema 3 _(layer: cli)_ _(points: 20)_
-4. [ ] **Task 4** — Describe the network report in the adopter-facing READMEs under `cli/` _(layer: cli)_ _(points: 8)_
+4. [x] **Task 4** — Describe the network report in the adopter-facing READMEs under `cli/` _(layer: cli)_ _(points: 8)_
 5. [ ] **Task 5** — Show the network report in `branch-status` and name it in `AUTONOMOUS_FLOW.md`'s run-analytics row _(layer: plugin)_ _(points: 8)_
 6. [ ] **Task 6** — Bring the self-adopted run-analytics scripts and state-dir READMEs to the template bytes, and name the mirror in `judge.sh` _(layer: general)_ _(points: 10)_
 7. [ ] **Task 7** — Document the network report in `docs/watcher.md`, `docs/cli.md` and `ARCHITECTURE.md` _(layer: general)_ _(points: 10)_
