@@ -32,3 +32,8 @@
 - Grep `docs/cli.md` for `changes no other check` and confirm that every hit names both `remote-github` and `branch-protection`.
 - The `docs/cli.md` §7 table's order matches `CHECKS` in `cli/src/doctor/checks.ts`: `branch-protection` follows `forge`.
 - Grep the changed lines for a path on the machine that wrote them, and find none (`.claude/context/conventions.md` → `## The testing bar`, the self-containment bullet).
+
+**Deviations from plan:**
+
+- `docs/cli.md` → the `**\`--check-github\`**` paragraph's closing sentence *"With `execution.target` at `local` it asks nothing."* was also falsified by this branch: `BRANCH_PROTECTION_CHECK` (`cli/src/doctor/checks.ts`) never reads `execution.target`. Rewritten to scope it to `remote-github` and to say `branch-protection` does not read that key.
+- `docs/config.md` → the `protectedBranches` row: the `branch-protection` sentence sits after *"A **glob** entry is not graded at all"* rather than directly beside *"by `doctor`'s `protected-set` check"*, so the glob sentence keeps qualifying `protected-set`; it adds that `branch-protection` reports a glob entry as not checked.
