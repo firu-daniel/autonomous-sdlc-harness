@@ -55,3 +55,9 @@
 - `npm test --workspace cli -- test/branch-protection.test.mjs` passes. It is this task's own new test file, run from the repository root as one plain foreground command (`.claude/context/conventions.md` → `## The testing bar`).
 - `bash scripts/typecheck.sh` exits zero.
 - Grep `cli/src/doctor/branchProtection.ts` for `node:child_process`, `node:fs`, `runGh` and `./checks.js`, and find none.
+
+**Deviations from plan:**
+
+- `BranchCoverage` gains a `readonly why: string` field: the unreadable sources' reasons joined with `; ` (and `its branch protection was not asked` for a `not-asked` classic read that does not count as read), empty when `undetermined` is empty. The plan's `describeCoverage(coverages, globs)` must name each undetermined need's `why`, but the plan's `BranchCoverage` carried no `why` and `describeCoverage` receives no read, so without this field the sentence could not name it. `assessBranch`'s signature is unchanged; Task 2 reads the field through the record it already receives.
+- The `warn` detail also lists the branches proved covered (`covered: …`) when any are, so a warn names every protected branch it checked.
+- `describeCoverage` collapses every whitespace run in a `why` and a note to one space, so a multi-line `gh` refusal cannot break the one-line detail.
