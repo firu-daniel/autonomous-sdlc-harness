@@ -24,3 +24,5 @@
 - The `--check-github` option's first `DOCTOR_USAGE` line is unchanged: diff it against `HEAD`.
 - Grep `cli/src/commands/doctor.ts` for `changes no other check` and confirm that every sentence carrying it names both `remote-github` and `branch-protection`.
 - Grep the changed `DOCTOR_USAGE` lines for any non-ASCII byte and find none.
+
+**Deviations from plan:** Also updated the `DoctorOptions.checkGithub` doc comment in `cli/src/commands/doctor.ts`, which said the flag turns on only "the remote-github check's `gh` queries" and would otherwise have been stale beside the corrected `CHECK_GITHUB_FLAG` comment. Wording only; no behaviour change.
