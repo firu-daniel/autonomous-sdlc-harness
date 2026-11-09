@@ -12,7 +12,8 @@
 // One row per test file, sorted by `seconds` descending then `file` ascending: `file` relative to
 // the working directory with `/` separators, `status` `fail` when `failed > 0` else `pass`,
 // `seconds` the sum of the file's top-level test durations in seconds with one decimal, `tests` the
-// top-level tests counted, `failed` the failed ones. Last line `end`. Every row is kept: truncation
+// top-level tests counted, `0` for a file that loaded cleanly and opened no test of its own,
+// `failed` the failed ones. Last line `end`. Every row is kept: truncation
 // belongs to a display, never to the record.
 //
 // The rule this module exists to enforce: every test file the run reported appears exactly once,
@@ -24,13 +25,24 @@
 // is counted the same way. A missing `data.details.duration_ms` counts as 0. Every other event, and
 // every event with no `data.file`, contributes nothing.
 //
+// The file-level entry. `node --test` loads every module under a `test/` directory as a test file,
+// a helper module included, and for a file that reported no test of its own Node emits one
+// nesting-0 event named for the file itself. That entry is not a test case. Its key is
+// `typeof data.name === 'string'` and `path.resolve(data.name) === path.resolve(data.file)` —
+// resolved on both sides because Node may give the name absolute or relative to the runner's
+// working directory, which is this reporter's too. A file-level `test:pass` adds its duration and
+// no test, so the file still gets its row, with `tests` `0`. A file-level `test:fail` is a load
+// failure and counts as one failed test, as above. Accepted residual: a real top-level test whose
+// name is its own file's path is read as a file-level entry.
+//
 // THE FLOOR — `cli/package.json` → `engines` is `>=20.11.0`. The features this module relies on:
 //   1. a custom reporter module passed to `--test-reporter`;
 //   2. `--test-reporter` / `--test-reporter-destination` given more than once, pairwise;
 //   3. `data.file` on `test:pass` / `test:fail`;
 //   4. `data.nesting` on the same events;
-//   5. `data.details.duration_ms` on the same events.
-// Where that was read, on 2026-11-04:
+//   5. `data.details.duration_ms` on the same events;
+//   6. `data.name` on the same events.
+// Where 1–5 were read, on 2026-11-04:
 //   - Node's own documentation history for `node:test` and its CLI flags was NOT read: fetching
 //     `doc/api/test.md` and `doc/api/cli.md` at tag v20.11.0 was refused by the implementing
 //     session's sandbox. No "added in" version is stated here for any of the five.
@@ -46,6 +58,11 @@
 // kept for 3–5: an event without `data.file` or with another `nesting` contributes no row, the
 // reader then finds no failing file and runs the round in full. Features 1 and 2 have no degraded
 // outcome inside this module: a Node without them rejects the flag before any test runs.
+// Feature 6 was not read in any source: no documentation, type declaration or probe run was
+// consulted for it, and no "added in" version is stated. `cli/test/test-timing-reporter.test.mjs`'s
+// real-run case is the evidence that it is present on the Node that runs the suite. Its degraded
+// outcome: without `data.name`, a file-level entry counts as one test, as before the file-level
+// key existed, and `scripts/lib/gate-round-lib.sh` then refuses the record and names the row.
 //
 // Uses only `node:` builtins.
 import path from 'node:path';
@@ -68,8 +85,11 @@ export default async function* testTimingReporter(source) {
     }
     const ms = data.details?.duration_ms;
     entry.ms += typeof ms === 'number' && Number.isFinite(ms) ? ms : 0;
-    entry.tests += 1;
-    if (event.type === 'test:fail') entry.failed += 1;
+    const fileLevel = typeof data.name === 'string' && path.resolve(data.name) === path.resolve(data.file);
+    if (!fileLevel || event.type === 'test:fail') {
+      entry.tests += 1;
+      if (event.type === 'test:fail') entry.failed += 1;
+    }
   }
 
   const rows = [...files].map(([file, { ms, tests, failed }]) => ({
