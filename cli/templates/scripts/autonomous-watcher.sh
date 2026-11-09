@@ -5124,8 +5124,10 @@ remote_commit_and_push() {
 # a protected set that cannot be resolved, or not a valid branch name — is
 # archived as rejected_ too, with one `failed` notification and no registry
 # record. It sits ahead of the shared guards and of the `execution.target` read
-# because it is a property of the name, which no waiting changes; that is why a
-# GitHub-bound drop on such a branch never reaches remote-run.sh.
+# because waiting does not change it: the name has to change, or, for an
+# unresolvable protected set, the configuration has to be repaired before the
+# file is dropped again. That is why a GitHub-bound drop on such a branch never
+# reaches remote-run.sh.
 # -----------------------------------------------------------------------------
 process_inbox_file() {
   local file="$1"

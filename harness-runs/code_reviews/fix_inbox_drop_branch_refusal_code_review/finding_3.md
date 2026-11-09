@@ -29,3 +29,6 @@ with
 In `docs/watcher.md` step 2, replace the closing clause "it is a property of the name, which no amount of waiting changes." with "waiting does not change the answer: the name has to change or, for an unresolvable protected set, `harness.config.json` has to be repaired before the file is dropped again."
 
 No test reads either passage; no test run is owed.
+
+**Deviations from plan:** The `docs/watcher.md` step-2 replacement lies outside the dispatched `cli` layer path and was not made by the `cli` dispatch; it belongs to the `general` (catch-all) layer. Only the `cli/templates/scripts/autonomous-watcher.sh` comment was replaced.
+- The `general` dispatch then made the `docs/watcher.md` step-2 replacement verbatim as the Fix specifies; both halves of the finding are now applied.
