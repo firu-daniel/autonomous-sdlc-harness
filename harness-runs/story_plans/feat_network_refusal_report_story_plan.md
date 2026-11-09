@@ -39,7 +39,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_network_refusal_report/
 3. [x] **Task 3** — Hand finished rounds' logs to mode `gate_logs` in `run-analytics.sh`, merge them and write schema 3 _(layer: cli)_ _(points: 20)_
 4. [x] **Task 4** — Describe the network report in the adopter-facing READMEs under `cli/` _(layer: cli)_ _(points: 8)_
 5. [x] **Task 5** — Show the network report in `branch-status` and name it in `AUTONOMOUS_FLOW.md`'s run-analytics row _(layer: plugin)_ _(points: 8)_
-6. [ ] **Task 6** — Bring the self-adopted run-analytics scripts and state-dir READMEs to the template bytes, and name the mirror in `judge.sh` _(layer: general)_ _(points: 10)_
+6. [x] **Task 6** — Bring the self-adopted run-analytics scripts and state-dir READMEs to the template bytes, and name the mirror in `judge.sh` _(layer: general)_ _(points: 10)_
 7. [ ] **Task 7** — Document the network report in `docs/watcher.md`, `docs/cli.md` and `ARCHITECTURE.md` _(layer: general)_ _(points: 10)_
 
 ## Scope register

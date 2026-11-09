@@ -6,13 +6,18 @@
 # new (by `session_id`, the merge key), whether host suspend intervals are worth
 # reading, and whether either file's bytes changed. Which rounds are new is
 # decided by `lib/run-analytics.jq`'s mode `rounds`, not here: this script only
-# finds the round records, hands them over and appends what comes back.
+# finds the round records, hands them over and appends what comes back. The
+# record also lists each session's refused network calls (decided in
+# `lib/run-analytics.jq` mode `sessions`) and each finished round log's possible
+# network attempts (mode `gate_logs`).
 #
 # THREE FILES, ONE DRIVER. `lib/run-analytics.jq` computes the session records
 # (`sessions` mode), re-classes idle gaps against suspend intervals
 # (`overlay`), sums sub-agent transcripts per agent id (`transcripts`),
-# attaches those sums to the new records (`attach`), and parses and validates
-# the round records and decides which rounds are new (`rounds`); `lib/run-analytics-report.jq`
+# attaches those sums to the new records (`attach`), parses and validates
+# the round records and decides which rounds are new (`rounds`), and lists a
+# finished round log's possible network attempts and decides which are new
+# (`gate_logs`); `lib/run-analytics-report.jq`
 # recomputes `.run` (`rollup`) and renders the Markdown (`markdown`). Both
 # headers state their calls; this script makes them as stated and resolves both
 # beside itself under `lib/`.
@@ -40,8 +45,9 @@
 # `HR_TEST_RUN_LABEL_PATTERN`; a running round has no `.verdict` yet and is
 # picked up by a later call. Read beside it, each only when a regular,
 # non-symlink file: `<label>.gates.tsv`, `<label>.focused.tests.tsv`,
-# `<label>.full.tests.tsv`. Only a label with at least one of the three counts,
-# so a lane of logs and verdicts alone contributes nothing. Handed over is not
+# `<label>.full.tests.tsv`. Only a label with at least one of the three
+# contributes a round, so a lane of logs and verdicts alone records no round;
+# its logs are read under GATE LOGS. Handed over is not
 # recorded: a `<phase>.tests.tsv` an earlier attempt of the label left is
 # refused by mode `rounds` unless this attempt's `gates.tsv` has rows of that
 # phase (its header states the rule and the residual); no file-age test is added
@@ -49,6 +55,13 @@
 # rounds reach the mode through a file (`--slurpfile known`), never an
 # argument: their size outgrows Linux's per-argument limit. No failure on this
 # path stops the run: it is named on stderr and the sessions are still written.
+#
+# GATE LOGS. Every finished label's `<label>.log`, when a regular, non-symlink
+# file, is handed to mode `gate_logs`, whether or not the round wrote records.
+# Only the log's matching lines reach the record, redacted and uncut; which
+# lines match, and which entries are new, is the mode's decision. The recorded
+# entries reach the mode through a file (`--slurpfile known`), as the rounds do.
+# A failure on this path is one stderr line and never stops the sessions.
 #
 # WHERE IT STOPS. It writes those two files in the named checkout and nothing
 # else: it commits nothing, pushes nothing, notifies nothing and never touches
@@ -59,13 +72,19 @@
 # THE MERGE. A recorded session or round is never rewritten, reordered or
 # re-derived: new records are appended in stream order, new rounds in the order
 # mode `rounds` returns them — a changed record under a recorded label as
-# `<label>#<N>` — then `.run` and the Markdown are regenerated from the whole
-# document every time, so a hand-deleted `.md` comes back. A document is schema
-# 2 exactly when it carries a round; an existing schema-1 document is read and
-# extended. An existing `run-analytics.json` that does not parse as one
-# schema-1 document without `rounds`, or one schema-2 document whose `rounds`
-# is an array of objects with a string `round_id`, is refused and left
-# byte-for-byte as it is — it is the only copy of
+# `<label>#<N>`. A recorded gate-log entry is never rewritten either: new
+# entries are appended in the order mode `gate_logs` returns them. Then `.run`
+# and the Markdown are regenerated from the whole document every time, so a
+# hand-deleted `.md` comes back. A document is schema 3 exactly when it carries
+# a gate-log entry, with `gate_logs` and a `rounds` array (possibly empty)
+# beside it; otherwise, when it carries a round, schema 2; otherwise schema
+# 1. An existing schema-1 or schema-2 document is read and extended. An
+# existing `run-analytics.json` that does not parse as one schema-1 document
+# with neither `rounds` nor `gate_logs`, one schema-2 document without
+# `gate_logs` whose `rounds` is an array of objects with a string `round_id`,
+# or one schema-3 document whose `rounds` is such an array and whose
+# `gate_logs` is an array of objects with a string `log_id`, is refused and
+# left byte-for-byte as it is — it is the only copy of
 # the sessions it holds. A file is replaced only when its bytes differ, and
 # nothing written carries a wall-clock value, so a re-run over the same stream
 # leaves both files byte-identical.
@@ -77,10 +96,13 @@
 # checkout is `--main-repo` when given and non-empty, else `hr_main_repo`'s
 # answer for the checkout — which, inside a clone, is the clone itself, so the
 # watcher passes `--main-repo` explicitly. `HARNESS_MAIN_REPO` is never read.
-# Round ids, gate ids and file paths pass through the same pairs, through mode
-# `rounds`' `redact_path`: the pairs only, without the home step and without
+# Round ids, gate ids and round file paths pass through the same pairs,
+# through mode `rounds`' `redact_path`: the pairs only, without the home step and without
 # the 160-character cut free-text fields get, so a long path or label is
 # recorded in full and a relative path containing `/home/` is not collapsed.
+# Gate-log fields split (`lib/run-analytics.jq` → `Mode gate_logs`): the log id
+# goes through `redact_path`; a `test_file` through `redact_file`, the pairs
+# plus the anchored home step; a `line` through `redact_text`, uncut.
 #
 # TUNABLES, from the environment:
 #   RUN_ANALYTICS_IDLE_SECS       idle-gap threshold in seconds; default 120, a
@@ -106,9 +128,10 @@
 #      regenerated bytes changed), `recorded <n> session(s) and <m> round(s)
 #      for <branch>` when m new rounds were recorded, `unchanged: no new
 #      session for <branch>`, or `no session in <stream_file>` (no session, no
-#      new round and no record: nothing written). stderr may also carry
-#      `run-analytics: round record skipped: <label>.<record> — <reason>` lines
-#      and one `run-analytics: round records not read: <reason>` line.
+#      new round, no new gate-log entry and no record: nothing written). stderr
+#      may also carry `run-analytics: round record skipped: <label>.<record> —
+#      <reason>` lines, one `run-analytics: round records not read: <reason>`
+#      line and one `run-analytics: gate logs not read: <reason>` line.
 #   1  stderr: `run-analytics: <reason>` — nothing was replaced
 #   2  stderr: `run-analytics: <reason>; usage: …` — bad usage
 #
@@ -142,6 +165,10 @@
 #              same call -> `recorded 1 session(s) and 1 round(s) for feat_x`, schema 2
 #   running    as `round` without the .verdict      -> `recorded 1 session(s) for feat_x`,
 #              schema 1; write the .verdict, same call -> `recorded 0 session(s) and 1 round(s) for feat_x`
+#   gate log   no record yet; l as in `round`; mkdir -p "$l"
+#              printf 'Error: connect ECONNREFUSED 127.0.0.1:443\n' > "$l/r_round_1.log"
+#              printf 'pass\n' > "$l/r_round_1.verdict"
+#              same call -> `recorded 1 session(s) for feat_x`, schema 3, one `connect` match
 
 # Deliberately no `-e`: every failure below is an explicit exit with its line.
 set -uo pipefail
@@ -299,14 +326,17 @@ work=$(mktemp -d "${TMPDIR:-/tmp}/run-analytics.XXXXXX") || die "cannot create a
 have_record=0
 if [ -e "$json_out" ]; then
   have_record=1
-  jq -s -e 'length == 1 and (.[0] | type == "object"
-            and ((.schema == 1 and (has("rounds") | not))
-                 or (.schema == 2 and (.rounds | type) == "array"
-                     and all(.rounds[]; type == "object" and (.round_id | type) == "string")))
+  jq -s -e 'def rounds_ok: (.rounds | type) == "array"
+              and all(.rounds[]; type == "object" and (.round_id | type) == "string");
+            length == 1 and (.[0] | type == "object"
+            and ((.schema == 1 and (has("rounds") | not) and (has("gate_logs") | not))
+                 or (.schema == 2 and (has("gate_logs") | not) and rounds_ok)
+                 or (.schema == 3 and rounds_ok and (.gate_logs | type) == "array"
+                     and all(.gate_logs[]; type == "object" and (.log_id | type) == "string")))
             and (.sessions | type) == "array"
             and all(.sessions[]; type == "object" and (.session_id | type) == "string"))' \
     "$json_out" >/dev/null 2>&1 \
-    || die "'$json_out' is not a schema-1 or schema-2 run-analytics document; left untouched"
+    || die "'$json_out' is not a schema-1, schema-2 or schema-3 run-analytics document; left untouched"
   cp "$json_out" "$work/old.json" || die "cannot read '$json_out'"
 else
   printf '%s\n' '{"schema":1,"sessions":[]}' > "$work/old.json" || die "cannot write the working copy"
@@ -325,6 +355,9 @@ n=$(jq 'length' "$work/new.json") || die "lib/run-analytics.jq wrote no array"
 m=0
 rounds_err=""
 rounds_file=/dev/null
+g=0
+gate_logs_err=""
+gate_logs_file=/dev/null
 lane=""
 if state_dir=$(hr_state_dir "$top") && lane=$(hr_test_run_lane_dir "$state_dir" "$branch"); then
   case "$lane" in
@@ -340,6 +373,11 @@ if [ -n "$lane" ] && [ -d "$lane" ]; then
     label=${v##*/}
     label=${label%.verdict}
     [[ "$label" =~ $HR_TEST_RUN_LABEL_PATTERN ]] || continue
+    if [ -f "$lane/$label.log" ] && [ ! -L "$lane/$label.log" ]; then
+      { printf '{"run_analytics_gate_log":"%s"}\n' "$label" \
+          && cat "$lane/$label.log" && printf '\n'; } >> "$work/gate_logs.jsonl" 2>/dev/null \
+        || gate_logs_err="cannot copy '$label.log' into the working copy"
+    fi
     recs=""
     for r in gates.tsv focused.tests.tsv full.tests.tsv; do
       if [ -f "$lane/$label.$r" ] && [ ! -L "$lane/$label.$r" ]; then recs="$recs $r"; fi
@@ -376,7 +414,30 @@ if [ -n "$rounds_err" ]; then
 fi
 case "$m" in '' | *[!0-9]*) m=0; rounds_file=/dev/null ;; esac
 
-if [ "$n" -eq 0 ] && [ "$m" -eq 0 ] && [ "$have_record" -eq 0 ]; then
+# --- Gate logs (GATE LOGS above): nothing on this path reaches `die` either.
+if [ -z "$gate_logs_err" ] && [ -s "$work/gate_logs.jsonl" ]; then
+  if ! jq -c '.gate_logs // []' "$work/old.json" > "$work/known_gate_logs.json" 2> "$work/err"; then
+    IFS= read -r why < "$work/err" || why=""
+    gate_logs_err="${why:-cannot write the recorded gate logs}"
+  elif ! jq -n -R -c -S -f "$sessions_jq" --arg mode gate_logs --slurpfile known "$work/known_gate_logs.json" \
+       --argjson idle_threshold_s 1 --argjson redact "$redact" --argjson suspend '[]' \
+       --arg suspend_source none < "$work/gate_logs.jsonl" > "$work/gate_logs_out.json" 2> "$work/err"; then
+    IFS= read -r why < "$work/err" || why=""
+    gate_logs_err="${why:-lib/run-analytics.jq gate_logs failed}"
+  elif ! g=$(jq '.gate_logs | length' "$work/gate_logs_out.json" 2>/dev/null); then
+    gate_logs_err="lib/run-analytics.jq gate_logs wrote no gate_logs array"
+  else
+    gate_logs_file="$work/gate_logs_out.json"
+  fi
+fi
+if [ -n "$gate_logs_err" ]; then
+  printf 'run-analytics: gate logs not read: %s\n' "$gate_logs_err" >&2
+  g=0
+  gate_logs_file=/dev/null
+fi
+case "$g" in '' | *[!0-9]*) g=0; gate_logs_file=/dev/null ;; esac
+
+if [ "$n" -eq 0 ] && [ "$m" -eq 0 ] && [ "$g" -eq 0 ] && [ "$have_record" -eq 0 ]; then
   printf 'no session in %s\n' "$stream"
   exit 0
 fi
@@ -518,12 +579,16 @@ if [ "$src" != "none" ]; then
 fi
 
 # --- Merge, roll up, render.
-# `$rounds_file` is `/dev/null` (slurped as `[]`) when the rounds step recorded nothing.
+# `$rounds_file` and `$gate_logs_file` are `/dev/null` (slurped as `[]`) when their step
+# recorded nothing.
 jq -n -S --arg branch "$branch" --slurpfile old "$work/old.json" --slurpfile new "$work/new.json" \
-  --slurpfile r "$rounds_file" \
+  --slurpfile r "$rounds_file" --slurpfile gl "$gate_logs_file" \
   '(($old[0].rounds // []) + ($r[0].rounds // [])) as $rounds
+   | (($old[0].gate_logs // []) + ($gl[0].gate_logs // [])) as $gate_logs
    | {schema: 1, branch: $branch, sessions: ($old[0].sessions + $new[0]), run: null}
-   | if ($rounds | length) > 0 then .schema = 2 | .rounds = $rounds else . end' \
+   | if ($gate_logs | length) > 0 then .schema = 3 | .gate_logs = $gate_logs | .rounds = $rounds
+     elif ($rounds | length) > 0 then .schema = 2 | .rounds = $rounds
+     else . end' \
   > "$work/merged.json" 2> "$work/err" || die "cannot merge the new sessions"
 if ! jq -S -f "$report_jq" --arg mode rollup < "$work/merged.json" > "$work/doc.json" 2> "$work/err"; then
   IFS= read -r why < "$work/err" || why=""
