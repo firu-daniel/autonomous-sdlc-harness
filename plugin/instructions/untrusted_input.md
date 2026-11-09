@@ -75,6 +75,7 @@ These documents point at a section of this file:
 - `${CLAUDE_PLUGIN_ROOT}/instructions/code_review_fixes_instructions.md`
 - `${CLAUDE_PLUGIN_ROOT}/instructions/docs_orchestration_instructions_autonomous.md`
 - `${CLAUDE_PLUGIN_ROOT}/instructions/mention_reading.md`
+- `${CLAUDE_PLUGIN_ROOT}/instructions/qa_test_instructions.md`
 - `${CLAUDE_PLUGIN_ROOT}/instructions/run_mode_instructions.md`
 - `${CLAUDE_PLUGIN_ROOT}/instructions/task_plan_implementation_instructions.md`
 - `${CLAUDE_PLUGIN_ROOT}/instructions/task_plan_writing_instructions_autonomous.md`

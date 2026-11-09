@@ -35,3 +35,5 @@ The supervised QA flow's step 4 relays the user's answers to the same `ui-tests-
    between the `docs_orchestration_instructions_autonomous.md` and `task_plan_writing_instructions_autonomous.md` keys. The roster test compares the roster with the union of every row's `expected`, so edits 2 and 3 have to land together.
 
 Verify by running the one test file this fix edits, from the repository root: `npm test --workspace cli -- test/untrusted-input-corpus.test.mjs`.
+
+**Deviations from plan:** The `plugin` dispatch landed edits 1 and 2 only; edit 3 (`cli/test/untrusted-input-corpus.test.mjs`) is outside `plugin/` and belongs to this unit's `cli` dispatch. Until it lands, the tree guard `npm test --workspace cli -- test/untrusted-input-corpus.test.mjs` fails 3 of 18 (`markers-citation` and the roster comparison, each naming only `plugin/instructions/qa_test_instructions.md` as the extra entry), exactly as the finding's "edits 2 and 3 have to land together" predicts; the `cli` dispatch reruns it as its own edited test file.

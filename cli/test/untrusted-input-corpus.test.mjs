@@ -98,6 +98,7 @@ export const CASES = [
       'plugin/agents/user-review-fix-plan-writer.md': 1,
       'plugin/instructions/clarification_digest_instructions.md': 1,
       'plugin/instructions/docs_orchestration_instructions_autonomous.md': 1,
+      'plugin/instructions/qa_test_instructions.md': 1,
       'plugin/instructions/task_plan_writing_instructions_autonomous.md': 1,
       'plugin/instructions/task_plan_writing_instructions_core.md': 2,
       'plugin/instructions/user_review_fix_plan_writing_instructions_autonomous.md': 1,
