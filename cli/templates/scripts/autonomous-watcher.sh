@@ -5048,11 +5048,12 @@ fail_before_launch() {
 # answer or its RESUME sentinel lands. Stamping `failed` over it would strand a
 # run that nothing ever goes back for. Also used by process_inbox_file's intake
 # refusal of a protected, unjudgeable or invalid branch, where there is no record
-# at all and none may be created.
+# at all and none may be created, which passes watcher.log as the log to name,
+# since the refused branch has no run log.
 reject_preserving_status() {
-  local branch="$1" file="$2" fname="$3" reason="$4"
+  local branch="$1" file="$2" fname="$3" reason="$4" log="${5:-$LOGS_DIR/$1.log}"
   mv "$file" "$ARCHIVE_DIR/rejected_$(date '+%Y%m%d%H%M%S')_$fname" 2>/dev/null || rm -f "$file"
-  notify failed "$branch" "$LOGS_DIR/$branch.log" "$reason"
+  notify failed "$branch" "$log" "$reason"
 }
 
 # watcher_commit <worktree> <rel> <subject> — the watcher's commit of one placed
@@ -5144,7 +5145,7 @@ process_inbox_file() {
   # The intake refusal — see above. Nothing above it may write a file.
   if ! hr_inbox_branch_refusal_var "$MAIN_REPO" "$branch"; then
     log "rejecting '$fname': $HR_INBOX_REFUSAL — nothing created, committed or launched"
-    reject_preserving_status "$branch" "$file" "$fname" "(refused at intake: $HR_INBOX_REFUSAL — nothing created, committed or launched; rename the drop to an unprotected, valid branch name, or, when the protected set cannot be resolved, repair harness.config.json, then drop it again)"
+    reject_preserving_status "$branch" "$file" "$fname" "(refused at intake: $HR_INBOX_REFUSAL — nothing created, committed or launched; rename the drop to an unprotected, valid branch name, or, when the protected set cannot be resolved, repair harness.config.json, then drop it again)" "$WATCHER_LOG"
     return 0
   fi
 
