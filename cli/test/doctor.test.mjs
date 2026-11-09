@@ -29,10 +29,12 @@
  *    exited 1 for a different reason than the edit made would otherwise pass, which is the one way a
  *    test like this can be green and worthless.
  * 4. **Cases run concurrently.** Every case is a serial chain of subprocesses, so run one after
- *    another the file uses one core. The cases sit in one `concurrentSuite` and run
- *    `CASE_CONCURRENCY` at a time (`test/helpers/concurrency.mjs`); the three slowest — the
- *    machine-footprint, daemon-path and plugin-permissions cases — also start their subtests together
- *    and await them as one. `HARNESS_TEST_CONCURRENCY=1` runs all of it in series. That is safe
+ *    another the file uses one core. The cases sit in one `describe` opened in this file with
+ *    `{ concurrency: CASE_CONCURRENCY }` (`test/helpers/concurrency.mjs`), because Node credits a
+ *    suite to the file that calls `describe`, so a suite opened by a helper is timed against the
+ *    helper; the three slowest — the machine-footprint, daemon-path and plugin-permissions cases —
+ *    also start their subtests together and await them as one. `HARNESS_TEST_CONCURRENCY=1` runs
+ *    all of it in series. That is safe
  *    because no case shares anything with another: each builds its own repository with
  *    `wiredFixture`, every machine directory it points the CLI at (`HOME`, `XDG_STATE_HOME`,
  *    `XDG_CONFIG_HOME`, `CLAUDE_CONFIG_DIR`, the stub directories put first on `PATH`) is its own temp
@@ -57,10 +59,10 @@ import {
 import { mkdtemp, readdir, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, delimiter, dirname, join } from 'node:path';
-import test from 'node:test';
+import test, { describe } from 'node:test';
 import { pathToFileURL } from 'node:url';
 
-import { CASE_CONCURRENCY, concurrentSuite } from './helpers/concurrency.mjs';
+import { CASE_CONCURRENCY } from './helpers/concurrency.mjs';
 import {
   createFixture,
   INIT_SCRIPTS_DIR,
@@ -294,7 +296,7 @@ const { CHECKS } = await loadCompiled('doctor/checks.js');
 /** The directories the Python retrieval checks always search, read by the case that must not run a real command. */
 const { LAUNCHER_PATH_FALLBACKS } = await loadCompiled('retrieval/pythonBackend.js');
 
-concurrentSuite('doctor', () => { // body deliberately not re-indented: keeps the diff and `git blame` readable
+describe('doctor', { concurrency: CASE_CONCURRENCY }, () => { // body deliberately not re-indented: keeps the diff and `git blame` readable
 
 test('doctor exits 0 on a freshly wired repository, warnings and all, and writes nothing', async (t) => {
   const dir = await wiredFixture(t);

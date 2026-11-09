@@ -26,8 +26,8 @@
  *    asserted as absence, with the placeholder named separately when it is what actually happened.
  *    {@link stackCase}'s `absentCommands` does both, through the model's own `isPlaceholder`.
  * 3. **Cases run concurrently.** Every case is a serial chain of subprocesses, so run one after
- *    another the file uses one core. The cases sit in one `concurrentSuite` and run
- *    `CASE_CONCURRENCY` at a time (`test/helpers/concurrency.mjs`); the two slowest — the
+ *    another the file uses one core. The cases sit in one `describe` opened in this file
+ *    with `{ concurrency: CASE_CONCURRENCY }` (`test/helpers/concurrency.mjs`); the two slowest — the
  *    adoption-matrix case and the conventional-test-root case — also start their `stackCase`
  *    subtests together and await them as one. `HARNESS_TEST_CONCURRENCY=1` runs all of it in series.
  *    That is safe because no case shares anything with another: each builds its own fixture under a
@@ -42,10 +42,10 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import test from 'node:test';
+import test, { describe } from 'node:test';
 import { pathToFileURL } from 'node:url';
 
-import { CASE_CONCURRENCY, concurrentSuite } from './helpers/concurrency.mjs';
+import { CASE_CONCURRENCY } from './helpers/concurrency.mjs';
 import { createFixture, INIT_SCRIPTS_DIR, readJson, runCli, PACKAGE_ROOT, WORKSPACE_ROOT } from './helpers/fixture.mjs';
 
 /** The generated configuration every assertion here reads, relative to the fixture root. */
@@ -305,7 +305,7 @@ function stackCase(
   });
 }
 
-concurrentSuite('stack presets', () => { // body deliberately not re-indented: keeps the diff and `git blame` readable
+describe('stack presets', { concurrency: CASE_CONCURRENCY }, () => { // body deliberately not re-indented: keeps the diff and `git blame` readable
 
 /**
  * {@link stackCase} exercised against a preset that already exists, so the helper nine later stacks

@@ -35,7 +35,8 @@
 #   GR_PREREQUISITES      space-separated `<prereq>:<dep>,<dep>,…`; a dep in the
 #                         focus set brings its prereq with it
 #   GR_NARROWED_IDS       ids whose focused run takes test files (`GR_FOCUS_FILES`)
-#   GR_TEST_FILE_PATTERN  an ERE every recorded test file must match
+#   GR_TEST_FILE_PATTERN  an ERE every recorded file carrying a test must match;
+#                         a row outside it is read only with `0` tests and `0` failed
 #   GR_TEST_ROOT          the repo-relative directory recorded files are relative to
 #
 # THE SEAM. `run-test-suite.sh` exports `RUN_TEST_SUITE_LABEL` and the
@@ -53,8 +54,10 @@
 #   `<label>.<phase>.tests.tsv` — owned by `scripts/lib/test-timing-reporter.mjs`
 #     (its THE RECORD paragraph).
 # A record that breaks its shape in any way, or names an id the caller did not
-# pass or a file outside `GR_TEST_FILE_PATTERN`, is unreadable, and an
-# unreadable previous record means the round runs in full. A finished round's
+# pass, is unreadable, and an unreadable previous record means the round runs
+# in full. A row outside `GR_TEST_FILE_PATTERN` that carries tests is an
+# attribution error, which makes the record unreadable, and `gr_slowest` names
+# the failed check. A finished round's
 # records are also read, never written, by `scripts/run-analytics.sh` (its
 # `GATE ROUNDS` paragraph), which copies their rows into the committed run
 # analytics, so the shape stated here is a contract with that reader too.
@@ -156,38 +159,52 @@ gr_tests_destination() {
   fi
 }
 
-# gr__tests_record_ok <file> — 0 when the per-file record is readable: exact
-# header, last line `end`, every row five fields with a relative file matching
-# GR_TEST_FILE_PATTERN, status pass|fail and numeric counts.
-gr__tests_record_ok() {
-  [ -f "${1-}" ] && [ -r "$1" ] || return 1
-  [ -n "${GR_TEST_FILE_PATTERN-}" ] || return 1
+# gr__tests_record_reason <file> — 0, printing nothing, when the per-file record
+# is readable: exact header, last line `end`, every row five fields with a
+# relative file, status pass|fail and numeric counts, and a file outside
+# GR_TEST_FILE_PATTERN only with 0 tests and 0 failed. Otherwise 1, printing one
+# line naming the first check that failed. The only copy of these checks.
+gr__tests_record_reason() {
+  if [ ! -f "${1-}" ] || [ ! -r "$1" ]; then
+    printf 'not a readable file\n'
+    return 1
+  fi
+  if [ -z "${GR_TEST_FILE_PATTERN-}" ]; then
+    printf 'no test-file pattern is set\n'
+    return 1
+  fi
   GR__PAT="$GR_TEST_FILE_PATTERN" awk -F'\t' '
+    function bad(msg) { print msg; exit 1 }
     { line[NR] = $0 }
     END {
-      if (NR < 2) exit 1
-      if (line[1] != "file\tstatus\tseconds\ttests\tfailed") exit 1
-      if (line[NR] != "end") exit 1
+      if (line[1] != "file\tstatus\tseconds\ttests\tfailed") bad("first line is not the header")
+      if (NR < 2 || line[NR] != "end") bad("last line is not end")
       pat = ENVIRON["GR__PAT"]
       for (i = 2; i < NR; i++) {
-        if (split(line[i], f, "\t") != 5) exit 1
-        if (f[1] !~ pat || f[1] ~ /^\// || f[1] ~ /(^|\/)\.\.?(\/|$)/ || f[1] ~ / /) exit 1
-        if (f[2] != "pass" && f[2] != "fail") exit 1
-        if (f[3] !~ /^[0-9]+(\.[0-9]+)?$/ || f[4] !~ /^[0-9]+$/ || f[5] !~ /^[0-9]+$/) exit 1
+        if (split(line[i], f, "\t") != 5) bad("line " i ": not five tab-separated fields")
+        if (f[1] ~ /^\// || f[1] ~ /(^|\/)\.\.?(\/|$)/ || f[1] ~ / /) bad("line " i ": " f[1] " is absolute, has a . or .. segment, or contains a space")
+        if (f[2] != "pass" && f[2] != "fail") bad("line " i ": status " f[2] " is neither pass nor fail")
+        if (f[3] !~ /^[0-9]+(\.[0-9]+)?$/ || f[4] !~ /^[0-9]+$/ || f[5] !~ /^[0-9]+$/) bad("line " i ": seconds, tests or failed is not a number")
+        if (f[1] !~ pat && (f[4] + 0 != 0 || f[5] + 0 != 0)) bad("line " i ": " f[1] " is outside the test-file pattern but carries " f[4] " tests and " f[5] " failed")
       }
       exit 0
     }' "$1" 2>/dev/null
 }
 
+# gr__tests_record_ok <file> — 0 when the per-file record is readable.
+gr__tests_record_ok() {
+  gr__tests_record_reason "${1-}" >/dev/null
+}
+
 # gr_slowest <tests_tsv> <phase> — print the slowest-files section; always 0.
 gr_slowest() {
-  local file="${1-}" phase="${2-}" tab=$'\t'
+  local file="${1-}" phase="${2-}" tab=$'\t' reason
   if [ ! -e "$file" ]; then
     printf '== slowest test files: no per-file record (no record was written) ==\n'
     return 0
   fi
-  if ! gr__tests_record_ok "$file"; then
-    printf '== slowest test files: no per-file record (the record is unreadable) ==\n'
+  if ! reason=$(gr__tests_record_reason "$file"); then
+    printf '== slowest test files: no per-file record (the record is unreadable: %s) ==\n' "$reason"
     return 0
   fi
   printf '== slowest test files (%s run of gate 4), by the sum of each file'"'"'s top-level test durations ==\n' "$phase"
