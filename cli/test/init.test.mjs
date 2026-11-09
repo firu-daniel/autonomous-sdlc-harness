@@ -8811,6 +8811,15 @@ test('the GitHub workflows arrive with execution.target github-actions, and only
     for (const name of names) {
       assert.ok(stdout.includes(name), `the closing report does not name ${name}:\n${stdout}`);
     }
+    assert.ok(stdout.includes('ready_for_review'), `the closing report does not name ready_for_review:\n${stdout}`);
+    assert.ok(
+      stdout.includes('gh secret set HARNESS_GIT_TOKEN'),
+      `the closing report does not print gh secret set HARNESS_GIT_TOKEN:\n${stdout}`,
+    );
+    assert.ok(
+      !stdout.includes("so the job's pushes trigger your own CI"),
+      `the closing report still claims the job's pushes trigger CI when HARNESS_GIT_TOKEN is set:\n${stdout}`,
+    );
     // The pre-push hook init installs refuses this form.
     assert.ok(!stdout.includes('git push origin '), `the closing report prints a push the hook refuses:\n${stdout}`);
   });

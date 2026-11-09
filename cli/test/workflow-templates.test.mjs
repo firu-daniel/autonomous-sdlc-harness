@@ -5,20 +5,29 @@
  * sends, with `action`'s options exactly `run`, `pause`, `warm` and `stop`; a job only for `run`
  * and for `warm`, so `pause` and `stop` start none, except the `wrong-ref` job, which fails a `run`
  * or `pause` whose `github.ref_name` is not its `branch` input, reading both only through its step's
- * `env:`, while the `run` and `collect` jobs' `if:` require that ref and that input to agree;
- * the `collect` job after `run`, under `!cancelled()`,
+ * `env:`, while the `open`, `run`, `deliver` and `collect` jobs' `if:` require that ref and that input
+ * to agree; `open` only when `chain` is 0, `run` `needs: open`, `deliver` `needs: run` and `collect`
+ * `needs: [run, deliver]`, the last three under `!cancelled()`;
+ * the `collect` job,
  * in the `harness-review-<branch>` group with `cancel-in-progress: false`, checking out the default
  * branch rather than `inputs.branch`, reading no secret and running
  * `remote-run.sh collect` alone; the `run-name` title the pause poll and
  * `continue` / `poll` match runs by; the `runs-on` line; `permissions: {}` at workflow level and
- * each job's own grants exactly — `wrong-ref` none, `run` and `collect` `contents`, `actions`,
- * `issues` and `pull-requests`, each `write`, and `warm` `contents: read`; the `Open the pull request and report`
- * step running `remote-run.sh deliver` after `Upload the state bundle` and before `Continue, wait
- * or stop`, `continue-on-error: true`, with `HARNESS_PR_TOKEN` drawn from `secrets.HARNESS_GIT_TOKEN`
- * through `env:`; the `run` job's `Open the draft pull request` step running `remote-run.sh open`
- * after `Restore the previous job's state` and before `Run the harness`, its `if:` exactly
- * `env.HARNESS_STOPPED != '1' && inputs.chain == 0`, `continue-on-error: true`, the same
- * `HARNESS_PR_TOKEN` through `env:` and no expression in its `run:` line; the cancelled-job step calling `remote-run.sh report failed`; every GitHub
+ * each job's own grants exactly — `wrong-ref` none, `open` `contents: read`, `issues` and
+ * `pull-requests` `write`, `run` and `collect` `contents`, `actions`, `issues` and `pull-requests`,
+ * each `write`, `deliver` `contents: read`, `actions: read`, `issues` and `pull-requests` `write`,
+ * and `warm` `contents: read`; the `deliver` job's last step, `Open the pull request and report`,
+ * running `remote-run.sh deliver` after `Download the state bundle`, which downloads
+ * `STATE_ARTIFACT_NAME` and exits 0 with one `::notice::` line when it cannot,
+ * `continue-on-error: true`, with `HARNESS_PR_TOKEN` drawn from `secrets.HARNESS_GIT_TOKEN`
+ * through `env:`; the `open` job's last step, `Open the draft pull request`, running
+ * `remote-run.sh open`, its `if:` exactly `env.HARNESS_STOPPED != '1'`, `continue-on-error: true`,
+ * the same `HARNESS_PR_TOKEN` through `env:` and no expression in its `run:` line; no line of the
+ * `run` job naming `HARNESS_GIT_TOKEN` or `HARNESS_PR_TOKEN`; the `run` job's `Store the push
+ * credential outside the checkout` step right after `Set the git identity`, before `Bootstrap the
+ * checkout` and `Restore the previous job's state`, and `Erase the push credential` its last step,
+ * under `always()` and `continue-on-error: true`; the `open` and `deliver` checkouts the default
+ * branch; the cancelled-job step calling `remote-run.sh report failed`; every GitHub
  * expression spaced after its braces and `{{cliVersion}}` the only template token, so the CLI's
  * renderer (`cli/src/core/templating.ts`) sees nothing else; no input or secret expression inside a
  * `run:` block (script injection); `continue` under `!cancelled()` and the upload and final push
@@ -29,8 +38,8 @@
  * `cli/src/commands/doctor.ts` → `REMOTE_JOB_FLAG` declares it, which that module does not export.
  * `Push the branch` keeps its `always()` condition and turns each refusing or given-up push line into
  * an `::error::` annotation and a job-summary line, exiting 0.
- * The run-actor gate: the first step of `run` and of `collect`, its `run:` body identical in both and
- * no `secrets.` step of `run` before it, both jobs' `env:` passing `RUN_ACTORS_VARIABLE` from
+ * The run-actor gate: the first step of `open`, `run`, `deliver` and `collect`, its `run:` body
+ * identical in all four and no `secrets.` step of any of them before it, each job's `env:` passing `RUN_ACTORS_VARIABLE` from
  * `vars.`, each gate step's `env:` exactly `IN_TRIGGERING_ACTOR`, `IN_OWNER` and `IN_OWNER_TYPE`; and
  * the body, run under `bash -e -o pipefail`, passing `github-actions[bot]`, a listed login, `*` and the
  * owner of a user-owned repository under an empty list, and refusing every other actor with an
@@ -99,7 +108,8 @@
  * branch, with `# <action> v<major>.<minor>.<patch>` on the line directly above it, naming the same
  * action; the `# ACTION PINS.` header names exactly the set of those action-and-version pairs, so a pin
  * the file dropped or a bump the header forgot fails. The checkout credential: `persist-credentials:
- * false` on the `warm` checkout alone, every other checkout keeping it because its job pushes or, for
+ * false` on exactly the checkouts `CREDENTIAL_SHAPES` lists unpersisted — `harness-run.yml`'s `run`
+ * and `warm` — every other checkout keeping it because its job pushes or fetches with it or, for
  * `poll`, runs `git ls-remote` against origin, and a `# THE CHECKOUT CREDENTIAL.` block
  * (`# THE CHECKOUT.` in `harness-trigger.yml`) naming why; and no `actions/upload-artifact` step
  * carrying `.git/config` off the runner — `harness-run.yml`'s path under `${{ runner.temp }}`,
@@ -218,7 +228,9 @@ test('only run and warm start a job, and pause only a failing one from the wrong
   const jobIfs = LINES.filter((l) => /^ {4}if: /.test(l)).map((l) => l.trim());
   assert.deepEqual(jobIfs, [
     "if: (inputs.action == 'run' || inputs.action == 'pause') && github.ref_name != inputs.branch",
-    "if: inputs.action == 'run' && github.ref_name == inputs.branch",
+    "if: inputs.action == 'run' && github.ref_name == inputs.branch && inputs.chain == 0",
+    "if: ${{ !cancelled() && inputs.action == 'run' && github.ref_name == inputs.branch }}",
+    "if: ${{ inputs.action == 'run' && !cancelled() && github.ref_name == inputs.branch }}",
     "if: ${{ inputs.action == 'run' && !cancelled() && github.ref_name == inputs.branch }}",
     "if: inputs.action == 'warm'",
   ]);
@@ -245,7 +257,7 @@ test('the collect job follows run unless cancelled, shares the review group, rea
   assert.notEqual(start, -1, 'harness-run.yml carries a collect job');
   const block = blockUnder(start);
   const text = block.join('\n');
-  assert.ok(block.includes('    needs: run'), text);
+  assert.ok(block.includes('    needs: [run, deliver]'), text);
   assert.match(text, /^ {4}if: .*!cancelled\(\)/m);
   const at = block.findIndex((l) => /^ {4}concurrency:$/.test(l));
   assert.notEqual(at, -1, 'the collect job declares a concurrency group');
@@ -314,9 +326,12 @@ function jobEnv(job) {
 }
 
 const GATE_STEPS = {
+  open: `Refuse an actor not on ${RUN_ACTORS_VARIABLE} before opening`,
   run: `Refuse an actor not on ${RUN_ACTORS_VARIABLE}`,
+  deliver: `Refuse an actor not on ${RUN_ACTORS_VARIABLE} before delivering`,
   collect: `Refuse an actor not on ${RUN_ACTORS_VARIABLE} before collecting`,
 };
+const GATED_JOBS = Object.keys(GATE_STEPS);
 
 function gateBody(job) {
   const [first] = jobSteps(job);
@@ -326,21 +341,22 @@ function gateBody(job) {
   return bodies[0];
 }
 
-test('the run-actor gate is the first step of run and collect, identical in both, before any secret', () => {
-  assert.equal(gateBody('run'), gateBody('collect'));
+test('the run-actor gate is the first step of open, run, deliver and collect, identical in all four, before any secret', () => {
+  for (const job of GATED_JOBS) assert.equal(gateBody(job), gateBody('run'), `the ${job} job's gate is run's, byte for byte`);
   assert.ok(!gateBody('run').includes('${{'), 'no expression inside the gate body');
   assert.ok(
     gateBody('run').includes('docs/remote-execution.md, section 7 step 4, and section 11'),
     'the refusal points at the allow-list setup and the security section',
   );
   assert.ok(!gateBody('run').includes('section 9'), 'the refusal no longer points at section 9');
-  const runSteps = jobSteps('run');
-  const firstSecret = runSteps.findIndex((s) => s.join('\n').includes('secrets.'));
-  assert.ok(firstSecret > 0, 'no step of run reading a secret comes before the gate');
+  for (const job of ['open', 'run', 'deliver']) {
+    const firstSecret = jobSteps(job).findIndex((s) => s.join('\n').includes('secrets.'));
+    assert.ok(firstSecret > 0, `no step of ${job} reading a secret comes before the gate`);
+  }
 });
 
 test('the run-actor gate reads the list from vars and the actor and owner through its own env', () => {
-  for (const job of ['run', 'collect']) {
+  for (const job of GATED_JOBS) {
     assert.ok(
       jobEnv(job).includes(`${RUN_ACTORS_VARIABLE}: \${{ vars.${RUN_ACTORS_VARIABLE} }}`),
       `the ${job} job passes ${RUN_ACTORS_VARIABLE}`,
@@ -431,48 +447,149 @@ test('the run-name title, the runner line and the permissions', () => {
   const pushing = ['contents: write', 'actions: write', 'issues: write', 'pull-requests: write'];
   assertPermissions(LINES, {
     'wrong-ref': ['{}'],
+    open: ['contents: read', 'issues: write', 'pull-requests: write'],
     run: pushing,
+    deliver: ['contents: read', 'actions: read', 'issues: write', 'pull-requests: write'],
     collect: pushing,
     warm: ['contents: read'],
   });
 });
 
-test('deliver opens the pull request and reports, after the upload and before continue, never failing the job', () => {
-  const names = steps().map((s) => /- name: (.*)$/m.exec(s)[1]);
+/** One job's steps with their names, and a lookup that fails on a missing name. */
+function namedJobSteps(job) {
+  const list = jobSteps(job);
+  const names = list.map((s) => /- name: (.*)$/.exec(s[0])[1]);
   const at = (name) => {
     const i = names.indexOf(name);
-    assert.notEqual(i, -1, `a step is named ${name}`);
+    assert.notEqual(i, -1, `the ${job} job has a step named ${name}`);
     return i;
   };
+  return { list, names, at };
+}
+
+/** One job's own top-level `<key>:` value, or `undefined` when the job does not set it. */
+function jobKey(job, key) {
+  const line = blockUnder(jobStart(job)).find((l) => indentOf(l) === 4 && l.trim().startsWith(`${key}:`));
+  return line === undefined ? undefined : line.trim().slice(key.length + 1).trim();
+}
+
+test('the deliver job opens the pull request and reports as its last step, after the bundle download, never failing the job', () => {
+  const { list, names, at } = namedJobSteps('deliver');
   const deliver = at('Open the pull request and report');
-  assert.ok(at('Upload the state bundle') < deliver);
-  assert.ok(deliver < at('Continue, wait or stop'));
-  const step = steps()[deliver];
-  assert.match(ifOf(step), /!cancelled\(\)/);
+  assert.equal(deliver, list.length - 1, 'the report is the deliver job\'s last step');
+  assert.equal(at('Download the state bundle') + 1, deliver, 'the bundle is downloaded right before the report');
+  assert.ok(!jobSteps('run').some((s) => s[0].includes('Open the pull request and report')), 'the run job no longer reports');
+  const step = list[deliver].join('\n');
+  assert.equal(ifOf(step), "env.HARNESS_STOPPED != '1'");
   assert.match(step, /^\s*continue-on-error: true$/m);
   assert.match(step, /^\s*HARNESS_PR_TOKEN: \$\{\{ secrets\.HARNESS_GIT_TOKEN \}\}$/m);
-  const [body] = runBodies(step.split('\n'));
+  const [body] = runBodies(list[deliver]);
   assert.equal(body, 'bash "$SCRIPTS_DIR/remote-run.sh" deliver "$HARNESS_INPUT_BRANCH" "$RUNNER_TEMP/harness-state"');
+  assert.deepEqual(names.slice(0, 2), [GATE_STEPS.deliver, 'Stop when HARNESS_REMOTE_STOP is set before delivering']);
 });
 
-test('open opens the draft pull request only in a person-started job, after the restore and before the harness, never failing the job', () => {
-  const runSteps = jobSteps('run');
-  const names = runSteps.map((s) => /- name: (.*)$/.exec(s[0])[1]);
-  const at = (name) => {
-    const i = names.indexOf(name);
-    assert.notEqual(i, -1, `the run job has a step named ${name}`);
-    return i;
-  };
+test('the deliver job downloads STATE_ARTIFACT_NAME, and a missing bundle is one notice and exit 0', () => {
+  const { list, at } = namedJobSteps('deliver');
+  const step = list[at('Download the state bundle')];
+  const body = dedent(runBodies(step)[0]);
+  assert.ok(
+    body.includes(`gh run download "$GITHUB_RUN_ID" --name ${STATE_ARTIFACT_NAME} --dir "$RUNNER_TEMP/harness-state"`),
+    body,
+  );
+  for (const [code, notices] of [[0, 0], [1, 1]]) {
+    const dir = mkdtempSync(join(tmpdir(), 'deliver-download-'));
+    try {
+      const bin = join(dir, 'bin');
+      mkdirSync(bin);
+      writeFileSync(join(bin, 'gh'), `#!/bin/sh\nexit ${code}\n`, { mode: 0o755 });
+      const r = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', body], {
+        env: { ...process.env, [MAIN_REPO_ANCHOR_VARIABLE]: '', PATH: `${bin}:${process.env.PATH}`, RUNNER_TEMP: dir, GITHUB_RUN_ID: '1' },
+        encoding: 'utf8',
+      });
+      assert.equal(r.error, undefined);
+      assert.equal(r.status, 0, `gh exiting ${code}: ${r.stdout}${r.stderr}`);
+      assert.equal(r.stdout.split('\n').filter((l) => l.startsWith('::notice::')).length, notices, r.stdout);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('the open job opens the draft pull request only in a person-started job, before run, never failing the job', () => {
+  const { list, names, at } = namedJobSteps('open');
   const open = at('Open the draft pull request');
-  assert.ok(at("Restore the previous job's state") < open);
-  assert.ok(open < at('Run the harness'));
-  const step = runSteps[open].join('\n');
-  assert.equal(ifOf(step), "env.HARNESS_STOPPED != '1' && inputs.chain == 0");
+  assert.equal(open, list.length - 1, 'the open step is the open job\'s last step');
+  assert.ok(!jobSteps('run').some((s) => s[0].includes('Open the draft pull request')), 'the run job no longer opens');
+  assert.equal(jobKey('open', 'if'), "inputs.action == 'run' && github.ref_name == inputs.branch && inputs.chain == 0");
+  const step = list[open].join('\n');
+  assert.equal(ifOf(step), "env.HARNESS_STOPPED != '1'");
   assert.match(step, /^\s*continue-on-error: true$/m);
   assert.match(step, /^\s*HARNESS_PR_TOKEN: \$\{\{ secrets\.HARNESS_GIT_TOKEN \}\}$/m);
-  const [body] = runBodies(runSteps[open]);
-  assert.ok(body.includes('remote-run.sh" open "$HARNESS_INPUT_BRANCH"'), body);
-  assert.ok(!body.includes('${{'), 'no expression inside the open step body');
+  const [body] = runBodies(list[open]);
+  assert.equal(body, 'bash "$SCRIPTS_DIR/remote-run.sh" open "$HARNESS_INPUT_BRANCH"');
+  assert.deepEqual(names.slice(0, 2), [GATE_STEPS.open, 'Stop when HARNESS_REMOTE_STOP is set before opening']);
+});
+
+test('open and deliver gate every step after the stop check on it, and share one job-level env', () => {
+  for (const job of ['open', 'deliver']) {
+    const { list, names } = namedJobSteps(job);
+    list.slice(2).forEach((s, i) => assert.equal(ifOf(s.join('\n')), "env.HARNESS_STOPPED != '1'", `${job}: ${names[i + 2]}`));
+  }
+  assert.deepEqual(jobEnv('deliver'), jobEnv('open'));
+  assert.deepEqual(jobEnv('open'), [
+    'GH_TOKEN: ${{ github.token }}',
+    'HARNESS_REMOTE_SLUG: ${{ github.repository }}',
+    'HARNESS_INPUT_BRANCH: ${{ inputs.branch }}',
+    'HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}',
+    `${RUN_ACTORS_VARIABLE}: \${{ vars.${RUN_ACTORS_VARIABLE} }}`,
+  ]);
+});
+
+// The rule: the job that runs the agent never references HARNESS_GIT_TOKEN, so no step of it can
+// hand that token to the session or write it into the checkout.
+test('no line of the run job names HARNESS_GIT_TOKEN or HARNESS_PR_TOKEN', () => {
+  const block = blockUnder(jobStart('run'));
+  assert.ok(block.length > 0);
+  for (const line of block) assert.doesNotMatch(line, /HARNESS_GIT_TOKEN|HARNESS_PR_TOKEN/, line);
+});
+
+test('the run job stores its push credential before anything reaches origin and erases it last', () => {
+  const { list, at } = namedJobSteps('run');
+  const store = at('Store the push credential outside the checkout');
+  assert.equal(store, at('Set the git identity') + 1, 'the credential is stored right after the git identity');
+  for (const later of ["Restore the previous job's state", 'Bootstrap the checkout', 'Run the harness', 'Push the branch']) {
+    assert.ok(store < at(later), `the store precedes ${later}`);
+  }
+  assert.equal(ifOf(list[store].join('\n')), "env.HARNESS_STOPPED != '1'");
+  assert.deepEqual(runBodies(list[store]), ['bash "$SCRIPTS_DIR/remote-run.sh" push-credential store']);
+
+  const erase = at('Erase the push credential');
+  assert.equal(erase, list.length - 1, 'the erase is the run job\'s last step');
+  for (const earlier of ['Push the branch', 'Save the state bundle', 'Upload the state bundle', 'Continue, wait or stop', 'Notify a cancelled job']) {
+    assert.ok(at(earlier) < erase, `${earlier} precedes the erase`);
+  }
+  assert.equal(ifOf(list[erase].join('\n')), "always() && env.SCRIPTS_DIR != ''");
+  assert.equal(stepKey(list[erase], 'continue-on-error'), 'true');
+  assert.deepEqual(runBodies(list[erase]), ['bash "$SCRIPTS_DIR/remote-run.sh" push-credential erase']);
+});
+
+test('run needs open, deliver needs run, and collect needs run and deliver', () => {
+  assert.equal(jobKey('run', 'needs'), 'open');
+  assert.match(jobKey('run', 'if'), /!cancelled\(\)/, 'a skipped open does not skip run');
+  assert.equal(jobKey('deliver', 'needs'), 'run');
+  assert.match(jobKey('deliver', 'if'), /!cancelled\(\)/);
+  assert.equal(jobKey('collect', 'needs'), '[run, deliver]');
+});
+
+test('the open and deliver jobs check out the default branch with the job token', () => {
+  for (const job of ['open', 'deliver']) {
+    const block = blockUnder(jobStart(job));
+    assert.deepEqual(
+      block.filter((l) => /^\s+(ref|token): /.test(l)).map((l) => l.trim()),
+      ['ref: ${{ github.event.repository.default_branch }}', 'token: ${{ github.token }}'],
+      `the ${job} checkout`,
+    );
+  }
 });
 
 test('a cancelled job reports failed through remote-run.sh report', () => {
@@ -895,9 +1012,22 @@ const CREDENTIAL_SHAPES = [
   {
     file: WORKFLOW_RUN_FILE,
     lines: LINES,
-    persists: { run: true, collect: true, warm: false },
+    persists: { open: true, run: false, deliver: true, collect: true, warm: false },
     heading: 'THE CHECKOUT CREDENTIAL.',
-    names: ['`run`', '`collect`', '`warm`', 'push-branch.sh', 'persist-credentials: false'],
+    names: [
+      '`open`',
+      '`run`',
+      '`deliver`',
+      '`collect`',
+      '`warm`',
+      'push-branch.sh',
+      'persist-credentials: false',
+      '~/.git-credentials',
+      '`store --file <path>`',
+      'sandbox.credentials.files',
+      'S1 (runner)',
+      'S2 (runner)',
+    ],
     uploads: 'runner-temp',
   },
   {
@@ -927,7 +1057,7 @@ const CREDENTIAL_SHAPES = [
 ];
 
 for (const { file, lines, persists, heading, names, uploads } of CREDENTIAL_SHAPES) {
-  test(`${file}: persist-credentials: false on the warm checkout alone, each persisted one argued, no upload carrying .git/config`, () => {
+  test(`${file}: persist-credentials: false on exactly the listed checkouts, each persisted one argued, no upload carrying .git/config`, () => {
     const checkouts = usesOf('actions/checkout', lines);
     assert.deepEqual(checkouts.map((at) => jobOf(at, lines)), Object.keys(persists), 'one checkout per listed job');
     for (const at of checkouts) {

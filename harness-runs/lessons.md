@@ -66,6 +66,8 @@ _[Add headings of your own as themes emerge — one per recurring theme — and 
 
 - **An unsandboxed script takes its mode and the path of every trust input from a record the session cannot write, such as the run registry, and never from the argument's shape or an environment variable.** _(taught by: fix_linux_detached_gate_run)_
 
+- **Refuse what an unattended run must never do in every execution mode, local and job alike; never gate that refusal on the one mode whose credential happens to be unable to do it.** _(taught by: fix_run_job_credential_exposure)_
+
 ## Remote and branch-scoped operations
 
 - **A command scoped to one branch reads and writes that branch's state only: never create a working copy, record or sync for any other branch as a side effect.** _(taught by: feat_forge_run_triggers)_
