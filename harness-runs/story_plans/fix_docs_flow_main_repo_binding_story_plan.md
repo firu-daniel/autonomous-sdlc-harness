@@ -28,7 +28,7 @@ This branch changes prose only, plus one contract test. An unattended run gets o
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_docs_flow_main_repo_binding/task_<K>_plan.md`.
 
 1. [x] **Task 1** — Give the plan and docs engine commands a `<MAIN_REPO>` row and the literal push spelling _(layer: plugin)_ _(points: 15)_
-2. [ ] **Task 2** — Bind `<MAIN_REPO>` in the docs fork's table and point the docs phase at the main checkout's wrappers _(layer: plugin)_ _(points: 10)_
+2. [x] **Task 2** — Bind `<MAIN_REPO>` in the docs fork's table and point the docs phase at the main checkout's wrappers _(layer: plugin)_ _(points: 10)_
 3. [ ] **Task 3** — Move `<MAIN_REPO>` into a row in both orchestration forks and spell the post-commit push literally _(layer: plugin)_ _(points: 15)_
 4. [ ] **Task 4** — Fix the planning forks' "Push after the commit" prose and bind `<MAIN_REPO>` in the fix-plan fork's table _(layer: plugin)_ _(points: 15)_
 5. [ ] **Task 5** — Point the committer's `push` argument, the prompt-injection screen's row and the flow document's push at the main checkout's copy _(layer: plugin)_ _(points: 10)_
