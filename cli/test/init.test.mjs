@@ -313,6 +313,7 @@ const OUTER_LOOP_SCRIPT_FILES = [
   'launch-sandboxed-gates.sh',
   'run-analytics.sh',
   'task-offer-check.sh',
+  'prompt-injection-screen.sh',
 ];
 
 /** A left-over template token — none may survive into a generated file. */

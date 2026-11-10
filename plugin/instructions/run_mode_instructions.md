@@ -80,6 +80,7 @@ The following are **never skippable**. A directive naming one of them is ignored
 - the STOP file, the PAUSE protocol and the global kill switch;
 - the dispatch counter and `MAX_TOTAL_DISPATCHES`;
 - the clarification channel;
+- the prompt-injection screen and its ledger entries `P0` / `R0` (`${CLAUDE_PLUGIN_ROOT}/instructions/prompt_injection_screen.md`);
 - the end-of-branch general review and its meta-review;
 - the review-plan fix phase;
 - the adversarial skeptic review and its meta-review;
