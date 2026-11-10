@@ -1,6 +1,6 @@
 # The upstream report: Linux sandbox placeholders for denied absent paths
 
-**Who reads this:** the maintainer filing this report on anthropics/claude-code, and anyone checking whether a later Claude Code version lifts the harness's Linux interim position. It is a **draft to file, not a filed issue**: until an issue number is recorded here, nothing upstream has been asked. The interim position it would lift is `docs/cli.md` §6's. It owns the report's text and its asks; the measurements it quotes are recorded in `docs/sandbox-verification.md` (§0 *The probe's first Linux run (2026-10-29)*, §0 *The targeted check (2026-10-29)*, §5 F9, §5 AP2, §5 *Session 1* and AP7, §5 *The round's head, taken 2026-10-31*, and §8 GW1 and GW2), and that document stays their record.
+**Who reads this:** the maintainer filing this report on anthropics/claude-code, and anyone checking whether a later Claude Code version lifts the harness's Linux interim position. It is a **draft to file, not a filed issue**: until an issue number is recorded here, nothing upstream has been asked. The interim position it would lift is `docs/sandbox-record.md`, residual 12. It owns the report's text and its asks; the measurements it quotes are recorded in `docs/sandbox-verification.md` (§0 *The probe's first Linux run (2026-10-29)*, §0 *The targeted check (2026-10-29)*, §5 F9, §5 AP2, §5 *Session 1* and AP7, §5 *The round's head, taken 2026-10-31*, and §8 GW1 and GW2), and that document stays their record.
 
 Everything from `## Report` to the end of `### Asks` is written to be pasted as is. `<clone>` is the run copy, a `git clone --shared` of the main checkout, and `<main>` is the main checkout; both stand in for absolute paths under the container user's home directory.
 
@@ -153,7 +153,7 @@ As of 2026-10-29, none of #94008, #81602 or #78072 names a fixed version. #26722
 
 ## The harness's interim position
 
-`docs/cli.md` §6 states the whole position; this is its one-line summary. On Linux, the run copy's three `.git` trust files — `.git/commondir`, `.git/config.worktree` and `.git/objects/info/http-alternates` — are named by no `denyWrite` entry and no `Edit` deny rule, exact or glob, and are refused at launch and by the wrappers rather than by the sandbox, an empty regular `config.worktree` and `http-alternates` accepted, while the base profile's glob entries and `Edit` rules for them are re-rooted at every other sibling clone by exact path; leftovers are swept before the first reader that a leftover breaks, the watcher's own start included; and one run per repository runs at a time.
+`docs/sandbox-record.md`, residual 12, states the whole position; this is its one-line summary. On Linux, the run copy's three `.git` trust files — `.git/commondir`, `.git/config.worktree` and `.git/objects/info/http-alternates` — are named by no `denyWrite` entry and no `Edit` deny rule, exact or glob, and are refused at launch and by the wrappers rather than by the sandbox, an empty regular `config.worktree` and `http-alternates` accepted, while the base profile's glob entries and `Edit` rules for them are re-rooted at every other sibling clone by exact path; leftovers are swept before the first reader that a leftover breaks, the watcher's own start included; and one run per repository runs at a time.
 
 What lets the harness drop each part:
 

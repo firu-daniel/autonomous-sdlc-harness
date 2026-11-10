@@ -2834,7 +2834,7 @@ function reportGithubSteps(
   command(`gh variable set ${RUN_ACTORS_VARIABLE} --body <login,...>`);
   ctx.report.info('');
   ctx.report.info(
-    `3. Optionally set ${PUSH_URL_SECRET} to receive push notifications from the job, and ${GIT_TOKEN_SECRET} — a personal or App token — so the job's pushes trigger your own CI, which pushes made with the job's built-in token never do:`,
+    `3. Optionally set ${PUSH_URL_SECRET} to receive push notifications from the job, and ${GIT_TOKEN_SECRET} — a personal or App token — which opens a run's draft pull request and marks it ready for review at the end of every run, so your own CI runs on the pull request's opened and ready_for_review events. Pushes made by the job never trigger CI, whatever token is set, so your CI workflow must list ready_for_review among its pull_request types to run on a run's final commit:`,
   );
   command(`gh secret set ${PUSH_URL_SECRET}`);
   command(`gh secret set ${GIT_TOKEN_SECRET}`);

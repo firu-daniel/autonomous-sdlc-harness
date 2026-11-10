@@ -1,6 +1,6 @@
 # evals/
 
-**This directory has two tenants, and only one of them answers to a runner.**
+**This directory has three tenants, and only one of them answers to a runner.**
 
 - `plan-shape/` — a graded **case** for the native eval runner, which is **roadmap item 8**. It scores
 what a session produced against a written rubric in `plan-shape/graders/`, and it waits: the runner is
@@ -13,8 +13,11 @@ Its own contract is `evals/docs-retrieval/README.md` and its figures are
 `docs/retrieval-eval-results.md`, where `## The decision, applied to the real catalog` records its
 verdict against agent navigation, **withdrawn**, and the maintainer's decision to keep the tool
 opt-in rather than withdrawing it.
+- `prompt-injection-reviewer/` — a hand-run fixture set for the prompt-injection screen's agent,
+answering to no runner and run by a maintainer. Its contract is its own
+`evals/prompt-injection-reviewer/README.md`.
 
-So what separates them is both what is measured and what it waits on: one grades an agent's output
+So what separates the first two is both what is measured and what it waits on: one grades an agent's output
 against a rubric and is gated until the runner ships; the other measures shipped code against labels
 and has its numbers today.
 Every paragraph that follows is `plan-shape/`'s alone, down to the closing one, which is true of both.

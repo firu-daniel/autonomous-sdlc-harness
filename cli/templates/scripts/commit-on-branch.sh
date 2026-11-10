@@ -15,10 +15,12 @@
 # literal allow entry as well. An invocation of a SCRIPT PATH has neither
 # problem: the generated permission profile allow-lists
 # `bash <scripts_dir>/commit-on-branch.sh` in literal forms, and the commit
-# guard's parser never matches it. A run in a run copy — a clone, or a legacy
-# linked worktree — calls the MAIN checkout's copy, `bash
+# guard's parser never matches it. A run in a run copy — a clone — calls the
+# MAIN checkout's copy, `bash
 # <main>/<scripts_dir>/commit-on-branch.sh --repo <run copy> …` (WHY THE MAIN
-# CHECKOUT'S COPY RUNS OUTSIDE THE SANDBOX below); from a run copy the
+# CHECKOUT'S COPY RUNS OUTSIDE THE SANDBOX below); a session a person runs in a
+# linked worktree they made by hand with `git worktree add` calls the main
+# checkout's copy the same way, with `--repo <worktree>`. From a run copy the
 # script-allowlist guard does not vouch for that copy, so the profile's literal
 # `allow` entry is its only grant, and MESSAGE ARGUMENTS below states what that
 # costs the caller. Either way the caller's command line
@@ -30,7 +32,7 @@
 # permission profile write-denies the main checkout's whole `.git`, so a
 # sandboxed commit in a clone lands on the clone's own ref alone
 # (docs/sandbox-verification.md -> CL4; the whole-`.git` deny itself is row
-# CS2, owed). A legacy worktree run is closed one step earlier: a sandboxed git
+# CS2, pass). A hand-made linked worktree is closed one step earlier: a sandboxed git
 # cannot write a linked worktree's record, `<main>/.git/worktrees/<name>/`:
 # `git add` and `git commit` there fail with `Operation not permitted` on
 # `index.lock` (docs/sandbox-verification.md -> G1, G2 and F1, measured on
@@ -40,7 +42,7 @@
 # TARGET IS NOT TRUSTED to NO FILTER DRIVER RUNS is what that access costs. A
 # run copy's own `commit-on-branch.sh` sits in a sandbox-writable tree and is
 # never excluded: in a clone it cannot move the main checkout's branch, and in
-# a worktree it still fails on the record.
+# a hand-made linked worktree it still fails on the record.
 #
 # SAFETY-CRITICAL CONSEQUENCE. Not reaching the commit branch-guard also means
 # not reaching its protected-branch refusal, so this script MUST make that
@@ -247,16 +249,17 @@
 #
 # Usage: commit-on-branch.sh [--repo <repo-dir>] <path>... -- <subject> [<body-line>...]
 #        bash <main checkout>/<scripts_dir>/commit-on-branch.sh --repo <run copy> <path>... -- <subject>
-#   --repo <repo-dir>  the main checkout or a run copy (a clone, or a legacy
-#                      worktree) to operate in (default: $PWD)
+#   --repo <repo-dir>  the main checkout, a run copy (a clone), or a linked
+#                      worktree made by hand, to operate in (default: $PWD)
 #   <path>...          explicit paths to commit (before `--`); missing paths warn+skip
 #   --                 separates the path list from the message lines
 #   <subject>          first token after `--` — the commit subject; see
 #                      MESSAGE ARGUMENTS for the bytes it may not carry
 #   <body-line>...     each remaining token — one additional body paragraph,
 #                      under that same constraint
-#   The second form, the main checkout's copy aimed at a worktree, is the one
-#   the permission profile runs unsandboxed.
+#   The second form, the main checkout's copy aimed at a run copy or a
+#   hand-made linked worktree, is the one the permission profile runs
+#   unsandboxed.
 #
 # REPRO — reproduce any decision by hand, against a throwaway fixture:
 #
@@ -387,6 +390,17 @@ if ! main_top="$(hr_wrapper_main_of "$script_dir")"; then
   echo "commit-on-branch.sh: refusing to commit: cannot place this script in a main checkout (its .git is a symbolic link, or a directory holding a commondir)" >&2
   exit 1
 fi
+# Fail closed: a configuration that cannot be read is a branch that cannot be
+# judged. Loaded unsubstituted, so the clone arm's registry lookup, the pin and
+# the protected-branch decision below read the warmed cache. It runs ahead of
+# the target check, so a clone target gets this refusal rather than the clone
+# arm's registry sentence, and ahead of the pin, so it is not the pin's either.
+# It reads only `<main_top>/harness.config.json` and makes no git call.
+if ! hr_config_load "$main_top"; then
+  echo "commit-on-branch.sh: cannot resolve '$main_top/harness.config.json' — refusing to commit" >&2
+  echo "  (no configuration there, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)" >&2
+  exit 1
+fi
 if ! hr_wrapper_target_check_var "$main_top" "$top_nogit"; then
   echo "commit-on-branch.sh: refusing to commit: $HR_TARGET_REFUSAL" >&2
   exit 1
@@ -395,15 +409,6 @@ wt_gitdir="$HR_TARGET_GITDIR"
 # A CLONE IS A TARGET TOO (header): the clone arm judged its configuration.
 if [ "$HR_TARGET_KIND" != clone ] && ! hr_worktree_config_check_var "$top_nogit"; then
   echo "commit-on-branch.sh: refusing to commit: $HR_WT_CONFIG_REFUSAL" >&2
-  exit 1
-fi
-# Fail closed: a configuration that cannot be read is a branch that cannot be
-# judged. Loaded here, unsubstituted, so the pin and the protected-branch
-# decision below read the warmed cache, and so this is the refusal a broken
-# main configuration gets rather than the pin's.
-if ! hr_config_load "$main_top"; then
-  echo "commit-on-branch.sh: cannot resolve '$main_top/harness.config.json' — refusing to commit" >&2
-  echo "  (no configuration there, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)" >&2
   exit 1
 fi
 if ! hr_pinned_hooks_path "$main_top"; then

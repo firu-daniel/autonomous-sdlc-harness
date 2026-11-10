@@ -375,7 +375,7 @@
     "sandbox": {
       "type": "object",
       "additionalProperties": false,
-      "description": "The unattended run's Bash sandbox. Read by init, which renders it into the unattended permission profile, and by doctor, which grades that profile against it. Absent means the sandbox is on and this repository adds no domain to its network allowlist.",
+      "description": "The unattended run's Bash sandbox. Read by init, which renders it into the unattended permission profile, and by doctor, which grades that profile against it. It also carries passEnv, the environment-variable names a local unattended session keeps, which the run watcher reads at each launch. Absent means the sandbox is on, this repository adds no domain to its network allowlist and a local session keeps only the watcher's base set.",
       "properties": {
         "allowedDomains": {
           "type": "array",
@@ -412,6 +412,17 @@
               "pattern": "\\S",
               "description": "Why every unattended command runs unsandboxed. Must hold more than whitespace: an opt-out nobody explained is not one taken."
             }
+          }
+        },
+        "passEnv": {
+          "type": "array",
+          "default": [],
+          "uniqueItems": true,
+          "description": "The environment-variable names a local unattended session keeps beyond the run watcher's base set, read by the watcher from the main checkout at each launch and resume; no effect in a GitHub Actions job. A name in the watcher's credential strip set is removed whatever this lists.",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+            "description": "A bare environment-variable name: a letter or underscore, then letters, digits and underscores, with no '=', wildcard or '$'. This pattern must match SANDBOX_PASS_ENV_PATTERN in cli/src/config/model.ts."
           }
         }
       }

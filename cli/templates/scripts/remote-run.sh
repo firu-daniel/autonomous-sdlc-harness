@@ -40,6 +40,11 @@
 #                 (always 0, 1 only on a usage error: its paragraph)
 #   remote-run.sh control [--needs-agent] [--repo <root>]
 #                 (its own exit map: its paragraph)
+#   remote-run.sh push-credential store|erase   (no --repo: it runs in the
+#                 job's checkout root)
+#                 (store: 0 once the entry and its keys are written, 1 on a
+#                 usage error or when it writes no usable credential; erase:
+#                 always 0, 1 only on a usage error: its paragraph)
 #     0  sent (for stop: the action=stop marker was dispatched, and every
 #        queued, waiting or in-progress `harness run` run of that branch was
 #        asked to cancel, or there was none); for status and fetch: printed
@@ -169,8 +174,9 @@
 # verb because a local round's file exists only on the caller's machine, so no
 # later collection could pick it up. The bundle it reads is
 # downloaded to `sync`'s directory, the one write a refusal makes. The copy: the main
-# checkout's remote record's mirror when its `worktree` (a clone or a legacy
-# linked worktree) exists and is on the branch, never removed; otherwise
+# checkout's remote record's mirror when its `worktree` (a clone) exists and
+# is on the branch, never removed — a mirror that is a linked worktree is not
+# used, since `hr_run_copy_check_var` refuses one; otherwise
 # `create-worktree.sh --existing --no-bootstrap`, a clone at `hr_worktree_dir`,
 # removed on every exit with the local branch it DWIM-created, the registry
 # record it wrote and the registry directory it created, each only when absent
@@ -445,11 +451,29 @@
 # pull request so opened is authored by that token's owner, who therefore
 # cannot request changes on it: use a machine account's token, another
 # reviewer, or a local `branch-user-review` round. A lookup that fails opens
-# nothing. Then the ready flip, with the job's token and never
-# `HARNESS_PR_TOKEN`: a draft gets one `gh pr ready` (flipped), and a refusal
-# is one `::warning::` line naming gh's error (refused); a pull request that is
-# not a draft — no drafts on the plan, or a person marked it ready — gets no
-# call (not a draft) and is left alone. A round's review threads are handled
+# nothing. Then the ready flip, with `HARNESS_PR_TOKEN` when it is set, because
+# a `ready_for_review` made with the job's token starts no workflow and the
+# adopter's CI must run on the final tip: a draft gets one `gh pr ready`
+# (flipped); a refusal with `HARNESS_PR_TOKEN` is one `::warning::` line and
+# one retry with the job's token; a refusal with the job's token is one
+# `::warning::` line naming gh's error (refused, the pull request left a
+# draft). One line names which token made the flip. The event fires only on a
+# draft→ready transition, so with `HARNESS_PR_TOKEN` set a pull request that
+# is not a draft — no drafts on the plan, a person marked it ready, a round's
+# `--undo` refused, a resumed run — is first turned back to a draft with the
+# job's token (`gh pr ready --undo`, one line) and then flipped as a draft is,
+# on every run. The conversion runs under the `pull-requests: write` grant the
+# flip holds, beside `deliver`'s `contents: read`; `round`'s `--undo` and every
+# earlier flip ran beside `contents: write`, so that this grant suffices is
+# unmeasured (`docs/development.md` → roadmap item 35). It starts none
+# of the harness's own workflows (`WORKFLOW_CONTROL_FILE` listens to
+# `pull_request` `closed` only). A refused conversion is one `::warning::` line
+# naming gh's error and saying no `ready_for_review` fires on this tip, so the
+# adopter's CI does not run on it (not a draft, left as it is); a conversion
+# whose flip is then refused, retry included, leaves a draft (refused). With
+# `HARNESS_PR_TOKEN` unset a pull request that is not a draft gets no call (not
+# a draft) and is left alone, since a flip with the job's token would fire
+# nothing. A round's review threads are handled
 # next, after the flip and before the comments, with the job's token, per THE
 # REVIEW-COMMENT LINE below: only when the pull request is known, the
 # highest-numbered round file on origin's tip is the highest-numbered marked
@@ -501,7 +525,8 @@
 # Each names reviewing and requesting changes as the next action, and with
 # `phases.qa` true the local `branch-qa-test` still owed. Then
 # `sdlc-harness: done` on the issue and the pull request, each when known. It
-# writes at most one pull request, one flip, a round's thread replies and
+# writes at most one pull request, one conversion back to a draft, one flip,
+# a round's thread replies and
 # resolves, two comments and those labels, and never pushes. It never fails its caller: every problem, a refused flip
 # included, is one line and exit 0.
 #
@@ -636,8 +661,11 @@
 # `reply` and `clarify` need a non-blank `text`; `reason` is a string. Unknown
 # keys are ignored; an invalid decision is refused, exit 2, naming the first
 # rule broken. Then, once and before any action is answered, a `text` or
-# `answer` holding a saved credential value, or the job's `GH_TOKEN` raw or in
-# the base64 form `actions/checkout` persists, verbatim, is an `::error::` line
+# `answer` holding, verbatim, a saved credential value or a value the
+# library's one credential check records (`hr_credential_values_var`, read by
+# `hr_text_has_credential`) — the job's `GH_TOKEN` and `HARNESS_PR_TOKEN`, raw
+# or in the base64 form `actions/checkout` persists, the persisted extraheader
+# and a stored git credential — is an `::error::` line
 # that never prints it, nothing posted, exit 3. THE ANSWERS, each through `control_post`:
 # `none` posts nothing; `reply` / `clarify` post `@<login>: <text>` — `text`
 # through `JQ_DEF_SANITISE` (`<!--` neutralised, every other `@<login>` but the
@@ -1238,6 +1266,51 @@
 # --json defaultBranchRef`), which may differ from the configured
 # `defaultBranch`: a cache saved there is the one every branch can restore.
 #
+# `push-credential` LETS THE `run` JOB PUSH WITH `github.token` WHILE ITS
+# CHECKOUT PERSISTS NO CREDENTIAL. Job-side for its root, as `open` and
+# `deliver` are, and it takes no `--repo`; it calls no `gh` and reads no
+# configuration. Both actions derive the entry from `GITHUB_SERVER_URL`
+# (default `https://github.com`), whose `https://<host>` gives the host, and
+# `git remote get-url origin`, which must be `https://<host>/<path>` with a
+# host of `[A-Za-z0-9.:-]` and a path of `[A-Za-z0-9_.~/-]`; anything else is
+# one line, nothing written. `store` needs a non-empty `GH_TOKEN` holding no
+# newline, and a store file, `$HOME/.git-credentials` resolved now, that is
+# absolute and of `[A-Za-z0-9_./-]` only, so the helper value never needs
+# quoting; each missing is one line, nothing written. It writes one entry,
+# `protocol=https`, `host`, `path`, `username=x-access-token` and
+# `password=<GH_TOKEN>` fed by `printf` on stdin to `git credential-store
+# --file <store file> store` under `umask 077`, then sets in the checkout's
+# local config `credential.https://<host>.useHttpPath true` and
+# `credential.https://<host>/<path>.helper "store --file <store file>"`.
+# In a job the checkout is the main checkout, whose `.git/` the profile
+# write-protects from the session, so the helper's absolute path is a record
+# the session cannot write, and `push-branch.sh`'s
+# credential scan reads the store file from there, never from `HOME`. One line
+# names the host and path, never the token. `erase` feeds the same fields
+# without the password to `git credential-store --file <store file> erase`,
+# the store file being the path the helper key names when it is `store --file
+# <absolute path>`, else `$HOME/.git-credentials`, then `--unset`s both keys;
+# one line. An entry for the same host with no
+# path, or another path, survives both: git's store matches a path-scoped
+# entry only by its path. A `store` that writes no usable credential is one
+# `::error::` line and exit 1, so the `run` job stops before its session, as a
+# checkout with no credential would; every `erase` failure is one `::warning::`
+# line and exit 0. Both exit 1 on a usage error (no `store|erase`, another
+# word, a further argument or `--repo`).
+#
+# THE PUSH CREDENTIAL STAYS OUT OF THE CHECKOUT. The store file is
+# `~/.git-credentials` because the unattended profile names it in
+# `sandbox.credentials.files`, read-denied to a sandboxed command, and so in
+# its `Read` deny pair for the file tools. That deny is derived from the
+# profile, not measured on this file: the GitHub-hosted runner rows S1 and S2
+# (runner) measured the same mechanism pass on `~/.ssh` only
+# (`docs/sandbox-verification.md` §9; `docs/sandbox-record.md` -> `## 4. The
+# measured results, per leg`, the `credentials` leg), on the hosted
+# `ubuntu-26.04` image only and unverified elsewhere; the direct measurement on
+# `~/.git-credentials`, a sandboxed read and a `Read` of it, is still owed.
+# Every unsandboxed git still reads it: the excluded wrappers, the end-of-job
+# push and this script.
+#
 # WHERE gh RUNS. From the main checkout (`hr_main_repo` of the working
 # directory) unless `--repo <root>` names another, so gh resolves the
 # repository from that checkout's remote. The configuration read is that
@@ -1275,8 +1348,9 @@
 # issue and the pull request, and nothing local. `open` writes its body and
 # comment files under `RUNNER_TEMP` (removed), at most one pull request, its
 # `running` label and one comment on the issue. `deliver` writes its body and
-# comment files under `RUNNER_TEMP` (removed), at most one pull request, one
-# comment and the state labels. `control` writes its reply file, its `fetch`
+# comment files under `RUNNER_TEMP` (removed), at most one pull request, with
+# `HARNESS_PR_TOKEN` set one conversion of a pull request that is not a draft
+# back to a draft, one ready flip, one comment and the state labels. `control` writes its reply file, its `fetch`
 # directory and, for a mention, its context directory and the session's output
 # files under `RUNNER_TEMP` (removed) and one reply comment, plus
 # what the child verb it runs writes, and the fetch of origin's <branch> that
@@ -1287,7 +1361,12 @@
 # the fetch of origin's <branch> its settledness read makes for such a run,
 # force-writing `refs/remotes/origin/<branch>`, plus what its `review` child
 # writes. `stop`, `continue` and `poll` also make
-# `report`'s writes for each event they report. Every other verb's only writes are the
+# `report`'s writes for each event they report. `push-credential store` writes
+# one path-scoped entry in the store file, created under `umask 077`, and two
+# keys in the checkout's local config — `credential.https://<host>.useHttpPath`
+# and `credential.https://<host>/<path>.helper`;
+# `erase` removes exactly that entry and `--unset`s both keys; neither
+# pushes. Every other verb's only writes are the
 # registry record (`stop`, `sync`) and, for `sync`, the download directory
 # `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/` and
 # `<branch>.remote.log` in the main checkout, plus the mirror restore
@@ -1753,6 +1832,7 @@ usage() {
   echo "       remote-run.sh deliver <branch> <bundle_dir> [--repo <root>]" >&2
   echo "       remote-run.sh collect <branch> [--pr <n>] [--repo <root>]" >&2
   echo "       remote-run.sh control [--needs-agent] [--repo <root>]" >&2
+  echo "       remote-run.sh push-credential store|erase   (no --repo: it runs in the job's checkout root)" >&2
   [ "${verb-}" != save ] || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
 }
@@ -1822,7 +1902,7 @@ verb=""
 verb="$1"
 shift
 case "$verb" in
-  dispatch|pause|warm|stop|status|sync|fetch|restore|save|continue|poll|pause-requested|run-created-at|start|review|trigger|list|discard|report|open|deliver|collect|control) ;;
+  dispatch|pause|warm|stop|status|sync|fetch|restore|save|continue|poll|pause-requested|run-created-at|start|review|trigger|list|discard|report|open|deliver|collect|control|push-credential) ;;
   *) usage "unknown verb '$verb'" ;;
 esac
 
@@ -1853,10 +1933,12 @@ allow_no_run=0
 pr_arg=""
 branch_gone=0
 needs_agent=0
+pc_action=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --repo)
+      [ "$verb" != push-credential ] || usage "push-credential takes no --repo: it runs in the job's checkout root"
       [ "$#" -ge 2 ] || usage "--repo needs a value"
       repo_arg="$2"; shift 2 ;;
     --resume)
@@ -1921,7 +2003,10 @@ while [ "$#" -gt 0 ]; do
     *)
       [ "$verb" != warm ] && [ "$verb" != poll ] && [ "$verb" != trigger ] \
         && [ "$verb" != list ] && [ "$verb" != control ] || usage "$verb takes no branch"
-      if [ "$verb" = run-created-at ]; then
+      if [ "$verb" = push-credential ]; then
+        [ -z "$pc_action" ] || usage "unexpected argument '$1'"
+        pc_action="$1"
+      elif [ "$verb" = run-created-at ]; then
         [ -z "$run_id_arg" ] || usage "unexpected argument '$1'"
         run_id_arg="$1"
       elif [ "$verb" = discard ]; then
@@ -1945,8 +2030,16 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$verb" != warm ] && [ "$verb" != poll ] && [ "$verb" != run-created-at ] && [ "$verb" != trigger ] \
-  && [ "$verb" != list ] && [ "$verb" != discard ] && [ "$verb" != control ]; then
+  && [ "$verb" != list ] && [ "$verb" != discard ] && [ "$verb" != control ] && [ "$verb" != push-credential ]; then
   valid_branch "$branch" || usage "$verb needs a <branch>"
+fi
+
+if [ "$verb" = push-credential ]; then
+  case "$pc_action" in
+    store|erase) ;;
+    '') usage "push-credential needs store or erase" ;;
+    *) usage "unknown push-credential action '$pc_action'" ;;
+  esac
 fi
 
 if [ "$verb" = discard ] && [ -z "$discard_dir" ]; then
@@ -2051,11 +2144,12 @@ fi
 # ---------------------------------------------------------------------------
 
 # setup_fail <message> — a configuration problem: exit 1, except for save,
-# report, open, deliver and collect, which never fail the step that calls them.
+# report, open, deliver, collect and push-credential erase, which never fail
+# the step that calls them.
 setup_fail() {
   echo "remote-run.sh: $1" >&2
   [ "$verb" != save ] && [ "$verb" != report ] && [ "$verb" != open ] && [ "$verb" != deliver ] \
-    && [ "$verb" != collect ] || exit "$EXIT_OK"
+    && [ "$verb" != collect ] && { [ "$verb" != push-credential ] || [ "$pc_action" = erase ]; } || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
 }
 
@@ -2064,7 +2158,7 @@ if [ -n "$repo_arg" ]; then
 elif [ "$verb" = restore ] || [ "$verb" = save ] || [ "$verb" = continue ] || [ "$verb" = poll ] \
   || [ "$verb" = pause-requested ] || [ "$verb" = run-created-at ] || [ "$verb" = trigger ] \
   || [ "$verb" = discard ] || [ "$verb" = report ] || [ "$verb" = open ] || [ "$verb" = deliver ] \
-  || [ "$verb" = collect ] || [ "$verb" = control ]; then
+  || [ "$verb" = collect ] || [ "$verb" = control ] || [ "$verb" = push-credential ]; then
   root=$(hr_repo_root "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
 else
   root=$(hr_main_repo "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
@@ -2085,8 +2179,8 @@ case "$verb" in
   continue|poll|discard)
     hr_state_path "$root" >/dev/null || setup_fail "cannot resolve '$root/harness.config.json'"
     ;;
-  pause-requested|run-created-at)
-    # Read verbs: no gate, and nothing of the configuration is read.
+  pause-requested|run-created-at|push-credential)
+    # No gate, and nothing of the configuration is read.
     ;;
   trigger|control)
     # Gates itself, after reading the event, so a refusal can still be commented.
@@ -5773,7 +5867,7 @@ THREADS
 # `done`. Always exit 0.
 verb_deliver() {
   local status engine noun verb_done pr_url="" lookup_failed=0 create_err="" forbidden=0 base=""
-  local tmp made_tmp="" ready="" text readiness compare posted=""
+  local tmp made_tmp="" ready="" flip_by="" text readiness compare posted=""
   if ! forge_on; then
     echo "remote-run.sh: deliver: the forge coupling is off (forge github and execution.target github-actions); nothing posted"
     exit "$EXIT_OK"
@@ -5811,15 +5905,40 @@ verb_deliver() {
     base="$OPEN_BASE"
   fi
 
-  # The flip runs with the job's token, never HARNESS_PR_TOKEN.
+  # The flip runs with HARNESS_PR_TOKEN when set: a `ready_for_review` made
+  # with the job's token starts no workflow, so the adopter's CI would not run
+  # on the final tip. The event fires only on a draft→ready transition, hence
+  # the conversion back to a draft first, with the job's token.
   if [ -n "$FORGE_PR" ]; then
+    if [ "$FORGE_PR_DRAFT" != true ] && [ -n "${HARNESS_PR_TOKEN-}" ]; then
+      if gh_call pr ready "$FORGE_PR" --repo "$FORGE_REPO" --undo; then
+        FORGE_PR_DRAFT=true
+        echo "remote-run.sh: deliver: turned pull request #$FORGE_PR back to a draft so marking it ready fires ready_for_review on this tip"
+      else
+        echo "::warning::remote-run.sh: deliver: turning pull request #$FORGE_PR back to a draft was refused: $GH_ERR; no ready_for_review fires on this tip, so the repository's CI does not run on it"
+      fi
+    fi
     if [ "$FORGE_PR_DRAFT" = true ]; then
-      if gh_call pr ready "$FORGE_PR" --repo "$FORGE_REPO"; then
+      flip_by=""
+      if [ -n "${HARNESS_PR_TOKEN-}" ]; then
+        if gh_call_token "$HARNESS_PR_TOKEN" pr ready "$FORGE_PR" --repo "$FORGE_REPO"; then
+          flip_by=HARNESS_GIT_TOKEN
+        else
+          echo "::warning::remote-run.sh: deliver: marking pull request #$FORGE_PR ready for review with HARNESS_GIT_TOKEN was refused: $GH_ERR; retrying once with the job's token"
+        fi
+      fi
+      if [ -z "$flip_by" ]; then
+        if gh_call pr ready "$FORGE_PR" --repo "$FORGE_REPO"; then
+          flip_by="the job's token"
+        else
+          echo "::warning::remote-run.sh: deliver: marking pull request #$FORGE_PR ready for review was refused: $GH_ERR"
+        fi
+      fi
+      if [ -n "$flip_by" ]; then
         ready=flipped
-        echo "remote-run.sh: deliver: marked pull request #$FORGE_PR ready for review"
+        echo "remote-run.sh: deliver: marked pull request #$FORGE_PR ready for review with $flip_by"
       else
         ready=refused
-        echo "::warning::remote-run.sh: deliver: marking pull request #$FORGE_PR ready for review was refused: $GH_ERR"
       fi
     else
       ready=not-draft
@@ -7356,27 +7475,13 @@ control_commands_way() {
 # never exported, so only the agent subshell in control_mention_session sees it.
 MENTION_OAUTH=""
 MENTION_API=""
-# The job's `GH_TOKEN` in the base64 form `actions/checkout` persists into the
-# checkout's git configuration; never exported.
-MENTION_JOB_TOKEN_B64=""
 
-# mention_has_credential <string> — 0 when <string> contains, verbatim, a
-# non-empty saved credential value, or the job's `GH_TOKEN` raw or in its
-# persisted base64 form. An encoded or split copy is not caught.
+# mention_has_credential <string> — the library's one credential check
+# (`hr_text_has_credential`) over the values `verb_control` recorded through
+# `hr_credential_values_var`: a saved credential, and the job's `GH_TOKEN` raw
+# or in the base64 form `actions/checkout` persists, among them.
 mention_has_credential() {
-  if [ -n "$MENTION_OAUTH" ]; then
-    case "$1" in *"$MENTION_OAUTH"*) return 0 ;; esac
-  fi
-  if [ -n "$MENTION_API" ]; then
-    case "$1" in *"$MENTION_API"*) return 0 ;; esac
-  fi
-  if [ -n "${GH_TOKEN-}" ]; then
-    case "$1" in *"$GH_TOKEN"*) return 0 ;; esac
-  fi
-  if [ -n "$MENTION_JOB_TOKEN_B64" ]; then
-    case "$1" in *"$MENTION_JOB_TOKEN_B64"*) return 0 ;; esac
-  fi
-  return 1
+  hr_text_has_credential "$1"
 }
 
 # mention_cap <file> <max bytes> <note> — over <max bytes>, <file> keeps its
@@ -7746,11 +7851,11 @@ verb_control() {
   local LC_ALL=C
   local review=0 close=0
   # Unset first so an inherited export of either name cannot keep it exported.
-  unset MENTION_OAUTH MENTION_API MENTION_JOB_TOKEN_B64
+  unset MENTION_OAUTH MENTION_API
   MENTION_OAUTH="${IN_OAUTH-}"
   MENTION_API="${IN_API-}"
-  MENTION_JOB_TOKEN_B64=""
-  [ -z "${GH_TOKEN-}" ] || MENTION_JOB_TOKEN_B64="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
+  # While GH_TOKEN is still set; the agent subshell is where it leaves.
+  hr_credential_values_var "$root" "$MENTION_OAUTH" "$MENTION_API"
   unset IN_OAUTH IN_API CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY
   case "${GITHUB_EVENT_NAME-}" in
     issue_comment) ;;
@@ -8035,6 +8140,114 @@ verb_discard() {
   echo "remote-run.sh: removed $discard_dir"
 }
 
+# push_credential_target_var — set PC_HOST from `GITHUB_SERVER_URL` and PC_PATH
+# from the checkout's origin, per `push-credential`'s paragraph; 1 with PC_WHY
+# set when either has another shape. PC_WHY never quotes the origin URL, which
+# may carry a credential.
+push_credential_target_var() {
+  local server url host_chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.:-' \
+    path_chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.~/-'
+  PC_HOST=""
+  PC_PATH=""
+  PC_WHY=""
+  server="${GITHUB_SERVER_URL:-https://github.com}"
+  server="${server%/}"
+  case "$server" in
+    https://?*) PC_HOST=${server#https://} ;;
+    *) PC_WHY="GITHUB_SERVER_URL is not https://<host>"; return 1 ;;
+  esac
+  case "$PC_HOST" in
+    *[!$host_chars]*) PC_WHY="GITHUB_SERVER_URL is not https://<host>"; return 1 ;;
+  esac
+  if ! url=$(git -C "$root" remote get-url origin 2>/dev/null); then
+    PC_WHY="the checkout has no origin remote"
+    return 1
+  fi
+  case "$url" in
+    "https://$PC_HOST/"?*) PC_PATH=${url#"https://$PC_HOST/"} ;;
+    *) PC_WHY="origin is not https://$PC_HOST/<path>"; return 1 ;;
+  esac
+  case "$PC_PATH" in
+    *[!$path_chars]*) PC_WHY="origin is not https://$PC_HOST/<path>"; return 1 ;;
+  esac
+  return 0
+}
+
+# verb_push_credential — `push-credential store|erase`, per its paragraph.
+# `store` exits 1 whenever it leaves no usable credential; `erase` always 0.
+verb_push_credential() {
+  local store_file helper_key value rc failed="" nl='
+' file_chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_./-'
+  if ! push_credential_target_var; then
+    if [ "$pc_action" = store ]; then
+      echo "::error::remote-run.sh: push-credential: store: $PC_WHY; nothing written"
+      exit 1
+    fi
+    echo "remote-run.sh: push-credential: $pc_action: $PC_WHY; nothing written"
+    exit "$EXIT_OK"
+  fi
+  helper_key="credential.https://$PC_HOST/$PC_PATH.helper"
+
+  if [ "$pc_action" = store ]; then
+    if [ -z "${GH_TOKEN-}" ]; then
+      echo "::error::remote-run.sh: push-credential: store: GH_TOKEN is not set; nothing written"
+      exit 1
+    fi
+    case "$GH_TOKEN" in *"$nl"*)
+      echo "::error::remote-run.sh: push-credential: store: GH_TOKEN carries a newline; nothing written"
+      exit 1 ;;
+    esac
+    store_file=""
+    [ -z "${HOME-}" ] || store_file="${HOME%/}/.git-credentials"
+    case "$store_file" in
+      /?*) ;;
+      *) echo "::error::remote-run.sh: push-credential: store: HOME is not an absolute path; nothing written"; exit 1 ;;
+    esac
+    case "$store_file" in *[!$file_chars]*)
+      echo "::error::remote-run.sh: push-credential: store: the store file path under HOME carries a character outside [A-Za-z0-9_./-]; nothing written"
+      exit 1 ;;
+    esac
+    if ! ( umask 077
+      printf 'protocol=https\nhost=%s\npath=%s\nusername=x-access-token\npassword=%s\n\n' "$PC_HOST" "$PC_PATH" "$GH_TOKEN" \
+        | git credential-store --file "$store_file" store ) 2>/dev/null; then
+      echo "::error::remote-run.sh: push-credential: store: writing the entry for https://$PC_HOST/$PC_PATH to $store_file failed; nothing configured"
+      exit 1
+    fi
+    if ! git -C "$root" config --replace-all "credential.https://$PC_HOST.useHttpPath" true 2>/dev/null \
+      || ! git -C "$root" config --replace-all "$helper_key" "store --file $store_file" 2>/dev/null; then
+      echo "::error::remote-run.sh: push-credential: store: the entry for https://$PC_HOST/$PC_PATH is in $store_file, but setting the checkout's credential keys failed"
+      exit 1
+    fi
+    echo "remote-run.sh: push-credential: stored the job token for https://$PC_HOST/$PC_PATH in $store_file"
+    exit "$EXIT_OK"
+  fi
+
+  value=$(git -C "$root" config --get "$helper_key" 2>/dev/null) || value=""
+  store_file=""
+  case "$value" in 'store --file /'?*) store_file=${value#store --file } ;; esac
+  case "$store_file" in *[!$file_chars]*) store_file="" ;; esac
+  [ -n "$store_file" ] || { [ -z "${HOME-}" ] || store_file="${HOME%/}/.git-credentials"; }
+  if [ -z "$store_file" ]; then
+    failed="no store file is named and HOME is not set"
+  elif ! ( umask 077
+    printf 'protocol=https\nhost=%s\npath=%s\nusername=x-access-token\n\n' "$PC_HOST" "$PC_PATH" \
+      | git credential-store --file "$store_file" erase ) 2>/dev/null; then
+    failed="erasing the entry from $store_file failed"
+  fi
+  # `git config --unset` exits 5 for a key that is not set: nothing to undo.
+  for value in "$helper_key" "credential.https://$PC_HOST.useHttpPath"; do
+    rc=0
+    git -C "$root" config --unset "$value" 2>/dev/null || rc=$?
+    [ "$rc" -eq 0 ] || [ "$rc" -eq 5 ] || failed="${failed:+$failed; }unsetting $value failed"
+  done
+  if [ -n "$failed" ]; then
+    echo "::warning::remote-run.sh: push-credential: erase for https://$PC_HOST/$PC_PATH: $failed"
+  else
+    echo "remote-run.sh: push-credential: erased the job token for https://$PC_HOST/$PC_PATH and its checkout keys"
+  fi
+  exit "$EXIT_OK"
+}
+
 case "$verb" in
   dispatch) verb_dispatch ;;
   pause) verb_pause ;;
@@ -8059,5 +8272,6 @@ case "$verb" in
   deliver) verb_deliver ;;
   collect) verb_collect ;;
   control) verb_control ;;
+  push-credential) verb_push_credential ;;
 esac
 exit "$EXIT_OK"

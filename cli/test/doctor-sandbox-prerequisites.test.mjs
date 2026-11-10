@@ -19,9 +19,9 @@ import assert from 'node:assert/strict';
 import { accessSync, chmodSync, constants, existsSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { release, tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
-import { it } from 'node:test';
+import { describe, it } from 'node:test';
 
-import { concurrentSuite } from './helpers/concurrency.mjs';
+import { CASE_CONCURRENCY } from './helpers/concurrency.mjs';
 import { createFixture, runCli } from './helpers/fixture.mjs';
 import { gradeSandboxPrerequisites, NESTED_USERNS_PROBE_ENV } from '../dist/doctor/checks.js';
 import {
@@ -131,7 +131,7 @@ async function doctorLine(dir, status, args = [], env = {}) {
   return { line, status: result.status };
 }
 
-concurrentSuite('doctor sandbox-prerequisites', () => {
+describe('doctor sandbox-prerequisites', { concurrency: CASE_CONCURRENCY }, () => {
   it('(a) passes on darwin naming Seatbelt, with and without --remote-job', { skip: IS_DARWIN ? false : `platform ${process.platform} is not darwin` }, async (t) => {
     const dir = await wiredFixture(t);
     for (const args of [[], ['--remote-job']]) {

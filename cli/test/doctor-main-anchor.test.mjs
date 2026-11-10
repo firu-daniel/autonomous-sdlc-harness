@@ -11,10 +11,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { it } from 'node:test';
+import { describe, it } from 'node:test';
 
 import { MAIN_REPO_ANCHOR_RULE } from '../dist/core/mainRepoAnchor.js';
-import { concurrentSuite } from './helpers/concurrency.mjs';
+import { CASE_CONCURRENCY } from './helpers/concurrency.mjs';
 import { createFixture, runCli } from './helpers/fixture.mjs';
 
 const PROFILE_FILE = '.claude/settings.autonomous.json';
@@ -72,7 +72,7 @@ async function doctorLine(dir, status, args = []) {
   return { line, result };
 }
 
-concurrentSuite('doctor profile-main-anchor', () => {
+describe('doctor profile-main-anchor', { concurrency: CASE_CONCURRENCY }, () => {
   it('(a) passes on a freshly generated profile', async (t) => {
     const dir = await wiredFixture(t);
     await doctorLine(dir, 'PASS');

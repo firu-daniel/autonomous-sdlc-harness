@@ -20,6 +20,10 @@
  * - an absent file returned as `finished` → the no-file cases;
  * - a non-ledger file returned as `unfinished` → the non-ledger case.
  *
+ * And for `hr_ledger_phases`, under the same discipline:
+ * - the present-only test on `P0` / `R0` dropped (the optional id always tested) → the two
+ *   line-removed cases.
+ *
  * The library is sourced out of an `init`-wired fixture, as `cli/test/branch-naming.test.mjs`
  * does, so the copy under test is the one an adopter receives. Every ledger is written into the
  * fixture's own temp directory.
@@ -35,8 +39,8 @@ import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli } from './helpers/fixt
 /** The library's path under the `scriptsDir` a configless `init` writes. */
 const LIB_PATH = `${INIT_SCRIPTS_DIR}/lib/harness-run-lib.sh`;
 
-const TASK_IDS = ['P1', 'P2', 'P3', 'A', 'A1.5g', 'A1.5f', 'A2g', 'A2f', 'Bg', 'Bm', 'C', 'C2g', 'C2m', 'C2f', 'E', 'G', 'D'];
-const REVIEW_IDS = ['R1', 'R2', 'R3', 'R4', 'RG', 'R5'];
+const TASK_IDS = ['P0', 'P1', 'P2', 'P3', 'A', 'A1.5g', 'A1.5f', 'A2g', 'A2f', 'Bg', 'Bm', 'C', 'C2g', 'C2m', 'C2f', 'E', 'G', 'D'];
+const REVIEW_IDS = ['R0', 'R1', 'R2', 'R3', 'R4', 'RG', 'R5'];
 
 let fixture;
 let dir = '';
@@ -96,7 +100,7 @@ test('hr_ledger_phases reports a fresh task ledger as all pending', async () => 
 });
 
 test('hr_ledger_phases settles a phase on [x] and [-] alike', async () => {
-  const r = await phases(ledger(TASK_HEADER, TASK_IDS, { P1: 'x', P2: '-', P3: 'x' }));
+  const r = await phases(ledger(TASK_HEADER, TASK_IDS, { P0: 'x', P1: 'x', P2: '-', P3: 'x' }));
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout, 'task - done pending pending pending\n');
 });
@@ -109,7 +113,7 @@ test('hr_ledger_phases leaves phase 4 pending until D is settled', async () => {
 });
 
 test('hr_ledger_phases reads the user-review engine and its round', async () => {
-  const r = await phases(ledger(reviewHeader(3), REVIEW_IDS, { R1: 'x', R2: 'x', R3: 'x' }));
+  const r = await phases(ledger(reviewHeader(3), REVIEW_IDS, { R0: 'x', R1: 'x', R2: 'x', R3: 'x' }));
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout, 'user_review 3 done done pending pending\n');
 });
@@ -119,6 +123,39 @@ test('hr_ledger_phases counts a missing entry as not settled', async () => {
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout, 'task - done done pending pending\n');
 });
+
+/** `content` with two indented `screened:` record lines inserted after the entry line for `id`. */
+function withScreenedRecords(content, id) {
+  return content.replace(new RegExp(`^(- \\[.\\] ${id}\\..*)$`, 'm'), '$1\n  - screened: task prompt — SAFE\n  - screened: story plan — SAFE');
+}
+
+for (const { id, header, ids, engine, round } of [
+  { id: 'P0', header: TASK_HEADER, ids: TASK_IDS, engine: 'task', round: '-' },
+  { id: 'R0', header: reviewHeader(2), ids: REVIEW_IDS, engine: 'user_review', round: '2' },
+]) {
+  test(`hr_ledger_phases keeps phase 1 pending on an open ${id}`, async () => {
+    const r = await phases(ledger(header, ids, allExcept(ids, [id])));
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout, `${engine} ${round} pending done done done\n`);
+  });
+
+  test(`hr_ledger_phases leaves phase 1 to the other ids when the ${id} line is absent`, async () => {
+    const r = await phases(ledger(header, ids, allExcept(ids, [id]), [id]));
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout, `${engine} ${round} done done done done\n`);
+  });
+
+  test(`hr_ledger_phases reads a ${id} entry followed by screened records as one entry`, async () => {
+    const open = withScreenedRecords(ledger(header, ids, allExcept(ids, [id])), id);
+    assert.match(open, /\n {2}- screened: story plan — SAFE\n/);
+    const r1 = await phases(open);
+    assert.equal(r1.status, 0, r1.stderr);
+    assert.equal(r1.stdout, `${engine} ${round} pending done done done\n`);
+    const r2 = await phases(withScreenedRecords(ledger(header, ids, allExcept(ids, [])), id));
+    assert.equal(r2.status, 0, r2.stderr);
+    assert.equal(r2.stdout, `${engine} ${round} done done done done\n`);
+  });
+}
 
 test('hr_ledger_phases refuses a docs-engine ledger and a non-ledger file', async () => {
   for (const content of [

@@ -44,8 +44,8 @@
 # agent child. A killed run does NOT auto-resume — the watcher's reconcile pass
 # marks it `failed` on the next tick, and only cleanly PARKED OR PAUSED runs
 # are ever re-launched. Committed work is safe on the branch; a killed run is
-# continued by re-launching the engine BY HAND in its run copy (a clone, or a
-# legacy worktree), where it picks up from the last commit and the next
+# continued by re-launching the engine BY HAND in its run copy (a clone),
+# where it picks up from the last commit and the next
 # unchecked task. So this REFUSES by default while a run is in flight, and
 # `--force` is how you say you meant it.
 #
@@ -329,7 +329,7 @@ fi
 #     it, the per-run profile under the machine state lane
 #     (run-profiles/<slug>/<branch>.json), which carries no $main_repo path;
 #   * <work_root>/<projectName>- — a run an operator RE-LAUNCHED BY HAND in its
-#     run copy (a clone, or a legacy worktree), which the SAFETY block above
+#     run copy (a clone), which the SAFETY block above
 #     tells them to do. That process runs under a sibling checkout, carries no
 #     $main_repo path, and has no registry record either, so the main-checkout
 #     key alone would make this guard invisible to it and turn a refusal into a

@@ -49,6 +49,10 @@ const ENV = { G12_DB_POLL_SECS: '1', G12_RUN_LOOKUP_TRIES: '1', G12_RUN_LOOKUP_D
 
 const ARGS = ['default-branch', '--repo', GATE12_SLUG, '--other-branch', OTHER];
 
+// Each leg's own waits are seconds long; this ceiling stays below `--test-timeout` at the maximum
+// scale, so a stuck child is killed with its group and named rather than cancelling the file.
+const ROUND_BOUND_MS = scaleBound(120_000);
+
 async function fixtureFor(t, options) {
   const fixture = await makeGate12Fixture(options);
   t.after(() => cleanup(fixture));
@@ -91,7 +95,7 @@ test('a leg whose job starts restores the default and both variables and keeps t
   await ghStub(fixture.binDir, routes('in_progress'), START);
   const seed = await git(fixture.dir, ['rev-parse', 'refs/remotes/origin/main']);
 
-  const result = await runRound(fixture, ARGS, { env: ENV });
+  const result = await runRound(fixture, ARGS, { env: ENV, timeoutMs: ROUND_BOUND_MS });
   assert.equal(result.status, 0, show(result));
 
   const state = assertRestored(fixture);
@@ -127,7 +131,7 @@ test('a failed dispatch restores everything and keeps the JS3 branch recorded; a
   const fixture = await fixtureFor(t, { remoteRunExit: 3 });
   await ghStub(fixture.binDir, routes('in_progress'), START);
 
-  const result = await runRound(fixture, ARGS, { env: ENV });
+  const result = await runRound(fixture, ARGS, { env: ENV, timeoutMs: ROUND_BOUND_MS });
   assert.equal(result.status, 3, show(result));
   const state = assertRestored(fixture);
   assert.equal(state.other_branch, OTHER);
@@ -137,7 +141,7 @@ test('a failed dispatch restores everything and keeps the JS3 branch recorded; a
   await t.test('the recorded other_branch refuses the next leg', async () => {
     const heads = await originHeads(fixture);
     const before = (await ghStubCalls(fixture.binDir)).length;
-    const again = await runRound(fixture, [...ARGS.slice(0, 3), '--other-branch', `${OTHER}_2`], { env: ENV });
+    const again = await runRound(fixture, [...ARGS.slice(0, 3), '--other-branch', `${OTHER}_2`], { env: ENV, timeoutMs: ROUND_BOUND_MS });
     assert.equal(again.status, 2, show(again));
     assert.match(again.stderr, /teardown/);
     assert.equal(await originHeads(fixture), heads);
@@ -149,7 +153,7 @@ test('a job that never leaves queued restores everything and marks the run stall
   const fixture = await fixtureFor(t);
   await ghStub(fixture.binDir, routes('queued'), START);
 
-  const result = await runRound(fixture, [...ARGS, '--wait-secs', '1'], { env: ENV });
+  const result = await runRound(fixture, [...ARGS, '--wait-secs', '1'], { env: ENV, timeoutMs: ROUND_BOUND_MS });
   assert.equal(result.status, 0, show(result));
   const state = assertRestored(fixture);
   const runs = state.runs.filter((r) => r.row === 'JS3');
@@ -171,15 +175,29 @@ test('a SIGINT while the leg polls restores everything before the child exits no
     stderr += chunk;
   });
   const closed = new Promise((resolve) => child.on('close', (code, signal) => resolve({ code, signal })));
-  await new Promise((resolve, reject) => {
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk;
-      if (/^planted JS3 stall /m.test(stdout)) resolve();
+  /** `promise`, or a rejection naming `what` and the output so far once ROUND_BOUND_MS passes; the child is killed then. */
+  const bounded = (promise, what) => {
+    let timer;
+    const ceiling = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        child.kill('SIGKILL');
+        reject(new Error(`${what}: no answer after ${ROUND_BOUND_MS} ms\nstdout:\n${stdout}\nstderr:\n${stderr}`));
+      }, ROUND_BOUND_MS);
     });
-    closed.then(() => reject(new Error(`exited before polling\nstdout:\n${stdout}\nstderr:\n${stderr}`)));
-  });
+    return Promise.race([promise, ceiling]).finally(() => clearTimeout(timer));
+  };
+  await bounded(
+    new Promise((resolve, reject) => {
+      child.stdout.on('data', (chunk) => {
+        stdout += chunk;
+        if (/^planted JS3 stall /m.test(stdout)) resolve();
+      });
+      closed.then(() => reject(new Error(`exited before polling\nstdout:\n${stdout}\nstderr:\n${stderr}`)));
+    }),
+    'waiting for the planted JS3 stall line',
+  );
   child.kill('SIGINT');
-  const { code, signal } = await closed;
+  const { code, signal } = await bounded(closed, 'waiting for the child to exit after SIGINT');
   const detail = `code ${code} signal ${signal}\nstdout:\n${stdout}\nstderr:\n${stderr}`;
   assert.equal(signal, null, detail);
   assert.notEqual(code, 0, detail);
@@ -191,7 +209,7 @@ test('a restore whose gh repo edit fails exits 5 and names the command that fini
   const restore = `repo edit ${GATE12_SLUG} --default-branch main`;
   await ghStub(fixture.binDir, { ...routes('in_progress'), [restore]: { exit: 1, stderr: 'gh stub: refused\n' } }, START);
 
-  const result = await runRound(fixture, ARGS, { env: ENV });
+  const result = await runRound(fixture, ARGS, { env: ENV, timeoutMs: ROUND_BOUND_MS });
   assert.equal(result.status, 5, show(result));
   assert.ok(result.stderr.includes(`gh ${restore}`), result.stderr);
 });
@@ -213,7 +231,7 @@ test('a recorded run the stub reports in_progress refuses the leg before anythin
   await writeFile(fixture.stateFile, `${JSON.stringify(planted, null, 2)}\n`, 'utf8');
   const heads = await originHeads(fixture);
 
-  const result = await runRound(fixture, ARGS, { env: ENV });
+  const result = await runRound(fixture, ARGS, { env: ENV, timeoutMs: ROUND_BOUND_MS });
   assert.equal(result.status, 2, show(result));
   assert.match(result.stderr, /run 4242 .* is in_progress/);
   assert.equal(await originHeads(fixture), heads);
@@ -226,7 +244,7 @@ async function plantedPrompt(t, kill) {
   const fixture = await fixtureFor(t);
   await ghStub(fixture.binDir, routes('in_progress'), START);
   const args = kill === undefined ? ARGS : [...ARGS, '--stall-kill-secs', String(kill)];
-  const result = await runRound(fixture, args, { env: ENV });
+  const result = await runRound(fixture, args, { env: ENV, timeoutMs: ROUND_BOUND_MS });
   assert.equal(result.status, 0, show(result));
   const branch = await assertJs3Branch(fixture, readJson(fixture.stateFile));
   const path = `${fixture.stateDir}/task_prompts/${branch.name}_task_prompt.md`;
@@ -304,7 +322,7 @@ test('JS3: a stall-kill threshold over 480 s is refused before anything changes'
   await ghStub(fixture.binDir, routes('in_progress'), START);
   const heads = await originHeads(fixture);
 
-  const result = await runRound(fixture, [...ARGS, '--stall-kill-secs', '481'], { env: ENV });
+  const result = await runRound(fixture, [...ARGS, '--stall-kill-secs', '481'], { env: ENV, timeoutMs: ROUND_BOUND_MS });
   assert.equal(result.status, 2, show(result));
   assert.match(result.stderr, /--stall-kill-secs 481 /);
   assert.match(result.stderr, /600000 ms/);

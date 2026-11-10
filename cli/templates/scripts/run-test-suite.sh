@@ -148,53 +148,52 @@
 # A heartbeat stall with NO signal sent was observed with the former separate
 # heartbeat process — a toucher fed by a pipe on the worker's fd 3: in a
 # sandboxed macOS fixture (2026-10-23) `.running`'s mtime stopped advancing
-# while the worker and its gate were both alive; the cause was not established
-# (`docs/sandbox-verification.md` → the paragraph after row BG10). That process
-# has been removed. A stalled heartbeat makes the label read free after
+# while the worker and its gate were both alive, in 2 of 14 holder runs, 1 of
+# them with no signal sent; the cause was not established. That process has
+# been removed. A stalled heartbeat would make the label read free after
 # STALE_SECONDS while the run still runs: `--wait` refuses `no run in flight`,
 # and a run form issued then starts a second worker that races the first for
-# `.running`. Row BG10 remains the measurement that would show a stall on a
-# real run; no figure has been measured for the current shape.
+# `.running`. Measured for the current shape on 2026-11-06, Claude Code
+# 2.1.319, macOS 15.7.4, GNU bash 3.2.57, SANDBOXED (`docs/sandbox-verification.md`
+# → the paragraph after row BG10): 16 holder runs of a detached
+# `bash -c '<run form>; exec sleep 600'`, four at a time, each gate held 40 s on
+# a release file, `.running`'s mtime read every 100 ms: the largest lag behind
+# the clock while the worker lived was 1.02 s over 6321 readings, no `--wait`
+# refused while a gate ran, and every run ended `pass`. Row BG10's real run,
+# watched from outside, peaked at 1.05 s over 252 s.
 #
-# SIGNALS. Measured 2026-10-23, Claude Code 2.1.309 (`claude --version`), macOS,
-# GNU bash 3.2.57, SANDBOXED, within one Bash call: a Node driver run through
-# `scratch-run.sh` started the run form in a throwaway fixture and signalled the
-# worker its own descendant had started, with the gate held on a release file.
-# No signal was refused by the sandbox. Every bullet was measured against the
-# former separate heartbeat process (RESIDUALS OF THE DETACHED SHAPE), whose
-# stall a heartbeat stop below may be rather than the signal's doing.
-#   - TERM to the worker's PID alone: bash runs a trap only once its foreground
-#     command returns, so the gate kept running and `--wait` printed `pending`
-#     until the gate was released; then `.running` was removed, no verdict and
-#     no further marker were written, and the next `--wait` refused `no run in
-#     flight`. Unchanged from the unsandboxed run-form measurement.
-#   - KILL to the worker's PID alone: the worker ended at once; the gate
-#     survived orphaned until released; `.running` stayed and no verdict was
-#     written. CHANGED: the heartbeat did not reliably stop. In 6 of 8 runs it
-#     stayed fresh after both the worker and the orphaned gate had ended, for as
-#     long as observed (24 s), so `--wait` kept printing `pending`; in 2 of 8 it
-#     stopped and the label read free after STALE_SECONDS. The pre-detach run
-#     form, KILLed the same way, showed the same split (3 of 4 fresh), so the
-#     detach did not cause it; its cause was not established.
-#   - INT to the calling shell's process group: in 7 of 7 runs the worker, the
-#     gate and the calling shell's own `exec sleep` kept running, and once the
-#     gate was released the verdict `pass` was written and `.running` removed.
-#     CHANGED: INT no longer stops the gate; and in 2 of 7 runs the heartbeat
-#     stopped within 3 s while the worker and gate ran on, so the label read
-#     free once stale (`--wait` refused `no run in flight` with STALE_SECONDS at
-#     5) while the run still ran; its cause was not established. Under that
-#     call a plain `sleep` also survived INT to its own PID, so INT was ignored
-#     on entry by every process measured, and this case does not isolate the
-#     background-job rule.
-#   - HUP to the worker's PID alone: no effect; once the gate was released the
-#     verdict `pass` was written and `.running` removed.
+# SIGNALS. Measured 2026-11-06, Claude Code 2.1.319 (`claude --version`), macOS
+# 15.7.4, GNU bash 3.2.57, SANDBOXED, one Bash call per case, 8 runs each: a
+# Node driver run through `scratch-run.sh` laid out a throwaway fixture as
+# `init` writes it (this script and `lib/harness-run-lib.sh`), started the run
+# form with the gate held on a release file and RUN_TEST_SUITE_STALE at 5,
+# signalled 1.5 s after the gate started, read the files 1 s and 4 s later,
+# issued `--wait`, released the gate, and read them again STALE_SECONDS + 2 s
+# later. No signal was refused by the sandbox, and no run was a setup fault.
+#   - TERM to the worker's PID alone (8 of 8): bash runs a trap only once its
+#     foreground command returns, so the worker and the gate ran on, the
+#     heartbeat kept advancing and `--wait` printed `pending` until the gate was
+#     released; then `.running` was removed, no verdict and no further marker
+#     were written, and the next `--wait` refused `no run in flight`.
+#   - KILL to the worker's PID alone (8 of 8): the worker ended at once and the
+#     heartbeat stopped with it; the gate survived orphaned until released;
+#     `.running` stayed and no verdict was written; `--wait`, once the heartbeat
+#     was stale, refused `no run in flight`. The former toucher's 6-of-8 fresh
+#     heartbeat after a KILL is gone with it.
+#   - INT to the calling shell's process group (8 of 8): the worker, the gate and
+#     the calling shell's own `exec sleep` kept running, the heartbeat kept
+#     advancing, `--wait` printed `pending`, and once the gate was released the
+#     verdict `pass` was written and `.running` removed. The former toucher's
+#     2-of-7 stall under INT did not recur.
+#   - HUP to the worker's PID alone (8 of 8): no effect; once the gate was
+#     released the verdict `pass` was written and `.running` removed.
 # A worker stopped by TERM therefore never reports its label free while its gate
 # runs, and once the trap ran the next `--wait` refuses at once.
 # Residuals: after a KILL to the worker's PID alone, the heartbeat stops with
 # the worker, and the label reads free after STALE_SECONDS while an orphaned
-# gate may still run; after an INT to the calling group, the label may read
-# free while the run still runs (above); a host suspended mid-run can wake with
-# a stale heartbeat before the worker refreshes it.
+# gate may still run — row WF3 measured it on a real run, the gate and its
+# subshell orphaned and running on; a host suspended mid-run can wake with a
+# stale heartbeat before the worker refreshes it.
 #
 # THE BOUND. STALE_SECONDS, the run library's HR_TEST_RUN_STALE_SECONDS (30),
 # is below WAIT_SLICE_SECONDS (60), so one

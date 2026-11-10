@@ -29,11 +29,11 @@ export function workRoot(repoRoot: string): string {
 
 /**
  * `<worktree_glob>` — `<work_root>/<projectName>-*`, the pattern that matches the sibling
- * worktree checkouts of one project.
+ * run copies (clones) of one project.
  *
  * It is emitted unconditionally into a generated permission profile: a single-checkout adopter
  * simply has no sibling for it to match, whereas omitting it is what silently skips a phase in
- * a worktree run.
+ * a run copy.
  */
 export function worktreeGlob(work: string, projectName: string): string {
   return join(work, `${projectName}-*`);

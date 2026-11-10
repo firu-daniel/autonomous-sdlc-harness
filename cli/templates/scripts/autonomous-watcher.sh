@@ -271,6 +271,11 @@
 #     machine lane. The job gates itself, and no local component gates a remote
 #     run. The kill switch still defers it, and a parked, paused or park-loop
 #     record still rejects it.
+#   * THE INTAKE REFUSAL APPLIES BEFORE THE TARGET IS EVEN READ: a drop on a
+#     protected, unjudgeable or invalid branch is archived as rejected_ in
+#     process_inbox_file with no `remote-run.sh sync`, commit, push or
+#     launch_remote_run, so the user reads the reason in the local log and
+#     notification rather than in the job's own refusal.
 #   * THE RECORD CARRIES `execution: github-actions`, and a run keeps the
 #     execution it started with for its whole life: the record's field, never
 #     the current key, is what later passes read. Before the duplicate test on
@@ -377,8 +382,7 @@
 # — is the one that holds the inbox, the logs, the registry and the kill switch,
 # so every run is tailable and stoppable from ONE place while executing in its own
 # sibling working copy — a clone (`copy_kind` `clone` in its registry record),
-# or, for a run started before clones, a legacy linked worktree, supported
-# until none is left — except under `job`, where the main checkout and the
+# never a linked worktree — except under `job`, where the main checkout and the
 # working copy are the same directory, the job's own checkout (see JOB MODE);
 # and except for a record with `execution: github-actions`, whose run executes
 # in a GitHub Actions job, whose local working copy is a mirror that
@@ -409,9 +413,12 @@
 # or not it is a tunable. It is sourced AFTER the anchors are resolved, so it
 # cannot move the inbox, the logs or the kill switch.
 #
-#   * It is sourced under `set -a`, so ANYTHING SET THERE ALSO REACHES A CHILD
-#     PROCESS — the notifier, and later the engine. No value from it is ever
-#     echoed or logged.
+#   * It is sourced under `set -a`, so ANYTHING SET THERE ALSO REACHES THE
+#     WATCHER'S OWN CHILDREN — the notifier and every pass's helper. The engine
+#     is not one of them: a LOCAL engine receives a value from it only when
+#     SESSION_ENV_BASE or `sandbox.passEnv` lists its name, and a name in the
+#     strip set never reaches the engine, in either mode (THE SESSION'S
+#     ENVIRONMENT, below). No value from it is ever echoed or logged.
 #   * CREDENTIALS DO NOT BELONG HERE. The push target lives in the machine-local
 #     `push.env` beside it, which autonomous-notify.sh resolves for itself.
 #   * THE FILE WINS OVER AN INHERITED ENVIRONMENT VALUE, which is the opposite of
@@ -423,6 +430,64 @@
 #
 # The resolved values are printed by `status`, one line, names and values only —
 # so the channel is observable rather than merely documented.
+#
+# THE SESSION'S ENVIRONMENT. The watcher keeps every variable for its own
+# passes; the engine session is launched with less, removed by `unset` in the
+# launch pipe's head just before its `exec`, so no value is ever on a command
+# line.
+#
+#   * THE STRIP SET, both modes: every `sandbox.credentials.envVars[].name` of
+#     the `--settings` file this launch passes, read through the library's
+#     `hr_profile_env_var_names` (the profile owns the token names, and the gate
+#     worker unsets the same list), minus ANTHROPIC_API_KEY and
+#     CLAUDE_CODE_OAUTH_TOKEN, which the agent itself needs, plus the
+#     watcher-owned SESSION_ENV_STRIP_EXTRA. It wins over `sandbox.passEnv`.
+#   * THE ALLOW-LIST, local runs only: every exported name that is in neither
+#     SESSION_ENV_BASE (this file's, with its LC_ and GCM_ prefixes) nor the
+#     main checkout's `sandbox.passEnv` (`hr_session_pass_env`) is removed too.
+#     A job skips it: a job's environment is the runner's, not a person's shell.
+#   * HARNESS_MAIN_REPO and CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS always reach
+#     the session with the launch's values: the head exports both after its
+#     `unset`, which removes an inherited copy of either.
+#   * BOTH SETS ARE READ, AND A FAILED READ REFUSED, in spawn_engine's own shell
+#     before the launch subshell: a refusal from inside the pipeline would reach
+#     no caller, because spawn_engine has returned 0 and recorded the pid by
+#     then. The refusal is the ordinary `not launched:` one.
+#   * IT IS HYGIENE THAT BLOCKS CASUAL READS, and a boundary only beside the
+#     sandbox's PID namespace and no-new-privileges, measured `pass` on the
+#     GitHub-hosted `ubuntu-26.04` image `20261101.186.1` alone
+#     (docs/sandbox-record.md → `## 5. The Linux runner's PID namespace and
+#     no-new-privileges`, its `runner-pid` and `runner-privs` legs), and
+#     unverified on other images and on self-hosted runners.
+#   * WHAT BREAKS UNDER THE ALLOW-LIST. A variable a gate, a Bedrock/Vertex
+#     setup or an API gateway's credential (ANTHROPIC_AUTH_TOKEN,
+#     ANTHROPIC_CUSTOM_HEADERS) needs is gone until `sandbox.passEnv` lists it;
+#     ANTHROPIC_BASE_URL and ANTHROPIC_MODEL are kept by the base set, so a
+#     gateway that authenticates with ANTHROPIC_API_KEY keeps working, and one
+#     that needs its own token fails to reach the API until that token's name is
+#     listed. `watcher.env` values no longer reach the session. A LOCAL HTTPS
+#     PUSH THAT AUTHENTICATES THROUGH GH_TOKEN OR GITHUB_TOKEN STOPS WORKING: the
+#     strip wins over `sandbox.passEnv`, and push-branch.sh exits 0 with only a
+#     `push failed for` line. The way on is a stored credential outside the
+#     environment,
+#       gh auth login
+#       gh auth setup-git
+#     or SSH,
+#       git remote set-url origin git@github.com:<owner>/<repo>.git
+#
+# PUSH REFUSALS (check_push_refusals). push-branch.sh writes a record under the
+# main checkout's `.git/harness-push-refusals/` whenever it refuses a push, and
+# this script acts on every record alike, whatever its reason, never parsing
+# it: the run goes `failed` with `push refused: <reason>`, one `failed`
+# notification carries that reason — its own way on — and in a job an
+# `::error title=Push refused::` annotation is printed and the job stops with
+# decision `stop`. The tick pass is the only site that tears a session down,
+# behind the `push_refusing` marker; classify_run_exit checks its own branch
+# only, after the engine has exited, and tears nothing down. The job summary's
+# row comes from `remote-run.sh save`, never from this file. A record for a
+# branch with no `running` run is left in place until that branch's next
+# launch, which files it as handled with one log line (spawn_engine), so a
+# refusal from a supervised or by-hand push never fails a later session.
 #
 # THE REGISTRY IS A CONTRACT, NOT AN IMPLEMENTATION DETAIL.
 # `<state_dir>/autonomous_logs/registry.json` is a single JSON object shaped
@@ -451,8 +516,12 @@
 #
 # JOB MODE. `job <branch> <engine> <resume>` runs EXACTLY ONE run inside a
 # GitHub Actions job's own checkout, through the same spawn_engine launch line,
-# stream tee, classify_run_exit, park-loop guard, stall watchdog and usage gate
-# a local run gets — the job does for itself what this daemon does locally.
+# stream tee, classify_run_exit, park-loop guard, stall watchdog, push-refusal
+# pass and usage gate a local run gets — the job does for itself what this
+# daemon does locally. The launch line removes the strip set from the session's
+# environment and applies no allow-list (THE SESSION'S ENVIRONMENT), so the
+# session keeps the runner's own variables while the job-level GH_TOKEN and the
+# push URL stay with this watcher and its `remote-run.sh` calls.
 #
 #   * REFUSED UNLESS HARNESS_JOB_MODE=1. The stall watchdog's reset to the last
 #     commit acts on the checkout the job runs in, and job mode treats that
@@ -757,6 +826,13 @@
 #                 foo_task_prompt_review.md -> branch foo_task_prompt, review
 #                 notes.md             -> archived as rejected_<ts>_notes.md,
 #                    with no registry record written at all
+#                 trunk_task_prompt.md -> archived as
+#                    rejected_<ts>_trunk_task_prompt.md, ONE `failed`
+#                    notification, no registry record and no working copy;
+#                    the same for trunk_review[_<n>].md and trunk_docs.md, for
+#                    a name `git check-ref-format --branch` refuses
+#                    (a..b_task_prompt.md, foo.lock_review_2.md), and when the
+#                    protected set cannot be resolved
 #                 README.md            -> left in place, never archived
 #   a guard       with "$d/sdlc-harness/AUTONOMOUS_STOP" present, or the registry
 #                 already at MAX_PARALLEL_RUNS live runs, the dropped file STAYS
@@ -792,7 +868,7 @@
 #                    further tick with no answer_4.md does NOT resume
 #   a park loop   from that resume setup, a stub that writes an unanswered
 #                 question_<n>.md with an index no higher than any already there
-#                 before it exits, and PARK_LOOP_WINDOW_SECS=0; answer each park
+#                 before it exits; answer each park
 #                 and tick, twice -> after the second resumed session exits it is
 #                 `park_loop`, park_loop_cycles is 2, ONE `park_loop`
 #                 notification and no `parked` one fire for that exit, and
@@ -1190,8 +1266,7 @@ placeholder_start_recover "${1-}"
 
 # -----------------------------------------------------------------------------
 # Anchors. All central state lives in the MAIN checkout; a run executes in a
-# sibling clone, or a legacy linked worktree for a run started before clones —
-# under `job`, the main checkout and the working copy are
+# sibling clone — under `job`, the main checkout and the working copy are
 # the same directory, the job's own checkout, which the first working copy
 # `git worktree list` reports already yields (see JOB MODE in the header); for
 # a record with `execution: github-actions` the run executes in a GitHub Actions
@@ -1382,7 +1457,8 @@ RUN_CAP_CLAMP_LOGGED=0
 # effective_max_parallel_runs — print 1 on a placeholder host when
 # MAX_PARALLEL_RUNS is above 1, else MAX_PARALLEL_RUNS unchanged: concurrent
 # runs of one repository share the main checkout's sandbox placeholders
-# (docs/cli.md §6). Job mode runs one run and is never clamped.
+# (docs/sandbox-record.md residual 12). Job mode runs one run and is never
+# clamped.
 effective_max_parallel_runs() {
   if [ "$JOB_MODE" != "1" ]; then
     case "$MAX_PARALLEL_RUNS" in
@@ -1457,14 +1533,10 @@ STALL_WAKE_GAP_SECS="${STALL_WAKE_GAP_SECS:-300}"
 # The park-loop guard (classify_run_exit; clear_park_loops). How many CONSECUTIVE
 # park-resumes that made no progress mark the run `park_loop`, after which it is
 # resumed no further until an operator creates PARK_LOOP_CLEAR. Set 0 to turn the
-# guard off. Both defaults are sized from measured park-resumed sessions; the
+# guard off. The default is sized from measured park-resumed sessions; the
 # measurements are in the harness repository's docs/watcher.md §4, "A resume
 # that makes no progress is bounded.".
 PARK_LOOP_MAX_CYCLES="${PARK_LOOP_MAX_CYCLES:-2}"
-# A park-resumed session that parks again inside this many seconds made no
-# progress, whatever question it parked on. Set 0 to judge progress on the
-# question index alone.
-PARK_LOOP_WINDOW_SECS="${PARK_LOOP_WINDOW_SECS:-300}"
 
 # The usage gate (usage_gate; see the header for what it acts on and why only the
 # watcher can). Set 0 to turn the whole pass off — a run then spends the account's
@@ -1754,8 +1826,6 @@ job_report() {
 #                       otherwise. Read and cleared by classify_run_exit on every
 #                       non-pause exit; it is how the park-loop guard counts only
 #                       park-resumed sessions. Cleared on a fresh launch
-#   resumed_at_epoch    the epoch second of the most recent resume, stamped by
-#                       both resume paths; the guard's window is measured from it
 #   resume_max_question_index
 #                       the highest numbered question_<n>.md index, top level and
 #                       answered/ together, when the park resume launched. An
@@ -1778,6 +1848,16 @@ job_report() {
 #                       dying under the kill would otherwise fire a spurious
 #                       `failed` over the status this pass sets. Cleared on every
 #                       arm of the teardown, including the give-up one.
+#   push_refusing       `1` for the width of a push-refusal teardown
+#                       (check_push_refusals), raised before anything is
+#                       collected or signalled, for stall_killing's reason:
+#                       classify_run_exit and record_run_analytics return at
+#                       once while it is set. Cleared at the end of that
+#                       teardown and on a fresh launch
+#   push_refused        `push refused: <reason>` once a push refusal has set the
+#                       run `failed`, at either site; run_job reads it to stop
+#                       the job without an automatic resume and to word the
+#                       bundle's detail. Cleared on a fresh launch
 #   stall_wake_noted    the `.host_woke_at` epoch for which check_stalled_runs
 #                       last logged `measuring silence from the wake`, so one
 #                       wake is logged once per run. Written by
@@ -1915,6 +1995,30 @@ registry_branches() { hr_registry_branches "$REGISTRY"; }
 # field, never `execution.target` (see REMOTE DISPATCH). Silent.
 record_is_remote() {
   [ "$(registry_get "$1" execution)" = "github-actions" ]
+}
+
+# record_has_no_copy_kind <branch> — outside job mode, true when <branch>'s
+# record carries no `copy_kind`: a run made as a linked worktree before the
+# clone layout, which this watcher no longer resumes. Logs the skip once per
+# watcher process per branch (NO_COPY_KIND_NOTED, newline-delimited); writes
+# nothing to the registry and prunes nothing.
+NO_COPY_KIND_NOTED=""
+record_has_no_copy_kind() {
+  local branch="$1"
+  [ "$JOB_MODE" != "1" ] || return 1
+  [ -z "$(registry_get "$branch" copy_kind)" ] || return 1
+  case "
+$NO_COPY_KIND_NOTED" in
+    *"
+$branch
+"*) ;;
+    *)
+      NO_COPY_KIND_NOTED="${NO_COPY_KIND_NOTED}${branch}
+"
+      log "skipping '$branch': its run-registry record carries no copy_kind — a run made as a linked worktree before the clone layout, which this watcher no longer resumes; finish or remove it by hand"
+      ;;
+  esac
+  return 0
 }
 
 # Self-healing pass: a record still marked `running` whose process is gone is
@@ -2216,7 +2320,7 @@ print_status() {
   # observable. Nothing else the override file may have set is printed. The cap
   # printed is the one enforced.
   RUN_CAP="$(effective_max_parallel_runs)"
-  echo "tunables: MAX_PARALLEL_RUNS=$RUN_CAP POLL_INTERVAL_SECS=$POLL_INTERVAL_SECS PERMISSION_MODE=$PERMISSION_MODE CLEANUP_INTERVAL_SECS=$CLEANUP_INTERVAL_SECS AUTO_TAIL_TERMINAL=$AUTO_TAIL_TERMINAL STALL_CHECK_ENABLED=$STALL_CHECK_ENABLED STALL_WARN_SECS=$STALL_WARN_SECS STALL_KILL_SECS=$STALL_KILL_SECS STALL_MAX_RESTARTS=$STALL_MAX_RESTARTS STALL_BUSY_CPU_PCT=$STALL_BUSY_CPU_PCT PARK_LOOP_MAX_CYCLES=$PARK_LOOP_MAX_CYCLES PARK_LOOP_WINDOW_SECS=$PARK_LOOP_WINDOW_SECS USAGE_CHECK_ENABLED=$USAGE_CHECK_ENABLED USAGE_CHECK_INTERVAL_SECS=$USAGE_CHECK_INTERVAL_SECS USAGE_PAUSE_TRIGGER=$USAGE_PAUSE_TRIGGER USAGE_WARNING_DEBOUNCE=$USAGE_WARNING_DEBOUNCE USAGE_RESUME_MARGIN_SECS=$USAGE_RESUME_MARGIN_SECS USAGE_SEVEN_DAY_PAUSE_PCT=$USAGE_SEVEN_DAY_PAUSE_PCT USAGE_LANE_STATE_ENABLED=$USAGE_LANE_STATE_ENABLED USAGE_LANE_LOCK_ENABLED=$USAGE_LANE_LOCK_ENABLED REMOTE_CONTROL_POLL_SECS=$REMOTE_CONTROL_POLL_SECS REMOTE_WAIT_MAX_SECS=$REMOTE_WAIT_MAX_SECS REMOTE_AUTO_RESUME_MAX=$REMOTE_AUTO_RESUME_MAX REMOTE_AUTO_RESUME_DELAY_SECS=$REMOTE_AUTO_RESUME_DELAY_SECS STALL_WAKE_GAP_SECS=$STALL_WAKE_GAP_SECS KEEP_AWAKE=$KEEP_AWAKE_MODE"
+  echo "tunables: MAX_PARALLEL_RUNS=$RUN_CAP POLL_INTERVAL_SECS=$POLL_INTERVAL_SECS PERMISSION_MODE=$PERMISSION_MODE CLEANUP_INTERVAL_SECS=$CLEANUP_INTERVAL_SECS AUTO_TAIL_TERMINAL=$AUTO_TAIL_TERMINAL STALL_CHECK_ENABLED=$STALL_CHECK_ENABLED STALL_WARN_SECS=$STALL_WARN_SECS STALL_KILL_SECS=$STALL_KILL_SECS STALL_MAX_RESTARTS=$STALL_MAX_RESTARTS STALL_BUSY_CPU_PCT=$STALL_BUSY_CPU_PCT PARK_LOOP_MAX_CYCLES=$PARK_LOOP_MAX_CYCLES USAGE_CHECK_ENABLED=$USAGE_CHECK_ENABLED USAGE_CHECK_INTERVAL_SECS=$USAGE_CHECK_INTERVAL_SECS USAGE_PAUSE_TRIGGER=$USAGE_PAUSE_TRIGGER USAGE_WARNING_DEBOUNCE=$USAGE_WARNING_DEBOUNCE USAGE_RESUME_MARGIN_SECS=$USAGE_RESUME_MARGIN_SECS USAGE_SEVEN_DAY_PAUSE_PCT=$USAGE_SEVEN_DAY_PAUSE_PCT USAGE_LANE_STATE_ENABLED=$USAGE_LANE_STATE_ENABLED USAGE_LANE_LOCK_ENABLED=$USAGE_LANE_LOCK_ENABLED REMOTE_CONTROL_POLL_SECS=$REMOTE_CONTROL_POLL_SECS REMOTE_WAIT_MAX_SECS=$REMOTE_WAIT_MAX_SECS REMOTE_AUTO_RESUME_MAX=$REMOTE_AUTO_RESUME_MAX REMOTE_AUTO_RESUME_DELAY_SECS=$REMOTE_AUTO_RESUME_DELAY_SECS STALL_WAKE_GAP_SECS=$STALL_WAKE_GAP_SECS KEEP_AWAKE=$KEEP_AWAKE_MODE"
   if [ "$KEEP_AWAKE_MODE" = "off" ]; then
     echo "keep-awake: $KEEP_AWAKE_MODE — $KEEP_AWAKE_REASON"
   else
@@ -2526,7 +2630,7 @@ run_profile_wrapper_prefixes() {
 
 # run_profile_entries <copy> <kind> — print one
 # `<absolute path><TAB><kind><TAB><deny|omit>` line per entry the per-run
-# profile adds for the run copy <copy> of <kind> (`clone` or `worktree`), kind
+# profile adds for the run copy <copy> of <kind> (`clone`, the only kind), kind
 # being `file`, `directory` or `entry` as writeProtection.ts → ProtectedKind
 # means them. The third column is `omit` only for a clone row marked `omit`
 # while HR_PLACEHOLDER_HOST is `1` (bubblewrap would plant a placeholder at that
@@ -2534,11 +2638,10 @@ run_profile_wrapper_prefixes() {
 # then carries neither the line's denyWrite entry nor its `Edit` rules. The
 # column is `deny` for every other line:
 #   * each `hr_run_protected_rel_paths` line re-rooted at <copy>, as `entry`;
-#   * on a clone, each RUN_PROFILE_COPY_GIT_PATHS row re-rooted at <copy>;
-#   * on a legacy worktree, <copy>/.git as `file`;
-#   * the `.git` pointer of every other linked worktree the main checkout
-#     lists, as `file`;
-#   * while HR_PLACEHOLDER_HOST is `1`, on either kind, for each
+#   * each RUN_PROFILE_COPY_GIT_PATHS row re-rooted at <copy>;
+#   * the `.git` pointer of every linked worktree the main checkout lists —
+#     checkouts a person made by hand — as `file`;
+#   * while HR_PLACEHOLDER_HOST is `1`, for each
 #     run_profile_glob_drops line <g> and its `omit` row <p>, each path <d>/<p>
 #     `hr_deny_glob_expand <g> <copy>` prints, as `entry`, when <d>/.git is a
 #     directory and not a symbolic link and <d>/<p>'s parent directory exists.
@@ -2559,12 +2662,12 @@ run_profile_wrapper_prefixes() {
 # (every row but `///`; the loop above covers the quotes), which the copy's
 # wrapper twins would otherwise carry. Exit 1 the protected set or the base's
 # denyWrite list is unreadable, 2 the worktree list failed, 3 a path was
-# refused, 4 <kind> is neither kind, 5 a base sibling-glob trio entry has a
+# refused, 4 <kind> is not `clone`, 5 a base sibling-glob trio entry has a
 # shape hr_deny_glob_expand cannot expand; nothing useful is printed on a
 # non-zero exit.
 run_profile_entries() {
   local copy="${1%/}" kind="${2-}" rel p k a list line first=1 out="" drops g sib="" d
-  case "$kind" in clone | worktree) ;; *) return 4 ;; esac
+  [ "$kind" = clone ] || return 4
   drops="$(run_profile_glob_drops)" || return 1
   list="$(hr_run_protected_rel_paths "$MAIN_REPO")" || return 1
   while IFS= read -r rel; do
@@ -2574,19 +2677,14 @@ run_profile_entries() {
   done <<EOF
 $list
 EOF
-  if [ "$kind" = clone ]; then
-    while IFS=' ' read -r p k a; do
-      [ -n "$p" ] || continue
-      [ "$a" = omit ] && [ "${HR_PLACEHOLDER_HOST:-0}" = 1 ] || a=deny
-      out="${out}${copy}/${p}	${k}	${a}
+  while IFS=' ' read -r p k a; do
+    [ -n "$p" ] || continue
+    [ "$a" = omit ] && [ "${HR_PLACEHOLDER_HOST:-0}" = 1 ] || a=deny
+    out="${out}${copy}/${p}	${k}	${a}
 "
-    done <<EOF
+  done <<EOF
 $RUN_PROFILE_COPY_GIT_PATHS
 EOF
-  else
-    out="${out}${copy}/.git	file	deny
-"
-  fi
   list="$(git -C "$MAIN_REPO" worktree list --porcelain 2>/dev/null)" || return 2
   while IFS= read -r line; do
     case "$line" in
@@ -2686,7 +2784,7 @@ run_profile_render() {
     1) RUN_PROFILE_REFUSAL="the run copy's protected paths could not be read from harness.config.json, or the denyWrite list from $SETTINGS_PROFILE"; return 1 ;;
     2) RUN_PROFILE_REFUSAL="git worktree list failed in $MAIN_REPO"; return 1 ;;
     3) RUN_PROFILE_REFUSAL="a per-run profile entry carries a quote, a '*' or a tab, or the run copy's path carries a '\$', a backquote, '&', ';', '|', '<', '>' or a newline"; return 1 ;;
-    4) RUN_PROFILE_REFUSAL="the run copy's kind '$kind' is neither clone nor worktree"; return 1 ;;
+    4) RUN_PROFILE_REFUSAL="the run copy's kind '$kind' is not clone"; return 1 ;;
     *) RUN_PROFILE_REFUSAL="a sibling-glob denyWrite entry of $SETTINGS_PROFILE for a run copy's .git/commondir, .git/config.worktree or .git/objects/info/http-alternates cannot be re-rooted: the watcher expands only an absolute entry with one '*' ending its segment"; return 1 ;;
   esac
   if ! hr_json_single_object "$SETTINGS_PROFILE"; then
@@ -2986,6 +3084,72 @@ EOF
 }
 
 # -----------------------------------------------------------------------------
+# The session's two environment sets (THE SESSION'S ENVIRONMENT, in the
+# header). Constants, assigned plainly after the override channel, so neither
+# `watcher.env` nor an inherited value can widen them.
+#
+# SESSION_ENV_STRIP_EXTRA — the watcher-owned names added to the profile's
+# `sandbox.credentials.envVars`, in both modes: the push URL only
+# autonomous-notify.sh, which this script runs, reads, and the job's git token.
+# MIRROR OF `cli/src/remote/githubActions.ts` → `PUSH_URL_SECRET` and
+# `GIT_TOKEN_SECRET`, byte for byte: a rename there is an edit here, and these
+# two values are the only code spelling of either name in this file.
+SESSION_ENV_STRIP_EXTRA="HARNESS_PUSH_URL HARNESS_GIT_TOKEN"
+#
+# SESSION_ENV_BASE — the names a LOCAL session keeps without `sandbox.passEnv`,
+# plus every name beginning `LC_` or `GCM_` (session_env_kept).
+#   * The login shell's own: PATH … LANG TZ and the XDG_* roots.
+#   * SSH_AUTH_SOCK GIT_SSH_COMMAND GIT_SSH, for the excluded wrappers' SSH push.
+#   * The HTTPS push's, because an in-session push-branch.sh and the credential
+#     helper its push runs inherit this environment. `store` reads
+#     $HOME/.git-credentials or ${XDG_CONFIG_HOME:-$HOME/.config}/git/credentials
+#     and `cache` a socket under XDG_CACHE_HOME or HOME, both already kept;
+#     `osxkeychain` needs nothing beyond HOME/USER; `libsecret` and any Secret
+#     Service store reach it over the session bus, so DBUS_SESSION_BUS_ADDRESS
+#     (XDG_RUNTIME_DIR is already kept); Git Credential Manager reads its
+#     settings, never a secret, from GCM_* names; `gh auth git-credential` reads
+#     GH_TOKEN / GITHUB_TOKEN first — stripped whatever `sandbox.passEnv` says —
+#     then its stored login through GH_CONFIG_DIR or XDG_CONFIG_HOME, so
+#     GH_CONFIG_DIR (GH_ENTERPRISE_TOKEN and GITHUB_ENTERPRISE_TOKEN are in
+#     neither set, so `sandbox.passEnv` can bring them back); a prompting helper
+#     reaches its program through GIT_ASKPASS. SSH_ASKPASS is not kept: nothing
+#     on the HTTPS path reads it.
+#   * Proxies and CA bundles.
+#   * CLAUDE_CONFIG_DIR, whose owner is `cli/src/machine/paths.ts` →
+#     `CLAUDE_HOME_VARIABLE`, and the agent's two credentials.
+#   * ANTHROPIC_BASE_URL ANTHROPIC_MODEL: they name where and which model, never
+#     a secret. A gateway's own credential (ANTHROPIC_AUTH_TOKEN,
+#     ANTHROPIC_CUSTOM_HEADERS) and a Bedrock/Vertex setup
+#     (CLAUDE_CODE_USE_BEDROCK / CLAUDE_CODE_USE_VERTEX and the cloud
+#     credentials they need) carry or select a secret, so they are left to
+#     `sandbox.passEnv`, where the operator opts in by name.
+#   * The harness-owned names a session-side reader needs, derived from
+#       grep -rhoE '\$\{?(HARNESS|CLAUDE_CODE)_[A-Z0-9_]+|printenv (HARNESS|CLAUDE_CODE)_[A-Z0-9_]+' \
+#         plugin/ cli/templates/scripts/{commit-on-branch,push-branch,refresh-branch,launch-sandboxed-gates,run-test-suite,scratch-run,flow-walker,docs-search-server,typecheck,test}.sh \
+#         cli/templates/scripts/lib/
+#     run in the harness repository, keeping each name a session's tree reads
+#     and none of the strip set: HARNESS_DOCS_RETRIEVAL_DATABASE_URL. Its other
+#     hits are HARNESS_MAIN_REPO, which the launch exports itself, the strip
+#     set's HARNESS_PR_TOKEN and HARNESS_GIT_TOKEN, and two job-only names the
+#     watcher's own passes read.
+SESSION_ENV_BASE="PATH HOME USER LOGNAME SHELL TMPDIR TERM LANG TZ \
+XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME XDG_DATA_HOME XDG_RUNTIME_DIR \
+SSH_AUTH_SOCK GIT_SSH_COMMAND GIT_SSH \
+DBUS_SESSION_BUS_ADDRESS GH_CONFIG_DIR GIT_ASKPASS \
+HTTPS_PROXY HTTP_PROXY NO_PROXY ALL_PROXY https_proxy http_proxy no_proxy all_proxy NODE_EXTRA_CA_CERTS SSL_CERT_FILE SSL_CERT_DIR \
+CLAUDE_CONFIG_DIR ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN \
+ANTHROPIC_BASE_URL ANTHROPIC_MODEL \
+HARNESS_DOCS_RETRIEVAL_DATABASE_URL"
+
+# session_env_kept <name> <pass names, space-separated> — 0 when a local
+# session keeps <name> under the allow-list.
+session_env_kept() {
+  case "$1" in LC_* | GCM_*) return 0 ;; esac
+  case " $SESSION_ENV_BASE $2 " in *" $1 "*) return 0 ;; esac
+  return 1
+}
+
+# -----------------------------------------------------------------------------
 # Headless launch. It DELIMITS THE UNTRUSTED PROMPT CONTENT: the launch prompt
 # references the dropped artifact's FILE PATH for the engine to read — it never
 # concatenates that artifact's text into the trusted instruction layer. The
@@ -2995,9 +3159,10 @@ EOF
 #
 # The flag string, in full:
 #
-#   HARNESS_MAIN_REPO=<MAIN_REPO>
-#   CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0
-#   <agent cli> -p "<trusted instruction naming the artifact's FILE PATH>" \
+#   unset <the strip set> [<every other exported name outside the allow-list>]
+#   export HARNESS_MAIN_REPO=<MAIN_REPO>
+#   export CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0
+#   exec <agent cli> -p "<trusted instruction naming the artifact's FILE PATH>" \
 #     --settings <per-run copy> \
 #     --permission-mode "$PERMISSION_MODE" \
 #     --model "<agentModel>" \
@@ -3016,12 +3181,16 @@ EOF
 # the base, unchanged. Either file is checked first (run_profile_check), and
 # the launch is refused when the check fails: Claude Code takes one
 # `--settings` file, and silently ignores one that fails its validation.
-# The environment lines are exported inside spawn_engine's subshell, so the
-# engine and every command it runs inherit them. The plugin's readers read
-# HARNESS_MAIN_REPO with a bare
-# `printenv HARNESS_MAIN_REPO`; no outer-loop script reads it, because an
-# assignment prefix on an excluded call could set it.
-# where the bracketed tail is JOB MODE ONLY: one --add-dir per
+# All three lines run in the launch pipe's head only, so the subshell's own
+# post-session passes keep the full environment. The `unset` takes the names
+# spawn_engine computed before the subshell (THE SESSION'S ENVIRONMENT, in the
+# header): the strip set in both modes and, bracketed, the allow-list's
+# removals on a local run. The two exports follow it, so the engine and every
+# command it runs inherit them whatever it removed; the plugin's readers read
+# HARNESS_MAIN_REPO with a bare `printenv HARNESS_MAIN_REPO`, and no outer-loop
+# script reads it, because an assignment prefix on an excluded call could set
+# it.
+# On the `exec` line the bracketed tail is JOB MODE ONLY: one --add-dir per
 # permissions.additionalDirectories entry of the base profile, in file order, minus
 # empty entries and the two directories above; outside job mode the line ends at
 # the state directory. See spawn_engine for why the profile's list is repeated.
@@ -3081,7 +3250,12 @@ spawn_engine() {
     settings_file="$SETTINGS_PROFILE"
   else
     copy_kind="$(registry_get "$branch" copy_kind)"
-    [ -n "$copy_kind" ] || copy_kind="worktree"
+    # A backstop: every caller skips such a record or has it refused by the
+    # run-copy check before reaching here.
+    if [ "$copy_kind" != "clone" ]; then
+      spawn_refuse "$branch" "its run-registry record carries no 'clone' copy_kind, so it is not launched"
+      return 1
+    fi
     # Read by run_profile_entries, and by the manifest write below.
     hr_placeholder_host_probe_var
     if [ "$HR_PLACEHOLDER_HOST" = "1" ]; then
@@ -3092,15 +3266,13 @@ spawn_engine() {
       # commondir, or a non-empty or non-regular config.worktree or
       # http-alternates, is refused here, before Claude Code's own startup git
       # reads the copy.
-      if [ "$copy_kind" = "clone" ]; then
-        if [ -z "$RUN_MAIN" ]; then
-          spawn_refuse "$branch" "$RUN_MAIN_REFUSAL"
-          return 1
-        fi
-        if ! hr_run_copy_check_var "$RUN_MAIN" "$worktree"; then
-          spawn_refuse "$branch" "the run copy failed its trust check before launch: $HR_RUN_REFUSAL"
-          return 1
-        fi
+      if [ -z "$RUN_MAIN" ]; then
+        spawn_refuse "$branch" "$RUN_MAIN_REFUSAL"
+        return 1
+      fi
+      if ! hr_run_copy_check_var "$RUN_MAIN" "$worktree"; then
+        spawn_refuse "$branch" "the run copy failed its trust check before launch: $HR_RUN_REFUSAL"
+        return 1
       fi
     fi
     if ! run_profile_render "$branch" "$worktree" "$copy_kind"; then
@@ -3115,6 +3287,60 @@ spawn_engine() {
     spawn_refuse "$branch" "$RUN_PROFILE_REFUSAL"
     return 1
   fi
+
+  # The names the launch pipe's head unsets (THE SESSION'S ENVIRONMENT, in the
+  # header), computed and refused HERE, in this shell: from inside the launch
+  # subshell a refusal would reach no caller.
+  local session_unset_names profile_names pass_names="" name unset_logged=""
+  local launch_agent_cli="$AGENT_CLI" launch_permission_mode="$PERMISSION_MODE"
+  session_unset_names=()
+  if ! profile_names="$(hr_profile_env_var_names "$settings_file")"; then
+    spawn_refuse "$branch" "$settings_file has a sandbox.credentials.envVars that is not a list, or cannot be read, so the session's environment cannot be stripped"
+    return 1
+  fi
+  if [ "$JOB_MODE" != "1" ]; then
+    # Local only: a job's environment is the runner's, not a person's shell.
+    # The main checkout's configuration, never the run copy's.
+    if ! pass_names="$(hr_session_pass_env "$MAIN_REPO")"; then
+      spawn_refuse "$branch" "sandbox.passEnv could not be read from the main checkout's harness.config.json, so the session's allow-list is unknown"
+      return 1
+    fi
+    pass_names="$(printf '%s\n' "$pass_names" | tr '\n' ' ')"
+  fi
+  # The two names the launch exports may land in this list when the watcher
+  # inherited them; the head exports both after its `unset`, so they still
+  # reach the session with the launch's values.
+  while IFS= read -r name; do
+    case "$name" in
+      '' | ANTHROPIC_API_KEY | CLAUDE_CODE_OAUTH_TOKEN) continue ;;
+    esac
+    session_unset_names+=("$name")
+  done <<EOF
+$profile_names
+$(printf '%s\n' $SESSION_ENV_STRIP_EXTRA)
+EOF
+  if [ "$JOB_MODE" != "1" ]; then
+    while IFS= read -r name; do
+      # MAIN_REPO: the head's anchor export reads it after the `unset`.
+      case "$name" in '' | MAIN_REPO) continue ;; esac
+      case " ${session_unset_names[*]+${session_unset_names[*]}} " in *" $name "*) continue ;; esac
+      session_env_kept "$name" "$pass_names" || session_unset_names+=("$name")
+    done <<EOF
+$(compgen -e)
+EOF
+  fi
+  unset_logged="${session_unset_names[*]+${session_unset_names[*]}}"
+  log "session environment for '$branch': removing ${unset_logged:-nothing}"
+  # A record already here predates this session (PUSH REFUSALS, in the
+  # header): file it, so it cannot fail the run this launch starts. The
+  # session's own first push re-scans the same commits.
+  if hr_push_refusals_for_var "$MAIN_REPO" "$branch"; then
+    log "push refusal: filing ${#HR_PUSH_REFUSAL_FILES[@]} record(s) older than this launch of '$branch' as handled (the first: $HR_PUSH_REFUSAL_REASON)"
+    local stale_refusal
+    for stale_refusal in "${HR_PUSH_REFUSAL_FILES[@]}"; do
+      hr_push_refusal_handled "$stale_refusal" || log "push refusal: could not move $stale_refusal to handled/ for '$branch'"
+    done
+  fi
   # `launch-sandboxed-gates.sh` reads this record, never `hr_run_profile_file`:
   # an environment variable must not choose the profile its worker's protected
   # paths come from. Job mode writes nothing — its launcher target is the main
@@ -3127,10 +3353,16 @@ spawn_engine() {
   # Trusted instruction layer. It NAMES the artifact's path; it never inlines the
   # untrusted body. The engine reads the file itself.
   #
-  # On a RESUME, name every top-level answer file the watcher just unblocked so
-  # the engine consumes all of them (the planning fork detects the resume from
-  # those top-level answer_<n>.md files; the watcher archives exactly that set
-  # only after this run exits — the consume-then-archive contract).
+  # On a RESUME, name every top-level answer file the watcher just unblocked and
+  # assign no reader: the flow's own resume step decides who reads each pair.
+  # Before Phase D, a pair whose question names an origin that opens `Phase G`
+  # can be read only by test-fix-plan-writer, and only when G.0 passes it
+  # (plugin/instructions/plan_orchestration_instructions_core.md → `### G.0
+  # Resolve the round`); Phase D's clarification digest
+  # (plugin/instructions/clarification_digest_instructions.md) is its one later
+  # reader. The planning fork detects the resume from those top-level
+  # answer_<n>.md files; the watcher archives exactly that set only after this
+  # run exits — the consume-then-archive contract.
   local resume_clause=""
   if [ -n "$resume_indexes" ]; then
     local i resume_files=""
@@ -3138,8 +3370,11 @@ spawn_engine() {
       [ -z "$resume_files" ] || resume_files="${resume_files}, "
       resume_files="${resume_files}${state_rel}/clarifications/${branch}/answer_${i}.md"
     done
-    resume_clause="This is a RESUME: every question file of this park has been answered — consume ALL of these answer \
-files, each paired by index with its question_<i>.md, and resume from the park point rather than restarting: ${resume_files}. "
+    resume_clause="This is a RESUME: every question file of this park has been answered. Its answer files, each paired \
+by index with its question_<i>.md, are: ${resume_files}. Resume from the park point rather than restarting; each answer \
+file is read only by the step your flow's instructions name for it. Before Phase D, never open or quote an answer file \
+whose question file names an origin that opens Phase G: Phase G's G.0 decides whether that pair reaches \
+test-fix-plan-writer, its only possible reader until Phase D's clarification digest quotes it. "
   fi
 
   # Pause-resume clause: set (via the 5th argument) when the paused-run resume
@@ -3355,15 +3590,6 @@ EOF
   # the only way to enumerate them is through a parent that is still alive.
   (
     cd "$worktree" || exit 97
-    # Set unconditionally, so a value the watcher inherited is overwritten rather
-    # than passed on; inside the subshell, so no other child of the watcher sees it.
-    export HARNESS_MAIN_REPO="$MAIN_REPO"
-    # Set unconditionally, so a value inherited by the watcher or sourced from
-    # `watcher.env` is overwritten for the session; inside the subshell, so no
-    # other child of the watcher sees it. No operator value may override it: a
-    # nonzero ceiling stops a running background sub-agent and exits 0
-    # (BACKGROUND SUB-AGENTS ARE WAITED FOR, in the header).
-    export CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0
     # The run log's length before this session writes to it, so the stopped-
     # agents scan after it reads only this session's bytes. `$(( ))` strips the
     # padding BSD `wc` adds; a missing log is 0.
@@ -3391,12 +3617,28 @@ EOF
     # into the engine, so PIPESTATUS[0] is the engine's own status, and the
     # `$(exec sh -c …)` pid is the engine's pid, because bash 3.2 has no
     # per-subshell pid variable. keep_awake_start's stdio is detached because its
-    # stdout here is the stream pipe.
+    # stdout here is the stream pipe. The `unset` runs in this head alone, over
+    # the names computed before the subshell, so the session starts without
+    # them while this subshell's own post-session passes keep them; a readonly
+    # name it cannot remove is skipped silently. The `exec` line reads only
+    # unexported copies: a tunable sourced from `watcher.env` under `set -a`,
+    # PERMISSION_MODE among them, is exported, so it can be in that list.
+    #
+    # The two exports come AFTER the `unset`, which may have removed an
+    # inherited copy of either, and are set unconditionally, so a value the
+    # watcher inherited or sourced from `watcher.env` is overwritten rather than
+    # passed on; in this head, so no other child of the watcher sees them. No
+    # operator value may override the ceiling: a nonzero one stops a running
+    # background sub-agent and exits 0 (BACKGROUND SUB-AGENTS ARE WAITED FOR, in
+    # the header).
     {
       keep_awake_start "$branch" "$(exec sh -c 'echo "$PPID"')" </dev/null >/dev/null 2>&1
-      exec "$AGENT_CLI" -p "$launch_prompt" \
+      unset -v ${session_unset_names[@]+"${session_unset_names[@]}"} 2>/dev/null
+      export HARNESS_MAIN_REPO="$MAIN_REPO"
+      export CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0
+      exec "$launch_agent_cli" -p "$launch_prompt" \
         --settings "$settings_file" \
-        --permission-mode "$PERMISSION_MODE" \
+        --permission-mode "$launch_permission_mode" \
         ${model_args[@]+"${model_args[@]}"} \
         ${effort_args[@]+"${effort_args[@]}"} \
         --output-format stream-json --verbose \
@@ -3500,6 +3742,7 @@ launch_run() {
   registry_set "$branch" stall_restarts 0
   registry_set "$branch" stall_warned ""
   registry_set "$branch" stall_killing ""
+  registry_set "$branch" push_refusing "" push_refused ""
   registry_set "$branch" paused_by "" usage_resume_at "" pause_reason "" pause_note_stale ""
   registry_set "$branch" resume_kind ""
   registry_set "$branch" park_loop_cycles 0
@@ -3635,9 +3878,8 @@ EOF
 # equal to `refs/remotes/origin/<branch>`, fetching that ref once when they
 # differ. Any non-zero answer — the push refused or skipped, origin naming no
 # URL, the fetch failing, or origin moved past the branch — is one watcher-log
-# WARNING; the push's and the fetch's own output go to the run's log. That
-# reading holds for a clone and a legacy worktree alike: on a clone the commit
-# has already moved the main checkout's ref with the clone's, so push-branch.sh's
+# WARNING; the push's and the fetch's own output go to the run's log. On a
+# clone the commit has already moved the main checkout's ref with the clone's, so push-branch.sh's
 # sync-in is a no-op, the push runs from the main checkout, and
 # classify_run_exit's sync after it finds the two equal.
 # In a job (JOB_MODE=1) it pushes nothing: the workflow's `Push the branch` step
@@ -3652,6 +3894,10 @@ record_run_analytics() {
 
   # The watchdog owns this run's teardown, as in classify_run_exit's first test.
   if [ "$(registry_get "$branch" stall_killing)" = "1" ]; then
+    return 0
+  fi
+  # So does the push-refusal pass, as in classify_run_exit's second test.
+  if [ "$(registry_get "$branch" push_refusing)" = "1" ]; then
     return 0
   fi
   if [ ! -x "$RUN_ANALYTICS" ]; then
@@ -3747,6 +3993,10 @@ classify_run_exit() {
   if [ "$(registry_get "$branch" stall_killing)" = "1" ]; then
     return 0
   fi
+  # The push-refusal pass is tearing this run down, for the same reason.
+  if [ "$(registry_get "$branch" push_refusing)" = "1" ]; then
+    return 0
+  fi
 
   # Sync a clone's branch into the main checkout, so the main checkout's branch
   # shows what the run committed. A refusal is one log line and never changes
@@ -3757,6 +4007,14 @@ classify_run_exit() {
     elif ! hr_run_copy_check_var "$RUN_MAIN" "$worktree" >>"$log_path" 2>&1; then
       log "classify: could not sync the clone of '$branch' into the main checkout ($HR_RUN_REFUSAL) — its branch there may lag the run's commits"
     fi
+  fi
+
+  # A push this session made and push-branch.sh refused outranks every other
+  # outcome, `completed` included. This run's own branch only, and no teardown:
+  # the engine has exited, and the tick pass owns every other run's record.
+  if hr_push_refusals_for_var "$MAIN_REPO" "$branch"; then
+    push_refusal_fail "$branch" "$log_path"
+    return 0
   fi
 
   local state_rel state_abs="" clar_dir="" pause_ack="" resume_file=""
@@ -3860,35 +4118,28 @@ classify_run_exit() {
     done
   fi
 
-  # THE PARK-LOOP GUARD. Counts consecutive park-resumed sessions that parked
-  # again without progress, whatever the cause, and past PARK_LOOP_MAX_CYCLES
-  # holds the run as `park_loop` so no resume pass offers it again. Only a
-  # session the PARK resume launched is judged — resume_kind tells it apart from
-  # a fresh launch and a pause resume, whose parked exits leave the count as it
-  # is. Placed after the parked decision above, which it never changes.
+  # THE PARK-LOOP GUARD. A park-resumed session that parks again without raising
+  # a question_<n>.md above resume_max_question_index made no progress; one that
+  # raised one made progress, whatever its duration — a new question waits on a
+  # person's answer, so how soon it was raised says nothing about a loop (the
+  # harness repository's docs/watcher.md §4, "A resume that makes no progress is
+  # bounded."). Consecutive no-progress sessions past PARK_LOOP_MAX_CYCLES hold
+  # the run as `park_loop` so no resume pass offers it again. Only a session the
+  # PARK resume launched is judged — resume_kind tells it apart from a fresh
+  # launch and a pause resume, whose parked exits leave the count as it is.
+  # Placed after the parked decision above, which it never changes.
   local resume_kind
   resume_kind="$(registry_get "$branch" resume_kind)"
   if [ -n "$resume_kind" ]; then
     registry_set "$branch" resume_kind ""
   fi
   if [ "$parked" = 1 ] && [ "$resume_kind" = "answer" ] && [ "$PARK_LOOP_MAX_CYCLES" != "0" ]; then
-    local base_max now_max resumed_epoch elapsed cycles loop_reason=""
+    local base_max now_max cycles loop_reason=""
     base_max="$(registry_get "$branch" resume_max_question_index)"
     case "$base_max" in '' | *[!0-9]*) base_max=0 ;; esac
     now_max="$(max_question_index "$clar_dir")"
-    resumed_epoch="$(registry_get "$branch" resumed_at_epoch)"
     if [ "$now_max" -le "$((10#$base_max))" ]; then
       loop_reason="no question above index $((10#$base_max))"
-    else
-      case "$resumed_epoch" in
-        '' | *[!0-9]*) ;;
-        *)
-          elapsed=$(($(date +%s) - resumed_epoch))
-          if [ "$elapsed" -lt "$PARK_LOOP_WINDOW_SECS" ]; then
-            loop_reason="re-parked after ${elapsed}s, inside PARK_LOOP_WINDOW_SECS=$PARK_LOOP_WINDOW_SECS"
-          fi
-          ;;
-      esac
     fi
     if [ -n "$loop_reason" ]; then
       cycles="$(registry_get "$branch" park_loop_cycles)"
@@ -4094,7 +4345,6 @@ begin_park_resume() {
   registry_set "$branch" resumed_at "$(date '+%Y-%m-%dT%H:%M:%S')"
   registry_set "$branch" resumed_for_index "$answered_set"
   registry_set "$branch" resume_kind answer
-  registry_set "$branch" resumed_at_epoch "$(date +%s)"
   registry_set "$branch" resume_max_question_index "$(max_question_index "$clar_dir")"
 }
 
@@ -4105,7 +4355,9 @@ begin_park_resume() {
 # for the cap and 11 when it deferred for the kill switch — the same three-way
 # vocabulary the inbox pass returns, so a caller that already distinguishes them
 # needs no second one. A remote record returns 1 and logs nothing: its answers
-# reach GitHub through the user's own command (REMOTE DISPATCH).
+# reach GitHub through the user's own command (REMOTE DISPATCH). A record with
+# no `copy_kind` returns 1, its status, files and channel untouched
+# (record_has_no_copy_kind).
 #
 # THE PARK IS THE UNIT. A partly answered park is not resumed, and a resume
 # consumes every answered pair at once: resuming on a subset would leave pairs
@@ -4120,6 +4372,7 @@ resume_parked_run() {
   local branch="$1"
   local worktree log_path
   record_is_remote "$branch" && return 1
+  record_has_no_copy_kind "$branch" && return 1
   worktree="$(registry_get "$branch" worktree)"
   log_path="$(registry_get "$branch" log_path)"
   [ -n "$worktree" ] || return 1
@@ -4276,7 +4529,6 @@ begin_pause_resume() {
   registry_set "$branch" status running pause_reason ""
   registry_set "$branch" resumed_at "$(date '+%Y-%m-%dT%H:%M:%S')"
   registry_set "$branch" resume_kind pause
-  registry_set "$branch" resumed_at_epoch "$(date +%s)"
 }
 
 # resume_paused_run <branch>
@@ -4284,11 +4536,12 @@ begin_pause_resume() {
 # Resume one paused run if a RESUME trigger has landed in its working copy.
 # Return codes, the missing-working-copy outcome and the kill-switch/cap ordering
 # are resume_parked_run's, for the same reasons. A remote record returns 1 and
-# logs nothing, as there.
+# logs nothing, and a record with no `copy_kind` is skipped, as there.
 resume_paused_run() {
   local branch="$1"
   local worktree log_path
   record_is_remote "$branch" && return 1
+  record_has_no_copy_kind "$branch" && return 1
   worktree="$(registry_get "$branch" worktree)"
   log_path="$(registry_get "$branch" log_path)"
   [ -n "$worktree" ] || return 1
@@ -4711,6 +4964,65 @@ $(registry_branches)
 EOF
 }
 
+# push_refusal_fail <branch> <log_path> — the outcome both push-refusal sites
+# share (PUSH REFUSALS in the header), over the records hr_push_refusals_for_var
+# just set: `failed` with `push refused: <reason>`, one `failed` notification
+# carrying it, in a job the `::error` annotation, then every record handled.
+# The reason is push-branch.sh's own sentence, way on included; nothing is
+# added to it. `%` is the one character of a single-line annotation GitHub
+# reads as an escape.
+push_refusal_fail() {
+  local branch="$1" log_path="$2" detail f annotation
+  detail="push refused: ${HR_PUSH_REFUSAL_REASON:-push-branch.sh recorded no reason}"
+  registry_set "$branch" status failed pid "" push_refused "$detail"
+  log "run '$branch' failed — $detail"
+  notify failed "$branch" "$log_path" "$detail"
+  if [ "$JOB_MODE" = "1" ]; then
+    annotation="${HR_PUSH_REFUSAL_REASON:-push-branch.sh recorded no reason}"
+    printf '::error title=Push refused::%s\n' "${annotation//%/%25}"
+  fi
+  for f in ${HR_PUSH_REFUSAL_FILES[@]+"${HR_PUSH_REFUSAL_FILES[@]}"}; do
+    hr_push_refusal_handled "$f" || log "push refusal: could not move $f to handled/ for '$branch'"
+  done
+}
+
+# check_push_refusals — the tick pass over every local `running` run, and the
+# only push-refusal site that tears a session down (PUSH REFUSALS in the
+# header). The marker goes up before anything is collected or signalled, as the
+# stall watchdog's kill tier raises stall_killing, so a session exiting under
+# the kill is neither classified nor notified by its own subshell; a run its
+# subshell already classified is skipped. A record whose branch has no
+# `running` run is left in place until that branch's next launch, which
+# files it as handled (spawn_engine).
+check_push_refusals() {
+  local b pid descendants log_path
+  while IFS= read -r b; do
+    [ -n "$b" ] || continue
+    record_is_remote "$b" && continue
+    [ "$(registry_get "$b" status)" = "running" ] || continue
+    hr_push_refusals_for_var "$MAIN_REPO" "$b" || continue
+    registry_set "$b" push_refusing 1
+    if [ "$(registry_get "$b" status)" != "running" ]; then
+      registry_set "$b" push_refusing ""
+      continue
+    fi
+    pid="$(registry_get "$b" pid)"
+    log "push refusal: '$b' — stopping its session (pid ${pid:-none})"
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+      descendants="$(collect_descendants "$pid")"
+      kill -9 "$pid" 2>/dev/null
+      # shellcheck disable=SC2086 # one signal to the whole captured list
+      [ -n "$descendants" ] && kill -9 $descendants 2>/dev/null
+    fi
+    log_path="$(registry_get "$b" log_path)"
+    [ -n "$log_path" ] || log_path="$LOGS_DIR/$b.log"
+    push_refusal_fail "$b" "$log_path"
+    registry_set "$b" push_refusing ""
+  done <<EOF
+$(registry_branches)
+EOF
+}
+
 # -----------------------------------------------------------------------------
 # The two pre-launch outcomes for a drop that never becomes a run. They differ in
 # exactly ONE thing — whether the branch's registry record is overwritten — and
@@ -4734,11 +5046,14 @@ fail_before_launch() {
 # Used when the record already there (`parked`, `paused`, `park_loop`) has to survive
 # untouched so the resume pass can still pick that run up once its clarification
 # answer or its RESUME sentinel lands. Stamping `failed` over it would strand a
-# run that nothing ever goes back for.
+# run that nothing ever goes back for. Also used by process_inbox_file's intake
+# refusal of a protected, unjudgeable or invalid branch, where there is no record
+# at all and none may be created, which passes watcher.log as the log to name,
+# since the refused branch has no run log.
 reject_preserving_status() {
-  local branch="$1" file="$2" fname="$3" reason="$4"
+  local branch="$1" file="$2" fname="$3" reason="$4" log="${5:-$LOGS_DIR/$1.log}"
   mv "$file" "$ARCHIVE_DIR/rejected_$(date '+%Y%m%d%H%M%S')_$fname" 2>/dev/null || rm -f "$file"
-  notify failed "$branch" "$LOGS_DIR/$branch.log" "$reason"
+  notify failed "$branch" "$log" "$reason"
 }
 
 # watcher_commit <worktree> <rel> <subject> — the watcher's commit of one placed
@@ -4804,6 +5119,15 @@ remote_commit_and_push() {
 # A filename matching none of the three is logged and ARCHIVED rather than left
 # where it is, so it is not re-logged on every pass for as long as the watcher
 # runs.
+#
+# A routed name whose branch `hr_inbox_branch_refusal_var` refuses — protected,
+# a protected set that cannot be resolved, or not a valid branch name — is
+# archived as rejected_ too, with one `failed` notification and no registry
+# record. It sits ahead of the shared guards and of the `execution.target` read
+# because waiting does not change it: the name has to change, or, for an
+# unresolvable protected set, the configuration has to be repaired before the
+# file is dropped again. That is why a GitHub-bound drop on such a branch never
+# reaches remote-run.sh.
 # -----------------------------------------------------------------------------
 process_inbox_file() {
   local file="$1"
@@ -4819,6 +5143,13 @@ process_inbox_file() {
   fi
   branch="$HR_INBOX_BRANCH"
   engine_kind="$HR_INBOX_KIND"
+
+  # The intake refusal — see above. Nothing above it may write a file.
+  if ! hr_inbox_branch_refusal_var "$MAIN_REPO" "$branch"; then
+    log "rejecting '$fname': $HR_INBOX_REFUSAL — nothing created, committed or launched"
+    reject_preserving_status "$branch" "$file" "$fname" "(refused at intake: $HR_INBOX_REFUSAL — nothing created, committed or launched; rename the drop to an unprotected, valid branch name, or, when the protected set cannot be resolved, repair harness.config.json, then drop it again)" "$WATCHER_LOG"
+    return 0
+  fi
 
   # The central log every step below appends to. A branch derived from a FILENAME
   # cannot contain a `/`, so this name needs no sanitizing — unlike the
@@ -5743,6 +6074,8 @@ tick() {
   # settled before anything below reads the cap. It is skipped whole while a
   # usage hold is up — see the function.
   check_stalled_runs
+  # Beside it, for the same reason, and not skipped under a usage hold.
+  check_push_refusals
 
   # The two resume passes, both acting on runs that are ALREADY launched, and
   # both AHEAD OF THE INBOX LOOP below: a run that has been waiting for an answer
@@ -6032,6 +6365,7 @@ run_job() {
   registry_set "$branch" stall_restarts 0
   registry_set "$branch" stall_warned ""
   registry_set "$branch" stall_killing ""
+  registry_set "$branch" push_refusing "" push_refused ""
   registry_set "$branch" paused_by "" usage_resume_at ""
   registry_set "$branch" resume_kind ""
   registry_set "$branch" park_loop_cycles 0
@@ -6137,6 +6471,7 @@ run_job() {
         reconcile_stale_runs
         host_wake_pass
         check_stalled_runs
+        check_push_refusals
         usage_gate
         [ "$(registry_get "$branch" status)" = "running" ] || continue
         job_control_poll "$branch" "$state_abs" "$remote_status"
@@ -6216,6 +6551,10 @@ run_job() {
         esac
         ;;
       failed)
+        # A refused push is not retried either: the next session would push
+        # the same commits. The decision stays `stop`, so nothing is chained.
+        detail="$(registry_get "$branch" push_refused)"
+        [ -z "$detail" ] || break
         # A launch spawn_engine refused is not retried: the refusal does not
         # change between attempts, and no session ran.
         if [ -n "$SPAWN_REFUSAL" ]; then

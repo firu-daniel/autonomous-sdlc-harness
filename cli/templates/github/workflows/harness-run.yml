@@ -97,25 +97,29 @@
 # `review` cuts its own working copy of it, which create-worktree.sh refuses
 # for a branch already checked out. Its step is `continue-on-error` for the
 # report step's reason below: scripts older than this file carry no `collect`
-# verb.
+# verb. It is `needs: [run, deliver]` under the same `!cancelled()`, reading no
+# job's result, so a round is never collected before its delivery flipped the
+# pull request, and a failed or skipped `deliver` still reaches it.
 #
 # THE REF CHECK. Finding 6 of Gate 12 round 6: GitHub lists a run under the ref
 # it was dispatched from (Use workflow from), so a run or pause dispatched from
 # a ref other than its `branch` input is invisible to every lookup by that
 # branch. When `action` is `run` or `pause` and `github.ref_name` is not
-# `inputs.branch`, the `wrong-ref` job fails, naming the ref to use, and `run`
-# and `collect` are skipped; the jobless `pause` marker gains that failing job
+# `inputs.branch`, the `wrong-ref` job fails, naming the ref to use, and `open`,
+# `run`, `deliver` and `collect` are skipped; the jobless `pause` marker gains that failing job
 # only when its ref is wrong. `warm` is exempt because it dispatches on the
 # default branch with that branch as its input, so the two already agree.
 # `stop` is exempt because a deleted branch's stop marker is sent from the
 # default branch, its own ref being gone, and the stop check matches the
 # `harness stop <branch>` title across every branch's runs, under any ref.
 #
-# THE RUN-ACTOR GATE. The first step of `run` and of `collect`, byte-identical
-# in both, refuses a `github.triggering_actor` the repository variable
-# HARNESS_RUN_ACTORS does not admit, so the Run workflow form, `gh workflow run`
-# and a re-run by someone not on the list launch nothing; a refused `run` sets
-# no SCRIPTS_DIR, so its `always()` and `!cancelled()` steps skip too. The list:
+# THE RUN-ACTOR GATE. The first step of `open`, `run`, `deliver` and `collect`,
+# byte-identical in all four, refuses a `github.triggering_actor` the repository
+# variable HARNESS_RUN_ACTORS does not admit, so the Run workflow form, `gh
+# workflow run` and a re-run by someone not on the list launch nothing; a
+# refused job sets no SCRIPTS_DIR, so its `always()` and `!cancelled()` steps
+# skip too, and a `run` reached after a refused `open` is refused by its own
+# gate. The list:
 # split on `,`, each entry trimmed, empty entries dropped, matched
 # case-insensitively, `*` admitting every writer; an empty list admits the owner
 # of a user-owned repository alone, and nobody otherwise.
@@ -128,8 +132,9 @@
 #     the harness-resume.yml poller, which Gate 12 observation (xv) confirms.
 #   * Not closed: a writer who edits this file on a branch can remove the gate
 #     or dispatch as the bot. That writer can already read the secret (G7).
-#   * Resolved before it: the job-level HARNESS_PUSH_URL secret, at job start.
-#     The credential secrets and HARNESS_GIT_TOKEN are read only by later steps.
+#   * Resolved before it: `run`'s job-level HARNESS_PUSH_URL secret, at job
+#     start. The credential secrets are read only by later `run` steps, and
+#     HARNESS_GIT_TOKEN only by the last step of `open` and of `deliver`.
 #
 # THE JOB'S OWN FILES. `Check out the run's branch` checks out the run's branch,
 # and every later step runs or loads that tree's files: its scriptsDir scripts,
@@ -201,10 +206,13 @@
 # WHAT IT READS.
 #   Secrets: CLAUDE_CODE_OAUTH_TOKEN and/or ANTHROPIC_API_KEY (one is required;
 #     billing follows the API key when both are set), HARNESS_GIT_TOKEN (optional:
-#     a personal or App token, so the job's pushes trigger your own CI, which
-#     GITHUB_TOKEN pushes never do; it also opens the run's draft pull request
-#     when the run starts, and `deliver` opens one only when none is open at
-#     completion, so your CI runs on it without an approval click), HARNESS_PUSH_URL
+#     a personal or App token, read only by `open` and `deliver`; it opens the
+#     run's draft pull request when the run starts and flips it ready for review
+#     at completion, `deliver` opening one only when none is open, so your CI
+#     runs on `opened` and on `ready_for_review` without an approval click. The
+#     `run` job's pushes use GITHUB_TOKEN, so they trigger no CI, and no push
+#     from this workflow can carry a `.github/workflows/` edit: A WORKFLOW-FILE
+#     CHANGE CANNOT BE PUSHED FROM THIS WORKFLOW below), HARNESS_PUSH_URL
 #     (optional notifications).
 #   Variables: HARNESS_RUNNER, HARNESS_REMOTE_STOP (any value stops every job
 #     before it launches anything), HARNESS_RUN_ACTORS (THE RUN-ACTOR GATE),
@@ -215,17 +223,42 @@
 #   harness.config.json, at run time: `scriptsDir` and whether docs retrieval
 #     applies. No configured value is frozen into this file.
 #
+# A WORKFLOW-FILE CHANGE CANNOT BE PUSHED FROM THIS WORKFLOW. A workflow edit is
+# supervised-only: push-branch.sh refuses, at the first push of every unattended
+# run, local or in a job, a commit that changes a file under
+# `.github/workflows/`, and the watcher fails the run at once with that reason.
+# Here `run` pushes only with GITHUB_TOKEN, which could not push such a commit
+# anyway. A file under any other `workflows/` directory, such as a template
+# tree, is an ordinary file.
+#
 # THE PERMISSIONS. `permissions: {}` at workflow level grants nothing, and each
 # job's own block sets every permission it does not list to `none`. Each grant
 # is what that job's own steps run:
 #   wrong-ref  none           it fails the dispatch from its step's `env:` alone
+#   open       contents read  the default-branch checkout, and `open`'s fetch of
+#                             the run's branch (forge_fetch_branch)
+#              issues         `open`'s comment on the run's issue and the state
+#                             label on its pull request, through the issues API
+#              pull-requests  `open` lists the branch's pull requests and opens
+#                             the draft one
 #   run        contents       push-branch.sh pushes the branch
 #              actions        remote-run.sh `restore` downloads the previous
 #                             bundle, `continue` dispatches and enables the poller
 #              issues         lifecycle comments and state labels, on the issue
 #                             and the pull request, which both use the issues API
-#              pull-requests  remote-run.sh `open` and `deliver` open, update and
-#                             label the run's pull request
+#              pull-requests  `continue` (through notify) and the cancelled
+#                             job's `report` reach forge_report, whose
+#                             forge_pr_var lists the run's pull request
+#   deliver    contents read  the default-branch checkout, and `deliver`'s fetch
+#                             of the run's branch (forge_fetch_branch)
+#              actions read   `Download the state bundle` downloads this run's
+#                             bundle
+#              issues         `deliver`'s `completed` comment and state labels,
+#                             through the issues API
+#              pull-requests  `deliver` lists, opens and updates the pull
+#                             request and flips it ready, first running `gh pr
+#                             ready --undo` on a ready one when HARNESS_PR_TOKEN
+#                             is set: the flip and the re-toggle, one grant
 #   collect    contents       `collect` runs `review`, whose hr_push_landed
 #                             pushes the round through push-branch.sh
 #              actions        the settledness read lists runs and downloads the
@@ -241,15 +274,38 @@
 #                             its `init` calls no GitHub API
 # A grant narrower than a job's need fails only on GitHub, never locally.
 #
-# THE CHECKOUT CREDENTIAL. The `warm` checkout sets `persist-credentials: false`:
-# that job pushes nothing. The `run` and `collect` checkouts keep the credential
-# persisted, because both push through push-branch.sh with it (`run` with
-# HARNESS_GIT_TOKEN or the job token, `collect` with the job token), so
-# zizmor's `artipacked` finding stands on those two. The one upload, `Upload
+# THE CHECKOUT CREDENTIAL. The `open`, `deliver` and `collect` checkouts persist
+# GITHUB_TOKEN, and none of those jobs runs an agent: `open` and `deliver` fetch
+# the run's branch with it, and `collect` also pushes through push-branch.sh
+# with it, so zizmor's `artipacked` finding stands on those three. The `warm`
+# and `run` checkouts set `persist-credentials: false`: `warm` pushes nothing,
+# and `run`'s agent session works in its checkout, so its .git/config holds no
+# credential. `run` still pushes with GITHUB_TOKEN, through push-branch.sh:
+# `Store the push credential outside the checkout` (`remote-run.sh
+# push-credential store`) writes one path-scoped entry to ~/.git-credentials and
+# names that file by absolute path in the checkout's `credential.<url>.helper`
+# (`store --file <path>`), and `Erase the push credential`, the job's last step,
+# removes the entry and the keys. The sandbox and the file tools are read-denied
+# that file by derivation from the profile: its `sandbox.credentials.files`
+# entry and that entry's `Read` deny pair, the mechanism
+# S1 (runner) and S2 (runner) measured **pass** on ~/.ssh
+# (docs/sandbox-verification.md). Those rows measure the mechanism, not this
+# file: the direct measurement on ~/.git-credentials is still owed. The one upload, `Upload
 # the state bundle`, takes its path from the runner's temp directory, outside
 # GITHUB_WORKSPACE, so no artifact carries the checkout's .git/config. An edit
 # keeps it so: never point an upload-artifact `path:` inside the workspace while
 # a checkout persists its credential.
+#
+# THE JOB TOKEN AND THE SESSION. The `run` job's job-level GH_TOKEN (GITHUB_TOKEN)
+# and HARNESS_PUSH_URL reach the watcher's own passes: its pushes, its
+# remote-run.sh calls and its notifications. The watcher strips both, and every
+# `sandbox.credentials.envVars` name but the agent's own credential, from the
+# agent session's environment. That is hygiene that blocks a casual read, and a
+# boundary only beside the sandbox's PID namespace and no-new-privileges,
+# measured on the GitHub-hosted `ubuntu-26.04` image `20261101.186.1` only
+# (docs/sandbox-record.md, section 5) and unverified on other images and on
+# self-hosted runners. HARNESS_GIT_TOKEN is referenced only by `open` and
+# `deliver`, which run no agent and run the default branch's scripts.
 #
 # THE CLAUDE CLI. `Install the claude CLI when absent` installs
 # @anthropic-ai/claude-code unpinned, and only when the runner has no `claude`.
@@ -262,17 +318,21 @@
 # The audit-silent alternatives, `npx --yes` and `curl | bash`, are the same
 # install with less integrity checking.
 #
-# WHY THE REPORT STEP MAY FAIL. `Open the pull request and report` runs
-# `remote-run.sh deliver` after the push, so the pull request's head carries the
-# run's last commit. It is `continue-on-error`: a repository that re-rendered
-# this file without `init --force` still runs scripts with no `deliver` verb,
-# and a finished run must not be marked failed for its report.
+# WHY THE REPORT STEP MAY FAIL. `Open the pull request and report`, the
+# `deliver` job's last step, runs `remote-run.sh deliver` on the bundle
+# `Download the state bundle` fetched from the `run` job's upload, after that
+# job's final push, so the pull request's head carries the run's last commit.
+# It is `continue-on-error`: a repository that re-rendered this file without
+# `init --force` still runs scripts with no `deliver` verb, and a finished run
+# must not be marked failed for its report.
 #
-# WHY THE OPEN STEP RUNS ONLY WHEN chain IS 0. `Open the draft pull request`
-# runs `remote-run.sh open` before the harness, so the run's draft pull request
-# exists from its first job. `chain` counts automatic dispatches since the last
-# user action, so 0 is a job a person's action started: the first job, a
-# resume, an answer, a round. An automatic continuation therefore never retries
+# WHY THE OPEN STEP RUNS ONLY WHEN chain IS 0. `Open the draft pull request`,
+# the `open` job's last step, runs `remote-run.sh open` before the `run` job, so
+# the run's draft pull request exists from its first job. The `open` job's
+# `if:` carries `inputs.chain == 0`, and `run` is `needs: open` under
+# `!cancelled()`, so a skipped or failed `open` never skips it. `chain` counts
+# automatic dispatches since the last user action, so 0 is a job a person's
+# action started: the first job, a resume, an answer, a round. An automatic continuation therefore never retries
 # a create that failed, and the attempts per run stay bounded by people's
 # actions; `deliver`'s fallback at completion is the last attempt, and its
 # `completed` comment names the error. It is `continue-on-error` for the report
@@ -334,16 +394,17 @@
 # `sandbox.optOut` is taken, so `Run the harness` never starts a session that
 # cannot run Bash: no step from this one to `Run the harness` carries a status
 # function. What still runs after that failure: the `run` job's bundle-saving
-# and reporting steps, and the `collect` job, which is `needs: run` under
-# `!cancelled()`. The `run` job has started, so remote-run.sh's
+# and reporting steps, and the `deliver` and `collect` jobs, both `needs:` it
+# under `!cancelled()`. The `run` job has started, so remote-run.sh's
 # `run_not_started_var` answers `started` and `collect` passes through its
 # ordinary stops, exactly as after a failed `Preflight with doctor`. The run's
 # one notification is `Continue, wait or stop`: `continue` with no
 # `status.json` sends one `failed` naming the run URL and dispatches nothing,
-# and `Open the pull request and report` runs `deliver`, which sends nothing.
+# and the `deliver` job's `Open the pull request and report` runs `deliver`,
+# which sends nothing.
 # The step ran in Gate 12 round 13 (2026-11-05), where the stock profile
-# defeated it; the fixed step's runner result is owed to the Gate 12 redo
-# (docs/sandbox-verification.md, section 9).
+# defeated it; the fixed step passed in rounds 14-16 and its failing arm was
+# taken in round 17 (docs/sandbox-verification.md, section 9).
 #
 # WHY retention-days IS SET. The `harness-state` bundle is the only remote copy
 # of a run's clarifications, uncommitted planning drafts and carried counts; a
@@ -433,8 +494,109 @@ jobs:
           echo "::error::this run was dispatched from '$IN_REF', but its branch input is '$IN_BRANCH': GitHub lists a run under the ref it was dispatched from, so no lookup of '$IN_BRANCH' would find it. Run the workflow again with Use workflow from set to '$IN_BRANCH'."
           exit 1
 
+  open:
+    if: inputs.action == 'run' && github.ref_name == inputs.branch && inputs.chain == 0
+    runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HARNESS_REMOTE_SLUG: ${{ github.repository }}
+      HARNESS_INPUT_BRANCH: ${{ inputs.branch }}
+      HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
+      HARNESS_RUN_ACTORS: ${{ vars.HARNESS_RUN_ACTORS }}
+    steps:
+      - name: Refuse an actor not on HARNESS_RUN_ACTORS before opening
+        env:
+          IN_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          IN_OWNER: ${{ github.repository_owner }}
+          IN_OWNER_TYPE: ${{ github.event.repository.owner.type }}
+        run: |
+          actor="$IN_TRIGGERING_ACTOR"
+          if [ "$actor" = 'github-actions[bot]' ]; then
+            echo "@$actor passes: every harness dispatch is made with GITHUB_TOKEN and names it."
+            exit 0
+          fi
+          lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+          want=$(lower "$actor")
+          rest="${HARNESS_RUN_ACTORS-},"
+          listed=""
+          while [ -n "$rest" ]; do
+            entry="${rest%%,*}"
+            rest="${rest#*,}"
+            entry="${entry#"${entry%%[![:space:]]*}"}"
+            entry="${entry%"${entry##*[![:space:]]}"}"
+            [ -n "$entry" ] || continue
+            listed=1
+            if [ "$entry" = '*' ]; then
+              echo "@$actor passes: HARNESS_RUN_ACTORS carries *, which admits every writer."
+              exit 0
+            fi
+            if [ -n "$want" ] && [ "$(lower "$entry")" = "$want" ]; then
+              echo "@$actor passes: listed in HARNESS_RUN_ACTORS."
+              exit 0
+            fi
+          done
+          if [ -n "$listed" ]; then
+            why="@${actor:-(no actor)} is not listed in it."
+          elif [ "$IN_OWNER_TYPE" = User ] && [ -n "$IN_OWNER" ]; then
+            if [ -n "$want" ] && [ "$(lower "$IN_OWNER")" = "$want" ]; then
+              echo "@$actor passes: HARNESS_RUN_ACTORS is unset, which admits the owner of this user-owned repository alone."
+              exit 0
+            fi
+            why="it is unset, which admits the owner of this user-owned repository, @$IN_OWNER, alone, and @${actor:-(no actor)} is not that owner."
+          else
+            why="it is unset, and this repository has no single owner to admit (its owner type is ${IN_OWNER_TYPE:-unreadable}), so it admits nobody."
+          fi
+          echo "::error::@${actor:-(no actor)} dispatched or re-ran this run, and the repository variable HARNESS_RUN_ACTORS does not admit them: $why Nothing was launched and no credential was read. Add the login to the comma-separated repository variable HARNESS_RUN_ACTORS, or set it to * for every writer (docs/remote-execution.md, section 7 step 4, and section 11)."
+          exit 1
+
+      - name: Stop when HARNESS_REMOTE_STOP is set before opening
+        run: |
+          if [ -n "$HARNESS_REMOTE_STOP" ]; then
+            echo "HARNESS_STOPPED=1" >> "$GITHUB_ENV"
+            echo "::notice::HARNESS_REMOTE_STOP is set: nothing is launched."
+          fi
+
+      - name: Check out the default branch for opening
+        if: env.HARNESS_STOPPED != '1'
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          token: ${{ github.token }}
+          fetch-depth: 0
+
+      - name: Check for jq and gh before opening
+        if: env.HARNESS_STOPPED != '1'
+        run: |
+          missing=""
+          for tool in jq gh; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::this runner lacks:$missing. Install them on the self-hosted runner, or use a GitHub-hosted one."
+            exit 1
+          fi
+
+      - name: Read the configuration for opening
+        if: env.HARNESS_STOPPED != '1'
+        run: |
+          scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
+          echo "SCRIPTS_DIR=${scripts_dir%/}" >> "$GITHUB_ENV"
+
+      - name: Open the draft pull request
+        if: env.HARNESS_STOPPED != '1'
+        continue-on-error: true
+        env:
+          HARNESS_PR_TOKEN: ${{ secrets.HARNESS_GIT_TOKEN }}
+        run: bash "$SCRIPTS_DIR/remote-run.sh" open "$HARNESS_INPUT_BRANCH"
+
   run:
-    if: inputs.action == 'run' && github.ref_name == inputs.branch
+    needs: open
+    if: ${{ !cancelled() && inputs.action == 'run' && github.ref_name == inputs.branch }}
     runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
     permissions:
       contents: write
@@ -468,7 +630,6 @@ jobs:
       USAGE_RESUME_MARGIN_SECS: ${{ vars.USAGE_RESUME_MARGIN_SECS }}
       USAGE_SEVEN_DAY_PAUSE_PCT: ${{ vars.USAGE_SEVEN_DAY_PAUSE_PCT }}
       PARK_LOOP_MAX_CYCLES: ${{ vars.PARK_LOOP_MAX_CYCLES }}
-      PARK_LOOP_WINDOW_SECS: ${{ vars.PARK_LOOP_WINDOW_SECS }}
       REMOTE_WAIT_MAX_SECS: ${{ vars.REMOTE_WAIT_MAX_SECS }}
       REMOTE_AUTO_RESUME_MAX: ${{ vars.REMOTE_AUTO_RESUME_MAX }}
       REMOTE_AUTO_RESUME_DELAY_SECS: ${{ vars.REMOTE_AUTO_RESUME_DELAY_SECS }}
@@ -576,7 +737,8 @@ jobs:
         with:
           ref: ${{ inputs.branch }}
           fetch-depth: 0
-          token: ${{ secrets.HARNESS_GIT_TOKEN || github.token }}
+          token: ${{ github.token }}
+          persist-credentials: false
 
       - name: Check for jq and gh
         if: env.HARNESS_STOPPED != '1'
@@ -652,6 +814,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Store the push credential outside the checkout
+        if: env.HARNESS_STOPPED != '1'
+        run: bash "$SCRIPTS_DIR/remote-run.sh" push-credential store
 
       - name: Install the pinned plugin
         if: env.HARNESS_STOPPED != '1'
@@ -842,13 +1008,6 @@ jobs:
         if: env.HARNESS_STOPPED != '1'
         run: bash "$SCRIPTS_DIR/remote-run.sh" restore "$HARNESS_INPUT_BRANCH" --resume "$HARNESS_INPUT_RESUME"
 
-      - name: Open the draft pull request
-        if: env.HARNESS_STOPPED != '1' && inputs.chain == 0
-        continue-on-error: true
-        env:
-          HARNESS_PR_TOKEN: ${{ secrets.HARNESS_GIT_TOKEN }}
-        run: bash "$SCRIPTS_DIR/remote-run.sh" open "$HARNESS_INPUT_BRANCH"
-
       - name: Run the harness
         if: env.HARNESS_STOPPED != '1'
         timeout-minutes: ${{ fromJSON(env.HARNESS_STEP_TIMEOUT_MINUTES || env.HARNESS_HOSTED_JOB_LIMIT_MINUTES) }}
@@ -915,13 +1074,6 @@ jobs:
           overwrite: true
           retention-days: 400
 
-      - name: Open the pull request and report
-        if: ${{ !cancelled() && env.SCRIPTS_DIR != '' }}
-        continue-on-error: true
-        env:
-          HARNESS_PR_TOKEN: ${{ secrets.HARNESS_GIT_TOKEN }}
-        run: bash "$SCRIPTS_DIR/remote-run.sh" deliver "$HARNESS_INPUT_BRANCH" "$RUNNER_TEMP/harness-state"
-
       - name: Continue, wait or stop
         if: ${{ !cancelled() && env.SCRIPTS_DIR != '' }}
         run: bash "$SCRIPTS_DIR/remote-run.sh" continue "$HARNESS_INPUT_BRANCH" "$RUNNER_TEMP/harness-state"
@@ -934,8 +1086,124 @@ jobs:
             "job cancelled: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" || true
           bash "$SCRIPTS_DIR/remote-run.sh" report failed "$HARNESS_INPUT_BRANCH" --note "the job was cancelled: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" || true
 
-  collect:
+      - name: Erase the push credential
+        if: always() && env.SCRIPTS_DIR != ''
+        continue-on-error: true
+        run: bash "$SCRIPTS_DIR/remote-run.sh" push-credential erase
+
+  deliver:
     needs: run
+    if: ${{ inputs.action == 'run' && !cancelled() && github.ref_name == inputs.branch }}
+    runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HARNESS_REMOTE_SLUG: ${{ github.repository }}
+      HARNESS_INPUT_BRANCH: ${{ inputs.branch }}
+      HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
+      HARNESS_RUN_ACTORS: ${{ vars.HARNESS_RUN_ACTORS }}
+    steps:
+      - name: Refuse an actor not on HARNESS_RUN_ACTORS before delivering
+        env:
+          IN_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          IN_OWNER: ${{ github.repository_owner }}
+          IN_OWNER_TYPE: ${{ github.event.repository.owner.type }}
+        run: |
+          actor="$IN_TRIGGERING_ACTOR"
+          if [ "$actor" = 'github-actions[bot]' ]; then
+            echo "@$actor passes: every harness dispatch is made with GITHUB_TOKEN and names it."
+            exit 0
+          fi
+          lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+          want=$(lower "$actor")
+          rest="${HARNESS_RUN_ACTORS-},"
+          listed=""
+          while [ -n "$rest" ]; do
+            entry="${rest%%,*}"
+            rest="${rest#*,}"
+            entry="${entry#"${entry%%[![:space:]]*}"}"
+            entry="${entry%"${entry##*[![:space:]]}"}"
+            [ -n "$entry" ] || continue
+            listed=1
+            if [ "$entry" = '*' ]; then
+              echo "@$actor passes: HARNESS_RUN_ACTORS carries *, which admits every writer."
+              exit 0
+            fi
+            if [ -n "$want" ] && [ "$(lower "$entry")" = "$want" ]; then
+              echo "@$actor passes: listed in HARNESS_RUN_ACTORS."
+              exit 0
+            fi
+          done
+          if [ -n "$listed" ]; then
+            why="@${actor:-(no actor)} is not listed in it."
+          elif [ "$IN_OWNER_TYPE" = User ] && [ -n "$IN_OWNER" ]; then
+            if [ -n "$want" ] && [ "$(lower "$IN_OWNER")" = "$want" ]; then
+              echo "@$actor passes: HARNESS_RUN_ACTORS is unset, which admits the owner of this user-owned repository alone."
+              exit 0
+            fi
+            why="it is unset, which admits the owner of this user-owned repository, @$IN_OWNER, alone, and @${actor:-(no actor)} is not that owner."
+          else
+            why="it is unset, and this repository has no single owner to admit (its owner type is ${IN_OWNER_TYPE:-unreadable}), so it admits nobody."
+          fi
+          echo "::error::@${actor:-(no actor)} dispatched or re-ran this run, and the repository variable HARNESS_RUN_ACTORS does not admit them: $why Nothing was launched and no credential was read. Add the login to the comma-separated repository variable HARNESS_RUN_ACTORS, or set it to * for every writer (docs/remote-execution.md, section 7 step 4, and section 11)."
+          exit 1
+
+      - name: Stop when HARNESS_REMOTE_STOP is set before delivering
+        run: |
+          if [ -n "$HARNESS_REMOTE_STOP" ]; then
+            echo "HARNESS_STOPPED=1" >> "$GITHUB_ENV"
+            echo "::notice::HARNESS_REMOTE_STOP is set: nothing is launched."
+          fi
+
+      - name: Check out the default branch for delivering
+        if: env.HARNESS_STOPPED != '1'
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          token: ${{ github.token }}
+          fetch-depth: 0
+
+      - name: Check for jq and gh before delivering
+        if: env.HARNESS_STOPPED != '1'
+        run: |
+          missing=""
+          for tool in jq gh; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::this runner lacks:$missing. Install them on the self-hosted runner, or use a GitHub-hosted one."
+            exit 1
+          fi
+
+      - name: Read the configuration for delivering
+        if: env.HARNESS_STOPPED != '1'
+        run: |
+          scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
+          echo "SCRIPTS_DIR=${scripts_dir%/}" >> "$GITHUB_ENV"
+
+      # A run job refused before its upload saved no bundle; deliver then reads no status and posts nothing.
+      - name: Download the state bundle
+        if: env.HARNESS_STOPPED != '1'
+        run: |
+          if ! gh run download "$GITHUB_RUN_ID" --name harness-state --dir "$RUNNER_TEMP/harness-state"; then
+            echo "::notice::this workflow run has no harness-state artifact to download, so there is nothing to deliver."
+          fi
+          exit 0
+
+      - name: Open the pull request and report
+        if: env.HARNESS_STOPPED != '1'
+        continue-on-error: true
+        env:
+          HARNESS_PR_TOKEN: ${{ secrets.HARNESS_GIT_TOKEN }}
+        run: bash "$SCRIPTS_DIR/remote-run.sh" deliver "$HARNESS_INPUT_BRANCH" "$RUNNER_TEMP/harness-state"
+
+  collect:
+    needs: [run, deliver]
     if: ${{ inputs.action == 'run' && !cancelled() && github.ref_name == inputs.branch }}
     runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
     permissions:

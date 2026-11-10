@@ -21,12 +21,10 @@
  * `origin`, with the copy cut by `create-worktree.sh` from a task drop: a clone, its record's
  * `copy_kind` `clone`. Its main `.git/config` sets the repo-relative `core.hooksPath` `githooks`, so
  * an unpinned hook-running call resolves hooks inside the copy, and `extensions.worktreeConfig=true`,
- * so a legacy copy's `config.worktree` is live for an unpinned call. A payload is committed the way
- * a session in a clone commits one: `hash-object` / `update-index` / `write-tree` / `commit-tree` in
- * the clone and an `update-ref` of the clone's own branch, with no working-tree write; the
- * watchdog's copy check syncs it into the main checkout. `{ legacy: true }` replaces the clone,
- * while the session hangs, with a linked worktree of the main checkout on the branch, its record
- * carrying no `copy_kind`: a parked run from before the clone layout. Every planted hook and
+ * so the main checkout's own `config.worktree` is live for an unpinned call. A payload is committed
+ * the way a session in a clone commits one: `hash-object` / `update-index` / `write-tree` /
+ * `commit-tree` in the clone and an `update-ref` of the clone's own branch, with no working-tree
+ * write; the watchdog's copy check syncs it into the main checkout. Every planted hook and
  * fsmonitor writes a marker named for itself. In job mode the job checkout is the fixture itself,
  * on the run branch.
  *
@@ -39,15 +37,11 @@
  *   marker, no reset written and no note: the record's `config.worktree` (S4: a planted
  *   `.git/config.worktree`; S4c: the same key in `.git/config`, off the allow-list) and the `.git`
  *   pointer (S10: a planted `.git/commondir`).
- * - Worktree-only, kept as migration coverage on a legacy worktree: S4, the original plant,
- *   because the worktree arm still serves a parked legacy run and only there does the reset's own
- *   pinning stand between the payload and a run.
  * - Job mode (J1–J6) is unchanged: its copy is the job checkout, never a clone.
  *
  * RED ONCE — local cases: each mutation applied once to the fixture's own written copy of
  * `autonomous-watcher.sh` (S2, S4, S4c, S6 to S10: to its `lib/harness-run-lib.sh`), never to the
- * template, the case run, the failure observed; measured on the clone layout unless the case is a
- * legacy one. Job cases: applied to `cli/templates/scripts/autonomous-watcher.sh` and reverted, and
+ * template, the case run, the failure observed; measured on the clone layout. Job cases: applied to `cli/templates/scripts/autonomous-watcher.sh` and reverted, and
  * not re-measured here, their checkout being the job's own:
  * - (honest) the watchdog's `hr_run_reset_var` call replaced by `:` → fails `the uncommitted edit
  *   survived the reset`.
@@ -63,7 +57,6 @@
  *   resumes: fails on the record's `status`, `completed`, not `failed`.
  * - (S4c) `hr_clone_config_check_var`'s off-allow-list test skipped → the same failure.
  * - (S10) `commondir` dropped from `hr_clone_target_check_var`'s absent-file loop → the same failure.
- * - (S4, legacy) the (S1) mutation → fails `a planted payload ran`, holding `S4-fsmonitor`.
  * - (release) `collect_descendants() { :; }` defined in `localStall`'s script after the sourcing
  *   line, which reproduces the sandbox's empty descendant list, with the release line removed → the
  *   honest case fails `the hung session was never released`, after the stub's bound and before any
@@ -174,12 +167,12 @@ const git = (cwd, args, env = {}) => sh(cwd, 'git "$@"', [...PIN, ...args], env)
  * A watcher fixture adopted on `origin`'s default branch, with the main `.git/config` setting
  * `extensions.worktreeConfig=true` and the repo-relative `core.hooksPath` `githooks`. `job` checks
  * the run branch out in the fixture itself, the job's checkout; otherwise `localStall` cuts the
- * copy, a clone, which `legacy` replaces with a linked worktree whose record carries no `copy_kind`.
+ * copy, a clone.
  *
  * @param {import('node:test').TestContext} t
- * @param {{ job?: boolean, legacy?: boolean }} [options]
+ * @param {{ job?: boolean }} [options]
  */
-async function createStallFixture(t, { job = false, legacy = false } = {}) {
+async function createStallFixture(t, { job = false } = {}) {
   const w = await createWatcherFixture(t);
   if (w === null) return null;
 
@@ -295,14 +288,6 @@ async function createStallFixture(t, { job = false, legacy = false } = {}) {
       return stalled(argv, w.watcherEnv(stallEnv(env)), async () => {
         assert.ok(existsSync(copy), `create-worktree.sh cut no working copy\n${w.watcherLog()}`);
         assert.equal(w.record().copy_kind, 'clone', `create-worktree.sh cut no clone\n${w.watcherLog()}`);
-        if (legacy) {
-          await rm(copy, { recursive: true, force: true });
-          await git(w.dir, ['worktree', 'add', '--quiet', copy, w.branch]);
-          const registryPath = join(w.dir, REGISTRY_PATH);
-          const registry = JSON.parse(readFileSync(registryPath, 'utf8'));
-          delete registry.runs[w.branch].copy_kind;
-          await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`, 'utf8');
-        }
         await plant();
       }, null);
     },
@@ -356,7 +341,7 @@ async function createStallFixture(t, { job = false, legacy = false } = {}) {
     tip: () => git(w.dir, ['rev-parse', ref]),
     originTip: (name) => git(origin, ['rev-parse', `refs/heads/${name}`]),
     defaultFile: (path) => git(w.dir, ['show', `refs/remotes/origin/${config.defaultBranch}:${path}`]),
-    /** The copy's git directory: the clone's `.git`, or a legacy worktree's record. */
+    /** The copy's git directory: the clone's `.git`, or the job checkout's. */
     recordDir: () => git(copy, ['rev-parse', '--absolute-git-dir']),
     /** An executable payload outside the fixture that writes `<markers>/<name>`, then `tail`. */
     async payload(name, tail = 'exit 1') {
@@ -663,21 +648,6 @@ test('(S10) a .git/commondir planted in the clone, naming a repository whose con
   });
 
   await assertCloneRefused(f, plantedFile('commondir'), tip);
-});
-
-// ---------------------------------------------------------------------------------------------
-// Migration coverage: a parked legacy worktree run, its record carrying no copy_kind.
-// ---------------------------------------------------------------------------------------------
-
-test("(S4, legacy) migration coverage: a core.fsmonitor in a legacy worktree's config.worktree is never read: the run resumes", async (t) => {
-  const f = await createStallFixture(t, { legacy: true });
-  if (f === null) return;
-
-  await f.localStall(async () => {
-    await git(f.dir, ['config', '--file', join(await f.recordDir(), 'config.worktree'), 'core.fsmonitor', await f.payload('S4-fsmonitor')]);
-  });
-
-  assertResumed(f);
 });
 
 // ---------------------------------------------------------------------------------------------

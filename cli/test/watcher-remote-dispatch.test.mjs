@@ -10,7 +10,9 @@
  * `origin/<branch>`, its copy is a clone, a task re-drop while that clone is live is refused by
  * `create-worktree.sh`'s one-live-copy rule, and with the key absent the inbox pass is today's.** A
  * failed push sends no `workflow run` at all; the key-absent case launches the agent stub and sends
- * nothing to `gh`.
+ * nothing to `gh`. A drop whose branch is protected, not a valid branch name, or any branch while the
+ * protected set cannot be resolved is archived as `rejected_` with one `failed` notification, for
+ * every pattern and both targets, before anything is created — and it never reaches `gh`.
  *
  * The later cases seed a remote record as `launch_remote_run` leaves it and hold the watcher to
  * relaying nothing: the user's commands send pause, resume and answer to GitHub themselves, so a
@@ -25,8 +27,14 @@ import { rm, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { runGit, snapshotTree } from './helpers/fixture.mjs';
-import { createWatcherFixture } from './helpers/watcher.mjs';
+import { runBash, runGit, snapshotTree } from './helpers/fixture.mjs';
+import {
+  createWatcherFixture,
+  DEFAULT_KEEP_AWAKE_PROBE,
+  DEFAULT_PLACEHOLDER_HOST_PROBE,
+  DEFAULT_SANDBOX_PROBE,
+  TICK_TIMEOUT_MS,
+} from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
 const REGISTRY_PATH = `${STATE_DIR}/autonomous_logs/registry.json`;
@@ -390,6 +398,128 @@ test('with the key absent a drop routes through the library: task engine on its 
   const archived = readdirSync(join(f.dir, STATE_DIR, 'autonomous_inbox', '.processed'));
   assert.equal(archived.filter((name) => /^rejected_\d+_notes\.md$/.test(name)).length, 1);
   assert.deepEqual(Object.keys(JSON.parse(readFileSync(join(f.dir, REGISTRY_PATH), 'utf8')).runs), ['feat_x_review']);
+});
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** `hr_inbox_branch_refusal_var`'s three reasons; the root is matched loosely, the temp dir may be a symlink. */
+const INVALID_REASON = (b) => `'${escapeRe(b)}' is not a valid branch name \\(git check-ref-format --branch\\)`;
+const PROTECTED_REASON = (b) => `'${escapeRe(b)}' is a protected branch in '[^']*/harness\\.config\\.json'`;
+const UNRESOLVABLE_REASON = (b) =>
+  `whether '${escapeRe(b)}' is protected cannot be judged: the protected set in '[^']*/harness\\.config\\.json' cannot be resolved`;
+
+const rejectionLine = (fname, reason) =>
+  new RegExp(`rejecting '${escapeRe(fname)}': ${reason} — nothing created, committed or launched`);
+
+const archivedRejections = (f, fname) =>
+  readdirSync(join(f.dir, STATE_DIR, 'autonomous_inbox', '.processed')).filter((name) =>
+    new RegExp(`^rejected_\\d+_${escapeRe(fname)}$`).test(name),
+  );
+
+const registryRuns = (f) =>
+  existsSync(join(f.dir, REGISTRY_PATH)) ? JSON.parse(readFileSync(join(f.dir, REGISTRY_PATH), 'utf8')).runs ?? {} : {};
+
+const defaultBranchOf = (f) => JSON.parse(readFileSync(join(f.dir, 'harness.config.json'), 'utf8')).defaultBranch;
+
+/** Each refused drop: out of the inbox, archived once, and no working copy or run log for its branch. */
+function assertRefusedAtIntake(f, drops) {
+  for (const [fname, branch] of drops) {
+    assert.equal(f.inInbox(fname), false, `${fname} was left in the inbox`);
+    assert.equal(archivedRejections(f, fname).length, 1, `${fname} was not archived as rejected_ exactly once`);
+    assert.equal(existsSync(`${f.dir}-${branch}`), false, `a working copy was cut for '${branch}'`);
+    assert.equal(existsSync(join(f.dir, STATE_DIR, 'autonomous_logs', `${branch}.log`)), false, `a run log was written for '${branch}'`);
+    assert.equal(branch in registryRuns(f), false, `a registry record was written for '${branch}'`);
+  }
+  const failed = failures(f);
+  assert.deepEqual(
+    failed.map((n) => n.branch).sort(),
+    drops.map(([, branch]) => branch).sort(),
+    JSON.stringify(f.notifications()),
+  );
+  for (const n of failed) assert.match(n.detail, /^\(refused at intake: /);
+}
+
+test('with the key absent a protected or invalid branch is refused at intake for every pattern; a valid drop still launches', async (t) => {
+  const f = await createDispatchFixture(t, { target: null });
+  if (f === null) return;
+  const D = defaultBranchOf(f);
+  for (const branch of [D, 'a..b', 'foo.lock']) t.after(() => rm(`${f.dir}-${branch}`, { recursive: true, force: true }));
+
+  const refused = [
+    [`${D}_task_prompt.md`, D],
+    [`${D}_review.md`, D],
+    [`${D}_docs.md`, D],
+    ['a..b_task_prompt.md', 'a..b'],
+    ['foo.lock_review_2.md', 'foo.lock'],
+  ];
+  for (const [fname] of refused) await f.drop(fname, 'refuse me\n');
+  await f.drop('feat_x_task_prompt.md', 'do the thing\n');
+  await f.tick();
+
+  assertRefusedAtIntake(f, refused);
+  assert.equal(f.prompts().length, 1, 'expected exactly one launch, for the valid drop');
+  assert.equal(f.record().engine, 'task');
+  assert.equal(await f.subject(), 'chore: add task prompt for feat_x');
+  assert.deepEqual(Object.keys(registryRuns(f)), ['feat_x']);
+
+  const log = f.watcherLog();
+  for (const [fname, branch] of refused) {
+    assert.match(log, rejectionLine(fname, branch === D ? PROTECTED_REASON(branch) : INVALID_REASON(branch)));
+  }
+});
+
+test('with execution.target github-actions a refused drop is archived before remote-run.sh is reached', async (t) => {
+  const f = await createDispatchFixture(t);
+  if (f === null) return;
+  const D = defaultBranchOf(f);
+  for (const branch of [D, 'foo.lock']) t.after(() => rm(`${f.dir}-${branch}`, { recursive: true, force: true }));
+
+  const refused = [
+    [`${D}_task_prompt.md`, D],
+    ['foo.lock_docs.md', 'foo.lock'],
+  ];
+  for (const [fname] of refused) await f.drop(fname, 'refuse me\n');
+  await f.tick();
+
+  assert.deepEqual(f.ghCalls(), [], 'a refused drop reached gh');
+  assertRefusedAtIntake(f, refused);
+  assert.match(f.watcherLog(), rejectionLine(`${D}_task_prompt.md`, PROTECTED_REASON(D)));
+  assert.match(f.watcherLog(), rejectionLine('foo.lock_docs.md', INVALID_REASON('foo.lock')));
+});
+
+// The watcher refuses to start on a configuration with no `defaultBranch`, and the helper's `tick`
+// sources it first, so the configuration is swapped after the sourcing, inside the pass's own shell;
+// `tick`'s `hr_config_reset` then reads it.
+test('while the protected set cannot be resolved any drop is refused at intake', async (t) => {
+  const f = await createDispatchFixture(t, { target: null });
+  if (f === null) return;
+
+  const broken = JSON.parse(readFileSync(join(f.dir, 'harness.config.json'), 'utf8'));
+  delete broken.defaultBranch;
+  const brokenPath = join(f.dir, 'watcher-test', 'no-default-branch.json');
+  await writeFile(brokenPath, `${JSON.stringify(broken, null, 2)}\n`, 'utf8');
+
+  await f.drop('feat_x_task_prompt.md', 'do the thing\n');
+  const script = [
+    '. "$1" status >/dev/null',
+    `hr_sandbox_prereq_probe_var() {\n${DEFAULT_SANDBOX_PROBE}\n}`,
+    `hr_keep_awake_probe_var() {\n${DEFAULT_KEEP_AWAKE_PROBE}\n}`,
+    `hr_placeholder_host_probe_var() {\n${DEFAULT_PLACEHOLDER_HOST_PROBE}\n}`,
+    'cp "$2" "$3"',
+    'tick',
+    'wait',
+  ].join('\n');
+  const result = await runBash(
+    f.dir,
+    ['-c', script, '_', f.watcherPath, brokenPath, join(f.dir, 'harness.config.json')],
+    f.watcherEnv(),
+    { timeoutMs: TICK_TIMEOUT_MS, signal: t.signal },
+  );
+  assert.equal(result.status, 0, `the watcher pass exited ${result.status}\n${result.stdout}\n${result.stderr}`);
+
+  assertRefusedAtIntake(f, [['feat_x_task_prompt.md', 'feat_x']]);
+  assert.match(f.watcherLog(), rejectionLine('feat_x_task_prompt.md', UNRESOLVABLE_REASON('feat_x')));
+  assert.deepEqual(f.prompts(), [], 'the agent stub was launched');
 });
 
 /** A remote record as launch_remote_run leaves it, with `fields` over it. */

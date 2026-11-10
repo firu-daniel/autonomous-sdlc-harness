@@ -65,14 +65,15 @@
  * *"a job killed mid-run leaves running / continue"* spawns and kills its own group, and is not
  * bounded here.
  *
- * **`HARNESS_JOB_USAGE_REPEAT` repeats the case *"a reset 2 seconds ahead"* concurrently.** Unset is
- * 1 and runs the case once; a positive integer N runs N independent job fixtures at once and fails
- * naming the repetition; anything else fails the file's load naming the variable. At N > 1 each
- * repetition's reset is `REPEAT_RESET_AHEAD_SECS` ahead and its stub waits `REPEAT_PAUSE_WAIT_TENTHS`,
- * scaled by `HARNESS_TEST_TIME_SCALE`, for PAUSE: under that load a watcher's pass outlasts 2
- * seconds, the gate then reads an elapsed window and downgrades it (the watcher's usage-gate invariant 1), and the run completes unpaused on
- * one prompt — a failure of the fixture's timing, not of the race. The race window, a tag written
- * after its PAUSE, does not depend on the lead. It is off by
+ * **`HARNESS_JOB_USAGE_REPEAT` repeats the case *"a reset inside the in-job wait"* concurrently.**
+ * Unset is 1 and runs the case once; a positive integer N runs N independent job fixtures at once and
+ * fails naming the repetition; anything else fails the file's load naming the variable. Every run,
+ * N = 1 included, takes a reset `REPEAT_RESET_AHEAD_SECS` ahead and a stub that waits
+ * `REPEAT_PAUSE_WAIT_TENTHS`, scaled by `HARNESS_TEST_TIME_SCALE`, for PAUSE: under N concurrent
+ * watchers, and equally under a loaded full-suite run, a watcher's pass outlasts a 2-second lead, the
+ * gate then reads an elapsed window and downgrades it (the watcher's usage-gate invariant 1), and the
+ * run completes unpaused on one prompt — a failure of the fixture's timing, not of the race. The race
+ * window, a tag written after its PAUSE, does not depend on the lead. Repetition is off by
  * default because N concurrent watchers multiply the suite's load for evidence only a maintainer
  * needs: that the registry write race stays closed under contention, not one lucky pass. Its figure
  * is taken by hand, outside any harness session (`harness-runs/lessons.md` → *"A wall-clock figure
@@ -117,8 +118,8 @@ function jobUsageRepeat() {
 const JOB_USAGE_REPEAT = jobUsageRepeat();
 
 /**
- * The repeated case's reset lead and PAUSE wait — the header argues why they differ from one run's.
- * The lost-`usage_resume_at` and held-off-relaunch cases take them too, for the same reason.
+ * The repeated case's reset lead and PAUSE wait, which its single run takes too — the header argues
+ * why. The lost-`usage_resume_at` and held-off-relaunch cases take them too, for the same reason.
  */
 const REPEAT_RESET_AHEAD_SECS = 15;
 const REPEAT_PAUSE_WAIT_TENTHS = scaleBound(600);
@@ -844,13 +845,13 @@ test('budget: a hosted self-pause continues, silently', async (t) => {
 });
 
 test('usage: a short reset is waited out in the job, a reset past the deadline goes to the poller', async (t) => {
-  await t.test('a reset 2 seconds ahead -> the run completes in the same job', async (t) => {
-    const runOnce = async (label, aheadSecs, pauseTenths) => {
+  await t.test('a reset inside the in-job wait -> the run completes in the same job', async (t) => {
+    const runOnce = async (label) => {
       const j = await createJobFixture(t);
       if (j === null) return;
       const copy = await stageLedger(j, taskLedger(j.branch, TASK_LEDGER_IDS));
       await j.setStub(
-        `${COUNT_LAUNCH}\nif [ "$n" = 1 ]; then ${rateLimitRejected(aheadSecs)}; ${HONOUR_PAUSE(pauseTenths)}; else ${copy}; fi`,
+        `${COUNT_LAUNCH}\nif [ "$n" = 1 ]; then ${rateLimitRejected(REPEAT_RESET_AHEAD_SECS)}; ${HONOUR_PAUSE(REPEAT_PAUSE_WAIT_TENTHS)}; else ${copy}; fi`,
       );
       const result = await j.job([j.branch, 'task', 'none'], {
         USAGE_CHECK_INTERVAL_SECS: '1',
@@ -862,13 +863,13 @@ test('usage: a short reset is waited out in the job, a reset past the deadline g
       assert.equal(j.status().pause_reason, '', label);
     };
     if (JOB_USAGE_REPEAT === 1) {
-      await runOnce('', 2, PAUSE_WAIT_TENTHS);
+      await runOnce('');
       return;
     }
     // Settled rather than `Promise.all`, so no watcher outlives the case and every failure is named.
     const outcomes = await Promise.allSettled(
       Array.from({ length: JOB_USAGE_REPEAT }, (_, i) =>
-        runOnce(`repetition ${i + 1} of ${JOB_USAGE_REPEAT}: `, REPEAT_RESET_AHEAD_SECS, REPEAT_PAUSE_WAIT_TENTHS),
+        runOnce(`repetition ${i + 1} of ${JOB_USAGE_REPEAT}: `),
       ),
     );
     const failures = outcomes.filter((o) => o.status === 'rejected').map((o) => o.reason?.message ?? String(o.reason));

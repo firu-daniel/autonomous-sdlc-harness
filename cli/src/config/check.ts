@@ -34,7 +34,9 @@
  * selects nothing. Under `sandbox`, every `allowedDomains` entry carries both `domain` and
  * `reason`, `domain` matches `SANDBOX_DOMAIN_PATTERN`, and an `optOut` is an object carrying a
  * `reason`; both `reason`s must hold more than whitespace, because `sandboxOptedOut` treats a blank
- * one as no opt-out taken. `treeGuards` is an array whose every entry carries exactly a non-empty
+ * one as no opt-out taken; `passEnv` is an array of unique strings each matching
+ * `SANDBOX_PASS_ENV_PATTERN` — a duplicate is reported here, unlike the `uniqueItems` keys below,
+ * because each entry widens a session's environment and the list is read as an audit. `treeGuards` is an array whose every entry carries exactly a non-empty
  * `test` and `covers`.
  *
  * **An absent `scriptsDir` is a warning, and it is the one optional key reported for absence
@@ -75,6 +77,7 @@ import {
   QA_DRIVERS,
   RETRIEVAL_BACKENDS,
   SANDBOX_DOMAIN_PATTERN,
+  SANDBOX_PASS_ENV_PATTERN,
   STATE_DIR_DOT_PATTERN,
   STATE_DIR_PATTERN,
 } from './model.js';
@@ -157,7 +160,7 @@ const PARITY_STRING_KEYS = ['referenceName', 'referenceImplPath'] as const;
 const DEPLOY_KEYS = ['provider', 'target', 'command'] as const;
 const DESIGN_KEYS = ['source'] as const;
 const EXECUTION_KEYS = ['target', 'progressComments', 'keepAwake'] as const;
-const SANDBOX_KEYS = ['allowedDomains', 'optOut'] as const;
+const SANDBOX_KEYS = ['allowedDomains', 'optOut', 'passEnv'] as const;
 const SANDBOX_DOMAIN_KEYS = ['domain', 'reason'] as const;
 const SANDBOX_OPT_OUT_KEYS = ['reason'] as const;
 const TREE_GUARD_KEYS = ['test', 'covers'] as const;
@@ -589,7 +592,7 @@ function checkReason(parent: Record<string, unknown>, prefix: string, consequenc
   if (value.trim() === '') problems.error(path, `must not be blank: ${consequence}`);
 }
 
-/** `sandbox`: each allowed domain is a bare host with its reason, and an opt-out is a reasoned object. */
+/** `sandbox`: each allowed domain is a bare host with its reason, an opt-out is a reasoned object, and each pass-through name is a unique bare variable name. */
 function checkSandbox(sandbox: Record<string, unknown>, problems: Problems): void {
   const domains = sandbox['allowedDomains'];
   if (domains !== undefined) {
@@ -630,6 +633,30 @@ function checkSandbox(sandbox: Record<string, unknown>, problems: Problems): voi
       'the opt-out runs every unattended command unsandboxed, so it must say why, and one with no reason is not taken',
       problems,
     );
+  }
+
+  const passEnv = sandbox['passEnv'];
+  if (passEnv !== undefined) {
+    if (!Array.isArray(passEnv)) {
+      problems.error('sandbox.passEnv', `must be an array of environment-variable names, not ${describe(passEnv)}`);
+    } else {
+      const seen = new Set<string>();
+      passEnv.forEach((name, index) => {
+        const path = `sandbox.passEnv[${index}]`;
+        if (typeof name !== 'string') {
+          problems.error(path, `must be a string, not ${describe(name)}`);
+        } else if (!SANDBOX_PASS_ENV_PATTERN.test(name)) {
+          problems.error(
+            path,
+            `${JSON.stringify(name)} is not a bare environment-variable name: write the name alone, with no "=", wildcard or "$"`,
+          );
+        } else if (seen.has(name)) {
+          problems.error(path, `${JSON.stringify(name)} is listed more than once`);
+        } else {
+          seen.add(name);
+        }
+      });
+    }
   }
 }
 

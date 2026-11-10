@@ -233,9 +233,9 @@ function libraryDir(): string {
  * The main checkout's `.git` is protected as one directory: objects reach it only through sync-in's
  * fetch, which runs outside the sandbox, and git and the unsandboxed wrappers follow its
  * configuration, hooks, `commondir`, worktree records and legacy remotes, so no sandboxed write into
- * it is needed and any could redirect them. A legacy worktree run's record lies under it too; the
- * runtime already keeps a record outside the session's cwd closed to sandboxed git
- * (`docs/sandbox-verification.md` G2), so such a run's commits go through the excluded
+ * it is needed and any could redirect them. The record of a linked worktree a person made by hand
+ * lies under it too; the runtime already keeps a record outside the session's cwd closed to
+ * sandboxed git (`docs/sandbox-verification.md` G2), so commits there go through the excluded
  * `commit-on-branch.sh` either way.
  */
 export function protectedPaths({
@@ -482,6 +482,6 @@ export function applyWriteProtection(profile: JsonObject, { repoRoot, workRoot, 
       ({ bubblewrapDenyWrite }) => !bubblewrapDenyWrite,
     )
       .map(({ path }) => path)
-      .join(', ')} out of \`denyWrite\`, also leaves the base's sibling-glob entries for those same paths out of it, and adds an exact entry for each of them in every other sibling run copy whose .git is a directory. On Linux Claude Code enforces the \`Edit\` deny rules inside the sandbox too, mounting the same placeholder at an absent path inside a write root (measured 2026-10-30, Claude Code 2.1.314, bubblewrap 0.8.0), so on a host sandboxed by bubblewrap the per-run copy also leaves out the run copy's own \`Edit\` rules for those paths, its exact rules and the base's glob rules alike, while each other sibling run copy keeps them by exact path; the watcher refuses to launch or resume a run copy carrying a \`commondir\`, or a \`config.worktree\` or \`http-alternates\` that is not an empty regular file. A run's own edit under a protected worktree path, such as a change to its hooks directory or to ${MCP_PATH}, or to ${SETTINGS_PATH}, is refused by design.`,
+      .join(', ')} out of \`denyWrite\`, also leaves the base's sibling-glob entries for those same paths out of it, and adds an exact entry for each of them in every other sibling run copy whose .git is a directory. On Linux Claude Code enforces the \`Edit\` deny rules inside the sandbox too, mounting the same placeholder at an absent path inside a write root (measured 2026-10-30, Claude Code 2.1.314, bubblewrap 0.8.0), so on a host sandboxed by bubblewrap the per-run copy also leaves out the run copy's own \`Edit\` rules for those paths, its exact rules and the base's glob rules alike, while each other sibling run copy keeps them by exact path; the watcher refuses to launch or resume a run copy carrying a \`commondir\`, or a \`config.worktree\` or \`http-alternates\` that is not an empty regular file. On a host sandboxed by bubblewrap a harness plugin guard hook refuses \`Edit\`, \`Write\` and \`NotebookEdit\` on those three paths instead of a rule here (docs/sandbox-record.md residual 12). A run's own edit under a protected worktree path, such as a change to its hooks directory or to ${MCP_PATH}, or to ${SETTINGS_PATH}, is refused by design. What the sandbox contains, what it leaves outside and each residual are docs/sandbox-record.md §1 and §6.`,
   );
 }

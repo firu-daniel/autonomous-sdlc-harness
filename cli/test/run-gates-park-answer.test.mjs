@@ -9,7 +9,8 @@ import { WORKSPACE_ROOT } from './helpers/fixture.mjs';
  * The rule this suite enforces: an answered `fixable: 0` park's route — the G.2 clause, the
  * consumed marker, the park's origin and the fork-stated lookup — is spelled identically by every
  * file that writes it and every file that reads it, and the mode-free core names no clarification
- * path.
+ * path; and before Phase D, no orchestrator and no reviewer but `test-fix-plan-writer` reads a
+ * Phase G answer, and Phase D's clarification digest is the one later reader.
  *
  * This is a source guard, the last resort `.claude/context/conventions.md` → `## The testing bar`
  * permits. The route is instruction prose an orchestrator session reads, so no behavioural test
@@ -18,7 +19,8 @@ import { WORKSPACE_ROOT } from './helpers/fixture.mjs';
  * consumer here is silent until a parked run resumes and its answer is never read.
  *
  * Deliberately not covered: whether an orchestrator session actually follows G.0's pending-answer
- * arm. That needs a live session, which no test in this package starts.
+ * arm, and whether a live session actually refrains from reading a Phase G answer. Both need a live
+ * session, which no test in this package starts.
  *
  * Each assertion reads one section, sliced from its heading to the next heading of the same or a
  * higher level, so a match elsewhere in the file cannot satisfy it; a heading that is not found
@@ -32,6 +34,8 @@ const AGENT = read('plugin/agents/test-fix-plan-writer.md');
 const TASK_FORK = read('plugin/instructions/plan_orchestration_instructions_autonomous.md');
 const REVIEW_FORK = read('plugin/instructions/user_review_fixes_instructions_autonomous.md');
 const PLANNING_FORK = read('plugin/instructions/task_plan_writing_instructions_autonomous.md');
+const FIX_PLANNING_FORK = read('plugin/instructions/user_review_fix_plan_writing_instructions_autonomous.md');
+const ARCH_REVIEWER = read('plugin/agents/architecture-reviewer.md');
 
 const CLAUSE = 'Park answer: <question_file> + <answer_file>.';
 const MARKER = 'Park answer consumed:';
@@ -115,4 +119,38 @@ test('(e) the G.5 cap paragraph still covers the answered fixable: 0 park', () =
   assert.ok(paragraph, `${g5.where}: no paragraph opening "${lead}"`);
   assert.ok(paragraph.includes('fixable: 0'), `${g5.where}: the "${lead}" paragraph does not mention "fixable: 0"`);
   assert.ok(paragraph.includes('G.2'), `${g5.where}: the "${lead}" paragraph does not mention "G.2"`);
+});
+
+test('(f) the core forbids reading a Phase G answer and quoting one into a question file', () => {
+  const g2 = section(CORE, '### G.2 Write and review the test fix plan');
+  const byPath =
+    "A later park's question file names an earlier park by its question and answer paths alone, never by quoting or summarising either file.";
+  assert.ok(g2.text.includes(byPath), `${g2.where}: "${byPath}" not found`);
+
+  const mustNot = section(CORE, '## What you must NOT do');
+  assert.equal(
+    lineStarting(mustNot, '- Do NOT open a park'),
+    "- Do NOT open a park's question or answer file before Phase D, and never compose a dispatch or a question file from its content. Its paths travel only in G.2's `Park answer:` clause.",
+    `${mustNot.where}: the "- Do NOT open a park" bullet drifted`,
+  );
+});
+
+test('(g) every fork an orchestrator resumes through forbids opening a Phase G answer', () => {
+  const noRead =
+    "Before Phase D, never open, quote or summarise a Phase G pair's `answer_<n>.md`: tell the pair's origin from its `question_<n>.md` alone. Phase D's clarification digest is the one later step that reads it, and it quotes it verbatim into its committed record.";
+  const sites = [
+    section(PLANNING_FORK, '## Override 2 — resumability'),
+    section(FIX_PLANNING_FORK, '## Override 2 — resumability'),
+    section(REVIEW_FORK, '### `<escalate>` / `<ask>` — the park-and-yield clarification reroute'),
+  ];
+  for (const sec of sites) {
+    assert.ok(sec.text.includes(noRead), `${sec.where}: the Phase G no-read passage not found`);
+  }
+});
+
+test('(h) the Phase G architecture reviewer grades the quoted sentence and never opens the answer', () => {
+  const steps = section(ARCH_REVIEWER, '## Process');
+  const noOpen =
+    "Never open an answer file that the index's `Park answer consumed:` line or a finding's `**Authorised by:**` line names: grade the quoted sentence, because `test-fix-plan-writer` is the answer's only reader.";
+  assert.ok(steps.text.includes(noOpen), `${steps.where}: "${noOpen}" not found`);
 });

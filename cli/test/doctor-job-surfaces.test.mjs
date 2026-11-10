@@ -32,9 +32,9 @@ import { realpathSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { it } from 'node:test';
+import { describe, it } from 'node:test';
 
-import { concurrentSuite } from './helpers/concurrency.mjs';
+import { CASE_CONCURRENCY } from './helpers/concurrency.mjs';
 import { runCli, runGit } from './helpers/fixture.mjs';
 
 const DEFAULT_BRANCH = 'main';
@@ -187,7 +187,7 @@ function assertPassed(result) {
   assert.match(result.stdout, /Summary: 1 pass, 0 warn, 0 fail/);
 }
 
-concurrentSuite('doctor --job-surfaces', () => {
+describe('doctor --job-surfaces', { concurrency: CASE_CONCURRENCY }, () => {
   it('passes an honest branch that changed only src/', async (t) => {
     const { clone } = await branchChanging(t, 'src/app.txt');
     assertPassed(await jobSurfaces(clone, DEFAULT_BRANCH));
