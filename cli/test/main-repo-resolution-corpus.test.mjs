@@ -6,9 +6,11 @@
  * (`plugin/instructions/main_repo_resolution.md` → `## Who may cite this`) names exactly those
  * sites.** Every autonomous binder also carries the byte-identical `<MAIN_REPO>` `## Resolved values`
  * row (`MAIN_REPO_ROW`); every clause-carrier without that row is listed in `EXEMPT` with its reason;
- * and no plugin file names the push other than as the main checkout's copy
- * (`<MAIN_REPO>/<scripts_dir>/push-branch.sh`), or resolves `<MAIN_REPO>` through "watcher-supplied"
- * or a pipeline.
+ * and no plugin file spells the push path as `<scripts_dir>/push-branch.sh` under any prefix but
+ * `<MAIN_REPO>/`, passes it a `$` argument, or resolves `<MAIN_REPO>` through "watcher-supplied" or
+ * a pipeline. A mention of the bare name `push-branch.sh` with no `<scripts_dir>/` in front is not
+ * policed: wrapper-property and inventory sentences ("`push-branch.sh` is non-fatal") use that name
+ * legitimately.
  *
  * Registered as a tree guard by Task 11 of `fix_clone_main_repo_resolution`, which adds this
  * file's `treeGuards` entry to `harness.config.json`.
@@ -33,6 +35,11 @@
  * `plugin/commands/branch-start-docs-autonomous.md` rewritten as "via `<scripts_dir>/push-branch.sh`"
  * in the working tree only, then restored: `main-repo-resolved-values-row` failed, a `forbidden` hit
  * on the bare-spelling pattern.
+ *
+ * RED ONCE (prefixed push) — 2026-11-10, the hard boundary's push in
+ * `plugin/commands/branch-start-docs-autonomous.md` rewritten as
+ * "via `bash <repo_root>/<scripts_dir>/push-branch.sh`" in the working tree only, then restored:
+ * `main-repo-resolved-values-row` failed, a `forbidden` hit on the `<MAIN_REPO>/` lookbehind pattern.
  *
  * RED ONCE (`$` argument) — 2026-11-10, `"$REPO_ROOT"` put as the argument of the Override D push
  * fence in `plugin/instructions/plan_orchestration_instructions_autonomous.md` in the working tree
@@ -136,7 +143,7 @@ export const CASES = [
     needle: MAIN_REPO_ROW,
     expected: Object.fromEntries(ROW_BINDERS.map((file) => [file, 1])),
     forbidden: [
-      /(^|[^/])<scripts_dir>\/push-branch\.sh/m,
+      /(?<!<MAIN_REPO>\/)<scripts_dir>\/push-branch\.sh/,
       /push-branch\.sh\s+"?\$/,
       'It uses the `$REPO_ROOT` the calling command',
       'watcher-supplied',
