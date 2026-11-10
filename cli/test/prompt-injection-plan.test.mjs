@@ -138,6 +138,25 @@ test('a new answer on resume is screened, and a recorded answered/ one stays saf
   ]);
 });
 
+test('an answer screened at the top level stays safe once the watcher archives it under answered/', async () => {
+  const branch = newBranch();
+  const prompt = '# Add comments\n';
+  const answer = 'Yes, paginate.\n';
+  put(`task_prompts/${branch}_task_prompt.md`, prompt);
+  const archived = put(`clarifications/${branch}/answered/answer_2.md`, answer);
+  ledger(branch, [
+    [promptPath(branch), sha(prompt)],
+    [`${stateDir}/clarifications/${branch}/answer_2.md`, sha(answer)],
+  ]);
+  const result = await plan(branch);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(result.lines, [
+    `safe ${promptPath(branch)} ${sha(prompt)}`,
+    `safe ${archived} ${sha(answer)}`,
+    'plan: clear',
+  ]);
+});
+
 test('no answer moves an unchanged parked prompt past UNSAFE, top level or answered/', async () => {
   const branch = newBranch();
   const prompt = '# Add comments\n';

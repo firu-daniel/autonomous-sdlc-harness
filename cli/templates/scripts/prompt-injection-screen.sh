@@ -60,7 +60,9 @@
 #   SAFE    (task, user_review) each line of flow_progress/<branch>_progress.md
 #           that is exactly `  - screened: <path> sha256=<64 lowercase hex>` —
 #           `plugin/instructions/autonomous_pause_and_ledger.md` → `### 1.3 Templates`.
-#           A missing ledger is an empty record.
+#           A missing ledger is an empty record. An answer's record matches it at
+#           the top level or under `answered/`: the watcher archives the pair
+#           after the session that screened it.
 #   UNSAFE  every consecutive `Screened file: `<path>`` / `sha256: `<hex>`` line
 #           pair of a question_<n>.md, top level or answered/, whose first
 #           non-blank line after the title is `Raised by: prompt-injection-reviewer
@@ -494,7 +496,7 @@ pis_check_branch() {
 
 pis_plan() {
   local repo_abs sd branch engine clar rel files="" ledger=""
-  local record="" q pairs line hash s p hit hits scan_status out="" n_screen=0 n_unsafe=0
+  local record="" q pairs line hash s p hit hits scan_status out="" n_screen=0 n_unsafe=0 alt
   pis_run_args "$@"
   repo_abs="$PIS_REPO_ABS"
   sd="$PIS_SD"
@@ -555,7 +557,18 @@ EOF
     hash=$(pis_sha256 "$PIS_RESOLVED") || pis_fault "cannot hash '$rel'"
 
     if [ -n "$ledger" ]; then
-      grep -F -x -q -e "  - screened: $rel sha256=$hash" -- "$ledger"
+      # The watcher archives an answer after the session that screened it,
+      # so its record may name the other spelling of the same file.
+      alt=""
+      case "$rel" in
+        "$clar"/answered/answer_*.md) alt="$clar/${rel#"$clar"/answered/}" ;;
+        "$clar"/answer_*.md) alt="$clar/answered/${rel#"$clar"/}" ;;
+      esac
+      if [ -n "$alt" ]; then
+        grep -F -x -q -e "  - screened: $rel sha256=$hash" -e "  - screened: $alt sha256=$hash" -- "$ledger"
+      else
+        grep -F -x -q -e "  - screened: $rel sha256=$hash" -- "$ledger"
+      fi
       case $? in
         0) out="${out}safe $rel $hash$PIS_NL"; continue ;;
         1) ;;
