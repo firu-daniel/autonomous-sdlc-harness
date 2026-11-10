@@ -4,33 +4,33 @@
 
 | Measure | Value |
 |---|---|
-| Sessions | 2 (0 incomplete) |
-| Span | 1h04m |
-| Wall | 59m 13s |
-| Active | 59m 13s |
+| Sessions | 3 (0 incomplete) |
+| Span | 1h16m |
+| Wall | 1h05m |
+| Active | 1h05m |
 | Host-suspended | 0.0s |
 | Idle | 0.0s |
-| Cost | $28.65 |
-| Input tokens (uncached) | 770 |
-| Total input tokens (incl. cache) | 56350392 |
-| Output tokens | 376613 |
-| Thinking tokens (main thread) | 1805 |
-| Cache read tokens | 54452202 |
-| Cache write tokens | 1897420 |
-| Cache write tokens, main thread (5m / 1h) | 0 / 244162 |
-| Cache hit ratio | 0.9663 |
-| Requests | 372 |
-| Request latency p50 / p90 / p99 / max | 3.2s / 18.9s / 1m 01s / 1m 37s |
+| Cost | $32.71 |
+| Input tokens (uncached) | 892 |
+| Total input tokens (incl. cache) | 62236625 |
+| Output tokens | 414395 |
+| Thinking tokens (main thread) | 3246 |
+| Cache read tokens | 59968099 |
+| Cache write tokens | 2267634 |
+| Cache write tokens, main thread (5m / 1h) | 0 / 362606 |
+| Cache hit ratio | 0.9635 |
+| Requests | 430 |
+| Request latency p50 / p90 / p99 / max | 3.1s / 17.7s / 58.6s / 1m 37s |
 | Requests over the idle threshold | 0 |
 | API retries | 0 |
-| Permission denials | 6 |
+| Permission denials | 9 |
 | Sub-agents failed / killed | 0 / 0 |
 | Slowest sub-agent | autonomous-sdlc-harness:task-plan-writer — Write the task plan — 20m 20s (session 1) |
 | Rate-limit peak | seven_day 0.02 |
 
 ## Network refusals
 
-2 of 2 sessions scanned.
+3 of 3 sessions scanned.
 
 No refused network call.
 
@@ -274,4 +274,111 @@ Remainder: tokens the session total holds that neither the orchestrator's reques
 | stop_reason | end_turn |
 | Turns | 30 |
 | Time to first token | 1.6s |
+| Rate-limit peak | seven_day 0.02 |
+
+## Session 3 — 2026-11-10T13:59:01.573Z → 2026-11-10T14:04:49.611Z
+
+Session id: `93469e13-c0d5-49f3-8d20-d37153e949b0`
+
+### Time
+
+| Wall | duration_ms | duration_api_ms | Host-suspended | Idle | Active | Suspend source |
+|---|---|---|---|---|---|---|
+| 5m 48s | 5m 49s | 5m 43s | 0.0s | 0.0s | 5m 48s | none |
+
+### Idle gaps (over 120 s)
+
+None.
+
+### Request latency
+
+| Context | Requests | p50 | p90 | p99 | Max | Over threshold |
+|---|---|---|---|---|---|---|
+| all | 58 | 1.9s | 10.0s | 27.5s | 27.5s | 0 |
+| autonomous-sdlc-harness:architecture-reviewer | 22 | 1.8s | 10.0s | 27.5s | 27.5s | 0 |
+| autonomous-sdlc-harness:task-plan-writer | 16 | 3.2s | 11.1s | 21.5s | 21.5s | 0 |
+| orchestrator | 20 | 1.5s | 7.6s | 12.0s | 12.0s | 0 |
+
+### Tool time
+
+| Tool | Context | Calls | Total | Max |
+|---|---|---|---|---|
+| Agent — sub-agent wall time | orchestrator | 2 | 4m 27s | 2m 13s |
+| Bash | autonomous-sdlc-harness:architecture-reviewer | 12 | 1.3s | 0.1s |
+| Bash | autonomous-sdlc-harness:task-plan-writer | 10 | 2.0s | 0.7s |
+| Bash | orchestrator | 13 | 2.2s | 0.2s |
+| Edit | autonomous-sdlc-harness:task-plan-writer | 7 | 0.3s | 0.0s |
+| Read | autonomous-sdlc-harness:architecture-reviewer | 30 | 1.4s | 0.4s |
+| Read | autonomous-sdlc-harness:task-plan-writer | 6 | 0.3s | 0.2s |
+| Read | orchestrator | 4 | 0.9s | 0.2s |
+| Skill | orchestrator | 1 | 0.0s | 0.0s |
+| Write | autonomous-sdlc-harness:architecture-reviewer | 1 | 0.0s | 0.0s |
+| Write | autonomous-sdlc-harness:task-plan-writer | 1 | 0.0s | 0.0s |
+| Write | orchestrator | 1 | 0.0s | 0.0s |
+
+`Agent` / `Task` rows are sub-agent wall time: how long the orchestrator was blocked on each dispatch, which `### Sub-agents` breaks down per dispatch. They are not time spent in a tool.
+
+#### Slowest calls (sub-agent dispatches excluded)
+
+| Tool | Context | Started | Duration | Result bytes | Error | Permission denied |
+|---|---|---|---|---|---|---|
+| Bash | autonomous-sdlc-harness:task-plan-writer | 2026-11-10T14:00:48.453Z | 0.7s | 1679 | false | false |
+| Read | autonomous-sdlc-harness:architecture-reviewer | 2026-11-10T14:02:07.285Z | 0.4s | 41569 | false | false |
+| Bash | orchestrator | 2026-11-10T14:04:16.978Z | 0.2s | 514 | false | false |
+| Bash | orchestrator | 2026-11-10T13:59:04.538Z | 0.2s | 2641 | false | false |
+| Read | orchestrator | 2026-11-10T13:59:14.579Z | 0.2s | 40775 | false | false |
+| Read | orchestrator | 2026-11-10T13:59:12.625Z | 0.2s | 62301 | false | false |
+| Read | autonomous-sdlc-harness:task-plan-writer | 2026-11-10T13:59:43.938Z | 0.2s | 35051 | false | false |
+| Read | autonomous-sdlc-harness:architecture-reviewer | 2026-11-10T14:02:07.837Z | 0.2s | 31120 | false | false |
+| Read | orchestrator | 2026-11-10T13:59:05.027Z | 0.2s | 61084 | false | false |
+| Read | autonomous-sdlc-harness:architecture-reviewer | 2026-11-10T14:02:32.586Z | 0.2s | 30267 | false | false |
+
+#### Polling loops
+
+None.
+
+### Sub-agents
+
+| Type | Description | Duration | Requests | Output tokens | Input tokens (uncached) | Total input tokens (incl. cache) | Cache read tokens | Cache write tokens | Wall share |
+|---|---|---|---|---|---|---|---|---|---|
+| autonomous-sdlc-harness:task-plan-writer | Revise task plan with park-2 answer | 2m 13s | 16 | 14893 | 34 | 1006115 | 926044 | 80037 | 0.3844 |
+| autonomous-sdlc-harness:architecture-reviewer | Architecture review of plan (iter 4) | 2m 13s | 22 | 14366 | 46 | 2732050 | 2560271 | 171733 | 0.383 |
+
+### Cost and tokens
+
+| Measure | Value |
+|---|---|
+| Cost | $4.07 |
+| Cost — claude-opus-5-5 | $4.07 |
+| Input tokens (uncached) | 122 |
+| Total input tokens (incl. cache) | 5886233 |
+| Output tokens | 37782 |
+| Thinking tokens (main thread) | 1441 |
+| Cache read tokens | 5515897 |
+| Cache write tokens | 370214 |
+| Cache write tokens, main thread (5m / 1h) | 0 / 118444 |
+| Cache hit ratio | 0.9371 |
+| Token source | result.modelUsage |
+
+#### Token attribution
+
+| Context | Input tokens (uncached) | Total input tokens (incl. cache) | Output tokens | Cache read tokens | Cache write tokens |
+|---|---|---|---|---|---|
+| orchestrator | 42 | 2148068 | 275 | 2029582 | 118444 |
+| sub-agents | 80 | 3738165 | 29259 | 3486315 | 251770 |
+| remainder | 0 | 0 | 8248 | 0 | 0 |
+
+Remainder: tokens the session total holds that neither the orchestrator's requests nor the dispatches' transcripts account for.
+
+### Reliability
+
+| Measure | Value |
+|---|---|
+| API retries | 0 |
+| Permission denials | 3 |
+| Sub-agents spawned / failed / killed | 2 / 0 / 0 |
+| terminal_reason | completed |
+| stop_reason | end_turn |
+| Turns | 23 |
+| Time to first token | 1.5s |
 | Rate-limit peak | seven_day 0.02 |
