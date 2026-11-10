@@ -116,6 +116,17 @@
 #   `parked: <question path>` per file written, the screen park first — so the
 #   last line is `parked:` whenever a file was written.
 #
+#   READERS OF THESE STRINGS — a rename here is an edit there, byte for byte:
+#   the `Raised by:` line (PIS_RAISED) is keyed on by
+#   plugin/instructions/task_plan_writing_instructions_autonomous.md (Override 2(a),
+#   Consume-then-archive), plugin/instructions/user_review_fix_plan_writing_instructions_autonomous.md
+#   (Override 2(a)) and plugin/instructions/clarification_digest_instructions.md
+#   (`## The entry format`), and written by hand on a halt per
+#   plugin/instructions/prompt_injection_screen.md; the re-ask heading is keyed
+#   on by clarification_digest_instructions.md. The file format itself is
+#   plugin/instructions/task_plan_writing_instructions_autonomous.md
+#   → `## Clarification channel — file format (canonical, single source of truth)`.
+#
 # VERDICT — parse prompt-injection-reviewer's return, which the orchestrator
 # wrote to <verdict-file>, for the one file <path>. Fails closed: only the exact
 # SAFE block passes. After one surrounding code fence is stripped (when the
