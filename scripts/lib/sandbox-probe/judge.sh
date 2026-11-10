@@ -17,6 +17,11 @@
 #   network    `<sandbox_violations>`, `CONNECT tunnel failed`, `host is not on the allow list`, or
 #               `This proxy requires authentication` (an SSH call through the proxy,
 #               docs/sandbox-verification.md row P1)
+#               The `network` strings and SP_N5_CANNOT_WIDEN are mirrored by
+#               cli/templates/scripts/lib/run-analytics.jq → network_refusal_strings, which the run
+#               analytics match a session's refusals against. A string added here is added there in
+#               the same change. cli/test/run-analytics-network-parse.test.mjs fails when one is
+#               missing there.
 #   sandbox     `Operation not permitted`
 #   sandbox     Linux only: `Read-only file system` (EROFS, a write into a bubblewrap read-only bind)
 #   sandbox     Linux only: `Permission denied` (a write onto a bubblewrap placeholder), `Device or

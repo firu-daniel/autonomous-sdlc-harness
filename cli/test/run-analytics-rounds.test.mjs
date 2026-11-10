@@ -201,7 +201,7 @@ test('a resumed label is appended as <label>#2 and the first entry is left as it
   assert.equal(JSON.stringify(rounds[0]), first);
 });
 
-test('a run with no round records writes the same bytes with or without a lane of logs and verdicts', async (t) => {
+test('a lane of logs and verdicts adds gate-log entries and no round', async (t) => {
   const bare = await adopted(t);
   const logs = await adopted(t);
   logs.put(LABEL, 'log', ['some output']);
@@ -209,16 +209,18 @@ test('a run with no round records writes the same bytes with or without a lane o
   await expectLine(bare, `recorded 1 session(s) for ${BRANCH}`);
   await expectLine(logs, `recorded 1 session(s) for ${BRANCH}`);
   assert.equal(existsSync(bare.lane), false);
-  const [aj, am] = bare.bytes();
-  const [bj, bm] = logs.bytes();
-  assert.ok(aj.equals(bj), `${aj}\n---\n${bj}`);
-  assert.ok(am.equals(bm));
-  const doc = bare.doc();
-  assert.equal(doc.schema, 1);
-  assert.equal('rounds' in doc, false);
+  const a = bare.doc();
+  const b = logs.doc();
+  assert.deepEqual(a.sessions, b.sessions);
+  assert.equal(a.schema, 1);
+  assert.equal('rounds' in a, false);
+  assert.equal('gate_logs' in a, false);
+  assert.equal(b.schema, 3);
+  assert.deepEqual(b.rounds, []);
+  assert.deepEqual(b.gate_logs, [{ log_id: LABEL, matches: [] }]);
 });
 
-test('a schema-1 document is extended to schema 2; a schema-3 one is refused and left as it is', async (t) => {
+test('a schema-1 document is extended to schema 2; a schema-4 one is refused and left as it is', async (t) => {
   await t.test('schema 1 extended', async (t2) => {
     const f = await adopted(t2);
     await expectLine(f, `recorded 1 session(s) for ${BRANCH}`);
@@ -231,15 +233,18 @@ test('a schema-1 document is extended to schema 2; a schema-3 one is refused and
     assert.equal(JSON.stringify(doc.sessions[0]), session);
   });
 
-  await t.test('schema 3 refused', async (t2) => {
+  await t.test('schema 4 refused', async (t2) => {
     const f = await adopted(t2);
     mkdirSync(join(f.jsonPath, '..'), { recursive: true });
-    const text = '{"schema":3,"branch":"feat_x","sessions":[],"rounds":[]}\n';
+    const text = '{"schema":4,"branch":"feat_x","sessions":[],"rounds":[]}\n';
     writeFileSync(f.jsonPath, text);
     putFinished(f);
     const r = await f.run();
     assert.equal(r.status, 1, output(r));
-    assert.ok(r.stderr.includes('is not a schema-1 or schema-2 run-analytics document; left untouched'), output(r));
+    assert.ok(
+      r.stderr.includes('is not a schema-1, schema-2 or schema-3 run-analytics document; left untouched'),
+      output(r),
+    );
     assert.equal(readFileSync(f.jsonPath, 'utf8'), text);
     assert.equal(existsSync(f.mdPath), false);
   });

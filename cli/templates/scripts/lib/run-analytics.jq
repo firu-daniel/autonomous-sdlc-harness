@@ -6,7 +6,8 @@
 # those records' idle gaps against host suspend intervals, turning sub-agent
 # transcripts into final per-request and per-dispatch token figures, and turning
 # a branch's finished Run gates round records (mode `rounds`) into round records,
-# deciding which are new. It reads no file of
+# and its finished Run gates logs (mode `gate_logs`) into lists of possible network
+# attempts, deciding which of each are new. It reads no file of
 # its own, resolves no path, consults no host and merges nothing: the roll-up and
 # the Markdown are lib/run-analytics-report.jq's; locating files, reading suspend
 # intervals, merging and writing are run-analytics.sh's, its only caller.
@@ -19,11 +20,12 @@
 # $suspend, $suspend_source. jq resolves every $name the program references at
 # compile time, not when the branch holding it runs, so a call omitting one
 # aborts with `$<name> is not defined` whatever its mode — sessions, overlay,
-# transcripts, attach or rounds. Each mode ignores the ones it does not use; pass
-# those as the neutral values shown. The variable set is unchanged, and a variable
-# may be bound by --slurpfile as well as by --arg / --argjson: mode `rounds` binds
-# $known that way, as the recorded rounds array wrapped in a one-element array,
-# not session ids. Every other mode keeps --argjson known.
+# transcripts, attach, rounds or gate_logs. Each mode ignores the ones it does not
+# use; pass those as the neutral values shown. The variable set is unchanged, and a
+# variable may be bound by --slurpfile as well as by --arg / --argjson: modes
+# `rounds` and `gate_logs` bind $known that way, as the recorded rounds or gate-log
+# array wrapped in a one-element array, not session ids. Every other mode keeps
+# --argjson known.
 #
 # Mode `sessions`:
 #   jq -n -R -c -S -f run-analytics.jq --arg mode sessions
@@ -45,9 +47,11 @@
 #     takes the nearest preceding one (the rule harness-run.yml's
 #     THE SELF-PAUSE POINT, MEASURED states).
 #   - Every free-text field written (dispatch description, Bash command) goes
-#     through `redact`: each $redact pair replaced literally, in order, then any
-#     remaining /Users/<segment> or /home/<segment> -> ~, then cut to 160
-#     characters. The init event's working-directory field is never read.
+#     through `redact`: `redact_text` — each $redact pair replaced literally, in
+#     order, then any remaining /Users/<segment> or /home/<segment> -> ~ — then
+#     cut to 160 characters. network_refusals' command and line, and mode
+#     `gate_logs`' line, go through `redact_text` uncut. The init event's
+#     working-directory field is never read.
 #     Mode `rounds`' round ids, gate ids and file paths go through `redact_path`,
 #     the replace pairs only, with neither the home step nor the 160-character
 #     cut, because they are keys and record values, not display text, and the
@@ -158,6 +162,49 @@
 #   text before the last `_round_` and then that number as a number; any other
 #   label after them, by its text.
 #
+# Mode `gate_logs` (the only mode that reads a Run gates log):
+#   jq -n -R -c -S -f run-analytics.jq --arg mode gate_logs
+#      --argjson idle_threshold_s 1 --slurpfile known <file holding the document's
+#      .gate_logs array, or []> --argjson redact '<pairs>' --argjson suspend '[]'
+#      --arg suspend_source none < <concatenated logs>
+#   $known is bound and checked as in mode `rounds`.
+#   Input: raw lines, read with `inputs`. A line that `fromjson?` parses to an
+#   object with string run_analytics_gate_log (the round's label) starts that log;
+#   the lines up to the next marker are its lines, less exactly one empty line at
+#   its end (the caller appends a newline after each file). Lines before the first
+#   marker are ignored.
+#   Attribution: a line that, after leading spaces, begins `ok `, `not ok ` or
+#   `# Subtest: ` is a test-name line: it may set the current test file and is
+#   never matched. A line names the test file in its first space-separated token
+#   containing `.test.`, `.spec.` or `_test.`, with a leading `file://`, `(`, `'`
+#   or `"` removed, cut at the first `:` after that marker, and trailing `)`, `'`,
+#   `"` and `,` removed. Every other line first sets the current test file when it
+#   names one.
+#   Matching: a line carrying a gate_proxy_strings member is kind `proxy`;
+#   otherwise one carrying a connect_error_strings member is kind `connect`. Its
+#   test_file is the current test file, or null. Identical {kind, test_file, line}
+#   are one match with a count, in first-occurrence order.
+#   The four connect names are Node's and libc's error-code names, not strings a
+#   recorded run measured.
+#   Redaction: the label goes through `redact_path`, as mode `rounds`' does.
+#   test_file goes through `redact_file`, whose home step is anchored at the
+#   start, because the unanchored strip_home would merge two relative test files
+#   under a `home/` segment (the comment above `def redact_path`). line is free
+#   text in which an absolute path can sit anywhere, so it takes `redact_text`'s
+#   unanchored step; two lines differing only in the segment after a `home/` are
+#   kept as one match whose count sums both, an accepted residual.
+#   Blind spots: a test that catches the error and passes leaves no trace; a plain
+#   connect error cannot be told apart from an unreachable host; on macOS,
+#   Seatbelt's own violation records go to the system log, not to the test
+#   output; a test whose name or output quotes a string is matched too, except on
+#   test-name lines.
+#   Output: {"gate_logs": [{log_id, matches: [{kind, test_file, line, count}]}]},
+#   one entry per log, a log with no match included.
+#   New versus recorded: matches is compared with the LAST $known[0] entry whose
+#   log_id | split("#")[0] is the label. None: emitted as the label. Equal:
+#   emitted nowhere. Different: emitted as "<label>#<k + 1>", k the number of
+#   entries carrying that label. Order: as mode `rounds` orders labels.
+#
 # Session record, of modes sessions, overlay and attach (top-level keys exactly these):
 #   session_id, complete, first_at, last_at  (ISO timestamps, verbatim)
 #   time: {wall_ms, duration_ms, duration_api_ms, host_suspended_ms, idle_ms,
@@ -212,6 +259,24 @@
 #     rate_limit_peak: max utilization per window, from rate_limit_info's
 #     rateLimitType/utilization and from each unifiedWindows.<window>.utilization
 #     (measured streams carry a null top-level utilization).
+#   network_refusals: [{context, tool, command, started_at, host, port, line}]
+#     One entry per tool_result of a known call that counts: (a) is_error is true
+#     and some line of its text carries a network_refusal_strings member, or (b)
+#     some line begins with `<sandbox_violations>`. The strings are quoted from
+#     docs/sandbox-verification.md rows N1, N5, CS3 and P1; N3's returned body and
+#     N4's `curl: (7) Failed to connect …` are not matched, nor is a
+#     permission-layer refusal. command: the raw Bash command through
+#     `redact_text`, null for another tool. line: the first carrying line through
+#     `redact_text`. host, port: from the first line naming them (`deny
+#     network-outbound <host>:<port>` or `sandbox proxy: <host>:<port>: 403`),
+#     else null. Residuals: a refused call whose command swallowed the error and
+#     whose result has no line beginning `<sandbox_violations>` is missed; a
+#     failing command whose output quotes a string is listed. A record without the
+#     key predates the report; [] means scanned, none found.
+#     network_refusal_strings mirrors scripts/lib/sandbox-probe/judge.sh →
+#     sp__layer's `network` arm plus SP_N5_CANNOT_WIDEN, which exist only in the
+#     harness's own repository. A string added there is added here, and
+#     cli/test/run-analytics-network-parse.test.mjs fails when one is missing.
 #   A context is `orchestrator` (no parent_tool_use_id) or the dispatching
 #   Agent/Task tool_use's input.subagent_type (`subagent` when absent).
 
@@ -266,10 +331,69 @@ def redact_path:
       (.; split($p[0]) | join($p[1] | tostring))
   end;
 
-def redact:
+def redact_text:
   if type != "string" then .
-  else redact_path | strip_home("/Users/") | strip_home("/home/") | .[0:160]
+  else redact_path | strip_home("/Users/") | strip_home("/home/")
   end;
+
+def redact:
+  redact_text | if type == "string" then .[0:160] else . end;
+
+# strip_home anchored at the string's start: a relative path never begins with `/`.
+def strip_home_lead($pre):
+  if startswith($pre) then
+    .[($pre | length):] as $rest | ($rest | seg_len) as $n | "~" + $rest[$n:]
+  else . end;
+
+def redact_file:
+  if type != "string" then .
+  else redact_path | strip_home_lead("/Users/") | strip_home_lead("/home/")
+  end;
+
+def all_digits:
+  length > 0 and ([explode[] | select(. < 48 or . > 57)] | length) == 0;
+
+# A mirror: header → network_refusals.
+def n5_refusal_string: "allowed_domains cannot widen network access";
+def network_refusal_strings:
+  ["<sandbox_violations>", "CONNECT tunnel failed", "host is not on the allow list",
+   "This proxy requires authentication", n5_refusal_string];
+def gate_proxy_strings: network_refusal_strings - [n5_refusal_string];
+# Node's and libc's error-code names, not strings a recorded run measured.
+def connect_error_strings: ["ECONNREFUSED", "ENETUNREACH", "EHOSTUNREACH", "EAI_AGAIN"];
+
+def carries_any($set): . as $l | [$set[] as $s | $l | contains($s)] | any;
+
+# One line -> {host, port} of the target it names, split at the last `:`.
+def host_port:
+  (if contains("deny network-outbound ") then split("deny network-outbound ")[1] | split(" ")[0]
+   elif contains("sandbox proxy: ") then split("sandbox proxy: ")[1] | split(": 403")[0]
+   else null end) as $t
+  | if $t == null or $t == "" then {host: null, port: null}
+    else
+      ($t | split(":")) as $p
+      | if ($p | length) < 2 then {host: $t, port: null}
+        else {host: ($p[0:-1] | join(":")),
+              port: ($p[-1] | if all_digits then tonumber else null end)}
+        end
+    end;
+
+def result_text:
+  if type == "string" then .
+  elif type == "array" then
+    [.[] | select(type == "object" and .type == "text" and (.text | type) == "string") | .text]
+    | join("\n")
+  else "" end;
+
+# One tool_result -> {host, port, line} when it counts as a network refusal, else null.
+def refusal_fields($r):
+  [$r.content | result_text | split("\n")[]] as $lines
+  | [$lines[] | select(carries_any(network_refusal_strings))] as $hit
+  | if (($r.is_error == true) and ($hit | length) > 0)
+       or ([$lines[] | startswith("<sandbox_violations>")] | any)
+    then ([$lines[] | host_port | select(.host != null)][0] // {host: null, port: null})
+         + {line: ($hit[0] | redact_text)}
+    else null end;
 
 def req_usage:
   {output_tokens: (.output_tokens // 0),
@@ -286,7 +410,7 @@ def new_session($key; $skip):
    ctx: {"": {last_t: null, last_seq: 0, retry: false, awaiting: true}},
    dispatch: {}, dispatch_order: [], reqidx: {}, reqs: [],
    calls: {}, corder: [], open: {},
-   gaps: [], retries: 0, retry_errors: {}, denied: {}, rl: {}};
+   gaps: [], retries: 0, retry_errors: {}, denied: {}, rl: {}, netref: []};
 
 def ctx_name($k):
   if $k == "" then "orchestrator" else (.dispatch[$k].type // "subagent") end;
@@ -319,7 +443,8 @@ def add_call($u; $ck; $t; $at):
     | ctx_name($ck) as $ctx
     | .calls[$u.id] = {tool: ($u.name // "unknown"), context: $ctx, started_at: $sat,
                        start_t: $st, duration_ms: null, result_bytes: null, is_error: null,
-                       command: (if $u.name == "Bash" then ($u.input.command // null | redact) else null end)}
+                       command: (if $u.name == "Bash" then ($u.input.command // null | redact) else null end),
+                       raw_command: (if $u.name == "Bash" then ($u.input.command // null) else null end)}
     | .corder += [$u.id]
     | .open[$u.id] = $st
     | if $u.name == "Agent" or $u.name == "Task" then
@@ -376,6 +501,13 @@ def on_user($e; $t; $ck):
            | if .dispatch[$id] != null and .ctx[$id] != null then .ctx[$id].awaiting = false else . end
            | if .dispatch[$id] != null and .dispatch[$id].agent_id == null and $aid != null
              then .dispatch[$id].agent_id = $aid else . end
+           | refusal_fields($r) as $nf
+           | if $nf == null then .
+             else
+               .calls[$id] as $c
+               | .netref += [{context: $c.context, tool: $c.tool, started_at: $c.started_at,
+                              command: ($c.raw_command | redact_text)} + $nf]
+             end
          end)
   | .ctx[$ck].awaiting = true;
 
@@ -485,7 +617,8 @@ def finalize:
                  stop_reason: $r.stop_reason,
                  num_turns: $r.num_turns,
                  ttft_ms: $r.ttft_ms,
-                 rate_limit_peak: .rl}};
+                 rate_limit_peak: .rl},
+   network_refusals: .netref};
 
 def close_current($followed):
   if .active == true and .skip != true and (.result != null or $followed) then
@@ -583,9 +716,6 @@ def attach:
              .requests.items |= map(if (.message_id | type) == "string" and $bymsg[.message_id] != null
                                     then . + $bymsg[.message_id] else . end)
            else . end));
-
-def all_digits:
-  length > 0 and ([explode[] | select(. < 48 or . > 57)] | length) == 0;
 
 def decimal:
   split(".") as $p
@@ -720,6 +850,78 @@ def rounds:
        skipped: ([.[].skipped[]] | sort_by(.record))}
   end;
 
+def lstrip_spaces: if startswith(" ") then .[1:] | lstrip_spaces else . end;
+
+def lead_trim:
+  if startswith("file://") then .[7:] | lead_trim
+  elif startswith("(") or startswith("'") or startswith("\"") then .[1:] | lead_trim
+  else . end;
+
+def tail_trim:
+  if endswith(")") or endswith("'") or endswith("\"") or endswith(",") then .[0:-1] | tail_trim
+  else . end;
+
+def test_file_markers: [".test.", ".spec.", "_test."];
+
+# One space-separated token -> the test file it names, or null.
+def token_test_file:
+  lead_trim
+  | . as $t
+  | ([test_file_markers[] as $m | select($t | contains($m))
+      | ($t | split($m)[0] | length) + ($m | length)] | min) as $at
+  | if $at == null then null
+    else (.[0:$at] + (.[$at:] | split(":")[0])) | tail_trim | if . == "" then null else . end
+    end;
+
+def line_test_file:
+  [split(" ")[] | select(. as $w | [test_file_markers[] as $m | $w | contains($m)] | any)][0]
+  | if . == null then null else token_test_file end;
+
+def test_name_line:
+  lstrip_spaces | (startswith("ok ") or startswith("not ok ") or startswith("# Subtest: "));
+
+# One log's lines -> [{kind, test_file, line, count}], first-occurrence order.
+def gate_log_matches:
+  reduce .[] as $l ({cur: null, ms: [], idx: {}};
+    ($l | line_test_file) as $own
+    | (if $own != null then .cur = $own else . end)
+    | if ($l | test_name_line) then .
+      else
+        (if ($l | carries_any(gate_proxy_strings)) then "proxy"
+         elif ($l | carries_any(connect_error_strings)) then "connect"
+         else null end) as $kind
+        | if $kind == null then .
+          else
+            {kind: $kind, test_file: (.cur | redact_file), line: ($l | redact_text)} as $m
+            | ([$m.kind, $m.test_file, $m.line] | tojson) as $k
+            | if .idx[$k] != null then .idx[$k] as $i | .ms[$i].count += 1
+              else .idx[$k] = (.ms | length) | .ms += [$m + {count: 1}] end
+          end
+      end)
+  | .ms;
+
+def gate_logs:
+  if ($known | type) != "array" or ($known | length) != 1 or ($known[0] | type) != "array" then
+    error("run-analytics.jq: mode gate_logs needs --slurpfile known naming a file that holds one JSON array")
+  else
+    [$known[0][] | select(type == "object" and (.log_id | type) == "string")] as $kn
+    | reduce inputs as $line ({cur: null, logs: {}};
+        [$line | fromjson? | select(type == "object" and (.run_analytics_gate_log | type) == "string")][0]
+          as $m
+        | if $m != null then $m.run_analytics_gate_log as $k | .cur = $k | .logs[$k] = []
+          elif .cur != null then .cur as $k | .logs[$k] += [$line]
+          else . end)
+    | [.logs | to_entries[]
+       | (.key | redact_path) as $lb
+       | (.value | if length > 0 and .[-1] == "" then .[0:-1] else . end | gate_log_matches) as $ms
+       | [$kn[] | select((.log_id | split("#")[0]) == $lb)] as $same
+       | {sort: ($lb | round_sort_key),
+          entry: (if ($same | length) == 0 then {log_id: $lb, matches: $ms}
+                  elif $same[-1].matches == $ms then null
+                  else {log_id: ($lb + "#" + (($same | length) + 1 | tostring)), matches: $ms} end)}]
+    | {gate_logs: ([.[] | select(.entry != null)] | sort_by(.sort) | map(.entry))}
+  end;
+
 if $mode == "sessions" then
   reduce (inputs | fromjson? | select(type == "object")) as $e
     ({out: [], emitted: {}, seen: {}, active: false,
@@ -735,6 +937,8 @@ elif $mode == "attach" then
   attach
 elif $mode == "rounds" then
   rounds
+elif $mode == "gate_logs" then
+  gate_logs
 else
-  error("run-analytics.jq: unknown --arg mode \"\($mode)\"; expected sessions, overlay, transcripts, attach or rounds")
+  error("run-analytics.jq: unknown --arg mode \"\($mode)\"; expected sessions, overlay, transcripts, attach, rounds or gate_logs")
 end
