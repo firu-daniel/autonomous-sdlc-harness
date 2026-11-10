@@ -30,3 +30,7 @@ No conventions document requires this declaration of a standalone template scrip
 ```
 
 Then copy the file byte for byte to `scripts/prompt-injection-screen.sh`. Change no code.
+
+- **Deviations from plan:**
+  - The paragraph also names `plugin/instructions/prompt_injection_screen.md`, which writes the same `Raised by: prompt-injection-reviewer (prompt-injection screen)` line by hand on a halt (its step-6 route, quoted from the line carrying `It opens `Raised by: …``): a rename of `PIS_RAISED` strands that writer too, so the declaration the finding asks for would be incomplete without it. The re-ask-heading clause names `clarification_digest_instructions.md` by file name instead of "the last of those", since the list no longer ends on it.
+  - `scripts/prompt-injection-screen.sh` was **not** copied: it lies outside this dispatch's `cli` path scope (it is the `general` layer's self-adopted copy, last brought to the template bytes by `eca1f541`, "Task 16 — Bring self-adopted copies to the template bytes"). The two copies now differ by this header comment only; a catch-all-layer dispatch copies `cli/templates/scripts/prompt-injection-screen.sh` over it byte for byte.
