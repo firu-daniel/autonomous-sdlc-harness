@@ -8,7 +8,7 @@ Headline: the layering is sound. Every edit lands in the layer whose `layers[].p
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Declare `<repo_root>` in `branch-start-docs-autonomous.md`'s `## Resolved values` table _(layer: plugin)_
+1. [x] **Finding 1** — Declare `<repo_root>` in `branch-start-docs-autonomous.md`'s `## Resolved values` table _(layer: plugin)_
 
 ## Must Fix
 

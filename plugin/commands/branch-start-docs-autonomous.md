@@ -8,7 +8,7 @@ description: Run the current branch's documentation checklist end-to-end autonom
 
 ## Resolved values
 
-The tokens below are not ordinary **path placeholders** (`<branch>`, `<slug>`, which this file's own text resolves): they resolve from the adopting repository's `harness.config.json`, except `<MAIN_REPO>`, which is derived at runtime. They are declared here once, and after this table the body uses each one as an ordinary placeholder. `$REPO_ROOT` is step 1's runtime anchor, not a config value; a command spells it as `<repo_root>`, the literal path it resolves to.
+The tokens below are not ordinary **path placeholders** (`<branch>`, `<slug>`, which this file's own text resolves): they resolve from the adopting repository's `harness.config.json`, except `<MAIN_REPO>` and `<repo_root>`, which are derived at runtime. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
@@ -16,6 +16,7 @@ The tokens below are not ordinary **path placeholders** (`<branch>`, `<slug>`, w
 | `<docs_root>` | config value | `docs.root` — the repo-relative directory holding the documentation corpus this flow builds. Read **only** when `phases.docs` is `true`, which is the same gate that decides whether this flow runs at all. |
 | `<scripts_dir>` | config value | `scriptsDir` — the directory the outer-loop scripts live in. This file names two of them — `autonomous-watcher.sh`, as the owner of the responsibilities this command deliberately does not have, and `push-branch.sh`, in the hard boundary, under `<MAIN_REPO>` — and invokes neither. |
 | `<MAIN_REPO>` | derived at runtime | The main checkout — the path a bare `printenv HARNESS_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
+| `<repo_root>` | derived at runtime | The absolute root of the checkout this run is executing in — the run copy, or the main repo in the manual entry point — which step 1 derives from a **bare** `git rev-parse --show-toplevel` and writes `$REPO_ROOT`. A command spells it as the literal absolute path it resolves to, never through a substitution or a variable. |
 | `<default_branch>` | config value | `defaultBranch` — the branch work starts from and merges back into. Never a remembered branch name. Bound for completeness — no step in this file consumes it. |
 | `<protected_branches>` | config value | `protectedBranches` — the branches the hard boundary below forbids merging into, pushing to, or opening a PR against. The effective set is these together with `<default_branch>`. The `pre-push` git hook enforces that set; above it, the plugin's `PreToolUse` protected-branch guard together with the generated permission profile's `Bash(git push:*)` **`ask`** entry — evaluated before any `allow`, and refused in an unattended run — is the best-effort layer. |
 
