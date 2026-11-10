@@ -66,3 +66,12 @@ Leave the dispatcher's `case` ready for those three verbs. Until they land, it a
 - `npm test --workspace cli -- test/init.test.mjs` passes. This task edits that file.
 - `bash -n cli/templates/scripts/prompt-injection-screen.sh` exits 0, and `grep -n 'mktemp' cli/templates/scripts/prompt-injection-screen.sh` shows only explicit templates.
 - In an `init`-wired fixture, `grep -c 'prompt-injection-screen.sh' .claude/settings.autonomous.json` is non-zero, carrying both allow forms.
+
+**Deviations from plan:**
+
+- *Mode `0755`.* The template is stored at git mode `100644`, as every sibling under `cli/templates/scripts/` is (`git ls-files -s` on `scratch-run.sh` and `task-offer-check.sh`: `100644`). `init` applies `0o755` from the row's `mode`. A `chmod` on the template was also refused in this session.
+- *`bash -n` evidence downgrade.* The bare `bash -n cli/templates/scripts/prompt-injection-screen.sh` call was refused by the session's permission mode. The claim rests instead on `bash scripts/typecheck.sh`, whose `check-shell-parse` step reported `123 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`, followed by `PASS: typecheck`. The `grep -n mktemp` probe ran: line 257 is the only call, and it uses `"${TMPDIR:-/tmp}/prompt-injection-screen.XXXXXX"`.
+- *Bash 3.2 runtime behaviour.* The suite runs the script with the `bash` first on `PATH`. Its byte handling (`printf -v v '%d' "'$b"` in `pis_cap`, `$'\x..'` byte patterns) was parsed under bash 3.2.57 but not executed there; ad-hoc `/bin/bash` invocations were refused in this session. `pis_cap` normalises a negative byte value (`v + 256`), so a signed-char `printf` gives the same answer.
+- *`pis_state_dir`.* It is defined (`hr_state_dir`, the reader `run_state_dir` uses) but `prescan` does not call it. The library's configuration reader needs `jq`, and the plan's floor says `prescan` needs no `jq`. It is there for the verbs that write under `stateDir` (Tasks 2–4).
+- *Profile check.* The `settings.autonomous.json` bullet is asserted in `cli/test/prompt-injection-prescan.test.mjs` (both `Bash(bash scripts/prompt-injection-screen.sh:*)` and the repo-root-absolute form) instead of being a hand-run `grep -c`.
+- *Outside-`--repo` case.* It passes `--repo <fixture>/prompts` and `../README.md`, so the test writes nothing outside the fixture. The fixture sits directly under the system temp directory.
