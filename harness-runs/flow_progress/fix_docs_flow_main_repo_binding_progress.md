@@ -9,7 +9,7 @@ Source: harness-runs/task_prompts/fix_docs_flow_main_repo_binding_task_prompt.md
 ## Planning
 - [x] P0. Untrusted input screened (prompt-injection-reviewer SAFE)
   - screened: harness-runs/task_prompts/fix_docs_flow_main_repo_binding_task_prompt.md sha256=a6430178b4496523a868d5e48155396034b1ce1825168f5321e34c535534a2ec
-- [ ] P1. Task plan converged (business_parity + architecture + task-plan-reviewer all PASS)
+- [x] P1. Task plan converged (business_parity + architecture + task-plan-reviewer all PASS)
 - [-] P2. UI-test plan converged (ui-tests-plan-reviewer PASS) — or no_ui
 - [ ] P3. Plans committed & pushed (story index + per-task dir + UI-test plan)
 
