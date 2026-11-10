@@ -11,7 +11,7 @@ Headline: the layering holds. Each new file sits in the layer its kind belongs t
 1. [x] **Finding 1** — Add `plugin/docs/AUTONOMOUS_FLOW_WHITEBOARD.md` to the screen step's citation roster _(layer: plugin)_
 2. [x] **Finding 2** — Add `docs/watcher.md` to the screen step's citation roster _(layer: plugin)_
 3. [x] **Finding 3** — Reduce the docs engine command's restatement of the screen step to a pointer _(layer: plugin)_
-4. [ ] **Finding 4** — Drop the restated placement rationale from the user-review engine command _(layer: plugin)_
+4. [x] **Finding 4** — Drop the restated placement rationale from the user-review engine command _(layer: plugin)_
 5. [ ] **Finding 5** — Declare, in the screen script's header, the plugin readers of the park file's wire strings _(layer: cli)_
 
 ## Must Fix
