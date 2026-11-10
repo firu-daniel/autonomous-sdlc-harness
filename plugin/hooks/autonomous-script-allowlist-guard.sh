@@ -212,7 +212,11 @@
 # guard is no wider than it — and, since the construct scan above runs ahead of
 # every piece test here and the sibling has no counterpart, it is now NARROWER:
 # a pipe or a balanced command substitution the sibling grants behind a safe
-# prefix is refused here.
+# prefix is refused here. The `cd` piece that sets `run_cwd` is judged by the
+# path-anchored arms first, vetoes included: in a run copy,
+# `cd <repo>/<scripts dir>/../../…/<outside>` used to put a relative `.sh` token
+# textually under `<scripts dir>` while it ran from outside, and the arm's `/../`
+# veto is what now refuses it.
 #
 # THE PREFIX SETS ARE RESOLVED LAZILY, and a command that is nothing but wrapper
 # invocations never resolves them at all — see `load_prefix_sets`. A failure there
@@ -363,8 +367,9 @@
 #
 # REPRO — reproduce any decision by hand; the payload goes in on stdin. <repo> is
 # a checkout that has adopted the harness with `scriptsDir: "<scripts dir>"`,
-# <wrapper> a script under it, and <work_root>/<project_name> the parent
-# directory and name stem its sibling worktrees are built from:
+# <wrapper> a script under it, <work_root>/<project_name> the parent
+# directory and name stem its sibling worktrees are built from, and <outside> a
+# directory outside the workspace:
 #
 #   printf '{"tool_input":{"command":"bash <repo>/<scripts dir>/<wrapper>.sh"},"cwd":"<repo>"}' \
 #     | bash plugin/hooks/autonomous-script-allowlist-guard.sh
@@ -409,6 +414,12 @@
 #     bash <repo>/<scripts dir>/../../evil.sh         `..` traversal
 #     bash <repo>/<scripts dir>/*.sh                  glob
 #     bash <repo>/<other dir>/thing.sh                outside <scripts dir>
+#     git -C <repo> status && cd <repo>/<scripts dir>/../../../../../<outside> && bash <scripts dir>/<wrapper>.sh
+#                                                     from a run copy, where <repo>
+#                                                     is `<work_root>/<project_name>-*`,
+#                                                     with as many `..` as climb out
+#                                                     of <work_root>: the stem arm's
+#                                                     `/../` veto refuses the `cd`
 #     git status                                      no `.sh` token
 #     any of the above in a <repo> configuring a different `scriptsDir`
 #     any of the above in a <repo> whose config is invalid JSON
@@ -674,7 +685,9 @@ esac
 # destructive, and narrowing past a measured need is a change nothing has justified.
 # `docs-search-server.sh` is started by the agent runner from `.mcp.json`, not by
 # a dispatched agent, and reaches only the read-only `docs serve`.
-# `run-analytics.sh` only appends sessions to `<state_dir>/run_analytics/<branch>/`
+# `run-analytics.sh` only appends sessions, and the finished Run gates rounds it
+# reads and the matching lines of their logs from the branch's
+# `<state_dir>/test_run_logs/` lane, to `<state_dir>/run_analytics/<branch>/`
 # for the branch and checkout it is given, and never rewrites a recorded one.
 # `task-offer-check.sh` is run by an interactive session's change-request fence,
 # reads the checkout and its main checkout's run registry, writes nothing, and

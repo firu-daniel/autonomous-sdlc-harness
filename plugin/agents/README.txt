@@ -3,8 +3,9 @@ agents/ — genericized agent definitions
 
 This directory holds the harness's agent definitions: the per-layer implementers,
 the plan writers and their plan reviewers, the per-unit and end-of-branch code
-reviewers, the skeptic, the docs writer and reviewer, the committer, and the
-interactive-test (QA) agent. Roadmap item 4 filled it. It also holds the pair the
+reviewers, the skeptic, the docs writer and reviewer, the committer, the
+prompt-injection reviewer that screens each untrusted input file before an
+autonomous run acts on it, and the interactive-test (QA) agent. Roadmap item 4 filled it. It also holds the pair the
 setup command `/autonomous-sdlc-harness:harness-analyze` dispatches — the
 conventions writer, which writes one conventions document per dispatch, and the
 conventions reviewer, which works on two axes: a document pass, dispatched once

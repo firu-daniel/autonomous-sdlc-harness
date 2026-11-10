@@ -1,10 +1,11 @@
 /**
- * `cleanup-merged-worktrees.sh`'s registry-driven sweep, over clones and legacy linked worktrees.
+ * `cleanup-merged-worktrees.sh`'s registry-driven sweep over clones.
  *
- * **The rule these tests exist to enforce: a run copy is found from the registry and removed by its
- * kind; nothing the registry does not name as the branch's own copy is removed.** A clone goes
- * through `hr_clone_remove_var`, a record with no `copy_kind` through the legacy worktree arm, and a
- * worktree `git worktree list` names with no record is left in place. `--dry-run` prints the same
+ * **The rule these tests exist to enforce: a run copy is found from the registry and removed only as
+ * a clone; nothing the registry does not name as the branch's own clone is removed.** A clone goes
+ * through `hr_clone_remove_var`; a record with no `copy_kind` is skipped with its own line, its
+ * linked worktree and profile left in place; and a worktree `git worktree list` names with no record
+ * is left in place. `--dry-run` prints the same
  * decisions and changes no directory, branch or registry byte. **A run's per-run profile goes with
  * its copy and only with it**, at the path the watcher writes — `hr_run_profile_file` over
  * `hr_repo_slug` of the main checkout, never `HARNESS_REPO_SLUG` — and is kept while any record in
@@ -30,8 +31,8 @@
  * - `hr_clone_remove_var "$main_repo" "$wt"` replaced by `rm -rf "$wt"` → the other-branch cases
  *   fail `the other branch's clone was removed`.
  * - `parked` dropped from the active-run filter → the `parked` case fails `the clone was removed`.
- * - the legacy arm's `if ! own_worktree_check …` replaced by `if true`, skipping every worktree →
- *   the legacy case fails.
+ * - the `''` arm's `say_skip_no_kind …; wt=""` replaced by `kind=clone`, falling through to removal
+ *   → the no-`copy_kind` case fails `the preview and the sweep disagree`.
  * - the clone arm's `profile_remove "$branch"` moved ahead of `if hr_clone_remove_var …` → the
  *   another-branch's-clone-also-recorded case fails `the preview and the sweep disagree`.
  */
@@ -347,7 +348,7 @@ test('a gone branch with no record: no copy is removed, and the branch is still 
   assert.equal(await f.localHas(GONE), false, `${GONE} was not deleted:\n${output(r)}`);
 });
 
-test('legacy: a recorded worktree is removed with its branch; one with no record is left in place', async (t) => {
+test('a record with no copy_kind is skipped and its worktree kept; a worktree with no record is left in place', async (t) => {
   const f = await fixture(t);
   const OLD = 'feat_old';
   const STRAY = 'feat_stray';
@@ -363,13 +364,14 @@ test('legacy: a recorded worktree is removed with its branch; one with no record
   const oldProfile = await f.plantProfile(OLD);
   const strayProfile = await f.plantProfile(STRAY);
 
+  const skip = `skip removing ${f.derived(OLD)} for '${OLD}' — its run-registry record carries no copy_kind: a linked worktree from before the clone layout, which this sweep no longer removes; remove it by hand`;
+  const count = (stdout, line) => stdout.split('\n').filter((l) => l === line).length;
   const r = await sweepBoth(f);
-  assert.ok(r.stdout.includes(`removed worktree ${f.derived(OLD)}`), output(r));
-  assert.ok(r.stdout.includes(profileLine('removed', oldProfile, OLD)), output(r));
-  assert.equal(await exists(oldProfile), false, `the legacy worktree's profile was not removed:\n${output(r)}`);
+  assert.equal(count(r.dryStdout, `${PREFIX}[dry-run] would ${skip}`), 1, r.dryStdout);
+  assert.equal(count(r.stdout, `${PREFIX}${skip}`), 1, output(r));
+  for (const out of [r.dryStdout, r.stdout]) assert.doesNotMatch(out, /removed worktree/, out);
+  assert.ok(await exists(join(f.derived(OLD), '.git')), `the no-copy_kind worktree was removed:\n${output(r)}`);
+  assert.equal(await readFile(oldProfile, 'utf8'), '{}\n', `the no-copy_kind branch's profile changed:\n${output(r)}`);
   assert.ok(await exists(strayProfile), `the unrecorded branch's profile was removed:\n${output(r)}`);
-  assert.equal(await exists(f.derived(OLD)), false, `the legacy worktree was not removed:\n${output(r)}`);
-  assert.equal(await f.localHas(OLD), false, `${OLD} was not deleted:\n${output(r)}`);
   assert.ok(await exists(join(f.derived(STRAY), '.git')), `the unrecorded worktree was removed:\n${output(r)}`);
-  assert.ok(!r.stdout.includes(`removed worktree ${f.derived(STRAY)}`), output(r));
 });

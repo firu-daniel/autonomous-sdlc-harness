@@ -2,20 +2,28 @@
 # harness-run-lib.sh — the one place every generated outer-loop script resolves
 # the repository it is operating on, reads that repository's
 # `harness.config.json` at run time, answers "is this branch protected?",
-# routes an inbox filename to its engine and branch (`hr_inbox_route_var`),
+# routes an inbox filename to its engine and branch (`hr_inbox_route_var`) and
+# judges whether that branch may be taken in (`hr_inbox_branch_refusal_var`),
 # derives a branch name from a title (`hr_derive_branch`), judges whether a
 # path lies strictly inside the state directory's scratch directory
 # (`hr_scratch_path_var`), answers whether the progress comment is on
 # (`hr_progress_comments`) and which main phases a flow-progress ledger records
 # as through (`hr_ledger_phases`), answers whether the sandbox opt-out is taken
-# (`hr_sandbox_opted_out`) and whether this host has a definite missing sandbox
+# (`hr_sandbox_opted_out`), which environment names a session keeps
+# (`hr_session_pass_env`) and which a profile's credentials deny
+# (`hr_profile_env_var_names`), whether a text or stream carries a credential
+# this host holds (`hr_credential_values_var`, `hr_text_has_credential`,
+# `hr_stream_has_credential`), records a push refused inside a session
+# (`hr_push_refusal_dir`, `hr_push_refusal_record`, `hr_push_refusals_for_var`,
+# `hr_push_refusal_handled`), and whether this host has a definite missing sandbox
 # prerequisite (`hr_sandbox_prereq_probe_var`, judged by
 # `hr_sandbox_prereq_judge_var`, which classifies through `hr_host_kind_var`),
 # answers whether a launch holds the host awake (`hr_keep_awake`,
 # `hr_keep_awake_probe_var`, `hr_keep_awake_mode_var`), whether it is on mains
 # power (`hr_on_mains_power`) and starts that hold (`hr_keep_awake_hold_var`),
-# owns the Run gates lane for `run-test-suite.sh` and
-# `launch-sandboxed-gates.sh` — its layout (`hr_test_run_lane_dir`), label
+# owns the Run gates lane for `run-test-suite.sh`,
+# `launch-sandboxed-gates.sh` and `run-analytics.sh` — its layout
+# (`hr_test_run_lane_dir`), label
 # pattern and staleness bound (`HR_TEST_RUN_*`) and heartbeat reader
 # (`hr_heartbeat_age`) — places a dropped
 # artifact in a working copy and commits and pushes it, and derives the
@@ -102,7 +110,8 @@
 # `cleanup-merged-worktrees.sh` and `setup-worktree.sh --target` — also pass the
 # main checkout for every configured value and keep git off the target's
 # records. `setup-worktree.sh --target <dir>` places its own checkout with
-# `hr_wrapper_main_of`, checks `<dir>` with `hr_wrapper_target_check_var`, and
+# `hr_wrapper_main_of`, checks `<dir>` with `hr_run_target_check_var`, which
+# refuses a linked worktree, and
 # reads every configured value (`appDir`, `qa.credentialsPath`, `githooksDir`,
 # `commands.*`) from the main checkout. They skip
 # `hr_worktree_config_check_var` because no runner lets git read the record's
@@ -172,14 +181,14 @@
 #      `hr_run_blob_var`'s walk and its hash is the same race
 #      `hr_commit_placed` already carried.
 #   5. THE WATCHER FAMILY'S GIT IN A RUN'S COPY moves a copy's branch and tree.
-#      Fence: `refs/heads/<branch>`, moved on a worktree or the main checkout
+#      Fence: `refs/heads/<branch>`, moved on the main checkout
 #      only by a compare-and-swap `update-ref` against the tip
 #      `hr_run_copy_check_var` read; on a clone the copy check itself first
 #      moves that ref, by `hr_copy_sync_in_var`'s compare-and-swap against the
 #      main checkout's previous value (writing objects there too), and every
 #      later move in this section is a compare-and-swap against the tip the
 #      copy check read after that sync-in; plus the copy's index
-#      (`<record>/index`, `<clone>/.git/index`) and working tree; a `mktemp`
+#      (`<main>/.git/index`, `<clone>/.git/index`) and working tree; a `mktemp`
 #      temporary index, removed on every exit path;
 #      `hr_run_trusted_base_var`'s fetch, which writes objects and `FETCH_HEAD`
 #      in the main repository and moves no ref; and, on a clone, the clone's
@@ -192,7 +201,7 @@
 #      `hr_copy_sync_in_var`, writes objects into the main repository and
 #      moves the main checkout's `refs/heads/<branch>` by compare-and-swap,
 #      may also heal the clone's `refs/heads/<branch>` by compare-and-swap,
-#      with its index and working tree, and on `main` and `worktree` writes nothing.
+#      with its index and working tree, and on `main` writes nothing.
 #      `hr_run_main_git`, `hr_run_copy_git` and `hr_copy_git_at` are
 #      general-purpose runners that
 #      write only what their caller's arguments ask, so a caller that drives a
@@ -220,16 +229,28 @@
 #      derived path of a clone the registry records. Written only by
 #      `hr_copy_sync_in_var`, `hr_copy_sync_out_var`, `hr_copy_ref_swap_var`,
 #      `hr_clone_create_var` and `hr_clone_remove_var`.
+#   7. THE PUSH-REFUSAL RECORD writes one record per refused push and files a
+#      handled one. Fence: only `hr_push_refusal_dir`'s directory
+#      `<main_top>/.git/harness-push-refusals/` and its `handled/`
+#      subdirectory, both created with `mkdir -p`, under the MAIN checkout's
+#      `.git/`, plus the temporary name in that directory which the `mv`
+#      replaces (removed by its writer on a failed step). Nothing else there is
+#      ever removed. Written only by `hr_push_refusal_record` and
+#      `hr_push_refusal_handled`.
 #
 # MIRRORS OF `cli/src/remote/githubActions.ts`, which owns these names; a
 # rename there is an edit here, byte for byte:
 #   HR_REMOTE_WORKFLOW_RUN_FILE mirrors  WORKFLOW_RUN_FILE
 #   HR_REMOTE_STATE_ARTIFACT    mirrors  STATE_ARTIFACT_NAME
+#   hr_credential_values_var    mirrors  GIT_TOKEN_SECRET  (its `HARNESS_GIT_TOKEN` source)
+#   HR_REMOTE_WORKFLOWS_DIR     mirrors  WORKFLOWS_DIR
 #
 # MIRROR OF `plugin/instructions/autonomous_pause_and_ledger.md` →
 # `### 1.3 Templates`, which owns the flow-progress ledger's two header forms
 # and its entry ids; `hr_ledger_phases` codes both, so renaming an id or a
-# header form there is an edit here.
+# header form there is an edit here. Its `P0` / `R0` screening entries are
+# counted only when the ledger carries their line, so an older ledger keeps
+# its meaning.
 #
 # MIRROR OF `plugin/instructions/docs_orchestration_instructions_autonomous.md`
 # → `## Checklist entry format (parse contract)`, which owns the docs
@@ -267,6 +288,10 @@
 # All three are held equal to their owners by
 # `cli/test/sandbox-prerequisites-shell-mirror.test.mjs`.
 #
+# MIRROR OF `cli/src/config/model.ts` → `SANDBOX_PASS_ENV_PATTERN`;
+# `hr_session_pass_env`'s element filter (`^[A-Za-z_][A-Za-z0-9_]*$`) is its
+# shell mirror, so a change to the owner is an edit here.
+#
 # A caller that calls no `hr_lane_*`, `hr_registry_init`, `hr_registry_set`,
 # `hr_remote_record_init`, `hr_registry_lock`, `hr_registry_unlock`, `hr_remote_status_write`,
 # `hr_remote_bundle_write`, `hr_remote_copy_tree`, `hr_remote_bundle_restore`,
@@ -276,7 +301,8 @@
 # clone only),
 # `hr_run_trusted_base_var`, `hr_run_surface_check_var` (through it), `hr_run_main_git`,
 # `hr_run_copy_git`, `hr_copy_git_at`, `hr_copy_sync_in_var`, `hr_copy_sync_out_var`,
-# `hr_copy_ref_swap_var`, `hr_registry_drop`, `hr_registry_restore`, `hr_clone_create_var` or
+# `hr_copy_ref_swap_var`, `hr_registry_drop`, `hr_registry_restore`, `hr_clone_create_var`,
+# `hr_push_refusal_record`, `hr_push_refusal_handled` or
 # `hr_clone_remove_var` function
 # still gets a library that only reads. The
 # lane's ceilings are the only environment values here that carry policy, because
@@ -296,7 +322,9 @@
 # `status.json` — never a configured value and never policy.
 # `HARNESS_GITHUB_DEFAULT_COMMIT` is read by `hr_remote_state_dir_var` alone, to
 # choose WHICH `harness.config.json` is read — the one at that commit — never
-# as a value in place of one.
+# as a value in place of one. `GH_TOKEN`, `GITHUB_TOKEN`, `HARNESS_PR_TOKEN` and
+# `HARNESS_GIT_TOKEN` are read by `hr_credential_values_var` alone, as values
+# to scan for — never a configured value and never policy, and never printed.
 #
 # CONFIGURATION IS READ AT RUN TIME, NOT FROZEN AT GENERATION TIME. That is the
 # whole reason the shipped scripts carry no `{{token}}`: a guard whose protected
@@ -317,7 +345,9 @@
 # COULD NOT READ. Every caller therefore has a closed outcome for 2 and states
 # it in its own header: the commit wrapper refuses loudly (non-zero), the push
 # wrapper refuses visibly but non-fatally (exit 0 with a message, because its
-# never-abort-the-caller contract is load-bearing), the watcher logs and defers.
+# never-abort-the-caller contract is load-bearing), the watcher's inbox intake
+# archives the drop as `rejected_` (through `hr_inbox_branch_refusal_var`), and
+# its `job` subcommand refuses with exit 2.
 #
 # THE SAME THREE STATES REACH EVERY TYPED READER: `hr_state_dir`,
 # `hr_command`, `hr_project_name` and the rest print their value and return 0,
@@ -430,12 +460,24 @@
 # keep-awake section's `HR_KEEP_AWAKE_WHO` and `HR_KEEP_AWAKE_WHAT` (assigned
 # at source time), `HR_KEEP_AWAKE_HOST`, `HR_KEEP_AWAKE_TOOL`,
 # `HR_KEEP_AWAKE_MODE`, `HR_KEEP_AWAKE_REASON`, `HR_KEEP_AWAKE_QUIET`,
-# `HR_KEEP_AWAKE_STATE`, `HR_KEEP_AWAKE_PID` and `HR_KEEP_AWAKE_DETAIL`.
+# `HR_KEEP_AWAKE_STATE`, `HR_KEEP_AWAKE_PID` and `HR_KEEP_AWAKE_DETAIL`, and the
+# credential check's `HR_CREDENTIAL_EXTRA_MIN_LENGTH` (assigned at source time),
+# `HR_CREDENTIAL_VALUES`, `HR_CREDENTIAL_LABELS` and `HR_CREDENTIAL_FORMS`
+# (`hr_credential_values_var`, through `hr_credential_add`),
+# `HR_CREDENTIAL_DECODED` (`hr_percent_decode_var`), `HR_CREDENTIAL_HIT_LABEL`
+# and `HR_CREDENTIAL_HIT_FORM` (`hr_text_has_credential`,
+# `hr_stream_has_credential`), the push-refusal record's
+# `HR_PUSH_REFUSAL_FILES` and `HR_PUSH_REFUSAL_REASON`
+# (`hr_push_refusals_for_var`), and `HR_REMOTE_WORKFLOWS_DIR` (assigned at
+# source time).
 # Every one of them is assigned
 # before it is read by the function that owns it, so an inherited value from a
 # parent process is overwritten rather than believed — except
 # `HR_RUN_TRUSTED_BASE`, which `hr_run_trusted_base_var` reuses when set and
-# `hr_run_main_set_var` clears, so a caller sets its main checkout first.
+# `hr_run_main_set_var` clears, so a caller sets its main checkout first, and
+# `HR_CREDENTIAL_VALUES`, `HR_CREDENTIAL_LABELS` and `HR_CREDENTIAL_FORMS`,
+# which `hr_text_has_credential` and `hr_stream_has_credential` read as
+# `hr_credential_values_var` left them, so a caller calls it first.
 #
 # BASH 3.2 IS THE FLOOR. macOS ships `/bin/bash` 3.2, so nothing here uses an
 # associative array, `${var^^}` / `${var,,}`, `mapfile` or `local -n`. The cache
@@ -694,8 +736,8 @@ hr_script_root() {
 #
 # WHY THE MAIN CHECKOUT IS A SEPARATE ANCHOR: the inbox, the logs, the registry
 # and the kill switch live in ONE place so every run is tailable and stoppable
-# from it, while a run itself executes in a sibling worktree. A script that used
-# its own checkout for both would write a second, invisible inbox per worktree.
+# from it, while a run itself executes in its own clone beside it. A script that
+# used its own checkout for both would write a second, invisible inbox per copy.
 #
 # Inside a clone it answers the clone itself. It never reads HARNESS_MAIN_REPO,
 # because its callers run unsandboxed and place the main checkout from their own
@@ -721,7 +763,7 @@ EOF
   return 1
 }
 
-# Print the directory above <repo_root> — where sibling worktrees live. Matches
+# Print the directory above <repo_root> — where a run's clone lives. Matches
 # the CLI's `workRoot()` (the repository root's parent) byte for byte, because
 # the generated permission profile is materialized from that one.
 hr_work_root() {
@@ -1069,7 +1111,11 @@ hr_wrapper_target_check_var() {
 # `HR_TARGET_KIND` (`clone`) and `HR_TARGET_BRANCH` set when, in order:
 #   1. `<target>/.git/HEAD` is one line `ref: refs/heads/<branch>`, and the
 #      registry at `hr_state_path <main> autonomous_logs/registry.json` gives
-#      `copy_kind` `clone` for <branch> and a `worktree` that is <target>;
+#      `copy_kind` `clone` for <branch> and a `worktree` that is <target>. A
+#      registry path `hr_state_path` cannot derive, because
+#      `<main>/harness.config.json` cannot be resolved, is refused with its own
+#      sentence naming that file; only a resolvable configuration with no
+#      matching record gets the "records no clone" sentence;
 #   2. <target> is `hr_worktree_dir <main> <branch>`;
 #   3. `.git/commondir` is absent, symbolic links included;
 #      `.git/config.worktree` and `.git/objects/info/http-alternates` are each
@@ -1116,19 +1162,24 @@ hr_clone_target_check_var() {
   fi
   kind=""
   wt_c=""
-  if [ -n "$branch" ] && registry=$(hr_state_path "$main" autonomous_logs/registry.json) \
-    && [ -f "$registry" ] && [ -r "$registry" ] \
-    && line=$(jq -r --arg b "$branch" '
-      .runs[$b] | if type == "object"
-        then [(.copy_kind // "" | tostring), (.worktree // "" | tostring)] | @tsv
-        else error("absent") end
-    ' "$registry" 2>/dev/null); then
-    hr_tsv_unescape_var "${line%%"$tab"*}"
-    kind=$HR_CFG_VALUE
-    hr_tsv_unescape_var "${line#*"$tab"}"
-    wt=$HR_CFG_VALUE
-    if [ -n "$wt" ]; then
-      wt_c=$(hr_canonical_path_nogit "$wt") || wt_c=""
+  if [ -n "$branch" ]; then
+    if ! registry=$(hr_state_path "$main" autonomous_logs/registry.json); then
+      HR_TARGET_REFUSAL="$refused: its .git is not a regular pointer file, and the run registry that would record a clone of $main cannot be located, because '$main/harness.config.json' cannot be resolved"
+      return 1
+    fi
+    if [ -f "$registry" ] && [ -r "$registry" ] \
+      && line=$(jq -r --arg b "$branch" '
+        .runs[$b] | if type == "object"
+          then [(.copy_kind // "" | tostring), (.worktree // "" | tostring)] | @tsv
+          else error("absent") end
+      ' "$registry" 2>/dev/null); then
+      hr_tsv_unescape_var "${line%%"$tab"*}"
+      kind=$HR_CFG_VALUE
+      hr_tsv_unescape_var "${line#*"$tab"}"
+      wt=$HR_CFG_VALUE
+      if [ -n "$wt" ]; then
+        wt_c=$(hr_canonical_path_nogit "$wt") || wt_c=""
+      fi
     fi
   fi
   if [ "$kind" != clone ] || [ "$wt_c" != "$target" ]; then
@@ -1194,6 +1245,30 @@ hr_clone_target_check_var() {
   return 0
 }
 
+# hr_run_target_check_var <main> <dir> — the one place this library decides a
+# linked worktree is not a run copy. `hr_wrapper_target_check_var <main> <dir>`,
+# refused with that check's own `HR_TARGET_REFUSAL` when it fails; when it
+# accepts a linked worktree, return 1 with `HR_TARGET_REFUSAL` set to one
+# sentence naming <dir> and <main> as passed, and `HR_TARGET_GITDIR` and
+# `HR_TARGET_KIND` cleared, as every other refusal leaves them. Otherwise 0
+# with `HR_TARGET_KIND` (`main` or `clone`), `HR_TARGET_GITDIR` and
+# `HR_TARGET_BRANCH` as that check set them. Adds no read of its own: the run
+# registry is read only by that check's clone arm (`hr_clone_target_check_var`),
+# and no tip is read. Prints nothing; call it directly, never inside `$(…)`.
+# Its callers:
+# `hr_run_copy_check_var`, `launch-sandboxed-gates.sh` check 6 and
+# `setup-worktree.sh --target`.
+hr_run_target_check_var() {
+  hr_wrapper_target_check_var "${1-}" "${2-}" || return 1
+  if [ "$HR_TARGET_KIND" = worktree ]; then
+    HR_TARGET_REFUSAL="'${2-}' is a linked worktree of ${1-}, and a run copy is a clone the run registry records"
+    HR_TARGET_GITDIR=""
+    HR_TARGET_KIND=""
+    return 1
+  fi
+  return 0
+}
+
 # Set `HR_WRAPPER_BRANCH` to the branch the checkout whose canonical gitdir is
 # <gitdir> has out, asked of the main checkout <main> alone, for the
 # unsandboxed wrappers after `hr_wrapper_target_check_var` set <gitdir>.
@@ -1201,7 +1276,9 @@ hr_clone_target_check_var() {
 # that is not a valid branch name. Prints nothing; call it directly, never
 # inside `$(…)`.
 #
-# The main checkout's own HEAD is `HEAD` there; a worktree's is
+# The main checkout's own HEAD is `HEAD` there; a linked worktree's — which
+# reaches a wrapper only as a checkout a person made by hand with `git worktree
+# add`, a run copy being a clone — is
 # `worktrees/<name>/HEAD`, which git resolves from the main repository without
 # reading that worktree's `.git` pointer, its record's `commondir` or its
 # `config.worktree`. The wrapper reads the branch once and names it as
@@ -1242,10 +1319,12 @@ hr_wrapper_branch_var() {
   return 0
 }
 
-# Print which run copy the gitdir <gitdir> of the main checkout <main> is:
-# `main` for `<main>/.git`, `worktree` for a path directly under
-# `<main>/.git/worktrees/`, `clone` otherwise. Purely lexical: call it only on
-# a gitdir `hr_wrapper_target_check_var` has already accepted.
+# Print which kind of checkout the gitdir <gitdir> of the main checkout <main>
+# is: `main` for `<main>/.git`, `worktree` for a path directly under
+# `<main>/.git/worktrees/` — a linked worktree, which reaches the wrappers only
+# as a checkout a person made by hand with `git worktree add`; a run copy is a
+# clone — and `clone` otherwise. Purely lexical: call it only on a gitdir
+# `hr_wrapper_target_check_var` has already accepted.
 hr_copy_kind() {
   local main="${1-}" gitdir="${2-}" rest
   [ -n "$main" ] && [ -n "$gitdir" ] || return 1
@@ -1828,6 +1907,10 @@ hr_config_load() {
   # which is what lets an explicitly EMPTY list read as a configured set rather
   # than as an absent one.
   #
+  # `sandbox.passEnv` keeps string elements only, so a boolean `true` never
+  # reads as the name `true`, and drops one carrying a newline, which
+  # `hr_cfg_list_var`'s newline-joined value would split into two names.
+  #
   # A `phases.*`, `docs.retrieval`, `execution.progressComments` or
   # `execution.keepAwake` value that is not a boolean is emitted as `invalid`, so
   # the string `"true"` — which `tostring` would otherwise make indistinguishable
@@ -1885,7 +1968,8 @@ hr_config_load() {
                then "true" else null end) catch null),
       s("protectedBranches.present";
         try (if (.protectedBranches | type) == "array" then "1" else null end) catch null),
-      l("protectedBranches";     try .protectedBranches    catch null)
+      l("protectedBranches";     try .protectedBranches    catch null),
+      l("sandbox.passEnv"; try (.sandbox.passEnv | if type == "array" then map(strings | select(contains("\n") | not)) else null end) catch null)
   ' "$HR_CFG_FILE" 2>/dev/null) || return 2
 
   nl="
@@ -2221,6 +2305,28 @@ hr_sandbox_opted_out() {
   hr_config_load "$root" || return 1
   hr_cfg_scalar_var "sandbox.optedOut" || return 1
   [ "$HR_CFG_VALUE" = "true" ] || return 1
+  return 0
+}
+
+# `sandbox.passEnv` — print each name, one per line in document order, that
+# matches `^[A-Za-z_][A-Za-z0-9_]*$`, the shell mirror of
+# `cli/src/config/model.ts` → `SANDBOX_PASS_ENV_PATTERN`; any other element is
+# skipped. 0, printing nothing, when the key is absent, empty or not an array.
+# 2, printing nothing, on any `hr_config_load` failure, a missing
+# `harness.config.json` included: the main checkout must have one. Reads
+# through the cache like `hr_sandbox_opted_out`, so the watcher's per-tick
+# `hr_config_reset` covers it. The caller passes the MAIN checkout. Its
+# caller: `autonomous-watcher.sh` → `spawn_engine`.
+hr_session_pass_env() {
+  local root="${1-}" name first='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_'
+  hr_config_load "$root" || return 2
+  hr_cfg_list_var "sandbox.passEnv" || return 0
+  while IFS= read -r name; do
+    case "$name" in '' | [!$first]* | *[!0123456789$first]*) continue ;; esac
+    printf '%s\n' "$name"
+  done <<EOF
+$HR_CFG_VALUE
+EOF
   return 0
 }
 
@@ -2634,9 +2740,14 @@ hr_ledger_all_settled() {
 # the run began). An id absent from the file is NOT settled, so a malformed
 # ledger reads as `pending`, never as `done`. Phase 3 groups every end-of-branch
 # review with its fixes, QA and the run gates.
+#
+# The one exception is the screening entry, `P0` (task) or `R0` (user review):
+# it is tested only when the file carries an entry line for it, in any box. A
+# ledger written before that entry existed has no such line and must keep the
+# phase 1 answer its other ids give; a present `[ ]` keeps phase 1 `pending`.
 hr_ledger_phases() {
-  local file="${1-}" line first=1 engine="" round="-" settled=" " rest id
-  local p1 p2 p3 p4 s1 s2 s3 s4
+  local file="${1-}" line first=1 engine="" round="-" settled=" " seen=" " rest id
+  local p1 p2 p3 p4 s1 s2 s3 s4 optional
   [ -n "$file" ] && [ -f "$file" ] && [ -r "$file" ] || return 1
   while IFS= read -r line || [ -n "$line" ]; do
     if [ "$first" -eq 1 ]; then
@@ -2658,27 +2769,37 @@ hr_ledger_phases() {
       continue
     fi
     case "$line" in
-      "- [x] "*|"- [-] "*) ;;
+      "- [x] "*|"- [-] "*|"- [ ] "*) ;;
       *) continue ;;
     esac
     rest=${line#"- ["?"] "}
     id=${rest%% *}
     id=${id%.}
-    if [ -n "$id" ]; then settled="$settled$id "; fi
+    [ -n "$id" ] || continue
+    seen="$seen$id "
+    case "$line" in
+      "- [ ] "*) ;;
+      *) settled="$settled$id " ;;
+    esac
   done < "$file"
   [ -n "$engine" ] || return 1
 
   if [ "$engine" = "task" ]; then
+    optional="P0"
     p1="P1 P2 P3"
     p2="A"
     p3="A1.5g A1.5f A2g A2f Bg Bm C C2g C2m C2f E G"
     p4="D"
   else
+    optional="R0"
     p1="R1 R2"
     p2="R3"
     p3="R4 RG"
     p4="R5"
   fi
+  case "$seen" in
+    *" $optional "*) p1="$optional $p1" ;;
+  esac
   # Unquoted on purpose: each set is a fixed list of space-free ids.
   if hr_ledger_all_settled "$settled" $p1; then s1="done"; else s1="pending"; fi
   if hr_ledger_all_settled "$settled" $p2; then s2="done"; else s2="pending"; fi
@@ -2878,6 +2999,41 @@ hr_inbox_route_var() {
   return 0
 }
 
+# Judge whether <branch>, as `hr_inbox_route_var` derived it from a drop under
+# <root>, may be acted on. 0 with `HR_INBOX_REFUSAL` empty; otherwise 1 with
+# `HR_INBOX_REFUSAL` set to exactly one of:
+#   '<branch>' is not a valid branch name (git check-ref-format --branch)
+#   '<branch>' is a protected branch in '<root>/harness.config.json'
+#   whether '<branch>' is protected cannot be judged: the protected set in '<root>/harness.config.json' cannot be resolved
+# Never any other status. Validity is judged first, so a name git rejects is
+# reported as such even when the configuration is also unreadable.
+#
+# THE PRINTED NAME MUST EQUAL THE INPUT: `--branch` expands `@{-N}` to the
+# branch it names and exits 0, so its exit status alone would admit `@{-1}`.
+# An unresolvable protected set (2) is refused, never read as not protected.
+hr_inbox_branch_refusal_var() {
+  local root="${1-}" branch="${2-}" printed status
+  HR_INBOX_REFUSAL=""
+  case "$branch" in
+    '' | -*)
+      HR_INBOX_REFUSAL="'$branch' is not a valid branch name (git check-ref-format --branch)"
+      return 1
+      ;;
+  esac
+  if ! printed=$(git -C "$root" check-ref-format --branch "$branch" 2>/dev/null) || [ "$printed" != "$branch" ]; then
+    HR_INBOX_REFUSAL="'$branch' is not a valid branch name (git check-ref-format --branch)"
+    return 1
+  fi
+  status=0
+  hr_branch_is_protected "$root" "$branch" || status=$?
+  case "$status" in
+    1) return 0 ;;
+    0) HR_INBOX_REFUSAL="'$branch' is a protected branch in '$root/harness.config.json'" ;;
+    *) HR_INBOX_REFUSAL="whether '$branch' is protected cannot be judged: the protected set in '$root/harness.config.json' cannot be resolved" ;;
+  esac
+  return 1
+}
+
 # ---------------------------------------------------------------------------
 # The protected-branch trichotomy.
 # ---------------------------------------------------------------------------
@@ -2972,7 +3128,7 @@ hr_sanitize_branch() {
 
 # `<work_root>/<projectName>-<sanitized branch>` — byte-identical to what the
 # CLI's `worktreeGlob()` materializes into the generated permission profile, so
-# a worktree this creates is one that profile matches. Derive it here; never
+# a run's clone created there is one that profile matches. Derive it here; never
 # re-build the string in a caller.
 hr_worktree_dir() {
   local root="${1-}" branch="${2-}" work name safe
@@ -3823,13 +3979,12 @@ hr_derive_branch() {
 # THE WATCHER FAMILY'S GIT IN A RUN'S COPY.
 #
 # The watcher family runs git outside the sandbox in a working copy a run has
-# written — a worktree, the main checkout or a clone — so every call made here
-# holds four rules on every arm:
+# written — the main checkout or a clone the run registry records; the copy
+# check refuses a linked worktree (`hr_run_target_check_var`) — so every call
+# made here holds four rules on both arms:
 #   - No hook runs: `core.hooksPath=/dev/null` holds none.
 #   - The copy's record is read once, by the checks, and never again. For a
-#     worktree only `<record>/index` is borrowed, so git never reads the copy's
-#     `.git` pointer, the record's `commondir`, its `HEAD` or its
-#     `config.worktree`. For a clone the checks read the registry, `HEAD`,
+#     clone the checks read the registry, `HEAD`,
 #     `alternates` and `.git/config` once; the copy check's sync-in then runs
 #     `git-upload-pack` in the clone, which reads the clone's `.git/config`,
 #     refs and objects (through `alternates`) again under the measured fetch
@@ -3851,10 +4006,11 @@ hr_derive_branch() {
 # through `hr_copy_ref_swap_var`, the clone's ref first. `hr_run_surface_check_var` and
 # `hr_run_worktree_diff_var` need no arm of their own: they read refs and
 # objects from the main checkout and the copy's working tree through a fresh
-# index, which holds for a clone as for a worktree.
+# index, which holds for a clone as for the main checkout.
 # `hr_worktree_config_check_var` is skipped here because no runner below lets
-# git read the record's `config.worktree`; `push-branch.sh` and
-# `refresh-branch.sh` keep it under their own headers. Write exception 5 in the
+# git read a `config.worktree`; `push-branch.sh` and `refresh-branch.sh`, which
+# still accept a linked worktree a person made by hand, keep it under their own
+# headers. Write exception 5 in the
 # header is this section's.
 #
 # Every function suffixed `_var` sets globals and must be called directly, never
@@ -3893,23 +4049,26 @@ hr_run_main_set_var() {
   return 0
 }
 
-# hr_run_copy_check_var <main> <copy> — judge <copy> against <main> and set
+# hr_run_copy_check_var <main> <copy> — judge <copy> against <main> through
+# `hr_run_target_check_var`, which accepts the main checkout and a clone the
+# run registry records and refuses a linked worktree, and set
 # `HR_RUN_MAIN`, `HR_RUN_COPY_TOP` (canonical), `HR_RUN_COPY_GITDIR`
-# (`HR_TARGET_GITDIR`), `HR_RUN_COPY_KIND` (`HR_TARGET_KIND`),
-# `HR_RUN_COPY_BRANCH` (empty on a detached, unreadable or invalid HEAD, or a
-# name starting with `-`) and `HR_RUN_COPY_TIP`: the copy's HEAD commit read
-# from the main repository, empty when unborn. On a clone with a branch it
-# first syncs that branch in (`hr_copy_sync_in_var`), so the tip is the main
-# checkout's `refs/heads/<branch>` after the sync. 0 trusted; 1 untrusted or
-# the sync-in refused, with `HR_RUN_REFUSAL` set.
+# (`HR_TARGET_GITDIR`), `HR_RUN_COPY_KIND` (`HR_TARGET_KIND`: `main` or
+# `clone`), `HR_RUN_COPY_BRANCH` (empty on a detached, unreadable or invalid
+# HEAD, or a name starting with `-`) and `HR_RUN_COPY_TIP`: the copy's HEAD
+# commit read from the main repository, empty when unborn. On a clone with a
+# branch it first syncs that branch in (`hr_copy_sync_in_var`), so the tip is
+# the main checkout's `refs/heads/<branch>` after the sync. 0 trusted; 1
+# untrusted or the sync-in refused, with `HR_RUN_REFUSAL` set; a refused
+# target leaves every `HR_RUN_COPY_*` value empty.
 hr_run_copy_check_var() {
-  local main="${1-}" copy="${2-}" top head
+  local main="${1-}" copy="${2-}" top
   hr_run_main_set_var "$main" || return 1
   if [ -z "$copy" ] || ! top=$(hr_checkout_top_nogit "$copy"); then
     HR_RUN_REFUSAL="'$copy' is not inside a git checkout"
     return 1
   fi
-  if ! hr_wrapper_target_check_var "$HR_RUN_MAIN" "$top"; then
+  if ! hr_run_target_check_var "$HR_RUN_MAIN" "$top"; then
     HR_RUN_REFUSAL=$HR_TARGET_REFUSAL
     return 1
   fi
@@ -3931,12 +4090,7 @@ hr_run_copy_check_var() {
     HR_RUN_COPY_TIP=$(hr_run_main_git rev-parse --verify --quiet "refs/heads/$HR_RUN_COPY_BRANCH^{commit}" 2>/dev/null) || HR_RUN_COPY_TIP=""
     return 0
   fi
-  if [ "$HR_RUN_COPY_GITDIR" = "$HR_RUN_MAIN/.git" ]; then
-    head=HEAD
-  else
-    head="worktrees/${HR_RUN_COPY_GITDIR##*/}/HEAD"
-  fi
-  HR_RUN_COPY_TIP=$(hr_run_main_git rev-parse --verify --quiet "$head^{commit}" 2>/dev/null) || HR_RUN_COPY_TIP=""
+  HR_RUN_COPY_TIP=$(hr_run_main_git rev-parse --verify --quiet "HEAD^{commit}" 2>/dev/null) || HR_RUN_COPY_TIP=""
   return 0
 }
 
@@ -4066,7 +4220,7 @@ EOF
 # hr_run_worktree_diff_var <tip> <path>... — set `HR_RUN_WT_DIFF` to the paths
 # under <path>... where the copy's working tree differs from <tip>, plus every
 # file there <tip> does not hold, ignored ones included. Judged through a fresh
-# temporary index read from <tip>, never the record's `index`: a sandboxed
+# temporary index read from <tip>, never the copy's own `.git/index`: a sandboxed
 # session can write that index's skip-worktree / assume-unchanged bits and stat
 # data, which make git skip a file. 0 compared (`HR_RUN_WT_DIFF` may be empty);
 # 1 the temporary index or a git call failed.
@@ -4107,7 +4261,7 @@ hr_run_worktree_diff_var() {
 #   copy   `tree`, plus the copy's working tree on the set against <tip>
 #          through a fresh index, untracked and ignored files included;
 #   reset  the same as `copy`: a reset cannot be relied on to overwrite a
-#          file the record's index marks skip-worktree.
+#          file the copy's own index marks skip-worktree.
 hr_run_surface_check_var() {
   local tip="${1-}" mode="${2-}" set base out status p names=""
   local -a paths
@@ -4284,6 +4438,10 @@ hr_run_reset_var() {
 #   symbolic link   `120000`, its link text hashed;
 #   regular file    <file_mode>, its content hashed;
 #   anything else   (a directory, a submodule, a special file) 1.
+# A path that passes these checks but whose hash cannot be written to the main
+# repository's object store returns 2, so a caller can tell a refused path from
+# a failed write (a sandboxed copy of a wrapper, which cannot write
+# `<main>/.git/objects`, ends here).
 # Both hashes are `hash-object -w --no-filters` (`hr_commit_paths_var` states
 # why). A parent swapped for a symbolic link between this walk and the hash is
 # the same race `hr_commit_placed` already carried.
@@ -4316,7 +4474,7 @@ hr_run_blob_var() {
     link=${link%?}
     link=${link%$'\n'}
     HR_RUN_BLOB=$(printf '%s' "$link" | hr_run_main_git hash-object -w --no-filters --stdin) || HR_RUN_BLOB=""
-    [ -n "$HR_RUN_BLOB" ] || return 1
+    [ -n "$HR_RUN_BLOB" ] || return 2
     HR_RUN_BLOB_MODE=120000
     return 0
   fi
@@ -4326,7 +4484,7 @@ hr_run_blob_var() {
   fi
   [ -f "$leaf" ] || return 1
   HR_RUN_BLOB=$(hr_run_main_git hash-object -w --no-filters -- "$leaf") || HR_RUN_BLOB=""
-  [ -n "$HR_RUN_BLOB" ] || return 1
+  [ -n "$HR_RUN_BLOB" ] || return 2
   if [ "$file_mode" = auto ] && [ -x "$leaf" ]; then
     HR_RUN_BLOB_MODE=100755
   else
@@ -4373,7 +4531,7 @@ hr_run_blob_var() {
 hr_commit_paths_var() {
   local main="${1-}" top="${2-}" gitdir="${3-}" branch="${4-}" tip="${5-}"
   local file_mode="${6-}" sync="${7-}" reflog="${8-}"
-  local tmpdir records tip_c tip_tree null tree commit rel saw_sep=0 n swap
+  local tmpdir records tip_c tip_tree null tree commit rel saw_sep=0 n swap blob_rc
   local -a rels msg_args
   rels=()
   msg_args=()
@@ -4452,9 +4610,15 @@ hr_commit_paths_var() {
   while [ "$n" -lt "${#rels[@]}" ]; do
     rel=${rels[$n]}
     n=$((n + 1))
-    if ! hr_run_blob_var "$rel" "$file_mode"; then
+    blob_rc=0
+    hr_run_blob_var "$rel" "$file_mode" || blob_rc=$?
+    if [ "$blob_rc" -ne 0 ]; then
       rm -rf "$tmpdir"
-      HR_COMMIT_REFUSAL="'$rel' is not a regular file or a symbolic link reached without a symbolic link in '$top'"
+      if [ "$blob_rc" -eq 2 ]; then
+        HR_COMMIT_REFUSAL="cannot write the content of '$rel' to the object store of '$HR_RUN_MAIN' (git hash-object -w failed; a sandboxed command cannot write it)"
+      else
+        HR_COMMIT_REFUSAL="'$rel' is not a regular file or a symbolic link reached without a symbolic link in '$top'"
+      fi
       return 1
     fi
     if [ "$HR_RUN_BLOB_MODE" = 0 ]; then
@@ -5531,6 +5695,321 @@ hr_push_landed() {
 }
 
 # ---------------------------------------------------------------------------
+# THE CREDENTIAL CHECK — one check for "does this text or stream carry a
+# credential this host holds?", shared by `push-branch.sh` (its outgoing
+# commits), `autonomous-watcher.sh` and `remote-run.sh` (`mention_has_credential`).
+#
+# NO CREDENTIAL VALUE IS EVER PLACED ON A CHILD PROCESS'S COMMAND LINE OR
+# WRITTEN TO A FILE: another local user reads a command line from the process
+# table, and a file outlives the check. The values reach `grep -F` only as a
+# process substitution of the `printf` builtin, never as `-e` or a patterns
+# file, and reach `base64` only on its stdin. `cli/test/credential-scan-lib.test.mjs`
+# guards that on the source, because no test can observe a child's argv.
+#
+# A VALUE CARRYING A NEWLINE IS NEVER RECORDED: `grep -F -f` would read it as
+# two patterns, each a fragment that matches ordinary text. No empty value is
+# recorded either, because `grep -F -f` matches an empty pattern everywhere.
+#
+# `HR_CREDENTIAL_EXTRA_MIN_LENGTH` applies to `$HOME/.git-credentials` and the
+# XDG credential file alone: a short password there (a test registry's) would
+# match ordinary patch text and refuse a clean push.
+# ---------------------------------------------------------------------------
+
+HR_CREDENTIAL_EXTRA_MIN_LENGTH=8
+
+# hr_credential_add <value> <label> [raw] — append <value> to
+# `HR_CREDENTIAL_VALUES` with form `raw`, then, unless a third argument is
+# given, the base64 of `x-access-token:<value>` with newlines removed (the form
+# `actions/checkout` persists) with form `base64`; <label> goes to
+# `HR_CREDENTIAL_LABELS` for each. An empty value, or one carrying a newline,
+# adds nothing. Always 0.
+hr_credential_add() {
+  local value="${1-}" label="${2-}" raw_only="${3-}" encoded nl='
+'
+  [ -n "$value" ] || return 0
+  case "$value" in *"$nl"*) return 0 ;; esac
+  HR_CREDENTIAL_VALUES+=("$value")
+  HR_CREDENTIAL_LABELS+=("$label")
+  HR_CREDENTIAL_FORMS+=(raw)
+  [ -z "$raw_only" ] || return 0
+  encoded=$(printf 'x-access-token:%s' "$value" | base64 2>/dev/null | tr -d '\n') || return 0
+  [ -n "$encoded" ] || return 0
+  HR_CREDENTIAL_VALUES+=("$encoded")
+  HR_CREDENTIAL_LABELS+=("$label")
+  HR_CREDENTIAL_FORMS+=(base64)
+  return 0
+}
+
+# hr_percent_decode_var <text> — set `HR_CREDENTIAL_DECODED` to <text> with
+# each `%XX` (two hex digits) decoded, as git's credential store encodes a
+# password; any other `%` is kept. Always 0.
+hr_percent_decode_var() {
+  local s="${1-}" out="" head hex ch
+  HR_CREDENTIAL_DECODED=""
+  while :; do
+    case "$s" in *%*) ;; *) out="$out$s"; break ;; esac
+    head=${s%%\%*}
+    out="$out$head"
+    s=${s#"$head"%}
+    hex=${s:0:2}
+    case "$hex" in
+      [0123456789ABCDEFabcdef][0123456789ABCDEFabcdef])
+        printf -v ch "\\x$hex"
+        out="$out$ch"
+        s=${s:2}
+        ;;
+      *) out="$out%" ;;
+    esac
+  done
+  HR_CREDENTIAL_DECODED="$out"
+  return 0
+}
+
+# hr_credential_file_add <file> <min length> — add each password in a git
+# credential-store <file> (lines `<scheme>://<user>:<password>@<host>…`),
+# percent-decoded, labelled `a stored git credential`; a decoded password
+# shorter than <min length> is skipped. A missing or unreadable file adds
+# nothing. Always 0.
+hr_credential_file_add() {
+  local file="${1-}" min="${2-0}" line rest userinfo pass cr=$'\r'
+  [ -n "$file" ] && [ -f "$file" ] && [ -r "$file" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    line=${line%"$cr"}
+    case "$line" in *://*) ;; *) continue ;; esac
+    rest=${line#*://}
+    case "$rest" in *@*) ;; *) continue ;; esac
+    userinfo=${rest%%@*}
+    case "$userinfo" in *:*) ;; *) continue ;; esac
+    hr_percent_decode_var "${userinfo#*:}"
+    pass="$HR_CREDENTIAL_DECODED"
+    [ "${#pass}" -ge "$min" ] || continue
+    hr_credential_add "$pass" 'a stored git credential'
+  done <"$file"
+  return 0
+}
+
+# hr_credential_values_var <main_top> [<extra value>...] — set the parallel
+# arrays `HR_CREDENTIAL_VALUES`, `HR_CREDENTIAL_LABELS` and
+# `HR_CREDENTIAL_FORMS` (`raw` or `base64`) from every credential this host
+# holds, each recorded raw and as the base64 of `x-access-token:<value>`:
+#   `GH_TOKEN`, `GITHUB_TOKEN`                    the job token
+#   `HARNESS_PR_TOKEN`, `HARNESS_GIT_TOKEN`       HARNESS_GIT_TOKEN
+#   each `http.*.extraheader` in <main_top>/.git/config — the value, and where
+#   it ends `basic <b64>` that <b64> and the token it decodes from
+#   `x-access-token:<token>`                     the persisted extraheader
+#   each password in the file a `credential.*.helper` value of exactly
+#   `store --file <absolute path>` names there   a stored git credential
+#   each password of at least `HR_CREDENTIAL_EXTRA_MIN_LENGTH` characters in
+#   `$HOME/.git-credentials` and
+#   `${XDG_CONFIG_HOME:-$HOME/.config}/git/credentials`  a stored git credential
+#   each <extra value>, raw only                  a saved credential
+# The helper's path comes from the main checkout's `.git/config`, a record the
+# session cannot write, never from `HOME`. An empty or unreadable source adds
+# nothing. Always 0.
+hr_credential_values_var() {
+  local main_top="${1-}" cfg rec val hdr b64 decoded path home xdg extra nl='
+' path_chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_./-'
+  HR_CREDENTIAL_VALUES=()
+  HR_CREDENTIAL_LABELS=()
+  HR_CREDENTIAL_FORMS=()
+  [ "$#" -eq 0 ] || shift
+  hr_credential_add "${GH_TOKEN-}" 'the job token'
+  hr_credential_add "${GITHUB_TOKEN-}" 'the job token'
+  hr_credential_add "${HARNESS_PR_TOKEN-}" 'HARNESS_GIT_TOKEN'
+  hr_credential_add "${HARNESS_GIT_TOKEN-}" 'HARNESS_GIT_TOKEN'
+
+  if [ -n "$main_top" ]; then
+    cfg="${main_top%/}/.git/config"
+    if [ -f "$cfg" ] && [ -r "$cfg" ]; then
+      while IFS= read -r -d '' rec; do
+        case "$rec" in *"$nl"*) ;; *) continue ;; esac
+        hdr=${rec#*"$nl"}
+        hr_credential_add "$hdr" 'the persisted extraheader'
+        case "$hdr" in *[Bb][Aa][Ss][Ii][Cc]' '*) ;; *) continue ;; esac
+        b64=${hdr##*[Bb][Aa][Ss][Ii][Cc] }
+        case "$b64" in '' | *' '*) continue ;; esac
+        hr_credential_add "$b64" 'the persisted extraheader'
+        decoded=$(printf '%s' "$b64" | base64 --decode 2>/dev/null) || continue
+        case "$decoded" in x-access-token:?*) ;; *) continue ;; esac
+        hr_credential_add "${decoded#x-access-token:}" 'the persisted extraheader'
+      done < <(git -C / config --file "$cfg" -z --get-regexp '^http\..*\.extraheader$' 2>/dev/null)
+
+      while IFS= read -r -d '' rec; do
+        case "$rec" in *"$nl"*) ;; *) continue ;; esac
+        val=${rec#*"$nl"}
+        case "$val" in 'store --file '*) ;; *) continue ;; esac
+        path=${val#store --file }
+        case "$path" in /?*) ;; *) continue ;; esac
+        case "$path" in *[!$path_chars]*) continue ;; esac
+        hr_credential_file_add "$path" 0
+      done < <(git -C / config --file "$cfg" -z --get-regexp '^credential\..*\.helper$' 2>/dev/null)
+    fi
+  fi
+
+  home="${HOME-}"
+  xdg="${XDG_CONFIG_HOME-}"
+  [ -n "$xdg" ] || { [ -z "$home" ] || xdg="$home/.config"; }
+  [ -z "$home" ] || hr_credential_file_add "$home/.git-credentials" "$HR_CREDENTIAL_EXTRA_MIN_LENGTH"
+  [ -z "$xdg" ] || hr_credential_file_add "$xdg/git/credentials" "$HR_CREDENTIAL_EXTRA_MIN_LENGTH"
+
+  for extra in "$@"; do
+    hr_credential_add "$extra" 'a saved credential' raw
+  done
+  return 0
+}
+
+# hr_text_has_credential <text> — 0 when <text> contains an `HR_CREDENTIAL_VALUES`
+# entry verbatim (a `case` match), setting `HR_CREDENTIAL_HIT_LABEL` and
+# `HR_CREDENTIAL_HIT_FORM` from the first entry found; 1 otherwise, both empty.
+# An encoded or split copy is not caught.
+hr_text_has_credential() {
+  local text="${1-}" i=0 n value
+  HR_CREDENTIAL_HIT_LABEL=""
+  HR_CREDENTIAL_HIT_FORM=""
+  [ -n "${HR_CREDENTIAL_VALUES[*]+x}" ] || return 1
+  n=${#HR_CREDENTIAL_VALUES[@]}
+  while [ "$i" -lt "$n" ]; do
+    value=${HR_CREDENTIAL_VALUES[$i]-}
+    if [ -n "$value" ]; then
+      case "$text" in
+        *"$value"*)
+          HR_CREDENTIAL_HIT_LABEL=${HR_CREDENTIAL_LABELS[$i]-}
+          HR_CREDENTIAL_HIT_FORM=${HR_CREDENTIAL_FORMS[$i]-}
+          return 0
+          ;;
+      esac
+    fi
+    i=$((i + 1))
+  done
+  return 1
+}
+
+# hr_stream_has_credential — scan stdin for any `HR_CREDENTIAL_VALUES` entry.
+# 0 on a hit, setting `HR_CREDENTIAL_HIT_LABEL` and `HR_CREDENTIAL_HIT_FORM`;
+# 1 on none; 2 when the scan itself failed. With no values it drains stdin and
+# returns 1. Stdin is always drained, so a producer upstream never takes a
+# SIGPIPE that a `pipefail` caller would read as the pipeline's failure.
+hr_stream_has_credential() {
+  local hit rc=0 nl='
+'
+  HR_CREDENTIAL_HIT_LABEL=""
+  HR_CREDENTIAL_HIT_FORM=""
+  if [ -z "${HR_CREDENTIAL_VALUES[*]+x}" ]; then
+    cat >/dev/null 2>&1 || :
+    return 1
+  fi
+  hit=$(grep -a -F -o -m 1 -f <(printf '%s\n' "${HR_CREDENTIAL_VALUES[@]}") 2>/dev/null) || rc=$?
+  cat >/dev/null 2>&1 || :
+  case "$rc" in
+    0) ;;
+    1) return 1 ;;
+    *) return 2 ;;
+  esac
+  hr_text_has_credential "${hit%%"$nl"*}" || :
+  return 0
+}
+
+# ---------------------------------------------------------------------------
+# THE PUSH-REFUSAL RECORD — how a push `push-branch.sh` refused inside a
+# session becomes visible to the watcher, which reads the records after the
+# session ends.
+#
+# THE DIRECTORY LIVES UNDER THE MAIN CHECKOUT'S `.git/`, which the permission
+# profile write-denies to every sandboxed command and to the file tools
+# (`cli/src/generators/writeProtection.ts` → the main checkout's whole `.git`),
+# so a session can neither forge a record nor delete one, while the
+# unsandboxed main-checkout `push-branch.sh` writes it.
+#
+# A record is `<dir>/<epoch>-<pid>.refusal`, exactly two lines, `branch=<branch>`
+# and `reason=<reason>`, written through a temporary name in `<dir>` and `mv`.
+# A handled record moves to `<dir>/handled/` and is never removed.
+# ---------------------------------------------------------------------------
+
+# hr_push_refusal_dir <main_top> — print `<main_top>/.git/harness-push-refusals`;
+# 1, printing nothing, for an empty <main_top>. Creates nothing.
+hr_push_refusal_dir() {
+  local main_top="${1-}"
+  [ -n "$main_top" ] || return 1
+  printf '%s/.git/harness-push-refusals\n' "${main_top%/}"
+}
+
+# hr_push_refusal_record <main_top> <branch> <reason> — write one record. 1,
+# writing nothing, when <branch> or <reason> holds a newline; 1 when a step
+# fails, removing its own temporary file. A second record from the same process
+# in the same second takes the next free epoch, so it neither overwrites the
+# first nor sorts before it.
+hr_push_refusal_record() {
+  local main_top="${1-}" branch="${2-}" reason="${3-}" dir tmp epoch nl='
+'
+  case "$branch$reason" in *"$nl"*) return 1 ;; esac
+  dir=$(hr_push_refusal_dir "$main_top") || return 1
+  mkdir -p "$dir" 2>/dev/null || return 1
+  tmp=$(mktemp "$dir/.refusal.XXXXXX" 2>/dev/null) || return 1
+  if ! printf 'branch=%s\nreason=%s\n' "$branch" "$reason" >"$tmp" 2>/dev/null; then
+    rm -f -- "$tmp"
+    return 1
+  fi
+  epoch=$(date +%s 2>/dev/null) || epoch=""
+  case "$epoch" in '' | *[!0123456789]*)
+    rm -f -- "$tmp"
+    return 1
+    ;;
+  esac
+  while [ -e "$dir/$epoch-$$.refusal" ]; do epoch=$((epoch + 1)); done
+  if ! mv -f "$tmp" "$dir/$epoch-$$.refusal" 2>/dev/null; then
+    rm -f -- "$tmp"
+    return 1
+  fi
+  return 0
+}
+
+# hr_push_refusals_for_var <main_top> <branch> — set `HR_PUSH_REFUSAL_FILES` to
+# the records directly in the directory whose `branch=` line equals <branch>
+# exactly, oldest name first, and `HR_PUSH_REFUSAL_REASON` to the first one's
+# `reason=` text. 0 when there is at least one; 1 otherwise. Reads only.
+hr_push_refusals_for_var() {
+  local main_top="${1-}" branch="${2-}" dir f line b r seen_b
+  HR_PUSH_REFUSAL_FILES=()
+  HR_PUSH_REFUSAL_REASON=""
+  dir=$(hr_push_refusal_dir "$main_top") || return 1
+  [ -d "$dir" ] || return 1
+  for f in "$dir"/*.refusal; do
+    [ -f "$f" ] && [ ! -L "$f" ] || continue
+    b=""
+    r=""
+    seen_b=0
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in
+        branch=*) [ "$seen_b" -eq 1 ] || { b=${line#branch=}; seen_b=1; } ;;
+        reason=*) [ -n "$r" ] || r=${line#reason=} ;;
+      esac
+    done <"$f"
+    [ "$seen_b" -eq 1 ] && [ "$b" = "$branch" ] || continue
+    [ -n "${HR_PUSH_REFUSAL_FILES[*]+x}" ] || HR_PUSH_REFUSAL_REASON="$r"
+    HR_PUSH_REFUSAL_FILES+=("$f")
+  done
+  [ -n "${HR_PUSH_REFUSAL_FILES[*]+x}" ] || return 1
+  return 0
+}
+
+# hr_push_refusal_handled <record file> — move the record into
+# `<dir>/handled/`, creating it. 1 when <record file> is not a regular file
+# directly in a `.git/harness-push-refusals` directory, or a step fails.
+hr_push_refusal_handled() {
+  local f="${1-}" dir
+  [ -n "$f" ] && [ -f "$f" ] && [ ! -L "$f" ] || return 1
+  case "$f" in */*) dir=${f%/*} ;; *) return 1 ;; esac
+  case "$dir" in */.git/harness-push-refusals) ;; *) return 1 ;; esac
+  mkdir -p "$dir/handled" 2>/dev/null || return 1
+  mv -f "$f" "$dir/handled/" 2>/dev/null || return 1
+  return 0
+}
+
+# Mirror of `cli/src/remote/githubActions.ts` → `WORKFLOWS_DIR`; read by
+# `push-branch.sh`'s workflow-file check.
+HR_REMOTE_WORKFLOWS_DIR='.github/workflows'
+
+# ---------------------------------------------------------------------------
 # THE REMOTE STATE BUNDLE.
 #
 # THE FORMAT OF RECORD. What a remote job carries across a job boundary and
@@ -5699,8 +6178,8 @@ ui_test_plan_reviews/$branch"
 #
 # Residual, not closed here: the link test and the rename are separate
 # operations, so a process the session started and left running could put a
-# link at <out_json> between them — the gap `docs/cli.md` §6 residual 1,
-# item 5, first bullet, states for `save`.
+# link at <out_json> between them — the gap
+# `docs/sandbox-record.md` residual 1, item 5, first bullet, states for `save`.
 hr_remote_status_write() {
   local registry="${1-}" branch="${2-}" out="${3-}" decision="${4-}" detail="${5-}"
   local status engine reason chain run_id run_url tmp
@@ -6508,6 +6987,25 @@ EOF
   return 0
 }
 
+# hr_profile_env_var_names <profile> — every `.sandbox.credentials.envVars[].name`
+# of <profile>, one per line in file order: objects only, string names only,
+# none empty and none carrying a newline. THE ONE HOME of that read, so the gate
+# worker and the session unset the same names and refuse the same profile
+# shapes. 0, printing nothing, when `envVars` is absent; 1, printing nothing,
+# when <profile> is empty, not a regular readable file, not parsable, or
+# `envVars` is not a list. Its callers: `launch-sandboxed-gates.sh` →
+# `lsg_bwrap_args_var` and `autonomous-watcher.sh` → `spawn_engine`.
+hr_profile_env_var_names() {
+  local profile="${1-}" list
+  [ -n "$profile" ] && [ -f "$profile" ] && [ -r "$profile" ] || return 1
+  list=$(jq -r '(.sandbox.credentials.envVars // [])
+      | if type == "array" then .[] | objects | .name | strings | select(length > 0 and (contains("\n") | not))
+        else error("envVars is not a list") end' "$profile" 2>/dev/null) || return 1
+  [ -n "$list" ] || return 0
+  printf '%s\n' "$list"
+  return 0
+}
+
 # hr_json_single_object <file> — 0 only when <file> parses as exactly one JSON
 # value and that value is an object; 1 when it does not, or `jq` is missing or
 # fails. Read by `jq`, never sourced. THE ONE HOME of the test, so a profile one
@@ -6661,10 +7159,13 @@ hr_lane_mtime() {
 # THE RUN GATES LANE:
 # `<state_dir>/test_run_logs/<sanitized branch>/<label>.{running,verdict,commit,log}`,
 # the labels it accepts, and the age past which a `.running` heartbeat is stale.
-# Its two callers, `run-test-suite.sh` and `launch-sandboxed-gates.sh`, take all
-# four from here and must agree on them: a drift makes the launcher's `pending`
-# answer and its "did not start" refusal read the wrong lane. Only
-# `run-test-suite.sh` lets `RUN_TEST_SUITE_STALE` override the bound.
+# Its three callers take what they use from here: `run-test-suite.sh` and
+# `launch-sandboxed-gates.sh` take all four and must agree on them: a drift
+# makes the launcher's `pending` answer and its "did not start" refusal read the
+# wrong lane. `run-analytics.sh` is a read-only reader of finished rounds'
+# `.verdict` and record files, and takes the lane directory and the label
+# pattern. Only `run-test-suite.sh` lets `RUN_TEST_SUITE_STALE` override the
+# bound.
 HR_TEST_RUN_LABEL_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]*$'
 HR_TEST_RUN_STALE_SECONDS=30
 HR_TEST_RUN_LOG_SUBDIR='test_run_logs'
@@ -6672,7 +7173,8 @@ HR_TEST_RUN_LOG_SUBDIR='test_run_logs'
 # hr_test_run_lane_dir <state_dir> <branch> — print the lane directory
 # `<state_dir>/test_run_logs/<hr_sanitize_branch branch>`, as given (relative
 # when <state_dir> is); 1, printing nothing, when the branch does not sanitize.
-# Callers: `run-test-suite.sh` and `launch-sandboxed-gates.sh` (check 9).
+# Callers: `run-analytics.sh`, `run-test-suite.sh` and
+# `launch-sandboxed-gates.sh` (check 9).
 hr_test_run_lane_dir() {
   local state_dir="${1-}" safe
   safe=$(hr_sanitize_branch "${2-}") || return 1

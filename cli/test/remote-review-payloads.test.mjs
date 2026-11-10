@@ -14,10 +14,11 @@
  * `origin`, `gh` replaced by a recorder that lists one `completed` run with a `completed` bundle —
  * plus, for the mirror cases, a registry record of `feat_x` with `execution: github-actions` whose
  * `worktree` is the mirror: by default the clone `hr_clone_create_var` makes at the derived path,
- * with its `copy_kind: clone`; for (M5), a legacy linked worktree of the main checkout on `feat_x`.
- * Its main `.git/config` sets `extensions.worktreeConfig=true` and the repo-relative
- * `core.hooksPath` `githooks`, so an unpinned call in a legacy mirror reads its record's
- * `config.worktree` and resolves hooks inside the copy. A clone mirror carrying a worktree-only
+ * with its `copy_kind: clone`; for (M5), a linked worktree of the main checkout on `feat_x`, which
+ * the copy check refuses as a run copy, so `review` falls through to a cut that is refused while the
+ * worktree holds `feat_x`. Its main `.git/config` sets `extensions.worktreeConfig=true` and the
+ * repo-relative `core.hooksPath` `githooks`, so an unpinned call in a linked worktree reads its
+ * record's `config.worktree` and resolves hooks inside the copy. A clone mirror carrying a worktree-only
  * plant's equivalent — its `.git/config.worktree`, `.git/commondir` or a `.git/config` key off the
  * allow-list — fails the clone trust check; `review` then falls through to a cut, which the
  * one-live-copy rule refuses while the mirror stands. A copy the verb cuts is a clone at the derived
@@ -27,7 +28,7 @@
  * `uploadpack` writes a marker file named for itself.
  *
  * RED ONCE — each mutation applied once to `cli/templates/scripts/remote-run.sh` (M2, M4's second,
- * M6, M8, P1 and P2: to `lib/harness-run-lib.sh`; C1: to `create-worktree.sh` and the library), the
+ * M5, M6, M8, P1 and P2: to `lib/harness-run-lib.sh`; C1: to `create-worktree.sh` and the library), the
  * file run, the failure observed, the mutation reverted; measured on the clone layout:
  * - (M1) `git -C "$worktree" merge --ff-only "origin/$branch"` restored in place of
  *   `hr_run_fast_forward_var` → fails on the refusal, which names the push (`origin/feat_x moved`)
@@ -38,8 +39,9 @@
  *   exit status: 0, the round placed and dispatched.
  * - (M4) the same mutation as (M3) → fails on the exit status: 0. With the call restored, the
  *   `ls-files --others` test dropped from `hr_run_surface_check_var` → fails on the refusal.
- * - (M5) `git -C "$worktree" fetch origin "$branch"` restored in place of the pinned main-checkout
- *   fetch → fails `a planted payload ran`, holding `M5-uploadpack`.
+ * - (M5) the `worktree` refusal dropped from `hr_run_target_check_var` → fails on the refusal, which
+ *   names the fast-forward of the worktree mirror rather than `create-worktree.sh exited 2`: the
+ *   linked worktree taken as the run copy.
  * - (M6) `hr_run_copy_clean`'s first `diff` replaced by an unpinned
  *   `git -C "$HR_RUN_COPY_TOP" status --short` → fails `a planted payload ran`.
  * - (M7) mirror detection restored as `git -C "$record_wt" symbolic-ref --short HEAD` → fails on
@@ -112,7 +114,7 @@ const git = (cwd, args, env = {}) => sh(cwd, 'git "$@"', [...PIN, ...args], env)
  * An `init`-wired checkout with `execution.target` `github-actions`, adopted on `origin`'s default
  * branch, with `origin/feat_x` one honest commit ahead of it and no local `feat_x`. `mirror`
  * `'clone'` adds the library's clone of `feat_x` at the derived path, its record made the remote
- * one; `'worktree'` adds a legacy linked worktree on `feat_x` and the remote record naming it;
+ * one; `'worktree'` adds a linked worktree on `feat_x` and the remote record naming it;
  * `false` adds neither. `baseHooks` commits a marker-writing `githooks/pre-commit` on the default
  * branch first.
  *
@@ -368,17 +370,26 @@ test('(M4) an untracked marker-writing githooks/post-checkout in the mirror is r
   assertRefused(f, result, /protected-surface check .*githooks\/post-checkout/, job, await f.originTip());
 });
 
-test("(M5) a legacy mirror's config.worktree sshCommand and uploadpack never run; push-branch.sh's own check refuses the push", async (t) => {
+test("(M5) a mirror that is a linked worktree is not used as the run copy, its config.worktree sshCommand and uploadpack never run, and no copy is cut beside it", async (t) => {
   const f = await reviewFixture(t, { mirror: 'worktree' });
   const job = await f.jobCommit([{ path: 'src/job.txt', content: 'job\n' }]);
   const configWorktree = join(f.recordDir, 'config.worktree');
   await git(f.dir, ['config', '--file', configWorktree, 'core.sshCommand', f.payload('M5-sshCommand')]);
   await git(f.dir, ['config', '--file', configWorktree, 'remote.origin.uploadpack', f.payload('M5-uploadpack')]);
+  const tip = await f.tip();
+  const registry = f.registry();
 
   const result = await f.review();
 
-  assertRefused(f, result, /pushing feat_x: the remote refused the push/, job, await f.originTip());
-  assert.match(result.stderr, /push-branch\.sh: refusing to push: .*(core\.sshcommand|remote\.origin\.uploadpack)/i);
+  // The copy check refuses the worktree mirror, so `review` falls through to a cut, which is refused
+  // while the worktree holds feat_x.
+  assertRefused(f, result, /the working copy \(create-worktree\.sh exited 2\)/, job, await f.originTip());
+  assert.match(result.stderr, /create-worktree\.sh: branch 'feat_x' is already checked out at \S+-mirror — refusing/);
+  assert.equal(await f.tip(), tip, `${REF} moved`);
+  assert.equal(f.registry(), registry, 'the registry changed');
+  assert.ok(existsSync(join(f.mirror, '.git')), 'the worktree was removed');
+  assert.equal(existsSync(join(f.mirror, REVIEW_REL)), false, 'the round was placed in the worktree');
+  assert.equal(existsSync(f.copy), false, 'a copy was cut');
 });
 
 /**

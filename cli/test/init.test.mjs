@@ -32,8 +32,9 @@
  * 1. **Every test builds its own fixture and tears it down.** No directory is shared and none is
  *    reused across tests, so a test that writes cannot change what a later one observes, and a
  *    failure leaves nothing behind to confuse the next run (`helpers/fixture.mjs`). That is what
- *    lets the cases run concurrently: they sit in one `concurrentSuite` and run `CASE_CONCURRENCY`
- *    at a time (`test/helpers/concurrency.mjs`); `HARNESS_TEST_CONCURRENCY=1` runs them in series.
+ *    lets the cases run concurrently: they sit in one `describe` opened in this file with
+ *    `{ concurrency: CASE_CONCURRENCY }` (`test/helpers/concurrency.mjs`);
+ *    `HARNESS_TEST_CONCURRENCY=1` runs them in series.
  * 2. **The wrapper ↔ profile invariant is asserted in both directions**, because the two failures
  *    are different and neither is loud: a written wrapper missing one of its two allow forms
  *    leaves a caller using that spelling matching neither `allow` nor `deny`, which in an unattended
@@ -74,11 +75,11 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } fr
 import { cp, mkdtemp, readdir, rm, stat, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
-import test from 'node:test';
+import test, { describe } from 'node:test';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
-import { concurrentSuite } from './helpers/concurrency.mjs';
+import { CASE_CONCURRENCY } from './helpers/concurrency.mjs';
 import {
   createFixture,
   ignoredAmong,
@@ -312,6 +313,7 @@ const OUTER_LOOP_SCRIPT_FILES = [
   'launch-sandboxed-gates.sh',
   'run-analytics.sh',
   'task-offer-check.sh',
+  'prompt-injection-screen.sh',
 ];
 
 /** A left-over template token — none may survive into a generated file. */
@@ -771,7 +773,7 @@ const { parseRepoSlug } = await loadCompiled('core/paths.js');
  */
 const { MARKETPLACE_NAME, PLUGIN_KEY } = await loadCompiled('generators/projectSettings.js');
 
-concurrentSuite('init', () => { // body deliberately not re-indented: keeps the diff and `git blame` readable
+describe('init', { concurrency: CASE_CONCURRENCY }, () => { // body deliberately not re-indented: keeps the diff and `git blame` readable
 
 test('a first init exits 0 and writes a schema-shaped harness.config.json', async (t) => {
   const dir = await fixtureFor(t, { files: nodeProjectFiles() });
@@ -8811,6 +8813,15 @@ test('the GitHub workflows arrive with execution.target github-actions, and only
     for (const name of names) {
       assert.ok(stdout.includes(name), `the closing report does not name ${name}:\n${stdout}`);
     }
+    assert.ok(stdout.includes('ready_for_review'), `the closing report does not name ready_for_review:\n${stdout}`);
+    assert.ok(
+      stdout.includes('gh secret set HARNESS_GIT_TOKEN'),
+      `the closing report does not print gh secret set HARNESS_GIT_TOKEN:\n${stdout}`,
+    );
+    assert.ok(
+      !stdout.includes("so the job's pushes trigger your own CI"),
+      `the closing report still claims the job's pushes trigger CI when HARNESS_GIT_TOKEN is set:\n${stdout}`,
+    );
     // The pre-push hook init installs refuses this form.
     assert.ok(!stdout.includes('git push origin '), `the closing report prints a push the hook refuses:\n${stdout}`);
   });

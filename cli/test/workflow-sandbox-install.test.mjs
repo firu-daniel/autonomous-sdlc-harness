@@ -379,12 +379,16 @@ test('(l) a failed install step stops the job before its session, and the job st
     assert.equal(typeof step.if, 'string', `${step.name} has an if:`);
     assert.doesNotMatch(step.if, /always\(\)|failure\(\)|cancelled\(\)/, step.name);
   }
-  for (const name of ['Push the branch', 'Save the state bundle', 'Upload the state bundle', 'Open the pull request and report', 'Continue, wait or stop']) {
+  for (const name of ['Push the branch', 'Save the state bundle', 'Upload the state bundle', 'Continue, wait or stop']) {
     const step = steps.find((s) => s.name === name);
     assert.ok(step, `the run job has the step ${name}`);
     assert.ok(step.if.includes("env.SCRIPTS_DIR != ''"), `${name}: ${step.if}`);
     assert.ok(step.if.includes('always()') || step.if.includes('!cancelled()'), `${name}: ${step.if}`);
   }
+  const deliver = jobs.deliver;
+  assert.ok([deliver.needs].flat().includes('run'), 'deliver needs run');
+  assert.ok(deliver.if.includes('!cancelled()'), deliver.if);
+  assert.doesNotMatch(deliver.if, /success\(\)|needs\.run\.result/, deliver.if);
   const collect = jobs.collect;
   assert.ok([collect.needs].flat().includes('run'), 'collect needs run');
   assert.ok(collect.if.includes('!cancelled()'), collect.if);

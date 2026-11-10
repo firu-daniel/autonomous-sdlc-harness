@@ -1,7 +1,7 @@
 # run-analytics-report.jq — the whole-run roll-up and run-analytics.md.
 #
-# Owns: recomputing a run-analytics document's `.run` from its `.sessions`, and
-# rendering the document as Markdown. It reads no stream, file or host, and
+# Owns: recomputing a run-analytics document's `.run` from its `.sessions` and
+# its `.gate_logs`, and rendering the document as Markdown. It reads no stream, file or host, and
 # builds no document: merging sessions, ordering them and writing either file
 # are run-analytics.sh's, its only caller. Same document in, same bytes out.
 #
@@ -9,19 +9,28 @@
 # jq keyword as a $ variable, . field or object key (jq 1.7 accepts one, jq 1.6
 # does not), and every `if` has an `else`.
 #
-# Document: {schema: 1, branch, sessions: [<session record>, …], run}, sessions
-# oldest first, each record as lib/run-analytics.jq's header states it. A schema
-# other than 1 is an error naming it.
+# Document: {schema, branch, sessions: [<session record>, …], run}, plus
+#   - schema 1: neither `rounds` nor `gate_logs`.
+#   - schema 2: a `rounds` array, no `gate_logs`.
+#   - schema 3: a `gate_logs` array and a `rounds` array, which may be empty.
+# Sessions oldest first, each record as lib/run-analytics.jq's header states it;
+# each round record as its mode `rounds` states it, each gate-log entry as its
+# mode `gate_logs` states it. A session record without `network_refusals`
+# predates the refusal scan. A schema other than 1, 2 or 3 is an error naming
+# it; so is a schema-1 document carrying `rounds`, a schema-1 or schema-2 one
+# carrying `gate_logs`, or a schema-2 or schema-3 one whose `rounds` (or, on
+# schema 3, `gate_logs`) is not an array.
 #
 # Mode `rollup`:   jq -S -f run-analytics-report.jq --arg mode rollup
-#   document in -> the same document with `.run` replaced:
+#   document in -> the same document with `.run` replaced, `.rounds` and
+#   `.gate_logs` untouched:
 #   {sessions, complete_sessions, first_at, last_at, span_ms, wall_ms,
 #    duration_ms, duration_api_ms, host_suspended_ms, idle_ms, active_ms,
 #    total_cost_usd, input_tokens, output_tokens, thinking_tokens,
 #    cache_read_tokens, cache_write_tokens, cache_write_5m_tokens,
 #    cache_write_1h_tokens, token_sessions, cache_hit_ratio, requests,
 #    api_retries, permission_denials, subagents_failed, subagents_killed,
-#    slowest_subagent, rate_limit_peak}
+#    slowest_subagent, rate_limit_peak, network}
 #   Sums skip null (null when every session's value is null). span_ms = last
 #   session's last_at - first session's first_at. input_tokens, output_tokens,
 #   cache_read_tokens and cache_write_tokens sum the sessions' shares; a record
@@ -34,13 +43,41 @@
 #   requests.items pooled, nearest rank, each item against its own session's
 #   idle_threshold_s. slowest_subagent = {type, description, duration_ms,
 #   session (1-based position in .sessions)} or null. rate_limit_peak = max per
-#   window. branch-status reads wall_ms, active_ms, host_suspended_ms, idle_ms,
-#   sessions, total_cost_usd, cache_hit_ratio and slowest_subagent: fixed names.
+#   window. network =
+#     {sessions_scanned, sessions_not_scanned,
+#      refusals: [{session, session_id, context, tool, command, host, port, line}],
+#      gate_logs_scanned,
+#      gate_log_matches: [{log_id, kind, test_file, count, line}]}
+#   sessions_scanned counts the sessions whose network_refusals is an array, the
+#   rest are not scanned. refusals flattens the scanned sessions' entries in
+#   session then entry order, session as in slowest_subagent; gate_log_matches
+#   flattens every gate-log entry's matches in document order; gate_logs_scanned
+#   = number of gate-log entries, 0 without `.gate_logs`. Nothing is cut or
+#   sorted. branch-status reads wall_ms, active_ms, host_suspended_ms, idle_ms,
+#   sessions, total_cost_usd, cache_hit_ratio, slowest_subagent and network:
+#   fixed names.
 #
 # Mode `markdown`: jq -r -f run-analytics-report.jq --arg mode markdown
-#   document in -> Markdown text: `## Whole run`, then `## Session <k>` per
-#   session, oldest first. `.run` is recomputed, never read. Nothing in the text
-#   varies between two renders of one document.
+#   document in -> Markdown text: `## Whole run`, `## Network refusals`,
+#   `## Possible network attempts in gate logs (best effort)`, then
+#   `## Gate rounds` when `.rounds` is non-empty (nothing at all otherwise), then
+#   `## Session <k>` per session, oldest first. `.run` is recomputed, never read.
+#   Nothing in the text varies between two renders of one document.
+#   - `## Network refusals` always renders: `<scanned> of <sessions> sessions
+#     scanned.`, plus ` <n> recorded before refusals were scanned.` when any is
+#     not, then `No refused network call.` or one table row per refusal;
+#     `No session was scanned for refusals.` replaces both when none is scanned.
+#   - `## Possible network attempts in gate logs (best effort)` always renders
+#     its paragraph and blind-spot bullets, then `No Run gates round log was
+#     scanned.` without gate-log entries, `No possible network attempt in <n>
+#     round logs.` without a match, or one table row per match.
+#   - Refusal and match lines render whole; a null cell renders —.
+#   - `## Gate rounds`: one `### Round` per round, in document order. Its wait is
+#     the summed total_ms of every session's orchestrator polling rows whose
+#     command ends in `--wait <label>`, — when none matches. Per test phase, only
+#     the slowest_test_files (N = 10) rows show, by seconds descending, then file
+#     ascending; the JSON keeps every row in record order. Test seconds render
+#     with one decimal.
 #   - Input tokens are labelled (uncached): the API's input_tokens counts only
 #     the uncached tail of each request. Wherever an input-token row or column
 #     is rendered, `Total input tokens (incl. cache)` follows it: input + cache
@@ -195,10 +232,37 @@ def run_of:
                                | select((.value | type) == "number")) as $w
                          ({}; .[$w.key] = ([.[$w.key], $w.value] | max)))};
 
+# Input: the document. Output: the .run.network object the header lists.
+def network_of:
+  .sessions as $ss
+  | (.gate_logs // []) as $gl
+  | {sessions_scanned: ([$ss[] | select((.network_refusals | type) == "array")] | length),
+     sessions_not_scanned: ([$ss[] | select((.network_refusals | type) != "array")] | length),
+     refusals: [range(0; $ss | length) as $i
+                | $ss[$i] as $s
+                | ($s.network_refusals | if type == "array" then .[] else empty end)
+                | {session: ($i + 1), session_id: $s.session_id,
+                   context, tool, command, host, port, line}],
+     gate_logs_scanned: ($gl | length),
+     gate_log_matches: [$gl[] | .log_id as $id | (.matches // [])[]
+                        | {log_id: $id, kind, test_file, count, line}]};
+
+def slowest_test_files: 10;
+
 def check_doc:
   if type != "object" then error("run-analytics-report.jq: input is not a run-analytics document")
-  elif .schema != 1 then
-    error("run-analytics-report.jq: document schema \(.schema | tojson) is not supported; expected 1")
+  elif .schema != 1 and .schema != 2 and .schema != 3 then
+    error("run-analytics-report.jq: document schema \(.schema | tojson) is not supported; expected 1, 2 or 3")
+  elif .schema == 1 and has("rounds") then
+    error("run-analytics-report.jq: a schema 1 document carries .rounds; only schema 2 may")
+  elif .schema != 3 and has("gate_logs") then
+    error("run-analytics-report.jq: a schema \(.schema) document carries .gate_logs; only schema 3 may")
+  elif .schema == 2 and (.rounds | type) != "array" then
+    error("run-analytics-report.jq: schema 2 document's .rounds is not an array")
+  elif .schema == 3 and (.rounds | type) != "array" then
+    error("run-analytics-report.jq: schema 3 document's .rounds is not an array")
+  elif .schema == 3 and (.gate_logs | type) != "array" then
+    error("run-analytics-report.jq: schema 3 document's .gate_logs is not an array")
   elif (.sessions | type) != "array" then error("run-analytics-report.jq: .sessions is not an array")
   else . end;
 
@@ -409,16 +473,94 @@ def session_md($k; $sh):
              ["Time to first token", ($rl.ttft_ms | fmt_dur)],
              ["Rate-limit peak", ($rl.rate_limit_peak | fmt_map)]]);
 
+# One decimal, so a float sum never renders a long tail.
+def fmt1: if type != "number" then "—" else (. * 10 + 0.5 | floor) as $d | "\($d / 10 | floor).\($d % 10)" end;
+
+# Summed total_ms of every session's orchestrator polling rows whose command's
+# last two space-separated tokens are `--wait` and $lb; null when none matches.
+def label_wait($ss; $lb):
+  [$ss[] | (.tools.polling // [])[]
+   | select(.context == "orchestrator" and (.command | type) == "string")
+   | select((.command | split(" ") | map(select(length > 0))) as $t
+            | ($t | length) >= 2 and $t[-2] == "--wait" and $t[-1] == $lb)
+   | .total_ms]
+  | num_sum(.);
+
+def round_md($ss):
+  (.round_id | tostring | split("#")[0]) as $lb
+  | (.tests | if type == "object" then . else {} end) as $ts
+  | [["focused", "full"][] as $p | select($ts | has($p)) | {phase: $p, rows: ($ts[$p] // [])}] as $ph
+  | ["### Round \(.round_id | fmt) — \(.verdict | fmt)", ""]
+    + table(["Measure", "Value"];
+            [["Wait (every run of \($lb))", (label_wait($ss; $lb) | fmt_dur)],
+             ["Gate rows", (.gates | if . == null then null else "\(.rows | length) (\(.outcome | fmt))" end)]]
+            + [$ph[] | ["Test files — \(.phase)",
+                        "\(.rows | length) files, \(.rows | num_sum(.seconds) // 0 | fmt1) s summed"]])
+    + (if .gates == null then []
+       else [""]
+            + table(["Phase", "Gate", "Status", "Seconds"];
+                    [(.gates.rows // [])[]
+                     | [.phase, .gate, .status, (.seconds | if type == "number" then "\(.) s" else null end)]])
+       end)
+    + [$ph[] | (.rows | sort_by([0 - .seconds, .file]) | .[0:slowest_test_files]) as $top
+       | (["", "#### Slowest test files — \(.phase) (\($top | length) of \(.rows | length))", ""]
+          + table(["File", "Status", "Seconds", "Tests", "Failed"];
+                  [$top[] | [.file, .status, (.seconds | fmt1), .tests, .failed]]))[]]
+    + (if (.unreadable // []) | length > 0
+       then ["", "Records not read: \(.unreadable | join(", "))"]
+       else [] end);
+
+def gate_rounds($ss):
+  (.rounds // []) as $rs
+  | if ($rs | length) == 0 then []
+    else ["", "## Gate rounds", "",
+          "Wait is the orchestrator's wait on `run-test-suite.sh --wait <label>`, summed over every polling row whose command ends in that label; — when none matches, as for a label waited on fewer than three times in a session (no polling row is written for it) or a command cut at 160 characters.",
+          "",
+          "A phase's test-file total sums each file's own seconds, so it exceeds the gate's wall time when files run in parallel."]
+         + [$rs[] | ([""] + round_md($ss))[]]
+    end;
+
+# Input: the document.
+def network_md:
+  network_of as $n
+  | ["", "## Network refusals", ""]
+    + (if $n.sessions_scanned == 0 then ["No session was scanned for refusals."]
+       else ["\($n.sessions_scanned) of \(.sessions | length) sessions scanned."
+             + (if $n.sessions_not_scanned > 0
+                then " \($n.sessions_not_scanned) recorded before refusals were scanned." else "" end),
+             ""]
+            + (if ($n.refusals | length) == 0 then ["No refused network call."]
+               else table(["Session", "Context", "Tool", "Command", "Host", "Port", "Refusal line"];
+                          [$n.refusals[] | [.session, .context, .tool, .command, .host, .port, .line]])
+               end)
+       end)
+    + ["", "## Possible network attempts in gate logs (best effort)", "",
+       "Lines in finished Run gates logs that carry a proxy refusal string or a plain connect error (`ECONNREFUSED`, `ENETUNREACH`, `EHOSTUNREACH`, `EAI_AGAIN`). They are listed as possible attempts, not refusals. What this list cannot show:",
+       "",
+       "- a test that catches the error and passes leaves no trace;",
+       "- a plain connect error cannot be told apart from a host that is unreachable for another reason;",
+       "- on macOS, Seatbelt's own violation records go to the system log, not to the test output;",
+       "- a test whose name or output quotes one of these strings is listed too.",
+       ""]
+    + (if $n.gate_logs_scanned == 0 then ["No Run gates round log was scanned."]
+       elif ($n.gate_log_matches | length) == 0 then
+         ["No possible network attempt in \($n.gate_logs_scanned) round logs."]
+       else table(["Log", "Kind", "Test file", "Count", "Line"];
+                  [$n.gate_log_matches[] | [.log_id, .kind, .test_file, .count, .line]])
+       end);
+
 def markdown:
   .branch as $b
   | .sessions as $ss
   | ($ss | shares) as $sh
   | ($ss | whole_run($b))
+    + network_md
+    + gate_rounds($ss)
     + [range(0; $ss | length) as $i | ([""] + ($ss[$i] | session_md($i + 1; $sh[$i])))[]]
   | join("\n");
 
 check_doc
-| if $mode == "rollup" then .run = (.sessions | run_of)
+| if $mode == "rollup" then network_of as $n | .run = ((.sessions | run_of) + {network: $n})
   elif $mode == "markdown" then markdown
   else error("run-analytics-report.jq: unknown --arg mode \"\($mode)\"; expected rollup or markdown")
   end

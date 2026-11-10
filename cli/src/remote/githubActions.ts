@@ -26,12 +26,16 @@
  * `cli/templates/scripts/remote-run.sh`, `cli/templates/github/workflows/harness-run.yml`,
  * `cli/templates/github/workflows/harness-resume.yml`,
  * `cli/templates/github/workflows/harness-trigger.yml`,
- * `cli/templates/github/workflows/harness-control.yml` and
+ * `cli/templates/github/workflows/harness-control.yml`,
  * `cli/templates/scripts/lib/harness-run-lib.sh`, which mirrors {@link WORKFLOW_RUN_FILE} and
- * {@link STATE_ARTIFACT_NAME} for the GitHub route its notification producers print.
- * `cli/templates/scripts/autonomous-watcher.sh` is not one: it reaches GitHub only through
- * `remote-run.sh`, spells none of these names in code, and reaches the GitHub-route text only through
- * the library's `hr_github_answer_route` and `hr_github_resume_route`.
+ * {@link STATE_ARTIFACT_NAME} for the GitHub route its notification producers print,
+ * {@link GIT_TOKEN_SECRET} as the `HARNESS_GIT_TOKEN` source of `hr_credential_values_var`, and
+ * {@link WORKFLOWS_DIR} as `HR_REMOTE_WORKFLOWS_DIR`, for `push-branch.sh`'s workflow-file
+ * check, and `cli/templates/scripts/autonomous-watcher.sh`, for {@link PUSH_URL_SECRET} and
+ * {@link GIT_TOKEN_SECRET} only: its `SESSION_ENV_STRIP_EXTRA` names them as variables it strips
+ * from the engine session's environment. The watcher still reaches GitHub only through
+ * `remote-run.sh`, and the GitHub-route text only through the library's `hr_github_answer_route`
+ * and `hr_github_resume_route`.
  *
  * **Why {@link GH_CLI_VARIABLE} exists.** Every real route into `gh` reaches the network, which no
  * test may do, so the binary run as `gh` is taken from `${HARNESS_GH_CLI:-gh}` in both this CLI and

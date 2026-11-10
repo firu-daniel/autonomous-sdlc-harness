@@ -1376,7 +1376,9 @@ hc_command_strings() {
 # tooling here. A configured command that is empty or starts with a path (a
 # wrapper-script invocation) contributes nothing: its leading word is a path,
 # and a path is already matched by the configured string itself in
-# `hc_safe_prefixes`.
+# `hc_safe_prefixes`. A leading word that begins with `!` contributes nothing
+# either: it is not a runner, and `hc_path_anchored_patterns` would emit an arm
+# built from it that `hc_matches_any_pattern` reads as a veto.
 #
 # It reads the cached document DIRECTLY rather than through `hc_get`, because
 # `hc_get` prints and this needs a value: routing five values through five
@@ -1393,7 +1395,7 @@ hc_runner_words() {
     hc_cfg_scalar_var ".commands[\"$key\"]" || continue
     first=${HC_CFG_VALUE%% *}
     case "$first" in
-      ''|*/*) continue ;;
+      ''|*/*|'!'*) continue ;;
     esac
     case "$seen" in
       *"|$first|"*) continue ;;
@@ -1518,11 +1520,27 @@ EOF
 # class (a scoped `packages/@acme/storefront`): the `--prefix` spelling of a
 # configured command then costs ONE PROMPT, in EACH of the two allow-only
 # guards, while the tail-free `--prefix` arm, the `cd` arms and every bare
-# configured command are unaffected — measured, with this cost's standing
+# configured command are unaffected, except a `cd` below that directory under a
+# sibling worktree or a run copy, which the stem arm's class veto refuses (see
+# the next paragraph) — measured, with this cost's standing
 # status, in `docs/guard-verification.md` §2.4. DO NOT widen the
 # class to buy that back — every character added has to be argued incapable of
 # introducing an expansion in every position, which is the enumerate-the-refused
 # game these lines exist to end.
+#
+# THE PATH-ANCHORED ARMS' VETOES ARE THE SAME TWO LINES IN GLOB FORM
+# (`hc_path_anchored_patterns` below): a `/..` veto for the first and a
+# `[!A-Za-z0-9._/-]` veto for the second, each written against the text an arm's
+# `*` matched and nothing else. A literal arm — `cd <root>`, `cd <app_dir>`,
+# `<runner> --prefix <app_dir>` — carries no `*` and so no veto, which leaves it
+# exactly as it was. The scoped-`appDir` cost above grows by one shape: under a
+# sibling worktree or a run copy, the stem arm's class veto refuses a `cd` to any
+# path carrying a character outside the class, so a path BELOW a scoped `appDir`
+# (`<stem>x/packages/@acme/storefront/src`) costs one prompt, while the app
+# directory itself keeps its allow through the subsumed `cd <stem>*/<appDir>` arm
+# (`docs/guard-verification.md` §2.4 row `(m)`, m46–m47). The DO NOT widen rule
+# binds the vetoes' class too: it is the same class, and a character added to one
+# copy and not the other is a hole in whichever guard reads the narrower one.
 #
 # THEY LIVE IN THE TWO HELPERS, NOT IN `hc_in_workspace` — deliberate. Centralising
 # them would also harden `hc_in_workspace`'s other callers
@@ -1543,10 +1561,14 @@ EOF
 # resolution, which contradicts the `THEY ARE GLOBS, NOT FILESYSTEM LOOKUPS` note
 # below, adds a fork per piece to a hook that fires on every Bash call, introduces
 # a TOCTOU, and falsely refuses a legitimate directory reached through a symlinked
-# path (common on macOS, where `/tmp` is itself one). Measured, it reaches only
-# these two helpers: the `cd` arms do not match a path BELOW a configured
-# directory, and an `rm` operand must additionally be in the index, which a path
-# through a link out of the repository cannot be. THE STANDING STATUS OF THIS AND
+# path (common on macOS, where `/tmp` is itself one). It reaches these two
+# helpers and one arm. The arm is the sibling `cd <work_root>/<project_name>-*`,
+# which matches any path under a sibling worktree and, for a session in a run
+# copy, any path under the copy itself — so a link there is accepted too, with
+# the same bound: writing it is a write inside a checkout of the workspace. The
+# other `cd` arms do not match a path BELOW a configured directory, and an `rm`
+# operand must additionally be in the index, which a path through a link out of
+# the repository cannot be. THE STANDING STATUS OF THIS AND
 # OF EVERY OTHER DISCLOSED RESIDUAL IN THIS PLUGIN — which are open, which have
 # since been closed, and the rows that bound each — is
 # `docs/guard-verification.md` §2.4. Check it there before re-litigating one.
@@ -1564,8 +1586,9 @@ EOF
 # WHY THEY EXIST. The generic prefix list cannot cover a piece that names a
 # directory, because the directory is the part that differs per checkout. What
 # the arms cover is `cd <dir>` — which executes nothing beyond changing directory,
-# so a trailing wildcard on it can carry no subcommand (a second argument is a
-# shell error) — plus the EXACT, tail-free spelling `<pkg-manager> --prefix <dir>`.
+# so a trailing wildcard on it can carry no subcommand, though it can carry a
+# second operand, which zsh reads as `cd <old> <new>` (see below) — plus the
+# EXACT, tail-free spelling `<pkg-manager> --prefix <dir>`.
 # THE TWO SHAPES THAT CARRY A SUBCOMMAND AFTER THE DIRECTORY — `git -C <dir> …`
 # and `<pkg-manager> --prefix <dir> …` — ARE NOT ARMS AT ALL: an arm matches on
 # the directory alone, so every subcommand rides along on it, and the arms that
@@ -1587,21 +1610,44 @@ EOF
 # `nullglob` / `failglob` and of whether any sibling worktree currently exists
 # on disk (and `set -f` in a caller does not affect `case` matching). The `cd`
 # arm built on the worktree stem ends in `*`, so one pattern covers the worktree
-# top, anything under it and any trailing arguments; each non-worktree `cd` arm
-# is emitted twice, an exact match and the prefix followed by a space + more
-# args. Each `--prefix` arm is emitted ONCE, exact — its `*`-terminated twin is
-# what the two rewrite helpers above replaced, and re-adding one re-opens the
-# hole they close.
+# top and anything under it. When `appDir` or `stateDir` is not `.`, two more
+# sibling arms, `cd <stem>*/<appDir>` and `cd <stem>*/<stateDir>`, match a subset
+# of what the stem arm matches; they exist so a scoped directory such as
+# `packages/@acme/storefront` keeps under a sibling the allow the stem arm's
+# class veto would otherwise cost it. Each non-worktree `cd` arm is emitted
+# twice: an exact match, and the prefix followed by a space and a `*>*` tail that
+# must carry an output redirection — the tail may be ONLY a redirection, because
+# zsh reads a second operand as `cd <old> <new>`, substituting <new> for <old>
+# in `$PWD`, so `cd <repo> <anywhere>` and `cd <repo> ..` leave the workspace.
+# Each `--prefix` arm is emitted ONCE, exact — its `*`-terminated twin is what
+# the two rewrite helpers above replaced, and re-adding one re-opens the hole
+# they close.
+#
+# THE VETOES ARE GLOBS TOO. A line beginning with `!` is a veto: the `case` glob
+# after the `!` binds to the nearest arm above it and withdraws that arm when it
+# also matches the piece (`hc_matches_any_pattern`). Every arm whose `*` can
+# carry a spelling the shell resolves outside the workspace is followed by its
+# own: on the stem arms and the sibling `--prefix` arm, the `/..` and
+# `[!A-Za-z0-9._/-]` vetoes — `THE TWO REJECT LINES IN BOTH HELPERS ARE ONE
+# UNIT` above, in glob form; the class veto is also what refuses a
+# subcommand riding inside the `*`, because a space is outside the class; on
+# each space-suffixed `cd` twin, three operand vetoes that admit only a single
+# redirection word (`2>/dev/null`, `>/dev/null`, `2>&1`, `&>/dev/null`). The
+# record the vetoes rest on is `docs/guard-verification.md` §2.4 row `(m)`.
 #
 # THIS IS THE ONE DEFINITION. All four allow-only guards —
 # `allow-safe-compounds.sh`, `git-rewrite-branch-guard.sh`,
 # `autonomous-script-allowlist-guard.sh` and `allow-qa-credentials-read.sh` —
-# build their path-anchored arms from this function, so no two of them can apply
-# different workspace definitions — the drift the source guards could only warn
-# about in prose. A new arm, a new `commands.*` key or a change to how the
-# app/worktree paths compose belongs here, once.
+# build their path-anchored arms from this function and match them through
+# `hc_matches_any_pattern`, so no two of them can apply different workspace
+# definitions — the drift the source guards could only warn about in prose — and
+# every one of them honours the vetoes with no change of its own. A new arm, a
+# new veto, a new `commands.*` key or a change to how the app/worktree paths
+# compose belongs here, once.
 hc_path_anchored_patterns() {
   local root="${1-}" work project app_rel state_rel app_abs state_abs wt wt_app word
+  local cls='A-Za-z0-9._/-' nl='
+' sib=''
   work=$(hc_work_root "$root") || return 1
   project=$(hc_project_name "$root") || return 1
   app_rel=$(hc_config_dir "$root" appDir .) || app_rel="."
@@ -1622,14 +1668,40 @@ hc_path_anchored_patterns() {
     wt_app="$wt*/$app_rel"
   fi
 
+  # Built as strings, not printed, so the one heredoc below stays the only fork.
+  # Each is newline-LED so an empty one adds no blank line.
+  if [ "$app_rel" != "." ]; then
+    sib="$sib${nl}cd $wt*/$app_rel${nl}!cd $wt*[!$cls]*/$app_rel${nl}!cd $wt*/../*"
+  fi
+  if [ "$state_rel" != "." ]; then
+    sib="$sib${nl}cd $wt*/$state_rel${nl}!cd $wt*[!$cls]*/$state_rel${nl}!cd $wt*/../*"
+  fi
+
+  # The three operand vetoes under each ` *>*` twin: the tail is one word in a
+  # redirection's class; it opens like a redirection; and a digit-led word is a
+  # descriptor number and nothing more. A `<` is refused because zsh reads
+  # `<x-y>` as a numeric-range glob, so a `<`-bearing word can be a second `cd`
+  # operand.
   cat <<EOF
 cd $root
-cd $root *
+cd $root *>*
+!cd $root *[!0-9>&A-Za-z/._-]*
+!cd $root [!0-9>&]*
+!cd $root [0-9]*[!0-9]*>*
 cd $app_abs
-cd $app_abs *
+cd $app_abs *>*
+!cd $app_abs *[!0-9>&A-Za-z/._-]*
+!cd $app_abs [!0-9>&]*
+!cd $app_abs [0-9]*[!0-9]*>*
 cd $state_abs
-cd $state_abs *
+cd $state_abs *>*
+!cd $state_abs *[!0-9>&A-Za-z/._-]*
+!cd $state_abs [!0-9>&]*
+!cd $state_abs [0-9]*[!0-9]*>*
 cd $wt*
+!cd $wt*[!$cls]*
+!cd $wt*/..
+!cd $wt*/../*$sib
 EOF
 
   while IFS= read -r word; do
@@ -1639,27 +1711,52 @@ EOF
     # a subcommand goes through `hc_runner_piece_in_workspace` instead.
     printf '%s --prefix %s\n' "$word" "$app_abs"
     printf '%s --prefix %s\n' "$word" "$wt_app"
+    if [ "$app_rel" = "." ]; then
+      printf '!%s --prefix %s[!%s]*\n!%s --prefix %s/..\n!%s --prefix %s/../*\n' \
+        "$word" "$wt*" "$cls" "$word" "$wt*" "$word" "$wt*"
+    else
+      printf '!%s --prefix %s[!%s]*/%s\n!%s --prefix %s/../*\n' \
+        "$word" "$wt*" "$cls" "$app_rel" "$word" "$wt*"
+    fi
   done <<EOF
 $(hc_runner_words "$root")
 EOF
   return 0
 }
 
-# 0 when <piece> matches any pattern in the newline-delimited <patterns> list
-# (blank lines ignored); 1 otherwise. The pattern is deliberately UNQUOTED in
-# the `case` label — that is what makes its `*` a wildcard. Bash does not
-# field-split a `case` pattern, so a pattern containing spaces stays one
-# pattern.
+# 0 when <piece> matches an arm in the newline-delimited <patterns> list and none
+# of that arm's vetoes; 1 otherwise. Blank lines are ignored. A line beginning
+# with `!` is a veto: the glob after the `!` binds to the nearest arm above it
+# and, when it also matches, withdraws that arm. A veto can only withdraw the arm
+# it follows — it never grants, never reaches another arm, and one before any
+# arm does nothing — so a piece another arm grants is still granted. The pattern
+# is deliberately UNQUOTED in the `case` label — that is what makes its `*` a
+# wildcard. Bash does not field-split a `case` pattern, so a pattern containing
+# spaces stays one pattern.
 hc_matches_any_pattern() {
-  local piece="${1-}" patterns="${2-}" pattern
+  local piece="${1-}" patterns="${2-}" pattern hit=1
   while IFS= read -r pattern; do
     [ -n "$pattern" ] || continue
-    case "$piece" in
-      $pattern) return 0 ;;
+    case "$pattern" in
+      '!'*)
+        [ "$hit" -eq 0 ] || continue
+        pattern=${pattern#'!'}
+        case "$piece" in
+          $pattern) hit=1 ;;
+        esac
+        ;;
+      *)
+        [ "$hit" -eq 0 ] && return 0
+        hit=1
+        case "$piece" in
+          $pattern) hit=0 ;;
+        esac
+        ;;
     esac
   done <<EOF
 $patterns
 EOF
+  [ "$hit" -eq 0 ] && return 0
   return 1
 }
 

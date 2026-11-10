@@ -4,10 +4,10 @@
 # `.git/config.worktree` or `.git/objects/info/http-alternates`, or a path under
 # one, however the path is spelled; stay SILENT on every other path. Each of the
 # three redirects git to another repository or another config, so a run copy
-# must never carry one a session wrote (docs/cli.md §6 residual 12). On a
-# bubblewrap host the run copy's own `Edit` rules for these paths are dropped
-# (`autonomous-watcher.sh` → `run_profile_edit_drops`), and this guard is what
-# refuses the file tools there.
+# must never carry one a session wrote (docs/sandbox-record.md residual 12).
+# On a bubblewrap host the run copy's own `Edit` rules for these paths are
+# dropped (`autonomous-watcher.sh` → `run_profile_edit_drops`), and this guard
+# is what refuses the file tools there.
 #
 # NO JURISDICTION TEST, DELIBERATELY. This guard reads no `harness.config.json`
 # and does not source `lib/harness-config-lib.sh`: it applies on every platform
@@ -248,7 +248,7 @@ for form in "${forms[@]}"; do
     if [[ $form == *"$trio" || $form == *"$trio"/* ]]; then
       resolved=""
       [ "$form" = "$given" ] || resolved=" (resolves to $form)"
-      deny "refusing $tool on $given$resolved: .git/commondir, .git/config.worktree and .git/objects/info/http-alternates redirect git to another repository or config; a run copy must never carry one written by a session (docs/cli.md §6 residual 12)"
+      deny "refusing $tool on $given$resolved: .git/commondir, .git/config.worktree and .git/objects/info/http-alternates redirect git to another repository or config; a run copy must never carry one written by a session (docs/sandbox-record.md residual 12)"
     fi
   done
 done

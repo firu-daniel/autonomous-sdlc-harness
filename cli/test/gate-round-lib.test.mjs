@@ -4,7 +4,9 @@
  *
  * **The rule this suite enforces: a round passes only through a full phase; a focused phase that
  * fails stops the round; an unreadable or absent previous record changes nothing about today's
- * run.** It also pins the gate-line forms, the record rows, the lane validation and the
+ * run.** A tests-record row outside the test-file pattern is read only with no tests; one carrying
+ * tests makes the record unreadable, and `gr_slowest` names an unreadable record with its first
+ * failed check. It also pins the gate-line forms, the record rows, the lane validation and the
  * slowest-files section.
  *
  * Each case copies the run library (`cli/templates/scripts/lib/harness-run-lib.sh`, which owns
@@ -232,6 +234,19 @@ test('still failing: a failing file no longer on disk is dropped, and gate 4 lea
   assert.deepEqual(emptied.calls, ['focused 6a']);
 });
 
+test('still failing: a zero-test non-test row is readable and never a focus file', async (t) => {
+  const f = await fixture(t);
+  await writePrevious(f, 'task_round_1', fullRows(['4', '6a']));
+  await writeTests(f, 'task_round_1', 'full', [
+    ['test/a.test.mjs', 'fail', '1.5', '3', '1'],
+    ['test/helpers/fixture.mjs', 'pass', '1.2', '0', '0'],
+  ]);
+  const r = await round(f, { fail: '6a' });
+  assert.equal(r.stderr, '');
+  assert.ok(r.stdout.includes(FOCUS_LINE), r.stdout);
+  assert.deepEqual(r.calls, ['focused 4 test/a.test.mjs', 'focused 6a']);
+});
+
 test('now passing: the focused phase passes, then every other id and gate 4 whole run in full', async (t) => {
   const f = await fixture(t);
   await previousFailures(f);
@@ -309,6 +324,13 @@ test('an unreadable previous record gives the first-round outcome', async (t) =>
       async (f) => {
         await writePrevious(f, 'task_round_1', fullRows(['4', '6a']));
         await writeTests(f, 'task_round_1', 'full', [a, ['../x.test.mjs', 'fail', '1', '1', '1']]);
+      },
+    ],
+    [
+      '4 FAIL with a tests record crediting tests to a non-test file',
+      async (f) => {
+        await writePrevious(f, 'task_round_1', fullRows(['4', '6a']));
+        await writeTests(f, 'task_round_1', 'full', [a, ['test/helpers/concurrency.mjs', 'pass', '12.0', '8', '0']]);
       },
     ],
   ];
@@ -395,7 +417,46 @@ test('gr_slowest prints the ten slowest rows under its heading, or a no-record l
     "== slowest test files (full run of gate 4), by the sum of each file's top-level test durations ==\n" +
       slowest.map((x) => `  ${x[2]} s  ${x[0]}  (${x[3]} tests, ${x[4]} failed)\n`).join('') +
       '== slowest test files: no per-file record (no record was written) ==\n' +
-      '== slowest test files: no per-file record (the record is unreadable) ==\n',
+      '== slowest test files: no per-file record (the record is unreadable: last line is not end) ==\n',
   );
   assert.equal(slowest.at(-1)[2], '3.5');
+});
+
+test('gr_slowest refuses a non-test row carrying tests, and shows one with none', async (t) => {
+  const f = await fixture(t);
+  const pattern = `GR_TEST_FILE_PATTERN='^test/[A-Za-z0-9._/-]+\\.test\\.mjs$'`;
+  const attributed = join(f.root, 'attributed.tests.tsv');
+  await writeFile(
+    attributed,
+    [TESTS_HEADER, 'test/helpers/concurrency.mjs\tpass\t12.0\t8\t0', 'test/a.test.mjs\tpass\t1.5\t3\t0', 'end'].join('\n') + '\n',
+  );
+  const refused = await call(f, `${pattern}; gr_slowest "$1" full`, [attributed]);
+  assert.equal(refused.stderr, '');
+  assert.equal(
+    refused.stdout,
+    '== slowest test files: no per-file record (the record is unreadable: line 2: test/helpers/concurrency.mjs is outside the test-file pattern but carries 8 tests and 0 failed) ==\n',
+  );
+
+  const zero = join(f.root, 'zero.tests.tsv');
+  await writeFile(
+    zero,
+    [
+      TESTS_HEADER,
+      'test/a.test.mjs\tfail\t1.5\t3\t1',
+      'test/helpers/fixture.mjs\tpass\t1.2\t0\t0',
+      'test/fixtures/x.mjs\tpass\t0.4\t0\t0',
+      'test/b.test.mjs\tpass\t2.5\t2\t0',
+      'end',
+    ].join('\n') + '\n',
+  );
+  const shown = await call(f, `${pattern}; gr_slowest "$1" full`, [zero]);
+  assert.equal(shown.stderr, '');
+  assert.equal(
+    shown.stdout,
+    "== slowest test files (full run of gate 4), by the sum of each file's top-level test durations ==\n" +
+      '  2.5 s  test/b.test.mjs  (2 tests, 0 failed)\n' +
+      '  1.5 s  test/a.test.mjs  (3 tests, 1 failed)\n' +
+      '  1.2 s  test/helpers/fixture.mjs  (0 tests, 0 failed)\n' +
+      '  0.4 s  test/fixtures/x.mjs  (0 tests, 0 failed)\n',
+  );
 });

@@ -13,7 +13,7 @@
  * Each case drives a fixture `init` wired, with `execution.target` set and the adopted tree committed
  * and pushed to the fixture's bare `origin` as its default branch, so `create-worktree.sh` cuts a real
  * clone from it at the derived sibling path. A pre-existing copy at that path is a clone with its own
- * registry record, made by the library's `hr_clone_create_var`; one legacy case plants a linked
+ * registry record, made by the library's `hr_clone_create_var`; one case plants a hand-made linked
  * worktree there instead. `gh` is a recorder stub reached through `HARNESS_GH_CLI`, appending each
  * argument vector as one JSON line, as in `remote-run.test.mjs`. No case reaches the network.
  *
@@ -245,9 +245,9 @@ test('a refused start leaves a live clone at the copy\'s path, its record and it
   assert.equal(await f.originHas('feat_x'), false);
 });
 
-test('a refused start leaves a legacy linked worktree at the copy\'s path untouched', async (t) => {
+test('a refused start leaves a hand-made linked worktree at the copy\'s path untouched', async (t) => {
   const f = await startFixture(t);
-  // A registered working tree, so `git worktree remove --force` would delete it were the guard gone.
+  // A registered working tree a person made by hand, which start must not touch.
   await runGit(f.dir, ['worktree', 'add', '--quiet', '--detach', f.worktree]);
   writeFileSync(join(f.worktree, 'keep.txt'), 'not start\'s\n');
 

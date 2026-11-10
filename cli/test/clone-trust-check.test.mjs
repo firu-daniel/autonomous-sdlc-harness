@@ -8,7 +8,10 @@
  * object store alone, and its `.git/config` is on the one allow-list its creator writes — which may
  * carry the main checkout's identity (`user.name`, `user.email`) at its exact value, and nothing
  * else that identifies or signs. Anything else is refused, naming a key or a file and never a
- * value, and the check writes nothing — not the registry, not its lock, not a ref.** The one
+ * value, and the check writes nothing — not the registry, not its lock, not a ref. A main
+ * checkout whose `harness.config.json` cannot be resolved is refused with a sentence naming that
+ * file; only a resolvable configuration with no matching record is refused as "records no
+ * clone".** The one
  * accepted shape of a redirecting file: a `.git/config.worktree` or `.git/objects/info/http-alternates`
  * that is a regular file, 0 bytes and not a symbolic link — for `config.worktree` only while
  * `extensions.worktreeConfig` is off. Every other shape of those two, and any `commondir`, an empty
@@ -34,7 +37,7 @@
 import assert from 'node:assert/strict';
 import { access, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import test from 'node:test';
 
 import { PACKAGE_ROOT, runBash, runGit } from './helpers/fixture.mjs';
@@ -77,9 +80,14 @@ function globals(result) {
   return out;
 }
 
+/** Run `body` with the library sourced, under `env` overrides; `$1`… are `args`. */
+function libWith(env, cwd, body, ...args) {
+  return runBash(cwd, ['-c', `. "$1" || exit 99; shift; ${body}`, 'hr', LIB, ...args], env);
+}
+
 /** Run `body` with the library sourced; `$1`… are `args`. */
 function lib(cwd, body, ...args) {
-  return runBash(cwd, ['-c', `. "$1" || exit 99; shift; ${body}`, 'hr', LIB, ...args]);
+  return libWith({}, cwd, body, ...args);
 }
 
 const CHECK = `hr_wrapper_target_check_var "$1" "$2"; s=$?
@@ -124,7 +132,7 @@ async function fixture(t, { clone = true, identity = true } = {}) {
     main,
     registry,
     clone: join(root, `main-${BRANCH}`),
-    check: async (target) => globals(await lib(root, CHECK, main, target)),
+    check: async (target, env = {}) => globals(await libWith(env, root, CHECK, main, target)),
     create: async (branch) => {
       const result = await lib(
         root,
@@ -150,9 +158,9 @@ async function fixture(t, { clone = true, identity = true } = {}) {
 }
 
 /** A refusal: status 1, no kind or gitdir, the main checkout's refs and registry byte-identical. */
-async function assertRefused(f, target, pattern) {
+async function assertRefused(f, target, pattern, env = {}) {
   const before = await f.snapshot();
-  const g = await f.check(target);
+  const g = await f.check(target, env);
   assert.equal(g.status, '1', JSON.stringify(g));
   assert.equal(g.kind, '');
   assert.equal(g.gitdir, '');
@@ -324,6 +332,45 @@ test('(e) A record with no copy_kind, or whose worktree names another path, is r
     await f.writeRegistry(doc);
     await assertRefused(f, f.clone, NO_CLONE_RECORD);
   });
+});
+
+test('(e2) A main checkout whose harness.config.json cannot be resolved is refused as such, not as a missing record', async (t) => {
+  const CONFIG_UNRESOLVED = /cannot be located, because '.*\/harness\.config\.json' cannot be resolved$/;
+  const variants = {
+    truncated: async (f) => {
+      const path = join(f.main, 'harness.config.json');
+      const saved = await readFile(path, 'utf8');
+      await writeFile(path, '{"version":');
+      return { env: {}, restore: () => writeFile(path, saved) };
+    },
+    absent: async (f) => {
+      const path = join(f.main, 'harness.config.json');
+      const saved = await readFile(path, 'utf8');
+      await rm(path);
+      return { env: {}, restore: () => writeFile(path, saved) };
+    },
+    'old jq': async (f) => {
+      const dir = join(f.root, 'jq-shim');
+      await mkdir(dir);
+      await writeFile(join(dir, 'jq'), `#!/bin/sh\n[ "$1" = --version ] && { echo jq-1.4; exit 0; }\nexit 3\n`, { mode: 0o755 });
+      return { env: { PATH: `${dir}${delimiter}${process.env.PATH ?? ''}` }, restore: async () => {} };
+    },
+  };
+  for (const [name, perturb] of Object.entries(variants)) {
+    await t.test(name, async (t) => {
+      const f = await fixture(t);
+      const { env, restore } = await perturb(f);
+      const refusal = await assertRefused(f, f.clone, CONFIG_UNRESOLVED, env);
+      assert.match(refusal, NOT_LISTED);
+      assert.doesNotMatch(refusal, NO_CLONE_RECORD);
+      assert.ok(refusal.includes(`'${join(f.main, 'harness.config.json')}'`), refusal);
+      assert.equal(await exists(`${f.registry}.lock`), false);
+      await restore();
+      const g = await f.check(f.clone);
+      assert.equal(g.status, '0', g.refusal);
+      assert.equal(g.kind, 'clone');
+    });
+  }
 });
 
 test('(f) A clone moved off the derived path is refused even with the registry following it', async (t) => {
