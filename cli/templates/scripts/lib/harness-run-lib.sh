@@ -248,7 +248,9 @@
 # MIRROR OF `plugin/instructions/autonomous_pause_and_ledger.md` →
 # `### 1.3 Templates`, which owns the flow-progress ledger's two header forms
 # and its entry ids; `hr_ledger_phases` codes both, so renaming an id or a
-# header form there is an edit here.
+# header form there is an edit here. Its `P0` / `R0` screening entries are
+# counted only when the ledger carries their line, so an older ledger keeps
+# its meaning.
 #
 # MIRROR OF `plugin/instructions/docs_orchestration_instructions_autonomous.md`
 # → `## Checklist entry format (parse contract)`, which owns the docs
@@ -2738,9 +2740,14 @@ hr_ledger_all_settled() {
 # the run began). An id absent from the file is NOT settled, so a malformed
 # ledger reads as `pending`, never as `done`. Phase 3 groups every end-of-branch
 # review with its fixes, QA and the run gates.
+#
+# The one exception is the screening entry, `P0` (task) or `R0` (user review):
+# it is tested only when the file carries an entry line for it, in any box. A
+# ledger written before that entry existed has no such line and must keep the
+# phase 1 answer its other ids give; a present `[ ]` keeps phase 1 `pending`.
 hr_ledger_phases() {
-  local file="${1-}" line first=1 engine="" round="-" settled=" " rest id
-  local p1 p2 p3 p4 s1 s2 s3 s4
+  local file="${1-}" line first=1 engine="" round="-" settled=" " seen=" " rest id
+  local p1 p2 p3 p4 s1 s2 s3 s4 optional
   [ -n "$file" ] && [ -f "$file" ] && [ -r "$file" ] || return 1
   while IFS= read -r line || [ -n "$line" ]; do
     if [ "$first" -eq 1 ]; then
@@ -2762,27 +2769,37 @@ hr_ledger_phases() {
       continue
     fi
     case "$line" in
-      "- [x] "*|"- [-] "*) ;;
+      "- [x] "*|"- [-] "*|"- [ ] "*) ;;
       *) continue ;;
     esac
     rest=${line#"- ["?"] "}
     id=${rest%% *}
     id=${id%.}
-    if [ -n "$id" ]; then settled="$settled$id "; fi
+    [ -n "$id" ] || continue
+    seen="$seen$id "
+    case "$line" in
+      "- [ ] "*) ;;
+      *) settled="$settled$id " ;;
+    esac
   done < "$file"
   [ -n "$engine" ] || return 1
 
   if [ "$engine" = "task" ]; then
+    optional="P0"
     p1="P1 P2 P3"
     p2="A"
     p3="A1.5g A1.5f A2g A2f Bg Bm C C2g C2m C2f E G"
     p4="D"
   else
+    optional="R0"
     p1="R1 R2"
     p2="R3"
     p3="R4 RG"
     p4="R5"
   fi
+  case "$seen" in
+    *" $optional "*) p1="$optional $p1" ;;
+  esac
   # Unquoted on purpose: each set is a fixed list of space-free ids.
   if hr_ledger_all_settled "$settled" $p1; then s1="done"; else s1="pending"; fi
   if hr_ledger_all_settled "$settled" $p2; then s2="done"; else s2="pending"; fi

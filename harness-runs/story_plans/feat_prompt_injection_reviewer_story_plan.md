@@ -135,7 +135,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_prompt_injection_review
 2. [x] **Task 2** — Add the `plan` verb: the screened set, the ledger record and the recorded-`UNSAFE` re-issue _(layer: cli)_ _(points: 20)_
 3. [x] **Task 3** — Add the park writer and the `park` verb: neutralised, capped excerpts in the clarification-channel format, and the discard-and-re-ask of a flagged answer _(layer: cli)_ _(points: 20)_
 4. [x] **Task 4** — Add the `verdict` verb: the strict parser of the agent's return, failing closed _(layer: cli)_ _(points: 15)_
-5. [ ] **Task 5** — Count `P0` / `R0` in `hr_ledger_phases` when the ledger carries them _(layer: cli)_ _(points: 10)_
+5. [x] **Task 5** — Count `P0` / `R0` in `hr_ledger_phases` when the ledger carries them _(layer: cli)_ _(points: 10)_
 6. [ ] **Task 6** — Prove the GitHub route by test: a screen park posted through `remote-run.sh`, an answer restored by it, and a re-ask answered through it _(layer: cli)_ _(points: 18)_
 7. [ ] **Task 7** — Describe the new script and the screen park in the adopter-facing READMEs and the profile template's `_README` _(layer: cli)_ _(points: 10)_
 8. [ ] **Task 8** — Add `plugin/agents/prompt-injection-reviewer.md` and join it to the untrusted-input statement _(layer: plugin)_ _(points: 20)_

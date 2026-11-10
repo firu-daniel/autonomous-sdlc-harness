@@ -39,3 +39,8 @@ Neither entry is ever `[-]`.
 - `npm test --workspace cli -- test/ledger-phases.test.mjs` passes. This task edits that file.
 - `bash -n cli/templates/scripts/lib/harness-run-lib.sh` exits 0.
 - `git diff -U0 cli/templates/scripts/lib/harness-run-lib.sh` touches only `hr_ledger_phases`, its comment and the header's ledger-mirror paragraph.
+
+**Deviations from plan:**
+- Adding `P0` / `R0` to `TASK_IDS` / `REVIEW_IDS` writes an open `[ ]` line for them into every ledger built from those arrays, so the two existing cases that settle phase 1 by hand (`settles a phase on [x] and [-] alike`, `reads the user-review engine and its round`) now also mark `P0: 'x'` / `R0: 'x'`; their expected output is unchanged.
+- The red-once mutation was run through `bash scripts/scratch-run.sh harness-runs/scratch/task5_mutation.mjs` against a scratch copy of the library (the guard `case "$seen" in *" $optional "*) …` replaced by an unconditional `p1="$optional $p1"`): unmutated, both line-removed ledgers read `done done done done`; mutated, `task - pending done done done` and `user_review 2 pending done done done`.
+- `bash -n cli/templates/scripts/lib/harness-run-lib.sh` was refused as a bare command; the shell-parse evidence rests on `bash scripts/typecheck.sh`, whose `check-shell-parse` step reported `123 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`.
