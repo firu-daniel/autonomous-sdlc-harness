@@ -142,7 +142,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_prompt_injection_review
 9. [x] **Task 19** — Add the agent's entry to the untrusted-input corpus test's rule-pointer set _(layer: cli)_ _(points: 5)_
 10. [x] **Task 9** — Hold the script's check ids equal to the agent's _(layer: cli)_ _(points: 8)_
 11. [x] **Task 10** — Add `plugin/instructions/prompt_injection_screen.md`, the one statement of the screen step _(layer: plugin)_ _(points: 20)_
-12. [ ] **Task 11** — Add `P0` / `R0` to the ledger contract, and the screen to the run-mode safety floor _(layer: plugin)_ _(points: 18)_
+12. [x] **Task 11** — Add `P0` / `R0` to the ledger contract, and the screen to the run-mode safety floor _(layer: plugin)_ _(points: 18)_
 13. [ ] **Task 12** — Run the screen in the task engine and record it on `P0` _(layer: plugin)_ _(points: 20)_
 14. [ ] **Task 13** — Run the screen in the user-review engine and record it on `R0` _(layer: plugin)_ _(points: 15)_
 15. [ ] **Task 14** — Run the screen in the docs engine, parking on `UNSAFE` with no record _(layer: plugin)_ _(points: 8)_

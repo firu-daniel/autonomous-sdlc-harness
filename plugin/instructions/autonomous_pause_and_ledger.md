@@ -67,6 +67,7 @@ Source: <state_dir>/task_prompts/<branch>_task_prompt.md → `### Run mode`
 - remote-skipped: <run-mode directive ids this run's execution environment cannot run — today only `qa` — comma-separated, or `none`>   (from the launch prompt's remote-job clause, read at this write; `none` for a local run)
 
 ## Planning
+- [ ] P0. Untrusted input screened (prompt-injection-reviewer SAFE)
 - [ ] P1. Task plan converged (business_parity + architecture + task-plan-reviewer all PASS)
 - [ ] P2. UI-test plan converged (ui-tests-plan-reviewer PASS) — or no_ui
 - [ ] P3. Plans committed & pushed (story index + per-task dir + UI-test plan)
@@ -100,6 +101,7 @@ Source: <state_dir>/task_prompts/<branch>_task_prompt.md → `### Run mode`
 - remote-skipped: <run-mode directive ids this run's execution environment cannot run — today only `qa` — comma-separated, or `none`>   (from the launch prompt's remote-job clause, read at this write; `none` for a local run)
 
 ## Fix planning
+- [ ] R0. Untrusted input screened (prompt-injection-reviewer SAFE)
 - [ ] R1. Fix plan written & converged (parity + architecture gates PASS)
 - [ ] R2. Fix plan + source review committed
 ## Fixing
@@ -109,9 +111,16 @@ Source: <state_dir>/task_prompts/<branch>_task_prompt.md → `### Run mode`
 - [ ] R5. Post-user-review statistics committed
 ```
 
+**The screening record.** `P0` and `R0` each carry, under the entry, one indented line per screened file:
+`  - screened: <repo-relative path> sha256=<64 lowercase hex>`. These lines are not entries: they carry no
+checkbox and §1.7's first-`[ ]` scan never reads them. `<scripts_dir>/prompt-injection-screen.sh plan` reads
+them back by that exact form, so the form is a wire.
+
 **A shell reader keys on these templates too.** `<scripts_dir>/lib/harness-run-lib.sh` → `hr_ledger_phases`
 reads the entry ids and the two header forms above and maps them to the four phases a GitHub run's progress
 comment shows, so renaming, adding or removing an id here is an edit to that function in the same change.
+It counts `P0` / `R0` only where the ledger carries their line, so a ledger created before them keeps its
+meaning.
 
 **The three markers.** Every phase entry carries exactly one of:
 - `[ ]` — **not yet done.** The first one is the resume point (§1.7).
@@ -134,7 +143,7 @@ comment shows, so renaming, adding or removing an id here is an edit to that fun
 `[-]` is admissible on **exactly** the entries a run mode **or a `phases.*` flag** can switch off — `A1.5g`,
 `A1.5f`, `A2g`, `A2f`, `P2` and `E` in the task-engine template, and `R4` in the user-review-engine template
 — and on **no other entry**, because every other entry either names a step inside the **safety floor**, which
-**neither switch** can turn off (`Bg`/`Bm` the branch review and its meta-review, `C`/`C2g`/`C2m`/`C2f` the
+**neither switch** can turn off (`P0`/`R0` the prompt-injection screen, `Bg`/`Bm` the branch review and its meta-review, `C`/`C2g`/`C2m`/`C2f` the
 fixes and skeptic phases, `R2`/`R3` the fix-plan commit and its fix loop, `G`/`RG` the run gates, a step no directive addresses and
 no flag gates, `D`/`R5` the statistics bookkeeping), or names something **neither switch** reaches: `P3` and `A` name steps no directive addresses
 and no flag gates, and `P1` and `R1` are the **gate-bearing** entries — each contains the two plan gates the
@@ -260,6 +269,18 @@ file, the recorded `phases:` line and the markers it seeded in one act — all t
 `phases:` line disagrees with the live configuration is an **unresolved ledger** for §1.8 and is escalated
 there, never silently reconciled.
 
+**The screen entry.** The screen (`${CLAUDE_PLUGIN_ROOT}/instructions/prompt_injection_screen.md`) runs
+before every creation, re-seed and resume, and hands the owning fork its `SAFE` `(path, sha)` pairs.
+- **Task engine:** the creation write lays `P0` down `[x]` with one §1.3 record line per pair — still one
+  write and one commit.
+- **User-review engine:** the create and re-seed writes lay `R0` down `[x]` with this session's pairs **plus
+  every `screened:` line of the ledger being replaced**, whether it sat under `P0` or an earlier `R0`, so a
+  round never re-screens a file an earlier run passed.
+- **A later launch** whose screen passed files not yet recorded appends their lines under the entry as a
+  flip (§1.5). On a ledger with no `P0` / `R0` line, that flip first inserts the entry `[x]` as the first
+  line of its section.
+- **A launch whose screen parks** writes nothing to the ledger.
+
 In every create/re-seed case, commit the ledger immediately via the wrapper (§1.6) so it is tracked from step
 one; on the same-round resume path there is nothing to commit (wrapper exit 3).
 
@@ -268,6 +289,11 @@ The **driving fork** flips only its own entries — the **planner** flips `P1–
 `A–D`, `G` included, the **fix-plan fork** flips `R1–R2`, the **fixes fork** flips `R3–R5`, `RG` included. **Sub-agents never touch the
 ledger** (implementers, reviewers, committers stay single-purpose). Flip points are named in each fork's thin
 override.
+
+`P0` is written by the planner fork and `R0` by the fix-plan fork; a flip of either commits under §1.6's
+fixed subject `chore: Flow progress <entry-id> for <branch>`. Neither
+ever goes back to `[ ]`: a later file that parks stops the run at the screen, which gates every launch, and
+the marker is not what gates it.
 
 `[-]` is **not** a flip: it is set at ledger **creation / re-seed by the creating fork**, from the recorded
 `## Run mode` block and the phase configuration (§1.4), so it does not disturb "the driving fork flips only

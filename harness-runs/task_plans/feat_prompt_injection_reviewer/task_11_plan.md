@@ -21,7 +21,7 @@
 
 **Work:**
 
-- [ ] **§1.3 templates.**
+- [x] **§1.3 templates.**
   - In the task-engine template, add `- [ ] P0. Untrusted input screened (prompt-injection-reviewer SAFE)` as the first line under `## Planning`.
   - In the user-review template, add `- [ ] R0. Untrusted input screened (prompt-injection-reviewer SAFE)` as the first line under `## Fix planning`.
   - Directly after the templates, add a paragraph on the record:
@@ -30,16 +30,16 @@
     - `prompt-injection-screen.sh plan` reads them back by that exact form, so the form is a wire.
   - Extend the **"A shell reader keys on these templates too"** paragraph: `hr_ledger_phases` counts `P0` / `R0` only where the ledger carries the line, so a ledger created before them keeps its meaning.
   - **The `[-]` list.** In the paragraph that begins "`[-]` is admissible on **exactly** the entries …", add `P0` and `R0` to the entries that name a step inside the safety floor. Neither switch reaches them, and they are never `[-]`.
-- [ ] **§1.4 creation.**
+- [x] **§1.4 creation.**
   - **Task engine.** The screen (`${CLAUDE_PLUGIN_ROOT}/instructions/prompt_injection_screen.md`) precedes the creation write. So the planner fork's creation write lays `P0` down `[x]` with one record line per `SAFE` pair the screen handed it. That is still one write and one commit.
   - **User-review engine.** The create and re-seed writes lay `R0` down `[x]` with this session's pairs **plus every `screened:` line of the ledger being replaced**, carried forward whether it sat under `P0` or an earlier `R0`. A round therefore never re-screens a file an earlier run passed.
   - **A later launch** whose screen passed files not yet recorded appends their lines under the entry as a flip. On a ledger with no `P0` / `R0` line — one created before this entry existed — that flip first inserts the entry `[x]` as the first line of its section.
   - **A launch whose screen parks** writes nothing to the ledger.
-- [ ] **§1.5 who flips.**
+- [x] **§1.5 who flips.**
   - The planner fork writes `P0`, and the fix-plan fork writes `R0`.
   - The commit subject is the existing fixed form `chore: Flow progress <entry-id> for <branch>`.
   - `P0` / `R0` never go back to `[ ]`. A later file that parks stops the run at the screen, which gates every launch, and the marker is not what gates it.
-- [ ] **`run_mode_instructions.md` and the clean-tree commit points.**
+- [x] **`run_mode_instructions.md` and the clean-tree commit points.**
   - In `run_mode_instructions.md`, add one bullet to `## The safety floor — what a run mode may never skip`: the prompt-injection screen and its ledger entries `P0` / `R0` (`${CLAUDE_PLUGIN_ROOT}/instructions/prompt_injection_screen.md`). Change no other wording.
   - In `plan_orchestration_instructions_autonomous.md` → `## Autonomous-fork commit points — the clean-tree invariant (single source of truth)`, append entry **15**, after entry 14 and before the **"Editing any one of these in isolation"** sentence: **"The prompt-injection screen commits a re-screened input edit (all three autonomous engines)"** — `${CLAUDE_PLUGIN_ROOT}/instructions/prompt_injection_screen.md` → `## The steps` step 4. In two or three sentences, pointing and not restating:
     - it fires at launch, before anything else commits, only when a screened file the screen just passed is a modified tracked file — the person's edit made through the park's edit-and-resume route — so the engine goes on from a clean tree;
