@@ -7,7 +7,7 @@
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory of the generated wrapper scripts; `scripts/` when the key is absent. |
 | `<repo_root>` | derived at runtime | The root of the checkout this run executes in, from a bare `git rev-parse --show-toplevel`. |
-| `<MAIN_REPO>` | derived at runtime | The main checkout the citing engine command resolved at its global-kill-switch step. This file never resolves it again. |
+| `<MAIN_REPO>` | derived at runtime | The main checkout the citing engine command resolved per its own `## Resolved values` row. This file never resolves it again. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
 
 The screen is a tripwire, not a boundary: an adaptive attacker can pass an LLM screen. The containment is the permission profile, the guard hooks, the protected-branch refusals and the sandbox (the harness repository's `docs/sandbox-record.md`), and none of it is relaxed because this screen exists. `SAFE` never permits anything the profile or a guard withholds.
 
