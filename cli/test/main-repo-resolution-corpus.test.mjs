@@ -4,12 +4,17 @@
  * **The rule this suite exists to enforce: the `<MAIN_REPO>` resolution clause is wire text carried
  * byte-identical at every plugin site that resolves `<MAIN_REPO>`, and its single home's roster
  * (`plugin/instructions/main_repo_resolution.md` → `## Who may cite this`) names exactly those
- * sites.**
+ * sites.** Every autonomous binder also carries the byte-identical `<MAIN_REPO>` `## Resolved values`
+ * row (`MAIN_REPO_ROW`); every clause-carrier without that row is listed in `EXEMPT` with its reason;
+ * and no plugin file names the push other than as the main checkout's copy
+ * (`<MAIN_REPO>/<scripts_dir>/push-branch.sh`), or resolves `<MAIN_REPO>` through "watcher-supplied"
+ * or a pipeline.
  *
  * Registered as a tree guard by Task 11 of `fix_clone_main_repo_resolution`, which adds this
  * file's `treeGuards` entry to `harness.config.json`.
  *
- * A later suite adds a corpus case as a row in `CASES`, with no new runner code.
+ * A later suite adds a corpus case as a row in `CASES`, with no new runner code. A `forbidden` entry
+ * is either a string, matched by `includes`, or a `RegExp` without the `g` flag, matched by `test`.
  *
  * RED ONCE (first row) — 2026-10-29, `plugin/commands/branch-status.md` reverted to the old clause
  * in the working tree only, then restored: `main-repo-resolution-clause` failed its `deepEqual`,
@@ -18,6 +23,41 @@
  * RED ONCE (roster check) — 2026-10-29, the `${CLAUDE_PLUGIN_ROOT}/commands/branch-status.md`
  * entry deleted from `## Who may cite this` in the working tree only, then restored: the roster
  * check failed its `deepEqual`, `plugin/commands/branch-status.md` missing from the roster.
+ *
+ * RED ONCE (row, missing sentence) — 2026-11-10, the literal-spelling sentence deleted from
+ * `plugin/commands/branch-start-docs-autonomous.md`'s `<MAIN_REPO>` row in the working tree only,
+ * then restored: `main-repo-resolved-values-row` and `main-repo-literal-spelling` failed, the file
+ * missing from each `needle`.
+ *
+ * RED ONCE (bare push) — 2026-11-10, the hard boundary's push in
+ * `plugin/commands/branch-start-docs-autonomous.md` rewritten as "via `<scripts_dir>/push-branch.sh`"
+ * in the working tree only, then restored: `main-repo-resolved-values-row` failed, a `forbidden` hit
+ * on the bare-spelling pattern.
+ *
+ * RED ONCE (`$` argument) — 2026-11-10, `"$REPO_ROOT"` put as the argument of the Override D push
+ * fence in `plugin/instructions/plan_orchestration_instructions_autonomous.md` in the working tree
+ * only, then restored: `main-repo-resolved-values-row` failed, a `forbidden` hit on the `$`-argument
+ * pattern.
+ *
+ * RED ONCE (`$REPO_ROOT` prose) — 2026-11-10, "It uses the `$REPO_ROOT` the calling command"
+ * restored in `plugin/instructions/task_plan_writing_instructions_autonomous.md` in the working tree
+ * only, then restored: `main-repo-resolved-values-row` failed, a `forbidden` hit on that string.
+ *
+ * RED ONCE (watcher-supplied) — 2026-11-10, "watcher-supplied" inserted into
+ * `plugin/instructions/prompt_injection_screen.md`'s `<MAIN_REPO>` row in the working tree only,
+ * then restored: `main-repo-resolved-values-row` failed, a `forbidden` hit on that string.
+ *
+ * RED ONCE (pipeline) — 2026-11-10, "`git worktree list --porcelain | head -1`" inserted into
+ * `plugin/instructions/prompt_injection_screen.md`'s `<MAIN_REPO>` row in the working tree only,
+ * then restored: `main-repo-resolved-values-row` failed, a `forbidden` hit on the pipeline pattern.
+ *
+ * RED ONCE (sentence alone) — 2026-11-10, the literal-spelling sentence deleted from
+ * `plugin/instructions/prompt_injection_screen.md`'s `<MAIN_REPO>` row in the working tree only,
+ * then restored: `main-repo-literal-spelling` failed, the file missing from its `needle`.
+ *
+ * RED ONCE (classification) — 2026-11-10, `plugin/agents/qa-tester.md` removed from `EXEMPT` in
+ * this file only, then restored: the binder-classification test failed, the file a clause-carrier
+ * in neither the row binders nor `EXEMPT`.
  */
 
 import assert from 'node:assert/strict';
@@ -32,6 +72,30 @@ const NEW_CLAUSE =
 
 const OLD_CLAUSE =
   'the path a bare `printenv HARNESS_MAIN_REPO` prints, else the first `worktree ` line of a bare `git worktree list --porcelain`';
+
+const LITERAL_SPELLING =
+  'Spell it as a literal absolute path in the command, never through a substitution or a variable.';
+
+const MAIN_REPO_ROW =
+  '| `<MAIN_REPO>` | derived at runtime | The main checkout — ' + NEW_CLAUSE + '. ' + LITERAL_SPELLING + ' |';
+
+/** The autonomous binders: each carries `MAIN_REPO_ROW` once. */
+const ROW_BINDERS = [
+  'plugin/agents/committer.md',
+  'plugin/commands/branch-start-docs-autonomous.md',
+  'plugin/commands/branch-start-plan-autonomous.md',
+  'plugin/commands/branch-start-user-review-fix-autonomous.md',
+  'plugin/docs/AUTONOMOUS_FLOW.md',
+  'plugin/instructions/autonomous_pause_and_ledger.md',
+  'plugin/instructions/clarification_digest_instructions.md',
+  'plugin/instructions/dispatch_discipline_instructions.md',
+  'plugin/instructions/docs_orchestration_instructions_autonomous.md',
+  'plugin/instructions/improvement_observations_instructions.md',
+  'plugin/instructions/plan_orchestration_instructions_autonomous.md',
+  'plugin/instructions/task_plan_writing_instructions_autonomous.md',
+  'plugin/instructions/user_review_fix_plan_writing_instructions_autonomous.md',
+  'plugin/instructions/user_review_fixes_instructions_autonomous.md',
+];
 
 /** `{ id, root, glob, needle, expected, forbidden }` — `root` repo-relative, `glob` a file-name suffix. */
 export const CASES = [
@@ -65,7 +129,45 @@ export const CASES = [
     },
     forbidden: [OLD_CLAUSE],
   },
+  {
+    id: 'main-repo-resolved-values-row',
+    root: 'plugin',
+    glob: '.md',
+    needle: MAIN_REPO_ROW,
+    expected: Object.fromEntries(ROW_BINDERS.map((file) => [file, 1])),
+    forbidden: [
+      /(^|[^/])<scripts_dir>\/push-branch\.sh/m,
+      /push-branch\.sh\s+"?\$/,
+      'It uses the `$REPO_ROOT` the calling command',
+      'watcher-supplied',
+      /git worktree list --porcelain`?\s*\|/,
+    ],
+  },
+  {
+    id: 'main-repo-literal-spelling',
+    root: 'plugin',
+    glob: '.md',
+    needle: LITERAL_SPELLING,
+    expected: Object.fromEntries(
+      [...ROW_BINDERS, 'plugin/instructions/prompt_injection_screen.md'].map((file) => [file, 1]),
+    ),
+    forbidden: [],
+  },
 ];
+
+/** Carriers of the resolution clause without `MAIN_REPO_ROW`, each with the reason it needs none. */
+const SUPERVISED_NO_PUSH =
+  'user-invoked in a supervised session, where an unmatched command prompts rather than being refused, and none issues a push';
+
+export const EXEMPT = {
+  'plugin/agents/qa-tester.md': 'it resolves a Read-tool path and spells no command with `<MAIN_REPO>`',
+  'plugin/commands/branch-answer.md': SUPERVISED_NO_PUSH,
+  'plugin/commands/branch-pause.md': SUPERVISED_NO_PUSH,
+  'plugin/commands/branch-prompt.md': SUPERVISED_NO_PUSH,
+  'plugin/commands/branch-resume.md': SUPERVISED_NO_PUSH,
+  'plugin/commands/branch-status.md': SUPERVISED_NO_PUSH,
+  'plugin/commands/branch-user-review.md': SUPERVISED_NO_PUSH,
+};
 
 const MODULE = 'plugin/instructions/main_repo_resolution.md';
 
@@ -89,8 +191,9 @@ test('corpus cases', async (t) => {
         const text = readFileSync(join(WORKSPACE_ROOT, file), 'utf8');
         const count = occurrences(text, row.needle);
         if (count > 0) found[file] = count;
-        for (const string of row.forbidden) {
-          if (text.includes(string)) forbiddenHits.push(`${file}: ${string}`);
+        for (const entry of row.forbidden) {
+          const hit = entry instanceof RegExp ? entry.test(text) : text.includes(entry);
+          if (hit) forbiddenHits.push(`${file}: ${entry}`);
         }
       }
       // One assertion, so a site reverted to a forbidden string reports both its halves.
@@ -121,4 +224,14 @@ test('main_repo_resolution.md — one `## The fallback`, and a plugin roster equ
 
   const row = CASES.find((c) => c.id === 'main-repo-resolution-clause');
   assert.deepEqual(roster, Object.keys(row.expected).sort());
+});
+
+test('every clause-carrier is a row binder or listed in EXEMPT, never both', () => {
+  const clause = Object.keys(CASES.find((c) => c.id === 'main-repo-resolution-clause').expected);
+  const binders = Object.keys(CASES.find((c) => c.id === 'main-repo-resolved-values-row').expected);
+  const exempt = Object.keys(EXEMPT);
+  assert.deepEqual(
+    { carriers: [...clause].sort(), overlap: exempt.filter((file) => binders.includes(file)) },
+    { carriers: [...new Set([...binders, ...exempt])].sort(), overlap: [] },
+  );
 });

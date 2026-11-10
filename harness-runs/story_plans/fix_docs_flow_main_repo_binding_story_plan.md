@@ -32,7 +32,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_docs_flow_main_repo_bind
 3. [x] **Task 3** — Move `<MAIN_REPO>` into a row in both orchestration forks and spell the post-commit push literally _(layer: plugin)_ _(points: 15)_
 4. [x] **Task 4** — Fix the planning forks' "Push after the commit" prose and bind `<MAIN_REPO>` in the fix-plan fork's table _(layer: plugin)_ _(points: 15)_
 5. [x] **Task 5** — Point the committer's `push` argument, the prompt-injection screen's row and the flow document's push at the main checkout's copy _(layer: plugin)_ _(points: 10)_
-6. [ ] **Task 6** — Extend the `<MAIN_REPO>` corpus suite with the row, the push spelling and the forbidden resolutions, each run red once _(layer: cli)_ _(points: 20)_
+6. [x] **Task 6** — Extend the `<MAIN_REPO>` corpus suite with the row, the push spelling and the forbidden resolutions, each run red once _(layer: cli)_ _(points: 20)_
 
 ## Scope register
 
