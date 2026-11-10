@@ -24,7 +24,7 @@ What remains are two Should Fix findings: a guard that is narrower than its own 
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 2** — Say the docs phase's commit and push take the docs-catalog fences' command shape, with this phase's own paths and subject _(layer: plugin)_
+1. [x] **Finding 2** — Say the docs phase's commit and push take the docs-catalog fences' command shape, with this phase's own paths and subject _(layer: plugin)_
 2. [ ] **Finding 1** — Widen the bare-push forbidden pattern to every non-`<MAIN_REPO>/` prefix and make the suite header state exactly what it polices _(layer: cli)_
 
 ---
