@@ -138,7 +138,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_prompt_injection_review
 5. [x] **Task 5** — Count `P0` / `R0` in `hr_ledger_phases` when the ledger carries them _(layer: cli)_ _(points: 10)_
 6. [x] **Task 6** — Prove the GitHub route by test: a screen park posted through `remote-run.sh`, an answer restored by it, and a re-ask answered through it _(layer: cli)_ _(points: 18)_
 7. [x] **Task 7** — Describe the new script and the screen park in the adopter-facing READMEs and the profile template's `_README` _(layer: cli)_ _(points: 10)_
-8. [ ] **Task 8** — Add `plugin/agents/prompt-injection-reviewer.md` and join it to the untrusted-input statement _(layer: plugin)_ _(points: 20)_
+8. [x] **Task 8** — Add `plugin/agents/prompt-injection-reviewer.md` and join it to the untrusted-input statement _(layer: plugin)_ _(points: 20)_
 9. [ ] **Task 19** — Add the agent's entry to the untrusted-input corpus test's rule-pointer set _(layer: cli)_ _(points: 5)_
 10. [ ] **Task 9** — Hold the script's check ids equal to the agent's _(layer: cli)_ _(points: 8)_
 11. [ ] **Task 10** — Add `plugin/instructions/prompt_injection_screen.md`, the one statement of the screen step _(layer: plugin)_ _(points: 20)_
