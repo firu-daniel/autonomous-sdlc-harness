@@ -6,8 +6,16 @@
  * a second verdict line, an unknown id, a blocker — parks one `malformed-verdict` finding. The
  * verdict file is removed in every outcome but a refusal.
  *
+ * **The second rule: the parser's closed set is the agent's table, in order.** `PI_CHECK_IDS` in
+ * `cli/templates/scripts/prompt-injection-screen.sh` equals the first-column ids of
+ * `plugin/agents/prompt-injection-reviewer.md` → `## The checks`, so an id the agent may return is
+ * never parked as `malformed-verdict`, and one the agent never returns is never accepted.
+ *
  * The script is run out of an `init`-wired fixture, as `cli/test/prompt-injection-park.test.mjs`
  * runs it. Each case uses its own branch name, so the cases share one fixture without sharing files.
+ *
+ * RED ONCE (`authority-claim` renamed `authority-claimx` in the template's `PI_CHECK_IDS`) — 2026-11-10,
+ * the mirror case failed on index 2, `authority-claimx` against `authority-claim` (2 of 29 failed).
  */
 
 import assert from 'node:assert/strict';
@@ -16,7 +24,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, join } from 'node:path';
 import { after, before, test } from 'node:test';
 
-import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli } from './helpers/fixture.mjs';
+import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, WORKSPACE_ROOT } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/prompt-injection-screen.sh`;
 const RAISED = 'Raised by: prompt-injection-reviewer (prompt-injection screen)';
@@ -267,4 +275,24 @@ test('PI_CHECK_IDS, read from the written script, holds exactly 14 distinct ids'
   assert.equal(ids.length, 14, ids.join(' '));
   assert.equal(new Set(ids).size, 14, ids.join(' '));
   for (const id of ids) assert.match(id, /^[a-z]+(-[a-z]+)*$/);
+});
+
+test("PI_CHECK_IDS in the template equals the agent's ## The checks ids, in order", () => {
+  const agent = readFileSync(join(WORKSPACE_ROOT, 'plugin', 'agents', 'prompt-injection-reviewer.md'), 'utf8');
+  const section = agent.split('\n## The checks\n')[1];
+  assert.ok(section !== undefined, 'the agent has no ## The checks section');
+  const rows = section.split('\n## ')[0].split('\n').filter((line) => line.startsWith('|'));
+  const agentIds = rows.slice(2).map((row) => {
+    const cell = row.split('|')[1].trim();
+    const id = /^`([^`]+)`$/.exec(cell);
+    assert.ok(id, `first cell is not one backticked id: ${row}`);
+    return id[1];
+  });
+
+  const script = readFileSync(join(WORKSPACE_ROOT, 'cli', 'templates', 'scripts', 'prompt-injection-screen.sh'), 'utf8');
+  const lines = script.split('\n').filter((line) => line.startsWith('PI_CHECK_IDS='));
+  assert.equal(lines.length, 1, lines.join('\n'));
+  const scriptIds = lines[0].replace(/^PI_CHECK_IDS="/, '').replace(/"$/, '').split(' ');
+
+  assert.deepEqual(scriptIds, agentIds);
 });
