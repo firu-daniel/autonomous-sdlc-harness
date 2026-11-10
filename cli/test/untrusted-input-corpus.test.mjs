@@ -66,6 +66,7 @@ export const CASES = [
       'plugin/agents/docs-reviewer.md': 1,
       'plugin/agents/docs-writer.md': 1,
       'plugin/agents/layer-implementer.md': 1,
+      'plugin/agents/prompt-injection-reviewer.md': 1,
       'plugin/agents/qa-tester.md': 1,
       'plugin/agents/skeptic-reviewer.md': 1,
       'plugin/agents/statistics-plan-writer.md': 1,
