@@ -145,7 +145,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_prompt_injection_review
 12. [x] **Task 11** — Add `P0` / `R0` to the ledger contract, and the screen to the run-mode safety floor _(layer: plugin)_ _(points: 18)_
 13. [x] **Task 12** — Run the screen in the task engine and record it on `P0` _(layer: plugin)_ _(points: 20)_
 14. [x] **Task 13** — Run the screen in the user-review engine and record it on `R0` _(layer: plugin)_ _(points: 15)_
-15. [ ] **Task 14** — Run the screen in the docs engine, parking on `UNSAFE` with no record _(layer: plugin)_ _(points: 8)_
+15. [x] **Task 14** — Run the screen in the docs engine, parking on `UNSAFE` with no record _(layer: plugin)_ _(points: 8)_
 16. [ ] **Task 20** — Keep the clarification digest and `branch-answer` true for a screen-discarded answer and a multi-file screen park _(layer: plugin)_ _(points: 12)_
 17. [ ] **Task 15** — Describe the screen as a tripwire in `AUTONOMOUS_FLOW.md` and the whiteboard's containment paragraph _(layer: plugin)_ _(points: 20)_
 18. [ ] **Task 16** — Bring this repository's self-adopted script and state-dir copies to the template bytes _(layer: general)_ _(points: 10)_
