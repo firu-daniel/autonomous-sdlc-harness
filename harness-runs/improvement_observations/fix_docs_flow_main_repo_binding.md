@@ -1,0 +1,10 @@
+## Implementers editing `plugin/**/*.md` reported no tree guard selected on three of six such units
+- **category:** agent-contract
+- **evidence:** `harness.config.json` `treeGuards` maps `plugin/**/*.md` and `**/*.md` to three guards (`test/main-repo-resolution-corpus.test.mjs`, `test/untrusted-input-corpus.test.mjs`, `test/no-container-home-paths.test.mjs`). The `layer-implementer` returns for Task 1, Task 2, Task 3 and architecture Finding 1 (all `plugin/` markdown edits) each ran those three guards. The returns for Task 4 (`plugin/instructions/task_plan_writing_instructions_autonomous.md`, `plugin/instructions/user_review_fix_plan_writing_instructions_autonomous.md`), Task 5 (`plugin/agents/committer.md`, `plugin/instructions/prompt_injection_screen.md`, `plugin/docs/AUTONOMOUS_FLOW.md`) and code-review Finding 2 (`plugin/instructions/docs_phase_instructions.md`) each stated that no tree guard was selected, and ran none.
+- **cost this run:** three units committed without the guard run `unit_loop_core.md` → `## The test-run rule` point 7 requires; Phase G round 1 passed, so no defect shipped from it this run.
+- **hypothesis:** (guess) the implementer matches `covers` globs inconsistently across dispatches.
+
+## The configured diff base `dev` does not exist as a local ref in the run copy
+- **category:** agent-contract
+- **evidence:** `harness.config.json` `defaultBranch` is `dev`; `git log --format='%h %s%n%b' --name-only dev..HEAD` failed at Phase D with `fatal: ambiguous argument 'dev..HEAD': unknown revision or path not in the working tree.` The `branch-reviewer` (Phase B) and `statistics-plan-writer` (Phase D.1) returns each reported the same missing local `dev` and fell back to `origin/dev`. The core's A2.1 / A1.5.1 dispatch blocks pass `diff_base: <default_branch>` (the local name), while `### D.2 Done summary`'s delivery bullet already names `origin/<default_branch>` as the base.
+- **cost this run:** each agent improvised its own fallback base; `improvement_observations_instructions.md` → `## Dispositioned units` (b) as written also errored and needed the same fallback.
