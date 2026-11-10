@@ -53,3 +53,8 @@
 - `grep -rnE '/Users/|/home/|sk-ant-|ghp_|github_pat_|@[A-Za-z0-9-]+\.(com|org|net)' evals/prompt-injection-reviewer/` finds nothing.
 - `LC_ALL=C grep -rnP '[\x{200B}-\x{200D}\x{202A}-\x{202E}\x{2066}-\x{2069}]|\xF3\xA0' evals/prompt-injection-reviewer/` finds nothing (use the equivalent byte grep where `-P` is absent).
 - No fixture is named `prompt.md` or `case.yaml`, the names the eval runner discovers (`evals/README.md`).
+
+**Deviations from plan:**
+
+- `evals/README.md`: besides the tenant count and the new bullet, the opening's next sentence *"So what separates them"* now reads *"So what separates the first two"*, because with three tenants "them" would claim the plan-shape/docs-retrieval contrast covers the new tenant too. No other line of that README changed.
+- The stem-against-id checks of `**Verification:**` were run by a probe, `harness-runs/scratch/task17_probe.mjs` through `scripts/scratch-run.sh`, which reads the ids off `plugin/agents/prompt-injection-reviewer.md` → `## The checks` and also re-scans for the invisible, bidi and tag code points; it reported 14 ids, 14 hostile stems, no unknown stem and no hit. The `grep -rnE` and `LC_ALL=C grep -rnP` lines were run as written and both exited 1 (no match).
