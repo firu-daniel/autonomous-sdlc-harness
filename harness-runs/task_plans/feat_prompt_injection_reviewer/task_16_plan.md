@@ -32,3 +32,8 @@ This task changes none of those templates. Where a copy and its template differ 
   - `cmp cli/templates/state-dir/scratch/README.md harness-runs/scratch/README.md`
   - `cmp cli/templates/state-dir/clarifications/README.md harness-runs/clarifications/README.md`
 - `test -x scripts/prompt-injection-screen.sh` exits 0.
+
+- **Deviations from plan:**
+  - The library was not byte-identical to its template when this task ran: `cmp` reported `differ: char 16960, line 251`, and `diff` showed exactly Task 5's hunks. Each README likewise differed by exactly Task 7's paragraph. All three were brought to the template with the file-edit tool; `cmp` against each template then printed nothing.
+  - `cp` was refused by the permission profile (`Permission to use Bash has been denied because Claude Code is running in don't ask mode`), so `scripts/prompt-injection-screen.sh` was written with the file-write tool from the template's bytes; `cmp cli/templates/scripts/prompt-injection-screen.sh scripts/prompt-injection-screen.sh` printed nothing.
+  - `chmod 755 scripts/prompt-injection-screen.sh` was refused with the same message. The file is on disk as `-rw-r--r--` (`ls -l`), so `test -x` is not met. No other route was taken. The template itself is tracked as `100644` (`git ls-files -s cli/templates/scripts/prompt-injection-screen.sh`), as is `cli/templates/scripts/remote-run.sh`, while the self-adopted `scripts/remote-run.sh` is `100755`: the Goal's "mode `0755`" applies to the copy, not the template. Remedy: run `chmod 755 scripts/prompt-injection-screen.sh` before the commit, or stage with `git update-index --chmod=+x scripts/prompt-injection-screen.sh`.

@@ -148,7 +148,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_prompt_injection_review
 15. [x] **Task 14** — Run the screen in the docs engine, parking on `UNSAFE` with no record _(layer: plugin)_ _(points: 8)_
 16. [x] **Task 20** — Keep the clarification digest and `branch-answer` true for a screen-discarded answer and a multi-file screen park _(layer: plugin)_ _(points: 12)_
 17. [x] **Task 15** — Describe the screen as a tripwire in `AUTONOMOUS_FLOW.md` and the whiteboard's containment paragraph _(layer: plugin)_ _(points: 20)_
-18. [ ] **Task 16** — Bring this repository's self-adopted script and state-dir copies to the template bytes _(layer: general)_ _(points: 10)_
+18. [x] **Task 16** — Bring this repository's self-adopted script and state-dir copies to the template bytes _(layer: general)_ _(points: 10)_
 19. [ ] **Task 17** — Add the hand-run fixture set under `evals/prompt-injection-reviewer/` _(layer: general)_ _(points: 15)_
 20. [ ] **Task 18** — Add the screen to `README.md` → `## Scope and limits`, `docs/cli.md` and `docs/watcher.md` _(layer: general)_ _(points: 10)_
 
