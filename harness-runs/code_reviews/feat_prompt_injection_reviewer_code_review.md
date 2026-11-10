@@ -30,7 +30,7 @@
 1. [x] **Finding 3** — Copy the template `prompt-injection-screen.sh` over the drifted self-adopted copy _(layer: general)_
 2. [x] **Finding 4** — Move the `hidden-instruction` fixture's instruction out of an HTML comment, and name all five pre-scan classes in the eval README _(layer: general)_
 3. [x] **Finding 2** — Match an answer's `SAFE` record at the top level or under `answered/` _(layer: cli, general)_
-4. [ ] **Finding 1** — Exempt the GitHub review-round marker line from `prescan-html-comment` _(layer: cli, plugin, general)_
+4. [x] **Finding 1** — Exempt the GitHub review-round marker line from `prescan-html-comment` _(layer: cli, plugin, general)_
 
 ---
 

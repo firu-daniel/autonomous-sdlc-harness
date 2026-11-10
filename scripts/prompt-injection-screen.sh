@@ -35,7 +35,9 @@
 #   prescan-invisible     Tags block U+E0000–E007F, U+200B–200D, U+2060, and
 #                         U+FEFF anywhere but byte 0 of the file
 #   prescan-bidi          U+202A–202E, U+2066–2069
-#   prescan-html-comment  `<!--`
+#   prescan-html-comment  `<!--`, except a whole line in the exact shape of a
+#                         GitHub review round's closing marker
+#                         (`remote-run.sh` → `round_markers_read`)
 #   prescan-encoded-blob  ≥120 of `[A-Za-z0-9+/]` (any `=` padding after it is
 #                         irrelevant to the match), or ≥128 hex digits
 #   prescan-marker        `=== BEGIN UNTRUSTED DATA` / `=== END UNTRUSTED DATA`
@@ -230,6 +232,11 @@ PIS_RE_BIDI=$'\xe2\x80[\xaa-\xae]|\xe2\x81[\xa6-\xa9]'
 PIS_RE_HTML='<!--'
 PIS_RE_BLOB='[A-Za-z0-9+/]{120,}|[0-9A-Fa-f]{128,}'
 PIS_RE_MARKER='=== (BEGIN|END) UNTRUSTED DATA'
+# MIRROR OF cli/templates/scripts/remote-run.sh → round_markers_read: the
+# closing marker line of a review round collected on GitHub. A whole line in
+# exactly this shape carries no free text, so prescan-html-comment skips it;
+# any other `<!--` still hits.
+PIS_RE_ROUND_MARKER='<!-- sdlc-harness round collected_at=[0-9T:Z-]+ reviews=[0-9,]* comments=[0-9,]* -->'
 
 PIS_EXCERPT_MAX=160
 PIS_NL='
@@ -327,13 +334,19 @@ pis_cleanup() {
 }
 trap pis_cleanup EXIT
 
-# Print one `hit` line per line of <scan> matching <re>; return 0 when any
-# printed, 1 when none, 2 on a grep fault.
+# Print one `hit` line per line of <scan> matching <re>, less any line wholly
+# matching the optional ERE <exempt>; return 0 when any printed, 1 when none,
+# 2 on a grep fault.
 pis_hits() {
-  local id="$1" re="$2" rel="$3" scan="$4" out line n status
+  local id="$1" re="$2" rel="$3" scan="$4" exempt="${5-}" out line n status
   out=$(grep -a -n -E -e "$re" -- "$scan")
   status=$?
   [ "$status" -le 1 ] || return 2
+  if [ "$status" -eq 0 ] && [ -n "$exempt" ]; then
+    out=$(printf '%s\n' "$out" | grep -a -v -E -e "^[0-9]+:($exempt)\$")
+    status=$?
+    [ "$status" -le 1 ] || return 2
+  fi
   [ "$status" -eq 0 ] || return 1
   printf '%s\n' "$out" | while IFS= read -r line; do
     n=${line%%:*}
@@ -345,7 +358,7 @@ pis_hits() {
 # Print <rel>'s `hit` lines, scanning <resolved>; return 0 when none, 1 when
 # any. A scan fault calls pis_fault.
 pis_scan_file() {
-  local rel="$1" resolved="$2" lead scan status=0 r
+  local rel="$1" resolved="$2" lead scan status=0 r exempt
   # A BOM at byte 0 is not a hit: scan a copy without it. Line numbers are
   # unchanged, since the BOM holds no newline.
   scan="$resolved"
@@ -364,7 +377,9 @@ pis_scan_file() {
     "prescan-html-comment $PIS_RE_HTML" \
     "prescan-encoded-blob $PIS_RE_BLOB" \
     "prescan-marker $PIS_RE_MARKER"; do
-    pis_hits "${r%% *}" "${r#* }" "$rel" "$scan"
+    exempt=""
+    [ "${r%% *}" != prescan-html-comment ] || exempt="$PIS_RE_ROUND_MARKER"
+    pis_hits "${r%% *}" "${r#* }" "$rel" "$scan" "$exempt"
     case $? in
       0) status=1 ;;
       1) ;;
