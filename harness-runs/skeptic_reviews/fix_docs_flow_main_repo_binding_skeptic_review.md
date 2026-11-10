@@ -32,7 +32,7 @@ One net-new Should Fix remains. The regression guard finds `<MAIN_REPO>` binders
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Make the corpus suite require the literal-spelling sentence in every file with a `<MAIN_REPO>` table row, the resolution module excepted _(layer: cli)_
+1. [x] **Finding 1** — Make the corpus suite require the literal-spelling sentence in every file with a `<MAIN_REPO>` table row, the resolution module excepted _(layer: cli)_
 
 ---
 

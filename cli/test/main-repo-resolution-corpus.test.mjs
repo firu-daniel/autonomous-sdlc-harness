@@ -6,7 +6,8 @@
  * (`plugin/instructions/main_repo_resolution.md` → `## Who may cite this`) names exactly those
  * sites.** Every autonomous binder also carries the byte-identical `<MAIN_REPO>` `## Resolved values`
  * row (`MAIN_REPO_ROW`); every clause-carrier without that row is listed in `EXEMPT` with its reason;
- * and no plugin file spells the push path as `<scripts_dir>/push-branch.sh` under any prefix but
+ * every file with a `<MAIN_REPO>` table row carries the literal-spelling sentence, except
+ * `plugin/instructions/main_repo_resolution.md`; and no plugin file spells the push path as `<scripts_dir>/push-branch.sh` under any prefix but
  * `<MAIN_REPO>/`, passes it a `$` argument, or resolves `<MAIN_REPO>` through "watcher-supplied" or
  * a pipeline. A mention of the bare name `push-branch.sh` with no `<scripts_dir>/` in front is not
  * policed: wrapper-property and inventory sentences ("`push-branch.sh` is non-fatal") use that name
@@ -65,6 +66,11 @@
  * RED ONCE (classification) — 2026-11-10, `plugin/agents/qa-tester.md` removed from `EXEMPT` in
  * this file only, then restored: the binder-classification test failed, the file a clause-carrier
  * in neither the row binders nor `EXEMPT`.
+ *
+ * RED ONCE (inherited row) — 2026-11-10, the line "| `<MAIN_REPO>` | derived at runtime | The main
+ * checkout the citing engine command resolved. |" appended to `plugin/instructions/mode_contract.md`
+ * in the working tree only, then restored: only the inherited-row test failed, with
+ * `plugin/instructions/mode_contract.md` in the actual set and absent from the expected set.
  */
 
 import assert from 'node:assert/strict';
@@ -241,4 +247,15 @@ test('every clause-carrier is a row binder or listed in EXEMPT, never both', () 
     { carriers: [...clause].sort(), overlap: exempt.filter((file) => binders.includes(file)) },
     { carriers: [...new Set([...binders, ...exempt])].sort(), overlap: [] },
   );
+});
+
+test('every `<MAIN_REPO>` table row carries the literal-spelling sentence, the resolution module excepted', () => {
+  const spellers = Object.keys(CASES.find((c) => c.id === 'main-repo-literal-spelling').expected);
+  const rowFiles = filesUnder('plugin', '.md').filter((file) =>
+    readFileSync(join(WORKSPACE_ROOT, file), 'utf8')
+      .split('\n')
+      .some((line) => line.startsWith('| `<MAIN_REPO>` |')),
+  );
+  // `MODULE` produces the value and spells no command with it, so it carries no sentence.
+  assert.deepEqual(rowFiles.sort(), [...spellers, MODULE].sort());
 });
