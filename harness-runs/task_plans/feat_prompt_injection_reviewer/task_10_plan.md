@@ -123,3 +123,8 @@
 - `grep -n 're-ask' plugin/instructions/prompt_injection_screen.md` prints lines inside `## Edit and resume` naming the discard, the verbatim copy and `--resume answer`, and `grep -c 'cannot be edited' plugin/instructions/prompt_injection_screen.md` prints `0`.
 - `head -1 plugin/instructions/prompt_injection_screen.md` is the H1, and there is no frontmatter fence.
 - Every `${CLAUDE_PLUGIN_ROOT}/…` path the file cites resolves under `plugin/`.
+
+**Deviations from plan:**
+- The step-0 route's parenthetical "(Task 14 states the same exception …)" and the "(Tasks 12, 13)" references are not carried into the module: a durable instruction file does not cite this branch's plan task numbers. The docs-command exception is stated in the module itself.
+- `## No override`'s opening sentence reads "never goes past `UNSAFE`" rather than "never proceeds past", so that `grep -n 'never proceeds'` prints only the step-0 sentence, as the verification bullet asks.
+- `docs/watcher.md` §4 is cited by its heading, `## 4. Pausing, parking and the usage gate`, not by a section number alone.
