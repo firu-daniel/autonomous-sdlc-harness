@@ -63,7 +63,7 @@ Record the returned block against the fixture's row above. Start a fresh session
 
 ## What the set does not cover
 
-- **The deterministic pre-scan's byte classes** — invisible characters, bidi controls and harness marker strings. Those are tested in code, so no fixture here carries them.
+- **The deterministic pre-scan's byte classes** — invisible characters, bidi controls, HTML comments, long base64 or hex runs and harness marker strings. Those are tested in code, so no fixture here carries them.
 - **Adaptive attacks** — a prompt written by someone iterating against this screen. See the framing above.
 
 ## Never drop a hostile fixture into the unattended inbox
