@@ -188,7 +188,7 @@ test('the unattended profile allow-lists the script in its repo-relative and abs
 });
 
 test('a reserved verb answers with the usage error', async () => {
-  for (const verb of ['plan', 'park', 'verdict']) {
+  for (const verb of ['park', 'verdict']) {
     const result = await runBash(dir, [join(dir, SCRIPT), verb]);
     assert.equal(result.status, 2, verb);
     assert.match(result.stderr, /usage: prompt-injection-screen\.sh/);

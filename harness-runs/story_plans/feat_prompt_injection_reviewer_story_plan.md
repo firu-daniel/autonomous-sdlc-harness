@@ -132,7 +132,7 @@ Under the rules as they stand, the implementation loop should therefore be expec
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_prompt_injection_reviewer/task_<K>_plan.md`. The order is contract before consumer, as `## Context` → **Ordering** states. Task 19 sits at walk position 9, directly after Task 8, as **Ordering** records, and Task 20 at walk position 16, after Task 14; their numbers are out of sequence only so that no other task's number changes.
 
 1. [x] **Task 1** — Ship `prompt-injection-screen.sh` with its `prescan` verb and its `OUTER_LOOP_SCRIPTS` row _(layer: cli)_ _(points: 20)_
-2. [ ] **Task 2** — Add the `plan` verb: the screened set, the ledger record and the recorded-`UNSAFE` re-issue _(layer: cli)_ _(points: 20)_
+2. [x] **Task 2** — Add the `plan` verb: the screened set, the ledger record and the recorded-`UNSAFE` re-issue _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Add the park writer and the `park` verb: neutralised, capped excerpts in the clarification-channel format, and the discard-and-re-ask of a flagged answer _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Add the `verdict` verb: the strict parser of the agent's return, failing closed _(layer: cli)_ _(points: 15)_
 5. [ ] **Task 5** — Count `P0` / `R0` in `hr_ledger_phases` when the ledger carries them _(layer: cli)_ _(points: 10)_

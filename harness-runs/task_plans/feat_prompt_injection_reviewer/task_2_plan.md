@@ -76,3 +76,9 @@ This task calls those internally and changes neither.
 - `npm test --workspace cli -- test/prompt-injection-plan.test.mjs` passes. It is this task's own new test file.
 - `bash -n cli/templates/scripts/prompt-injection-screen.sh` exits 0.
 - A `plan` run writes nothing: the fixture's `git status --porcelain` is unchanged across it, asserted in the test.
+
+**Deviations from plan:**
+- `bash -n cli/templates/scripts/prompt-injection-screen.sh` was refused by the tool layer (don't-ask mode). The claim rests instead on `bash scripts/typecheck.sh`, whose `check-shell-parse` step reported `123 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`, and on `prompt-injection-plan.test.mjs` running the script through bash in every case.
+- `cli/test/prompt-injection-prescan.test.mjs` (outside Targets) edited: its reserved-verb case listed `plan`, which now exists; it now checks `park` and `verdict` only.
+- Task 1's per-file scan loop moved out of `pis_prescan` into `pis_scan_file`, which both verbs call; prescan's output is unchanged (its test file passes). `pis_fault` now removes the BOM scan copy itself, since a fault inside `$(…)` does not run the EXIT trap.
+- Unspecified choices: when several screen parks record the same path and hash, `recorded` names the highest-numbered one (the latest park); an equal `<n>` at the top level and under `answered/` lists `answered/` first.
