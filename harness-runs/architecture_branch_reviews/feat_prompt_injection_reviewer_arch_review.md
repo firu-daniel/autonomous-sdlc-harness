@@ -8,7 +8,7 @@ Headline: the layering holds. Each new file sits in the layer its kind belongs t
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Add `plugin/docs/AUTONOMOUS_FLOW_WHITEBOARD.md` to the screen step's citation roster _(layer: plugin)_
+1. [x] **Finding 1** — Add `plugin/docs/AUTONOMOUS_FLOW_WHITEBOARD.md` to the screen step's citation roster _(layer: plugin)_
 2. [ ] **Finding 2** — Add `docs/watcher.md` to the screen step's citation roster _(layer: plugin)_
 3. [ ] **Finding 3** — Reduce the docs engine command's restatement of the screen step to a pointer _(layer: plugin)_
 4. [ ] **Finding 4** — Drop the restated placement rationale from the user-review engine command _(layer: plugin)_

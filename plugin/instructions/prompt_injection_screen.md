@@ -132,6 +132,7 @@ These documents point at a section of this file:
 - `${CLAUDE_PLUGIN_ROOT}/instructions/task_plan_writing_instructions_autonomous.md`
 - `${CLAUDE_PLUGIN_ROOT}/instructions/user_review_fix_plan_writing_instructions_autonomous.md`
 - `${CLAUDE_PLUGIN_ROOT}/docs/AUTONOMOUS_FLOW.md`
+- `${CLAUDE_PLUGIN_ROOT}/docs/AUTONOMOUS_FLOW_WHITEBOARD.md` — **The prompt is data, not instruction.**
 - `README.md` — the harness repository's root README, `## Scope and limits`
 
 A citer **points and never restates**, and a new citer joins this list. An edit that rewords or moves a heading updates every roster member in the same change.
