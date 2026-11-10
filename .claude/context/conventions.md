@@ -190,6 +190,7 @@ There is no navigation surface in this project; its analogue is the set of table
 - `chore: add docs checklist for <branch>`
 - `chore: add task prompt for <branch>`
 - `chore: add user review for <branch>`
+- `chore: Commit re-screened input edit for <branch>`
 - `chore: Flow progress <entry-id> for <branch>`
 - `chore: Log dispatch additions for <branch>`
 - `chore: Log improvement observations for <branch>`
