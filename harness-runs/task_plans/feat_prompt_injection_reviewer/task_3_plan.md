@@ -96,3 +96,12 @@ Keep them byte-identical.
 - `bash -n cli/templates/scripts/prompt-injection-screen.sh` exits 0, and `grep -n 'mktemp' cli/templates/scripts/prompt-injection-screen.sh` shows only explicit templates.
 - The written files hold exactly one `=== BEGIN UNTRUSTED DATA` line per unsafe file, across the screen park and the re-asks, and every one has its `=== END` partner. This is asserted in the test.
 - `grep -n 'rm ' cli/templates/scripts/prompt-injection-screen.sh` shows no `-r` flag.
+
+**Deviations from plan:**
+
+- **Output order.** The Work asks for the `parked:` lines (screen park first) "then" the `discarded:` lines, and also that the last line is `parked:` whenever a question file was written; both cannot hold when one call writes a re-ask and discards a screen park's answer. Implemented the last-line rule, which Task 10's engine step keys on (`task_10_plan.md` restates it): every `discarded:` line first, then every `parked:` line, the screen park first among them.
+- **`nothing to park` stderr prefix.** The plan spells it `prompt-injection-screen.sh: park: nothing to park`; the script's header states every exit 2 prints one `prompt-injection-screen: <cause>` line, so it is printed as `prompt-injection-screen: park: nothing to park`.
+- **Findings placement.** Each file's findings block (intro sentence, markers, bullets) closes that file's own `## Q<k>` section rather than following all sections, so each section stays self-contained.
+- **Writer interface.** `pis_park_write <repo_abs> <stateDir> <branch>` reads findings on stdin, one per line, six tab-separated fields; id `re-issued` with excerpt `question_<m>.md` renders the re-issue bullet. Task 4 calls it this way (the script header's `PARK` paragraph).
+- **`bash -n` verification (evidence downgrade).** A direct `bash -n cli/templates/scripts/prompt-injection-screen.sh` call was refused by the tool layer; the claim rests on `bash scripts/typecheck.sh`, whose `check-shell-parse.sh` step runs `bash -n` over every shell script git lists: `123 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`, verdict `PASS: typecheck` (the script is tracked, so it is in that list).
+- **60,000-byte cap.** Implemented (two-pass build: measure everything but the bullets, then spend the rest) and not exercised by a test case; the plan's case list names none.
