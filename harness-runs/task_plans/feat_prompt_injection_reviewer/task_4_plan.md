@@ -69,3 +69,13 @@ finding: …
 - `npm test --workspace cli -- test/prompt-injection-verdict.test.mjs` passes. It is this task's own new test file.
 - `bash -n cli/templates/scripts/prompt-injection-screen.sh` exits 0.
 - `grep -n 'rm ' cli/templates/scripts/prompt-injection-screen.sh` shows no `-r` flag.
+
+**Deviations from plan:**
+
+- **Park write failure keeps the verdict file.** Cleanup is listed for "every outcome except a refusal"; a park write failure is treated like a refusal: exit 2, nothing on stdout (the writer runs in a command substitution, so its `pis_fault` exits only that subshell after printing its cause), and the verdict file stays so the step can be retried. Stated in the script header's `VERDICT` paragraph.
+- **Removal before the SAFE line.** The verdict file is removed before `verdict: SAFE …` is printed, and a failed removal is exit 2, so SAFE is never printed with the file left behind. On UNSAFE a failed removal only adds a stderr line: the park is already written and its `parked:` / `discarded:` line must still reach the caller.
+- **Strictness choices the plan leaves open.** A blank line is one holding only whitespace (CR included). A fence is stripped only when the first non-blank line starts with three backticks (an info string allowed) and the last is exactly three backticks. A line is otherwise compared byte-exact, so trailing whitespace or a CR on `verdict: SAFE` is malformed. Tabs inside an excerpt or reason become spaces, since the writer's records are tab-separated. An id carrying anything but `a-z` and `-` is rejected before the set lookup, so `backdoor supply-chain` cannot match two adjacent ids.
+- **`--engine`** is validated (`task|user_review|docs`, through `pis_run_args`) and otherwise unused: the park writer takes no engine.
+- **`PI_CHECK_IDS` mirror note** sits on the comment directly above the declaration, not in the file's top header.
+- **`cli/test/prompt-injection-prescan.test.mjs` → `a reserved verb answers with the usage error`** still passes for `verdict` (no arguments → `--path is required` usage error) and was not edited; its title now describes `verdict` loosely. Its file is not this unit's, so it was not run.
+- **`bash -n` verification (evidence downgrade).** A direct `bash -n cli/templates/scripts/prompt-injection-screen.sh` call was refused by the tool layer; the claim rests on `bash scripts/typecheck.sh`, whose `check-shell-parse` step runs `bash -n` over every tracked shell script: `123 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`, verdict `PASS: typecheck`.

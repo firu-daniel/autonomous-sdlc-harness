@@ -21,8 +21,8 @@
 #   prescan --repo <dir> <repo-relative path>…
 #   plan --repo <dir> --branch <branch> --engine task|user_review|docs
 #   park --repo <dir> --branch <branch> --engine task|user_review|docs
-#
-#   `verdict` is a reserved verb: this copy answers it with the usage error.
+#   verdict --repo <dir> --branch <branch> --engine task|user_review|docs
+#           --path <screened path> --verdict-file <repo-relative file>
 #
 # PRESCAN OUTPUT — stdout, per path in argument order:
 #
@@ -116,6 +116,27 @@
 #   `parked: <question path>` per file written, the screen park first — so the
 #   last line is `parked:` whenever a file was written.
 #
+# VERDICT — parse prompt-injection-reviewer's return, which the orchestrator
+# wrote to <verdict-file>, for the one file <path>. Fails closed: only the exact
+# SAFE block passes. After one surrounding code fence is stripped (when the
+# whole text is one fenced block) and blank lines are dropped:
+#
+#   verdict: SAFE                          and no other line
+#   verdict: UNSAFE                        then one or more lines
+#   finding: <id> | <excerpt> | <reason>   split on the first and the last ` | `,
+#                                          <id> in PI_CHECK_IDS, the other two
+#                                          non-empty
+#
+#   SAFE      prints `verdict: SAFE <path> sha256 <hex>`, hashed now.
+#   UNSAFE    parks the findings for <path> through pis_park_write, then prints
+#             `verdict: UNSAFE` and the writer's line (`parked:`, or
+#             `discarded:` for an answer to a screen park).
+#   anything else is malformed: parked as UNSAFE with one finding, id
+#             `malformed-verdict`, the return's first 160 characters as excerpt.
+#
+#   The verdict file is then removed (`rm -f`, one file). A refusal or a park
+#   write failure leaves it in place and writes nothing on stdout.
+#
 # EXIT CODES
 #
 #   prescan  0  no path has a hit
@@ -134,6 +155,11 @@
 #            2  any `plan` exit 2; nothing unsafe (`park: nothing to park`,
 #               nothing written); a flagged answer with no question_<k>.md
 #               beside it (nothing written or removed); any write failure
+#   verdict  0  SAFE
+#            1  UNSAFE or malformed, parked or discarded
+#            2  bad usage; stateDir unresolvable; <verdict-file> missing or
+#               resolving outside `<stateDir>/scratch/`; <path> absent or
+#               unreadable; any park write failure. Never prints SAFE.
 #   any other verb  2  the usage error.
 #   Every exit 2 prints one `prompt-injection-screen: <cause>` line on stderr.
 #
@@ -165,7 +191,8 @@ fi
 
 PIS_USAGE='usage: prompt-injection-screen.sh prescan --repo <dir> <repo-relative path>…
        prompt-injection-screen.sh plan --repo <dir> --branch <branch> --engine task|user_review|docs
-       prompt-injection-screen.sh park --repo <dir> --branch <branch> --engine task|user_review|docs'
+       prompt-injection-screen.sh park --repo <dir> --branch <branch> --engine task|user_review|docs
+       prompt-injection-screen.sh verdict --repo <dir> --branch <branch> --engine task|user_review|docs --path <screened path> --verdict-file <repo-relative file>'
 
 pis_usage() {
   printf 'prompt-injection-screen: %s\n%s\n' "$1" "$PIS_USAGE" >&2
@@ -892,6 +919,135 @@ $findings
 EOF
 }
 
+# MIRROR OF plugin/agents/prompt-injection-reviewer.md → ## The checks: an id
+# changed there is changed here, in that table's order.
+PI_CHECK_IDS="destructive-intent attack authority-claim unrelated-request foreign-execution web-download secret-access harness-weakening run-mode-abuse backdoor supply-chain outside-checkout hidden-instruction pressure"
+
+PIS_MALFORMED_REASON="the screen's verdict did not match its closed format"
+
+pis_is_check_id() {
+  case "${1-}" in ''|*[!a-z-]*) return 1 ;; esac
+  case " $PI_CHECK_IDS " in
+    *" $1 "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Parse the verdict lines in PIS_VLINES (non-blank, fence stripped). Set
+# PIS_VERDICT to SAFE, UNSAFE or MALFORMED and append one findings record per
+# `finding:` line to PIS_VFINDINGS, for <path> <sha>.
+pis_parse_verdict() {
+  local path="$1" sha="$2" i=1 rest id mid ex rs
+  PIS_VERDICT=MALFORMED
+  PIS_VFINDINGS=""
+  [ "${#PIS_VLINES[@]}" -gt 0 ] || return 0
+  case "${PIS_VLINES[0]}" in
+    'verdict: SAFE')
+      [ "${#PIS_VLINES[@]}" -eq 1 ] && PIS_VERDICT=SAFE
+      return 0
+      ;;
+    'verdict: UNSAFE') [ "${#PIS_VLINES[@]}" -gt 1 ] || return 0 ;;
+    *) return 0 ;;
+  esac
+  while [ "$i" -lt "${#PIS_VLINES[@]}" ]; do
+    case "${PIS_VLINES[$i]}" in
+      'finding: '*) rest=${PIS_VLINES[$i]#finding: } ;;
+      *) PIS_VFINDINGS=""; return 0 ;;
+    esac
+    case "$rest" in *' | '*' | '*) ;; *) PIS_VFINDINGS=""; return 0 ;; esac
+    id=${rest%%' | '*}
+    mid=${rest#*' | '}
+    ex=${mid%' | '*}
+    rs=${mid##*' | '}
+    if ! pis_is_check_id "$id" || [ -z "$ex" ] || [ -z "$rs" ]; then
+      PIS_VFINDINGS=""
+      return 0
+    fi
+    ex=${ex//$PIS_TAB/ }
+    rs=${rs//$PIS_TAB/ }
+    PIS_VFINDINGS="$PIS_VFINDINGS$path$PIS_TAB$sha$PIS_TAB$id$PIS_TAB$PIS_TAB$ex$PIS_TAB$rs$PIS_NL"
+    i=$((i + 1))
+  done
+  PIS_VERDICT=UNSAFE
+}
+
+pis_verdict() {
+  local repo="" branch="" engine="" path="" vfile="" scratch vf_abs path_abs sha line n out
+  local raw ex
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --repo|--branch|--engine|--path|--verdict-file)
+        [ "$#" -ge 2 ] || pis_usage "$1 needs a value"
+        case "$1" in
+          --repo) repo="$2" ;;
+          --branch) branch="$2" ;;
+          --engine) engine="$2" ;;
+          --path) path="$2" ;;
+          --verdict-file) vfile="$2" ;;
+        esac
+        shift 2
+        ;;
+      *) pis_usage "unknown argument '$1'" ;;
+    esac
+  done
+  [ -n "$path" ] || pis_usage "--path is required"
+  [ -n "$vfile" ] || pis_usage "--verdict-file is required"
+  pis_run_args --repo "$repo" --branch "$branch" --engine "$engine"
+
+  scratch=$(cd -P -- "$PIS_REPO_ABS/$PIS_SD/scratch" 2>/dev/null && pwd -P) \
+    || pis_fault "verdict: no $PIS_SD/scratch directory under --repo"
+  pis_resolve "$PIS_REPO_ABS" "$vfile"
+  vf_abs="$PIS_RESOLVED"
+  case "$vf_abs" in
+    "$scratch"/*) ;;
+    *) pis_fault "verdict: '$vfile' resolves outside $PIS_SD/scratch/" ;;
+  esac
+  pis_resolve "$PIS_REPO_ABS" "$path"
+  path_abs="$PIS_RESOLVED"
+  sha=$(pis_sha256 "$path_abs") || pis_fault "cannot hash '$path'"
+
+  PIS_VLINES=()
+  n=0
+  while IFS= read -r line || [ -n "$line" ]; do
+    [ -n "${line//[[:space:]]/}" ] || continue
+    PIS_VLINES[$n]="$line"
+    n=$((n + 1))
+  done < "$vf_abs" || pis_fault "verdict: cannot read '$vfile'"
+  # One surrounding fence: an opener line of three backticks (an info string
+  # allowed) and a closer of exactly three, around the whole text.
+  if [ "$n" -ge 2 ]; then
+    case "${PIS_VLINES[0]}" in
+      '```'*)
+        if [ "${PIS_VLINES[$((n - 1))]}" = '```' ]; then
+          PIS_VLINES=("${PIS_VLINES[@]:1:$((n - 2))}")
+        fi
+        ;;
+    esac
+  fi
+
+  pis_parse_verdict "$path" "$sha"
+  if [ "$PIS_VERDICT" = SAFE ]; then
+    rm -f -- "$vf_abs" || pis_fault "verdict: cannot remove '$vfile'"
+    printf 'verdict: SAFE %s sha256 %s\n' "$path" "$sha"
+    return 0
+  fi
+  if [ "$PIS_VERDICT" = MALFORMED ]; then
+    raw=$(head -c 1024 -- "$vf_abs") || raw=""
+    ex=$(pis_excerpt "$raw")
+    PIS_VFINDINGS="$path$PIS_TAB$sha${PIS_TAB}malformed-verdict$PIS_TAB$PIS_TAB$ex$PIS_TAB$PIS_MALFORMED_REASON$PIS_NL"
+  fi
+
+  # A write failure exits the substitution's subshell only, having printed its
+  # cause: the verdict file stays for a retry and nothing reaches stdout.
+  out=$(pis_park_write "$PIS_REPO_ABS" "$PIS_SD" "$PIS_BRANCH" <<EOF
+$PIS_VFINDINGS
+EOF
+) || exit 2
+  rm -f -- "$vf_abs" || printf 'prompt-injection-screen: verdict: cannot remove %s\n' "$vfile" >&2
+  printf 'verdict: UNSAFE\n%s\n' "$out"
+  return 1
+}
+
 [ "$#" -gt 0 ] || pis_usage "missing verb"
 pis_verb="$1"
 shift
@@ -899,6 +1055,6 @@ case "$pis_verb" in
   prescan) pis_prescan "$@"; exit $? ;;
   plan) pis_plan "$@"; exit $? ;;
   park) pis_park "$@"; exit $? ;;
-  verdict) pis_usage "verb '$pis_verb' is not available in this copy" ;;
+  verdict) pis_verdict "$@"; exit $? ;;
   *) pis_usage "unknown verb '$pis_verb'" ;;
 esac
