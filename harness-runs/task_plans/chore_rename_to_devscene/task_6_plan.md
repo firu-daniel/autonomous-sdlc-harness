@@ -27,6 +27,7 @@
 - [ ] `cleanup-merged-worktrees.sh` (the two `run-profiles` comments), `create-worktree.sh` (the two `npx devscene doctor` echo lines), `flow-walker.sh` (*"re-run devscene init"*), `prompt-injection-screen.sh` (the REPRO header line and the three `/devscene:branch-status` / `/devscene:branch-*` texts in the park message).
 - [ ] The `# Written by \`devscene init\`, and yours from there on …` header line of `deploy.sh`, `start-dev-server.sh`, `test.sh` and `typecheck.sh`, and `npx devscene init --force` in `scripts/README.md`'s fenced block.
 - [ ] Parse each edited `.sh` file with `bash -n <file>`, one plain command per file.
+  - **Deviations from plan:** Evidence downgrade: each of the ten plain `bash -n /…/cli/templates/scripts/<file>.sh` calls was refused by the tool layer ("Permission to use Bash has been denied because Claude Code is running in don't ask mode"). The parse claim rests instead on `bash scripts/typecheck.sh`, whose first step `scripts/check-shell-parse.sh` parses every `*.sh` path `git ls-files --cached --others --exclude-standard` lists (its header, point 1), the ten edited templates included: it printed `check-shell-parse: 124 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed` then `PASS: typecheck`.
 
 **Verification:**
 

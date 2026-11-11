@@ -34,7 +34,7 @@
 # an ignored `SIGINT`, so an `INT` passed on as itself would never arrive.
 #
 # MIRRORS — a change to any owner below is an edit here too:
-#   `retrieval/runtime` and `node_modules/autonomous-sdlc-harness/dist/cli.js`
+#   `retrieval/runtime` and `node_modules/devscene/dist/cli.js`
 #     mirror `RETRIEVAL_CACHE_DIRNAME`, `RETRIEVAL_RUNTIME_DIRNAME` and
 #     `RUNTIME_CLI_RELATIVE` in `cli/src/retrieval/runtime.ts`;
 #   `hr_cache_dir` mirrors `machineCacheDir()` in `cli/src/machine/paths.ts`;
@@ -81,14 +81,14 @@ elif [ "$config_status" -eq 0 ] && hr_docs_retrieval_applies "$root"; then
   backend_status=0
   backend="$(hr_docs_retrieval_backend "$root")" || backend_status=$?
   if [ "$backend_status" -ne 0 ]; then
-    echo "docs-search-server: docs.retrievalBackend in $root/harness.config.json is neither \`typescript\` nor \`python\`; set one of them, then run \`npx autonomous-sdlc-harness doctor\`" >&2
+    echo "docs-search-server: docs.retrievalBackend in $root/harness.config.json is neither \`typescript\` nor \`python\`; set one of them, then run \`npx devscene doctor\`" >&2
     exit 1
   fi
 fi
 
 if [ "$backend" = python ]; then
   if ! command -v harness-docs-retrieval >/dev/null 2>&1; then
-    echo "docs-search-server: the Python backend is selected but \`harness-docs-retrieval\` does not resolve on PATH (interpreter or package missing); see docs/retrieval.md and run \`npx autonomous-sdlc-harness doctor\`" >&2
+    echo "docs-search-server: the Python backend is selected but \`harness-docs-retrieval\` does not resolve on PATH (interpreter or package missing); see docs/retrieval.md and run \`npx devscene doctor\`" >&2
     exit 3
   fi
   if [ -z "${HARNESS_DOCS_RETRIEVAL_DATABASE_URL-}" ]; then
@@ -117,7 +117,7 @@ if [ "$backend" = python ]; then
   if [ "$child_status" -eq 0 ]; then
     exit 0
   fi
-  echo "docs-search-server: the Python backend exited with status $child_status before or while serving; the line above (\`harness-docs-retrieval: …\`) names why; run \`npx autonomous-sdlc-harness doctor\`" >&2
+  echo "docs-search-server: the Python backend exited with status $child_status before or while serving; the line above (\`harness-docs-retrieval: …\`) names why; run \`npx devscene doctor\`" >&2
   exit 3
 fi
 
@@ -125,10 +125,10 @@ if ! cache_dir="$(hr_cache_dir)"; then
   echo "docs-search-server: neither XDG_CACHE_HOME nor HOME is set, so the retrieval runtime cannot be located" >&2
   exit 1
 fi
-entry="$cache_dir/retrieval/runtime/node_modules/autonomous-sdlc-harness/dist/cli.js"
+entry="$cache_dir/retrieval/runtime/node_modules/devscene/dist/cli.js"
 
 if [ ! -f "$entry" ]; then
-  echo "docs-search-server: no retrieval runtime at $entry; run \`npx autonomous-sdlc-harness init\` in a repository with docs.retrieval on" >&2
+  echo "docs-search-server: no retrieval runtime at $entry; run \`npx devscene init\` in a repository with docs.retrieval on" >&2
   exit 1
 fi
 

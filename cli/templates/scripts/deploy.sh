@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Written by `autonomous-sdlc-harness init`, and yours from there on: edit it freely, a re-run
+# Written by `devscene init`, and yours from there on: edit it freely, a re-run
 # keeps your copy. It is what `deploy.command` invokes: it runs the raw deploy command line below
 # from the repository root, forwards whatever arguments it was given to it — a target or
 # environment selector — and prints one verdict line.
