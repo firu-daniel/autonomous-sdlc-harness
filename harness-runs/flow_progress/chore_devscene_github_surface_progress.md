@@ -13,7 +13,7 @@ Source: harness-runs/task_prompts/chore_devscene_github_surface_task_prompt.md â
   - screened: harness-runs/clarifications/chore_devscene_github_surface/answer_2.md sha256=133de8ef99bd7747536b16494490a581b729f3c5ce9ebad5f2b79279e43115cc
 - [x] P1. Task plan converged (business_parity + architecture + task-plan-reviewer all PASS)
 - [-] P2. UI-test plan converged (ui-tests-plan-reviewer PASS) â€” or no_ui
-- [ ] P3. Plans committed & pushed (story index + per-task dir + UI-test plan)
+- [x] P3. Plans committed & pushed (story index + per-task dir + UI-test plan)
 
 ## Implementation
 - [ ] A.      Tasks implemented (story-index readiness all [x])
