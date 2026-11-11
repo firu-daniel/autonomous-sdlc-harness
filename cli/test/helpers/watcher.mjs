@@ -324,7 +324,7 @@ export async function createWatcherFixture(t, { branch = 'feat_x', runAnalytics 
   const watcherPath = join(dir, WATCHER_PATH);
   /** The environment a pass runs under: recorders in, the usage gate, stall check and cleanup out. */
   const watcherEnv = (env = {}) => ({
-    HARNESS_AGENT_CLI: stubPath,
+    DEVSCENE_AGENT_CLI: stubPath,
     CLAR: clarDir,
     AUTO_TAIL_TERMINAL: '0',
     USAGE_CHECK_ENABLED: '0',

@@ -362,7 +362,7 @@
 # `$RUNNER_TEMP`, because the machine lane is off in a job and a hosted
 # runner's lane directory would not outlive it.
 #
-# THE AGENT BINARY IS REACHED THROUGH ONE VARIABLE, `${HARNESS_AGENT_CLI:-claude}`,
+# THE AGENT BINARY IS REACHED THROUGH ONE VARIABLE, `${DEVSCENE_AGENT_CLI:-claude}`,
 # resolved once below. It defaults to the real CLI, so an operator sees no
 # difference. It exists so the launch and exit-classification paths can be
 # exercised against a STUB that prints a canned `stream-json` transcript and
@@ -446,7 +446,7 @@
 #     SESSION_ENV_BASE (this file's, with its LC_ and GCM_ prefixes) nor the
 #     main checkout's `sandbox.passEnv` (`hr_session_pass_env`) is removed too.
 #     A job skips it: a job's environment is the runner's, not a person's shell.
-#   * HARNESS_MAIN_REPO and CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS always reach
+#   * DEVSCENE_MAIN_REPO and CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS always reach
 #     the session with the launch's values: the head exports both after its
 #     `unset`, which removes an inherited copy of either.
 #   * BOTH SETS ARE READ, AND A FAILED READ REFUSED, in spawn_engine's own shell
@@ -528,13 +528,13 @@
 #     checkout as both the main one and the working copy; run by accident in a
 #     developer's checkout it would discard work. Only the workflow sets it.
 #   * THE WATCHDOG'S RESET IS GATED ON THE JOB SURFACES. Before it, the job runs
-#     `npx --yes devscene@$HARNESS_CLI_VERSION doctor --cwd
+#     `npx --yes devscene@$DEVSCENE_CLI_VERSION doctor --cwd
 #     <checkout> --job-surfaces=<default branch>@<commit>@<base>` from a fresh
 #     empty temporary directory, never from the checkout, whose `.npmrc` and
 #     `node_modules` the session can write. The branch, commit and base are
 #     HARNESS_GITHUB_DEFAULT_BRANCH, HARNESS_GITHUB_DEFAULT_COMMIT and
 #     HARNESS_DEFAULT_BRANCH_COMMIT, recorded by devscene-run.yml before any
-#     session ran, so no ref the session could move is the base. A non-zero exit, or any of those values or HARNESS_CLI_VERSION
+#     session ran, so no ref the session could move is the base. A non-zero exit, or any of those values or DEVSCENE_CLI_VERSION
 #     empty, gives the run up as `failed`.
 #   * OFF: the inbox pass, the cleanup sweep, the live-log window, and the
 #     machine lane (both halves). The lane is local-only, and on a hosted runner
@@ -737,7 +737,7 @@
 #                    and the file is still there afterwards
 #   vanished pid  printf '%s' '{"runs":{"feat_x":{"status":"running","pid":999999}}}' > "$r"
 #                 -> tick reconciles feat_x to `failed` and fires ONE `failed`
-#                    notification (point HARNESS_PUSH_CMD at a recorder to see it)
+#                    notification (point DEVSCENE_PUSH_CMD at a recorder to see it)
 #   live pid      the same record with this shell's own $$ -> it stays `running`
 #   the count     bash -c '. "$1" status >/dev/null; running_count' _ \
 #                   "$d/scripts/autonomous-watcher.sh"
@@ -754,7 +754,7 @@
 #                    remove the file and it is 15 again
 #   a launch      s="$w/stub"; printf '#!/bin/sh\nprintf %%s\\\\n "{\\"type\\":\\"result\\"}"\nexit 0\n' >"$s"
 #                 chmod +x "$s"
-#                 HARNESS_AGENT_CLI="$s" bash -c \
+#                 DEVSCENE_AGENT_CLI="$s" bash -c \
 #                   '. "$1" status >/dev/null; launch_run feat_x "$2" "$3" task; wait' \
 #                   _ "$d/scripts/autonomous-watcher.sh" "$d" \
 #                   "$d/sdlc-harness/autonomous_logs/feat_x.log"
@@ -806,7 +806,7 @@
 #                 create-worktree.sh's REPRO), then
 #                 printf 'do the thing\n' > \
 #                   "$d/sdlc-harness/autonomous_inbox/feat_x_task_prompt.md"
-#                 HARNESS_AGENT_CLI="$s" bash "$d/scripts/autonomous-watcher.sh" tick
+#                 DEVSCENE_AGENT_CLI="$s" bash "$d/scripts/autonomous-watcher.sh" tick
 #                 -> a working copy at "$w/demo-feat_x" checked out on feat_x,
 #                    the prompt at sdlc-harness/task_prompts/feat_x_task_prompt.md
 #                    inside it, `git -C "$w/demo-feat_x" log -1` showing
@@ -842,7 +842,7 @@
 #                 with a LIVE `running` record it is archived as dup_<ts>_…
 #   no sandbox    `a drop`, with the sourced probe overridden to report a
 #                 missing piece:
-#                   HARNESS_AGENT_CLI="$s" bash -c '. "$1" status >/dev/null
+#                   DEVSCENE_AGENT_CLI="$s" bash -c '. "$1" status >/dev/null
 #                     hr_sandbox_prereq_probe_var() { HR_SANDBOX_MISSING="bwrap socat"
 #                       HR_SANDBOX_REFUSAL="needs bubblewrap"; return 1; }
 #                     tick; wait' _ "$d/scripts/autonomous-watcher.sh"
@@ -855,7 +855,7 @@
 #                 question_2.md and question_3.md under
 #                 "$d/sdlc-harness/clarifications/feat_x/", write answer_1.md and
 #                 answer_2.md there
-#                 HARNESS_AGENT_CLI="$s" bash "$d/scripts/autonomous-watcher.sh" tick
+#                 DEVSCENE_AGENT_CLI="$s" bash "$d/scripts/autonomous-watcher.sh" tick
 #                 -> nothing happens: the record stays `parked`. Write answer_3.md
 #                    and tick again -> the record goes `running` with
 #                    resumed_for_index "1 2 3", ONE `resumed` notification, and
@@ -1000,7 +1000,7 @@
 #                    The record half above is driven independently with
 #                    USAGE_LANE_STATE_ENABLED
 #   a job         j="$d/sdlc-harness/autonomous_logs/remote_status.json"
-#                 HARNESS_AGENT_CLI="$s" POLL_INTERVAL_SECS=1 bash \
+#                 DEVSCENE_AGENT_CLI="$s" POLL_INTERVAL_SECS=1 bash \
 #                   "$d/scripts/autonomous-watcher.sh" job feat_x task none
 #                 -> exit 2 and no stub launch; again with HARNESS_JOB_MODE=1 ->
 #                    `job: completed stop` as the last line, exit 0, "$j" with
@@ -1016,7 +1016,7 @@
 #                    under HARNESS_INPUT_CHAIN=2 the rewritten "$j" says chain "2"
 #                    and auto_resumes "2"; under HARNESS_INPUT_CHAIN=0,
 #                    auto_resumes "0". Kill the job's process group mid-run -> "$j"
-#                    stays at `running` / `continue`. Point HARNESS_GH_CLI at a
+#                    stays at `running` / `continue`. Point DEVSCENE_GH_CLI at a
 #                    stub (see remote-run.sh's REPRO) and use a stub agent that
 #                    writes "$d/sdlc-harness/PAUSE_ACK" once PAUSE appears:
 #                    REMOTE_SELF_PAUSE_AFTER_SECS=1 -> `job: paused continue`,
@@ -1040,7 +1040,7 @@
 #   remote drop  `a drop`'s fixture, with "$d"'s own files committed and pushed
 #                 to origin's default branch, `"execution":{"target":
 #                 "github-actions"}` in its harness.config.json, and
-#                 HARNESS_GH_CLI pointed at a recorder (see remote-run.sh's
+#                 DEVSCENE_GH_CLI pointed at a recorder (see remote-run.sh's
 #                 REPRO); drop feat_x_task_prompt.md and tick
 #                 -> the prompt committed and pushed as in `a drop`, ONE
 #                    `workflow run devscene-run.yml --ref feat_x … -f engine=task
@@ -1365,7 +1365,7 @@ AGENT_MODEL="$(hr_agent_model "$MAIN_REPO")" || AGENT_MODEL=""
 # The binary a run is launched with — see the header. Resolved ONCE, here, so
 # there is exactly one place a test can point at a stub and exactly one place to
 # look when asking what this watcher actually executes.
-AGENT_CLI="${HARNESS_AGENT_CLI:-claude}"
+AGENT_CLI="${DEVSCENE_AGENT_CLI:-claude}"
 # THE SPELLING OF THESE THREE IS MEASURED, NOT ASSUMED.
 # Measured on Claude Code 2.1.274, plugin `devscene 0.1.0` (per
 # `claude plugin details devscene@devscene`), from a
@@ -3095,7 +3095,7 @@ EOF
 # MIRROR OF `cli/src/remote/githubActions.ts` → `PUSH_URL_SECRET` and
 # `GIT_TOKEN_SECRET`, byte for byte: a rename there is an edit here, and these
 # two values are the only code spelling of either name in this file.
-SESSION_ENV_STRIP_EXTRA="HARNESS_PUSH_URL HARNESS_GIT_TOKEN"
+SESSION_ENV_STRIP_EXTRA="DEVSCENE_PUSH_URL DEVSCENE_GIT_TOKEN"
 #
 # SESSION_ENV_BASE — the names a LOCAL session keeps without `sandbox.passEnv`,
 # plus every name beginning `LC_` or `GCM_` (session_env_kept).
@@ -3130,8 +3130,8 @@ SESSION_ENV_STRIP_EXTRA="HARNESS_PUSH_URL HARNESS_GIT_TOKEN"
 #         cli/templates/scripts/lib/
 #     run in the harness repository, keeping each name a session's tree reads
 #     and none of the strip set: HARNESS_DOCS_RETRIEVAL_DATABASE_URL. Its other
-#     hits are HARNESS_MAIN_REPO, which the launch exports itself, the strip
-#     set's HARNESS_PR_TOKEN and HARNESS_GIT_TOKEN, and two job-only names the
+#     hits are DEVSCENE_MAIN_REPO, which the launch exports itself, the strip
+#     set's HARNESS_PR_TOKEN and DEVSCENE_GIT_TOKEN, and two job-only names the
 #     watcher's own passes read.
 SESSION_ENV_BASE="PATH HOME USER LOGNAME SHELL TMPDIR TERM LANG TZ \
 XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME XDG_DATA_HOME XDG_RUNTIME_DIR \
@@ -3161,7 +3161,7 @@ session_env_kept() {
 # The flag string, in full:
 #
 #   unset <the strip set> [<every other exported name outside the allow-list>]
-#   export HARNESS_MAIN_REPO=<MAIN_REPO>
+#   export DEVSCENE_MAIN_REPO=<MAIN_REPO>
 #   export CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0
 #   exec <agent cli> -p "<trusted instruction naming the artifact's FILE PATH>" \
 #     --settings <per-run copy> \
@@ -3188,7 +3188,7 @@ session_env_kept() {
 # header): the strip set in both modes and, bracketed, the allow-list's
 # removals on a local run. The two exports follow it, so the engine and every
 # command it runs inherit them whatever it removed; the plugin's readers read
-# HARNESS_MAIN_REPO with a bare `printenv HARNESS_MAIN_REPO`, and no outer-loop
+# DEVSCENE_MAIN_REPO with a bare `printenv DEVSCENE_MAIN_REPO`, and no outer-loop
 # script reads it, because an assignment prefix on an excluded call could set
 # it.
 # On the `exec` line the bracketed tail is JOB MODE ONLY: one --add-dir per
@@ -3635,7 +3635,7 @@ EOF
     {
       keep_awake_start "$branch" "$(exec sh -c 'echo "$PPID"')" </dev/null >/dev/null 2>&1
       unset -v ${session_unset_names[@]+"${session_unset_names[@]}"} 2>/dev/null
-      export HARNESS_MAIN_REPO="$MAIN_REPO"
+      export DEVSCENE_MAIN_REPO="$MAIN_REPO"
       export CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0
       exec "$launch_agent_cli" -p "$launch_prompt" \
         --settings "$settings_file" \
@@ -3887,7 +3887,7 @@ EOF
 # runs under always() after the job's last session and pushes every commit the
 # job made, this one included, so a push here would only repeat it.
 #
-# --main-repo is passed because run-analytics.sh reads no HARNESS_MAIN_REPO
+# --main-repo is passed because run-analytics.sh reads no DEVSCENE_MAIN_REPO
 # (see the header above spawn_engine); it is the same value.
 record_run_analytics() {
   local branch="$1" worktree="$2" log_path="$3"
@@ -4690,15 +4690,15 @@ stall_human_time() {
 # cannot change.
 stall_job_surfaces_ok() {
   local scratch rc=0
-  if [ -z "${HARNESS_CLI_VERSION:-}" ] || [ -z "${HARNESS_GITHUB_DEFAULT_BRANCH:-}" ] ||
+  if [ -z "${DEVSCENE_CLI_VERSION:-}" ] || [ -z "${HARNESS_GITHUB_DEFAULT_BRANCH:-}" ] ||
     [ -z "${HARNESS_GITHUB_DEFAULT_COMMIT:-}" ] || [ -z "${HARNESS_DEFAULT_BRANCH_COMMIT:-}" ] || [ -z "$MAIN_REPO" ]; then
-    echo "stall-watchdog: the job-surfaces check needs HARNESS_CLI_VERSION, HARNESS_GITHUB_DEFAULT_BRANCH, HARNESS_GITHUB_DEFAULT_COMMIT, HARNESS_DEFAULT_BRANCH_COMMIT and MAIN_REPO set" >&2
+    echo "stall-watchdog: the job-surfaces check needs DEVSCENE_CLI_VERSION, HARNESS_GITHUB_DEFAULT_BRANCH, HARNESS_GITHUB_DEFAULT_COMMIT, HARNESS_DEFAULT_BRANCH_COMMIT and MAIN_REPO set" >&2
     return 1
   fi
   scratch="$(mktemp -d "${TMPDIR:-/tmp}/watcher-job-surfaces.XXXXXX")" || return 1
   # Never from MAIN_REPO: npm reads a project `.npmrc` there and npx prefers a local
   # node_modules copy, both of which the session can write. `--cwd` still names the checkout.
-  (cd "$scratch" && npx --yes "devscene@$HARNESS_CLI_VERSION" doctor --cwd "$MAIN_REPO" --job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH@$HARNESS_GITHUB_DEFAULT_COMMIT@$HARNESS_DEFAULT_BRANCH_COMMIT") || rc=$?
+  (cd "$scratch" && npx --yes "devscene@$DEVSCENE_CLI_VERSION" doctor --cwd "$MAIN_REPO" --job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH@$HARNESS_GITHUB_DEFAULT_COMMIT@$HARNESS_DEFAULT_BRANCH_COMMIT") || rc=$?
   rm -rf "$scratch"
   return "$rc"
 }
