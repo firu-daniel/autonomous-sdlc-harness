@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Caller-agnostic pre-push BACKSTOP, written by `autonomous-sdlc-harness init` into the
+# Caller-agnostic pre-push BACKSTOP, written by `devscene init` into the
 # configured `githooksDir` - which init then points `core.hooksPath` at, so the hook
 # travels with the checkout. Yours from there on: edit it freely, a re-run keeps your copy.
 #

@@ -55,7 +55,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_rename_to_devscene/task_<K
 
 1. [x] **Task 1** — Rename the identity constants and the package manifest: `PLUGIN_NAME`, `MARKETPLACE_NAME`, `MACHINE_DIR_NAME`, the launchd label, `KEEP_AWAKE_WHO`, `RUNTIME_CLI_RELATIVE`, the `.gitignore` block header, `cli/package.json` and `cli/NOTICE` _(layer: cli)_ _(points: 15)_
 2. [x] **Task 2** — Respell every remaining `cli/src` string and comment _(layer: cli)_ _(points: 20)_
-3. [ ] **Task 3** — Respell the non-script templates, the daemon unit templates and `cli/README.md` _(layer: cli)_ _(points: 15)_
+3. [x] **Task 3** — Respell the non-script templates, the daemon unit templates and `cli/README.md` _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — Respell the four workflow templates and the two suites that pin them _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 5** — Respell the watcher, `remote-run.sh`, the notifier and `restart-watcher.sh` templates _(layer: cli)_ _(points: 20)_
 6. [ ] **Task 6** — Respell the shared run library and the remaining script templates _(layer: cli)_ _(points: 15)_

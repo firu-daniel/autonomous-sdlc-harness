@@ -1,6 +1,6 @@
 # QA test scenarios
 
-_Written once by `autonomous-sdlc-harness init`, and yours from there on: a checked-in file like any
+_Written once by `devscene init`, and yours from there on: a checked-in file like any
 other — edit it, review it, and a re-run keeps your copy. The harness keeps no private copy of it and
 reads nothing in its place, so what you write here is what the agents that plan and run the
 interactive test phase act on._

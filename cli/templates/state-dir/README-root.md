@@ -10,4 +10,4 @@ Some of the harness's state deliberately lives **outside** this tree, so looking
 
 Each directory here carries its own `README.md` naming what a file in it is and who writes it, so the contract lives beside the artifacts rather than in a central index that drifts from them. That README is also what settles whether a directory's ignore rule needs a negation: a directory that has one is ignored by its **contents** plus a negation for that single file, never as a directory, because git cannot re-include a file whose parent directory is excluded. The rule belongs to the generator that writes this repository's ignore file, in the managed block `init` maintains there — not to the tree.
 
-_Written by `autonomous-sdlc-harness init`, and yours from there on: edit it freely, a re-run keeps your copy._
+_Written by `devscene init`, and yours from there on: edit it freely, a re-run keeps your copy._

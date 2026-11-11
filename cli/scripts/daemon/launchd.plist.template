@@ -3,7 +3,7 @@
 <!--
   User LaunchAgent for the autonomous run watcher of {{projectName}}.
 
-  Rendered by `autonomous-sdlc-harness daemon install`, which writes it to
+  Rendered by `devscene daemon install`, which writes it to
   ~/Library/LaunchAgents/{{label}}.plist and loads it with `launchctl bootstrap gui/<uid>`.
   It is a per-user agent and never a system daemon: it runs as the account that installed it, and
   so has that account's keychain and agent-runner credentials, which is exactly what an unattended
