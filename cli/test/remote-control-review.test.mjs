@@ -3,7 +3,7 @@
  * branch's next user-review round through the `review` verb the local relay uses.
  *
  * **The rule these tests exist to enforce: only a review requesting changes, by a write-or-admin
- * reviewer `HARNESS_RUN_ACTORS` admits, on a recognised same-repository harness branch carrying a story index, starts a round; the
+ * reviewer `DEVSCENE_RUN_ACTORS` admits, on a recognised same-repository harness branch carrying a story index, starts a round; the
  * round collects every review requesting changes, every other submitted review carrying a summary, and
  * every inline comment since the previous round, by
  * every authorised author, each review's body under its own `## Review by @<login>` section and each
@@ -18,7 +18,7 @@
  * The fixture is `remote-control.test.mjs`'s — `init`, `execution.target` `github-actions`, `forge`
  * `github`, the adopted tree pushed to the fixture's bare `origin`, and `feat_x` pushed carrying its task
  * prompt and its flow-progress ledger — plus `feat_x`'s story index. `gh` is a stub reached through
- * `HARNESS_GH_CLI`: it logs each argument vector with the content of any `body=@<path>`, answers the
+ * `DEVSCENE_GH_CLI`: it logs each argument vector with the content of any `body=@<path>`, answers the
  * paginated `pulls/<n>/comments` and `pulls/<n>/reviews` listings from `STUB_PR_COMMENTS` and
  * `STUB_PR_REVIEWS` (raw API objects, one page each), the permission call per login from
  * `STUB_PERMISSIONS`, `run list` from `STUB_RUN_LIST` (by default one completed
@@ -183,7 +183,7 @@ async function reviewFixture(t) {
         sender: { login, type },
       }));
       return runBash(dir, [SCRIPT, 'control'], {
-        HARNESS_GH_CLI: stub,
+        DEVSCENE_GH_CLI: stub,
         STUB_LOG: log,
         GITHUB_EVENT_NAME: 'pull_request_review',
         GITHUB_EVENT_PATH: eventPath,
@@ -191,10 +191,10 @@ async function reviewFixture(t) {
         GITHUB_SERVER_URL: 'https://github.com',
         GITHUB_RUN_ID: '',
         RUNNER_TEMP: runnerTemp,
-        HARNESS_REMOTE_STOP: '',
-        HARNESS_TRIGGER_ALLOWED_BOTS: '',
-        HARNESS_RUN_ACTORS: '*',
-        HARNESS_TRIGGER_LABEL: '',
+        DEVSCENE_REMOTE_STOP: '',
+        DEVSCENE_TRIGGER_ALLOWED_BOTS: '',
+        DEVSCENE_RUN_ACTORS: '*',
+        DEVSCENE_TRIGGER_LABEL: '',
         STUB_PERMISSIONS: JSON.stringify({ alice: 'write' }),
         STUB_PRS: '',
         STUB_PR_COMMENTS: '',
@@ -511,12 +511,12 @@ test('a read reviewer is refused with a reply, and nothing is pushed', async (t)
   await assertRefused(f, result, before, /permission of @alice as read/);
 });
 
-test('a review by a writer HARNESS_RUN_ACTORS does not admit places no round and is refused naming the list', async (t) => {
+test('a review by a writer DEVSCENE_RUN_ACTORS does not admit places no round and is refused naming the list', async (t) => {
   const f = await reviewFixture(t);
   const before = await f.originRefs();
-  const result = await f.control({}, { HARNESS_RUN_ACTORS: 'carol' });
-  const reply = await assertRefused(f, result, before, /@alice is not on the repository variable HARNESS_RUN_ACTORS/);
-  assert.match(reply.body, /whom the repository variable `HARNESS_RUN_ACTORS` admits/);
+  const result = await f.control({}, { DEVSCENE_RUN_ACTORS: 'carol' });
+  const reply = await assertRefused(f, result, before, /@alice is not on the repository variable DEVSCENE_RUN_ACTORS/);
+  assert.match(reply.body, /whom the repository variable `DEVSCENE_RUN_ACTORS` admits/);
 });
 
 test('a head carrying neither a task prompt nor a ledger is refused as not a harness branch', async (t) => {

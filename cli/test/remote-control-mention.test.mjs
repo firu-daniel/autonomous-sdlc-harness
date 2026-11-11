@@ -16,7 +16,7 @@
  *
  * The fixture is `remote-control.test.mjs`'s shape, carried file-locally as each control suite carries
  * its own: `init`, `execution.target` `github-actions`, `forge` `github`, `feat_x` pushed with its task
- * prompt and ledger, and `gh` a stub through `HARNESS_GH_CLI` that also records, per call, whether
+ * prompt and ledger, and `gh` a stub through `DEVSCENE_GH_CLI` that also records, per call, whether
  * `IN_OAUTH`, `IN_API`, `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` is set, and answers the item read
  * with `STUB_ITEM` and `pr diff` with `STUB_PR_DIFF` (`FAIL` fails it). A diff over the per-string
  * bound travels as the path `STUB_PR_DIFF_FILE` instead: Linux's per-string `MAX_ARG_STRLEN` refused it
@@ -24,7 +24,7 @@
  * fault: `remote-run.sh` → `control_mention_context_extra` keeps the diff in the unexported `GH_OUT`
  * and writes it to `diff.patch` with the builtin `printf`, so no argument or environment value carries
  * it. The agent is a stub
- * through `HARNESS_AGENT_CLI` that logs its argv, cwd, the files under its cwd and which of `GH_TOKEN`,
+ * through `DEVSCENE_AGENT_CLI` that logs its argv, cwd, the files under its cwd and which of `GH_TOKEN`,
  * `CLAUDE_CODE_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` it sees, then prints `STUB_AGENT_OUTPUT` and exits
  * `STUB_AGENT_EXIT`. `HARNESS_MENTION_PLUGIN_DIR` is a throwaway directory under the fixture; no case
  * reads the real `plugin/` tree, runs a real session or reaches the network.
@@ -217,7 +217,7 @@ async function controlFixture(t, settings = {}) {
       const issue = { number, ...(pr ? { pull_request: { url: `https://api.github.com/repos/${REPOSITORY}/pulls/${number}` } } : {}) };
       writeFileSync(eventPath, JSON.stringify({ action: 'created', comment: { body }, issue, sender: { login, type: 'User' } }));
       return runBash(dir, [SCRIPT, 'control'], {
-        HARNESS_GH_CLI: gh,
+        DEVSCENE_GH_CLI: gh,
         STUB_LOG: log,
         GITHUB_EVENT_NAME: 'issue_comment',
         GITHUB_EVENT_PATH: eventPath,
@@ -225,12 +225,12 @@ async function controlFixture(t, settings = {}) {
         GITHUB_SERVER_URL: 'https://github.com',
         GITHUB_RUN_ID: '',
         RUNNER_TEMP: runnerTemp,
-        HARNESS_REMOTE_STOP: '',
-        HARNESS_TRIGGER_ALLOWED_BOTS: '',
-        HARNESS_RUN_ACTORS: '*',
+        DEVSCENE_REMOTE_STOP: '',
+        DEVSCENE_TRIGGER_ALLOWED_BOTS: '',
+        DEVSCENE_RUN_ACTORS: '*',
         GITHUB_RUN_ATTEMPT: '',
         GITHUB_TRIGGERING_ACTOR: '',
-        HARNESS_TRIGGER_LABEL: '',
+        DEVSCENE_TRIGGER_LABEL: '',
         STUB_PERMISSIONS: JSON.stringify({ alice: 'write' }),
         STUB_PR: '',
         STUB_COMMENTS: '',
@@ -242,7 +242,7 @@ async function controlFixture(t, settings = {}) {
         STUB_PR_DIFF: '',
         STUB_PR_DIFF_FILE: '',
         STUB_ITEM: '',
-        HARNESS_AGENT_CLI: agent,
+        DEVSCENE_AGENT_CLI: agent,
         STUB_AGENT_LOG: agentLog,
         STUB_AGENT_OUTPUT: result({ action: 'none', reason: 'nothing asked' }),
         STUB_AGENT_EXIT: '0',
@@ -352,23 +352,23 @@ test('each gate refuses a mention with today\'s text and no agent call', async (
     /no harness run was started from this issue/);
 });
 
-test('a writer HARNESS_RUN_ACTORS does not admit is refused before the agent, as are its unset default and an unlisted re-runner', async (t) => {
+test('a writer DEVSCENE_RUN_ACTORS does not admit is refused before the agent, as are its unset default and an unlisted re-runner', async (t) => {
   const mention = "@dev-scene what's the status on this?";
 
   const unlisted = await controlFixture(t);
-  assertRefusedBeforeAgent(unlisted, await unlisted.control(mention, {}, { HARNESS_RUN_ACTORS: 'bob' }), 2,
-    /^@alice: `@dev-scene` was not run: @alice is not on the repository variable HARNESS_RUN_ACTORS/);
+  assertRefusedBeforeAgent(unlisted, await unlisted.control(mention, {}, { DEVSCENE_RUN_ACTORS: 'bob' }), 2,
+    /^@alice: `@dev-scene` was not run: @alice is not on the repository variable DEVSCENE_RUN_ACTORS/);
 
   const unset = await controlFixture(t);
-  assertRefusedBeforeAgent(unset, await unset.control(mention, {}, { HARNESS_RUN_ACTORS: '' }), 2,
-    /^@alice: `@dev-scene` was not run: the repository variable HARNESS_RUN_ACTORS is unset/);
+  assertRefusedBeforeAgent(unset, await unset.control(mention, {}, { DEVSCENE_RUN_ACTORS: '' }), 2,
+    /^@alice: `@dev-scene` was not run: the repository variable DEVSCENE_RUN_ACTORS is unset/);
 
   const rerun = await controlFixture(t);
   assertRefusedBeforeAgent(rerun, await rerun.control(mention, {}, {
-    HARNESS_RUN_ACTORS: 'alice',
+    DEVSCENE_RUN_ACTORS: 'alice',
     GITHUB_RUN_ATTEMPT: '2',
     GITHUB_TRIGGERING_ACTOR: 'mallory',
-  }), 2, /^@alice: `@dev-scene` was not run: this job is a re-run by @mallory, .*@mallory is not on the repository variable HARNESS_RUN_ACTORS/);
+  }), 2, /^@alice: `@dev-scene` was not run: this job is a re-run by @mallory, .*@mallory is not on the repository variable DEVSCENE_RUN_ACTORS/);
 });
 
 test('no credential is one reply listing the commands, exit 2, and no agent call', async (t) => {
@@ -382,7 +382,7 @@ test('no credential is one reply listing the commands, exit 2, and no agent call
 test('a missing plugin directory, or one without the command, is one reply, exit 3, and no agent call', async (t) => {
   const unset = await controlFixture(t);
   assertRefusedBeforeAgent(unset, await unset.control("Let's @dev-scene pause", {}, { HARNESS_MENTION_PLUGIN_DIR: '' }), 3,
-    /the harness plugin carrying the mention command is not available to this job.*HARNESS_CLI_VERSION.*docs\/remote-execution\.md/);
+    /the harness plugin carrying the mention command is not available to this job.*DEVSCENE_CLI_VERSION.*docs\/remote-execution\.md/);
 
   const empty = await controlFixture(t);
   assertRefusedBeforeAgent(empty, await empty.control("Let's @dev-scene pause", {}, { HARNESS_MENTION_PLUGIN_DIR: empty.emptyPluginDir }), 3,
