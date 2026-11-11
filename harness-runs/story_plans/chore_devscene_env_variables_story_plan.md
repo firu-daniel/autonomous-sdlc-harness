@@ -101,7 +101,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_env_variables/tas
 6. [x] **Task 6** — Rename the variables in the four workflow templates and the two `.env.example` templates _(layer: cli)_ _(points: 20)_
 7. [x] **Task 7** — Rename the variables in the `doctor` suites _(layer: cli)_ _(points: 20)_
 8. [x] **Task 8** — Rename the variables in the `init`, workflow-template and remote-names suites _(layer: cli)_ _(points: 20)_
-9. [ ] **Task 9** — Rename the variables in the remote-trigger, remote-control and remote-collect suites _(layer: cli)_ _(points: 20)_
+9. [x] **Task 9** — Rename the variables in the remote-trigger, remote-control and remote-collect suites _(layer: cli)_ _(points: 20)_
 10. [ ] **Task 10** — Rename the variables in the close, mention, needs-agent and review run-control suites _(layer: cli)_ _(points: 20)_
 11. [ ] **Task 11** — Rename the variables in the `remote-run` suite and the smaller remote suites _(layer: cli)_ _(points: 15)_
 12. [ ] **Task 12** — Rename the variables in the watcher and restart-watcher suites _(layer: cli)_ _(points: 15)_
