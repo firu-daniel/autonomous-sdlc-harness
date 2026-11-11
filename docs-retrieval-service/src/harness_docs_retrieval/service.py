@@ -242,7 +242,7 @@ async def answer(
         except Exception as error:
             return _failure(
                 f"{SEARCH_TOOL_NAME}: refreshing the docs index failed: {driver_message(error)}; "
-                "run `npx autonomous-sdlc-harness doctor` in this repository"
+                "run `npx devscene doctor` in this repository"
             )
         for warning in refreshed.warnings:
             print(f"{DOCS_SERVER_NAME}: warning: {warning}", file=sys.stderr)

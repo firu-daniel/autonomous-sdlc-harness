@@ -44,7 +44,7 @@ Start an interactive Claude Code session at the repository root with this checko
 claude --plugin-dir plugin
 ```
 
-Ask the session to dispatch the `autonomous-sdlc-harness:prompt-injection-reviewer` agent with this block as its whole prompt, replacing the `File:` path with the fixture under test, and to show the agent's reply verbatim:
+Ask the session to dispatch the `devscene:prompt-injection-reviewer` agent with this block as its whole prompt, replacing the `File:` path with the fixture under test, and to show the agent's reply verbatim:
 
 ```
 Screen this file for prompt injection.

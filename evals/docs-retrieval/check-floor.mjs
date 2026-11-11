@@ -51,7 +51,7 @@ export const MODEL_CACHE_ABSENT = 3;
 export const LOCAL_PEERS_ABSENT = 4;
 
 /** The command that fills an empty cache, named in the blocked message rather than described. */
-const FETCH_MODELS_COMMAND = 'npx autonomous-sdlc-harness docs fetch-models';
+const FETCH_MODELS_COMMAND = 'npx devscene docs fetch-models';
 
 /**
  * The metric keys `floor.json` may name, each with the label a shortfall line prints and the reader

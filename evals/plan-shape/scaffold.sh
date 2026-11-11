@@ -112,7 +112,7 @@ sed '1,/^<!-- SEED MARKER/d' "$case_dir/prompt.md" | sed '/./,$!d' \
 # name because the copied config's `defaultBranch` is `main`.
 git init -q -b main "$dest"
 # Set on this repository only: the identity belongs to the scratch tree and to nothing outside it.
-git -C "$dest" config user.email "evals@autonomous-sdlc-harness.invalid"
+git -C "$dest" config user.email "evals@devscene.invalid"
 git -C "$dest" config user.name "harness evals scaffold"
 # A machine with signing enabled globally would block on a passphrase prompt with no operator
 # present to answer it.

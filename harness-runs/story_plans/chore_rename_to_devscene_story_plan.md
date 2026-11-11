@@ -73,7 +73,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_rename_to_devscene/task_<K
 18. [x] **Task 18** — Respell the three cli suites that read this repository's own root-level files: `init`, the gate-12 plant and the sandbox-probe job launch _(layer: cli)_ _(points: 18)_
 19. [x] **Task 19** — Retitle and relink `llms.txt` and move its gate to the new title and URL _(layer: general)_ _(points: 15)_
 20. [x] **Task 20** — Retitle and respell `README.md`, `ARCHITECTURE.md` and `ROADMAP.md` _(layer: general)_ _(points: 15)_
-21. [ ] **Task 21** — Respell `schemas/`, `evals/` and the Python docs-retrieval service _(layer: general)_ _(points: 15)_
+21. [x] **Task 21** — Respell `schemas/`, `evals/` and the Python docs-retrieval service _(layer: general)_ _(points: 15)_
 22. [ ] **Task 22** — Respell `docs/development.md`, the gate contracts included _(layer: general)_ _(points: 20)_
 23. [ ] **Task 23** — Respell the CLI, analyze, config, watcher and outer-loop reference documents _(layer: general)_ _(points: 20)_
 24. [ ] **Task 24** — Respell the remote-execution and GitHub run-control documents _(layer: general)_ _(points: 20)_
