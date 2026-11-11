@@ -15,10 +15,10 @@
 
 **Work:**
 
-- [ ] `autonomous_pause_and_ledger.md` through `mode_contract.md`: respell every qualified spelling and every `npx` line.
-- [ ] The `plan_orchestration_*`, `prompt_injection_screen.md` and `qa_test_instructions.md` files: respell, including every binding value that carries a command.
-- [ ] The `task_plan_writing_*`, `user_review_fix_plan_writing_*` and `user_review_fixes_*` files: respell, including every binding value that carries a command.
-- [ ] Before saving, grep `plugin/` for each changed binding value's old text. Every other file that quotes the same value byte for byte must already carry the new spelling: Task 12's commands or this task's own files.
+- [x] `autonomous_pause_and_ledger.md` through `mode_contract.md`: respell every qualified spelling and every `npx` line.
+- [x] The `plan_orchestration_*`, `prompt_injection_screen.md` and `qa_test_instructions.md` files: respell, including every binding value that carries a command.
+- [x] The `task_plan_writing_*`, `user_review_fix_plan_writing_*` and `user_review_fixes_*` files: respell, including every binding value that carries a command.
+- [x] Before saving, grep `plugin/` for each changed binding value's old text. Every other file that quotes the same value byte for byte must already carry the new spelling: Task 12's commands or this task's own files.
 
 **Verification:**
 
