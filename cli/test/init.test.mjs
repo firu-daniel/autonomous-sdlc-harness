@@ -8754,8 +8754,8 @@ test('init --plugin-root-entries writes the plugin-root entries doctor dictates 
 });
 
 /** The two workflows remote execution runs on, as the adopter's repository names them. */
-const WORKFLOW_RUN_FILE = '.github/workflows/harness-run.yml';
-const WORKFLOW_RESUME_FILE = '.github/workflows/harness-resume.yml';
+const WORKFLOW_RUN_FILE = '.github/workflows/devscene-run.yml';
+const WORKFLOW_RESUME_FILE = '.github/workflows/devscene-resume.yml';
 
 /** The shipped templates they are written from, read straight out of the package. */
 const WORKFLOW_TEMPLATES = join(PACKAGE_ROOT, 'templates', 'github', 'workflows');
@@ -8788,14 +8788,14 @@ test('the GitHub workflows arrive with execution.target github-actions, and only
     const { stdout } = await initOk(dir);
 
     const version = readJson(join(PACKAGE_ROOT, 'package.json')).version;
-    const runTemplate = readFileSync(join(WORKFLOW_TEMPLATES, 'harness-run.yml'), 'utf8');
+    const runTemplate = readFileSync(join(WORKFLOW_TEMPLATES, 'devscene-run.yml'), 'utf8');
     assert.ok(runTemplate.includes('{{cliVersion}}'), 'the run template no longer carries {{cliVersion}}');
     assert.equal(text(dir, WORKFLOW_RUN_FILE), runTemplate.replaceAll('{{cliVersion}}', version));
-    assert.ok(!RENDER_TOKEN.test(text(dir, WORKFLOW_RUN_FILE)), 'a {{token}} survived into harness-run.yml');
+    assert.ok(!RENDER_TOKEN.test(text(dir, WORKFLOW_RUN_FILE)), 'a {{token}} survived into devscene-run.yml');
     assert.equal(
       text(dir, WORKFLOW_RESUME_FILE),
-      readFileSync(join(WORKFLOW_TEMPLATES, 'harness-resume.yml'), 'utf8'),
-      'harness-resume.yml is not a verbatim copy of its template',
+      readFileSync(join(WORKFLOW_TEMPLATES, 'devscene-resume.yml'), 'utf8'),
+      'devscene-resume.yml is not a verbatim copy of its template',
     );
 
     // The commit, scope and push lines, with the `git add` line checked by its prefix, are the four
@@ -8902,10 +8902,10 @@ test('init --upgrade-workflows re-pins an older workflow after a .bak, and nothi
     assert.ok(current.length > 0, 'the re-rendered run workflow carries no pin');
     assert.deepEqual(current, current.map(() => version), `a pin is not the built CLI's version: ${current.join(', ')}`);
     const runBak = text(dir, `${WORKFLOW_RUN_FILE}.bak`);
-    assert.ok(runBak.includes("'0.0.1'") && runBak.includes(TUNED_COMMENT), 'harness-run.yml.bak does not hold the aged file');
+    assert.ok(runBak.includes("'0.0.1'") && runBak.includes(TUNED_COMMENT), 'devscene-run.yml.bak does not hold the aged file');
     assert.ok(!text(dir, WORKFLOW_RUN_FILE).includes(TUNED_COMMENT), 'the re-rendered run workflow kept the planted comment');
     assert.ok(text(dir, WORKFLOW_RESUME_FILE).includes(`- cron: ${TUNED_CRON}`), 'the tuned cron was not carried');
-    assert.ok(text(dir, `${WORKFLOW_RESUME_FILE}.bak`).includes(TUNED_COMMENT), 'harness-resume.yml.bak does not hold the aged file');
+    assert.ok(text(dir, `${WORKFLOW_RESUME_FILE}.bak`).includes(TUNED_COMMENT), 'devscene-resume.yml.bak does not hold the aged file');
     for (const path of [WORKFLOW_RUN_FILE, WORKFLOW_RESUME_FILE]) {
       assert.ok(stdout.includes(`${path}.bak`), `the output does not name ${path}.bak:\n${stdout}`);
     }
