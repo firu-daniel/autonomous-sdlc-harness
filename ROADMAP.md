@@ -10,60 +10,77 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 
 | Priority | Feature |
 |---|---|
-| 1 | [Docs-catalog retrieval](#engines-environments-and-integrations) — kept opt-in by maintainer decision after a withdrawn verdict; improving it and measuring where it pays is open |
-| 2 | [Citation groundedness gate](#quality-and-testing) |
-| 3 | [Structured agent outputs](#quality-and-testing) |
-| 4 | [Golden-task eval suite](#quality-and-testing) |
-| 5 | [Trace export](#planning-artifacts-and-reporting) |
-| 6 | [Cost per feature](#planning-artifacts-and-reporting) |
-| 7 | [Latency tracking](#planning-artifacts-and-reporting) |
-| 8 | [Engine / provider abstraction](#engines-environments-and-integrations) |
-| 9 | [Model-change drift gate](#quality-and-testing) |
-| 10 | [Budget governor](#engines-environments-and-integrations) |
-| 11 | [Cloud / CI execution](#engines-environments-and-integrations) |
-| 12 | [First published eval result](#evidence-and-adoption) |
-| 13 | [Outcome-graded eval case](#evidence-and-adoption) |
-| 14 | [Measuring the lessons ledger](#evidence-and-adoption) |
-| 15 | [MCP servers](#engines-environments-and-integrations) |
-| 16 | [Ultra-fast mode](#flow-and-orchestration) |
-| 17 | [Parallel dispatch in waves](#flow-and-orchestration) |
-| 18 | [Task researcher](#flow-and-orchestration) |
-| 19 | [Multi-plan programs](#flow-and-orchestration) |
-| 20 | [Cross-repo tasks](#flow-and-orchestration) |
-| 21 | [Watcher settings surface](#flow-and-orchestration) |
-| 22 | [`branch-summary.md`](#planning-artifacts-and-reporting) |
-| 23 | [Task breakdown and estimates file](#planning-artifacts-and-reporting) |
-| 24 | [User flow diagram](#planning-artifacts-and-reporting) |
-| 25 | [Business (data) flow diagram](#planning-artifacts-and-reporting) |
-| 26 | [Integration tests](#quality-and-testing) |
-| 27 | [Regression tests](#quality-and-testing) |
-| 28 | [Fix-plan structure review](#quality-and-testing) |
-| 29 | [Performance and security review](#quality-and-testing) |
-| 30 | [Deploy to a test environment](#engines-environments-and-integrations) |
-| 31 | [Cloud QA](#engines-environments-and-integrations) |
-| 32 | [Mobile QA drivers](#engines-environments-and-integrations) |
-| 33 | [Design-source ingestion](#engines-environments-and-integrations) |
-| 34 | [Second end-to-end capture](#evidence-and-adoption) |
-| 35 | [Interactive session vs harness run](#evidence-and-adoption) |
-| 36 | [`init` warns when there is no remote](#evidence-and-adoption) |
-| 37 | [OS-level sandbox in the autonomous profile](#security-and-containment) |
-| 38 | [`doctor` sandbox checks](#security-and-containment) |
-| 39 | [`doctor` flags unverified branch protection](#security-and-containment) |
-| 40 | [Threat model](#documentation) |
-| 41 | [Per-run base branch](#flow-and-orchestration) |
-| 42 | [Suggested protected branches at `init`](#security-and-containment) |
-| 43 | [Guided default-branch change](#evidence-and-adoption) |
-| 44 | [Release tags in the protected set](#security-and-containment) |
-| 45 | [Notifications settings command](#flow-and-orchestration) |
+| 1 | [Converging plan reviews](#quality-and-testing) |
+| 2 | [Committer as a script](#flow-and-orchestration) |
+| 3 | [Script-driven planning pilot](#flow-and-orchestration) |
+| 4 | [Security reviewer](#quality-and-testing) |
+| 5 | [Performance reviewer](#quality-and-testing) |
+| 6 | [Task researcher](#flow-and-orchestration) |
+| 7 | [Contract-first task plans](#flow-and-orchestration) |
+| 8 | [Narrower plan and branch reviewers](#quality-and-testing) |
+| 9 | [Parallel plan reviews](#flow-and-orchestration) |
+| 10 | [Parallel dispatch in waves](#flow-and-orchestration) |
+| 11 | [Multi-plan programs](#flow-and-orchestration) |
+| 12 | [Review severity markers](#quality-and-testing) |
+| 13 | [Test-driven development](#quality-and-testing) |
+| 14 | [Script-driven autonomous flow](#flow-and-orchestration) |
+| 15 | [Outbound HTTP listener](#security-and-containment) |
+| 16 | [RagScene](#scene-products) |
+| 17 | [GraphScene](#scene-products) |
+| 18 | [DevScene studio](#scene-products) |
+| 19 | [TraceScene](#scene-products) |
+| 20 | [Docs-catalog retrieval](#engines-environments-and-integrations) — kept opt-in by maintainer decision after a withdrawn verdict; improving it and measuring where it pays is open |
+| 21 | [Citation groundedness gate](#quality-and-testing) |
+| 22 | [Structured agent outputs](#quality-and-testing) |
+| 23 | [Golden-task eval suite](#quality-and-testing) |
+| 24 | [Trace export](#planning-artifacts-and-reporting) |
+| 25 | [Engine / provider abstraction](#engines-environments-and-integrations) |
+| 26 | [Model-change drift gate](#quality-and-testing) |
+| 27 | [Budget governor](#engines-environments-and-integrations) |
+| 28 | [Cloud / CI execution](#engines-environments-and-integrations) |
+| 29 | [First published eval result](#evidence-and-adoption) |
+| 30 | [Outcome-graded eval case](#evidence-and-adoption) |
+| 31 | [Measuring the lessons ledger](#evidence-and-adoption) |
+| 32 | [MCP servers](#engines-environments-and-integrations) |
+| 33 | [Ultra-fast mode](#flow-and-orchestration) |
+| 34 | [Cross-repo tasks](#flow-and-orchestration) |
+| 35 | [Watcher settings surface](#flow-and-orchestration) |
+| 36 | [`branch-summary.md`](#planning-artifacts-and-reporting) |
+| 37 | [Task breakdown and estimates file](#planning-artifacts-and-reporting) |
+| 38 | [User flow diagram](#planning-artifacts-and-reporting) |
+| 39 | [Business (data) flow diagram](#planning-artifacts-and-reporting) |
+| 40 | [Integration tests](#quality-and-testing) |
+| 41 | [Regression tests](#quality-and-testing) |
+| 42 | [Fix-plan structure review](#quality-and-testing) |
+| 43 | [Deploy to a test environment](#engines-environments-and-integrations) |
+| 44 | [Cloud QA](#engines-environments-and-integrations) |
+| 45 | [Mobile QA drivers](#engines-environments-and-integrations) |
+| 46 | [Design-source ingestion](#engines-environments-and-integrations) |
+| 47 | [Second end-to-end capture](#evidence-and-adoption) |
+| 48 | [Interactive session vs harness run](#evidence-and-adoption) |
+| 49 | [`init` warns when there is no remote](#evidence-and-adoption) |
+| 50 | [OS-level sandbox in the autonomous profile](#security-and-containment) |
+| 51 | [`doctor` sandbox checks](#security-and-containment) |
+| 52 | [Threat model](#documentation) |
+| 53 | [Per-run base branch](#flow-and-orchestration) |
+| 54 | [Suggested protected branches at `init`](#security-and-containment) |
+| 55 | [Guided default-branch change](#evidence-and-adoption) |
+| 56 | [Release tags in the protected set](#security-and-containment) |
+| 57 | [Notifications settings command](#flow-and-orchestration) |
 
 ## Flow and orchestration
 
 | Feature | What it is | Status |
 |---|---|---|
 | Ultra-fast mode | A reduced flow — plan, plan review, implementation, branch review, review fixes — with an optional duration flag. When a duration is given, the orchestrator splits it across phases (e.g. 40% planning, 20% implementation, 40% branch review and fixes) and gives each agent a time window to return in. | Open |
-| Parallel dispatch in waves | Planning and implementation agents with no dependency on each other run in parallel batches instead of one at a time. | Open |
-| Task researcher | A pre-planning agent: checks feasibility, asks clarifying questions at minute one, and flags tasks too big for one plan. | Open |
-| Multi-plan programs | A task too big for one plan becomes an ordered chain of plans, each picked up from the inbox when the previous one finishes. | Open |
+| Parallel dispatch in waves | Planning and implementation agents with no dependency on each other run in parallel batches instead of one at a time. On the implementation side it is what **Contract-first task plans** make possible: each wave dispatches one implementer per layer — baseline models, then abstract contracts, then implementations and wiring. On the planning side it starts with **Parallel plan reviews**. | Open |
+| Task researcher | A pre-planning agent with four responsibilities: (a) web research where the task needs it — it is granted `WebSearch` and `WebFetch`, and whether and how it stays sandboxed is still to be decided; (b) a feasibility check, asking clarifying questions at minute one; (c) a research report file for the run, which also gives the plan writer short leads; (d) rough estimates for the full requirements, flagging any task above 300 story points to be split into several branches of at most 300 each. The split itself is **Multi-plan programs**. | Open |
+| Contract-first task plans | Refactor the task-plan writer to fewer responsibilities: it writes the skeleton and the contracts between tasks — the required output and behaviour of each sub-task — rather than every implementation detail. Today the plan is so detailed that implementers mostly transcribe it, which leaves them no room to improvise and binds them to the plan when it is wrong. Where the work allows it (source code more than corpus or documentation work, and never as an absolute rule), a story is ordered in three stages, each dispatchable in parallel per layer: (a) the baseline — data models, domain entities, mappers; (b) abstract contracts — data-module functions returning the data models, domain functions or use cases calling them, the presentation layer's hooks or components — as signatures, nullable stubs or "not implemented" bodies; (c) the implementations of those contracts and the tasks that link them together. Starts with research into the writer's full current responsibilities. | Open |
+| Parallel plan reviews | The task-plan and user-review fix-plan reviewers run in parallel, each writing its own findings file; then either the plan writer reads every file, or a merging agent (possibly a new one) folds them into one. | Open |
+| Committer as a script | A script that commits and pushes, replacing the `committer` agent. | Open |
+| Script-driven planning pilot | A script walks the planning graph and runs each node as its own headless session, taking planning out of the orchestrator session; an opt-in measured pilot that ends with a cost comparison deciding whether the unit loop follows ([#159](https://github.com/firu-daniel/autonomous-sdlc-harness/issues/159)). | Open |
+| Script-driven autonomous flow | The whole autonomous flow on the script-driven graph, removing the orchestrator session. Follows the planning pilot if its cost comparison favours it. | Open |
+| Multi-plan programs | A task too big for one plan becomes an ordered chain of plans — one branch each, at most 300 story points, split from the **Task researcher**'s estimates — each picked up from the inbox when the previous one finishes. | Open |
 | Cross-repo tasks | One task split into per-repository plans with an explicit contract between them. | Open |
 | Watcher settings surface | A supported way to change the watcher's tunables instead of hand-editing a file. | Open |
 | Notifications settings command | A `notifications` command that manages the machine-local `push.env` and nothing else: `set-url` writes the endpoint, `show` names the file in effect and which keys are set without printing a value, and `test` sends one push. Today only `init --notifications` writes the file, and `init` skips a file that already exists, so a `push.env` that is there with both keys empty can be filled only by hand or by `init --force`, which regenerates every other file too. `doctor`'s warning about an empty file then names this command. | Open |
@@ -74,8 +91,8 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | Feature | What it is | Status |
 |---|---|---|
 | Trace export | Per-run logs converted to OpenTelemetry GenAI spans or Langfuse traces. | Open |
-| Cost per feature | Token and cost accounting per run in branch statistics: "feature X cost $Y for Z story points." | Open |
-| Latency tracking | Per-phase and per-agent wall-clock recorded in branch statistics alongside the cost figures, so a slow phase is visible without reading the run logs. | Open |
+| Cost per feature | Token and cost accounting per run: every headless session's cost, tokens and cache use, rolled up per run in `<state_dir>/run_analytics/<branch>/run-analytics.md` ([`docs/watcher.md`](docs/watcher.md) §2, *Run analytics*). | Done |
+| Latency tracking | Wall time recorded alongside the cost figures — per session, per request, per tool call and per sub-agent, and per Run gates round down to each test file — so a slow phase is visible without reading the run logs ([`docs/watcher.md`](docs/watcher.md) §2, *Run analytics*). | Done |
 | `branch-summary.md` | At the end of the flow, write the Done summary the supervised flow already gives — including token consumption and the API-equivalent price. | Open |
 | Task breakdown and estimates file | The story plan exported as a task list with per-task and total estimates, in the shape project managers track. | Open |
 | User flow diagram | A writer agent draws, and a reviewer agent checks, the user flow the branch implements. | Open |
@@ -93,7 +110,12 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | Integration tests | The pipeline writes integration tests for the change — and widget/component tests where the stack has them. | Open |
 | Regression tests | The pipeline writes regression tests for the behaviour a branch fixes or changes. | Open |
 | Fix-plan structure review | A structural reviewer for the user-review fix-plan flow, matching the one the task plan already has. | Open |
-| Performance and security review | Review coverage for performance and security findings; shape not decided. | Open |
+| Converging plan reviews | The first two review rounds of a task plan review the whole plan; from the third round on, the reviewers only check that the previous round's Must Fix items were addressed instead of reviewing the plan again. The same for the user-review fix plan. | Open |
+| Narrower plan and branch reviewers | Refactor the task-plan reviewer to fewer responsibilities — the plan's structure, and whether it covers and offers a solution for every requirement of the task prompt — and spread the rest across the other reviewers. Starts with research into its full current responsibilities; whether the same applies to the end-of-branch `branch-reviewer` is part of that research. | Open |
+| Review severity markers | Revisit what really is a Must Fix — possibly a review should carry Must Fix items only. | Open |
+| Security reviewer | A security reviewer agent at the end-of-branch review and in the user-review fix-plan phase, and in the plan phase where security issues can be detected from a plan at all. Its scope draws on Claude Code's existing security review command. | Open |
+| Performance reviewer | A performance reviewer agent at the same three points: the end-of-branch review, the user-review fix-plan phase, and the plan phase where performance issues can be detected from a plan at all. | Open |
+| Test-driven development | The pipeline writes the tests before the implementation they cover. | Open |
 
 ## Engines, environments and integrations
 
@@ -132,10 +154,22 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 |---|---|---|
 | OS-level sandbox in the autonomous profile | Shipped: `init` writes Claude Code's native sandbox (Seatbelt on macOS, bubblewrap on Linux/WSL2) into `settings.autonomous.json`, strict, with `sandbox.failIfUnavailable: true` so an unattended run refuses to start instead of silently running unsandboxed, a network domain allowlist that is empty by default, and four excluded scripts. Every Bash command and every process it starts runs inside it; the file tools, hooks and MCP servers run outside it ([`docs/sandbox-record.md`](docs/sandbox-record.md)). Left: roadmap item 21's measurement half — no WSL2 row, MC1 not run, the interactive-test phase unmeasured ([`docs/development.md`](docs/development.md) §6, `docs/sandbox-record.md` §7). | In progress |
 | `doctor` sandbox checks | Shipped: `doctor`'s `sandbox-prerequisites` check (bubblewrap and socat on Linux and WSL2, and the Ubuntu 24.04 AppArmor profile), the watcher's refusal to launch a run on a host that cannot start the sandbox, the remote job's step that installs the prerequisites before its preflight (IS1–IS4 **pass** on a GitHub-hosted runner, `docs/sandbox-record.md` §4 `runner-install`), and the domain allowlist that `sandbox.allowedDomains` carries. Left: the tools known to break under the sandbox (docker, watchman; TLS in `gh`/`terraform` under Seatbelt), which roadmap item 21's measurement settles ([`docs/development.md`](docs/development.md) §6). | In progress |
-| `doctor` flags unverified branch protection | Warn that forge-side branch protection has not been verified. Setting it up stays the user's job; its absence should be visible. | Open |
+| `doctor` flags unverified branch protection | Shipped: `doctor`'s `branch-protection` check, under `--check-github` with `forge` `github`, warns for every protected branch whose ruleset or branch protection does not block direct pushes, force pushes and deletion, and warns *not checked* otherwise. Setting it up stays the user's job ([`docs/cli.md`](docs/cli.md)). | Done |
 | Suggested protected branches at `init` | `init` protects only the detected `defaultBranch`. When `origin` carries well-known environment branches (`main`, `uat`, `staging`, `pre-prod`, `prod`, `release/*`), propose adding them to `protectedBranches` instead of leaving them unguarded until someone edits the list. | Open |
+| Outbound HTTP listener | A listener on outbound HTTP calls that prevents unwanted web access, without itself becoming an entry point for an attacker. The sandbox's domain allowlist and the run analytics' `## Network refusals` report already refuse and record; this is the prevention layer beside them. | Open |
 | Release tags in the protected set | The pre-push backstop and the `PreToolUse` guard judge branch targets only, so a tag push passes both. Unattended runs are still covered — `git tag` and `git push` are on the autonomous profile's ask list, which an unattended run's default `dontAsk` mode refuses — but a supervised session has only its prompt. An optional protected tag pattern (e.g. `v*`) that both check. | Open |
 | Nightly supply-chain audit | A scheduled workflow, never a merge gate, audits the workspace's full npm tree, the Python service's `uv.lock`, the workflows `init` renders for an adopter and this repository's own workflows with online `zizmor`, and the pinned model revisions. It fails on findings; model drift is reported as a notice. Both retrieval paths now load a pinned revision of each model. What runs where, and how its ignore sets are kept: [`docs/development.md`](docs/development.md) §8. | Done |
+
+## Scene products
+
+Parts of the harness extracted as products of their own.
+
+| Feature | What it is | Status |
+|---|---|---|
+| RagScene | The docs retrieval extracted from the harness as its own product ([`docs/rag-extraction-research/`](docs/rag-extraction-research/README.md)). | Open |
+| GraphScene | The flow-graph navigation extracted from the harness ([`docs/flow-graph-walker.md`](docs/flow-graph-walker.md)). | Open |
+| DevScene studio | DevScene studio. | Open |
+| TraceScene | Logs and traces as a product; the name (TraceScene or TeleScene) is not settled. Builds on **Trace export** and the run analytics. | Open |
 
 ## Documentation
 
