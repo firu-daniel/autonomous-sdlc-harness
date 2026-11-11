@@ -1,0 +1,67 @@
+### 2. `init` still repairs the unparseable 0.6.1 control workflow
+
+**Files (site anchors):**
+- `cli/src/generators/githubWorkflows.ts`:
+  - `UNPARSEABLE_CONTROL_RELEASES` — "'0.6.1': 'b197e3df";
+  - `UNPARSEABLE_CONTROL_IF_LINE`;
+  - `unparseableControlRoute` — "export function unparseableControlRoute(version: string)";
+  - `ControlRepair`, `classifyControl`;
+  - in `writeGithubWorkflows`, "if (existsSync(controlPath)) controlRepair = classifyControl(";
+  - in the result interface, "readonly controlRepair?: ControlRepair;";
+  - in the header, choice 6 "6. **Any `init` replaces a `devscene-control.yml` byte-identical to a release's copy GitHub could", choice 5's "the control workflow's one exception is the\n *    byte-identical repair of choice 6", and "**This module owns {@link unparseableControlRoute}.**"
+- `cli/src/commands/init.ts` (`reportControlRepair`) — "function reportControlRepair(", its call "reportControlRepair(ctx, {", "const setupWorkflows =", the filter "// A repaired control workflow's diff line and its un-ignored .bak are reportControlRepair's to print.", the doc-comment clause "less a\n * repaired control workflow, whose `.bak` is not ignored and is {@link reportControlRepair}'s", and the import entries `UNPARSEABLE_CONTROL_RELEASES,`, `unparseableControlRoute,`, `type ControlRepair,`
+- `cli/src/doctor/checks.ts` (`remote-github`, the workflows-listed-by-path failure) — "? unparseableControlRoute(version)", and the import "unparseableControlRoute,"
+- `cli/test/doctor.test.mjs` — subtest "with the trigger on, devscene-control.yml listed by its path fails with the control route", its assertion "assert.ok(line.includes('if: >-'), line);"
+- `scripts/check-typos.sh` — header lines "#   cli/src/generators/githubWorkflows.ts and cli/src/commands/init.ts — `UNPARSEABLE` and" through "#     exported identifiers other files import by name.", and the `case` alternatives "\"cli/src/generators/githubWorkflows.ts|UNPARSEABLE\"", "\"cli/src/commands/init.ts|UNPARSEABLE\"", "\"cli/src/doctor/checks.ts|unparseable\""
+- `cli/src/core/writer.ts` — the `devscene-control.yml` row of the re-run-contract table, "Any `init` replaces, after a `.bak`, a copy byte-identical to a release's copy GitHub could not parse (today 0.6.1)", and the policy paragraph "and on\n * `devscene-control.yml` on any `init` when its bytes are a release's unparsable copy"
+- `cli/templates/github/workflows/devscene-control.yml` — header "# their re-run contract — `init --force` replaces it after a `.bak`. The one\n# exception: any `init` replaces, after a `.bak`, a copy that is byte for byte\n# the one 0.6.1 wrote"
+- `cli/test/fixtures/harness-control-0.6.1.yml` — the whole file
+- `cli/test/trigger-workflow-init.test.mjs` — `UNPARSEABLE_CONTROL_RELEASES` import, `CONTROL_0_6_1`, test "any init repairs a byte-identical 0.6.1 devscene-control.yml and keeps every other copy", test "init reports the control-workflow repair, and warns on an edited 0.6.1 copy", header clause "except that any `init` repairs a byte-identical 0.6.1 control workflow,"
+- `scripts/check-rendered-workflows.mjs` — `NEGATIVE`, `negativePath`, the `--negatives` mode, the fixture half of the `--actionlint` mode "const path = negativePath();", and the header lines that name the fixture
+- `scripts/run-gates.sh` — "14b) gate_header 14", "GR_PREREQUISITES='2a:2b,2c,2d,2e,11,13c,14a,14b,14c,14d'", and the `gr_run_round run_unit 1 …` id list
+
+**Problem.** The user wants every piece of pre-rename support removed. `init` classifies an existing `devscene-control.yml` against `UNPARSEABLE_CONTROL_RELEASES`, a SHA-256 of the control workflow 0.6.1 shipped with its `if:` line respelled to the new names, and against `UNPARSEABLE_CONTROL_IF_LINE`. It replaces a matching copy after a `.bak` and warns on an edited one. As the user notes, no release ever wrote a file named `devscene-control.yml`: 0.6.1 wrote `harness-control.yml`. So the digest and the `if:` line can never match a real adopter's file, and the repair, its report and its fixture are dead code. The same fixture feeds gate 14b and the negative half of gate 14c in `scripts/check-rendered-workflows.mjs`. `doctor` reuses the repair's route text (`unparseableControlRoute`) when GitHub lists `devscene-control.yml` by its path. That text points at the repair ("replaces a devscene-control.yml that 0.6.1 wrote and nobody edited") and at the 0.6.1 `if:` hand-fix, so it goes with the repair. The generic route doctor already prints for the other workflows covers this one too.
+
+**Fix.**
+- [ ] `cli/src/generators/githubWorkflows.ts`:
+  - delete `UNPARSEABLE_CONTROL_RELEASES`, `UNPARSEABLE_CONTROL_IF_LINE`, `unparseableControlRoute`, the `ControlRepair` type and `classifyControl`, each with its doc comment;
+  - in `writeGithubWorkflows`, delete `let controlRepair: ControlRepair;`, the `existsSync(controlPath)` classification line, the `forceOverride` spread on the control request, and the `controlRepair` spread in the returned object. The control workflow is then enqueued exactly like the trigger: `create-if-absent`, no override;
+  - delete the `controlRepair` field and its doc comment from the result interface;
+  - in the header, delete choice 6 entirely and the paragraph "**This module owns {@link unparseableControlRoute}.** …". End choice 5 at "Neither is ever upgraded by pin." by dropping "; the control workflow's one exception is the byte-identical repair of choice 6";
+  - remove `createHash` and any other import that becomes unused, as `noUnusedLocals` reports.
+- [ ] `cli/src/commands/init.ts`:
+  - delete `reportControlRepair` with its doc comment, the `controlEffect` lookup that feeds it, and its call;
+  - delete the `.filter(...)` on `replacedWorkflows` that excludes a repaired control workflow, and its comment;
+  - replace `setupWorkflows` with `freshWorkflows` at its one use, and delete the comment "A repair alone is not a first setup…";
+  - in `reportWorkflowUpgrade`'s doc comment, drop the clause "less a repaired control workflow, whose `.bak` is not ignored and is {@link reportControlRepair}'s";
+  - remove the imports `UNPARSEABLE_CONTROL_RELEASES`, `unparseableControlRoute` and `type ControlRepair`, and `type WriteEffect` from the `../core/writer.js` import, whose only use is `reportControlRepair`'s `controlEffect` parameter.
+- [ ] `cli/src/doctor/checks.ts`: drop `unparseableControlRoute` from the `../generators/githubWorkflows.js` import. In the listed-by-path failure, delete the `path === WORKFLOW_CONTROL_PATH ? … :` branch so every judged workflow gets the one generic route: `` `Check ${path} with actionlint, or re-render it with \`${pinnedCliCommand(version)} init --force\`, which keeps a .bak; then commit it and push it to the repository's default branch.` ``.
+- [ ] `cli/test/doctor.test.mjs`, the subtest "with the trigger on, devscene-control.yml listed by its path fails with the control route". It asserts the removed route's `if: >-` text, so it changes with the doctor change above:
+  - rename it to "with the trigger on, devscene-control.yml listed by its path fails with the generic route";
+  - delete `assert.ok(line.includes('if: >-'), line);`;
+  - assert the generic route's own text instead: `line.includes('actionlint')`, `line.includes('init --force')` (already present, keep it) and `line.includes('keeps a .bak')`;
+  - keep the `GitHub lists .github/workflows/devscene-control.yml by its path rather than its name` assertion and the negative assertion on `GitHub knows devscene-trigger.yml and devscene-control.yml`;
+  - the comment "Gate 12 round 7's observation: GitHub listed the unparsed file with its name equal to its path." describes the listing, not the repair route, and stays.
+- [ ] `cli/src/core/writer.ts`:
+  - in the `devscene-control.yml` table row, delete the sentence "Any `init` replaces, after a `.bak`, a copy byte-identical to a release's copy GitHub could not parse (today 0.6.1), and keeps every other copy;" and keep "`--force` after a `.bak` …" as the row's closing sentence, recapitalised;
+  - in the `forceOverride` paragraph, delete ", and on `devscene-control.yml` on any `init` when its bytes are a release's unparsable copy". Turn the surrounding "both … and …" list back into the two cases that remain, and adjust "None of them" to "Neither".
+- [ ] `cli/templates/github/workflows/devscene-control.yml`: in the `WHO WRITES IT.` paragraph, delete "The one exception: any `init` replaces, after a `.bak`, a copy that is byte for byte the one 0.6.1 wrote, which GitHub could not parse; an edited copy of that one is kept and named in `init`'s output." Re-wrap the paragraph so it reads "… so it shares their re-run contract — `init --force` replaces it after a `.bak`. It is a file of its own, apart from devscene-trigger.yml, …". The later `if:`-is-a-folded-block-scalar comment is about the template's own shape and stays.
+- [ ] Delete `cli/test/fixtures/harness-control-0.6.1.yml`.
+- [ ] `cli/test/trigger-workflow-init.test.mjs`:
+  - delete the two `test(...)` groups "any init repairs a byte-identical 0.6.1 devscene-control.yml and keeps every other copy" and "init reports the control-workflow repair, and warns on an edited 0.6.1 copy", with every subtest in them;
+  - delete the `UNPARSEABLE_CONTROL_RELEASES` dynamic import and the `CONTROL_0_6_1` constant;
+  - delete the now-unused imports `createHash` (`node:crypto`) and `pathToFileURL` (`node:url`). `controlFixture` is declared inside the first deleted group and goes with it;
+  - reword the header's rule so it no longer says "except that any `init` repairs a byte-identical 0.6.1 control workflow,": "… each byte for byte from its template, never upgraded, and their presence changes nothing else `init` writes; …".
+  - The group "init writes the trigger and control workflows only for forge github with remote execution on" stays, including "an edited control workflow survives --upgrade-workflows with no .bak; --force replaces it after a .bak".
+- [ ] `scripts/check-rendered-workflows.mjs`:
+  - delete `NEGATIVE`, `negativePath` and its doc comment, the `--negatives` branch, and the fixture block at the end of the `--actionlint` branch (`const path = negativePath(); if (path !== undefined) { … }`);
+  - remove `'--negatives'` from the accepted-modes array and from the usage line;
+  - in the header, change THE RULE to "Every workflow `init` renders under `forge: github` and `execution.target: github-actions` parses as YAML." and drop the 0.6.1 clause. Delete the `--negatives` usage entry. End the `--actionlint` entry at "which must report nothing.", dropping the fixture clause. Change "Depends on gate 2a's build: every mode but --negatives runs `cli/dist/cli.js`." to "Depends on gate 2a's build: every mode runs `cli/dist/cli.js`." Every remaining mode goes through `withRendered`, including `zizmorOnline`.
+- [ ] `scripts/run-gates.sh`:
+  - delete the `14b)` case arm;
+  - remove `14b` from `GR_PREREQUISITES` (`'2a:2b,2c,2d,2e,11,13c,14a,14c,14d'`) and from the `gr_run_round run_unit 1 …` id list;
+  - leave the other leg ids `14a`, `14c` and `14d` as they are. Renumbering would ripple into every document that cites them.
+- [ ] `scripts/check-typos.sh` (gate 6f's deliberate set). Every identifier the entry justifies is deleted above, so the entry goes:
+  - in the `case` arm, delete the three lines of alternatives `"cli/src/generators/githubWorkflows.ts|UNPARSEABLE" | "cli/src/generators/githubWorkflows.ts|unparseable" | \`, `"cli/src/commands/init.ts|UNPARSEABLE" | "cli/src/commands/init.ts|unparseable" | \` and `"cli/src/doctor/checks.ts|unparseable" | \`, so the arm opens with `"plugin/agents/docs-reviewer.md|ines" | \`;
+  - in the header's THE RULE, delete the four lines from "#   cli/src/generators/githubWorkflows.ts and cli/src/commands/init.ts — `UNPARSEABLE` and" through "#     exported identifiers other files import by name.", so the set's list opens with the `plugin/agents/docs-reviewer.md` line.
+- [ ] Gate 14's description, and gate 6f's deliberate-set bullet, in `docs/development.md` are Finding 3's.
