@@ -15,7 +15,7 @@ Source: harness-runs/task_prompts/chore_devscene_github_surface_task_prompt.md â
   - screened: harness-runs/clarifications/chore_devscene_github_surface/answered/answer_1.md sha256=5605116a09301de45f4eddf7f7f45fe20ec0fdad81d2936cf265131523049ab7
   - screened: harness-runs/clarifications/chore_devscene_github_surface/answered/answer_2.md sha256=133de8ef99bd7747536b16494490a581b729f3c5ce9ebad5f2b79279e43115cc
 - [x] R1. Fix plan written & converged (parity + architecture gates PASS)
-- [ ] R2. Fix plan + source review committed
+- [x] R2. Fix plan + source review committed
 ## Fixing
 - [ ] R3. All fix-plan findings implemented (fix-plan index all [x])
 - [-] R4. QA passed (UI-test index all [x], or only blocked tests left / no_ui / no-op augment)
