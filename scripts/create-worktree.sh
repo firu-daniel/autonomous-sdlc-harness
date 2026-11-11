@@ -381,7 +381,7 @@ else
   if ! git -C "$main_repo" remote get-url origin >/dev/null 2>&1; then
     echo "create-worktree.sh: '$main_repo' has no 'origin' remote — a working copy is created from origin/$default_branch, so there is nothing to branch from" >&2
     echo "  add one: git remote add origin <url> && git push -u origin $default_branch" >&2
-    echo "  (\`npx autonomous-sdlc-harness doctor\` reports this as a failing \`remote\` check)" >&2
+    echo "  (\`npx devscene doctor\` reports this as a failing \`remote\` check)" >&2
     exit 2
   fi
   # This fetch only keeps origin/<default branch> current for the clone's copy
@@ -395,7 +395,7 @@ else
   if ! hr_run_trusted_base_var; then
     echo "create-worktree.sh: cannot establish $default_branch on origin to branch from — $HR_RUN_REFUSAL; nothing was created" >&2
     echo "  reach origin, or push the default branch: git push -u origin $default_branch" >&2
-    echo "  (\`npx autonomous-sdlc-harness doctor\` reports a missing origin/$default_branch as a failing \`remote\` check; it does not contact origin, so an unreachable one passes there)" >&2
+    echo "  (\`npx devscene doctor\` reports a missing origin/$default_branch as a failing \`remote\` check; it does not contact origin, so an unreachable one passes there)" >&2
     exit 2
   fi
   start="$HR_RUN_TRUSTED_BASE"

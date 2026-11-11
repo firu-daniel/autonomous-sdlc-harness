@@ -160,7 +160,7 @@
 # creates nothing and writes nothing else.
 #
 # `review` PLACES A USER REVIEW ROUND ON THE BRANCH TIP AND DISPATCHES IT, for
-# `/autonomous-sdlc-harness:branch-user-review` on a run that executes on
+# `/devscene:branch-user-review` on a run that executes on
 # GitHub. In order, stopping at the first failure: refuse a protected branch
 # and a review file that is not a readable regular file (2; a relative
 # --review-file resolves against the caller's directory); refuse a branch that
@@ -673,7 +673,7 @@
 # `MENTION_TEXT_MAX_BYTES` with a `(cut)` line — then a footer saying an agent
 # wrote it and changed nothing, listing the commands; `fixes` posts this
 # script's text pointing at a review requesting changes or
-# `/autonomous-sdlc-harness:branch-user-review`; `command` with a verb in
+# `/devscene:branch-user-review`; `command` with a verb in
 # `MENTION_ACT_VERBS` is carried out by that verb's own arm (`control_run_verb`)
 # from the exact form's `CONTROL_ARGS` and `CONTROL_BODY` — for `answer`, the
 # command line then the decision's `answer` below it, byte for byte — every
@@ -1338,7 +1338,7 @@
 # directory `sync` uses, and `report`'s writes for the round. Its settledness
 # read, when the newest run's job GitHub never started, also fetches origin's
 # <branch>, force-writing `refs/remotes/origin/<branch>` in the root checkout:
-# for a local `/autonomous-sdlc-harness:branch-user-review`, the main checkout. A user's chain-0 `dispatch --resume answer|pause`
+# for a local `/devscene:branch-user-review`, the main checkout. A user's chain-0 `dispatch --resume answer|pause`
 # writes the record's `status`, `resumed_at` and `resume_kind` in one write
 # when the main checkout's registry file exists and holds a record with
 # `execution: github-actions`; any other `dispatch` writes nothing. `trigger` writes its snapshot and comment
@@ -1418,7 +1418,7 @@
 # REPRO — every verb and every refusal, against a throwaway fixture, with gh
 # replaced by a recorder stub (nothing reaches the network):
 #
-#   d=$(mktemp -d); git -C "$d" init -q; (cd "$d" && npx autonomous-sdlc-harness init)
+#   d=$(mktemp -d); git -C "$d" init -q; (cd "$d" && npx devscene init)
 #   jq '.execution = {target: "github-actions"}' "$d/harness.config.json" > "$d/c" && mv "$d/c" "$d/harness.config.json"
 #   s=$(mktemp -d)/gh; printf '%s\n' '#!/bin/sh' 'echo "$*" >> "$0.log"' \
 #     'case "$1 $2" in "run list") echo "[{\"databaseId\":7,\"displayTitle\":\"harness run feat_x\",\"status\":\"in_progress\"}]";;' \
@@ -1732,7 +1732,7 @@ COMMAND_VERBS='answer pause resume stop clear status'
 MENTION_ACTIONS='command reply clarify fixes none'
 MENTION_ACT_VERBS='answer pause resume status'
 MENTION_CONFIRM_VERBS='stop clear'
-MENTION_COMMAND='/autonomous-sdlc-harness:harness-read-mention'
+MENTION_COMMAND='/devscene:harness-read-mention'
 COMMENT_MARKER='<!-- sdlc-harness'
 REVIEW_ROUND_STATE='changes_requested'
 STATE_LABEL_PREFIX='sdlc-harness: '
@@ -3343,7 +3343,7 @@ valid_engine() {
 }
 
 STOPPED_LINE="a 'harness stop' run is newer than its newest 'harness run' run"
-RESUME_HINT="/autonomous-sdlc-harness:branch-resume"
+RESUME_HINT="/devscene:branch-resume"
 # A `paused` report on a usage pause says the run resumes by itself; a note
 # saying the automatic resume failed carries the action instead.
 USAGE_RESUME_NOTE="Comment \`$COMMAND_HANDLE resume\` after the limit resets to continue."
@@ -5662,7 +5662,7 @@ deliver_comment() {
   if hr_phase_enabled "$root" qa; then
     text="$text
 
-The interactive-test phase was skipped on GitHub Actions. Before merging, run \`/autonomous-sdlc-harness:branch-qa-test $branch\` locally."
+The interactive-test phase was skipped on GitHub Actions. Before merging, run \`/devscene:branch-qa-test $branch\` locally."
   fi
   if [ -z "$tmp" ] || ! file=$(mktemp "$tmp/harness-deliver-comment.XXXXXX"); then
     echo "remote-run.sh: deliver: cannot create the comment file for #$number; no comment posted" >&2
@@ -7740,7 +7740,7 @@ control_mention() {
       text=$(cat "$file")
       control_reply "$EXIT_OK" "@$CONTROL_ACTOR: $text"$'\n\n'"_Written by an agent that read your mention; it changed nothing. $(control_commands_way)_" ;;
     fixes)
-      control_reply "$EXIT_OK" "@$CONTROL_ACTOR: a mention does not start a round of fixes. A review that requests changes on the run's pull request starts one (\`docs/github-run-control.md\` → \`## 2.\`). An author who cannot request changes on their own pull request starts the round locally with \`/autonomous-sdlc-harness:branch-user-review\` (\`## 4.\`)." ;;
+      control_reply "$EXIT_OK" "@$CONTROL_ACTOR: a mention does not start a round of fixes. A review that requests changes on the run's pull request starts one (\`docs/github-run-control.md\` → \`## 2.\`). An author who cannot request changes on their own pull request starts the round locally with \`/devscene:branch-user-review\` (\`## 4.\`)." ;;
     command)
       question=""
       [ "$verb" != answer ] || question=$(printf '%s' "$decision" | jq -r '.d.question | numbers | floor')

@@ -97,7 +97,7 @@
 #   restart-watcher.sh --force    restart even then, killing the run
 #   restart-watcher.sh --help     print this header
 #
-# HARNESS_CLI names the CLI, `autonomous-sdlc-harness` when unset. It is split
+# HARNESS_CLI names the CLI, `devscene` when unset. It is split
 # on whitespace: the first word must be on PATH and the remaining words are
 # leading arguments, so `HARNESS_CLI="node <path>/cli/dist/cli.js"` runs
 # `node <path>/cli/dist/cli.js daemon stop`. There is no quoting, so a path
@@ -246,7 +246,7 @@ fi
 # `read -a` splits without glob expansion or quote parsing. The blank refusal
 # precedes every "${cli_argv[@]}": bash 3.2 under `set -u` treats that
 # expansion of an empty array as unbound.
-cli="${HARNESS_CLI:-autonomous-sdlc-harness}"
+cli="${HARNESS_CLI:-devscene}"
 cli_argv=()
 read -r -a cli_argv <<< "$cli"
 if [ -z "${cli_argv[0]:-}" ]; then
