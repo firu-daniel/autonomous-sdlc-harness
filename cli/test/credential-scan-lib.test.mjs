@@ -53,7 +53,7 @@ async function fixture(t) {
     GH_TOKEN: '',
     GITHUB_TOKEN: '',
     HARNESS_PR_TOKEN: '',
-    HARNESS_GIT_TOKEN: '',
+    DEVSCENE_GIT_TOKEN: '',
     GITHUB_ACTIONS: '',
   };
   /** Source the copied library, then run `script` under `set -u` with the remaining values as `$1`, `$2`, …. */
@@ -81,8 +81,8 @@ test('each source is found raw and in base64, labelled by where it came from', a
   const envSources = [
     ['GH_TOKEN', 'ghs_jobtoken0001', 'the job token'],
     ['GITHUB_TOKEN', 'ghs_jobtoken0002', 'the job token'],
-    ['HARNESS_PR_TOKEN', 'github_pat_pr0003', 'HARNESS_GIT_TOKEN'],
-    ['HARNESS_GIT_TOKEN', 'github_pat_git0004', 'HARNESS_GIT_TOKEN'],
+    ['HARNESS_PR_TOKEN', 'github_pat_pr0003', 'DEVSCENE_GIT_TOKEN'],
+    ['DEVSCENE_GIT_TOKEN', 'github_pat_git0004', 'DEVSCENE_GIT_TOKEN'],
   ];
   for (const [name, value, label] of envSources) {
     assertBoth(await f.scan(`diff +${value} tail`, { [name]: value }), `0|${label}|raw`, `${name} raw`);

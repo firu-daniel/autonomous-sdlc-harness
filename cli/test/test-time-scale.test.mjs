@@ -7,7 +7,7 @@
  * `helpers/watcher.mjs` in a child `node`, because the variable is read once at load; the child's
  * environment drops `HARNESS_TEST_TIME_SCALE` and `NODE_TEST_CONTEXT` before adding the case's own
  * value, so a parent run that exports the variable cannot decide the result, and blanks
- * `HARNESS_MAIN_REPO` so a watcher-launched run's anchor does not leak into the child. No case
+ * `DEVSCENE_MAIN_REPO` so a watcher-launched run's anchor does not leak into the child. No case
  * measures wall time.
  */
 

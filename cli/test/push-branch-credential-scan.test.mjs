@@ -52,7 +52,7 @@ async function adoptedFixture(t) {
     GH_TOKEN: '',
     GITHUB_TOKEN: '',
     HARNESS_PR_TOKEN: '',
-    HARNESS_GIT_TOKEN: '',
+    DEVSCENE_GIT_TOKEN: '',
     GITHUB_ACTIONS: '',
     PUSH_RETRY_DELAY_SECS: '0',
   };

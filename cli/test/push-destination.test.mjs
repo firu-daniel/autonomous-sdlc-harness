@@ -86,18 +86,18 @@ test('writeNotifications writes the resolved destination and never prints it', a
   await t.test('a topic is written as its ntfy.sh address', () => {
     const { result, file } = plan(TOPIC);
     assert.equal(result.written, true);
-    assert.match(file.content, new RegExp(`^HARNESS_PUSH_URL=https://ntfy\\.sh/${TOPIC}$`, 'm'));
+    assert.match(file.content, new RegExp(`^DEVSCENE_PUSH_URL=https://ntfy\\.sh/${TOPIC}$`, 'm'));
     assertNothingPrinted(result, TOPIC);
   });
 
   await t.test('a URL with `&` is single-quoted, and sources back byte-identical', () => {
     const { result, file } = plan(AMPERSAND_URL);
     assert.equal(result.written, true);
-    assert.match(file.content, /^HARNESS_PUSH_URL='https:\/\/example\.invalid\/hook\?a=1&b=2'$/m);
+    assert.match(file.content, /^DEVSCENE_PUSH_URL='https:\/\/example\.invalid\/hook\?a=1&b=2'$/m);
 
     const sourced = join(scratch, 'push.env.sourced');
     writeFileSync(sourced, file.content, 'utf8');
-    const out = execFileSync('bash', ['-c', '. "$1"; printf %s "$HARNESS_PUSH_URL"', 'bash', sourced], {
+    const out = execFileSync('bash', ['-c', '. "$1"; printf %s "$DEVSCENE_PUSH_URL"', 'bash', sourced], {
       encoding: 'utf8',
     });
     assert.equal(out, AMPERSAND_URL);
