@@ -44,7 +44,7 @@ const REVIEW_DIR = `${STATE_DIR}/user_reviews`;
 const REVIEW_ID = 900;
 const REVIEW_URL = `https://github.com/${REPOSITORY}/pull/12#pullrequestreview-${REVIEW_ID}`;
 const REVIEW_DISPATCH =
-  'workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=user_review -f resume=none -f chain=0';
+  'workflow run devscene-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=user_review -f resume=none -f chain=0';
 
 const STUB = `#!/usr/bin/env node
 const { appendFileSync, readFileSync } = require('node:fs');
@@ -138,7 +138,7 @@ async function reviewFixture(t) {
     const files = {};
     if (prompt) {
       files[`${STATE_DIR}/task_prompts/${branch}_task_prompt.md`] =
-        `# A task\n\nDo it.\n\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`sdlc-harness\`.\n`;
+        `# A task\n\nDo it.\n\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`devscene\`.\n`;
     }
     if (ledger) files[`${STATE_DIR}/flow_progress/${branch}_progress.md`] = '# Progress\n';
     if (story) files[`${STATE_DIR}/story_plans/${branch}_story_plan.md`] = '# Stories\n';
@@ -222,7 +222,7 @@ async function reviewFixture(t) {
 }
 
 const allComments = (calls) => calls.filter((call) => /^api --method POST repos\/[^ ]+\/issues\/\d+\/comments /.test(call.line));
-const replies = (calls) => allComments(calls).filter((call) => /<!-- sdlc-harness event=reply /.test(call.body));
+const replies = (calls) => allComments(calls).filter((call) => /<!-- devscene event=reply /.test(call.body));
 const dispatches = (calls) => calls.filter((call) => call.line.startsWith('workflow run '));
 
 /** One inline comment, as the pull request's comments endpoint returns it. */
@@ -255,7 +255,7 @@ const review = (id, login, fields = {}) => ({
 
 /** The marker line closing a round that consumed <reviews> and <comments>. */
 const markerOf = (reviews, comments) =>
-  new RegExp(`\\n<!-- sdlc-harness round collected_at=\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ reviews=${reviews.join(',')} comments=${comments.join(',')} -->\\n$`);
+  new RegExp(`\\n<!-- devscene round collected_at=\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ reviews=${reviews.join(',')} comments=${comments.join(',')} -->\\n$`);
 
 /** Assert a started round: exit 0, `feat_x_review<suffix>.md` committed on origin, one dispatch, no reply. */
 const assertRound = async (f, result, name = 'feat_x_review.md') => {
@@ -401,7 +401,7 @@ for (const [name, fields] of [['with an empty body', { state: 'COMMENTED', body:
 test("a COMMENTED review an earlier round's marker records is absent", async (t) => {
   const f = await reviewFixture(t);
   await f.commitOn('feat_x', {
-    [`${REVIEW_DIR}/feat_x_review.md`]: 'Round one.\n\n<!-- sdlc-harness round collected_at=2000-01-01T00:00:00Z reviews=5 comments= -->\n',
+    [`${REVIEW_DIR}/feat_x_review.md`]: 'Round one.\n\n<!-- devscene round collected_at=2000-01-01T00:00:00Z reviews=5 comments= -->\n',
   }, 'chore: add user review for feat_x');
   const result = await f.control({}, {
     STUB_PERMISSIONS: JSON.stringify({ alice: 'write', bob: 'write' }),
@@ -429,7 +429,7 @@ test('two reviews requesting changes become one round with two sections and one 
 test("an id already recorded in a previous round's marker is absent", async (t) => {
   const f = await reviewFixture(t);
   await f.commitOn('feat_x', {
-    [`${REVIEW_DIR}/feat_x_review.md`]: 'Round one.\n\n<!-- sdlc-harness round collected_at=2000-01-01T00:00:00Z reviews=5 comments=1 -->\n',
+    [`${REVIEW_DIR}/feat_x_review.md`]: 'Round one.\n\n<!-- devscene round collected_at=2000-01-01T00:00:00Z reviews=5 comments=1 -->\n',
   }, 'chore: add user review for feat_x');
   const result = await f.control({}, {
     STUB_PERMISSIONS: JSON.stringify({ alice: 'write', bob: 'write' }),
@@ -449,7 +449,7 @@ test("an id already recorded in a previous round's marker is absent", async (t) 
 test('a review a marker already records, with nothing else pending, is answered with its round and places nothing', async (t) => {
   const f = await reviewFixture(t);
   await f.commitOn('feat_x', {
-    [`${REVIEW_DIR}/feat_x_review.md`]: `Round one.\n\n<!-- sdlc-harness round collected_at=2000-01-01T00:00:00Z reviews=${REVIEW_ID} comments= -->\n`,
+    [`${REVIEW_DIR}/feat_x_review.md`]: `Round one.\n\n<!-- devscene round collected_at=2000-01-01T00:00:00Z reviews=${REVIEW_ID} comments= -->\n`,
   }, 'chore: add user review for feat_x');
   const before = await f.originRefs();
   const result = await f.control();
@@ -464,7 +464,7 @@ test('a review a marker already records, with nothing else pending, is answered 
 test('a comment from before the marked boundary is absent, and one inside the overlap is present', async (t) => {
   const f = await reviewFixture(t);
   await f.commitOn('feat_x', {
-    [`${REVIEW_DIR}/feat_x_review.md`]: 'Round one.\n\n<!-- sdlc-harness round collected_at=2026-01-02T00:00:00Z reviews=800 comments= -->\n',
+    [`${REVIEW_DIR}/feat_x_review.md`]: 'Round one.\n\n<!-- devscene round collected_at=2026-01-02T00:00:00Z reviews=800 comments= -->\n',
   }, 'chore: add user review for feat_x');
   const result = await f.control({}, {
     STUB_PR_COMMENTS: JSON.stringify([
@@ -571,7 +571,7 @@ test('a review while the newest run is in progress is collected, not refused; no
 test('a review already recorded in a round while the branch is in flight is answered with that round', async (t) => {
   const f = await reviewFixture(t);
   await f.commitOn('feat_x', {
-    [`${REVIEW_DIR}/feat_x_review.md`]: `Round one.\n\n<!-- sdlc-harness round collected_at=2000-01-01T00:00:00Z reviews=${REVIEW_ID} comments= -->\n`,
+    [`${REVIEW_DIR}/feat_x_review.md`]: `Round one.\n\n<!-- devscene round collected_at=2000-01-01T00:00:00Z reviews=${REVIEW_ID} comments= -->\n`,
   }, 'chore: add user review for feat_x');
   const before = await f.originRefs();
   const result = await f.control({}, { STUB_RUN_LIST: IN_PROGRESS });
@@ -597,7 +597,7 @@ test('a run whose run job has completed parked is in flight, and the reply names
     STUB_BUNDLES: JSON.stringify({ 501: { status: 'parked' } }),
   });
   const reply = await assertAcknowledged(f, result, before, /^@alice: your review was collected\. `feat_x` is `parked`; /);
-  assert.match(reply.body, /comment `@sdlc-harness answer <n>`/);
+  assert.match(reply.body, /comment `@dev-scene answer <n>`/);
 });
 
 test('a review on a stopped paused run names it stopped, with resume as the way on', async (t) => {
@@ -611,7 +611,7 @@ test('a review on a stopped paused run names it stopped, with resume as the way 
     STUB_BUNDLES: JSON.stringify({ 601: { status: 'paused', pause_reason: 'user' } }),
   });
   const reply = await assertAcknowledged(f, result, before, /^@alice: your review was collected\. `feat_x` is `stopped`; /);
-  assert.match(reply.body, /Comment `@sdlc-harness resume` to resume the run from its committed ledger\./);
+  assert.match(reply.body, /Comment `@dev-scene resume` to resume the run from its committed ledger\./);
   assert.doesNotMatch(reply.body, /`paused`/);
 });
 

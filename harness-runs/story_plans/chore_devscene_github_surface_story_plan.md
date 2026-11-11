@@ -68,7 +68,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_github_surface/ta
 8. [x] **Task 8** — Respell the `doctor` suite _(layer: cli)_ _(points: 20)_
 9. [x] **Task 9** — Respell the `init`, branch-naming, credential-scan and prompt-injection suites and the fixture helper's comment _(layer: cli)_ _(points: 10)_
 10. [x] **Task 10** — Respell the `remote-control` suite _(layer: cli)_ _(points: 20)_
-11. [ ] **Task 11** — Respell the mention, needs-agent, close and review run-control suites _(layer: cli)_ _(points: 20)_
+11. [x] **Task 11** — Respell the mention, needs-agent, close and review run-control suites _(layer: cli)_ _(points: 20)_
 12. [ ] **Task 12** — Respell the `remote-run` and `remote-trigger` suites _(layer: cli)_ _(points: 20)_
 13. [ ] **Task 13** — Respell the report, collect and deliver suites _(layer: cli)_ _(points: 15)_
 14. [ ] **Task 14** — Respell the open, progress, review-payload and start suites and the three watcher remote suites _(layer: cli)_ _(points: 15)_
