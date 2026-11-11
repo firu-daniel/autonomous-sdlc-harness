@@ -1,10 +1,11 @@
 {
-  "name": "autonomous-sdlc-harness",
+  "name": "devscene",
+  "displayName": "DevScene",
   "version": "0.6.12",
-  "description": "An autonomous SDLC harness for Claude Code: plan, implement, review, QA and ship a branch end to end.",
+  "description": "DevScene, an autonomous SDLC harness for Claude Code: plan, implement, review, QA and ship a branch end to end.",
   "author": { "name": "firu-daniel", "url": "https://github.com/firu-daniel" },
-  "homepage": "https://github.com/firu-daniel/autonomous-sdlc-harness",
-  "repository": "https://github.com/firu-daniel/autonomous-sdlc-harness",
+  "homepage": "https://github.com/firu-daniel/devscene",
+  "repository": "https://github.com/firu-daniel/devscene",
   "license": "Apache-2.0",
   "keywords": ["sdlc", "agents", "workflow", "code-review", "automation"]
 }
