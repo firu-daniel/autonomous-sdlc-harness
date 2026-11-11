@@ -19,10 +19,11 @@
 
 **Work:**
 
-- [ ] `docs/sandbox-verification.md`: every plugin-cache path, machine path, `npx` command and repository URL inside the row tables and round records, plus the disclosure sentence under its opening statement.
-- [ ] `docs/sandbox-placeholder-upstream-report.md`: its hits, including its repository URL, plus the disclosure sentence. This report is addressed to an upstream reader, so the sentence also tells that reader the repository is now `firu-daniel/devscene`.
-- [ ] `docs/sandbox-record.md` and `docs/orchestrator-cost-measurement.md`: the one hit each. Add the disclosure sentence where that hit sits in a measured record; where it is prose, add nothing.
-- [ ] Re-read every changed record line against `git show HEAD:<file>`. Each must differ only in the product name.
+- [x] `docs/sandbox-verification.md`: every plugin-cache path, machine path, `npx` command and repository URL inside the row tables and round records, plus the disclosure sentence under its opening statement.
+- [x] `docs/sandbox-placeholder-upstream-report.md`: its hits, including its repository URL, plus the disclosure sentence. This report is addressed to an upstream reader, so the sentence also tells that reader the repository is now `firu-daniel/devscene`.
+- [x] `docs/sandbox-record.md` and `docs/orchestrator-cost-measurement.md`: the one hit each. Add the disclosure sentence where that hit sits in a measured record; where it is prose, add nothing.
+  - `docs/orchestrator-cost-measurement.md`: the hit is the measured `--agent` table row, so the disclosure sentence was added under the opening `**Who reads this:**` paragraph. `docs/sandbox-record.md`: the hit is prose (the `/devscene:branch-resume` route a remedy paragraph names), so no sentence was added.
+- [x] Re-read every changed record line against `git show HEAD:<file>`. Each must differ only in the product name.
 
 **Verification:**
 

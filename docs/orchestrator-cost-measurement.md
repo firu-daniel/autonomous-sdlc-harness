@@ -2,6 +2,8 @@
 
 **Who reads this:** the maintainer deciding whether the autonomous flows keep an in-session orchestrator or move to a script-driven graph whose nodes are separate sessions, and the planner of any branch that changes the committer, the dispatch-additions record, or how a node's agent is launched. It owns three measurements taken on 2026-10-16 and the conclusions drawn from them. It owns no design choice. The script-driven planning pilot is a separate task, and its result belongs to that branch.
 
+Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed.
+
 It builds on [`copilot-foundry-research.md`](copilot-foundry-research.md) → `### 5.4 What a harness run costs at API rates`, which establishes what `total_cost_usd` is and that cache reads are the largest part of a run's cost. It revisits one premise of [`second-runtime-port-decision.md`](second-runtime-port-decision.md) → `## 4. Cost`.
 
 ---
@@ -111,7 +113,7 @@ The CLI reference (https://code.claude.com/docs/en/cli-reference) says `--tools`
 | Run | Agent and extra flags | `system`/`init` tools | Outcome |
 |---|---|---|---|
 | Project agent | `--agent limited` (`tools: Read`) | `['Read']` | No tool call; no file. The model: "The **Write** tool and the **Bash** tool are both missing from my available tools." |
-| Plugin agent | `--plugin-dir <this repo>/plugin --agent autonomous-sdlc-harness:committer` | `['Bash', 'Read', 'Edit']` — the committer's allowlist | No tool call; no file. The model: "I can't complete either step because the Write and Glob tools are not available to me." |
+| Plugin agent | `--plugin-dir <this repo>/plugin --agent devscene:committer` | `['Bash', 'Read', 'Edit']` — the committer's allowlist | No tool call; no file. The model: "I can't complete either step because the Write and Glob tools are not available to me." |
 | Control | no `--agent` | the full default set | `Write` and `Bash` both ran; the file exists |
 | Widening attempt | `--agent limited --tools "Read,Write"` | `['Read']` | not widened |
 | Widening attempt | `--agent limited --allowedTools "Write"` | `['Read']` | not widened |
