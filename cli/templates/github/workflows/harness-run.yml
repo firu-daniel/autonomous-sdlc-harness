@@ -1,7 +1,7 @@
-# harness-run.yml — runs one autonomous-sdlc-harness run in a GitHub Actions job,
+# harness-run.yml — runs one devscene run in a GitHub Actions job,
 # on a GitHub-hosted or a self-hosted runner chosen by the HARNESS_RUNNER variable.
 #
-# WHO WRITES IT. `autonomous-sdlc-harness init`, only when harness.config.json's
+# WHO WRITES IT. `devscene init`, only when harness.config.json's
 # `execution.target` is `github-actions`. Written create-if-absent: from then on
 # it is yours to tune, and a re-run of `init` keeps your copy.
 # `init --upgrade-workflows` re-renders it at that CLI's version, after a `.bak`,
@@ -38,7 +38,7 @@
 #                                     HARNESS_TRIGGER_ALLOWED_BOTS
 #   cli/src/generators/githubWorkflows.ts   --upgrade-workflows
 #   cli/src/generators/projectSettings.ts   the marketplace and plugin key
-#                                     autonomous-sdlc-harness@autonomous-sdlc-harness
+#                                     devscene@devscene
 #   cli/src/config/model.ts           DEFAULTS.scriptsDir and retrievalApplies
 #   cli/src/machine/paths.ts          machineCacheDir, under which the retrieval
 #                                     runtime sits in `retrieval/`
@@ -73,7 +73,7 @@
 #                                     plugin` step, the first
 #                                     `HARNESS_CLI_VERSION:` env line (key, then
 #                                     the quoted version) and the release-tag
-#                                     shape `autonomous-sdlc-harness--v<version>`
+#                                     shape `devscene--v<version>`
 #                                     of the `Install the pinned plugin` step
 #
 # THE COLLECT JOB. When a run ends, `remote-run.sh collect` starts the next
@@ -198,7 +198,7 @@
 # has it, and a self-hosted one must run it (docs/remote-execution.md, section
 # 8). A sha, not a tag: a tag is mutable, and this job holds the Claude
 # credential and write tokens. A pin moves when
-# `npx autonomous-sdlc-harness@<version> init --upgrade-workflows` re-renders
+# `npx devscene@<version> init --upgrade-workflows` re-renders
 # this file at a newer release's pins; a hand bump replaces the sha and its
 # comment line together. The version stays on its own line, never trailing the
 # `uses:` value: a value carrying ` #` is never a plain scalar.
@@ -368,7 +368,7 @@
 # timeout-minutes is accepted.
 #
 # THE PLUGIN PIN. The job clones the marketplace repository at the release tag
-# autonomous-sdlc-harness--v<HARNESS_CLI_VERSION> (docs/development.md, section 7)
+# devscene--v<HARNESS_CLI_VERSION> (docs/development.md, section 7)
 # and adds the clone as a directory source, so what it installs is the tag's
 # plugin whatever the default branch carries. Both the add and the install run
 # from $RUNNER_TEMP, outside the checkout, so the committed .claude/settings.json's
@@ -415,7 +415,7 @@
 # means "as long as this repository allows" — the same bound as leaving it
 # unset. It is explicit so that lowering it is a visible edit. The real bound is
 # the repository's Artifact and log retention setting, which
-# `autonomous-sdlc-harness doctor --check-github` reads. Gate 12 round 2, on
+# `devscene doctor --check-github` reads. Gate 12 round 2, on
 # 2026-09-29, observed the cap rather than a rejection on `actions/upload-artifact@v4`:
 # the artifact's `expires_at` fell 90 days after its creation, with the
 # repository's artifact-and-log-retention at {"days":90,"maximum_allowed_days":400}.
@@ -765,7 +765,7 @@ jobs:
         if: env.HARNESS_STOPPED != '1'
         working-directory: ${{ runner.temp }}
         run: |
-          npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH" \
+          npx --yes "devscene@$HARNESS_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH" \
             || { echo "::error::this branch's own commits changed files the job runs or loads, named in this step's doctor report; nothing from it runs in this job."; exit 1; }
 
       - name: Record the default branch's commit
@@ -785,7 +785,7 @@ jobs:
           retrieval=$(jq -r '(.phases.docs == true and .docs.retrieval == true)' harness.config.json)
           {
             echo "SCRIPTS_DIR=${scripts_dir%/}"
-            echo "HARNESS_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval"
+            echo "HARNESS_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/devscene/retrieval"
           } >> "$GITHUB_ENV"
           echo "retrieval=$retrieval" >> "$GITHUB_OUTPUT"
 
@@ -822,21 +822,21 @@ jobs:
       - name: Install the pinned plugin
         if: env.HARNESS_STOPPED != '1'
         run: |
-          source_repo=$(jq -r '.extraKnownMarketplaces["autonomous-sdlc-harness"].source.repo // empty' .claude/settings.json 2>/dev/null || true)
+          source_repo=$(jq -r '.extraKnownMarketplaces["devscene"].source.repo // empty' .claude/settings.json 2>/dev/null || true)
           if [ -z "$source_repo" ]; then
-            echo "::error::.claude/settings.json names no marketplace source for autonomous-sdlc-harness. Run init locally with --marketplace <owner>/<repo> and commit the file."
+            echo "::error::.claude/settings.json names no marketplace source for devscene. Run init locally with --marketplace <owner>/<repo> and commit the file."
             exit 1
           fi
-          upgrade_route="to run another version, re-render this repository's workflows with 'npx autonomous-sdlc-harness@<version> init --upgrade-workflows', then commit the paths its printed 'git add' names and push them to the default branch (docs/remote-execution.md, section 7, Upgrading)"
-          tag="autonomous-sdlc-harness--v$HARNESS_CLI_VERSION"
+          upgrade_route="to run another version, re-render this repository's workflows with 'npx devscene@<version> init --upgrade-workflows', then commit the paths its printed 'git add' names and push them to the default branch (docs/remote-execution.md, section 7, Upgrading)"
+          tag="devscene--v$HARNESS_CLI_VERSION"
           marketplace_dir="$RUNNER_TEMP/harness-marketplace"
           # --quiet does not cover the detached-HEAD advice a tag checkout prints; only advice.detachedHead gates it.
           if ! git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$tag" "https://github.com/$source_repo.git" "$marketplace_dir"; then
             echo "::error::$source_repo has no release tag $tag, so the plugin this workflow was rendered for cannot be installed. If $HARNESS_CLI_VERSION was released, its release is missing the tag; otherwise, $upgrade_route."
             exit 1
           fi
-          (cd "$RUNNER_TEMP" && claude plugin marketplace add ./harness-marketplace && claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness)
-          installed=$(claude plugin list --json | jq -r '[.[] | select(.id == "autonomous-sdlc-harness@autonomous-sdlc-harness" and .scope == "user")][0].version // empty')
+          (cd "$RUNNER_TEMP" && claude plugin marketplace add ./harness-marketplace && claude plugin install devscene@devscene)
+          installed=$(claude plugin list --json | jq -r '[.[] | select(.id == "devscene@devscene" and .scope == "user")][0].version // empty')
           if [ "$installed" != "$HARNESS_CLI_VERSION" ]; then
             echo "::error::the installed plugin is version '${installed:-none}', but this workflow was rendered for $HARNESS_CLI_VERSION and cloned $tag; $upgrade_route."
             exit 1
@@ -854,11 +854,11 @@ jobs:
         if: env.HARNESS_STOPPED != '1'
         working-directory: ${{ runner.temp }}
         run: |
-          npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" --cwd "$GITHUB_WORKSPACE" init --plugin-root-entries
+          npx --yes "devscene@$HARNESS_CLI_VERSION" --cwd "$GITHUB_WORKSPACE" init --plugin-root-entries
           changed=$(git -C "$GITHUB_WORKSPACE" status --porcelain --untracked-files=no)
           if [ -n "$changed" ]; then
             printf '%s\n' "$changed"
-            echo "::error::init $HARNESS_CLI_VERSION changed tracked files. Run 'npx autonomous-sdlc-harness@$HARNESS_CLI_VERSION init' locally and commit the result."
+            echo "::error::init $HARNESS_CLI_VERSION changed tracked files. Run 'npx devscene@$HARNESS_CLI_VERSION init' locally and commit the result."
             exit 1
           fi
 
@@ -998,7 +998,7 @@ jobs:
       - name: Preflight with doctor
         if: env.HARNESS_STOPPED != '1'
         working-directory: ${{ runner.temp }}
-        run: npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --remote-job
+        run: npx --yes "devscene@$HARNESS_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --remote-job
 
       - name: Bootstrap the checkout
         if: env.HARNESS_STOPPED != '1'
@@ -1332,7 +1332,7 @@ jobs:
             exit 1
           fi
           retrieval=$(jq -r '(.phases.docs == true and .docs.retrieval == true)' harness.config.json)
-          echo "HARNESS_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval" >> "$GITHUB_ENV"
+          echo "HARNESS_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/devscene/retrieval" >> "$GITHUB_ENV"
           echo "retrieval=$retrieval" >> "$GITHUB_OUTPUT"
           if [ "$retrieval" != true ]; then
             echo "::notice::docs retrieval does not apply to this configuration: there is no cache to warm."
@@ -1357,4 +1357,4 @@ jobs:
 
       - name: Install what is missing
         if: env.HARNESS_STOPPED != '1' && steps.config.outputs.retrieval == 'true'
-        run: npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" init
+        run: npx --yes "devscene@$HARNESS_CLI_VERSION" init

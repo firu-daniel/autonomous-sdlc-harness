@@ -45,7 +45,7 @@ const SERVER_SPECIFIER = '@modelcontextprotocol/sdk/server/index.js';
 const STDIO_SPECIFIER = '@modelcontextprotocol/sdk/server/stdio.js';
 const TYPES_SPECIFIER = '@modelcontextprotocol/sdk/types.js';
 
-const CLI = 'npx autonomous-sdlc-harness';
+const CLI = 'npx devscene';
 
 /**
  * What a corpus-coverage warning is prefixed with in the tool result, and the same literal the

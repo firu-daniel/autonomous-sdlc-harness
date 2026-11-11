@@ -117,7 +117,7 @@ const WATCHER_IN_REPO = `${INIT_SCRIPTS_DIR}/autonomous-watcher.sh`;
 const LIB_IN_REPO = `${INIT_SCRIPTS_DIR}/lib/harness-run-lib.sh`;
 
 /** The fixed halves of the two identities — everything about them that is not the repository. */
-const LAUNCHD_LABEL_PREFIX = 'com.autonomous-sdlc-harness.watcher.';
+const LAUNCHD_LABEL_PREFIX = 'com.devscene.watcher.';
 const SYSTEMD_UNIT_PREFIX = 'harness-watcher@';
 const SYSTEMD_UNIT_SUFFIX = '.service';
 
@@ -131,7 +131,7 @@ const LABEL_CHARSET = /^[a-z0-9.@_-]+$/;
  * the label: this is the published format (`docs/watcher.md` §7), so a reader of a hand-seeded
  * fixture below is reading the contract, not a restatement of the code that has to satisfy it.
  */
-const MACHINE_DIR = 'autonomous-sdlc-harness';
+const MACHINE_DIR = 'devscene';
 const REGISTRY_FILE = 'repos.json';
 const REGISTRY_SCHEMA = 1;
 
@@ -272,7 +272,7 @@ async function seedRegistry(machine, repos) {
 }
 
 /** One registry row, with the fields `docs/watcher.md` §7 says it carries and nothing else. */
-function entryFor(root, { label = 'com.autonomous-sdlc-harness.watcher.seeded', unitPath, backend = 'launchd' }) {
+function entryFor(root, { label = 'com.devscene.watcher.seeded', unitPath, backend = 'launchd' }) {
   return { root, projectName: 'seeded-project', label, backend, unitPath, registered_at: 1786575259 };
 }
 
@@ -740,8 +740,8 @@ test('the daemon is identified by a slug of its repository, and both backends sp
     assert.equal(repoSlug(repoRoot), slug, `the slug derived for ${repoRoot}`);
 
     const launchd = unitFor('launchd', repoRoot, { unitDir: launchAgents });
-    assert.equal(launchd.label, `com.autonomous-sdlc-harness.watcher.${slug}`);
-    assert.equal(launchd.targetPath, `${launchAgents}/com.autonomous-sdlc-harness.watcher.${slug}.plist`);
+    assert.equal(launchd.label, `com.devscene.watcher.${slug}`);
+    assert.equal(launchd.targetPath, `${launchAgents}/com.devscene.watcher.${slug}.plist`);
 
     const systemd = unitFor('systemd', repoRoot, { unitDir: systemdUser });
     assert.equal(systemd.label, `harness-watcher@${slug}.service`);
@@ -1262,7 +1262,7 @@ test('a registered repository that is gone is reported, and only --prune removes
 
   // A unit file that exists, so the surviving row's grade is about the repository rather than about
   // a unit this test forgot to create.
-  const unitPath = join(elsewhere, 'com.autonomous-sdlc-harness.watcher.kept.plist');
+  const unitPath = join(elsewhere, 'com.devscene.watcher.kept.plist');
   await writeFile(unitPath, '<plist/>\n', 'utf8');
 
   const kept = repoSlug(dir);

@@ -713,7 +713,7 @@ export function checkConfigShape(value: unknown): ConfigProblem[] {
   if (value['scriptsDir'] === undefined) {
     problems.warn(
       'scriptsDir',
-      `is not set, so every reader falls back to ${DEFAULTS.scriptsDir} — the directory releases before 0.6.6 wrote into, which a fresh init no longer writes. Set it explicitly to the directory your scripts are in, with npx autonomous-sdlc-harness config set scriptsDir <dir>, so its meaning cannot change under you.`,
+      `is not set, so every reader falls back to ${DEFAULTS.scriptsDir} — the directory releases before 0.6.6 wrote into, which a fresh init no longer writes. Set it explicitly to the directory your scripts are in, with npx devscene config set scriptsDir <dir>, so its meaning cannot change under you.`,
     );
   }
   checkStringArray(value, 'protectedBranches', '', problems);

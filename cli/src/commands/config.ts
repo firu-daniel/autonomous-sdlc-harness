@@ -98,7 +98,7 @@ const SUMMARY = 'Read and update harness.config.json';
 const ROADMAP_ITEM = 13;
 
 /** How the CLI is typed, for the messages that tell an operator what to run next. The `npx` prefix is not decoration: the rule for which occurrences carry it is stated once in `commands/init.ts`, beside its own `CLI`. */
-const CLI = 'npx autonomous-sdlc-harness';
+const CLI = 'npx devscene';
 
 /** The three verbs, in the order `--help` lists them. */
 const VERBS = ['list', 'get', 'set'] as const;

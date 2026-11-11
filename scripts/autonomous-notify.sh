@@ -46,7 +46,7 @@
 #
 # CREDENTIAL RESOLUTION ORDER, STATED ONCE AND IMPLEMENTED ONCE:
 #
-#   1. the machine-local file `${XDG_CONFIG_HOME:-$HOME/.config}/autonomous-sdlc-harness/push.env`
+#   1. the machine-local file `${XDG_CONFIG_HOME:-$HOME/.config}/devscene/push.env`
 #   2. the repository's configured `pushEnvPath`, when it is set and the file is
 #      there
 #
@@ -128,7 +128,7 @@
 #   neither      env -u HARNESS_PUSH_CMD -u HARNESS_PUSH_URL bash …/autonomous-notify.sh paused feat/x
 #                -> the degrade line naming the paths looked at, exit 0
 #   file order   put `HARNESS_PUSH_CMD=<recorder A>` in
-#                  "${XDG_CONFIG_HOME:-$HOME/.config}/autonomous-sdlc-harness/push.env"
+#                  "${XDG_CONFIG_HOME:-$HOME/.config}/devscene/push.env"
 #                and `HARNESS_PUSH_CMD=<recorder B>` in the repository's `pushEnvPath`
 #                -> A records; remove that file and B records
 #   unknown      bash …/autonomous-notify.sh sneezed feat/x; echo $?   -> generic title, 0
@@ -267,7 +267,7 @@ fi
 # `|| true` so a notifier that is present but refused permission cannot end the
 # script before the push arms run.
 if command -v terminal-notifier >/dev/null 2>&1; then
-  terminal-notifier -title "$TITLE" -message "$MESSAGE" -group "autonomous-sdlc-harness.$slug" >/dev/null 2>&1 || true
+  terminal-notifier -title "$TITLE" -message "$MESSAGE" -group "devscene.$slug" >/dev/null 2>&1 || true
 fi
 
 if command -v osascript >/dev/null 2>&1; then

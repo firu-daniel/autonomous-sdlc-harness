@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Written by `autonomous-sdlc-harness init`, and yours from there on: edit it freely, a re-run
+# Written by `devscene init`, and yours from there on: edit it freely, a re-run
 # keeps your copy. It is what `commands.test` invokes: it runs the raw test command line below
 # from the repository root, forwards whatever arguments it was given to it — what that line makes
 # of them is the command's own property, stated at the line — and prints one verdict line.

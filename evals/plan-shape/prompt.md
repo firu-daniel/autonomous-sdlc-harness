@@ -1,4 +1,4 @@
-/autonomous-sdlc-harness:branch-start-plan-semi-autonomous
+/devscene:branch-start-plan-semi-autonomous
 
 <!-- SEED MARKER — every line below this one is the task prompt `scaffold.sh` seeds into the tree; the line above is how each arm is driven, and `case.yaml` states what each arm does with it. -->
 

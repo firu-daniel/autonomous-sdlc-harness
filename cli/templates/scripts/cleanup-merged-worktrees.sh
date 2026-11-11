@@ -20,7 +20,7 @@
 #      reported as already gone. Then it
 #   2. deletes that run's per-run profile — `hr_run_profile_file "$slug"
 #      "$branch"`, i.e. `${XDG_STATE_HOME:-$HOME/.local/state}/
-#      autonomous-sdlc-harness/run-profiles/<slug>/<sanitized branch>.json`,
+#      devscene/run-profiles/<slug>/<sanitized branch>.json`,
 #      with `slug` from `hr_repo_slug "$main_repo"` (never the inherited
 #      `HARNESS_REPO_SLUG`, which this sweep does not read: in job mode the
 #      watcher sets it to the remote slug). No glob, no hand-built path. Three
@@ -182,7 +182,7 @@
 #                 bash -c '. "$1/scripts/lib/harness-run-lib.sh"
 #                   f=$(hr_run_profile_file "$(hr_repo_slug "$1")" feat_gone)
 #                   mkdir -p "${f%/*}" && printf "{}" > "$f"' _ "$d"
-#                 -> `$XDG_STATE_HOME/autonomous-sdlc-harness/run-profiles/
+#                 -> `$XDG_STATE_HOME/devscene/run-profiles/
 #                    <slug>/feat_gone.json`; the preview names it, the sweep
 #                    removes it
 #   manifest      likewise plant its absent-path manifest:

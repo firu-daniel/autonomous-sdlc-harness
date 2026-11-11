@@ -1,6 +1,6 @@
 # The `cli` layer
 
-> **Read this when:** the change you are implementing or reviewing lands under `cli/` — the npm package `autonomous-sdlc-harness` and the template trees it ships. **Skip when:** it lands under `plugin/` or anywhere else at the root; each has its own document, and the rules that span all of them are in `.claude/context/conventions.md`, which this file assumes has been read.
+> **Read this when:** the change you are implementing or reviewing lands under `cli/` — the npm package `devscene` and the template trees it ships. **Skip when:** it lands under `plugin/` or anywhere else at the root; each has its own document, and the rules that span all of them are in `.claude/context/conventions.md`, which this file assumes has been read.
 
 **Purpose.** The rules this layer's implementer and its reviewer both read before they start. Read the cross-layer document first: it owns the stack, the no-runtime-dependency rule, the module monopolies, the shared-constant owners, the `Reporter` and error contracts, the testing bar and the commit-message policy. What follows is this layer's own rules and its own consequences of those.
 

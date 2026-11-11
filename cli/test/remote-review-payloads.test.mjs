@@ -1,5 +1,5 @@
 /**
- * `remote-run.sh review` — the verb the supervised `/autonomous-sdlc-harness:branch-user-review`
+ * `remote-run.sh review` — the verb the supervised `/devscene:branch-user-review`
  * runs — driven against a mirror or a cut copy carrying each payload a GitHub job's agent or a local
  * session could plant.
  *

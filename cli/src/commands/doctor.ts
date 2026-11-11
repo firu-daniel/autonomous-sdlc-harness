@@ -354,7 +354,7 @@ function parseOptions(argv: readonly string[]): DoctorOptions {
     }
     throw new HarnessError(
       token.startsWith('-')
-        ? `doctor: unknown option ${JSON.stringify(token)} — the options doctor takes of its own are ${OWN_FLAGS.join(', ')}; run \`npx autonomous-sdlc-harness doctor --help\` for them and for the global options it accepts`
+        ? `doctor: unknown option ${JSON.stringify(token)} — the options doctor takes of its own are ${OWN_FLAGS.join(', ')}; run \`npx devscene doctor --help\` for them and for the global options it accepts`
         : `doctor: unexpected argument ${JSON.stringify(token)} — doctor takes no arguments, and checks the repository containing the current directory (or --cwd)`,
     );
   }
@@ -485,7 +485,7 @@ function sendTestNotification(ctx: CommandContext, checks: CheckContext): void {
   const script = outerLoopScriptPath(repoRoot, config, NOTIFY_SCRIPT_NAME);
   if (!existsSync(script)) {
     ctx.report.warn(
-      `${TEST_NOTIFICATION_FLAG} sent nothing: no notifier at ${script}. \`init\` writes it into the configured scriptsDir, so nothing there means it was removed or scriptsDir was changed without a re-run — run \`npx autonomous-sdlc-harness init\` to write it back. The exit status is the checks' and is unchanged`,
+      `${TEST_NOTIFICATION_FLAG} sent nothing: no notifier at ${script}. \`init\` writes it into the configured scriptsDir, so nothing there means it was removed or scriptsDir was changed without a re-run — run \`npx devscene init\` to write it back. The exit status is the checks' and is unchanged`,
     );
     return;
   }

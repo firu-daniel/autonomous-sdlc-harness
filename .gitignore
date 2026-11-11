@@ -9,7 +9,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# >>> autonomous-sdlc-harness (managed block: this line to the next blank line; re-run init to extend it) >>>
+# >>> devscene (managed block: this line to the next blank line; re-run init to extend it) >>>
 # Machine-local files this repository names by path but never commits. Each path is a
 # value in harness.config.json, so it is the same for everyone who clones, while the file
 # it names never leaves the machine. Where one of these has a committed `.example`

@@ -6,11 +6,11 @@
  * heuristics, no scoring, no language model. `init` has to be reproducible — a second `init`
  * against the same tree must reach the same answer, and an adopter must be able to re-derive what
  * `init` decided by reading this table — and a judgement call cannot offer that. Refining a
- * profile with judgement is `/autonomous-sdlc-harness:harness-analyze`'s job, not this table's: it
+ * profile with judgement is `/devscene:harness-analyze`'s job, not this table's: it
  * **proposes** a revision and applies it through `config set layers` after a yes, never writing
  * `harness.config.json` itself. That is why the last row is an unconditional fallback rather than a
  * refusal: an unrecognised layout is exactly the repository
- * `/autonomous-sdlc-harness:harness-analyze` exists to handle, and refusing there would block
+ * `/devscene:harness-analyze` exists to handle, and refusing there would block
  * adoption on it.
  *
  * **{@link SIGNALS} is exported as data** so `docs/cli.md` documents the same rows the code
@@ -1077,7 +1077,7 @@ export function findAnyReadManifest(context: DetectContext): string | undefined 
  * The `src/` fallback covers the `src`-layout convention, where the importable package is one
  * level further down; naming `src` there is enough for a layer path, and picking which package
  * inside it is the layer is a judgement call and therefore
- * `/autonomous-sdlc-harness:harness-analyze`'s.
+ * `/devscene:harness-analyze`'s.
  */
 export function findPythonPackageDir(context: DetectContext): string | undefined {
   for (const root of context.manifestRoots) {
@@ -1303,7 +1303,7 @@ export const SIGNALS: readonly Signal[] = [
     // **A Cargo workspace root carries this same manifest, and is deliberately not told from a
     // plain crate.** Distinguishing them would mean reading the file for a `[workspace]` table, and
     // what it would buy is a per-member layer list — a judgement call, and therefore
-    // `/autonomous-sdlc-harness:harness-analyze`'s. A workspace root that keeps a `src/` gets the
+    // `/devscene:harness-analyze`'s. A workspace root that keeps a `src/` gets the
     // single source-root layer, one that does not gets `general` alone, and either is better than
     // the `flat` fallback.
     //

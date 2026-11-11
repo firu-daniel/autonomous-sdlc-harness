@@ -474,7 +474,7 @@ test('a repository whose config has been removed fails, and says what to run', a
 
   assert.equal(status, 1);
   assert.match(stderr, failLine('config'));
-  assert.match(stderr, /npx autonomous-sdlc-harness init/);
+  assert.match(stderr, /npx devscene init/);
 });
 
 /** The nested application whose hand-fill path produces the state the command-wrappers check grades. */
@@ -2273,7 +2273,7 @@ test('a profile that starts no browser server warns, and the bare init --force i
   assert.match(broken.stderr, warnLine('browser-wiring'));
   assert.match(
     broken.stderr,
-    /`npx autonomous-sdlc-harness init --force`/,
+    /`npx devscene init --force`/,
     `the warning does not name the command that repairs it:\n${broken.stderr}`,
   );
   assert.doesNotMatch(
@@ -2482,7 +2482,7 @@ test('a qa phase armed by hand warns about the unchosen driver, and init --force
 });
 
 /** The machine-local settings file, spelled from its two parts as the CLI resolves them. */
-const MACHINE_DIR = 'autonomous-sdlc-harness';
+const MACHINE_DIR = 'devscene';
 const PUSH_ENV_FILE = 'push.env';
 
 /** The repository-side half of the same precedence, at the path a generated config seeds. */
@@ -2746,7 +2746,7 @@ const REGISTRY_FILE = 'repos.json';
 const REGISTRY_SCHEMA = 1;
 
 /** A label no generated one collides with, so a report carrying it carries *this* seeded entry. */
-const SEEDED_LABEL = 'com.autonomous-sdlc-harness.watcher.seeded-by-the-doctor-suite';
+const SEEDED_LABEL = 'com.devscene.watcher.seeded-by-the-doctor-suite';
 
 /**
  * A throwaway `XDG_STATE_HOME`, the directory the registry resolves under, and the file itself.
@@ -3868,7 +3868,7 @@ const SETUP_PENDING_OPEN = '<!-- harness:setup-pending -->';
 const SETUP_PENDING_CLOSE = '<!-- /harness:setup-pending -->';
 
 /** The analyze command, as both remedies name it. */
-const ANALYZE_COMMAND = '/autonomous-sdlc-harness:harness-analyze';
+const ANALYZE_COMMAND = '/devscene:harness-analyze';
 
 /**
  * The conventions documents the wired config points at.
@@ -4009,8 +4009,8 @@ test('the setup-analysis check reports what is unfilled, and never above a warni
     const line = detailLine(stderr, warnLine('setup-analysis'));
     assert.ok(line.includes(missing), `the warning does not name the path that resolves to nothing:\n${line}`);
     // A configured path has two ways of being wrong, and the remedies differ: the value, or the tree.
-    assert.match(line, /npx autonomous-sdlc-harness config set layers/);
-    assert.match(line, /npx autonomous-sdlc-harness init/);
+    assert.match(line, /npx devscene config set layers/);
+    assert.match(line, /npx devscene init/);
     assert.match(stdout, CLEAN_SUMMARY);
   });
 
@@ -4035,7 +4035,7 @@ test('the setup-analysis check reports what is unfilled, and never above a warni
     // adopter fixing it edits the row rather than searching the file for a string.
     assert.ok(line.includes(layerName), `the warning does not name the layer whose scope is missing:\n${line}`);
     assert.ok(line.includes(scope), `the warning does not name the directory that is not there:\n${line}`);
-    assert.match(line, /npx autonomous-sdlc-harness config set layers/);
+    assert.match(line, /npx devscene config set layers/);
 
     // The same repository with the directory created — and the states `init` leaves warning cleared
     // as the control case above clears them — reaches the pass line, which is what shows this is
@@ -4071,7 +4071,7 @@ test('the setup-analysis check reports what is unfilled, and never above a warni
     const line = detailLine(stderr, warnLine('setup-analysis'));
     assert.ok(line.includes(shared), `the warning does not name the shared document that is gone:\n${line}`);
     assert.match(line, /no layer points at it/);
-    assert.match(line, /npx autonomous-sdlc-harness init/);
+    assert.match(line, /npx devscene init/);
     assert.match(stdout, CLEAN_SUMMARY);
   });
 
@@ -4141,7 +4141,7 @@ test('a deleted task-offer rules file warns, names the remedy, and leaves the ex
   assert.equal(status, 0, `doctor exited ${status} on a condition that only warns\n${stdout}\n${stderr}`);
   assert.match(stderr, warnLine('task-offer-rules'));
   assert.ok(stderr.includes(TASK_OFFER_FILE), `the warning does not name the file that is missing:\n${stderr}`);
-  assert.match(stderr, /autonomous-sdlc-harness init/);
+  assert.match(stderr, /devscene init/);
   assert.match(stdout, CLEAN_SUMMARY);
 });
 
@@ -4194,9 +4194,9 @@ test('a rules file no fence names warns, names both remedies, and leaves the exi
   assert.ok(stderr.includes(TASK_OFFER_FILE), `the warning does not name the orphaned file:\n${stderr}`);
 
   // Both remedies, because they cost different things and the adopter picks: the section added by
-  // hand keeps everything `/autonomous-sdlc-harness:harness-analyze` filled, the forced re-render does not.
+  // hand keeps everything `/devscene:harness-analyze` filled, the forced re-render does not.
   assert.ok(stderr.includes(TASK_OFFER_SECTION), `the warning does not name the section to add by hand:\n${stderr}`);
-  assert.match(stderr, /autonomous-sdlc-harness init --force/);
+  assert.match(stderr, /devscene init --force/);
   assert.match(stdout, CLEAN_SUMMARY);
 });
 
@@ -4261,7 +4261,7 @@ test('(b) a deleted fence opt-out script warns, naming its path and init, and le
   const line = taskOfferRulesLine(stderr);
   assert.match(line, warnLine('task-offer-rules'));
   assert.ok(line.includes(join(dir, TASK_OFFER_CHECK_FILE)), `the warning does not name the script's path:\n${line}`);
-  assert.match(line, /autonomous-sdlc-harness init/);
+  assert.match(line, /devscene init/);
   assert.match(stdout, CLEAN_SUMMARY);
 });
 
@@ -4275,7 +4275,7 @@ test('(c) a settings file without the fence allow rule warns, naming the exact r
   const line = taskOfferRulesLine(stderr);
   assert.match(line, warnLine('task-offer-rules'));
   assert.ok(line.includes(`\`${TASK_OFFER_CHECK_RULE}\``), `the warning does not name the exact rule:\n${line}`);
-  assert.match(line, /autonomous-sdlc-harness init/);
+  assert.match(line, /devscene init/);
 });
 
 test('(d) an allow list holding only another entry warns and says to add the rule by hand', async (t) => {
@@ -4360,7 +4360,7 @@ async function wiredLayeredFixture(t) {
  *
  * **The subject is the disappearing signal**, which is why the first case runs `doctor` twice. Before
  * this check, the only trace that a `flat` fallback profile had never been examined was
- * `setup-analysis`'s skeleton warning — and `/autonomous-sdlc-harness:harness-analyze conventions` clears that by filling the
+ * `setup-analysis`'s skeleton warning — and `/devscene:harness-analyze conventions` clears that by filling the
  * documents, without the profile having been looked at at all. The second run in case (a) is that
  * state, reached by hand: `setup-analysis` passes and this check still warns.
  *
@@ -4622,9 +4622,9 @@ const FLAT_DIRS = Object.freeze(['cmd', 'lib', 'pkg', 'tools', 'test']);
  * pass on a reworded sentence.
  */
 const STANDING_GAP_REMEDY =
-  'If any of them is a real layer, run `/autonomous-sdlc-harness:harness-analyze` in a session here and answer `skip` for every already-filled document; ' +
+  'If any of them is a real layer, run `/devscene:harness-analyze` in a session here and answer `skip` for every already-filled document; ' +
   'a no-argument run with `--yes` takes `merge` on all of them and rewrites documents nobody asked to touch. ' +
-  'The profile itself is applied through `npx autonomous-sdlc-harness config set layers`';
+  'The profile itself is applied through `npx devscene config set layers`';
 
 /**
  * The directories a `layer-drift` warning listed, read back off the emitted detail.
@@ -4703,7 +4703,7 @@ test('the layer-drift check names the directories no layer covers, and is not gr
   await t.test('a recorded review does not silence it — a layer hand-added after the review still drifts', async (subtest) => {
     const dir = await wiredLayeredFixture(subtest);
     mkdirSync(join(dir, DRIFTED_DIR), { recursive: true });
-    // The record `/autonomous-sdlc-harness:harness-analyze layers` writes, hand-added in the shape `config set
+    // The record `/devscene:harness-analyze layers` writes, hand-added in the shape `config set
     // detection.review` takes. It clears `layer-profile` and nothing else: a verdict is a statement
     // about the profile at the moment it was reviewed, so a directory that appeared afterwards is
     // exactly Finding 38's entry 2 — "a layer is hand-added between runs".
@@ -4727,7 +4727,7 @@ test('the layer-drift check names the directories no layer covers, and is not gr
     // And its remedy fits an already-declined profile: the direct route leads, and the standing
     // analyze-first sentence — the instruction that re-derives this very record — is gone.
     assert.ok(
-      line.includes('add its row with `npx autonomous-sdlc-harness config set layers`'),
+      line.includes('add its row with `npx devscene config set layers`'),
       `the remedy does not lead with the route that needs no session:\n${line}`,
     );
     assert.ok(!line.endsWith(STANDING_GAP_REMEDY), `the recorded-review remedy is the standing analyze-first one:\n${line}`);
@@ -5477,7 +5477,7 @@ const RETRIEVAL_CHECK_IDS = ['retrieval-dependencies', 'retrieval-model-cache', 
 
 const RETRIEVAL_OFF_TEXT = 'docs.retrieval is off (it needs phases.docs and docs.retrieval both true)';
 
-const REMEDY = 'npx autonomous-sdlc-harness init';
+const REMEDY = 'npx devscene init';
 
 /** A retrieval-on fixture with a one-file corpus, a planted model cache and, unless told not to, a planted runtime. */
 async function retrievalDoctorFixture(t, { runtime = true, runtimeVersion } = {}) {
@@ -5514,7 +5514,7 @@ test('Acceptance 6 (a): with retrieval on and everything in place, the three ret
 
 test('Acceptance 6 (b): with the model cache removed, the model and index checks fail and doctor exits non-zero', async (t) => {
   const { dir, cacheHome, env } = await retrievalDoctorFixture(t);
-  await rm(join(cacheHome, 'autonomous-sdlc-harness', 'retrieval', 'models'), { recursive: true, force: true });
+  await rm(join(cacheHome, 'devscene', 'retrieval', 'models'), { recursive: true, force: true });
 
   const { status, stdout, stderr } = await runCli(dir, ['doctor'], env);
 
@@ -5547,7 +5547,7 @@ test('Acceptance 6 (d): with no runtime installed, or one at another version, re
       assert.notEqual(status, 0);
       assert.match(stderr, failLine('retrieval-dependencies'), stdout);
       const line = detailLine(stderr, failLine('retrieval-dependencies'));
-      assert.ok(line.includes('autonomous-sdlc-harness'), line);
+      assert.ok(line.includes('devscene'), line);
       assert.ok(line.includes(REMEDY), line);
     });
   }
@@ -6035,7 +6035,7 @@ test('the remote-execution check grades local evidence and fails only what stops
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-execution');
-    assert.ok(line?.includes('/autonomous-sdlc-harness:branch-resume'), stderr);
+    assert.ok(line?.includes('/devscene:branch-resume'), stderr);
   });
 
   await t.test('on, with harness-run.yml not on origin/<defaultBranch>, warns to commit and push it', async (subtest) => {
@@ -6080,7 +6080,7 @@ test('the remote-execution check grades local evidence and fails only what stops
     const line = reportLine(stderr, 'warn', 'remote-execution');
     assert.ok(line?.includes(UPGRADE_ROUTE), `${stdout}\n${stderr}`);
     assert.ok(line.includes(STALE_PIN), line);
-    assert.ok(line.includes(`autonomous-sdlc-harness@${STALE_PIN} doctor`), line);
+    assert.ok(line.includes(`devscene@${STALE_PIN} doctor`), line);
     assert.ok(line.includes('git push --no-verify origin'), line);
     assertMoveRoute(line);
   });
@@ -6207,7 +6207,7 @@ test('the remote-execution check grades local evidence and fails only what stops
 
     const line = reportLine(stderr, 'warn', 'remote-execution');
     assert.ok(line?.includes(QA_SKIP), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('/autonomous-sdlc-harness:branch-qa-test'), line);
+    assert.ok(line.includes('/devscene:branch-qa-test'), line);
   });
 
   await t.test('on, with phases.qa false, passes without the QA warning', async (subtest) => {
@@ -6427,7 +6427,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     assert.deepEqual(ghInvocations(stub), [], 'a default doctor run invoked gh');
     const line = reportLine(stdout, 'pass', 'remote-github');
-    assert.ok(line?.includes('not asked — run `npx autonomous-sdlc-harness doctor --check-github`'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('not asked — run `npx devscene doctor --check-github`'), `${stdout}\n${stderr}`);
   });
 
   await t.test('--check-github with remote execution off asks nothing', async (subtest) => {
@@ -7093,7 +7093,7 @@ test('the forge check names every forge state and never fails', async (t) => {
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'forge');
     assert.ok(line?.includes(`${REMOTE_TRIGGER_WORKFLOW}, ${REMOTE_CONTROL_WORKFLOW} are absent, so labelling an issue starts nothing, and comments and reviews start nothing`), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('re-run `npx autonomous-sdlc-harness init`'), line);
+    assert.ok(line.includes('re-run `npx devscene init`'), line);
   });
 
   await t.test('github with harness-control.yml absent warns naming it and init', async (subtest) => {
@@ -7107,7 +7107,7 @@ test('the forge check names every forge state and never fails', async (t) => {
     const line = reportLine(stderr, 'warn', 'forge');
     assert.ok(line?.includes(`${REMOTE_CONTROL_WORKFLOW} is absent, so comments and reviews start nothing`), `${stdout}\n${stderr}`);
     assert.ok(!line.includes(REMOTE_TRIGGER_WORKFLOW), line);
-    assert.ok(line.includes('re-run `npx autonomous-sdlc-harness init`'), line);
+    assert.ok(line.includes('re-run `npx devscene init`'), line);
   });
 
   await t.test('github with harness-control.yml present but not on origin warns with the push remedy', async (subtest) => {
@@ -7195,7 +7195,7 @@ test('the forge check names every forge state and never fails', async (t) => {
     assert.ok(line?.includes(`${REMOTE_CONTROL_WORKFLOW} was ${BEFORE_RUN_ACTORS} and passes the scripts no list`), `${stdout}\n${stderr}`);
     assert.ok(!line.includes(`${REMOTE_TRIGGER_WORKFLOW} was`), line);
     assert.ok(!line.includes(`${REMOTE_TRIGGER_WORKFLOW}, ${REMOTE_CONTROL_WORKFLOW} were`), line);
-    assert.ok(line.includes('`npx autonomous-sdlc-harness init --force`'), line);
+    assert.ok(line.includes('`npx devscene init --force`'), line);
   });
 
   await t.test('github with both forge workflows as init writes them says nothing about HARNESS_RUN_ACTORS', async (subtest) => {
@@ -7231,7 +7231,7 @@ test('the forge check names every forge state and never fails', async (t) => {
     const line = reportLine(stderr, 'warn', 'forge');
     assert.ok(line?.includes(`${REMOTE_CONTROL_WORKFLOW} ${NO_MENTION_CREDENTIAL}, so a mention of \`@sdlc-harness\` anywhere in a comment is answered that it was not read`), `${stdout}\n${stderr}`);
     assert.ok(line.includes('the `@sdlc-harness <verb>` commands still work'), line);
-    assert.ok(line.includes('`npx autonomous-sdlc-harness init --force`'), line);
+    assert.ok(line.includes('`npx devscene init --force`'), line);
     assert.ok(!line.includes(BEFORE_RUN_ACTORS), line);
   });
 
@@ -7259,7 +7259,7 @@ test('the forge check names every forge state and never fails', async (t) => {
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'forge');
     assert.ok(line?.includes('the remote-github check above reports what GitHub says'), `${stdout}\n${stderr}`);
-    assert.ok(!line.includes('`npx autonomous-sdlc-harness doctor --check-github` asks GitHub'), line);
+    assert.ok(!line.includes('`npx devscene doctor --check-github` asks GitHub'), line);
   });
 });
 

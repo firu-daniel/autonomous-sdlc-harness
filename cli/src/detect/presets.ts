@@ -114,7 +114,7 @@ const GENERAL_LAYER_CONVENTIONS = 'conventions.md';
 /**
  * The rules document a preset's single source-root layer points at — the shape a stack whose whole
  * application lives under one directory gets, where naming that directory is deterministic and
- * decomposing it is a judgement call and therefore `/autonomous-sdlc-harness:harness-analyze`'s.
+ * decomposing it is a judgement call and therefore `/devscene:harness-analyze`'s.
  */
 const MODULE_LAYER_CONVENTIONS = 'module.md';
 
@@ -648,7 +648,7 @@ function presetSourceLayers(preset: PresetName, context: DetectContext): Harness
       // The single-module Android application this row exists for: one source root under the
       // module's main source set, named because it is deterministic, and pointed at the
       // single-module document for `flutter`'s reason — decomposing it into features is a
-      // judgement call and therefore `/autonomous-sdlc-harness:harness-analyze`'s. A
+      // judgement call and therefore `/devscene:harness-analyze`'s. A
       // **multi-module** Android repository laid out as root-level `data/`, `domain/`,
       // `presentation/` never reaches here: it matches `layered-clean-arch:layer-directories`,
       // which is evaluated well above this preset's row.
@@ -670,7 +670,7 @@ function presetSourceLayers(preset: PresetName, context: DetectContext): Harness
       // Both build tools reach here, and both get the same one layer: a Maven or Gradle project's
       // sources live under one main source set, naming it is deterministic, and decomposing it into
       // modules or packages is a judgement call and therefore
-      // `/autonomous-sdlc-harness:harness-analyze`'s. A **multi-module** JVM repository laid out as
+      // `/devscene:harness-analyze`'s. A **multi-module** JVM repository laid out as
       // root-level `data/`, `domain/`, `presentation/` never reaches here — it matches
       // `layered-clean-arch:layer-directories`, far above these rows.
       const dir = jvmSourceDir(context);
@@ -685,7 +685,7 @@ function presetSourceLayers(preset: PresetName, context: DetectContext): Harness
       // line here. Naming a layer per `.csproj` would take its name from the project file
       // (`MyApp.Infrastructure` → `infrastructure`) and thereby decide which project is which
       // layer — a judgement about the adopter's architecture, and therefore
-      // `/autonomous-sdlc-harness:harness-analyze`'s, exactly as the `monorepo` and `flat` cases
+      // `/devscene:harness-analyze`'s, exactly as the `monorepo` and `flat` cases
       // below say for packages and modules. Naming `src/` is deterministic; naming its contents is
       // not.
       const dir = dotnetSourceDir(context);
@@ -699,7 +699,7 @@ function presetSourceLayers(preset: PresetName, context: DetectContext): Harness
       // One source root, pointed at the single-module document for `flutter`'s reason: naming
       // `Sources/` — or the directory the Xcode container is named after — is deterministic, while
       // decomposing it into targets or feature modules is a judgement call and therefore
-      // `/autonomous-sdlc-harness:harness-analyze`'s. The layer is called `sources` in both arms
+      // `/devscene:harness-analyze`'s. The layer is called `sources` in both arms
       // even where the directory is `MyApp/`; {@link APPLE_LAYER_NAME} says why the two are allowed
       // to differ here.
       const dir = appleSourceDir(context);
@@ -712,7 +712,7 @@ function presetSourceLayers(preset: PresetName, context: DetectContext): Harness
     case 'rust-cargo': {
       // One layer at the crate's `src/`, for {@link dotnetSourceDir}'s reason: naming the source
       // root is deterministic, while splitting it into modules — or a workspace into its members —
-      // is a judgement call and therefore `/autonomous-sdlc-harness:harness-analyze`'s.
+      // is a judgement call and therefore `/devscene:harness-analyze`'s.
       const dir = cargoSourceDir(context);
       return dir === undefined
         ? // `buildPreset`'s general-only warning then fires, which is the right answer: a manifest
@@ -725,7 +725,7 @@ function presetSourceLayers(preset: PresetName, context: DetectContext): Harness
       // reason: naming `app/` or `lib/` is deterministic, while splitting either into the
       // sub-directories Rails puts there — `models/`, `controllers/`, `views/` — would decide the
       // adopter's architecture, which is a judgement call and therefore
-      // `/autonomous-sdlc-harness:harness-analyze`'s. A Rails-shaped repository does not arrive here
+      // `/devscene:harness-analyze`'s. A Rails-shaped repository does not arrive here
       // at all: `api-service:route-directory` matches its `app/controllers` far above this preset's
       // row and gives it the better profile.
       const dir = firstSourceDir(context, RUBY_SOURCE_DIRS);
@@ -739,7 +739,7 @@ function presetSourceLayers(preset: PresetName, context: DetectContext): Harness
       // One layer at whichever conventional source root exists, for the `ruby-bundler` arm's
       // reason: naming Laravel's `app/` or PSR-4's `src/` is deterministic, while splitting either
       // into the sub-directories a framework puts there — `Http/`, `Models/`, `Providers/` — would
-      // decide the adopter's architecture, which is `/autonomous-sdlc-harness:harness-analyze`'s. A
+      // decide the adopter's architecture, which is `/devscene:harness-analyze`'s. A
       // Laravel-shaped repository does not arrive here at all: `api-service:route-directory` matches
       // its `routes/` far above this preset's row and gives it the better profile.
       const dir = firstSourceDir(context, PHP_SOURCE_DIRS);
@@ -752,7 +752,7 @@ function presetSourceLayers(preset: PresetName, context: DetectContext): Harness
     case 'cmake-cpp': {
       // The two conventional source roots, for the `rust-cargo` arm's reason: naming them is
       // deterministic, while splitting a C++ project into modules, targets or libraries is a
-      // judgement call and therefore `/autonomous-sdlc-harness:harness-analyze`'s.
+      // judgement call and therefore `/devscene:harness-analyze`'s.
       // {@link CMAKE_HEADER_DIRS} says why `include/` is a row of its own and why it is a *source*
       // row.
       const source = firstSourceDir(context, CMAKE_SOURCE_DIRS);
@@ -770,7 +770,7 @@ function presetSourceLayers(preset: PresetName, context: DetectContext): Harness
     case 'flat':
       // Both are deliberately layer-less: the packages of a monorepo and the shape of an
       // unrecognised tree are judgement calls, and judgement is
-      // `/autonomous-sdlc-harness:harness-analyze`'s.
+      // `/devscene:harness-analyze`'s.
       return [generalLayer()];
   }
 }
@@ -2232,7 +2232,7 @@ export function buildPreset(detection: DetectionResult): PresetProfile {
   // toolchain's conventional test root exists, and gating on the spliced length would silence this
   // warning for a repository whose source root did not resolve but whose test root did.
   // `flat` is excluded because its own fallback warning already says to run
-  // `/autonomous-sdlc-harness:harness-analyze`, and the same advice twice in one summary reads as a
+  // `/devscene:harness-analyze`, and the same advice twice in one summary reads as a
   // bug rather than as emphasis.
   //
   // The trailing clause names what `doctor` will say about the same repository, gated on the set

@@ -1,10 +1,10 @@
-# harness-control.yml — acts on an autonomous-sdlc-harness command comment
+# harness-control.yml — acts on a devscene command comment
 # (`@sdlc-harness answer|pause|resume|stop|clear|status`) on an issue or pull
 # request, turns a pull-request review requesting changes into the next
 # user-review round, and stops a run when its issue or pull request is closed
 # or its branch is deleted.
 #
-# WHO WRITES IT. `autonomous-sdlc-harness init`, only when harness.config.json's
+# WHO WRITES IT. `devscene init`, only when harness.config.json's
 # `forge` is `github` and its `execution.target` is `github-actions`. Written
 # create-if-absent: from then on it is yours to tune, and a re-run of `init`
 # keeps your copy. `init --upgrade-workflows` does NOT re-render it: it carries
@@ -134,7 +134,7 @@
 #
 # THE PLUGIN. This file carries no pin of its own. A comment job reads the
 # first HARNESS_CLI_VERSION in the checkout's harness-run.yml, clones the
-# release tag `autonomous-sdlc-harness--v<that version>` outside the checkout
+# release tag `devscene--v<that version>` outside the checkout
 # as harness-run.yml's `Install the pinned plugin` step does, checks the
 # plugin manifest's version against it, and hands the plugin's directory to
 # the act step as HARNESS_MENTION_PLUGIN_DIR; the session loads it with
@@ -195,12 +195,12 @@
 #                                     (`HARNESS_CLI_VERSION`, read from
 #                                     harness-run.yml)
 #   cli/src/generators/projectSettings.ts   MARKETPLACE_NAME
-#                                     (`autonomous-sdlc-harness`)
+#                                     (`devscene`)
 #   cli/src/config/model.ts           DEFAULTS.scriptsDir
 #   harness-run.yml                   the concurrency group
 #                                     `harness-review-<branch>`, held by its
 #                                     `collect` job; the release-tag shape
-#                                     `autonomous-sdlc-harness--v<version>`
+#                                     `devscene--v<version>`
 #                                     of its `Install the pinned plugin` step
 #   remote-run.sh (the scriptsDir copy) IN_OAUTH, IN_API and
 #                                     HARNESS_MENTION_PLUGIN_DIR, the env
@@ -355,21 +355,21 @@ jobs:
             echo "::warning::.github/workflows/harness-run.yml carries no HARNESS_CLI_VERSION, so no plugin was fetched and a mention gets the no-plugin reply."
             exit 1
           fi
-          source_repo=$(jq -r '.extraKnownMarketplaces["autonomous-sdlc-harness"].source.repo // empty' .claude/settings.json 2>/dev/null || true)
+          source_repo=$(jq -r '.extraKnownMarketplaces["devscene"].source.repo // empty' .claude/settings.json 2>/dev/null || true)
           if [ -z "$source_repo" ]; then
-            echo "::warning::.claude/settings.json names no marketplace source for autonomous-sdlc-harness, so the plugin at $pin was not fetched."
+            echo "::warning::.claude/settings.json names no marketplace source for devscene, so the plugin at $pin was not fetched."
             exit 1
           fi
-          tag="autonomous-sdlc-harness--v$pin"
+          tag="devscene--v$pin"
           marketplace_dir="$RUNNER_TEMP/harness-marketplace"
           # --quiet does not cover the detached-HEAD advice a tag checkout prints; only advice.detachedHead gates it.
           if ! git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$tag" "https://github.com/$source_repo.git" "$marketplace_dir"; then
             echo "::warning::$source_repo has no release tag $tag, so the plugin at $pin was not fetched."
             exit 1
           fi
-          plugin_source=$(jq -r '[.plugins[]? | select(.name == "autonomous-sdlc-harness") | .source | strings][0] // empty' "$marketplace_dir/.claude-plugin/marketplace.json" 2>/dev/null || true)
+          plugin_source=$(jq -r '[.plugins[]? | select(.name == "devscene") | .source | strings][0] // empty' "$marketplace_dir/.claude-plugin/marketplace.json" 2>/dev/null || true)
           if [ -z "$plugin_source" ]; then
-            echo "::warning::$tag's .claude-plugin/marketplace.json has no readable autonomous-sdlc-harness entry, so the plugin at $pin was not handed to the mention session."
+            echo "::warning::$tag's .claude-plugin/marketplace.json has no readable devscene entry, so the plugin at $pin was not handed to the mention session."
             exit 1
           fi
           plugin_dir="$marketplace_dir/${plugin_source#./}"

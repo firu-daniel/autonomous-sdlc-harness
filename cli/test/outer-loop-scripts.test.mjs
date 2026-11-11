@@ -125,11 +125,11 @@ const LAUNCHER_FILE = 'docs-search-server.sh';
 const LAUNCHER_PATH = `${SCRIPTS_DIR}/${LAUNCHER_FILE}`;
 const LAUNCHER_TEMPLATE = join(TEMPLATE_SCRIPTS, LAUNCHER_FILE);
 const RUNTIME_ENTRY = [
-  'autonomous-sdlc-harness',
+  'devscene',
   'retrieval',
   'runtime',
   'node_modules',
-  'autonomous-sdlc-harness',
+  'devscene',
   'dist',
   'cli.js',
 ];
@@ -1738,7 +1738,7 @@ test('the docs-retrieval server launcher refuses with an empty stdout when no ru
   assert.equal(status, 1, `the launcher exited ${status}:\n${stderr}`);
   // Stdout is the MCP transport: a refusal written there would be a malformed frame.
   assert.equal(stdout, '', `the launcher wrote to stdout:\n${stdout}`);
-  assert.match(stderr, /npx autonomous-sdlc-harness init/, `the refusal does not name the remedy:\n${stderr}`);
+  assert.match(stderr, /npx devscene init/, `the refusal does not name the remedy:\n${stderr}`);
   assert.ok(stderr.includes(join(cacheHome, ...RUNTIME_ENTRY)), `the refusal does not name the entry path:\n${stderr}`);
 });
 
@@ -1961,11 +1961,11 @@ test('hr_cache_dir resolves the machine cache directory the way machineCacheDir(
 
   const empty = await sourceAndCallWithEnv(dir, 'hr_cache_dir', { XDG_CACHE_HOME: '', HOME: home });
   assert.equal(empty.status, 0, `hr_cache_dir exited ${empty.status}: ${empty.stderr}`);
-  assert.equal(empty.stdout, `${home}/.cache/autonomous-sdlc-harness\n`, 'an empty XDG_CACHE_HOME did not fall back to $HOME/.cache');
+  assert.equal(empty.stdout, `${home}/.cache/devscene\n`, 'an empty XDG_CACHE_HOME did not fall back to $HOME/.cache');
 
   const slashed = await sourceAndCallWithEnv(dir, 'hr_cache_dir', { XDG_CACHE_HOME: '/x/', HOME: home });
   assert.equal(slashed.status, 0, `hr_cache_dir exited ${slashed.status}: ${slashed.stderr}`);
-  assert.equal(slashed.stdout, '/x/autonomous-sdlc-harness\n', 'one trailing slash was not stripped');
+  assert.equal(slashed.stdout, '/x/devscene\n', 'one trailing slash was not stripped');
 });
 
 /**

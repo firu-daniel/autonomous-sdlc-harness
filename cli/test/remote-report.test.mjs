@@ -192,7 +192,7 @@ test('paused with a user reason comments on the issue, naming resume, and adds t
   assert.equal(allComments(calls).length, 1);
   assert.match(posted[0].body, /Comment `@sdlc-harness resume` to continue\./);
   assert.ok(posted[0].body.endsWith(`\n\n${MARKER('paused', 'feat_x')}\n`), posted[0].body);
-  assert.doesNotMatch(posted[0].body, /\/autonomous-sdlc-harness:/);
+  assert.doesNotMatch(posted[0].body, /\/devscene:/);
   assert.deepEqual(
     labelAdds(calls, 7).map((call) => call.args.at(-1)),
     ['labels[]=sdlc-harness: paused'],

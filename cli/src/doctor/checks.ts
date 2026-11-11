@@ -377,7 +377,7 @@ import {
  * is not decoration: the rule for which occurrences carry it is stated once in `commands/init.ts`,
  * beside its own `CLI`.
  */
-const CLI = 'npx autonomous-sdlc-harness';
+const CLI = 'npx devscene';
 
 /** The remedy every check that needs `gh` gives when it cannot run it. */
 const GH_INSTALL_REMEDY = `install the GitHub CLI (https://cli.github.com) and run \`gh auth login\`, or point ${GH_CLI_VARIABLE} at it`;
@@ -2767,7 +2767,7 @@ const DAEMON_PATH_CHECK: Check = {
  * no commit set of its own but the paths the upgrade's printed `git add` names; and its `push`
  * fragment is a complete sentence in both of its forms, so the join adds no punctuation of its own.
  * Under `--remote-job` the job runs `doctor` at its own pin, so this cannot arise there. A file with no pin, or unreadable, is a note. No `harness-resume.yml`, because a usage-paused
- * hosted run then waits for `/autonomous-sdlc-harness:branch-resume`; a `harness-run.yml` that
+ * hosted run then waits for `/devscene:branch-resume`; a `harness-run.yml` that
  * `origin/<defaultBranch>` does not carry, because GitHub dispatches only a workflow its default
  * branch has — the run starts once it is pushed, so nothing is broken here, and its remedy's push
  * skips the hook because the `pre-push` hook `init` wired refuses every push to the default branch
@@ -2819,7 +2819,7 @@ const REMOTE_EXECUTION_CHECK: Check = {
     }
     if (!resumePresent) {
       warnings.push(
-        `${WORKFLOW_RESUME_PATH} is absent, so a hosted run paused on usage waits for /autonomous-sdlc-harness:branch-resume instead of resuming on its own: re-run \`${CLI} init\` to write it`,
+        `${WORKFLOW_RESUME_PATH} is absent, so a hosted run paused on usage waits for /devscene:branch-resume instead of resuming on its own: re-run \`${CLI} init\` to write it`,
       );
     }
 
@@ -2832,7 +2832,7 @@ const REMOTE_EXECUTION_CHECK: Check = {
 
     if (ctx.config.phases?.qa === true) {
       warnings.push(
-        "phases.qa is true, but a remote run skips the interactive-test phase — GitHub Actions jobs have no browser wiring, application dependencies or QA credentials for it (docs/remote-execution.md → §3, The interactive-test phase): run /autonomous-sdlc-harness:branch-qa-test <branch> locally before merging a remote run's branch",
+        "phases.qa is true, but a remote run skips the interactive-test phase — GitHub Actions jobs have no browser wiring, application dependencies or QA credentials for it (docs/remote-execution.md → §3, The interactive-test phase): run /devscene:branch-qa-test <branch> locally before merging a remote run's branch",
       );
     }
 
@@ -4460,7 +4460,7 @@ function detectionProvenance(detection: HarnessDetection): string {
  *
  * **It is deliberately blind to the conventions documents.** {@link SETUP_ANALYSIS_CHECK} above
  * grades those, and its skeleton warning was the last indirect trace that a fallback profile had
- * never been examined — a trace `/autonomous-sdlc-harness:harness-analyze conventions` clears by filling the documents,
+ * never been examined — a trace `/devscene:harness-analyze conventions` clears by filling the documents,
  * leaving `doctor` green about a profile nobody looked at. This check reads no document, so that
  * command does not move it.
  *

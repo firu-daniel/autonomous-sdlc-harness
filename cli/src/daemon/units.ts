@@ -10,7 +10,7 @@
  * ## Five non-obvious choices, and where each comes from
  *
  * 1. **The identity is per repository, not per project name.** The launchd label is
- *    `com.autonomous-sdlc-harness.watcher.<slug>` and the systemd unit name
+ *    `com.devscene.watcher.<slug>` and the systemd unit name
  *    `harness-watcher@<slug>.service`, where `<slug>` is {@link repoSlug} of the repository the
  *    daemon was installed from. Two repositories on one machine therefore install daemons that
  *    cannot collide — which two checkouts sharing a `projectName` would have, under a label built
@@ -84,7 +84,7 @@ const UNIT_TEMPLATES = {
 } as const;
 
 /** Reverse-DNS prefix of the launchd label; {@link repoSlug} completes it. */
-const LAUNCHD_LABEL_PREFIX = 'com.autonomous-sdlc-harness.watcher';
+const LAUNCHD_LABEL_PREFIX = 'com.devscene.watcher';
 
 /** The systemd unit name, either side of {@link repoSlug}. */
 const SYSTEMD_UNIT_PREFIX = 'harness-watcher@';
@@ -131,7 +131,7 @@ export interface RenderedUnit {
   readonly targetPath: string;
   /**
    * The identifier the backend addresses this service by: the launchd label
-   * `com.autonomous-sdlc-harness.watcher.<slug>`, or the systemd unit name
+   * `com.devscene.watcher.<slug>`, or the systemd unit name
    * `harness-watcher@<slug>.service` — the strings `launchctl` and `systemctl --user` respectively
    * take, with `<slug>` from {@link repoSlug}.
    */
@@ -404,7 +404,7 @@ function render(file: string, values: Readonly<Record<string, string>>): string 
  * Render the daemon's unit for the detected backend, and compute where it is installed and what it
  * is then called.
  *
- * - **launchd** — `~/Library/LaunchAgents/com.autonomous-sdlc-harness.watcher.<slug>.plist`.
+ * - **launchd** — `~/Library/LaunchAgents/com.devscene.watcher.<slug>.plist`.
  * - **systemd** — `~/.config/systemd/user/harness-watcher@<slug>.service`.
  * - **`none`** — throws, naming the platform and carrying detection's own reason, because a caller
  *   that reached this function with no backend has a question with no answer rather than a value to

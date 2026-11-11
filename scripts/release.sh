@@ -79,7 +79,7 @@ if [ -z "$repo_root" ] || ! cd "$repo_root"; then
   fail "could not resolve a repository root from '${script_dir}' (is git on PATH?)"
 fi
 
-package="autonomous-sdlc-harness"
+package="devscene"
 tag="${package}--v${version}"
 manifest="plugin/.claude-plugin/plugin.json"
 bump_branch="chore_bump_version_${version//[.+-]/_}"

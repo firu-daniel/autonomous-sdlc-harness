@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Written by `autonomous-sdlc-harness init`, and yours from there on: edit it freely, a re-run
+# Written by `devscene init`, and yours from there on: edit it freely, a re-run
 # keeps your copy. It is what `commands.devServer` invokes: it starts the development server in
 # the background, from the repository root, and prints the pid and the log path a caller needs.
 #

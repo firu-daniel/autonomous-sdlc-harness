@@ -135,7 +135,7 @@ Whether it loads a repository's `.claude/` plugins, hooks, subagents or MCP serv
 
 ### 4.4 Claude sessions in VS Code
 
-VS Code runs Claude sessions on the Claude Agent SDK. Usage is billed through Copilot when a Copilot model is picked, the sessions "use Claude project configuration" in the workspace, and an organisation may manage the setting `github.copilot.chat.claudeAgent.enabled`. **Documented:** https://code.visualstudio.com/docs/agents/agent-types/third-party-agents. **Inference:** this can carry the supervised `/autonomous-sdlc-harness:branch-*` flows by hand, not unattended runs. VS Code's own local harness ignoring hook matchers (§3.4) is a reason to prefer the Claude session over it.
+VS Code runs Claude sessions on the Claude Agent SDK. Usage is billed through Copilot when a Copilot model is picked, the sessions "use Claude project configuration" in the workspace, and an organisation may manage the setting `github.copilot.chat.claudeAgent.enabled`. **Documented:** https://code.visualstudio.com/docs/agents/agent-types/third-party-agents. **Inference:** this can carry the supervised `/devscene:branch-*` flows by hand, not unattended runs. VS Code's own local harness ignoring hook matchers (§3.4) is a reason to prefer the Claude session over it.
 
 ### 4.5 Not recommended: Claude Code on a Copilot token through a proxy
 

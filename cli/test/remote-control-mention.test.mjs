@@ -46,7 +46,7 @@ const ENGINE_COMMENTS_JQ = '.[] | {login: .user.login, at: .created_at, body: .b
 const REPLY_MARKER = '<!-- sdlc-harness event=reply branch=feat_x -->';
 const OAUTH = 'oauth-credential-value-1234';
 const API_KEY = 'api-credential-value-5678';
-const MENTION_COMMAND = '/autonomous-sdlc-harness:harness-read-mention';
+const MENTION_COMMAND = '/devscene:harness-read-mention';
 const COMMANDS = ['answer [<n>]', 'pause', 'resume', 'stop', 'clear', 'status'];
 
 const DIFF = 'diff --git a/notes.txt b/notes.txt\n--- a/notes.txt\n+++ b/notes.txt\n@@ -1 +1 @@\n-old\n+new\n';
@@ -654,7 +654,7 @@ test('fixes posts the script\'s own text', async (t) => {
     STUB_AGENT_OUTPUT: result({ action: 'fixes', reason: 'asked for fixes' }),
   }), 0);
   assert.match(body, /^@alice: a mention does not start a round of fixes\. A review that requests changes on the run's pull request starts one/);
-  assert.match(body, /`\/autonomous-sdlc-harness:branch-user-review`/);
+  assert.match(body, /`\/devscene:branch-user-review`/);
 });
 
 test('command stop and command clear each get the confirmation request, no workflow run and no stop', async (t) => {

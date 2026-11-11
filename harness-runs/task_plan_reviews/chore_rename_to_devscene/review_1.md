@@ -1,0 +1,18 @@
+# Task plan review — iteration 1
+
+## Must Fix
+
+1. **The expected `lessons.md` diff is wrong: the capture already differs from the template on a second line** — `task_27_plan.md`.
+   Task 27's second `**Work:**` bullet rewrites the `examples/notes-app/README.md` sentence so that `diff cli/templates/state-dir/lessons.md sdlc-harness/lessons.md` *"now prints only the closing `_Written by …_` line pair, which differs in the product name alone, and that is the whole expected diff"*. Its third `**Verification:**` bullet expects `git diff --no-index cli/templates/state-dir/lessons.md examples/notes-app/sdlc-harness/lessons.md` to show *"only the closing-line pair the README now describes"*. Neither can hold.
+   At `HEAD` the two files already differ, before any task runs: `git diff --no-index --stat` reports `1 insertion(+), 1 deletion(-)`. The difference is the opening **What this is.** paragraph. The template ends it *"…or a run in a second run copy — the working copy the watcher prepares for one run — appends its lesson to the wrong branch."* The capture ends it *"…or a run in a second working copy appends its lesson to the wrong branch."* The template's wording changed after the capture was taken, so the README's current claim (*"exits 0 with no output … that `diff` is expected to stay empty"*) is already false. After Task 3 respells the template's closing `_Written by …_` line, the diff will show **two** line pairs: the opening paragraph and the footer. The implementer will either write a false sentence into the README or fail its own verification. The capture is frozen and cannot be edited to close the gap.
+   **Fix:** In `task_27_plan.md`, rewrite the corrected README sentence and the verification bullet to state the real expected diff. It has two line pairs: (a) the **What this is.** paragraph, where the template's wording was revised after the capture was taken (quote both endings), and (b) the closing `_Written by …_` line, which differs only in the product name after Task 3. Say that both differences sit in the template, and that the capture is unchanged. Change the verification bullet to expect exactly those two pairs and nothing else.
+
+## Should Fix
+
+1. **Task 14's statement that changing `projectName` "does not affect this run" covers only the watcher** — `task_14_plan.md` (`**Where this task stops.**`) and the story index's `## Context` bullet on `projectName`.
+   The guard library also reads `projectName` at run time. It reads it from the repository being judged, which is this run copy, not the main checkout. `plugin/hooks/lib/harness-config-lib.sh` → `hc_project_name` feeds the `<work_root>/<project_name>-*` sibling-worktree arms. Once Task 14 lands, the run copy's own `harness.config.json` says `devscene`, so those arms become `…/devscene-*`. This checkout is at `…/autonomous-sdlc-harness-chore_rename_to_devscene`, so the stem arms no longer cover it for Tasks 15–28. The root-derived arms still cover a command naming the checkout's own root. That is probably why nothing breaks, but the plan does not say so.
+   Add one sentence that names the guard-side read and why it is harmless here: the run's own root is matched by the root-derived arms, not the stem arms. Alternatively, move the `projectName` edit to the end of the order if that is not true.
+
+## Nice to Have
+
+1. The story index's `## Corpus staleness` entries cite *"line 19 at `HEAD`"* / *"line 3 at `HEAD`"* next to their heading anchors and full quoted lines. The quoted line already locates each one, so drop the line coordinates (`.claude/context/plugin.md` → `## Citation`, on not writing a line number into a durable artifact).

@@ -74,7 +74,7 @@
 #
 # SOURCED, NEVER EXECUTED. It sets no shell option: the entry point owns `set -u`. Bash 3.2 floor.
 
-SP__WP_PLUGIN_NAME="autonomous-sdlc-harness"
+SP__WP_PLUGIN_NAME="devscene"
 # CS2's new-file name under <main>/.git; legs-settings.sh's parity checklist prints the same path.
 SP_CS2_NEW_NAME="sbx_cs2_new"
 # The judge's Linux strings a dd or a rename can print: every member of judge.sh's SP__LINUX_SANDBOX_STRINGS

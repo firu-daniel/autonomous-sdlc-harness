@@ -1183,7 +1183,7 @@ function appendToolchainAllowances(profile: JsonObject, { config, referenceToolc
 }
 
 /** The command that re-derives this machine's plugin roots and prints the lines to paste. */
-const DOCTOR_COMMAND = 'npx autonomous-sdlc-harness doctor';
+const DOCTOR_COMMAND = 'npx devscene doctor';
 
 /**
  * The plugin roots this machine resolves, **runtime root first** — `doctor`'s own order — with the

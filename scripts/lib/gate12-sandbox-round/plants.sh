@@ -21,9 +21,9 @@
 #                     `# gate12 plant JS1`; refused when absent
 #   JS4 npmrc         .npmrc: node-options=--require=${GITHUB_WORKSPACE}/gate12-js4-marker.cjs, and
 #                     gate12-js4-marker.cjs, the marker
-#   JS4 node-modules  node_modules/autonomous-sdlc-harness/{package.json,bin.js (100755)}, a bin of
-#                     that name -> bin.js, the marker; node_modules/.bin/autonomous-sdlc-harness, a
-#                     120000 link to ../autonomous-sdlc-harness/bin.js
+#   JS4 node-modules  node_modules/devscene/{package.json,bin.js (100755)}, a bin of
+#                     that name -> bin.js, the marker; node_modules/.bin/devscene, a
+#                     120000 link to ../devscene/bin.js
 #   SB2 clarifications gate12-sb2-token.txt at the root, holding a fresh token recorded as tokens.SB2;
 #                     $G12_STATE_DIR/clarifications/<branch>/gate12-link.md, a 120000 link to it
 #   SB2 pause-note    gate12-sb2-pause-token.txt at the root, holding a fresh token recorded as
@@ -114,18 +114,18 @@ g12_plant_js4() {
     node-modules)
       cat >"$dir/f1" <<'EOF'
 {
-  "name": "autonomous-sdlc-harness",
+  "name": "devscene",
   "version": "0.0.0-gate12",
   "bin": {
-    "autonomous-sdlc-harness": "bin.js"
+    "devscene": "bin.js"
   }
 }
 EOF
       g12_plant_marker_js "$dir/f2" '#!/usr/bin/env node'
-      printf '%s' ../autonomous-sdlc-harness/bin.js >"$dir/f3"
-      g12_plant_add "$dir" 100644 node_modules/autonomous-sdlc-harness/package.json f1
-      g12_plant_add "$dir" 100755 node_modules/autonomous-sdlc-harness/bin.js f2
-      g12_plant_add "$dir" 120000 node_modules/.bin/autonomous-sdlc-harness f3
+      printf '%s' ../devscene/bin.js >"$dir/f3"
+      g12_plant_add "$dir" 100644 node_modules/devscene/package.json f1
+      g12_plant_add "$dir" 100755 node_modules/devscene/bin.js f2
+      g12_plant_add "$dir" 120000 node_modules/.bin/devscene f3
       ;;
     *) g12_refuse "JS4 has no arm '$arm'"; return 1 ;;
   esac

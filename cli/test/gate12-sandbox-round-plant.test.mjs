@@ -45,9 +45,9 @@ const ARMS = [
     row: 'JS4',
     arm: 'node-modules',
     paths: () => [
-      '120000 node_modules/.bin/autonomous-sdlc-harness',
-      '100755 node_modules/autonomous-sdlc-harness/bin.js',
-      '100644 node_modules/autonomous-sdlc-harness/package.json',
+      '120000 node_modules/.bin/devscene',
+      '100755 node_modules/devscene/bin.js',
+      '100644 node_modules/devscene/package.json',
     ],
   },
   {

@@ -174,7 +174,7 @@ gitignore_entry="$(git ls-files -s -- .gitignore)"
 if [ -n "$gitignore_entry" ]; then
   gitignore_mode="${gitignore_entry%% *}"
   pruned_blob="$(git cat-file blob "${dev_tip}:.gitignore" | awk '
-    /^# >>> autonomous-sdlc-harness / { skip = 1; next }
+    /^# >>> devscene / { skip = 1; next }
     skip && /^[[:space:]]*$/ { skip = 0; next }
     skip { next }
     { lines[++n] = $0 }

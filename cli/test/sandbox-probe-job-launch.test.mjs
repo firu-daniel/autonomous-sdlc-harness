@@ -215,7 +215,7 @@ test('the job-mode placeholder manifest', async (t) => {
       ].join('\n'),
       m.w.watcherEnv(),
     );
-  const manifestAt = (runnerTemp) => join(runnerTemp, 'autonomous-sdlc-harness-placeholders', `${BRANCH}.absent`);
+  const manifestAt = (runnerTemp) => join(runnerTemp, 'devscene-placeholders', `${BRANCH}.absent`);
   /** The probe's lines less the pre-session sweep's, which the real watcher's `job-sweep` produces. */
   const manifestLines = (stderr) =>
     probeLines(stderr).filter((l) => !l.startsWith('sandbox-probe: job-sweep before this session: '));

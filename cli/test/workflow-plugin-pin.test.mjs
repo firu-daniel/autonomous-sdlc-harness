@@ -19,7 +19,7 @@ import { PACKAGE_ROOT, runBash, runGit } from './helpers/fixture.mjs';
 import { WORKFLOW_RUN_FILE, WORKFLOW_TEMPLATE_DIR } from '../dist/remote/githubActions.js';
 
 const LINES = readFileSync(join(PACKAGE_ROOT, 'templates', WORKFLOW_TEMPLATE_DIR, WORKFLOW_RUN_FILE), 'utf8').split('\n');
-const PLUGIN_KEY = 'autonomous-sdlc-harness@autonomous-sdlc-harness';
+const PLUGIN_KEY = 'devscene@devscene';
 const UPGRADE_ROUTE = 'init --upgrade-workflows';
 const COMMIT_SET = "commit the paths its printed 'git add' names";
 
@@ -71,7 +71,7 @@ esac
 async function commitVersion(work, version) {
   writeFileSync(
     join(work, 'plugin', '.claude-plugin', 'plugin.json'),
-    `${JSON.stringify({ name: 'autonomous-sdlc-harness', version })}\n`,
+    `${JSON.stringify({ name: 'devscene', version })}\n`,
   );
   await runGit(work, ['add', '-A']);
   await runGit(work, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', `v${version}`]);
@@ -87,11 +87,11 @@ async function world(t) {
   mkdirSync(join(work, 'plugin', '.claude-plugin'), { recursive: true });
   writeFileSync(
     join(work, '.claude-plugin', 'marketplace.json'),
-    `${JSON.stringify({ name: 'autonomous-sdlc-harness', plugins: [{ name: 'autonomous-sdlc-harness', source: './plugin' }] })}\n`,
+    `${JSON.stringify({ name: 'devscene', plugins: [{ name: 'devscene', source: './plugin' }] })}\n`,
   );
   await runGit(work, ['init', '--quiet', '--initial-branch=main']);
   await commitVersion(work, '9.0.0');
-  await runGit(work, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'tag', '-a', '-m', 'v9.0.0', 'autonomous-sdlc-harness--v9.0.0']);
+  await runGit(work, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'tag', '-a', '-m', 'v9.0.0', 'devscene--v9.0.0']);
   await commitVersion(work, '9.1.0');
   mkdirSync(join(fixtures, 'acme'), { recursive: true });
   await runGit(root, ['clone', '--quiet', '--bare', work, join(fixtures, 'acme', 'harness.git')]);
@@ -100,7 +100,7 @@ async function world(t) {
   mkdirSync(join(checkout, '.claude'), { recursive: true });
   writeFileSync(
     join(checkout, '.claude', 'settings.json'),
-    `${JSON.stringify({ extraKnownMarketplaces: { 'autonomous-sdlc-harness': { source: { source: 'github', repo: 'acme/harness' } } } })}\n`,
+    `${JSON.stringify({ extraKnownMarketplaces: { 'devscene': { source: { source: 'github', repo: 'acme/harness' } } } })}\n`,
   );
   const bin = join(root, 'bin');
   mkdirSync(bin);
@@ -143,7 +143,7 @@ test('(b) a version with no release tag refuses, naming the tag and the upgrade 
   const result = await runStep(w, { HARNESS_CLI_VERSION: '9.2.0' });
   assert.notEqual(result.status, 0);
   const output = result.stdout + result.stderr;
-  assert.ok(output.includes('autonomous-sdlc-harness--v9.2.0'), output);
+  assert.ok(output.includes('devscene--v9.2.0'), output);
   assert.ok(output.includes(UPGRADE_ROUTE), output);
   assert.ok(output.includes(COMMIT_SET), output);
   assert.ok(!output.includes('commit both'), output);

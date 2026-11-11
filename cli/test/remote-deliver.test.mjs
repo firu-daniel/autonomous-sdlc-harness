@@ -424,6 +424,6 @@ test('with phases.qa true each comment names the local branch-qa-test still owed
   const result = await f.deliver({ STUB_PRS: openDraft });
   assert.equal(result.status, 0, result.stderr);
   const calls = f.calls();
-  assert.match(commentsOn(calls, 7)[0].body, /\/autonomous-sdlc-harness:branch-qa-test feat_x/);
-  assert.match(commentsOn(calls, 12)[0].body, /\/autonomous-sdlc-harness:branch-qa-test feat_x/);
+  assert.match(commentsOn(calls, 7)[0].body, /\/devscene:branch-qa-test feat_x/);
+  assert.match(commentsOn(calls, 12)[0].body, /\/devscene:branch-qa-test feat_x/);
 });

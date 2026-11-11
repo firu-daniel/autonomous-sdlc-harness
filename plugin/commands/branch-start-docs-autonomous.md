@@ -24,7 +24,7 @@ The tokens below are not ordinary **path placeholders** (`<branch>`, `<slug>`, w
 
 ## Context
 
-This is the **docs-catalog** autonomous engine command — a **lean sibling** of `/autonomous-sdlc-harness:branch-start-plan-autonomous`. It walks a pre-authored documentation checklist and, for each entry, dispatches a `docs-writer` to produce one doc and a `docs-reviewer` to accuracy-check it, commits the doc, and moves on — ending at "branch ready for review." It builds the documentation corpus under `<docs_root>`: one doc per business feature and one per cross-cutting concept, plus an `INDEX.md` retrieval map.
+This is the **docs-catalog** autonomous engine command — a **lean sibling** of `/devscene:branch-start-plan-autonomous`. It walks a pre-authored documentation checklist and, for each entry, dispatches a `docs-writer` to produce one doc and a `docs-reviewer` to accuracy-check it, commits the doc, and moves on — ending at "branch ready for review." It builds the documentation corpus under `<docs_root>`: one doc per business feature and one per cross-cutting concept, plus an `INDEX.md` retrieval map.
 
 It is **much leaner than the code engine** because documentation has no code-shaped risk surface. There is:
 
@@ -40,7 +40,7 @@ You are the **orchestrator** for the whole session. You do not write docs and yo
 
 ## Two entry points, one engine
 
-- **(a) Manual / interactive** — you invoke `/autonomous-sdlc-harness:branch-start-docs-autonomous` yourself in the branch's checkout and watch the `[docs · <slug> · …]` heartbeat live. Simplest for validating the flow on a short checklist.
+- **(a) Manual / interactive** — you invoke `/devscene:branch-start-docs-autonomous` yourself in the branch's checkout and watch the `[docs · <slug> · …]` heartbeat live. Simplest for validating the flow on a short checklist.
 - **(b) Watcher / headless** — the watcher (`<scripts_dir>/autonomous-watcher.sh`) launches this same command with `-p` plus the generated permission profile via `--settings`, inside the per-branch run copy it created from a `<branch>_docs.md` inbox drop. Usage-gated auto-pause/resume is the watcher's, and this engine honors `<state_dir>/PAUSE` so it yields cleanly.
 
 ## Steps

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "projectName": "autonomous-sdlc-harness",
+  "projectName": "devscene",
   "defaultBranch": "dev",
   "protectedBranches": [
     "main",

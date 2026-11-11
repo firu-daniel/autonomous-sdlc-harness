@@ -36,7 +36,7 @@ export async function openRetrieval(options: {
 
   if (!retrievalApplies(config)) {
     throw new HarnessError(
-      'docs retrieval is off in harness.config.json: it needs phases.docs true and docs.retrieval true (`npx autonomous-sdlc-harness config set docs.retrieval true`)',
+      'docs retrieval is off in harness.config.json: it needs phases.docs true and docs.retrieval true (`npx devscene config set docs.retrieval true`)',
     );
   }
 
@@ -44,7 +44,7 @@ export async function openRetrieval(options: {
   const models = modelFilesPresent(cacheDir);
   if (!models.present) {
     throw new HarnessError(
-      `the docs-retrieval model cache at ${cacheDir} is missing ${models.missing.join(', ')}: run \`npx autonomous-sdlc-harness init\` in a repository with docs.retrieval on, which downloads the models`,
+      `the docs-retrieval model cache at ${cacheDir} is missing ${models.missing.join(', ')}: run \`npx devscene init\` in a repository with docs.retrieval on, which downloads the models`,
     );
   }
 

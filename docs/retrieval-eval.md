@@ -382,7 +382,7 @@ checkout root (`scripts/python-service.sh` → `checkout_key`):
 
 ```
 du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval/models" >> harness-runs/scratch/backend-comparison/footprint.txt
-du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/models/Xenova" >> harness-runs/scratch/backend-comparison/footprint.txt
+du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/devscene/retrieval/models/Xenova" >> harness-runs/scratch/backend-comparison/footprint.txt
 du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval/venvs/$(printf '%s' "$(git rev-parse --show-toplevel)" | cksum | awk '{print $1}')" >> harness-runs/scratch/backend-comparison/footprint.txt
 ```
 

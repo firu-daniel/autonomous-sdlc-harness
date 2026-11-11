@@ -15,6 +15,6 @@
 
 > A file in this layer may import from the layers beneath it and never from the ones above it. A dependency pointing upwards is a defect even when it compiles, because it makes this layer impossible to exercise without dragging the layer above into the test.
 
-_Run `{{analyzeInvocation}}` to fill this in from this repository's own code, or replace everything above with the `{{layerName}}` layer's own rules; either way this file is yours from here on and a re-run of `autonomous-sdlc-harness init` keeps your copy — and if you write it by hand, the marker on the last line goes with it._
+_Run `{{analyzeInvocation}}` to fill this in from this repository's own code, or replace everything above with the `{{layerName}}` layer's own rules; either way this file is yours from here on and a re-run of `devscene init` keeps your copy — and if you write it by hand, the marker on the last line goes with it._
 
 <!-- harness:unfilled -->

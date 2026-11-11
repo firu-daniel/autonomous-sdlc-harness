@@ -23,6 +23,6 @@ canPublish(draft: Draft, author: Author): PublishDecision
 // control was pressed — three concerns that each belong to another layer.
 ```
 
-_Run `{{analyzeInvocation}}` to fill this in from this repository's own code, or replace everything above with this project's own domain rules; either way this file is yours from here on and a re-run of `autonomous-sdlc-harness init` keeps your copy — and if you write it by hand, the marker on the last line goes with it._
+_Run `{{analyzeInvocation}}` to fill this in from this repository's own code, or replace everything above with this project's own domain rules; either way this file is yours from here on and a re-run of `devscene init` keeps your copy — and if you write it by hand, the marker on the last line goes with it._
 
 <!-- harness:unfilled -->

@@ -252,7 +252,7 @@ function pushEnvContent(url: string): string {
   const value = SHELL_SAFE_VALUE.test(url) ? url : `'${url}'`;
   return [
     '# Push notifications for unattended runs — machine-local, written by',
-    '# `npx autonomous-sdlc-harness init --notifications`.',
+    '# `npx devscene init --notifications`.',
     '#',
     '# This is the machine-local half of the pair `docs/watcher.md` §6 describes: it is read before',
     "# any repository's configured `pushEnvPath`, and while it exists that one is not read at all.",

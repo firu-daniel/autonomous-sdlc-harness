@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # check-command-spelling.sh — fail when a plugin command is spelled with a bare slash instead of
-# `/autonomous-sdlc-harness:<name>`. Hand-written for this repository, like run-gates.sh, which runs
+# `/devscene:<name>`. Hand-written for this repository, like run-gates.sh, which runs
 # it as gate 6d; `docs/development.md` §5 gate 6 states the contract in prose.
 #
 # THE CONTRACT.
@@ -26,12 +26,12 @@
 # empty. The `<path>:<line>` coordinates are the output of that one run, not anchors into the current
 # file.
 #   docs/cli.md, plant: Run `/harness-analyze` here.
-#     exit 1; check-command-spelling: docs/cli.md:447 — bare command spelling; write /autonomous-sdlc-harness:<name>
+#     exit 1; check-command-spelling: docs/cli.md:447 — bare command spelling; write /devscene:<name>
 #     reverted, rerun: exit 0, no output
 #   docs/development.md, outside the gate-8 block, plant: Run `/harness-analyze` here.
-#     exit 1; check-command-spelling: docs/development.md:495 — bare command spelling; write /autonomous-sdlc-harness:<name>
+#     exit 1; check-command-spelling: docs/development.md:495 — bare command spelling; write /devscene:<name>
 #   docs/cli.md, plant: Then run /branch-status.
-#     exit 1; check-command-spelling: docs/cli.md:447 — bare command spelling; write /autonomous-sdlc-harness:<name>
+#     exit 1; check-command-spelling: docs/cli.md:447 — bare command spelling; write /devscene:<name>
 set -uo pipefail
 
 if [ $# -gt 0 ]; then
@@ -147,7 +147,7 @@ if [ -n "$matches" ]; then
     case "$exempt_keys" in
       *$'\n'"${m_path}:${m_line}"$'\n'*) continue ;;
     esac
-    finding "${m_path}:${m_line}" "bare command spelling; write /autonomous-sdlc-harness:<name>"
+    finding "${m_path}:${m_line}" "bare command spelling; write /devscene:<name>"
   done <<<"$matches"
 fi
 

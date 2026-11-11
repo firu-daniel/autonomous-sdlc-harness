@@ -1,7 +1,7 @@
-# harness-resume.yml — resumes usage-paused autonomous-sdlc-harness runs once
+# harness-resume.yml — resumes usage-paused devscene runs once
 # their usage window has reset, with no local machine involved.
 #
-# WHO WRITES IT. `autonomous-sdlc-harness init`, only when harness.config.json's
+# WHO WRITES IT. `devscene init`, only when harness.config.json's
 # `execution.target` is `github-actions`. Written create-if-absent: from then on
 # it is yours to tune, and a re-run of `init` keeps your copy.
 # `init --upgrade-workflows` re-renders it together with the run workflow, after
@@ -25,7 +25,7 @@
 # state became `disabled_manually`. UNVERIFIED: the enable, because no job
 # ended on a usage pause. If it is refused, the pausing job's `paused`
 # notification says auto-resume is unavailable, and the run waits for
-# /autonomous-sdlc-harness:branch-resume.
+# /devscene:branch-resume.
 #
 # THE INTERVAL IS YOURS TO EDIT. On a private repository every tick is billed
 # at least one minute while the poller is enabled: `*/30` is up to 48 minutes a
@@ -93,7 +93,7 @@
 # 2.327.1 or newer; a GitHub-hosted runner already
 # has it, and a self-hosted one must run it (docs/remote-execution.md, section
 # 8). A sha, not a tag: a tag is mutable, and this job holds write tokens. A pin
-# moves when `npx autonomous-sdlc-harness@<version> init --upgrade-workflows`
+# moves when `npx devscene@<version> init --upgrade-workflows`
 # re-renders this file at a newer release's pins; a hand bump replaces the sha
 # and its comment line together. The version stays on its own line, never
 # trailing the `uses:` value: a value carrying ` #` is never a plain scalar.

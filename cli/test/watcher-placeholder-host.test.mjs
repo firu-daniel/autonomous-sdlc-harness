@@ -676,7 +676,7 @@ test('(7) with the seam off the recorded leftovers of cases 1 and 2 are left in 
 // ---------------------------------------------------------------------------------------------
 
 /** The manifest directory `hr_job_absent_file` names under `RUNNER_TEMP`. */
-const JOB_MANIFEST_DIR = 'autonomous-sdlc-harness-placeholders';
+const JOB_MANIFEST_DIR = 'devscene-placeholders';
 
 /** `gh`: `run list` answers no runs, every other call succeeds silently. */
 const GH_STUB = '#!/usr/bin/env bash\ncase "$*" in "run list"*) printf "[]" ;; esac\nexit 0\n';

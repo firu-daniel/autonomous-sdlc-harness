@@ -36,7 +36,7 @@ import { runBash } from './helpers/fixture.mjs';
 import { createWatcherFixture, TICK_TIMEOUT_MS } from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
-const RESUME_COMMAND = '/autonomous-sdlc-harness:branch-resume feat_x';
+const RESUME_COMMAND = '/devscene:branch-resume feat_x';
 
 const TASK_IDS = ['P1', 'P2', 'P3', 'A', 'A1.5g', 'A1.5f', 'A2g', 'A2f', 'Bg', 'Bm', 'C', 'C2g', 'C2m', 'C2f', 'E', 'G', 'D'];
 const REVIEW_IDS = ['R1', 'R2', 'R3', 'R4', 'RG', 'R5'];

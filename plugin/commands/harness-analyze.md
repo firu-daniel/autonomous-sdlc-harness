@@ -23,20 +23,20 @@ an ordinary placeholder.
 | `<githooks_dir>` | config value | `githooksDir` — the directory the committed git hooks live in. **Excluded from evidence gathering** for the same reason. |
 | `<project_name>` | config value | `projectName` — the name the always-loaded project file's `# ` heading carries. The `project` target writes the paragraph beneath that heading, never the heading itself. |
 | `<parity_vocabulary>` | config value | `parity.referenceName` — the name of the reference implementation this project is kept in parity with. Read **only** when `phases.parity` is `true`. |
-| `<shared_conventions_path>` | config value, with a literal fallback | The `conventions` target's document, which `<layer_path_map>` cannot resolve on its own — the case that target exists for is the one where **no** `layers[]` row names it. It is the `layers[].conventions` value naming the shared cross-layer document where a layer points at it, and otherwise the literal `.claude/context/conventions.md`, spelled out here because this body is Markdown and cannot import the CLI's `SHARED_CONVENTIONS_PATH` constant. **This row is the only place in this file that path is spelled.** The document set of a no-argument run derives from it: every `layers[].conventions` value, normalized and deduplicated, plus this document whether or not a layer names it — the same derivation `autonomous-sdlc-harness init` states when it resolves the analyze offer and `doctor` states in its `setup-analysis` check. |
+| `<shared_conventions_path>` | config value, with a literal fallback | The `conventions` target's document, which `<layer_path_map>` cannot resolve on its own — the case that target exists for is the one where **no** `layers[]` row names it. It is the `layers[].conventions` value naming the shared cross-layer document where a layer points at it, and otherwise the literal `.claude/context/conventions.md`, spelled out here because this body is Markdown and cannot import the CLI's `SHARED_CONVENTIONS_PATH` constant. **This row is the only place in this file that path is spelled.** The document set of a no-argument run derives from it: every `layers[].conventions` value, normalized and deduplicated, plus this document whether or not a layer names it — the same derivation `devscene init` states when it resolves the analyze offer and `doctor` states in its `setup-analysis` check. |
 
 ---
 
 ## Context
 
-`autonomous-sdlc-harness init` detects a layout from file existence alone and writes the conventions documents
+`devscene init` detects a layout from file existence alone and writes the conventions documents
 as skeletons. This command is the other half: it reads this repository and turns those skeletons into this
 project's actual rules, and fills the two skeleton sections of the always-loaded project file. It is not the
 host tool's own project-file initializer, and it refuses to guess what it could not determine. The setup verb it
-completes is written in full, `autonomous-sdlc-harness init`, never a bare `init`.
+completes is written in full, `devscene init`, never a bare `init`.
 
-**Usage:** `/autonomous-sdlc-harness:harness-analyze` with no argument runs every target; `$ARGUMENTS` may name one target plus flags,
-e.g. `/autonomous-sdlc-harness:harness-analyze <target> --existing`.
+**Usage:** `/devscene:harness-analyze` with no argument runs every target; `$ARGUMENTS` may name one target plus flags,
+e.g. `/devscene:harness-analyze <target> --existing`.
 
 **Targets are read from `harness.config.json` at invocation time, and this file enumerates none of them:** the
 `<layer_names>` values, plus the reserved `project` (the always-loaded file), `conventions` (the shared
@@ -52,7 +52,7 @@ harness CLI out of the session, which the generated permission profile does not 
 Three standing prohibitions:
 
 - **It never edits `harness.config.json`.** It reaches that file through exactly two
-  `autonomous-sdlc-harness config set` keys — `config set layers` for a layer-profile change, and
+  `devscene config set` keys — `config set layers` for a layer-profile change, and
   `config set detection.review` for step 5's verdict record — that verb being the one writer that validates
   the result and takes a `.bak`, on each key alike.
 - **It never declines on size or duration.** A large repository is sampled and the sample is disclosed in
@@ -81,7 +81,7 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
    step 6 names the pair once.
 
    **What a run that does not itself write the shared cross-layer document sends as `shared_document`.** Two run
-   shapes do not write it: `/autonomous-sdlc-harness:harness-analyze <layer>` for a layer whose own
+   shapes do not write it: `/devscene:harness-analyze <layer>` for a layer whose own
    `conventions` is some other document, and any run — no-argument or single-target — in which (4a) classified
    that document `skip`. The discriminator is **whether this run writes it**, never whether the document set
    contains it; (4a) settles that for the whole set before any dispatch leaves. In both shapes the anchor is
@@ -152,7 +152,7 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
 
    **Ordering, for the set the run actually has.** **When this run writes the shared cross-layer document** —
    every no-argument run in which (4a) did not classify it `skip`, a
-   `/autonomous-sdlc-harness:harness-analyze conventions` run, and a single-target run naming the layer whose
+   `/devscene:harness-analyze conventions` run, and a single-target run naming the layer whose
    `conventions` is that document, which every generated configuration's catch-all row is —
    `<shared_conventions_path>` is written first, in its own write→review→fix chain completed before any
    per-layer document is dispatched, and its finished text is then passed to every later writer as
@@ -170,7 +170,7 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
    dispatch that writes it and in the on-disk cases step 1 names; and `parity`, only when `phases.parity` is
    `true`.
 
-   **What governs the prompt beyond that block.** `/autonomous-sdlc-harness:harness-analyze` does **not**
+   **What governs the prompt beyond that block.** `/devscene:harness-analyze` does **not**
    activate `${CLAUDE_PLUGIN_ROOT}/instructions/dispatch_discipline_instructions.md`: that file's activation
    list is closed and this command is not on it. **What stands in its place: the block is closed.** Every
    dispatch this command sends — write, review and fix alike — carries **exactly** the fields named here and in
@@ -283,7 +283,7 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
    Recording it is a **duty, not a permission**, exactly as it is for the writer.
 
    The **setup-pending banner is not a classification input** — it records that setup offered the analysis,
-   not which sections are filled. Its absence (an unforced `autonomous-sdlc-harness init` re-run over a
+   not which sections are filled. Its absence (an unforced `devscene init` re-run over a
    pre-existing file writes no banner, and an adopter may delete the block by hand) changes nothing above and
    is never a reason to skip this target. Delete the banner, `<!-- harness:setup-pending -->` through
    `<!-- /harness:setup-pending -->` inclusive, **only** when every target of a no-argument run has completed;
@@ -407,7 +407,7 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
 5. **The `layers` target proposes and never writes.** Show the current and proposed `layers` arrays as a diff, and
    name what in the tree each added or changed row was read off. Keep **at least one** row with `path: "."`. Apply
    only on an explicit yes or `--apply-layers` — never on `--yes` alone — by running
-   `npx autonomous-sdlc-harness config set layers '<json>'` and reporting its output; that verb validates the
+   `npx devscene config set layers '<json>'` and reporting its output; that verb validates the
    result and writes the `.bak`. **This step itself sends nothing.** On acceptance inside a no-argument run: the
    `layers` target has already run first, so next update the `project` target's routing table to match the new
    list. A `conventions` path the accepted proposal newly names **joins the run's document set** — step 1
@@ -417,7 +417,7 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
    `## The document`, whose third case is exactly that dispatch; this file does not restate it.
 
    **Record the verdict, in all three outcomes.** Once the propose/apply decision is settled, record what
-   this target concluded by running `npx autonomous-sdlc-harness config set detection.review '<json>'` and
+   this target concluded by running `npx devscene config set detection.review '<json>'` and
    reporting its output, where `<json>` is, on one line:
 
    `{"verdict": "<one of applied | considered-no-change | proposed-and-refused>", "rationale": "<one line: what was read, what was concluded, and — where a proposal was refused — what was proposed>", "at": "<YYYY-MM-DD>"}`
@@ -445,7 +445,7 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
    every `## Not determined` line collected across the documents; every conflict found between the adopter's
    existing prose and the code; the corpus pass's own outcome, including every outstanding cross-document
    item, in the shape the corpus block below sets out; and the next action —
-   `npx autonomous-sdlc-harness doctor` to confirm nothing is left unfilled, and `/autonomous-sdlc-harness:harness-analyze <target>`
+   `npx devscene doctor` to confirm nothing is left unfilled, and `/devscene:harness-analyze <target>`
    to redo one document. A run that wrote nothing says so explicitly. Report in the **announced target order
    regardless of completion order**, so concurrency changes nothing a reader sees.
 
@@ -468,7 +468,7 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
      of the harvest inventory against that survey, this target having no writer and no `## Not determined`
      section.
    - **The `layers` target** is reported **`proposed`**, or applied when an explicit yes or `--apply-layers`
-     ran `autonomous-sdlc-harness config set layers`, from step 5's own outcome — and **beside** that action
+     ran `devscene config set layers`, from step 5's own outcome — and **beside** that action
      value, never as a fifth one, the verdict step 5 recorded with its rationale. Where the
      `config set detection.review` call was **refused at the permission prompt or otherwise did not run**,
      say so in the same place: a silent run must never leave a reader to infer that something was recorded.
@@ -509,5 +509,5 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
    count: a finding landing in a `role: context` member; a divergence or corpus finding the writer declined;
    and a reconciliation (4d.0) held divergences for but could not send, this run not having written the shared
    cross-layer document. Each is reported **among the results above**, named as the run's outstanding item —
-   and only then may `Next actions` name `/autonomous-sdlc-harness:harness-analyze <target>` as its remedy. **A run that ends with
+   and only then may `Next actions` name `/devscene:harness-analyze <target>` as its remedy. **A run that ends with
    none says so explicitly**, in the same place, as a run that wrote nothing does.

@@ -46,7 +46,7 @@ import {
 const STEP_TIMEOUT_MS = 900000;
 
 const REMEDY =
-  're-run `npx autonomous-sdlc-harness init`; `npx autonomous-sdlc-harness doctor` reports what is missing';
+  're-run `npx devscene init`; `npx devscene doctor` reports what is missing';
 
 /** A warning for a failed child: the command, its exit status and the last line it wrote to stderr. */
 function failureWarning(step: string, command: readonly string[], error: unknown): string {

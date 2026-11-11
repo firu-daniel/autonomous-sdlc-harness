@@ -1,7 +1,7 @@
-# harness-trigger.yml — starts an autonomous-sdlc-harness task run when an
+# harness-trigger.yml — starts a devscene task run when an
 # issue is labelled, or when a `repository_dispatch` asks for one.
 #
-# WHO WRITES IT. `autonomous-sdlc-harness init`, only when harness.config.json's
+# WHO WRITES IT. `devscene init`, only when harness.config.json's
 # `forge` is `github` and its `execution.target` is `github-actions`. Written
 # create-if-absent: from then on it is yours to tune, and a re-run of `init`
 # keeps your copy. `init --upgrade-workflows` does NOT re-render it: it carries

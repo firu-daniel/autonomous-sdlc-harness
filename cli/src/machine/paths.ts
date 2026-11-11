@@ -54,7 +54,7 @@ import { homeRoot } from '../core/paths.js';
  * It is the package name, and it is shared with the shell half's `hr_lane_dir`. Changing it here
  * without changing it there would leave two components each believing they hold the machine.
  */
-export const MACHINE_DIR_NAME = 'autonomous-sdlc-harness';
+export const MACHINE_DIR_NAME = 'devscene';
 
 /**
  * The mode a writer creates either directory at: the owner's, and nobody else's.
@@ -66,7 +66,7 @@ export const MACHINE_DIR_NAME = 'autonomous-sdlc-harness';
 export const MACHINE_DIR_MODE = 0o700;
 
 /**
- * `<base>/autonomous-sdlc-harness` for one XDG base variable and its fallback, in the shell half's
+ * `<base>/devscene` for one XDG base variable and its fallback, in the shell half's
  * exact order: the variable when it holds something, the fallback under {@link homeRoot} otherwise,
  * then one trailing slash stripped.
  *
@@ -82,7 +82,7 @@ function resolveMachineDir(variable: string, fallback: string): string {
 }
 
 /**
- * The machine-local **state** directory — `${XDG_STATE_HOME:-$HOME/.local/state}/autonomous-sdlc-harness`.
+ * The machine-local **state** directory — `${XDG_STATE_HOME:-$HOME/.local/state}/devscene`.
  *
  * What lives in it is machine-scoped run state that no single repository owns: the usage lane's two
  * artifacts, published by `docs/watcher.md` §5; the watcher's per-run profiles,
@@ -97,7 +97,7 @@ export function machineStateDir(): string {
 }
 
 /**
- * The machine-local **configuration** directory — `${XDG_CONFIG_HOME:-$HOME/.config}/autonomous-sdlc-harness`.
+ * The machine-local **configuration** directory — `${XDG_CONFIG_HOME:-$HOME/.config}/devscene`.
  *
  * What lives in it is an operator's own settings rather than a repository's: `docs/watcher.md` §6's
  * `push.env` is the one file this release puts there, and it comes first in that section's
@@ -108,7 +108,7 @@ export function machineConfigDir(): string {
 }
 
 /**
- * The machine-local **cache** directory — `${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness`.
+ * The machine-local **cache** directory — `${XDG_CACHE_HOME:-$HOME/.cache}/devscene`.
  *
  * What lives in it is re-creatable and shared by every repository on the machine: the docs-retrieval
  * runtime installation and its model weights, whose paths `retrieval/runtime.ts` owns.

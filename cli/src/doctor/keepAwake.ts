@@ -32,7 +32,7 @@
 import { sandboxHostKind, type SandboxHostKind } from './sandboxPrerequisites.js';
 
 /** The `--who` a logind lock is taken under. */
-export const KEEP_AWAKE_WHO = 'autonomous-sdlc-harness';
+export const KEEP_AWAKE_WHO = 'devscene';
 
 /** The `--what` a logind lock is taken for. */
 export const KEEP_AWAKE_WHAT = 'sleep:handle-lid-switch';

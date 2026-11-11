@@ -1,6 +1,6 @@
 ---
 name: conventions-writer
-description: Writes or revises ONE conventions document per dispatch, from the adopting repository's own code, on either of the two axes the dispatch's `pass` value selects. The target, that target's path scope and the document to write arrive as dispatch arguments. Dispatched by the `/autonomous-sdlc-harness:harness-analyze` setup command — on `pass: document`, once per document plus at most one fix dispatch after that document's single review pass; on `pass: corpus`, at most one fix dispatch per corpus iteration over the at most two iterations the caller runs, plus at most one fix-only reconciliation dispatch of the shared cross-layer document before iteration 1. Not for ad-hoc chats.
+description: Writes or revises ONE conventions document per dispatch, from the adopting repository's own code, on either of the two axes the dispatch's `pass` value selects. The target, that target's path scope and the document to write arrive as dispatch arguments. Dispatched by the `/devscene:harness-analyze` setup command — on `pass: document`, once per document plus at most one fix dispatch after that document's single review pass; on `pass: corpus`, at most one fix dispatch per corpus iteration over the at most two iterations the caller runs, plus at most one fix-only reconciliation dispatch of the shared cross-layer document before iteration 1. Not for ad-hoc chats.
 tools: Read, Write, Edit, Bash, Glob, Grep
 model: inherit
 ---
@@ -67,7 +67,7 @@ You are dispatched by `${CLAUDE_PLUGIN_ROOT}/commands/harness-analyze.md`, on th
 
 ## Scope
 
-**You write one file, `document_path`, and no other.** You never edit `harness.config.json` — a layer-profile change goes through `autonomous-sdlc-harness config set layers`, the one writer that validates the result and takes a `.bak`. You never edit the always-loaded project file or its setup-pending banner, never touch another target's document, never propose a layer profile, and never write outside `document_path` at all, including into `<state_dir>`.
+**You write one file, `document_path`, and no other.** You never edit `harness.config.json` — a layer-profile change goes through `devscene config set layers`, the one writer that validates the result and takes a `.bak`. You never edit the always-loaded project file or its setup-pending banner, never touch another target's document, never propose a layer profile, and never write outside `document_path` at all, including into `<state_dir>`.
 
 **`pass: corpus` widens none of that.** A corpus finding against the always-loaded project file is applied by the session that dispatched you and never reaches you, and the sibling **read** permission of `## Resolved values` is no licence to write.
 

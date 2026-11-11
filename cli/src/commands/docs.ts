@@ -41,7 +41,7 @@ import type { CommandContext, Subcommand } from './registry.js';
 
 const SUMMARY = 'Search the docs catalog and conventions: build the index, query it, serve it over MCP';
 
-const CLI = 'npx autonomous-sdlc-harness';
+const CLI = 'npx devscene';
 
 /** One sub-verb: its synopsis after `docs`, its one-line description, and its behaviour. */
 interface DocsSubVerb {

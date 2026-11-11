@@ -106,9 +106,9 @@ test('hr_run_profile_absent_files lists only the regular .absent files, and refu
 
   const missing = await list('slug');
   assert.equal(missing.stdout, 'status=0\n', `no directory yet: ${missing.stderr}`);
-  assert.equal(await exists(join(state, 'autonomous-sdlc-harness')), false, 'the enumerator created the lane');
+  assert.equal(await exists(join(state, 'devscene')), false, 'the enumerator created the lane');
 
-  const dir = join(state, 'autonomous-sdlc-harness', 'run-profiles', 'slug');
+  const dir = join(state, 'devscene', 'run-profiles', 'slug');
   await mkdir(dir, { recursive: true });
   const empty = await list('slug');
   assert.equal(empty.stdout, 'status=0\n', `empty directory: ${empty.stderr}`);
@@ -134,7 +134,7 @@ test('hr_job_absent_file names the manifest under an absolute RUNNER_TEMP, and r
   const name = (branch, env) => f.call('hr_job_absent_file "$1"; printf "status=%s\\n" "$?"', [branch], env);
 
   const named = await name('feat/x', { RUNNER_TEMP: `${runnerTemp}/` });
-  assert.equal(named.stdout, `${runnerTemp}/autonomous-sdlc-harness-placeholders/feat-x.absent\nstatus=0\n`, named.stderr);
+  assert.equal(named.stdout, `${runnerTemp}/devscene-placeholders/feat-x.absent\nstatus=0\n`, named.stderr);
   assert.equal(await exists(runnerTemp), false, 'the namer created a directory');
 
   for (const [label, env] of [
@@ -158,7 +158,7 @@ test('hr_job_absent_files lists only the regular, non-link .absent files under R
   assert.equal(missing.stdout, 'status=0\n', `no directory yet: ${missing.stderr}`);
   assert.equal(await exists(runnerTemp), false, 'the enumerator created a directory');
 
-  const dir = join(runnerTemp, 'autonomous-sdlc-harness-placeholders');
+  const dir = join(runnerTemp, 'devscene-placeholders');
   await mkdir(dir, { recursive: true });
   const a = await plant(join(dir, 'feat-a.absent'), '', 0o600);
   const b = await plant(join(dir, 'main.absent'), '/x\n', 0o600);

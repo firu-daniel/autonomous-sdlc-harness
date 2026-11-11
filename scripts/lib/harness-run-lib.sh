@@ -542,8 +542,8 @@
 #   anchors           hr_main_repo "$root"; hr_work_root "$root"
 #                     hr_worktree_dir "$root" feat/x; hr_repo_slug "$root"
 #                     hr_state_path "$root" autonomous_logs/registry.json
-#   machine dirs      ( XDG_CACHE_HOME= hr_cache_dir )     -> $HOME/.cache/autonomous-sdlc-harness
-#                     ( XDG_CACHE_HOME=/x/ hr_cache_dir )  -> /x/autonomous-sdlc-harness
+#   machine dirs      ( XDG_CACHE_HOME= hr_cache_dir )     -> $HOME/.cache/devscene
+#                     ( XDG_CACHE_HOME=/x/ hr_cache_dir )  -> /x/devscene
 #   the PATH policy   run each in a SUBSHELL, so your own PATH is untouched:
 #                     ( PATH="$HOME/.rbenv/shims:/usr/bin:/bin"
 #                       hr_path_with_fallbacks )
@@ -2508,7 +2508,7 @@ hr_sandbox_prereq_probe_var() {
 # edit there.
 # ---------------------------------------------------------------------------
 
-HR_KEEP_AWAKE_WHO='autonomous-sdlc-harness'
+HR_KEEP_AWAKE_WHO='devscene'
 HR_KEEP_AWAKE_WHAT='sleep:handle-lid-switch'
 
 # Probe this host for the keep-awake decision. Sets `HR_KEEP_AWAKE_HOST` (an
@@ -3310,7 +3310,7 @@ hr_machine_config_dir() {
     /.config) return 1 ;;
   esac
   [ -n "$base" ] || return 1
-  printf '%s/autonomous-sdlc-harness\n' "${base%/}"
+  printf '%s/devscene\n' "${base%/}"
 }
 
 # The machine-local cache directory, holding the shared docs-retrieval runtime.
@@ -3324,7 +3324,7 @@ hr_cache_dir() {
     /.cache) return 1 ;;
   esac
   [ -n "$base" ] || return 1
-  printf '%s/autonomous-sdlc-harness\n' "${base%/}"
+  printf '%s/devscene\n' "${base%/}"
 }
 
 # The push-notification credential files, in RESOLUTION ORDER, one per line and
@@ -6789,7 +6789,7 @@ hr_lane_dir() {
     /.local/state) return 1 ;;
   esac
   [ -n "$base" ] || return 1
-  printf '%s/autonomous-sdlc-harness\n' "${base%/}"
+  printf '%s/devscene\n' "${base%/}"
 }
 
 # The three artifact paths, so no caller re-joins any of the strings.
@@ -6860,7 +6860,7 @@ hr_run_profile_absent_files() {
 }
 
 # hr_job_absent_file <branch> — job mode's manifest:
-# `$RUNNER_TEMP/autonomous-sdlc-harness-placeholders/<hr_sanitize_branch branch>.absent`.
+# `$RUNNER_TEMP/devscene-placeholders/<hr_sanitize_branch branch>.absent`.
 # `RUNNER_TEMP` lasts the whole job, post-session steps included, and lies
 # outside every root the job's session may write; the machine lane is off in a
 # job. 1, printing nothing, when `RUNNER_TEMP` is empty or relative or the
@@ -6870,7 +6870,7 @@ hr_job_absent_file() {
   local base="${RUNNER_TEMP-}" safe
   case "$base" in /*) ;; *) return 1 ;; esac
   safe=$(hr_sanitize_branch "${1-}") || return 1
-  printf '%s/autonomous-sdlc-harness-placeholders/%s.absent\n' "${base%/}" "$safe"
+  printf '%s/devscene-placeholders/%s.absent\n' "${base%/}" "$safe"
 }
 
 # hr_job_absent_files — print every existing manifest `hr_job_absent_file`

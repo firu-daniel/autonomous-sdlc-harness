@@ -298,7 +298,7 @@ async function hold(mode, { mains = true, probeStatus = 0 } = {}) {
   }
 }
 
-const LOCK_FLAGS = ['--what=sleep:handle-lid-switch', '--mode=block', '--who=autonomous-sdlc-harness', '--why=run feat_x'];
+const LOCK_FLAGS = ['--what=sleep:handle-lid-switch', '--mode=block', '--who=devscene', '--why=run feat_x'];
 
 test('hr_keep_awake_hold_var caffeinate holds with -s -i -w <pid> and ends with the pid', async () => {
   const got = await hold('caffeinate');

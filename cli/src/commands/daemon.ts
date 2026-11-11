@@ -112,7 +112,7 @@ const WATCHER_FLAG = '--watcher';
 const PRUNE_FLAG = '--prune';
 
 /** How the CLI is typed, for the messages that tell an operator what to run next. The `npx` prefix is not decoration: the rule for which occurrences carry it is stated once in `commands/init.ts`, beside its own `CLI`. */
-const CLI = 'npx autonomous-sdlc-harness';
+const CLI = 'npx devscene';
 
 /** Mode of the written unit file: readable by the service manager, writable only by its owner. */
 const UNIT_MODE = 0o644;

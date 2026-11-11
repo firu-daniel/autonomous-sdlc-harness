@@ -7,7 +7,7 @@
  * reproducible: a second `init` over the same repository produces the same result, and an adopter can
  * re-derive the recorded preset from the detection table by hand. It is also why judgement-dependent
  * work — reading real code to refine a layer profile, filling a conventions stub — belongs to
- * `/autonomous-sdlc-harness:harness-analyze` and is deliberately absent from this file. The offer to run it
+ * `/devscene:harness-analyze` and is deliberately absent from this file. The offer to run it
  * ({@link resolveAnalyzeOffer}) adds no model call and no external process here: the answer's whole
  * material effect is which banner wording the generated always-loaded file carries and which closing
  * pointer this run prints.
@@ -239,18 +239,18 @@ const ROADMAP_ITEM = 13;
  * for the whole command surface.
  *
  * **The rule, one line: an occurrence an adopter is told to *run* carries the `npx` prefix; an
- * occurrence that is the tool's *name* does not.** The bare `autonomous-sdlc-harness …` form
+ * occurrence that is the tool's *name* does not.** The bare `devscene …` form
  * resolves only where something installed a global binary, and no documented adoption path does:
- * root `README.md`'s quick start is `npx autonomous-sdlc-harness …` throughout and
+ * root `README.md`'s quick start is `npx devscene …` throughout and
  * `docs/development.md`'s contributor loop is `node cli/dist/cli.js …`. `npx` is the safe superset
  * — it runs an already-installed global binary as well as fetching a published one — so it is the
  * one adopter-facing spelling rather than a second special case. Under the name half of the rule
- * the prefix is wrong and is not added: the `autonomous-sdlc-harness: <message>` error prefix and
+ * the prefix is wrong and is not added: the `devscene: <message>` error prefix and
  * the `--version` banner in `cli.ts`, {@link MARKETPLACE_NAME}, `MACHINE_DIR_NAME`,
  * `LAUNCHD_LABEL_PREFIX`, and the managed `.gitignore` block header in `generators/repoRoot.ts`.
  * There is no third category.
  */
-const CLI = 'npx autonomous-sdlc-harness';
+const CLI = 'npx devscene';
 
 /**
  * This verb, written in full wherever a line addresses the adopter.
@@ -310,14 +310,15 @@ const MARKETPLACE_ADD_COMMAND = `${AGENT_CLI} plugin marketplace add ${SLUG_SHAP
  * respelled (`docs/analyze.md` §9).
  *
  * Headless first-message leg, re-measured: Claude Code 2.1.274, from this checkout with the plugin
- * enabled; the `system`/`init` event of both runs listed `autonomous-sdlc-harness:harness-analyze`
- * among its slash commands and did not list `harness-analyze`.
- * - `claude -p "/autonomous-sdlc-harness:harness-analyze" --permission-mode plan --max-turns 2 --output-format stream-json --verbose`:
+ * enabled; the `system`/`init` event of both runs listed `devscene:harness-analyze`
+ * among its slash commands and did not list `harness-analyze`. (Taken under the product's earlier
+ * name; only the name is respelled here.)
+ * - `claude -p "/devscene:harness-analyze" --permission-mode plan --max-turns 2 --output-format stream-json --verbose`:
  *   exit 1; no `Skill` call, the first tool call was the command's own `Bash` read of the
  *   unfilled-stub markers; final `result` event `is_error: true`, `result: null`, verbatim message
  *   `Reached maximum number of turns (2)`.
  * - `claude -p "/harness-analyze" --permission-mode plan --max-turns 2 --output-format stream-json --verbose`:
- *   exit 1; the first tool call was `Skill` naming `autonomous-sdlc-harness:harness-analyze`, which
+ *   exit 1; the first tool call was `Skill` naming `devscene:harness-analyze`, which
  *   loaded the command; final `result` event `is_error: true`, `result: null`, verbatim message
  *   `Reached maximum number of turns (2)`.
  * Both exits are the two-turn cap, not a resolution failure: the prefixed spelling ran the command
