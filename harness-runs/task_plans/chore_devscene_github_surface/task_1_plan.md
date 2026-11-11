@@ -20,3 +20,7 @@
 - `grep -nE "sdlc-harness|harness-(trigger|run|control|resume)\.yml" cli/src/remote/githubActions.ts` prints nothing.
 - `grep -nE "^export const (WORKFLOW_(RUN|RESUME|TRIGGER|CONTROL)_FILE|COMMAND_HANDLE|COMMENT_MARKER|STATE_LABEL_PREFIX|DEFAULT_TRIGGER_LABEL) =" cli/src/remote/githubActions.ts` shows exactly the eight literals above, and `LEGACY_TRIGGER_LABEL` still reads `'harness'`.
 - Mirror check for later tasks. Tasks 2–4 restate these eight literals and must match them byte for byte. `cli/test/remote-names.test.mjs` (Task 7) asserts them.
+
+**Deviations from plan:**
+
+- The `LEGACY_TRIGGER_LABEL` and `triggerFallbackLabel` doc comments describe a trigger workflow committed by an **earlier release**, which an adopter's repository carries under its old file name. Writing `devscene-trigger.yml` there would be false, so both now say "trigger workflow" without naming a file. The verification grep still comes back empty. `carriesMentionCredential`, `CLI_VERSION_VARIABLE` and the header's mirror list now carry the new `devscene-*.yml` names.

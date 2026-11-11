@@ -58,7 +58,7 @@ Place it as its own paragraph directly after the earlier rename's sentence (*"Me
 
 Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_github_surface/task_<K>_plan.md`. Entries run in ship order. Task 19 sits among the `general` tasks for the reason `## Context` gives.
 
-1. [ ] **Task 1** — Respell the GitHub-surface constants in `cli/src/remote/githubActions.ts` _(layer: cli)_ _(points: 10)_
+1. [x] **Task 1** — Respell the GitHub-surface constants in `cli/src/remote/githubActions.ts` _(layer: cli)_ _(points: 10)_
 2. [ ] **Task 2** — Rename the four workflow templates to `devscene-*.yml` and respell their contents _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Respell the label, handle, marker and workflow names in the `remote-run.sh` template _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Respell the run library, prompt-injection screen, watcher and run-analytics templates and `cli/templates/README.md` _(layer: cli)_ _(points: 10)_
