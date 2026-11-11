@@ -217,7 +217,7 @@ test("a round ledger with only the task run's comment listed posts a new comment
   assert.match(round.body, /^Progress of user-review round 2 on `feat_x`:\n/);
   assert.match(round.body, /^- Fix plan: done$/m);
   assert.match(round.body, /^- Fix implementation: in progress$/m);
-  assert.ok(round.body.trimEnd().endsWith('<!-- sdlc-harness event=progress branch=feat_x round=2 -->'), round.body);
+  assert.ok(round.body.trimEnd().endsWith('<!-- devscene event=progress branch=feat_x round=2 -->'), round.body);
 });
 
 test('execution.progressComments false calls no gh at all', async (t) => {
@@ -265,19 +265,19 @@ test('forge_marker with four or fewer arguments prints what it printed before th
   const f = await progressFixture(t);
   const result = await runBash(f.dir, [
     '-c',
-    `COMMENT_MARKER='<!-- sdlc-harness'; eval "$(sed -n '/^forge_marker() {/,/^}/p' "$1")"; forge_marker started feat_x; forge_marker progress feat_x "" "" 3`,
+    `COMMENT_MARKER='<!-- devscene'; eval "$(sed -n '/^forge_marker() {/,/^}/p' "$1")"; forge_marker started feat_x; forge_marker progress feat_x "" "" 3`,
     '_',
     join(f.dir, SCRIPT),
   ]);
   assert.equal(result.status, 0, result.stderr);
   assert.equal(
     result.stdout,
-    '<!-- sdlc-harness event=started branch=feat_x -->\n<!-- sdlc-harness event=progress branch=feat_x round=3 -->\n',
+    '<!-- devscene event=started branch=feat_x -->\n<!-- devscene event=progress branch=feat_x round=3 -->\n',
   );
 });
 
 /** A progress comment body as `forge_progress` renders it, with `- Implementation: <second>`. */
-const progressBody = (second, marker = '<!-- sdlc-harness event=progress branch=feat_x -->') =>
+const progressBody = (second, marker = '<!-- devscene event=progress branch=feat_x -->') =>
   `Progress of the harness run on \`feat_x\`:\n\n- Planning: done\n- Implementation: ${second}\n- Branch review: not started\n- Done: not started\n\n${marker}\n`;
 const listings = (calls) =>
   calls.filter((call) => call.args[0] === 'api' && call.args[1] === '--paginate' && /\/issues\/12\/comments$/.test(call.args[2]));
@@ -296,7 +296,7 @@ test("a stopped report rewrites the task run's progress comment from in progress
 
 test("a stopped report rewrites a round's progress comment too", async (t) => {
   const f = await progressFixture(t);
-  const body = progressBody('in progress', '<!-- sdlc-harness event=progress branch=feat_x round=2 -->');
+  const body = progressBody('in progress', '<!-- devscene event=progress branch=feat_x round=2 -->');
   const result = await f.stopped({ STUB_COMMENTS: JSON.stringify([{ id: 777, login: BOT, body }]) });
   assert.equal(result.status, 0, result.stderr);
   const edits = patches(f.calls());
@@ -337,9 +337,9 @@ test("a stopped report's round matcher is anchored to the branch and to a numeri
   const f = await progressFixture(t);
   const result = await f.stopped({
     STUB_COMMENTS: JSON.stringify([
-      { id: 501, login: BOT, body: progressBody('in progress', '<!-- sdlc-harness event=progress branch=feat_xy -->') },
-      { id: 502, login: BOT, body: progressBody('in progress', '<!-- sdlc-harness event=progress branch=feat_x round=two -->') },
-      { id: 503, login: BOT, body: progressBody('in progress', '<!-- sdlc-harness event=progress branch=feat_xy round=2 -->') },
+      { id: 501, login: BOT, body: progressBody('in progress', '<!-- devscene event=progress branch=feat_xy -->') },
+      { id: 502, login: BOT, body: progressBody('in progress', '<!-- devscene event=progress branch=feat_x round=two -->') },
+      { id: 503, login: BOT, body: progressBody('in progress', '<!-- devscene event=progress branch=feat_xy round=2 -->') },
     ]),
   });
   assert.equal(result.status, 0, result.stderr);

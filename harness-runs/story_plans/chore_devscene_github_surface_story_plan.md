@@ -71,7 +71,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_github_surface/ta
 11. [x] **Task 11** — Respell the mention, needs-agent, close and review run-control suites _(layer: cli)_ _(points: 20)_
 12. [x] **Task 12** — Respell the `remote-run` and `remote-trigger` suites _(layer: cli)_ _(points: 20)_
 13. [x] **Task 13** — Respell the report, collect and deliver suites _(layer: cli)_ _(points: 15)_
-14. [ ] **Task 14** — Respell the open, progress, review-payload and start suites and the three watcher remote suites _(layer: cli)_ _(points: 15)_
+14. [x] **Task 14** — Respell the open, progress, review-payload and start suites and the three watcher remote suites _(layer: cli)_ _(points: 15)_
 15. [ ] **Task 15** — Respell the marker and workflow names in the plugin's agents, flow document and instructions _(layer: plugin)_ _(points: 10)_
 16. [ ] **Task 16** — Bring the self-adopted script copies to the respelled template bytes and respell the `.gitignore` `.bak` rules _(layer: general)_ _(points: 10)_
 17. [ ] **Task 17** — Respell the rendered-workflows gate, `run-gates.sh`, `tag-release.sh` and the sandbox-probe runner files _(layer: general)_ _(points: 15)_

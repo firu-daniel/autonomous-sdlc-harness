@@ -56,7 +56,7 @@ if (failOn && args.join(' ').startsWith(failOn)) {
 `;
 
 const TASK_DISPATCH =
-  'workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=task -f resume=none -f chain=0';
+  'workflow run devscene-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=task -f resume=none -f chain=0';
 
 /**
  * An `init`-wired fixture adopted on `origin`'s default branch, `main` among its protected branches,

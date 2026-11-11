@@ -126,7 +126,7 @@ async function wireForge(w, scratch) {
     await mkdir(join(clone, STATE_DIR, 'task_prompts'), { recursive: true });
     await writeFile(
       join(clone, prompt),
-      `# A task\n\nDo it.\n\n---\n\nStarted from https://github.com/${REPOSITORY}/issues/${ISSUE} by @alice, who applied the label \`sdlc-harness\`.\n`,
+      `# A task\n\nDo it.\n\n---\n\nStarted from https://github.com/${REPOSITORY}/issues/${ISSUE} by @alice, who applied the label \`devscene\`.\n`,
       'utf8',
     );
     await runGit(clone, ['add', '--force', prompt]);
@@ -354,7 +354,7 @@ async function playSequence(t, { job2Env = () => ({}), job2Stub = HONOUR_PAUSE(P
   const completed = calls.filter(
     (c) =>
       c.line.startsWith(`api --method POST repos/${REPOSITORY}/issues/${ISSUE}/comments `) &&
-      (c.body ?? '').includes(`<!-- sdlc-harness event=completed branch=${s.branch} -->`),
+      (c.body ?? '').includes(`<!-- devscene event=completed branch=${s.branch} -->`),
   );
   assert.equal(completed.length, 1, calls.map((c) => c.line).join('\n'));
   assert.ok(completed[0].body.includes(PR_URL), completed[0].body);

@@ -75,7 +75,7 @@ const REVIEW_REL = `${STATE_DIR}/user_reviews/feat_x_review.md`;
 const REVIEW_BYTES = 'The button is not centred.\n';
 const REVIEW_SUBJECT = 'chore: add user review for feat_x';
 const REVIEW_DISPATCH =
-  'workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=user_review -f resume=none -f chain=0';
+  'workflow run devscene-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=user_review -f resume=none -f chain=0';
 const PIN = ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'submodule.recurse=false'];
 const REF = 'refs/heads/feat_x';
 

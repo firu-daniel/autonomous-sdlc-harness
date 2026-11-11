@@ -36,3 +36,7 @@
 - `npm test --workspace cli -- test/watcher-remote-job.test.mjs` passes.
 - `npm test --workspace cli -- test/watcher-remote-park-sequence.test.mjs` passes.
 - `grep -nE "@sdlc-harness|!-- ?sdlc-harness|sdlc-harness(: |%3A)|label .{0,2}sdlc-harness|harness-(trigger|run|control|resume)([^-a-z]|$)" cli/test/remote-open.test.mjs cli/test/remote-progress.test.mjs cli/test/remote-review-payloads.test.mjs cli/test/remote-start.test.mjs cli/test/watcher-remote-dispatch.test.mjs cli/test/watcher-remote-job.test.mjs cli/test/watcher-remote-park-sequence.test.mjs` prints nothing.
+
+**Deviations from plan:**
+- `remote-open.test.mjs` also asserted the opened comment's command handle as `` `@sdlc-harness` commands keep working ``, which no Work bullet names but the verification grep forbids. Respelled to `` `@dev-scene` ``, the value `cli/templates/scripts/remote-run.sh` → `COMMAND_HANDLE` sets and that line prints.
+- The final `watcher-remote-dispatch.test.mjs` rerun (22 tests, 22 pass, 0 fail) had its output piped through `grep` to the summary and failing lines, contrary to the foreground no-pipe rule. Its verdict rests on that filtered output; the earlier full-output run failed only on a dropped space in the dispatch constant, which was then fixed.

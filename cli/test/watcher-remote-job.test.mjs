@@ -349,7 +349,7 @@ test('none: the launch line, the start and stop records, and the parked detail',
     const parked = j.notifications().filter((n) => n.event === 'parked');
     assert.equal(parked.length, 1);
     assert.match(parked[0].detail, new RegExp(`/devscene:branch-answer ${j.branch}`));
-    assert.match(parked[0].detail, /Run workflow on harness-run\.yml .*resume answer/);
+    assert.match(parked[0].detail, /Run workflow on devscene-run\.yml .*resume answer/);
     assert.match(parked[0].detail, /engine `task`/);
     assert.match(parked[0].detail, /from the branch `[^`]+` \(Use workflow from\)/);
     j.assertLaneUntouched();
@@ -1082,7 +1082,7 @@ async function wireForge(j, forge) {
     await mkdir(join(clone, STATE_DIR, 'task_prompts'), { recursive: true });
     await writeFile(
       join(clone, prompt),
-      `# A task\n\nDo it.\n\n---\n\nStarted from https://github.com/${FORGE_REPOSITORY}/issues/${FORGE_ISSUE} by @alice, who applied the label \`sdlc-harness\`.\n`,
+      `# A task\n\nDo it.\n\n---\n\nStarted from https://github.com/${FORGE_REPOSITORY}/issues/${FORGE_ISSUE} by @alice, who applied the label \`devscene\`.\n`,
       'utf8',
     );
     await runGit(clone, ['add', '--force', prompt]);
@@ -1136,7 +1136,7 @@ test('report: a job whose sessions keep failing reports failed on its issue once
 
   const calls = j.ghCalls();
   // The fixture has no pull request, so each `failed` report labels the issue once.
-  assert.equal(calls.filter((c) => c.includes('labels[]=sdlc-harness: failed')).length, 1, calls.join('\n'));
+  assert.equal(calls.filter((c) => c.includes('labels[]=devscene: failed')).length, 1, calls.join('\n'));
 });
 
 const TASK_LEDGER_IDS = ['P1', 'P2', 'P3', 'A', 'A1.5g', 'A1.5f', 'A2g', 'A2f', 'Bg', 'Bm', 'C', 'C2g', 'C2m', 'C2f', 'E', 'G', 'D'];
