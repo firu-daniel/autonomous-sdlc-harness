@@ -35,7 +35,7 @@ export const ROUND_SCRIPT = join(WORKSPACE_ROOT, 'scripts', 'gate12-sandbox-roun
 const INSTALL_STEP ='Install the sandbox prerequisites';
 
 const ORIGIN_URL = `https://github.com/${GATE12_SLUG}.git`;
-const WORKFLOW_TEMPLATE = join(WORKSPACE_ROOT, 'cli', 'templates', 'github', 'workflows', 'harness-run.yml');
+const WORKFLOW_TEMPLATE = join(WORKSPACE_ROOT, 'cli', 'templates', 'github', 'workflows', 'devscene-run.yml');
 const ISOLATED_GITCONFIG = resolve(import.meta.dirname, 'isolated-gitconfig');
 
 /** Every fixture root this module created; {@link cleanup} removes these and nothing else. */
@@ -92,7 +92,7 @@ export async function makeGate12Fixture({
   const files = {
     'harness.config.json': `${JSON.stringify(config, null, 2)}\n`,
     '.claude/settings.json': `${JSON.stringify({ permissions: { allow: [] } }, null, 2)}\n`,
-    '.github/workflows/harness-run.yml': workflow,
+    '.github/workflows/devscene-run.yml': workflow,
     // The scratch contents rule init's managed block renders for stateDir (repoRoot.ts → contentsIgnoredDirectory).
     '.gitignore': `${stateDir}/scratch/*\n`,
   };

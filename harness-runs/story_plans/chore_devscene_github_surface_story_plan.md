@@ -76,7 +76,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_github_surface/ta
 16. [x] **Task 16** — Bring the self-adopted script copies to the respelled template bytes and respell the `.gitignore` `.bak` rules _(layer: general)_ _(points: 10)_
 17. [x] **Task 17** — Respell the rendered-workflows gate, `run-gates.sh`, `tag-release.sh` and the sandbox-probe runner files _(layer: general)_ _(points: 15)_
 18. [x] **Task 18** — Respell the Gate 12 sandbox-round library _(layer: general)_ _(points: 15)_
-19. [ ] **Task 19** — Respell the Gate 12 sandbox-round suites, their helper and the sandbox-probe runner suite _(layer: cli)_ _(points: 10)_
+19. [x] **Task 19** — Respell the Gate 12 sandbox-round suites, their helper and the sandbox-probe runner suite _(layer: cli)_ _(points: 10)_
 20. [ ] **Task 20** — Respell `README.md` and `ARCHITECTURE.md` _(layer: general)_ _(points: 5)_
 21. [ ] **Task 21** — Respell `docs/development.md`, the Gate 12 rounds and Gate 14 included _(layer: general)_ _(points: 20)_
 22. [ ] **Task 22** — Respell `docs/github-run-control.md` and `docs/github-issue-trigger.md` _(layer: general)_ _(points: 20)_

@@ -225,7 +225,7 @@ test("the gh stub synthesises one stable run per branch named at run time", asyn
   const gh = await ghStub(fixture.binDir, { 'run list': { synthesiseRun: true } });
   const list = async (branch) => {
     const result = await runBash(fixture.dir, [
-      gh, 'run', 'list', '--repo', GATE12_SLUG, '--workflow', 'harness-run.yml', '--branch', branch,
+      gh, 'run', 'list', '--repo', GATE12_SLUG, '--workflow', 'devscene-run.yml', '--branch', branch,
       '--json', 'databaseId,createdAt,displayTitle', '--limit', '20',
     ]);
     assert.equal(result.status, 0, result.stderr);

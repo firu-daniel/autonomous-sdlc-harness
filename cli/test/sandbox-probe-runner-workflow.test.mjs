@@ -1,5 +1,5 @@
 /**
- * `scripts/sandbox-probe-runner.yml`, held to the `harness-run.yml` job it reproduces and to the probe's guards.
+ * `scripts/sandbox-probe-runner.yml`, held to the `devscene-run.yml` job it reproduces and to the probe's guards.
  *
  * **The rules these tests exist to enforce:**
  * - **Same runner:** it runs where a job would run — the template `run` job's `runs-on`.
