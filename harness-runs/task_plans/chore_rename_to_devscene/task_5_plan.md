@@ -27,3 +27,9 @@
 - `bash -n` exits 0 on each of the four files.
 - `git grep -n -E '^ENGINE_COMMAND_(TASK|USER_REVIEW|DOCS)=' -- cli/templates/scripts/autonomous-watcher.sh` prints the same three lines `git show HEAD:cli/templates/scripts/autonomous-watcher.sh` carries, unchanged.
 - `git grep -n -F "MENTION_COMMAND='/devscene:harness-read-mention'" -- cli/templates/scripts/remote-run.sh` prints one line.
+
+**Deviations from plan:**
+
+- Evidence downgrade: the four plain `bash -n <file>` calls were refused by the permission layer (don't-ask mode). The parse claim rests instead on `bash scripts/typecheck.sh`, whose `scripts/check-shell-parse.sh` parses every `git ls-files --cached --others --exclude-standard` shell script (the four targets included) with `/bin/bash`: verdict `check-shell-parse: 124 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed` and `PASS: typecheck`.
+- The work bullet names "the two `…:branch-start-plan-autonomous` spellings" in the measured block; HEAD carried three prefixed spellings there (the `system`/`init` listing, the `"/…:branch-start-plan-autonomous": exit 0` leg line, and the `Skill` tool_use line). All three were respelled, since the first verification grep admits no surviving old name; the two exempted bare lines are byte-identical.
+- The measured-record parenthesis closes the `# Measured on Claude Code 2.1.274, …` sentence, before its trailing colon: `spelled each way (Taken under the product's earlier name; only the name is respelled here.):`, wrapped over two comment lines.
