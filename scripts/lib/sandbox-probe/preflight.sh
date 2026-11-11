@@ -30,7 +30,7 @@
 #      resolve on PATH.
 #   7. The agent CLI does not resolve on PATH. Sets SP_VERSION from one `<agent cli> --version`.
 #
-# JOB MODE (SP_JOB_MODE=1). The checkout measured is SP_JOB_CHECKOUT, a harness-run.yml job's own, and
+# JOB MODE (SP_JOB_MODE=1). The checkout measured is SP_JOB_CHECKOUT, a devscene-run.yml job's own, and
 # the job's preflight is `doctor --remote-job` (docs/remote-execution.md → **The permission
 # profile.**). Checks 2, 3 and 7 run as above; 1 and 6 take a job arm; 8 is job mode's alone:
 #   1. SP_JOB_CHECKOUT has no git top (hr_repo_root); that top is the probe's own checkout (the git

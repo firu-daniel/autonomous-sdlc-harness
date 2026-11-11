@@ -3,9 +3,9 @@
 // Hand-written for this repository, like check-flow-graph.sh; not an `init` output.
 //
 // THE RULE. Every workflow `init` renders under `forge: github` and `execution.target:
-// github-actions` parses as YAML, and 0.6.1's `harness-control.yml` does not. The render is
+// github-actions` parses as YAML, and 0.6.1's `devscene-control.yml` does not. The render is
 // `init`'s own output in a throwaway repository, never the templates read as text, and the rendered
-// set must be exactly the four harness workflows: a render that wrote nothing is a finding.
+// set must be exactly the four devscene workflows: a render that wrote nothing is a finding.
 //
 // Usage: node scripts/check-rendered-workflows.mjs
 //          render in a throwaway repository under the OS temp directory and parse each file
@@ -49,7 +49,7 @@ import { delimiter, dirname, isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const NAME = 'check-rendered-workflows';
-const EXPECTED = ['harness-control.yml', 'harness-resume.yml', 'harness-run.yml', 'harness-trigger.yml'];
+const EXPECTED = ['devscene-control.yml', 'devscene-resume.yml', 'devscene-run.yml', 'devscene-trigger.yml'];
 const NEGATIVE = 'cli/test/fixtures/harness-control-0.6.1.yml';
 const ZIZMOR_VERSION = '1.30.1';
 /**
@@ -59,14 +59,14 @@ const ZIZMOR_VERSION = '1.30.1';
  * pinned install is flagged too.
  */
 const RESIDUAL = [
-  'harness-run.yml artipacked open',
-  'harness-run.yml artipacked deliver',
-  'harness-run.yml artipacked collect',
-  'harness-run.yml adhoc-packages run',
-  'harness-resume.yml artipacked poll',
-  'harness-trigger.yml artipacked trigger',
-  'harness-control.yml artipacked control',
-  'harness-control.yml adhoc-packages control',
+  'devscene-run.yml artipacked open',
+  'devscene-run.yml artipacked deliver',
+  'devscene-run.yml artipacked collect',
+  'devscene-run.yml adhoc-packages run',
+  'devscene-resume.yml artipacked poll',
+  'devscene-trigger.yml artipacked trigger',
+  'devscene-control.yml artipacked control',
+  'devscene-control.yml adhoc-packages control',
 ];
 
 const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
@@ -93,9 +93,10 @@ function onPath(binary) {
 }
 
 /**
- * The 0.6.1 fixture, repo-relative: byte for byte the `harness-control.yml` 0.6.1 shipped (git blob
+ * The 0.6.1 fixture, repo-relative: the control workflow 0.6.1 shipped (git blob
  * `1b4f0fc33200d876e4089ebe4013120e48a45335`, `cli/src/generators/githubWorkflows.ts` →
- * `UNPARSEABLE_CONTROL_RELEASES`).
+ * `UNPARSEABLE_CONTROL_RELEASES`), with its job-level `if:` line respelled to the current names and
+ * still unparsable.
  */
 function negativePath() {
   const path = join(repoRoot, NEGATIVE);

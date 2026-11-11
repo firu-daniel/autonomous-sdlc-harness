@@ -1,5 +1,5 @@
 # sandbox-probe-runner.yml — runs `scripts/sandbox-probe.sh run --job` on a GitHub-hosted runner,
-# against a checkout set up as a `harness-run.yml` job sets up its own, up to that job's launch.
+# against a checkout set up as a `devscene-run.yml` job sets up its own, up to that job's launch.
 #
 # WHERE IT GOES. Committed by hand to the Gate 12 repository, firu-daniel/harness-gate12, on its
 # default branch, as .github/workflows/sandbox-probe-runner.yml. Never to this repository: it lives
@@ -16,7 +16,7 @@
 # streams, which can quote what a session read, carry no real secret. The metadata-service control
 # keeps the HTTP status alone: its response body goes to /dev/null.
 #
-# THE COPIED STEPS. Each step named as one of cli/templates/github/workflows/harness-run.yml's `run`
+# THE COPIED STEPS. Each step named as one of cli/templates/github/workflows/devscene-run.yml's `run`
 # job steps carries that step's `run:` body byte for byte, without its HARNESS_STOPPED condition, and
 # each `uses:` keeps that file's pin and its version comment.
 #
@@ -164,7 +164,7 @@ jobs:
             exit 1
           fi
 
-      # Named apart from harness-run.yml's `Check the credentials`, which accepts either of two secrets.
+      # Named apart from devscene-run.yml's `Check the credentials`, which accepts either of two secrets.
       - name: Check the OAuth credential
         env:
           IN_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

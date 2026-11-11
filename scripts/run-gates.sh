@@ -418,7 +418,7 @@ run_unit() {
       # under --actionlint and --zizmor, pushed onto neither array.
       gate "14a rendered workflows parse as YAML" node scripts/check-rendered-workflows.mjs
       ;;
-    14b) gate_header 14 "rendered workflows parse"; gate "14b 0.6.1's harness-control.yml is refused" node scripts/check-rendered-workflows.mjs --negatives ;;
+    14b) gate_header 14 "rendered workflows parse"; gate "14b 0.6.1's devscene-control.yml is refused" node scripts/check-rendered-workflows.mjs --negatives ;;
     14c)
       gate_header 14 "rendered workflows parse"
       node scripts/check-rendered-workflows.mjs --actionlint >"$log" 2>&1

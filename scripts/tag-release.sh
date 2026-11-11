@@ -6,7 +6,7 @@
 #
 # WHAT A RELEASE TAG IS, AND WHO READS IT. An annotated tag named `devscene--v<version>`
 # with the message `devscene <version>` — the shape of the first one, v0.1.0 (cut under the
-# product's earlier name). The `Install the pinned plugin` step of cli/templates/github/workflows/harness-run.yml clones the
+# product's earlier name). The `Install the pinned plugin` step of cli/templates/github/workflows/devscene-run.yml clones the
 # marketplace repository at exactly that tag, for the CLI version the workflow was rendered by. A
 # version released without its tag is a version whose adopters' remote runs cannot install the plugin.
 #
