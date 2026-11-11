@@ -252,7 +252,7 @@
 #   RUNNER_TEMP          where the prompt snapshot is written; a `mktemp -d`
 #                        directory under `${TMPDIR:-/tmp}` when empty
 # THE LEGACY LABEL. The workflow `init` now writes always passes a non-empty
-# `HARNESS_TRIGGER_LABEL`; only the previous release's workflow, which
+# `HARNESS_TRIGGER_LABEL`; only an earlier release's workflow, which
 # `init --upgrade-workflows` never re-renders, passes it empty, and its `if:`
 # already ran the job for `LEGACY_TRIGGER_LABEL`. So when it is empty either
 # `DEFAULT_TRIGGER_LABEL` or `LEGACY_TRIGGER_LABEL` is accepted, and the comment

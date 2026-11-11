@@ -173,7 +173,7 @@ export const TRIGGER_LABEL_VARIABLE = 'HARNESS_TRIGGER_LABEL';
 export const DEFAULT_TRIGGER_LABEL = 'devscene';
 
 /**
- * The previous release's {@link DEFAULT_TRIGGER_LABEL}. The trigger still accepts it when its
+ * An earlier release's {@link DEFAULT_TRIGGER_LABEL}. The trigger still accepts it when its
  * workflow passes no label, which only that release's trigger workflow does: it is never
  * re-rendered by `init --upgrade-workflows`, and its own `if:` already ran the job for this label.
  */
