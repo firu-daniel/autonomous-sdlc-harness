@@ -133,7 +133,7 @@ test('(g) docs index refuses with docs.retrieval false', async (t) => {
 
 test('(h) docs index refuses with the model files removed, naming a missing file', async (t) => {
   const { dir, cacheHome, env } = await retrievalFixture(t);
-  await rm(join(cacheHome, 'autonomous-sdlc-harness', 'retrieval', 'models'), { recursive: true, force: true });
+  await rm(join(cacheHome, 'devscene', 'retrieval', 'models'), { recursive: true, force: true });
   const before = await snapshotTree(dir);
 
   const result = await runCli(dir, ['docs', 'index'], env);

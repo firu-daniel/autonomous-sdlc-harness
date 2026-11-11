@@ -679,9 +679,9 @@ export function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
-/** `<cacheHome>/autonomous-sdlc-harness/retrieval`, as `machineCacheDir()` and `retrieval/runtime.ts` spell it. */
+/** `<cacheHome>/devscene/retrieval`, as `machineCacheDir()` and `retrieval/runtime.ts` spell it. */
 function retrievalCacheDir(cacheHome) {
-  return join(cacheHome, 'autonomous-sdlc-harness', 'retrieval');
+  return join(cacheHome, 'devscene', 'retrieval');
 }
 
 /**
@@ -715,7 +715,7 @@ export function retrievalEnv(cacheHome) {
 
 /**
  * Plant every model file as an empty file at
- * `<cacheHome>/autonomous-sdlc-harness/retrieval/models/<model id>/<revision>/<file>`, which the
+ * `<cacheHome>/devscene/retrieval/models/<model id>/<revision>/<file>`, which the
  * retrieval verbs check for even under the stub.
  *
  * @param {string} cacheHome
@@ -735,7 +735,7 @@ export async function plantModelFiles(cacheHome) {
 }
 
 /**
- * Plant the retrieval runtime under `<cacheHome>/autonomous-sdlc-harness/retrieval/runtime` as the
+ * Plant the retrieval runtime under `<cacheHome>/devscene/retrieval/runtime` as the
  * three things `retrievalRuntimeState()` tests: the CLI entry, that CLI's manifest at `version`, and a
  * manifest per optional peer of `cli/package.json`.
  *
@@ -756,9 +756,9 @@ export async function plantRetrievalRuntime(cacheHome, { version } = {}) {
     planted.push(target);
   };
 
-  await plant(join(modules, 'autonomous-sdlc-harness', 'dist', 'cli.js'), 'process.exit(0);\n');
+  await plant(join(modules, 'devscene', 'dist', 'cli.js'), 'process.exit(0);\n');
   await plant(
-    join(modules, 'autonomous-sdlc-harness', 'package.json'),
+    join(modules, 'devscene', 'package.json'),
     `${JSON.stringify({ version: version ?? manifest.version })}\n`,
   );
   for (const name of Object.keys(manifest.peerDependencies ?? {})) {

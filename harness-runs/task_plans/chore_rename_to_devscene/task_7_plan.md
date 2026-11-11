@@ -23,10 +23,10 @@
 
 **Work:**
 
-- [ ] `daemon.test.mjs`: `LAUNCHD_LABEL_PREFIX = 'com.devscene.watcher.'`, `MACHINE_DIR = 'devscene'`, the seeded labels and plist names, and the two `launchd.label` / `targetPath` expectations, plus every comment naming the product.
-- [ ] `stack-presets.test.mjs`: the two ``"`/devscene:harness-analyze`'s to propose"`` keys and the header comment.
-- [ ] `helpers/fixture.mjs`: the retrieval-cache helpers and their doc comments, `<cacheHome>/devscene/retrieval`, and the planted runtime `node_modules/devscene/dist/cli.js` and `node_modules/devscene/package.json`. `docs-retrieval.test.mjs`: the models directory `join(cacheHome, 'devscene', 'retrieval', 'models')`.
-- [ ] Run each of the three edited suites through `npm test --workspace cli -- test/<name>.test.mjs` from the checkout root, one plain foreground command each. `helpers/fixture.mjs` is not a suite: `test/docs-retrieval.test.mjs`, which imports its retrieval helpers, is the run that exercises it.
+- [x] `daemon.test.mjs`: `LAUNCHD_LABEL_PREFIX = 'com.devscene.watcher.'`, `MACHINE_DIR = 'devscene'`, the seeded labels and plist names, and the two `launchd.label` / `targetPath` expectations, plus every comment naming the product.
+- [x] `stack-presets.test.mjs`: the two ``"`/devscene:harness-analyze`'s to propose"`` keys and the header comment.
+- [x] `helpers/fixture.mjs`: the retrieval-cache helpers and their doc comments, `<cacheHome>/devscene/retrieval`, and the planted runtime `node_modules/devscene/dist/cli.js` and `node_modules/devscene/package.json`. `docs-retrieval.test.mjs`: the models directory `join(cacheHome, 'devscene', 'retrieval', 'models')`.
+- [x] Run each of the three edited suites through `npm test --workspace cli -- test/<name>.test.mjs` from the checkout root, one plain foreground command each. `helpers/fixture.mjs` is not a suite: `test/docs-retrieval.test.mjs`, which imports its retrieval helpers, is the run that exercises it.
 
 **Verification:**
 
