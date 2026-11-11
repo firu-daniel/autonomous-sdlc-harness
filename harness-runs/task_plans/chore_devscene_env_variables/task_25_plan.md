@@ -25,3 +25,5 @@
 - `git grep -nE 'HARNESS_(RUN_ACTORS|TRIGGER_LABEL|TRIGGER_ALLOWED_BOTS|RUNNER|REMOTE_STOP|MAX_CHAIN|POLL_MAX_DISPATCH_FAILURES|POLL_GIVE_UP_AFTER_MINUTES|STEP_TIMEOUT_MINUTES|SELF_PAUSE_AFTER_MINUTES|GIT_TOKEN|PUSH_|QA_|CLI|AGENT_CLI|GH_CLI|MAIN_REPO|DEV_SERVER_PORT|FETCH_TIMEOUT|VERSION_MANAGER_INIT)' -- docs` prints nothing. Tasks 20–24 cleared the other documents.
 - `git grep -n 'keep their old names' -- docs/rag-extraction-research` prints nothing.
 - `git grep -cE 'HARNESS_DOCS_RETRIEVAL_|AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_' -- docs/rag-extraction-research/07-extraction-plan.md` is non-zero: the excluded names are untouched.
+
+- **Deviations from plan:** Respelling the `### G9.` heading in `docs/team-accounts-research.md` changes its generated anchor, so the G9 row of that file's own summary table linked to `#g9-harness_git_token-…`, which no longer resolved. Its fragment was updated to `#g9-devscene_git_token-per-member-fine-grained-tokens-or-a-github-app-installation-token`. `git grep -n 'harness_git_token'` found no other link to that anchor.

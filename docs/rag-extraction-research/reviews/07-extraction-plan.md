@@ -203,10 +203,10 @@ R3. **The `self-docs` eval cannot be "repointed at an explicit path list" inside
 - All 20 queries in `queries/self-docs.jsonl` are labelled with harness anchors, such as `.claude/context/conventions.md#…` and `docs/config.md#5-key-reference`. Those files do not exist in RagScene. After step 12, RagScene's own `.claude/context/conventions.md` exists with different anchors.
 - The bar-8 grep also hits eval material:
   - `self-docs.jsonl` (`stateDir`);
-  - `arm-a/run-arm-a.sh` (8 lines: `HARNESS_AGENT_CLI` and `HARNESS_EVAL_CORPUS_ROOT`, contributor variables #154 keeps under their old names).
+  - `arm-a/run-arm-a.sh` (8 lines: `DEVSCENE_AGENT_CLI` and `HARNESS_EVAL_CORPUS_ROOT`, the contributor variables the script reads).
 - **Change:**
   - Give `self-docs` an external corpus root, pinned to a harness checkout as `gate10-catalog` already is, or drop it. Fold this into Open question 5.
-  - Add `HARNESS_AGENT_CLI` and `HARNESS_EVAL_CORPUS_ROOT` to cut row 6/7.
+  - Add `DEVSCENE_AGENT_CLI` and `HARNESS_EVAL_CORPUS_ROOT` to cut row 6/7.
   - Exempt label data (`queries/*.jsonl`, `transcripts/`) from bar item 8.
 
 R4. **The move's steps leave out the watcher.**
