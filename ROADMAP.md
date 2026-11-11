@@ -11,24 +11,24 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | Priority | Feature |
 |---|---|
 | 1 | [Converging plan reviews](#quality-and-testing) |
-| 2 | [Committer as a script](#flow-and-orchestration) |
-| 3 | [Script-driven planning pilot](#flow-and-orchestration) |
-| 4 | [Security reviewer](#quality-and-testing) |
-| 5 | [Performance reviewer](#quality-and-testing) |
+| 2 | [Security reviewer](#quality-and-testing) |
+| 3 | [Performance reviewer](#quality-and-testing) |
+| 4 | [Committer as a script](#flow-and-orchestration) |
+| 5 | [Script-driven planning pilot](#flow-and-orchestration) |
 | 6 | [Task researcher](#flow-and-orchestration) |
 | 7 | [Contract-first task plans](#flow-and-orchestration) |
 | 8 | [Narrower plan and branch reviewers](#quality-and-testing) |
 | 9 | [Parallel plan reviews](#flow-and-orchestration) |
 | 10 | [Parallel dispatch in waves](#flow-and-orchestration) |
 | 11 | [Multi-plan programs](#flow-and-orchestration) |
-| 12 | [Review severity markers](#quality-and-testing) |
-| 13 | [Test-driven development](#quality-and-testing) |
+| 12 | [Ultra-fast mode](#flow-and-orchestration) |
+| 13 | [Review severity markers](#quality-and-testing) |
 | 14 | [Script-driven autonomous flow](#flow-and-orchestration) |
-| 15 | [Outbound HTTP listener](#security-and-containment) |
-| 16 | [RagScene](#scene-products) |
-| 17 | [GraphScene](#scene-products) |
-| 18 | [DevScene studio](#scene-products) |
-| 19 | [TraceScene](#scene-products) |
+| 15 | [Test-driven development](#quality-and-testing) |
+| 16 | [Outbound HTTP listener](#security-and-containment) |
+| 17 | [RagScene](#scene-products) |
+| 18 | [GraphScene](#scene-products) |
+| 19 | [DevScene studio](#scene-products) |
 | 20 | [Docs-catalog retrieval](#engines-environments-and-integrations) — kept opt-in by maintainer decision after a withdrawn verdict; improving it and measuring where it pays is open |
 | 21 | [Citation groundedness gate](#quality-and-testing) |
 | 22 | [Structured agent outputs](#quality-and-testing) |
@@ -37,36 +37,34 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | 25 | [Engine / provider abstraction](#engines-environments-and-integrations) |
 | 26 | [Model-change drift gate](#quality-and-testing) |
 | 27 | [Budget governor](#engines-environments-and-integrations) |
-| 28 | [Cloud / CI execution](#engines-environments-and-integrations) |
+| 28 | [Other issue trackers](#engines-environments-and-integrations) |
 | 29 | [First published eval result](#evidence-and-adoption) |
 | 30 | [Outcome-graded eval case](#evidence-and-adoption) |
 | 31 | [Measuring the lessons ledger](#evidence-and-adoption) |
 | 32 | [MCP servers](#engines-environments-and-integrations) |
-| 33 | [Ultra-fast mode](#flow-and-orchestration) |
-| 34 | [Cross-repo tasks](#flow-and-orchestration) |
-| 35 | [Watcher settings surface](#flow-and-orchestration) |
-| 36 | [`branch-summary.md`](#planning-artifacts-and-reporting) |
-| 37 | [Task breakdown and estimates file](#planning-artifacts-and-reporting) |
-| 38 | [User flow diagram](#planning-artifacts-and-reporting) |
-| 39 | [Business (data) flow diagram](#planning-artifacts-and-reporting) |
-| 40 | [Integration tests](#quality-and-testing) |
-| 41 | [Regression tests](#quality-and-testing) |
-| 42 | [Fix-plan structure review](#quality-and-testing) |
-| 43 | [Deploy to a test environment](#engines-environments-and-integrations) |
-| 44 | [Cloud QA](#engines-environments-and-integrations) |
-| 45 | [Mobile QA drivers](#engines-environments-and-integrations) |
-| 46 | [Design-source ingestion](#engines-environments-and-integrations) |
-| 47 | [Second end-to-end capture](#evidence-and-adoption) |
-| 48 | [Interactive session vs harness run](#evidence-and-adoption) |
-| 49 | [`init` warns when there is no remote](#evidence-and-adoption) |
-| 50 | [OS-level sandbox in the autonomous profile](#security-and-containment) |
-| 51 | [`doctor` sandbox checks](#security-and-containment) |
-| 52 | [Threat model](#documentation) |
-| 53 | [Per-run base branch](#flow-and-orchestration) |
-| 54 | [Suggested protected branches at `init`](#security-and-containment) |
-| 55 | [Guided default-branch change](#evidence-and-adoption) |
-| 56 | [Release tags in the protected set](#security-and-containment) |
-| 57 | [Notifications settings command](#flow-and-orchestration) |
+| 33 | [Cross-repo tasks](#flow-and-orchestration) |
+| 34 | [Watcher settings surface](#flow-and-orchestration) |
+| 35 | [`branch-summary.md`](#planning-artifacts-and-reporting) |
+| 36 | [Task breakdown and estimates file](#planning-artifacts-and-reporting) |
+| 37 | [User flow diagram](#planning-artifacts-and-reporting) |
+| 38 | [Business (data) flow diagram](#planning-artifacts-and-reporting) |
+| 39 | [Integration tests](#quality-and-testing) |
+| 40 | [Regression tests](#quality-and-testing) |
+| 41 | [Fix-plan structure review](#quality-and-testing) |
+| 42 | [Deploy to a test environment](#engines-environments-and-integrations) |
+| 43 | [Cloud QA](#engines-environments-and-integrations) |
+| 44 | [Mobile QA drivers](#engines-environments-and-integrations) |
+| 45 | [Design-source ingestion](#engines-environments-and-integrations) |
+| 46 | [Second end-to-end capture](#evidence-and-adoption) |
+| 47 | [Interactive session vs harness run](#evidence-and-adoption) |
+| 48 | [`init` warns when there is no remote](#evidence-and-adoption) |
+| 49 | [OS-level sandbox in the autonomous profile](#security-and-containment) |
+| 50 | [`doctor` sandbox checks](#security-and-containment) |
+| 51 | [Threat model](#documentation) |
+| 52 | [Suggested protected branches at `init`](#security-and-containment) |
+| 53 | [Guided default-branch change](#evidence-and-adoption) |
+| 54 | [Release tags in the protected set](#security-and-containment) |
+| 55 | [Notifications settings command](#flow-and-orchestration) |
 
 ## Flow and orchestration
 
@@ -80,17 +78,16 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | Committer as a script | A script that commits and pushes, replacing the `committer` agent. | Open |
 | Script-driven planning pilot | A script walks the planning graph and runs each node as its own headless session, taking planning out of the orchestrator session; an opt-in measured pilot that ends with a cost comparison deciding whether the unit loop follows ([#159](https://github.com/firu-daniel/autonomous-sdlc-harness/issues/159)). | Open |
 | Script-driven autonomous flow | The whole autonomous flow on the script-driven graph, removing the orchestrator session. Follows the planning pilot if its cost comparison favours it. | Open |
-| Multi-plan programs | A task too big for one plan becomes an ordered chain of plans — one branch each, at most 300 story points, split from the **Task researcher**'s estimates — each picked up from the inbox when the previous one finishes. | Open |
+| Multi-plan programs | A task too big for one plan becomes an ordered chain of plans — one branch each, at most 300 story points, split from the **Task researcher**'s estimates — each picked up from the inbox when the previous one finishes. **The mechanism is a per-run base branch**, which also covers the standalone case of a run starting from a branch other than `defaultBranch` — a hotfix from `prod`, a fix on `release/x.y`: the config lists the allowed bases, the drop or `/autonomous-sdlc-harness:branch-prompt` picks one, and the run records it; the run copy, the branch-review diff and the branch refresh all use that recorded base. Today every run is cut from `defaultBranch`, so the only way is to change the key for one run and change it back. **Lead, to be researched:** when the researcher splits a task, the program cuts its own base branch from `defaultBranch`; each plan's branch is cut from that base, refreshes from it before it lands (an earlier plan may have landed meanwhile), and lands back into it; the base reaches `defaultBranch` through the usual human-merged pull request. The research must first settle whether that is safe under the protected-branch set and the sandbox: who merges into the base, given that a run never merges today; and how a branch cut from a base other runs wrote passes the protected-surface check that the run copy now makes against `defaultBranch`. | Open |
 | Cross-repo tasks | One task split into per-repository plans with an explicit contract between them. | Open |
 | Watcher settings surface | A supported way to change the watcher's tunables instead of hand-editing a file. | Open |
 | Notifications settings command | A `notifications` command that manages the machine-local `push.env` and nothing else: `set-url` writes the endpoint, `show` names the file in effect and which keys are set without printing a value, and `test` sends one push. Today only `init --notifications` writes the file, and `init` skips a file that already exists, so a `push.env` that is there with both keys empty can be filled only by hand or by `init --force`, which regenerates every other file too. `doctor`'s warning about an empty file then names this command. | Open |
-| Per-run base branch | A run can start from a branch other than `defaultBranch` — a hotfix from `prod`, a fix on `release/x.y`. The config lists the allowed bases, the drop or `/autonomous-sdlc-harness:branch-prompt` picks one, and the run records it; the run copy, the branch-review diff and the branch refresh all use that recorded base. Today every run is cut from `defaultBranch`, so the only way is to change the key for one run and change it back. | Open |
 
 ## Planning artifacts and reporting
 
 | Feature | What it is | Status |
 |---|---|---|
-| Trace export | Per-run logs converted to OpenTelemetry GenAI spans or Langfuse traces. | Open |
+| Trace export | Per-run logs converted to OpenTelemetry GenAI spans or Langfuse traces. One possible shape is **TraceScene** (or TeleScene; the name is not settled): a standalone repository that does the export, which the harness uses instead of exporting itself. Whether that is feasible, and whether a separate product helps more than an export inside the harness, is to be researched first. | Open |
 | Cost per feature | Token and cost accounting per run: every headless session's cost, tokens and cache use, rolled up per run in `<state_dir>/run_analytics/<branch>/run-analytics.md` ([`docs/watcher.md`](docs/watcher.md) §2, *Run analytics*). | Done |
 | Latency tracking | Wall time recorded alongside the cost figures — per session, per request, per tool call and per sub-agent, and per Run gates round down to each test file — so a slow phase is visible without reading the run logs ([`docs/watcher.md`](docs/watcher.md) §2, *Run analytics*). | Done |
 | `branch-summary.md` | At the end of the flow, write the Done summary the supervised flow already gives — including token consumption and the API-equivalent price. | Open |
@@ -125,7 +122,8 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | Second-runtime reference port | **Withdrawn** by maintainer decision on 2026-09-24: the planning loop is already an orchestrator-walked graph whose committed progress ledgers are its durable state, and a port would add code-enforced routing no run has needed while moving the planning phase onto per-token API billing ([`docs/second-runtime-port-decision.md`](docs/second-runtime-port-decision.md)). | Withdrawn |
 | Engine / provider abstraction | The engine seam built and proven against at least one open-source runtime, with runtime and model as separate settings. | Open |
 | Budget governor | Token and cost caps for API-billed accounts. Today the usage gate only pauses on plan windows, so an API-billed account has no cap. | Open |
-| Cloud / CI execution | **The execution half has shipped:** with `execution.target` set to `github-actions` (opt-in; `local` stays the default), the local watcher dispatches each run to a GitHub Actions job on a hosted or self-hosted runner, and a run longer than one job runs as a chain of bounded jobs that each resume from the committed ledger. The docs-retrieval cache under `${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/` is restored per job, keyed on the CLI version, and seeded by a warm job on the default branch, since a cache saved on one feature branch is not readable from another ([`docs/remote-execution.md`](docs/remote-execution.md)). **The issue trigger has shipped:** labelling an issue starts a task run with nothing local taking part, gated on `forge` `github` ([`docs/github-issue-trigger.md`](docs/github-issue-trigger.md)). **Run control has shipped:** comment commands, review rounds, lifecycle comments, state labels and draft-pull-request output, gated on `forge` `github` ([`docs/github-run-control.md`](docs/github-run-control.md)). A remote run ends at a pushed branch and, with `forge` `github`, a draft pull request; merging stays the operator's. **Still open:** trackers other than GitHub Issues. Jira reaches `start` one way, through the documented and untested `repository_dispatch` route ([`docs/github-issue-trigger.md`](docs/github-issue-trigger.md) → `## 6. Other trackers`); GitLab needs a relay, and none ships; no tracker gets the run's state back or steers the run. | Open |
+| Cloud / CI execution | **The execution half has shipped:** with `execution.target` set to `github-actions` (opt-in; `local` stays the default), the local watcher dispatches each run to a GitHub Actions job on a hosted or self-hosted runner, and a run longer than one job runs as a chain of bounded jobs that each resume from the committed ledger. The docs-retrieval cache under `${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/` is restored per job, keyed on the CLI version, and seeded by a warm job on the default branch, since a cache saved on one feature branch is not readable from another ([`docs/remote-execution.md`](docs/remote-execution.md)). **The issue trigger has shipped:** labelling an issue starts a task run with nothing local taking part, gated on `forge` `github` ([`docs/github-issue-trigger.md`](docs/github-issue-trigger.md)). **Run control has shipped:** comment commands, review rounds, lifecycle comments, state labels and draft-pull-request output, gated on `forge` `github` ([`docs/github-run-control.md`](docs/github-run-control.md)). A remote run ends at a pushed branch and, with `forge` `github`, a draft pull request; merging stays the operator's. Trackers other than GitHub Issues are their own row, **Other issue trackers**. | Done |
+| Other issue trackers | Starting and steering runs from trackers other than GitHub Issues. Jira reaches `start` one way, through the documented and untested `repository_dispatch` route ([`docs/github-issue-trigger.md`](docs/github-issue-trigger.md) → `## 6. Other trackers`); GitLab needs a relay, and none ships; no tracker gets the run's state back or steers the run. | Open |
 | MCP servers | A QA server (reserve test users, seed fixtures) and a ledger server (lessons, observations, statistics). | Open |
 | Deploy to a test environment | Deploy the branch through a user-provided script, or a light CI/CD step that respects protected branches and the never-merge rule. | Open |
 | Cloud QA | QA runs against a preview-deployment URL with a headless browser inside the job, credentials come from CI secrets, and test-user parking uses a real lock. | Open |
@@ -169,7 +167,6 @@ Parts of the harness extracted as products of their own.
 | RagScene | The docs retrieval extracted from the harness as its own product ([`docs/rag-extraction-research/`](docs/rag-extraction-research/README.md)). | Open |
 | GraphScene | The flow-graph navigation extracted from the harness ([`docs/flow-graph-walker.md`](docs/flow-graph-walker.md)). | Open |
 | DevScene studio | DevScene studio. | Open |
-| TraceScene | Logs and traces as a product; the name (TraceScene or TeleScene) is not settled. Builds on **Trace export** and the run analytics. | Open |
 
 ## Documentation
 
