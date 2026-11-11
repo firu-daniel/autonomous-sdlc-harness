@@ -1,5 +1,5 @@
 /**
- * The `Install the pinned plugin` step of the `harness-run.yml` template, run.
+ * The `Install the pinned plugin` step of the `devscene-run.yml` template, run.
  *
  * **The rule these tests enforce: the install step installs the plugin at the workflow's version,
  * whatever the marketplace's default branch carries, refuses naming the upgrade route when it

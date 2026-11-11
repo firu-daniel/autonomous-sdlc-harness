@@ -75,12 +75,14 @@ test('each workflow path joins the workflows directory and its file', () => {
 });
 
 test('the run-control names keep their literal values', () => {
-  assert.equal(WORKFLOW_CONTROL_FILE, 'harness-control.yml');
-  assert.equal(COMMAND_HANDLE, '@sdlc-harness');
+  assert.equal(WORKFLOW_RUN_FILE, 'devscene-run.yml');
+  assert.equal(WORKFLOW_RESUME_FILE, 'devscene-resume.yml');
+  assert.equal(WORKFLOW_CONTROL_FILE, 'devscene-control.yml');
+  assert.equal(COMMAND_HANDLE, '@dev-scene');
   assert.deepEqual([...COMMAND_VERBS], ['answer', 'pause', 'resume', 'stop', 'clear', 'status']);
-  assert.equal(COMMENT_MARKER, '<!-- sdlc-harness');
+  assert.equal(COMMENT_MARKER, '<!-- devscene');
   assert.equal(REVIEW_ROUND_STATE, 'changes_requested');
-  assert.equal(STATE_LABEL_PREFIX, 'sdlc-harness: ');
+  assert.equal(STATE_LABEL_PREFIX, 'devscene: ');
   assert.deepEqual([...RUN_STATES], ['running', 'parked', 'paused', 'done', 'failed', 'stopped']);
   assert.deepEqual([...MENTION_ACTIONS], ['command', 'reply', 'clarify', 'fixes', 'none']);
   assert.deepEqual([...MENTION_ACT_VERBS], ['answer', 'pause', 'resume', 'status']);
@@ -123,9 +125,9 @@ test('remote-run.sh mirrors the run-control names byte for byte', () => {
 
 // The YAML and shell mirrors spell these byte for byte, so a rename must fail here first.
 test('the issue-trigger names keep their literal values', () => {
-  assert.equal(WORKFLOW_TRIGGER_FILE, 'harness-trigger.yml');
+  assert.equal(WORKFLOW_TRIGGER_FILE, 'devscene-trigger.yml');
   assert.equal(TRIGGER_LABEL_VARIABLE, 'HARNESS_TRIGGER_LABEL');
-  assert.equal(DEFAULT_TRIGGER_LABEL, 'sdlc-harness');
+  assert.equal(DEFAULT_TRIGGER_LABEL, 'devscene');
   assert.equal(LEGACY_TRIGGER_LABEL, 'harness');
   assert.equal(TRIGGER_ALLOWED_BOTS_VARIABLE, 'HARNESS_TRIGGER_ALLOWED_BOTS');
   assert.equal(TRIGGER_DISPATCH_EVENT_TYPE, 'harness-task');

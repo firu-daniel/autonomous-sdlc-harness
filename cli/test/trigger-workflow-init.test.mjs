@@ -22,14 +22,14 @@ const { UNPARSEABLE_CONTROL_RELEASES } = await import(
 );
 const CONTROL_0_6_1 = readFileSync(join(PACKAGE_ROOT, 'test', 'fixtures', 'harness-control-0.6.1.yml'), 'utf8');
 
-const TRIGGER_FILE = '.github/workflows/harness-trigger.yml';
-const RUN_FILE = '.github/workflows/harness-run.yml';
-const RESUME_FILE = '.github/workflows/harness-resume.yml';
-const CONTROL_FILE = '.github/workflows/harness-control.yml';
-const TRIGGER_TEMPLATE = readFileSync(join(PACKAGE_ROOT, 'templates', 'github', 'workflows', 'harness-trigger.yml'), 'utf8');
-const CONTROL_TEMPLATE = readFileSync(join(PACKAGE_ROOT, 'templates', 'github', 'workflows', 'harness-control.yml'), 'utf8');
+const TRIGGER_FILE = '.github/workflows/devscene-trigger.yml';
+const RUN_FILE = '.github/workflows/devscene-run.yml';
+const RESUME_FILE = '.github/workflows/devscene-resume.yml';
+const CONTROL_FILE = '.github/workflows/devscene-control.yml';
+const TRIGGER_TEMPLATE = readFileSync(join(PACKAGE_ROOT, 'templates', 'github', 'workflows', 'devscene-trigger.yml'), 'utf8');
+const CONTROL_TEMPLATE = readFileSync(join(PACKAGE_ROOT, 'templates', 'github', 'workflows', 'devscene-control.yml'), 'utf8');
 const PR_SETTING = 'Allow GitHub Actions to create and approve pull requests';
-const LABEL_COMMAND = 'gh label create sdlc-harness --description "Start a harness run from this issue"';
+const LABEL_COMMAND = 'gh label create devscene --description "Start a harness run from this issue"';
 
 function nodeProjectFiles() {
   return {
@@ -92,8 +92,8 @@ test('init writes the trigger and control workflows only for forge github with r
 
     const { stdout } = await initOk(dir);
 
-    assert.equal(text(dir, TRIGGER_FILE), TRIGGER_TEMPLATE, 'harness-trigger.yml is not a verbatim copy of its template');
-    assert.equal(text(dir, CONTROL_FILE), CONTROL_TEMPLATE, 'harness-control.yml is not a verbatim copy of its template');
+    assert.equal(text(dir, TRIGGER_FILE), TRIGGER_TEMPLATE, 'devscene-trigger.yml is not a verbatim copy of its template');
+    assert.equal(text(dir, CONTROL_FILE), CONTROL_TEMPLATE, 'devscene-control.yml is not a verbatim copy of its template');
     const addLine = stdout.split('\n').find((line) => line.trim().startsWith('git add '));
     assert.ok(addLine !== undefined, `no git add line:\n${stdout}`);
     for (const path of [RUN_FILE, RESUME_FILE, TRIGGER_FILE, CONTROL_FILE]) {
@@ -107,13 +107,13 @@ test('init writes the trigger and control workflows only for forge github with r
       !stdout.includes('Only a person with write or admin access, or a listed bot, starts one.'),
       `the label step still carries the sentence that omits HARNESS_RUN_ACTORS:\n${stdout}`,
     );
-    assert.ok(stdout.includes('`sdlc-harness: <state>`'), `the report does not tell the state labels apart:\n${stdout}`);
+    assert.ok(stdout.includes('`devscene: <state>`'), `the report does not tell the state labels apart:\n${stdout}`);
     assert.ok(stdout.includes(PR_SETTING), `the report does not name the pull-request setting:\n${stdout}`);
     assert.ok(stdout.includes('HARNESS_GIT_TOKEN, which opens the pull request'), `the report does not offer HARNESS_GIT_TOKEN for the pull request:\n${stdout}`);
     assert.ok(stdout.includes('machine account'), `the report does not carry the machine-account advice:\n${stdout}`);
-    assert.ok(stdout.includes('@sdlc-harness followed by answer, pause, resume, stop, clear, status steers'), `the report does not name the comment commands:\n${stdout}`);
+    assert.ok(stdout.includes('@dev-scene followed by answer, pause, resume, stop, clear, status steers'), `the report does not name the comment commands:\n${stdout}`);
     assert.ok(
-      stdout.includes('a mention of @sdlc-harness anywhere else in a comment is read by an agent, which carries out answer, pause, resume, status and asks the commenter to confirm stop, clear'),
+      stdout.includes('a mention of @dev-scene anywhere else in a comment is read by an agent, which carries out answer, pause, resume, status and asks the commenter to confirm stop, clear'),
       `the report does not name what a mention does:\n${stdout}`,
     );
     assert.ok(stdout.includes('docs/github-run-control.md'), `the report does not point at docs/github-run-control.md:\n${stdout}`);
@@ -179,7 +179,7 @@ test('init writes the trigger and control workflows only for forge github with r
     const nextHeading = afterHeading.indexOf('\n== ');
     const upgradeBlock = nextHeading === -1 ? afterHeading : afterHeading.slice(0, nextHeading);
     assert.ok(upgradeBlock.includes('HARNESS_RUN_ACTORS'), `the upgrade block does not name HARNESS_RUN_ACTORS:\n${stdout}`);
-    assert.ok(!upgradeBlock.includes('harness-trigger.yml'), `the upgrade block names harness-trigger.yml with no forge workflows:\n${stdout}`);
+    assert.ok(!upgradeBlock.includes('devscene-trigger.yml'), `the upgrade block names devscene-trigger.yml with no forge workflows:\n${stdout}`);
     assert.ok(!upgradeBlock.includes('init --force'), `the upgrade block sends an adopter with no forge workflows to init --force:\n${stdout}`);
   });
 
@@ -222,7 +222,7 @@ test('init writes the trigger and control workflows only for forge github with r
   });
 });
 
-test('any init repairs a byte-identical 0.6.1 harness-control.yml and keeps every other copy', async (t) => {
+test('any init repairs a byte-identical 0.6.1 devscene-control.yml and keeps every other copy', async (t) => {
   /** A wired forge fixture whose control workflow is replaced by `content`. */
   async function controlFixture(subtest, content) {
     const dir = await wiredFixture(subtest, { forge: 'github', target: 'github-actions' });
