@@ -1,8 +1,10 @@
 # Starting a run from a GitHub issue
 
-**Who reads this:** a maintainer who wants a labelled GitHub issue to start an autonomous run, and anyone changing the issue trigger — `harness-trigger.yml`, `remote-run.sh trigger` and `start`, or the branch-name rule. It owns the trigger's design of record: how to turn it on, the trigger label and the upgrade path for a repository already using `harness`, what happens between a label and a dispatched run, how the branch is named, who may start a run and what the labeller vouches for, and what is not verified. The run itself, from the dispatch on, is [`remote-execution.md`](remote-execution.md)'s, and working it from comments and reviews is [`github-run-control.md`](github-run-control.md)'s.
+**Who reads this:** a maintainer who wants a labelled GitHub issue to start an autonomous run, and anyone changing the issue trigger — `devscene-trigger.yml`, `remote-run.sh trigger` and `start`, or the branch-name rule. It owns the trigger's design of record: how to turn it on, the trigger label and the upgrade path for a repository already using `harness`, what happens between a label and a dispatched run, how the branch is named, who may start a run and what the labeller vouches for, and what is not verified. The run itself, from the dispatch on, is [`remote-execution.md`](remote-execution.md)'s, and working it from comments and reviews is [`github-run-control.md`](github-run-control.md)'s.
 
-It cites rather than restates. Every GitHub fact below is cited from [`github-integration-research.md`](github-integration-research.md) by its ID (S1, S3, T1–T6), retrieved there on 2026-09-30 and not re-verified here. The code of record is `cli/templates/scripts/remote-run.sh` → the header's `start` and `trigger` paragraphs, the header of `cli/templates/github/workflows/harness-trigger.yml`, and `cli/templates/scripts/lib/harness-run-lib.sh` → `DERIVING A BRANCH NAME FROM A TITLE`.
+Records in this document taken before DevScene's GitHub-facing names changed — its trigger and state labels, its comment handle, its hidden comment marker and its workflow file names — have had those names respelled to the current ones; nothing else in them was changed.
+
+It cites rather than restates. Every GitHub fact below is cited from [`github-integration-research.md`](github-integration-research.md) by its ID (S1, S3, T1–T6), retrieved there on 2026-09-30 and not re-verified here. The code of record is `cli/templates/scripts/remote-run.sh` → the header's `start` and `trigger` paragraphs, the header of `cli/templates/github/workflows/devscene-trigger.yml`, and `cli/templates/scripts/lib/harness-run-lib.sh` → `DERIVING A BRANCH NAME FROM A TITLE`.
 
 ---
 
@@ -20,7 +22,7 @@ npx devscene config set forge github
 npx devscene config set execution.target github-actions
 ```
 
-**2. Write the trigger workflow.** `init` writes `.github/workflows/harness-trigger.yml` only if absent. It also writes `.github/workflows/harness-control.yml`, which turns comments and reviews into harness actions ([`github-run-control.md`](github-run-control.md)), on the same terms. Neither carries a version pin, so `init --upgrade-workflows` does not re-render them; `init --force` replaces each after a `.bak`. Any `init` also replaces a `harness-control.yml` byte for byte the copy 0.6.1 wrote, which GitHub cannot parse, after a `.bak` ([`remote-execution.md`](remote-execution.md) → `### Upgrading`).
+**2. Write the trigger workflow.** `init` writes `.github/workflows/devscene-trigger.yml` only if absent. It also writes `.github/workflows/devscene-control.yml`, which turns comments and reviews into harness actions ([`github-run-control.md`](github-run-control.md)), on the same terms. Neither carries a version pin, so `init --upgrade-workflows` does not re-render them; `init --force` replaces each after a `.bak`. Any `init` also replaces a `devscene-control.yml` byte for byte the copy 0.6.1 wrote, which GitHub cannot parse, after a `.bak` ([`remote-execution.md`](remote-execution.md) → `### Upgrading`).
 
 ```
 npx devscene init
@@ -41,7 +43,7 @@ git status --short
 The `workflow` scope and `--no-verify` are explained in [`remote-execution.md`](remote-execution.md) → `## 7.` step 3.
 
 ```
-git add .github/workflows/harness-trigger.yml .github/workflows/harness-control.yml
+git add .github/workflows/devscene-trigger.yml .github/workflows/devscene-control.yml
 ```
 
 ```
@@ -59,10 +61,10 @@ git push --no-verify origin <default branch>
 **4. Create the trigger label.** Creating a label needs write access (T1).
 
 ```
-gh label create sdlc-harness
+gh label create devscene
 ```
 
-**5. Optionally, rename the label, admit bots, or name who may act.** The trigger label is the repository variable `HARNESS_TRIGGER_LABEL`, `sdlc-harness` when unset; create a label of that name instead of `sdlc-harness`. The six `sdlc-harness: <state>` labels are the harness's own, set as a run moves ([`github-run-control.md`](github-run-control.md) → `## 5. Lifecycle comments and state labels`), and are not the trigger label. `HARNESS_TRIGGER_ALLOWED_BOTS` is a comma-separated list of bot logins allowed to start a run, empty by default (§3).
+**5. Optionally, rename the label, admit bots, or name who may act.** The trigger label is the repository variable `HARNESS_TRIGGER_LABEL`, `devscene` when unset; create a label of that name instead of `devscene`. The six `devscene: <state>` labels are the harness's own, set as a run moves ([`github-run-control.md`](github-run-control.md) → `## 5. Lifecycle comments and state labels`), and are not the trigger label. `HARNESS_TRIGGER_ALLOWED_BOTS` is a comma-separated list of bot logins allowed to start a run, empty by default (§3).
 
 ```
 gh variable set HARNESS_TRIGGER_LABEL --body <label>
@@ -86,7 +88,7 @@ gh variable set HARNESS_RUN_ACTORS --body '*'
 
 Which value fits which credential is [`remote-execution.md`](remote-execution.md) → `## 9. Credentials and billing`.
 
-**6. Check the setup.** `doctor`'s `forge` check reads local evidence only: it warns when remote execution is off, when the trigger workflow is absent, or when `origin/<default branch>` does not carry it. `--check-github` adds whether GitHub knows `harness-trigger.yml` and `harness-control.yml`, whether the trigger label exists — asked by `HARNESS_TRIGGER_LABEL`, else by the label the committed workflow falls back to — and whether *Allow GitHub Actions to create and approve pull requests* is on, which a run needs to open its draft pull request unless `HARNESS_GIT_TOKEN` is set. It notes every bot `HARNESS_TRIGGER_ALLOWED_BOTS` admits, and names the effective `HARNESS_RUN_ACTORS` list: the logins it names, every writer for `*`, or, unset, the owner alone or nobody. It also **fails** when GitHub lists any harness workflow by its path rather than its name, which is how GitHub lists a file it could not parse; the confirmation naming both forge workflows is then withheld. Once `gh` is authenticated, these answers appear in the `remote-github` check's report whatever else it reports, `pass`, `warn` or `fail`. A `gh` that cannot run or reports no usable login stops that check before GitHub is asked about the trigger.
+**6. Check the setup.** `doctor`'s `forge` check reads local evidence only: it warns when remote execution is off, when the trigger workflow is absent, or when `origin/<default branch>` does not carry it. `--check-github` adds whether GitHub knows `devscene-trigger.yml` and `devscene-control.yml`, whether the trigger label exists — asked by `HARNESS_TRIGGER_LABEL`, else by the label the committed workflow falls back to — and whether *Allow GitHub Actions to create and approve pull requests* is on, which a run needs to open its draft pull request unless `HARNESS_GIT_TOKEN` is set. It notes every bot `HARNESS_TRIGGER_ALLOWED_BOTS` admits, and names the effective `HARNESS_RUN_ACTORS` list: the logins it names, every writer for `*`, or, unset, the owner alone or nobody. It also **fails** when GitHub lists any harness workflow by its path rather than its name, which is how GitHub lists a file it could not parse; the confirmation naming both forge workflows is then withheld. Once `gh` is authenticated, these answers appear in the `remote-github` check's report whatever else it reports, `pass`, `warn` or `fail`. A `gh` that cannot run or reports no usable login stops that check before GitHub is asked about the trigger.
 
 ```
 npx devscene doctor --check-github
@@ -94,7 +96,7 @@ npx devscene doctor --check-github
 
 The trigger job runs on the runner `HARNESS_RUNNER` names, like the run job, and needs `jq` and `gh` there.
 
-**A repository already using `harness`.** The default trigger label is now `sdlc-harness`, and `HARNESS_TRIGGER_LABEL` still overrides it. A `harness-trigger.yml` written by the previous release falls back to `harness` when the variable is unset and passes no label to the script, which then accepts `harness` as well as `sdlc-harness`; such a repository keeps starting runs on `harness` until it re-renders. `init --force` replaces `harness-trigger.yml` and the scripts together, each after a `.bak`, and from then on the default is `sdlc-harness`. Setting `HARNESS_TRIGGER_LABEL` to `harness` keeps the old name under either workflow. `doctor --check-github` asks GitHub about the label the committed workflow falls back to when the variable is unset, and when that fallback is `harness` it adds a note naming the re-render. The two ways on — re-render, then create the new label (step 4) and commit what it replaced (step 3):
+**A repository already using `harness`.** The default trigger label is now `devscene`, and `HARNESS_TRIGGER_LABEL` still overrides it. A `devscene-trigger.yml` written by the previous release falls back to `harness` when the variable is unset and passes no label to the script, which then accepts `harness` as well as `devscene`; such a repository keeps starting runs on `harness` until it re-renders. `init --force` replaces `devscene-trigger.yml` and the scripts together, each after a `.bak`, and from then on the default is `devscene`. Setting `HARNESS_TRIGGER_LABEL` to `harness` keeps the old name under either workflow. `doctor --check-github` asks GitHub about the label the committed workflow falls back to when the variable is unset, and when that fallback is `harness` it adds a note naming the re-render. The two ways on — re-render, then create the new label (step 4) and commit what it replaced (step 3):
 
 ```
 npx devscene init --force
@@ -112,8 +114,8 @@ gh variable set HARNESS_TRIGGER_LABEL --body harness
 
 ## 1. What happens when an issue is labelled
 
-1. **The event.** `harness-trigger.yml` listens to `issues` of type `labeled` only, never `opened`. A label set while the issue is being created raises `labeled` as a separate event whose `sender` is the creator, so listening to both would start twice, and `labeled` alone covers labelling at creation and later (T1).
-2. **The label filter.** The job's `if:` runs it only for the label `HARNESS_TRIGGER_LABEL` names, else `sdlc-harness`, and the workflow passes the label it matched to the script. Any other label yields a skipped job, which runs no runner and bills nothing ([`remote-execution.md`](remote-execution.md) → `### Verified in Gate 12 round 2`).
+1. **The event.** `devscene-trigger.yml` listens to `issues` of type `labeled` only, never `opened`. A label set while the issue is being created raises `labeled` as a separate event whose `sender` is the creator, so listening to both would start twice, and `labeled` alone covers labelling at creation and later (T1).
+2. **The label filter.** The job's `if:` runs it only for the label `HARNESS_TRIGGER_LABEL` names, else `devscene`, and the workflow passes the label it matched to the script. Any other label yields a skipped job, which runs no runner and bills nothing ([`remote-execution.md`](remote-execution.md) → `### Verified in Gate 12 round 2`).
 3. **The refusals**, in this order, each one a comment on the issue naming the reason and the way on:
    1. the repository variable `HARNESS_REMOTE_STOP` is set;
    2. the default branch's `harness.config.json` does not set `forge` to `github` and `execution.target` to `github-actions` — checked before any authorisation, so a disabled trigger asks GitHub nothing about the labeller;
@@ -123,13 +125,13 @@ gh variable set HARNESS_TRIGGER_LABEL --body harness
    6. the labeller is a `User` whose repository permission is not `admin` or `write`, or whose permission could not be read (§3);
    7. the labeller is a `User` with write access whom `HARNESS_RUN_ACTORS` does not admit (§3).
 4. **The branch and the snapshot.** The job fetches the default branch, derives the branch name from the issue's title (§2), and writes the task prompt: `# <title>`, the body as it is at this moment, and a provenance line naming the issue, the labeller, the label and the time. A name that cannot be derived, or whose every suffix is taken, is a refusal.
-5. **`start`.** `remote-run.sh start <branch> --prompt-file <file>` cuts the branch from `origin/<default branch>`, places the prompt at `<stateDir>/task_prompts/<branch>_task_prompt.md`, commits it as `chore: add task prompt for <branch>` and pushes it, through the same run-library calls the local watcher's inbox pass makes. The working copy and its local branch are removed once the push lands, and on any failure after the cut, so a self-hosted runner accumulates nothing; a copy or branch that existed before the cut is left alone. Then it sends `harness-run.yml`'s `workflow_dispatch` with `action: run`, `engine: task`, `resume: none` and `chain: 0`. Nothing downstream can tell where the task came from.
-6. **The comment and the label.** The job looks up the `harness run <branch>` run whose head commit (`headSha`) is the one `start` pushed, at most `TRIGGER_RUN_LOOKUP_TRIES` times, and comments the branch and that run's URL — or, if the lookup finds nothing, the URL of the branch's filtered run list. A run of an earlier branch of the same name is never named. Every comment, a refusal's included, ends with a hidden line, `<!-- sdlc-harness event=started branch=<branch> -->` or `event=refused`, which is how a later `@sdlc-harness` comment on the issue finds its run ([`github-run-control.md`](github-run-control.md) → `## 1. Commands in a comment`). Every comment is followed by removing the trigger label, so re-applying it is a deliberate act; re-applied on the same issue, it starts another run on the next indexed branch. In the same step a start sets the state label `sdlc-harness: running`, and a refusal sets none. The comment, the removal and that one label are the only writes the trigger makes to the issue.
+5. **`start`.** `remote-run.sh start <branch> --prompt-file <file>` cuts the branch from `origin/<default branch>`, places the prompt at `<stateDir>/task_prompts/<branch>_task_prompt.md`, commits it as `chore: add task prompt for <branch>` and pushes it, through the same run-library calls the local watcher's inbox pass makes. The working copy and its local branch are removed once the push lands, and on any failure after the cut, so a self-hosted runner accumulates nothing; a copy or branch that existed before the cut is left alone. Then it sends `devscene-run.yml`'s `workflow_dispatch` with `action: run`, `engine: task`, `resume: none` and `chain: 0`. Nothing downstream can tell where the task came from.
+6. **The comment and the label.** The job looks up the `harness run <branch>` run whose head commit (`headSha`) is the one `start` pushed, at most `TRIGGER_RUN_LOOKUP_TRIES` times, and comments the branch and that run's URL — or, if the lookup finds nothing, the URL of the branch's filtered run list. A run of an earlier branch of the same name is never named. Every comment, a refusal's included, ends with a hidden line, `<!-- devscene event=started branch=<branch> -->` or `event=refused`, which is how a later `@dev-scene` comment on the issue finds its run ([`github-run-control.md`](github-run-control.md) → `## 1. Commands in a comment`). Every comment is followed by removing the trigger label, so re-applying it is a deliberate act; re-applied on the same issue, it starts another run on the next indexed branch. In the same step a start sets the state label `devscene: running`, and a refusal sets none. The comment, the removal and that one label are the only writes the trigger makes to the issue.
 7. **From here it is the run a local drop starts** ([`remote-execution.md`](remote-execution.md) → `## 1. The lifecycle of a remote run`, from step 4): the same workflow, inputs, supervision and notifications, ending in a pushed branch ready for review. Nothing on your machine takes part.
 
 **The adapter shape is *event → (branch, task text) → placement → dispatch*.** `trigger` is the event adapter: it turns a GitHub event into a branch and a task text. `start` is the platform-neutral half, and is where any later adapter plugs in; a Jira rule already reaches it through `repository_dispatch` without touching it (§6). The workflow declares no `concurrency` group, because a group keeps at most one pending run and cancels an earlier pending one, which would drop a trigger (§7). Two starts racing for one name are caught by the refused push of an existing branch, and that refusal is commented.
 
-**Running it on your own hardware.** A run started from GitHub always executes through `harness-run.yml`: GitHub cannot reach your machine, and a local process polling GitHub for issues would contradict the point of starting from GitHub. To run it on your own hardware, register a self-hosted runner there and name its label in `HARNESS_RUNNER` ([`remote-execution.md`](remote-execution.md) → `## 8. Choosing a runner`). Both the trigger job and the run then execute on that machine.
+**Running it on your own hardware.** A run started from GitHub always executes through `devscene-run.yml`: GitHub cannot reach your machine, and a local process polling GitHub for issues would contradict the point of starting from GitHub. To run it on your own hardware, register a self-hosted runner there and name its label in `HARNESS_RUNNER` ([`remote-execution.md`](remote-execution.md) → `## 8. Choosing a runner`). Both the trigger job and the run then execute on that machine.
 
 ---
 
@@ -155,7 +157,7 @@ The name is derived from the issue title by a fixed rule, with no model call and
   - *a protected branch*: `protectedBranches` with `defaultBranch`, which no run ever works on. A title of `Main` derives `main_2`;
   - *a branch on `origin`*, compared case-insensitively, since two refs differing only in case cannot coexist on a case-insensitive filesystem (T5);
   - *a local branch*, and *a run-registry record* when the caller names a registry. The rule is written for any caller; the trigger job's fresh checkout holds no run branch and names no registry, so for it these two never fire;
-  - *a run of the run workflow listed under that name*, when the caller passes `gh`, as the trigger does: GitHub is asked once per candidate whether any `harness-run.yml` run is listed under it. An abandoned, unmerged branch leaves no artifact on the default branch, yet its runs and their state bundles stay listed under its name for the artifact retention, and a reused name would inherit them ([`development.md`](development.md) → Gate 12 → Round 5, finding 1).
+  - *a run of the run workflow listed under that name*, when the caller passes `gh`, as the trigger does: GitHub is asked once per candidate whether any `devscene-run.yml` run is listed under it. An abandoned, unmerged branch leaves no artifact on the default branch, yet its runs and their state bundles stay listed under its name for the artifact retention, and a reused name would inherit them ([`development.md`](development.md) → Gate 12 → Round 5, finding 1).
 
   A name that cannot be judged, because a listing failed, a candidate's run history included, is a refusal, never a guess.
 - **The inbox round-trip.** The derived name must route back to itself through the inbox filename patterns (`<name>_task_prompt.md`, `<name>_review.md`, `<name>_review_2.md`, `<name>_docs.md`), so no derived name makes those patterns ambiguous. A name that does not is replaced by the fallback once.
@@ -223,7 +225,7 @@ The trigger job's push and comment start no other workflow; its `workflow_dispat
 
 Without the prefix a command chooses among the local registry's runs only, so a run with no local record is reached through the prefix alone. The answer, resume and pause go out as dispatches the command sends itself; the user review is committed on the branch tip from a temporary copy that is never bootstrapped, then dispatched ([`remote-execution.md`](remote-execution.md) → `## 1. The lifecycle of a remote run`).
 
-**Without one**, a run is worked from GitHub by comments and reviews ([`github-run-control.md`](github-run-control.md) → `## The GitHub entry point`), and the **Run workflow** form is still available ([`remote-execution.md`](remote-execution.md) → `### Working a run from GitHub alone`). For a person the allow-list does not admit (§3), a `run` dispatched from the form, by `gh workflow run`, or as a re-run launches nothing: `harness-run.yml`'s run job checks `github.triggering_actor` against `HARNESS_RUN_ACTORS` before any other step.
+**Without one**, a run is worked from GitHub by comments and reviews ([`github-run-control.md`](github-run-control.md) → `## The GitHub entry point`), and the **Run workflow** form is still available ([`remote-execution.md`](remote-execution.md) → `### Working a run from GitHub alone`). For a person the allow-list does not admit (§3), a `run` dispatched from the form, by `gh workflow run`, or as a re-run launches nothing: `devscene-run.yml`'s run job checks `github.triggering_actor` against `HARNESS_RUN_ACTORS` before any other step.
 
 **Either way, the notifications name both routes**: every job-side notification that names a local command also names the GitHub one.
 
@@ -231,7 +233,7 @@ Without the prefix a command chooses among the local registry's runs only, so a 
 
 ## 6. Other trackers
 
-**Any tracker that can send an HTTP request reaches `start` through `repository_dispatch`.** `harness-trigger.yml` also listens to `repository_dispatch` of type `harness-task`, with this body:
+**Any tracker that can send an HTTP request reaches `start` through `repository_dispatch`.** `devscene-trigger.yml` also listens to `repository_dispatch` of type `harness-task`, with this body:
 
 ```json
 {"event_type": "harness-task", "client_payload": {"title": "…", "body": "…", "source": "…"}}
