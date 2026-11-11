@@ -65,7 +65,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_github_surface/ta
 5. [x] **Task 5** — Respell the workflow generator, its recorded 0.6.1 `if:` line and digest, and the 0.6.1 fixture's `if:` line _(layer: cli)_ _(points: 15)_
 6. [x] **Task 6** — Respell the workflow names in the rest of `cli/src` and in `cli/README.md` _(layer: cli)_ _(points: 15)_
 7. [x] **Task 7** — Respell the remote-names, workflow-template and trigger-workflow `init` suites _(layer: cli)_ _(points: 15)_
-8. [ ] **Task 8** — Respell the `doctor` suite _(layer: cli)_ _(points: 20)_
+8. [x] **Task 8** — Respell the `doctor` suite _(layer: cli)_ _(points: 20)_
 9. [ ] **Task 9** — Respell the `init`, branch-naming, credential-scan and prompt-injection suites and the fixture helper's comment _(layer: cli)_ _(points: 10)_
 10. [ ] **Task 10** — Respell the `remote-control` suite _(layer: cli)_ _(points: 20)_
 11. [ ] **Task 11** — Respell the mention, needs-agent, close and review run-control suites _(layer: cli)_ _(points: 20)_

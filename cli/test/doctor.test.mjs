@@ -5899,8 +5899,8 @@ test('Acceptance 1: with docs.retrievalBackend absent, doctor reports what an ex
  */
 const GH_CLI_VARIABLE = 'HARNESS_GH_CLI';
 const FIXTURE_GH_CLI = 'harness-fixture-gh';
-const REMOTE_RUN_WORKFLOW = '.github/workflows/harness-run.yml';
-const REMOTE_RESUME_WORKFLOW = '.github/workflows/harness-resume.yml';
+const REMOTE_RUN_WORKFLOW = '.github/workflows/devscene-run.yml';
+const REMOTE_RESUME_WORKFLOW = '.github/workflows/devscene-resume.yml';
 
 /** A `gh` stub that appends its argv to a log and fails — a default `doctor` must never run it. */
 async function ghStub(t) {
@@ -5919,7 +5919,7 @@ async function remoteFixture(t) {
     const result = await runCli(dir, args);
     assert.equal(result.status, 0, `${args.join(' ')} exited ${result.status}\n${result.stdout}\n${result.stderr}`);
   }
-  assert.ok(existsSync(join(dir, REMOTE_RUN_WORKFLOW)), 'init did not write harness-run.yml with remote execution on');
+  assert.ok(existsSync(join(dir, REMOTE_RUN_WORKFLOW)), 'init did not write devscene-run.yml with remote execution on');
   return dir;
 }
 
@@ -5996,7 +5996,7 @@ test('the remote-execution check grades local evidence and fails only what stops
     }
   });
 
-  await t.test('on, with harness-run.yml absent, fails with init as the remedy', async (subtest) => {
+  await t.test('on, with devscene-run.yml absent, fails with init as the remedy', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await pushWorkflows(dir);
     await rm(join(dir, REMOTE_RUN_WORKFLOW));
@@ -6025,7 +6025,7 @@ test('the remote-execution check grades local evidence and fails only what stops
     assert.ok(line.includes('install the GitHub CLI'), line);
   });
 
-  await t.test('on, with harness-resume.yml absent, warns about branch-resume', async (subtest) => {
+  await t.test('on, with devscene-resume.yml absent, warns about branch-resume', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await pushWorkflows(dir);
     await rm(join(dir, REMOTE_RESUME_WORKFLOW));
@@ -6038,7 +6038,7 @@ test('the remote-execution check grades local evidence and fails only what stops
     assert.ok(line?.includes('/devscene:branch-resume'), stderr);
   });
 
-  await t.test('on, with harness-run.yml not on origin/<defaultBranch>, warns to commit and push it', async (subtest) => {
+  await t.test('on, with devscene-run.yml not on origin/<defaultBranch>, warns to commit and push it', async (subtest) => {
     const dir = await remoteFixture(subtest);
     const stub = await ghStub(subtest);
 
@@ -6058,17 +6058,17 @@ test('the remote-execution check grades local evidence and fails only what stops
     const path = join(dir, REMOTE_RUN_WORKFLOW);
     const before = readFileSync(path, 'utf8');
     const after = before.replace(PIN_LINE, replace);
-    assert.notEqual(after, before, 'harness-run.yml carries no HARNESS_CLI_VERSION line to rewrite');
+    assert.notEqual(after, before, 'devscene-run.yml carries no HARNESS_CLI_VERSION line to rewrite');
     writeFileSync(path, after, 'utf8');
   };
   const assertMoveRoute = (line) => {
     assert.ok(line.includes('a run already in flight finishes on the version it started with'), line);
     assert.ok(!/\.\.\s/.test(line), line);
     assert.ok(line.includes('commit the paths its printed `git add` names'), line);
-    assert.ok(!line.includes('commit .github/workflows/harness-run.yml and'), line);
+    assert.ok(!line.includes('commit .github/workflows/devscene-run.yml and'), line);
   };
 
-  await t.test('on, with harness-run.yml pinned to another version, warns with the upgrade route and the stay route', async (subtest) => {
+  await t.test('on, with devscene-run.yml pinned to another version, warns with the upgrade route and the stay route', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await pushWorkflows(dir);
     rewritePins(dir, `$1 '${STALE_PIN}'`);
@@ -6085,7 +6085,7 @@ test('the remote-execution check grades local evidence and fails only what stops
     assertMoveRoute(line);
   });
 
-  await t.test('on, with harness-run.yml pinned to another version and defaultBranch unusable, joins the push fragment without a double full stop', async (subtest) => {
+  await t.test('on, with devscene-run.yml pinned to another version and defaultBranch unusable, joins the push fragment without a double full stop', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await pushWorkflows(dir);
     rewritePins(dir, `$1 '${STALE_PIN}'`);
@@ -6103,7 +6103,7 @@ test('the remote-execution check grades local evidence and fails only what stops
     assertMoveRoute(line);
   });
 
-  await t.test('on, with harness-run.yml pinned to this version, passes and says so', async (subtest) => {
+  await t.test('on, with devscene-run.yml pinned to this version, passes and says so', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await pushWorkflows(dir);
     const stub = await ghStub(subtest);
@@ -6161,13 +6161,13 @@ test('the remote-execution check grades local evidence and fails only what stops
   const RUN_ACTORS_LINE = /^[ \t]*HARNESS_RUN_ACTORS:.*\r?\n/gm;
   const BEFORE_RUN_ACTORS = 'was written before `HARNESS_RUN_ACTORS`';
 
-  await t.test('on, with harness-run.yml written before HARNESS_RUN_ACTORS, warns with the upgrade route', async (subtest) => {
+  await t.test('on, with devscene-run.yml written before HARNESS_RUN_ACTORS, warns with the upgrade route', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await pushWorkflows(dir);
     const path = join(dir, REMOTE_RUN_WORKFLOW);
     const before = readFileSync(path, 'utf8');
     const after = before.replace(RUN_ACTORS_LINE, '');
-    assert.notEqual(after, before, 'harness-run.yml carries no HARNESS_RUN_ACTORS line to remove');
+    assert.notEqual(after, before, 'devscene-run.yml carries no HARNESS_RUN_ACTORS line to remove');
     writeFileSync(path, after, 'utf8');
     const stub = await ghStub(subtest);
 
@@ -6180,7 +6180,7 @@ test('the remote-execution check grades local evidence and fails only what stops
     assert.ok(line.includes('docs/remote-execution.md, section 7, Upgrading'), line);
   });
 
-  await t.test('on, with harness-run.yml as init writes it, says nothing about HARNESS_RUN_ACTORS', async (subtest) => {
+  await t.test('on, with devscene-run.yml as init writes it, says nothing about HARNESS_RUN_ACTORS', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await pushWorkflows(dir);
     const stub = await ghStub(subtest);
@@ -6278,9 +6278,9 @@ test('daemon-path names gh when remote execution is on, and not when it is off',
  */
 const GH_CALLS = Object.freeze({
   auth: ['auth', 'status'],
-  run: ['workflow', 'view', 'harness-run.yml'],
+  run: ['workflow', 'view', 'devscene-run.yml'],
   secrets: ['secret', 'list', '--json', 'name'],
-  resume: ['workflow', 'view', 'harness-resume.yml'],
+  resume: ['workflow', 'view', 'devscene-resume.yml'],
   workflows: ['api', 'repos/{owner}/{repo}/actions/workflows?per_page=100'],
   variables: ['variable', 'list', '--json', 'name,value'],
   retention: ['api', 'repos/{owner}/{repo}/actions/permissions/artifact-and-log-retention'],
@@ -6324,7 +6324,7 @@ async function answeringGhStub(t) {
  * files in `byPath`, listed with `name` equal to `path` as GitHub lists a file it could not parse.
  */
 function workflowListing(byPath = []) {
-  const workflows = ['harness-run', 'harness-resume', 'harness-trigger', 'harness-control'].map((name, id) => {
+  const workflows = ['devscene-run', 'devscene-resume', 'devscene-trigger', 'devscene-control'].map((name, id) => {
     const path = `.github/workflows/${name}.yml`;
     return { id, name: byPath.includes(path) ? path : name, path, state: 'active' };
   });
@@ -6335,9 +6335,9 @@ function workflowListing(byPath = []) {
 function answerGh(stub, overrides = {}) {
   const healthy = {
     auth: { out: 'Logged in to github.com\n' },
-    run: { out: 'Harness run - harness-run.yml\n' },
+    run: { out: 'devscene-run - devscene-run.yml\n' },
     secrets: { out: JSON.stringify([{ name: 'CLAUDE_CODE_OAUTH_TOKEN' }, { name: 'HARNESS_PUSH_URL' }]) },
-    resume: { out: 'Harness resume - harness-resume.yml\n' },
+    resume: { out: 'devscene-resume - devscene-resume.yml\n' },
     workflows: { out: workflowListing() },
     variables: { out: '[]' },
     retention: { out: JSON.stringify({ days: 90, maximum_allowed_days: 400 }) },
@@ -6373,18 +6373,18 @@ async function checkGithub(dir, stub, gh = stub.path) {
 
 /** The reads the check adds when the issue trigger applies, answered apart from {@link GH_CALLS}. */
 const TRIGGER_GH_CALLS = Object.freeze({
-  trigger: ['workflow', 'view', 'harness-trigger.yml'],
-  control: ['workflow', 'view', 'harness-control.yml'],
+  trigger: ['workflow', 'view', 'devscene-trigger.yml'],
+  control: ['workflow', 'view', 'devscene-control.yml'],
   labels: ['label', 'list', '--json', 'name', '--limit', '1000'],
   prSetting: ['api', 'repos/{owner}/{repo}/actions/permissions/workflow'],
 });
 
-/** Answer the trigger reads: both workflows known, a `sdlc-harness` label and the pull-request setting on, then per-call overrides. */
+/** Answer the trigger reads: both workflows known, a `devscene` label and the pull-request setting on, then per-call overrides. */
 function answerTriggerGh(stub, overrides = {}) {
   const healthy = {
-    trigger: { out: 'Harness trigger - harness-trigger.yml\n' },
-    control: { out: 'Harness control - harness-control.yml\n' },
-    labels: { out: JSON.stringify([{ name: 'bug' }, { name: 'sdlc-harness' }]) },
+    trigger: { out: 'devscene-trigger - devscene-trigger.yml\n' },
+    control: { out: 'devscene-control - devscene-control.yml\n' },
+    labels: { out: JSON.stringify([{ name: 'bug' }, { name: 'devscene' }]) },
     prSetting: { out: JSON.stringify({ default_workflow_permissions: 'read', can_approve_pull_request_reviews: true }) },
   };
   for (const [call, args] of Object.entries(TRIGGER_GH_CALLS)) {
@@ -6481,7 +6481,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
   const failing = [
     ['gh does not spawn', {}, `${FIXTURE_GH_CLI}-absent`, 'install the GitHub CLI', 0],
     ['gh auth status exits non-zero', { auth: { err: 'You are not logged into any GitHub hosts.\n', status: 1 } }, undefined, 'gh auth login', 1],
-    ['GitHub does not know harness-run.yml', { run: { err: 'could not find any workflows named harness-run.yml\n', status: 1 } }, undefined, "push .github/workflows/harness-run.yml to the repository's default branch", 9],
+    ['GitHub does not know devscene-run.yml', { run: { err: 'could not find any workflows named devscene-run.yml\n', status: 1 } }, undefined, "push .github/workflows/devscene-run.yml to the repository's default branch", 9],
     ['neither credential secret is set', { secrets: { out: JSON.stringify([{ name: 'HARNESS_PUSH_URL' }]) } }, undefined, 'billing follows ANTHROPIC_API_KEY when both are set', 8],
   ];
   for (const [name, overrides, ghName, expected, calls] of failing) {
@@ -6501,7 +6501,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
   const warning = [
     ['HARNESS_PUSH_URL is absent', { secrets: { out: JSON.stringify([{ name: 'CLAUDE_CODE_OAUTH_TOKEN' }]) } }, 'notifications from a remote run reach no one'],
-    ['GitHub does not know harness-resume.yml', { resume: { err: 'could not find any workflows named harness-resume.yml\n', status: 1 } }, 'usage auto-resume is unavailable'],
+    ['GitHub does not know devscene-resume.yml', { resume: { err: 'could not find any workflows named devscene-resume.yml\n', status: 1 } }, 'usage auto-resume is unavailable'],
     ['HARNESS_REMOTE_STOP is set', { variables: { out: JSON.stringify([{ name: 'HARNESS_REMOTE_STOP', value: '1' }]) } }, 'every remote start and continuation is stopped'],
     ['a gh call is stopped past its bound', { secrets: { kill: true } }, 'cannot tell which repository secrets are set: `gh secret list --json name` gave no answer, because it was stopped before it answered (timed out)'],
     ['gh cannot reach GitHub', { auth: { err: 'error connecting to api.github.com\ncheck your internet connection or https://githubstatus.com\n', status: 1 } }, 'cannot tell whether gh is authenticated'],
@@ -6715,23 +6715,23 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.ok(!`${stdout}\n${stderr}`.includes(writersWarning), `${stdout}\n${stderr}`);
   });
 
-  await t.test('fails naming the file and init --force when harness-run.yml is listed by its path', async (subtest) => {
+  await t.test('fails naming the file and init --force when devscene-run.yml is listed by its path', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
-    answerGh(stub, { workflows: { out: workflowListing(['.github/workflows/harness-run.yml']) } });
+    answerGh(stub, { workflows: { out: workflowListing(['.github/workflows/devscene-run.yml']) } });
 
     const { status, stdout, stderr } = await checkGithub(dir, stub);
 
     assert.equal(status, 1, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'fail', 'remote-github');
-    assert.ok(line?.includes('GitHub lists .github/workflows/harness-run.yml by its path'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('GitHub lists .github/workflows/devscene-run.yml by its path'), `${stdout}\n${stderr}`);
     assert.ok(line.includes('init --force'), line);
   });
 
-  await t.test('with forge absent, a harness-control.yml listed by its path is not judged', async (subtest) => {
+  await t.test('with forge absent, a devscene-control.yml listed by its path is not judged', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
-    answerGh(stub, { workflows: { out: workflowListing(['.github/workflows/harness-control.yml']) } });
+    answerGh(stub, { workflows: { out: workflowListing(['.github/workflows/devscene-control.yml']) } });
 
     const { status, stdout, stderr } = await checkGithub(dir, stub);
 
@@ -6775,7 +6775,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const calls = ghInvocations(stub);
     for (const args of Object.values(TRIGGER_GH_CALLS)) assert.ok(!calls.includes(args.join(' ')), calls.join('\n'));
-    assert.ok(!reportLine(stdout, 'pass', 'remote-github')?.includes('harness-trigger.yml'), stdout);
+    assert.ok(!reportLine(stdout, 'pass', 'remote-github')?.includes('devscene-trigger.yml'), stdout);
   });
 
   await t.test('with the trigger on, both known passes and names the label', async (subtest) => {
@@ -6788,7 +6788,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'remote-github');
-    assert.ok(line?.includes('GitHub knows harness-trigger.yml and harness-control.yml, and the label `sdlc-harness` exists'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('GitHub knows devscene-trigger.yml and devscene-control.yml, and the label `devscene` exists'), `${stdout}\n${stderr}`);
     assert.ok(!line.includes('earlier release'), line);
     const calls = ghInvocations(stub);
     for (const args of Object.values(TRIGGER_GH_CALLS)) assert.ok(calls.includes(args.join(' ')), calls.join('\n'));
@@ -6805,7 +6805,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
     assert.ok(line?.includes('HARNESS_PUSH_URL is not a repository secret'), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('GitHub knows harness-trigger.yml and harness-control.yml, and the label `sdlc-harness` exists'), line);
+    assert.ok(line.includes('GitHub knows devscene-trigger.yml and devscene-control.yml, and the label `devscene` exists'), line);
   });
 
   await t.test('with the trigger on, a failing grade still carries the trigger confirmation', async (subtest) => {
@@ -6819,21 +6819,21 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.equal(status, 1, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'fail', 'remote-github');
     assert.ok(line?.includes('neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY is a repository secret'), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('GitHub knows harness-trigger.yml and harness-control.yml, and the label `sdlc-harness` exists'), line);
+    assert.ok(line.includes('GitHub knows devscene-trigger.yml and devscene-control.yml, and the label `devscene` exists'), line);
   });
 
-  await t.test('with the trigger on, an unknown harness-trigger.yml warns with the push', async (subtest) => {
+  await t.test('with the trigger on, an unknown devscene-trigger.yml warns with the push', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub);
-    answerTriggerGh(stub, { trigger: { err: 'could not find any workflows named harness-trigger.yml\n', status: 1 } });
+    answerTriggerGh(stub, { trigger: { err: 'could not find any workflows named devscene-trigger.yml\n', status: 1 } });
 
     const { status, stdout, stderr } = await checkGithub(dir, stub);
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
-    assert.ok(line?.includes("GitHub does not know harness-trigger.yml"), `${stdout}\n${stderr}`);
-    assert.ok(line.includes("so labelling an issue starts nothing: push .github/workflows/harness-trigger.yml to the repository's default branch"), line);
+    assert.ok(line?.includes("GitHub does not know devscene-trigger.yml"), `${stdout}\n${stderr}`);
+    assert.ok(line.includes("so labelling an issue starts nothing: push .github/workflows/devscene-trigger.yml to the repository's default branch"), line);
   });
 
   await t.test('with the trigger on, a missing label warns with gh label create', async (subtest) => {
@@ -6846,52 +6846,52 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
-    assert.ok(line?.includes('no label `sdlc-harness` exists, so nobody can apply it: `gh label create sdlc-harness`'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('no label `devscene` exists, so nobody can apply it: `gh label create devscene`'), `${stdout}\n${stderr}`);
   });
 
   await t.test('with the trigger on, an unreadable label list is cannot tell', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub);
-    answerTriggerGh(stub, { labels: { out: '{"name":"sdlc-harness"}' } });
+    answerTriggerGh(stub, { labels: { out: '{"name":"devscene"}' } });
 
     const { status, stdout, stderr } = await checkGithub(dir, stub);
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
-    assert.ok(line?.includes('cannot tell whether the label `sdlc-harness` exists'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('cannot tell whether the label `devscene` exists'), `${stdout}\n${stderr}`);
   });
 
-  await t.test('with the trigger on, an unknown harness-control.yml warns with the push', async (subtest) => {
+  await t.test('with the trigger on, an unknown devscene-control.yml warns with the push', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub);
-    answerTriggerGh(stub, { control: { err: 'could not find any workflows named harness-control.yml\n', status: 1 } });
+    answerTriggerGh(stub, { control: { err: 'could not find any workflows named devscene-control.yml\n', status: 1 } });
 
     const { status, stdout, stderr } = await checkGithub(dir, stub);
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
-    assert.ok(line?.includes('GitHub does not know harness-control.yml'), `${stdout}\n${stderr}`);
-    assert.ok(line.includes("so comments and reviews start nothing: push .github/workflows/harness-control.yml to the repository's default branch"), line);
-    assert.ok(!line.includes('GitHub knows harness-trigger.yml'), line);
+    assert.ok(line?.includes('GitHub does not know devscene-control.yml'), `${stdout}\n${stderr}`);
+    assert.ok(line.includes("so comments and reviews start nothing: push .github/workflows/devscene-control.yml to the repository's default branch"), line);
+    assert.ok(!line.includes('GitHub knows devscene-trigger.yml'), line);
   });
 
-  await t.test('with the trigger on, harness-control.yml listed by its path fails with the control route', async (subtest) => {
+  await t.test('with the trigger on, devscene-control.yml listed by its path fails with the control route', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     const stub = await answeringGhStub(subtest);
     // Gate 12 round 7's observation: GitHub listed the unparsed file with its name equal to its path.
-    answerGh(stub, { workflows: { out: workflowListing(['.github/workflows/harness-control.yml']) } });
+    answerGh(stub, { workflows: { out: workflowListing(['.github/workflows/devscene-control.yml']) } });
     answerTriggerGh(stub);
 
     const { status, stdout, stderr } = await checkGithub(dir, stub);
 
     assert.notEqual(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'fail', 'remote-github');
-    assert.ok(line?.includes('GitHub lists .github/workflows/harness-control.yml by its path rather than its name'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('GitHub lists .github/workflows/devscene-control.yml by its path rather than its name'), `${stdout}\n${stderr}`);
     assert.ok(line.includes('if: >-'), line);
     assert.ok(line.includes('init --force'), line);
-    assert.ok(!line.includes('GitHub knows harness-trigger.yml and harness-control.yml'), line);
+    assert.ok(!line.includes('GitHub knows devscene-trigger.yml and devscene-control.yml'), line);
   });
 
   const prSettingOff = { prSetting: { out: JSON.stringify({ default_workflow_permissions: 'read', can_approve_pull_request_reviews: false }) } };
@@ -6954,10 +6954,10 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
   await t.test('with the trigger on and the variable unset, a committed workflow falling back to harness is asked about and noted', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
-    const trigger = join(dir, '.github', 'workflows', 'harness-trigger.yml');
+    const trigger = join(dir, '.github', 'workflows', 'devscene-trigger.yml');
     const current = readFileSync(trigger, 'utf8');
-    const previousRelease = current.replace("(vars.HARNESS_TRIGGER_LABEL || 'sdlc-harness')", "(vars.HARNESS_TRIGGER_LABEL || 'harness')");
-    assert.notEqual(previousRelease, current, 'the fixture trigger workflow carries no sdlc-harness fallback');
+    const previousRelease = current.replace("(vars.HARNESS_TRIGGER_LABEL || 'devscene')", "(vars.HARNESS_TRIGGER_LABEL || 'harness')");
+    assert.notEqual(previousRelease, current, 'the fixture trigger workflow carries no devscene fallback');
     writeFileSync(trigger, previousRelease);
     const stub = await answeringGhStub(subtest);
     answerGh(stub);
@@ -6969,7 +6969,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     const line = reportLine(stdout, 'pass', 'remote-github');
     assert.ok(line?.includes('and the label `harness` exists'), `${stdout}\n${stderr}`);
     assert.ok(line.includes('was written by an earlier release and falls back to `harness`, which keeps starting runs'), line);
-    assert.ok(line.includes('init --force` re-renders it and the scripts to `sdlc-harness`'), line);
+    assert.ok(line.includes('init --force` re-renders it and the scripts to `devscene`'), line);
     assert.ok(line.includes('setting HARNESS_TRIGGER_LABEL keeps a name of your choosing under either'), line);
     // The edit leaves the HARNESS_RUN_ACTORS line in place, so the forge grade stays pass.
     assert.ok(reportLine(stdout, 'pass', 'forge') !== undefined, `${stdout}\n${stderr}`);
@@ -6995,8 +6995,8 @@ test('the remote-github check asks GitHub only under --check-github and grades e
  * The `forge` check: the key's reporter, graded from local evidence and never worse than `warn`.
  * Every case runs `doctor` with the recording `gh` stub, so a case that spawned `gh` fails.
  */
-const REMOTE_TRIGGER_WORKFLOW = '.github/workflows/harness-trigger.yml';
-const REMOTE_CONTROL_WORKFLOW = '.github/workflows/harness-control.yml';
+const REMOTE_TRIGGER_WORKFLOW = '.github/workflows/devscene-trigger.yml';
+const REMOTE_CONTROL_WORKFLOW = '.github/workflows/devscene-control.yml';
 
 /** Apply `config set` edits in order, then optionally re-run `init`, asserting each exits 0. */
 async function configure(dir, edits, { init = false } = {}) {
@@ -7044,8 +7044,8 @@ test('the forge check names every forge state and never fails', async (t) => {
   await t.test('none with both forge workflows left in place passes and names both as unused', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await configure(dir, [['forge', 'github']], { init: true });
-    assert.ok(existsSync(join(dir, REMOTE_TRIGGER_WORKFLOW)), 'init did not write harness-trigger.yml');
-    assert.ok(existsSync(join(dir, REMOTE_CONTROL_WORKFLOW)), 'init did not write harness-control.yml');
+    assert.ok(existsSync(join(dir, REMOTE_TRIGGER_WORKFLOW)), 'init did not write devscene-trigger.yml');
+    assert.ok(existsSync(join(dir, REMOTE_CONTROL_WORKFLOW)), 'init did not write devscene-control.yml');
     await configure(dir, [['forge', 'none']]);
     const stub = await ghStub(subtest);
 
@@ -7096,7 +7096,7 @@ test('the forge check names every forge state and never fails', async (t) => {
     assert.ok(line.includes('re-run `npx devscene init`'), line);
   });
 
-  await t.test('github with harness-control.yml absent warns naming it and init', async (subtest) => {
+  await t.test('github with devscene-control.yml absent warns naming it and init', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     rmSync(join(dir, REMOTE_CONTROL_WORKFLOW));
     const stub = await ghStub(subtest);
@@ -7110,13 +7110,13 @@ test('the forge check names every forge state and never fails', async (t) => {
     assert.ok(line.includes('re-run `npx devscene init`'), line);
   });
 
-  await t.test('github with harness-control.yml present but not on origin warns with the push remedy', async (subtest) => {
+  await t.test('github with devscene-control.yml present but not on origin warns with the push remedy', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await configure(dir, [['forge', 'github']], { init: true });
     rmSync(join(dir, REMOTE_CONTROL_WORKFLOW));
     await pushWorkflows(dir);
     await configure(dir, [], { init: true });
-    assert.ok(existsSync(join(dir, REMOTE_CONTROL_WORKFLOW)), 'init did not re-write harness-control.yml');
+    assert.ok(existsSync(join(dir, REMOTE_CONTROL_WORKFLOW)), 'init did not re-write devscene-control.yml');
     const stub = await ghStub(subtest);
 
     const { status, stdout, stderr } = await doctorWithStub(dir, stub);
@@ -7165,10 +7165,10 @@ test('the forge check names every forge state and never fails', async (t) => {
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'forge');
-    assert.ok(line?.includes('HARNESS_TRIGGER_LABEL label (default `sdlc-harness`) starts a task run'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('HARNESS_TRIGGER_LABEL label (default `devscene`) starts a task run'), `${stdout}\n${stderr}`);
     assert.ok(line.includes(REMOTE_CONTROL_WORKFLOW), line);
-    assert.ok(line.includes('`@sdlc-harness <verb>` comment'), line);
-    assert.ok(line.includes('a mention of `@sdlc-harness` anywhere else in a comment is read by an agent, which carries out answer, pause, resume, status and asks the commenter to confirm stop, clear'), line);
+    assert.ok(line.includes('`@dev-scene <verb>` comment'), line);
+    assert.ok(line.includes('a mention of `@dev-scene` anywhere else in a comment is read by an agent, which carries out answer, pause, resume, status and asks the commenter to confirm stop, clear'), line);
     assert.ok(line.includes('a run opens a draft pull request when it starts, marked ready for review when it completes'), line);
     assert.ok(line.includes('carries them'), line);
     assert.ok(!line.includes('still to come'), line);
@@ -7177,13 +7177,13 @@ test('the forge check names every forge state and never fails', async (t) => {
 
   const BEFORE_RUN_ACTORS = 'written before `HARNESS_RUN_ACTORS`';
 
-  await t.test('github with harness-control.yml written before HARNESS_RUN_ACTORS warns naming it alone and init --force', async (subtest) => {
+  await t.test('github with devscene-control.yml written before HARNESS_RUN_ACTORS warns naming it alone and init --force', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await configure(dir, [['forge', 'github']], { init: true });
     const path = join(dir, REMOTE_CONTROL_WORKFLOW);
     const before = readFileSync(path, 'utf8');
     const after = before.replace(/^[ \t]*HARNESS_RUN_ACTORS:.*\r?\n/gm, '');
-    assert.notEqual(after, before, 'harness-control.yml carries no HARNESS_RUN_ACTORS line to remove');
+    assert.notEqual(after, before, 'devscene-control.yml carries no HARNESS_RUN_ACTORS line to remove');
     writeFileSync(path, after, 'utf8');
     await pushWorkflows(dir);
     const stub = await ghStub(subtest);
@@ -7214,13 +7214,13 @@ test('the forge check names every forge state and never fails', async (t) => {
 
   const NO_MENTION_CREDENTIAL = 'passes the mention agent no credential secret';
 
-  await t.test('github with harness-control.yml passing no credential secret warns naming the mention and init --force', async (subtest) => {
+  await t.test('github with devscene-control.yml passing no credential secret warns naming the mention and init --force', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await configure(dir, [['forge', 'github']], { init: true });
     const path = join(dir, REMOTE_CONTROL_WORKFLOW);
     const before = readFileSync(path, 'utf8');
     const after = before.replace(/^.*secrets\.(CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY).*\r?\n/gm, '');
-    assert.notEqual(after, before, 'harness-control.yml carries no credential secret line to remove');
+    assert.notEqual(after, before, 'devscene-control.yml carries no credential secret line to remove');
     writeFileSync(path, after, 'utf8');
     await pushWorkflows(dir);
     const stub = await ghStub(subtest);
@@ -7229,13 +7229,13 @@ test('the forge check names every forge state and never fails', async (t) => {
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'forge');
-    assert.ok(line?.includes(`${REMOTE_CONTROL_WORKFLOW} ${NO_MENTION_CREDENTIAL}, so a mention of \`@sdlc-harness\` anywhere in a comment is answered that it was not read`), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('the `@sdlc-harness <verb>` commands still work'), line);
+    assert.ok(line?.includes(`${REMOTE_CONTROL_WORKFLOW} ${NO_MENTION_CREDENTIAL}, so a mention of \`@dev-scene\` anywhere in a comment is answered that it was not read`), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('the `@dev-scene <verb>` commands still work'), line);
     assert.ok(line.includes('`npx devscene init --force`'), line);
     assert.ok(!line.includes(BEFORE_RUN_ACTORS), line);
   });
 
-  await t.test('github with harness-control.yml as init writes it says nothing about a mention credential', async (subtest) => {
+  await t.test('github with devscene-control.yml as init writes it says nothing about a mention credential', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await configure(dir, [['forge', 'github']], { init: true });
     await pushWorkflows(dir);
