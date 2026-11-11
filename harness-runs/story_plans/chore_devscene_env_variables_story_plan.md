@@ -116,7 +116,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_env_variables/tas
 21. [x] **Task 21** — Rename the variables in `docs/development.md` _(layer: general)_ _(points: 20)_
 22. [x] **Task 22** — Rename the variables in `docs/remote-execution.md` _(layer: general)_ _(points: 20)_
 23. [x] **Task 23** — Rename the variables in `docs/github-issue-trigger.md` and `docs/github-run-control.md` _(layer: general)_ _(points: 20)_
-24. [ ] **Task 24** — Rename the variables in `docs/outer-loop-verification.md` and `docs/sandbox-verification.md` _(layer: general)_ _(points: 15)_
+24. [x] **Task 24** — Rename the variables in `docs/outer-loop-verification.md` and `docs/sandbox-verification.md` _(layer: general)_ _(points: 15)_
 25. [ ] **Task 25** — Rename the variables in the research documents and reword the stale keep-forecast _(layer: general)_ _(points: 10)_
 26. [ ] **Task 26** — Rename the example's live dev-server files, record the `.claude/` paste, and run the closing check _(layer: general)_ _(points: 15)_
 
