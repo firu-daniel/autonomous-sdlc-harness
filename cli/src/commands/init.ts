@@ -491,7 +491,7 @@ export interface InitFlags extends HarnessConfigFlags, ProjectSettingsFlags {
   readonly pluginRootEntries?: boolean;
   /**
    * `--upgrade-workflows`. Re-render the two remote-execution workflows at this CLI's version, after a
-   * `.bak`, when `harness-run.yml` was rendered for another (`generators/githubWorkflows.ts`, choice 4).
+   * `.bak`, when `devscene-run.yml` was rendered for another (`generators/githubWorkflows.ts`, choice 4).
    * Writes no config key.
    */
   readonly upgradeWorkflows?: boolean;
@@ -786,7 +786,7 @@ const INIT_OPTIONS: readonly InitOption[] = initOptions([
     key: 'upgradeWorkflows',
     flag: UPGRADE_WORKFLOWS_FLAG,
     kind: 'switch',
-    summary: "Re-render the two remote-execution workflows at this CLI's version, after a .bak, when harness-run.yml was rendered for another",
+    summary: "Re-render the two remote-execution workflows at this CLI's version, after a .bak, when devscene-run.yml was rendered for another",
   },
 ] as const);
 
@@ -2732,7 +2732,7 @@ function reportWorkflowUpgrade(
 }
 
 /**
- * What `init` did about a `harness-control.yml` a release wrote unparsable; which copy is replaced,
+ * What `init` did about a `devscene-control.yml` a release wrote unparsable; which copy is replaced,
  * and when, is the generator's decision (`generators/githubWorkflows.ts`, choice 6), and this only
  * reports it.
  *

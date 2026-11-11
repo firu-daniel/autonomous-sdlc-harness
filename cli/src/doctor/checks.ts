@@ -2753,12 +2753,12 @@ const DAEMON_PATH_CHECK: Check = {
  * the workflow — the pass text names and leaves to that flag.
  *
  * **Every finding is reported, and the grade is the worst of them.** Two `fail`s: no
- * `harness-run.yml`, because no remote run can be dispatched; and no `gh`, because the watcher
- * dispatches through it. Five `warn`s: a `harness-run.yml` whose text does not read
+ * `devscene-run.yml`, because no remote run can be dispatched; and no `gh`, because the watcher
+ * dispatches through it. Five `warn`s: a `devscene-run.yml` whose text does not read
  * {@link RUN_ACTORS_VARIABLE} ({@link carriesRunActors}), remedied by {@link upgradeWorkflowsCommand} —
  * local evidence, because the workflow is what GitHub runs and only its text says whether the list
  * reaches the gate and the scripts; listed beside the pin warning when both fire, and an unreadable
- * file adds nothing to the pin note. A `harness-run.yml` pinned (`remote/githubActions.ts` →
+ * file adds nothing to the pin note. A `devscene-run.yml` pinned (`remote/githubActions.ts` →
  * {@link renderedCliVersions}) to a version other than this CLI's — never a `fail`, because the job
  * installs its pin and the adopter may stay on it deliberately; the remedy is
  * `generators/githubWorkflows.ts` → {@link upgradeWorkflowsCommand}, the alternative `doctor` at the
@@ -2766,8 +2766,8 @@ const DAEMON_PATH_CHECK: Check = {
  * packages. The warning also prints that module's {@link IN_FLIGHT_RUNS_NOTE}; its move route names
  * no commit set of its own but the paths the upgrade's printed `git add` names; and its `push`
  * fragment is a complete sentence in both of its forms, so the join adds no punctuation of its own.
- * Under `--remote-job` the job runs `doctor` at its own pin, so this cannot arise there. A file with no pin, or unreadable, is a note. No `harness-resume.yml`, because a usage-paused
- * hosted run then waits for `/devscene:branch-resume`; a `harness-run.yml` that
+ * Under `--remote-job` the job runs `doctor` at its own pin, so this cannot arise there. A file with no pin, or unreadable, is a note. No `devscene-resume.yml`, because a usage-paused
+ * hosted run then waits for `/devscene:branch-resume`; a `devscene-run.yml` that
  * `origin/<defaultBranch>` does not carry, because GitHub dispatches only a workflow its default
  * branch has — the run starts once it is pushed, so nothing is broken here, and its remedy's push
  * skips the hook because the `pre-push` hook `init` wired refuses every push to the default branch
@@ -2782,7 +2782,7 @@ const DAEMON_PATH_CHECK: Check = {
  *
  * **A missing `origin/<defaultBranch>`, or an unusable `defaultBranch`, leaves the origin row
  * ungraded** and the detail says so: that ref's absence is {@link REMOTE_CHECK}'s `fail`, and
- * reporting it again would make one finding two. It is asked only when `harness-run.yml` exists here,
+ * reporting it again would make one finding two. It is asked only when `devscene-run.yml` exists here,
  * for the same reason. The ref is read as this checkout last fetched it.
  *
  * With remote execution off, a workflow file left in place is a `pass` that says it does nothing:
@@ -3026,22 +3026,22 @@ function writersOf(stdout: string): { readonly logins: readonly string[]; readon
  *
  * Grades, worst wins and every finding is reported:
  * - `fail` — `gh` does not spawn or `gh auth status` refuses (nothing further is asked); GitHub does
- *   not know `harness-run.yml`; neither credential secret is set; a harness workflow GitHub lists by
+ *   not know `devscene-run.yml`; neither credential secret is set; a harness workflow GitHub lists by
  *   its path, which is how it lists a file it could not parse — judged from the workflow listing
  *   ({@link WORKFLOWS_ENDPOINT}) because `gh workflow view` answers for an unparsed file too, as Gate 12
- *   round 7 observed. `harness-trigger.yml` and `harness-control.yml` are judged only when
+ *   round 7 observed. `devscene-trigger.yml` and `devscene-control.yml` are judged only when
  *   {@link forgeTriggerApplies}.
- * - `warn` — `HARNESS_PUSH_URL` absent; `harness-resume.yml` unknown to GitHub; `HARNESS_REMOTE_STOP`
+ * - `warn` — `HARNESS_PUSH_URL` absent; `devscene-resume.yml` unknown to GitHub; `HARNESS_REMOTE_STOP`
  *   set; the workflow listing unread, or not reaching a judged harness workflow because the repository
  *   has more workflows than one page lists, so whether GitHub could parse it cannot be told; artifact retention below {@link ARTIFACT_RETENTION_WARN_DAYS} days; when
- *   {@link forgeTriggerApplies}, `harness-trigger.yml` or `harness-control.yml` unknown to GitHub, no
+ *   {@link forgeTriggerApplies}, `devscene-trigger.yml` or `devscene-control.yml` unknown to GitHub, no
  *   label by the effective trigger name, or the pull-request setting off with no `HARNESS_GIT_TOKEN`
  *   secret; and any call that timed out, could not reach GitHub, or answered in a shape not
  *   understood — *cannot tell* is not *missing*, so it never fails.
  * - the pull-request setting off while the secret list was unreadable is a *cannot tell* warning,
  *   never the missing-`HARNESS_GIT_TOKEN` one.
  * - the effective trigger label is `HARNESS_TRIGGER_LABEL`, else the fallback the committed
- *   `harness-trigger.yml` carries ({@link triggerFallbackLabel}), else {@link DEFAULT_TRIGGER_LABEL};
+ *   `devscene-trigger.yml` carries ({@link triggerFallbackLabel}), else {@link DEFAULT_TRIGGER_LABEL};
  *   a fallback of {@link LEGACY_TRIGGER_LABEL} is a note, since it still starts runs.
  * - both credential secrets present is a note, not a finding: billing follows `ANTHROPIC_API_KEY`.
  * - a non-empty `HARNESS_TRIGGER_ALLOWED_BOTS` is a note naming the bots, which start runs without a
