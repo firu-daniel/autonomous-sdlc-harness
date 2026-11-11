@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# tag-release.sh — create and push the release tag `autonomous-sdlc-harness--v<version>`, the ref a
+# tag-release.sh — create and push the release tag `devscene--v<version>`, the ref a
 # remote run installs the plugin from. Hand-written for this repository, like publish-main.sh: it is
 # not in the set `init --force` regenerates, and publish-main.sh removes `scripts/`, so it never
 # reaches `main`.
 #
-# WHAT A RELEASE TAG IS, AND WHO READS IT. An annotated tag named `autonomous-sdlc-harness--v<version>`
-# with the message `autonomous-sdlc-harness <version>` — the shape of the first one, v0.1.0. The
-# `Install the pinned plugin` step of cli/templates/github/workflows/harness-run.yml clones the
+# WHAT A RELEASE TAG IS, AND WHO READS IT. An annotated tag named `devscene--v<version>`
+# with the message `devscene <version>` — the shape of the first one, v0.1.0 (cut under the
+# product's earlier name). The `Install the pinned plugin` step of cli/templates/github/workflows/harness-run.yml clones the
 # marketplace repository at exactly that tag, for the CLI version the workflow was rendered by. A
 # version released without its tag is a version whose adopters' remote runs cannot install the plugin.
 #
@@ -73,7 +73,7 @@ if [ -z "$repo_root" ] || ! cd "$repo_root"; then
   fail "could not resolve a repository root from '${script_dir}' (is git on PATH?)"
 fi
 
-tag="autonomous-sdlc-harness--v${version}"
+tag="devscene--v${version}"
 manifest="plugin/.claude-plugin/plugin.json"
 
 git fetch --quiet --tags origin main || fail "could not fetch main and tags from origin"
@@ -135,7 +135,7 @@ fi
 [ -t 0 ] || fail "stdin is not a terminal; a release tag is pushed by a person at a terminal (use --dry-run to inspect)"
 
 if [ "$create" -eq 1 ]; then
-  git tag -a "$tag" -m "autonomous-sdlc-harness $version" "$target" \
+  git tag -a "$tag" -m "devscene $version" "$target" \
     || fail "could not create ${tag} at ${target_line}"
   echo "tag-release: created ${tag} at ${target_line}"
 fi

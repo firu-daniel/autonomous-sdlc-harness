@@ -67,7 +67,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_rename_to_devscene/task_<K
 12. [x] **Task 12** — Respell every command reference under `plugin/commands/` _(layer: plugin)_ _(points: 15)_
 13. [x] **Task 13** — Respell every command reference under `plugin/instructions/` _(layer: plugin)_ _(points: 15)_
 14. [x] **Task 14** — Rename the marketplace manifest, the workspace root and the root identity files _(layer: general)_ _(points: 10)_
-15. [ ] **Task 15** — Rename the release tooling: the npm release workflow, `release.sh`, `publish-main.sh` and `tag-release.sh` _(layer: general)_ _(points: 10)_
+15. [x] **Task 15** — Rename the release tooling: the npm release workflow, `release.sh`, `publish-main.sh` and `tag-release.sh` _(layer: general)_ _(points: 10)_
 16. [ ] **Task 16** — Respell the sandbox-probe and gate-12 scripts, the command-spelling gate and `run-gates.sh` _(layer: general)_ _(points: 15)_
 17. [ ] **Task 17** — Bring this repository's self-adopted script and hook copies to the renamed template bytes _(layer: general)_ _(points: 10)_
 18. [ ] **Task 18** — Respell the three cli suites that read this repository's own root-level files: `init`, the gate-12 plant and the sandbox-probe job launch _(layer: cli)_ _(points: 18)_

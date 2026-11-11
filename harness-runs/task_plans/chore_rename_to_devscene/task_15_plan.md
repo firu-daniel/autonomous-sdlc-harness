@@ -31,3 +31,8 @@
 - `git grep -n -F 'autonomous-sdlc-harness' -- .github/workflows/release-npm.yml scripts/release.sh scripts/publish-main.sh scripts/tag-release.sh` prints nothing.
 - `git grep -n -F 'devscene--v' -- .github/workflows/release-npm.yml scripts/tag-release.sh cli/templates/github/workflows` lists the trigger, the strip, the tag assignment and the templates' fetch lines, with one spelling of the shape throughout.
 - `bash -n` exits 0 on the three scripts.
+
+**Deviations from plan:**
+
+- Evidence downgrade: the three per-file `bash -n <file>` calls (Work item 5, Verification bullet 3) were each refused by the tool layer ("Permission to use Bash has been denied because Claude Code is running in don't ask mode"). The parse claim rests instead on the configured `commands.typecheck`, `bash scripts/typecheck.sh`, whose `scripts/check-shell-parse.sh` step runs `bash -n` over every shell script git lists (`scripts/typecheck.sh` → its header's "`bash -n` over every shell script git lists"); it printed `check-shell-parse: 124 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed` and `PASS: typecheck`.
+- `tag-release.sh` header: the edited sentence was reflowed so `The` joins the `Install the pinned plugin` line; no wording beyond the planned edits changed.
