@@ -1,4 +1,4 @@
-# harness-run.yml — runs one devscene run in a GitHub Actions job,
+# devscene-run.yml — runs one devscene run in a GitHub Actions job,
 # on a GitHub-hosted or a self-hosted runner chosen by the HARNESS_RUNNER variable.
 #
 # WHO WRITES IT. `devscene init`, only when harness.config.json's
@@ -66,7 +66,7 @@
 #                                     `Install the sandbox prerequisites` to
 #                                     read sandbox.optOut on its failing arm,
 #                                     held by workflow-sandbox-install.test.mjs
-#   harness-control.yml               the concurrency group
+#   devscene-control.yml              the concurrency group
 #                                     `harness-review-<branch>`, shared by its
 #                                     review jobs and the `collect` job here;
 #                                     and, read by its `Fetch the pinned
@@ -81,7 +81,7 @@
 # answered "collected" while the run was in flight, so a reviewer waits at most
 # for that run and never resubmits. It is a job of its own, not a step of
 # `run`, for two reasons: a step cannot hold a concurrency group, and this one
-# must share `harness-review-<branch>` with harness-control.yml's review jobs so
+# must share `harness-review-<branch>` with devscene-control.yml's review jobs so
 # the two never place a round at once; and the settledness test reads "the
 # `run` job is completed", which no step inside that job could see. Under
 # `!cancelled()` a failed `run` job still reaches it, and the run's state bundle
@@ -89,10 +89,10 @@
 # cancelled before any step ran, for example one no runner acquired, reaches it
 # too, and `collect` reports that run once (remote-run.sh's header, its
 # `collect` paragraph), because the job itself could report nothing; a workflow
-# run cancelled or stopped as a whole skips it. The group name mirrors harness-control.yml's, and
+# run cancelled or stopped as a whole skips it. The group name mirrors devscene-control.yml's, and
 # RUN_JOB_NAME in remote-run.sh mirrors the `run` job's key (DECLARED MIRRORS
 # above). It reads no secret: its own token pushes the round, dispatches it and
-# comments. It checks out the default branch, as harness-control.yml's review
+# comments. It checks out the default branch, as devscene-control.yml's review
 # jobs do, never the run's branch: `collect` fetches that branch itself and
 # `review` cuts its own working copy of it, which create-worktree.sh refuses
 # for a branch already checked out. Its step is `continue-on-error` for the
@@ -129,7 +129,7 @@
 #   * `github-actions[bot]` passes: every harness dispatch is made with
 #     GITHUB_TOKEN and names it. Measured 2026-10-05 for the trigger, the comment
 #     commands and `collect`; inferred for the `remote-run.sh continue` chain and
-#     the harness-resume.yml poller, which Gate 12 observation (xv) confirms.
+#     the devscene-resume.yml poller, which Gate 12 observation (xv) confirms.
 #   * Not closed: a writer who edits this file on a branch can remove the gate
 #     or dispatch as the bot. That writer can already read the secret (G7).
 #   * Resolved before it: `run`'s job-level HARNESS_PUSH_URL secret, at job
@@ -310,7 +310,7 @@
 # THE CLAUDE CLI. `Install the claude CLI when absent` installs
 # @anthropic-ai/claude-code unpinned, and only when the runner has no `claude`.
 # The latest is wanted: the agent runner tracks the model API, and
-# harness-control.yml installs it the same way but is never re-rendered by
+# devscene-control.yml installs it the same way but is never re-rendered by
 # `--upgrade-workflows` (cli/src/generators/githubWorkflows.ts, choice 5), so a
 # version frozen into the templates would stay frozen there. zizmor's
 # `adhoc-packages` finding stands on it, and pinning does not clear it: it flags
@@ -363,7 +363,7 @@
 # WHY THE TIMEOUT IS COMPUTED INTO GITHUB_ENV. The first step computes every
 # budget value from `runner.environment` into GITHUB_ENV, so the harness step's
 # timeout-minutes reads a single `env` value rather than an expression over the
-# runner kind. Gate 12 round 2, on 2026-09-29, found every harness-run.yml run
+# runner kind. Gate 12 round 2, on 2026-09-29, found every devscene-run.yml run
 # accepted and its `Run the harness` step run: the expression-valued
 # timeout-minutes is accepted.
 #
@@ -421,7 +421,7 @@
 # repository's artifact-and-log-retention at {"days":90,"maximum_allowed_days":400}.
 # That was v4; the v7 pinned above has not yet been observed by a gate round.
 
-name: harness-run
+name: devscene-run
 run-name: harness ${{ inputs.action }} ${{ inputs.branch }}
 
 on:

@@ -1,4 +1,4 @@
-# harness-resume.yml — resumes usage-paused devscene runs once
+# devscene-resume.yml — resumes usage-paused devscene runs once
 # their usage window has reset, with no local machine involved.
 #
 # WHO WRITES IT. `devscene init`, only when harness.config.json's
@@ -14,14 +14,14 @@
 # usage-paused run whose recorded reset has passed.
 #
 # IT DISABLES ITSELF. When a tick leaves no run waiting, `poll` runs
-# `gh workflow disable harness-resume.yml`; a job that ends on a usage pause
+# `gh workflow disable devscene-resume.yml`; a job that ends on a usage pause
 # re-enables it (`remote-run.sh continue`). Ticks are paid only during a pause.
 # That also makes moot GitHub's disabling of scheduled workflows in a public
 # repository after 60 days without activity.
 #
 # Gate 12 round 2, on 2026-09-29, verified that `gh workflow disable` succeeds
 # under GITHUB_TOKEN with `actions: write`: a hand-started tick logged
-# `poll: no branch is waiting; disabled harness-resume.yml`, and the workflow's
+# `poll: no branch is waiting; disabled devscene-resume.yml`, and the workflow's
 # state became `disabled_manually`. UNVERIFIED: the enable, because no job
 # ended on a usage pause. If it is refused, the pausing job's `paused`
 # notification says auto-resume is unavailable, and the run waits for
@@ -98,7 +98,7 @@
 # and its comment line together. The version stays on its own line, never
 # trailing the `uses:` value: a value carrying ` #` is never a plain scalar.
 
-name: harness-resume
+name: devscene-resume
 
 on:
   schedule:
