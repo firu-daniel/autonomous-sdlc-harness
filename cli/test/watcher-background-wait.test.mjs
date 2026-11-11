@@ -88,7 +88,7 @@ test('env, override file: a ceiling in watcher.env does not reach the session', 
   const f = await createWatcherFixture(t);
   if (f === null) return;
   const probe = ceilingProbe(f);
-  const configDir = join(f.dir, 'home', '.config', 'autonomous-sdlc-harness');
+  const configDir = join(f.dir, 'home', '.config', 'devscene');
   await mkdir(configDir, { recursive: true });
   await writeFile(join(configDir, 'watcher.env'), `${CEILING}=600000\n`, 'utf8');
 

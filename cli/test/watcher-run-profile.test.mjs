@@ -263,7 +263,7 @@ test('a task drop launches on a per-run copy at hr_run_profile_file: the base pl
   assert.ok(settings, `the stub was never called:\n${f.watcherLog()}`);
   const launchState = () => `record: ${JSON.stringify(f.record())}\nlog:\n${f.watcherLog()}`;
   assert.equal(settings, await f.profileFileFor(f.branch), `--settings is not hr_run_profile_file's path\n${launchState()}`);
-  assert.ok(settings.startsWith(`${f.watcherEnv().XDG_STATE_HOME}/autonomous-sdlc-harness/run-profiles/`), settings);
+  assert.ok(settings.startsWith(`${f.watcherEnv().XDG_STATE_HOME}/devscene/run-profiles/`), settings);
   assert.equal(f.record().copy_kind, 'clone', `copy_kind is not clone\n${launchState()}`);
   assert.equal(f.record().worktree, f.clone, `worktree is not the clone\n${launchState()}`);
 

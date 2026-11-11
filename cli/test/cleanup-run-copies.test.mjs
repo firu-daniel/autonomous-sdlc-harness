@@ -114,7 +114,7 @@ async function fixture(t) {
   const ownSlug = await slug();
   /** The per-run profile path, built from its documented shape rather than by `hr_run_profile_file`. */
   const profilePath = (branch, slugValue = ownSlug) =>
-    join(state, 'autonomous-sdlc-harness', 'run-profiles', slugValue, `${branch.replaceAll('/', '-')}.json`);
+    join(state, 'devscene', 'run-profiles', slugValue, `${branch.replaceAll('/', '-')}.json`);
 
   return {
     root,

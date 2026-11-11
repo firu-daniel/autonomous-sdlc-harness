@@ -199,7 +199,7 @@ test('the judge answers the nested user-namespace check as assessSandboxHost doe
               }
               if (failed) {
                 assert.ok(
-                  !shell.refusal.includes('npx autonomous-sdlc-harness doctor'),
+                  !shell.refusal.includes('npx devscene doctor'),
                   `refusal names doctor itself for ${label}: ${shell.refusal}`,
                 );
               }
