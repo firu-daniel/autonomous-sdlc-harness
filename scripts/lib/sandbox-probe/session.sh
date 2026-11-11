@@ -522,7 +522,7 @@ sp_session() {
   SP__SESSIONS="$SP__SESSIONS${SP_CURRENT_LEG:--}"$'\t'"$SP_STREAM"$'\t'"$SP_TMP/$name.stderr"$'\t'"$pfile"$'\t'"$debug"$'\n'
   (
     cd "$cwd" || exit 97
-    export HARNESS_MAIN_REPO="$SP_MAIN"
+    export DEVSCENE_MAIN_REPO="$SP_MAIN"
     if [ "$has_pid_token" -eq 1 ]; then
       # Bash 3.2 has no BASHPID: sh's PPID is this subshell, which `exec` turns into the agent CLI.
       pid_file="$SP_TMP/$name.agent-pid"
