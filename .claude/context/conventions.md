@@ -16,7 +16,7 @@
 
 | Layer | Path | Owns | Its rules |
 |---|---|---|---|
-| `cli` | `cli` | The npm package `autonomous-sdlc-harness` — the outer loop (`init`, `doctor`, `config`, `daemon`), and `cli/templates/`, the files `init` writes into an adopting repository | `.claude/context/cli.md` |
+| `cli` | `cli` | The npm package `devscene` — the outer loop (`init`, `doctor`, `config`, `daemon`), and `cli/templates/`, the files `init` writes into an adopting repository | `.claude/context/cli.md` |
 | `plugin` | `plugin` | The Claude Code plugin — agent definitions, `branch-*` and `harness-*` commands, instruction cores and forks, `PreToolUse` guard hooks, samples, flow documents | `.claude/context/plugin.md` |
 | `general` | `.` | Everything else at the root: `schemas/`, `docs/`, `examples/`, `evals/`, the root prose documents and the workspace manifest | this document |
 
