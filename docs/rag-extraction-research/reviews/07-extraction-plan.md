@@ -5,6 +5,8 @@ Revised after ruling R3.7 (sandbox series, then the DevScene rename, then RagSce
 
 Checked on 2026-10-28 against `dev` at `0d02ba3e`, Expause and straightedge (read-only), `gh issue view` #151, #156, #170, #196, #199–#203 and #205, and the GitHub, PyPI and npm docs. Most of the history, the authorship, the citations and the GitHub web claims hold. What fails is the §2 inventory, which leaves out three files the moving code needs, and two exit checks in the plan that cannot pass as written.
 
+Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed.
+
 Confirmed:
 - **Expause history.** The plan's commits are right (#228 `df1e96650` on 2026-08-07, #232 `88ea6a948`, #309 `570292c83`), and so is the #311 message.
 - **This repository.** `2c01123c` is a single commit of 350 files, none of them retrieval files. `e43781aa` and `cba2ac24` are dated 2026-09-16. `dev` has 142 commits, all by one author, and no `Co-Authored-By` trailer on the moving paths.
@@ -48,7 +50,7 @@ Confirmed:
      - Add "the evals' `cli/dist/cli.js` spawns" to cut row 11/12.
 
 3. **Step 8's exit check, "a grep of `.claude/` for the §3.2 names is empty", cannot pass.**
-   - Adoption itself writes those names. In straightedge, `git grep -lE "harness.config|autonomous-sdlc-harness|HARNESS_" main -- .claude` matches 8 files: `CLAUDE.md`, `settings.json`, `settings.autonomous.json`, `harness-task-offer.md`, `context/conventions.md` and others.
+   - Adoption itself writes those names. In straightedge, `git grep -lE "harness.config|devscene|HARNESS_" main -- .claude` matches 8 files: `CLAUDE.md`, `settings.json`, `settings.autonomous.json`, `harness-task-offer.md`, `context/conventions.md` and others.
    - **Change:**
      - Scope the check to the analyze-written prose: `.claude/context/*.md` and the filled sections of `CLAUDE.md`.
      - Grep there only for the product-code names a cut should have removed: `harness_docs_retrieval`, `HARNESS_DOCS_RETRIEVAL`, `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL`, `harness-docs`, `cli/dist`, `docs_index` and `retrievalApplies`.
@@ -98,7 +100,7 @@ Confirmed:
 
 ## Should Fix
 
-5. **§1, "64 commits … The last is `570292c83` (#309)", is off by one.** `git log --oneline -- autonomous-sdlc-harness/` gives 64 commits, but the newest is `32ed0bf18` (#311), the removal. The range #232–#309 is 63 commits. **Change:** "63 commits from #232 to #309, plus the #311 removal (64 in all)".
+5. **§1, "64 commits … The last is `570292c83` (#309)", is off by one.** `git log --oneline -- devscene/` gives 64 commits, but the newest is `32ed0bf18` (#311), the removal. The range #232–#309 is 63 commits. **Change:** "63 commits from #232 to #309, plus the #311 removal (64 in all)".
 
 6. **§1 gitleaks:**
    - **The line number.** `gitleaks git` reports line 29 in commit `504a4df6`, but at `dev`'s tip the string is on line 30 (`grep -n "N3_TOKEN =" …` → `30:`).
@@ -162,7 +164,7 @@ Confirmed:
 
 17. **Secrets.** State that none are needed before release: the stubs need no model token, and the local watcher pushes over SSH. Name the release-time ones: npm and PyPI trusted publishing, and `CLAUDE_CODE_OAUTH_TOKEN` only if the remote workflows are turned on.
 18. **Public-to-private transfer (§5, OQ3).** The docs do not cover it, so the "Inference" label is right. Fold it into OQ3's throwaway test, together with the numbering.
-19. **Moved research docs.** Their `path:line` citations point into the harness tree. Add a one-line header saying they cite `autonomous-sdlc-harness@<sha>`, so they stay resolvable rather than dangling.
+19. **Moved research docs.** Their `path:line` citations point into the harness tree. Add a one-line header saying they cite `devscene@<sha>`, so they stay resolvable rather than dangling.
 20. **Step 15** could name the harness-side deletions it implies: the frozen engine files, the `docs-retrieval-service/` copy, gate 10 and gate 11, and the `uv-audit` and `model-revisions` jobs. The issue can then size that branch.
 
 ## Re-review

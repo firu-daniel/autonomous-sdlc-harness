@@ -11,6 +11,8 @@
 
 **It does not own:** the engine, lexical, model or shape decisions (`README.md` → `## 5`, `## 3`), or what RagScene builds later (`README.md` → `## 7`).
 
+Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed.
+
 ## How this was researched
 
 **Date and route.** All sources were read on 2026-10-28, the web sources included:
@@ -35,7 +37,7 @@ Because the copy is made after the rename, every name here is the post-rename sp
 ## 1. History: copy the files, check them, know what the squash leaves
 
 **What happened last time (Documented, from git).**
-- **Expause.** `git log -- autonomous-sdlc-harness/` gives 64 commits:
+- **Expause.** `git log -- devscene/` gives 64 commits:
   - 63 from `88ea6a948` (#232, 2026-08-09) to `570292c83` (#309, 2026-09-08);
   - the removal, `32ed0bf18` (#311, 2026-09-22). Its message: the folder "was a staging area for a product-agnostic extraction", and "the history stays in this repo".
 - **This repository** starts with `2c01123c` (2026-09-09), one commit of 350 files.
@@ -73,7 +75,7 @@ This refines the cut in `01-current-mechanism.md` → `## 7`. Paths are given as
 | `cli/test/docs-retrieval*.test.mjs` (5 suites), `cli/test/fixtures/docs-index-pg-textsearch-1.3.1.*`, and the parts of `cli/test/helpers/fixture.mjs` (710 lines) and `helpers/timing.mjs` those suites use | **Duplicated** | `fixture.mjs` re-exports `dist/config/model.js`, and its `writeRetrievalConfig` writes the harness config file. The RagScene copy writes a RagScene source setting instead. It also drops the `dist/doctor/checks.js` import (`fixture.mjs:69`, `KEEP_AWAKE_LOCK_PROBE_ENV`). |
 | `cli/src/retrieval/setup.ts`, doctor's retrieval checks, `cli/test/retrieval-{loading,python-backend}.test.mjs` | **Stays** | Harness provisioning and `doctor` (`01 → §4` #8–#10). |
 | `evals/docs-retrieval/` (51 files) and the retrieval half of `evals/README.md` | **Moves**, but stays here until retirement | This is the product's only quality evidence, and gates 10 and 11 run it here (`scripts/run-gates.sh:193`). Its imports of `cli/dist/retrieval/{runtime,pythonBackend}.js`, `config/model.js` and `cli.js` are cut (§3.2). |
-| `docs/retrieval-eval.md`, `docs/retrieval-eval-results.md` (1.4 MB), `docs/rag-extraction-research/` | **Moves**; the harness keeps a pointer | The design record. Each moved research file gains a header line saying it cites `autonomous-sdlc-harness@<sha>`, so its `path:line` citations still resolve. |
+| `docs/retrieval-eval.md`, `docs/retrieval-eval-results.md` (1.4 MB), `docs/rag-extraction-research/` | **Moves**; the harness keeps a pointer | The design record. Each moved research file gains a header line saying it cites `devscene@<sha>`, so its `path:line` citations still resolve. |
 | `docs/retrieval.md` | **Split** | The design-of-record parts move; the adopter-facing parts stay. |
 | `scripts/python-service.sh`, `scripts/check-model-revisions.mjs`, `scripts/check-eval-artifacts.sh` | **Duplicated** | The dev wrapper, the model-pin check and the eval-data leak check (gate 6e). |
 | `supply-chain.yml` jobs `uv-audit` and `model-revisions` (`:62`, `:100`) | **Duplicated** into a RagScene workflow | — |
@@ -166,7 +168,7 @@ package.json   ← workspaces: ["typescript"]
 
 | Cost or risk | What happens | Mitigation |
 |---|---|---|
-| **Issue and PR links** | PRs, closed issues and reviews stay in `ragscenedev`. GitHub transfers only open issues between repositories of one owner. "A private repository issue cannot be transferred to a public repository". The old URL redirects (https://docs.github.com/en/issues/tracking-your-work-with-issues/administering-issues/transferring-an-issue-to-another-repository). **Unconfirmed, likely a new number:** the page is silent. Secondary reports say transfers renumber (https://bugs.jython.org/msg13090), and issues and PRs share one counter (https://lists.llvm.org/pipermail/cfe-dev/2020-April/065197.html). A bare `#N` links within the current repository (https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/autolinked-references-and-urls) | Transfer while both repositories are private, then flip `ragscene` public. Review each thread first: its comments, including links to private PRs, become public. Before the squash, rewrite every `#N`: harness issues become `firu-daniel/autonomous-sdlc-harness#N`, transferred issues get their new URL, and the rest go. |
+| **Issue and PR links** | PRs, closed issues and reviews stay in `ragscenedev`. GitHub transfers only open issues between repositories of one owner. "A private repository issue cannot be transferred to a public repository". The old URL redirects (https://docs.github.com/en/issues/tracking-your-work-with-issues/administering-issues/transferring-an-issue-to-another-repository). **Unconfirmed, likely a new number:** the page is silent. Secondary reports say transfers renumber (https://bugs.jython.org/msg13090), and issues and PRs share one counter (https://lists.llvm.org/pipermail/cfe-dev/2020-April/065197.html). A bare `#N` links within the current repository (https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/autolinked-references-and-urls) | Transfer while both repositories are private, then flip `ragscene` public. Review each thread first: its comments, including links to private PRs, become public. Before the squash, rewrite every `#N`: harness issues become `firu-daniel/devscene#N`, transferred issues get their new URL, and the rest go. |
 | **Adoption and state directory** | Run artifacts accumulate. `harness-runs/` here holds 2 642 tracked files, and 53 of the 105 files in `624867e7` (#55) are run artifacts. They are not published evidence (project memory). The watcher label and the project-memory folder are keyed on the folder path (#151, step 2) | **Redo the adoption at the move.** Carry over `.claude/CLAUDE.md`, `.claude/context/*.md` and `lessons.md`; `init` keeps an existing `CLAUDE.md` ("a re-run keeps your copy"). Drop the run artifacts. Copy the project memory by hand. |
 | **Names** | `ragscene`, `rag-scene`, `ragscenedev` and `ragscene-dev` return 404 on npm, PyPI and GitHub (2026-10-28). A pending PyPI trusted publisher does "**not** … reserve a project's name" (https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/). npm trusted publishers are per package, and a new one must publish within 2 days (https://docs.npmjs.com/trusted-publishers) | **Reserve by hand or rule it out** (step 3). A hand-published `0.0.0` ties no repository, but an empty placeholder risks a PEP 541 claim (Inference). Point trusted publishing at `ragscene` only at the first release. Never publish from `ragscenedev`. |
 | **Actions minutes** | See §3.3 | Use the local watcher and local gates while the repository is private. |
@@ -259,7 +261,7 @@ They are transferred to `ragscenedev` or closed in the harness with a pointer (O
 | 6 | The rename: devscene1–5 at full scope, with #151's hand steps. Release `devscene@<X.Y.Z>`. Re-wire scenewise, expause and straightedge | Harness runs and hand | 4, 5 | #151 complete |
 | 7 | Under (b): fix #200 on the renamed paths. Then run the #205 probe as a record branch in the harness | Harness run (#200); supervised or hand (#205) | 6 | #200 merged; `pgembed-runtime-probe.md` merged |
 | 8 | `gh repo create firu-daniel/ragscenedev --private`; clone it to `~/Work/ragscenedev` | Hand | 7 | Empty clone |
-| 9 | Extract with `git archive <dev-sha> -- <§2 paths> \| tar -x` into a staging folder. Lay it out as in §3.1 and add the provenance headers. Run `gitleaks dir`. Commit "import from autonomous-sdlc-harness@<sha>" on `main`; create `dev` | Hand | 8 | Pushed; gitleaks clean |
+| 9 | Extract with `git archive <dev-sha> -- <§2 paths> \| tar -x` into a staging folder. Lay it out as in §3.1 and add the provenance headers. Run `gitleaks dir`. Commit "import from devscene@<sha>" on `main`; create `dev` | Hand | 8 | Pushed; gitleaks clean |
 | 10 | The cut (§3.2 table), on `chore_ragscene_cut` in its own worktree | Supervised, no harness | 9 | Bar items 1–8 hold; PR merged into `dev` |
 | 11 | CI: `ci.yml` (Postgres image, both suites, parity) plus `uv-audit` and `model-revisions`. Or defer CI to the public repository and keep the local gates | Supervised | 10 | Named workflow and job green, or a recorded deferral |
 | 12 | On `chore_adopt_devscene` in its own worktree: `npx devscene@<X.Y.Z> init`; set the four layers, `defaultBranch: dev` and `protectedBranches`; run `/devscene:analyze`; review the conventions. After the merge, refresh the main checkout's machine-local profile and run `daemon install` | Hand plus supervised | 10 (and 11 if built) | `doctor` passes; no `setup-pending` block; the grep below returns nothing |

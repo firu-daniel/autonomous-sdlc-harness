@@ -7,6 +7,8 @@ cost per arm, over each committed corpus, with the corpus stamp, the models and 
 threshold each figure was taken under. It does not explain how to run the eval or what the metrics
 mean: `docs/retrieval-eval.md` owns that, and `docs/retrieval.md` owns how the tool itself works.
 
+Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed.
+
 > **The region between the two markers below is generated.** `evals/docs-retrieval/run.mjs` rewrites
 > it on every run given `--out`, and it is the **only** writer of those bytes. A hand edit inside the
 > region is destroyed by the next run; everything outside it, including every section below the end
@@ -26437,7 +26439,7 @@ eval-route cross-check.
 
 **Host stamp.** MacBook Air, Apple M4, 10 cores (4 performance + 6 efficiency), 16 GB, macOS 15.7.4
 (24G517), `uname -sr` → `Darwin 24.6.0`, arm64, Node `v22.23.2`, npm 10.9.8, Claude Code 2.1.278, the
-package `autonomous-sdlc-harness@0.2.0` installed from the registry, load average `1.92 1.76 1.76`, nothing
+package `devscene@0.2.0` installed from the registry, load average `1.92 1.76 1.76`, nothing
 else of consequence running. The Node version differs from the 177-chunk figures' `v20.19.5`: **recorded,
 not reconciled.**
 
@@ -26898,7 +26900,7 @@ run made — lists all seven flags `evals/docs-retrieval/arm-a/run-arm-a.sh` pas
 **What each session loaded.** The catalog's root carries `.claude/CLAUDE.md`, `.claude/settings.json`,
 `.claude/settings.autonomous.json` and `.mcp.json`, and no root `CLAUDE.md`. A session started there:
 
-- ran with the catalog's `autonomous-sdlc-harness` plugin enabled and its `.claude/CLAUDE.md` loaded —
+- ran with the catalog's `devscene` plugin enabled and its `.claude/CLAUDE.md` loaded —
   the realistic setup for an agent navigating a harness-adopted repository, accepted as such by the
   operator;
 - fired **no hook**: the plugin's only hook is a `PreToolUse` hook matching `Bash`, which the runner
@@ -28218,8 +28220,8 @@ expanded `${XDG_CACHE_HOME:-$HOME/.cache}` and `<key>` for the checkout key the 
 - The TypeScript weight cache, q8:
 
   ```
-  du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/models/Xenova"
-   56M	<cache>/autonomous-sdlc-harness/retrieval/models/Xenova
+  du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/devscene/retrieval/models/Xenova"
+   56M	<cache>/devscene/retrieval/models/Xenova
   ```
 
 - The Python environment, with the `models` extra:
@@ -28307,7 +28309,7 @@ output was not captured.
 **The failed first attempt is a finding, recorded and not acted on.** Its stream shows only that
 `harness-docs` was `failed` at `system/init`, and the agent answered without the tool. The stream does
 not record why. `agent-session.md` records the cause the operator found. The launcher's runtime is the
-published `autonomous-sdlc-harness@0.5.0` that `init` installed machine-wide, and it refused
+published `devscene@0.5.0` that `init` installed machine-wide, and it refused
 `harness.config.json` with *"docs.retrievalBackend: unknown key"*. So, on this machine, once the key was
 set to `typescript` the TypeScript server would not start. The Python session ran with the key set and
 connected. For the same reason, the second TypeScript session's server is that published runtime, not
@@ -31104,7 +31106,7 @@ the after-fix run compares with.
 
 - **The code.** 2026-10-21, at commit `625c57b4` with a clean tree, after `npm run build`. `git diff
   --stat d15e5cc3 HEAD -- cli/src` lists nothing, so `cli/dist` is the base commit's retrieval code. The
-  TypeScript model cache under `~/.cache/autonomous-sdlc-harness/retrieval/models` held both models, and
+  TypeScript model cache under `~/.cache/devscene/retrieval/models` held both models, and
   none was fetched.
 - **The engine.** A scratch probe opened an in-memory PGlite with both extensions before the runs. It read
   `version()` `PostgreSQL 18.6 (PGlite 0.5.10) on wasm32-unknown-emscripten`, `SHOW
@@ -31623,7 +31625,7 @@ values Task 8's commit re-recorded.
 - **The code.** 2026-10-21, at commit `0c4630e5` with a clean tree, after `npm run build`. That commit
   makes `refreshIndex` call `DocStore.rebuildIndexes()`, which issues `END_STATE_STATEMENTS`, `REINDEX
   INDEX chunks_bm25` alone (`cli/src/retrieval/store.ts`). The TypeScript model cache under
-  `~/.cache/autonomous-sdlc-harness/retrieval/models` held both models.
+  `~/.cache/devscene/retrieval/models` held both models.
 - **The engine.** `harness-runs/scratch/fix-bm25/versions.mjs` opened an in-memory PGlite with both
   extensions before the runs. It read `version()` `PostgreSQL 18.6 (PGlite 0.5.10) on
   wasm32-unknown-emscripten`, `SHOW pg_textsearch.library_version` `1.5.1`, and `pg_extension.extversion`

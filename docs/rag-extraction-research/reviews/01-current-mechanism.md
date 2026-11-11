@@ -3,6 +3,8 @@ verdict: PASS
 
 Checked at `dev` (`2ace325d`), 2026-10-28. 31 repository citations verified against source (list at the end). Five licence claims checked on the web. No Must Fix: no wrong fact changes the verdict, and the seven claims the author asked about all hold.
 
+Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed.
+
 ## Must Fix
 
 None.
@@ -58,7 +60,7 @@ None.
 - `cli/src/generators/repoRoot.ts` → `retrievalWiring` refuses any server other than `harness-docs` (:443-447).
 - `cli/templates/repo/mcp.retrieval.json` — `bash`, one `args` string, empty `env`.
 - `cli/templates/claude/settings.autonomous.retrieval.json` — enablement plus allow, and the `_README` stall wording.
-- `docs-search-server.sh:58-87`, `:75-87` (backend choice), `:89-122` (Python: default URL, child, signal relay, exit 3) and `:124-135` (TS `exec node $cache/retrieval/runtime/node_modules/autonomous-sdlc-harness/dist/cli.js docs serve`).
+- `docs-search-server.sh:58-87`, `:75-87` (backend choice), `:89-122` (Python: default URL, child, signal relay, exit 3) and `:124-135` (TS `exec node $cache/retrieval/runtime/node_modules/devscene/dist/cli.js docs serve`).
 - `cli/src/retrieval/runtime.ts:14-17`, `:57-60` — `init` installs "the peers and this CLI, at its own version" into the machine-cache runtime directory. Confirms the copy-of-the-CLI claim.
 - `server.ts:35-42`, `:56-69` (schema `{query, k}`, `additionalProperties: false`, annotations), `:58` (description), `:82-96`, `:137` (remedy), `:149` (`mode: 'fused-rerank'` hard-coded, so no mode), `:201-211` (queue).
 - `wire.py:25-46` — the same schema and description.

@@ -2,6 +2,8 @@
 
 **Who reads this:** the maintainer deciding whether to move docs retrieval into its own repository and product, and whoever writes the synthesis (`README.md` in this directory). **It owns:** the invocation path as shipped, the pipeline stage by stage, every place the retrieval code depends on the harness, an assessment of which half could stand alone, the gaps for a large-docs user, and a proposed seam. **It does not own:** how comparable products are packaged (`02-distribution-shapes.md`), remote sources, managed Postgres or connection security (`03-sources-database-security.md`), or how the harness should consume the extracted product beyond one short subsection.
 
+Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed.
+
 ## How this was researched
 
 Date: 2026-10-28. Route: reading this repository at `dev` (`2ace325d`) only — source, templates, tests, shipped docs and the eval record. No command was run against a database or a model. The fork itself used no web source. The licence URLs in §7 were checked by this file's reviewer (`reviews/01-current-mechanism.md`, Should Fix 1) and are carried here with that provenance.
@@ -27,7 +29,7 @@ Unlabelled sentences in a paragraph that cites a source are Documented.
 1. **`init` writes the registration.** When `retrievalApplies(config)` holds — `phases.docs === true && docs.retrieval === true` (`cli/src/config/model.ts:637`) — `init` merges a `harness-docs` stdio entry from `cli/templates/repo/mcp.retrieval.json` into `.mcp.json`. The entry runs `command: "bash"` with one argument, `<scriptsDir>/docs-search-server.sh`, and an empty `env` object (`cli/src/generators/repoRoot.ts` → `retrievalWiring`).
 2. **The agent runner starts the launcher.** Only the MCP SDK's fixed inherited environment reaches it (`HOME`, `LOGNAME`, `PATH`, `SHELL`, `TERM`, `USER`), so any setting must go in the entry's `env` object (`docs/retrieval.md:54`).
 3. **The launcher picks the backend at run time** (`cli/templates/scripts/docs-search-server.sh:75-135`). It reads `docs.retrievalBackend` only inside the retrieval gate.
-   - `typescript`, or the key absent: it `exec`s a whole copy of the harness CLI that `init` installed into a machine cache, as `node $cache/retrieval/runtime/node_modules/autonomous-sdlc-harness/dist/cli.js docs serve --cwd <root>` (`cli/src/retrieval/runtime.ts:14-17`).
+   - `typescript`, or the key absent: it `exec`s a whole copy of the harness CLI that `init` installed into a machine cache, as `node $cache/retrieval/runtime/node_modules/devscene/dist/cli.js docs serve --cwd <root>` (`cli/src/retrieval/runtime.ts:14-17`).
    - `python`: it defaults `HARNESS_DOCS_RETRIEVAL_DATABASE_URL` to the compose loopback URL, runs `harness-docs-retrieval serve-mcp --repo <root>` as a child, relays signals, and maps any failure to exit `3`.
    - There is no fallback between backends.
 
@@ -53,7 +55,7 @@ Unlabelled sentences in a paragraph that cites a source are Documented.
 - **Hits.** Each hit is `n. <path>#<anchor> (score s)` followed by an indented snippet of 240 characters.
 - **Abstention.** Exactly `no confident match`, when the best reranker score is below `0.32`.
 - **Coverage warnings.** `note: ` lines placed before the body.
-- **Errors.** `isError` text for an argument refusal, a refresh failure (which names `npx autonomous-sdlc-harness doctor`), a search failure, or an unknown tool.
+- **Errors.** `isError` text for an argument refusal, a refresh failure (which names `npx devscene doctor`), a search failure, or an unknown tool.
 
 Calls are answered one at a time, because each call refreshes and therefore writes (`server.ts:201-211`; the Python side uses an `asyncio.Lock` in `service.py` → `answer`).
 
@@ -124,13 +126,13 @@ Two things use it: the service image's default command (`docs-retrieval-service/
 | 4 | Wire names `harness-docs` / `search_docs`, quoted by 11 agents and 2 templates | `server.ts:35-42`; `wire.py`; `plugin/agents/README.txt:84-90` | Moderate. A configurable server name would let the harness keep its string. |
 | 5 | Description and remedy text naming the harness | `server.ts:58`, `:137`; `service.py:245`; `session.ts:39`, `:47` | Trivial. |
 | 6 | `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` (read by both backends, passed through by `compose.yaml`) and `…_RETRIEVAL_LOG` | `stubs.py:21`; `queryLog.ts:53`; `models.ts` | Trivial. |
-| 7 | Cache paths `…/autonomous-sdlc-harness/retrieval/{runtime,models}`, mirrored in the launcher and in `cli/templates/github/workflows/harness-run.yml:600`, `:938` | `runtime.ts:20-27` | Trivial for the product; the harness mirrors move with it. |
+| 7 | Cache paths `…/devscene/retrieval/{runtime,models}`, mirrored in the launcher and in `cli/templates/github/workflows/harness-run.yml:600`, `:938` | `runtime.ts:20-27` | Trivial for the product; the harness mirrors move with it. |
 | 8 | **The TS backend ships inside the harness npm package** as optional peers. `init` installs the whole CLI plus peers into a runtime directory, because `npx` cannot resolve project peers. It imports `HarnessConfig`, `HarnessError`, `Reporter` and `core/paths` | `cli/package.json`; `runtime.ts`; `setup.ts`; `docs/retrieval.md:71-73` | **Hard.** |
 | 9 | Model fetching inside `init` (`setup.ts` spawns `docs fetch-models`, 900 s timeout) | `setup.ts:46` | Moderate; Python has its own `fetch-models`. |
 | 10 | `doctor`: six checks; the Python three parse `self-check` stdout | `checks.ts:5767-6060`; `pythonBackend.ts:13-31` | Moderate. |
 | 11 | **Byte parity between backends:** `jscompat.py` ports JS semantics, and five parity tests run TS through `cli/dist` (`ts_bridge.*`) | `docs-retrieval-service/README.md:155-163` | **Moderate to hard.** Goes away if only one implementation remains. |
 | 12 | Eval harness `evals/docs-retrieval/` (6 066 lines; **15 modules import `../../cli/dist/…`**), its corpora, query sets and the 32k-line results file | e.g. `args.mjs:29`, `results.mjs:30-31` | Moderate. It is the product's only quality evidence, and it is bound to the TS module layout. |
-| 13 | Python provisioning clones this repo at the harness tag `autonomous-sdlc-harness--v<version>` | `docs/retrieval.md:185-200` | Trivial; it becomes the product's own release. |
+| 13 | Python provisioning clones this repo at the harness tag `devscene--v<version>` | `docs/retrieval.md:185-200` | Trivial; it becomes the product's own release. |
 | 14 | Harness-side wiring and housekeeping: the launcher and `harness-run-lib.sh`; schema keys `docs.retrieval`/`docs.retrievalBackend`; gate 13, gate 10, `scripts/python-service.sh`, the `uv-audit` and `model-revisions` jobs; the `cli/test/docs-retrieval*` and `retrieval-*` suites; the remote job's TS-only provisioning | `docs-search-server.sh`; `schemas/harness.config.schema.json:279-288`; `scripts/run-gates.sh:227`; `supply-chain.yml:62-114`; `docs/retrieval.md:262` | Launcher and schema stay. CI, gates and tests are moderate to recreate on whichever side keeps the code. |
 
 ## 5. What already stands alone
@@ -203,7 +205,7 @@ The code moves as a **starting point**. The new product may replace the lexical 
 **Minimum changes at the seam:**
 
 - the product's own source config in place of `docs.root`/`layers[]`;
-- names moved off `AUTONOMOUS_SDLC_HARNESS_*` and `…/autonomous-sdlc-harness/…`;
+- names moved off `AUTONOMOUS_SDLC_HARNESS_*` and `…/devscene/…`;
 - neutral wording;
 - a corpus or tenant key.
 

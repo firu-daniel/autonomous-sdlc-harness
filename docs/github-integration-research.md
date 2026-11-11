@@ -4,6 +4,8 @@
 
 It cites rather than restates [`remote-execution.md`](remote-execution.md), whose `### Verified in Gate 12 round 2` and `round 3` rows it does not repeat.
 
+Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed.
+
 ---
 
 ## How this was researched
@@ -524,7 +526,7 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 
 **Answer:** Observed by the maintainer:
 - **Create:** a default codespace on Gate 12 took about 1 minute and 4 clicks.
-- **Plugin:** the plugin installed at user scope, and `/autonomous-sdlc-harness:branch-status` ran.
+- **Plugin:** the plugin installed at user scope, and `/devscene:branch-status` ran.
 - **Sign-in:** `claude` signed in by copying a URL into the browser and pasting back a code. `claude setup-token` used the same flow and succeeded.
 - **Workflow files:** the codespace's token pushed a workflow-file change (S2).
 - **Cost:** a 2-core machine is $0.18 an hour past the included 120 core hours a month (Free), which is 60 hours of a 2-core machine.

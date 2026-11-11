@@ -4,7 +4,7 @@
 
 **Recommend with changes.** There should be no report file at all. That is not because the agent lacks a write path: it has `Bash`, so `cat` or `sed` redirection could write one. The reasons are these:
 - The agent's `tools:` allowlist omits `Write` and `Edit` on purpose. That omission is its read-only guarantee (`plugin/agents/conventions-reviewer.md:13`), and `.claude/context/plugin.md` → `## Frontmatter` makes widening past the output surface a finding.
-- A `/autonomous-sdlc-harness:harness-analyze` run has no committer behind it, so a file would be untracked litter (`docs/analyze.md:217`, §12 (d2)).
+- A `/devscene:harness-analyze` run has no committer behind it, so a file would be untracked litter (`docs/analyze.md:217`, §12 (d2)).
 
 The checklist should be **embedded in the agent definition** and **returned inline** as a final `work_report:` field after `summary:`. Its one named consumer is step 6 of `harness-analyze`, under the sibling report's **combined caller edit**, which this report adopts. Goal (a) is weak here, because the record exists only in the session. Goal (b) is real: the agent runs 15 + 6 checks, each with its own exemptions.
 
