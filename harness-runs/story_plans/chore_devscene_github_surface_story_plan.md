@@ -80,7 +80,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_github_surface/ta
 20. [x] **Task 20** — Respell `README.md` and `ARCHITECTURE.md` _(layer: general)_ _(points: 5)_
 21. [x] **Task 21** — Respell `docs/development.md`, the Gate 12 rounds and Gate 14 included _(layer: general)_ _(points: 20)_
 22. [x] **Task 22** — Respell `docs/github-run-control.md` and `docs/github-issue-trigger.md` _(layer: general)_ _(points: 20)_
-23. [ ] **Task 23** — Respell `docs/remote-execution.md`, `docs/cli.md`, `docs/config.md` and `docs/watcher.md` _(layer: general)_ _(points: 20)_
+23. [x] **Task 23** — Respell `docs/remote-execution.md`, `docs/cli.md`, `docs/config.md` and `docs/watcher.md` _(layer: general)_ _(points: 20)_
 24. [ ] **Task 24** — Respell the research documents and the sandbox records, and run the closing check _(layer: general)_ _(points: 20)_
 
 ## Scope register
