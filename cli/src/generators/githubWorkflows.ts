@@ -1,7 +1,7 @@
 /**
- * Generator: the GitHub Actions workflows remote execution runs on — `harness-run.yml`, the job
- * the watcher dispatches a run to, `harness-resume.yml`, the self-disabling resume poller,
- * `harness-trigger.yml`, the issue-label and `repository_dispatch` trigger, and `harness-control.yml`,
+ * Generator: the GitHub Actions workflows remote execution runs on — `devscene-run.yml`, the job
+ * the watcher dispatches a run to, `devscene-resume.yml`, the self-disabling resume poller,
+ * `devscene-trigger.yml`, the issue-label and `repository_dispatch` trigger, and `devscene-control.yml`,
  * the comment-command and review handler — written into the adopter's `.github/workflows/`.
  *
  * **The rule this module exists to enforce: the first two workflows are written exactly when
@@ -20,17 +20,17 @@
  *    wrong the moment the key changed. The version is the exception because it is the pin the job
  *    installs the plugin and runs `npx devscene@<version>` against, and it is read
  *    through `core/paths.ts` → `ownManifestString`, the one reader of this package's manifest.
- * 2. **`assertNoneSurvive` is on for `harness-run.yml`.** The one substituted value is a version
+ * 2. **`assertNoneSurvive` is on for `devscene-run.yml`.** The one substituted value is a version
  *    string, which has no business carrying `{{…}}`; one that did would ship a workflow pinned to
  *    nothing. The template's GitHub expressions are all written `${{ ` with a space, so the token
  *    pattern never matches one and the check sees only `{{cliVersion}}`.
- * 3. **`harness-resume.yml` is copied verbatim, not rendered.** It carries no token, so there is no
+ * 3. **`devscene-resume.yml` is copied verbatim, not rendered.** It carries no token, so there is no
  *    value for the renderer to check; a token added to it later belongs in this module first.
  * 4. **The upgrade mode ({@link GithubWorkflowsOptions.upgrade}) replaces through a per-request
  *    `forceOverride: 'always'`, not a fifth `WritePolicy`.** The engine's `.bak`-then-replace is
  *    exactly the operation wanted, and `core/writer.ts` reserves new policies for a new re-run
  *    contract. The condition is the pin `remote/githubActions.ts` → `renderedCliVersions` reads from
- *    `harness-run.yml`: absent, or any value other than this CLI's version. A re-render writes that
+ *    `devscene-run.yml`: absent, or any value other than this CLI's version. A re-render writes that
  *    version, so a second run finds nothing to replace. The resume poller's `- cron:` lines are
  *    carried into its re-render because the schedule is the one thing an adopter tunes inside that
  *    file; every other edit to either file survives only in its `.bak`. The runner and the timeouts
@@ -38,10 +38,10 @@
  * 5. **The two forge workflows — the trigger and the control workflow — are gated on
  *    `forgeTriggerApplies`, carry no pin and are not upgraded,** because each calls the scripts on the
  *    default branch and shares their re-run contract. Both are copied verbatim like
- *    `harness-resume.yml` (choice 3), and the trigger never carries a `forceOverride`, upgrade mode
+ *    `devscene-resume.yml` (choice 3), and the trigger never carries a `forceOverride`, upgrade mode
  *    included. Neither is ever upgraded by pin; the control workflow's one exception is the
  *    byte-identical repair of choice 6.
- * 6. **Any `init` replaces a `harness-control.yml` byte-identical to a release's copy GitHub could
+ * 6. **Any `init` replaces a `devscene-control.yml` byte-identical to a release's copy GitHub could
  *    not parse ({@link UNPARSEABLE_CONTROL_RELEASES}), after a `.bak`.** The match is an exact
  *    SHA-256 over the LF-normalised bytes, not a parse: the package carries no YAML parser at run
  *    time (`.claude/context/conventions.md` → `## The stack…`, the no-runtime-dependency rule), and an
@@ -58,7 +58,7 @@
  * **This module owns {@link unparseableControlRoute}.** `init`'s warning and `doctor`'s failure both
  * print it, and neither re-spells it.
  *
- * **Declared mirror.** `cli/templates/github/workflows/harness-run.yml`'s `Install the pinned plugin`
+ * **Declared mirror.** `cli/templates/github/workflows/devscene-run.yml`'s `Install the pinned plugin`
  * step spells the route {@link upgradeWorkflowsCommand} produces,
  * `npx devscene@<version> init --upgrade-workflows`, as a literal the compiler cannot
  * reach, and declares the mirror in its own `# DECLARED MIRRORS` block: a change to
@@ -109,41 +109,42 @@ export function upgradeWorkflowsCommand(version: string): string {
 /**
  * The upgrade route's one statement that an upgrade does not reach a run already in flight. One
  * complete sentence ending in exactly one `.` and carrying no backtick, so a caller joins it with a
- * space. Its citation is spelled as `harness-run.yml`'s `upgrade_route` spells it.
+ * space. Its citation is spelled as `devscene-run.yml`'s `upgrade_route` spells it.
  */
 export const IN_FLIGHT_RUNS_NOTE =
   "An upgrade reaches only the runs dropped after it is pushed: each run's branch carries the workflows it was cut with, so a run already in flight finishes on the version it started with, and moving one on purpose is a separate step (docs/remote-execution.md, section 7, Upgrading).";
 
 /**
- * Each release whose shipped `harness-control.yml` GitHub could not parse, to the SHA-256 hex of
- * that file's LF-normalised bytes (choice 6). The 0.6.1 digest is of git blob
- * `1b4f0fc33200d876e4089ebe4013120e48a45335`, `cli/templates/github/workflows/harness-control.yml`
- * from `a4ae3c8` through `31a2d55`.
+ * Each release whose shipped control workflow GitHub could not parse, to the SHA-256 hex of a
+ * copy's LF-normalised bytes (choice 6). The 0.6.1 digest is of 0.6.1's shipped control workflow —
+ * git blob `1b4f0fc33200d876e4089ebe4013120e48a45335`, the control workflow template from `a4ae3c8`
+ * through `31a2d55` — with its job-level `if:` line respelled to the current command handle, comment
+ * marker and state-label prefix ({@link UNPARSEABLE_CONTROL_IF_LINE}); every other byte is the blob's.
  */
 export const UNPARSEABLE_CONTROL_RELEASES: Readonly<Record<string, string>> = {
-  '0.6.1': 'dd014dc14bf19947182f4c95fa0bf011aba04fda354d9a6fa94242e86082bfa5',
+  '0.6.1': 'b197e3df1bb92b2c7eb41d3c03b4e7a8f51e92a11cb92fb0b76ffb93c12d67d1',
 };
 
-/** The job-level `if:` line, trimmed, that made 0.6.1's `harness-control.yml` unparsable. */
+/** The job-level `if:` line, trimmed, that made 0.6.1's `devscene-control.yml` unparsable, respelled to the current handle, marker and prefix. */
 const UNPARSEABLE_CONTROL_IF_LINE =
-  "if: (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@sdlc-harness') && !contains(github.event.comment.body, '<!-- sdlc-harness')) || (github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'issues' && contains(join(github.event.issue.labels.*.name, ','), 'sdlc-harness: ')) || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'delete' && github.event.ref_type == 'branch')";
+  "if: (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@dev-scene') && !contains(github.event.comment.body, '<!-- devscene')) || (github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'issues' && contains(join(github.event.issue.labels.*.name, ','), 'devscene: ')) || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'delete' && github.event.ref_type == 'branch')";
 
 /**
- * The one producer of the route from an unparsable `harness-control.yml` to the fixed one. Complete
+ * The one producer of the route from an unparsable `devscene-control.yml` to the fixed one. Complete
  * sentences ending in one `.`, ASCII only, no line break.
  */
 export function unparseableControlRoute(version: string): string {
   const pinned = pinnedCliCommand(version);
   const releases = Object.keys(UNPARSEABLE_CONTROL_RELEASES).join(' or ');
   return (
-    `Run \`${pinned} init\`, which replaces a harness-control.yml that ${releases} wrote and nobody edited, keeping the previous copy as a .bak; ` +
+    `Run \`${pinned} init\`, which replaces a ${WORKFLOW_CONTROL_FILE} that ${releases} wrote and nobody edited, keeping the previous copy as a .bak; ` +
     `for an edited copy, write the control job's if: as a folded block scalar (if: >- with the expression on the next line, indented), ` +
     `or run \`${pinned} init --force\`, which regenerates every generated file after a .bak; ` +
     `then commit the file and push it to the repository's default branch.`
   );
 }
 
-/** What `init` decided about an existing `harness-control.yml` a release wrote unparsable (choice 6). */
+/** What `init` decided about an existing `devscene-control.yml` a release wrote unparsable (choice 6). */
 export type ControlRepair =
   | { readonly kind: 'replaced'; readonly release: string }
   | { readonly kind: 'edited' }
@@ -172,7 +173,7 @@ export interface GithubWorkflowsOptions {
   /** The command's write plan; this generator enqueues into it and never writes `fs` itself; the upgrade mode reads the tree. */
   readonly plan: WritePlan;
   /**
-   * Re-render both workflows after a `.bak` when `harness-run.yml` exists and its pin differs from this
+   * Re-render both workflows after a `.bak` when `devscene-run.yml` exists and its pin differs from this
    * CLI's version, carrying the resume poller's `- cron:` lines (choice 4).
    */
   readonly upgrade?: boolean;
@@ -180,13 +181,13 @@ export interface GithubWorkflowsOptions {
 
 /** What the upgrade mode found and decided. */
 export interface WorkflowUpgrade {
-  /** The versions the existing `harness-run.yml` was pinned to, in file order; empty when none was read. */
+  /** The versions the existing `devscene-run.yml` was pinned to, in file order; empty when none was read. */
   readonly renderedFor: readonly string[];
   /** This CLI's version, the one a re-render pins to. */
   readonly to: string;
   /** True when the run workflow is replaced. */
   readonly replaced: boolean;
-  /** The schedules carried into `harness-resume.yml`, quotes stripped, or `undefined` when the template's default stands. */
+  /** The schedules carried into `devscene-resume.yml`, quotes stripped, or `undefined` when the template's default stands. */
   readonly cron: readonly string[] | undefined;
 }
 
@@ -198,7 +199,7 @@ export interface GithubWorkflowsResult {
   readonly workflows: readonly { readonly absolute: string; readonly repoPath: string }[];
   /** True exactly when the trigger and control workflows were enqueued, which happens together (choice 5); `init` gates its forge steps on it. */
   readonly trigger: boolean;
-  /** Present exactly when `upgrade` was set, remote execution applied and `harness-run.yml` existed. */
+  /** Present exactly when `upgrade` was set, remote execution applied and `devscene-run.yml` existed. */
   readonly upgrade?: WorkflowUpgrade;
   /**
    * `'replaced'` when the plan replaces a byte-identical copy of `release`'s unparsable control
