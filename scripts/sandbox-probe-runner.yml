@@ -28,7 +28,7 @@ on:
   workflow_dispatch:
     inputs:
       probe_commit:
-        description: The full commit of autonomous-sdlc-harness to take the probe from
+        description: The full commit of devscene to take the probe from
         required: true
         type: string
       cli_version:
@@ -88,7 +88,7 @@ jobs:
           retrieval=$(jq -r '(.phases.docs == true and .docs.retrieval == true)' harness.config.json)
           {
             echo "SCRIPTS_DIR=${scripts_dir%/}"
-            echo "HARNESS_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval"
+            echo "HARNESS_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/devscene/retrieval"
           } >> "$GITHUB_ENV"
           echo "retrieval=$retrieval" >> "$GITHUB_OUTPUT"
 
@@ -133,21 +133,21 @@ jobs:
 
       - name: Install the pinned plugin
         run: |
-          source_repo=$(jq -r '.extraKnownMarketplaces["autonomous-sdlc-harness"].source.repo // empty' .claude/settings.json 2>/dev/null || true)
+          source_repo=$(jq -r '.extraKnownMarketplaces["devscene"].source.repo // empty' .claude/settings.json 2>/dev/null || true)
           if [ -z "$source_repo" ]; then
-            echo "::error::.claude/settings.json names no marketplace source for autonomous-sdlc-harness. Run init locally with --marketplace <owner>/<repo> and commit the file."
+            echo "::error::.claude/settings.json names no marketplace source for devscene. Run init locally with --marketplace <owner>/<repo> and commit the file."
             exit 1
           fi
-          upgrade_route="to run another version, re-render this repository's workflows with 'npx autonomous-sdlc-harness@<version> init --upgrade-workflows', then commit the paths its printed 'git add' names and push them to the default branch (docs/remote-execution.md, section 7, Upgrading)"
-          tag="autonomous-sdlc-harness--v$HARNESS_CLI_VERSION"
+          upgrade_route="to run another version, re-render this repository's workflows with 'npx devscene@<version> init --upgrade-workflows', then commit the paths its printed 'git add' names and push them to the default branch (docs/remote-execution.md, section 7, Upgrading)"
+          tag="devscene--v$HARNESS_CLI_VERSION"
           marketplace_dir="$RUNNER_TEMP/harness-marketplace"
           # --quiet does not cover the detached-HEAD advice a tag checkout prints; only advice.detachedHead gates it.
           if ! git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$tag" "https://github.com/$source_repo.git" "$marketplace_dir"; then
             echo "::error::$source_repo has no release tag $tag, so the plugin this workflow was rendered for cannot be installed. If $HARNESS_CLI_VERSION was released, its release is missing the tag; otherwise, $upgrade_route."
             exit 1
           fi
-          (cd "$RUNNER_TEMP" && claude plugin marketplace add ./harness-marketplace && claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness)
-          installed=$(claude plugin list --json | jq -r '[.[] | select(.id == "autonomous-sdlc-harness@autonomous-sdlc-harness" and .scope == "user")][0].version // empty')
+          (cd "$RUNNER_TEMP" && claude plugin marketplace add ./harness-marketplace && claude plugin install devscene@devscene)
+          installed=$(claude plugin list --json | jq -r '[.[] | select(.id == "devscene@devscene" and .scope == "user")][0].version // empty')
           if [ "$installed" != "$HARNESS_CLI_VERSION" ]; then
             echo "::error::the installed plugin is version '${installed:-none}', but this workflow was rendered for $HARNESS_CLI_VERSION and cloned $tag; $upgrade_route."
             exit 1
@@ -156,11 +156,11 @@ jobs:
       - name: Generate the job's permission profile
         working-directory: ${{ runner.temp }}
         run: |
-          npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" --cwd "$GITHUB_WORKSPACE" init --plugin-root-entries
+          npx --yes "devscene@$HARNESS_CLI_VERSION" --cwd "$GITHUB_WORKSPACE" init --plugin-root-entries
           changed=$(git -C "$GITHUB_WORKSPACE" status --porcelain --untracked-files=no)
           if [ -n "$changed" ]; then
             printf '%s\n' "$changed"
-            echo "::error::init $HARNESS_CLI_VERSION changed tracked files. Run 'npx autonomous-sdlc-harness@$HARNESS_CLI_VERSION init' locally and commit the result."
+            echo "::error::init $HARNESS_CLI_VERSION changed tracked files. Run 'npx devscene@$HARNESS_CLI_VERSION init' locally and commit the result."
             exit 1
           fi
 
@@ -189,9 +189,9 @@ jobs:
             echo "::error::probe_commit '$commit' is not a full commit: it must be 40 lowercase hex characters."
             exit 1
           fi
-          source_repo=$(jq -r '.extraKnownMarketplaces["autonomous-sdlc-harness"].source.repo // empty' .claude/settings.json 2>/dev/null || true)
+          source_repo=$(jq -r '.extraKnownMarketplaces["devscene"].source.repo // empty' .claude/settings.json 2>/dev/null || true)
           if [ -z "$source_repo" ]; then
-            echo "::error::.claude/settings.json names no marketplace source for autonomous-sdlc-harness, so there is no repository to take the probe from."
+            echo "::error::.claude/settings.json names no marketplace source for devscene, so there is no repository to take the probe from."
             exit 1
           fi
           probe_dir="$RUNNER_TEMP/sandbox-probe-src"

@@ -60,7 +60,7 @@ g12_row_declare FR7 6 full-run - \
 g12_row_declare JS1 7 plant settings,remote-run \
   "a pushed plumbing commit of .claude/settings.json, and separately of remote-run.sh under scriptsDir, refused at Refuse a branch that changed the job's own files"
 g12_row_declare JS4 7 plant npmrc,node-modules \
-  "a pushed plumbing commit of a .npmrc, and separately of node_modules/autonomous-sdlc-harness, whose marker must not appear in the job's npm steps"
+  "a pushed plumbing commit of a .npmrc, and separately of node_modules/devscene, whose marker must not appear in the job's npm steps"
 g12_row_declare SB2 7 plant clarifications,pause-note \
   "clarifications is a committed link inside the branch's clarifications directory; pause-note asks the session to make a link at PAUSE_PROGRESS.md through scratch-run.sh, on its own branch, and a run that parks on the session's refusal of that task, with no link and no token in its artifact, passes as refused by the session; the autonomous_logs/remote_status.json variant is read from the source, since hr_remote_status_write removes a link at its target before each rename"
 g12_row_declare SB4 7 reads-SB2 - \
