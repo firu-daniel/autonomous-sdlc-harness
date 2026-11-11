@@ -16,7 +16,7 @@
 # `bash <scriptsDir>/task-offer-check.sh` — matched by the exact `Bash(…)` rule
 # the generated `.claude/settings.json` carries. It judges the checkout of the
 # WORKING DIRECTORY, never the one holding this file, and reads no
-# `HARNESS_MAIN_REPO`. `jq` is reached on the clone arm only.
+# `DEVSCENE_MAIN_REPO`. `jq` is reached on the clone arm only.
 #
 # REUSED FROM `lib/harness-run-lib.sh`: `hr_repo_root`, `hr_main_repo`,
 # `hr_copy_sync_main_of`, `hr_clone_target_check_var`. `toc_alternates_candidate`

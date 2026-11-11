@@ -95,7 +95,7 @@
 # `<main_repo>`, unless it is the checkout itself; then `$HOME` -> `~`. The main
 # checkout is `--main-repo` when given and non-empty, else `hr_main_repo`'s
 # answer for the checkout — which, inside a clone, is the clone itself, so the
-# watcher passes `--main-repo` explicitly. `HARNESS_MAIN_REPO` is never read.
+# watcher passes `--main-repo` explicitly. `DEVSCENE_MAIN_REPO` is never read.
 # Round ids, gate ids and round file paths pass through the same pairs,
 # through mode `rounds`' `redact_path`: the pairs only, without the home step and without
 # the 160-character cut free-text fields get, so a long path or label is
