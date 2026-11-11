@@ -28,3 +28,5 @@
 - `grep -nE "@sdlc-harness|!-- ?sdlc-harness|sdlc-harness(: |%3A)|harness-(trigger|run|control|resume)\.yml" cli/templates/scripts/lib/harness-run-lib.sh cli/templates/scripts/prompt-injection-screen.sh cli/templates/scripts/autonomous-watcher.sh cli/templates/scripts/lib/run-analytics.jq cli/templates/README.md` prints nothing.
 - `grep -n "HR_REMOTE_WORKFLOW_RUN_FILE=" cli/templates/scripts/lib/harness-run-lib.sh` shows `'devscene-run.yml'`, equal to Task 1's `WORKFLOW_RUN_FILE`.
 - `bash -n` exits 0 on each of the three `.sh` targets.
+
+**Deviations from plan:** The free-standing `bash -n` on each `.sh` target was refused by the permission layer. The parse claim rests on `bash scripts/typecheck.sh` instead: its `scripts/check-shell-parse.sh` step runs `bash -n` over every shell script `git ls-files` lists, which includes all three tracked targets, and it reported `check-shell-parse: 124 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`.

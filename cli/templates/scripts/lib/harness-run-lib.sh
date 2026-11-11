@@ -50,7 +50,7 @@
 # literal presence here is exactly the defect this paragraph prevents.) The
 # project-command wrappers and `autonomous-format-stream.sh` need nothing from
 # this library and do not source it. The one sourcer that is not a script is
-# the `harness-run.yml` step `Install the sandbox prerequisites`: it sources this
+# the `devscene-run.yml` step `Install the sandbox prerequisites`: it sources this
 # file in a subshell from `$SCRIPTS_DIR/lib/harness-run-lib.sh` (a value read
 # from configuration, not a hardcoded path) and calls only
 # `hr_sandbox_opted_out`, so renaming that function is an edit to the workflow.
@@ -6102,7 +6102,7 @@ hr_remote_names_var() {
   HR_REMOTE_STATUS_SOURCE="$HR_REMOTE_LOGS_DIR/remote_status.json"
   HR_REMOTE_SUPERSEDED_DIR="$HR_REMOTE_LOGS_DIR/remote_superseded"
   HR_REMOTE_PLANNING_DIR='planning'
-  HR_REMOTE_WORKFLOW_RUN_FILE='harness-run.yml'
+  HR_REMOTE_WORKFLOW_RUN_FILE='devscene-run.yml'
   HR_REMOTE_STATE_ARTIFACT='harness-state'
 }
 
@@ -6111,7 +6111,7 @@ hr_remote_names_var() {
 #
 # Print the GitHub route for a remote-only reader of a job-side notification,
 # one clause with no trailing period, for the caller to join after its local
-# command. The route names the engine because `harness-run.yml`'s `engine`
+# command. The route names the engine because `devscene-run.yml`'s `engine`
 # input defaults to `task`: an empty <engine> prints where to read the run's
 # own instead. It names the branch twice, as the form's *Use workflow from*
 # ref and as the `branch` input: a run dispatched from the default branch is
