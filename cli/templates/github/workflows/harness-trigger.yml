@@ -1,4 +1,4 @@
-# harness-trigger.yml — starts an devscene task run when an
+# harness-trigger.yml — starts a devscene task run when an
 # issue is labelled, or when a `repository_dispatch` asks for one.
 #
 # WHO WRITES IT. `devscene init`, only when harness.config.json's

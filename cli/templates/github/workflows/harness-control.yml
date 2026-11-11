@@ -1,4 +1,4 @@
-# harness-control.yml — acts on an devscene command comment
+# harness-control.yml — acts on a devscene command comment
 # (`@sdlc-harness answer|pause|resume|stop|clear|status`) on an issue or pull
 # request, turns a pull-request review requesting changes into the next
 # user-review round, and stops a run when its issue or pull request is closed
