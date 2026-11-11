@@ -2,6 +2,8 @@
 
 **Who reads this:** a maintainer changing the unattended profile's `sandbox` block, the scripts it excludes, or the write protection; and sandbox4 (`fix_run_job_credential_exposure`), for §5. **Which file owns what.** [`sandbox-verification.md`](sandbox-verification.md) is the evidence record: one row per check, with its procedure, expectation, observed quote and verdict. This file owns the model and the residuals. It cites evidence rows by id, states no result stronger than the row it cites, and quotes no observed output. `docs/sandbox.md`, the adopter-facing explainer `chore_unattended_sandbox_doc` will write, will explain this file and link to it; it does not exist yet. How each check works is owned by [`cli.md`](cli.md) §6 and by the wrapper headers, which this file links rather than restates.
 
+Records in this document taken before DevScene's GitHub-facing names changed — its trigger and state labels, its comment handle, its hidden comment marker and its workflow file names — have had those names respelled to the current ones; nothing else in them was changed.
+
 Every result below is a verdict and the row id it rests on, a dated documentation citation, or a statement *derived from the code*. A bare row id is a row of `sandbox-verification.md`; `(Linux)` and `(runner)` name its §8 and §9 rows.
 
 ## 1. What the sandbox contains, and what it does not
@@ -85,7 +87,7 @@ One row per leg of [`development.md`](development.md) → **Gate 15**'s leg tabl
 - **macOS:** Seatbelt, arm64, the probe's clone layout. The one exception is `job-layout`, which runs only in job mode (`run --job`).
 - **Linux container:** Debian 12 in Gate 15's container on colima, bubblewrap 0.8.0.
 - **Runner:** a GitHub-hosted runner in job mode, `ubuntu-26.04` `20261101.186.1`, bubblewrap 0.11.1, Gate 12 rounds 14 and 15 (§9). The one addition is round 16 on `ubuntu-24.04` `20261101.360.1`, bubblewrap 0.9.0, where a row records it.
-- **Real job:** one task through `harness-run.yml`, end to end, on the runner image above, Gate 12 round 15 (§10).
+- **Real job:** one task through `devscene-run.yml`, end to end, on the runner image above, Gate 12 round 15 (§10).
 
 | Leg | Platform | Date | Claude Code | Rows | Verdict |
 |---|---|---|---|---|---|

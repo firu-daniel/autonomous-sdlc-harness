@@ -180,7 +180,7 @@ Checked against the revised file (5 109 words, 17 steps, `## Review response`), 
 ### Must Fix
 
 R1. **§5's catch 2 is partly wrong, and step 1 would amend #156 from it.**
-- `HARNESS_RETRIEVAL_CACHE` **does exist** on `dev`, four times in the adopter-rendered `cli/templates/github/workflows/harness-run.yml` (`:600`, `:658`, `:938`, `:958`). Dropping it from #156's table would leave it unrenamed.
+- `HARNESS_RETRIEVAL_CACHE` **does exist** on `dev`, four times in the adopter-rendered `cli/templates/github/workflows/devscene-run.yml` (`:600`, `:658`, `:938`, `:958`). Dropping it from #156's table would leave it unrenamed.
 - `HARNESS_RETRIEVAL_LOG` does not exist. The log variable is `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG` (`queryLog.ts:53`).
 - The table also omits four names:
   - `HARNESS_DOCS_RETRIEVAL_MODEL_CACHE` (`models.py:85`, `Dockerfile:35`, `compose.yaml:36`);

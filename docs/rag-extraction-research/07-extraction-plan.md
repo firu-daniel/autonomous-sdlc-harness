@@ -216,7 +216,7 @@ The move stays outside any later harness-wide freeze.
 **Two catches to settle before the rename (Documented).**
 1. **#156's Done-when grep.** It is `git grep -nE 'harness[-_]docs|HARNESS_(DOCS_)?RETRIEVAL'`, run outside `harness-runs/`. Once this branch merges, it would hit about 9 files under `docs/rag-extraction-research/`. Amend #156 to exclude that folder as historical record.
 2. **#156's rename table.** I counted each name with `git grep -w` across the whole tree, `cli/templates` included and `harness-runs/` excluded:
-   - **Keep `HARNESS_RETRIEVAL_CACHE` (4).** All four are in the adopter-rendered `cli/templates/github/workflows/harness-run.yml`, at `:600`, `:658`, `:938` and `:958`.
+   - **Keep `HARNESS_RETRIEVAL_CACHE` (4).** All four are in the adopter-rendered `cli/templates/github/workflows/devscene-run.yml`, at `:600`, `:658`, `:938` and `:958`.
    - **Replace `HARNESS_RETRIEVAL_LOG` (0).** It does not exist. In its place, add `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG` (8) and `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` (25). These two are outside #152's scope, but #156's Done-when regex matches them as substrings, so devscene5 must rename them.
    - **Add `HARNESS_DOCS_RETRIEVAL_MODEL_CACHE` (7) and `HARNESS_DOCS_RETRIEVAL_PG_PORT` (4)., and `HARNESS_DOCS_RETRIEVAL_REPO` (3, `docs-retrieval-service/compose.yaml` and its README; added after review).**
    - **Fix #154 too.** It cites `HARNESS_RETRIEVAL_STUB`, which does not exist (0).
