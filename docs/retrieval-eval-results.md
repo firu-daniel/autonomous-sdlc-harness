@@ -7,8 +7,6 @@ cost per arm, over each committed corpus, with the corpus stamp, the models and 
 threshold each figure was taken under. It does not explain how to run the eval or what the metrics
 mean: `docs/retrieval-eval.md` owns that, and `docs/retrieval.md` owns how the tool itself works.
 
-Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed.
-
 > **The region between the two markers below is generated.** `evals/docs-retrieval/run.mjs` rewrites
 > it on every run given `--out`, and it is the **only** writer of those bytes. A hand edit inside the
 > region is destroyed by the next run; everything outside it, including every section below the end

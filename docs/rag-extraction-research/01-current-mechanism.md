@@ -2,8 +2,6 @@
 
 **Who reads this:** the maintainer deciding whether to move docs retrieval into its own repository and product, and whoever writes the synthesis (`README.md` in this directory). **It owns:** the invocation path as shipped, the pipeline stage by stage, every place the retrieval code depends on the harness, an assessment of which half could stand alone, the gaps for a large-docs user, and a proposed seam. **It does not own:** how comparable products are packaged (`02-distribution-shapes.md`), remote sources, managed Postgres or connection security (`03-sources-database-security.md`), or how the harness should consume the extracted product beyond one short subsection.
 
-Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed.
-
 ## How this was researched
 
 Date: 2026-10-28. Route: reading this repository at `dev` (`2ace325d`) only — source, templates, tests, shipped docs and the eval record. No command was run against a database or a model. The fork itself used no web source. The licence URLs in §7 were checked by this file's reviewer (`reviews/01-current-mechanism.md`, Should Fix 1) and are carried here with that provenance.

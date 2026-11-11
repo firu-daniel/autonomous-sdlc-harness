@@ -2,8 +2,6 @@
 
 **Who reads this:** a maintainer or team member who works runs from GitHub, and anyone changing `devscene-control.yml`, `devscene-run.yml`'s `collect` job or `remote-run.sh`'s `open`, `control`, `collect`, `report` and `deliver`. It owns the design of record for comment commands, mentions read by an agent, review rounds, parks over comments, the draft pull request and its draft state, lifecycle comments, the progress comment, state labels and the resolution of review threads.
 
-Records in this document taken before DevScene's GitHub-facing names changed — its trigger and state labels, its comment handle, its hidden comment marker and its workflow file names — have had those names respelled to the current ones; nothing else in them was changed.
-
 It cites rather than restates. Every GitHub fact below is cited from [`github-integration-research.md`](github-integration-research.md) by its ID (S3–S6, T1–T4, C1–C4), retrieved there on 2026-09-30 and not re-verified here. The run's own lifecycle is [`remote-execution.md`](remote-execution.md)'s, and starting a run is [`github-issue-trigger.md`](github-issue-trigger.md)'s. The code of record is `cli/templates/scripts/remote-run.sh` → the header's `open`, `control`, `collect`, `report` and `deliver` paragraphs, the header of `cli/templates/github/workflows/devscene-control.yml`, and in `cli/templates/github/workflows/devscene-run.yml` the `Open the draft pull request` step with its `WHY THE OPEN STEP RUNS ONLY WHEN chain IS 0` header paragraph and the `collect` job with its `THE COLLECT JOB` header paragraph.
 
 ---

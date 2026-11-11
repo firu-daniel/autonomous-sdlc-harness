@@ -5,8 +5,6 @@ Revised after ruling R3.7 (sandbox series, then the DevScene rename, then RagSce
 
 Checked on 2026-10-28 against `dev` at `0d02ba3e`, Expause and straightedge (read-only), `gh issue view` #151, #156, #170, #196, #199–#203 and #205, and the GitHub, PyPI and npm docs. Most of the history, the authorship, the citations and the GitHub web claims hold. What fails is the §2 inventory, which leaves out three files the moving code needs, and two exit checks in the plan that cannot pass as written.
 
-Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed.
-
 Confirmed:
 - **Expause history.** The plan's commits are right (#228 `df1e96650` on 2026-08-07, #232 `88ea6a948`, #309 `570292c83`), and so is the #311 message.
 - **This repository.** `2c01123c` is a single commit of 350 files, none of them retrieval files. `e43781aa` and `cba2ac24` are dated 2026-09-16. `dev` has 142 commits, all by one author, and no `Co-Authored-By` trailer on the moving paths.

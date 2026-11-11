@@ -3,8 +3,6 @@ verdict: PASS
 
 Checked at `dev` (`2ace325d`), 2026-10-28. 31 repository citations verified against source (list at the end). Five licence claims checked on the web. No Must Fix: no wrong fact changes the verdict, and the seven claims the author asked about all hold.
 
-Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed.
-
 ## Must Fix
 
 None.

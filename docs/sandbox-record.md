@@ -2,8 +2,6 @@
 
 **Who reads this:** a maintainer changing the unattended profile's `sandbox` block, the scripts it excludes, or the write protection; and sandbox4 (`fix_run_job_credential_exposure`), for §5. **Which file owns what.** [`sandbox-verification.md`](sandbox-verification.md) is the evidence record: one row per check, with its procedure, expectation, observed quote and verdict. This file owns the model and the residuals. It cites evidence rows by id, states no result stronger than the row it cites, and quotes no observed output. `docs/sandbox.md`, the adopter-facing explainer `chore_unattended_sandbox_doc` will write, will explain this file and link to it; it does not exist yet. How each check works is owned by [`cli.md`](cli.md) §6 and by the wrapper headers, which this file links rather than restates.
 
-Records in this document taken before DevScene's GitHub-facing names changed — its trigger and state labels, its comment handle, its hidden comment marker and its workflow file names — have had those names respelled to the current ones; nothing else in them was changed.
-
 Every result below is a verdict and the row id it rests on, a dated documentation citation, or a statement *derived from the code*. A bare row id is a row of `sandbox-verification.md`; `(Linux)` and `(runner)` name its §8 and §9 rows.
 
 ## 1. What the sandbox contains, and what it does not

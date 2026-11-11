@@ -2,8 +2,6 @@
 
 **Who reads this:** anyone changing a script under `cli/templates/scripts/` — the watcher, the git wrappers, the worktree scripts, the cleanup sweep, the notifier, the four project-command wrappers — or the permission surface that decides which of them an agent may run. It records what those scripts **do** when driven, as rows a later change re-runs rather than re-argues. `docs/guard-verification.md` covers the composed `PreToolUse` guard set; **this file covers the outer loop**, and §3 is the one place they meet.
 
-Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed.
-
 These are the only shipped assets that mutate a repository — `git commit`, `git push`, `git branch -D`, `kill` (and `git worktree remove`, until `chore_remove_legacy_worktree_arm` took the sweep's worktree arm out) — so a claim about them that nothing re-runs is exactly the shape that regresses silently.
 
 **Whole-set run of record: 2026-08-13**, on the machine named in §0. Every row below was produced in that run, not quoted from the task that shipped the script.

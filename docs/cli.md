@@ -2,8 +2,6 @@
 
 **Who reads this:** someone about to run `init` against a repository, or debugging a repository it already wired. It answers what each command does, what it writes, what it refuses, and what its exit status means — so the decision "is this repository correctly adopted, and if not what do I change" can be made from the CLI's own output rather than from its source.
 
-Records in this document taken before DevScene's GitHub-facing names changed — its trigger and state labels, its comment handle, its hidden comment marker and its workflow file names — have had those names respelled to the current ones; nothing else in them was changed.
-
 The commands are `init`, `doctor`, `config`, `daemon` and `docs`. The process assets a wired repository then runs — agents, slash commands, hooks, instructions and samples — are not in this package; they ship as the sibling plugin.
 
 ---

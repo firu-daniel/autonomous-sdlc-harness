@@ -4,10 +4,6 @@
 
 It cites rather than restates [`remote-execution.md`](remote-execution.md), whose `### Verified in Gate 12 round 2` and `round 3` rows it does not repeat.
 
-Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed.
-
-Records in this document taken before DevScene's GitHub-facing names changed — its trigger and state labels, its comment handle, its hidden comment marker and its workflow file names — have had those names respelled to the current ones; nothing else in them was changed.
-
 ---
 
 ## How this was researched

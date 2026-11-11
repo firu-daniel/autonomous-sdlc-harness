@@ -2,8 +2,6 @@
 
 **Who reads this:** the maintainer deciding whether, and how, the harness can be adopted inside a company whose only licensed AI coding product is GitHub Copilot (Business or Enterprise), and the planner of any branch that changes how a run authenticates, which engine it launches, or how it caps spend. It owns the findings below, each with its source, as of 2026-10-16, and the routes and recommendation drawn from them. It does not own any design choice: any change it describes to `cli/templates/github/workflows/devscene-run.yml`, `cli/templates/scripts/autonomous-watcher.sh`, `doctor` or anything else is a later branch's to make.
 
-Records in this document taken before DevScene's GitHub-facing names changed — its trigger and state labels, its comment handle, its hidden comment marker and its workflow file names — have had those names respelled to the current ones; nothing else in them was changed.
-
 It cites rather than restates [`ARCHITECTURE.md`](../ARCHITECTURE.md) §5–§9 — the engine-axis inventory and the nine-operation adapter contract — and [`team-accounts-research.md`](team-accounts-research.md), which covers credentials for a team that does have Claude accounts. [`github-integration-research.md`](github-integration-research.md) A7 recorded, earlier, that Copilot's cloud agent and third-party agents documented no custom plugin, permission profile or launch line; §3 and §4 below supersede that entry where the two disagree.
 
 ---

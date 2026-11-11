@@ -2,8 +2,6 @@
 
 **Who reads this:** the maintainer deciding how a team runs the harness on GitHub, and the planner of any branch that changes the credentials `cli/templates/github/workflows/devscene-run.yml` reads. It owns the findings below, each with its evidence, as of 2026-10-02, and the options and recommendation drawn from them. It does not own any design choice: any change it describes to `cli/templates/github/workflows/devscene-run.yml`, `cli/templates/scripts/remote-run.sh` or anything else is a later branch's to make.
 
-Records in this document taken before DevScene's GitHub-facing names changed — its trigger and state labels, its comment handle, its hidden comment marker and its workflow file names — have had those names respelled to the current ones; nothing else in them was changed.
-
 It cites rather than restates [`remote-execution.md`](remote-execution.md) → `## 9. Credentials and billing`, and [`github-integration-research.md`](github-integration-research.md), whose entry IDs (S1 to A13) it cites by ID.
 
 ---

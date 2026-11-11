@@ -2,8 +2,6 @@
 
 **Who reads this:** a maintainer who wants a labelled GitHub issue to start an autonomous run, and anyone changing the issue trigger — `devscene-trigger.yml`, `remote-run.sh trigger` and `start`, or the branch-name rule. It owns the trigger's design of record: how to turn it on, the trigger label and the upgrade path for a repository already using `harness`, what happens between a label and a dispatched run, how the branch is named, who may start a run and what the labeller vouches for, and what is not verified. The run itself, from the dispatch on, is [`remote-execution.md`](remote-execution.md)'s, and working it from comments and reviews is [`github-run-control.md`](github-run-control.md)'s.
 
-Records in this document taken before DevScene's GitHub-facing names changed — its trigger and state labels, its comment handle, its hidden comment marker and its workflow file names — have had those names respelled to the current ones; nothing else in them was changed.
-
 It cites rather than restates. Every GitHub fact below is cited from [`github-integration-research.md`](github-integration-research.md) by its ID (S1, S3, T1–T6), retrieved there on 2026-09-30 and not re-verified here. The code of record is `cli/templates/scripts/remote-run.sh` → the header's `start` and `trigger` paragraphs, the header of `cli/templates/github/workflows/devscene-trigger.yml`, and `cli/templates/scripts/lib/harness-run-lib.sh` → `DERIVING A BRANCH NAME FROM A TITLE`.
 
 ---

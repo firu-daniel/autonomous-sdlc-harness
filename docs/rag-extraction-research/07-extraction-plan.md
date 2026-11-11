@@ -11,8 +11,6 @@
 
 **It does not own:** the engine, lexical, model or shape decisions (`README.md` → `## 5`, `## 3`), or what RagScene builds later (`README.md` → `## 7`).
 
-Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed.
-
 ## How this was researched
 
 **Date and route.** All sources were read on 2026-10-28, the web sources included:
