@@ -34,7 +34,7 @@ Two Should Fix findings remain. A third item, the migration story for a reposito
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — State why the handle is `@dev-scene`, hyphenated, in `docs/github-run-control.md`'s handle paragraph _(layer: general)_
+1. [x] **Finding 1** — State why the handle is `@dev-scene`, hyphenated, in `docs/github-run-control.md`'s handle paragraph _(layer: general)_
 2. [ ] **Finding 2** — Describe `LEGACY_TRIGGER_LABEL` as an earlier release's default, not the previous release's, in `githubActions.ts` and both copies of `remote-run.sh` _(layer: cli, general)_
 
 ---
