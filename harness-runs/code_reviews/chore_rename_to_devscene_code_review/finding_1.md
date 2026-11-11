@@ -31,3 +31,5 @@ node -e "JSON.parse(require('fs').readFileSync('examples/notes-app/.mcp.json','u
 ```
 
 It must exit 0. This fix creates or edits no test file, so it runs no test.
+
+- **Deviations from plan:** The edit was made by the operator by hand, per `harness-runs/clarifications/chore_rename_to_devscene/answer_3.md` Q1 option (a), because the run's unattended profile refused every agent `Edit` of this file. The implementer edited no code file and only verified the result. `git grep -n -F 'autonomous-sdlc-harness' -- examples/notes-app/.mcp.json` printed nothing. The `node -e "JSON.parse(...)"` check exited 0. Line 2 was read against line 2 of `cli/templates/repo/mcp.json` and matches it; the `args` arrays are still one element per line. `bash scripts/typecheck.sh` printed `PASS: typecheck`.

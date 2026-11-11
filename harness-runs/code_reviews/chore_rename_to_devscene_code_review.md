@@ -36,7 +36,7 @@
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below from top to bottom. The committer flips each one to `[x]` as that fix's commit lands. Each entry resolves to `harness-runs/code_reviews/chore_rename_to_devscene_code_review/finding_<K>.md` through its `**Finding K**` reference.
 
 1. [x] **Finding 2** — Change "an devscene" to "a devscene" in the line-1 headers of `harness-control.yml` and `harness-trigger.yml` _(layer: cli)_
-2. [ ] **Finding 1** — Replace the two old-name occurrences in `examples/notes-app/.mcp.json`'s `_comment` with `devscene` _(layer: general)_
+2. [x] **Finding 1** — Replace the two old-name occurrences in `examples/notes-app/.mcp.json`'s `_comment` with `devscene` _(layer: general)_
 
 ---
 
