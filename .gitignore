@@ -92,6 +92,6 @@ harness-runs/test_run_logs/*
 # forced run writes is left visible on purpose.
 # The exception is a .bak landing inside a directory whose contents are ignored above: git hides it
 # all the same, so the forced run names each such .bak in its notes.
-.github/workflows/harness-run.yml.bak
-.github/workflows/harness-resume.yml.bak
+.github/workflows/devscene-run.yml.bak
+.github/workflows/devscene-resume.yml.bak
 .claude/settings.autonomous.json.bak

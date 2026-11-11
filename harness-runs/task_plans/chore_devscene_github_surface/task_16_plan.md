@@ -31,3 +31,7 @@ Each copy's content is identical to its template today; `## Context` → *The se
 - `git diff --stat -- scripts` lists only the five targets. Their file modes are unchanged (`git diff --summary -- scripts` reports no mode change).
 - `grep -nE "harness-(run|resume)\.yml" .gitignore` prints nothing, and `grep -nE "devscene-(run|resume)\.yml\.bak" .gitignore` prints both rules.
 - `bash -n` exits 0 on `scripts/remote-run.sh`, `scripts/lib/harness-run-lib.sh`, `scripts/prompt-injection-screen.sh` and `scripts/autonomous-watcher.sh`.
+
+**Deviations from plan:**
+- Copy route: `cp cli/templates/scripts/remote-run.sh scripts/remote-run.sh` was refused by the permission layer (don't-ask mode), so each copy was brought to its template's bytes with Edit-tool string replacements derived from `diff <template> <copy>`. The result rests on execution, not reading: `cmp` exits 0 with no output on all five pairs, and `git diff --summary` reports no mode change. Editing in place left each file's mode as it was.
+- Evidence downgrade: the four `bash -n <file>` runs were refused by the permission layer. The parse claim rests instead on `bash scripts/typecheck.sh`, whose `check-shell-parse` step printed `124 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`, and on each copy being byte-identical (`cmp`) to its template. The Run gates phase re-runs the same shell parse.
