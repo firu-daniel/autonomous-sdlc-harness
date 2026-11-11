@@ -64,9 +64,9 @@ const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
 const STATE_DIR = 'sdlc-harness';
 const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
-const MARKER = (event, branch) => `<!-- sdlc-harness event=${event} branch=${branch} -->`;
+const MARKER = (event, branch) => `<!-- devscene event=${event} branch=${branch} -->`;
 const BOT = 'github-actions[bot]';
-const PAUSE_DISPATCH = 'workflow run harness-run.yml --ref feat_x -f action=pause -f branch=feat_x';
+const PAUSE_DISPATCH = 'workflow run devscene-run.yml --ref feat_x -f action=pause -f branch=feat_x';
 const COMMENTS_JQ = '.[] | {login: .user.login, body: .body}';
 const ENGINE_COMMENTS_JQ = '.[] | {login: .user.login, at: .created_at, body: .body}';
 
@@ -162,7 +162,7 @@ async function controlFixture(t, { forge = 'github', ledger: ledgerText = '# Pro
       const promptFile = `${STATE_DIR}/task_prompts/${branch}_task_prompt.md`;
       files.push(promptFile);
       mkdirSync(join(dir, STATE_DIR, 'task_prompts'), { recursive: true });
-      writeFileSync(join(dir, promptFile), `# A task\n\nDo it.\n\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`sdlc-harness\`.\n`);
+      writeFileSync(join(dir, promptFile), `# A task\n\nDo it.\n\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`devscene\`.\n`);
     }
     if (ledger) {
       const ledgerFile = `${STATE_DIR}/flow_progress/${branch}_progress.md`;
@@ -252,10 +252,10 @@ async function controlFixture(t, { forge = 'github', ledger: ledgerText = '# Pro
 const commentsOn = (calls, n) =>
   calls.filter((call) => call.line.startsWith(`api --method POST repos/${REPOSITORY}/issues/${n}/comments `));
 const allComments = (calls) => calls.filter((call) => /^api --method POST repos\/[^ ]+\/issues\/\d+\/comments /.test(call.line));
-const replies = (calls) => allComments(calls).filter((call) => /<!-- sdlc-harness event=reply /.test(call.body));
+const replies = (calls) => allComments(calls).filter((call) => /<!-- devscene event=reply /.test(call.body));
 const lastLine = (body) => body.trimEnd().split('\n').at(-1);
-const REPLY_MARKER = '<!-- sdlc-harness event=reply branch=feat_x -->';
-const DISPATCHED_MARKER = (engine) => `<!-- sdlc-harness event=reply branch=feat_x engine=${engine} -->`;
+const REPLY_MARKER = '<!-- devscene event=reply branch=feat_x -->';
+const DISPATCHED_MARKER = (engine) => `<!-- devscene event=reply branch=feat_x engine=${engine} -->`;
 const dispatches = (calls) => calls.filter((call) => call.line.startsWith('workflow run '));
 const permissionCalls = (calls) => calls.filter((call) => /\/collaborators\//.test(call.line));
 
@@ -280,7 +280,7 @@ const assertRefused = (f, result, pattern) => {
 
 test('a write user\'s pause on a running run dispatches the pause and replies once naming @alice', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness pause');
+  const result = await f.control('@dev-scene pause');
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   const calls = f.calls();
   assert.deepEqual(dispatches(calls).map((call) => call.line), [PAUSE_DISPATCH]);
@@ -297,7 +297,7 @@ test('a write user\'s pause on a running run dispatches the pause and replies on
 
 test('the handle and verb match case-insensitively', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@SDLC-Harness PAUSE\r\nplease');
+  const result = await f.control('@Dev-Scene PAUSE\r\nplease');
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.deepEqual(dispatches(f.calls()).map((call) => call.line), [PAUSE_DISPATCH]);
   assert.equal(replies(f.calls()).length, 1);
@@ -306,8 +306,8 @@ test('the handle and verb match case-insensitively', async (t) => {
 for (const [name, body, event] of [
   ['a bare verb', 'pause', {}],
   ['a verb with words', 'pause this', {}],
-  ['a body carrying the marker', `@sdlc-harness pause\n\n${MARKER('reply', 'feat_x')}`, {}],
-  ['an edited comment', '@sdlc-harness pause', { action: 'edited' }],
+  ['a body carrying the marker', `@dev-scene pause\n\n${MARKER('reply', 'feat_x')}`, {}],
+  ['an edited comment', '@dev-scene pause', { action: 'edited' }],
 ]) {
   test(`${name} is ignored with no gh call`, async (t) => {
     const f = await controlFixture(t);
@@ -320,7 +320,7 @@ for (const [name, body, event] of [
 
 test('a read answer is refused with one reply and no dispatch', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness pause', {}, { STUB_PERMISSIONS: JSON.stringify({ alice: 'read' }) });
+  const result = await f.control('@dev-scene pause', {}, { STUB_PERMISSIONS: JSON.stringify({ alice: 'read' }) });
   const reply = assertRefused(f, result, /permission of @alice as read/);
   assert.match(reply.body, /^@alice: `pause` was not run: /);
   assert.match(reply.body, /HARNESS_TRIGGER_ALLOWED_BOTS/);
@@ -328,13 +328,13 @@ test('a read answer is refused with one reply and no dispatch', async (t) => {
 
 test('a failed permission call is refused, never a pass', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness pause', {}, { STUB_PERMISSIONS: JSON.stringify({ alice: 'FAIL' }) });
+  const result = await f.control('@dev-scene pause', {}, { STUB_PERMISSIONS: JSON.stringify({ alice: 'FAIL' }) });
   assertRefused(f, result, /permission check for @alice failed/);
 });
 
 test('a write commenter HARNESS_RUN_ACTORS does not admit is refused naming the list', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness pause', { login: 'bob' }, {
+  const result = await f.control('@dev-scene pause', { login: 'bob' }, {
     HARNESS_RUN_ACTORS: 'alice',
     STUB_PERMISSIONS: JSON.stringify({ alice: 'write', bob: 'write' }),
   });
@@ -345,7 +345,7 @@ test('a write commenter HARNESS_RUN_ACTORS does not admit is refused naming the 
 
 test('HARNESS_RUN_ACTORS entries are trimmed and matched case-insensitively', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness pause', {}, { HARNESS_RUN_ACTORS: ' ALICE ' });
+  const result = await f.control('@dev-scene pause', {}, { HARNESS_RUN_ACTORS: ' ALICE ' });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.deepEqual(dispatches(f.calls()).map((call) => call.line), [PAUSE_DISPATCH]);
 });
@@ -354,58 +354,58 @@ test('a re-run of a command by a person HARNESS_RUN_ACTORS does not admit is ref
   const rerun = { HARNESS_RUN_ACTORS: 'alice', GITHUB_RUN_ATTEMPT: '2' };
 
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness pause', {}, { ...rerun, GITHUB_TRIGGERING_ACTOR: 'bob' });
+  const result = await f.control('@dev-scene pause', {}, { ...rerun, GITHUB_TRIGGERING_ACTOR: 'bob' });
   assertRefused(f, result, /re-run by @bob/);
   assert.deepEqual(permissionCalls(f.calls()), []);
 
   const g = await controlFixture(t);
-  const listed = await g.control('@sdlc-harness pause', {}, { ...rerun, GITHUB_TRIGGERING_ACTOR: 'alice' });
+  const listed = await g.control('@dev-scene pause', {}, { ...rerun, GITHUB_TRIGGERING_ACTOR: 'alice' });
   assert.equal(listed.status, 0, `${listed.stdout}\n${listed.stderr}`);
   assert.deepEqual(dispatches(g.calls()).map((call) => call.line), [PAUSE_DISPATCH]);
 });
 
 test('ghost is refused', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness pause', { login: 'ghost' });
+  const result = await f.control('@dev-scene pause', { login: 'ghost' });
   assertRefused(f, result, /does not name/);
   assert.deepEqual(permissionCalls(f.calls()), []);
 });
 
 test('an unlisted bot is refused with no permission call', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness pause', { login: 'renovate[bot]', type: 'Bot' });
+  const result = await f.control('@dev-scene pause', { login: 'renovate[bot]', type: 'Bot' });
   assertRefused(f, result, /not listed in HARNESS_TRIGGER_ALLOWED_BOTS/);
   assert.deepEqual(permissionCalls(f.calls()), []);
 });
 
 test('HARNESS_REMOTE_STOP refuses every command', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness pause', {}, { HARNESS_REMOTE_STOP: '1' });
+  const result = await f.control('@dev-scene pause', {}, { HARNESS_REMOTE_STOP: '1' });
   assertRefused(f, result, /HARNESS_REMOTE_STOP/);
   assert.deepEqual(permissionCalls(f.calls()), []);
 });
 
 test('forge none is refused before any permission call', async (t) => {
   const f = await controlFixture(t, { forge: 'none' });
-  const result = await f.control('@sdlc-harness pause');
+  const result = await f.control('@dev-scene pause');
   assertRefused(f, result, /`forge` set to `github` \(it is none\)/);
   assert.deepEqual(permissionCalls(f.calls()), []);
 });
 
 test('an unknown verb is a mention, and with no credential its refusal lists the six commands', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness merge', {}, { IN_OAUTH: '', IN_API: '' });
+  const result = await f.control('@dev-scene merge', {}, { IN_OAUTH: '', IN_API: '' });
   const reply = assertRefused(f, result);
-  assert.match(reply.body, /^@alice: `@sdlc-harness` was not run: `harness-control\.yml` passes the agent that reads a mention no credential, so a mention is not read\. /);
+  assert.match(reply.body, /^@alice: `@dev-scene` was not run: `devscene-control\.yml` passes the agent that reads a mention no credential, so a mention is not read\. /);
   for (const command of ['answer [<n>]', 'pause', 'resume', 'stop', 'clear', 'status']) {
-    assert.ok(reply.body.includes(`\`@sdlc-harness ${command}\``), command);
+    assert.ok(reply.body.includes(`\`@dev-scene ${command}\``), command);
   }
   assert.match(reply.body, /docs\/github-run-control\.md/);
 });
 
 test('a cross-repository pull request is refused', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness pause', {}, {
+  const result = await f.control('@dev-scene pause', {}, {
     STUB_PR: JSON.stringify({ headRefName: 'feat_x', isCrossRepository: true, state: 'OPEN' }),
   });
   assertRefused(f, result, /from a fork/);
@@ -414,7 +414,7 @@ test('a cross-repository pull request is refused', async (t) => {
 
 test('a closed pull request is refused', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness pause', {}, {
+  const result = await f.control('@dev-scene pause', {}, {
     STUB_PR: JSON.stringify({ headRefName: 'feat_x', isCrossRepository: false, state: 'CLOSED' }),
   });
   assertRefused(f, result, /is CLOSED, not open/);
@@ -430,7 +430,7 @@ const NOT_HARNESS_BRANCH_REFUSAL =
 
 test('a branch with a ledger is accepted with no in-flight listing', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness pause');
+  const result = await f.control('@dev-scene pause');
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.deepEqual(inFlightListings(f.calls()), []);
 });
@@ -438,7 +438,7 @@ test('a branch with a ledger is accepted with no in-flight listing', async (t) =
 test('a pull request whose head carries only its task prompt, with no run in flight, is accepted with no in-flight listing', async (t) => {
   const f = await controlFixture(t);
   await f.pushBranch('feat_y', { ledger: false });
-  const result = await f.control('@sdlc-harness status', {}, { STUB_PR: FEAT_Y_PR, STUB_RUN_LIST: '[]' });
+  const result = await f.control('@dev-scene status', {}, { STUB_PR: FEAT_Y_PR, STUB_RUN_LIST: '[]' });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   const calls = f.calls();
   assert.deepEqual(inFlightListings(calls), []);
@@ -451,14 +451,14 @@ test('a pull request whose head carries only its task prompt, with no run in fli
 test('a pull request whose head carries neither a task prompt nor a ledger but a harness run in progress is accepted by stop', async (t) => {
   const f = await controlFixture(t);
   await f.pushBranch('feat_y', { prompt: false, ledger: false });
-  const result = await f.control('@sdlc-harness stop', {}, {
+  const result = await f.control('@dev-scene stop', {}, {
     STUB_PR: FEAT_Y_PR,
     STUB_RUN_LIST: JSON.stringify([featYRun('in_progress')]),
   });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   const calls = f.calls();
   assert.equal(inFlightListings(calls).length, 1);
-  assert.ok(calls.some((call) => call.line === 'workflow run harness-run.yml --ref feat_y -f action=stop -f branch=feat_y'),
+  assert.ok(calls.some((call) => call.line === 'workflow run devscene-run.yml --ref feat_y -f action=stop -f branch=feat_y'),
     JSON.stringify(calls.map((call) => call.line)));
   const posted = replies(calls);
   assert.equal(posted.length, 1);
@@ -468,19 +468,19 @@ test('a pull request whose head carries neither a task prompt nor a ledger but a
 test('a pull request whose head carries neither a task prompt nor a ledger but a queued harness run is accepted by pause', async (t) => {
   const f = await controlFixture(t);
   await f.pushBranch('feat_y', { prompt: false, ledger: false });
-  const result = await f.control('@sdlc-harness pause', {}, {
+  const result = await f.control('@dev-scene pause', {}, {
     STUB_PR: FEAT_Y_PR,
     STUB_RUN_LIST: JSON.stringify([featYRun('queued')]),
   });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.deepEqual(dispatches(f.calls()).map((call) => call.line),
-    ['workflow run harness-run.yml --ref feat_y -f action=pause -f branch=feat_y']);
+    ['workflow run devscene-run.yml --ref feat_y -f action=pause -f branch=feat_y']);
 });
 
 test('a pull request whose head carries neither a task prompt nor a ledger and only a completed run is not a harness branch', async (t) => {
   const f = await controlFixture(t);
   await f.pushBranch('feat_y', { prompt: false, ledger: false });
-  const result = await f.control('@sdlc-harness pause', {}, {
+  const result = await f.control('@dev-scene pause', {}, {
     STUB_PR: FEAT_Y_PR,
     STUB_RUN_LIST: JSON.stringify([featYRun('completed', { conclusion: 'success' })]),
   });
@@ -490,7 +490,7 @@ test('a pull request whose head carries neither a task prompt nor a ledger and o
 test('a failed in-flight listing is refused naming the read, never as not a harness branch', async (t) => {
   const f = await controlFixture(t);
   await f.pushBranch('feat_y', { prompt: false, ledger: false });
-  const result = await f.control('@sdlc-harness pause', {}, { STUB_PR: FEAT_Y_PR, STUB_FAIL_ON: 'run list' });
+  const result = await f.control('@dev-scene pause', {}, { STUB_PR: FEAT_Y_PR, STUB_FAIL_ON: 'run list' });
   assert.equal(result.status, 3, `${result.stdout}\n${result.stderr}`);
   const calls = f.calls();
   assert.deepEqual(dispatches(calls), []);
@@ -502,7 +502,7 @@ test('a failed in-flight listing is refused naming the read, never as not a harn
 
 test('on an issue, a github-actions[bot] genuine start names the branch', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness pause', { number: 7, pr: false }, {
+  const result = await f.control('@dev-scene pause', { number: 7, pr: false }, {
     STUB_COMMENTS: JSON.stringify([startComment('feat_x')]),
   });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
@@ -515,7 +515,7 @@ test('on an issue, a github-actions[bot] genuine start names the branch', async 
 
 test('on an issue, the same start comment by anyone else is never trusted', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness pause', { number: 7, pr: false }, {
+  const result = await f.control('@dev-scene pause', { number: 7, pr: false }, {
     STUB_COMMENTS: JSON.stringify([startComment('feat_x', 'mallory')]),
   });
   assertRefused(f, result, /no harness run was started from this issue/);
@@ -524,7 +524,7 @@ test('on an issue, the same start comment by anyone else is never trusted', asyn
 test('a quoted marker mid-body, and a marker after another sentence, are both ignored', async (t) => {
   const f = await controlFixture(t);
   const evil = MARKER('started', 'feat_evil');
-  const result = await f.control('@sdlc-harness pause', { number: 7, pr: false }, {
+  const result = await f.control('@dev-scene pause', { number: 7, pr: false }, {
     STUB_COMMENTS: JSON.stringify([
       startComment('feat_x'),
       { user: { login: BOT }, body: `Started a harness run on the branch \`feat_evil\`: quoted\n\n${evil}\n\nmore text after it\n${MARKER('parked', 'feat_x')}\n` },
@@ -541,7 +541,7 @@ test('an issue whose genuine start names a protected branch is refused', async (
   const f = await controlFixture(t);
   // The fixture's default branch, always in the protected set; its name follows the host's git.
   const protectedBranch = f.defaultBranch;
-  const result = await f.control('@sdlc-harness pause', { number: 7, pr: false }, {
+  const result = await f.control('@dev-scene pause', { number: 7, pr: false }, {
     STUB_COMMENTS: JSON.stringify([startComment(protectedBranch)]),
   });
   const reply = assertRefused(f, result);
@@ -551,22 +551,22 @@ test('an issue whose genuine start names a protected branch is refused', async (
 test('an issue whose genuine start names a branch without the ledger is accepted by stop, with no in-flight listing', async (t) => {
   const f = await controlFixture(t);
   await f.pushBranch('feat_y', { ledger: false });
-  const result = await f.control('@sdlc-harness stop', { number: 7, pr: false }, {
+  const result = await f.control('@dev-scene stop', { number: 7, pr: false }, {
     STUB_COMMENTS: JSON.stringify([startComment('feat_y')]),
   });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   const calls = f.calls();
   assert.deepEqual(inFlightListings(calls), []);
-  assert.ok(calls.some((call) => call.line === 'workflow run harness-run.yml --ref feat_y -f action=stop -f branch=feat_y'),
+  assert.ok(calls.some((call) => call.line === 'workflow run devscene-run.yml --ref feat_y -f action=stop -f branch=feat_y'),
     JSON.stringify(calls.map((call) => call.line)));
-  const posted = commentsOn(calls, 7).filter((call) => /<!-- sdlc-harness event=reply /.test(call.body));
+  const posted = commentsOn(calls, 7).filter((call) => /<!-- devscene event=reply /.test(call.body));
   assert.equal(posted.length, 1);
   assert.match(posted[0].body, /^Stop requested by @alice/);
 });
 
 test('an issue whose genuine start names a branch gone from origin is refused as deleted', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness resume', { number: 7, pr: false }, {
+  const result = await f.control('@dev-scene resume', { number: 7, pr: false }, {
     STUB_COMMENTS: JSON.stringify([startComment('feat_y')]),
   });
   const reply = assertRefused(f, result,
@@ -577,13 +577,13 @@ test('an issue whose genuine start names a branch gone from origin is refused as
 
 test('stop on a pull request: the marker, the cancel, the stopped comment and a reply, each naming @alice', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness stop', {}, {
+  const result = await f.control('@dev-scene stop', {}, {
     STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false, isDraft: false }]),
   });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   const calls = f.calls();
   const lines = calls.map((call) => call.line);
-  const marker = lines.indexOf('workflow run harness-run.yml --ref feat_x -f action=stop -f branch=feat_x');
+  const marker = lines.indexOf('workflow run devscene-run.yml --ref feat_x -f action=stop -f branch=feat_x');
   const cancel = lines.indexOf('run cancel 501');
   assert.ok(marker >= 0 && cancel > marker, JSON.stringify(lines));
   const posted = commentsOn(calls, 12);
@@ -597,7 +597,7 @@ test('stop on a pull request: the marker, the cancel, the stopped comment and a 
 
 test('stop typed on the issue posts stopped on the pull request and the reply on the issue', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness stop', { number: 7, pr: false }, {
+  const result = await f.control('@dev-scene stop', { number: 7, pr: false }, {
     STUB_COMMENTS: JSON.stringify([startComment('feat_x')]),
     STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false, isDraft: false }]),
   });
@@ -615,13 +615,13 @@ test('stop typed on the issue posts stopped on the pull request and the reply on
 
 test('stop with no run on the branch is refused', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness stop', {}, { STUB_RUN_LIST: '[]' });
+  const result = await f.control('@dev-scene stop', {}, { STUB_RUN_LIST: '[]' });
   assertRefused(f, result, /no harness run on `feat_x`/);
 });
 
 test('pause on a parked run is refused naming parked, with no dispatch', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness pause', {}, {
+  const result = await f.control('@dev-scene pause', {}, {
     STUB_RUN_LIST: JSON.stringify([{ databaseId: 601, displayTitle: 'harness run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' }]),
     STUB_ARTIFACTS: JSON.stringify({ artifacts: [{ name: 'harness-state', expired: false }] }),
     STUB_BUNDLE_STATUS: 'parked',
@@ -632,7 +632,7 @@ test('pause on a parked run is refused naming parked, with no dispatch', async (
 
 test('a pause whose dispatch fails replies naming the failure and exits 3', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness pause', {}, { STUB_FAIL_ON: 'workflow run' });
+  const result = await f.control('@dev-scene pause', {}, { STUB_FAIL_ON: 'workflow run' });
   assert.equal(result.status, 3, `${result.stdout}\n${result.stderr}`);
   const posted = replies(f.calls());
   assert.equal(posted.length, 1);
@@ -641,22 +641,22 @@ test('a pause whose dispatch fails replies naming the failure and exits 3', asyn
 
 test('a reply that cannot be posted is an ::error:: line and exit 3', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness merge', {}, { STUB_FAIL_ON: `api --method POST repos/${REPOSITORY}/issues/12/comments` });
+  const result = await f.control('@dev-scene merge', {}, { STUB_FAIL_ON: `api --method POST repos/${REPOSITORY}/issues/12/comments` });
   assert.equal(result.status, 3);
   assert.match(result.stdout, /::error::remote-run\.sh: control: the reply on #12 could not be posted/);
 });
 
 test('another event name, or an unreadable event file, exits 1 with no gh call', async (t) => {
   const f = await controlFixture(t);
-  const other = await f.control('@sdlc-harness pause', {}, { GITHUB_EVENT_NAME: 'push' });
+  const other = await f.control('@dev-scene pause', {}, { GITHUB_EVENT_NAME: 'push' });
   assert.equal(other.status, 1);
-  const missing = await f.control('@sdlc-harness pause', {}, { GITHUB_EVENT_PATH: join(f.dir, 'nope.json') });
+  const missing = await f.control('@dev-scene pause', {}, { GITHUB_EVENT_PATH: join(f.dir, 'nope.json') });
   assert.equal(missing.status, 1);
   assert.deepEqual(f.calls(), []);
 });
 
-const RESUME_DISPATCH = 'workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=task -f resume=pause -f chain=0';
-const CLEAR_DISPATCH = 'workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=task -f resume=pause -f park_loop_clear=true -f chain=0';
+const RESUME_DISPATCH = 'workflow run devscene-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=task -f resume=pause -f chain=0';
+const CLEAR_DISPATCH = 'workflow run devscene-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=task -f resume=pause -f park_loop_clear=true -f chain=0';
 
 /** The environment of a completed `harness run feat_x` run whose bundle carries <status> and <fields>. */
 const finishedRun = (status, fields = {}, questions = '') => ({
@@ -679,7 +679,7 @@ const assertResumed = (f, result, dispatch, pattern) => {
   assert.match(posted[0].body, pattern);
   for (const n of [7, 12]) {
     assert.ok(
-      calls.some((call) => call.line === `api --method POST repos/${REPOSITORY}/issues/${n}/labels -f labels[]=sdlc-harness: running`),
+      calls.some((call) => call.line === `api --method POST repos/${REPOSITORY}/issues/${n}/labels -f labels[]=devscene: running`),
       `${n}: ${JSON.stringify(calls.map((call) => call.line))}`,
     );
   }
@@ -689,59 +689,59 @@ const assertResumed = (f, result, dispatch, pattern) => {
 
 test('resume on a paused run sends the relay\'s dispatch, replies naming @alice and labels it running', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness resume', {}, finishedRun('paused', { pause_reason: 'user', engine: 'task' }));
+  const result = await f.control('@dev-scene resume', {}, finishedRun('paused', { pause_reason: 'user', engine: 'task' }));
   assertResumed(f, result, RESUME_DISPATCH, /^Resume requested by @alice: `feat_x` continues from its committed ledger\.\n/);
   assert.equal(lastLine(replies(f.calls())[0].body), DISPATCHED_MARKER('task'));
 });
 
 test('resume on a run paused as expired is dispatched the same way', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness resume', {}, finishedRun('paused', { pause_reason: 'expired', engine: 'task' }));
+  const result = await f.control('@dev-scene resume', {}, finishedRun('paused', { pause_reason: 'expired', engine: 'task' }));
   assertResumed(f, result, RESUME_DISPATCH, /^Resume requested by @alice/);
 });
 
 test('resume on a park-loop hold is refused pointing at clear', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness resume', {}, finishedRun('park_loop', { engine: 'task' }));
-  assertRefused(f, result, /`@sdlc-harness clear`/);
+  const result = await f.control('@dev-scene resume', {}, finishedRun('park_loop', { engine: 'task' }));
+  assertRefused(f, result, /`@dev-scene clear`/);
 });
 
 test('clear on a park-loop hold sends the same dispatch with park_loop_clear', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness clear', {}, finishedRun('park_loop', { engine: 'task' }));
+  const result = await f.control('@dev-scene clear', {}, finishedRun('park_loop', { engine: 'task' }));
   assertResumed(f, result, CLEAR_DISPATCH, /^Park-loop hold on `feat_x` cleared by @alice; the run resumes from its committed ledger\.\n/);
 });
 
 test('resume on a parked run is refused naming answer and the open index', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness resume', {}, finishedRun('parked', { engine: 'task' }, '2'));
-  const reply = assertRefused(f, result, /`@sdlc-harness answer <n>`/);
+  const result = await f.control('@dev-scene resume', {}, finishedRun('parked', { engine: 'task' }, '2'));
+  const reply = assertRefused(f, result, /`@dev-scene answer <n>`/);
   assert.match(reply.body, /open: 2\)/);
 });
 
 test('resume with no recorded engine is refused naming the Run workflow form', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness resume', {}, finishedRun('paused', { pause_reason: 'user' }));
+  const result = await f.control('@dev-scene resume', {}, finishedRun('paused', { pause_reason: 'user' }));
   const reply = assertRefused(f, result, /\*\*Run workflow\*\* form/);
   assert.match(reply.body, /resume pause/);
 });
 
 test('clear on a paused run is refused, with no dispatch', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness clear', {}, finishedRun('paused', { pause_reason: 'user', engine: 'task' }));
+  const result = await f.control('@dev-scene clear', {}, finishedRun('paused', { pause_reason: 'user', engine: 'task' }));
   assertRefused(f, result, /no park-loop hold to clear: the run on `feat_x` is `paused`/);
 });
 
 test('resume on a running run is refused as already running', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness resume');
+  const result = await f.control('@dev-scene resume');
   const reply = assertRefused(f, result, /already `running`/);
   assert.equal(lastLine(reply.body), REPLY_MARKER);
 });
 
 test('a resume whose dispatch fails replies naming the failure and exits 3', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness resume', {}, {
+  const result = await f.control('@dev-scene resume', {}, {
     ...finishedRun('paused', { pause_reason: 'user', engine: 'task' }),
     STUB_FAIL_ON: 'workflow run',
   });
@@ -753,12 +753,12 @@ test('a resume whose dispatch fails replies naming the failure and exits 3', asy
 });
 
 const ANSWER_DISPATCH = (answers) =>
-  `workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=task -f resume=answer -f answers=${JSON.stringify(answers)} -f chain=0`;
+  `workflow run devscene-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=task -f resume=answer -f answers=${JSON.stringify(answers)} -f chain=0`;
 const parkedRun = (questions) => finishedRun('parked', { engine: 'task' }, questions);
 
 test('answer with lines below and one open question sends them, replies that it resumes and labels it running', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness answer\r\nUse A.\r\nBecause it is smaller.\n', {}, parkedRun('1'));
+  const result = await f.control('@dev-scene answer\r\nUse A.\r\nBecause it is smaller.\n', {}, parkedRun('1'));
   assertResumed(f, result, ANSWER_DISPATCH({ 1: 'Use A.\nBecause it is smaller.\n' }),
     /^Answer to question 1 received from @alice; every open question is answered, so `feat_x` resumes\.\n/);
   assert.equal(lastLine(replies(f.calls())[0].body), DISPATCHED_MARKER('task'));
@@ -767,69 +767,69 @@ test('answer with lines below and one open question sends them, replies that it 
 
 test('answer 1 with a short answer on the first line sends that answer', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness answer 1 Use B.', {}, parkedRun('1'));
+  const result = await f.control('@dev-scene answer 1 Use B.', {}, parkedRun('1'));
   assertResumed(f, result, ANSWER_DISPATCH({ 1: 'Use B.' }), /^Answer to question 1 received from @alice/);
 });
 
 test('answer with no index and two open questions is refused listing both', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness answer\nUse B.', {}, parkedRun('1 2'));
+  const result = await f.control('@dev-scene answer\nUse B.', {}, parkedRun('1 2'));
   const reply = assertRefused(f, result, /questions 1, 2 are open, so the command must name one/);
-  assert.match(reply.body, /`@sdlc-harness answer 1`, `@sdlc-harness answer 2`/);
+  assert.match(reply.body, /`@dev-scene answer 1`, `@dev-scene answer 2`/);
 });
 
 test('answer 2 with two open is sent, names question 1 as still open and leaves the label', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness answer 2\nUse B.', {}, parkedRun('1 2'));
+  const result = await f.control('@dev-scene answer 2\nUse B.', {}, parkedRun('1 2'));
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   const calls = f.calls();
   assert.deepEqual(dispatches(calls).map((call) => call.line), [ANSWER_DISPATCH({ 2: 'Use B.' })]);
   const posted = replies(calls);
   assert.equal(posted.length, 1);
   assert.match(posted[0].body,
-    /^Answer to question 2 received from @alice and sent; question\(s\) 1 still need an answer: `@sdlc-harness answer 1`\.\n/);
+    /^Answer to question 2 received from @alice and sent; question\(s\) 1 still need an answer: `@dev-scene answer 1`\.\n/);
   assert.equal(lastLine(posted[0].body), DISPATCHED_MARKER('task'));
   assert.ok(!calls.some((call) => /\/labels -f labels\[\]=/.test(call.line)), JSON.stringify(calls.map((call) => call.line)));
 });
 
 test('answer 3 is refused naming the open set', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness answer 3\nUse B.', {}, parkedRun('1 2'));
+  const result = await f.control('@dev-scene answer 3\nUse B.', {}, parkedRun('1 2'));
   assertRefused(f, result, /question 3 is not open; the open questions are 1, 2/);
 });
 
 test('an empty answer is refused', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness answer 1\n  \n', {}, parkedRun('1'));
+  const result = await f.control('@dev-scene answer 1\n  \n', {}, parkedRun('1'));
   assertRefused(f, result, /the answer is empty/);
 });
 
 test('answer on a park-loop hold is refused naming clear', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness answer 1\nUse B.', {}, finishedRun('park_loop', { engine: 'task' }, '1'));
-  assertRefused(f, result, /`@sdlc-harness clear`/);
+  const result = await f.control('@dev-scene answer 1\nUse B.', {}, finishedRun('park_loop', { engine: 'task' }, '1'));
+  assertRefused(f, result, /`@dev-scene clear`/);
 });
 
 test('answer on an expired bundle is refused naming the expiry, never as no park', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness answer 1\nUse B.', {}, {
+  const result = await f.control('@dev-scene answer 1\nUse B.', {}, {
     ...parkedRun('1'),
     STUB_ARTIFACTS: JSON.stringify({ artifacts: [{ name: 'harness-state', expired: true, expires_at: '2026-01-02T00:00:00Z' }] }),
   });
   const reply = assertRefused(f, result, /expired on 2026-01-02T00:00:00Z/);
   assert.match(reply.body, /can no longer be answered here/);
-  assert.match(reply.body, /`@sdlc-harness resume`/);
+  assert.match(reply.body, /`@dev-scene resume`/);
 });
 
 test('answer while a job is in progress is refused naming the run', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness answer 1\nUse B.');
+  const result = await f.control('@dev-scene answer 1\nUse B.');
   assertRefused(f, result, /in progress \(https:\/\/example\.test\/runs\/501\)/);
 });
 
 test('an answer over the payload limit is refused naming the limit', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control(`@sdlc-harness answer\n${'a'.repeat(70000)}`, {}, parkedRun('1'));
+  const result = await f.control(`@dev-scene answer\n${'a'.repeat(70000)}`, {}, parkedRun('1'));
   const reply = assertRefused(f, result, /workflow_dispatch limit of 65535/);
   assert.match(reply.body, /Shorten the answer, or commit it to a file on `feat_x`/);
 });
@@ -837,7 +837,7 @@ test('an answer over the payload limit is refused naming the limit', async (t) =
 test('an answer carrying a command substitution and a backtick is sent byte for byte and never run', async (t) => {
   const f = await controlFixture(t);
   const answer = 'Run `$(touch pwned)` and "$HOME"\\n `x';
-  const result = await f.control(`@sdlc-harness answer\n${answer}`, {}, parkedRun('1'));
+  const result = await f.control(`@dev-scene answer\n${answer}`, {}, parkedRun('1'));
   assertResumed(f, result, ANSWER_DISPATCH({ 1: answer }), /^Answer to question 1 received from @alice/);
   assert.ok(!existsSync(join(f.dir, 'pwned')));
 });
@@ -856,41 +856,41 @@ const CANCELLING = {
 test('a stopped run whose bundle reads running (paused, killed) is named stopped by pause and answer; resume still dispatches', async (t) => {
   const env = stopped(finishedRun('running', { engine: 'task' }));
   const f = await controlFixture(t);
-  const pause = assertRefused(f, await f.control('@sdlc-harness pause', {}, env), /the run on `feat_x` is `stopped`\. /);
-  assert.match(pause.body, /Comment `@sdlc-harness resume` to continue it from its committed ledger\./);
+  const pause = assertRefused(f, await f.control('@dev-scene pause', {}, env), /the run on `feat_x` is `stopped`\. /);
+  assert.match(pause.body, /Comment `@dev-scene resume` to continue it from its committed ledger\./);
   assert.doesNotMatch(pause.body, /`paused`/);
 
   const g = await controlFixture(t);
-  const answer = assertRefused(g, await g.control('@sdlc-harness answer 1\nUse B.', {}, env), /the run on `feat_x` is `stopped`\. /);
-  assert.match(answer.body, /`@sdlc-harness resume`/);
+  const answer = assertRefused(g, await g.control('@dev-scene answer 1\nUse B.', {}, env), /the run on `feat_x` is `stopped`\. /);
+  assert.match(answer.body, /`@dev-scene resume`/);
   assert.doesNotMatch(answer.body, /`paused`/);
 
   const h = await controlFixture(t);
-  assertResumed(h, await h.control('@sdlc-harness resume', {}, env), RESUME_DISPATCH, /^Resume requested by @alice/);
+  assertResumed(h, await h.control('@dev-scene resume', {}, env), RESUME_DISPATCH, /^Resume requested by @alice/);
 });
 
 test('a stopped parked run is named stopped by pause and resume, and an answer resumes it', async (t) => {
   const env = stopped(parkedRun('1'));
   for (const verb of ['pause', 'resume']) {
     const f = await controlFixture(t);
-    const reply = assertRefused(f, await f.control(`@sdlc-harness ${verb}`, {}, env),
+    const reply = assertRefused(f, await f.control(`@dev-scene ${verb}`, {}, env),
       /the run on `feat_x` is `stopped` \(it was parked, waiting for an answer, open: 1\)/);
-    assert.match(reply.body, /`@sdlc-harness answer <n>`.*; the answer resumes it\./);
+    assert.match(reply.body, /`@dev-scene answer <n>`.*; the answer resumes it\./);
     assert.doesNotMatch(reply.body, /`parked`/);
   }
   const f = await controlFixture(t);
-  assertResumed(f, await f.control('@sdlc-harness answer 1\nUse A.', {}, env), ANSWER_DISPATCH({ 1: 'Use A.' }),
+  assertResumed(f, await f.control('@dev-scene answer 1\nUse A.', {}, env), ANSWER_DISPATCH({ 1: 'Use A.' }),
     /^Answer to question 1 received from @alice; every open question is answered, so the stopped run on `feat_x` resumes\.\n/);
 });
 
 test('a stopped park-loop hold is named stopped by resume, and clear resumes it', async (t) => {
   const env = stopped(finishedRun('park_loop', { engine: 'task' }));
   const f = await controlFixture(t);
-  const reply = assertRefused(f, await f.control('@sdlc-harness resume', {}, env),
+  const reply = assertRefused(f, await f.control('@dev-scene resume', {}, env),
     /the run on `feat_x` is `stopped` \(it was held by the park-loop guard\)/);
-  assert.match(reply.body, /`@sdlc-harness clear`/);
+  assert.match(reply.body, /`@dev-scene clear`/);
   const g = await controlFixture(t);
-  assertResumed(g, await g.control('@sdlc-harness clear', {}, env), CLEAR_DISPATCH,
+  assertResumed(g, await g.control('@dev-scene clear', {}, env), CLEAR_DISPATCH,
     /^Park-loop hold on `feat_x` cleared by @alice; the stopped run resumes from its committed ledger\.\n/);
 });
 
@@ -898,18 +898,18 @@ test('a stopped run whose cancelled job is still in progress is named stopped by
   const env = stopped(CANCELLING);
   for (const verb of ['pause', 'resume']) {
     const f = await controlFixture(t);
-    const reply = assertRefused(f, await f.control(`@sdlc-harness ${verb}`, {}, env),
-      /the run on `feat_x` is `stopped`; its cancelled job is still finishing\. Comment `@sdlc-harness resume` once it has ended\./);
+    const reply = assertRefused(f, await f.control(`@dev-scene ${verb}`, {}, env),
+      /the run on `feat_x` is `stopped`; its cancelled job is still finishing\. Comment `@dev-scene resume` once it has ended\./);
     assert.doesNotMatch(reply.body, /`running`/);
   }
 });
 
 test('without a stop run, pause names a paused run paused and resume names a parked run parked', async (t) => {
   const f = await controlFixture(t);
-  assertRefused(f, await f.control('@sdlc-harness pause', {}, finishedRun('paused', { pause_reason: 'user', engine: 'task' })),
+  assertRefused(f, await f.control('@dev-scene pause', {}, finishedRun('paused', { pause_reason: 'user', engine: 'task' })),
     /only a running run can be paused, and the run on `feat_x` is `paused`/);
   const g = await controlFixture(t);
-  const reply = assertRefused(g, await g.control('@sdlc-harness resume', {}, parkedRun('1')), /is `parked`, waiting for an answer/);
+  const reply = assertRefused(g, await g.control('@dev-scene resume', {}, parkedRun('1')), /is `parked`, waiting for an answer/);
   assert.doesNotMatch(reply.body, /`stopped`/);
 });
 
@@ -941,12 +941,12 @@ const neverStarted = ({ olderBundle, comments }) => ({
 });
 
 const RESUME_DISPATCH_AS = (engine) =>
-  `workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=${engine} -f resume=pause -f chain=0`;
+  `workflow run devscene-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=${engine} -f resume=pause -f chain=0`;
 
 test('resume of a never-started run takes user_review from the pull request\'s round comment', async (t) => {
   const f = await controlFixture(t);
   const env = neverStarted({ olderBundle: true, comments: { 12: [timedComment(`Round 2 placed.\n\n${MARKER('round', 'feat_x')}\n`, 10)] } });
-  const result = await f.control('@sdlc-harness resume', {}, env);
+  const result = await f.control('@dev-scene resume', {}, env);
   assertResumed(f, result, RESUME_DISPATCH_AS('user_review'), /^Resume requested by @alice/);
   assert.equal(lastLine(replies(f.calls())[0].body), DISPATCHED_MARKER('user_review'));
 });
@@ -954,7 +954,7 @@ test('resume of a never-started run takes user_review from the pull request\'s r
 test('resume of a never-started run with no bundle anywhere takes task from the issue\'s started marker', async (t) => {
   const f = await controlFixture(t);
   const env = neverStarted({ olderBundle: false, comments: { 7: [{ ...startComment('feat_x'), created_at: atOffset(5) }] } });
-  const result = await f.control('@sdlc-harness resume', { number: 7, pr: false }, env);
+  const result = await f.control('@dev-scene resume', { number: 7, pr: false }, env);
   assertResumed(f, result, RESUME_DISPATCH_AS('task'), /^Resume requested by @alice/);
   assert.equal(lastLine(replies(f.calls())[0].body), DISPATCHED_MARKER('task'));
 });
@@ -962,14 +962,14 @@ test('resume of a never-started run with no bundle anywhere takes task from the 
 test('a never-started run with no bundle anywhere and no qualifying marker stays failed', async (t) => {
   const f = await controlFixture(t);
   const env = neverStarted({ olderBundle: false, comments: { 7: [{ ...startComment('feat_x'), created_at: atOffset(-600) }] } });
-  const result = await f.control('@sdlc-harness resume', { number: 7, pr: false }, env);
+  const result = await f.control('@dev-scene resume', { number: 7, pr: false }, env);
   assertRefused(f, result, /only a paused run can be resumed, and the run on `feat_x` is `failed`/);
 });
 
 test('a reply marker carrying an engine inside the slack before the run answers that engine', async (t) => {
   const f = await controlFixture(t);
-  const reply = timedComment(`Resume requested by @alice.\n\n<!-- sdlc-harness event=reply branch=feat_x engine=task -->\n`, -30);
-  const result = await f.control('@sdlc-harness resume', {}, neverStarted({ olderBundle: true, comments: { 12: [reply] } }));
+  const reply = timedComment(`Resume requested by @alice.\n\n<!-- devscene event=reply branch=feat_x engine=task -->\n`, -30);
+  const result = await f.control('@dev-scene resume', {}, neverStarted({ olderBundle: true, comments: { 12: [reply] } }));
   assertResumed(f, result, RESUME_DISPATCH_AS('task'), /^Resume requested by @alice/);
 });
 
@@ -989,20 +989,20 @@ const firstRunNeverStarted = (secs) => ({
 test('resume on the issue of a first run GitHub never started dispatches engine task', async (t) => {
   const f = await controlFixture(t);
   await f.pushBranch('feat_y', { ledger: false });
-  const result = await f.control('@sdlc-harness resume', { number: 7, pr: false }, firstRunNeverStarted(5));
+  const result = await f.control('@dev-scene resume', { number: 7, pr: false }, firstRunNeverStarted(5));
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   const calls = f.calls();
   assert.deepEqual(dispatches(calls).map((call) => call.line),
-    ['workflow run harness-run.yml --ref feat_y -f action=run -f branch=feat_y -f engine=task -f resume=pause -f chain=0']);
+    ['workflow run devscene-run.yml --ref feat_y -f action=run -f branch=feat_y -f engine=task -f resume=pause -f chain=0']);
   const posted = replies(calls);
   assert.equal(posted.length, 1);
-  assert.equal(lastLine(posted[0].body), '<!-- sdlc-harness event=reply branch=feat_y engine=task -->');
+  assert.equal(lastLine(posted[0].body), '<!-- devscene event=reply branch=feat_y engine=task -->');
 });
 
 test('resume on the issue of a first run whose started marker is too old is refused as failed', async (t) => {
   const f = await controlFixture(t);
   await f.pushBranch('feat_y', { ledger: false });
-  const result = await f.control('@sdlc-harness resume', { number: 7, pr: false }, firstRunNeverStarted(-600));
+  const result = await f.control('@dev-scene resume', { number: 7, pr: false }, firstRunNeverStarted(-600));
   assertRefused(f, result, /only a paused run can be resumed, and the run on `feat_y` is `failed`/);
 });
 
@@ -1015,7 +1015,7 @@ for (const [name, comment] of [
 ]) {
   test(`resume of a never-started run with ${name} records no engine`, async (t) => {
     const f = await controlFixture(t);
-    const result = await f.control('@sdlc-harness resume', {}, neverStarted({ olderBundle: true, comments: { 12: [comment] } }));
+    const result = await f.control('@dev-scene resume', {}, neverStarted({ olderBundle: true, comments: { 12: [comment] } }));
     const reply = assertRefused(f, result, /records no engine, and the harness does not guess one/);
     assert.match(reply.body, /\*\*Run workflow\*\* form/);
   });
@@ -1038,24 +1038,24 @@ const assertStatus = (f, result) => {
 
 test('status on a parked run names parked, question 1 with its answer form, the next ledger entry and the run', async (t) => {
   const f = await controlFixture(t, { ledger: STATUS_LEDGER });
-  const body = assertStatus(f, await f.control('@sdlc-harness status', {}, parkedRun('1')));
+  const body = assertStatus(f, await f.control('@dev-scene status', {}, parkedRun('1')));
   assert.match(body, /^@alice: `feat_x` is `parked`\./);
   assert.match(body, /Next in the flow-progress ledger: Task 2 — write the reply \(under `Phase B`\)/);
-  assert.match(body, /Open questions: 1 \(`@sdlc-harness answer 1`\)/);
+  assert.match(body, /Open questions: 1 \(`@dev-scene answer 1`\)/);
   assert.match(body, /Latest run: https:\/\/example\.test\/runs\/601/);
   assert.deepEqual(readdirNames(f.runnerTemp), []);
 });
 
 test('status on a running run is answered, never refused', async (t) => {
   const f = await controlFixture(t, { ledger: STATUS_LEDGER });
-  const body = assertStatus(f, await f.control('@sdlc-harness status'));
+  const body = assertStatus(f, await f.control('@dev-scene status'));
   assert.match(body, /^@alice: `feat_x` is `running`\./);
   assert.match(body, /Latest run: https:\/\/example\.test\/runs\/501/);
 });
 
 test('status with no run listed says so, and a fully ticked ledger says every entry is ticked', async (t) => {
   const f = await controlFixture(t, { ledger: '# Progress\n\n## Phase A\n\n- [x] Plan\n' });
-  const body = assertStatus(f, await f.control('@sdlc-harness status', {}, { STUB_RUN_LIST: '[]' }));
+  const body = assertStatus(f, await f.control('@dev-scene status', {}, { STUB_RUN_LIST: '[]' }));
   assert.match(body, /^@alice: no harness run is listed for `feat_x`\./);
   assert.match(body, /Every entry of the flow-progress ledger is ticked\./);
   assert.doesNotMatch(body, /Latest run: /);
@@ -1092,7 +1092,7 @@ async function pushOntoFeatX(f, commits) {
 test('status on a running run whose round commit follows a ticked ledger names the round, never every entry ticked', async (t) => {
   const f = await controlFixture(t, { ledger: TICKED_LEDGER });
   await pushOntoFeatX(f, ['chore: add user review for feat_x']);
-  const body = assertStatus(f, await f.control('@sdlc-harness status'));
+  const body = assertStatus(f, await f.control('@dev-scene status'));
   assert.match(body, /^@alice: `feat_x` is `running`\./);
   assert.match(body, ROUND_STARTED);
   assert.doesNotMatch(body, /Every entry of the flow-progress ledger is ticked/);
@@ -1100,7 +1100,7 @@ test('status on a running run whose round commit follows a ticked ledger names t
 
 test('status on a running run with a ticked ledger and no round commit says it is still running', async (t) => {
   const f = await controlFixture(t, { ledger: TICKED_LEDGER });
-  const body = assertStatus(f, await f.control('@sdlc-harness status'));
+  const body = assertStatus(f, await f.control('@dev-scene status'));
   assert.match(body, STILL_RUNNING);
   assert.doesNotMatch(body, /every entry .* is ticked/i);
   assert.doesNotMatch(body, ROUND_STARTED);
@@ -1109,13 +1109,13 @@ test('status on a running run with a ticked ledger and no round commit says it i
 test('status reads a ledger written after the round commit as it reads any ledger', async (t) => {
   const f = await controlFixture(t, { ledger: TICKED_LEDGER });
   await pushOntoFeatX(f, ['chore: add user review for feat_x', { ledger: STATUS_LEDGER }]);
-  const open = assertStatus(f, await f.control('@sdlc-harness status'));
+  const open = assertStatus(f, await f.control('@dev-scene status'));
   assert.match(open, /Next in the flow-progress ledger: Task 2 — write the reply \(under `Phase B`\)/);
   assert.doesNotMatch(open, ROUND_STARTED);
 
   const g = await controlFixture(t, { ledger: STATUS_LEDGER });
   await pushOntoFeatX(g, ['chore: add user review for feat_x', { ledger: TICKED_LEDGER }]);
-  const ticked = assertStatus(g, await g.control('@sdlc-harness status', {}, finishedRun('paused', { engine: 'task' })));
+  const ticked = assertStatus(g, await g.control('@dev-scene status', {}, finishedRun('paused', { engine: 'task' })));
   assert.match(ticked, /`feat_x` is `paused`/);
   assert.match(ticked, /Every entry of the flow-progress ledger is ticked\./);
   assert.doesNotMatch(ticked, ROUND_STARTED);
@@ -1124,14 +1124,14 @@ test('status reads a ledger written after the round commit as it reads any ledge
 test('status does not take a subject that only contains the round text for the round commit', async (t) => {
   const f = await controlFixture(t, { ledger: TICKED_LEDGER });
   await pushOntoFeatX(f, ['chore: add user review for feat_x_2', 'see chore: add user review for feat_x']);
-  const body = assertStatus(f, await f.control('@sdlc-harness status'));
+  const body = assertStatus(f, await f.control('@dev-scene status'));
   assert.doesNotMatch(body, ROUND_STARTED);
   assert.match(body, STILL_RUNNING);
 });
 
 test('status on an expired bundle reports the expiry, never an absent run', async (t) => {
   const f = await controlFixture(t);
-  const body = assertStatus(f, await f.control('@sdlc-harness status', {}, {
+  const body = assertStatus(f, await f.control('@dev-scene status', {}, {
     ...parkedRun('1'),
     STUB_ARTIFACTS: JSON.stringify({ artifacts: [{ name: 'harness-state', expired: true, expires_at: '2026-01-02T00:00:00Z' }] }),
   }));
@@ -1140,20 +1140,20 @@ test('status on an expired bundle reports the expiry, never an absent run', asyn
 
 test('status names a stopped run stopped, whether its bundle says running or parked', async (t) => {
   const f = await controlFixture(t);
-  const running = assertStatus(f, await f.control('@sdlc-harness status', {}, stopped(finishedRun('running', { engine: 'task' }))));
+  const running = assertStatus(f, await f.control('@dev-scene status', {}, stopped(finishedRun('running', { engine: 'task' }))));
   assert.match(running, /`feat_x` is `stopped`/);
   assert.doesNotMatch(running, /`paused`/);
 
   const g = await controlFixture(t);
-  const parked = assertStatus(g, await g.control('@sdlc-harness status', {}, stopped(parkedRun('1'))));
+  const parked = assertStatus(g, await g.control('@dev-scene status', {}, stopped(parkedRun('1'))));
   assert.match(parked, /`feat_x` is `stopped`; it was parked, waiting for an answer\./);
-  assert.match(parked, /Open questions: 1 \(`@sdlc-harness answer 1`\)/);
+  assert.match(parked, /Open questions: 1 \(`@dev-scene answer 1`\)/);
   assert.doesNotMatch(parked, /`parked`/);
 });
 
 test('status whose state read fails is refused with exit 3', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness status', {}, { STUB_FAIL_ON: 'run list' });
+  const result = await f.control('@dev-scene status', {}, { STUB_FAIL_ON: 'run list' });
   assert.equal(result.status, 3, `${result.stdout}\n${result.stderr}`);
   const posted = replies(f.calls());
   assert.equal(posted.length, 1);
