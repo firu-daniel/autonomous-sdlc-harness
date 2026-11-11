@@ -6789,7 +6789,6 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'remote-github');
     assert.ok(line?.includes('GitHub knows devscene-trigger.yml and devscene-control.yml, and the label `devscene` exists'), `${stdout}\n${stderr}`);
-    assert.ok(!line.includes('earlier release'), line);
     const calls = ghInvocations(stub);
     for (const args of Object.values(TRIGGER_GH_CALLS)) assert.ok(calls.includes(args.join(' ')), calls.join('\n'));
   });
@@ -6950,29 +6949,6 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'remote-github');
     assert.ok(line?.includes('the pull-request setting was not checked: `gh api repos/{owner}/{repo}/actions/permissions/workflow` may need more access than this login has (it exited 1: HTTP 403'), `${stdout}\n${stderr}`);
-  });
-
-  await t.test('with the trigger on and the variable unset, a committed workflow falling back to harness is asked about and noted', async (subtest) => {
-    const dir = await pushedTriggerFixture(subtest);
-    const trigger = join(dir, '.github', 'workflows', 'devscene-trigger.yml');
-    const current = readFileSync(trigger, 'utf8');
-    const previousRelease = current.replace("(vars.HARNESS_TRIGGER_LABEL || 'devscene')", "(vars.HARNESS_TRIGGER_LABEL || 'harness')");
-    assert.notEqual(previousRelease, current, 'the fixture trigger workflow carries no devscene fallback');
-    writeFileSync(trigger, previousRelease);
-    const stub = await answeringGhStub(subtest);
-    answerGh(stub);
-    answerTriggerGh(stub, { labels: { out: JSON.stringify([{ name: 'harness' }]) } });
-
-    const { status, stdout, stderr } = await checkGithub(dir, stub);
-
-    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
-    const line = reportLine(stdout, 'pass', 'remote-github');
-    assert.ok(line?.includes('and the label `harness` exists'), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('was written by an earlier release and falls back to `harness`, which keeps starting runs'), line);
-    assert.ok(line.includes('init --force` re-renders it and the scripts to `devscene`'), line);
-    assert.ok(line.includes('setting HARNESS_TRIGGER_LABEL keeps a name of your choosing under either'), line);
-    // The edit leaves the HARNESS_RUN_ACTORS line in place, so the forge grade stays pass.
-    assert.ok(reportLine(stdout, 'pass', 'forge') !== undefined, `${stdout}\n${stderr}`);
   });
 
   await t.test('with the trigger on, HARNESS_TRIGGER_LABEL names the label and allowed bots are a note', async (subtest) => {

@@ -242,7 +242,6 @@
 #                        the URLs its comments name
 #   HARNESS_REMOTE_STOP  non-empty: every start is refused
 #   HARNESS_TRIGGER_LABEL   the trigger label; when empty, `DEFAULT_TRIGGER_LABEL`
-#                        or `LEGACY_TRIGGER_LABEL`, per the paragraph below
 #   HARNESS_TRIGGER_ALLOWED_BOTS   comma-separated bot logins allowed to start
 #   HARNESS_RUN_ACTORS   comma-separated people allowed to act on a run, `*`
 #                        for every writer; unset admits a `User` owner alone
@@ -251,13 +250,6 @@
 #                        A test seam
 #   RUNNER_TEMP          where the prompt snapshot is written; a `mktemp -d`
 #                        directory under `${TMPDIR:-/tmp}` when empty
-# THE LEGACY LABEL. The workflow `init` now writes always passes a non-empty
-# `HARNESS_TRIGGER_LABEL`; only an earlier release's workflow, which
-# `init --upgrade-workflows` never re-renders, passes it empty, and its `if:`
-# already ran the job for `LEGACY_TRIGGER_LABEL`. So when it is empty either
-# `DEFAULT_TRIGGER_LABEL` or `LEGACY_TRIGGER_LABEL` is accepted, and the comment
-# and the label removal name the one applied; a new workflow starts on
-# `LEGACY_TRIGGER_LABEL` only when the variable names it.
 # An `action` other than `labeled`, or another label, is one line and exit 0
 # with no `gh` call. Otherwise refused, in this order, each refusal one issue
 # comment naming the reason and the way on:
@@ -1394,7 +1386,6 @@
 #   HARNESS_GH_CLI       mirrors  GH_CLI_VARIABLE (the binary run as `gh`)
 #   HARNESS_TRIGGER_LABEL        mirrors  TRIGGER_LABEL_VARIABLE
 #   DEFAULT_TRIGGER_LABEL        mirrors  DEFAULT_TRIGGER_LABEL
-#   LEGACY_TRIGGER_LABEL         mirrors  LEGACY_TRIGGER_LABEL
 #   HARNESS_TRIGGER_ALLOWED_BOTS mirrors  TRIGGER_ALLOWED_BOTS_VARIABLE
 #   HARNESS_RUN_ACTORS           mirrors  RUN_ACTORS_VARIABLE
 #   TRIGGER_DISPATCH_EVENT_TYPE  mirrors  TRIGGER_DISPATCH_EVENT_TYPE ('harness-task')
@@ -1724,7 +1715,6 @@ WORKFLOW_RESUME_FILE='devscene-resume.yml'
 STATE_ARTIFACT_NAME='harness-state'
 POLL_STATE_ARTIFACT_NAME='harness-poll-state'
 DEFAULT_TRIGGER_LABEL='devscene'
-LEGACY_TRIGGER_LABEL='harness'
 TRIGGER_DISPATCH_EVENT_TYPE='harness-task'
 WORKFLOW_CONTROL_FILE='devscene-control.yml'
 COMMAND_HANDLE='@dev-scene'
@@ -4535,9 +4525,6 @@ verb_trigger() {
       exit "$EXIT_USAGE"
     }
     trigger_label="${HARNESS_TRIGGER_LABEL:-$DEFAULT_TRIGGER_LABEL}"
-    if [ -z "${HARNESS_TRIGGER_LABEL-}" ] && [ "$label" = "$LEGACY_TRIGGER_LABEL" ]; then
-      trigger_label="$LEGACY_TRIGGER_LABEL"
-    fi
     if [ "$action" != labeled ] || [ "$label" != "$trigger_label" ]; then
       echo "remote-run.sh: trigger: ignored, not the label '$trigger_label' being applied"
       return 0

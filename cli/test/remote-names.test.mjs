@@ -21,7 +21,6 @@ import {
   COMMENT_MARKER,
   DEFAULT_TRIGGER_LABEL,
   GH_CLI_VARIABLE,
-  LEGACY_TRIGGER_LABEL,
   MENTION_ACTIONS,
   MENTION_ACT_VERBS,
   MENTION_COMMAND,
@@ -55,7 +54,6 @@ import {
   ghCli,
   runActorAdmitted,
   runGh,
-  triggerFallbackLabel,
 } from '../dist/remote/githubActions.js';
 
 const scratch = mkdtempSync(join(tmpdir(), 'harness-remote-names-'));
@@ -128,7 +126,6 @@ test('the issue-trigger names keep their literal values', () => {
   assert.equal(WORKFLOW_TRIGGER_FILE, 'devscene-trigger.yml');
   assert.equal(TRIGGER_LABEL_VARIABLE, 'HARNESS_TRIGGER_LABEL');
   assert.equal(DEFAULT_TRIGGER_LABEL, 'devscene');
-  assert.equal(LEGACY_TRIGGER_LABEL, 'harness');
   assert.equal(TRIGGER_ALLOWED_BOTS_VARIABLE, 'HARNESS_TRIGGER_ALLOWED_BOTS');
   assert.equal(TRIGGER_DISPATCH_EVENT_TYPE, 'harness-task');
   assert.equal(RUN_ACTORS_VARIABLE, 'HARNESS_RUN_ACTORS');
@@ -172,19 +169,10 @@ test('carriesMentionCredential tells a control workflow that passes the agent a 
   assert.equal(carriesMentionCredential(template), true);
 });
 
-test('remote-run.sh mirrors the two trigger labels byte for byte', () => {
+test('remote-run.sh mirrors the trigger label byte for byte', () => {
   const lines = readFileSync(join(PACKAGE_ROOT, 'templates', 'scripts', 'remote-run.sh'), 'utf8').split('\n');
-  for (const line of [`DEFAULT_TRIGGER_LABEL='${DEFAULT_TRIGGER_LABEL}'`, `LEGACY_TRIGGER_LABEL='${LEGACY_TRIGGER_LABEL}'`]) {
-    assert.ok(lines.includes(line), `remote-run.sh lacks the line ${line}`);
-  }
-});
-
-test('triggerFallbackLabel reads the label a committed trigger workflow falls back to', () => {
-  const template = readFileSync(join(PACKAGE_ROOT, 'templates', 'github', 'workflows', WORKFLOW_TRIGGER_FILE), 'utf8');
-  assert.equal(triggerFallbackLabel(template), DEFAULT_TRIGGER_LABEL);
-  const previousRelease = "    if: github.event_name == 'repository_dispatch' || github.event.label.name == (vars.HARNESS_TRIGGER_LABEL || 'harness')\n";
-  assert.equal(triggerFallbackLabel(`jobs:\n  run:\n${previousRelease}`), LEGACY_TRIGGER_LABEL);
-  assert.equal(triggerFallbackLabel('on:\n  issues:\n    types: [labeled]\n'), undefined);
+  const line = `DEFAULT_TRIGGER_LABEL='${DEFAULT_TRIGGER_LABEL}'`;
+  assert.ok(lines.includes(line), `remote-run.sh lacks the line ${line}`);
 });
 
 test('harness-run-lib.sh mirrors WORKFLOW_RUN_FILE and STATE_ARTIFACT_NAME byte for byte', () => {

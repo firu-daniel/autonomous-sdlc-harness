@@ -12,8 +12,8 @@
  * sender held to the list where a `Bot` sender is not. A body
  * carrying shell syntax is committed byte for byte with nothing executed. A dispatch event has no issue,
  * so its cases assert feedback in the step summary and no `issue` call at all. With `HARNESS_TRIGGER_LABEL`
- * empty — only the previous release's workflow passes it so — the legacy label `harness` starts a run
- * too, and its removal names it; with the variable set, only the label it names does. Every issue comment
+ * empty only the default label `devscene` starts a run; with the variable set, only the label it names
+ * does. Every issue comment
  * ends with the hidden marker, `event=started branch=<branch>` on a start and `event=refused` otherwise, and
  * a start alone sets the state label `devscene: running`, after the trigger label's removal; a failed
  * label add is a warning, never a failed start.
@@ -437,31 +437,21 @@ test('another action or another label is ignored with no gh call', async (t) => 
   assert.deepEqual(f.calls(), []);
 });
 
-test('with HARNESS_TRIGGER_LABEL empty, the legacy label starts a run and its removal names it', async (t) => {
+test('with HARNESS_TRIGGER_LABEL set to the default, another label is ignored with no gh call', async (t) => {
   const f = await triggerFixture(t);
-  const result = await f.trigger({ label: { name: 'harness' } });
-  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-  const calls = f.calls();
-  assert.equal(dispatches(calls).length, 1);
-  assert.equal(removals(calls, 'harness').length, 1);
-  assert.equal(removals(calls).length, 0);
-});
-
-test('with HARNESS_TRIGGER_LABEL set to the default, the legacy label is ignored with no gh call', async (t) => {
-  const f = await triggerFixture(t);
-  const result = await f.trigger({ label: { name: 'harness' } }, { HARNESS_TRIGGER_LABEL: 'devscene' });
+  const result = await f.trigger({ label: { name: 'start-run' } }, { HARNESS_TRIGGER_LABEL: 'devscene' });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /ignored/);
   assert.deepEqual(f.calls(), []);
 });
 
-test('with HARNESS_TRIGGER_LABEL naming the legacy label, that label starts a run', async (t) => {
+test('with HARNESS_TRIGGER_LABEL naming a custom label, that label starts a run', async (t) => {
   const f = await triggerFixture(t);
-  const result = await f.trigger({ label: { name: 'harness' } }, { HARNESS_TRIGGER_LABEL: 'harness' });
+  const result = await f.trigger({ label: { name: 'start-run' } }, { HARNESS_TRIGGER_LABEL: 'start-run' });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   const calls = f.calls();
   assert.equal(dispatches(calls).length, 1);
-  assert.equal(removals(calls, 'harness').length, 1);
+  assert.equal(removals(calls, 'start-run').length, 1);
 });
 
 test('a second issue with the same title starts on <slug>_2', async (t) => {

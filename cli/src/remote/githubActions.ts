@@ -14,8 +14,7 @@
  * Except in `generators/repoRoot.ts`, nothing here is consulted unless `config/model.ts` →
  * `remoteExecutionApplies(config)` is true: every other consumer tests that switch first. That one
  * is ungated because a gated rule would change `.gitignore` in the same run that turns remote
- * execution on. The issue-trigger names (`WORKFLOW_TRIGGER_*`, `TRIGGER_*`, `DEFAULT_TRIGGER_LABEL`,
- * `LEGACY_TRIGGER_LABEL`)
+ * execution on. The issue-trigger names (`WORKFLOW_TRIGGER_*`, `TRIGGER_*`, `DEFAULT_TRIGGER_LABEL`)
  * and the run-control names (`WORKFLOW_CONTROL_*`, `COMMAND_*`, `COMMENT_MARKER`,
  * `REVIEW_ROUND_STATE`, `STATE_LABEL_PREFIX`, `RUN_STATES`, `STATE_LABELS`, `PR_CREATE_SETTING`,
  * `PR_CREATE_SETTING_PATH`, `MENTION_*`) are gated tighter
@@ -171,30 +170,6 @@ export const TRIGGER_LABEL_VARIABLE = 'HARNESS_TRIGGER_LABEL';
 
 /** The issue label that starts a run when {@link TRIGGER_LABEL_VARIABLE} is unset or empty. */
 export const DEFAULT_TRIGGER_LABEL = 'devscene';
-
-/**
- * An earlier release's {@link DEFAULT_TRIGGER_LABEL}. The trigger still accepts it when its
- * workflow passes no label, which only that release's trigger workflow does: it is never
- * re-rendered by `init --upgrade-workflows`, and its own `if:` already ran the job for this label.
- */
-export const LEGACY_TRIGGER_LABEL = 'harness';
-
-const TRIGGER_FALLBACK_PATTERN = new RegExp(`\\(\\s*vars\\.${TRIGGER_LABEL_VARIABLE}\\s*\\|\\|\\s*'([^']+)'\\s*\\)`);
-
-/**
- * The label a trigger workflow's text falls back to when {@link TRIGGER_LABEL_VARIABLE} is unset: the
- * single-quoted literal of the first `(vars.HARNESS_TRIGGER_LABEL || '<label>')`, or `undefined` when
- * no line carries one. Pure — the caller reads the file. It exists because the committed
- * trigger workflow carries no version pin and is never upgraded, so its own fallback, not
- * {@link DEFAULT_TRIGGER_LABEL}, is what starts a run in a repository wired by an earlier release.
- */
-export function triggerFallbackLabel(text: string): string | undefined {
-  for (const line of text.split(/\r?\n/)) {
-    const match = TRIGGER_FALLBACK_PATTERN.exec(line);
-    if (match !== null) return match[1];
-  }
-  return undefined;
-}
 
 /** Repository variable: comma-separated bot logins that may start a run; unset or empty admits none. */
 export const TRIGGER_ALLOWED_BOTS_VARIABLE = 'HARNESS_TRIGGER_ALLOWED_BOTS';

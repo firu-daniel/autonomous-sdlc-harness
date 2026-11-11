@@ -280,7 +280,6 @@ import {
   GH_CLI_VARIABLE,
   ghCli,
   GIT_TOKEN_SECRET,
-  LEGACY_TRIGGER_LABEL,
   MENTION_ACT_VERBS,
   MENTION_CONFIRM_VERBS,
   OAUTH_TOKEN_SECRET,
@@ -296,7 +295,6 @@ import {
   RUNNER_VARIABLE,
   TRIGGER_ALLOWED_BOTS_VARIABLE,
   TRIGGER_LABEL_VARIABLE,
-  triggerFallbackLabel,
   WORKFLOW_CONTROL_FILE,
   WORKFLOW_CONTROL_PATH,
   WORKFLOW_RESUME_FILE,
@@ -3040,9 +3038,7 @@ function writersOf(stdout: string): { readonly logins: readonly string[]; readon
  *   understood — *cannot tell* is not *missing*, so it never fails.
  * - the pull-request setting off while the secret list was unreadable is a *cannot tell* warning,
  *   never the missing-`HARNESS_GIT_TOKEN` one.
- * - the effective trigger label is `HARNESS_TRIGGER_LABEL`, else the fallback the committed
- *   `devscene-trigger.yml` carries ({@link triggerFallbackLabel}), else {@link DEFAULT_TRIGGER_LABEL};
- *   a fallback of {@link LEGACY_TRIGGER_LABEL} is a note, since it still starts runs.
+ * - the effective trigger label is `HARNESS_TRIGGER_LABEL`, else {@link DEFAULT_TRIGGER_LABEL}.
  * - both credential secrets present is a note, not a finding: billing follows `ANTHROPIC_API_KEY`.
  * - a non-empty `HARNESS_TRIGGER_ALLOWED_BOTS` is a note naming the bots, which start runs without a
  *   permission check. When the trigger does not apply, no trigger, control or pull-request-setting
@@ -3284,20 +3280,7 @@ const REMOTE_GITHUB_CHECK: Check = {
 
       // The label's name is a repository variable, so an unread variable listing leaves nothing to compare.
       const configured = variableValues?.get(TRIGGER_LABEL_VARIABLE)?.trim() ?? '';
-      let labelName = configured;
-      if (configured === '') {
-        // Unset, the committed workflow's own fallback starts a run; it is never re-rendered by an upgrade.
-        let committed: string | undefined;
-        try {
-          committed = triggerFallbackLabel(readFileSync(join(root, ...WORKFLOW_TRIGGER_PATH.split('/')), 'utf8'));
-        } catch {
-          committed = undefined;
-        }
-        labelName = committed ?? DEFAULT_TRIGGER_LABEL;
-        if (variableValues !== undefined && labelName === LEGACY_TRIGGER_LABEL) {
-          notes.push(`${WORKFLOW_TRIGGER_PATH} was written by an earlier release and falls back to \`${LEGACY_TRIGGER_LABEL}\`, which keeps starting runs; \`${CLI} init --force\` re-renders it and the scripts to \`${DEFAULT_TRIGGER_LABEL}\`, and setting ${TRIGGER_LABEL_VARIABLE} keeps a name of your choosing under either`);
-        }
-      }
+      const labelName = configured === '' ? DEFAULT_TRIGGER_LABEL : configured;
       let labelFound = false;
       if (variableValues === undefined) {
         warnings.push(`cannot tell whether the trigger label exists: its name is the ${TRIGGER_LABEL_VARIABLE} variable, and ${variables.call} gave no readable answer`);
