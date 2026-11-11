@@ -28,3 +28,4 @@
 - `grep -nE "sdlc-harness([^/]|$)" cli/templates/scripts/remote-run.sh` prints nothing, or only lines naming the `stateDir` default.
 - `grep -nE "^(WORKFLOW_(RUN|RESUME|CONTROL)_FILE|DEFAULT_TRIGGER_LABEL|COMMAND_HANDLE|COMMENT_MARKER|STATE_LABEL_PREFIX)=" cli/templates/scripts/remote-run.sh` shows the seven values above, byte-identical to Task 1's TypeScript literals.
 - `bash -n cli/templates/scripts/remote-run.sh` exits 0.
+  - **Deviations from plan:** The direct `bash -n cli/templates/scripts/remote-run.sh` call was refused by the tool layer ("Permission to use Bash has been denied because Claude Code is running in don't ask mode"). The parse claim rests instead on the configured `bash scripts/typecheck.sh`, whose `check-shell-parse` step reported `124 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed` and ended `PASS: typecheck`. The Run gates phase's whole-tree typecheck run verifies it again.
