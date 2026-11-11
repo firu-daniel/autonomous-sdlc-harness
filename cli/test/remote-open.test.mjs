@@ -109,7 +109,7 @@ async function openFixture(t, { forge = 'github', provenance = true } = {}) {
     /** @param {Record<string, string>} [env] */
     open: (env = {}) =>
       runBash(dir, [SCRIPT, 'open', 'feat_x'], {
-        HARNESS_GH_CLI: stub,
+        DEVSCENE_GH_CLI: stub,
         STUB_LOG: log,
         GITHUB_REPOSITORY: REPOSITORY,
         GITHUB_SERVER_URL: 'https://github.com',

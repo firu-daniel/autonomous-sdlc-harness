@@ -12,7 +12,7 @@
  * The fixture is `remote-report.test.mjs`'s shape — `init`, `execution.target` `github-actions`,
  * `forge` `github`, `feat_x` pushed to the fixture's bare `origin` with its task prompt and ledger —
  * plus a ledger written into the fixture checkout itself, which `--repo` points at. `gh` is a stub
- * reached through `HARNESS_GH_CLI`: it logs each argument vector with the content of any `body=@<path>`,
+ * reached through `DEVSCENE_GH_CLI`: it logs each argument vector with the content of any `body=@<path>`,
  * answers `pr list` from `STUB_PRS`, `run list` from `STUB_RUN_LIST`, and the paginated comment listing
  * from `STUB_COMMENTS`, one JSON object per line as `--jq` prints them. No case reaches the network.
  */
@@ -111,7 +111,7 @@ async function progressFixture(t) {
     /** @param {Record<string, string>} [env] */
     progress: (env = {}) =>
       runBash(dir, [SCRIPT, 'report', 'progress', 'feat_x', '--repo', dir], {
-        HARNESS_GH_CLI: stub,
+        DEVSCENE_GH_CLI: stub,
         STUB_LOG: log,
         GITHUB_REPOSITORY: REPOSITORY,
         GITHUB_SERVER_URL: 'https://github.com',
@@ -125,7 +125,7 @@ async function progressFixture(t) {
     /** `report stopped feat_x`, under the same stubs as `progress`. @param {Record<string, string>} [env] */
     stopped: (env = {}) =>
       runBash(dir, [SCRIPT, 'report', 'stopped', 'feat_x', '--repo', dir], {
-        HARNESS_GH_CLI: stub,
+        DEVSCENE_GH_CLI: stub,
         STUB_LOG: log,
         GITHUB_REPOSITORY: REPOSITORY,
         GITHUB_SERVER_URL: 'https://github.com',

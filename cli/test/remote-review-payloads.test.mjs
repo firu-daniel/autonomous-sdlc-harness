@@ -223,7 +223,7 @@ async function reviewFixture(t, { mirror = 'clone', baseHooks = false } = {}) {
     registry: () => (existsSync(join(dir, REGISTRY)) ? readFileSync(join(dir, REGISTRY), 'utf8') : null),
     review: () =>
       runBash(dir, [SCRIPT, 'review', 'feat_x', '--review-file', reviewFile], {
-        HARNESS_GH_CLI: stub,
+        DEVSCENE_GH_CLI: stub,
         STUB_LOG: ghLog,
         STUB_BUNDLE: bundleDir,
         HARNESS_TRIGGER_LOOKUP_SECS: '0',
