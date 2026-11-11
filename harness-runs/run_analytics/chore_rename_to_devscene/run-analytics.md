@@ -4,33 +4,33 @@
 
 | Measure | Value |
 |---|---|
-| Sessions | 4 (1 incomplete) |
-| Span | 2h59m |
-| Wall | 2h31m |
-| Active | 2h14m |
+| Sessions | 5 (1 incomplete) |
+| Span | 3h47m |
+| Wall | 3h09m |
+| Active | 2h51m |
 | Host-suspended | 0.0s |
 | Idle | 17m 26s |
-| Cost | $51.47 |
-| Input tokens (uncached) | 2028 (3 of 4 sessions) |
-| Total input tokens (incl. cache) | 102562240 (3 of 4 sessions) |
-| Output tokens | 539579 (3 of 4 sessions) |
-| Thinking tokens (main thread) | 10039 |
-| Cache read tokens | 98712450 (3 of 4 sessions) |
-| Cache write tokens | 3847762 (3 of 4 sessions) |
-| Cache write tokens, main thread (5m / 1h) | 0 / 563739 |
-| Cache hit ratio | 0.9625 |
-| Requests | 1515 |
-| Request latency p50 / p90 / p99 / max | 2.0s / 6.0s / 20.5s / 2m 56s |
+| Cost | $60.98 |
+| Input tokens (uncached) | 2384 (4 of 5 sessions) |
+| Total input tokens (incl. cache) | 126617491 (4 of 5 sessions) |
+| Output tokens | 605186 (4 of 5 sessions) |
+| Thinking tokens (main thread) | 15347 |
+| Cache read tokens | 122218923 (4 of 5 sessions) |
+| Cache write tokens | 4396184 (4 of 5 sessions) |
+| Cache write tokens, main thread (5m / 1h) | 0 / 813656 |
+| Cache hit ratio | 0.9653 |
+| Requests | 1686 |
+| Request latency p50 / p90 / p99 / max | 2.0s / 5.8s / 20.1s / 2m 56s |
 | Requests over the idle threshold | 1 |
 | API retries | 0 |
-| Permission denials | 55 |
+| Permission denials | 59 |
 | Sub-agents failed / killed | 0 / 0 |
 | Slowest sub-agent | autonomous-sdlc-harness:task-plan-writer — Write task plan — 18m 33s (session 1) |
 | Rate-limit peak | seven_day 0.12 |
 
 ## Network refusals
 
-4 of 4 sessions scanned.
+5 of 5 sessions scanned.
 
 | Session | Context | Tool | Command | Host | Port | Refusal line |
 |---|---|---|---|---|---|---|
@@ -45,7 +45,68 @@ Lines in finished Run gates logs that carry a proxy refusal string or a plain co
 - on macOS, Seatbelt's own violation records go to the system log, not to the test output;
 - a test whose name or output quotes one of these strings is listed too.
 
-No Run gates round log was scanned.
+No possible network attempt in 1 round logs.
+
+## Gate rounds
+
+Wait is the orchestrator's wait on `run-test-suite.sh --wait <label>`, summed over every polling row whose command ends in that label; — when none matches, as for a label waited on fewer than three times in a session (no polling row is written for it) or a command cut at 160 characters.
+
+A phase's test-file total sums each file's own seconds, so it exceeds the gate's wall time when files run in parallel.
+
+### Round task_round_1 — pass
+
+| Measure | Value |
+|---|---|
+| Wait (every run of task_round_1) | 26m 03s |
+| Gate rows | 29 (complete) |
+| Test files — full | 185 files, 12278.5 s summed |
+
+| Phase | Gate | Status | Seconds |
+|---|---|---|---|
+| full | 1 | ok | 0 s |
+| full | 2a | ok | 1 s |
+| full | 2b | ok | 0 s |
+| full | 2c | ok | 0 s |
+| full | 2d | ok | 0 s |
+| full | 2e | ok | 0 s |
+| full | 3a | ok | 1 s |
+| full | 3b | ok | 1 s |
+| full | 3c | ok | 0 s |
+| full | 3d | ok | 0 s |
+| full | 3e | ok | 1 s |
+| full | 3f | ok | 0 s |
+| full | 4 | ok | 1612 s |
+| full | 6a | ok | 2 s |
+| full | 6b | ok | 0 s |
+| full | 6c | ok | 1 s |
+| full | 6d | ok | 2 s |
+| full | 6e | ok | 0 s |
+| full | 6f | ok | 0 s |
+| full | 11 | BLOCKED | 0 s |
+| full | 13a | BLOCKED | 0 s |
+| full | 13b | BLOCKED | 0 s |
+| full | 13c | BLOCKED | 0 s |
+| full | 13d | SKIPPED | 0 s |
+| full | 14a | ok | 1 s |
+| full | 14b | ok | 0 s |
+| full | 14c | ok | 1 s |
+| full | 14d | SKIPPED | 0 s |
+| full | 16 | ok | 1 s |
+
+#### Slowest test files — full (10 of 185)
+
+| File | Status | Seconds | Tests | Failed |
+|---|---|---|---|---|
+| test/watcher-review-drop-payloads.test.mjs | pass | 780.3 | 21 | 0 |
+| test/watcher-remote-job.test.mjs | pass | 615.9 | 29 | 0 |
+| test/watcher-placeholder-host.test.mjs | pass | 594.2 | 27 | 0 |
+| test/watcher-remote-dispatch.test.mjs | pass | 574.7 | 17 | 0 |
+| test/remote-run.test.mjs | pass | 528.9 | 130 | 0 |
+| test/watcher-run-profile.test.mjs | pass | 516.5 | 21 | 0 |
+| test/watcher-stall-reset-payloads.test.mjs | pass | 471.0 | 18 | 0 |
+| test/remote-control-review.test.mjs | pass | 453.2 | 33 | 0 |
+| test/remote-control.test.mjs | pass | 452.4 | 83 | 0 |
+| test/doctor.test.mjs | pass | 421.5 | 1 | 0 |
 
 ## Session 1 — 2026-11-11T06:47:11.025Z → 2026-11-11T07:29:37.547Z
 
@@ -632,4 +693,128 @@ Remainder: tokens the session total holds that neither the orchestrator's reques
 | stop_reason | end_turn |
 | Turns | 159 |
 | Time to first token | 1.5s |
+| Rate-limit peak | seven_day 0.12 |
+
+## Session 5 — 2026-11-11T09:56:36.166Z → 2026-11-11T10:34:14.929Z
+
+Session id: `ebb83fd8-a9e9-49df-a179-155b08989d45`
+
+### Time
+
+| Wall | duration_ms | duration_api_ms | Host-suspended | Idle | Active | Suspend source |
+|---|---|---|---|---|---|---|
+| 37m 38s | 37m 40s | 10m 24s | 0.0s | 0.0s | 37m 38s | none |
+
+### Idle gaps (over 120 s)
+
+None.
+
+### Request latency
+
+| Context | Requests | p50 | p90 | p99 | Max | Over threshold |
+|---|---|---|---|---|---|---|
+| all | 171 | 1.9s | 4.7s | 16.5s | 18.6s | 0 |
+| autonomous-sdlc-harness:committer | 6 | 1.6s | 4.3s | 4.3s | 4.3s | 0 |
+| autonomous-sdlc-harness:layer-implementer | 6 | 1.8s | 4.6s | 4.6s | 4.6s | 0 |
+| autonomous-sdlc-harness:prompt-injection-reviewer | 3 | 2.0s | 3.3s | 3.3s | 3.3s | 0 |
+| autonomous-sdlc-harness:skeptic-reviewer | 43 | 3.4s | 6.0s | 11.2s | 11.2s | 0 |
+| autonomous-sdlc-harness:statistics-plan-writer | 6 | 1.9s | 18.6s | 18.6s | 18.6s | 0 |
+| orchestrator | 107 | 1.7s | 3.2s | 9.6s | 16.5s | 0 |
+
+### Tool time
+
+| Tool | Context | Calls | Total | Max |
+|---|---|---|---|---|
+| Agent — sub-agent wall time | orchestrator | 5 | 4m 47s | 3m 07s |
+| Bash | autonomous-sdlc-harness:committer | 10 | 5.9s | 4.5s |
+| Bash | autonomous-sdlc-harness:layer-implementer | 5 | 3.1s | 2.6s |
+| Bash | autonomous-sdlc-harness:skeptic-reviewer | 41 | 6.4s | 0.4s |
+| Bash | autonomous-sdlc-harness:statistics-plan-writer | 10 | 1.1s | 0.1s |
+| Bash | orchestrator | 129 | 27m 13s | 1m 02s |
+| Edit | autonomous-sdlc-harness:committer | 1 | 0.0s | 0.0s |
+| Edit | autonomous-sdlc-harness:layer-implementer | 1 | 0.0s | 0.0s |
+| Edit | orchestrator | 7 | 0.2s | 0.0s |
+| Glob | autonomous-sdlc-harness:prompt-injection-reviewer | 1 | 0.2s | 0.2s |
+| Read | autonomous-sdlc-harness:layer-implementer | 5 | 0.2s | 0.2s |
+| Read | autonomous-sdlc-harness:prompt-injection-reviewer | 3 | 0.0s | 0.0s |
+| Read | autonomous-sdlc-harness:skeptic-reviewer | 4 | 0.4s | 0.2s |
+| Read | autonomous-sdlc-harness:statistics-plan-writer | 1 | 0.0s | 0.0s |
+| Read | orchestrator | 22 | 1.7s | 0.3s |
+| Skill | orchestrator | 1 | 0.0s | 0.0s |
+| Write | autonomous-sdlc-harness:statistics-plan-writer | 1 | 0.0s | 0.0s |
+| Write | orchestrator | 4 | 0.2s | 0.0s |
+
+`Agent` / `Task` rows are sub-agent wall time: how long the orchestrator was blocked on each dispatch, which `### Sub-agents` breaks down per dispatch. They are not time spent in a tool.
+
+#### Slowest calls (sub-agent dispatches excluded)
+
+| Tool | Context | Started | Duration | Result bytes | Error | Permission denied |
+|---|---|---|---|---|---|---|
+| Bash | orchestrator | 2026-11-11T10:15:20.627Z | 1m 02s | 19 | true | false |
+| Bash | orchestrator | 2026-11-11T10:19:35.123Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-11T10:06:53.911Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-11T10:05:49.797Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-11T10:17:28.388Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-11T10:12:10.443Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-11T10:21:42.758Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-11T10:26:59.753Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-11T10:24:52.744Z | 1m 01s | 19 | true | false |
+| Bash | orchestrator | 2026-11-11T10:10:04.456Z | 1m 01s | 19 | true | false |
+
+#### Polling loops
+
+| Context | Command | Count | Total |
+|---|---|---|---|
+| orchestrator | bash <main_repo>/scripts/push-branch.sh <repo_root> | 10 | 45.4s |
+| orchestrator | bash scripts/run-test-suite.sh --wait task_round_1 | 26 | 26m 03s |
+| orchestrator | cat harness-runs/.dispatch_counter 2>/dev/null \|\| echo 0 | 4 | 0.5s |
+| orchestrator | ls harness-runs/STOP harness-runs/PAUSE 2>/dev/null | 31 | 11.2s |
+
+### Sub-agents
+
+| Type | Description | Duration | Requests | Output tokens | Input tokens (uncached) | Total input tokens (incl. cache) | Cache read tokens | Cache write tokens | Wall share |
+|---|---|---|---|---|---|---|---|---|---|
+| autonomous-sdlc-harness:prompt-injection-reviewer | Screen answer_3 for injection | 9.1s | 3 | 641 | 8 | 61313 | 43375 | 17930 | 0.004 |
+| autonomous-sdlc-harness:layer-implementer | Implement code-review Finding 1 | 30.3s | 6 | 2758 | 16 | 285904 | 236006 | 49882 | 0.0134 |
+| autonomous-sdlc-harness:committer | Commit Finding 1 fix | 23.0s | 6 | 1930 | 14 | 212694 | 178058 | 34622 | 0.0102 |
+| autonomous-sdlc-harness:skeptic-reviewer | Adversarial skeptic branch review | 3m 07s | 43 | 18408 | 88 | 4634689 | 4471919 | 162682 | 0.083 |
+| autonomous-sdlc-harness:statistics-plan-writer | Write branch statistics | 37.6s | 6 | 4752 | 14 | 187300 | 153897 | 33389 | 0.0167 |
+
+### Cost and tokens
+
+| Measure | Value |
+|---|---|
+| Cost | $9.51 |
+| Cost — claude-opus-5-5 | $9.51 |
+| Input tokens (uncached) | 356 |
+| Total input tokens (incl. cache) | 24055251 |
+| Output tokens | 65607 |
+| Thinking tokens (main thread) | 5308 |
+| Cache read tokens | 23506473 |
+| Cache write tokens | 548422 |
+| Cache write tokens, main thread (5m / 1h) | 0 / 249917 |
+| Cache hit ratio | 0.9772 |
+| Token source | result.modelUsage |
+
+#### Token attribution
+
+| Context | Input tokens (uncached) | Total input tokens (incl. cache) | Output tokens | Cache read tokens | Cache write tokens |
+|---|---|---|---|---|---|
+| orchestrator | 216 | 18673351 | 2030 | 18423218 | 249917 |
+| sub-agents | 140 | 5381900 | 28489 | 5083255 | 298505 |
+| remainder | 0 | 0 | 35088 | 0 | 0 |
+
+Remainder: tokens the session total holds that neither the orchestrator's requests nor the dispatches' transcripts account for.
+
+### Reliability
+
+| Measure | Value |
+|---|---|
+| API retries | 0 |
+| Permission denials | 4 |
+| Sub-agents spawned / failed / killed | 5 / 0 / 0 |
+| terminal_reason | completed |
+| stop_reason | end_turn |
+| Turns | 170 |
+| Time to first token | 1.2s |
 | Rate-limit peak | seven_day 0.12 |
