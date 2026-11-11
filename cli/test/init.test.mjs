@@ -494,7 +494,7 @@ const RETURNS_PROMPTLY_MS = 3000;
  * process that is actually sleeping and signalling it leaves nothing behind.
  */
 const DEV_SERVER_STUB = `#!/bin/sh
-echo "port=\${HARNESS_DEV_SERVER_PORT:-none} args=$*"
+echo "port=\${DEVSCENE_DEV_SERVER_PORT:-none} args=$*"
 exec sleep ${DEV_SERVER_STUB_SECONDS}
 `;
 
@@ -7945,8 +7945,8 @@ const TOPIC = 'harness-t0p1c-nowhere-else-9f3';
 const UNRECOGNISED_DESTINATION = 'not a destination';
 
 /** The two keys the notifier recognises, asserted by name because the file is a contract with it. */
-const PUSH_URL_KEY = 'HARNESS_PUSH_URL';
-const PUSH_CMD_KEY = 'HARNESS_PUSH_CMD';
+const PUSH_URL_KEY = 'DEVSCENE_PUSH_URL';
+const PUSH_CMD_KEY = 'DEVSCENE_PUSH_CMD';
 
 /**
  * A throwaway directory to point `XDG_CONFIG_HOME` at, and the settings file that resolves under it.
@@ -8041,7 +8041,7 @@ test('push notifications are opt-in, and an opt-in without an endpoint writes no
     });
 
     const content = readFileSync(machine.file, 'utf8');
-    assert.match(content, new RegExp(`^HARNESS_PUSH_URL=https://ntfy\\.sh/${TOPIC}$`, 'm'));
+    assert.match(content, new RegExp(`^DEVSCENE_PUSH_URL=https://ntfy\\.sh/${TOPIC}$`, 'm'));
     assert.equal(await modeOf(machine.file), 0o600, 'the file holding a push credential is readable beyond its owner');
     assert.equal(await modeOf(machine.dir), 0o700, 'the directory holding a push credential is not 0700');
     assert.ok(!stdout.includes(TOPIC), `the topic was printed back on stdout:\n${stdout}`);
@@ -8056,7 +8056,7 @@ test('push notifications are opt-in, and an opt-in without an endpoint writes no
 
     await initOk(dir, ['--notifications', '--push-url', `ntfy.sh/${TOPIC}`], { XDG_CONFIG_HOME: machine.home });
 
-    assert.match(readFileSync(machine.file, 'utf8'), new RegExp(`^HARNESS_PUSH_URL=https://ntfy\\.sh/${TOPIC}$`, 'm'));
+    assert.match(readFileSync(machine.file, 'utf8'), new RegExp(`^DEVSCENE_PUSH_URL=https://ntfy\\.sh/${TOPIC}$`, 'm'));
   });
 
   await t.test("another service's URL is accepted as well, and single-quoted where a shell would split it", async (subtest) => {
@@ -8815,12 +8815,12 @@ test('the GitHub workflows arrive with execution.target github-actions, and only
     }
     assert.ok(stdout.includes('ready_for_review'), `the closing report does not name ready_for_review:\n${stdout}`);
     assert.ok(
-      stdout.includes('gh secret set HARNESS_GIT_TOKEN'),
-      `the closing report does not print gh secret set HARNESS_GIT_TOKEN:\n${stdout}`,
+      stdout.includes('gh secret set DEVSCENE_GIT_TOKEN'),
+      `the closing report does not print gh secret set DEVSCENE_GIT_TOKEN:\n${stdout}`,
     );
     assert.ok(
       !stdout.includes("so the job's pushes trigger your own CI"),
-      `the closing report still claims the job's pushes trigger CI when HARNESS_GIT_TOKEN is set:\n${stdout}`,
+      `the closing report still claims the job's pushes trigger CI when DEVSCENE_GIT_TOKEN is set:\n${stdout}`,
     );
     // The pre-push hook init installs refuses this form.
     assert.ok(!stdout.includes('git push origin '), `the closing report prints a push the hook refuses:\n${stdout}`);
@@ -8854,7 +8854,7 @@ test('the GitHub workflows arrive with execution.target github-actions, and only
 const UPGRADE_WORKFLOWS = '--upgrade-workflows';
 
 /** A pin line of the run workflow, the value captured without its quotes. */
-const CLI_VERSION_LINE = /^\s*HARNESS_CLI_VERSION: '([^']*)'$/gm;
+const CLI_VERSION_LINE = /^\s*DEVSCENE_CLI_VERSION: '([^']*)'$/gm;
 
 /** The schedule an adopter tuned, and the comment each planted file carries only before an upgrade. */
 const TUNED_CRON = "'0 * * * *'";
@@ -8951,15 +8951,15 @@ test('init --upgrade-workflows re-pins an older workflow after a .bak, and nothi
       'gh auth refresh -s workflow',
       `git push --no-verify origin ${defaultBranch}`,
       'finishes on the version it started with',
-      'gh variable set HARNESS_RUN_ACTORS --body <login,...>',
+      'gh variable set DEVSCENE_RUN_ACTORS --body <login,...>',
     ];
     for (const name of present) assert.ok(stdout.includes(name), `the upgrade report does not name ${name}:\n${stdout}`);
     const absent = [
       'Add the harness workflows',
       'gh secret set',
-      'gh variable set HARNESS_RUNNER ',
-      'gh variable set HARNESS_TRIGGER_LABEL',
-      'gh variable set HARNESS_TRIGGER_ALLOWED_BOTS',
+      'gh variable set DEVSCENE_RUNNER ',
+      'gh variable set DEVSCENE_TRIGGER_LABEL',
+      'gh variable set DEVSCENE_TRIGGER_ALLOWED_BOTS',
       'Do not commit the .bak files',
     ];
     for (const name of absent) {
