@@ -25,7 +25,7 @@ The autonomous flow has no way to *suspend* a run short of the hard `STOP` (whic
 auto-resumed). This command drops a **`<state_dir>/PAUSE`** request into a running run's **run copy**. At its
 next safety-contract checkpoint, if the tree has no uncommitted tracked changes (a clean boundary), the
 orchestrator appends a note to `<state_dir>/PAUSE_PROGRESS.md`, writes `<state_dir>/PAUSE_ACK`, and **ends its
-session** — the watcher marks the run `paused` and notifies. Resume later with `/autonomous-sdlc-harness:branch-resume <branch>`
+session** — the watcher marks the run `paused` and notifies. Resume later with `/devscene:branch-resume <branch>`
 (the watcher re-launches from the committed flow-progress ledger). Wraps "Pause / resume a run" in
 `${CLAUDE_PLUGIN_ROOT}/docs/AUTONOMOUS_FLOW.md`.
 
@@ -37,8 +37,8 @@ which it removes before it ends. The only scripts it invokes are `<scripts_dir>/
 `<scripts_dir>/remote-run.sh pause`, on the GitHub route; it names `remote-run.sh stop` in its report and never runs it. It must NOT modify
 `<scripts_dir>/autonomous-watcher.sh`, `<scripts_dir>/remote-run.sh`, the engines, or the instruction forks.
 
-**Usage:** type `/autonomous-sdlc-harness:branch-pause`. Optionally target a branch with a leading `<branch>: ` prefix and add a
-free-text reason after it, e.g. `/autonomous-sdlc-harness:branch-pause feat_settings_search: session token window nearly full`. The
+**Usage:** type `/devscene:branch-pause`. Optionally target a branch with a leading `<branch>: ` prefix and add a
+free-text reason after it, e.g. `/devscene:branch-pause feat_settings_search: session token window nearly full`. The
 reason (everything after any `<branch>: ` prefix) is written verbatim as the PAUSE file's body for your
 own audit — the orchestrator only checks the file's **presence**, never its content. On the GitHub route no `PAUSE` file is
 written and the reason is not sent.
@@ -90,7 +90,7 @@ written and the reason is not sent.
 5. Report: the run will honor the pause at its **next clean tracked-tree checkpoint** (it lets any pending
    commit finish first, so an in-flight unit is not left half-done), then write `PAUSE_PROGRESS.md` and end
    its session; the watcher will mark it `paused` and notify. Tell the user to resume later with
-   `/autonomous-sdlc-harness:branch-resume <branch>` (or by dropping `<state_dir>/RESUME` in the run copy). Note that the pause is
+   `/devscene:branch-resume <branch>` (or by dropping `<state_dir>/RESUME` in the run copy). Note that the pause is
    not instantaneous — the checkpoint is reached between sub-agent dispatches, so an in-flight dispatch
    (e.g. a long interactive-test or review) finishes first.
 
@@ -98,6 +98,6 @@ written and the reason is not sent.
    `bash <scripts_dir>/remote-run.sh pause <branch>` and report its result: exit 0, the pause dispatch was
    sent; exit 2 or 3, report its message — nothing reached the run. On a send, report that the job finds the
    `harness pause <branch>` run by polling and yields at its next clean checkpoint exactly as a local run
-   does, and that `/autonomous-sdlc-harness:branch-resume <branch>` resumes it. To stop a remote run outright
+   does, and that `/devscene:branch-resume <branch>` resumes it. To stop a remote run outright
    rather than pause it, `bash <scripts_dir>/remote-run.sh stop <branch>` cancels its job and its chain —
    report that command; never run it.
