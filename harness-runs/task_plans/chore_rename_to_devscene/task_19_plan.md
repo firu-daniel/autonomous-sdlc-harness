@@ -23,3 +23,9 @@
 - `git grep -n -o -E '\]\([^)]*\)' -- llms.txt` lists only targets that start `https://github.com/firu-daniel/devscene/blob/main/` or `https://github.com/firu-daniel/devscene/tree/main/`, each with the same path after the prefix as at `HEAD`.
 - `git grep -n -F 'autonomous-sdlc-harness' -- llms.txt scripts/check-llms-txt.sh` prints nothing.
 - `head -n 1 llms.txt` prints `# DevScene`.
+
+**Deviations from plan:**
+
+- Evidence downgrade: the Work bullet's `bash -n scripts/check-llms-txt.sh` was refused by the tool layer (the call was denied in don't-ask mode, once with an absolute path and once with a relative one). The parse claim rests instead on `bash scripts/typecheck.sh` (the configured `commands.typecheck`), whose first step `scripts/check-shell-parse.sh` parses every `*.sh` that `git ls-files --cached --others --exclude-standard` lists, which includes this file. It reported `check-shell-parse: 124 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`, followed by `PASS: typecheck`.
+- Gate 6c (`scripts/check-llms-txt.sh`) itself was not run. It is a gate script that `commands.test` runs through `scripts/run-gates.sh`, so it is deferred to the Run gates phase, as this file's Work bullet already says.
+- The three Verification bullets were run as written, with these results. `git grep -n -o -E '\]\([^)]*\)' -- llms.txt` lists 35 targets. Each one starts `https://github.com/firu-daniel/devscene/blob/main/` or `…/tree/main/`. `git diff -- llms.txt` shows that the only change on each link line is the slug, so every path is the same as at `HEAD`. `git grep -n -F 'autonomous-sdlc-harness' -- llms.txt scripts/check-llms-txt.sh` printed nothing. `head -n 1 llms.txt` printed `# DevScene`.

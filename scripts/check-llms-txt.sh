@@ -4,9 +4,9 @@
 # states the contract in prose.
 #
 # THE CONTRACT.
-#   1. Line 1 is exactly `# autonomous-sdlc-harness`.
+#   1. Line 1 is exactly `# DevScene`.
 #   2. A line starting `> ` appears before the first line starting `## `.
-#   3. Every `](…)` target is `https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/<path>`
+#   3. Every `](…)` target is `https://github.com/firu-daniel/devscene/blob/main/<path>`
 #      with <path> a tracked file, or `…/tree/main/<path>` with <path> a tracked directory.
 #   4. No target carries `#` or `?`, no <path> has an empty, `.` or `..` segment, and no target has any other form.
 #   5. No <path> equals, or starts with `<entry>/` for, an entry of publish-main.sh's `removed_paths`.
@@ -40,8 +40,8 @@ if [ -z "$repo_root" ] || ! cd "$repo_root"; then
 fi
 
 publish_script="scripts/publish-main.sh"
-blob_prefix="https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/"
-tree_prefix="https://github.com/firu-daniel/autonomous-sdlc-harness/tree/main/"
+blob_prefix="https://github.com/firu-daniel/devscene/blob/main/"
+tree_prefix="https://github.com/firu-daniel/devscene/tree/main/"
 
 findings=0
 finding() {
@@ -158,8 +158,8 @@ while IFS= read -r line || [ -n "$line" ]; do
   done
 done <"$file"
 
-if [ "$first_line" != "# autonomous-sdlc-harness" ]; then
-  finding "line 1 '${first_line}'" "must be exactly '# autonomous-sdlc-harness'"
+if [ "$first_line" != "# DevScene" ]; then
+  finding "line 1 '${first_line}'" "must be exactly '# DevScene'"
 fi
 if [ "$quote_seen" -eq 0 ]; then
   finding "$file" "no line starting '> ' before the first line starting '## '"
