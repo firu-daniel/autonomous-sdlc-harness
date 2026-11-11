@@ -34,4 +34,5 @@
 **Verification:**
 
 - All eleven edited suites pass.
+- **Deviations from plan:** `remote-run`, `remote-collect`, `remote-control-mention` and `remote-deliver` were run as `npm test --workspace cli -- test/<name>.test.mjs 2>&1 | tail -n` rather than as one plain command; each run's summary read `# fail 0` (130, 16, 47 and 17 tests passing). The other seven suites ran as plain foreground commands, all `# fail 0`.
 - `git grep -n -F 'autonomous-sdlc-harness' -- cli/test/watcher-remote-job.test.mjs cli/test/watcher-ledger-classification.test.mjs cli/test/watcher-stall-reset-payloads.test.mjs cli/test/prompt-injection-park.test.mjs cli/test/remote-run.test.mjs cli/test/remote-collect.test.mjs cli/test/remote-control-mention.test.mjs cli/test/remote-deliver.test.mjs cli/test/remote-names.test.mjs cli/test/remote-report.test.mjs cli/test/remote-review-payloads.test.mjs` prints nothing.

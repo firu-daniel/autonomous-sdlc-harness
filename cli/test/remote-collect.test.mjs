@@ -456,7 +456,7 @@ test('a first run whose job never started, with its issue\'s started marker: one
   const result = await f.collect(neverStarted({ olderBundle: false, prs: [], comments: { 7: [botComment('started')] } }));
   const body = await assertNotStarted(f, result, before, 7);
   assert.ok(body.includes('Comment `@sdlc-harness resume`'), body);
-  assert.ok(notifiedNotStarted(f).includes('/autonomous-sdlc-harness:branch-resume'));
+  assert.ok(notifiedNotStarted(f).includes('/devscene:branch-resume'));
   assert.deepEqual(labelCalls(f.calls()), [labelOn(7, 'paused')]);
 });
 
@@ -469,7 +469,7 @@ test('a first run whose job never started, with no marker: one issue comment nam
   assert.ok(body.includes(ROUTE_CHOICE), body);
   assert.ok(!body.includes('harness-state'), body);
   assert.ok(!body.includes('@sdlc-harness resume'), body);
-  assert.ok(!notifiedNotStarted(f).includes('/autonomous-sdlc-harness:branch-resume'));
+  assert.ok(!notifiedNotStarted(f).includes('/devscene:branch-resume'));
   assert.deepEqual(labelCalls(f.calls()), [labelOn(7, 'failed')]);
 });
 

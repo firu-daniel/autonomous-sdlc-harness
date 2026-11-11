@@ -348,7 +348,7 @@ test('none: the launch line, the start and stop records, and the parked detail',
     assert.equal(j.status().decision, 'stop');
     const parked = j.notifications().filter((n) => n.event === 'parked');
     assert.equal(parked.length, 1);
-    assert.match(parked[0].detail, new RegExp(`/autonomous-sdlc-harness:branch-answer ${j.branch}`));
+    assert.match(parked[0].detail, new RegExp(`/devscene:branch-answer ${j.branch}`));
     assert.match(parked[0].detail, /Run workflow on harness-run\.yml .*resume answer/);
     assert.match(parked[0].detail, /engine `task`/);
     assert.match(parked[0].detail, /from the branch `[^`]+` \(Use workflow from\)/);
@@ -368,7 +368,7 @@ test('a local run that parks names neither the job command nor the GitHub route'
 
   const parked = w.notifications().filter((n) => n.event === 'parked');
   assert.equal(parked.length, 1, w.watcherLog());
-  assert.doesNotMatch(parked[0].detail, /\/autonomous-sdlc-harness:branch-answer/);
+  assert.doesNotMatch(parked[0].detail, /\/devscene:branch-answer/);
   assert.doesNotMatch(parked[0].detail, /Run workflow on/);
 });
 
@@ -477,7 +477,7 @@ test('answer: a seeded park_loop_cycles and a no-progress re-park become park_lo
   assert.equal(j.status().park_loop_cycles, '2');
   const loop = j.notifications().filter((n) => n.event === 'park_loop');
   assert.equal(loop.length, 1);
-  assert.match(loop[0].detail, /\/autonomous-sdlc-harness:branch-status feat_x/);
+  assert.match(loop[0].detail, /\/devscene:branch-status feat_x/);
   assert.match(loop[0].detail, /resume answer, park_loop_clear true/);
   j.assertLaneUntouched();
 });
@@ -682,7 +682,7 @@ test('control poll: a harness pause run newer than the start pauses the run for 
   assert.equal(j.status().decision, 'stop');
   const paused = j.notifications().filter((n) => n.event === 'paused');
   assert.equal(paused.length, 1);
-  assert.match(paused[0].detail, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+  assert.match(paused[0].detail, /\/devscene:branch-resume feat_x/);
   assert.match(paused[0].detail, /resume pause/);
   assert.ok(j.ghCalls().some((c) => c.startsWith('run list')), j.ghCalls().join('\n'));
   j.assertLaneUntouched();
@@ -970,7 +970,7 @@ test('usage: a short reset is waited out in the job, a reset past the deadline g
 
     const last = paused.at(-1).detail;
     assert.match(last, /the in-job wait passed 2s after the reset without a resume/);
-    assert.match(last, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+    assert.match(last, /\/devscene:branch-resume feat_x/);
     assert.match(last, /resume pause/);
     assert.doesNotMatch(last, /usage limit reached — resumes automatically after/);
 
@@ -1029,7 +1029,7 @@ test('auto-resume: bounded, and reset by a user action', async (t) => {
 
 test('phases.qa: a job tells the task and user_review engines the QA phase is skipped, and says so on completion', async (t) => {
   const SKIP_CLAUSE = /executes in a GitHub Actions job \(execution: github-actions\), where the interactive-test phase is unsupported/;
-  const SKIP_DETAIL = /interactive tests skipped \(unsupported on GitHub Actions\): run \/autonomous-sdlc-harness:branch-qa-test feat_x locally/;
+  const SKIP_DETAIL = /interactive tests skipped \(unsupported on GitHub Actions\): run \/devscene:branch-qa-test feat_x locally/;
 
   for (const qa of [true, false]) {
     await t.test(`phases.qa ${qa}`, async (t) => {
@@ -1253,7 +1253,7 @@ test('unfinished: a zero exit over an unfinished ledger is resumed, bounded, the
     const notes = j.notifications();
     const paused = notes.filter((n) => n.event === 'paused');
     assert.equal(paused.length, 1, JSON.stringify(notes));
-    assert.match(paused[0].detail, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+    assert.match(paused[0].detail, /\/devscene:branch-resume feat_x/);
     assert.equal(notes.some((n) => n.event === 'completed'), false, JSON.stringify(notes));
     assert.equal(notes.some((n) => /API overload/.test(n.detail ?? '')), false, JSON.stringify(notes));
   });
@@ -1292,7 +1292,7 @@ test('unfinished: a zero exit over an unfinished ledger is resumed, bounded, the
     const notes = j.notifications();
     const paused = notes.filter((n) => n.event === 'paused');
     assert.equal(paused.length, 1, JSON.stringify(notes));
-    assert.match(paused[0].detail, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+    assert.match(paused[0].detail, /\/devscene:branch-resume feat_x/);
     assert.equal(notes.some((n) => n.event === 'completed'), false, JSON.stringify(notes));
     assert.match(j.watcherLog(), /paused \(unfinished\)/);
   });
@@ -1379,7 +1379,7 @@ test('resumed, no ledger: an answer resume that exits 0 before any ledger is nev
   assert.equal(notes.some((n) => n.event === 'completed'), false, JSON.stringify(notes));
   const paused = notes.filter((n) => n.event === 'paused');
   assert.equal(paused.length, 1, JSON.stringify(notes));
-  assert.match(paused[0].detail, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+  assert.match(paused[0].detail, /\/devscene:branch-resume feat_x/);
   const log = j.watcherLog();
   assert.match(log, /has no readable ledger \(absent: .*\) after an answer resume — not classifying it completed/);
   assert.doesNotMatch(log, /completed — branch ready for review/);

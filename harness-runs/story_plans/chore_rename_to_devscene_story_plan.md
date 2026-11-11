@@ -62,7 +62,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_rename_to_devscene/task_<K
 7. [x] **Task 7** — Respell the `daemon`, stack-preset and retrieval suites and the shared fixture helper _(layer: cli)_ _(points: 15)_
 8. [x] **Task 8** — Respell the `doctor` suite _(layer: cli)_ _(points: 20)_
 9. [x] **Task 9** — Respell the suites that pin the shell library's machine paths and the script templates _(layer: cli)_ _(points: 15)_
-10. [ ] **Task 10** — Respell the watcher, remote and prompt-injection suites _(layer: cli)_ _(points: 20)_
+10. [x] **Task 10** — Respell the watcher, remote and prompt-injection suites _(layer: cli)_ _(points: 20)_
 11. [ ] **Task 11** — Rename the plugin manifest, add `displayName`, and respell the plugin README, agents, flow whiteboard and samples _(layer: plugin)_ _(points: 15)_
 12. [ ] **Task 12** — Respell every command reference under `plugin/commands/` _(layer: plugin)_ _(points: 15)_
 13. [ ] **Task 13** — Respell every command reference under `plugin/instructions/` _(layer: plugin)_ _(points: 15)_

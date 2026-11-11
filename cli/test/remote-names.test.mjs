@@ -86,7 +86,7 @@ test('the run-control names keep their literal values', () => {
   assert.deepEqual([...MENTION_ACT_VERBS], ['answer', 'pause', 'resume', 'status']);
   assert.deepEqual([...MENTION_CONFIRM_VERBS], ['stop', 'clear']);
   assert.equal(MENTION_COMMAND_NAME, 'harness-read-mention');
-  assert.equal(MENTION_COMMAND, '/autonomous-sdlc-harness:harness-read-mention');
+  assert.equal(MENTION_COMMAND, '/devscene:harness-read-mention');
 });
 
 test('the mention act and confirm verbs partition COMMAND_VERBS', () => {

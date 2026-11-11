@@ -683,7 +683,7 @@ test('sync with the newest bundle expired records paused / expired with the way 
   assert.equal(rec.pause_reason, 'expired');
   assert.equal(rec.remote_run_id, '102');
   assert.equal(rec.remote_run_url, runUrl(102));
-  assert.equal(rec.remote_detail, 'the state bundle of run 102 expired on 2026-01-02T00:00:00Z: resume from the committed ledger with /autonomous-sdlc-harness:branch-resume feat_x, or re-drop the task');
+  assert.equal(rec.remote_detail, 'the state bundle of run 102 expired on 2026-01-02T00:00:00Z: resume from the committed ledger with /devscene:branch-resume feat_x, or re-drop the task');
   assert.deepEqual(downloads(fx), []);
   assert.equal(existsSync(mirror(fx, 'question_1.md')), false);
 });
@@ -707,7 +707,7 @@ test('sync of an already-applied parked record whose bundle has since expired fl
   assert.equal(rec.status, 'paused');
   assert.equal(rec.pause_reason, 'expired');
   assert.equal(rec.remote_run_id, '101');
-  assert.ok(rec.remote_detail.includes('/autonomous-sdlc-harness:branch-resume feat_x'), rec.remote_detail);
+  assert.ok(rec.remote_detail.includes('/devscene:branch-resume feat_x'), rec.remote_detail);
   assert.ok(existsSync(mirror(fx, 'question_1.md')), 'the mirror question files were removed');
   assert.equal(downloads(fx).length, 1);
 });
@@ -723,7 +723,7 @@ test('status prints the expired line and leaves every file under the state direc
     artifacts: { 101: [{ name: 'harness-state', expired: true, expires_at: '2026-01-02T00:00:00Z' }] },
   }));
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /the state bundle of run 101 expired on 2026-01-02T00:00:00Z: resume from the committed ledger with \/autonomous-sdlc-harness:branch-resume feat_x/);
+  assert.match(result.stdout, /the state bundle of run 101 expired on 2026-01-02T00:00:00Z: resume from the committed ledger with \/devscene:branch-resume feat_x/);
   assert.deepEqual(readFileSync(join(fx.dir, REGISTRY)), registryBefore);
   assert.deepEqual(await snapshotTree(fx.dir, { exclude: ['.git', 'stub'] }), before);
 });
@@ -998,7 +998,7 @@ test('restore --resume answer with the newest bundle expired exits 2 naming the 
     expiredRestoreEnv(fx, { HARNESS_INPUT_ANSWERS: JSON.stringify({ 1: 'yes\n' }) }));
   assert.equal(result.status, 2, result.stderr);
   assert.ok(result.stderr.includes(`run 402 expired on ${EXPIRES_AT}`), result.stderr);
-  assert.ok(result.stderr.includes('/autonomous-sdlc-harness:branch-resume feat_x'), result.stderr);
+  assert.ok(result.stderr.includes('/devscene:branch-resume feat_x'), result.stderr);
   assert.deepEqual(downloads(fx), []);
   assert.equal(existsSync(mirror(fx, 'answer_1.md')), false);
   assert.equal(existsSync(join(fx.dir, REMOTE_STATUS)), false);
@@ -1322,7 +1322,7 @@ test('continue with HARNESS_REMOTE_STOP set sends nothing and notifies paused on
   assert.equal(notes().length, 1);
   assert.equal(notes()[0].event, 'paused');
   assert.match(notes()[0].detail, /remote stop is set/);
-  assert.match(notes()[0].detail, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+  assert.match(notes()[0].detail, /\/devscene:branch-resume feat_x/);
   assert.match(notes()[0].detail, /Run workflow on harness-run\.yml .*resume pause/);
 });
 
@@ -1357,7 +1357,7 @@ test('continue on wait-poller with a failing enable sends a paused notification 
   const message = readFileSync(body, 'utf8');
   assert.match(message, /Auto-resume is unavailable/);
   assert.match(message, /HTTP 403: Resource not accessible by integration/);
-  assert.match(message, /autonomous-sdlc-harness:branch-resume feat_x/);
+  assert.match(message, /devscene:branch-resume feat_x/);
   const heading = readFileSync(title, 'utf8');
   assert.ok(heading.startsWith('[o/r] '), heading);
   assert.match(heading, /paused/i);
@@ -1433,7 +1433,7 @@ test('continue with a failing run list fails closed: nothing sent, one paused no
   assert.equal(notes().length, 1);
   assert.equal(notes()[0].event, 'paused');
   assert.match(notes()[0].detail, /HTTP 502: bad gateway/);
-  assert.match(notes()[0].detail, /autonomous-sdlc-harness:branch-resume feat_x/);
+  assert.match(notes()[0].detail, /devscene:branch-resume feat_x/);
 });
 
 // ---------------------------------------------------------------------------
@@ -1486,13 +1486,13 @@ test('continue with HARNESS_REMOTE_STOP under forge github also comments on the 
   assert.deepEqual(workflowRuns(fx), []);
   assert.equal(notes().length, 1);
   assert.equal(notes()[0].event, 'paused');
-  assert.match(notes()[0].detail, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+  assert.match(notes()[0].detail, /\/devscene:branch-resume feat_x/);
 
   const comments = posted(fx).filter((call) => call.args.join(' ').startsWith(COMMENT_ON_7));
   assert.equal(comments.length, 1, joined(fx).join('\n'));
   assert.match(comments[0].body, /`HARNESS_REMOTE_STOP`/);
   assert.match(comments[0].body, /`@sdlc-harness resume`/);
-  assert.doesNotMatch(comments[0].body, /\/autonomous-sdlc-harness:/);
+  assert.doesNotMatch(comments[0].body, /\/devscene:/);
   assert.deepEqual(joined(fx).filter((line) => line.startsWith(LABEL_ON_7)), [`${LABEL_ON_7} -f labels[]=sdlc-harness: paused`]);
 });
 
@@ -1848,7 +1848,7 @@ test('poll whose re-enable fails sends one paused notification for the branch th
   assert.equal(sent[0].event, 'paused');
   assert.equal(sent[0].branch, 'feat_a');
   assert.match(sent[0].detail, /HTTP 403: forbidden/);
-  assert.match(sent[0].detail, /autonomous-sdlc-harness:branch-resume feat_a/);
+  assert.match(sent[0].detail, /devscene:branch-resume feat_a/);
 });
 
 test('poll counts an unfinished run already carrying a usage-paused bundle as waiting, and never dispatches it', async (t) => {
@@ -1924,7 +1924,7 @@ test('poll gives up on a dispatch that always fails: one paused notification at 
   assert.equal(sent[0].branch, 'feat_x');
   assert.match(sent[0].detail, /HTTP 404: harness-run\.yml not found/);
   assert.match(sent[0].detail, /after 3 attempts/);
-  assert.match(sent[0].detail, /autonomous-sdlc-harness:branch-resume feat_x/);
+  assert.match(sent[0].detail, /devscene:branch-resume feat_x/);
   assert.deepEqual(disables(fx), ['workflow disable harness-resume.yml']);
   assert.equal(pollState(fx).feat_x.notified, '1');
 
@@ -2020,7 +2020,7 @@ test('poll at the download bound sends one push-only bundle_unreadable, posts no
   assert.equal(sent[0].event, 'bundle_unreadable');
   assert.equal(sent[0].branch, 'feat_x');
   assert.match(sent[0].detail, /after 3 attempts \([^)]*no artifact matches\)/);
-  assert.match(sent[0].detail, /autonomous-sdlc-harness:branch-resume feat_x/);
+  assert.match(sent[0].detail, /devscene:branch-resume feat_x/);
   assert.deepEqual(issueWrites(fx), []);
   assert.deepEqual(posted(fx), []);
   assert.equal(pollState(fx).feat_x.notified, '1');
