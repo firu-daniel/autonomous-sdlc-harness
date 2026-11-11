@@ -112,7 +112,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_env_variables/tas
 17. [x] **Task 17** — Rename the variables in the sandbox-probe scripts, the probe runner workflow and the arm-A eval script _(layer: general)_ _(points: 10)_
 18. [x] **Task 18** — Rename the variables in the suites that read the plugin and this repository's scripts _(layer: cli)_ _(points: 8)_
 19. [x] **Task 19** — Rename the variables in `README.md` and `ARCHITECTURE.md` _(layer: general)_ _(points: 8)_
-20. [ ] **Task 20** — Rename the variables in `docs/cli.md`, `docs/watcher.md` and `docs/guard-verification.md` _(layer: general)_ _(points: 15)_
+20. [x] **Task 20** — Rename the variables in `docs/cli.md`, `docs/watcher.md` and `docs/guard-verification.md` _(layer: general)_ _(points: 15)_
 21. [ ] **Task 21** — Rename the variables in `docs/development.md` _(layer: general)_ _(points: 20)_
 22. [ ] **Task 22** — Rename the variables in `docs/remote-execution.md` _(layer: general)_ _(points: 20)_
 23. [ ] **Task 23** — Rename the variables in `docs/github-issue-trigger.md` and `docs/github-run-control.md` _(layer: general)_ _(points: 20)_
