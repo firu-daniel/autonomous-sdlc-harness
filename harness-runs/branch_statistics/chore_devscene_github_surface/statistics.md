@@ -2,11 +2,11 @@
 
 ## Summary
 
-- `success_rate`: **`100%`** — headline metric.
+- `success_rate`: **`98.6%`** — headline metric.
 - `story_points_total`: `370` — denominator (sum of every task's `_(points: <N>)_` story-point estimate in the story index's `## Phase 2 Readiness — Ordered Fix List`).
-- `issue_cost_total`: `0` — subtraction (sum of each user-review observation's severity weight, in story-point units).
+- `issue_cost_total`: `5` — subtraction (sum of each user-review observation's severity weight, in story-point units).
 - `story_plan_tasks`: `24` — retained raw count of `## Phase 2 Readiness — Ordered Fix List` task entries.
-- `user_review_issues`: `0` — retained raw count of observations across all `chore_devscene_github_surface_review*.md` user-review files.
+- `user_review_issues`: `1` — retained raw count of observations across all `chore_devscene_github_surface_review*.md` user-review files.
 
 Formula:
 
@@ -14,7 +14,7 @@ Formula:
 success_rate = round(clamp((story_points_total - issue_cost_total) / story_points_total, 0, 1) * 100, 1) percent
 ```
 
-Worked example: `round(clamp((370 - 0) / 370, 0, 1) * 100, 1)` = `100.0` = `100%`.
+Worked example: `round(clamp((370 - 5) / 370, 0, 1) * 100, 1)` = `round(98.6486…, 1)` = `98.6%`.
 
 Edge cases (the rate is always computed via the formula, then adjusted by these rules):
 
@@ -55,17 +55,21 @@ Per-source raw numbers and per-issue costs are retained so the metric can be ref
     - Task 23: `20`
     - Task 24: `20`
     - **sum (`story_points_total`)**: `370`
-  - `dispositioned_points`: `0` — no commit in `dev..HEAD` (run against `origin/dev..HEAD`, the only `dev` ref in this checkout) carries the `record disposition of ` record, so no task here was closed without a fix, and no unpointed token was matched.
+  - `dispositioned_points`: `0` — no commit in `dev..HEAD` (run as `origin/dev..HEAD`, the only `dev` ref in this checkout; a local `dev` does not exist) carries the `record disposition of ` record, so no task here was closed without a fix, and no unpointed token was matched.
   - Back-compat fallback did not fire: every entry carries a `_(points: …)_` tag.
-- **User-review source** — `user_review_issues`: `0`, `issue_cost_total`: `0`
-  - The glob `harness-runs/user_reviews/chore_devscene_github_surface_review*.md` matches no file (first write, pre-user-review), so there is no per-file count, no enumeration arm applied and no observation weighted.
-  - **total**: `0` observations → `issue_cost_total` `0`
-  - Each file's observation count is the count of whatever top-level enumeration that file uses, taken from the first of four arms to return non-zero and never summed across arms: (1) numbered `##`–`####` headings with required trailing punctuation, `grep -cE '^#{2,4} +[0-9]+[.):]'`; (2) top-level numbered/bulleted list items, `grep -cE '^[0-9]+\.|^[-*][[:space:]]'`; (3) an explicit per-observation marker the file itself uses, with the matching grep recorded beside the count; (4) `1`, reserved for a file with no enumeration of any kind.
+- **User-review source** — `user_review_issues`: `1`, `issue_cost_total`: `5` (per user-review file, then summed)
+  - The glob `harness-runs/user_reviews/chore_devscene_github_surface_review*.md` matches one file once `_fix_plan` matches are dropped.
+  - `harness-runs/user_reviews/chore_devscene_github_surface_review.md`: `1` observation → cost `5`. Counted by **arm 2, top-level list items** — `grep -cE '^[0-9]+\.|^[-*][[:space:]]' <file>` → `1`, arm 1 (`grep -cE '^#{2,4} +[0-9]+[.):]' <file>`) having returned `0`. Its sub-points `1a`, `1b` and `1c` are inline within the one top-level item, not separate top-level lines, so they are not counted separately. The observation's assigned weight:
+    1. remove all pre-rename backwards-compatibility support (the legacy `harness` trigger-label fallback, `init`'s 0.6.1 control-workflow repair, and the docs describing either) → **Minor** `5`
+  - **total**: `1` observation → `issue_cost_total` `5`
+  - Each file's observation count is the count of whatever top-level enumeration that file uses, taken from the first of four arms to return non-zero and never summed across arms: (1) numbered `##`–`####` headings with required trailing punctuation, `grep -cE '^#{2,4} +[0-9]+[.):]'` — here `0`; (2) top-level numbered/bulleted list items, `grep -cE '^[0-9]+\.|^[-*][[:space:]]'` — here `1`, so arm 2 is this file's count; (3) an explicit per-observation marker the file itself uses, with the matching grep recorded beside the count; (4) `1`, reserved for a file with no enumeration of any kind. The arm and its grep are recorded beside the file's count above. Every observation the user wrote is counted and weighted, including any a later fix plan verifies as OK — the count measures what the user found, not what survived triage.
   - Each observation is weighted in story-point units: **Major** `15` (explicit `[major]` marker, or the observation describes a broken/incorrect user-facing flow, a missing/client-only authorization gate, data loss/corruption/unprotected data, or an absent whole ported behaviour — the deciding phrase is quoted beside the observation), **Trivial** `2` (explicit `[trivial]` marker), **Minor** `5` (the default for every observation without a Major/Trivial classification).
+
+**Why the one observation took the Minor default.** It carries no explicit `[major]` or `[trivial]` marker, and read from the review text alone it describes none of the Major conditions. It asks for compatibility code and documentation to be removed. It does not report a user-facing flow that fails, a missing authorization gate, data loss or unprotected data, or a ported behaviour that is absent.
 
 ## Status
 
-- status: `pre-user-review` — `pre-user-review` means this file was written right after the branch (code) review with no user review yet (`issue_cost_total` `0` → `100%`); `post-user-review` means it was re-written after user-review fixes, with the issues from the `chore_devscene_github_surface_review*.md` files counted and weighted.
+- status: `post-user-review` — `pre-user-review` means this file was written right after the branch (code) review with no user review yet (`issue_cost_total` `0` → `100%`); `post-user-review` means it was re-written after user-review fixes, with the issues from the `chore_devscene_github_surface_review*.md` files counted and weighted.
 - last_updated: `2026-11-11`
 
 ## Notes
