@@ -13,7 +13,7 @@
  * existed. Every name — the directory, the file names, the template directory — is imported from
  * `remote/githubActions.ts`, which owns them.
  *
- * ## Six non-obvious choices, and where each comes from
+ * ## Five non-obvious choices, and where each comes from
  *
  * 1. **No configured value is rendered into either file; only this CLI's own version is.** The job
  *    reads `harness.config.json` at run time, so a workflow frozen with a configured value would go
@@ -39,24 +39,7 @@
  *    `forgeTriggerApplies`, carry no pin and are not upgraded,** because each calls the scripts on the
  *    default branch and shares their re-run contract. Both are copied verbatim like
  *    `devscene-resume.yml` (choice 3), and the trigger never carries a `forceOverride`, upgrade mode
- *    included. Neither is ever upgraded by pin; the control workflow's one exception is the
- *    byte-identical repair of choice 6.
- * 6. **Any `init` replaces a `devscene-control.yml` byte-identical to a release's copy GitHub could
- *    not parse ({@link UNPARSEABLE_CONTROL_RELEASES}), after a `.bak`.** The match is an exact
- *    SHA-256 over the LF-normalised bytes, not a parse: the package carries no YAML parser at run
- *    time (`.claude/context/conventions.md` → `## The stack…`, the no-runtime-dependency rule), and an
- *    exact match is the only copy known to be unedited, so it is the only one replacing loses nothing
- *    for. A copy still carrying {@link UNPARSEABLE_CONTROL_IF_LINE} but otherwise edited is kept and
- *    reported as `controlRepair: { kind: 'edited' }`. It runs on every `init`, not only under
- *    {@link UPGRADE_WORKFLOWS_FLAG}, because the file carries no pin for that mode to key on and an
- *    unparsable copy disables comment control whichever command the adopter reaches for. It is a
- *    per-request `forceOverride: 'always'`, not a new `WritePolicy`, on choice 4's precedent: the
- *    engine's `.bak`-then-replace is the operation, and the re-run contract stays `create-if-absent`.
- *    The repair's `.bak` is deliberately not in the managed `.gitignore` block: the repair happens
- *    once, and its `.bak` is meant to be seen and deleted.
- *
- * **This module owns {@link unparseableControlRoute}.** `init`'s warning and `doctor`'s failure both
- * print it, and neither re-spells it.
+ *    included. Neither is ever upgraded by pin.
  *
  * **Declared mirror.** `cli/templates/github/workflows/devscene-run.yml`'s `Install the pinned plugin`
  * step spells the route {@link upgradeWorkflowsCommand} produces,
@@ -71,7 +54,6 @@
  * re-run keeps that edit; `--force` replaces each after a `.bak` (`core/writer.ts`'s re-run table).
  */
 
-import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -114,54 +96,6 @@ export function upgradeWorkflowsCommand(version: string): string {
 export const IN_FLIGHT_RUNS_NOTE =
   "An upgrade reaches only the runs dropped after it is pushed: each run's branch carries the workflows it was cut with, so a run already in flight finishes on the version it started with, and moving one on purpose is a separate step (docs/remote-execution.md, section 7, Upgrading).";
 
-/**
- * Each release whose shipped control workflow GitHub could not parse, to the SHA-256 hex of a
- * copy's LF-normalised bytes (choice 6). The 0.6.1 digest is of 0.6.1's shipped control workflow —
- * git blob `1b4f0fc33200d876e4089ebe4013120e48a45335`, the control workflow template from `a4ae3c8`
- * through `31a2d55` — with its job-level `if:` line respelled to the current command handle, comment
- * marker and state-label prefix ({@link UNPARSEABLE_CONTROL_IF_LINE}); every other byte is the blob's.
- */
-export const UNPARSEABLE_CONTROL_RELEASES: Readonly<Record<string, string>> = {
-  '0.6.1': 'b197e3df1bb92b2c7eb41d3c03b4e7a8f51e92a11cb92fb0b76ffb93c12d67d1',
-};
-
-/** The job-level `if:` line, trimmed, that made 0.6.1's `devscene-control.yml` unparsable, respelled to the current handle, marker and prefix. */
-const UNPARSEABLE_CONTROL_IF_LINE =
-  "if: (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@dev-scene') && !contains(github.event.comment.body, '<!-- devscene')) || (github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'issues' && contains(join(github.event.issue.labels.*.name, ','), 'devscene: ')) || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'delete' && github.event.ref_type == 'branch')";
-
-/**
- * The one producer of the route from an unparsable `devscene-control.yml` to the fixed one. Complete
- * sentences ending in one `.`, ASCII only, no line break.
- */
-export function unparseableControlRoute(version: string): string {
-  const pinned = pinnedCliCommand(version);
-  const releases = Object.keys(UNPARSEABLE_CONTROL_RELEASES).join(' or ');
-  return (
-    `Run \`${pinned} init\`, which replaces a ${WORKFLOW_CONTROL_FILE} that ${releases} wrote and nobody edited, keeping the previous copy as a .bak; ` +
-    `for an edited copy, write the control job's if: as a folded block scalar (if: >- with the expression on the next line, indented), ` +
-    `or run \`${pinned} init --force\`, which regenerates every generated file after a .bak; ` +
-    `then commit the file and push it to the repository's default branch.`
-  );
-}
-
-/** What `init` decided about an existing `devscene-control.yml` a release wrote unparsable (choice 6). */
-export type ControlRepair =
-  | { readonly kind: 'replaced'; readonly release: string }
-  | { readonly kind: 'edited' }
-  | undefined;
-
-/** Classify an existing control workflow's text against {@link UNPARSEABLE_CONTROL_RELEASES}. */
-function classifyControl(existing: string): ControlRepair {
-  const normalised = existing.replace(/\r\n/g, '\n');
-  const digest = createHash('sha256').update(normalised, 'utf8').digest('hex');
-  const release = Object.keys(UNPARSEABLE_CONTROL_RELEASES).find(
-    (name) => UNPARSEABLE_CONTROL_RELEASES[name] === digest,
-  );
-  if (release !== undefined) return { kind: 'replaced', release };
-  if (normalised.split('\n').some((line) => line.trim() === UNPARSEABLE_CONTROL_IF_LINE)) return { kind: 'edited' };
-  return undefined;
-}
-
 const CRON_LINE = /^\s*- cron: /;
 
 /** Everything {@link writeGithubWorkflows} needs. */
@@ -201,12 +135,6 @@ export interface GithubWorkflowsResult {
   readonly trigger: boolean;
   /** Present exactly when `upgrade` was set, remote execution applied and `devscene-run.yml` existed. */
   readonly upgrade?: WorkflowUpgrade;
-  /**
-   * `'replaced'` when the plan replaces a byte-identical copy of `release`'s unparsable control
-   * workflow; `'edited'` when the copy carries {@link UNPARSEABLE_CONTROL_IF_LINE} and is kept; absent
-   * otherwise and whenever the forge workflows are not enqueued (choice 6).
-   */
-  readonly controlRepair?: ControlRepair;
 }
 
 /** The schedule a `- cron:` line carries, quotes stripped. */
@@ -291,7 +219,6 @@ export function writeGithubWorkflows({
   ];
 
   const trigger = forgeTriggerApplies(config);
-  let controlRepair: ControlRepair;
   if (trigger) {
     const triggerPath = join(repoRoot, ...WORKFLOW_TRIGGER_PATH.split('/'));
     plan.add({
@@ -303,13 +230,11 @@ export function writeGithubWorkflows({
     workflows.push({ absolute: triggerPath, repoPath: WORKFLOW_TRIGGER_PATH });
 
     const controlPath = join(repoRoot, ...WORKFLOW_CONTROL_PATH.split('/'));
-    if (existsSync(controlPath)) controlRepair = classifyControl(readFileSync(controlPath, 'utf8'));
     plan.add({
       path: controlPath,
       policy: 'create-if-absent',
       content: readTemplate(`${WORKFLOW_TEMPLATE_DIR}/${WORKFLOW_CONTROL_FILE}`),
       label: `workflow ${WORKFLOW_CONTROL_FILE}`,
-      ...(controlRepair?.kind === 'replaced' ? { forceOverride: 'always' as const } : {}),
     });
     workflows.push({ absolute: controlPath, repoPath: WORKFLOW_CONTROL_PATH });
   }
@@ -319,6 +244,5 @@ export function writeGithubWorkflows({
     workflows,
     trigger,
     ...(upgradeResult === undefined ? {} : { upgrade: upgradeResult }),
-    ...(controlRepair === undefined ? {} : { controlRepair }),
   };
 }

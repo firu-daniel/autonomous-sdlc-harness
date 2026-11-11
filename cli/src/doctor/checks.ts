@@ -186,7 +186,7 @@ import {
   pushEnvCandidates,
   type PushEnvCandidate,
 } from '../generators/notifications.js';
-import { IN_FLIGHT_RUNS_NOTE, pinnedCliCommand, unparseableControlRoute, upgradeWorkflowsCommand } from '../generators/githubWorkflows.js';
+import { IN_FLIGHT_RUNS_NOTE, pinnedCliCommand, upgradeWorkflowsCommand } from '../generators/githubWorkflows.js';
 import {
   DOCS_SEARCH_SERVER_SCRIPT_NAME,
   outerLoopScriptPath,
@@ -3162,10 +3162,7 @@ const REMOTE_GITHUB_CHECK: Check = {
           }
           if (name !== path) continue;
           unparsed.add(path);
-          const route =
-            path === WORKFLOW_CONTROL_PATH
-              ? unparseableControlRoute(version)
-              : `Check ${path} with actionlint, or re-render it with \`${pinnedCliCommand(version)} init --force\`, which keeps a .bak; then commit it and push it to the repository's default branch.`;
+          const route = `Check ${path} with actionlint, or re-render it with \`${pinnedCliCommand(version)} init --force\`, which keeps a .bak; then commit it and push it to the repository's default branch.`;
           failures.push(`GitHub lists ${path} by its path rather than its name, which it does for a workflow file it cannot parse, so that workflow runs for no event: ${route}`);
         }
         if (unseen.length > 0) {

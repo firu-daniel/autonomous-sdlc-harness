@@ -9,10 +9,7 @@
 # create-if-absent: from then on it is yours to tune, and a re-run of `init`
 # keeps your copy. `init --upgrade-workflows` does NOT re-render it: it carries
 # no version pin and calls the scripts on the default branch, so it shares
-# their re-run contract — `init --force` replaces it after a `.bak`. The one
-# exception: any `init` replaces, after a `.bak`, a copy that is byte for byte
-# the one 0.6.1 wrote, which GitHub could not parse; an edited copy of that one
-# is kept and named in `init`'s output. It is a
+# their re-run contract — `init --force` replaces it after a `.bak`. It is a
 # file of its own, apart from devscene-trigger.yml, so you can disable comment
 # control alone: disabling a workflow disables every event in it.
 #

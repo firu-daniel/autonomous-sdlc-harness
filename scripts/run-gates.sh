@@ -75,7 +75,7 @@ log="$tmp_dir/log"
 trap 'rm -f "$log" "$tmp_dir/focused.tests.tsv" "$tmp_dir/full.tests.tsv"; rmdir "$tmp_dir" 2>/dev/null' EXIT
 
 gr_init "$repo_root" "$tmp_dir"
-GR_PREREQUISITES='2a:2b,2c,2d,2e,11,13c,14a,14b,14c,14d'
+GR_PREREQUISITES='2a:2b,2c,2d,2e,11,13c,14a,14c,14d'
 GR_NARROWED_IDS='4'
 GR_TEST_FILE_PATTERN='^test/[A-Za-z0-9._/-]+\.test\.mjs$'
 GR_TEST_ROOT='cli'
@@ -418,7 +418,6 @@ run_unit() {
       # under --actionlint and --zizmor, pushed onto neither array.
       gate "14a rendered workflows parse as YAML" node scripts/check-rendered-workflows.mjs
       ;;
-    14b) gate_header 14 "rendered workflows parse"; gate "14b 0.6.1's devscene-control.yml is refused" node scripts/check-rendered-workflows.mjs --negatives ;;
     14c)
       gate_header 14 "rendered workflows parse"
       node scripts/check-rendered-workflows.mjs --actionlint >"$log" 2>&1
@@ -483,7 +482,7 @@ run_unit() {
 }
 
 # A stopped round returns 1 having pushed its failure onto `failed`, so the closing block exits 1.
-gr_run_round run_unit 1 2a 2b 2c 2d 2e 3a 3b 3c 3d 3e 3f 4 6a 6b 6c 6d 6e 6f 11 13a 13b 13c 13d 14a 14b 14c 14d 16
+gr_run_round run_unit 1 2a 2b 2c 2d 2e 3a 3b 3c 3d 3e 3f 4 6a 6b 6c 6d 6e 6f 11 13a 13b 13c 13d 14a 14c 14d 16
 
 python_blocked_list=""
 if [ ${#python_blocked[@]} -gt 0 ]; then

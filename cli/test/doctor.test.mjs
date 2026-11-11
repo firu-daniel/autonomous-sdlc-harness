@@ -6876,7 +6876,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.ok(!line.includes('GitHub knows devscene-trigger.yml'), line);
   });
 
-  await t.test('with the trigger on, devscene-control.yml listed by its path fails with the control route', async (subtest) => {
+  await t.test('with the trigger on, devscene-control.yml listed by its path fails with the generic route', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     const stub = await answeringGhStub(subtest);
     // Gate 12 round 7's observation: GitHub listed the unparsed file with its name equal to its path.
@@ -6888,8 +6888,9 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.notEqual(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'fail', 'remote-github');
     assert.ok(line?.includes('GitHub lists .github/workflows/devscene-control.yml by its path rather than its name'), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('if: >-'), line);
+    assert.ok(line.includes('actionlint'), line);
     assert.ok(line.includes('init --force'), line);
+    assert.ok(line.includes('keeps a .bak'), line);
     assert.ok(!line.includes('GitHub knows devscene-trigger.yml and devscene-control.yml'), line);
   });
 
