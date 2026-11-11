@@ -93,7 +93,7 @@ The rest runs in this order:
 
 Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_env_variables/task_<K>_plan.md`. Entries are in ship order. Task 18 sits among the `general` tasks for the reason `## Context` gives.
 
-1. [ ] **Task 1** — Read the anchor name from `MAIN_REPO_ANCHOR_VARIABLE` in the main-repo-resolution corpus guard _(layer: cli)_ _(points: 5)_
+1. [x] **Task 1** — Read the anchor name from `MAIN_REPO_ANCHOR_VARIABLE` in the main-repo-resolution corpus guard _(layer: cli)_ _(points: 5)_
 2. [ ] **Task 2** — Rename the variable-name constants and literals in `cli/src` _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Rename the variables in the watcher, restart-watcher and notifier templates and the watcher test helper _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — Rename the variables in the `remote-run.sh` template _(layer: cli)_ _(points: 15)_
