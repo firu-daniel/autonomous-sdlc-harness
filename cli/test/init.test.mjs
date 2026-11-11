@@ -154,7 +154,7 @@ const PARITY_DIRS = ['business_parity_branch_reviews', 'business_parity_branch_r
 const QA_SCENARIOS_HEADING = /^# QA test scenarios$/m;
 
 /** The managed block's opening marker, which has to stay byte-stable for a re-run to find it. */
-const GITIGNORE_MARKER = '>>> autonomous-sdlc-harness (managed block';
+const GITIGNORE_MARKER = '>>> devscene (managed block';
 
 /**
  * The unattended loop's stop, pause and dispatch-count files and the flow walker's state file,
@@ -335,7 +335,7 @@ const GENERIC_STUB_NOTE = 'no dedicated skeleton';
  */
 const UNFILLED_MARKER = '<!-- harness:unfilled -->';
 const GUIDANCE_MARKER = '**What belongs here**';
-const ANALYZE_COMMAND = '/autonomous-sdlc-harness:harness-analyze';
+const ANALYZE_COMMAND = '/devscene:harness-analyze';
 
 /** How the reporter renders a step heading, and the whole of what delimits one block from the next. */
 const STEP_MARKER = '== ';
@@ -2029,7 +2029,7 @@ async function retrievalSetupCache(t) {
   const cacheHome = await mkdtemp(join(tmpdir(), 'harness-retrieval-cache-'));
   t.after(() => rm(cacheHome, { recursive: true, force: true }));
   await plantModelFiles(cacheHome);
-  return { cacheHome, runtimeDir: join(cacheHome, 'autonomous-sdlc-harness', 'retrieval', 'runtime'), env: retrievalEnv(cacheHome) };
+  return { cacheHome, runtimeDir: join(cacheHome, 'devscene', 'retrieval', 'runtime'), env: retrievalEnv(cacheHome) };
 }
 
 /** Every file under `dir`, absolute and sorted. */
@@ -2056,7 +2056,7 @@ test('retrieval setup installs nothing when the runtime is planted, names the in
     const { stdout } = await initOk(dir, ['--docs', '--docs-retrieval', '--dry-run'], env);
 
     assert.ok(stdout.includes(`npm install --prefix ${runtimeDir} `), `no npm install note names the runtime:\n${stdout}`);
-    assert.ok(stdout.includes(`autonomous-sdlc-harness@${version}`), `the install note names no pinned CLI:\n${stdout}`);
+    assert.ok(stdout.includes(`devscene@${version}`), `the install note names no pinned CLI:\n${stdout}`);
     assert.match(stdout, /stub models \(.*\) need no download/, `no note says the stub needs no download:\n${stdout}`);
     assert.deepEqual(await snapshotTree(dir), before, 'a dry run changed the tree');
     assert.equal(existsSync(runtimeDir), false, 'a dry run created the runtime directory');
@@ -3147,7 +3147,7 @@ test("init's closing notes say the profile is gitignored and name the teammate's
   for (const stale of ['is committed, and it is machine-specific', 'There is no second init', 'the permission profile are committed']) {
     assert.ok(!output.includes(stale), `the closing notes still say the profile is committed (${stale}):\n${output}`);
   }
-  assert.ok(output.includes('npx autonomous-sdlc-harness init'), `the closing notes do not name the teammate's init:\n${output}`);
+  assert.ok(output.includes('npx devscene init'), `the closing notes do not name the teammate's init:\n${output}`);
   const [profileNote] = output.split('\n').filter((line) => line.includes(`${PROFILE_FILE} is gitignored`));
   assert.ok(profileNote !== undefined, `no closing note says ${PROFILE_FILE} is gitignored:\n${output}`);
   assert.ok(profileNote.includes('doctor'), `the profile note does not send a committed copy to doctor:\n${profileNote}`);
@@ -3352,7 +3352,7 @@ test('stack detection maps each seeded layout to its preset', async (t) => {
       }
       if (testCase.name === 'flat') {
         assert.match(stderr, /unrecognised layout/);
-        assert.match(stderr, /\/autonomous-sdlc-harness:harness-analyze/);
+        assert.match(stderr, /\/devscene:harness-analyze/);
         // The fallback row's own evidence string, which is what turns "nothing matched" into a
         // recorded fact instead of an absence a later reader has to guess at.
         assert.equal(config.detection.evidence, 'no signal matched');
@@ -3366,7 +3366,7 @@ const GAP_NOTE = 'covered by no layer';
 
 /** The two remedy leads, so a case can assert which arm composed the sentence it read. */
 const CONFIG_SET_LAYERS = 'config set layers';
-const ANALYZE_FIRST_REMEDY = 'run `/autonomous-sdlc-harness:harness-analyze` in a session here and answer `skip`';
+const ANALYZE_FIRST_REMEDY = 'run `/devscene:harness-analyze` in a session here and answer `skip`';
 
 /** A directory an adopter adds beside the ones the preset wrote rows for, per fixture shape. */
 const API_DRIFTED_DIR = 'src/handlers';
@@ -3385,7 +3385,7 @@ const GAP_LAYERED_DIRS = Object.freeze(['src/data', 'src/domain', 'src/presentat
  */
 const GAP_PUBSPEC = 'name: fixture\nenvironment:\n  sdk: ">=3.0.0 <4.0.0"\n';
 
-/** The record `/autonomous-sdlc-harness:harness-analyze layers` writes, in the shape `config set detection.review` takes. */
+/** The record `/devscene:harness-analyze layers` writes, in the shape `config set detection.review` takes. */
 const REVIEW_VERDICT = 'considered-no-change';
 const REVIEW_DATE = '2026-08-01';
 
@@ -3479,7 +3479,7 @@ test('init names the source directories no layer covers, as doctor does', async 
     const dir = await fixtureFor(subtest, { files: { 'pubspec.yaml': GAP_PUBSPEC, 'lib/main.dart': 'void main() {}\n' } });
     await initOk(dir);
     // The two hand edits an adopter's own repository makes between runs: a directory added after the
-    // profile was written, and the record `/autonomous-sdlc-harness:harness-analyze layers` leaves behind.
+    // profile was written, and the record `/devscene:harness-analyze layers` leaves behind.
     mkdirSync(join(dir, FLUTTER_DRIFTED_DIR), { recursive: true });
     editConfig(dir, (config) => {
       config.detection.review = { verdict: REVIEW_VERDICT, at: REVIEW_DATE };
@@ -3501,7 +3501,7 @@ test('init names the source directories no layer covers, as doctor does', async 
       `the note tells an adopter with a recorded review to re-derive the same decision:\n${note}`,
     );
     assert.ok(
-      note.indexOf(CONFIG_SET_LAYERS) < note.indexOf('/autonomous-sdlc-harness:harness-analyze', note.indexOf(GAP_NOTE)),
+      note.indexOf(CONFIG_SET_LAYERS) < note.indexOf('/devscene:harness-analyze', note.indexOf(GAP_NOTE)),
       `the remedy does not lead with the route that needs no session:\n${note}`,
     );
   });
@@ -5403,7 +5403,7 @@ test('each conventions stub names the analyze target of the layer that points at
  *
  * The config schema's `name` pattern admits `project`, `conventions` and `layers`, so this is a
  * legal repository rather than a hypothetical one. The rule is that the reserved meaning wins and
- * the run says so: a footer reading `/autonomous-sdlc-harness:harness-analyze project` would send the adopter at the
+ * the run says so: a footer reading `/devscene:harness-analyze project` would send the adopter at the
  * always-loaded project file while promising this layer's document, which is the silent resolution
  * the collision rule exists to refuse.
  */
@@ -5600,9 +5600,9 @@ test('the generated project file spells the harness commands qualified by the pl
 
   const content = text(dir, CLAUDE_MD);
   for (const spelling of [
-    '/autonomous-sdlc-harness:harness-analyze',
-    '/autonomous-sdlc-harness:branch-*',
-    '/autonomous-sdlc-harness:harness-*',
+    '/devscene:harness-analyze',
+    '/devscene:branch-*',
+    '/devscene:harness-*',
   ]) {
     assert.ok(content.includes(spelling), `${CLAUDE_MD} does not carry the qualified spelling ${spelling}`);
   }
@@ -5754,7 +5754,7 @@ function doctorStepLine(stdout) {
 }
 
 /** The two operator steps that last step names while the interactive-test phase is on. */
-const DAEMON_INSTALL_STEP = 'npx autonomous-sdlc-harness daemon install';
+const DAEMON_INSTALL_STEP = 'npx devscene daemon install';
 const PERMISSION_ENTRIES_STEP = 'permissions.allow';
 
 /**
@@ -5763,11 +5763,11 @@ const PERMISSION_ENTRIES_STEP = 'permissions.allow';
  * are deliberately absent, so nothing here asserts a version.
  */
 const REGISTRY_LAUNCHER_STEP = 'npx -y';
-const CHECK_REGISTRY_STEP = 'npx autonomous-sdlc-harness doctor --check-registry';
+const CHECK_REGISTRY_STEP = 'npx devscene doctor --check-registry';
 
 /** The two run settings that step names, and the one-key `config set` form it points at for both. */
 const RUN_SETTING_KEYS = ['agentModel', 'agentEffort'];
-const CONFIG_SET_RUN_SETTING = 'npx autonomous-sdlc-harness config set <key> <value>';
+const CONFIG_SET_RUN_SETTING = 'npx devscene config set <key> <value>';
 
 /** The composite key `enabledPlugins` holds, from the two manifests rather than from a literal. */
 function pluginKey() {
@@ -5846,7 +5846,7 @@ const PASTE_UNCONFIRMED = 'not confirmed on the version measured here';
 const CHOSEN_SLUG = 'octo-org/harness-marketplace';
 
 /** A `repository.url` naming no account — the shape `resolveSlug` refuses, for the root built below. */
-const UNRESOLVED_REPOSITORY_URL = 'https://github.com/<owner>/autonomous-sdlc-harness.git';
+const UNRESOLVED_REPOSITORY_URL = 'https://github.com/<owner>/devscene.git';
 
 /**
  * Run `init` with the slug **unresolved**, from a package root the test builds.
@@ -7924,7 +7924,7 @@ test('a kept-config run names the flags whose values it dropped, and the two com
 });
 
 /** The machine-local settings file, spelled from its two parts as the CLI resolves them. */
-const MACHINE_DIR = 'autonomous-sdlc-harness';
+const MACHINE_DIR = 'devscene';
 const PUSH_ENV_FILE = 'push.env';
 
 /** The repository-side half of the same precedence, at the path a generated config seeds. */
