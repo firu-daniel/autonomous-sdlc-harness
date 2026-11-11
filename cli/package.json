@@ -1,13 +1,13 @@
 {
-  "name": "autonomous-sdlc-harness",
+  "name": "devscene",
   "version": "0.6.12",
-  "description": "The outer loop of the autonomous SDLC harness: init, doctor, config and daemon management for the harness Claude Code plugin, plus opt-in local docs retrieval.",
+  "description": "The outer loop of DevScene, an autonomous SDLC harness: init, doctor, config and daemon management for the harness Claude Code plugin, plus opt-in local docs retrieval.",
   "license": "Apache-2.0",
   "author": "firu-daniel",
-  "homepage": "https://github.com/firu-daniel/autonomous-sdlc-harness",
-  "repository": { "type": "git", "url": "https://github.com/firu-daniel/autonomous-sdlc-harness.git" },
+  "homepage": "https://github.com/firu-daniel/devscene",
+  "repository": { "type": "git", "url": "https://github.com/firu-daniel/devscene.git" },
   "type": "module",
-  "bin": { "autonomous-sdlc-harness": "./dist/cli.js" },
+  "bin": { "devscene": "./dist/cli.js" },
   "files": ["dist", "scripts", "templates", "README.md", "LICENSE", "NOTICE"],
   "engines": { "node": ">=20.11.0" },
   "scripts": {

@@ -140,7 +140,7 @@ export const MCP_PATH = '.mcp.json';
  * the engine actually maintains: a later run's additions are inserted at the end of that run.
  */
 export const GITIGNORE_BLOCK_HEADER =
-  '# >>> autonomous-sdlc-harness (managed block: this line to the next blank line; re-run init to extend it) >>>';
+  '# >>> devscene (managed block: this line to the next blank line; re-run init to extend it) >>>';
 
 /**
  * The run daemon's log directory, whose contents are machine-local.

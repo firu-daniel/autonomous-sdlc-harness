@@ -24,7 +24,7 @@
  * same reason: the `<plugin>:branch-prompt` skill that file's answer-1 path invokes is that name, and
  * a shipped literal there would survive a rename in every adopter's checkout with nothing reporting it.
  */
-export const PLUGIN_NAME = 'autonomous-sdlc-harness';
+export const PLUGIN_NAME = 'devscene';
 
 /**
  * The analyze command as every line addressing the adopter names it, plugin-qualified.

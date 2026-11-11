@@ -53,7 +53,7 @@ This branch renames the product to **DevScene**. That covers the plugin, the mar
 
 Each entry maps 1:1 to `harness-runs/task_plans/chore_rename_to_devscene/task_<K>_plan.md`. Entries run in ship order. Task 18 sits among the `general` tasks for the reason `## Context` gives.
 
-1. [ ] **Task 1** — Rename the identity constants and the package manifest: `PLUGIN_NAME`, `MARKETPLACE_NAME`, `MACHINE_DIR_NAME`, the launchd label, `KEEP_AWAKE_WHO`, `RUNTIME_CLI_RELATIVE`, the `.gitignore` block header, `cli/package.json` and `cli/NOTICE` _(layer: cli)_ _(points: 15)_
+1. [x] **Task 1** — Rename the identity constants and the package manifest: `PLUGIN_NAME`, `MARKETPLACE_NAME`, `MACHINE_DIR_NAME`, the launchd label, `KEEP_AWAKE_WHO`, `RUNTIME_CLI_RELATIVE`, the `.gitignore` block header, `cli/package.json` and `cli/NOTICE` _(layer: cli)_ _(points: 15)_
 2. [ ] **Task 2** — Respell every remaining `cli/src` string and comment _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Respell the non-script templates, the daemon unit templates and `cli/README.md` _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — Respell the four workflow templates and the two suites that pin them _(layer: cli)_ _(points: 20)_
