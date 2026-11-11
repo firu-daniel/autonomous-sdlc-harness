@@ -15,20 +15,20 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | 3 | [Performance reviewer](#quality-and-testing) |
 | 4 | [Committer as a script](#flow-and-orchestration) |
 | 5 | [Script-driven planning pilot](#flow-and-orchestration) |
-| 6 | [Task researcher](#flow-and-orchestration) |
-| 7 | [Contract-first task plans](#flow-and-orchestration) |
-| 8 | [Narrower plan and branch reviewers](#quality-and-testing) |
-| 9 | [Parallel plan reviews](#flow-and-orchestration) |
-| 10 | [Parallel dispatch in waves](#flow-and-orchestration) |
-| 11 | [Multi-plan programs](#flow-and-orchestration) |
-| 12 | [Ultra-fast mode](#flow-and-orchestration) |
-| 13 | [Review severity markers](#quality-and-testing) |
-| 14 | [Script-driven autonomous flow](#flow-and-orchestration) |
-| 15 | [Test-driven development](#quality-and-testing) |
-| 16 | [Outbound HTTP listener](#security-and-containment) |
-| 17 | [RagScene](#scene-products) |
-| 18 | [GraphScene](#scene-products) |
-| 19 | [DevScene studio](#scene-products) |
+| 6 | [DevScene studio](#scene-products) |
+| 7 | [Task researcher](#flow-and-orchestration) |
+| 8 | [Contract-first task plans](#flow-and-orchestration) |
+| 9 | [Narrower plan and branch reviewers](#quality-and-testing) |
+| 10 | [Parallel plan reviews](#flow-and-orchestration) |
+| 11 | [Parallel dispatch in waves](#flow-and-orchestration) |
+| 12 | [Multi-plan programs](#flow-and-orchestration) |
+| 13 | [Ultra-fast mode](#flow-and-orchestration) |
+| 14 | [Review severity markers](#quality-and-testing) |
+| 15 | [Script-driven autonomous flow](#flow-and-orchestration) |
+| 16 | [Test-driven development](#quality-and-testing) |
+| 17 | [Outbound HTTP listener](#security-and-containment) |
+| 18 | [RagScene](#scene-products) |
+| 19 | [GraphScene](#scene-products) |
 | 20 | [Docs-catalog retrieval](#engines-environments-and-integrations) — kept opt-in by maintainer decision after a withdrawn verdict; improving it and measuring where it pays is open |
 | 21 | [Citation groundedness gate](#quality-and-testing) |
 | 22 | [Structured agent outputs](#quality-and-testing) |
