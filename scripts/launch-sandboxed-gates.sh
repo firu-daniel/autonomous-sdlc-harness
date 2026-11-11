@@ -39,7 +39,7 @@
 #
 # NO ENVIRONMENT VARIABLE DECIDES TRUST IN THE TARGET. An assignment prefix on
 # an excluded call could set one, as `autonomous-watcher.sh`'s header says of
-# `HARNESS_MAIN_REPO`; nothing here reads that or any other `HARNESS_*` name.
+# `DEVSCENE_MAIN_REPO`; nothing here reads that or any other `HARNESS_*` name.
 # What the environment does reach, as residuals:
 #   - `PATH` finds `bwrap`, `jq`, `git` and `setsid`, the trust
 #     `docs/sandbox-record.md` residual 5 states for the wrappers; `BASH_ENV`

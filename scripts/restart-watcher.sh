@@ -58,7 +58,7 @@
 #     executes on GitHub, beyond the local process tree a restart tears down, so
 #     it is listed as `remote (not affected by a restart): <branch> <status>`
 #     and never blocks;
-#   * a process probe for the agent binary — `${HARNESS_AGENT_CLI:-claude}`, the
+#   * a process probe for the agent binary — `${DEVSCENE_AGENT_CLI:-claude}`, the
 #     same variable the watcher launches through — is a BACKSTOP, for a run OF
 #     THIS PROJECT whose record has not been written yet or was written by a
 #     watcher that was killed before it could update it. It is SCOPED to this
@@ -97,9 +97,9 @@
 #   restart-watcher.sh --force    restart even then, killing the run
 #   restart-watcher.sh --help     print this header
 #
-# HARNESS_CLI names the CLI, `devscene` when unset. It is split
+# DEVSCENE_CLI names the CLI, `devscene` when unset. It is split
 # on whitespace: the first word must be on PATH and the remaining words are
-# leading arguments, so `HARNESS_CLI="node <path>/cli/dist/cli.js"` runs
+# leading arguments, so `DEVSCENE_CLI="node <path>/cli/dist/cli.js"` runs
 # `node <path>/cli/dist/cli.js daemon stop`. There is no quoting, so a path
 # containing a space needs a one-line shim on PATH instead.
 #
@@ -111,7 +111,7 @@
 #      the restart is complete only once you have run them
 #   1  nothing was restarted for a reason that is not about runs: a usage
 #      error, a missing shared library, no repository here, no configuration at
-#      the main checkout, a blank HARNESS_CLI, the CLI's first word not on
+#      the main checkout, a blank DEVSCENE_CLI, the CLI's first word not on
 #      PATH, or a delegated command that exited non-zero
 #   2  REFUSED: a run is in flight, or it could not be proven that none is, and
 #      `--force` was not given. Nothing was stopped and nothing was installed
@@ -126,7 +126,7 @@
 #   printf '#!/usr/bin/env bash\necho "$*" >> "%s/calls"\n' "$w" > "$w/bin/hcli"
 #   chmod +x "$w/bin/hcli"
 #   reg="$d/sdlc-harness/autonomous_logs/registry.json"
-#   run() { PATH="$w/bin:$PATH" HARNESS_CLI="${HARNESS_CLI:-hcli}" bash "$d/scripts/restart-watcher.sh" "$@"; echo "exit $?"; }
+#   run() { PATH="$w/bin:$PATH" DEVSCENE_CLI="${DEVSCENE_CLI:-hcli}" bash "$d/scripts/restart-watcher.sh" "$@"; echo "exit $?"; }
 #
 #   in flight     printf '%s' '{"runs":{"feat_x":{"status":"running"}}}' > "$reg"
 #                 run            -> the in-flight report, exit 2, and no
@@ -145,15 +145,15 @@
 #   never ran     rm -f "$reg"; run     -> the restart proceeds, exit 0
 #   unreadable    printf 'x' > "$reg"; run
 #                                -> "cannot prove no run is in flight", exit 2
-#   no CLI        HARNESS_CLI=definitely-not-installed run
+#   no CLI        DEVSCENE_CLI=definitely-not-installed run
 #                                -> one line naming it, exit 1, no registry read
 #   multi-word    printf '%s' '{"runs":{"feat_x":{"status":"completed"}}}' > "$reg"
 #                 rm -f "$w/calls"
-#                 HARNESS_CLI='hcli --via' run
+#                 DEVSCENE_CLI='hcli --via' run
 #                                -> "$w/calls" holds `--via daemon stop` then
 #                                   `--via daemon install`, exit 0
-#   blank         HARNESS_CLI=' ' run
-#                                -> one line naming HARNESS_CLI, exit 1
+#   blank         DEVSCENE_CLI=' ' run
+#                                -> one line naming DEVSCENE_CLI, exit 1
 #   stop failed   printf '#!/usr/bin/env bash\necho "$*" >> "%s/calls"\ncase "$*" in *stop*) exit 3;; esac\n' "$w" > "$w/bin/hcli"
 #                 rm -f "$w/calls"; run
 #                                -> `daemon stop` reported as exit 3, the
@@ -246,17 +246,17 @@ fi
 # `read -a` splits without glob expansion or quote parsing. The blank refusal
 # precedes every "${cli_argv[@]}": bash 3.2 under `set -u` treats that
 # expansion of an empty array as unbound.
-cli="${HARNESS_CLI:-devscene}"
+cli="${DEVSCENE_CLI:-devscene}"
 cli_argv=()
 read -r -a cli_argv <<< "$cli"
 if [ -z "${cli_argv[0]:-}" ]; then
-  echo "restart-watcher.sh: HARNESS_CLI is blank — nothing was restarted" >&2
+  echo "restart-watcher.sh: DEVSCENE_CLI is blank — nothing was restarted" >&2
   exit 1
 fi
 if ! command -v "${cli_argv[0]}" >/dev/null 2>&1; then
   echo "restart-watcher.sh: '${cli_argv[0]}' is not on PATH — nothing was restarted" >&2
-  echo "  install the harness CLI, or set HARNESS_CLI to the command that runs it," >&2
-  echo "  or set HARNESS_CLI to a command and its leading arguments, e.g. \`node <path>/cli/dist/cli.js\`" >&2
+  echo "  install the harness CLI, or set DEVSCENE_CLI to the command that runs it," >&2
+  echo "  or set DEVSCENE_CLI to a command and its leading arguments, e.g. \`node <path>/cli/dist/cli.js\`" >&2
   exit 1
 fi
 
@@ -357,7 +357,7 @@ wt_name="$(hr_project_name "$main_repo" 2>/dev/null || true)"
 if [ -n "$wt_work" ] && [ -n "$wt_name" ]; then
   worktree_prefix="${wt_work%/}/${wt_name}-"
 fi
-agent_probe="$(basename "${HARNESS_AGENT_CLI:-claude}")"
+agent_probe="$(basename "${DEVSCENE_AGENT_CLI:-claude}")"
 if [ -n "$agent_probe" ]; then
   candidates="$(pgrep -f "${agent_probe}[ ]-p" 2>/dev/null || true)"
   while IFS= read -r cand; do

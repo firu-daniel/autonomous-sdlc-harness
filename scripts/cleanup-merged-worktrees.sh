@@ -144,7 +144,7 @@
 #   --dry-run   report what would be removed; remove nothing
 #
 # Environment:
-#   HARNESS_FETCH_TIMEOUT   seconds to allow the `fetch --prune` before it is
+#   DEVSCENE_FETCH_TIMEOUT  seconds to allow the `fetch --prune` before it is
 #                           killed and the round skipped (default 60, clamped to
 #                           1..3600; anything else falls back to the default).
 #                           The bound exists because this sweep runs inside the
@@ -450,7 +450,7 @@ run_bounded() {
 # that round rather than the loop. It is NOT short next to `POLL_INTERVAL_SECS`
 # (15): a sweep that spends the whole ceiling does hold the loop for it, which is
 # the price of bounding the fetch at all and the reason the ceiling is not larger.
-# `HARNESS_FETCH_TIMEOUT` raises it for an adopter on a link where 60 s is not
+# `DEVSCENE_FETCH_TIMEOUT` raises it for an adopter on a link where 60 s is not
 # generous, and lowers it for the test that drives this ceiling.
 #
 # VALIDATED BY VALUE, NOT BY SHAPE. An earlier form of this clause tested the
@@ -465,7 +465,7 @@ run_bounded() {
 # unparsable or out-of-range string as readily as for a number that fails the
 # test, and the default is what survives either way. The upper clamp is what keeps
 # a fat-fingered value from expressing "wait forever" in seconds.
-fetch_timeout="${HARNESS_FETCH_TIMEOUT:-60}"
+fetch_timeout="${DEVSCENE_FETCH_TIMEOUT:-60}"
 if ! { [ "$fetch_timeout" -ge 1 ] && [ "$fetch_timeout" -le 3600 ]; } 2>/dev/null; then
   fetch_timeout=60
 fi
