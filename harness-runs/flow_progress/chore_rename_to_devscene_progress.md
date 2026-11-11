@@ -12,7 +12,7 @@ Source: harness-runs/task_prompts/chore_rename_to_devscene_task_prompt.md → `#
   - screened: harness-runs/clarifications/chore_rename_to_devscene/answer_1.md sha256=62c72ff25bb4efab844ccb45249b5a5733397c373eed5cf3c45aabb744afa725
 - [x] P1. Task plan converged (business_parity + architecture + task-plan-reviewer all PASS)
 - [-] P2. UI-test plan converged (ui-tests-plan-reviewer PASS) — or no_ui
-- [ ] P3. Plans committed & pushed (story index + per-task dir + UI-test plan)
+- [x] P3. Plans committed & pushed (story index + per-task dir + UI-test plan)
 
 ## Implementation
 - [ ] A.      Tasks implemented (story-index readiness all [x])
