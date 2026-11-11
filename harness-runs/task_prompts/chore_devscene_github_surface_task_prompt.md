@@ -7,7 +7,7 @@
 | trigger label `sdlc-harness` (the `HARNESS_TRIGGER_LABEL` default) | `devscene` |
 | state labels `sdlc-harness: <state>` (`running`, `paused`, …) | `devscene: <state>` |
 | comment handle `@sdlc-harness` | `@dev-scene` |
-| hidden comment marker `<!-- sdlc-harness` | `<!-- devscene` |
+| hidden HTML-comment marker (the comment opener followed by `sdlc-harness`) | the comment opener followed by `devscene` |
 | `harness-trigger.yml`, `harness-run.yml`, `harness-control.yml`, `harness-resume.yml` | `devscene-trigger.yml`, `devscene-run.yml`, `devscene-control.yml`, `devscene-resume.yml` |
 | workflow `name:` values `harness-trigger`, … | `devscene-trigger`, … |
 
