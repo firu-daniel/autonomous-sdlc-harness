@@ -33,7 +33,7 @@
 # SOURCED, NEVER EXECUTED. It sets no shell option: the entry point owns `set -u`.
 # Bash 3.2 is the floor (macOS /bin/bash): no associative array.
 
-# harness-run.yml's `run` job has no `name:`, so GitHub names it by its key (that file's DECLARED
+# devscene-run.yml's `run` job has no `name:`, so GitHub names it by its key (that file's DECLARED
 # MIRRORS -> RUN_JOB_NAME in remote-run.sh).
 G12_RUN_JOB=run
 

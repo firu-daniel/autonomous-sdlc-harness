@@ -286,7 +286,7 @@ g12_sb2_save_clause() {
 # The next job is the first `harness run <branch>` run created after the planted one.
 g12_sb2_restore_clause() {
   local json next log rc
-  json="$(gh run list --repo "$G12_REPO" --workflow harness-run.yml --branch "$G12_SB2_BRANCH" \
+  json="$(gh run list --repo "$G12_REPO" --workflow devscene-run.yml --branch "$G12_SB2_BRANCH" \
     --json databaseId,displayTitle --limit 20 </dev/null)" ||
     { g12_refuse "gh run list --repo $G12_REPO --branch $G12_SB2_BRANCH failed"; G12_ARM_ID="$G12_SB2_ID"; g12_arm_gh_failed; return; }
   next="$(jq -r --arg t "harness run $G12_SB2_BRANCH" --argjson id "$G12_SB2_ID" \

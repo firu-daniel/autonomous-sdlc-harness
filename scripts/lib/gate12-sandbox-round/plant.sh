@@ -145,12 +145,12 @@ g12_dispatch() {
     return 3
   fi
 
-  lookup="gh run list --repo $G12_REPO --workflow harness-run.yml --branch $branch --json databaseId,createdAt,displayTitle --limit 20"
+  lookup="gh run list --repo $G12_REPO --workflow devscene-run.yml --branch $branch --json databaseId,createdAt,displayTitle --limit 20"
   while [ "$n" -lt "$tries" ]; do
     n=$((n + 1))
-    if json="$(gh run list --repo "$G12_REPO" --workflow harness-run.yml --branch "$branch" \
+    if json="$(gh run list --repo "$G12_REPO" --workflow devscene-run.yml --branch "$branch" \
       --json databaseId,createdAt,displayTitle --limit 20)"; then
-      # The title is harness-run.yml's run-name, `harness <action> <branch>`.
+      # The title is devscene-run.yml's run-name, `harness <action> <branch>`.
       id="$(jq -r --arg t "harness run $branch" \
         '[.[] | select(.displayTitle == $t)] | sort_by(.createdAt) | last | .databaseId // empty' <<<"$json")" || id=""
       case "$id" in "" | *[!0-9]*) id="" ;; *) break ;; esac

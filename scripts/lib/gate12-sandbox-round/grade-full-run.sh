@@ -41,9 +41,9 @@ G12_FR_RESUMED_WHY=""
 g12_full_run_jobs() {
   local branch="$1" json
   G12_FR_JOBS=""
-  json="$(gh run list --repo "$G12_REPO" --workflow harness-run.yml --branch "$branch" \
+  json="$(gh run list --repo "$G12_REPO" --workflow devscene-run.yml --branch "$branch" \
     --json databaseId,createdAt,displayTitle,status --limit 100 </dev/null)" || {
-    g12_refuse "gh run list --repo $G12_REPO --workflow harness-run.yml --branch $branch failed"
+    g12_refuse "gh run list --repo $G12_REPO --workflow devscene-run.yml --branch $branch failed"
     g12_exit_raise 3
     g12_arm_set "not run" "the runs of $branch could not be listed (named on stderr)"
     return 1

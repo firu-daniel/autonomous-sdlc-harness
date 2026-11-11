@@ -10,7 +10,7 @@
 # It also pushes G12_OTHER_BRANCH and the JS3 branch to origin, each recorded in the state file before
 # its push and kept until teardown: the JS3 job's checkout already holds the other branch.
 #
-# harness-run.yml fixes HARNESS_GITHUB_DEFAULT_BRANCH when the run is dispatched and its run job reads
+# devscene-run.yml fixes HARNESS_GITHUB_DEFAULT_BRANCH when the run is dispatched and its run job reads
 # vars.STALL_WARN_SECS / vars.STALL_KILL_SECS when the job starts, so the default is switched before
 # the dispatch and the variables are kept lowered until the run is in_progress or completed, or until
 # G12_WAIT_SECS has passed.
@@ -18,7 +18,7 @@
 # An honest task does not go STALL_KILL_SECS silent on its own, so JS3's prompt plants one stall. It is
 # a scratch-run.sh call because that is allow-listed and guard-allowed in the job's profile. The watcher
 # kills a silent run only while its whole process tree, the agent CLI included, sums under
-# STALL_BUSY_CPU_PCT (autonomous-watcher.sh → check_stalled_runs), which harness-run.yml does not set; on
+# STALL_BUSY_CPU_PCT (autonomous-watcher.sh → check_stalled_runs), which devscene-run.yml does not set; on
 # a Linux runner `ps -o %cpu` is each process's lifetime average, so whether the tree stays under it
 # during the stall is not measured, and a "deferring the kill" line in the job's watcher log is that guard. The file is `.mjs`
 # because scratch-run.sh's interpreter table omits `.sh` on purpose. With S = G12_STALL_KILL_SECS + 60,
@@ -118,7 +118,7 @@ g12_db_runs_idle() {
   while IFS=$'\t' read -r id branch; do
     [ -n "$id" ] || continue
     if [ "$id" = null ]; then
-      statuses="$(gh run list --repo "$G12_REPO" --workflow harness-run.yml --branch "$branch" \
+      statuses="$(gh run list --repo "$G12_REPO" --workflow devscene-run.yml --branch "$branch" \
         --json status --jq '.[].status' </dev/null)" ||
         { g12_db_failed "gh run list --repo $G12_REPO --branch $branch failed"; return; }
     else

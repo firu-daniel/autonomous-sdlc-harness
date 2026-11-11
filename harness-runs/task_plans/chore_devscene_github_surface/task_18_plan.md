@@ -29,3 +29,4 @@
 - `grep -rn "devscene-run.yml" scripts/lib/gate12-sandbox-round` lists a line in each of the seven targets.
 - `grep -n "displayTitle\|harness <action> <branch>" scripts/lib/gate12-sandbox-round/plant.sh` still shows the run-name match.
 - `bash -n` exits 0 on each of the seven targets.
+  - **Deviations from plan:** The free-standing `bash -n` on the seven targets was refused by the permission layer ("Permission to use Bash has been denied because Claude Code is running in don't ask mode"). The parse claim rests instead on `bash scripts/typecheck.sh`, whose `scripts/check-shell-parse.sh` runs `/bin/bash -n` over every `*.sh` that `git ls-files --cached --others --exclude-standard` lists, the seven targets included: it printed `check-shell-parse: 124 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed` and then `PASS: typecheck`.
