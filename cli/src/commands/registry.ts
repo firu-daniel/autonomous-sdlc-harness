@@ -87,9 +87,9 @@ export function commandListLines(): readonly string[] {
 /** One command's own usage, without the global options block the entry point appends. */
 export function commandSynopsis(command: Subcommand): readonly string[] {
   return [
-    `npx autonomous-sdlc-harness ${command.name} — ${command.summary}`,
+    `npx devscene ${command.name} — ${command.summary}`,
     '',
-    `Usage: npx autonomous-sdlc-harness ${command.name} [options]`,
+    `Usage: npx devscene ${command.name} [options]`,
     ...(command.usage === undefined ? [] : ['', ...command.usage]),
   ];
 }

@@ -111,7 +111,7 @@ export function loadConfigText(text: string | undefined, origin: string): Loaded
       problems: [
         {
           path: '',
-          message: `${CONFIG_FILENAME} not found at ${origin}: this repository is not wired yet — run \`npx autonomous-sdlc-harness init\``,
+          message: `${CONFIG_FILENAME} not found at ${origin}: this repository is not wired yet — run \`npx devscene init\``,
           severity: 'error',
         },
       ],

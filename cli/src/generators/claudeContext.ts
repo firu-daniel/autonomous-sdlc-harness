@@ -124,7 +124,7 @@ const CONTEXT_TEMPLATE_DIR = 'context';
  *   skeletons for three concerns no preset detects — local persistence, a documentation catalog,
  *   shared application state. Nothing `init` generates points at them, and the one route that reads
  *   one is an adopter pointing a `layers[].conventions` at that exact basename and re-running
- *   `init`. A path a `/autonomous-sdlc-harness:harness-analyze` layer-profile revision newly names
+ *   `init`. A path a `/devscene:harness-analyze` layer-profile revision newly names
  *   does **not** reach them: that command never re-runs `init`, so `conventions-writer` composes the document with no file
  *   behind it. They are kept rather than deleted because writing one of those documents from
  *   nothing is the expensive part, and they are named here so a later reader does not take them for
@@ -199,7 +199,7 @@ export const RESERVED_ANALYZE_TARGETS = ['project', 'conventions', 'layers'] as 
 
 /**
  * The delimiters of the **setup-pending banner** the generated project file carries under its
- * heading: the record of what the adopter answered `autonomous-sdlc-harness init`'s analyze offer
+ * heading: the record of what the adopter answered `devscene init`'s analyze offer
  * (`docs/analyze.md` §9), written into the one file every session in that repository loads without
  * being asked.
  *
@@ -239,7 +239,7 @@ export type AnalyzeOffer = 'accepted' | 'declined';
  * plugin key into the settings file this clause names, so the state it reports is one the same run
  * left behind.
  */
-const PLUGIN_ORIGIN_CLAUSE = `\`${ANALYZE_COMMAND}\` is a command of the harness plugin, which \`npx autonomous-sdlc-harness init\` enabled for this repository in \`${CLAUDE_DIR}/settings.json\`, so it exists in a session that resolves that plugin.`;
+const PLUGIN_ORIGIN_CLAUSE = `\`${ANALYZE_COMMAND}\` is a command of the harness plugin, which \`npx devscene init\` enabled for this repository in \`${CLAUDE_DIR}/settings.json\`, so it exists in a session that resolves that plugin.`;
 
 /**
  * The banner's body, one blockquote per answer.
@@ -652,7 +652,7 @@ export function writeClaudeContext({
 
   if (claudeMdExisted && !force) {
     notes.push(
-      `${CLAUDE_MD_PATH} was already there and ${dryRun ? 'would be kept' : 'was kept'} as it stands, so the setup-pending banner ${dryRun ? 'would not be' : 'was not'} written into it: run \`npx autonomous-sdlc-harness doctor\` at any time for what is still unfilled`,
+      `${CLAUDE_MD_PATH} was already there and ${dryRun ? 'would be kept' : 'was kept'} as it stands, so the setup-pending banner ${dryRun ? 'would not be' : 'was not'} written into it: run \`npx devscene doctor\` at any time for what is still unfilled`,
     );
   }
 

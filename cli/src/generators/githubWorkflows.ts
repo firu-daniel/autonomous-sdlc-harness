@@ -18,7 +18,7 @@
  * 1. **No configured value is rendered into either file; only this CLI's own version is.** The job
  *    reads `harness.config.json` at run time, so a workflow frozen with a configured value would go
  *    wrong the moment the key changed. The version is the exception because it is the pin the job
- *    installs the plugin and runs `npx autonomous-sdlc-harness@<version>` against, and it is read
+ *    installs the plugin and runs `npx devscene@<version>` against, and it is read
  *    through `core/paths.ts` → `ownManifestString`, the one reader of this package's manifest.
  * 2. **`assertNoneSurvive` is on for `harness-run.yml`.** The one substituted value is a version
  *    string, which has no business carrying `{{…}}`; one that did would ship a workflow pinned to
@@ -60,7 +60,7 @@
  *
  * **Declared mirror.** `cli/templates/github/workflows/harness-run.yml`'s `Install the pinned plugin`
  * step spells the route {@link upgradeWorkflowsCommand} produces,
- * `npx autonomous-sdlc-harness@<version> init --upgrade-workflows`, as a literal the compiler cannot
+ * `npx devscene@<version> init --upgrade-workflows`, as a literal the compiler cannot
  * reach, and declares the mirror in its own `# DECLARED MIRRORS` block: a change to
  * {@link UPGRADE_WORKFLOWS_FLAG} or to that route is an edit to that line too.
  *
