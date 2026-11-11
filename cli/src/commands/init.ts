@@ -2971,7 +2971,7 @@ function analyzeRecordSentence(
  * A line naming a command to type still leaves the adopter to open a session first; a line to paste
  * does not, and it is indented under step 2 rather than numbered because it is that step's *how*
  * rather than a fifth thing to do. It names {@link AGENT_CLI} directly where the generated watcher
- * reaches the same binary through `${HARNESS_AGENT_CLI:-claude}`
+ * reaches the same binary through `${DEVSCENE_AGENT_CLI:-claude}`
  * (`templates/scripts/autonomous-watcher.sh`) — an override that belongs to a script's own
  * environment and would mean nothing on a line printed for a person to paste. It names the same
  * {@link ANALYZE_COMMAND} spelling step 2 above it names, so the introducing sentence gives no

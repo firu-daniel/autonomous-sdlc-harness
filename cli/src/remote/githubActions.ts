@@ -28,7 +28,7 @@
  * `cli/templates/github/workflows/devscene-control.yml`,
  * `cli/templates/scripts/lib/harness-run-lib.sh`, which mirrors {@link WORKFLOW_RUN_FILE} and
  * {@link STATE_ARTIFACT_NAME} for the GitHub route its notification producers print,
- * {@link GIT_TOKEN_SECRET} as the `HARNESS_GIT_TOKEN` source of `hr_credential_values_var`, and
+ * {@link GIT_TOKEN_SECRET} as the `DEVSCENE_GIT_TOKEN` source of `hr_credential_values_var`, and
  * {@link WORKFLOWS_DIR} as `HR_REMOTE_WORKFLOWS_DIR`, for `push-branch.sh`'s workflow-file
  * check, and `cli/templates/scripts/autonomous-watcher.sh`, for {@link PUSH_URL_SECRET} and
  * {@link GIT_TOKEN_SECRET} only: its `SESSION_ENV_STRIP_EXTRA` names them as variables it strips
@@ -37,8 +37,8 @@
  * and `hr_github_resume_route`.
  *
  * **Why {@link GH_CLI_VARIABLE} exists.** Every real route into `gh` reaches the network, which no
- * test may do, so the binary run as `gh` is taken from `${HARNESS_GH_CLI:-gh}` in both this CLI and
- * `remote-run.sh` — the same test seam `${HARNESS_AGENT_CLI:-claude}` gives the watcher's agent
+ * test may do, so the binary run as `gh` is taken from `${DEVSCENE_GH_CLI:-gh}` in both this CLI and
+ * `remote-run.sh` — the same test seam `${DEVSCENE_AGENT_CLI:-claude}` gives the watcher's agent
  * (`docs/outer-loop-verification.md` → `## 0. Method and fixtures` → *The agent stub*).
  *
  * It reads no configuration and writes nothing.
@@ -160,22 +160,22 @@ export const STATE_ARTIFACT_NAME = 'harness-state';
 export const POLL_STATE_ARTIFACT_NAME = 'harness-poll-state';
 
 /** Repository variable naming the `runs-on` label; unset means `ubuntu-latest`. */
-export const RUNNER_VARIABLE = 'HARNESS_RUNNER';
+export const RUNNER_VARIABLE = 'DEVSCENE_RUNNER';
 
 /** Repository variable: any non-empty value stops every job and poller tick before it launches. */
-export const REMOTE_STOP_VARIABLE = 'HARNESS_REMOTE_STOP';
+export const REMOTE_STOP_VARIABLE = 'DEVSCENE_REMOTE_STOP';
 
 /** Repository variable naming the issue label that starts a run; unset or empty means {@link DEFAULT_TRIGGER_LABEL}. */
-export const TRIGGER_LABEL_VARIABLE = 'HARNESS_TRIGGER_LABEL';
+export const TRIGGER_LABEL_VARIABLE = 'DEVSCENE_TRIGGER_LABEL';
 
 /** The issue label that starts a run when {@link TRIGGER_LABEL_VARIABLE} is unset or empty. */
 export const DEFAULT_TRIGGER_LABEL = 'devscene';
 
 /** Repository variable: comma-separated bot logins that may start a run; unset or empty admits none. */
-export const TRIGGER_ALLOWED_BOTS_VARIABLE = 'HARNESS_TRIGGER_ALLOWED_BOTS';
+export const TRIGGER_ALLOWED_BOTS_VARIABLE = 'DEVSCENE_TRIGGER_ALLOWED_BOTS';
 
 /** Repository variable: comma-separated GitHub logins allowed to start, command, answer and review a run; `*` admits every writer; unset admits the owner of a user-owned repository alone, and nobody in an organisation-owned one. */
-export const RUN_ACTORS_VARIABLE = 'HARNESS_RUN_ACTORS';
+export const RUN_ACTORS_VARIABLE = 'DEVSCENE_RUN_ACTORS';
 
 /** The {@link RUN_ACTORS_VARIABLE} entry that admits every collaborator with write access. */
 export const RUN_ACTORS_EVERY_WRITER = '*';
@@ -233,8 +233,8 @@ export function runActorAdmitted(actors: RunActors, login: string): boolean {
 }
 
 /**
- * Whether a workflow's text reads `vars.HARNESS_RUN_ACTORS`; `false` marks a copy written before the
- * allow-list existed. Pure — the caller reads the file.
+ * Whether a workflow's text reads `vars.DEVSCENE_RUN_ACTORS`; `false` marks a copy that does not read
+ * the allow-list variable. Pure — the caller reads the file.
  */
 export function carriesRunActors(workflowText: string): boolean {
   return workflowText.includes(`vars.${RUN_ACTORS_VARIABLE}`);
@@ -258,27 +258,27 @@ export const OAUTH_TOKEN_SECRET = 'CLAUDE_CODE_OAUTH_TOKEN';
 /** Repository secret for API billing; wins over {@link OAUTH_TOKEN_SECRET} when both are set. */
 export const API_KEY_SECRET = 'ANTHROPIC_API_KEY';
 
-export const PUSH_URL_SECRET = 'HARNESS_PUSH_URL';
-export const GIT_TOKEN_SECRET = 'HARNESS_GIT_TOKEN';
+export const PUSH_URL_SECRET = 'DEVSCENE_PUSH_URL';
+export const GIT_TOKEN_SECRET = 'DEVSCENE_GIT_TOKEN';
 
 /** GitHub's repository setting that lets a workflow's own token open a pull request; off by default. */
 export const PR_CREATE_SETTING = 'Allow GitHub Actions to create and approve pull requests';
 /** Where an adopter finds {@link PR_CREATE_SETTING} in the repository's settings. */
 export const PR_CREATE_SETTING_PATH = 'Settings -> Actions -> General -> Workflow permissions';
 
-/** The environment variable naming the binary run as `gh`: `${HARNESS_GH_CLI:-gh}`. */
-export const GH_CLI_VARIABLE = 'HARNESS_GH_CLI';
+/** The environment variable naming the binary run as `gh`: `${DEVSCENE_GH_CLI:-gh}`. */
+export const GH_CLI_VARIABLE = 'DEVSCENE_GH_CLI';
 
 /**
  * The job-level `env:` variable carrying the CLI version a rendered `devscene-run.yml` is pinned to.
  * Mirrored in `cli/templates/github/workflows/devscene-run.yml`, once per job.
  */
-export const CLI_VERSION_VARIABLE = 'HARNESS_CLI_VERSION';
+export const CLI_VERSION_VARIABLE = 'DEVSCENE_CLI_VERSION';
 
 const CLI_VERSION_LINE = new RegExp(`^[ \\t]*${CLI_VERSION_VARIABLE}:[ \\t]*(.*?)(?:[ \\t]+#.*)?[ \\t]*$`);
 
 /**
- * Every version a workflow's text is pinned to: the value of each `<indent>HARNESS_CLI_VERSION: <value>`
+ * Every version a workflow's text is pinned to: the value of each `<indent>DEVSCENE_CLI_VERSION: <value>`
  * line, a trailing ` # comment` and the quotes stripped, distinct and in file order; `[]` when no such
  * line exists. Pure — the caller reads the file.
  */
