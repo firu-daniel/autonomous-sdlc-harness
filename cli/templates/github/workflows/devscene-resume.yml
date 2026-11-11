@@ -34,14 +34,14 @@
 # cost nothing.
 #
 # WHAT IT READS.
-#   Secrets: HARNESS_PUSH_URL (optional notifications: the poller's own notice
+#   Secrets: DEVSCENE_PUSH_URL (optional notifications: the poller's own notice
 #     when it cannot resume a run or cannot download its bundle).
-#   Variables: HARNESS_RUNNER, HARNESS_REMOTE_STOP (any value: the tick
-#     dispatches nothing), HARNESS_MAX_CHAIN (the automatic-dispatch limit),
-#     HARNESS_POLL_MAX_DISPATCH_FAILURES (failed re-dispatches of one paused
+#   Variables: DEVSCENE_RUNNER, DEVSCENE_REMOTE_STOP (any value: the tick
+#     dispatches nothing), DEVSCENE_MAX_CHAIN (the automatic-dispatch limit),
+#     DEVSCENE_POLL_MAX_DISPATCH_FAILURES (failed re-dispatches of one paused
 #     run, or consecutive failed downloads of one run's listed bundle, before
 #     the poller gives up on it; 3 when unset) and
-#     HARNESS_POLL_GIVE_UP_AFTER_MINUTES (minutes after the usage reset past
+#     DEVSCENE_POLL_GIVE_UP_AFTER_MINUTES (minutes after the usage reset past
 #     which it gives up; 360 when unset).
 #   harness.config.json, at run time: `scriptsDir` and `stateDir`. No
 #     configured value is frozen into this file.
@@ -77,8 +77,8 @@
 # letter straight after the braces as a token; this file carries no token.
 #
 # DECLARED MIRRORS — a rename on either side is an edit to both:
-#   cli/src/remote/githubActions.ts   WORKFLOW_RESUME_FILE, HARNESS_RUNNER,
-#                                     HARNESS_REMOTE_STOP, HARNESS_PUSH_URL,
+#   cli/src/remote/githubActions.ts   WORKFLOW_RESUME_FILE, DEVSCENE_RUNNER,
+#                                     DEVSCENE_REMOTE_STOP, DEVSCENE_PUSH_URL,
 #                                     POLL_STATE_ARTIFACT_NAME
 #   cli/src/config/model.ts           DEFAULTS.scriptsDir, DEFAULTS.stateDir
 #
@@ -113,7 +113,7 @@ defaults:
 
 jobs:
   poll:
-    runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.DEVSCENE_RUNNER || 'ubuntu-latest' }}
     permissions:
       contents: read
       actions: write
@@ -125,12 +125,12 @@ jobs:
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
-      HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
-      HARNESS_MAX_CHAIN: ${{ vars.HARNESS_MAX_CHAIN }}
-      HARNESS_POLL_MAX_DISPATCH_FAILURES: ${{ vars.HARNESS_POLL_MAX_DISPATCH_FAILURES }}
-      HARNESS_POLL_GIVE_UP_AFTER_MINUTES: ${{ vars.HARNESS_POLL_GIVE_UP_AFTER_MINUTES }}
+      DEVSCENE_REMOTE_STOP: ${{ vars.DEVSCENE_REMOTE_STOP }}
+      DEVSCENE_MAX_CHAIN: ${{ vars.DEVSCENE_MAX_CHAIN }}
+      DEVSCENE_POLL_MAX_DISPATCH_FAILURES: ${{ vars.DEVSCENE_POLL_MAX_DISPATCH_FAILURES }}
+      DEVSCENE_POLL_GIVE_UP_AFTER_MINUTES: ${{ vars.DEVSCENE_POLL_GIVE_UP_AFTER_MINUTES }}
       HARNESS_REMOTE_SLUG: ${{ github.repository }}
-      HARNESS_PUSH_URL: ${{ secrets.HARNESS_PUSH_URL }}
+      DEVSCENE_PUSH_URL: ${{ secrets.DEVSCENE_PUSH_URL }}
     steps:
       - name: Check out the default branch
         # actions/checkout v7.0.1

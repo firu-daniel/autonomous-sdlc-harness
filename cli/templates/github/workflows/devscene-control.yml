@@ -15,7 +15,7 @@
 #
 # WHAT IT DOES. One job runs `remote-run.sh control`, which does everything
 # else: it authorises the actor — their write access, then the allow-list
-# HARNESS_RUN_ACTORS — finds the run's branch, carries out the
+# DEVSCENE_RUN_ACTORS — finds the run's branch, carries out the
 # command or places the review round, and replies. A comment that mentions
 # `@dev-scene` anywhere, not in the exact command form, is read by one
 # read-only agent session running the plugin's mention-reading slash command,
@@ -130,7 +130,7 @@
 #     MIRRORS below).
 #
 # THE PLUGIN. This file carries no pin of its own. A comment job reads the
-# first HARNESS_CLI_VERSION in the checkout's devscene-run.yml, clones the
+# first DEVSCENE_CLI_VERSION in the checkout's devscene-run.yml, clones the
 # release tag `devscene--v<that version>` outside the checkout
 # as devscene-run.yml's `Install the pinned plugin` step does, checks the
 # plugin manifest's version against it, and hands the plugin's directory to
@@ -181,15 +181,15 @@
 #   cli/src/remote/githubActions.ts   WORKFLOW_CONTROL_FILE, COMMAND_HANDLE
 #                                     (`@dev-scene`), COMMENT_MARKER
 #                                     (`<!-- devscene`), REVIEW_ROUND_STATE
-#                                     (`changes_requested`), HARNESS_RUNNER,
-#                                     HARNESS_REMOTE_STOP,
-#                                     HARNESS_TRIGGER_ALLOWED_BOTS,
-#                                     HARNESS_RUN_ACTORS,
+#                                     (`changes_requested`), DEVSCENE_RUNNER,
+#                                     DEVSCENE_REMOTE_STOP,
+#                                     DEVSCENE_TRIGGER_ALLOWED_BOTS,
+#                                     DEVSCENE_RUN_ACTORS,
 #                                     OAUTH_TOKEN_SECRET
 #                                     (`CLAUDE_CODE_OAUTH_TOKEN`),
 #                                     API_KEY_SECRET (`ANTHROPIC_API_KEY`),
 #                                     CLI_VERSION_VARIABLE
-#                                     (`HARNESS_CLI_VERSION`, read from
+#                                     (`DEVSCENE_CLI_VERSION`, read from
 #                                     devscene-run.yml)
 #   cli/src/generators/projectSettings.ts   MARKETPLACE_NAME
 #                                     (`devscene`)
@@ -266,7 +266,7 @@ jobs:
   control:
     if: >-
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@dev-scene') && !contains(github.event.comment.body, '<!-- devscene')) || (github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'issues' && contains(join(github.event.issue.labels.*.name, ','), 'devscene: ')) || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'delete' && github.event.ref_type == 'branch')
-    runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.DEVSCENE_RUNNER || 'ubuntu-latest' }}
     permissions:
       contents: write
       actions: write
@@ -277,10 +277,10 @@ jobs:
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
-      HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
+      DEVSCENE_REMOTE_STOP: ${{ vars.DEVSCENE_REMOTE_STOP }}
       HARNESS_REMOTE_SLUG: ${{ github.repository }}
-      HARNESS_TRIGGER_ALLOWED_BOTS: ${{ vars.HARNESS_TRIGGER_ALLOWED_BOTS }}
-      HARNESS_RUN_ACTORS: ${{ vars.HARNESS_RUN_ACTORS }}
+      DEVSCENE_TRIGGER_ALLOWED_BOTS: ${{ vars.DEVSCENE_TRIGGER_ALLOWED_BOTS }}
+      DEVSCENE_RUN_ACTORS: ${{ vars.DEVSCENE_RUN_ACTORS }}
     steps:
       - name: Check out the default branch
         # actions/checkout v7.0.1
@@ -347,9 +347,9 @@ jobs:
         if: github.event_name == 'issue_comment' && steps.needs.outputs.agent != 'no'
         continue-on-error: true
         run: |
-          pin=$(awk '/^[[:space:]]*HARNESS_CLI_VERSION:/ { sub(/^[[:space:]]*HARNESS_CLI_VERSION:[[:space:]]*/, ""); sub(/[[:space:]]+#.*$/, ""); sub(/[[:space:]]+$/, ""); gsub(/["\047]/, ""); print; exit }' .github/workflows/devscene-run.yml 2>/dev/null || true)
+          pin=$(awk '/^[[:space:]]*DEVSCENE_CLI_VERSION:/ { sub(/^[[:space:]]*DEVSCENE_CLI_VERSION:[[:space:]]*/, ""); sub(/[[:space:]]+#.*$/, ""); sub(/[[:space:]]+$/, ""); gsub(/["\047]/, ""); print; exit }' .github/workflows/devscene-run.yml 2>/dev/null || true)
           if [ -z "$pin" ]; then
-            echo "::warning::.github/workflows/devscene-run.yml carries no HARNESS_CLI_VERSION, so no plugin was fetched and a mention gets the no-plugin reply."
+            echo "::warning::.github/workflows/devscene-run.yml carries no DEVSCENE_CLI_VERSION, so no plugin was fetched and a mention gets the no-plugin reply."
             exit 1
           fi
           source_repo=$(jq -r '.extraKnownMarketplaces["devscene"].source.repo // empty' .claude/settings.json 2>/dev/null || true)
