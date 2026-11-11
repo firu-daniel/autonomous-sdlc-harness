@@ -25,6 +25,7 @@ Task 4's run library mirrors `devscene-run.yml`.
   - respell the comment-body assertions (`/devscene-run\.yml.*Run workflow/s`, the `actions/workflows/devscene-run.yml?query=…` URL) and every marker line.
 - [ ] `remote-trigger.test.mjs`, the legacy case: keep the event label `harness`, which is `LEGACY_TRIGGER_LABEL`. Set its configured `HARNESS_TRIGGER_LABEL` to `'devscene'`. The case still asserts exactly what it asserts today about the legacy label.
 - [ ] In both, leave `const STATE_DIR = 'sdlc-harness'` and every `sdlc-harness/` path unchanged.
+- **Deviations from plan:** The `/`@sdlc-harness resume`/` assertion in `remote-run.test.mjs` (the `continue` with `HARNESS_REMOTE_STOP` under forge github case) is respelled to `@dev-scene resume`, not `@devscene`: `remote-run.sh` builds that line from `COMMAND_HANDLE='@dev-scene'`. Run titles (`harness run|stop|pause <branch>`), artifact names (`harness-state`, `harness-poll-state`), the `harness-task` dispatch event type and `lib/harness-run-lib.sh` stay as they are, because `remote-run.sh` still spells them that way. The `remote-run.test.mjs` run used `--test-reporter=dot` so that failures stayed visible in the returned output. The final result was 130 tests with 0 failures.
 
 **Verification:**
 

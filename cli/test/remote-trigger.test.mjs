@@ -15,7 +15,7 @@
  * empty — only the previous release's workflow passes it so — the legacy label `harness` starts a run
  * too, and its removal names it; with the variable set, only the label it names does. Every issue comment
  * ends with the hidden marker, `event=started branch=<branch>` on a start and `event=refused` otherwise, and
- * a start alone sets the state label `sdlc-harness: running`, after the trigger label's removal; a failed
+ * a start alone sets the state label `devscene: running`, after the trigger label's removal; a failed
  * label add is a warning, never a failed start.
  *
  * Each case drives `remote-start.test.mjs`'s fixture shape — `init`, `execution.target` set, the
@@ -142,7 +142,7 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
     trigger: async (overrides = {}, env = {}, permissions = { alice: 'write' }) => {
       const event = {
         action: 'labeled',
-        label: { name: 'sdlc-harness' },
+        label: { name: 'devscene' },
         sender: { login: 'alice', type: 'User' },
         ...overrides,
         issue: {
@@ -235,7 +235,7 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
 
 const dispatches = (calls) => calls.filter((call) => call.line.startsWith('workflow run'));
 const comments = (calls) => calls.filter((call) => call.line.startsWith('issue comment 7'));
-const removals = (calls, label = 'sdlc-harness') =>
+const removals = (calls, label = 'devscene') =>
   calls.filter((call) => call.line === `issue edit 7 --repo ${REPOSITORY} --remove-label ${label}`);
 const permissionCalls = (calls) => calls.filter((call) => call.args[0] === 'api' && /\/collaborators\//.test(call.args[1] ?? ''));
 const LABELS_PATH = `repos/${REPOSITORY}/issues/7/labels`;
@@ -253,7 +253,7 @@ function assertRefused(f, result, reason) {
   assert.equal(posted.length, 1);
   assert.match(posted[0].body, /No run started/);
   assert.match(posted[0].body, reason);
-  assert.match(posted[0].body, /<!-- sdlc-harness event=refused branch=[a-z0-9_]* -->\n$/);
+  assert.match(posted[0].body, /<!-- devscene event=refused branch=[a-z0-9_]* -->\n$/);
   assert.equal(removals(calls).length, 1);
   assert.deepEqual(labelAdds(calls), []);
   return calls;
@@ -266,9 +266,9 @@ test('a start marks its comment started with the derived branch and sets running
   const calls = f.calls();
   const posted = comments(calls);
   assert.equal(posted.length, 1);
-  assert.ok(posted[0].body.endsWith(`\n\n<!-- sdlc-harness event=started branch=${BRANCH} -->\n`), posted[0].body);
+  assert.ok(posted[0].body.endsWith(`\n\n<!-- devscene event=started branch=${BRANCH} -->\n`), posted[0].body);
   const adds = labelAdds(calls);
-  assert.deepEqual(adds.map((call) => call.line), [`api --method POST ${LABELS_PATH} -f labels[]=sdlc-harness: running`]);
+  assert.deepEqual(adds.map((call) => call.line), [`api --method POST ${LABELS_PATH} -f labels[]=devscene: running`]);
   const removal = calls.findIndex((call) => call.line.startsWith('issue edit 7'));
   assert.ok(removal >= 0 && removal < calls.indexOf(adds[0]), 'running was added before the trigger label was removed');
 });
@@ -276,7 +276,7 @@ test('a start marks its comment started with the derived branch and sets running
 test('a refusal before a branch is derived marks its comment refused with an empty branch', async (t) => {
   const f = await triggerFixture(t);
   const calls = assertRefused(f, await f.trigger({}, { HARNESS_REMOTE_STOP: '1' }), /HARNESS_REMOTE_STOP/);
-  assert.ok(comments(calls)[0].body.endsWith('\n\n<!-- sdlc-harness event=refused branch= -->\n'));
+  assert.ok(comments(calls)[0].body.endsWith('\n\n<!-- devscene event=refused branch= -->\n'));
 });
 
 test('a failing state-label add still exits 0, with one warning line', async (t) => {
@@ -286,7 +286,7 @@ test('a failing state-label add still exits 0, with one warning line', async (t)
   assert.equal(dispatches(f.calls()).length, 1);
   const warnings = `${result.stdout}\n${result.stderr}`.split('\n').filter((line) => line.startsWith('::warning::'));
   assert.equal(warnings.length, 1, warnings.join('\n'));
-  assert.match(warnings[0], /sdlc-harness: running/);
+  assert.match(warnings[0], /devscene: running/);
 });
 
 test('a write user starts one run on the derived branch, comments it and removes the label', async (t) => {
@@ -296,7 +296,7 @@ test('a write user starts one run on the derived branch, comments it and removes
   const calls = f.calls();
   assert.deepEqual(
     dispatches(calls).map((call) => call.line),
-    [`workflow run harness-run.yml --ref ${BRANCH} -f action=run -f branch=${BRANCH} -f engine=task -f resume=none -f chain=0`],
+    [`workflow run devscene-run.yml --ref ${BRANCH} -f action=run -f branch=${BRANCH} -f engine=task -f resume=none -f chain=0`],
   );
   const posted = comments(calls);
   assert.equal(posted.length, 1);
@@ -313,7 +313,7 @@ test('a write user starts one run on the derived branch, comments it and removes
   assert.match(
     prompt,
     new RegExp(
-      `^# ${TITLE}\\n\\nLet a reader comment on a content item\\.\\n\\n\\n---\\n\\nStarted from https://github\\.com/${REPOSITORY}/issues/7 by @alice, who applied the label \`sdlc-harness\` at \\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ\\.`,
+      `^# ${TITLE}\\n\\nLet a reader comment on a content item\\.\\n\\n\\n---\\n\\nStarted from https://github\\.com/${REPOSITORY}/issues/7 by @alice, who applied the label \`devscene\` at \\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ\\.`,
     ),
   );
 });
@@ -449,7 +449,7 @@ test('with HARNESS_TRIGGER_LABEL empty, the legacy label starts a run and its re
 
 test('with HARNESS_TRIGGER_LABEL set to the default, the legacy label is ignored with no gh call', async (t) => {
   const f = await triggerFixture(t);
-  const result = await f.trigger({ label: { name: 'harness' } }, { HARNESS_TRIGGER_LABEL: 'sdlc-harness' });
+  const result = await f.trigger({ label: { name: 'harness' } }, { HARNESS_TRIGGER_LABEL: 'devscene' });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /ignored/);
   assert.deepEqual(f.calls(), []);
@@ -480,7 +480,7 @@ test('a name with run-workflow history and no branch starts on <slug>_2, probed 
   const calls = f.calls();
   assert.deepEqual(
     dispatches(calls).map((call) => call.line),
-    [`workflow run harness-run.yml --ref ${BRANCH}_2 -f action=run -f branch=${BRANCH}_2 -f engine=task -f resume=none -f chain=0`],
+    [`workflow run devscene-run.yml --ref ${BRANCH}_2 -f action=run -f branch=${BRANCH}_2 -f engine=task -f resume=none -f chain=0`],
   );
   const posted = comments(calls);
   assert.equal(posted.length, 1);
@@ -494,7 +494,7 @@ test('a failed run-history listing is refused, naming it', async (t) => {
   const f = await triggerFixture(t);
   assertRefused(
     f,
-    await f.trigger({}, { STUB_FAIL_ON: `run list --workflow harness-run.yml --branch ${BRANCH} --limit 1` }),
+    await f.trigger({}, { STUB_FAIL_ON: `run list --workflow devscene-run.yml --branch ${BRANCH} --limit 1` }),
     new RegExp(`the run history of ${BRANCH} could not be listed`),
   );
 });
@@ -527,7 +527,7 @@ test('a dispatch that fails after the push exits 3 and comments the manual way o
   const posted = comments(calls);
   assert.equal(posted.length, 1);
   assert.match(posted[0].body, new RegExp(`\`${BRANCH}\` was pushed`));
-  assert.match(posted[0].body, /harness-run\.yml.*Run workflow/s);
+  assert.match(posted[0].body, /devscene-run\.yml.*Run workflow/s);
   assert.match(posted[0].body, /Use workflow from\* set to/);
   assert.equal(removals(calls).length, 1);
 });
@@ -562,7 +562,7 @@ test('the comment names the filtered run list, never an older run, when the disp
   const posted = comments(f.calls());
   assert.equal(posted.length, 1);
   assert.ok(
-    posted[0].body.includes(`https://github.com/${REPOSITORY}/actions/workflows/harness-run.yml?query=branch%3A${BRANCH}`),
+    posted[0].body.includes(`https://github.com/${REPOSITORY}/actions/workflows/devscene-run.yml?query=branch%3A${BRANCH}`),
     posted[0].body,
   );
   assert.doesNotMatch(posted[0].body, /runs\/older/);
@@ -581,7 +581,7 @@ test('a harness-task dispatch starts one run, snapshots its provenance and repor
   const calls = f.calls();
   assert.deepEqual(
     dispatches(calls).map((call) => call.line),
-    [`workflow run harness-run.yml --ref ${BRANCH} -f action=run -f branch=${BRANCH} -f engine=task -f resume=none -f chain=0`],
+    [`workflow run devscene-run.yml --ref ${BRANCH} -f action=run -f branch=${BRANCH} -f engine=task -f resume=none -f chain=0`],
   );
   assert.deepEqual(issueCalls(calls), []);
   const prompt = await f.committedPrompt(BRANCH);
