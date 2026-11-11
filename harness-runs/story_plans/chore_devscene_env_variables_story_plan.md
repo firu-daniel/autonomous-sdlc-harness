@@ -96,7 +96,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_env_variables/tas
 1. [x] **Task 1** — Read the anchor name from `MAIN_REPO_ANCHOR_VARIABLE` in the main-repo-resolution corpus guard _(layer: cli)_ _(points: 5)_
 2. [x] **Task 2** — Rename the variable-name constants and literals in `cli/src` _(layer: cli)_ _(points: 15)_
 3. [x] **Task 3** — Rename the variables in the watcher, restart-watcher and notifier templates and the watcher test helper _(layer: cli)_ _(points: 15)_
-4. [ ] **Task 4** — Rename the variables in the `remote-run.sh` template _(layer: cli)_ _(points: 15)_
+4. [x] **Task 4** — Rename the variables in the `remote-run.sh` template _(layer: cli)_ _(points: 15)_
 5. [ ] **Task 5** — Rename the variables in the remaining script templates _(layer: cli)_ _(points: 10)_
 6. [ ] **Task 6** — Rename the variables in the four workflow templates and the two `.env.example` templates _(layer: cli)_ _(points: 20)_
 7. [ ] **Task 7** — Rename the variables in the `doctor` suites _(layer: cli)_ _(points: 20)_
