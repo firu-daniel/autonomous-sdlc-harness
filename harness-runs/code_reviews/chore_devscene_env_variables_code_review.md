@@ -51,7 +51,7 @@ Two findings are left. Both are about prose that the mechanical respelling skipp
 Each entry resolves to a self-contained `harness-runs/code_reviews/chore_devscene_env_variables_code_review/finding_<K>.md` through its `**Finding K**` reference. The leading `N.` is the fix order. `K` is the finding's stable identity.
 
 1. [x] **Finding 2** — Restore the `DEVSCENE_*` family to `launch-sandboxed-gates.sh`'s trust clause, in the template and its adopted copy _(layer: cli, general)_
-2. [ ] **Finding 1** — Record a dated `docs/guard-verification.md` entry for this branch's edit to the shared guard library _(layer: general)_
+2. [x] **Finding 1** — Record a dated `docs/guard-verification.md` entry for this branch's edit to the shared guard library _(layer: general)_
 
 ---
 
