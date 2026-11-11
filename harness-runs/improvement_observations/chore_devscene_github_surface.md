@@ -23,3 +23,25 @@
 - **category:** agent-contract
 - **evidence:** the Task 2 `layer-implementer` return states the plan suggests `git mv` for the four workflow-template renames but its output contract forbids it, so each move was done as a Write of the new file plus `rm` of the old one, with a `git diff --no-index` check before deletion.
 - **cost this run:** none beyond the workaround; the rename landed in commit `116c3df9`.
+
+# User-review fix round 1 — removed the pre-rename trigger-label fallback, the 0.6.1 control-workflow repair, and the docs describing them
+
+## `cp` and `node --check` refused for implementers in the fix round
+- **category:** tooling-gap
+- **evidence:** the Finding 1 `general`-layer `layer-implementer` return reports a `cp` of `cli/templates/scripts/remote-run.sh` over `scripts/remote-run.sh` refused by the permission profile, so the copy was rebuilt with file-editor removals and checked with `cmp`; the Finding 2 `general`-layer `layer-implementer` return reports `node --check scripts/check-rendered-workflows.mjs` refused, recorded as an evidence downgrade.
+- **cost this run:** one self-adopted copy hand-edited instead of copied; one edited `.mjs` file shipped with no syntax check until the Run gates round.
+
+## An implementer piped single-file test and tree-guard runs through `grep` again
+- **category:** agent-contract
+- **evidence:** the Finding 1 `cli`-layer `layer-implementer` return self-reports piping three test-file runs and all four tree-guard runs through `grep` to pull out counts, against `unit_loop_core.md` → `## The test-run rule` point 6; it did not re-run them unpiped.
+- **cost this run:** that unit's test and guard evidence rests on filtered output.
+
+## A fix-iteration implementer reported no tree guard selected for a `docs/*.md` edit
+- **category:** agent-contract
+- **evidence:** the Finding 3 iteration-1 `layer-implementer` return edits `docs/github-integration-research.md` and states "no tree guard was selected", while `harness.config.json` → `treeGuards` maps `test/no-container-home-paths.test.mjs` to `**/*.md`; the iteration-0 return for the same finding did select and run that guard.
+- **cost this run:** the final edit to that doc shipped without its tree-guard run; Phase G's whole suite passed afterwards.
+
+## The disposition derivation's `git log <default_branch>..HEAD` fails in a run copy with no local default branch
+- **category:** silent-failure
+- **evidence:** at Phase D, `git log --format='%h %s' -i --grep='record disposition of ' --grep=' done — ' dev..HEAD` exited 128 with `fatal: ambiguous argument 'dev..HEAD': unknown revision`; the same command over `origin/dev..HEAD` ran and matched nothing.
+- **cost this run:** none, because the orchestrator substituted the remote-tracking ref; a literal reading of `improvement_observations_instructions.md` → `## Dispositioned units` (b) yields no derivation at all here.
