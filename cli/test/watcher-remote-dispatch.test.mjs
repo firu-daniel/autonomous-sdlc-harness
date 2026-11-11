@@ -109,7 +109,7 @@ async function createDispatchFixture(t, { target = 'github-actions', branch } = 
     ...w,
     worktree,
     origin,
-    tick: (env = {}) => w.tick({ HARNESS_GH_CLI: ghStub, STUB_LOG: ghLog, ...env }),
+    tick: (env = {}) => w.tick({ DEVSCENE_GH_CLI: ghStub, STUB_LOG: ghLog, ...env }),
     drop: (name, body) => writeFile(join(w.dir, STATE_DIR, 'autonomous_inbox', name), body, 'utf8'),
     inInbox: (name) => existsSync(join(w.dir, STATE_DIR, 'autonomous_inbox', name)),
     ghArgv: () =>

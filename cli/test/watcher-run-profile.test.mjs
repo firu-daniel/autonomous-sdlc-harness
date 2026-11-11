@@ -751,7 +751,7 @@ test('a clone run\'s exit syncs its branch into the main checkout', async (t) =>
   await f.setStub(
     [
       'printf "one\\n" > sync-one.txt',
-      `bash "$HARNESS_MAIN_REPO/${INIT_SCRIPTS_DIR}/commit-on-branch.sh" --repo "$PWD" sync-one.txt -- 'test: commit through the wrapper' >> '${wrapperLog}' 2>&1 || echo WRAPPER_FAILED >> '${wrapperLog}'`,
+      `bash "$DEVSCENE_MAIN_REPO/${INIT_SCRIPTS_DIR}/commit-on-branch.sh" --repo "$PWD" sync-one.txt -- 'test: commit through the wrapper' >> '${wrapperLog}' 2>&1 || echo WRAPPER_FAILED >> '${wrapperLog}'`,
       'printf "two\\n" > sync-two.txt',
       `git add sync-two.txt && git -c core.hooksPath=/dev/null ${IDENTITY.join(' ')} commit -q -m 'test: commit directly in the clone' >> '${wrapperLog}' 2>&1 || echo DIRECT_FAILED >> '${wrapperLog}'`,
     ].join('\n'),

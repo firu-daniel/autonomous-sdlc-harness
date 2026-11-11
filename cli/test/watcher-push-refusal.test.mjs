@@ -239,7 +239,7 @@ test('in a job, a refused push is annotated, stops the job, and writes no step s
       REMOTE_CONTROL_POLL_SECS: '1',
       REMOTE_AUTO_RESUME_DELAY_SECS: '0',
       POLL_INTERVAL_SECS: '1',
-      HARNESS_GH_CLI: join(rec, 'gh-never-called'),
+      DEVSCENE_GH_CLI: join(rec, 'gh-never-called'),
     }),
     { timeoutMs: RUN_TIMEOUT_MS, signal: t.signal },
   );

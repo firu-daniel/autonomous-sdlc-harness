@@ -1,6 +1,6 @@
 /**
  * The written `restart-watcher.sh`'s in-flight gate, driven through its own REPRO arrangement: the
- * harness CLI replaced by a recorder on a temp `PATH` (`HARNESS_CLI`), so no daemon and no service
+ * harness CLI replaced by a recorder on a temp `PATH` (`DEVSCENE_CLI`), so no daemon and no service
  * manager is touched.
  *
  * **The rule these tests exist to enforce: a registry record whose `execution` is `github-actions`
@@ -43,9 +43,9 @@ async function createRestartFixture(t, registry) {
     run: () =>
       runBash(w.dir, [join(w.dir, SCRIPT_PATH)], {
         PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
-        HARNESS_CLI: 'hcli',
+        DEVSCENE_CLI: 'hcli',
         // A name no process carries, so the backstop probe cannot match a real agent session.
-        HARNESS_AGENT_CLI: 'restart-test-no-such-agent',
+        DEVSCENE_AGENT_CLI: 'restart-test-no-such-agent',
       }),
     calls: () => (existsSync(calls) ? readFileSync(calls, 'utf8').split('\n').filter(Boolean) : null),
   };

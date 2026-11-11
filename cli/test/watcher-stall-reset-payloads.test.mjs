@@ -216,7 +216,7 @@ async function createStallFixture(t, { job = false } = {}) {
   const stallEnv = (env) => ({
     REC: rec,
     REGISTRY: join(w.dir, REGISTRY_PATH),
-    HARNESS_GH_CLI: ghStub,
+    DEVSCENE_GH_CLI: ghStub,
     STUB_LOG: join(rec, 'gh.log'),
     STALL_CHECK_ENABLED: '1',
     STALL_WARN_SECS: '1',
@@ -311,7 +311,7 @@ async function createStallFixture(t, { job = false } = {}) {
           REMOTE_CONTROL_POLL_SECS: '1',
           REMOTE_AUTO_RESUME_MAX: '0',
           REMOTE_AUTO_RESUME_DELAY_SECS: '0',
-          HARNESS_CLI_VERSION: CLI_VERSION,
+          DEVSCENE_CLI_VERSION: CLI_VERSION,
           HARNESS_GITHUB_DEFAULT_BRANCH: config.defaultBranch,
           HARNESS_GITHUB_DEFAULT_COMMIT: defaultCommit,
           HARNESS_DEFAULT_BRANCH_COMMIT: defaultCommit,

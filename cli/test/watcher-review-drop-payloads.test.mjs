@@ -165,7 +165,7 @@ async function createReviewFixture(t, { remote = false, baseHooks = false, kindl
   const ghStub = join(w.dir, 'watcher-test', 'gh');
   const ghLog = join(w.dir, 'watcher-test', 'gh.log');
   await writeFile(ghStub, GH_STUB, { mode: 0o755 });
-  const tick = (env = {}) => w.tick({ HARNESS_GH_CLI: ghStub, STUB_LOG: ghLog, PUSH_RETRY_DELAY_SECS: '0', ...env });
+  const tick = (env = {}) => w.tick({ DEVSCENE_GH_CLI: ghStub, STUB_LOG: ghLog, PUSH_RETRY_DELAY_SECS: '0', ...env });
   const inbox = join(w.dir, STATE_DIR, 'autonomous_inbox');
   /** Assign `fields` to the run's record; a field whose value is `undefined` is removed. */
   const patchRecord = async (fields) => {
