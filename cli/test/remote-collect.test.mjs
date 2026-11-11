@@ -24,7 +24,7 @@
  * `push.env` or raises a desktop banner, and a case asserts what was sent through `notifications()`.
  *
  * A newest run whose `run` job GitHub never started is reported by this run's own `collect` in one
- * `not_started` comment, on the pull request or else the issue, naming `@sdlc-harness resume` when its
+ * `not_started` comment, on the pull request or else the issue, naming `@dev-scene resume` when its
  * dispatch's marker recorded an engine and the **Run workflow** form when none did; another run's is one
  * line, and no round is collected either way.
  *
@@ -48,7 +48,7 @@ const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
 const REVIEW_DIR = `${STATE_DIR}/user_reviews`;
 const REVIEW_DISPATCH =
-  'workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=user_review -f resume=none -f chain=0';
+  'workflow run devscene-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=user_review -f resume=none -f chain=0';
 
 const STUB = `#!/usr/bin/env node
 const { appendFileSync, readFileSync } = require('node:fs');
@@ -156,7 +156,7 @@ async function collectFixture(t, { ledger = true } = {}) {
 
   const files = {
     [`${STATE_DIR}/task_prompts/feat_x_task_prompt.md`]:
-      `# A task\n\nDo it.\n\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`sdlc-harness\`.\n`,
+      `# A task\n\nDo it.\n\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`devscene\`.\n`,
     ...(ledger
       ? {
           [`${STATE_DIR}/flow_progress/feat_x_progress.md`]: '# Progress\n',
@@ -264,7 +264,7 @@ test('settled, with one pending review: one round commit and one user_review dis
   assert.equal(await f.originSubject(), 'chore: add user review for feat_x');
   const round = await f.originFile(`${REVIEW_DIR}/feat_x_review.md`);
   assert.ok(round.startsWith('## Review by @bob\n\nReview 5 by bob.\n'), round);
-  assert.match(round, /\n<!-- sdlc-harness round collected_at=\S+ reviews=5 comments= -->\n$/);
+  assert.match(round, /\n<!-- devscene round collected_at=\S+ reviews=5 comments= -->\n$/);
   const calls = f.calls();
   assert.deepEqual(dispatches(calls).map((call) => call.line), [REVIEW_DISPATCH]);
   assert.ok(calls.some((call) => call.line === 'api repos/{owner}/{repo}/actions/runs/601/jobs'), 'the run job was read');
@@ -286,7 +286,7 @@ test('a writer HARNESS_RUN_ACTORS does not admit has their items dropped with on
   const round = await f.originFile(`${REVIEW_DIR}/feat_x_review.md`);
   assert.ok(round.startsWith('## Review by @alice\n\nReview 5 by alice.\n'), round);
   assert.ok(!round.includes('@bob') && !round.includes('Review 6'), round);
-  assert.match(round, /\n<!-- sdlc-harness round collected_at=\S+ reviews=5 comments= -->\n$/);
+  assert.match(round, /\n<!-- devscene round collected_at=\S+ reviews=5 comments= -->\n$/);
   assert.deepEqual(dispatches(f.calls()).map((call) => call.line), [REVIEW_DISPATCH]);
 });
 
@@ -365,7 +365,7 @@ test('review failing placement: exactly one pull-request comment, exit 0, nothin
     posted[0].body,
     /They stay on the pull request\. To retry, re-run this run's `collect` job \(no new review is needed\), or submit a review requesting changes\.\n/,
   );
-  assert.match(posted[0].body, /<!-- sdlc-harness event=reply branch=feat_x -->/);
+  assert.match(posted[0].body, /<!-- devscene event=reply branch=feat_x -->/);
   assert.equal(await f.originRefs(), before);
 });
 
@@ -392,7 +392,7 @@ const ROUTE_CHOICE = '<task, user_review or docs: the one the run was started wi
 const botComment = (marker, secs = 5) => ({
   user: { login: 'github-actions[bot]' },
   created_at: new Date(Date.parse(THIS_RUN.createdAt) + secs * 1000).toISOString().replace('.000Z', 'Z'),
-  body: `Dispatched.\n\n<!-- sdlc-harness event=${marker} branch=feat_x -->\n`,
+  body: `Dispatched.\n\n<!-- devscene event=${marker} branch=feat_x -->\n`,
 });
 
 /**
@@ -413,7 +413,7 @@ const neverStarted = ({ olderBundle, comments = {}, prs = [{ number: 12, isCross
 
 const labelCalls = (calls) =>
   calls.filter((call) => /^api --method POST repos\/[^ ]+\/issues\/\d+\/labels /.test(call.line)).map((call) => call.line);
-const labelOn = (n, state) => `api --method POST repos/${REPOSITORY}/issues/${n}/labels -f labels[]=sdlc-harness: ${state}`;
+const labelOn = (n, state) => `api --method POST repos/${REPOSITORY}/issues/${n}/labels -f labels[]=devscene: ${state}`;
 
 /** The detail of the one `not_started` push the recorder got for feat_x; fails unless there is exactly one. */
 const notifiedNotStarted = (f) => {
@@ -432,7 +432,7 @@ const assertNotStarted = async (f, result, before, n) => {
   assert.match(posted[0].line, new RegExp(`issues/${n}/comments `));
   assert.match(posted[0].body, /^GitHub did not start the job of the harness run on `feat_x`, so nothing ran and the branch is unchanged\. /);
   assert.ok(posted[0].body.includes(`\n\n${NOT_STARTED_WHY}\n`), posted[0].body);
-  assert.match(posted[0].body, /<!-- sdlc-harness event=not_started branch=feat_x -->/);
+  assert.match(posted[0].body, /<!-- devscene event=not_started branch=feat_x -->/);
   assert.equal(await f.originRefs(), before);
   notifiedNotStarted(f);
   return posted[0].body;
@@ -443,7 +443,7 @@ test('a run whose job never started, with a pull request and a recorded engine: 
   const before = await f.originRefs();
   const result = await f.collect(neverStarted({ olderBundle: true, comments: { 12: [botComment('round')] } }));
   const body = await assertNotStarted(f, result, before, 12);
-  assert.ok(body.includes('Comment `@sdlc-harness resume` to start it again.'), body);
+  assert.ok(body.includes('Comment `@dev-scene resume` to start it again.'), body);
   assert.ok(!body.includes('Run workflow'), body);
   const labels = labelCalls(f.calls());
   assert.ok(labels.includes(labelOn(12, 'paused')), labels.join('\n'));
@@ -455,7 +455,7 @@ test('a first run whose job never started, with its issue\'s started marker: one
   const before = await f.originRefs();
   const result = await f.collect(neverStarted({ olderBundle: false, prs: [], comments: { 7: [botComment('started')] } }));
   const body = await assertNotStarted(f, result, before, 7);
-  assert.ok(body.includes('Comment `@sdlc-harness resume`'), body);
+  assert.ok(body.includes('Comment `@dev-scene resume`'), body);
   assert.ok(notifiedNotStarted(f).includes('/devscene:branch-resume'));
   assert.deepEqual(labelCalls(f.calls()), [labelOn(7, 'paused')]);
 });
@@ -468,7 +468,7 @@ test('a first run whose job never started, with no marker: one issue comment nam
   assert.ok(body.includes('Start it again with the **Run workflow** form: '), body);
   assert.ok(body.includes(ROUTE_CHOICE), body);
   assert.ok(!body.includes('harness-state'), body);
-  assert.ok(!body.includes('@sdlc-harness resume'), body);
+  assert.ok(!body.includes('@dev-scene resume'), body);
   assert.ok(!notifiedNotStarted(f).includes('/devscene:branch-resume'));
   assert.deepEqual(labelCalls(f.calls()), [labelOn(7, 'failed')]);
 });

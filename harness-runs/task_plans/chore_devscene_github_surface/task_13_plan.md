@@ -34,3 +34,5 @@
 - `npm test --workspace cli -- test/remote-deliver.test.mjs` passes.
 - `npm test --workspace cli -- test/remote-deliver-threads.test.mjs` passes.
 - `grep -nE "@sdlc-harness|!-- ?sdlc-harness|sdlc-harness(: |%3A)|label .{0,2}sdlc-harness|label = 'sdlc-harness'|harness-(trigger|run|control|resume)([^-a-z]|$)" cli/test/remote-report.test.mjs cli/test/remote-collect.test.mjs cli/test/remote-deliver.test.mjs cli/test/remote-deliver-threads.test.mjs` prints nothing.
+
+- **Deviations from plan:** The Work list names no respelling for the mention handle, but the Verification grep's `@sdlc-harness` alternative requires one: every `@sdlc-harness <verb>` in `remote-report.test.mjs`, `remote-collect.test.mjs` (header comment included) and `remote-deliver.test.mjs` was respelled to `@dev-scene <verb>`, the handle `cli/test/remote-control-mention.test.mjs` already asserts.
