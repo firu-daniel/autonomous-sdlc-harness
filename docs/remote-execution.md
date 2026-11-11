@@ -585,7 +585,7 @@ All are set on the GitHub repository (Settings → Secrets and variables → Act
 | `REMOTE_AUTO_RESUME_MAX` | variable | job mode: automatic resumes per run after a failure or an overload pause | 2 | no |
 | `REMOTE_AUTO_RESUME_DELAY_SECS` | variable | job mode: the wait before each automatic resume | 300 | no |
 | `REMOTE_CONTROL_POLL_SECS` | variable | job mode: how often the job looks for a `harness pause` run | 60 | no |
-| `HARNESS_TRIGGER_LABEL` | variable | `devscene-trigger.yml`'s job filter and `remote-run.sh trigger` | `devscene`; `harness` in a workflow written by an earlier release | no |
+| `HARNESS_TRIGGER_LABEL` | variable | `devscene-trigger.yml`'s job filter and `remote-run.sh trigger` | `devscene` | no |
 | `HARNESS_TRIGGER_ALLOWED_BOTS` | variable | `remote-run.sh trigger`, and `remote-run.sh control` in `devscene-control.yml`: a listed bot's commands and reviews are obeyed too | empty: no bot may start a run | no |
 | `HARNESS_RUN_ACTORS` | variable | `devscene-run.yml`'s gate step, the first step of the `open`, `run`, `deliver` and `collect` jobs; `remote-run.sh trigger`, `control` and `collect`: the allow-list of people who may start, command, answer and review a run. Comma-separated logins, matched case-insensitively; `*` admits every writer (§7 step 4) | unset: the repository owner alone in a user-owned repository, nobody in an organisation-owned one | yes in an organisation-owned repository; otherwise no |
 
@@ -697,18 +697,6 @@ The last two are needed for the reason step 3 above gives: the `workflow` scope,
 
   Carry over what you need by hand. The managed `.gitignore` block ignores both workflow `.bak` files, so `git add -A` leaves them out; delete them once compared.
 - **It does not re-render `devscene-trigger.yml` or `devscene-control.yml`.** Neither carries a version pin, and both call the scripts on the default branch, so both share the scripts' route, `init --force`, like the outer-loop scripts in the next bullet. A repository that re-renders the two pinned workflows without `--force` gets a `deliver` report step whose script verb is missing until `--force` runs; that step is `continue-on-error`, so the run still finishes. `Store the push credential outside the checkout` is not, so a `run` job carrying it fails until `--force` has run (the bullet on `HARNESS_GIT_TOKEN` above).
-
-  **One exception: a `devscene-control.yml` that 0.6.1 wrote.** GitHub cannot parse that copy, so it runs for no event ([`development.md`](development.md) → Gate 12 → Round 7, finding 1). Any `init`, this upgrade included, replaces a copy byte for byte the one 0.6.1 wrote, after a `.bak`, and the upgrade's `git add` line then names it. Compare it with:
-
-  ```
-  git diff --no-index .github/workflows/devscene-control.yml.bak .github/workflows/devscene-control.yml
-  ```
-
-  That `.bak` is not in the managed `.gitignore` block, so delete it once compared. An edited copy that still carries 0.6.1's job `if:` is kept, with a warning naming the hand fix — the `if:` as a folded block scalar, `if: >-` with the expression on the next line — and the forced re-run, which regenerates every generated file after a `.bak`:
-
-  ```
-  npx devscene@<version> init --force
-  ```
 
   `doctor --check-github` fails on any harness workflow GitHub lists by its path rather than its name, which is how GitHub lists a file it could not parse.
 - **It does not re-render the outer-loop scripts** under `<scriptsDir>`. They stay create-if-absent ([`cli.md`](cli.md) → `## 3. The re-run contract`), so `init --force` remains their route. It also regenerates every other generated file after a `.bak`, including `.claude/CLAUDE.md` and the conventions documents the analyze command filled.

@@ -1,6 +1,6 @@
 # Starting a run from a GitHub issue
 
-**Who reads this:** a maintainer who wants a labelled GitHub issue to start an autonomous run, and anyone changing the issue trigger — `devscene-trigger.yml`, `remote-run.sh trigger` and `start`, or the branch-name rule. It owns the trigger's design of record: how to turn it on, the trigger label and the upgrade path for a repository already using `harness`, what happens between a label and a dispatched run, how the branch is named, who may start a run and what the labeller vouches for, and what is not verified. The run itself, from the dispatch on, is [`remote-execution.md`](remote-execution.md)'s, and working it from comments and reviews is [`github-run-control.md`](github-run-control.md)'s.
+**Who reads this:** a maintainer who wants a labelled GitHub issue to start an autonomous run, and anyone changing the issue trigger — `devscene-trigger.yml`, `remote-run.sh trigger` and `start`, or the branch-name rule. It owns the trigger's design of record: how to turn it on, the trigger label, what happens between a label and a dispatched run, how the branch is named, who may start a run and what the labeller vouches for, and what is not verified. The run itself, from the dispatch on, is [`remote-execution.md`](remote-execution.md)'s, and working it from comments and reviews is [`github-run-control.md`](github-run-control.md)'s.
 
 It cites rather than restates. Every GitHub fact below is cited from [`github-integration-research.md`](github-integration-research.md) by its ID (S1, S3, T1–T6), retrieved there on 2026-09-30 and not re-verified here. The code of record is `cli/templates/scripts/remote-run.sh` → the header's `start` and `trigger` paragraphs, the header of `cli/templates/github/workflows/devscene-trigger.yml`, and `cli/templates/scripts/lib/harness-run-lib.sh` → `DERIVING A BRANCH NAME FROM A TITLE`.
 
@@ -20,7 +20,7 @@ npx devscene config set forge github
 npx devscene config set execution.target github-actions
 ```
 
-**2. Write the trigger workflow.** `init` writes `.github/workflows/devscene-trigger.yml` only if absent. It also writes `.github/workflows/devscene-control.yml`, which turns comments and reviews into harness actions ([`github-run-control.md`](github-run-control.md)), on the same terms. Neither carries a version pin, so `init --upgrade-workflows` does not re-render them; `init --force` replaces each after a `.bak`. Any `init` also replaces a `devscene-control.yml` byte for byte the copy 0.6.1 wrote, which GitHub cannot parse, after a `.bak` ([`remote-execution.md`](remote-execution.md) → `### Upgrading`).
+**2. Write the trigger workflow.** `init` writes `.github/workflows/devscene-trigger.yml` only if absent. It also writes `.github/workflows/devscene-control.yml`, which turns comments and reviews into harness actions ([`github-run-control.md`](github-run-control.md)), on the same terms. Neither carries a version pin, so `init --upgrade-workflows` does not re-render them; `init --force` replaces each after a `.bak`.
 
 ```
 npx devscene init
@@ -86,27 +86,13 @@ gh variable set HARNESS_RUN_ACTORS --body '*'
 
 Which value fits which credential is [`remote-execution.md`](remote-execution.md) → `## 9. Credentials and billing`.
 
-**6. Check the setup.** `doctor`'s `forge` check reads local evidence only: it warns when remote execution is off, when the trigger workflow is absent, or when `origin/<default branch>` does not carry it. `--check-github` adds whether GitHub knows `devscene-trigger.yml` and `devscene-control.yml`, whether the trigger label exists — asked by `HARNESS_TRIGGER_LABEL`, else by the label the committed workflow falls back to — and whether *Allow GitHub Actions to create and approve pull requests* is on, which a run needs to open its draft pull request unless `HARNESS_GIT_TOKEN` is set. It notes every bot `HARNESS_TRIGGER_ALLOWED_BOTS` admits, and names the effective `HARNESS_RUN_ACTORS` list: the logins it names, every writer for `*`, or, unset, the owner alone or nobody. It also **fails** when GitHub lists any harness workflow by its path rather than its name, which is how GitHub lists a file it could not parse; the confirmation naming both forge workflows is then withheld. Once `gh` is authenticated, these answers appear in the `remote-github` check's report whatever else it reports, `pass`, `warn` or `fail`. A `gh` that cannot run or reports no usable login stops that check before GitHub is asked about the trigger.
+**6. Check the setup.** `doctor`'s `forge` check reads local evidence only: it warns when remote execution is off, when the trigger workflow is absent, or when `origin/<default branch>` does not carry it. `--check-github` adds whether GitHub knows `devscene-trigger.yml` and `devscene-control.yml`, whether the trigger label exists — asked by `HARNESS_TRIGGER_LABEL`, else by `devscene` — and whether *Allow GitHub Actions to create and approve pull requests* is on, which a run needs to open its draft pull request unless `HARNESS_GIT_TOKEN` is set. It notes every bot `HARNESS_TRIGGER_ALLOWED_BOTS` admits, and names the effective `HARNESS_RUN_ACTORS` list: the logins it names, every writer for `*`, or, unset, the owner alone or nobody. It also **fails** when GitHub lists any harness workflow by its path rather than its name, which is how GitHub lists a file it could not parse; the confirmation naming both forge workflows is then withheld. Once `gh` is authenticated, these answers appear in the `remote-github` check's report whatever else it reports, `pass`, `warn` or `fail`. A `gh` that cannot run or reports no usable login stops that check before GitHub is asked about the trigger.
 
 ```
 npx devscene doctor --check-github
 ```
 
 The trigger job runs on the runner `HARNESS_RUNNER` names, like the run job, and needs `jq` and `gh` there.
-
-**A repository already using `harness`.** The default trigger label is now `devscene`, and `HARNESS_TRIGGER_LABEL` still overrides it. A `devscene-trigger.yml` written by the previous release falls back to `harness` when the variable is unset and passes no label to the script, which then accepts `harness` as well as `devscene`; such a repository keeps starting runs on `harness` until it re-renders. `init --force` replaces `devscene-trigger.yml` and the scripts together, each after a `.bak`, and from then on the default is `devscene`. Setting `HARNESS_TRIGGER_LABEL` to `harness` keeps the old name under either workflow. `doctor --check-github` asks GitHub about the label the committed workflow falls back to when the variable is unset, and when that fallback is `harness` it adds a note naming the re-render. The two ways on — re-render, then create the new label (step 4) and commit what it replaced (step 3):
-
-```
-npx devscene init --force
-```
-
-or keep the name:
-
-```
-gh variable set HARNESS_TRIGGER_LABEL --body harness
-```
-
-`--force` regenerates more than the trigger; what else is listed in [`remote-execution.md`](remote-execution.md) → `### Upgrading`.
 
 ---
 
@@ -263,8 +249,6 @@ Every automated case drives a `gh` stub. Gate 12 round 5 (2026-10-01, CLI 0.5.0)
 | A `concurrency` group keeps at most one pending run and cancels an earlier pending one | The decision to declare none (§1) | GitHub's documented behaviour, not retrieved in this branch | Nothing built depends on it: the workflow has no group |
 | A Jira rule's **Send web request** reaches `repository_dispatch` end to end | §6's Jira route | GitHub side documented, Jira side documented in parts, the chain untested (T6) | The route is documentation only; nothing ships for it |
 | A `workflow_dispatch` run's `headSha` in `gh run list` is the commit the dispatched ref pointed at when it was dispatched | The comment's run lookup (§1 step 6) | Not retrieved in this branch, because unattended runs have no web access; Gate 12 (xiii) leg (d) in [`development.md`](development.md) records it | No run matches, so the comment names the branch's filtered run list rather than the run; it never names another lineage's run |
-| The script accepts the legacy label `harness` only when the workflow passes no label | Upgrading a repository already using `harness` (*Turning it on, in short*) | Driven by a `gh` stub, not observed on GitHub | An old workflow's `harness` is ignored, and `init --force` is the remedy |
-
 
 ### Verified in Gate 12 round 5
 

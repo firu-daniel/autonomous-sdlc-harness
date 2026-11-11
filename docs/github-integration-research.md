@@ -210,12 +210,12 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
   ```
   event=issues action=labeled actor=firu-daniel triggering_actor=firu-daniel sender=firu-daniel sender_type=User label=question review_state= ref=refs/heads/main secret_present=true
   ```
-- Observation by the maintainer, measured by the planning session, Gate 12, 2026-09-30 11:43 UTC: the maintainer created issue #3 in the web UI with the label `harness` set at creation. `gh api repos/firu-daniel/harness-gate12/issues/3/events` shows `{"actor":"firu-daniel","created_at":"2026-09-30T11:43:01Z","label":"harness"}` for the `labeled` event, and the issue's `createdAt` is `2026-09-30T11:43:00Z`. Two `probe-listen.yml` runs followed, `36710247909` and `36710247923`, logging:
+- Observation by the maintainer, measured by the planning session, Gate 12, 2026-09-30 11:43 UTC: the maintainer created issue #3 in the web UI with the label `devscene` set at creation. `gh api repos/firu-daniel/harness-gate12/issues/3/events` shows `{"actor":"firu-daniel","created_at":"2026-09-30T11:43:01Z","label":"devscene"}` for the `labeled` event, and the issue's `createdAt` is `2026-09-30T11:43:00Z`. Two `probe-listen.yml` runs followed, `36710247909` and `36710247923`, logging:
   ```
   event=issues action=opened actor=firu-daniel triggering_actor=firu-daniel sender=firu-daniel sender_type=User label= review_state= ref=refs/heads/main secret_present=true
-  event=issues action=labeled actor=firu-daniel triggering_actor=firu-daniel sender=firu-daniel sender_type=User label=harness review_state= ref=refs/heads/main secret_present=true
+  event=issues action=labeled actor=firu-daniel triggering_actor=firu-daniel sender=firu-daniel sender_type=User label=devscene review_state= ref=refs/heads/main secret_present=true
   ```
-  A label set while the issue is being created raises `labeled` too, as a separate event, and its `sender` is the creator. The same run's payload carries the issue's `title` and `body` (`gh issue view 3 --json title,body,labels` → `"title":"Test research issue title"`, `"body":"Test research issue body"`, label `harness`).
+  A label set while the issue is being created raises `labeled` too, as a separate event, and its `sender` is the creator. The same run's payload carries the issue's `title` and `body` (`gh issue view 3 --json title,body,labels` → `"title":"Test research issue title"`, `"body":"Test research issue body"`, label `devscene`).
 - Not established: whether a label an issue form adds at creation (`labels:` in the form) raises `labeled`, and with which `sender`. The form syntax page says only: "Labels that will automatically be added to issues created with this template." (https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms#top-level-syntax, retrieved 2026-09-30). The triage role was not measured, because the measurement had no second account.
 
 **Consequence:**

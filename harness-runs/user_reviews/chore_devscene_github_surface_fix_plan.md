@@ -21,7 +21,7 @@ Each entry resolves to a self-contained `harness-runs/user_reviews/chore_devscen
 
 1. [x] **Finding 1** — Remove the legacy `harness` trigger-label fallback: `LEGACY_TRIGGER_LABEL`, `triggerFallbackLabel`, the `remote-run.sh` fallback (template and self-adopted copy), the doctor note, and their cases in the `remote-names`, `remote-trigger` and `doctor` suites. _(layer: cli, general)_
 2. [x] **Finding 2** — Remove `init`'s 0.6.1 control-workflow repair: `UNPARSEABLE_CONTROL_RELEASES`, `classifyControl`, `reportControlRepair`, `unparseableControlRoute` (doctor falls back to its generic route, and its by-path subtest asserts that route), the template comment, the `harness-control-0.6.1.yml` fixture and its tests, gate 14b plus the fixture half of 14c, and gate 6f's `UNPARSEABLE` / `unparseable` deliberate-set entry in `check-typos.sh`. _(layer: cli, general)_
-3. [ ] **Finding 3** — Delete every doc passage describing either feature (`github-issue-trigger.md`, `remote-execution.md`, `github-run-control.md`, `cli.md`, Gate 14 and gate 6f's deliberate-set bullet in `development.md`), and respell the old trigger label in the Gate 12 Round 5 and 6 records and in `github-integration-research.md`. _(layer: general)_
+3. [x] **Finding 3** — Delete every doc passage describing either feature (`github-issue-trigger.md`, `remote-execution.md`, `github-run-control.md`, `cli.md`, Gate 14 and gate 6f's deliberate-set bullet in `development.md`), and respell the old trigger label in the Gate 12 Round 5 and 6 records and in `github-integration-research.md`. _(layer: general)_
 
 ---
 
