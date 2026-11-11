@@ -29,3 +29,5 @@ So the corrected command reproduces the comment, and `SESSION_ENV_BASE` itself n
 ```
 
 Change nothing else in either file. Do not change `SESSION_ENV_BASE` or `SESSION_ENV_STRIP_EXTRA`. Keep `scripts/autonomous-watcher.sh` at its current mode and byte-identical to the template. After the edit, `git ls-files -s cli/templates/scripts/autonomous-watcher.sh scripts/autonomous-watcher.sh` must show one blob id for both. This fix edits no test file.
+
+- **Deviations from plan:** The one-blob-id check was not executed as `git ls-files -s` / `git hash-object`: the index is unchanged until the committer stages, and `git hash-object` on the two working-tree files was refused by the permission layer. It rests instead on `cmp cli/templates/scripts/autonomous-watcher.sh scripts/autonomous-watcher.sh`, which exited 0 with no output (byte-identical), and on `ls -l`, which shows the modes unchanged (`-rw-r--r--` template, `-rwxr-xr-x` self-adopted copy, matching index modes `100644` / `100755`). The committer's staging is where `git ls-files -s` will show the single blob id.

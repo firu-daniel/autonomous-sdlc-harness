@@ -34,7 +34,7 @@
 
 Each entry resolves to a self-contained `harness-runs/skeptic_reviews/chore_devscene_env_variables_skeptic_review/finding_<K>.md` through its `**Finding K**` reference. The leading `N.` is the fix order. `K` is the finding's stable identity.
 
-1. [ ] **Finding 2** — Add `DEVSCENE` to the watcher's `SESSION_ENV_BASE` derivation grep, in the template and its adopted copy _(layer: cli, general)_
+1. [x] **Finding 2** — Add `DEVSCENE` to the watcher's `SESSION_ENV_BASE` derivation grep, in the template and its adopted copy _(layer: cli, general)_
 2. [ ] **Finding 1** — Make the story index's manual migration step run `init --force`, which replaces all four workflows and the scripts, instead of `--upgrade-workflows` _(layer: general)_
 
 ---

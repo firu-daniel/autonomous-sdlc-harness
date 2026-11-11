@@ -3125,7 +3125,7 @@ SESSION_ENV_STRIP_EXTRA="DEVSCENE_PUSH_URL DEVSCENE_GIT_TOKEN"
 #     credentials they need) carry or select a secret, so they are left to
 #     `sandbox.passEnv`, where the operator opts in by name.
 #   * The harness-owned names a session-side reader needs, derived from
-#       grep -rhoE '\$\{?(HARNESS|CLAUDE_CODE)_[A-Z0-9_]+|printenv (HARNESS|CLAUDE_CODE)_[A-Z0-9_]+' \
+#       grep -rhoE '\$\{?(HARNESS|DEVSCENE|CLAUDE_CODE)_[A-Z0-9_]+|printenv (HARNESS|DEVSCENE|CLAUDE_CODE)_[A-Z0-9_]+' \
 #         plugin/ cli/templates/scripts/{commit-on-branch,push-branch,refresh-branch,launch-sandboxed-gates,run-test-suite,scratch-run,flow-walker,docs-search-server,typecheck,test}.sh \
 #         cli/templates/scripts/lib/
 #     run in the harness repository, keeping each name a session's tree reads
