@@ -718,7 +718,7 @@ test('the preflight runs doctor --remote-job, after the profile is generated and
   assert.ok(at("Generate the job's permission profile") < preflight);
   assert.ok(preflight < at('Run the harness'));
   const [body] = runBodies(steps()[preflight].split('\n'));
-  assert.equal(body, 'npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --remote-job');
+  assert.equal(body, 'npx --yes "devscene@$HARNESS_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --remote-job');
 });
 
 /** A step's own top-level `<key>:` value, or `undefined` when the step does not set it. */
@@ -738,7 +738,7 @@ function dedent(body) {
 const REFUSAL_STEP = "Refuse a branch that changed the job's own files";
 const RECORD_STEP = "Record the default branch's commit";
 const REFUSAL_BODY = [
-  'npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH" \\',
+  'npx --yes "devscene@$HARNESS_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH" \\',
   '  || { echo "::error::this branch\'s own commits changed files the job runs or loads, named in this step\'s doctor report; nothing from it runs in this job."; exit 1; }',
 ].join('\n');
 const RECORD_BODY = [
@@ -902,7 +902,7 @@ test('the no-copy assertion fails on a rendered file whose run job calls create-
 
 test('no configured directory is frozen into the file', () => {
   assert.doesNotMatch(TEXT, /(^|[^A-Za-z0-9_])scripts\//m);
-  // A segment of its own: the machine cache path's `autonomous-sdlc-harness/` is not the state dir.
+  // A segment of its own: the machine cache path's `devscene/` is not the state dir.
   assert.doesNotMatch(TEXT, /(^|[^A-Za-z0-9_-])sdlc-harness\//m);
 });
 
@@ -1413,7 +1413,7 @@ test("control: Fetch the pinned plugin reads harness-run.yml's pin, clones its r
   const [body] = runBodies(fetch.split('\n'));
   assert.ok(body.includes(`${CLI_VERSION_VARIABLE}:`), 'reads the pin variable');
   assert.ok(body.includes(`.github/workflows/${WORKFLOW_RUN_FILE}`), 'reads it from harness-run.yml');
-  assert.ok(body.includes('autonomous-sdlc-harness--v'), 'clones the release tag');
+  assert.ok(body.includes('devscene--v'), 'clones the release tag');
   assert.match(body, /^\s*echo "HARNESS_MENTION_PLUGIN_DIR=\$plugin_dir" >> "\$GITHUB_ENV"$/m);
   assert.ok(!body.includes('claude plugin install'), 'installs nothing');
   const install = stepCarrying('claude plugin install');
