@@ -6,10 +6,6 @@
 # THE RULE. `typos 1.51.1`, with its default configuration (no `--config`, no `_typos.toml`), over
 # `cli/templates`, `plugin`, `schemas` and `cli/src`, reports only the deliberate set below. The set
 # is keyed on the file and the flagged word, never a line number:
-#   cli/src/generators/githubWorkflows.ts and cli/src/commands/init.ts — `UNPARSEABLE` and
-#     `unparseable`; cli/src/doctor/checks.ts — `unparseable`. Each sits inside
-#     `UNPARSEABLE_CONTROL_RELEASES`, `UNPARSEABLE_CONTROL_IF_LINE` or `unparseableControlRoute`,
-#     exported identifiers other files import by name.
 #   plugin/agents/docs-reviewer.md — `ines`: the regular expression `[Ll]ines?`.
 #   plugin/instructions/mode_contract.md — `Ein`: the `git grep -Ein` flags.
 #   plugin/hooks/lib/harness-config-lib.sh — `fo`: the `--fo` option-prefix example.
@@ -71,9 +67,6 @@ while IFS= read -r line; do
   path="${BASH_REMATCH[1]}"
   word="${BASH_REMATCH[2]}"
   case "${path}|${word}" in
-    "cli/src/generators/githubWorkflows.ts|UNPARSEABLE" | "cli/src/generators/githubWorkflows.ts|unparseable" | \
-    "cli/src/commands/init.ts|UNPARSEABLE" | "cli/src/commands/init.ts|unparseable" | \
-    "cli/src/doctor/checks.ts|unparseable" | \
     "plugin/agents/docs-reviewer.md|ines" | \
     "plugin/instructions/mode_contract.md|Ein" | \
     "plugin/hooks/lib/harness-config-lib.sh|fo")

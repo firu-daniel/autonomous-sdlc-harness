@@ -3,17 +3,15 @@
 // Hand-written for this repository, like check-flow-graph.sh; not an `init` output.
 //
 // THE RULE. Every workflow `init` renders under `forge: github` and `execution.target:
-// github-actions` parses as YAML, and 0.6.1's `harness-control.yml` does not. The render is
-// `init`'s own output in a throwaway repository, never the templates read as text, and the rendered
-// set must be exactly the four harness workflows: a render that wrote nothing is a finding.
+// github-actions` parses as YAML. The render is `init`'s own output in a throwaway repository, never
+// the templates read as text, and the rendered set must be exactly the four devscene workflows: a
+// render that wrote nothing is a finding.
 //
 // Usage: node scripts/check-rendered-workflows.mjs
 //          render in a throwaway repository under the OS temp directory and parse each file
-//        node scripts/check-rendered-workflows.mjs --negatives
-//          cli/test/fixtures/harness-control-0.6.1.yml must be refused by the same parse
 //        node scripts/check-rendered-workflows.mjs --actionlint
 //          render as above and run `actionlint -shellcheck= -pyflakes=` over each rendered file,
-//          which must report nothing, and over the 0.6.1 fixture, which must report `syntax-check`.
+//          which must report nothing.
 //          No `-ignore` is set: no shipped-template finding has been argued as a deliberate shape.
 //        node scripts/check-rendered-workflows.mjs --zizmor
 //          render as above and run `zizmor 1.30.1 --offline --no-config --format=json` over the
@@ -40,7 +38,7 @@
 //       4 only under --actionlint, when actionlint is not on PATH, under --zizmor and
 //       --zizmor-online, when neither PATH nor uvx provides zizmor 1.30.1, and under
 //       --zizmor-online, when neither `GH_TOKEN` nor `gh auth token` yields a token
-// Depends on gate 2a's build: every mode but --negatives runs `cli/dist/cli.js`.
+// Depends on gate 2a's build: every mode runs `cli/dist/cli.js`.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -49,8 +47,7 @@ import { delimiter, dirname, isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const NAME = 'check-rendered-workflows';
-const EXPECTED = ['harness-control.yml', 'harness-resume.yml', 'harness-run.yml', 'harness-trigger.yml'];
-const NEGATIVE = 'cli/test/fixtures/harness-control-0.6.1.yml';
+const EXPECTED = ['devscene-control.yml', 'devscene-resume.yml', 'devscene-run.yml', 'devscene-trigger.yml'];
 const ZIZMOR_VERSION = '1.30.1';
 /**
  * The zizmor findings the shipped workflows keep, as `<file> <audit> <job>`, each justified in its
@@ -59,14 +56,14 @@ const ZIZMOR_VERSION = '1.30.1';
  * pinned install is flagged too.
  */
 const RESIDUAL = [
-  'harness-run.yml artipacked open',
-  'harness-run.yml artipacked deliver',
-  'harness-run.yml artipacked collect',
-  'harness-run.yml adhoc-packages run',
-  'harness-resume.yml artipacked poll',
-  'harness-trigger.yml artipacked trigger',
-  'harness-control.yml artipacked control',
-  'harness-control.yml adhoc-packages control',
+  'devscene-run.yml artipacked open',
+  'devscene-run.yml artipacked deliver',
+  'devscene-run.yml artipacked collect',
+  'devscene-run.yml adhoc-packages run',
+  'devscene-resume.yml artipacked poll',
+  'devscene-trigger.yml artipacked trigger',
+  'devscene-control.yml artipacked control',
+  'devscene-control.yml adhoc-packages control',
 ];
 
 const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
@@ -82,7 +79,7 @@ const finding = (file, reason) => findings.push(`${NAME}: ${file} — ${reason}`
 
 function usage(message) {
   console.error(`${NAME}: ${message}`);
-  console.error('  usage: node scripts/check-rendered-workflows.mjs [--negatives | --actionlint | --zizmor | --zizmor-online]');
+  console.error('  usage: node scripts/check-rendered-workflows.mjs [--actionlint | --zizmor | --zizmor-online]');
   process.exit(2);
 }
 
@@ -90,17 +87,6 @@ function onPath(binary) {
   return (process.env.PATH ?? '')
     .split(delimiter)
     .some((dir) => dir !== '' && existsSync(join(dir, binary)));
-}
-
-/**
- * The 0.6.1 fixture, repo-relative: byte for byte the `harness-control.yml` 0.6.1 shipped (git blob
- * `1b4f0fc33200d876e4089ebe4013120e48a45335`, `cli/src/generators/githubWorkflows.ts` →
- * `UNPARSEABLE_CONTROL_RELEASES`).
- */
-function negativePath() {
-  const path = join(repoRoot, NEGATIVE);
-  if (!existsSync(path)) finding(NEGATIVE, 'the negative fixture is missing');
-  return existsSync(path) ? path : undefined;
 }
 
 /**
@@ -307,7 +293,7 @@ function zizmorOnline(tool, token) {
 const args = process.argv.slice(2);
 if (args.length > 1) usage('expected at most one argument');
 const mode = args[0] ?? 'render';
-if (!['render', '--negatives', '--actionlint', '--zizmor', '--zizmor-online'].includes(mode)) {
+if (!['render', '--actionlint', '--zizmor', '--zizmor-online'].includes(mode)) {
   usage(`unknown argument '${mode}'`);
 }
 
@@ -318,11 +304,6 @@ if (mode === 'render') {
       if (reason !== undefined) finding(`.github/workflows/${file}`, `does not parse as YAML: ${reason}`);
     }
   });
-} else if (mode === '--negatives') {
-  const path = negativePath();
-  if (path !== undefined && parseError(path) === undefined) {
-    finding(NEGATIVE, 'parses as YAML; the gate can no longer see a workflow GitHub refuses');
-  }
 } else if (mode === '--zizmor') {
   const tool = resolveZizmor();
   if (tool.reason !== undefined) {
@@ -353,13 +334,6 @@ if (mode === 'render') {
       if (status !== 0) finding(`.github/workflows/${file}`, `actionlint exit ${status}: ${out.trim()}`);
     }
   });
-  const path = negativePath();
-  if (path !== undefined) {
-    const { status, out } = actionlint(path);
-    if (status === 0 || !out.includes('[syntax-check]')) {
-      finding(NEGATIVE, `actionlint reported no syntax-check finding (exit ${status})`);
-    }
-  }
 }
 
 for (const line of findings) console.error(line);

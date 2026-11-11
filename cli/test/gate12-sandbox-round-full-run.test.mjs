@@ -27,7 +27,7 @@
  *   `verb_save`'s saved line; `save_link_free`'s `remote-run.sh: save: skipped ` form.
  * - `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_remote_copy_tree`'s
  *   `remote state bundle: skipped ` prefix and ` is a symbolic link` suffix.
- * - `cli/templates/github/workflows/harness-run.yml`: the `run` job's step names, and the install
+ * - `cli/templates/github/workflows/devscene-run.yml`: the `run` job's step names, and the install
  *   step's present line.
  * - `cli/templates/scripts/push-branch.sh`: the prefix of its `$HR_WT_CONFIG_REFUSAL` refusal, and
  *   its detached-HEAD refusal.
@@ -75,7 +75,7 @@ const PUSH_BRANCH = 'cli/templates/scripts/push-branch.sh';
 const COMMIT_ON_BRANCH = 'cli/templates/scripts/commit-on-branch.sh';
 const REMOTE_RUN = 'cli/templates/scripts/remote-run.sh';
 const WATCHER = 'cli/templates/scripts/autonomous-watcher.sh';
-const WORKFLOW = 'cli/templates/github/workflows/harness-run.yml';
+const WORKFLOW = 'cli/templates/github/workflows/devscene-run.yml';
 
 const watcher = source(WATCHER);
 const [WATCHER_TAG] = extract(watcher, /^log\(\) \{ printf '%s (\[watcher\]) %s\\n'/m, 'log() format');
@@ -357,7 +357,7 @@ async function stage(fixture, jobs, { analytics = ANALYTICS, artifacts = { [PARK
   // Listed newest first, as `gh run list` answers: the grader orders by createdAt.
   const listed = [...jobs].reverse().map((j) => ({ databaseId: j.id, createdAt: j.createdAt, displayTitle: `harness run ${B}`, status: 'completed' }));
   const routes = {
-    [`run list --repo ${GATE12_SLUG} --workflow harness-run.yml --branch ${B}`]: { stdout: `${JSON.stringify(listed)}\n` },
+    [`run list --repo ${GATE12_SLUG} --workflow devscene-run.yml --branch ${B}`]: { stdout: `${JSON.stringify(listed)}\n` },
   };
   for (const j of jobs) {
     const base = `run view ${j.id} --repo ${GATE12_SLUG}`;

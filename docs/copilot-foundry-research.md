@@ -1,6 +1,6 @@
 # Copilot and Foundry integration research
 
-**Who reads this:** the maintainer deciding whether, and how, the harness can be adopted inside a company whose only licensed AI coding product is GitHub Copilot (Business or Enterprise), and the planner of any branch that changes how a run authenticates, which engine it launches, or how it caps spend. It owns the findings below, each with its source, as of 2026-10-16, and the routes and recommendation drawn from them. It does not own any design choice: any change it describes to `cli/templates/github/workflows/harness-run.yml`, `cli/templates/scripts/autonomous-watcher.sh`, `doctor` or anything else is a later branch's to make.
+**Who reads this:** the maintainer deciding whether, and how, the harness can be adopted inside a company whose only licensed AI coding product is GitHub Copilot (Business or Enterprise), and the planner of any branch that changes how a run authenticates, which engine it launches, or how it caps spend. It owns the findings below, each with its source, as of 2026-10-16, and the routes and recommendation drawn from them. It does not own any design choice: any change it describes to `cli/templates/github/workflows/devscene-run.yml`, `cli/templates/scripts/autonomous-watcher.sh`, `doctor` or anything else is a later branch's to make.
 
 It cites rather than restates [`ARCHITECTURE.md`](../ARCHITECTURE.md) §5–§9 — the engine-axis inventory and the nine-operation adapter contract — and [`team-accounts-research.md`](team-accounts-research.md), which covers credentials for a team that does have Claude accounts. [`github-integration-research.md`](github-integration-research.md) A7 recorded, earlier, that Copilot's cloud agent and third-party agents documented no custom plugin, permission profile or launch line; §3 and §4 below supersede that entry where the two disagree.
 
@@ -43,7 +43,7 @@ The hard couplings, hardest first:
 3. **Plugin packaging and asset resolution** — `${CLAUDE_PLUGIN_ROOT}` across the plugin corpus, slash-command resolution from a headless first message (the `ENGINE_COMMAND_TASK` string in `cli/templates/scripts/autonomous-watcher.sh`), and the marketplace format.
 4. **An auto-loaded root context file** (`CLAUDE.md`) in every sub-agent. It fails silently when absent.
 5. **The headless event stream** — the `stream-json` schema, and `rate_limit_event` records whose `five_hour` / `seven_day` windows drive the usage gate.
-6. **Launch flags and credentials** — `-p`, `--settings`, `--permission-mode`, `--add-dir`, `--model`, `--effort`, and `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`, which `cli/templates/github/workflows/harness-run.yml` requires one of.
+6. **Launch flags and credentials** — `-p`, `--settings`, `--permission-mode`, `--add-dir`, `--model`, `--effort`, and `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`, which `cli/templates/github/workflows/devscene-run.yml` requires one of.
 
 ---
 
@@ -226,16 +226,16 @@ None of this is decided here. Each item is a later branch's.
 
 - **Local runs need no code change** — only the §5.1 environment variables and the model pin from §5.3.
 - **Remote runs on GitHub Actions do not work on Foundry today.** Claude Code reads the Foundry variables on any machine, a runner included, so nothing in the engine blocks it. What blocks it is the workflow:
-  - `cli/templates/github/workflows/harness-run.yml`'s *Check the credentials* step fails the job unless the `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` secret is set.
+  - `cli/templates/github/workflows/devscene-run.yml`'s *Check the credentials* step fails the job unless the `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` secret is set.
   - Its *Run the harness* step exports only those two before `autonomous-watcher.sh job`.
-  - `harness-control.yml` passes the same two to the mention session.
+  - `devscene-control.yml` passes the same two to the mention session.
 
   Supporting Foundry would take three changes:
   1. **Accept a Foundry credential** as a third option, by one of two routes:
      - **Key** — an `ANTHROPIC_FOUNDRY_API_KEY` secret, exported with `CLAUDE_CODE_USE_FOUNDRY=1` and `ANTHROPIC_FOUNDRY_RESOURCE`.
      - **Keyless, preferred** — Azure workload identity federation: `permissions: id-token: write` and an `azure/login` step before the run. Claude Code's default Azure credential chain then picks up the Azure CLI sign-in, and no secret is stored.
   2. **Export the model pins** (`ANTHROPIC_DEFAULT_OPUS_MODEL` and its Sonnet and Haiku siblings) from repository variables, for the reason in §5.3.
-  3. **Make the same change in `harness-control.yml`** for the mention session.
+  3. **Make the same change in `devscene-control.yml`** for the mention session.
 
   `claude-code-action` already has a provider input for Foundry using OIDC, which shows the shape (https://code.claude.com/docs/en/github-actions). The usage gate is as inert on a runner as it is locally, and per-run cost is §5.4's.
 - **`doctor`** could warn when a provider is selected and the `opus` alias is unpinned.

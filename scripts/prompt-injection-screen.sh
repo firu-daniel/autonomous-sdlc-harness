@@ -236,7 +236,7 @@ PIS_RE_MARKER='=== (BEGIN|END) UNTRUSTED DATA'
 # closing marker line of a review round collected on GitHub. A whole line in
 # exactly this shape carries no free text, so prescan-html-comment skips it;
 # any other `<!--` still hits.
-PIS_RE_ROUND_MARKER='<!-- sdlc-harness round collected_at=[0-9T:Z-]+ reviews=[0-9,]* comments=[0-9,]* -->'
+PIS_RE_ROUND_MARKER='<!-- devscene round collected_at=[0-9T:Z-]+ reviews=[0-9,]* comments=[0-9,]* -->'
 
 PIS_EXCERPT_MAX=160
 PIS_NL='

@@ -303,7 +303,7 @@ test('a workflow edit is refused with GITHUB_ACTIONS=true and without', async (t
 
 test('a nested workflows directory is an ordinary file and pushes', async (t) => {
   const f = await adoptedFixture(t);
-  await f.commitFile('cli/templates/github/workflows/harness-run.yml', 'on: push\n');
+  await f.commitFile('cli/templates/github/workflows/devscene-run.yml', 'on: push\n');
   await assertPushed(f, await f.push());
 });
 

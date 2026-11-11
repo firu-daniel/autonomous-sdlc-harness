@@ -533,7 +533,7 @@
 #     empty temporary directory, never from the checkout, whose `.npmrc` and
 #     `node_modules` the session can write. The branch, commit and base are
 #     HARNESS_GITHUB_DEFAULT_BRANCH, HARNESS_GITHUB_DEFAULT_COMMIT and
-#     HARNESS_DEFAULT_BRANCH_COMMIT, recorded by harness-run.yml before any
+#     HARNESS_DEFAULT_BRANCH_COMMIT, recorded by devscene-run.yml before any
 #     session ran, so no ref the session could move is the base. A non-zero exit, or any of those values or HARNESS_CLI_VERSION
 #     empty, gives the run up as `failed`.
 #   * OFF: the inbox pass, the cleanup sweep, the live-log window, and the
@@ -1043,7 +1043,7 @@
 #                 HARNESS_GH_CLI pointed at a recorder (see remote-run.sh's
 #                 REPRO); drop feat_x_task_prompt.md and tick
 #                 -> the prompt committed and pushed as in `a drop`, ONE
-#                    `workflow run harness-run.yml --ref feat_x … -f engine=task
+#                    `workflow run devscene-run.yml --ref feat_x … -f engine=task
 #                    -f resume=none -f chain=0` recorded, the record
 #                    `execution: github-actions`, `status: running`, an empty
 #                    pid and a remote_dispatched_at, ONE `launched`
@@ -4682,7 +4682,7 @@ stall_human_time() {
 # the check fails, when no scratch directory can be made, or when a value it
 # needs is empty. The configuration is read from HARNESS_GITHUB_DEFAULT_COMMIT
 # and the merge base taken with HARNESS_DEFAULT_BRANCH_COMMIT, the configured
-# default branch's commit; harness-run.yml recorded both from the fresh checkout
+# default branch's commit; devscene-run.yml recorded both from the fresh checkout
 # before any session ran, never a ref: the session has been writing MAIN_REPO's
 # `.git/refs` and `packed-refs`, so `refs/remotes/origin/<default>` there could
 # name the session's own tip, which makes the merge base the tip and the check

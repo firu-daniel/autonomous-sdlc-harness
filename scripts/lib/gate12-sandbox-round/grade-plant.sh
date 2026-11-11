@@ -36,7 +36,7 @@
 G12_GRADERS="g12_grade_plant JS1 JS4 RJ2
 g12_grade_state SB2 SB4 JS3 JS3N SB3 RJ3"
 
-# The `run` job's step names, from cli/templates/github/workflows/harness-run.yml.
+# The `run` job's step names, from cli/templates/github/workflows/devscene-run.yml.
 G12_STEP_REFUSE="Refuse a branch that changed the job's own files"
 G12_STEP_CONFIG="Read the configuration"
 G12_STEP_BOOTSTRAP="Bootstrap the checkout"
@@ -196,7 +196,7 @@ g12_refused_arm() {
   [ "$concl" = failure ] ||
     { g12_arm_set fail "run $G12_ARM_ID concluded '$concl', not failure"; return; }
 
-  # harness-run.yml THE JOB'S OWN FILES: the refusal leaves SCRIPTS_DIR unset, which only `Read the
+  # devscene-run.yml THE JOB'S OWN FILES: the refusal leaves SCRIPTS_DIR unset, which only `Read the
   # configuration` sets, so it and every step after it must be skipped. The runner's own `Post …`
   # and `Complete job` steps are not the workflow's.
   steps="$(g12_run_steps "$G12_ARM_ID")" || { g12_arm_gh_failed; return; }

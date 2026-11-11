@@ -102,7 +102,7 @@ async function deliverFixture(t, { forge = 'github', qa = false, status = 'compl
   const files = [`${STATE_DIR}/task_prompts/feat_x_task_prompt.md`, `${STATE_DIR}/flow_progress/feat_x_progress.md`];
   mkdirSync(join(dir, STATE_DIR, 'task_prompts'), { recursive: true });
   mkdirSync(join(dir, STATE_DIR, 'flow_progress'), { recursive: true });
-  const provenance = issue ? `\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`sdlc-harness\`.\n` : '';
+  const provenance = issue ? `\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`devscene\`.\n` : '';
   writeFileSync(join(dir, files[0]), `# Add comments\n\nDo it.\n${provenance}`);
   writeFileSync(join(dir, files[1]), '# Progress\n');
   await runGit(dir, ['add', '--force', ...files]);
@@ -170,7 +170,7 @@ const labelAdds = (calls, n) =>
   calls
     .filter((call) => call.line.startsWith(`api --method POST repos/${REPOSITORY}/issues/${n}/labels `))
     .map((call) => call.args.at(-1));
-const MARKER = '<!-- sdlc-harness event=completed branch=feat_x -->\n';
+const MARKER = '<!-- devscene event=completed branch=feat_x -->\n';
 
 const FLIP_ARGS = ['pr', 'ready', '12', '--repo', REPOSITORY];
 const UNDO_ARGS = [...FLIP_ARGS, '--undo'];
@@ -203,8 +203,8 @@ test('an open draft is marked ready with HARNESS_PR_TOKEN, commented on it and o
   assert.match(onIssue.body, /https:\/\/github\.com\/octo\/fixture\/pull\/12/);
   assert.ok(onIssue.body.endsWith(MARKER), onIssue.body);
   assert.doesNotMatch(onIssue.body, /branch-qa-test/);
-  assert.deepEqual(labelAdds(calls, 7), ['labels[]=sdlc-harness: done']);
-  assert.deepEqual(labelAdds(calls, 12), ['labels[]=sdlc-harness: done']);
+  assert.deepEqual(labelAdds(calls, 7), ['labels[]=devscene: done']);
+  assert.deepEqual(labelAdds(calls, 12), ['labels[]=devscene: done']);
 });
 
 test('with HARNESS_PR_TOKEN unset, an open draft is marked ready with the job token and the line says so', async (t) => {
@@ -304,7 +304,7 @@ test('a refused flip is one warning line, exit 0, the refused sentence, and both
   assert.equal(onIssue.length, 1);
   assert.match(onIssue[0].body, /still a draft — marking it ready for review was refused/);
   assert.doesNotMatch(onIssue[0].body, /is ready for your review/);
-  assert.deepEqual(labelAdds(calls, 12), ['labels[]=sdlc-harness: done']);
+  assert.deepEqual(labelAdds(calls, 12), ['labels[]=devscene: done']);
 });
 
 test('with no pull request open, the fallback draft create runs with HARNESS_PR_TOKEN and then the flip', async (t) => {
@@ -322,10 +322,10 @@ test('with no pull request open, the fallback draft create runs with HARNESS_PR_
   assert.equal(made[0].args[made[0].args.indexOf('--title') + 1], 'Add comments');
   assert.match(made[0].body, /\nStarted from #7\.\n/);
   assert.doesNotMatch(made[0].body, /\b(closes|fixes|resolves) #/i);
-  for (const cmd of ['@sdlc-harness answer <n>', '@sdlc-harness pause', '@sdlc-harness resume', '@sdlc-harness stop', '@sdlc-harness clear', '@sdlc-harness status']) {
+  for (const cmd of ['@dev-scene answer <n>', '@dev-scene pause', '@dev-scene resume', '@dev-scene stop', '@dev-scene clear', '@dev-scene status']) {
     assert.ok(made[0].body.includes(`\`${cmd}\``), made[0].body);
   }
-  assert.ok(made[0].body.endsWith('<!-- sdlc-harness event=pull-request branch=feat_x -->\n'), made[0].body);
+  assert.ok(made[0].body.endsWith('<!-- devscene event=pull-request branch=feat_x -->\n'), made[0].body);
   const createAt = calls.indexOf(made[0]);
   const flips = readies(calls);
   assert.equal(flips.length, 1);
@@ -354,7 +354,7 @@ test('with no issue, only the pull request is commented on and labelled', async 
   const calls = f.calls();
   assert.equal(allComments(calls).length, 1);
   assert.equal(commentsOn(calls, 12).length, 1);
-  assert.deepEqual(labelAdds(calls, 12), ['labels[]=sdlc-harness: done']);
+  assert.deepEqual(labelAdds(calls, 12), ['labels[]=devscene: done']);
   assert.deepEqual(labelAdds(calls, 7), []);
 });
 
@@ -382,7 +382,7 @@ test('the Actions refusal is not retried, and the issue alone names the setting 
   assert.match(posted.body, /Allow GitHub Actions to create and approve pull requests/);
   assert.match(posted.body, /HARNESS_GIT_TOKEN/);
   assert.equal(allComments(calls).length, 1);
-  assert.deepEqual(labelAdds(calls, 7), ['labels[]=sdlc-harness: done']);
+  assert.deepEqual(labelAdds(calls, 7), ['labels[]=devscene: done']);
 });
 
 test('another create failure is retried once without --draft, and the not-a-draft result is not flipped', async (t) => {

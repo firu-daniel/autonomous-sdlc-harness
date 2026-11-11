@@ -2,8 +2,6 @@
 
 **Who reads this:** the maintainer deciding whether to move docs retrieval into its own repository and product, and whoever writes the synthesis (`README.md` in this directory). **It owns:** the invocation path as shipped, the pipeline stage by stage, every place the retrieval code depends on the harness, an assessment of which half could stand alone, the gaps for a large-docs user, and a proposed seam. **It does not own:** how comparable products are packaged (`02-distribution-shapes.md`), remote sources, managed Postgres or connection security (`03-sources-database-security.md`), or how the harness should consume the extracted product beyond one short subsection.
 
-Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed.
-
 ## How this was researched
 
 Date: 2026-10-28. Route: reading this repository at `dev` (`2ace325d`) only — source, templates, tests, shipped docs and the eval record. No command was run against a database or a model. The fork itself used no web source. The licence URLs in §7 were checked by this file's reviewer (`reviews/01-current-mechanism.md`, Should Fix 1) and are carried here with that provenance.
@@ -126,7 +124,7 @@ Two things use it: the service image's default command (`docs-retrieval-service/
 | 4 | Wire names `harness-docs` / `search_docs`, quoted by 11 agents and 2 templates | `server.ts:35-42`; `wire.py`; `plugin/agents/README.txt:84-90` | Moderate. A configurable server name would let the harness keep its string. |
 | 5 | Description and remedy text naming the harness | `server.ts:58`, `:137`; `service.py:245`; `session.ts:39`, `:47` | Trivial. |
 | 6 | `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` (read by both backends, passed through by `compose.yaml`) and `…_RETRIEVAL_LOG` | `stubs.py:21`; `queryLog.ts:53`; `models.ts` | Trivial. |
-| 7 | Cache paths `…/devscene/retrieval/{runtime,models}`, mirrored in the launcher and in `cli/templates/github/workflows/harness-run.yml:600`, `:938` | `runtime.ts:20-27` | Trivial for the product; the harness mirrors move with it. |
+| 7 | Cache paths `…/devscene/retrieval/{runtime,models}`, mirrored in the launcher and in `cli/templates/github/workflows/devscene-run.yml:600`, `:938` | `runtime.ts:20-27` | Trivial for the product; the harness mirrors move with it. |
 | 8 | **The TS backend ships inside the harness npm package** as optional peers. `init` installs the whole CLI plus peers into a runtime directory, because `npx` cannot resolve project peers. It imports `HarnessConfig`, `HarnessError`, `Reporter` and `core/paths` | `cli/package.json`; `runtime.ts`; `setup.ts`; `docs/retrieval.md:71-73` | **Hard.** |
 | 9 | Model fetching inside `init` (`setup.ts` spawns `docs fetch-models`, 900 s timeout) | `setup.ts:46` | Moderate; Python has its own `fetch-models`. |
 | 10 | `doctor`: six checks; the Python three parse `self-check` stdout | `checks.ts:5767-6060`; `pythonBackend.ts:13-31` | Moderate. |
@@ -257,7 +255,7 @@ Responding to `reviews/01-current-mechanism.md`.
 | SF3 — "README says" attribution | Fixed to "the eval record says" (`docs/retrieval-eval-results.md:28246`). |
 | SF4 — `supply-chain.yml` | Fixed: the only Python job is `uv audit`, and none builds or pushes a wheel or image. |
 | SF5 — ten modules | Fixed to fifteen. |
-| SF6 — `harness-run.yml` path | Fixed to the full path, `:600` and `:938`. |
+| SF6 — `devscene-run.yml` path | Fixed to the full path, `:600` and `:938`. |
 | SF7 — stub variable in §5 | Added "(except the stub variable, §4 #6)". |
 | SF8 — length | Cut along the listed lines: prose and error-string lists shortened, the diagram kept and slimmed, §4 rows 11 and 15–18 folded into one, the §5 facts table trimmed, §6 is the single home for the gaps, and the licence section is rewritten. |
 | SF9 — verdict length | Now 7 sentences. |

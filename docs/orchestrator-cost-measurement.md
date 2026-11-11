@@ -2,8 +2,6 @@
 
 **Who reads this:** the maintainer deciding whether the autonomous flows keep an in-session orchestrator or move to a script-driven graph whose nodes are separate sessions, and the planner of any branch that changes the committer, the dispatch-additions record, or how a node's agent is launched. It owns three measurements taken on 2026-10-16 and the conclusions drawn from them. It owns no design choice. The script-driven planning pilot is a separate task, and its result belongs to that branch.
 
-Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed.
-
 It builds on [`copilot-foundry-research.md`](copilot-foundry-research.md) → `### 5.4 What a harness run costs at API rates`, which establishes what `total_cost_usd` is and that cache reads are the largest part of a run's cost. It revisits one premise of [`second-runtime-port-decision.md`](second-runtime-port-decision.md) → `## 4. Cost`.
 
 ---

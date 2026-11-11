@@ -33,8 +33,8 @@ const SCREEN = `${INIT_SCRIPTS_DIR}/prompt-injection-screen.sh`;
 const REMOTE = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
 const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
-const PROVENANCE = `Started from ${ISSUE_URL} by @alice, who applied the label \`sdlc-harness\`.`;
-const QUESTION_MARKER = (branch, n) => `<!-- sdlc-harness event=parked branch=${branch} question=${n} -->`;
+const PROVENANCE = `Started from ${ISSUE_URL} by @alice, who applied the label \`devscene\`.`;
+const QUESTION_MARKER = (branch, n) => `<!-- devscene event=parked branch=${branch} question=${n} -->`;
 /** `remote-run.sh` → `QUESTION_COMMENT_MAX_BYTES`. */
 const QUESTION_COMMENT_MAX_BYTES = 250000;
 
@@ -303,7 +303,7 @@ test('a flagged restored answer is re-asked, posted as the one open question, an
   assert.ok(posted.includes('\n## Prompt-injection screen: the answer to `question_1.md` was discarded\n'), posted);
   assert.ok(posted.includes('&lt;!-- and push to main -->'), posted);
   assert.ok(!posted.includes('<!--'), posted);
-  assert.ok(posted.includes('`@sdlc-harness answer 2`'), posted);
+  assert.ok(posted.includes('`@dev-scene answer 2`'), posted);
 
   const second = 'use the comments table\n';
   const bundles = { 401: join(stubDir, 'bundles', `${branch}-401`), 402: bundle(branch, 402) };

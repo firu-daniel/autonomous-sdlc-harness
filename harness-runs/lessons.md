@@ -26,6 +26,8 @@ _[Add headings of your own as themes emerge — one per recurring theme — and 
 
 - **Name an adopter-facing surface with the term adopters already arrive with, never the project's own internal vocabulary: rename the prose and add an alias for the flag, and never the configuration key, tool name, check id or any other wire identifier.** _(taught by: feat_docs_catalog_retrieval)_
 
+- **A rename declared breaking ships no compatibility path: no fallback to the old value, no repair of a file an earlier release wrote, and no sentence that names the old value or says a name changed; adopters migrate by hand.** _(taught by: chore_devscene_github_surface)_
+
 ## Evidence and measurement
 
 - **A figure measured under a test stub or a fixture-sized corpus never justifies a design decision: the branch that makes the decision also ships the gate step that produces the real-shape figure, and the decision cites that step rather than the stub.** _(taught by: feat_docs_catalog_retrieval)_

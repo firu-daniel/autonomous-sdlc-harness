@@ -174,7 +174,7 @@ function oversizedArgString(args, env) {
  * this isolation, as it already was.
  *
  * `HARNESS_GITHUB_DEFAULT_COMMIT` is blanked because the remote bundle library switches to the
- * trusted configuration whenever it is non-empty, and a `harness-run` job exports it to every later
+ * trusted configuration whenever it is non-empty, and a `devscene-run` job exports it to every later
  * step, a session's gate runs included; a case that exercises trusted mode passes it explicitly.
  *
  * {@link MAIN_REPO_ANCHOR_VARIABLE} is blanked because the plugin's readers act on the main checkout

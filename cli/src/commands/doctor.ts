@@ -209,7 +209,7 @@ const DOCTOR_USAGE: readonly string[] = Object.freeze([
   '',
   `${CHECK_GITHUB_FLAG} is off by default for the same reason. With it on and execution.target`,
   'github-actions, remote-github asks gh whether it is authenticated, whether GitHub knows',
-  'harness-run.yml and harness-resume.yml, which secret names are set (names only, never values) and',
+  'devscene-run.yml and devscene-resume.yml, which secret names are set (names only, never values) and',
   'which runner HARNESS_RUNNER selects. A call that times out or cannot reach GitHub warns rather than',
   'fails. Every call is a read, so --dry-run does not suppress it either. With forge github,',
   "branch-protection reads each protected branch's ruleset rules, and its classic branch protection",

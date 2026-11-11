@@ -22,7 +22,7 @@
  *   `$(hr_cache_dir)/retrieval/runtime/node_modules/devscene/dist/cli.js`, which it
  *   `exec`s. `hr_cache_dir` itself mirrors `machineCacheDir()`, declared in `machine/paths.ts` →
  *   choice 2.
- * - `cli/templates/github/workflows/harness-run.yml` mirrors {@link RETRIEVAL_CACHE_DIRNAME} in the
+ * - `cli/templates/github/workflows/devscene-run.yml` mirrors {@link RETRIEVAL_CACHE_DIRNAME} in the
  *   `actions/cache` path `${XDG_CACHE_HOME:-$HOME/.cache}/devscene/retrieval`, in both
  *   the `run` and the `warm` job; its prefix mirrors `machineCacheDir()`, declared in the same choice.
  *

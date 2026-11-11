@@ -1,5 +1,5 @@
 /**
- * The `Install the sandbox prerequisites` step of the `harness-run.yml` template, pinned and run.
+ * The `Install the sandbox prerequisites` step of the `devscene-run.yml` template, pinned and run.
  *
  * **The rule these tests enforce: the step installs exactly the owner's packages, applies exactly
  * the owner's stock-profile remedy, writes and loads exactly the owner's profile, then always

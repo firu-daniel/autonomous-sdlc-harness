@@ -67,7 +67,7 @@ exit 0
 const NO_PUSH_DELAY = { PUSH_RETRY_DELAY_SECS: '0' };
 
 const taskDispatch = (branch, engine) =>
-  `workflow run harness-run.yml --ref ${branch} -f action=run -f branch=${branch} -f engine=${engine} -f resume=none -f chain=0`;
+  `workflow run devscene-run.yml --ref ${branch} -f action=run -f branch=${branch} -f engine=${engine} -f resume=none -f chain=0`;
 
 /**
  * A watcher fixture adopted on `origin`'s default branch, with `execution.target` set to `target`

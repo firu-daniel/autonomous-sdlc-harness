@@ -1,8 +1,8 @@
 # Working a run from GitHub
 
-**Who reads this:** a maintainer or team member who works runs from GitHub, and anyone changing `harness-control.yml`, `harness-run.yml`'s `collect` job or `remote-run.sh`'s `open`, `control`, `collect`, `report` and `deliver`. It owns the design of record for comment commands, mentions read by an agent, review rounds, parks over comments, the draft pull request and its draft state, lifecycle comments, the progress comment, state labels and the resolution of review threads.
+**Who reads this:** a maintainer or team member who works runs from GitHub, and anyone changing `devscene-control.yml`, `devscene-run.yml`'s `collect` job or `remote-run.sh`'s `open`, `control`, `collect`, `report` and `deliver`. It owns the design of record for comment commands, mentions read by an agent, review rounds, parks over comments, the draft pull request and its draft state, lifecycle comments, the progress comment, state labels and the resolution of review threads.
 
-It cites rather than restates. Every GitHub fact below is cited from [`github-integration-research.md`](github-integration-research.md) by its ID (S3–S6, T1–T4, C1–C4), retrieved there on 2026-09-30 and not re-verified here. The run's own lifecycle is [`remote-execution.md`](remote-execution.md)'s, and starting a run is [`github-issue-trigger.md`](github-issue-trigger.md)'s. The code of record is `cli/templates/scripts/remote-run.sh` → the header's `open`, `control`, `collect`, `report` and `deliver` paragraphs, the header of `cli/templates/github/workflows/harness-control.yml`, and in `cli/templates/github/workflows/harness-run.yml` the `Open the draft pull request` step with its `WHY THE OPEN STEP RUNS ONLY WHEN chain IS 0` header paragraph and the `collect` job with its `THE COLLECT JOB` header paragraph.
+It cites rather than restates. Every GitHub fact below is cited from [`github-integration-research.md`](github-integration-research.md) by its ID (S3–S6, T1–T4, C1–C4), retrieved there on 2026-09-30 and not re-verified here. The run's own lifecycle is [`remote-execution.md`](remote-execution.md)'s, and starting a run is [`github-issue-trigger.md`](github-issue-trigger.md)'s. The code of record is `cli/templates/scripts/remote-run.sh` → the header's `open`, `control`, `collect`, `report` and `deliver` paragraphs, the header of `cli/templates/github/workflows/devscene-control.yml`, and in `cli/templates/github/workflows/devscene-run.yml` the `Open the draft pull request` step with its `WHY THE OPEN STEP RUNS ONLY WHEN chain IS 0` header paragraph and the `collect` job with its `THE COLLECT JOB` header paragraph.
 
 ---
 
@@ -15,19 +15,19 @@ GitHub is a second entry point **beside** the local one, never instead of it. On
 1. Install the plugin ([`README.md`](../README.md) → `### Adopting it in your own repository`, step A).
 2. Run `init` (the same section, step B).
 3. Run `/devscene:harness-analyze`. This is recommended, not required (the same section, step C).
-4. Set `forge` to `github` and `execution.target` to `github-actions`, then run `init` again. That run writes the four workflows: `harness-run.yml`, `harness-resume.yml`, `harness-trigger.yml` and `harness-control.yml` ([`github-issue-trigger.md`](github-issue-trigger.md) → `## Turning it on, in short`, steps 1–2; [`remote-execution.md`](remote-execution.md) → `## 7. Turning it on`, steps 1–2).
+4. Set `forge` to `github` and `execution.target` to `github-actions`, then run `init` again. That run writes the four workflows: `devscene-run.yml`, `devscene-resume.yml`, `devscene-trigger.yml` and `devscene-control.yml` ([`github-issue-trigger.md`](github-issue-trigger.md) → `## Turning it on, in short`, steps 1–2; [`remote-execution.md`](remote-execution.md) → `## 7. Turning it on`, steps 1–2).
 5. Commit them ([`remote-execution.md`](remote-execution.md) → `## 7.`, step 3).
 6. Give `gh` the `workflow` scope (the same step).
 7. Push to the default branch (the same step).
 8. Set a credential secret, and name who may spend it in `HARNESS_RUN_ACTORS` ([`remote-execution.md`](remote-execution.md) → `## 7.`, step 4).
 9. Set `HARNESS_GIT_TOKEN` if your own CI must run on the run's pull request ([`remote-execution.md`](remote-execution.md) → `### Every secret and variable`). The agent-free `open` job opens the draft pull request with it, and the `deliver` job marks it ready for review with it; the job that runs the agent never uses it. It does not let a job push a `.github/workflows/*` edit: workflow edits are supervised-only, refused by `push-branch.sh` in every unattended run; make them in a supervised session ([`remote-execution.md`](remote-execution.md) → `## 11. Security`, **The issue trigger**). Its owner becomes the pull request's author, and an author cannot request changes on their own pull request. So use a token from a machine account, especially if you maintain the repository alone, or plan to start review rounds locally with `/devscene:branch-user-review` ([§4](#4-the-draft-pull-request)).
-10. Create the trigger label `sdlc-harness` ([`github-issue-trigger.md`](github-issue-trigger.md) → `## Turning it on, in short`, step 4).
+10. Create the trigger label `devscene` ([`github-issue-trigger.md`](github-issue-trigger.md) → `## Turning it on, in short`, step 4).
 11. Switch on *Allow GitHub Actions to create and approve pull requests* unless `HARNESS_GIT_TOKEN` is set, so the `open` job can open the draft pull request with the job's own token ([§4](#4-the-draft-pull-request)).
 
 **2. What a team member the allow-list admits then does from GitHub alone:**
 
-- labels an issue `sdlc-harness` to start a run ([`github-issue-trigger.md`](github-issue-trigger.md));
-- answers, pauses, resumes or stops the run with `@sdlc-harness` comments, or mentions `@sdlc-harness` in a comment to ask about it ([§1](#1-commands-in-a-comment));
+- labels an issue `devscene` to start a run ([`github-issue-trigger.md`](github-issue-trigger.md));
+- answers, pauses, resumes or stops the run with `@dev-scene` comments, or mentions `@dev-scene` in a comment to ask about it ([§1](#1-commands-in-a-comment));
 - requests changes on a pull request from the run's branch, draft or not, to start the next round ([§2](#2-a-review-that-requests-changes-starts-a-round));
 - follows the run through its lifecycle comments and state labels ([§5](#5-lifecycle-comments-and-state-labels)).
 
@@ -37,24 +37,6 @@ The triage role is refused ([§6](#6-who-can-act-and-pull-requests-from-forks)).
 
 - Running or re-running `/devscene:harness-analyze`. It is supervised and has no remote route ([`github-integration-research.md`](github-integration-research.md) → A12).
 - Upgrading, with `init --upgrade-workflows` or `init --force`, because the workflows pin the harness version ([`remote-execution.md`](remote-execution.md) → `### Upgrading`).
-
-  **Coming from 0.6.1.** `harness-control.yml` as 0.6.1 wrote it is not valid YAML, so GitHub runs it for no event: no comment, review, close or deletion reaches the run ([`development.md`](development.md) → Gate 12 → Round 7, finding 1). Run `init` at a later version, where `<version>` is that version:
-
-  ```
-  npx devscene@<version> init
-  ```
-
-  An unedited copy is replaced, the old one kept as a `.bak`, and `init` prints the commands that commit it, give `gh` the `workflow` scope and push it. An edited copy is kept, with a warning: write its job `if:` as a folded block scalar, `if: >-` with the expression on the next line, or replace the file by regenerating every generated file, each after a `.bak`:
-
-  ```
-  npx devscene@<version> init --force
-  ```
-
-  Either way, commit the file and push it to the default branch. `doctor --check-github` fails on a copy GitHub could not parse, and names the same route:
-
-  ```
-  npx devscene@<version> doctor --check-github
-  ```
 - Running `doctor`.
 - A configuration change that needs files re-rendered. A plain switch in `harness.config.json` can be edited in a pull request on GitHub, because the job reads that file from the branch.
 - The interactive-test phase. A remote run skips it, so while `phases.qa` is on the branch still owes a local `/devscene:branch-qa-test`, until `ROADMAP.md`'s *Cloud QA* row lands ([`remote-execution.md`](remote-execution.md) → `### The interactive-test phase`).
@@ -69,32 +51,32 @@ The triage role is refused ([§6](#6-who-can-act-and-pull-requests-from-forks)).
 
 ## 1. Commands in a comment
 
-**A command is a new comment whose first line opens with `@sdlc-harness`, followed by a verb.** The handle must be the first word of the first line; leading spaces and tabs are skipped, and the handle and the verb are matched case-insensitively. Text after `pause`, `resume`, `stop`, `clear` or `status` on the same line is ignored. A comment is read once, when it is created: an edited comment is never re-read, so a correction is a new comment. Any other comment carrying the handle as a word, a first line that opens with the handle followed by no command included, is a **mention**, read by an agent as [*Mentions read by an agent*](#mentions-read-by-an-agent) below says.
+**A command is a new comment whose first line opens with `@dev-scene`, followed by a verb.** The handle must be the first word of the first line; leading spaces and tabs are skipped, and the handle and the verb are matched case-insensitively. Text after `pause`, `resume`, `stop`, `clear` or `status` on the same line is ignored. A comment is read once, when it is created: an edited comment is never re-read, so a correction is a new comment. Any other comment carrying the handle as a word, a first line that opens with the handle followed by no command included, is a **mention**, read by an agent as [*Mentions read by an agent*](#mentions-read-by-an-agent) below says.
 
 ```
-@sdlc-harness pause
-```
-
-```
-@sdlc-harness resume
+@dev-scene pause
 ```
 
 ```
-@sdlc-harness stop
+@dev-scene resume
 ```
 
 ```
-@sdlc-harness clear
+@dev-scene stop
 ```
 
 ```
-@sdlc-harness status
+@dev-scene clear
+```
+
+```
+@dev-scene status
 ```
 
 `answer` takes the question's index on the first line and the answer on the lines below it:
 
 ```
-@sdlc-harness answer 2
+@dev-scene answer 2
 Use the existing date helper rather than adding a new one.
 ```
 
@@ -124,9 +106,9 @@ When the flow-progress ledger on the branch tip reads fully ticked, `status` say
 - `pause` — no handle;
 - `pause this` — no handle;
 - an edited comment, whatever it now says;
-- any comment carrying the harness's hidden line, which opens `<!-- sdlc-harness`. Every comment the harness posts carries it, so a harness reply that quotes a command never acts on it, and the harness's own comments are ignored without a reply.
+- any comment carrying the harness's hidden line, which opens `<!-- devscene`. Every comment the harness posts carries it, so a harness reply that quotes a command never acts on it, and the harness's own comments are ignored without a reply.
 
-`Let's @sdlc-harness pause` and `> @sdlc-harness pause` are not commands either, because the handle is not the first word, but they are mentions: the agent reads them, and treats a quoted line as someone else's words.
+`Let's @dev-scene pause` and `> @dev-scene pause` are not commands either, because the handle is not the first word, but they are mentions: the agent reads them, and treats a quoted line as someone else's words.
 
 **Who and where.** A command is obeyed only from a collaborator whose permission on the repository is `admin` or `write` and whom the allow-list `HARNESS_RUN_ACTORS` admits, or from a bot listed in `HARNESS_TRIGGER_ALLOWED_BOTS`. The permission API reports the maintain role as `write`, so it passes, and triage as `read`, so it is refused (T3). The list is read after the permission, so a writer it does not admit is refused with a reply naming it. This is the trigger's own check ([`github-issue-trigger.md`](github-issue-trigger.md) → `## 3. Who can start a run`). A command on a pull request acts on its head branch. A command on an issue acts on the branch the trigger started from that issue, read from the trigger's own `started` comment, posted by `github-actions[bot]`. Either branch must be unprotected, and is acted on when any one of three holds:
 
@@ -154,18 +136,18 @@ Every refused command gets a reply in one form, `` @<login>: `<verb>` was not ru
 A word after the handle that is not one of the six makes the comment a mention, not an unknown command, so step 4 has nothing to refuse today. The reply that lists all six is now what a mention gets when no credential reaches the job:
 
 ```
-The commands are `@sdlc-harness answer [<n>]`, `@sdlc-harness pause`, `@sdlc-harness resume`, `@sdlc-harness stop`, `@sdlc-harness clear`, `@sdlc-harness status`; `docs/github-run-control.md` in the harness documentation states each.
+The commands are `@dev-scene answer [<n>]`, `@dev-scene pause`, `@dev-scene resume`, `@dev-scene stop`, `@dev-scene clear`, `@dev-scene status`; `docs/github-run-control.md` in the harness documentation states each.
 ```
 
 **A refusal is a success.** The `harness control` run that replied with a refusal concludes `success`, because the refusal was answered: nobody gets a failure e-mail for a command that was correctly turned down. A mention's refusals, an invalid decision and no credential among them, follow the same rule. Only a failure to act or to reply fails the run: an agent that could not run, or that ended in error, fails the job with exit 3 after replying.
 
-**The handle.** Type `@sdlc-harness` in full: GitHub does not autocomplete it. It renders as a link to [github.com/sdlc-harness](https://github.com/sdlc-harness), a placeholder organisation created only so that nobody else can take the name. It is not a user, not an app and not a member of any repository, so nothing is notified. A command or a mention is matched as **text** in the comment by `control`, never delivered through GitHub's notification of the handle. A comment that contains `@claude` as a word also triggers `anthropics/claude-code-action` where that action is installed (C4), and a harness command needs no such word. The shorter `@harness` was not used because it belongs to another organisation (`gh api users/harness`, observed by the maintainer on 2026-10-01).
+**The handle.** Type `@dev-scene` in full: GitHub does not autocomplete it. It renders as a link to [github.com/dev-scene](https://github.com/dev-scene), a placeholder organisation created only so that nobody else can take the name. It is not a user, not an app and not a member of any repository, so nothing is notified. A command or a mention is matched as **text** in the comment by `control`, never delivered through GitHub's notification of the handle. A comment that contains `@claude` as a word also triggers `anthropics/claude-code-action` where that action is installed (C4), and a harness command needs no such word. The handle is hyphenated, unlike the `devscene` trigger label, state labels and hidden marker, because the GitHub account `devscene` belongs to someone else, so `@devscene` would mention, and notify, that account on every command. An earlier choice of handle passed over the shorter `@harness` for the same reason: it belongs to another organisation (`gh api users/harness`, observed by the maintainer on 2026-10-01).
 
 ### Mentions read by an agent
 
-**A mention is a new comment that carries `@sdlc-harness` as a word anywhere and is not the exact form above.** The handle is matched case-insensitively and never inside a longer word: a letter or digit before it, or a letter, digit or hyphen after it, makes it no mention. The comment may be on an issue or a pull request's conversation. A mention is read once, when it is created, and *Never a command, and never read* above holds for it too.
+**A mention is a new comment that carries `@dev-scene` as a word anywhere and is not the exact form above.** The handle is matched case-insensitively and never inside a longer word: a letter or digit before it, or a letter, digit or hyphen after it, makes it no mention. The comment may be on an issue or a pull request's conversation. A mention is read once, when it is created, and *Never a command, and never read* above holds for it too.
 
-**The checks, in order, before any session.** The first that fails is replied in §1's refusal form, the handle standing in for the verb: `` @<login>: `@sdlc-harness` was not run: <reason>. <way on> ``.
+**The checks, in order, before any session.** The first that fails is replied in §1's refusal form, the handle standing in for the verb: `` @<login>: `@dev-scene` was not run: <reason>. <way on> ``.
 
 1. The repository variable `HARNESS_REMOTE_STOP` is set.
 2. The default branch's `harness.config.json` does not set `forge` to `github` and `execution.target` to `github-actions`.
@@ -179,7 +161,7 @@ The commands are `@sdlc-harness answer [<n>]`, `@sdlc-harness pause`, `@sdlc-har
 
 Checks 1 to 4 run twice. The comment job's `Decide whether the comment needs the agent` step runs them first, through `remote-run.sh control --needs-agent`, and replies to nothing; the act step runs them again and replies. A comment that fails one of them, and every command in the exact form, skips installing the agent binary and fetching the plugin. A failed permission call in that first step installs anyway, and the act step's reply names the failure.
 
-**What reads it.** One read-only session running the plugin's `/devscene:harness-read-mention` command, at the release `harness-run.yml` is pinned to, which loads `plugin/instructions/mention_reading.md`. The session runs once and is never retried. How the control job reaches the plugin and a credential is in [§6](#6-who-can-act-and-pull-requests-from-forks).
+**What reads it.** One read-only session running the plugin's `/devscene:harness-read-mention` command, at the release `devscene-run.yml` is pinned to, which loads `plugin/instructions/mention_reading.md`. The session runs once and is never retried. How the control job reaches the plugin and a credential is in [§6](#6-who-can-act-and-pull-requests-from-forks).
 
 **What the agent receives**, each file cut at a whole line within 200,000 bytes, and a read that failed said in the file rather than refused:
 
@@ -194,30 +176,30 @@ Checks 1 to 4 run twice. The comment job's `Decide whether the comment needs the
 
 | `action` | Example mention | What happens | Reply | Exit |
 |---|---|---|---|---|
-| `command`, `answer` | *"@sdlc-harness it hit the plan loop cap. If the question has an option to give it more rounds, give it three more"* | The `answer` arm writes and dispatches the answer, with every check §3 lists | The read-as note with the answer quoted in full, then the arm's reply | The arm's |
-| `command`, `pause` | *"Let's pause the run so I can take a better look before it proceeds. @sdlc-harness"* | The `pause` arm, with its state check | The read-as note, then the arm's reply | The arm's |
-| `command`, `resume` | *"@sdlc-harness the usage limit has reset, carry on"* | The `resume` arm, with its state check | The read-as note, then the arm's reply | The arm's |
-| `command`, `status` | *"@sdlc-harness what is the status on this branch?"* | The `status` arm; nothing changes | The read-as note, then the arm's reply | The arm's |
-| `command`, `stop` | *"@sdlc-harness this is going the wrong way, kill it"* | Nothing | The confirmation | 0 |
-| `command`, `clear` | *"@sdlc-harness let it out of the loop"* | Nothing | The confirmation | 0 |
-| `reply` | *"The session parked. @sdlc-harness check the question and let me know"* | Nothing | The agent's text, with the footer | 0 |
-| `clarify` | *"@sdlc-harness do what we agreed"* | Nothing | The agent's question back, with the footer | 0 |
-| `fixes` | *"@sdlc-harness fix this"* | Nothing; no round starts | The script's own text, below | 0 |
-| `none` | *"thanks @sdlc-harness"* | Nothing | None | 0 |
+| `command`, `answer` | *"@dev-scene it hit the plan loop cap. If the question has an option to give it more rounds, give it three more"* | The `answer` arm writes and dispatches the answer, with every check §3 lists | The read-as note with the answer quoted in full, then the arm's reply | The arm's |
+| `command`, `pause` | *"Let's pause the run so I can take a better look before it proceeds. @dev-scene"* | The `pause` arm, with its state check | The read-as note, then the arm's reply | The arm's |
+| `command`, `resume` | *"@dev-scene the usage limit has reset, carry on"* | The `resume` arm, with its state check | The read-as note, then the arm's reply | The arm's |
+| `command`, `status` | *"@dev-scene what is the status on this branch?"* | The `status` arm; nothing changes | The read-as note, then the arm's reply | The arm's |
+| `command`, `stop` | *"@dev-scene this is going the wrong way, kill it"* | Nothing | The confirmation | 0 |
+| `command`, `clear` | *"@dev-scene let it out of the loop"* | Nothing | The confirmation | 0 |
+| `reply` | *"The session parked. @dev-scene check the question and let me know"* | Nothing | The agent's text, with the footer | 0 |
+| `clarify` | *"@dev-scene do what we agreed"* | Nothing | The agent's question back, with the footer | 0 |
+| `fixes` | *"@dev-scene fix this"* | Nothing; no round starts | The script's own text, below | 0 |
+| `none` | *"thanks @dev-scene"* | Nothing | None | 0 |
 | anything else | — | Nothing | A refusal naming the rule the decision broke | 2 |
 
 An agent that could not run, or that ended in error, gets a refusal reply and exit 3. Neither that nor an invalid decision is retried: a new comment is.
 
-The read-as note opens every reply of a carried-out verb, the arm's refusals included, so the commenter sees which command the mention was read as. For `pause`, `resume` and `status` it is ``Read from your mention as `@sdlc-harness <verb>`.``; for `answer`, where `<n>` is left out when the agent named no question:
+The read-as note opens every reply of a carried-out verb, the arm's refusals included, so the commenter sees which command the mention was read as. For `pause`, `resume` and `status` it is ``Read from your mention as `@dev-scene <verb>`.``; for `answer`, where `<n>` is left out when the agent named no question:
 
 ```
-Read from your mention as `@sdlc-harness answer <n>`, with this answer:
+Read from your mention as `@dev-scene answer <n>`, with this answer:
 ```
 
 followed by the answer that was sent to the run, fenced. The confirmation:
 
 ```
-@<login>: your mention reads as `@sdlc-harness <verb>`. Comment that command to carry it out.
+@<login>: your mention reads as `@dev-scene <verb>`. Comment that command to carry it out.
 ```
 
 A `reply` or `clarify` is posted as `@<login>: <text>`, then the footer, *"Written by an agent that read your mention; it changed nothing."*, followed by the six commands. The `fixes` reply:
@@ -231,11 +213,11 @@ That is [§2](#2-a-review-that-requests-changes-starts-a-round) and [§4](#4-the
 **Why `stop` and `clear` only ask.** `stop` is destructive, so a misreading would cost a run. Typing `clear` is itself the confirmation `/devscene:branch-resume` asks for before releasing a park loop, so a mention read as `clear` cannot stand in for it. Comment the command itself:
 
 ```
-@sdlc-harness stop
+@dev-scene stop
 ```
 
 ```
-@sdlc-harness clear
+@dev-scene clear
 ```
 
 **A run in flight.** A mention on a run in flight is answered with the run's state through the same arms: an `answer` read from it is refused while a job runs, exactly as the exact form is. Delivering a mention into the running job is not done.
@@ -254,7 +236,7 @@ The credential the job now holds and the boundary against hostile text in a comm
 
 - one `## Review by @<login>` section per review, oldest first. A review requesting changes always gets a section, holding its body verbatim or `(The review carries no summary.)` when it has none. A *Comment* or *Approve* review gets one only when its body is not empty or blank; otherwise it is skipped and its id is not recorded. Each section ends with a provenance line naming the review's state: `Requested changes on pull request #<n> (<url>) at <submitted_at>.`, `Commented on pull request #<n> (<url>) at <submitted_at>.`, `Approved pull request #<n> (<url>) at <submitted_at>.`, `Reviewed pull request #<n> (<url>) at <submitted_at>; the review has since been dismissed.`, or, for any other state, `Reviewed pull request #<n> (<url>) at <submitted_at> (state <state>).`;
 - under `## Inline comments`, oldest first, every pending inline comment, by any author and whatever the state of the review it belongs to;
-- a closing marker line, `<!-- sdlc-harness round collected_at=<utc> reviews=<id,…> comments=<id,…> -->`, listing exactly the review and comment ids written to the file.
+- a closing marker line, `<!-- devscene round collected_at=<utc> reviews=<id,…> comments=<id,…> -->`, listing exactly the review and comment ids written to the file.
 
 **Since the previous round, and never twice.** What earlier rounds consumed is the union of the ids every marker line on the branch tip records. Items are listed from the newest marked round's `collected_at` less `ROUND_OVERLAP_SECS` (300 seconds), so a runner whose clock runs behind loses nothing; the overlap re-lists some items, and the id check drops them again. Where no round carries a marker, because it was placed before markers existed or by the local command, which consumes no pull-request item, the boundary is the committer time of the branch's newest round file, and there is none when there is no round. An inline comment that belongs to a pending review is collected whatever its time, because a draft comment is created before its review is submitted.
 
@@ -264,7 +246,7 @@ The credential the job now holds and the boundary against hostile text in a comm
 
 **How the round is numbered.** From the branch tip on `origin`, by the anchored rule of `/devscene:branch-user-review` step 3: each file under `<stateDir>/user_reviews/` matching `^(.+)_review(_[0-9]+)?\.md$` whose captured branch **equals** the branch, the unsuffixed file being round 1. The next round is `<branch>_review.md` when none matched, otherwise `<branch>_review_<max+1>.md`.
 
-**How it is sent.** `control` runs `remote-run.sh review`, which commits the round as `chore: add user review for <branch>`, pushes it and dispatches `engine: user_review`, exactly as the local command's GitHub route does (`plugin/commands/branch-user-review.md`, step 7). It then waits until GitHub lists the dispatched run. The `collect` job of `harness-run.yml` sends a round the same way, through `remote-run.sh review`; a round it could not place leaves one comment on the pull request, offering a re-run of that `collect` job, with no new review needed, or a new review requesting changes. No working copy is bootstrapped and no code from the pull request is run.
+**How it is sent.** `control` runs `remote-run.sh review`, which commits the round as `chore: add user review for <branch>`, pushes it and dispatches `engine: user_review`, exactly as the local command's GitHub route does (`plugin/commands/branch-user-review.md`, step 7). It then waits until GitHub lists the dispatched run. The `collect` job of `devscene-run.yml` sends a round the same way, through `remote-run.sh review`; a round it could not place leaves one comment on the pull request, offering a re-run of that `collect` job, with no new review needed, or a new review requesting changes. No working copy is bootstrapped and no code from the pull request is run.
 
 **Which pull requests count.** A review counts on **a pull request from the run's branch**: a head branch in this repository, unprotected, whose tip carries its task prompt or `<stateDir>/flow_progress/<branch>_progress.md`. Who opened the pull request does not matter, and neither does whether it is a draft. Marking it ready for review does not close it to rounds. The reviewer passes the same checks as a commenter (§1, *Who and where*). A refusal is a reply on the pull request.
 
@@ -280,9 +262,9 @@ Each reply carries the hidden marker (`event=thread`, with the round's `round=<n
 
 **A run in flight.** A review arriving while the branch's newest run is queued, running, parked, held in a park loop, paused or stopped is **accepted**, and nothing is pushed or dispatched:
 
-- The reply says the review was collected, names the state, and says the next round starts by itself when that run finishes. Where the state has a way on, the reply names it: `@sdlc-harness answer <n>` for a park, `@sdlc-harness clear` for a park loop, `@sdlc-harness resume` for a pause, and, for a usage pause, that the run resumes by itself after the reset.
-- A stopped run is named `stopped`, whatever state its bundle was left in, once the branch's newest `harness stop` run is newer than its newest `harness run` run. Its way on is `@sdlc-harness resume`, with three exceptions that follow the state the stop left: stopped while parked, the answer resumes it (`@sdlc-harness answer <n>`); stopped while held in a park loop, `@sdlc-harness clear` resumes it; stopped while its cancelled job is still finishing, `@sdlc-harness resume` once that job has ended.
-- When that run ends `completed` or `failed`, the `collect` job of `harness-run.yml` starts the next round from every review collected meanwhile. Nobody resubmits. A round `collect` could not place leaves one comment naming why, and offering a re-run of that run's `collect` job, with no new review needed, or a new review requesting changes.
+- The reply says the review was collected, names the state, and says the next round starts by itself when that run finishes. Where the state has a way on, the reply names it: `@dev-scene answer <n>` for a park, `@dev-scene clear` for a park loop, `@dev-scene resume` for a pause, and, for a usage pause, that the run resumes by itself after the reset.
+- A stopped run is named `stopped`, whatever state its bundle was left in, once the branch's newest `harness stop` run is newer than its newest `harness run` run. Its way on is `@dev-scene resume`, with three exceptions that follow the state the stop left: stopped while parked, the answer resumes it (`@dev-scene answer <n>`); stopped while held in a park loop, `@dev-scene clear` resumes it; stopped while its cancelled job is still finishing, `@dev-scene resume` once that job has ended.
+- When that run ends `completed` or `failed`, the `collect` job of `devscene-run.yml` starts the next round from every review collected meanwhile. Nobody resubmits. A round `collect` could not place leaves one comment naming why, and offering a re-run of that run's `collect` job, with no new review needed, or a new review requesting changes.
 - A review already taken into a round is answered with that round's number.
 - The local `/devscene:branch-user-review` still refuses while a run is in flight, because its review text exists only on the user's machine and no later job can collect it.
 
@@ -291,7 +273,7 @@ Each reply carries the hidden marker (`event=thread`, with the round's `round=<n
 **One writer at a time.** Two concurrency groups keep the branch to one writer:
 
 - The run's `run` job holds `harness-run-<branch>`.
-- A round is placed only by a review job of `harness-control.yml` or by the `collect` job of `harness-run.yml`. Both hold `harness-review-<branch>`, and both place a round only when no `run` job of the branch is running or queued. Comment jobs get a group of their own, so a command is never dropped.
+- A round is placed only by a review job of `devscene-control.yml` or by the `collect` job of `devscene-run.yml`. Both hold `harness-review-<branch>`, and both place a round only when no `run` job of the branch is running or queued. Comment jobs get a group of their own, so a command is never dropped.
 - `review` holds the group until GitHub lists the run it dispatched, so the next job in the group never reads the branch as settled before that run appears.
 
 So two reviews submitted together become one round: the second job finds the first one's reviews recorded, or finds the round's run in flight and answers "collected". A pending review job that GitHub replaces with a newer one loses nothing, because the newer one collects cumulatively and the round's comment names every reviewer it took. The replaced job posts no reply, though, so when three or more reviews land while a review job is running, a reviewer whose job was replaced may get no "collected" reply. Their review is still collected.
@@ -311,14 +293,14 @@ So `review` exits 4 and nothing is dispatched. The reviews stay on the pull requ
 
 ## 3. Answering a park in a comment
 
-**Each open question is posted whole, as one comment.** When a run parks, `report` posts one comment per open `question_<n>.md`, in ascending order, on the run's target (§5, *The target rule*). With the pull request open from the run's start, that target is the pull request. A person may still answer on the issue, because `control` acts on the branch the issue's `started` comment names (§1, *Who and where*). The comment opens with which run is waiting and on which question, then carries the file less any line naming its own `answer_<n>.md` — the local channel's instruction, which does not apply on GitHub — and ends with the answer form and a ready-to-copy block of `@sdlc-harness answer <n>`, so the comment carries one answer instruction. The canonical format already says a question file names no answer channel (`plugin/instructions/task_plan_writing_instructions_autonomous.md` → `## Clarification channel — file format (canonical, single source of truth)`); the removal covers a file written against it. One question per comment keeps the answer to it unambiguous, since a conversation comment, on an issue or a pull request, has no thread.
+**Each open question is posted whole, as one comment.** When a run parks, `report` posts one comment per open `question_<n>.md`, in ascending order, on the run's target (§5, *The target rule*). With the pull request open from the run's start, that target is the pull request. A person may still answer on the issue, because `control` acts on the branch the issue's `started` comment names (§1, *Who and where*). The comment opens with which run is waiting and on which question, then carries the file less any line naming its own `answer_<n>.md` — the local channel's instruction, which does not apply on GitHub — and ends with the answer form and a ready-to-copy block of `@dev-scene answer <n>`, so the comment carries one answer instruction. The canonical format already says a question file names no answer channel (`plugin/instructions/task_plan_writing_instructions_autonomous.md` → `## Clarification channel — file format (canonical, single source of truth)`); the removal covers a file written against it. One question per comment keeps the answer to it unambiguous, since a conversation comment, on an issue or a pull request, has no thread.
 
 **The size bound.** GitHub refuses a comment body over 262,144 bytes of UTF-8, with a refusal text that says `65536 characters` and so misstates the unit (S6). A question file larger than 250,000 bytes is cut at its last whole line within that bound, which leaves room for the comment's own lines. The comment then names the file, `question_<n>.md`, in the run's `harness-state` artifact, where the whole question is. S6 measured the bound on an issue comment; on a pull request's conversation it is unverified.
 
-**The answer** is a new comment whose first line is `@sdlc-harness answer <n>` and whose following lines are the answer. This one answers question 2:
+**The answer** is a new comment whose first line is `@dev-scene answer <n>` and whose following lines are the answer. This one answers question 2:
 
 ```
-@sdlc-harness answer 2
+@dev-scene answer 2
 Keep the existing retry count of three.
 The new timeout applies only to the upload call.
 ```
@@ -327,14 +309,14 @@ The new timeout applies only to the upload call.
 - A short answer may follow the index on the first line, when nothing follows below it.
 - The answer is written byte for byte, a trailing carriage return stripped from each line, as untrusted task data: it is never run as a command.
 
-**One answer, one dispatch.** Each comment is one event, so each answer is sent as its own `resume: answer` dispatch carrying that one answer, and nothing holds state between comments. That is safe because a job whose park is not fully answered stops parked before it starts a session, and its bundle then carries the answer it was sent, so the job for the last answer finds the set complete. While questions remain open, the reply names them and the label stays `sdlc-harness: parked`. Once none remain, the reply says the run resumes and the label moves to `sdlc-harness: running`.
+**One answer, one dispatch.** Each comment is one event, so each answer is sent as its own `resume: answer` dispatch carrying that one answer, and nothing holds state between comments. That is safe because a job whose park is not fully answered stops parked before it starts a session, and its bundle then carries the answer it was sent, so the job for the last answer finds the set complete. While questions remain open, the reply names them and the label stays `devscene: parked`. Once none remain, the reply says the run resumes and the label moves to `devscene: running`.
 
 **The refusals**, each a reply on the item that was commented on:
 
 | The run, or the comment | The reply's way on |
 |---|---|
-| held in a park loop | comment `@sdlc-harness clear` |
-| paused, its bundle expired included | comment `@sdlc-harness resume`, which restarts from the committed ledger |
+| held in a park loop | comment `@dev-scene clear` |
+| paused, its bundle expired included | comment `@dev-scene resume`, which restarts from the committed ledger |
 | a job in flight | send the answer again once that job finishes; nothing is queued behind it |
 | `<n>` is not an open question | the reply lists the open ones |
 | several questions open and no `<n>` | the reply lists the open ones |
@@ -343,7 +325,7 @@ The new timeout applies only to the upload call.
 
 A refused answer is refused rather than queued for the reason §1 gives: a newer pending run in the branch's concurrency group could cancel the job it waited behind.
 
-**Why an answer is not a reply to the question.** The `@sdlc-harness answer <n>` command is the one channel that never passes through an agent. A comment that mentions the handle may also answer, when the agent reads it as an answer ([§1](#mentions-read-by-an-agent)): that answer goes through the same `answer` arm, and the reply quotes the text that was sent, so the commenter sees what the run received. The other channels considered:
+**Why an answer is not a reply to the question.** The `@dev-scene answer <n>` command is the one channel that never passes through an agent. A comment that mentions the handle may also answer, when the agent reads it as an answer ([§1](#mentions-read-by-an-agent)): that answer goes through the same `answer` arm, and the reply quotes the text that was sent, so the commenter sees what the run received. The other channels considered:
 
 - **A quote reply** is rejected. A partial or ambiguous quote, a quote of a question already archived, and a quote made in ordinary discussion would each send text to the run as an answer. A quoted line opens `>`, so it is never a command (§1, *Never a command, and never read*). A quote that does not mention the handle is never read; one that does is a mention, and the agent treats the quoted line as someone else's words.
 - **Any plain comment** is rejected, for the same reason at a larger scale: every remark on the item would become an answer. A remark that does not mention the handle is still never read.
@@ -358,7 +340,7 @@ On a public repository a question comment and its answer are public, as the `har
 
 ## 4. The draft pull request
 
-**When it opens.** The draft pull request from the branch to the default branch opens when the run's first job starts, for a run that executes on GitHub where the default branch's `harness.config.json` sets `forge` to `github`. `harness-run.yml`'s step `Open the draft pull request` runs `remote-run.sh open <branch>` before `Run the harness`, on every job whose `chain` input is `0`, meaning a job a person's action started: the first job, a resume, an answer, a round. An open pull request from the branch is reused by every later job, and no second one is opened. The flow itself opens none and merges none, and `push-branch.sh` still opens none: the flow runs unchanged wherever it executes, and opening a pull request is a forge concern of the GitHub job, which now does at the start what a person could already do by hand from the branch.
+**When it opens.** The draft pull request from the branch to the default branch opens when the run's first job starts, for a run that executes on GitHub where the default branch's `harness.config.json` sets `forge` to `github`. `devscene-run.yml`'s step `Open the draft pull request` runs `remote-run.sh open <branch>` before `Run the harness`, on every job whose `chain` input is `0`, meaning a job a person's action started: the first job, a resume, an answer, a round. An open pull request from the branch is reused by every later job, and no second one is opened. The flow itself opens none and merges none, and `push-branch.sh` still opens none: the flow runs unchanged wherever it executes, and opening a pull request is a forge concern of the GitHub job, which now does at the start what a person could already do by hand from the branch.
 
 **Its draft state follows the run.** It is a draft while the run works, `deliver` marks it ready for review on `completed`, and a round turns it back to draft until that round completes (§5, the table's **Draft state** column). A person who marks it ready mid-run is left alone until the next transition. At completion, a pull request that is not a draft is left as it is, the `completed` comment saying so, only when `HARNESS_GIT_TOKEN` is unset or the conversion below is refused. With the secret set, `deliver` first turns a ready pull request back to a draft and then marks it ready again, so the repository's CI gets `ready_for_review` on each run's final tip; on a plan without drafts that conversion is refused, and that tip gets no CI ([`remote-execution.md`](remote-execution.md) → `## 11. Security`, **CI on the final tip.** and **The gap the re-toggle leaves.**). A refused flip either way is one warning line in the job's log. The harness never merges it.
 
@@ -376,9 +358,9 @@ On a public repository a question comment and its answer are public, as the `har
   Another reviewer with write access whom the allow-list admits can still request changes on it. So a solo maintainer who keeps their own token there needs a second reviewer, and that reviewer must be on `HARNESS_RUN_ACTORS` too ([§6](#6-who-can-act-and-pull-requests-from-forks)).
 - With the job's own token, anyone with write access whom the allow-list admits can request changes and start a round, and CI on the pull request waits for a person to select **Approve workflows to run** (S3). The job's token needs Settings → Actions → General → Workflow permissions → *Allow GitHub Actions to create and approve pull requests*, off by default for a new repository on a personal account and for a new organisation (S4, C3). With it off, the `completed` comment names that setting and `HARNESS_GIT_TOKEN`, and the branch's compare link for opening this one by hand.
 
-**The plain mention.** The body names the issue the run was started from as `Started from #<n>.`, never a closing keyword such as `Closes #<n>` or `Fixes #<n>`, so merging the pull request never closes the issue. A maintainer who wants that adds the keyword. Closing the issue, closing or merging the pull request, or deleting the branch stops an unfinished run (§5, *Closed or deleted*). The body also states that a review requesting changes starts a round and which `@sdlc-harness` commands act on it.
+**The plain mention.** The body names the issue the run was started from as `Started from #<n>.`, never a closing keyword such as `Closes #<n>` or `Fixes #<n>`, so merging the pull request never closes the issue. A maintainer who wants that adds the keyword. Closing the issue, closing or merging the pull request, or deleting the branch stops an unfinished run (§5, *Closed or deleted*). The body also states that a review requesting changes starts a round and which `@dev-scene` commands act on it.
 
-**The issue names the pull request when it opens.** Once the pull request is open, `open` labels it `sdlc-harness: running` and posts one `opened` comment on the source issue naming `#<pr>` and its URL, saying whether it opened as a draft and that the run's questions, lifecycle comments and progress go to it from then on, while `@sdlc-harness` commands keep working on the issue. A run with no source issue posts nothing there. That comment, and `completed` after it, are the issue's link to the pull request, because neither direction of mention adds a cross-reference with the job's token: in Gate 12 round 6 the issue showed no `cross-referenced` event 45 minutes after the pull request opened, and none for the `completed` comment naming it ([`development.md`](development.md) → Gate 12 → Round 6, finding 5; [§8](#8-what-is-not-verified-here), *Verified in Gate 12 round 6*). Whether a pull request opened with `HARNESS_GIT_TOKEN` puts one there is unmeasured ([§8](#8-what-is-not-verified-here)). Linking the branch through the issue's Development panel is **dropped**: it would move the branch's creation into a GraphQL call from the trigger job, which reads no secret by design, it would rest on GitHub facts the harness has not verified, and the `opened` comment already links the issue the moment the pull request exists.
+**The issue names the pull request when it opens.** Once the pull request is open, `open` labels it `devscene: running` and posts one `opened` comment on the source issue naming `#<pr>` and its URL, saying whether it opened as a draft and that the run's questions, lifecycle comments and progress go to it from then on, while `@dev-scene` commands keep working on the issue. A run with no source issue posts nothing there. That comment, and `completed` after it, are the issue's link to the pull request, because neither direction of mention adds a cross-reference with the job's token: in Gate 12 round 6 the issue showed no `cross-referenced` event 45 minutes after the pull request opened, and none for the `completed` comment naming it ([`development.md`](development.md) → Gate 12 → Round 6, finding 5; [§8](#8-what-is-not-verified-here), *Verified in Gate 12 round 6*). Whether a pull request opened with `HARNESS_GIT_TOKEN` puts one there is unmeasured ([§8](#8-what-is-not-verified-here)). Linking the branch through the issue's Development panel is **dropped**: it would move the branch's creation into a GraphQL call from the trigger job, which reads no secret by design, it would rest on GitHub facts the harness has not verified, and the `opened` comment already links the issue the moment the pull request exists.
 
 **The one retry.** A draft that fails to open is retried once as a ready pull request, because drafts depend on the account's plan and the plan cannot be read from the job (C3; the fallback case is unmeasured). A refusal because of the Actions setting is not retried, since a ready pull request is refused the same way. The same rules hold at the start and in `deliver`'s fallback, which opens the pull request at completion when none is open. The start is attempted only on a job a person's action started, so an automatic continuation never retries a create that failed. A start that fails posts nothing and logs one warning line: the run goes on, its comments reach the issue, and `deliver` tries again, its `completed` comment naming the error and the compare link if that fails too.
 
@@ -392,25 +374,25 @@ On a public repository a question comment and its answer are public, as the `har
 
 | Event | Where it is posted | What it says | Draft state | The next GitHub action | The label it sets |
 |---|---|---|---|---|---|
-| `launched` | the issue, as the trigger's own `started` comment | the branch and the run's URL | none; no pull request yet | none; work the run with the §1 commands | `sdlc-harness: running` |
-| `opened` (marker `event=opened`) | the issue | the pull request, as `#<pr>` and its URL, and that the run's comments go there from now on | opens as a draft | none; follow the run on the pull request | `sdlc-harness: running` on the pull request |
+| `launched` | the issue, as the trigger's own `started` comment | the branch and the run's URL | none; no pull request yet | none; work the run with the §1 commands | `devscene: running` |
+| `opened` (marker `event=opened`) | the issue | the pull request, as `#<pr>` and its URL, and that the run's comments go there from now on | opens as a draft | none; follow the run on the pull request | `devscene: running` on the pull request |
 | `progress` (marker `event=progress`, with `round=<n>` for a round) | the pull request only, one comment per run or round, edited in place | the four phases, each done, in progress or not started, or `stopped` once the run is stopped | unchanged | none | no label change |
-| `parked` | the target, one comment per open question (§3) | the question whole, then the answer form, and, when a pause requested on the run was overtaken by the park, a line saying the pause is folded into it | unchanged | `@sdlc-harness answer <n>` | `sdlc-harness: parked` |
-| `park_loop` | the target | the run parked again and again without progress and is on hold, and, when a pause requested on the run was overtaken by the park, a line saying the pause is folded into the hold | unchanged | `@sdlc-harness clear` | `sdlc-harness: parked` |
-| `paused` | the target | the run paused, and why; a usage pause names the reset time | unchanged | `@sdlc-harness resume`; for a usage pause none, since it resumes by itself after the reset | `sdlc-harness: paused` |
-| `resumed` | the target | the run resumed | unchanged | none | `sdlc-harness: running` |
-| `failed` | the target | the run failed, and where its log is; posted once the job's automatic resumes are exhausted. On a pull request, it stays open | stays a draft | for a round, a review that requests changes; for a task run on a pull request, close it to discard the run, or re-apply the trigger label to the issue; on an issue, re-applying the trigger label, which starts a new run on the next indexed branch | `sdlc-harness: failed` |
-| `not_started` | the target, posted by the `collect` job of the run's own workflow run | GitHub did not start the job of the run, so nothing ran and the branch is unchanged, and GitHub's reason | unchanged | `@sdlc-harness resume` when the run's engine is recorded; otherwise the **Run workflow** form | `sdlc-harness: paused`; `sdlc-harness: failed` when no older run carries a bundle and no engine is recorded |
-| `stopped` | the target | the run was stopped; on a pull request, that its draft stays open and closing it discards the run. The progress comment's `in progress` line reads `stopped` | stays a draft | `@sdlc-harness resume`, which continues the stopped run from its committed ledger; a review that requests changes is collected, and its round starts once the resumed run finishes | `sdlc-harness: stopped` |
-| `stopped` (closed or deleted) | the item acted on: the closed pull request, else the target. For a deleted branch, the issue, read from the task prompt at the newest run's commit, and also every unmerged pull request of the branch, from this repository, still labelled `running`, `parked` or `paused`; GitHub closed such a pull request with the deletion. The issue is labelled too, and so is each of those pull requests | the run was stopped because @<login> closed issue #<n>, closed or merged pull request #<n>, or deleted its branch; its runs and artifacts are kept. Each pull request's progress comment reads `stopped` | unchanged | `@sdlc-harness resume` while the branch exists: on the issue, or on the pull request once it is reopened; a merged pull request cannot be reopened, so after a merge only on the issue; none once the branch is deleted | `sdlc-harness: stopped` |
-| a started round | the pull request | a user-review round started, by a review or by the end of a run, naming every reviewer it took, and a `completed` comment follows | turns back to a draft until the round completes | none; wait for `completed` | `sdlc-harness: running` |
-| `completed` | the pull request and the issue, the issue's comment naming `#<pr>` and its URL, each when known; the issue alone when none could be opened, naming why and the compare link | the run completed, and the pull request, or why it could not be opened | turns ready for review; left as it is, and said so, when it is not a draft | review the pull request; a review that requests changes starts another round. With `phases.qa` on, it also names the local `/devscene:branch-qa-test` still owed | `sdlc-harness: done` on both |
+| `parked` | the target, one comment per open question (§3) | the question whole, then the answer form, and, when a pause requested on the run was overtaken by the park, a line saying the pause is folded into it | unchanged | `@dev-scene answer <n>` | `devscene: parked` |
+| `park_loop` | the target | the run parked again and again without progress and is on hold, and, when a pause requested on the run was overtaken by the park, a line saying the pause is folded into the hold | unchanged | `@dev-scene clear` | `devscene: parked` |
+| `paused` | the target | the run paused, and why; a usage pause names the reset time | unchanged | `@dev-scene resume`; for a usage pause none, since it resumes by itself after the reset | `devscene: paused` |
+| `resumed` | the target | the run resumed | unchanged | none | `devscene: running` |
+| `failed` | the target | the run failed, and where its log is; posted once the job's automatic resumes are exhausted. On a pull request, it stays open | stays a draft | for a round, a review that requests changes; for a task run on a pull request, close it to discard the run, or re-apply the trigger label to the issue; on an issue, re-applying the trigger label, which starts a new run on the next indexed branch | `devscene: failed` |
+| `not_started` | the target, posted by the `collect` job of the run's own workflow run | GitHub did not start the job of the run, so nothing ran and the branch is unchanged, and GitHub's reason | unchanged | `@dev-scene resume` when the run's engine is recorded; otherwise the **Run workflow** form | `devscene: paused`; `devscene: failed` when no older run carries a bundle and no engine is recorded |
+| `stopped` | the target | the run was stopped; on a pull request, that its draft stays open and closing it discards the run. The progress comment's `in progress` line reads `stopped` | stays a draft | `@dev-scene resume`, which continues the stopped run from its committed ledger; a review that requests changes is collected, and its round starts once the resumed run finishes | `devscene: stopped` |
+| `stopped` (closed or deleted) | the item acted on: the closed pull request, else the target. For a deleted branch, the issue, read from the task prompt at the newest run's commit, and also every unmerged pull request of the branch, from this repository, still labelled `running`, `parked` or `paused`; GitHub closed such a pull request with the deletion. The issue is labelled too, and so is each of those pull requests | the run was stopped because @<login> closed issue #<n>, closed or merged pull request #<n>, or deleted its branch; its runs and artifacts are kept. Each pull request's progress comment reads `stopped` | unchanged | `@dev-scene resume` while the branch exists: on the issue, or on the pull request once it is reopened; a merged pull request cannot be reopened, so after a merge only on the issue; none once the branch is deleted | `devscene: stopped` |
+| a started round | the pull request | a user-review round started, by a review or by the end of a run, naming every reviewer it took, and a `completed` comment follows | turns back to a draft until the round completes | none; wait for `completed` | `devscene: running` |
+| `completed` | the pull request and the issue, the issue's comment naming `#<pr>` and its URL, each when known; the issue alone when none could be opened, naming why and the compare link | the run completed, and the pull request, or why it could not be opened | turns ready for review; left as it is, and said so, when it is not a draft | review the pull request; a review that requests changes starts another round. With `phases.qa` on, it also names the local `/devscene:branch-qa-test` still owed | `devscene: done` on both |
 
-A reply `control` posts after a successful dispatch carries ` engine=<engine>` in its hidden marker, `<!-- sdlc-harness event=reply branch=<branch> engine=<engine> -->`, which, beside the trigger's `started` comment (`task`) and a started round's comment (`user_review`), is how a run whose job never started keeps its engine ([`remote-execution.md`](remote-execution.md) → `### When GitHub fails or lags`).
+A reply `control` posts after a successful dispatch carries ` engine=<engine>` in its hidden marker, `<!-- devscene event=reply branch=<branch> engine=<engine> -->`, which, beside the trigger's `started` comment (`task`) and a started round's comment (`user_review`), is how a run whose job never started keeps its engine ([`remote-execution.md`](remote-execution.md) → `### When GitHub fails or lags`).
 
 Every comment names its next action as something done on GitHub, never a slash command, except where the step has no GitHub form. Nothing from a stopped job changes a label or posts a lifecycle comment: `parked`, `park_loop`, `paused`, `resumed`, a started round, `failed` and `not_started` each post nothing once the branch's newest `harness stop` run is newer than its newest `harness run` run, so a job a stop overtook never overwrites `stopped`. A `resumed` that a stop overtook is silent, like `failed`. Only when GitHub's run list cannot be read is the event reported anyway; `stopped` itself is never withheld ([`development.md`](development.md) → Gate 12 → Round 7, leg (h) and finding 3). The way on that a `failed` comment on a pull request or a `stopped` comment names assumes the branch still exists; a lifecycle comment posted before the branch was deleted is not changed afterwards, and the only comment a stop edits is the progress comment, whose `in progress` line it rewrites to `stopped`.
 
-**Closed or deleted.** Closing the run's issue, closing or merging a pull request from its branch, or deleting the branch stops an unfinished run (`running`, `parked`, `park_loop` or `paused`) through `remote-run.sh stop`, as `@sdlc-harness stop` does. The actor must pass the §6 check; for a deletion only a bot is checked ([§6](#6-who-can-act-and-pull-requests-from-forks), *Closing and deleting*). A close by anyone who fails it is ignored, and the item stays closed. A completed or failed run is left alone, and so is one already stopped. Reopening the issue or the pull request resumes nothing. A deleted branch's stop marker is dispatched from GitHub's default branch, the only ref left, and the poller and the automatic resume never re-dispatch a branch absent on `origin`. Every case that stops nothing is one line in the job log, with no comment, label or dispatch. Deleting a branch whose pull request is open closes that pull request as well; that close is one line in its job's log, and the deletion's job does the stop and reports it on that pull request: the `stopped` comment, the label and the progress comment ([`development.md`](development.md) → Gate 12 → Round 9, finding 3). GitHub starts no workflow for activity on a pull request that has a merge conflict, so closing a conflicting pull request stops nothing; stop that run with `@sdlc-harness stop` on its issue, or reopen the pull request and comment it there, or close the issue.
+**Closed or deleted.** Closing the run's issue, closing or merging a pull request from its branch, or deleting the branch stops an unfinished run (`running`, `parked`, `park_loop` or `paused`) through `remote-run.sh stop`, as `@dev-scene stop` does. The actor must pass the §6 check; for a deletion only a bot is checked ([§6](#6-who-can-act-and-pull-requests-from-forks), *Closing and deleting*). A close by anyone who fails it is ignored, and the item stays closed. A completed or failed run is left alone, and so is one already stopped. Reopening the issue or the pull request resumes nothing. A deleted branch's stop marker is dispatched from GitHub's default branch, the only ref left, and the poller and the automatic resume never re-dispatch a branch absent on `origin`. Every case that stops nothing is one line in the job log, with no comment, label or dispatch. Deleting a branch whose pull request is open closes that pull request as well; that close is one line in its job's log, and the deletion's job does the stop and reports it on that pull request: the `stopped` comment, the label and the progress comment ([`development.md`](development.md) → Gate 12 → Round 9, finding 3). GitHub starts no workflow for activity on a pull request that has a merge conflict, so closing a conflicting pull request stops nothing; stop that run with `@dev-scene stop` on its issue, or reopen the pull request and comment it there, or close the issue.
 
 **The budget is silent.** A run that reaches the hosted job's time budget pauses and continues in a chained job, and neither the pause nor the resume is posted: a chained continuation is not an event anyone acts on. The progress comment below shows a phase, never the continuation.
 
@@ -418,7 +400,7 @@ Every comment names its next action as something done on GitHub, never a slash c
 
 **Push notifications are unchanged.** `autonomous-notify.sh` sends the same notifications as before, beside the comments; they still name the local slash command for each next action.
 
-**The state labels** are `sdlc-harness: running`, `sdlc-harness: parked`, `sdlc-harness: paused`, `sdlc-harness: done`, `sdlc-harness: failed` and `sdlc-harness: stopped`. Exactly one is kept on the issue and one on the pull request, each when known; every transition removes the others. The trigger sets `sdlc-harness: running` when it removes the trigger label. A label is created the first time the harness sets it. Do not apply them by hand: the next transition overwrites a hand-applied one, so it says nothing about the run.
+**The state labels** are `devscene: running`, `devscene: parked`, `devscene: paused`, `devscene: done`, `devscene: failed` and `devscene: stopped`. Exactly one is kept on the issue and one on the pull request, each when known; every transition removes the others. The trigger sets `devscene: running` when it removes the trigger label. A label is created the first time the harness sets it. Do not apply them by hand: the next transition overwrites a hand-applied one, so it says nothing about the run.
 
 The labels let a team filter runs by state from the issue and pull-request lists without opening a comment. They are a view: the run list on GitHub is the authority on what a run is doing.
 
@@ -435,16 +417,16 @@ The labels let a team filter runs by state from the issue and pull-request lists
 
 Triage is refused because commenting and labelling need only the triage role, so neither proves that the actor may run code with the repository's secrets. The API reports triage as `read` (T3).
 
-The **Run workflow** form and `gh workflow run` reach no comment check, and a re-run replays its event's original sender, so `harness-run.yml`'s `run` and `collect` jobs each open with a step that holds `github.triggering_actor` to the same list, and refuse anyone else before any credential is read; `github-actions[bot]`, which every harness dispatch names, passes. A re-run of a trigger or control job is held to the list by its re-runner too: `remote-run.sh` refuses one whose `GITHUB_TRIGGERING_ACTOR` the list does not admit, before it checks the event's own actor. The list does not close one route: a writer can still edit a workflow to read the credential secret itself ([`remote-execution.md`](remote-execution.md) → `## 9. Credentials and billing`).
+The **Run workflow** form and `gh workflow run` reach no comment check, and a re-run replays its event's original sender, so `devscene-run.yml`'s `run` and `collect` jobs each open with a step that holds `github.triggering_actor` to the same list, and refuse anyone else before any credential is read; `github-actions[bot]`, which every harness dispatch names, passes. A re-run of a trigger or control job is held to the list by its re-runner too: `remote-run.sh` refuses one whose `GITHUB_TRIGGERING_ACTOR` the list does not admit, before it checks the event's own actor. The list does not close one route: a writer can still edit a workflow to read the credential secret itself ([`remote-execution.md`](remote-execution.md) → `## 9. Credentials and billing`).
 
-**A credential and an agent in the control job.** The comment path of `harness-control.yml` reads `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`, whichever is set, so that a mention can be read ([§1](#mentions-read-by-an-agent)). Whose account a mention bills is the run's own rule ([`remote-execution.md`](remote-execution.md) → `## 9. Credentials and billing`).
+**A credential and an agent in the control job.** The comment path of `devscene-control.yml` reads `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`, whichever is set, so that a mention can be read ([§1](#mentions-read-by-an-agent)). Whose account a mention bills is the run's own rule ([`remote-execution.md`](remote-execution.md) → `## 9. Credentials and billing`).
 
 - **Which events reach it.** `issue_comment` only. The act step's `IN_OAUTH` and `IN_API` are each `` ${{ github.event_name == 'issue_comment' && secrets.<name> || '' }} ``, so a `pull_request_review`, `issues`, `pull_request` or `delete` job gets empty values.
-- **What reads the mention.** One session running the plugin's `/devscene:harness-read-mention` command, at the release the repository's `harness-run.yml` is pinned to (`HARNESS_CLI_VERSION`). The comment job's `Fetch the pinned plugin` step runs only for a mention whose commenter passed checks 1 to 4 ([§1](#mentions-read-by-an-agent)). It clones that release's tag, checks the clone's `plugin.json` version against the pin, and hands the plugin's directory to the one session through `--plugin-dir`; nothing is installed. So the command and the instruction a mention runs under are the release the run job installs, whatever the default branch carries. A pin older than mentions has no such command, and the mention gets a reply saying so.
+- **What reads the mention.** One session running the plugin's `/devscene:harness-read-mention` command, at the release the repository's `devscene-run.yml` is pinned to (`HARNESS_CLI_VERSION`). The comment job's `Fetch the pinned plugin` step runs only for a mention whose commenter passed checks 1 to 4 ([§1](#mentions-read-by-an-agent)). It clones that release's tag, checks the clone's `plugin.json` version against the pin, and hands the plugin's directory to the one session through `--plugin-dir`; nothing is installed. So the command and the instruction a mention runs under are the release the run job installs, whatever the default branch carries. A pin older than mentions has no such command, and the mention gets a reply saying so.
 - **The merge-commit caveat.** A `pull_request_review` job runs the pull request's merge-commit copy of the workflow (C2), so a head in this repository can edit that copy to read the secret on its own review. Whoever pushed that head already has write access and can read the secret through any workflow of their own (`remote-execution.md` → `## 9.`, *The residual risk, in both set-ups*). A fork's review job gets no secret (C2).
 - **The exposure that already held.** Every actor needs `admin` or `write` and must pass `HARNESS_RUN_ACTORS`, checked in code before any session, and a comment on a fork's pull request is refused (`control_branch_from_pr`). The rest of the runner and visibility picture is [`remote-execution.md`](remote-execution.md) → `## 11. Security`.
 - **What one mention spends.** One session, bounded by `--max-budget-usd`, and never retried.
-- **What a comment that is not read spends.** A command in the exact form, and a comment the checks refuse, installs nothing and clones nothing: the `Decide whether the comment needs the agent` step writes `agent=no`, and the install and fetch steps are skipped. A mention by an admitted commenter costs one more permission call than before, because the act step makes it again. The saving needs a `harness-control.yml` written by this release or later. The file is written only when absent and is not re-rendered by `init --upgrade-workflows`, so an older copy keeps installing for every comment until `init --force` replaces it ([`remote-execution.md`](remote-execution.md#upgrading) → `### Upgrading`).
+- **What a comment that is not read spends.** A command in the exact form, and a comment the checks refuse, installs nothing and clones nothing: the `Decide whether the comment needs the agent` step writes `agent=no`, and the install and fetch steps are skipped. A mention by an admitted commenter costs one more permission call than before, because the act step makes it again. The saving needs a `devscene-control.yml` written by this release or later. The file is written only when absent and is not re-rendered by `init --upgrade-workflows`, so an older copy keeps installing for every comment until `init --force` replaces it ([`remote-execution.md`](remote-execution.md#upgrading) → `### Upgrading`).
 
 **Why hostile text stays inside the closed set.** The comment, the issue or pull request, the conversation, the diff and the question files are all untrusted input to the agent, and `plugin/instructions/mention_reading.md` treats every file it is given as data, never instructions. The boundary does not rest on that instruction:
 
@@ -458,17 +440,17 @@ What stays possible: injected text can steer the agent to a wrong choice **insid
 
 **Pull requests from forks.** The fork rule is three sentences:
 
-- `harness-control.yml` never uses `pull_request_target`.
-- A review on a fork's pull request runs `harness-control.yml` as the fork's merge commit carries it (C2). The shipped `if:` skips it, but a fork can edit that copy. Such a job gets a read-only token and no secret, so it can reply to nothing and dispatch nothing, but it does run, on any runner label the fork names ([`remote-execution.md`](remote-execution.md) → `## 11. Security`).
+- `devscene-control.yml` never uses `pull_request_target`.
+- A review on a fork's pull request runs `devscene-control.yml` as the fork's merge commit carries it (C2). The shipped `if:` skips it, but a fork can edit that copy. Such a job gets a read-only token and no secret, so it can reply to nothing and dispatch nothing, but it does run, on any runner label the fork names ([`remote-execution.md`](remote-execution.md) → `## 11. Security`).
 - A comment on a fork's pull request is refused with a reply, because an `issue_comment` job carries the repository's secrets (C2).
 
 A fork can still reach a self-hosted runner through a workflow of its own. [`remote-execution.md`](remote-execution.md) → `## 11. Security` gives that warning and what prevents it.
 
 **Closing and deleting.** A close of the run's issue or pull request is authorised as a command is. Triage can close issues and pull requests ([§8](#8-what-is-not-verified-here)) but fails the check, so a triage user cannot stop a run that way, and a close by a writer the allow-list does not admit is ignored too. Deleting a branch already needs write access and a stop spends no credential, so for a deletion only a bot is checked, against `HARNESS_TRIGGER_ALLOWED_BOTS`, and never the allow-list. The job replies to none of them, because the item is closed or the branch gone; an ignored one is a line in the job log ([§5](#5-lifecycle-comments-and-state-labels), *Closed or deleted*). A fork's closed pull request is skipped by the shipped `if:`, but the job runs the fork's merge-commit copy of the workflow, as a review does (C2).
 
-**The scripts are always the default branch's.** The control job checks out the default branch and runs that branch's `remote-run.sh`, never the pull request's. For a review event, though, the workflow file itself is the pull request's merge-commit copy (C2), so a head that edits `harness-control.yml` changes what its own review job runs. A round's fixes run later, in `harness-run.yml`, on the run's own branch, as every round does.
+**The scripts are always the default branch's.** The control job checks out the default branch and runs that branch's `remote-run.sh`, never the pull request's. For a review event, though, the workflow file itself is the pull request's merge-commit copy (C2), so a head that edits `devscene-control.yml` changes what its own review job runs. A round's fixes run later, in `devscene-run.yml`, on the run's own branch, as every round does.
 
-**The harness never triggers itself.** Every comment the harness posts carries the hidden line `<!-- sdlc-harness`, which the workflow's `if:` and `control` both exclude ([§1](#1-commands-in-a-comment)). Each one is posted with the job's own token, and a comment made with that token starts no workflow (S3).
+**The harness never triggers itself.** Every comment the harness posts carries the hidden line `<!-- devscene`, which the workflow's `if:` and `control` both exclude ([§1](#1-commands-in-a-comment)). Each one is posted with the job's own token, and a comment made with that token starts no workflow (S3).
 
 **What a commenter vouches for.** An authorised reviewer or answerer vouches for the text that becomes a round or an answer, in the same way that the labeller vouches for an issue's text ([`github-issue-trigger.md`](github-issue-trigger.md) → `## 4. What the labeller vouches for`). A review round carries each authorised reviewer's review and inline comments, each vouched for by its own author, and nothing from anyone the §6 check refuses ([§2](#2-a-review-that-requests-changes-starts-a-round)). An answer is written as untrusted task data and never run as a command ([§3](#3-answering-a-park-in-a-comment)).
 
@@ -485,9 +467,9 @@ A fork can still reach a self-hosted runner through a workflow of its own. [`rem
 - **GitHub's changes** show up locally because local commands read the run's state from GitHub before they act. `/devscene:branch-status` reads it too.
 - **Local changes** show up on GitHub. A dispatch from `/devscene:branch-answer`, `-resume` or `-pause` starts a job, and that job posts the lifecycle comments and sets the labels ([§5](#5-lifecycle-comments-and-state-labels)). A local `remote-run.sh stop` posts `stopped`, and a local `/devscene:branch-user-review` posts the started round, as their GitHub forms do.
 
-**The Run workflow form stays the fallback.** A person the allow-list admits can still work any remote run with no local setup from `harness-run.yml`'s **Run workflow** form, for example when the control workflow is disabled ([`remote-execution.md`](remote-execution.md) → `### Working a run from GitHub alone`). The run job refuses a `run` dispatched or re-run by anyone else, before it launches anything ([§6](#6-who-can-act-and-pull-requests-from-forks)).
+**The Run workflow form stays the fallback.** A person the allow-list admits can still work any remote run with no local setup from `devscene-run.yml`'s **Run workflow** form, for example when the control workflow is disabled ([`remote-execution.md`](remote-execution.md) → `### Working a run from GitHub alone`). The run job refuses a `run` dispatched or re-run by anyone else, before it launches anything ([§6](#6-who-can-act-and-pull-requests-from-forks)).
 
-**A locally executed branch reviewed on GitHub.** A person may open a pull request for a branch that ran on their own machine, and a review requesting changes on it starts a round ([§2](#2-a-review-that-requests-changes-starts-a-round)). That round runs through `harness-run.yml`, because a round started from GitHub always does. The local record keeps `execution: local` and is not touched. As a result, the local working copy falls behind `origin/<branch>` by the round's commits. Before another local round, bring it current by running this in that working copy:
+**A locally executed branch reviewed on GitHub.** A person may open a pull request for a branch that ran on their own machine, and a review requesting changes on it starts a round ([§2](#2-a-review-that-requests-changes-starts-a-round)). That round runs through `devscene-run.yml`, because a round started from GitHub always does. The local record keeps `execution: local` and is not touched. As a result, the local working copy falls behind `origin/<branch>` by the round's commits. Before another local round, bring it current by running this in that working copy:
 
 ```
 git pull --ff-only
@@ -504,10 +486,10 @@ Every automated case drives a `gh` stub, and the mention cases also drive an age
 | A pull request's conversation comment has the same size limit as an issue comment | Cutting a question file at 250,000 bytes ([§3](#3-answering-a-park-in-a-comment)) | S6 measured issue comments only | A long question comment on a pull request is refused |
 | A draft is refused for an account whose plan has no drafts, and a ready pull request is then accepted | The one ready retry ([§4](#4-the-draft-pull-request)), and the draft flips that follow the run: ready on `completed`, back to draft for a round ([§4](#4-the-draft-pull-request), [§5](#5-lifecycle-comments-and-state-labels)) | C3; the fallback case is unmeasured | The retry fails too, and the `completed` comment names the compare link |
 | A pull request's author cannot request changes on their own pull request | The advice that a solo maintainer uses a machine account's token for `HARNESS_GIT_TOKEN` or starts the round locally ([§4](#4-the-draft-pull-request)) | GitHub's documented rule, not retrieved here; C1 measured only a pull request opened by `app/github-actions` | The token's owner can start a round from GitHub after all, and the advice is merely unneeded |
-| A newer pending run in `harness-run.yml`'s `concurrency` group cancels an older pending one | Refusing an answer, resume or clear while a job is in flight, rather than queueing it ([§1](#1-commands-in-a-comment)). Reviews are no longer refused: a pending review job replaced in `harness-review-<branch>` loses nothing, because collection is cumulative ([§2](#2-a-review-that-requests-changes-starts-a-round)) | GitHub's documented behaviour, not measured here | Nothing is lost either way, because nothing is queued behind a job in flight |
-| A concurrency group spans workflows in one repository | The `collect` job of `harness-run.yml` and the review jobs of `harness-control.yml` sharing `harness-review-<branch>`, so they never place a round at the same moment ([§2](#2-a-review-that-requests-changes-starts-a-round)) | Verified in GitHub's documentation, *Control the concurrency of workflows and jobs* (docs.github.com): "concurrency group names must be unique across workflows to avoid canceling in-progress jobs or runs from other workflows". | A review job and `collect` can place rounds at the same moment, and the loser fails its push loudly; nothing is lost |
+| A newer pending run in `devscene-run.yml`'s `concurrency` group cancels an older pending one | Refusing an answer, resume or clear while a job is in flight, rather than queueing it ([§1](#1-commands-in-a-comment)). Reviews are no longer refused: a pending review job replaced in `harness-review-<branch>` loses nothing, because collection is cumulative ([§2](#2-a-review-that-requests-changes-starts-a-round)) | GitHub's documented behaviour, not measured here | Nothing is lost either way, because nothing is queued behind a job in flight |
+| A concurrency group spans workflows in one repository | The `collect` job of `devscene-run.yml` and the review jobs of `devscene-control.yml` sharing `harness-review-<branch>`, so they never place a round at the same moment ([§2](#2-a-review-that-requests-changes-starts-a-round)) | Verified in GitHub's documentation, *Control the concurrency of workflows and jobs* (docs.github.com): "concurrency group names must be unique across workflows to avoid canceling in-progress jobs or runs from other workflows". | A review job and `collect` can place rounds at the same moment, and the loser fails its push loudly; nothing is lost |
 | An artifact uploaded by a job is listable before its workflow run completes | The settledness test reading the run's state bundle while that run's `collect` job is still pending ([§2](#2-a-review-that-requests-changes-starts-a-round)) | Verified in GitHub's changelog of 2023-12-14, *GitHub Actions – Artifacts v4 is now generally available*: "This allows the artifact to become immediately available to download from the API after being uploaded, which was not possible before." The Artifacts REST reference is silent on it. | The branch reads in flight until the run completes, and the review is answered "collected" and taken by that run's `collect` |
-| The jobs API names a job with no `name:` key by its key, `run` | The settledness test finding the `run` job of the newest run ([§2](#2-a-review-that-requests-changes-starts-a-round)) | GitHub's documentation is silent. Observed on `firu-daniel/harness-gate12`: the jobs API for run 36833810996 of `harness-run.yml` answers `run` and `warm`, and neither job carries a `name:` key. | No run ever reads settled before it completes, and reviews are collected rather than placed until then |
+| The jobs API names a job with no `name:` key by its key, `run` | The settledness test finding the `run` job of the newest run ([§2](#2-a-review-that-requests-changes-starts-a-round)) | GitHub's documentation is silent. Observed on `firu-daniel/harness-gate12`: the jobs API for run 36833810996 of `devscene-run.yml` answers `run` and `warm`, and neither job carries a `name:` key. | No run ever reads settled before it completes, and reviews are collected rather than placed until then |
 | `concurrency: queue: max` | Nothing ([§2](#2-a-review-that-requests-changes-starts-a-round)). It is deliberately not used: 100 pending jobs is still a hard limit, and the end-of-run `collect` job needs no queue. Keeping the default `single` queue on `harness-review-<branch>` has one consequence. When three or more reviews land while a review job is running, a pending review job can be replaced. That reviewer's review is still collected, but gets no reply. | Verified in GitHub's workflow syntax reference (`concurrency.queue`: `single` is the default, keeping at most one pending run, which a newer one cancels and replaces; `max` keeps up to 100 pending runs, cancelling any beyond that, and cannot be combined with `cancel-in-progress: true`) and in GitHub's changelog of 2026-05-07. | Nothing changes |
 | Triage may close issues and pull requests | The statement that a triage user can close a run's item without stopping the run ([§6](#6-who-can-act-and-pull-requests-from-forks)) | GitHub's documented behaviour, not retrieved in [`github-integration-research.md`](github-integration-research.md); T3 covers only how the permission API reports triage | Triage cannot close them, and the statement describes a case that never happens |
 | Deleting a pull request's head branch closes the pull request and raises a `pull_request` `closed` event | The quiet close of a pull request whose branch is gone ([§5](#5-lifecycle-comments-and-state-labels), *Closed or deleted*) | GitHub's documented behaviour, not retrieved in [`github-integration-research.md`](github-integration-research.md) | No second job runs, and the deletion's job alone stops the run |
@@ -534,8 +516,8 @@ Every automated case drives a `gh` stub, and the mention cases also drive an age
 
 | Behaviour | Observed |
 |---|---|
-| The prefilter's `contains()` compares case-insensitively | `@SDLC-HARNESS pause` on issue #8 gave a `harness-control.yml` run that got past its `if:` and replied ([`development.md`](development.md) → Gate 12 → Round 6, leg (f)) |
-| The job token's `issues: write` can add a missing label to an issue or pull request, and create one | The setup created only `sdlc-harness`. The jobs created `sdlc-harness: running`, `parked`, `paused`, `done` and `stopped` on first use, and set and removed them on issue #8 and pull request #9 at every transition |
+| The prefilter's `contains()` compares case-insensitively | `@DEV-SCENE pause` on issue #8 gave a `devscene-control.yml` run that got past its `if:` and replied ([`development.md`](development.md) → Gate 12 → Round 6, leg (f)) |
+| The job token's `issues: write` can add a missing label to an issue or pull request, and create one | The setup created only `devscene`. The jobs created `devscene: running`, `parked`, `paused`, `done` and `stopped` on first use, and set and removed them on issue #8 and pull request #9 at every transition |
 | A pull request's conversation comment and its labels go through the issues endpoints | Every lifecycle comment and reply on pull request #9 was posted, among them question 2, `resumed`, `stopped`, the started-round comments and `completed`, and its state label followed each transition |
 | A pull request opened, and a comment posted, with the job's token put no `cross-referenced` event on the issue they mention | Issue #8's timeline showed no `cross-referenced` event for pull request #9, 45 minutes after it opened, and none for the `completed` comment naming it ([`development.md`](development.md) → Gate 12 → Round 6, leg (d) and finding 5) |
 
@@ -543,7 +525,7 @@ Every automated case drives a `gh` stub, and the mention cases also drive an age
 
 | Behaviour | Observed |
 |---|---|
-| A `delete` event's workflow runs from the default branch | Deleting `feat_invoices_4` started `harness-control.yml` run `37297215528`, event `delete`, `headBranch` `main`, `headSha` `db0f6ab` (the default branch's tip). It stopped the run ([`development.md`](development.md) → Gate 12 → Round 7, leg (h)) |
+| A `delete` event's workflow runs from the default branch | Deleting `feat_invoices_4` started `devscene-control.yml` run `37297215528`, event `delete`, `headBranch` `main`, `headSha` `db0f6ab` (the default branch's tip). It stopped the run ([`development.md`](development.md) → Gate 12 → Round 7, leg (h)) |
 | The contents API serves a file at a commit no branch points at any more | After the deletion, the `stopped` comment reached issue #10. The deletion path reads the issue from the task prompt at the newest run's `headSha`, which no branch pointed at any more |
 | A workflow can be dispatched from the default branch while its `branch` input names a deleted branch | The deletion's `harness stop feat_invoices_4` marker run `37297237226` was accepted and listed under `main` |
-| A `pull_request` `closed` job runs the merge-commit copy of the workflow | Closing PR #11 ran `harness-control.yml` run `37296486401` (event `pull_request`, `headBranch` `feat_invoices_4`, `headSha` the head's tip). The head branch still carried 0.6.1's unparseable copy (item 1), and only `main` had the fixed one, yet the job parsed and ran. It therefore did not run the head's copy, which matches the merge-commit copy. That the default branch's copy ran instead is not excluded by this observation |
+| A `pull_request` `closed` job runs the merge-commit copy of the workflow | Closing PR #11 ran `devscene-control.yml` run `37296486401` (event `pull_request`, `headBranch` `feat_invoices_4`, `headSha` the head's tip). The head branch still carried 0.6.1's unparseable copy (item 1), and only `main` had the fixed one, yet the job parsed and ran. It therefore did not run the head's copy, which matches the merge-commit copy. That the default branch's copy ran instead is not excluded by this observation |

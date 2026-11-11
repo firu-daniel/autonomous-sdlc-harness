@@ -44,7 +44,7 @@
 #   - Timestamps: whole seconds from `.timestamp[0:19] + "Z" | fromdateiso8601`
 #     plus three fractional digits. An event with no timestamp is ignored for
 #     every time computation, except that a tool_use or tool_result with none
-#     takes the nearest preceding one (the rule harness-run.yml's
+#     takes the nearest preceding one (the rule devscene-run.yml's
 #     THE SELF-PAUSE POINT, MEASURED states).
 #   - Every free-text field written (dispatch description, Bash command) goes
 #     through `redact`: `redact_text` — each $redact pair replaced literally, in

@@ -3,8 +3,6 @@ verdict: PASS
 
 Checked at `dev` (`2ace325d`), 2026-10-28. 31 repository citations verified against source (list at the end). Five licence claims checked on the web. No Must Fix: no wrong fact changes the verdict, and the seven claims the author asked about all hold.
 
-Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed.
-
 ## Must Fix
 
 None.
@@ -33,7 +31,7 @@ None.
 
 5. **Wrong count: the eval harness "imports `cli/dist` in ten modules" (§4 #14).** `grep -l "cli/dist" evals/docs-retrieval/*.mjs` returns 15 modules, each with a top-level `import … from '../../cli/dist/…'`, for example `args.mjs:29`, `results.mjs:30-31` and `check-floor.mjs:34-35`. The total of 6 066 lines is correct. Change: "fifteen modules". This makes the move cost of the eval harness higher than stated.
 
-6. **Stale or loose path: `harness-run.yml:597-654` (§4 #7).** The file is `cli/templates/github/workflows/harness-run.yml`. The cache path appears twice, at :600 (`run` job) and :938 (`warm` job), as `cli/src/retrieval/runtime.ts:25-27` says. The range given misses the second. Change: cite the full path and `:600`, `:938`.
+6. **Stale or loose path: `devscene-run.yml:597-654` (§4 #7).** The file is `cli/templates/github/workflows/devscene-run.yml`. The cache path appears twice, at :600 (`run` job) and :938 (`warm` job), as `cli/src/retrieval/runtime.ts:25-27` says. The range given misses the second. Change: cite the full path and `:600`, `:938`.
 
 7. **Incomplete statement in §5, "its own `HARNESS_DOCS_RETRIEVAL_*` environment variables".** The Python service also reads `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` (`stubs.py:21`), and its own `compose.yaml` passes that variable through. §4 #6 records this; §5 contradicts it by omission. Change: add "(except the stub variable, §4 #6)".
 

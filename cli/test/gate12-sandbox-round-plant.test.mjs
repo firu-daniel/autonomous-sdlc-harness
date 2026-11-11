@@ -247,7 +247,7 @@ test('a run lookup that never lists the run exits 3, records run_id null and nam
   assert.equal(state.runs[0].branch, branch);
   assert.equal(state.runs[0].run_id, null);
 
-  const lookup = `gh run list --repo ${GATE12_SLUG} --workflow harness-run.yml --branch ${branch} --json databaseId,createdAt,displayTitle --limit 20`;
+  const lookup = `gh run list --repo ${GATE12_SLUG} --workflow devscene-run.yml --branch ${branch} --json databaseId,createdAt,displayTitle --limit 20`;
   assert.ok(result.stderr.includes(lookup), result.stderr);
   const lookups = (await ghStubCalls(fixture.binDir)).filter((argv) => argv[0] === 'run' && argv[1] === 'list');
   assert.equal(lookups.length, 2);

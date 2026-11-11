@@ -5,8 +5,6 @@ Revised after ruling R3.7 (sandbox series, then the DevScene rename, then RagSce
 
 Checked on 2026-10-28 against `dev` at `0d02ba3e`, Expause and straightedge (read-only), `gh issue view` #151, #156, #170, #196, #199–#203 and #205, and the GitHub, PyPI and npm docs. Most of the history, the authorship, the citations and the GitHub web claims hold. What fails is the §2 inventory, which leaves out three files the moving code needs, and two exit checks in the plan that cannot pass as written.
 
-Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed.
-
 Confirmed:
 - **Expause history.** The plan's commits are right (#228 `df1e96650` on 2026-08-07, #232 `88ea6a948`, #309 `570292c83`), and so is the #311 message.
 - **This repository.** `2c01123c` is a single commit of 350 files, none of them retrieval files. `e43781aa` and `cba2ac24` are dated 2026-09-16. `dev` has 142 commits, all by one author, and no `Co-Authored-By` trailer on the moving paths.
@@ -180,7 +178,7 @@ Checked against the revised file (5 109 words, 17 steps, `## Review response`), 
 ### Must Fix
 
 R1. **§5's catch 2 is partly wrong, and step 1 would amend #156 from it.**
-- `HARNESS_RETRIEVAL_CACHE` **does exist** on `dev`, four times in the adopter-rendered `cli/templates/github/workflows/harness-run.yml` (`:600`, `:658`, `:938`, `:958`). Dropping it from #156's table would leave it unrenamed.
+- `HARNESS_RETRIEVAL_CACHE` **does exist** on `dev`, four times in the adopter-rendered `cli/templates/github/workflows/devscene-run.yml` (`:600`, `:658`, `:938`, `:958`). Dropping it from #156's table would leave it unrenamed.
 - `HARNESS_RETRIEVAL_LOG` does not exist. The log variable is `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG` (`queryLog.ts:53`).
 - The table also omits four names:
   - `HARNESS_DOCS_RETRIEVAL_MODEL_CACHE` (`models.py:85`, `Dockerfile:35`, `compose.yaml:36`);

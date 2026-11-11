@@ -242,7 +242,6 @@
 #                        the URLs its comments name
 #   HARNESS_REMOTE_STOP  non-empty: every start is refused
 #   HARNESS_TRIGGER_LABEL   the trigger label; when empty, `DEFAULT_TRIGGER_LABEL`
-#                        or `LEGACY_TRIGGER_LABEL`, per the paragraph below
 #   HARNESS_TRIGGER_ALLOWED_BOTS   comma-separated bot logins allowed to start
 #   HARNESS_RUN_ACTORS   comma-separated people allowed to act on a run, `*`
 #                        for every writer; unset admits a `User` owner alone
@@ -251,13 +250,6 @@
 #                        A test seam
 #   RUNNER_TEMP          where the prompt snapshot is written; a `mktemp -d`
 #                        directory under `${TMPDIR:-/tmp}` when empty
-# THE LEGACY LABEL. The workflow `init` now writes always passes a non-empty
-# `HARNESS_TRIGGER_LABEL`; only the previous release's workflow, which
-# `init --upgrade-workflows` never re-renders, passes it empty, and its `if:`
-# already ran the job for `LEGACY_TRIGGER_LABEL`. So when it is empty either
-# `DEFAULT_TRIGGER_LABEL` or `LEGACY_TRIGGER_LABEL` is accepted, and the comment
-# and the label removal name the one applied; a new workflow starts on
-# `LEGACY_TRIGGER_LABEL` only when the variable names it.
 # An `action` other than `labeled`, or another label, is one line and exit 0
 # with no `gh` call. Otherwise refused, in this order, each refusal one issue
 # comment naming the reason and the way on:
@@ -292,10 +284,10 @@
 # `TRIGGER_RUN_LOOKUP_TRIES` times, falling back to the branch's filtered run
 # list, and comments the branch and that URL; the comment never names an older
 # run of the branch. Every comment ends with the marker
-# `<!-- sdlc-harness event=started branch=<branch> -->` on a start and
+# `<!-- devscene event=started branch=<branch> -->` on a start and
 # `event=refused` otherwise (`branch=` empty before one is derived), and is
 # followed by removing the label, so re-applying it is deliberate; then a start
-# sets the state label `sdlc-harness: running`. That comment, that removal and
+# sets the state label `devscene: running`. That comment, that removal and
 # that one label are the trigger's only writes to the issue; a refusal sets no
 # label. A removal or a label set that fails is one `::warning::` line.
 # A `repository_dispatch` reads `.action` (where GitHub puts the `event_type`)
@@ -366,7 +358,7 @@
 # own comment) are one line each, as is any other event. The comment names the
 # next GitHub action — never a slash command — then <note> byte for byte, then
 # this run's URL when `GITHUB_RUN_ID` is set, then the marker line
-# `<!-- sdlc-harness event=<event> branch=<branch> -->`. The pause reason and
+# `<!-- devscene event=<event> branch=<branch> -->`. The pause reason and
 # reset come from the registry record, read only when the registry file exists.
 # `parked` instead posts one comment per open question — `open_questions_in`
 # over `$root`'s state directory, ascending — carrying `question_<n>.md` less
@@ -398,7 +390,7 @@
 # phase) or `not started` for `Planning`, `Implementation`, `Branch review`,
 # `Done` (a round: `Fix plan`, `Fix implementation`, `Branch review`, `Done`) —
 # plain list items, no timestamp, no run URL — then the marker
-# `<!-- sdlc-harness event=progress branch=<branch> -->`, gaining ` round=<n>`
+# `<!-- devscene event=progress branch=<branch> -->`, gaining ` round=<n>`
 # for a round. One paginated comment listing picks the newest
 # `github-actions[bot]` comment whose last non-empty line is that marker: none
 # is one `forge_comment`; a body equal to the render (carriage returns and
@@ -524,7 +516,7 @@
 # gh's error — with the branch's compare URL; nowhere when neither is known.
 # Each names reviewing and requesting changes as the next action, and with
 # `phases.qa` true the local `branch-qa-test` still owed. Then
-# `sdlc-harness: done` on the issue and the pull request, each when known. It
+# `devscene: done` on the issue and the pull request, each when known. It
 # writes at most one pull request, one conversion back to a draft, one flip,
 # a round's thread replies and
 # resolves, two comments and those labels, and never pushes. It never fails its caller: every problem, a refused flip
@@ -576,13 +568,13 @@
 # body carrying `COMMENT_MARKER` anywhere (the harness's own comment, whoever
 # posted it); and a body that does not hold `COMMAND_HANDLE` as a word
 # anywhere, compared lowercase (the ERE `(^|[^a-z0-9])<handle>([^a-z0-9-]|$)`).
-# So `pause` and `foo@sdlc-harnessx` start nothing. THE EXACT FORM is a first
+# So `pause` and `foo@dev-scenex` start nothing. THE EXACT FORM is a first
 # line — a trailing CR stripped, leading spaces and tabs skipped — opening with
 # a word equal to `COMMAND_HANDLE`, compared lowercase, whose next word,
 # lowercased, is a `COMMAND_VERBS` word: that is the verb, and `CONTROL_ARGS`
 # the rest of that line. Any other body holding the handle is A MENTION
-# (`CONTROL_MENTION`, no verb): `Let's @sdlc-harness pause`, `> @sdlc-harness
-# pause`, the handle on a later line, and `@sdlc-harness check the question`
+# (`CONTROL_MENTION`, no verb): `Let's @dev-scene pause`, `> @dev-scene
+# pause`, the handle on a later line, and `@dev-scene check the question`
 # alike, each read by MENTION below. Then refused, in this order, each a reply
 # and exit 2:
 #   1. `HARNESS_REMOTE_STOP` is set
@@ -617,7 +609,7 @@
 # with no session: no saved credential (exit 2, the reply listing every
 # command); no `commands/<basename of MENTION_COMMAND>.md` under
 # `HARNESS_MENTION_PLUGIN_DIR` (exit 3, naming `HARNESS_CLI_VERSION` in
-# `harness-run.yml` and `docs/remote-execution.md` -> `### Upgrading`); and an
+# `devscene-run.yml` and `docs/remote-execution.md` -> `### Upgrading`); and an
 # agent binary, `${HARNESS_AGENT_CLI:-claude}`, that `command -v` does not
 # resolve (exit 3). The plugin directory is a path only: nothing under it is
 # sourced or run by this script. THE CONTEXT DIRECTORY, a fresh one under
@@ -836,7 +828,7 @@
 # the review has since been dismissed.`, or for any other state `Reviewed
 # pull request … at <submitted_at> (state <state>).`; then, when any is
 # kept, `## Inline comments`, oldest `created_at` first; then the marker line
-# `<!-- sdlc-harness round collected_at=<utc> reviews=<id,…> comments=<id,…> -->`
+# `<!-- devscene round collected_at=<utc> reviews=<id,…> comments=<id,…> -->`
 # listing exactly the ids written. Each comment is a `### `<path>`, line
 # <n>` heading (`original line <n> (outdated)` when `line` is null), `Made on
 # commit `<original_commit_id or commit_id>`.`, `By @<login>: <url>`, its body
@@ -903,7 +895,7 @@
 # `… deleted the branch `<b>`.` (with `--branch-gone`). Every note but the
 # deletion's adds that the workflow runs and their `harness-state` artifacts
 # are kept; a closed pull request's `stopped` comment says to reopen it, or to
-# use the issue, before commenting `@sdlc-harness resume`. The runs and
+# use the issue, before commenting `@dev-scene resume`. The runs and
 # artifacts are kept. Reopening the issue or the pull
 # request does nothing. A `pull_request` close job runs the pull request's
 # merge-commit copy of the workflow, as a review job does
@@ -1394,7 +1386,6 @@
 #   HARNESS_GH_CLI       mirrors  GH_CLI_VARIABLE (the binary run as `gh`)
 #   HARNESS_TRIGGER_LABEL        mirrors  TRIGGER_LABEL_VARIABLE
 #   DEFAULT_TRIGGER_LABEL        mirrors  DEFAULT_TRIGGER_LABEL
-#   LEGACY_TRIGGER_LABEL         mirrors  LEGACY_TRIGGER_LABEL
 #   HARNESS_TRIGGER_ALLOWED_BOTS mirrors  TRIGGER_ALLOWED_BOTS_VARIABLE
 #   HARNESS_RUN_ACTORS           mirrors  RUN_ACTORS_VARIABLE
 #   TRIGGER_DISPATCH_EVENT_TYPE  mirrors  TRIGGER_DISPATCH_EVENT_TYPE ('harness-task')
@@ -1426,7 +1417,7 @@
 #   export HARNESS_GH_CLI="$s"; cd "$d"
 #
 #   dispatch   bash scripts/remote-run.sh dispatch feat_x --engine task; echo $?
-#              -> 0; "$s.log" gains `workflow run harness-run.yml --ref feat_x
+#              -> 0; "$s.log" gains `workflow run devscene-run.yml --ref feat_x
 #                 -f action=run -f branch=feat_x -f engine=task -f resume=none -f chain=0`
 #   pause      bash scripts/remote-run.sh pause feat_x        -> 0, `-f action=pause`
 #   warm       bash scripts/remote-run.sh warm                -> 0, `--ref main -f action=warm`
@@ -1475,7 +1466,7 @@
 #   reported   report's setup, then review ... --actor alice --source
 #              https://github.com/o/r/pull/12#pullrequestreview-1 -> 0; one
 #              comment on 7 naming `Round <n>`, the source and `@alice`, then
-#              `sdlc-harness: running` on 7
+#              `devscene: running` on 7
 #   fetch      t=$(mktemp -d); bash scripts/remote-run.sh fetch feat_x "$t"
 #              -> 0; prints `state: running` (or, with no run listed,
 #                 `state: none`), every other key present
@@ -1562,25 +1553,25 @@
 #              its `harness run feat_x` run -> 0, no `workflow run`, no
 #              `workflow enable`, no notification
 #   list fails a stub failing `run list` -> 0, nothing sent, one `paused`
-#   wait-poller  decision wait-poller -> `workflow enable harness-resume.yml`;
+#   wait-poller  decision wait-poller -> `workflow enable devscene-resume.yml`;
 #              a stub failing it -> one `paused` naming its stderr
 #   no status  an empty <b> -> 0, one `failed` naming the run URL
 #   poll       a `run list` answer with a completed `harness run feat_x` run
 #              whose bundle says paused / usage / usage_resume_at 1: bash
 #              scripts/remote-run.sh poll -> 0; `run download`, `workflow run
-#              ... -f resume=pause`, then `workflow disable harness-resume.yml`;
+#              ... -f resume=pause`, then `workflow disable devscene-resume.yml`;
 #              with usage_resume_at far ahead -> no dispatch, no disable
 #   no dispatch  that due bundle with usage_resume_at a minute ago and a stub
 #              failing `workflow run`: three ticks, each serving the previous
 #              tick's poll_state/current/ as run <id>'s `harness-poll-state`
-#              under `run list --workflow harness-resume.yml` -> ticks 1-2 no
+#              under `run list --workflow devscene-resume.yml` -> ticks 1-2 no
 #              notification, no disable; tick 3 one `paused` naming the error
-#              and branch-resume, then `workflow disable harness-resume.yml`
+#              and branch-resume, then `workflow disable devscene-resume.yml`
 #   interleave that due run plus an `in_progress` `harness run feat_y` run
 #              with no artifact, and a stub that, once its log holds `workflow
 #              disable`, lists `harness-state` for feat_y's run with a
 #              paused / usage bundle -> the feat_x dispatch, `workflow disable`,
-#              then `workflow enable harness-resume.yml`; no feat_y dispatch
+#              then `workflow enable devscene-resume.yml`; no feat_y dispatch
 #
 #   the job's reads: a `run list` answer whose run has `displayTitle` `harness
 #   pause feat_x` and `createdAt` `2026-01-01T00:00:10Z` (epoch 1767225610):
@@ -1593,16 +1584,16 @@
 #              run-created-at 42 -> prints 1767225610, 0; a failing stub -> 3
 #
 #   trigger needs start's setup plus `"forge": "github"`, an event file e.json
-#   {"action":"labeled","label":{"name":"sdlc-harness"},"sender":{"login":"alice",
+#   {"action":"labeled","label":{"name":"devscene"},"sender":{"login":"alice",
 #   "type":"User"},"issue":{"number":7,"title":"Add comments","body":"x",
 #   "html_url":"https://github.com/o/r/issues/7","state":"open"}}, and a stub
 #   answering `api repos/o/r/collaborators/alice/permission` with
 #   {"permission":"write"}; export GITHUB_EVENT_NAME=issues GITHUB_EVENT_PATH=e.json
 #   GITHUB_REPOSITORY=o/r HARNESS_TRIGGER_LOOKUP_SECS=0 HARNESS_RUN_ACTORS='*':
 #   trigger    bash scripts/remote-run.sh trigger -> 0; origin/add_comments gains
-#              the prompt commit, "$s.log" gains `workflow run harness-run.yml
+#              the prompt commit, "$s.log" gains `workflow run devscene-run.yml
 #              --ref add_comments ...`, `issue comment 7 ...` naming the branch,
-#              then `issue edit 7 ... --remove-label sdlc-harness`
+#              then `issue edit 7 ... --remove-label devscene`
 #   read       the permission answer {"permission":"read"} -> 2, no `workflow
 #              run`, one comment naming write access, the label removed
 #   not listed HARNESS_RUN_ACTORS=bob -> 2, no `workflow run`, one comment
@@ -1623,8 +1614,8 @@
 #   list` and `api repos/o/r/issues/7/labels` with []; GITHUB_REPOSITORY=o/r:
 #   paused     bash scripts/remote-run.sh report paused feat_x -> 0; "$s.log"
 #              gains `api --method POST repos/o/r/issues/7/comments -F body=@…`
-#              naming `@sdlc-harness resume`, then `api --method POST
-#              repos/o/r/issues/7/labels -f labels[]=sdlc-harness: paused`
+#              naming `@dev-scene resume`, then `api --method POST
+#              repos/o/r/issues/7/labels -f labels[]=devscene: paused`
 #   forge off  `"forge": "none"`, then the same -> 0, one line, "$s.log" unchanged
 #   progress   a task ledger at sdlc-harness/flow_progress/feat_x_progress.md in
 #              the checkout and the stub answering `pr list` with [{"number":12,
@@ -1641,7 +1632,7 @@
 #              a `--draft` create with `--base main --head feat_x`, then `pr
 #              ready 12` with the job's token, then one comment on 12 saying
 #              it is now marked ready, then one on issue 7 naming #12 and
-#              /pull/12, then `sdlc-harness: done` on 7 and 12
+#              /pull/12, then `devscene: done` on 7 and 12
 #   reused     the stub answering `pr list` with [{"number":12,
 #              "isCrossRepository":false,"isDraft":false}] -> 0, no create, no
 #              `pr ready`, the pull request's comment saying it is not a draft
@@ -1661,7 +1652,7 @@
 #   open needs deliver's setup without the bundle:
 #   open       bash scripts/remote-run.sh open feat_x -> 0; "$s.log" gains a
 #              `--draft` create with `--base main --head feat_x`, then
-#              `sdlc-harness: running` on 12, then one comment on issue 7
+#              `devscene: running` on 12, then one comment on issue 7
 #              naming /pull/12 and ending in `event=opened branch=feat_x`
 #   reused     the stub answering `pr list` with [{"number":12,
 #              "isCrossRepository":false}] -> 0, one line, no create, no comment
@@ -1680,14 +1671,14 @@
 #   {"headRefName":"feat_x","isCrossRepository":false,"state":"OPEN"}, the
 #   permission call with {"permission":"write"}, and `run list` with an
 #   `in_progress` `harness run feat_x` run; an event file c.json
-#   {"action":"created","comment":{"body":"@sdlc-harness pause"},"issue":{"number":12,
+#   {"action":"created","comment":{"body":"@dev-scene pause"},"issue":{"number":12,
 #   "pull_request":{"url":"x"}},"sender":{"login":"alice","type":"User"}};
 #   export GITHUB_EVENT_NAME=issue_comment GITHUB_EVENT_PATH=c.json GITHUB_REPOSITORY=o/r:
 #   pause      bash scripts/remote-run.sh control -> 0; "$s.log" gains `workflow
-#              run harness-run.yml --ref feat_x -f action=pause -f branch=feat_x`,
+#              run devscene-run.yml --ref feat_x -f action=pause -f branch=feat_x`,
 #              then one comment on 12 naming @alice
 #   ignored    c.json's body `pause` -> 0, one line, "$s.log" unchanged
-#   mention    c.json's body `Let's @sdlc-harness pause`, with
+#   mention    c.json's body `Let's @dev-scene pause`, with
 #              HARNESS_MENTION_PLUGIN_DIR=<a throwaway directory holding an
 #              empty commands/harness-read-mention.md>, IN_OAUTH=x and
 #              HARNESS_AGENT_CLI=<a stub printing {"type":"result",
@@ -1697,13 +1688,13 @@
 #              running.`, and no `workflow run`
 #   act        the same with the stub's structured_output {"action":"command",
 #              "verb":"pause","reason":"r"} -> 0; "$s.log" gains `workflow run
-#              harness-run.yml --ref feat_x -f action=pause -f branch=feat_x`,
+#              devscene-run.yml --ref feat_x -f action=pause -f branch=feat_x`,
 #              then one comment on 12 opening `Read from your mention as
-#              `@sdlc-harness pause`.`
+#              `@dev-scene pause`.`
 #   needs-agent  the mention's c.json, `control --needs-agent` -> 0, one line
 #              `needs-agent: yes, a mention by @alice on #12`; "$s.log" holds
 #              only the permission call
-#   needs-agent  c.json's body `@sdlc-harness pause` -> 2, one `needs-agent: no`
+#   needs-agent  c.json's body `@dev-scene pause` -> 2, one `needs-agent: no`
 #   exact      line naming the exact form; "$s.log" unchanged
 #   needs-agent  the mention with HARNESS_RUN_ACTORS=bob -> 2, one `needs-agent:
 #   unlisted   no` line naming HARNESS_RUN_ACTORS; nothing posted
@@ -1719,23 +1710,22 @@ fi
 # shellcheck source=lib/harness-run-lib.sh
 . "$hr_lib"
 
-WORKFLOW_RUN_FILE='harness-run.yml'
-WORKFLOW_RESUME_FILE='harness-resume.yml'
+WORKFLOW_RUN_FILE='devscene-run.yml'
+WORKFLOW_RESUME_FILE='devscene-resume.yml'
 STATE_ARTIFACT_NAME='harness-state'
 POLL_STATE_ARTIFACT_NAME='harness-poll-state'
-DEFAULT_TRIGGER_LABEL='sdlc-harness'
-LEGACY_TRIGGER_LABEL='harness'
+DEFAULT_TRIGGER_LABEL='devscene'
 TRIGGER_DISPATCH_EVENT_TYPE='harness-task'
-WORKFLOW_CONTROL_FILE='harness-control.yml'
-COMMAND_HANDLE='@sdlc-harness'
+WORKFLOW_CONTROL_FILE='devscene-control.yml'
+COMMAND_HANDLE='@dev-scene'
 COMMAND_VERBS='answer pause resume stop clear status'
 MENTION_ACTIONS='command reply clarify fixes none'
 MENTION_ACT_VERBS='answer pause resume status'
 MENTION_CONFIRM_VERBS='stop clear'
 MENTION_COMMAND='/devscene:harness-read-mention'
-COMMENT_MARKER='<!-- sdlc-harness'
+COMMENT_MARKER='<!-- devscene'
 REVIEW_ROUND_STATE='changes_requested'
-STATE_LABEL_PREFIX='sdlc-harness: '
+STATE_LABEL_PREFIX='devscene: '
 RUN_STATES='running parked paused done failed stopped'
 PR_CREATE_SETTING='Allow GitHub Actions to create and approve pull requests'
 PR_CREATE_SETTING_PATH='Settings -> Actions -> General -> Workflow permissions'
@@ -1781,7 +1771,7 @@ POLL_STATE_RUNS_LIMIT=10
 TRIGGER_RUN_LOOKUP_TRIES=6
 TRIGGER_LOOKUP_SECS_DEFAULT=5
 # The `run` job's name in WORKFLOW_RUN_FILE: its key, since it has no `name:`.
-# `branch_settled_var` reads that job's status; harness-run.yml's header
+# `branch_settled_var` reads that job's status; devscene-run.yml's header
 # declares the mirror.
 RUN_JOB_NAME='run'
 # How far before the previous round's `collected_at` `round_collect` lists
@@ -2921,7 +2911,7 @@ restore_refuse() {
 # lineage_commits_var <checkout> — the branch's current lineage, read from refs
 # alone: never a fetch, never gh, nothing on stdout. A run is of the current
 # lineage when its `headSha` is a commit reachable from HEAD and not from
-# `origin/<defaultBranch>`. The list is complete because `harness-run.yml`
+# `origin/<defaultBranch>`. The list is complete because `devscene-run.yml`
 # checks out with `fetch-depth: 0`. It survives the branch's own history
 # edits because `refresh-branch.sh` merges and never rebases and
 # `push-branch.sh` never forces, so every own run's `headSha` stays an ancestor
@@ -4535,9 +4525,6 @@ verb_trigger() {
       exit "$EXIT_USAGE"
     }
     trigger_label="${HARNESS_TRIGGER_LABEL:-$DEFAULT_TRIGGER_LABEL}"
-    if [ -z "${HARNESS_TRIGGER_LABEL-}" ] && [ "$label" = "$LEGACY_TRIGGER_LABEL" ]; then
-      trigger_label="$LEGACY_TRIGGER_LABEL"
-    fi
     if [ "$action" != labeled ] || [ "$label" != "$trigger_label" ]; then
       echo "remote-run.sh: trigger: ignored, not the label '$trigger_label' being applied"
       return 0
@@ -7649,7 +7636,7 @@ control_mention() {
   base=${MENTION_COMMAND##*:}
   if [ -z "${HARNESS_MENTION_PLUGIN_DIR-}" ] || [ ! -f "$HARNESS_MENTION_PLUGIN_DIR/commands/$base.md" ]; then
     control_refuse "$EXIT_GH" "the harness plugin carrying the mention command is not available to this job" \
-      "The control job fetches the plugin at the version \`HARNESS_CLI_VERSION\` pins in \`harness-run.yml\`; see \`docs/remote-execution.md\` → \`### Upgrading\`, then comment again, or comment a command. $(control_commands_way)"
+      "The control job fetches the plugin at the version \`HARNESS_CLI_VERSION\` pins in \`devscene-run.yml\`; see \`docs/remote-execution.md\` → \`### Upgrading\`, then comment again, or comment a command. $(control_commands_way)"
   fi
   AGENT_CLI="${HARNESS_AGENT_CLI:-claude}"
   if ! command -v "$AGENT_CLI" >/dev/null 2>&1; then

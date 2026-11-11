@@ -25,7 +25,7 @@ import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli } from './helpers/fixt
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
 const STATE_DIR = 'sdlc-harness';
 const REPOSITORY = 'octo/fixture';
-const MENTION = "Let's @sdlc-harness pause";
+const MENTION = "Let's @dev-scene pause";
 const PERMISSION_CALL = `api repos/${REPOSITORY}/collaborators/alice/permission`;
 
 const GH_STUB = `#!/usr/bin/env node
@@ -159,13 +159,13 @@ test('an admitted writer\'s mention answers yes, with only the permission call',
 
 test('the exact form answers no before any gate, with no gh call', async (t) => {
   const f = await controlFixture(t);
-  assertAnswer(f, await f.control('@sdlc-harness status'), 2,
-    /^remote-run\.sh: control: needs-agent: no, the comment is the exact form `@sdlc-harness status`$/, []);
+  assertAnswer(f, await f.control('@dev-scene status'), 2,
+    /^remote-run\.sh: control: needs-agent: no, the comment is the exact form `@dev-scene status`$/, []);
 });
 
 for (const [name, body] of [
   ['a comment without the handle', 'pause'],
-  ['a comment the harness posted', 'Paused.\n\n<!-- sdlc-harness event=reply branch=feat_x -->'],
+  ['a comment the harness posted', 'Paused.\n\n<!-- devscene event=reply branch=feat_x -->'],
 ]) {
   test(`${name} answers no after its ignored line, with no gh call`, async (t) => {
     const f = await controlFixture(t);

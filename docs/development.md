@@ -2,8 +2,6 @@
 
 **Who reads this:** anyone changing a file in this repository, and the maintainer cutting a release. It answers how to run the plugin from your working copy instead of from an installed copy, what that choice forces on the way references between plugin assets are written, which commands decide whether a change is good, what the roadmap item numbers cited throughout the tree mean, which steps a release takes, in which order, and what the nightly supply-chain audit checks.
 
-Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed.
-
 Everything below was measured against the shipped `claude` CLI at version 2.1.226, except where a fact names its own version. Where a fact is a measurement, the command and the exact message are given, so a later version that behaves differently is detectable rather than merely surprising.
 
 ---
@@ -140,7 +138,7 @@ Six measured behaviours and one shipped contract, each of which costs a round if
 - **`agents/` and `commands/` carry `README.txt`, not `README.md`.** Component discovery loads every `.md` file in those two directories as an agent or a command, so a `README.md` there is parsed as a component and fails `--strict` with `frontmatter: No frontmatter block found`. Every other directory that carries a README carries an ordinary `README.md`; only these two use `.txt`.
 - **A guard resolves the repository it judges from the command it was handed, and reads `harness.config.json` at that root and nowhere else.** In order: the first `git -C <dir>` in the command string, else a leading `cd <dir>`, else the hook payload's own `.cwd`, else the process `$PWD` — then `git -C <that anchor> rev-parse --show-toplevel`. Never a hardcoded path and never an assumed session root, because a plugin hook fires in every session the plugin is enabled for and the command it is handed may name a sibling worktree. Two outcomes are closed rather than left to the author: a resolved root with **no `harness.config.json`** — or one the guard's own process cannot read, which the `[ -f ] && [ -r ]` jurisdiction test puts *outside* jurisdiction rather than inside it — means that repository has not adopted the harness, so every guard stays silent in it; and **within** jurisdiction a configuration that will not resolve — invalid JSON, more than one JSON document, or a `jq` too old to run the load — must never produce an `allow`. Two near neighbours are not that invariant: an absent `jq` is a payload the guards cannot parse at all rather than a configuration they cannot resolve, and an absent `defaultBranch` closes only the three guards that consult the protected set — the other three go on permitting, correctly, because nothing they decide depends on it. Which non-permit each guard emits instead of that `allow` differs per guard and is tabulated in `plugin/hooks/README.md`; read it there rather than inferring it from one guard's behaviour.
 
-More generally, `--strict` promotes unknown fields and missing metadata from warnings to errors. Adding a field to a manifest because it seems like it should exist is the fastest way to fail gate 1; add only fields the validator recognizes, and confirm by running it. `plugin/.claude-plugin/plugin.json` carries `displayName`, added when the product was renamed DevScene; gate `1` (`claude plugin validate --strict plugin`) is what establishes that the validator accepts it.
+More generally, `--strict` promotes unknown fields and missing metadata from warnings to errors. Adding a field to a manifest because it seems like it should exist is the fastest way to fail gate 1; add only fields the validator recognizes, and confirm by running it. `plugin/.claude-plugin/plugin.json` carries `displayName`; gate `1` (`claude plugin validate --strict plugin`) is what establishes that the validator accepts it.
 
 ---
 
@@ -435,7 +433,6 @@ bash scripts/check-typos.sh
 
 **What it fails on:** any hit `typos` 1.51.1 reports, with its default configuration — no `--config`, no `_typos.toml` — over `cli/templates`, `plugin`, `schemas` and `cli/src`, outside its deliberate set. Like 6c and 6d it is read from its **exit status**: each finding is printed on stderr as `check-typos: <path> — <word>`, all of them are reported, and it exits 0 when there are none and 1 otherwise. **The deliberate set** is keyed on file and flagged word, never a line number:
 
-- `UNPARSEABLE` and `unparseable` in `cli/src/generators/githubWorkflows.ts` and `cli/src/commands/init.ts`, and `unparseable` in `cli/src/doctor/checks.ts`: each sits inside `UNPARSEABLE_CONTROL_RELEASES`, `UNPARSEABLE_CONTROL_IF_LINE` or `unparseableControlRoute`, exported identifiers other files import by name.
 - `ines` in `plugin/agents/docs-reviewer.md`: the regular expression `[Ll]ines?`.
 - `Ein` in `plugin/instructions/mode_contract.md`: the `git grep -Ein` flags.
 - `fo` in `plugin/hooks/lib/harness-config-lib.sh`: the `--fo` option-prefix example.
@@ -848,7 +845,7 @@ A shortfall is not exempt: it fails the script. The floor policy itself — the 
 
 The fixes shipped in 0.4.1, and round 2, below, ran on it.
 
-**Round 2 — 2026-09-29, CLI 0.4.1.** Run by hand against the scratch repository `firu-daniel/harness-gate12-r2` (private, a GitHub-hosted runner, `phases.qa`, `docs` and `parity` off, `execution.target: github-actions`), adopted with `npx devscene@0.4.1 init`, with one task dropped as `feat_invoice_totals`. Observation (i) is **reached — lines not recorded**: jobs ran to "branch ready for review" under 0.4.1's plugin-root grants, but the `doctor --check-github` lines were not carried into this repository. Observation (ii) is **reached — lines not recorded** on the same evidence: the preflight's `PASS` lines were not carried either. Observation (iii) **passed**: with `HARNESS_SELF_PAUSE_AFTER_MINUTES=5` the job dropped `PAUSE` at exactly 300 s (`reason budget`); `continue` logged `dispatched action=run engine=task resume=pause`, and a new `harness run <branch>` run restored the bundle and resumed; the artifact's `expires_at` was 90 days after creation, with `artifact-and-log-retention` at `{"days":90,"maximum_allowed_days":400}`; whether a push started another workflow had nothing to answer it, because the repository had no other workflow; and the chain exposed finding 1 below. Observation (iv) **passed**: both jobs of the `harness pause` run were `skipped`, `timing` answered `"billable":{"UBUNTU":{"total_ms":0,"jobs":2,…}}`, and the running job found the run 47 s after its creation and ended with decision `stop`. Observation (v) **passed** on its disable, which logged `poll: no branch is waiting; disabled harness-resume.yml` and left the workflow's state `disabled_manually`; its enable and its in-progress artifact listing were never reached, because no job ended on a usage pause. Observation (vi) **passed**: every `harness-run.yml` run was accepted and its `Run the harness` step ran. Observation (vii) was **skipped**. Observation (viii) **passed**: `remote-run.sh stop` dispatched the marker, cancelled the running job, whose post-steps still saved and uploaded the bundle, and started nothing new; a later resume restored that cancelled job's bundle. Observation (ix) was **skipped**, because no API key was available. Observation (x) was **skipped**; running the interactive-test phase remotely is `ROADMAP.md`'s *Cloud QA* row. Observation (xi) is **not observed**, because its pass condition ends at P1 converging and the operator stopped the run before P1. What it reached: a task leaving three security limits undecided made the task-plan writer park before writing a draft (`question_1.md`, `job: parked stop`); an `answer_1.md` was written **by hand** into the worktree clarifications directory, the file `/devscene:branch-answer` writes, without running that command; one `tick` logged `relayed the answers (1) of parked remote run`; and the next job logged `restored the bundle of run <id>`, `wrote answer_1.md for <branch>` and `resuming parked run '<branch>' (answers 1)`, then passed `answered` to the walker and dispatched the writer with the answers attached, without re-parking. One 240-minute job took the task from planning to "branch ready for review" in 30 m 35 s, with every enabled phase `[x]`. The `claude` version the job installed was not carried into this repository. The behaviours the round settled are moved to `docs/remote-execution.md` → `## 6. What is not verified here` → `### Verified in Gate 12 round 2`. The two findings, and what this branch changed for each:
+**Round 2 — 2026-09-29, CLI 0.4.1.** Run by hand against the scratch repository `firu-daniel/harness-gate12-r2` (private, a GitHub-hosted runner, `phases.qa`, `docs` and `parity` off, `execution.target: github-actions`), adopted with `npx devscene@0.4.1 init`, with one task dropped as `feat_invoice_totals`. Observation (i) is **reached — lines not recorded**: jobs ran to "branch ready for review" under 0.4.1's plugin-root grants, but the `doctor --check-github` lines were not carried into this repository. Observation (ii) is **reached — lines not recorded** on the same evidence: the preflight's `PASS` lines were not carried either. Observation (iii) **passed**: with `HARNESS_SELF_PAUSE_AFTER_MINUTES=5` the job dropped `PAUSE` at exactly 300 s (`reason budget`); `continue` logged `dispatched action=run engine=task resume=pause`, and a new `harness run <branch>` run restored the bundle and resumed; the artifact's `expires_at` was 90 days after creation, with `artifact-and-log-retention` at `{"days":90,"maximum_allowed_days":400}`; whether a push started another workflow had nothing to answer it, because the repository had no other workflow; and the chain exposed finding 1 below. Observation (iv) **passed**: both jobs of the `harness pause` run were `skipped`, `timing` answered `"billable":{"UBUNTU":{"total_ms":0,"jobs":2,…}}`, and the running job found the run 47 s after its creation and ended with decision `stop`. Observation (v) **passed** on its disable, which logged `poll: no branch is waiting; disabled devscene-resume.yml` and left the workflow's state `disabled_manually`; its enable and its in-progress artifact listing were never reached, because no job ended on a usage pause. Observation (vi) **passed**: every `devscene-run.yml` run was accepted and its `Run the harness` step ran. Observation (vii) was **skipped**. Observation (viii) **passed**: `remote-run.sh stop` dispatched the marker, cancelled the running job, whose post-steps still saved and uploaded the bundle, and started nothing new; a later resume restored that cancelled job's bundle. Observation (ix) was **skipped**, because no API key was available. Observation (x) was **skipped**; running the interactive-test phase remotely is `ROADMAP.md`'s *Cloud QA* row. Observation (xi) is **not observed**, because its pass condition ends at P1 converging and the operator stopped the run before P1. What it reached: a task leaving three security limits undecided made the task-plan writer park before writing a draft (`question_1.md`, `job: parked stop`); an `answer_1.md` was written **by hand** into the worktree clarifications directory, the file `/devscene:branch-answer` writes, without running that command; one `tick` logged `relayed the answers (1) of parked remote run`; and the next job logged `restored the bundle of run <id>`, `wrote answer_1.md for <branch>` and `resuming parked run '<branch>' (answers 1)`, then passed `answered` to the walker and dispatched the writer with the answers attached, without re-parking. One 240-minute job took the task from planning to "branch ready for review" in 30 m 35 s, with every enabled phase `[x]`. The `claude` version the job installed was not carried into this repository. The behaviours the round settled are moved to `docs/remote-execution.md` → `## 6. What is not verified here` → `### Verified in Gate 12 round 2`. The two findings, and what this branch changed for each:
 
 1. A pause during planning lost the untracked planning drafts, because each job starts in a fresh checkout: three consecutive jobs each ran the task-plan writer and paused before any reviewer, only the ledger reached the branch, the second job's bundle held exactly four files, and the run's own `PAUSE_PROGRESS.md` recorded that *"the untracked story index and per-task files from the first session were not on disk (the checkout was fresh)"* → the state bundle carries the untracked planning drafts, and a job restore puts them back without overwriting, as `docs/remote-execution.md` → `### Runs longer than a job` states.
 2. Every run printed *"Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/upload-artifact@v4."* → both workflow templates pin Node 24 majors, listed in each header's `# ACTION PINS.` block.
@@ -860,10 +857,10 @@ The fixes shipped in 0.4.2, and round 3, below, ran on it.
 **Round 4 — 2026-09-30, the pinned plugin install before its release.** Scoped to the observations the pinned plugin install touched — (i), (ii), (vi) and (xii) — and run by hand against `firu-daniel/harness-gate12` from its seed commit (a GitHub-hosted runner, `phases.qa`, `docs` and `parity` off, `execution.target: github-actions`). The round ran before the fix's release, so the local `init`, `init --upgrade-workflows` and `doctor` calls ran the fix branch's CLI build, which reports 0.4.2. The jobs ran the published CLI their pin names, and cloned the backfilled release tags. Each job installed Claude Code `2.1.285`. Observation (i) **passed**: after the adoption push, `doctor --check-github` at 0.4.1 answered `PASS remote-execution` and warned only `remote-github … HARNESS_PUSH_URL is not a repository secret, so notifications from a remote run reach no one`. Observation (xii), in three legs:
 
 - **Leg A, the previous release's workflow.** The repository was adopted with `npx devscene@0.4.1 init`, and the task `feat_invoices` was dropped. Run `36671123793` **refused** in `Install the pinned plugin` with `the installed plugin is version '0.4.2', but this workflow was rendered for 0.4.1. Publish the matching plugin, or re-run init with the installed version and commit the workflow.` That run's `continue` step notified `failed`, and `sync` recorded `paused (killed)`.
-- **Leg B, the upgrade.** The branch's `doctor` warned `remote-execution … .github/workflows/harness-run.yml was rendered for 0.4.1 (HARNESS_CLI_VERSION), and this CLI is 0.4.2 …` and named `npx devscene@0.4.2 init --upgrade-workflows`. That command re-rendered both workflows with `HARNESS_CLI_VERSION: '0.4.2'`, left `harness-run.yml.bak` and `harness-resume.yml.bak` beside them, and carried the poller's `*/30 * * * *` schedule over. `doctor` then answered `PASS remote-execution`. After the push, a `RESUME` for `feat_invoices` started run `36671710773`, which **still ran the 0.4.1 workflow** and refused the same way. The run's branch was cut before the upgrade, and `remote-run.sh` dispatches with `--ref <branch>`, so GitHub ran the workflow file that branch carries. That is finding 1 below. A fresh drop, `feat_invoices_b`, was cut after the upgrade. Its run `36671794632` cloned `devscene--v0.4.2` (`4dd0881`), passed the version check and ran. Its preflight printed `PASS profile-paths`, `PASS profile-tracked`, and `PASS  plugin-permissions      .claude/settings.autonomous.json carries all 1 \`permissions.allow\` entry this machine's plugin roots need — the directory this marketplace is sourced from (/home/runner/.claude/plugins/known_marketplaces.json → \`installLocation\` + the marketplace manifest's plugin \`source\`), which the runtime substitutes for \`${CLAUDE_PLUGIN_ROOT}\` — /home/runner/work/_temp/harness-marketplace/plugin: 1 entry; …`. The session read every plugin instruction file from `/home/runner/work/_temp/harness-marketplace/plugin/`, so the project-scope github entry of the same name did not win. It did not park, and the operator stopped it once `chore: Add flow-progress ledger for feat_invoices_b` had landed.
-- **Leg C, pinned to N while `main` carries N+1.** This leg was simulated, because no release after the fix exists yet. The re-rendered `harness-run.yml`'s two `HARNESS_CLI_VERSION` lines were edited by hand to `'0.4.1'`, and the task `feat_invoices_c` was dropped. Run `36672854611` cloned `devscene--v0.4.1` (`355f1e8`) while `main` carried 0.4.2, passed the version check, and printed the same three `PASS` lines. Its session read the plugin from the clone, and the operator stopped it after `chore: Flow progress P3 for feat_invoices_c`.
+- **Leg B, the upgrade.** The branch's `doctor` warned `remote-execution … .github/workflows/devscene-run.yml was rendered for 0.4.1 (HARNESS_CLI_VERSION), and this CLI is 0.4.2 …` and named `npx devscene@0.4.2 init --upgrade-workflows`. That command re-rendered both workflows with `HARNESS_CLI_VERSION: '0.4.2'`, left `devscene-run.yml.bak` and `devscene-resume.yml.bak` beside them, and carried the poller's `*/30 * * * *` schedule over. `doctor` then answered `PASS remote-execution`. After the push, a `RESUME` for `feat_invoices` started run `36671710773`, which **still ran the 0.4.1 workflow** and refused the same way. The run's branch was cut before the upgrade, and `remote-run.sh` dispatches with `--ref <branch>`, so GitHub ran the workflow file that branch carries. That is finding 1 below. A fresh drop, `feat_invoices_b`, was cut after the upgrade. Its run `36671794632` cloned `devscene--v0.4.2` (`4dd0881`), passed the version check and ran. Its preflight printed `PASS profile-paths`, `PASS profile-tracked`, and `PASS  plugin-permissions      .claude/settings.autonomous.json carries all 1 \`permissions.allow\` entry this machine's plugin roots need — the directory this marketplace is sourced from (/home/runner/.claude/plugins/known_marketplaces.json → \`installLocation\` + the marketplace manifest's plugin \`source\`), which the runtime substitutes for \`${CLAUDE_PLUGIN_ROOT}\` — /home/runner/work/_temp/harness-marketplace/plugin: 1 entry; …`. The session read every plugin instruction file from `/home/runner/work/_temp/harness-marketplace/plugin/`, so the project-scope github entry of the same name did not win. It did not park, and the operator stopped it once `chore: Add flow-progress ledger for feat_invoices_b` had landed.
+- **Leg C, pinned to N while `main` carries N+1.** This leg was simulated, because no release after the fix exists yet. The re-rendered `devscene-run.yml`'s two `HARNESS_CLI_VERSION` lines were edited by hand to `'0.4.1'`, and the task `feat_invoices_c` was dropped. Run `36672854611` cloned `devscene--v0.4.1` (`355f1e8`) while `main` carried 0.4.2, passed the version check, and printed the same three `PASS` lines. Its session read the plugin from the clone, and the operator stopped it after `chore: Flow progress P3 for feat_invoices_c`.
 
-Observation (ii) **passed** on Legs B and C, and observation (vi) on every run. The other observations were not run, by the round's scope. After the round, `harness-resume.yml` was disabled by hand, because it had never run.
+Observation (ii) **passed** on Legs B and C, and observation (vi) on every run. The other observations were not run, by the round's scope. After the round, `devscene-resume.yml` was disabled by hand, because it had never run.
 
 The findings:
 
@@ -876,91 +873,91 @@ The findings:
 
 A follow-up fix answers findings 1, 3, 4, 5 and 6. For finding 1 the answer is documentation plus one sentence in the upgrade's report and in the version warning, because a run keeping the version it started with is intended. Finding 2 is not carried: no repository carries a workflow rendered before the pinned install, because remote execution has no adopters.
 
-**Round 5 — 2026-10-01, CLI 0.5.0.** Scoped to observation (xiii), the issue trigger, and run by hand against `firu-daniel/harness-gate12` from its seed commit (a GitHub-hosted runner, `phases.qa`, `docs` and `parity` off), adopted with `npx devscene@0.5.0 init --non-interactive`, then `config set execution.target github-actions`, `config set forge github` and a second `init`, which wrote `harness-run.yml`, `harness-resume.yml` and `harness-trigger.yml`. The trigger label `harness` already existed from an earlier probe. The job installed Claude Code `2.1.286`. The machine stayed on, but no run daemon had ever been installed from the checkout (`daemon stop` found no unit), so nothing local took part. The setup gave `PASS  forge  forge is github and remote execution is on: .github/workflows/harness-trigger.yml is present and origin/main carries it. …`, and `remote-github` warned only `HARNESS_PUSH_URL is not a repository secret, so notifications from a remote run reach no one` — without naming the trigger workflow or the label, which is finding 2 below. The main leg **passed** on its trigger half: issue #6, titled `feat: invoices` with the invoices task as its body, was labelled at 08:01:29Z; `harness trigger 6` succeeded in 19 s and dispatched `harness run feat_invoices` (`36833810996`) at 08:01:43Z; the issue carried one comment naming `feat_invoices` and a run URL, and the label was removed; `origin/feat_invoices` carried `chore: add task prompt for feat_invoices`, whose prompt was `# feat: invoices`, the body verbatim and the line `Started from https://github.com/firu-daniel/harness-gate12/issues/6 by @firu-daniel, who applied the label `harness` at 2026-10-01T08:01:39Z. …`; an edit of the issue's body after the comment did not reach the committed prompt. The comment's run URL was **wrong**, which is finding 1. The run did not reach "branch ready for review", because leg (c) paused it after the plan and two tasks were committed. Leg (a) **passed**: a second issue with the same title derived `feat_invoices_2`, whose comment named run `36835744979`, the run the trigger dispatched; that run was stopped with `remote-run.sh stop`. Leg (b) was **not run** as specified: the scratch repository is owned by a personal account, where every collaborator holds `write`, so no triage or read account was available. In its place a second account with `write`, `expause-admin`, applied the label to the leg (a) issue; the run started, and its provenance line named `@expause-admin`. Leg (c) **passed**: in a `claude` session in the scratch repository, `/devscene:branch-status feat_invoices` printed the run as `running` from GitHub with no registry file; `/devscene:branch-pause feat_invoices: gate12 round 5` ran `remote-run.sh fetch`, then `pause`, which printed `dispatched action=pause for feat_invoices`; the `harness pause` run was `skipped`; and the job logged `a 'harness pause feat_invoices' run was created at or after 1790842296 — dropped PAUSE (reason user)`, then `run 'feat_invoices' paused (PAUSE honored, reason user)` and `job: paused stop`. No registry record, sibling working copy, local branch or `deps.marker` appeared on the machine.
+**Round 5 — 2026-10-01, CLI 0.5.0.** Scoped to observation (xiii), the issue trigger, and run by hand against `firu-daniel/harness-gate12` from its seed commit (a GitHub-hosted runner, `phases.qa`, `docs` and `parity` off), adopted with `npx devscene@0.5.0 init --non-interactive`, then `config set execution.target github-actions`, `config set forge github` and a second `init`, which wrote `devscene-run.yml`, `devscene-resume.yml` and `devscene-trigger.yml`. The trigger label `devscene` already existed from an earlier probe. The job installed Claude Code `2.1.286`. The machine stayed on, but no run daemon had ever been installed from the checkout (`daemon stop` found no unit), so nothing local took part. The setup gave `PASS  forge  forge is github and remote execution is on: .github/workflows/devscene-trigger.yml is present and origin/main carries it. …`, and `remote-github` warned only `HARNESS_PUSH_URL is not a repository secret, so notifications from a remote run reach no one` — without naming the trigger workflow or the label, which is finding 2 below. The main leg **passed** on its trigger half: issue #6, titled `feat: invoices` with the invoices task as its body, was labelled at 08:01:29Z; `harness trigger 6` succeeded in 19 s and dispatched `harness run feat_invoices` (`36833810996`) at 08:01:43Z; the issue carried one comment naming `feat_invoices` and a run URL, and the label was removed; `origin/feat_invoices` carried `chore: add task prompt for feat_invoices`, whose prompt was `# feat: invoices`, the body verbatim and the line `Started from https://github.com/firu-daniel/harness-gate12/issues/6 by @firu-daniel, who applied the label `devscene` at 2026-10-01T08:01:39Z. …`; an edit of the issue's body after the comment did not reach the committed prompt. The comment's run URL was **wrong**, which is finding 1. The run did not reach "branch ready for review", because leg (c) paused it after the plan and two tasks were committed. Leg (a) **passed**: a second issue with the same title derived `feat_invoices_2`, whose comment named run `36835744979`, the run the trigger dispatched; that run was stopped with `remote-run.sh stop`. Leg (b) was **not run** as specified: the scratch repository is owned by a personal account, where every collaborator holds `write`, so no triage or read account was available. In its place a second account with `write`, `expause-admin`, applied the label to the leg (a) issue; the run started, and its provenance line named `@expause-admin`. Leg (c) **passed**: in a `claude` session in the scratch repository, `/devscene:branch-status feat_invoices` printed the run as `running` from GitHub with no registry file; `/devscene:branch-pause feat_invoices: gate12 round 5` ran `remote-run.sh fetch`, then `pause`, which printed `dispatched action=pause for feat_invoices`; the `harness pause` run was `skipped`; and the job logged `a 'harness pause feat_invoices' run was created at or after 1790842296 — dropped PAUSE (reason user)`, then `run 'feat_invoices' paused (PAUSE honored, reason user)` and `job: paused stop`. No registry record, sibling working copy, local branch or `deps.marker` appeared on the machine.
 
 The findings:
 
 1. **A run whose branch name was used before inherits that earlier run's state.** `feat_invoices` was the name rounds 3 and 4 used, and their branch had been deleted. The new run's `Restore the previous job's state` logged `restored the bundle of run 36569531374` (from 2026-09-29) and `placed 7 planning file(s) for feat_invoices; kept 0 the checkout already carries`; the session said `Resuming the planning phase: an unreviewed plan draft is on disk`, reviewed the inherited drafts and committed them as its plan. The issue comment likewise named `36671710773`, a failed run of 2026-09-30, instead of `36833810996`. Both lookups key on the branch and the `harness run <branch>` title with no bound to the branch's current lineage, and the branch-name rule does not count run history as taken. `feat_invoices_2`, with no history, logged `no previous bundle for feat_invoices_2; this is its first job`.
-2. `doctor --check-github` reports that GitHub knows `harness-trigger.yml` and that the label exists only when `remote-github` passes outright, so any other warning on that check hides it, and (xiii)'s setup condition cannot be met without every remote secret set.
+2. `doctor --check-github` reports that GitHub knows `devscene-trigger.yml` and that the label exists only when `remote-github` passes outright, so any other warning on that check hides it, and (xiii)'s setup condition cannot be met without every remote secret set.
 3. `/devscene:branch-pause`'s GitHub route makes its temporary directory with `mktemp -d`; in an auto-mode session the composed `$(mktemp -d)` command and the `rm -rf` of the directory, outside the repository, were both refused, and the session fell back to `rmdir`.
 
 All three are carried to a follow-up fix. For finding 1, `fix_forge_trigger_run_lineage` bounded `restore`'s previous-bundle pick to runs whose `headSha` is in the branch's current lineage, made the trigger comment's lookup match the run whose `headSha` is the commit `start` pushed, and counted a name's run history as taken when deriving a branch name — *not yet re-observed; leg (d) records it*. For finding 2, it made `remote-github` carry the trigger workflow and label answers on every outcome, not only on a pass — *not yet re-observed; (xiii)'s setup records it*. For finding 3, it moved `/devscene:branch-pause`'s fetch into a scratch directory under `<stateDir>/scratch/` that `remote-run.sh discard` removes — *not yet re-observed; leg (c) records it*. The trigger's lookup-bound row in `docs/github-issue-trigger.md` → `## 7. What is not verified here` is settled for a branch with no run history and moved to *Verified in Gate 12 round 5*; the rest of that table stands.
 
-**Round 6 — 2026-10-02, CLI 0.6.0.** Scoped to observation (xiv), run control from GitHub, and run by hand against `firu-daniel/harness-gate12` from its seed commit (a GitHub-hosted runner, `phases.qa`, `docs` and `parity` off), adopted with `npx devscene@0.6.0 init --non-interactive`, then `config set execution.target github-actions`, `config set forge github` and a second `init`, which reported writing all four workflows, `harness-control.yml` among them. The legacy label `harness` left by round 5 was deleted and `sdlc-harness` created. `can_approve_pull_request_reviews` read `false`, was switched on through `PUT repos/<owner>/<repo>/actions/permissions/workflow`, and read `true`. The job installed Claude Code `2.1.287`. The machine stayed on but no run daemon was registered (`daemon stop` found no unit), so nothing local took part; every command was a comment or a review on GitHub. `firu-daniel` (admin) commented, and `expause-admin` (write) submitted every review; no `HARNESS_GIT_TOKEN` was set, so the pull request was authored by `app/github-actions`. The setup **passed**: `PASS  forge` named both forge workflows, and `remote-github` warned only that `HARNESS_PUSH_URL` is not set, while still saying `GitHub knows harness-trigger.yml and harness-control.yml, and the label `sdlc-harness` exists` — round 5's finding 2 re-observed fixed. The task was the invoices task with a closing section reserving two security limits to the product owner.
+**Round 6 — 2026-10-02, CLI 0.6.0.** Scoped to observation (xiv), run control from GitHub, and run by hand against `firu-daniel/harness-gate12` from its seed commit (a GitHub-hosted runner, `phases.qa`, `docs` and `parity` off), adopted with `npx devscene@0.6.0 init --non-interactive`, then `config set execution.target github-actions`, `config set forge github` and a second `init`, which reported writing all four workflows, `devscene-control.yml` among them. The trigger label `devscene` left by round 5 was deleted and created again. `can_approve_pull_request_reviews` read `false`, was switched on through `PUT repos/<owner>/<repo>/actions/permissions/workflow`, and read `true`. The job installed Claude Code `2.1.287`. The machine stayed on but no run daemon was registered (`daemon stop` found no unit), so nothing local took part; every command was a comment or a review on GitHub. `firu-daniel` (admin) commented, and `expause-admin` (write) submitted every review; no `HARNESS_GIT_TOKEN` was set, so the pull request was authored by `app/github-actions`. The setup **passed**: `PASS  forge` named both forge workflows, and `remote-github` warned only that `HARNESS_PUSH_URL` is not set, while still saying `GitHub knows devscene-trigger.yml and devscene-control.yml, and the label `devscene` exists` — round 5's finding 2 re-observed fixed. The task was the invoices task with a closing section reserving two security limits to the product owner.
 
-Leg (a) **passed**: issue #8, labelled at 10:40:54Z, got the trigger's comment naming `feat_invoices_3` — not `feat_invoices`, because the names rounds 3 to 5 used carry run history — and run `36996832017`, which was the dispatched run, its `headSha` the task-prompt commit: round 5's finding 1 re-observed fixed. The label moved to `sdlc-harness: running`. At 10:43:09Z the task-plan writer parked before any draft, and the issue carried one comment with `question_1.md` whole (four questions) and the label `sdlc-harness: parked`. Leg (b) **passed**: `@sdlc-harness answer 1` with four lines got `Answer to question 1 received from @firu-daniel; every open question is answered, so `feat_invoices_3` resumes.`, then `resumed`, and `running`; the job logged `wrote answer_1.md for feat_invoices_3` and `resuming parked run 'feat_invoices_3' (answers 1)` and did not re-park. Leg (c) **passed**: once the ledger showed P1 and P3 `[x]`, `@sdlc-harness pause` got `Pause requested by @firu-daniel; …`; the job logged `dropped PAUSE (reason user)` 21 s after the `harness pause` run, finished its task in flight and logged `paused (PAUSE honored, reason user)`; `paused` and the label followed. `@sdlc-harness resume` got `Resume requested by @firu-daniel: `feat_invoices_3` continues from its committed ledger.`, then `resumed` and `running`, and the next commit was the next task. Leg (d) **failed**, which is finding 1: the resumed job ran the flow to its end (ledger D `[x]`, rc 0) and was classified `parked`, so `deliver` opened nothing. It was recovered with the *Run workflow* fallback (`resume answer`, the same answer); a first recovery dispatched from `main` rather than the run's branch was invisible to every branch lookup, which is finding 6, and the second, from `feat_invoices_3`, completed and opened draft pull request #9: `isDraft` `true`, `headRefName` `feat_invoices_3`, the body carrying `Started from #8.` and the commands, `sdlc-harness: done` on both items, and a `completed` comment on the issue naming the pull request, none on the pull request. The issue's timeline showed no `cross-referenced` event for #9, 45 minutes later as at once, which is finding 5.
+Leg (a) **passed**: issue #8, labelled at 10:40:54Z, got the trigger's comment naming `feat_invoices_3` — not `feat_invoices`, because the names rounds 3 to 5 used carry run history — and run `36996832017`, which was the dispatched run, its `headSha` the task-prompt commit: round 5's finding 1 re-observed fixed. The label moved to `devscene: running`. At 10:43:09Z the task-plan writer parked before any draft, and the issue carried one comment with `question_1.md` whole (four questions) and the label `devscene: parked`. Leg (b) **passed**: `@dev-scene answer 1` with four lines got `Answer to question 1 received from @firu-daniel; every open question is answered, so `feat_invoices_3` resumes.`, then `resumed`, and `running`; the job logged `wrote answer_1.md for feat_invoices_3` and `resuming parked run 'feat_invoices_3' (answers 1)` and did not re-park. Leg (c) **passed**: once the ledger showed P1 and P3 `[x]`, `@dev-scene pause` got `Pause requested by @firu-daniel; …`; the job logged `dropped PAUSE (reason user)` 21 s after the `harness pause` run, finished its task in flight and logged `paused (PAUSE honored, reason user)`; `paused` and the label followed. `@dev-scene resume` got `Resume requested by @firu-daniel: `feat_invoices_3` continues from its committed ledger.`, then `resumed` and `running`, and the next commit was the next task. Leg (d) **failed**, which is finding 1: the resumed job ran the flow to its end (ledger D `[x]`, rc 0) and was classified `parked`, so `deliver` opened nothing. It was recovered with the *Run workflow* fallback (`resume answer`, the same answer); a first recovery dispatched from `main` rather than the run's branch was invisible to every branch lookup, which is finding 6, and the second, from `feat_invoices_3`, completed and opened draft pull request #9: `isDraft` `true`, `headRefName` `feat_invoices_3`, the body carrying `Started from #8.` and the commands, `devscene: done` on both items, and a `completed` comment on the issue naming the pull request, none on the pull request. The issue's timeline showed no `cross-referenced` event for #9, 45 minutes later as at once, which is finding 5.
 
-Leg (e) **passed**: a review requesting changes with two inline comments (`src/invoiceInput.ts` line 18, `src/invoiceLines.ts` line 20), its body reserving two more security limits, was answered "collected" because of finding 6, and the recovery run's `collect` job placed one `chore: add user review for feat_invoices_3`. The round file carried the body verbatim under `## Review by @expause-admin` with its provenance line, both inline comments with file, line, `Made on commit`, author link and hunk, and the marker `reviews=5391275659 comments=4165308215,4165308224`; the started-round comment read `Round 1 from pull request #9 … by @expause-admin`. The user-review fix-plan writer parked, and question 2 was posted whole **on the pull request**; `@sdlc-harness answer 2` there got the received reply, `resumed` and `running`, and the round completed with three fixes. Leg (f) **passed**: `@sdlc-harness approve` got the reply listing the five commands; a bare `pause` gave a `skipped` control run and no reply; an *Approve* review gave a `skipped` control run, and the next `collect` logged `no review requesting changes is pending`. A review requesting changes started round 2; three more, submitted back to back while it ran, were none refused, two answered `your review was collected. `feat_invoices_3` is `running`; … Nothing needs to be submitted again.`, the pending job of the middle one was `cancelled` by the newest and posted nothing, and no second round commit appeared. `@SDLC-HARNESS pause` passed the `if:` and got a reply. Leg (g) **passed**, run against round 2 rather than at the end: `@sdlc-harness stop` on the pull request got `Stop requested by @firu-daniel; …`, a `stopped` comment reading `Stopped by @firu-daniel.`, `sdlc-harness: stopped` on both items, the round's run and its `collect` job `cancelled` and no `failed` comment. `@sdlc-harness resume` then restarted it from the ledger, and once it completed its `collect` job logged `started the next round of feat_invoices_3 from @expause-admin` and placed one `feat_invoices_3_review_3.md` carrying the three later reviews, each under its own `## Review by @expause-admin`, oldest first; round 3 then completed. `@sdlc-harness status`, on the issue and on the pull request, was refused as not a command, as it is not one of the five. Every comment and label on the pull request went through, which settles three rows of `docs/github-run-control.md` → `## 8. What is not verified here`, moved to *Verified in Gate 12 round 6*.
+Leg (e) **passed**: a review requesting changes with two inline comments (`src/invoiceInput.ts` line 18, `src/invoiceLines.ts` line 20), its body reserving two more security limits, was answered "collected" because of finding 6, and the recovery run's `collect` job placed one `chore: add user review for feat_invoices_3`. The round file carried the body verbatim under `## Review by @expause-admin` with its provenance line, both inline comments with file, line, `Made on commit`, author link and hunk, and the marker `reviews=5391275659 comments=4165308215,4165308224`; the started-round comment read `Round 1 from pull request #9 … by @expause-admin`. The user-review fix-plan writer parked, and question 2 was posted whole **on the pull request**; `@dev-scene answer 2` there got the received reply, `resumed` and `running`, and the round completed with three fixes. Leg (f) **passed**: `@dev-scene approve` got the reply listing the five commands; a bare `pause` gave a `skipped` control run and no reply; an *Approve* review gave a `skipped` control run, and the next `collect` logged `no review requesting changes is pending`. A review requesting changes started round 2; three more, submitted back to back while it ran, were none refused, two answered `your review was collected. `feat_invoices_3` is `running`; … Nothing needs to be submitted again.`, the pending job of the middle one was `cancelled` by the newest and posted nothing, and no second round commit appeared. `@SDLC-HARNESS pause` passed the `if:` and got a reply. Leg (g) **passed**, run against round 2 rather than at the end: `@dev-scene stop` on the pull request got `Stop requested by @firu-daniel; …`, a `stopped` comment reading `Stopped by @firu-daniel.`, `devscene: stopped` on both items, the round's run and its `collect` job `cancelled` and no `failed` comment. `@dev-scene resume` then restarted it from the ledger, and once it completed its `collect` job logged `started the next round of feat_invoices_3 from @expause-admin` and placed one `feat_invoices_3_review_3.md` carrying the three later reviews, each under its own `## Review by @expause-admin`, oldest first; round 3 then completed. `@dev-scene status`, on the issue and on the pull request, was refused as not a command, as it is not one of the five. Every comment and label on the pull request went through, which settles three rows of `docs/github-run-control.md` → `## 8. What is not verified here`, moved to *Verified in Gate 12 round 6*.
 
 The findings:
 
 1. **A park answered, then paused, then resumed ends `parked`, opens no pull request and cannot be worked from GitHub.** `classify_run_exit` archives answered pairs only from the registry's `resumed_for_index`; a pause exit leaves it set for the next non-pause exit, but a job's registry is discarded and `status.json` (schema `1`) does not carry the field. Job `36998575175` (`resume pause`) therefore archived nothing, found `question_1.md` and `answer_1.md` at the top level, logged `parked (clarification waiting) — rc=0` after the session's own `Done: feat_invoices_3 is ready for review`, and `report` posted a parked comment with no question in it. From GitHub `answer` was refused (no open question), `resume` was refused (parked), and a review was collected but started nothing.
 2. Closing a run's issue or pull request, or deleting its branch, does not stop the run: no workflow listens to `issues: closed`, `pull_request: closed` or `delete`.
 3. A refused command fails its `harness control` run: `control` exits 2 and the step fails, so every refusal shows as a failed run with GitHub's failure notice.
-4. The parked comment carries `question_<n>.md` unchanged, including the file channel's line telling the reader to answer in an `answer_<n>.md` beside the file, against the comment's own `@sdlc-harness answer` form.
+4. The parked comment carries `question_<n>.md` unchanged, including the file channel's line telling the reader to answer in an `answer_<n>.md` beside the file, against the comment's own `@dev-scene answer` form.
 5. The draft pull request's `Started from #<n>.` and the `completed` comment, both posted with the job's token, put no cross-reference on the issue's timeline, so leg (d)'s timeline condition cannot pass.
-6. A `harness-run.yml` dispatch from a ref other than its `branch` input is accepted; GitHub lists it under that ref, so the lookups keyed on `--branch` never see it.
+6. A `devscene-run.yml` dispatch from a ref other than its `branch` input is accepted; GitHub lists it under that ref, so the lookups keyed on `--branch` never see it.
 7. After a stop, command replies call the run `paused`, its cancelled job's bundle reading `paused`/`killed`, while its comment and labels say stopped.
 8. A resume after a stop launched the user-review engine with `This is a RESUME from a PAUSE` and the task engine's stale `PAUSE_PROGRESS.md`, which the bundle carries across engines and rounds; the session followed the ledger instead.
 9. A round's inline review threads stay unresolved after the round completes and fixes them.
 
-The round also settled four design changes for the follow-up: open the draft pull request when the run starts and mark it ready on `completed`, turning it back to draft while a round runs; post `completed` on the pull request always and on the source issue too; post one short comment per main phase (planning, implementation, branch review, done); and resolve the threads finding 9 names. Two are open questions for its plan: a read-only `status` command, and answering a park by replying to its comment rather than with `@sdlc-harness answer <n>`. All are carried to a follow-up fix; none is fixed here. The defects (findings 1–8) and the two open questions were then addressed by `fix_forge_run_control_gate12_findings`, and the four design changes, finding 9 among them, are roadmap item 19.
+The round also settled four design changes for the follow-up: open the draft pull request when the run starts and mark it ready on `completed`, turning it back to draft while a round runs; post `completed` on the pull request always and on the source issue too; post one short comment per main phase (planning, implementation, branch review, done); and resolve the threads finding 9 names. Two are open questions for its plan: a read-only `status` command, and answering a park by replying to its comment rather than with `@dev-scene answer <n>`. All are carried to a follow-up fix; none is fixed here. The defects (findings 1–8) and the two open questions were then addressed by `fix_forge_run_control_gate12_findings`, and the four design changes, finding 9 among them, are roadmap item 19.
 
-**Round 7 — 2026-10-05, CLI 0.6.1.** Scoped to observation (xiv), run control from GitHub, re-run after `fix_forge_run_control_gate12_findings`, and run by hand against `firu-daniel/harness-gate12` from its seed commit (a GitHub-hosted runner, `phases.qa`, `docs` and `parity` off). Round 6's teardown had not reset `main`, so the round began by resetting it to the seed. It was adopted with `npx devscene@0.6.1 init --non-interactive`, then `config set execution.target github-actions`, `config set forge github` and a second `init`, which reported creating all four workflows. `sdlc-harness` was created, and `can_approve_pull_request_reviews` read `false`, was switched on through `PUT repos/<owner>/<repo>/actions/permissions/workflow`, and read `true`. The job installed Claude Code `2.1.289`. No run daemon was registered (`daemon stop` found no unit), so nothing local took part. `firu-daniel` (admin) commented, `expause-admin` (write) submitted every review, and with no `HARNESS_GIT_TOKEN` set the pull request was authored by `app/github-actions`. The setup **passed** on its `doctor` lines: `PASS  forge` named both forge workflows and the six commands, and `remote-github` warned only that `HARNESS_PUSH_URL` is not set while saying `GitHub knows harness-trigger.yml and harness-control.yml, and the label `sdlc-harness` exists`. But the adoption push had already started a `harness-control.yml` run, `37286840763`, that failed with no job on a workflow file issue, which is finding 1. The task was the invoices task with a closing section reserving two security limits to the product owner.
+**Round 7 — 2026-10-05, CLI 0.6.1.** Scoped to observation (xiv), run control from GitHub, re-run after `fix_forge_run_control_gate12_findings`, and run by hand against `firu-daniel/harness-gate12` from its seed commit (a GitHub-hosted runner, `phases.qa`, `docs` and `parity` off). Round 6's teardown had not reset `main`, so the round began by resetting it to the seed. It was adopted with `npx devscene@0.6.1 init --non-interactive`, then `config set execution.target github-actions`, `config set forge github` and a second `init`, which reported creating all four workflows. `devscene` was created, and `can_approve_pull_request_reviews` read `false`, was switched on through `PUT repos/<owner>/<repo>/actions/permissions/workflow`, and read `true`. The job installed Claude Code `2.1.289`. No run daemon was registered (`daemon stop` found no unit), so nothing local took part. `firu-daniel` (admin) commented, `expause-admin` (write) submitted every review, and with no `HARNESS_GIT_TOKEN` set the pull request was authored by `app/github-actions`. The setup **passed** on its `doctor` lines: `PASS  forge` named both forge workflows and the six commands, and `remote-github` warned only that `HARNESS_PUSH_URL` is not set while saying `GitHub knows devscene-trigger.yml and devscene-control.yml, and the label `devscene` exists`. But the adoption push had already started a `devscene-control.yml` run, `37286840763`, that failed with no job on a workflow file issue, which is finding 1. The task was the invoices task with a closing section reserving two security limits to the product owner.
 
-Leg (a) **passed**: issue #10, labelled at 08:57:45Z, got the trigger's comment naming `feat_invoices_4` and run `37286947112`, and the label moved to `sdlc-harness: running`. At 08:59:50Z the task-plan writer parked before any draft, and the issue carried one comment with `question_1.md` whole (five questions), the `@sdlc-harness answer 1` instruction and its copy block, and no `answer_1.md` anywhere — round 6's finding 4 re-observed fixed — with the label `sdlc-harness: parked`. Leg (b) **failed** as shipped: `@sdlc-harness answer 1` at 09:00:14Z started no `harness-control.yml` run and got no reply, because the file does not parse (finding 1). The scratch repository's copy was patched by hand, its job `if:` rewritten as a folded block scalar, and pushed, after which GitHub listed the workflow as `harness-control`; every leg from here on ran against that patched copy. The answer, posted again, got `Answer to question 1 received from @firu-daniel; every open question is answered, so `feat_invoices_4` resumes.`, then `resumed` and `running`; the job logged `wrote answer_1.md for feat_invoices_4` and `resuming parked run 'feat_invoices_4' (answers 1)` and did not re-park. Leg (c) **passed**: once the ledger showed P1 and P3 `[x]`, `@sdlc-harness pause` got `Pause requested by @firu-daniel; …`; the job logged `dropped PAUSE (reason user)`, finished its task in flight and logged `paused (PAUSE honored, reason user)`; `paused` and the label followed, and `@sdlc-harness resume` got the resume reply, `resumed` and `running`. Leg (d) **passed** with no workaround — round 6's finding 1 re-observed fixed: the answered, paused and resumed run logged `completed — branch ready for review` and `deliver: opened pull request #11`; `isDraft` was `true`, `headRefName` `feat_invoices_4`, the body carried `Started from #10.` and the six commands, the issue's `completed` comment named the pull request, and both items carried `sdlc-harness: done`. The issue's timeline showed no `cross-referenced` event, as expected with the job's token.
+Leg (a) **passed**: issue #10, labelled at 08:57:45Z, got the trigger's comment naming `feat_invoices_4` and run `37286947112`, and the label moved to `devscene: running`. At 08:59:50Z the task-plan writer parked before any draft, and the issue carried one comment with `question_1.md` whole (five questions), the `@dev-scene answer 1` instruction and its copy block, and no `answer_1.md` anywhere — round 6's finding 4 re-observed fixed — with the label `devscene: parked`. Leg (b) **failed** as shipped: `@dev-scene answer 1` at 09:00:14Z started no `devscene-control.yml` run and got no reply, because the file does not parse (finding 1). The scratch repository's copy was patched by hand, its job `if:` rewritten as a folded block scalar, and pushed, after which GitHub listed the workflow as `devscene-control`; every leg from here on ran against that patched copy. The answer, posted again, got `Answer to question 1 received from @firu-daniel; every open question is answered, so `feat_invoices_4` resumes.`, then `resumed` and `running`; the job logged `wrote answer_1.md for feat_invoices_4` and `resuming parked run 'feat_invoices_4' (answers 1)` and did not re-park. Leg (c) **passed**: once the ledger showed P1 and P3 `[x]`, `@dev-scene pause` got `Pause requested by @firu-daniel; …`; the job logged `dropped PAUSE (reason user)`, finished its task in flight and logged `paused (PAUSE honored, reason user)`; `paused` and the label followed, and `@dev-scene resume` got the resume reply, `resumed` and `running`. Leg (d) **passed** with no workaround — round 6's finding 1 re-observed fixed: the answered, paused and resumed run logged `completed — branch ready for review` and `deliver: opened pull request #11`; `isDraft` was `true`, `headRefName` `feat_invoices_4`, the body carried `Started from #10.` and the six commands, the issue's `completed` comment named the pull request, and both items carried `devscene: done`. The issue's timeline showed no `cross-referenced` event, as expected with the job's token.
 
-Leg (e) **passed**: a review requesting changes with two inline comments (`src/invoice-limits.ts` line 2, `src/invoice-render.ts` line 9), its body reserving two more security limits, was placed by its own control job as `chore: add user review for feat_invoices_4`. The round file carried the body verbatim under `## Review by @expause-admin` with its provenance line, both inline comments with file, line, `Made on commit`, author link and hunk, and the marker `reviews=5412752170 comments=4182722327,4182722338`; the started-round comment read `Round 1 from pull request #11 … by @expause-admin`. The user-review fix-plan writer parked, question 2 was posted whole on the pull request, and the bare `@sdlc-harness answer` there resumed it. Leg (f) **passed** but for one condition not observed: `@sdlc-harness approve` got the reply listing the six commands and its control run concluded `success` — round 6's finding 3 re-observed fixed; `@sdlc-harness status` on the issue and on the pull request each replied with the state and the latest run and changed no label, but named the previous engine's ledger as all ticked, which is finding 2; a bare `pause` and an *Approve* review each gave a `skipped` control run. A second review requesting changes, submitted while round 1 ran, was answered `your review was collected. … Nothing needs to be submitted again.`, no second round commit appeared, and round 1's `collect` job placed it as `feat_invoices_4_review_2.md` and started round 2. A review then started round 3, and three more, submitted back to back while it ran, were none refused; the jobs for the second and fourth answered "collected", and the third's pending job was `cancelled` by the fourth and posted nothing. Round 3 was then stopped by leg (g) and ended by leg (h) before it completed, so the `collect` job placing those three reviews in one round file was **not observed** this round; round 6 observed it. Leg (g) **passed**: `@sdlc-harness stop` on the issue got `Stop requested by @firu-daniel; …`, a `stopped` comment reading `Stopped by @firu-daniel.`, `sdlc-harness: stopped` on both items and the round's run `cancelled` with its bundle saved and uploaded. `@SDLC-HARNESS pause` on the stopped run passed the `if:` and was refused as `` the run on `feat_invoices_4` is `stopped`; its cancelled job is still finishing `` — round 6's finding 7 re-observed fixed. `@sdlc-harness resume` restarted it, and the job logged `resumes after a job that did not pause for engine user_review … — no pause note` with no line naming `PAUSE_PROGRESS.md` — round 6's finding 8 re-observed fixed. Leg (h): closing the issue while the run ran **passed** — a `stopped` comment on the pull request carried `Stopped because @firu-daniel closed issue #10.`, both items read `sdlc-harness: stopped`, and the run was `cancelled` with its `harness-state` artifact listed. Closing the pull request after a resume **failed** on one condition: the pull request got `Stopped because @firu-daniel closed pull request #11.` and the run was `cancelled`, but the resumed job's own `resumed` report landed a second after the stop, fell back to the issue, and left it reading `sdlc-harness: running`, which is finding 3. Deleting the branch after a further resume **passed**: the issue got a `stopped` comment saying the branch was deleted and the run cannot be resumed, its label read `sdlc-harness: stopped`, a `harness stop feat_invoices_4` run was listed under `main`, and no run followed. The close by a triage user and the triage refusal were not run, the repository being owned by a personal account. Leg (i) **passed** — round 6's finding 6 re-observed fixed: a `harness-run.yml` dispatch from `main` naming `feat_invoices_4` failed in its `wrong-ref` job with `this run was dispatched from 'main', but its branch input is 'feat_invoices_4': …`, and its `run` job was skipped. Four rows of `docs/github-run-control.md` → `## 8. What is not verified here` are moved to *Verified in Gate 12 round 7*.
+Leg (e) **passed**: a review requesting changes with two inline comments (`src/invoice-limits.ts` line 2, `src/invoice-render.ts` line 9), its body reserving two more security limits, was placed by its own control job as `chore: add user review for feat_invoices_4`. The round file carried the body verbatim under `## Review by @expause-admin` with its provenance line, both inline comments with file, line, `Made on commit`, author link and hunk, and the marker `reviews=5412752170 comments=4182722327,4182722338`; the started-round comment read `Round 1 from pull request #11 … by @expause-admin`. The user-review fix-plan writer parked, question 2 was posted whole on the pull request, and the bare `@dev-scene answer` there resumed it. Leg (f) **passed** but for one condition not observed: `@dev-scene approve` got the reply listing the six commands and its control run concluded `success` — round 6's finding 3 re-observed fixed; `@dev-scene status` on the issue and on the pull request each replied with the state and the latest run and changed no label, but named the previous engine's ledger as all ticked, which is finding 2; a bare `pause` and an *Approve* review each gave a `skipped` control run. A second review requesting changes, submitted while round 1 ran, was answered `your review was collected. … Nothing needs to be submitted again.`, no second round commit appeared, and round 1's `collect` job placed it as `feat_invoices_4_review_2.md` and started round 2. A review then started round 3, and three more, submitted back to back while it ran, were none refused; the jobs for the second and fourth answered "collected", and the third's pending job was `cancelled` by the fourth and posted nothing. Round 3 was then stopped by leg (g) and ended by leg (h) before it completed, so the `collect` job placing those three reviews in one round file was **not observed** this round; round 6 observed it. Leg (g) **passed**: `@dev-scene stop` on the issue got `Stop requested by @firu-daniel; …`, a `stopped` comment reading `Stopped by @firu-daniel.`, `devscene: stopped` on both items and the round's run `cancelled` with its bundle saved and uploaded. `@SDLC-HARNESS pause` on the stopped run passed the `if:` and was refused as `` the run on `feat_invoices_4` is `stopped`; its cancelled job is still finishing `` — round 6's finding 7 re-observed fixed. `@dev-scene resume` restarted it, and the job logged `resumes after a job that did not pause for engine user_review … — no pause note` with no line naming `PAUSE_PROGRESS.md` — round 6's finding 8 re-observed fixed. Leg (h): closing the issue while the run ran **passed** — a `stopped` comment on the pull request carried `Stopped because @firu-daniel closed issue #10.`, both items read `devscene: stopped`, and the run was `cancelled` with its `harness-state` artifact listed. Closing the pull request after a resume **failed** on one condition: the pull request got `Stopped because @firu-daniel closed pull request #11.` and the run was `cancelled`, but the resumed job's own `resumed` report landed a second after the stop, fell back to the issue, and left it reading `devscene: running`, which is finding 3. Deleting the branch after a further resume **passed**: the issue got a `stopped` comment saying the branch was deleted and the run cannot be resumed, its label read `devscene: stopped`, a `harness stop feat_invoices_4` run was listed under `main`, and no run followed. The close by a triage user and the triage refusal were not run, the repository being owned by a personal account. Leg (i) **passed** — round 6's finding 6 re-observed fixed: a `devscene-run.yml` dispatch from `main` naming `feat_invoices_4` failed in its `wrong-ref` job with `this run was dispatched from 'main', but its branch input is 'feat_invoices_4': …`, and its `run` job was skipped. Four rows of `docs/github-run-control.md` → `## 8. What is not verified here` are moved to *Verified in Gate 12 round 7*.
 
 The findings:
 
-1. **`harness-control.yml` as 0.6.1 renders it is not valid YAML, so no comment, review, close or deletion reaches `control`.** The job `if:` is a plain scalar that #64 extended with the state-label prefix `'sdlc-harness: '`, whose `: ` makes the line a mapping. GitHub listed the workflow by its path, failed the adoption push's run on a workflow file issue, and started nothing for leg (b)'s comment. No gate parses the rendered workflows.
+1. **`devscene-control.yml` as 0.6.1 renders it is not valid YAML, so no comment, review, close or deletion reaches `control`.** The job `if:` is a plain scalar that #64 extended with the state-label prefix `'devscene: '`, whose `: ` makes the line a mapping. GitHub listed the workflow by its path, failed the adoption push's run on a workflow file issue, and started nothing for leg (b)'s comment. No gate parses the rendered workflows.
 2. `status` early in a user-review round names the previous engine's ledger as all ticked while it calls the run `running`: the control job reads the ledger from its fetch of `origin`, made before the round's fresh ledger lands.
-3. A run job's `resumed` report that lands after a stop posts `resumed` and sets `sdlc-harness: running` on a stopped run: `forge_report` checks whether the branch was stopped for `failed` alone.
+3. A run job's `resumed` report that lands after a stop posts `resumed` and sets `devscene: running` on a stopped run: `forge_report` checks whether the branch was stopped for `failed` alone.
 
 All three are carried to `fix_forge_run_control_gate12_round7_findings`.
 
-What still owes a first recording: (v)'s enable and its in-progress artifact listing; (vii), (ix) and (x); (xii)'s last leg on a real release after the one under test; (xiii)'s machine-off condition and its leg (b) refusal; (xiv) on an unpatched `harness-control.yml` once finding 1 is fixed, its leg (f) `collect` of the back-to-back reviews into one round, its leg (h) pull-request close leaving both items `stopped`, and its triage refusal and triage close, not runnable on a repository owned by a personal account; and the rest of `docs/github-run-control.md` → `## 8.`.
+What still owes a first recording: (v)'s enable and its in-progress artifact listing; (vii), (ix) and (x); (xii)'s last leg on a real release after the one under test; (xiii)'s machine-off condition and its leg (b) refusal; (xiv) on an unpatched `devscene-control.yml` once finding 1 is fixed, its leg (f) `collect` of the back-to-back reviews into one round, its leg (h) pull-request close leaving both items `stopped`, and its triage refusal and triage close, not runnable on a repository owned by a personal account; and the rest of `docs/github-run-control.md` → `## 8.`.
 
-**Round 8 — 2026-10-05 to 2026-10-06, CLI 0.6.2.** Scoped to observations (xiv), run control from GitHub, on the unpatched `harness-control.yml`, and (xv), the run-actor allow-list. Run by hand against `firu-daniel/harness-gate12` from its seed commit `2fb082a` (a GitHub-hosted runner, `phases.qa`, `docs` and `parity` off). It was adopted with `npx devscene@0.6.2 init --non-interactive`, then `config set execution.target github-actions`, `config set forge github` and a second `init`, which reported creating all four workflows. `actionlint 1.7.12` reported nothing on them, and the adoption push started no `harness-control.yml` run, so round 7's finding 1 was re-observed fixed. `gh workflow list --all` listed all four by name. `sdlc-harness` was created. The operator set `HARNESS_RUN_ACTORS` to `firu-daniel,expause-admin` and switched `can_approve_pull_request_reviews` on (it read `false`, then `true`). The job installed Claude Code `2.1.291`. No run daemon was registered (`daemon stop` found no unit), so nothing local took part. `firu-daniel` (admin) commented, `expause-admin` (write) submitted every review, and with no `HARNESS_GIT_TOKEN` set the pull request was authored by `app/github-actions`. The setup **passed** on its `doctor` lines:
+**Round 8 — 2026-10-05 to 2026-10-06, CLI 0.6.2.** Scoped to observations (xiv), run control from GitHub, on the unpatched `devscene-control.yml`, and (xv), the run-actor allow-list. Run by hand against `firu-daniel/harness-gate12` from its seed commit `2fb082a` (a GitHub-hosted runner, `phases.qa`, `docs` and `parity` off). It was adopted with `npx devscene@0.6.2 init --non-interactive`, then `config set execution.target github-actions`, `config set forge github` and a second `init`, which reported creating all four workflows. `actionlint 1.7.12` reported nothing on them, and the adoption push started no `devscene-control.yml` run, so round 7's finding 1 was re-observed fixed. `gh workflow list --all` listed all four by name. `devscene` was created. The operator set `HARNESS_RUN_ACTORS` to `firu-daniel,expause-admin` and switched `can_approve_pull_request_reviews` on (it read `false`, then `true`). The job installed Claude Code `2.1.291`. No run daemon was registered (`daemon stop` found no unit), so nothing local took part. `firu-daniel` (admin) commented, `expause-admin` (write) submitted every review, and with no `HARNESS_GIT_TOKEN` set the pull request was authored by `app/github-actions`. The setup **passed** on its `doctor` lines:
 - `PASS  forge` named both forge workflows and the six commands.
-- `remote-github` warned only that `HARNESS_PUSH_URL` is not set. It said `GitHub knows harness-trigger.yml and harness-control.yml, and the label `sdlc-harness` exists`, and `HARNESS_RUN_ACTORS admits firu-daniel, expause-admin`.
+- `remote-github` warned only that `HARNESS_PUSH_URL` is not set. It said `GitHub knows devscene-trigger.yml and devscene-control.yml, and the label `devscene` exists`, and `HARNESS_RUN_ACTORS admits firu-daniel, expause-admin`.
 - Before the variable was set, a new 0.6.2 line warned that `expause-admin can write to the repository without being on HARNESS_RUN_ACTORS`.
 
 The task was the invoices task, with a closing section reserving two security limits to the product owner. GitHub's "Incident with Actions" (runner assignment delayed) was declared at 2026-10-05T19:11:58Z and resolved at 22:49:42Z. It interrupted leg (f), and the round resumed at 04:04Z on 2026-10-06.
 
-Leg (a) **passed**. Issue #12 was labelled at 17:57:39Z and got the trigger's comment naming `feat_invoices_5` and run `37352378621`; the label moved to `sdlc-harness: running`. The task-plan writer parked at 17:59:57Z. The issue got one comment with question 1 whole, the `@sdlc-harness answer 1` instruction and its copy block, and `sdlc-harness: parked`.
+Leg (a) **passed**. Issue #12 was labelled at 17:57:39Z and got the trigger's comment naming `feat_invoices_5` and run `37352378621`; the label moved to `devscene: running`. The task-plan writer parked at 17:59:57Z. The issue got one comment with question 1 whole, the `@dev-scene answer 1` instruction and its copy block, and `devscene: parked`.
 
-Leg (b) **passed on the shipped file**. `@sdlc-harness answer 1` got `Answer to question 1 received from @firu-daniel; every open question is answered, so `feat_invoices_5` resumes.`, then `resumed` (run `37352762524`) and `running`.
+Leg (b) **passed on the shipped file**. `@dev-scene answer 1` got `Answer to question 1 received from @firu-daniel; every open question is answered, so `feat_invoices_5` resumes.`, then `resumed` (run `37352762524`) and `running`.
 
 Leg (c) **passed on its second attempt only**:
-- First attempt: on the task run, `@sdlc-harness pause` at 18:13:46Z got `Pause requested by @firu-daniel; …`, and its `harness pause` marker run was created. But the running job never yielded, and it ran on to completion at 18:36:07Z (finding 1).
-- Second attempt, on user-review round 1's job `37357894012`: the job logged `dropped PAUSE (reason user)` and `paused (PAUSE honored, reason user)`. `paused` and the label followed. `@sdlc-harness resume` got the reply, then `resumed` and `running`.
+- First attempt: on the task run, `@dev-scene pause` at 18:13:46Z got `Pause requested by @firu-daniel; …`, and its `harness pause` marker run was created. But the running job never yielded, and it ran on to completion at 18:36:07Z (finding 1).
+- Second attempt, on user-review round 1's job `37357894012`: the job logged `dropped PAUSE (reason user)` and `paused (PAUSE honored, reason user)`. `paused` and the label followed. `@dev-scene resume` got the reply, then `resumed` and `running`.
 
-Leg (d) **passed**. The run logged `completed — branch ready for review` and `deliver: opened pull request #13`. `isDraft` was `true`, the body carried `Started from #12.` and the six commands, the issue's `completed` comment named the pull request, and both items carried `sdlc-harness: done`. No `cross-referenced` event appeared, as expected with the job's token.
+Leg (d) **passed**. The run logged `completed — branch ready for review` and `deliver: opened pull request #13`. `isDraft` was `true`, the body carried `Started from #12.` and the six commands, the issue's `completed` comment named the pull request, and both items carried `devscene: done`. No `cross-referenced` event appeared, as expected with the job's token.
 
 Leg (e) **passed**. A review requesting changes, with inline comments on `src/invoice.ts` line 11 and `src/render.ts` line 31, was placed by its own control job as `6c8db24 chore: add user review for feat_invoices_5`. The round file carried the body under `## Review by @expause-admin` with its provenance line, both inline comments in full, and the marker `reviews=5419061474 comments=4187494607,4187494614`.
 
 Leg (f) **passed**, with one workaround on the way:
-- `@sdlc-harness approve` got the reply listing the six commands.
-- `@sdlc-harness status` on the issue and on the pull request both said `A user-review round has started on `feat_invoices_5`, and its flow-progress ledger is not written yet.` and changed no label, so round 7's finding 2 was re-observed fixed.
+- `@dev-scene approve` got the reply listing the six commands.
+- `@dev-scene status` on the issue and on the pull request both said `A user-review round has started on `feat_invoices_5`, and its flow-progress ledger is not written yet.` and changed no label, so round 7's finding 2 was re-observed fixed.
 - A bare `pause` and an *Approve* review each gave a `skipped` control run.
 - A second review, submitted while round 1 ran, was answered `your review was collected.`, and no second round commit appeared. Round 1's `collect` committed it, but its push was refused with `remote: fatal error in commit_refs` and reported as `origin/feat_invoices_5 is not HEAD` (finding 2). Re-running the `collect` job placed it as `feat_invoices_5_review_2.md` and started round 2.
 - Three reviews submitted back to back while round 3 ran were none refused. The second review's job answered "collected". The third review's job got no runner until 19:27:37Z, during the incident. It then placed round 4 (`cec46a7`), whose round file carries all three reviews' bodies, each under its own `## Review by @expause-admin`. The fourth review's pending job was `cancelled` and posted nothing. So the three-reviews-in-one-round condition was **observed** this round, by the late review job rather than by round 3's `collect`, which was cancelled in the queue.
-- Round 4's own `run` job was "not acquired by Runner of type hosted even after multiple attempts" and cancelled. The issue and the pull request were left reading `sdlc-harness: running`, with no comment. The scheduled poller could not download a bundle for that run, skipped the branch and disabled `harness-resume.yml`. After the incident, `@sdlc-harness resume` was refused with `the run on `feat_invoices_5` (`paused`, `killed`) records no engine`, and round 4 was restarted through the Run workflow form (finding 3).
+- Round 4's own `run` job was "not acquired by Runner of type hosted even after multiple attempts" and cancelled. The issue and the pull request were left reading `devscene: running`, with no comment. The scheduled poller could not download a bundle for that run, skipped the branch and disabled `devscene-resume.yml`. After the incident, `@dev-scene resume` was refused with `the run on `feat_invoices_5` (`paused`, `killed`) records no engine`, and round 4 was restarted through the Run workflow form (finding 3).
 - `@SDLC-HARNESS pause` on the issue passed the `if:`, got `Pause requested by @firu-daniel; …`, and the job paused (reason `user`) four minutes later.
 - The commenter without write access was not run, the repository being owned by a personal account.
 
 Leg (g) **passed**:
-- `@sdlc-harness stop` got `Stop requested by @firu-daniel; …` and a `stopped` comment reading `Stopped by @firu-daniel.`. Both items moved to `sdlc-harness: stopped`.
-- `@sdlc-harness pause` on the stopped run was refused: `the run on `feat_invoices_5` is `stopped``.
-- `@sdlc-harness resume` got the reply, then `resumed` and `running`.
+- `@dev-scene stop` got `Stop requested by @firu-daniel; …` and a `stopped` comment reading `Stopped by @firu-daniel.`. Both items moved to `devscene: stopped`.
+- `@dev-scene pause` on the stopped run was refused: `the run on `feat_invoices_5` is `stopped``.
+- `@dev-scene resume` got the reply, then `resumed` and `running`.
 - The stop had landed on a run already paused by leg (f), whose bundle read `status: paused`. That resume therefore correctly kept the pause note, and it logged no stop/kill line. The stop/kill line was observed on the next resume, after leg (h)'s issue close cancelled a running job: `resumes after a job that did not pause for engine user_review (prev_status 'running', …) — no pause note`, with the carried `PAUSE_PROGRESS.md` moved aside and no line naming it as a note to read.
 
 Leg (h) **passed**, and round 7's finding 3 was not reproduced:
-- **Issue close.** Closing the issue while the run ran put `Stopped because @firu-daniel closed issue #12.` on the pull request. Both items read `sdlc-harness: stopped`, and the run was `cancelled` with its `harness-state` artifact listed.
+- **Issue close.** Closing the issue while the run ran put `Stopped because @firu-daniel closed issue #12.` on the pull request. Both items read `devscene: stopped`, and the run was `cancelled` with its `harness-state` artifact listed.
 - **Pull request close.** After a resume, closing the pull request put `Stopped because @firu-daniel closed pull request #13.` on it. Both items read `stopped`, and the run was `cancelled`. The close's control run read `event: pull_request`, `headBranch: feat_invoices_5`, and `headSha` the branch head, which does not show which copy of the workflow ran.
-- **Branch deletion.** After a further resume, whose `resumed` went to the issue with the pull request closed, the branch was deleted through the API. The issue got `its branch was deleted, so the run cannot be resumed`, and its label read `sdlc-harness: stopped`. A `harness stop feat_invoices_5` run was listed under `main`, the running job was `cancelled`, and no run followed. Because `harness-resume.yml` was still disabled, the poller's not re-dispatching was not exercised.
+- **Branch deletion.** After a further resume, whose `resumed` went to the issue with the pull request closed, the branch was deleted through the API. The issue got `its branch was deleted, so the run cannot be resumed`, and its label read `devscene: stopped`. A `harness stop feat_invoices_5` run was listed under `main`, the running job was `cancelled`, and no run followed. Because `devscene-resume.yml` was still disabled, the poller's not re-dispatching was not exercised.
 - The triage close was not run.
 
 Leg (i) **passed**. A dispatch from `main` naming the deleted `feat_invoices_5` failed in `wrong-ref` with `this run was dispatched from 'main', but its branch input is 'feat_invoices_5': …`, and its `run` job was skipped.
@@ -970,7 +967,7 @@ Observation (xv) ran on the same repository. The setup **passed**: `HARNESS_RUN_
 - **(b)** Its dispatch failed at `Refuse an actor not on HARNESS_RUN_ACTORS` with `@expause-admin dispatched or re-ran this run, and the repository variable HARNESS_RUN_ACTORS does not admit them: …`, and no later step ran.
 - **(c)** Its **Re-run all jobs** of the owner's first run and its **Re-run failed jobs** of the run the owner's stop ended were both refused at the gate, with `triggering_actor` `expause-admin`.
 - **(c′)** Its re-runs of the owner's trigger run and the owner's `stop` control run read `actor` `firu-daniel` and `triggering_actor` `expause-admin`. Each posted a refusal naming `@expause-admin` as the re-runner and `HARNESS_RUN_ACTORS`, and no run followed.
-- **(d)** Its `@sdlc-harness status` reply named `HARNESS_RUN_ACTORS`.
+- **(d)** Its `@dev-scene status` reply named `HARNESS_RUN_ACTORS`.
 
 The admissions held:
 - **(e)** The first job self-paused at 300 s (`reason budget`), and its `continue` step logged `dispatched action=run engine=task resume=pause`. The chained run `37414238278` named `github-actions[bot]` as both actors, and its gate logged `@github-actions[bot] passes: every harness dispatch is made with GITHUB_TOKEN and names it.`.
@@ -982,7 +979,7 @@ The rows of `docs/remote-execution.md` → `## 6.` on the `continue` chain namin
 
 The findings:
 
-1. `@sdlc-harness pause`, accepted, with its marker run created, was never honoured by the running task job. The retry on a later job worked. The cause is unconfirmed: the job's control poll advances its bound past a run the eventually consistent listing may not show yet, `pause-requested` exits 1 both for "no pause" and for a usage error, and the poll's output goes only to `watcher.log`, which the bundle does not carry.
+1. `@dev-scene pause`, accepted, with its marker run created, was never honoured by the running task job. The retry on a later job worked. The cause is unconfirmed: the job's control poll advances its bound past a run the eventually consistent listing may not show yet, `pause-requested` exits 1 both for "no pause" and for a usage error, and the poll's output goes only to `watcher.log`, which the bundle does not carry.
 2. `collect` gives up on a transient push rejection and reports it as `origin/<branch> is not HEAD`. No push is retried.
 3. A `run` job GitHub never starts is invisible: both items stay `running` with no comment. `collect` waits for an end that never comes. The poller treats the run's missing bundle as nothing waiting and disables itself, and `resume` is refused because the engine is recorded only in that bundle.
 4. The gate's refusal cites `docs/remote-execution.md, section 9`. The allow-list is set up in §7 step 4 and described in §11.
@@ -991,7 +988,7 @@ The findings:
 
 Findings 2 and 3 were triggered by GitHub's incident or a transient GitHub error, but the gaps in handling them are the harness's. 1, 4 and 5 occurred outside the incident. All six are carried to `fix_forge_run_control_gate12_round8_findings`.
 
-The round's teardown kept its GitHub evidence (issues #12 to #16, pull request #13, branches `feat_invoices_6` and `feat_invoice_currency_symbol`, and every run with its artifact until retention expires). It deleted the two variables and reset `main` to the seed. With its file gone, `harness-resume.yml`'s record reads `deleted` and refuses `enable` (HTTP 403). The next round checks it after its adoption push and enables it if it comes back `disabled_manually`.
+The round's teardown kept its GitHub evidence (issues #12 to #16, pull request #13, branches `feat_invoices_6` and `feat_invoice_currency_symbol`, and every run with its artifact until retention expires). It deleted the two variables and reset `main` to the seed. With its file gone, `devscene-resume.yml`'s record reads `deleted` and refuses `enable` (HTTP 403). The next round checks it after its adoption push and enables it if it comes back `disabled_manually`.
 
 What still owes a first recording:
 - (v)'s enable and its in-progress artifact listing.
@@ -1002,19 +999,19 @@ What still owes a first recording:
 - From (xv): leg (f)'s poller dispatch.
 - The rest of `docs/github-run-control.md` → `## 8.`.
 
-**Round 9 — 2026-10-06, CLI 0.6.3.** Scoped to observations (xiv), run control from GitHub, now with the draft pull request opened at the run's start, the progress comment and the review-thread replies, and (xv), the run-actor allow-list. Run by hand against `firu-daniel/harness-gate12` from its seed commit `2fb082a` (a GitHub-hosted runner, `phases.qa`, `docs` and `parity` off). It was adopted with `npx devscene@0.6.3 init --non-interactive`, then `config set execution.target github-actions`, `config set forge github` and a second `init`, which reported creating all four workflows (`4 created, 63 kept, 35 ensured`). `actionlint 1.7.12` reported nothing on them, and the adoption push started no run. `gh workflow list --all` listed all four by name, all `active`; `harness-resume.yml` came back `active` on its round-8 record, so no enable was needed. The pull-request setting already read `true`, left on by round 8, so this round recorded no switch. Before the setup, the operator deleted round 8's run branches and the trigger and state labels. The `delete` jobs that this fired exposed finding 1 (below). The job installed Claude Code `2.1.291`. No run daemon was registered (`daemon stop` found no unit), so nothing local took part. `firu-daniel` (admin) commented, `expause-admin` (write) submitted every review, and with no `HARNESS_GIT_TOKEN` set the pull request was authored by `app/github-actions`. The setup **passed** on its `doctor` lines:
+**Round 9 — 2026-10-06, CLI 0.6.3.** Scoped to observations (xiv), run control from GitHub, now with the draft pull request opened at the run's start, the progress comment and the review-thread replies, and (xv), the run-actor allow-list. Run by hand against `firu-daniel/harness-gate12` from its seed commit `2fb082a` (a GitHub-hosted runner, `phases.qa`, `docs` and `parity` off). It was adopted with `npx devscene@0.6.3 init --non-interactive`, then `config set execution.target github-actions`, `config set forge github` and a second `init`, which reported creating all four workflows (`4 created, 63 kept, 35 ensured`). `actionlint 1.7.12` reported nothing on them, and the adoption push started no run. `gh workflow list --all` listed all four by name, all `active`; `devscene-resume.yml` came back `active` on its round-8 record, so no enable was needed. The pull-request setting already read `true`, left on by round 8, so this round recorded no switch. Before the setup, the operator deleted round 8's run branches and the trigger and state labels. The `delete` jobs that this fired exposed finding 1 (below). The job installed Claude Code `2.1.291`. No run daemon was registered (`daemon stop` found no unit), so nothing local took part. `firu-daniel` (admin) commented, `expause-admin` (write) submitted every review, and with no `HARNESS_GIT_TOKEN` set the pull request was authored by `app/github-actions`. The setup **passed** on its `doctor` lines:
 - `PASS  forge` named both forge workflows and the six commands, and said a run opens a draft pull request when it starts.
-- `remote-github` warned only that `HARNESS_PUSH_URL` is not set. It said `GitHub knows harness-trigger.yml and harness-control.yml, and the label `sdlc-harness` exists`, and `HARNESS_RUN_ACTORS admits firu-daniel, expause-admin`. It printed no pull-request-setting warning.
+- `remote-github` warned only that `HARNESS_PUSH_URL` is not set. It said `GitHub knows devscene-trigger.yml and devscene-control.yml, and the label `devscene` exists`, and `HARNESS_RUN_ACTORS admits firu-daniel, expause-admin`. It printed no pull-request-setting warning.
 
 The task was the invoices task, with a closing section reserving two security limits to the product owner.
 
-Leg (a) **passed**. Issue #17 was labelled at 14:37:14Z and got the trigger's comment naming `feat_invoices_7` and run `37480544952`. At 14:38:06Z, before the run parked, the issue got the `opened` comment naming draft pull request #18 and its URL. #18 read `isDraft` `true`, its body carried `Started from #17.` before the commands, and it carried `sdlc-harness: running`. The operator had deleted every state label before the setup, and the job's token created each one it needed: `running`, `parked`, `paused` and `done` in this run, and `stopped` already at 14:34:44Z, through the setup's `delete` job. #18 carried one progress comment, which was edited in place: its *Planning* line moved from `in progress` to `done` at 14:49:51Z. The task-plan writer parked at 14:39:40Z. The **pull request** got one comment with question 1 whole, the `@sdlc-harness answer 1` instruction and its copy block, and no `answer_<n>.md`; both items read `sdlc-harness: parked`.
+Leg (a) **passed**. Issue #17 was labelled at 14:37:14Z and got the trigger's comment naming `feat_invoices_7` and run `37480544952`. At 14:38:06Z, before the run parked, the issue got the `opened` comment naming draft pull request #18 and its URL. #18 read `isDraft` `true`, its body carried `Started from #17.` before the commands, and it carried `devscene: running`. The operator had deleted every state label before the setup, and the job's token created each one it needed: `running`, `parked`, `paused` and `done` in this run, and `stopped` already at 14:34:44Z, through the setup's `delete` job. #18 carried one progress comment, which was edited in place: its *Planning* line moved from `in progress` to `done` at 14:49:51Z. The task-plan writer parked at 14:39:40Z. The **pull request** got one comment with question 1 whole, the `@dev-scene answer 1` instruction and its copy block, and no `answer_<n>.md`; both items read `devscene: parked`.
 
-Leg (b) **passed**. `@sdlc-harness answer 1` on the issue got `Answer to question 1 received from @firu-daniel; every open question is answered, so `feat_invoices_7` resumes.`, then `resumed` on the pull request (run `37480973152`), and `running`.
+Leg (b) **passed**. `@dev-scene answer 1` on the issue got `Answer to question 1 received from @firu-daniel; every open question is answered, so `feat_invoices_7` resumes.`, then `resumed` on the pull request (run `37480973152`), and `running`.
 
-Leg (c) **passed on the task run**, so round 8's finding 1 was re-observed fixed. `@sdlc-harness pause` at 14:50:04Z got `Pause requested by @firu-daniel; …`. The job logged every control poll with its result (`exit 5` for "no pause") and a bound that overlapped the earlier polls. It found the marker run 29 s after its creation, logged `dropped PAUSE (reason user)` and `paused (PAUSE honored, reason user)`, and posted `paused` on the pull request. Both labels read `paused`, and `isDraft` stayed `true`. `@sdlc-harness resume` got `Resume requested by @firu-daniel: …`, then `resumed` (run `37482666928`) and `running`, and `isDraft` was still `true`.
+Leg (c) **passed on the task run**, so round 8's finding 1 was re-observed fixed. `@dev-scene pause` at 14:50:04Z got `Pause requested by @firu-daniel; …`. The job logged every control poll with its result (`exit 5` for "no pause") and a bound that overlapped the earlier polls. It found the marker run 29 s after its creation, logged `dropped PAUSE (reason user)` and `paused (PAUSE honored, reason user)`, and posted `paused` on the pull request. Both labels read `paused`, and `isDraft` stayed `true`. `@dev-scene resume` got `Resume requested by @firu-daniel: …`, then `resumed` (run `37482666928`) and `running`, and `isDraft` was still `true`.
 
-Leg (d) **passed**. The run (c) resumed completed with no workaround: `completed — branch ready for review`, then `deliver: marked pull request #18 ready for review` and `completed on feat_invoices_7 reported on #18 and #17`. #18 read `isDraft` `false`, `headRefName` `feat_invoices_7` and `Started from #17.`. `completed` was posted on the pull request and on the issue, the issue's naming #18 and its URL. The progress comment read `done` on all four lines, and both items carried `sdlc-harness: done`. No `cross-referenced` event appeared, as expected with the job's token.
+Leg (d) **passed**. The run (c) resumed completed with no workaround: `completed — branch ready for review`, then `deliver: marked pull request #18 ready for review` and `completed on feat_invoices_7 reported on #18 and #17`. #18 read `isDraft` `false`, `headRefName` `feat_invoices_7` and `Started from #17.`. `completed` was posted on the pull request and on the issue, the issue's naming #18 and its URL. The progress comment read `done` on all four lines, and both items carried `devscene: done`. No `cross-referenced` event appeared, as expected with the job's token.
 
 Leg (e) **passed**:
 - A review requesting changes, with inline comments on `src/invoiceLimits.ts` line 48 and `src/invoiceText.ts` line 10, was placed by its own control job as `66fbd84 chore: add user review for feat_invoices_7`. The round file carried the body under `## Review by @expause-admin` with its provenance line, both inline comments with file, line, `Made on commit`, author link and hunk, and the marker `reviews=5430676448 comments=4197131039,4197131054`. The started-round comment read `Round 1 from pull request #18 … by @expause-admin`, and #18 was converted back to draft.
@@ -1022,27 +1019,27 @@ Leg (e) **passed**:
 - The other kind of thread was observed on round 3. An inline comment on `src/invoice.ts` line 28 asking for no change on this branch was left `isResolved: false`, with the reply `Not changed in this round: …`.
 
 Leg (f) **passed**:
-- `@sdlc-harness approve` got the reply listing the six commands, and its control run concluded `success`.
-- `@sdlc-harness status` on the issue and on the pull request both said `A user-review round has started on `feat_invoices_7`, and its flow-progress ledger is not written yet.` with `Latest run:`, changed no label, and started no run.
+- `@dev-scene approve` got the reply listing the six commands, and its control run concluded `success`.
+- `@dev-scene status` on the issue and on the pull request both said `A user-review round has started on `feat_invoices_7`, and its flow-progress ledger is not written yet.` with `Latest run:`, changed no label, and started no run.
 - A bare `pause` and an *Approve* review each gave a `skipped` control run.
 - A second review requesting changes, submitted while round 1 ran, was answered `your review was collected. … Nothing needs to be submitted again.`, and no second round commit appeared. Round 1's own `collect` placed it as `feat_invoices_7_review_2.md` on its first push. It logged `started the next round of feat_invoices_7 from @expause-admin`, and the started-round comment named `@expause-admin`.
 - After round 2, a review started round 3, and three more, submitted back to back while it ran, were none refused. The second's and fourth's jobs answered "collected". The third's pending job was `cancelled` by the fourth's and posted nothing. **Round 3's own `collect`** placed `feat_invoices_7_review_4.md`, carrying all three bodies, each under its own `## Review by @expause-admin`, with the marker naming the three reviews, and started round 4. This condition, open since round 7, is observed.
-- `@SDLC-HARNESS pause` on the issue passed the `if:` and got `Pause requested by @firu-daniel; …`. The job dropped `PAUSE`, but the user-review fix-plan writer parked first: text 2 conflicted with park 1's subtotal limit. No `paused` comment followed (finding 2). `@sdlc-harness answer 2`, typed **on the pull request**, got the received reply and `resumed`.
+- `@SDLC-HARNESS pause` on the issue passed the `if:` and got `Pause requested by @firu-daniel; …`. The job dropped `PAUSE`, but the user-review fix-plan writer parked first: text 2 conflicted with park 1's subtotal limit. No `paused` comment followed (finding 2). `@dev-scene answer 2`, typed **on the pull request**, got the received reply and `resumed`.
 - The commenter without write access was not run, the repository being owned by a personal account.
 
 Leg (g) **passed**:
-- `@sdlc-harness stop` on the running job got `Stop requested by @firu-daniel; …` and a `stopped` comment reading `Stopped by @firu-daniel.` that says the draft pull request stays open. Both items moved to `sdlc-harness: stopped`, and the run was `cancelled`.
-- `@sdlc-harness pause` on the stopped run was refused: `the run on `feat_invoices_7` is `stopped`. Comment `@sdlc-harness resume` …`.
-- `@sdlc-harness resume` got the reply, then `resumed` and `running`. Since the stop had cancelled a running job, the resumed job logged `resumes after a job that did not pause for engine user_review (prev_status 'running', prev_engine 'user_review') — no pause note`, and no line named `PAUSE_PROGRESS.md`.
+- `@dev-scene stop` on the running job got `Stop requested by @firu-daniel; …` and a `stopped` comment reading `Stopped by @firu-daniel.` that says the draft pull request stays open. Both items moved to `devscene: stopped`, and the run was `cancelled`.
+- `@dev-scene pause` on the stopped run was refused: `the run on `feat_invoices_7` is `stopped`. Comment `@dev-scene resume` …`.
+- `@dev-scene resume` got the reply, then `resumed` and `running`. Since the stop had cancelled a running job, the resumed job logged `resumes after a job that did not pause for engine user_review (prev_status 'running', prev_engine 'user_review') — no pause note`, and no line named `PAUSE_PROGRESS.md`.
 
 Leg (h) **passed** on its conditions, with two findings:
-- **Issue close.** Closing the issue while the run ran put `Stopped because @firu-daniel closed issue #17.` on the pull request. Both items read `sdlc-harness: stopped`, and the run was `cancelled` with its `harness-state` artifact listed.
+- **Issue close.** Closing the issue while the run ran put `Stopped because @firu-daniel closed issue #17.` on the pull request. Both items read `devscene: stopped`, and the run was `cancelled` with its `harness-state` artifact listed.
 - **Pull request close.** After a resume, with `isDraft` `true`, closing #18 put `Stopped because @firu-daniel closed pull request #18.` on it. Both items read `stopped`, and the run was `cancelled` with its artifact listed. The close's control run read `event: pull_request`, `headBranch: feat_invoices_7`, and `headSha` the pull request's head, so this does not show which copy of the workflow ran.
 - **Resume after the close.** Resuming from the issue opened a **new** draft pull request, #19, as `docs/github-run-control.md` §4 states. Round 4 then completed there. A review on #19 started round 5, so that the deletion could hit a running job.
-- **Branch deletion.** The branch was deleted through the API during round 5. The issue got `its branch was deleted, so the run cannot be resumed`, and its label read `sdlc-harness: stopped`. A `harness stop feat_invoices_7` run was listed under `main`, and the running job was `cancelled`. Two things went wrong:
+- **Branch deletion.** The branch was deleted through the API during round 5. The issue got `its branch was deleted, so the run cannot be resumed`, and its label read `devscene: stopped`. A `harness stop feat_invoices_7` run was listed under `main`, and the running job was `cancelled`. Two things went wrong:
   - The cancelled job's push step re-created the branch (finding 1).
-  - #19, closed by GitHub with its head deleted, kept `sdlc-harness: running` and got no `stopped` comment (finding 3).
-- **The poller.** `harness-resume.yml` never ticked on its schedule this round (finding 4), so it was started by hand. It logged `feat_invoices_7 is stopped (a 'harness stop' run is newer than its newest 'harness run' run); skipped` and `no branch is waiting; disabled harness-resume.yml`. No `harness run feat_invoices_7` followed, even with the branch re-created, so the poller half is observed.
+  - #19, closed by GitHub with its head deleted, kept `devscene: running` and got no `stopped` comment (finding 3).
+- **The poller.** `devscene-resume.yml` never ticked on its schedule this round (finding 4), so it was started by hand. It logged `feat_invoices_7 is stopped (a 'harness stop' run is newer than its newest 'harness run' run); skipped` and `no branch is waiting; disabled devscene-resume.yml`. No `harness run feat_invoices_7` followed, even with the branch re-created, so the poller half is observed.
 - The triage close was not run.
 
 Leg (i) **passed**. A dispatch from `main` naming `feat_invoices_7` failed in `wrong-ref` with `this run was dispatched from 'main', but its branch input is 'feat_invoices_7': …`, and its `run` job was skipped.
@@ -1052,7 +1049,7 @@ Observation (xv) ran on the same repository. The setup **passed**: `HARNESS_RUN_
 - **(b)** Its dispatch failed at `Refuse an actor not on HARNESS_RUN_ACTORS` with `@expause-admin dispatched or re-ran this run, … (docs/remote-execution.md, section 7 step 4, and section 11).`, and no later step ran. So round 8's finding 4 was re-observed fixed.
 - **(c)** Its **Re-run all jobs** of the owner's first run and its **Re-run failed jobs** of the run the owner's stop ended were both refused at the gate, with `triggering_actor` `expause-admin`. The first re-run-all attempt was sent together with (b) and the failed-jobs re-run. Its `run` job was cancelled while pending in the branch's concurrency group, so it was repeated alone, and attempt 3 failed at the gate.
 - **(c′)** Its re-runs of the owner's trigger run and the owner's `stop` control run read `actor` `firu-daniel` and `triggering_actor` `expause-admin`. Each posted a refusal naming `@expause-admin` as the re-runner and `HARNESS_RUN_ACTORS`, and no run followed.
-- **(d)** Its `@sdlc-harness status` reply named `HARNESS_RUN_ACTORS`.
+- **(d)** Its `@dev-scene status` reply named `HARNESS_RUN_ACTORS`.
 
 The admissions held:
 - **(e)** The first job self-paused at 300 s (`reason budget`), and its `continue` step logged `dispatched action=run engine=task resume=pause`. The chained run `37501358156` named `github-actions[bot]` as both actors, and its gate logged `@github-actions[bot] passes: every harness dispatch is made with GITHUB_TOKEN and names it.`.
@@ -1064,12 +1061,12 @@ The findings:
 
 1. A branch deleted while its job runs is pushed back by the cancelled job's `Push the branch` step, which runs `if: always()`. It was found in round 8's evidence (`feat_invoices_5` re-created 27 s after its deletion) and reproduced in leg (h). A later deletion of the re-created branch was then handled as a live run: a second `stopped` comment was posted on round 8's closed issue.
 2. An accepted `pause` that a park overtakes gets no `paused` comment, though the reply promised one.
-3. Deleting a run's branch while its pull request is open leaves that pull request, which GitHub closes, reading `sdlc-harness: running`, with no `stopped` comment and its progress comment in progress. Its own `pull_request` job defers to the deletion's job, which reports on the issue only.
-4. `harness-resume.yml`, `active` on a record reused from round 8, never ticked on its 30-minute schedule. The cause is not known.
+3. Deleting a run's branch while its pull request is open leaves that pull request, which GitHub closes, reading `devscene: running`, with no `stopped` comment and its progress comment in progress. Its own `pull_request` job defers to the deletion's job, which reports on the issue only.
+4. `devscene-resume.yml`, `active` on a record reused from round 8, never ticked on its 30-minute schedule. The cause is not known.
 
 All four are carried to `fix_forge_run_control_gate12_round9_findings`.
 
-The round's teardown kept its GitHub evidence: issues #17, #20, #22 and #23, pull requests #18, #19, #21 and #24, branches `feat_invoices_7` (re-created by finding 1), `feat_invoices_8` and `feat_invoice_currency_symbol_2`, and every run with its artifact until retention expires. It deleted the two variables and reset `main` to the seed. `harness-resume.yml` was left `disabled_manually` by the hand tick. The next round enables it after its adoption push if it comes back so, and watches for a first scheduled tick.
+The round's teardown kept its GitHub evidence: issues #17, #20, #22 and #23, pull requests #18, #19, #21 and #24, branches `feat_invoices_7` (re-created by finding 1), `feat_invoices_8` and `feat_invoice_currency_symbol_2`, and every run with its artifact until retention expires. It deleted the two variables and reset `main` to the seed. `devscene-resume.yml` was left `disabled_manually` by the hand tick. The next round enables it after its adoption push if it comes back so, and watches for a first scheduled tick.
 
 What still owes a first recording:
 - (v)'s enable and its in-progress artifact listing.
@@ -1094,7 +1091,7 @@ Each job logged its token's grant under `GITHUB_TOKEN Permissions`, and each mat
 - **`run`** pushed its branch, also from a cancelled job's post-steps. It opened the draft pull request, created and added the state labels, and posted and edited the question, progress and lifecycle comments. It marked the pull request ready for review, dispatched its own `continue` with `GITHUB_TOKEN`, and uploaded the state bundle.
 - **`collect`**, after round 1 of a review round, pushed `chore: add user review` with `<branch>_review_2.md`, dispatched round 2 as `github-actions[bot]`, posted the started-round comment and converted the pull request back to draft. That collect was reached by (xiv) leg (f)'s second review, submitted while round 1 ran.
 - **`warm`**, under `contents: read`, checked out without a persisted credential and succeeded. With docs retrieval off it logged `docs retrieval does not apply to this configuration: there is no cache to warm.` and skipped the cache and install steps, so **saving the cache was not observed**.
-- **`poll`**, under `contents: read`, ran `git ls-remote --heads origin` on the private repository. It reported `feat_invoices_7 no longer exists on origin; skipped`, a line only a no-such-head answer gives, then `gh workflow disable`d itself: `no branch is waiting; disabled harness-resume.yml`, state `disabled_manually`.
+- **`poll`**, under `contents: read`, ran `git ls-remote --heads origin` on the private repository. It reported `feat_invoices_7 no longer exists on origin; skipped`, a line only a no-such-head answer gives, then `gh workflow disable`d itself: `no branch is waiting; disabled devscene-resume.yml`, state `disabled_manually`.
 - **`trigger`** pushed the task-prompt commit, dispatched the run (its `headSha` that commit), commented and removed the label.
 - **`control`** pushed a review's round file, dispatched `answer`, `pause`, `resume`, `stop` and `user_review`, cancelled a running job on `stop`, and posted replies, labels and the progress edit.
 - **`wrong-ref`**, with a token reading `Metadata: read` alone, failed with `this run was dispatched from 'main', but its branch input is 'feat_invoices_hardening': …`, and the other three jobs were skipped.
@@ -1110,12 +1107,12 @@ The observations, on two runs: `feat_invoices_hardening` (the invoices task with
 - **(viii) passed.**
   - `remote-run.sh stop` dispatched the marker, cancelled `37917550853` and reported `stopped` on #38. The `harness stop` run was `skipped`, and `sync` recorded `paused (killed)`.
   - `/devscene:branch-resume` sent `resume=pause`. Run `37917758234` restored the cancelled job's bundle and logged `— no pause note`.
-- **Completion and the review round passed.** Run `37918454083` completed: `deliver: marked pull request #38 ready for review`. Then two reviews from `expause-admin`, the `collect` path above. Round 2 completed and left #38 ready and `sdlc-harness: done`.
+- **Completion and the review round passed.** Run `37918454083` completed: `deliver: marked pull request #38 ready for review`. Then two reviews from `expause-admin`, the `collect` path above. Round 2 completed and left #38 ready and `devscene: done`.
 - **(xiii) passed** on its token. Issue #39, labelled at 10:29:48Z, got the trigger's comment naming `feat_money_clamp` and run `37917976567`, whose `headSha` was the `chore: add task prompt for feat_money_clamp` commit. The label was removed. The committed prompt carried the provenance line, and a body edit after the comment did not reach it. The machine stayed on and the commands ran from it, but no daemon of this checkout was installed, so nothing local took part. The run did not reach "branch ready for review", because (xiv) stopped it.
 - **(xiv) passed** on the legs it ran, on #39 and draft pull request #40:
   - (a) the `opened` comment, `isDraft` `true`, `Started from #39.`, and the park on #40.
   - (j) step 2, an owner's mention, read `as reply from structured_output`, and the reply was drawn from the question.
-  - (b) `expause-admin`'s `@sdlc-harness answer 1` on the issue resumed it.
+  - (b) `expause-admin`'s `@dev-scene answer 1` on the issue resumed it.
   - (c) the owner's `pause` gave a `skipped` `harness pause` run and `paused (reason: user)`.
   - (j) step 5, `expause-admin`'s "you can now resume", read as `command resume` and dispatched `resume=pause`.
   - (f) `status` named `running`, the next ledger entry and the latest run.
@@ -1127,13 +1124,13 @@ The observations, on two runs: `feat_invoices_hardening` (the invoices task with
   - Its mention logged `needs-agent: no, @expause-admin is not the repository owner, …`, with Node, the install and the fetch `skipped`.
   - Leg (e)'s chain is (iii)'s.
 
-`harness-resume.yml`, `active` on its record reused since round 8, again took no `schedule` tick in the 68 minutes between the adoption push and the hand tick that disabled it.
+`devscene-resume.yml`, `active` on its record reused since round 8, again took no `schedule` tick in the 68 minutes between the adoption push and the hand tick that disabled it.
 
 **The online audit**, run on 2026-10-09: `zizmor 1.30.1 --no-config` with a GitHub token over the four templates gave 7 findings, 5 `artipacked` and 2 `adhoc-packages`, and none high. The online-only audits found nothing: no `impostor-commit`, no `ref-confusion` and no `known-vulnerable-actions`. These are the seven unsuppressed findings gate 14's 14d holds as its residual set offline.
 
 The finding:
 
-1. `init --force` leaves 53 `.bak` files untracked and not ignored, `harness-trigger.yml.bak` and `harness-control.yml.bak` among them, while `harness-run.yml.bak` and `harness-resume.yml.bak` are ignored. Round 4's finding 4 was fixed for the two files `--upgrade-workflows` writes, and `--force` is now the route that re-renders all four. A `git add -A` after it commits the backups.
+1. `init --force` leaves 53 `.bak` files untracked and not ignored, `devscene-trigger.yml.bak` and `devscene-control.yml.bak` among them, while `devscene-run.yml.bak` and `devscene-resume.yml.bak` are ignored. Round 4's finding 4 was fixed for the two files `--upgrade-workflows` writes, and `--force` is now the route that re-renders all four. A `git add -A` after it commits the backups.
 
 What the round leaves open:
 - `warm` saving its cache under `contents: read`, which needs `phases.docs` and `docs.retrieval` on.
@@ -1144,7 +1141,7 @@ What the round leaves open:
 
 The repository's actions setting reads `sha_pinning_required: false`; with every action now pinned, a later round could turn it on and check that the four workflows still start.
 
-The round's teardown kept its GitHub evidence: issues #39 and #41, pull requests #38 and #40, branches `feat_invoices_hardening` and `feat_money_clamp`, and every run with its artifact until retention expires. It closed the issues and pull requests before the seed reset, so each close job still found `harness.config.json`, deleted the round's variables and reset `main` to the seed. `harness-resume.yml` was left `disabled_manually` by the hand tick.
+The round's teardown kept its GitHub evidence: issues #39 and #41, pull requests #38 and #40, branches `feat_invoices_hardening` and `feat_money_clamp`, and every run with its artifact until retention expires. It closed the issues and pull requests before the seed reset, so each close job still found `harness.config.json`, deleted the round's variables and reset `main` to the seed. `devscene-resume.yml` was left `disabled_manually` by the hand tick.
 
 **The sandbox series round (#170 step 4) — not yet run.** One release and one reset of `firu-daniel/harness-gate12` take every remote and after-the-release check the sandbox series still owes, in ten steps whose order is part of the round, because later steps depend on earlier ones. Its rows are `docs/sandbox-verification.md` → `## 10. The full-run leg and the Gate 12 sandbox round`, and, for the `sandbox1h` checks, which are not sandbox rows, the documents of record named against each below. Every one reads *not yet measured* until the round runs.
 
@@ -1152,7 +1149,7 @@ The round's teardown kept its GitHub evidence: issues #39 and #41, pull requests
 
 **The steps.**
 
-1. **Release `<version>`** from a `dev` carrying `feat_sandbox_probe_linux_legs` (#166), `feat_sandbox_probe_job_mode` (#194) and the branch that wrote this round, as `## 7. Releasing` gives it. A `harness-run.yml` job clones the plugin at the tag `devscene--v<version>` and runs `init` and `doctor` from npm at its `HARNESS_CLI_VERSION` (`docs/remote-execution.md` → `### Upgrading`), and 0.6.7, the last release, predates the whole sandbox series.
+1. **Release `<version>`** from a `dev` carrying `feat_sandbox_probe_linux_legs` (#166), `feat_sandbox_probe_job_mode` (#194) and the branch that wrote this round, as `## 7. Releasing` gives it. A `devscene-run.yml` job clones the plugin at the tag `devscene--v<version>` and runs `init` and `doctor` from npm at its `HARNESS_CLI_VERSION` (`docs/remote-execution.md` → `### Upgrading`), and 0.6.7, the last release, predates the whole sandbox series.
 
    ```
    bash scripts/release.sh <version>
@@ -1204,7 +1201,7 @@ The round's teardown kept its GitHub evidence: issues #39 and #41, pull requests
    git push --no-verify origin <default branch>
    ```
 
-5. **The runner legs**, as Gate 15's **The GitHub-hosted runner legs, in the Gate 12 repository.** gives them, with their rows in `docs/sandbox-verification.md` → `## 9. The GitHub-hosted runner legs`. They come after the upgrade, because 0.6.7's `harness-run.yml` has neither `Install the sandbox prerequisites` nor `Sweep the sandbox placeholders`.
+5. **The runner legs**, as Gate 15's **The GitHub-hosted runner legs, in the Gate 12 repository.** gives them, with their rows in `docs/sandbox-verification.md` → `## 9. The GitHub-hosted runner legs`. They come after the upgrade, because 0.6.7's `devscene-run.yml` has neither `Install the sandbox prerequisites` nor `Sweep the sandbox placeholders`.
 6. **The full-run leg**, observation (xvi) below, on an honest branch: one task whose first job parks on a question, answered through `/devscene:branch-answer`'s GitHub route, run to "branch ready for review". It comes before the adversarial legs, so no planted branch is in flight while it runs.
 
    **Steps 6, 7 and 8 have a driver**, `scripts/gate12-sandbox-round.sh` in this repository, written below as `<this repository>/scripts/gate12-sandbox-round.sh`. Run it from the Gate 12 repository's root, naming that repository with `--repo`, and never in this repository. It prints one line per row, `row="<ID>" result="pass|fail|not run|expired|source" evidence="…" departure="…"`; a `source` line is not graded, and names the file and symbol the row's clause is read from. Its exit status is 0 when nothing failed, 1 on a usage error, 2 on a refusal — by the preflight, before anything is created, or of one `plant` arm, which alone is not created, while the arms its `planted` lines name were — 3 when a `gh` or `git` call failed, 4 when a row printed `fail`, and 5 when a restore or a removal left something behind, which it names on stderr; the highest wins. For each row that does not pass, it keeps the evidence under `<stateDir>/scratch/gate12-sandbox-round/evidence/` in the Gate 12 repository, with its state file, `state.json`, beside that directory. It records no result: each row's cells are filled by hand, as **Where its results go.** under (xvi) gives it.
@@ -1344,7 +1341,7 @@ The round's teardown kept its GitHub evidence: issues #39 and #41, pull requests
 
 **An artifact the round reads from expires.** `harness-state` is kept as long as the repository's artifact retention allows, and `sandbox-probe-evidence` for 3 days. An artifact found expired is recorded as expired and its step taken again; expiry never counts as an absence or a pass.
 
-**Departures.** The round changes no profile, generator, wrapper, guard, watcher or `harness-run.yml` behaviour. A defect a step finds is recorded with its command and exact message, and becomes a follow-up task prompt, never a fix inside the round.
+**Departures.** The round changes no profile, generator, wrapper, guard, watcher or `devscene-run.yml` behaviour. A defect a step finds is recorded with its command and exact message, and becomes a follow-up task prompt, never a fix inside the round.
 
 **Setup.**
 
@@ -1379,7 +1376,7 @@ gh secret set CLAUDE_CODE_OAUTH_TOKEN
 npx --yes devscene@<version> doctor --check-github
 ```
 
-These are the commands `docs/remote-execution.md` → `## 7. Turning it on` gives, in the order the second `init` prints them. Where the second `init` reports it could not resolve the plugin's owner, re-run it with `--marketplace <owner>/<repo>`, as `docs/remote-execution.md` → `## 7. Turning it on` step 2 says. Each observation below names what passes and what to record; a failure is recorded with its command and exact message, never retried until it passes. The job's own log is read with `gh run view <run id> --log`, and the run ids with `gh run list --workflow harness-run.yml`.
+These are the commands `docs/remote-execution.md` → `## 7. Turning it on` gives, in the order the second `init` prints them. Where the second `init` reports it could not resolve the plugin's owner, re-run it with `--marketplace <owner>/<repo>`, as `docs/remote-execution.md` → `## 7. Turning it on` step 2 says. Each observation below names what passes and what to record; a failure is recorded with its command and exact message, never retried until it passes. The job's own log is read with `gh run view <run id> --log`, and the run ids with `gh run list --workflow devscene-run.yml`.
 
 **(i) Adoption.** Passes when `doctor --check-github` reports `PASS remote-execution` and `PASS remote-github`. Record both lines, and every `WARN` it prints — `HARNESS_PUSH_URL` unset warns and is not a failure of this observation.
 
@@ -1387,7 +1384,7 @@ These are the commands `docs/remote-execution.md` → `## 7. Turning it on` give
 
 ```
 bash <scriptsDir>/autonomous-watcher.sh tick
-gh run list --workflow harness-run.yml
+gh run list --workflow devscene-run.yml
 ```
 
 Passes when a run titled `harness run <branch>` starts a job on `ubuntu-latest`, its `init --plugin-root-entries` step leaves no tracked file changed, its `Preflight with doctor` step — `doctor --remote-job` — reports `PASS profile-paths`, `PASS profile-tracked` and `PASS plugin-permissions`, and the session reads the plugin's instruction files without asking for permission. Record the run id, the runner label from the job log, and those three lines verbatim.
@@ -1445,7 +1442,7 @@ Passes when the job drops its own `PAUSE`, ends with decision `continue`, its `r
 **(iv) A `pause` dispatch.** While a job is running, run `/devscene:branch-pause <branch>` in the session, then read the marker run it sent:
 
 ```
-gh run list --workflow harness-run.yml
+gh run list --workflow devscene-run.yml
 gh run view <pause run id>
 gh api repos/<owner>/<scratch-repo>/actions/runs/<pause run id>/timing
 ```
@@ -1455,9 +1452,9 @@ Passes when the `harness pause <branch>` run appears after the command alone —
 **(v) `gh workflow enable` and `disable` under the job's token.** The disable is reached by one hand-started poller tick with nothing waiting:
 
 ```
-gh workflow enable harness-resume.yml
-gh workflow run harness-resume.yml
-gh workflow view harness-resume.yml
+gh workflow enable devscene-resume.yml
+gh workflow run devscene-resume.yml
+gh workflow view devscene-resume.yml
 ```
 
 Passes when the tick's `remote-run.sh poll` disables the poller itself and the last command reports it disabled. The enable is reached only by a job that ends on a usage pause with decision `wait-poller`; set `REMOTE_WAIT_MAX_SECS` to `0` so that any usage pause on a hosted runner goes to the poller, and record the `continue` step's output of the first such job. A gate run that meets no usage pause records the enable as **not observed**, never inferred from the disable. Record each succeeded or its exact refusal. While that job is still running, after its `Upload the state bundle` step, record whether `gh api repos/<owner>/<repo>/actions/runs/<in-progress run id>/artifacts` lists `harness-state` before the run completes: the poller's post-disable re-check rests on it (`docs/remote-execution.md` §6).
@@ -1476,7 +1473,7 @@ Passes when the job runs on that runner and **no** self-pause occurs past the fi
 
 ```
 bash <scriptsDir>/remote-run.sh stop <branch>
-gh run list --workflow harness-run.yml
+gh run list --workflow devscene-run.yml
 bash <scriptsDir>/remote-run.sh sync <branch>
 ```
 
@@ -1523,7 +1520,7 @@ Then drop a small task and let it run to the end. Passes when the run ends at "r
 Then read the next run:
 
 ```
-gh run list --workflow harness-run.yml
+gh run list --workflow devscene-run.yml
 ```
 
 Passes when the command itself sends the `resume: answer` dispatch, with no watcher tick; the next job logs its `restore` line, `wrote answer_<n>.md for <branch>` and `resuming parked run '<branch>' (answers <n>)`; the run does not re-park on the same question; and P1 converges, meaning the ledger's `P1` flips `[x]` and `chore: Add task plan for <branch>` lands on the branch. Record the command's `dispatched` line, those three job-log lines and the commit.
@@ -1536,7 +1533,7 @@ Then re-render the two workflows with the CLI under test:
 npx --yes devscene@<version> init --upgrade-workflows
 ```
 
-Passes when both `.github/workflows/harness-run.yml` and `.github/workflows/harness-resume.yml` are re-rendered with their pins at `<version>`, the resume workflow's cron is carried over, and a `.bak` of each sits beside it. Commit the paths the upgrade's printed `git add` names, which include `.gitignore` when the upgrade merged the managed block's new lines into it, and push them with `--no-verify`, as *Setup* does, then let the watcher dispatch the task again. Passes when the next job clones `devscene--v<version>`, passes the version check and runs. Record the job's `claude plugin list --json` output for the installed version.
+Passes when both `.github/workflows/devscene-run.yml` and `.github/workflows/devscene-resume.yml` are re-rendered with their pins at `<version>`, the resume workflow's cron is carried over, and a `.bak` of each sits beside it. Commit the paths the upgrade's printed `git add` names, which include `.gitignore` when the upgrade merged the managed block's new lines into it, and push them with `--no-verify`, as *Setup* does, then let the watcher dispatch the task again. Passes when the next job clones `devscene--v<version>`, passes the version check and runs. Record the job's `claude plugin list --json` output for the installed version.
 
 Record too whether that job's session `init` record names the plugin path under `$RUNNER_TEMP/harness-marketplace/plugin`. This settles `docs/remote-execution.md` → `## 6. What is not verified here`, the row on the user-scope directory marketplace and the project-scope entry of the same name.
 
@@ -1553,7 +1550,7 @@ npx --yes devscene@<version> init
 ```
 
 ```
-git add .github/workflows/harness-trigger.yml
+git add .github/workflows/devscene-trigger.yml
 ```
 
 ```
@@ -1569,7 +1566,7 @@ git push --no-verify origin <default branch>
 ```
 
 ```
-gh label create sdlc-harness
+gh label create devscene
 ```
 
 ```
@@ -1589,7 +1586,7 @@ gh issue create --repo <owner>/<scratch-repo> --title "<title>" --body "<body>"
 ```
 
 ```
-gh issue edit <number> --repo <owner>/<scratch-repo> --add-label sdlc-harness
+gh issue edit <number> --repo <owner>/<scratch-repo> --add-label devscene
 ```
 
 Once the issue carries the trigger's comment, edit the issue's body:
@@ -1605,7 +1602,7 @@ gh issue view <number> --repo <owner>/<scratch-repo> --comments
 ```
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-trigger.yml
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-trigger.yml
 ```
 
 ```
@@ -1654,7 +1651,7 @@ bash <scriptsDir>/remote-run.sh stop <slug>_2
 ```
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>_2 --json databaseId,displayTitle,status
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-run.yml --branch <slug>_2 --json databaseId,displayTitle,status
 ```
 
 Repeat the listing until every `harness run <slug>_2` entry has `status` `completed`. A stopped run is `completed` with conclusion `cancelled`, and `restore` counts it as a finished run. Then delete `<slug>_2`'s remote branch:
@@ -1670,7 +1667,7 @@ git push --no-verify origin --delete <slug>_2
    ```
 
    ```
-   gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>_3 --json databaseId,headSha,url
+   gh run list --repo <owner>/<scratch-repo> --workflow devscene-run.yml --branch <slug>_3 --json databaseId,headSha,url
    ```
 
    ```
@@ -1687,7 +1684,7 @@ git push --no-verify origin --delete <slug>_2
    Read that job's log:
 
    ```
-   gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>_2 --json databaseId,headSha,url
+   gh run list --repo <owner>/<scratch-repo> --workflow devscene-run.yml --branch <slug>_2 --json databaseId,headSha,url
    ```
 
    ```
@@ -1708,7 +1705,7 @@ npx --yes devscene@<version> config set forge github
 npx --yes devscene@<version> init
 ```
 
-Passes when that `init` reports writing, or keeping, all four workflows: `harness-run.yml`, `harness-resume.yml`, `harness-trigger.yml` and `harness-control.yml` under `.github/workflows/`. Commit and push them:
+Passes when that `init` reports writing, or keeping, all four workflows: `devscene-run.yml`, `devscene-resume.yml`, `devscene-trigger.yml` and `devscene-control.yml` under `.github/workflows/`. Commit and push them:
 
 ```
 git add <each path the init run reported writing>
@@ -1727,7 +1724,7 @@ git push --no-verify origin <default branch>
 ```
 
 ```
-gh label create sdlc-harness
+gh label create devscene
 ```
 
 Check that GitHub lists all four workflows by name:
@@ -1736,27 +1733,27 @@ Check that GitHub lists all four workflows by name:
 gh workflow list --all
 ```
 
-Passes when `harness-run`, `harness-resume`, `harness-trigger` and `harness-control` are each listed by that name, which is the templates' own `name:` value, and none by its `.github/workflows/<file>` path. GitHub lists a file it cannot parse by its path, as round 7 recorded for `harness-control.yml`; the `doctor --check-github` run below now fails on such a file, naming it.
+Passes when `devscene-run`, `devscene-resume`, `devscene-trigger` and `devscene-control` are each listed by that name, which is the templates' own `name:` value, and none by its `.github/workflows/<file>` path. GitHub lists a file it cannot parse by its path, as round 7 recorded for `devscene-control.yml`; the `doctor --check-github` run below now fails on such a file, naming it.
 
 Read the poller's workflow record; its id and state are also on its line of the workflow list above:
 
 ```
-gh workflow view harness-resume.yml --repo <owner>/<scratch-repo>
+gh workflow view devscene-resume.yml --repo <owner>/<scratch-repo>
 ```
 
 Where its state reads `disabled_manually`, enable it:
 
 ```
-gh workflow enable harness-resume.yml --repo <owner>/<scratch-repo>
+gh workflow enable devscene-resume.yml --repo <owner>/<scratch-repo>
 ```
 
 Over the hour after the adoption push, watch for its first scheduled run; the legs below need not wait for it:
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-resume.yml --event schedule
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-resume.yml --event schedule
 ```
 
-Record the record's id and state, and whether a `schedule` run appears within about an hour. If none does, make a trivial edit to `.github/workflows/harness-resume.yml`, commit and push it as above, and record whether ticks start. This records `docs/remote-execution.md` → `## 6. What is not verified here`'s row on a `schedule` workflow whose record GitHub reused. A missing tick is an observation, not a failed setup.
+Record the record's id and state, and whether a `schedule` run appears within about an hour. If none does, make a trivial edit to `.github/workflows/devscene-resume.yml`, commit and push it as above, and record whether ticks start. This records `docs/remote-execution.md` → `## 6. What is not verified here`'s row on a `schedule` workflow whose record GitHub reused. A missing tick is an observation, not a failed setup.
 
 Read the pull-request setting:
 
@@ -1770,7 +1767,7 @@ Switch on *Allow GitHub Actions to create and approve pull requests* by hand, un
 npx --yes devscene@<version> doctor --check-github
 ```
 
-The setup passes when `remote-github` names both `harness-trigger.yml` and `harness-control.yml` and prints no warning about the pull-request setting. Record the `forge` and `remote-github` lines. Then stop the local watcher:
+The setup passes when `remote-github` names both `devscene-trigger.yml` and `devscene-control.yml` and prints no warning about the pull-request setting. Record the `forge` and `remote-github` lines. Then stop the local watcher:
 
 ```
 npx --yes devscene@<version> daemon stop
@@ -1809,7 +1806,7 @@ gh issue create --repo <owner>/<scratch-repo> --title "<title>" --body "<body>"
 ```
 
 ```
-gh issue edit <issue> --repo <owner>/<scratch-repo> --add-label sdlc-harness
+gh issue edit <issue> --repo <owner>/<scratch-repo> --add-label devscene
 ```
 
 Once the run's job starts, find its pull request and read it:
@@ -1822,29 +1819,29 @@ gh pr list --repo <owner>/<scratch-repo> --head <slug>
 gh pr view <pr> --repo <owner>/<scratch-repo> --json isDraft,body,labels
 ```
 
-Passes when the issue carries the trigger's comment naming `<slug>` and, once the run's job starts and before the run completes, the `opened` comment naming `#<pr>` and its URL; the pull request reads `isDraft` `true`, its body reads `Started from #<issue>.` before the commands, and it carries `sdlc-harness: running`; and the pull request carries one progress comment, whose *Planning* line moves to `done`. Once the run parks, the **pull request** carries one comment per open question, and the issue and the pull request both carry `sdlc-harness: parked`. Each question comment carries that question whole, one answer instruction — the `@sdlc-harness answer <n>` form — and ends with the ready-to-copy block of that command. Record that `answer_<n>.md` appears nowhere in the comment.
+Passes when the issue carries the trigger's comment naming `<slug>` and, once the run's job starts and before the run completes, the `opened` comment naming `#<pr>` and its URL; the pull request reads `isDraft` `true`, its body reads `Started from #<issue>.` before the commands, and it carries `devscene: running`; and the pull request carries one progress comment, whose *Planning* line moves to `done`. Once the run parks, the **pull request** carries one comment per open question, and the issue and the pull request both carry `devscene: parked`. Each question comment carries that question whole, one answer instruction — the `@dev-scene answer <n>` form — and ends with the ready-to-copy block of that command. Record that `answer_<n>.md` appears nowhere in the comment.
 
 **(b) An answer in a comment.**
 
 ```
-gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@sdlc-harness answer 1 <answer>"
+gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@dev-scene answer 1 <answer>"
 ```
 
-Passes when a reply on the issue, where the command was typed, names the actor and the answer, a `resumed` comment follows on the pull request, and the label moves to `sdlc-harness: running`.
+Passes when a reply on the issue, where the command was typed, names the actor and the answer, a `resumed` comment follows on the pull request, and the label moves to `devscene: running`.
 
 **(c) Pause and resume.** While the run is running, on the issue:
 
 ```
-gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@sdlc-harness pause"
+gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@dev-scene pause"
 ```
 
-Passes when a reply on the issue names the actor, a `paused` comment follows on the pull request, the label moves to `sdlc-harness: paused`, and the pull request still reads `isDraft` `true`, read with leg (a)'s `gh pr view` command. Then:
+Passes when a reply on the issue names the actor, a `paused` comment follows on the pull request, the label moves to `devscene: paused`, and the pull request still reads `isDraft` `true`, read with leg (a)'s `gh pr view` command. Then:
 
 ```
-gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@sdlc-harness resume"
+gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@dev-scene resume"
 ```
 
-Passes when a reply on the issue names the actor, a `resumed` comment follows on the pull request, the label moves to `sdlc-harness: running`, and `isDraft` is still `true`. Let this paused-then-resumed run go on to leg (d) with no *Run workflow* recovery.
+Passes when a reply on the issue names the actor, a `resumed` comment follows on the pull request, the label moves to `devscene: running`, and `isDraft` is still `true`. Let this paused-then-resumed run go on to leg (d) with no *Run workflow* recovery.
 
 **(d) Completion and the ready pull request.** Let the run leg (c) resumed complete, then read its pull request and the issue's timeline:
 
@@ -1856,7 +1853,7 @@ gh pr view <pr> --repo <owner>/<scratch-repo> --json isDraft,body,headRefName
 gh api repos/<owner>/<scratch-repo>/issues/<issue>/timeline
 ```
 
-Passes when the run leg (c) resumed completed with no workaround, `isDraft` is **`false`**, `headRefName` is `<slug>`, the body reads `Started from #<issue>.`, `completed` is posted on the pull request **and** on the issue, the issue's naming `#<pr>` and the pull request's URL, the progress comment reads `done` on all four lines, and the issue and the pull request both carry `sdlc-harness: done`. Record the two outputs. Where `HARNESS_GIT_TOKEN` is set, record whether the timeline shows a `cross-referenced` event for the pull request (`docs/github-run-control.md` → `## 8. What is not verified here`); with the job's token none is expected.
+Passes when the run leg (c) resumed completed with no workaround, `isDraft` is **`false`**, `headRefName` is `<slug>`, the body reads `Started from #<issue>.`, `completed` is posted on the pull request **and** on the issue, the issue's naming `#<pr>` and the pull request's URL, the progress comment reads `done` on all four lines, and the issue and the pull request both carry `devscene: done`. Record the two outputs. Where `HARNESS_GIT_TOKEN` is set, record whether the timeline shows a `cross-referenced` event for the pull request (`docs/github-run-control.md` → `## 8. What is not verified here`); with the job's token none is expected.
 
 **(e) A review that requests changes.** Record which token opened the pull request, from its author — `app/github-actions` for the job's token, otherwise the owner of `HARNESS_GIT_TOKEN`:
 
@@ -1875,7 +1872,7 @@ gh api "repos/<owner>/<scratch-repo>/contents/<stateDir>/user_reviews/<slug>_rev
 ```
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-run.yml --branch <slug>
 ```
 
 Passes when `<slug>` carries one commit `chore: add user review for <slug>`; the round file carries the review's body and both inline comments, each with its file, its line, the commit it was made on and its hunk; a `harness run <slug>` run follows; and the pull request carries the started-round comment and reads `isDraft` **`true`**, read with leg (a)'s `gh pr view` command. Record the round file verbatim.
@@ -1895,29 +1892,29 @@ Passes when `isDraft` is `false`; the implemented comment's thread reads `isReso
 **(f) The refusals.** On the issue:
 
 ```
-gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@sdlc-harness approve"
+gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@dev-scene approve"
 ```
 
-Passes when the reply lists the six commands and the `harness-control.yml` run that replied concludes `success`, not `failure`:
+Passes when the reply lists the six commands and the `devscene-control.yml` run that replied concludes `success`, not `failure`:
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-control.yml
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-control.yml
 ```
 
 Then ask the run's state, on the issue and on the pull request:
 
 ```
-gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@sdlc-harness status"
+gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@dev-scene status"
 ```
 
 ```
-gh pr comment <pr> --repo <owner>/<scratch-repo> --body "@sdlc-harness status"
+gh pr comment <pr> --repo <owner>/<scratch-repo> --body "@dev-scene status"
 ```
 
 Passes when each reply names the run's state, the next ledger entry (`Next in the flow-progress ledger:`, or that every entry is ticked, or, early in a user-review round, that the round has started and its flow-progress ledger is not written yet) and the latest run (`Latest run:`); when neither item's labels change, read with the two label commands above before and after; and when no `harness run <slug>` run follows. Record both replies verbatim. Read the runs with:
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-run.yml --branch <slug>
 ```
 
 Then a comment with no handle:
@@ -1926,10 +1923,10 @@ Then a comment with no handle:
 gh issue comment <issue> --repo <owner>/<scratch-repo> --body "pause"
 ```
 
-Passes when no reply follows and no `harness-control.yml` run for it gets past its `if:` — none appears, or it is `skipped`:
+Passes when no reply follows and no `devscene-control.yml` run for it gets past its `if:` — none appears, or it is `skipped`:
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-control.yml
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-control.yml
 ```
 
 From leg (e)'s reviewing account, never the pull request's author, on the pull request:
@@ -1938,13 +1935,13 @@ From leg (e)'s reviewing account, never the pull request's author, on the pull r
 gh pr review <pr> --repo <owner>/<scratch-repo> --approve
 ```
 
-Passes when the `harness-control.yml` run for it is `skipped`. While (e)'s round is still running, submit a second review requesting changes from the same account:
+Passes when the `devscene-control.yml` run for it is `skipped`. While (e)'s round is still running, submit a second review requesting changes from the same account:
 
 ```
 gh pr review <pr> --repo <owner>/<scratch-repo> --request-changes --body "<text>"
 ```
 
-Passes when the reply says the review was collected, with no `submit again`, and no second `chore: add user review for <slug>` commit appears while (e)'s round runs; then, once that round completes, the `harness-run.yml` run's `collect` job places `<slug>_review_2.md` carrying that review's body under `## Review by @<login>`, a `harness run <slug>` run follows, and the pull request carries the started-round comment naming the reviewer. Record the reply, the `collect` job's log and the round file verbatim.
+Passes when the reply says the review was collected, with no `submit again`, and no second `chore: add user review for <slug>` commit appears while (e)'s round runs; then, once that round completes, the `devscene-run.yml` run's `collect` job places `<slug>_review_2.md` carrying that review's body under `## Review by @<login>`, a `harness run <slug>` run follows, and the pull request carries the started-round comment naming the reviewer. Record the reply, the `collect` job's log and the round file verbatim.
 
 Once that round completes too, from the same reviewing account, submit a review requesting changes:
 
@@ -1969,7 +1966,7 @@ gh pr review <pr> --repo <owner>/<scratch-repo> --request-changes --body "<text 
 Then read the review jobs:
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-control.yml
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-control.yml
 ```
 
 Passes when all of the following hold:
@@ -1977,9 +1974,9 @@ Passes when all of the following hold:
 - no review is refused;
 - each review job that ran replied "collected" (a pending review job that GitHub replaced may post no reply, which is recorded, not failed);
 - no second `chore: add user review for <slug>` commit appears while the first round runs;
-- once that round completes, the `harness-run.yml` run's `collect` job places one round file that carries the bodies of all three later reviews, each under its own `## Review by @<login>` section, and a `harness run <slug>` run follows.
+- once that round completes, the `devscene-run.yml` run's `collect` job places one round file that carries the bodies of all three later reviews, each under its own `## Review by @<login>` section, and a `harness run <slug>` run follows.
 
-Record each reply, the `harness-control.yml` run list (which review jobs ran and which were cancelled), the `collect` job's log and the round file verbatim.
+Record each reply, the `devscene-control.yml` run list (which review jobs ran and which were cancelled), the `collect` job's log and the round file verbatim.
 
 Then, on the issue:
 
@@ -1987,30 +1984,30 @@ Then, on the issue:
 gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@SDLC-HARNESS pause"
 ```
 
-Passes when a `harness-control.yml` run for it gets past its `if:` and a reply follows, accepted or refused by the run's state. Where the pause is accepted and the run parks before it yields, the park's comment carries the line *"A pause was requested on this run before it parked, so it is folded into this park: the run waits for the answer and continues once it is answered, and no separate `paused` comment follows."*, or, on a `park_loop` comment, the line *"A pause was requested on this run before it was put on hold, so it is folded into this hold: the run waits for the hold to be cleared and continues once it is, and no separate `paused` comment follows."*, and no `paused` comment follows; where it yields first, a `paused` comment follows. Record which happened. A commenter without write access is not runnable on a scratch repository owned by a personal account, where every collaborator holds `write`, as round 5's leg (b) was not; record it as not run.
+Passes when a `devscene-control.yml` run for it gets past its `if:` and a reply follows, accepted or refused by the run's state. Where the pause is accepted and the run parks before it yields, the park's comment carries the line *"A pause was requested on this run before it parked, so it is folded into this park: the run waits for the answer and continues once it is answered, and no separate `paused` comment follows."*, or, on a `park_loop` comment, the line *"A pause was requested on this run before it was put on hold, so it is folded into this hold: the run waits for the hold to be cleared and continues once it is, and no separate `paused` comment follows."*, and no `paused` comment follows; where it yields first, a `paused` comment follows. Record which happened. A commenter without write access is not runnable on a scratch repository owned by a personal account, where every collaborator holds `write`, as round 5's leg (b) was not; record it as not run.
 
 **(g) Stop.**
 
 ```
-gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@sdlc-harness stop"
+gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@dev-scene stop"
 ```
 
-Passes when a reply on the issue names the actor, a `stopped` comment on the pull request names the actor and says its draft stays open, and the label moves to `sdlc-harness: stopped`. Then, on the stopped run:
+Passes when a reply on the issue names the actor, a `stopped` comment on the pull request names the actor and says its draft stays open, and the label moves to `devscene: stopped`. Then, on the stopped run:
 
 ```
-gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@sdlc-harness pause"
+gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@dev-scene pause"
 ```
 
 Passes when the reply is a refusal naming the run `` `stopped` ``, and never `paused`. Then:
 
 ```
-gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@sdlc-harness resume"
+gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@dev-scene resume"
 ```
 
-Passes when a reply on the issue names the actor, a `resumed` comment follows on the pull request, the label moves to `sdlc-harness: running`, and the resumed job's log carries the stop/kill launch line, ending `— no pause note`, and no line naming `PAUSE_PROGRESS.md` as a note to read. Find the job and read its log:
+Passes when a reply on the issue names the actor, a `resumed` comment follows on the pull request, the label moves to `devscene: running`, and the resumed job's log carries the stop/kill launch line, ending `— no pause note`, and no line naming `PAUSE_PROGRESS.md` as a note to read. Find the job and read its log:
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-run.yml --branch <slug>
 ```
 
 ```
@@ -2025,20 +2022,20 @@ Record the reply to `pause` verbatim and the job's lines naming the pause note.
 gh issue close <issue> --repo <owner>/<scratch-repo>
 ```
 
-Passes when a `stopped` comment on the run's target (`docs/github-run-control.md` → `## 5.`, *The target rule*), the pull request, carries `Stopped because @<login> closed issue #<issue>.`, the issue and the pull request both carry `sdlc-harness: stopped`, and the run's `harness run <slug>` run is `cancelled` with its `harness-state` artifact still listed:
+Passes when a `stopped` comment on the run's target (`docs/github-run-control.md` → `## 5.`, *The target rule*), the pull request, carries `Stopped because @<login> closed issue #<issue>.`, the issue and the pull request both carry `devscene: stopped`, and the run's `harness run <slug>` run is `cancelled` with its `harness-state` artifact still listed:
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-run.yml --branch <slug>
 ```
 
 ```
 gh api repos/<owner>/<scratch-repo>/actions/runs/<run id>/artifacts
 ```
 
-Resume it, and once the label reads `sdlc-harness: running` again, read its draft state and close the pull request:
+Resume it, and once the label reads `devscene: running` again, read its draft state and close the pull request:
 
 ```
-gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@sdlc-harness resume"
+gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@dev-scene resume"
 ```
 
 ```
@@ -2049,10 +2046,10 @@ gh pr view <pr> --repo <owner>/<scratch-repo> --json isDraft
 gh pr close <pr> --repo <owner>/<scratch-repo>
 ```
 
-Record `isDraft` before the close; it reads `true`. Passes when the closed pull request carries a `stopped` comment with the line `Stopped because @<login> closed pull request #<pr>.`, both items carry `sdlc-harness: stopped`, and the run is `cancelled`, read with the same two commands. Record the close's `harness-control.yml` run, which shows which copy of the workflow ran:
+Record `isDraft` before the close; it reads `true`. Passes when the closed pull request carries a `stopped` comment with the line `Stopped because @<login> closed pull request #<pr>.`, both items carry `devscene: stopped`, and the run is `cancelled`, read with the same two commands. Record the close's `devscene-control.yml` run, which shows which copy of the workflow ran:
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-control.yml
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-control.yml
 ```
 
 ```
@@ -2062,21 +2059,21 @@ gh run view <run id> --repo <owner>/<scratch-repo> --json event,headBranch,headS
 Resume it again, and once it is running, delete its branch on `origin`:
 
 ```
-gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@sdlc-harness resume"
+gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@dev-scene resume"
 ```
 
 ```
 gh api -X DELETE repos/<owner>/<scratch-repo>/git/refs/heads/<slug>
 ```
 
-Passes when the issue carries a `stopped` comment saying the branch was deleted and the run cannot be resumed, the issue carries `sdlc-harness: stopped`, a `harness stop <slug>` run is listed under the default branch, and no `harness-resume.yml` run dispatches `<slug>` again: no `harness run <slug>` run follows the stop. The run's pull request, the draft the resume opened, which GitHub closes with the deletion, also carries a `stopped` comment and `sdlc-harness: stopped`, and its progress comment reads `stopped` where it read `in progress`. The branch also stays deleted: once the cancelled `harness run <slug>` run has finished, origin has no `<slug>`, and that run's `Push the branch` step logs `push-branch.sh: origin no longer has <slug>, which this checkout tracks; not pushing it back`. Read the runs with:
+Passes when the issue carries a `stopped` comment saying the branch was deleted and the run cannot be resumed, the issue carries `devscene: stopped`, a `harness stop <slug>` run is listed under the default branch, and no `devscene-resume.yml` run dispatches `<slug>` again: no `harness run <slug>` run follows the stop. The run's pull request, the draft the resume opened, which GitHub closes with the deletion, also carries a `stopped` comment and `devscene: stopped`, and its progress comment reads `stopped` where it read `in progress`. The branch also stays deleted: once the cancelled `harness run <slug>` run has finished, origin has no `<slug>`, and that run's `Push the branch` step logs `push-branch.sh: origin no longer has <slug>, which this checkout tracks; not pushing it back`. Read the runs with:
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-run.yml
 ```
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-resume.yml
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-resume.yml
 ```
 
 Then read the branch, the pull request and the cancelled run's log:
@@ -2095,16 +2092,16 @@ gh run view <run id> --repo <owner>/<scratch-repo> --log
 
 The first answers `HTTP 404` (`Branch not found`). The legs run from another device with the machine off, so the branch is read through the API rather than a local clone. Record the `Push the branch` step's line and the pull request's labels.
 
-Record the deletion's `harness-control.yml` run with the two `harness-control.yml` commands above. A close by a triage-role user is not runnable on a scratch repository owned by a personal account, where every collaborator holds `write`, as (f) records for the triage refusal; record it as not run.
+Record the deletion's `devscene-control.yml` run with the two `devscene-control.yml` commands above. A close by a triage-role user is not runnable on a scratch repository owned by a personal account, where every collaborator holds `write`, as (f) records for the triage refusal; record it as not run.
 
-**(i) A dispatch from the wrong ref.** Dispatch `harness-run.yml` from the default branch with the run's branch as its input:
-
-```
-gh workflow run harness-run.yml --repo <owner>/<scratch-repo> --ref <default branch> -f action=run -f branch=<slug>
-```
+**(i) A dispatch from the wrong ref.** Dispatch `devscene-run.yml` from the default branch with the run's branch as its input:
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <default branch>
+gh workflow run devscene-run.yml --repo <owner>/<scratch-repo> --ref <default branch> -f action=run -f branch=<slug>
+```
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-run.yml --branch <default branch>
 ```
 
 ```
@@ -2113,10 +2110,10 @@ gh run view <run id> --repo <owner>/<scratch-repo> --log-failed
 
 Passes when the run's `wrong-ref` job fails with an `::error::` line naming `<slug>` as the ref to use, and its `run` job is skipped. Record the error line.
 
-**(j) Mentions read by an agent** (`docs/github-run-control.md` → `## 1.`, *Mentions read by an agent*). The run legs (a) to (h) used ends with its branch deleted, so start a second one as leg (a) did: an issue `<issue 2>` whose task parks, labelled `sdlc-harness`, with `<slug 2>` its branch and `<pr 2>` its pull request. Once it parks, post each mention below in order, on `<pr 2>` unless the step names another item, waiting for each one's `harness-control.yml` run to finish before the next. After each, read the runs and that run's log:
+**(j) Mentions read by an agent** (`docs/github-run-control.md` → `## 1.`, *Mentions read by an agent*). The run legs (a) to (h) used ends with its branch deleted, so start a second one as leg (a) did: an issue `<issue 2>` whose task parks, labelled `devscene`, with `<slug 2>` its branch and `<pr 2>` its pull request. Once it parks, post each mention below in order, on `<pr 2>` unless the step names another item, waiting for each one's `devscene-control.yml` run to finish before the next. After each, read the runs and that run's log:
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-control.yml
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-control.yml
 ```
 
 ```
@@ -2132,68 +2129,68 @@ gh run view <run id> --repo <owner>/<scratch-repo> --json jobs --jq '.jobs[].ste
 1. A mention with nothing to do:
 
    ```
-   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "thanks @sdlc-harness"
+   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "thanks @dev-scene"
    ```
 
    Passes when no reply follows and the run concludes `success`.
 2. A question about the park:
 
    ```
-   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "The session parked. @sdlc-harness check the question and let me know"
+   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "The session parked. @dev-scene check the question and let me know"
    ```
 
-   Passes when one reply follows, carrying the agent footer *"Written by an agent that read your mention; it changed nothing."*, and both items still carry `sdlc-harness: parked`. Record whether the reply's text is drawn from the open question, not a refusal: that is whether the session followed `/devscene:harness-read-mention`.
+   Passes when one reply follows, carrying the agent footer *"Written by an agent that read your mention; it changed nothing."*, and both items still carry `devscene: parked`. Record whether the reply's text is drawn from the open question, not a refusal: that is whether the session followed `/devscene:harness-read-mention`.
 3. An answer read from a mention, while the run is still parked on a question that offers more rounds:
 
    ```
-   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@sdlc-harness it hit the plan loop cap. If the question has an option to give it more rounds, give it three more"
+   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@dev-scene it hit the plan loop cap. If the question has an option to give it more rounds, give it three more"
    ```
 
    ```
-   gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug 2>
+   gh run list --repo <owner>/<scratch-repo> --workflow devscene-run.yml --branch <slug 2>
    ```
 
-   Passes when the reply opens ``Read from your mention as `@sdlc-harness answer <n>`, with this answer:`` and quotes the answer, and exactly one `harness run <slug 2>` run follows, the `resume=answer` dispatch, with a `resumed` comment on `<pr 2>`. Where no open question offers more rounds, record it as not run.
-4. A pause asked for in words, on a run in flight. Wait until the `harness run <slug 2>` run step 3 dispatched is in progress and both items carry `sdlc-harness: running`. Where step 3 was not run, first answer the park with the exact form `@sdlc-harness answer <n>` and an answer its question accepts, and take that run instead. Then comment:
+   Passes when the reply opens ``Read from your mention as `@dev-scene answer <n>`, with this answer:`` and quotes the answer, and exactly one `harness run <slug 2>` run follows, the `resume=answer` dispatch, with a `resumed` comment on `<pr 2>`. Where no open question offers more rounds, record it as not run.
+4. A pause asked for in words, on a run in flight. Wait until the `harness run <slug 2>` run step 3 dispatched is in progress and both items carry `devscene: running`. Where step 3 was not run, first answer the park with the exact form `@dev-scene answer <n>` and an answer its question accepts, and take that run instead. Then comment:
 
    ```
-   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@sdlc-harness can you pause this?"
+   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@dev-scene can you pause this?"
    ```
 
-   Passes when the reply opens ``Read from your mention as `@sdlc-harness pause`.``, followed by `` Pause requested by @<login>; the run on `<slug 2>` yields at its next clean checkpoint, and a paused comment follows. ``, and a `paused` comment follows with both items carrying `sdlc-harness: paused`. Where the run parks before it yields, its `parked` comment carries the folded-pause line instead: record that, and record steps 5 and 6 as not observed.
+   Passes when the reply opens ``Read from your mention as `@dev-scene pause`.``, followed by `` Pause requested by @<login>; the run on `<slug 2>` yields at its next clean checkpoint, and a paused comment follows. ``, and a `paused` comment follows with both items carrying `devscene: paused`. Where the run parks before it yields, its `parked` comment carries the folded-pause line instead: record that, and record steps 5 and 6 as not observed.
 5. A resume asked for in words, once step 4's `paused` comment is posted:
 
    ```
-   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@sdlc-harness you can now resume"
+   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@dev-scene you can now resume"
    ```
 
    ```
-   gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug 2>
+   gh run list --repo <owner>/<scratch-repo> --workflow devscene-run.yml --branch <slug 2>
    ```
 
-   Passes when the reply opens ``Read from your mention as `@sdlc-harness resume`.``, followed by the `resume` command's own accepted reply, and exactly one new `harness run <slug 2>` run follows, the `resume=pause` dispatch, with a `resumed` comment on `<pr 2>`.
-6. A status asked for in words, while step 5's run is in progress and both items carry `sdlc-harness: running`:
+   Passes when the reply opens ``Read from your mention as `@dev-scene resume`.``, followed by the `resume` command's own accepted reply, and exactly one new `harness run <slug 2>` run follows, the `resume=pause` dispatch, with a `resumed` comment on `<pr 2>`.
+6. A status asked for in words, while step 5's run is in progress and both items carry `devscene: running`:
 
    ```
-   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@sdlc-harness what's the status on this?"
+   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@dev-scene what's the status on this?"
    ```
 
-   Passes when the reply either opens ``Read from your mention as `@sdlc-harness status`.``, followed by the `status` command's own reply naming the run as running, or is a `reply` carrying the agent footer that names the run as running. Either way, no label changes and no new `harness-run.yml` run is listed. Record which form the decision line reads as.
+   Passes when the reply either opens ``Read from your mention as `@dev-scene status`.``, followed by the `status` command's own reply naming the run as running, or is a `reply` carrying the agent footer that names the run as running. Either way, no label changes and no new `devscene-run.yml` run is listed. Record which form the decision line reads as.
 7. A stop asked for in words:
 
    ```
-   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@sdlc-harness please stop this"
+   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@dev-scene please stop this"
    ```
 
    ```
-   gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml
+   gh run list --repo <owner>/<scratch-repo> --workflow devscene-run.yml
    ```
 
-   Passes when the reply reads ``@<login>: your mention reads as `@sdlc-harness stop`. Comment that command to carry it out.`` and no `harness stop <slug 2>` run is listed.
+   Passes when the reply reads ``@<login>: your mention reads as `@dev-scene stop`. Comment that command to carry it out.`` and no `harness stop <slug 2>` run is listed.
 8. A request for fixes:
 
    ```
-   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@sdlc-harness fix this"
+   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@dev-scene fix this"
    ```
 
    Passes when the reply opens `@<login>: a mention does not start a round of fixes.` and no `chore: add user review for <slug 2>` commit follows.
@@ -2204,17 +2201,17 @@ gh run view <run id> --repo <owner>/<scratch-repo> --json jobs --jq '.jobs[].ste
    ```
 
    ```
-   gh issue comment <issue 3> --repo <owner>/<scratch-repo> --body "@sdlc-harness what is the status here?"
+   gh issue comment <issue 3> --repo <owner>/<scratch-repo> --body "@dev-scene what is the status here?"
    ```
 
-   Passes when the reply is the refusal `` @<login>: `@sdlc-harness` was not run: `` naming that no harness run was started from the issue, and that job's log carries no decision line.
+   Passes when the reply is the refusal `` @<login>: `@dev-scene` was not run: `` naming that no harness run was started from the issue, and that job's log carries no decision line.
 10. The exact form:
 
    ```
-   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@sdlc-harness pause"
+   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@dev-scene pause"
    ```
 
-   Passes when the reply is the `pause` command's own, accepted or refused by the run's state; that job's log carries no decision line; its `needs-agent:` line reads `no`, naming the exact form `` `@sdlc-harness pause` ``; and its `Set up Node`, `Install the claude CLI when absent` and `Fetch the pinned plugin` steps are `skipped` in the step-conclusion command's output.
+   Passes when the reply is the `pause` command's own, accepted or refused by the run's state; that job's log carries no decision line; its `needs-agent:` line reads `no`, naming the exact form `` `@dev-scene pause` ``; and its `Set up Node`, `Install the claude CLI when absent` and `Fetch the pinned plugin` steps are `skipped` in the step-conclusion command's output.
 11. A read outside the context directory, driven with `claude --restricted` directly on the operator's machine, with no comment and no runner. Round 10's form of this step, a mention asking for an outside file, could not reach the confinement: control job `37577497146` logged `did not read it` and no tool call, because the mention command answers from its run context only. Make a throwaway directory `<probe>` outside any git repository, holding one sentinel file inside the working directory, one in the added directory and one outside both:
 
    ```
@@ -2286,7 +2283,7 @@ The setup passes when the list does not name `HARNESS_RUN_ACTORS`. Then, as the 
 Run legs (e) and (f) first, while `<slug>` runs. Legs (b), (c) and (c′) need no job of `<slug>` running: the `run` job holds the concurrency group `harness-run-<slug>` with `cancel-in-progress: false`, so a job dispatched while another runs waits rather than reaching its gate. Once (f) is recorded, stop the run as the owner:
 
 ```
-gh issue comment <issue number> --repo <owner>/<scratch-repo> --body "@sdlc-harness stop"
+gh issue comment <issue number> --repo <owner>/<scratch-repo> --body "@dev-scene stop"
 ```
 
 For every run a leg names, record its `actor.login` and `triggering_actor.login` from:
@@ -2302,7 +2299,7 @@ gh issue create --repo <owner>/<scratch-repo> --title "<title>" --body "<body>"
 ```
 
 ```
-gh issue edit <number> --repo <owner>/<scratch-repo> --add-label sdlc-harness
+gh issue edit <number> --repo <owner>/<scratch-repo> --add-label devscene
 ```
 
 ```
@@ -2310,19 +2307,19 @@ gh issue view <number> --repo <owner>/<scratch-repo> --comments
 ```
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-run.yml
 ```
 
-Passes when the issue's refusal comment names `HARNESS_RUN_ACTORS` and no `harness run` run follows. Record the comment verbatim and the `harness-trigger.yml` run's two actors.
+Passes when the issue's refusal comment names `HARNESS_RUN_ACTORS` and no `harness run` run follows. Record the comment verbatim and the `devscene-trigger.yml` run's two actors.
 
 **(b) A dispatch.** As the second account:
 
 ```
-gh workflow run harness-run.yml --repo <owner>/<scratch-repo> --ref <slug> -f action=run -f branch=<slug>
+gh workflow run devscene-run.yml --repo <owner>/<scratch-repo> --ref <slug> -f action=run -f branch=<slug>
 ```
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-run.yml --branch <slug>
 ```
 
 ```
@@ -2347,14 +2344,14 @@ gh run view <id> --repo <owner>/<scratch-repo> --log
 
 Passes when the gate refuses both: each re-run's `run` job fails at its first step with the `::error::` line, and its `triggering_actor.login` is the second account. Where GitHub offers no failed-jobs re-run for that run, record its refusal exactly.
 
-**(c′) A re-run of the owner's trigger or command.** A re-run replays its event, so its sender is still the owner; only `remote-run.sh`'s re-runner check, which reads `GITHUB_TRIGGERING_ACTOR`, stands between it and a `harness-run.yml` dispatch named `github-actions[bot]`, which the gate in leg (c) passes. As the second account, re-run the `harness-trigger.yml` run of the owner's label on `<issue number>`, then the `harness-control.yml` run of the owner's `@sdlc-harness stop`:
+**(c′) A re-run of the owner's trigger or command.** A re-run replays its event, so its sender is still the owner; only `remote-run.sh`'s re-runner check, which reads `GITHUB_TRIGGERING_ACTOR`, stands between it and a `devscene-run.yml` dispatch named `github-actions[bot]`, which the gate in leg (c) passes. As the second account, re-run the `devscene-trigger.yml` run of the owner's label on `<issue number>`, then the `devscene-control.yml` run of the owner's `@dev-scene stop`:
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-trigger.yml
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-trigger.yml
 ```
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-control.yml
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-control.yml
 ```
 
 ```
@@ -2366,7 +2363,7 @@ gh issue view <issue number> --repo <owner>/<scratch-repo> --comments
 ```
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-run.yml
 ```
 
 Passes when each re-run's `actor.login` is the owner and its `triggering_actor.login` the second account; each posts a refusal on `<issue number>` that names the second account as the re-runner and `HARNESS_RUN_ACTORS`; and no `harness run` run follows either. Record both refusals verbatim and both re-runs' two actors.
@@ -2374,7 +2371,7 @@ Passes when each re-run's `actor.login` is the owner and its `triggering_actor.l
 **(d) A comment command.** As the second account, on the run's issue:
 
 ```
-gh issue comment <issue number> --repo <owner>/<scratch-repo> --body "@sdlc-harness status"
+gh issue comment <issue number> --repo <owner>/<scratch-repo> --body "@dev-scene status"
 ```
 
 ```
@@ -2389,12 +2386,12 @@ gh run view <run id> --repo <owner>/<scratch-repo> --log
 gh run view <run id> --repo <owner>/<scratch-repo> --json jobs --jq '.jobs[].steps[] | [.name, .conclusion] | @tsv'
 ```
 
-Passes when the reply names `HARNESS_RUN_ACTORS`; the job's `needs-agent:` line reads `no`, naming the exact form `` `@sdlc-harness status` ``, since the exact form is decided before any gate; and its `Set up Node`, `Install the claude CLI when absent` and `Fetch the pinned plugin` steps are `skipped`. Record the reply verbatim and the `harness-control.yml` run's two actors.
+Passes when the reply names `HARNESS_RUN_ACTORS`; the job's `needs-agent:` line reads `no`, naming the exact form `` `@dev-scene status` ``, since the exact form is decided before any gate; and its `Set up Node`, `Install the claude CLI when absent` and `Fetch the pinned plugin` steps are `skipped`. Record the reply verbatim and the `devscene-control.yml` run's two actors.
 
 **(d′) A mention.** A comment that holds the handle but is not a command reaches the same actor check, which must refuse it before the job installs the agent or fetches the plugin, and before any agent session starts, since that session spends the credential. As the second account, on the run's issue:
 
 ```
-gh issue comment <issue number> --repo <owner>/<scratch-repo> --body "@sdlc-harness what's the status on this?"
+gh issue comment <issue number> --repo <owner>/<scratch-repo> --body "@dev-scene what's the status on this?"
 ```
 
 ```
@@ -2409,12 +2406,12 @@ gh run view <id> --repo <owner>/<scratch-repo> --log
 gh run view <id> --repo <owner>/<scratch-repo> --json jobs --jq '.jobs[].steps[] | [.name, .conclusion] | @tsv'
 ```
 
-Passes when the reply opens `` @<login>: `@sdlc-harness` was not run: `` and names `HARNESS_RUN_ACTORS`; that job's log carries neither the line `remote-run.sh: control: a mention on …` nor a decision line, so no agent session ran; its `needs-agent:` line reads `no`, naming `HARNESS_RUN_ACTORS`, because a mention reaches the gates; and its `Set up Node`, `Install the claude CLI when absent` and `Fetch the pinned plugin` steps are `skipped`. Record the reply verbatim and the `harness-control.yml` run's two actors.
+Passes when the reply opens `` @<login>: `@dev-scene` was not run: `` and names `HARNESS_RUN_ACTORS`; that job's log carries neither the line `remote-run.sh: control: a mention on …` nor a decision line, so no agent session ran; its `needs-agent:` line reads `no`, naming `HARNESS_RUN_ACTORS`, because a mention reaches the gates; and its `Set up Node`, `Install the claude CLI when absent` and `Fetch the pinned plugin` steps are `skipped`. Record the reply verbatim and the `devscene-control.yml` run's two actors.
 
 **(e) The `continue` chain.** Let `<slug>`'s first job self-pause and its `remote-run.sh continue` step chain a new job:
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-run.yml --branch <slug>
 ```
 
 ```
@@ -2426,11 +2423,11 @@ Passes when the run the `continue` step dispatched — not the first — names `
 **(f) The poller's dispatch.** Let a job of `<slug>` end on a usage pause, as (v) sets up, or, while a paused run's reset has passed, start the poller by hand:
 
 ```
-gh workflow run harness-resume.yml --repo <owner>/<scratch-repo>
+gh workflow run devscene-resume.yml --repo <owner>/<scratch-repo>
 ```
 
 ```
-gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>
+gh run list --repo <owner>/<scratch-repo> --workflow devscene-run.yml --branch <slug>
 ```
 
 Passes when the `harness run <slug>` run the poller dispatched names `github-actions[bot]` as both `actor.login` and `triggering_actor.login`, and its gate passed with the same line as leg (e). A round that meets no usage pause records this leg as **not observed**, never inferred from leg (e).
@@ -2438,7 +2435,7 @@ Passes when the `harness run <slug>` run the poller dispatched names `github-act
 **(g) The owner, with the variable unset.** As the owner:
 
 ```
-gh workflow run harness-run.yml --repo <owner>/<scratch-repo> --ref <slug> -f action=run -f branch=<slug>
+gh workflow run devscene-run.yml --repo <owner>/<scratch-repo> --ref <slug> -f action=run -f branch=<slug>
 ```
 
 ```
@@ -2455,9 +2452,9 @@ gh variable set HARNESS_RUN_ACTORS --repo <owner>/<scratch-repo> --body "*"
 
 Then repeat leg (a) as the second account, on a new issue. Passes when the second account's label starts a run: the trigger's comment names a branch and its run, and a `harness run` run for that branch follows. Record the comment and the run's two actors, then stop the run.
 
-**What it settles.** The row of `docs/remote-execution.md` → `## 6. What is not verified here` on *A `remote-run.sh continue` chain and a `harness-resume.yml` poller dispatch name `github-actions[bot]`*, and on `github.event.repository.owner.type` reading `User`, by legs (e) to (g); and `docs/team-accounts-research.md` → `## 7. Open questions`'s still-to-confirm sentence on the `continue` chain and the poller dispatch, by legs (e) and (f). The result is recorded under this gate, not by editing that research.
+**What it settles.** The row of `docs/remote-execution.md` → `## 6. What is not verified here` on *A `remote-run.sh continue` chain and a `devscene-resume.yml` poller dispatch name `github-actions[bot]`*, and on `github.event.repository.owner.type` reading `User`, by legs (e) to (g); and `docs/team-accounts-research.md` → `## 7. Open questions`'s still-to-confirm sentence on the `continue` chain and the poller dispatch, by legs (e) and (f). The result is recorded under this gate, not by editing that research.
 
-**(xvi) The full-run leg: one task through `harness-run.yml`, end to end.** It observes one task run from the drop to "branch ready for review" on a GitHub-hosted runner, and what that run shows about the sandbox the job runs its session under. It is step 6 of **The sandbox series round (#170 step 4) — not yet run.**, above, and its rows are `docs/sandbox-verification.md` → `## 10. The full-run leg and the Gate 12 sandbox round`, FR1–FR7.
+**(xvi) The full-run leg: one task through `devscene-run.yml`, end to end.** It observes one task run from the drop to "branch ready for review" on a GitHub-hosted runner, and what that run shows about the sandbox the job runs its session under. It is step 6 of **The sandbox series round (#170 step 4) — not yet run.**, above, and its rows are `docs/sandbox-verification.md` → `## 10. The full-run leg and the Gate 12 sandbox round`, FR1–FR7.
 
 **Preconditions.** That round's steps 1–4: `<version>` released from a `dev` carrying the sandbox series, the scratch repository reset to its seed, adopted at 0.6.7, then upgraded locally to `<version>` and its upgrade committed and pushed. A job rendered at 0.6.7 has neither `Install the sandbox prerequisites` nor `Sweep the sandbox placeholders`, so a run started before the upgrade answers nothing here.
 
@@ -2471,7 +2468,7 @@ Then let the watcher dispatch it in one pass, as (ii) does:
 
 ```
 bash <scriptsDir>/autonomous-watcher.sh tick
-gh run list --workflow harness-run.yml
+gh run list --workflow devscene-run.yml
 ```
 
 **The park.** Wait for the first job's log to end with `job: parked stop`, the `job: <status> <decision>` line `run_job` prints in `cli/templates/scripts/autonomous-watcher.sh`. Answer the question through `/devscene:branch-answer`'s GitHub route, as (xi) does:
@@ -2483,7 +2480,7 @@ gh run list --workflow harness-run.yml
 Let the run go on, through every job it chains, to "branch ready for review". Read each job's log, then the branch it pushed:
 
 ```
-gh run list --workflow harness-run.yml
+gh run list --workflow devscene-run.yml
 gh run view <run id> --log
 gh run download <run id> -n harness-state -D <dir>
 git fetch origin <branch>
@@ -2498,7 +2495,7 @@ bash <this repository>/scripts/gate12-sandbox-round.sh grade --repo <owner>/<scr
 
 It grades FR1–FR7 on the reads each lists under **What it shows.** below, and prints FR1's clauses that are read from the source — the base profile passed unchanged as `--settings`, no per-run copy rendered and nothing written under the machine state directory — as a `source` line naming `spawn_engine`'s job-mode arm, rather than grading them.
 
-**What it shows.** Each item gives its row, its expected result, where it is read from, and the shipped source that reading rests on. Step names are `cli/templates/github/workflows/harness-run.yml`'s.
+**What it shows.** Each item gives its row, its expected result, where it is read from, and the shipped source that reading rests on. Step names are `cli/templates/github/workflows/devscene-run.yml`'s.
 
 - **FR1**, goal 1's first bullet and `sandbox1e4` §10 item 1. Expected: the job cuts no copy, renders no per-run copy, writes nothing under the machine state directory, and `run_profile_check` passes on the base profile, which is passed unchanged as `--settings`. Read from: observation (xvi): the `Run the harness` step log's `job: launching run for '<branch>'` line, with no `not launching` line after it. The engine's command line, `--settings` included, is not logged: that the base profile is passed unchanged as `--settings` is read from `spawn_engine`'s job-mode arm in `cli/templates/scripts/autonomous-watcher.sh`, not from the log. That the job cuts no copy is read from the same line's `in <worktree>`, which names the job's own checkout. That it renders no per-run copy and writes nothing under the machine state directory is not logged either: both are read from the same job-mode arm, which reaches neither `hr_run_profile_file` nor `run_profile_render`, and are recorded as read from the source, not observed. Source: `Run the harness` runs `autonomous-watcher.sh job`; in `autonomous-watcher.sh`, `spawn_engine`'s job-mode arm takes the base profile as the `--settings` file without calling `run_profile_render`, then runs `run_profile_check` on it, and a refusal goes through `spawn_refuse`, which logs `not launching '<branch>': <reason>`. What the log shows and what it does not: a passing check prints no line of its own, so it is read as `job: launching run for '<branch>'` with no `not launching` line after it. The session's own output goes to the run's log file, which `spawn_engine` appends to, not to the step log. The engine's command line, `--settings` included, is not logged; the one launch line that names a flag is the job-mode `job mode: '<branch>' also gets --add-dir from the profile's additionalDirectories:` line, printed only when the profile names such a directory.
 - **FR2**, goal 1's second bullet and `sandbox2`. Expected: `Install the sandbox prerequisites` runs on the hosted runner, what it installs is recorded, and `Preflight with doctor` then passes. Read from: observation (xvi): the `Install the sandbox prerequisites` and `Preflight with doctor` step logs. Source: the install step prints `The sandbox prerequisites are present.` on its early path, when it has nothing to install or write; a `::warning::` line for each thing it could not do; on Linux, once its nested user-namespace check (`bwrap --unshare-user --dev-bind / / -- unshare -U -r true`) passes, one line naming whether Ubuntu's `bwrap-userns-restrict` was disabled, whether the bwrap AppArmor profile was written and loaded, and that the nested check passed (`Ubuntu's bwrap-userns-restrict <state>; the bwrap AppArmor profile <state>; the nested user-namespace check inside bwrap passed.`); and, when that check fails, one `::error::` that fails the job before `Run the harness`, unless `sandbox.optOut` is taken; the preflight is `doctor --remote-job`.
@@ -2516,7 +2513,7 @@ It grades FR1–FR7 on the reads each lists under **What it shows.** below, and 
 gh pr close <number> --delete-branch
 ```
 
-Where (xiii) or (xiv) ran, delete the issues the round created with `gh issue delete <number>`, leg (d)'s third issue included, delete `<slug>_3` on the remote with the other runs' branches, and unset `forge` before the seed reset by removing its key from `harness.config.json` by hand, since `config` has no verb that unsets a key (`docs/cli.md` → ``## 8. `config` ``). Delete the trigger label `sdlc-harness` and, where (xiv) ran, the six state labels `sdlc-harness: running`, `sdlc-harness: parked`, `sdlc-harness: paused`, `sdlc-harness: done`, `sdlc-harness: failed` and `sdlc-harness: stopped`, one command per label, quoting a name that holds a space:
+Where (xiii) or (xiv) ran, delete the issues the round created with `gh issue delete <number>`, leg (d)'s third issue included, delete `<slug>_3` on the remote with the other runs' branches, and unset `forge` before the seed reset by removing its key from `harness.config.json` by hand, since `config` has no verb that unsets a key (`docs/cli.md` → ``## 8. `config` ``). Delete the trigger label `devscene` and, where (xiv) ran, the six state labels `devscene: running`, `devscene: parked`, `devscene: paused`, `devscene: done`, `devscene: failed` and `devscene: stopped`, one command per label, quoting a name that holds a space:
 
 ```
 gh label delete "<name>" --yes
@@ -2540,14 +2537,10 @@ HARNESS_GATES_CONTAINERS=1 bash scripts/run-gates.sh
 
 Without the variable the script prints `SKIPPED 13d` with the variable to set; with it and no `docker` on `PATH` the wrapper exits `4` and the script prints `SKIPPED 13d` with that reason. Either way 13d is listed with the gates the script cannot run and counted among neither the passes nor the failures, so a green run that did not reach Postgres says so. When it does run, it starts only the compose file's `postgres` service, under a project name and a loopback port derived from this checkout so that two worktrees do not collide, runs the `container`-marked cases against it, and removes that project with `docker compose … down -v` on every exit path. **The Python environment lives outside the checkout**: the wrapper keeps the virtual environment and every tool cache under `${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval/`, keyed per checkout, which is why gate 6a's `$HOME` grep needs no exclusion for it. **Two things stay hand-run**: `docker compose up` of the full service stack from `docs-retrieval-service/`, and any run of the service with real models, whose weights only the operator-run `harness-docs-retrieval fetch-models` sub-command downloads.
 
-**Gate 14 — the rendered workflows parse.** Gate 12 round 7's finding 1 was a `harness-control.yml` that 0.6.1 rendered as invalid YAML, so GitHub ran none of it, and no suite parsed the files `init` renders. This gate parses them. Every leg runs one hand-written script, `scripts/check-rendered-workflows.mjs`, which `scripts/run-gates.sh` grades by its exit status. **14a** renders the workflows through `init`, with `forge: github` and `execution.target: github-actions`, into a throwaway repository outside this checkout, and parses each with `js-yaml` 4's `load`, which is safe by default and replaced 3.x's `safeLoad`; it fails unless exactly the four harness workflows were written and each parses. **14b** must refuse `cli/test/fixtures/harness-control-0.6.1.yml`, the file 0.6.1 rendered, through the same parse. **14c** runs `actionlint -shellcheck= -pyflakes=` over the rendered files, which must report nothing, and over that fixture, which must report a syntax error. The throwaway repository is removed on every exit path. 14a, 14c and 14d run `cli/dist/cli.js`, so the gate depends on gate 2a's build. `js-yaml` is a direct, dev-only root `devDependencies` entry at 4.x, and is not a dependency of the published package. Run each leg from the repository root:
+**Gate 14 — the rendered workflows parse.** Gate 12 round 7's finding 1 was a `devscene-control.yml` that 0.6.1 rendered as invalid YAML, so GitHub ran none of it, and no suite parsed the files `init` renders. This gate parses them. Every leg runs one hand-written script, `scripts/check-rendered-workflows.mjs`, which `scripts/run-gates.sh` grades by its exit status. **14a** renders the workflows through `init`, with `forge: github` and `execution.target: github-actions`, into a throwaway repository outside this checkout, and parses each with `js-yaml` 4's `load`, which is safe by default and replaced 3.x's `safeLoad`; it fails unless exactly the four harness workflows were written and each parses. **14c** runs `actionlint -shellcheck= -pyflakes=` over the rendered files, which must report nothing. The throwaway repository is removed on every exit path. 14a, 14c and 14d run `cli/dist/cli.js`, so the gate depends on gate 2a's build. `js-yaml` is a direct, dev-only root `devDependencies` entry at 4.x, and is not a dependency of the published package. Run each leg from the repository root:
 
 ```
 node scripts/check-rendered-workflows.mjs
-```
-
-```
-node scripts/check-rendered-workflows.mjs --negatives
 ```
 
 ```
@@ -2574,12 +2567,12 @@ node scripts/check-rendered-workflows.mjs --zizmor
 
 **The residual set** is keyed on file, audit and job, and each entry is justified in its template's header:
 
-- `harness-run.yml` `artipacked` on `open`, `deliver` and `collect`: agent-free jobs that read origin, or push, through the checkout's persisted credential — `open` and `deliver` fetch the run's branch with it, and `collect` also pushes through `push-branch.sh`. `run` sets `persist-credentials: false` and pushes through the stored entry `harness-run.yml`'s `# THE CHECKOUT CREDENTIAL.` names.
-- `harness-run.yml` `adhoc-packages` on `run`: the latest Claude Code CLI is installed on purpose, and a pinned install is flagged too.
-- `harness-resume.yml` `artipacked` on `poll`: `poll` runs `git ls-remote` against origin, which a private repository refuses without the credential.
-- `harness-trigger.yml` `artipacked` on `trigger`: `trigger` pushes the new branch with the checkout's credential.
-- `harness-control.yml` `artipacked` on `control`: a review round pushes through `push-branch.sh` with the checkout's credential.
-- `harness-control.yml` `adhoc-packages` on `control`: the same unpinned Claude Code CLI install as `harness-run.yml`.
+- `devscene-run.yml` `artipacked` on `open`, `deliver` and `collect`: agent-free jobs that read origin, or push, through the checkout's persisted credential — `open` and `deliver` fetch the run's branch with it, and `collect` also pushes through `push-branch.sh`. `run` sets `persist-credentials: false` and pushes through the stored entry `devscene-run.yml`'s `# THE CHECKOUT CREDENTIAL.` names.
+- `devscene-run.yml` `adhoc-packages` on `run`: the latest Claude Code CLI is installed on purpose, and a pinned install is flagged too.
+- `devscene-resume.yml` `artipacked` on `poll`: `poll` runs `git ls-remote` against origin, which a private repository refuses without the credential.
+- `devscene-trigger.yml` `artipacked` on `trigger`: `trigger` pushes the new branch with the checkout's credential.
+- `devscene-control.yml` `artipacked` on `control`: a review round pushes through `push-branch.sh` with the checkout's credential.
+- `devscene-control.yml` `adhoc-packages` on `control`: the same unpinned Claude Code CLI install as `devscene-run.yml`.
 
 **It takes `zizmor` from `PATH` when that reports 1.30.1, else from `uvx zizmor@1.30.1`**, because another version's audit set is not the one the residual set was measured against. Where neither resolves it exits `4`, and `run-gates.sh` prints `SKIPPED 14d` on 14c's terms: a `SKIPPED` 14d is not a pass. The online audit is `--zizmor-online`, which `.github/workflows/supply-chain.yml` runs nightly and `run-gates.sh` never runs, so 14d stays offline and an API outage never turns a gate red; `## 8. The nightly supply-chain audit` says what it grades and where its token comes from. A `zizmor` on `PATH` at any other version is passed over for `uvx`, so install that version where wanted, as a `uv` tool:
 
@@ -2595,7 +2588,7 @@ pipx install zizmor==1.30.1
 
 **The audit it stands over, measured.** Before, on 2026-10-09 over a copy of the 0.6.5 templates: `uvx zizmor@1.30.1 --offline --no-config --format=plain .github` printed `59 findings (34 suppressed, 6 unsafe fixes): 0 informational, 2 low, 6 medium, 17 high` and exited `14`. After, on 2026-10-09 over a copy of this branch's four templates at commit `4c1e6bf`, the same command under `zizmor 1.30.1` printed `32 findings (25 suppressed, 5 unsafe fixes): 0 informational, 2 low, 5 medium, 0 high` and exited `13`; the seven unsuppressed findings are `artipacked` and `adhoc-packages` alone, the residual set above.
 
-**Gate 15 — the unattended sandbox probe (macOS and Linux).** `scripts/sandbox-probe.sh` measures what Claude Code's own sandbox does to an unattended run under this repository's profile: it cuts a throwaway probe clone, renders that clone's per-run profile with the watcher's own render and check, launches sandboxed headless sessions on the watcher's launch line, and prints one result line per row of each leg below. It runs on macOS and on Linux; a Linux run is taken in the local container described below (*A Linux run, in a local container*). Preflight refusal 2 refuses any other platform with `this probe measures the macOS and Linux sandboxes and 'uname -s' is '<x>'`. It is hand-run because a person has to start it: auto mode refuses a `claude -p` launch carrying `--allowedTools`, which several legs need. It can be started from a terminal at the main checkout or from a Claude Code session, where the `!` prefix runs it as the user's own shell command; the commands are in the block below. **It changes nothing outside its own temp area, the probe clone and the probe branch, except the evidence directory it keeps under `TMPDIR` when a leg does not pass and prints last, and, on Linux, the main checkout's run registry directory: the `registry` leg writes files beside `registry.json` and RG3 may move the directory aside, the probe removing what it wrote and restoring the directory, which is why a Linux run is taken only in the throwaway container below**, and a `shasum` guard over `harness.config.json`, `.git/config` and `.claude/settings.autonomous.json` exits `3` if any of the three changed. **It refuses to start, creating nothing, with exit `2`**, unless the main checkout is on its `defaultBranch`, the watcher has no run in flight, the watcher's cleanup sweep has nothing to delete, and the live profile is the one `doctor` grades: `doctor` passes `profile-sandbox`, `profile-write-protection`, `profile-main-anchor` and `sandbox-prerequisites`, and the watcher's `SETTINGS_PROFILE` is `<main>/.claude/settings.autonomous.json`. The cleanup check exists because `cleanup-merged-worktrees.sh`, which the watcher runs every five minutes, deletes a merged branch with `git branch -D`, removing its `[branch]` section from `<main>/.git/config` and tripping the guard although no session wrote the file (2026-10-27). So the probe refuses, naming each branch, while a local branch the sweep would delete is there. After leaving out the branches the sweep leaves out (protected, checked out, or with a run in a live status), that is any branch whose upstream already reads `[gone]`, whatever its remote, and any branch tracking the remote the sweep fetches (`branch.<defaultBranch>.remote`, else `origin`) whose remote branch no longer exists there. The second is found read-only by one `git ls-remote --heads <remote>`, which cannot prompt, rather than by a `fetch --prune`, which would write refs. The remedy is to wait for the watcher's next cleanup pass or run `bash scripts/cleanup-merged-worktrees.sh` from the main checkout, then retry; a fetched remote that cannot be listed refuses too. A branch merged during the run can still trip the guard, so for a run that must not be interrupted, stop the watcher first with `node cli/dist/cli.js daemon stop` and reload it afterwards with `node cli/dist/cli.js daemon install`. `run` takes every leg but `headless-parity`, `refusal` and the job-mode-only legs `job-layout`, `runner-install`, `runner-pid` and `runner-privs`, in table order, and off Linux it skips the Linux-only legs `glob-deny`, `registry`, `detached`, `gate-sandbox`, `loopback`, `runner-install`, `runner-pid` and `runner-privs`; `run --leg <one>` naming a Linux-only leg off Linux prints its rows `not run`, and naming a job-mode-only leg without `--job` prints its rows `not run`, *job mode only*. `refusal` is never a `run` leg (`run --leg refusal` is a usage error): it is a subcommand of its own, `bash scripts/sandbox-probe.sh refusal`, behind a preflight of its own, which needs four things: a Linux host; `doctor` passing `profile-sandbox`, `profile-write-protection` and `profile-main-anchor`; `doctor` **not** passing `sandbox-prerequisites`; and `bwrap` or `socat` missing from `PATH`. After preflight, `run` and `refusal` each print `sandbox-probe: stamp: <key>: <value>` lines on stderr. `headless-parity` is run with `run --leg headless-parity`, which prints the parity script with the live clone and profile paths and holds them until Enter is pressed. Each of the script's two `claude` launch lines carries the flags the headless sessions launch with, from the same source (`HARNESS_MAIN_REPO`, `--settings`, `--permission-mode dontAsk`, `--model` and `--effort` when configured, and both `--add-dir` entries), then the `--allowedTools` rule its headless leg ran with, `Bash(curl -sS https://example.com/)` for N1 and `Bash(dd:*)` for RT1 and CS2. Both profiles set `defaultMode: dontAsk`, so without that rule every interactive call is refused at the permission layer before it reaches the sandbox. Only the headless-only flags (`-p`, `--output-format`, `--verbose`), the controls' rules and `--debug-file` are left out. Paths are absolute and quoted where they need it. Each step prints the exact prompt to paste, RT1's asking for `dangerouslyDisableSandbox` set to true in words, and the operator notes any permission prompt and answers No to running a call unsandboxed. **Job mode**, `run --job <checkout>`, measures the checkout it runs in under the base profile a `harness-run.yml` job builds, `<checkout>/.claude/settings.autonomous.json`: no clone is measured and no session runs on a per-run profile; the one clone cut is the `wrappers` leg's control clone, named in the footprint below. It differs from the clone layout in four places. The launch line appends one `--add-dir` per `permissions.additionalDirectories` entry of the base profile, as the watcher's job-mode launch does. The profile check is the watcher's own `run_profile_check` on the base profile, with no copy. The preflight is its own. And the placeholder sweep is the job's: before each session on a placeholder host the probe runs the job's sweep, as the watcher does before each spawn, and then writes the job-mode manifest the watcher writes, and at teardown it runs the job's `Sweep the sandbox placeholders` step, `autonomous-watcher.sh job-sweep`. **Job mode's preflight** refuses, creating nothing, unless the target is a main checkout that is not the probe's own, on its `defaultBranch`, with no tracked change, and `doctor --remote-job` exits 0 and passes `profile-sandbox`, `profile-write-protection`, `profile-main-anchor` and `sandbox-prerequisites`; refusals 4 and 5 and refusal 6's `SETTINGS_PROFILE` half assume a local watcher, which job mode turns off, and do not apply. **Its footprint** is the probe branch in the checkout and on its origin, published with no upstream; the `wrappers` leg's control clone, cut beside the checkout as on the clone layout, with its run-registry record, its rendered per-run profile and its branch `<probe branch>_ctl` in the checkout and on its origin; the checkout's `HEAD`; and the job-mode placeholder manifest under `RUNNER_TEMP`. Each is restored or removed at teardown, after the job's own `job-sweep`. Without `--leg`, `run --job` takes only the legs `--list --job` names. **The legs**, one per line of `--list`, with the rows each measures in `docs/sandbox-verification.md`:
+**Gate 15 — the unattended sandbox probe (macOS and Linux).** `scripts/sandbox-probe.sh` measures what Claude Code's own sandbox does to an unattended run under this repository's profile: it cuts a throwaway probe clone, renders that clone's per-run profile with the watcher's own render and check, launches sandboxed headless sessions on the watcher's launch line, and prints one result line per row of each leg below. It runs on macOS and on Linux; a Linux run is taken in the local container described below (*A Linux run, in a local container*). Preflight refusal 2 refuses any other platform with `this probe measures the macOS and Linux sandboxes and 'uname -s' is '<x>'`. It is hand-run because a person has to start it: auto mode refuses a `claude -p` launch carrying `--allowedTools`, which several legs need. It can be started from a terminal at the main checkout or from a Claude Code session, where the `!` prefix runs it as the user's own shell command; the commands are in the block below. **It changes nothing outside its own temp area, the probe clone and the probe branch, except the evidence directory it keeps under `TMPDIR` when a leg does not pass and prints last, and, on Linux, the main checkout's run registry directory: the `registry` leg writes files beside `registry.json` and RG3 may move the directory aside, the probe removing what it wrote and restoring the directory, which is why a Linux run is taken only in the throwaway container below**, and a `shasum` guard over `harness.config.json`, `.git/config` and `.claude/settings.autonomous.json` exits `3` if any of the three changed. **It refuses to start, creating nothing, with exit `2`**, unless the main checkout is on its `defaultBranch`, the watcher has no run in flight, the watcher's cleanup sweep has nothing to delete, and the live profile is the one `doctor` grades: `doctor` passes `profile-sandbox`, `profile-write-protection`, `profile-main-anchor` and `sandbox-prerequisites`, and the watcher's `SETTINGS_PROFILE` is `<main>/.claude/settings.autonomous.json`. The cleanup check exists because `cleanup-merged-worktrees.sh`, which the watcher runs every five minutes, deletes a merged branch with `git branch -D`, removing its `[branch]` section from `<main>/.git/config` and tripping the guard although no session wrote the file (2026-10-27). So the probe refuses, naming each branch, while a local branch the sweep would delete is there. After leaving out the branches the sweep leaves out (protected, checked out, or with a run in a live status), that is any branch whose upstream already reads `[gone]`, whatever its remote, and any branch tracking the remote the sweep fetches (`branch.<defaultBranch>.remote`, else `origin`) whose remote branch no longer exists there. The second is found read-only by one `git ls-remote --heads <remote>`, which cannot prompt, rather than by a `fetch --prune`, which would write refs. The remedy is to wait for the watcher's next cleanup pass or run `bash scripts/cleanup-merged-worktrees.sh` from the main checkout, then retry; a fetched remote that cannot be listed refuses too. A branch merged during the run can still trip the guard, so for a run that must not be interrupted, stop the watcher first with `node cli/dist/cli.js daemon stop` and reload it afterwards with `node cli/dist/cli.js daemon install`. `run` takes every leg but `headless-parity`, `refusal` and the job-mode-only legs `job-layout`, `runner-install`, `runner-pid` and `runner-privs`, in table order, and off Linux it skips the Linux-only legs `glob-deny`, `registry`, `detached`, `gate-sandbox`, `loopback`, `runner-install`, `runner-pid` and `runner-privs`; `run --leg <one>` naming a Linux-only leg off Linux prints its rows `not run`, and naming a job-mode-only leg without `--job` prints its rows `not run`, *job mode only*. `refusal` is never a `run` leg (`run --leg refusal` is a usage error): it is a subcommand of its own, `bash scripts/sandbox-probe.sh refusal`, behind a preflight of its own, which needs four things: a Linux host; `doctor` passing `profile-sandbox`, `profile-write-protection` and `profile-main-anchor`; `doctor` **not** passing `sandbox-prerequisites`; and `bwrap` or `socat` missing from `PATH`. After preflight, `run` and `refusal` each print `sandbox-probe: stamp: <key>: <value>` lines on stderr. `headless-parity` is run with `run --leg headless-parity`, which prints the parity script with the live clone and profile paths and holds them until Enter is pressed. Each of the script's two `claude` launch lines carries the flags the headless sessions launch with, from the same source (`HARNESS_MAIN_REPO`, `--settings`, `--permission-mode dontAsk`, `--model` and `--effort` when configured, and both `--add-dir` entries), then the `--allowedTools` rule its headless leg ran with, `Bash(curl -sS https://example.com/)` for N1 and `Bash(dd:*)` for RT1 and CS2. Both profiles set `defaultMode: dontAsk`, so without that rule every interactive call is refused at the permission layer before it reaches the sandbox. Only the headless-only flags (`-p`, `--output-format`, `--verbose`), the controls' rules and `--debug-file` are left out. Paths are absolute and quoted where they need it. Each step prints the exact prompt to paste, RT1's asking for `dangerouslyDisableSandbox` set to true in words, and the operator notes any permission prompt and answers No to running a call unsandboxed. **Job mode**, `run --job <checkout>`, measures the checkout it runs in under the base profile a `devscene-run.yml` job builds, `<checkout>/.claude/settings.autonomous.json`: no clone is measured and no session runs on a per-run profile; the one clone cut is the `wrappers` leg's control clone, named in the footprint below. It differs from the clone layout in four places. The launch line appends one `--add-dir` per `permissions.additionalDirectories` entry of the base profile, as the watcher's job-mode launch does. The profile check is the watcher's own `run_profile_check` on the base profile, with no copy. The preflight is its own. And the placeholder sweep is the job's: before each session on a placeholder host the probe runs the job's sweep, as the watcher does before each spawn, and then writes the job-mode manifest the watcher writes, and at teardown it runs the job's `Sweep the sandbox placeholders` step, `autonomous-watcher.sh job-sweep`. **Job mode's preflight** refuses, creating nothing, unless the target is a main checkout that is not the probe's own, on its `defaultBranch`, with no tracked change, and `doctor --remote-job` exits 0 and passes `profile-sandbox`, `profile-write-protection`, `profile-main-anchor` and `sandbox-prerequisites`; refusals 4 and 5 and refusal 6's `SETTINGS_PROFILE` half assume a local watcher, which job mode turns off, and do not apply. **Its footprint** is the probe branch in the checkout and on its origin, published with no upstream; the `wrappers` leg's control clone, cut beside the checkout as on the clone layout, with its run-registry record, its rendered per-run profile and its branch `<probe branch>_ctl` in the checkout and on its origin; the checkout's `HEAD`; and the job-mode placeholder manifest under `RUNNER_TEMP`. Each is restored or removed at teardown, after the job's own `job-sweep`. Without `--leg`, `run --job` takes only the legs `--list --job` names. **The legs**, one per line of `--list`, with the rows each measures in `docs/sandbox-verification.md`:
 
 | Leg | Rows | Expected | Recorded in |
 |---|---|---|---|
@@ -2882,7 +2875,7 @@ bash scripts/sandbox-probe.sh run --job <job> --leg job-layout
 echo "exit $?"
 ```
 
-**The GitHub-hosted runner legs, in the Gate 12 repository.** They are taken at the release #170 step 4 cuts, through `bash scripts/release.sh <version>` (`## 7. Releasing`), from a `dev` carrying `feat_sandbox_probe_job_mode` and the branch that wrote Gate 12's observation (xvi) (#195), as step 5 of Gate 12's **The sandbox series round (#170 step 4) — not yet run.** Not at 0.6.7, whose `harness-run.yml` has neither `Install the sandbox prerequisites` nor `Sweep the sandbox placeholders`. The Gate 12 repository, `firu-daniel/harness-gate12`, is first re-rendered at that version with `init --upgrade-workflows`, as `docs/remote-execution.md` → `### Upgrading` gives it.
+**The GitHub-hosted runner legs, in the Gate 12 repository.** They are taken at the release #170 step 4 cuts, through `bash scripts/release.sh <version>` (`## 7. Releasing`), from a `dev` carrying `feat_sandbox_probe_job_mode` and the branch that wrote Gate 12's observation (xvi) (#195), as step 5 of Gate 12's **The sandbox series round (#170 step 4) — not yet run.** Not at 0.6.7, whose `devscene-run.yml` has neither `Install the sandbox prerequisites` nor `Sweep the sandbox placeholders`. The Gate 12 repository, `firu-daniel/harness-gate12`, is first re-rendered at that version with `init --upgrade-workflows`, as `docs/remote-execution.md` → `### Upgrading` gives it.
 
 - **What to commit.** Copy `scripts/sandbox-probe-runner.yml` by hand to that repository's default branch as `.github/workflows/sandbox-probe-runner.yml`. It never runs in this repository: it lives under `scripts/`, which `scripts/publish-main.sh` removes from `main` and every release tag.
 - **Which branch it measures.** The workflow checks out GitHub's default branch, then switches to `harness.config.json` → `defaultBranch` when the two differ, refusing and naming both when the configured branch is not on origin, because job-mode preflight accepts only the configured one. It runs on `${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}`, the job's own expression.
@@ -2957,7 +2950,7 @@ Directory READMEs, the reference documents beside this one and the CLI's own war
 | 17 | **CANCELLED.** Warming the docs index at worktree setup — moving the cold build out of an agent's first `search_docs` call and into `cli/templates/scripts/setup-worktree.sh` — is not done here and is not deferred: it is closed. **The reason is not a measurement.** The item's stated trip was a cold build long enough to risk a wall-clock limit inside an MCP call, and no such limit exists on any path this harness uses; the condition could therefore never be evaluated, and no figure was needed to cancel the item. What settles where the build belongs is a property of the mechanism rather than of a clock: **the cold build stays inside the first `search_docs` call because that call is the only mechanism serving every entry point.** A plain interactive session in the main checkout never runs `setup-worktree.sh` and still gets a built index; a warm performed by a script on the autonomous path would serve the worktrees that path creates and nothing else. `docs/retrieval.md` → **Why `setup-worktree.sh` does not warm the index.** is therefore the **standing decision** rather than the deferral this row used to point at, and it carries the settings that do exist with their defaults and the source they were read from. **This branch does not make the move and no later branch does either.** Two corrections to what this row previously said the move would cost, both of which weaken the case for it rather than strengthen it. **The index is built once per worktree and shared by every dispatch in it**, so the question was never which agents hold the `search_docs` grant — it is only whether the worktree queries at all, and the build is paid the moment any one dispatch does. **And the model load is not the cost**: it is a fraction of a percent of the cold build, while the refresh is almost all of it, and the refresh is paid at first query if it is not paid at setup — the measured breakdown is `docs/retrieval-eval-results.md` → `## Cold build and index size`, which is its one home and is not restated here. The honest statement is therefore that the move would have been close to free rather than a trade: it is cancelled because it buys nothing the in-line build does not already give every entry point, not because it costs too much. The row keeps its number and its place — a citation written before the item closed still has to resolve to something |
 | 18 | **NOT EXECUTED, by maintainer decision.** Withdrawing docs retrieval was the change the decision rule named on a real catalog: arm E's relevance did not clear against the stronger arm A variant, so `docs/retrieval-eval.md` → `## The decision rule` names **withdrawn**, and `docs/retrieval-eval-results.md` → `## The decision, applied to the real catalog` keeps that verdict and its figures unchanged. The maintainer did not execute it and keeps retrieval opt-in: it is a working system measured once, on one kind of corpus — a small, technical catalog searched with identifier-dense queries, where grep is strongest — with its smallest-model stack unoptimised, and it costs an adopter nothing while off. The decision and its full reasons are recorded in that section's `### The maintainer's decision`. Nothing is owed under this number: the `docs` verb, its optional peers, `ABSTAIN_SCORE_THRESHOLD`, the plugin's `search_docs` grants and the `docs.retrieval` key all stay. The row keeps its number and its place — a citation written before the decision still has to resolve to something |
 | 19 | **Shipped.** **Run control from the pull request** — the design changes Gate 12 round 6 decided. An `open` step at the run's start opened the draft pull request and posted an `opened` comment on the source issue naming it, and its draft state followed the run: ready on `completed`, back to draft for a user-review round. `completed` was posted on the pull request and on the source issue, and `docs/github-run-control.md` → §5's target rule was generalised to match, with a pull request recognised as the run's by its tip carrying the run's task prompt or flow-progress ledger. One progress comment per run or round, edited in place, replaced a comment per phase, behind `execution.progressComments`. At a round's `completed`, each collected review thread got a reply, and the thread of an implemented finding was resolved. Linking the branch through the issue's Development panel was **dropped** (`docs/github-run-control.md` → §4). Answering a park in a threaded review comment was **not taken** (`docs/github-run-control.md` → §3) |
-| 20 | **Shipped.** The unattended sandbox's prerequisite checks and its launch refusal — a run whose host cannot start the sandbox the generated profile asks for is refused at launch, with a stated reason. It delivered three parts. `doctor`'s `sandbox-prerequisites` check reports a definite missing piece — `bwrap` or `socat` off `PATH` on Linux or WSL2, a WSL1 host, an unsupported platform — as a warning, and as a failure under `--remote-job`, and an uncertain AppArmor answer as a warning in both modes (`docs/cli.md` §7). The watcher refuses a fresh local launch on a definite missing piece, naming it and its install command (`docs/watcher.md` §1, step 3). And `harness-run.yml`'s `Install the sandbox prerequisites` step installs the packages and the `bwrap` AppArmor profile before `Preflight with doctor` (`docs/remote-execution.md` §8). A taken `sandbox.optOut` passes the check as not required and exempts the launch from the refusal. The install step has run on a GitHub-hosted runner: `runner-install` IS1–IS4 **pass** (`docs/sandbox-record.md` §4) and FR2 **pass**, round 15 (`docs/sandbox-verification.md` §10) |
+| 20 | **Shipped.** The unattended sandbox's prerequisite checks and its launch refusal — a run whose host cannot start the sandbox the generated profile asks for is refused at launch, with a stated reason. It delivered three parts. `doctor`'s `sandbox-prerequisites` check reports a definite missing piece — `bwrap` or `socat` off `PATH` on Linux or WSL2, a WSL1 host, an unsupported platform — as a warning, and as a failure under `--remote-job`, and an uncertain AppArmor answer as a warning in both modes (`docs/cli.md` §7). The watcher refuses a fresh local launch on a definite missing piece, naming it and its install command (`docs/watcher.md` §1, step 3). And `devscene-run.yml`'s `Install the sandbox prerequisites` step installs the packages and the `bwrap` AppArmor profile before `Preflight with doctor` (`docs/remote-execution.md` §8). A taken `sandbox.optOut` passes the check as not required and exempts the launch from the refusal. The install step has run on a GitHub-hosted runner: `runner-install` IS1–IS4 **pass** (`docs/sandbox-record.md` §4) and FR2 **pass**, round 15 (`docs/sandbox-verification.md` §10) |
 | 21 | Measuring what the unattended sandbox breaks, and rewriting the containment statements to what it is measured to hold — including whether denying the configuration files every shell or tool invocation reads (`~/.npmrc`, `~/.gitconfig`, `~/.zshenv`) breaks a run |
 | 22 | **Shipped.** Citing the verdicts of rows the prose still calls owed: `docs/cli.md` §6 calls CS2, RG1–RG3 and CS6 owed, and `cli/templates/scripts/commit-on-branch.sh` → WHY THE MAIN CHECKOUT'S COPY RUNS OUTSIDE THE SANDBOX calls CS2 owed, while each row is **pass**; each site cites the verdict instead (`docs/sandbox-record.md` → `## 7. Follow-ups this record names`). Each of those sites, the self-adopted `scripts/commit-on-branch.sh` and the doc comment above `cli/src/doctor/checks.ts` → `SANDBOXED_WRAPPER_CONSEQUENCE` now cite the verdict |
 | 23 | **Shipped.** Citing the two results `docs/cli.md` §6 calls unrecorded: it calls `git-trust-file-guard.sh`'s refusal of the trio derived from the code until AP9 is taken, while `docs/sandbox-verification.md` §5's second-round AP9 is **pass**, refused by the hook; and it twice says the control is to be recorded in that §5 by that round's Finding 6, while §5 records it as session 2, AP7. Both results are now cited as recorded there |
@@ -2980,7 +2973,7 @@ Items 1 and 2 — the extraction manifest and this layout — are omitted becaus
 
 **Item 6 owed two things its row did not name; one shipped with it and the other turned out not to be its.** The first was **the permission-profile coverage for the outer-loop trio** — `commit-on-branch.sh`, `push-branch.sh`, `autonomous-watcher.sh` — which had to land in the same change that ships them: the profile generator derived its script entries from the wrappers written under `scriptsDir` alone, so the trio would have got none, and under the permission mode runs were then launched with, a missing entry was a silent stall rather than a refusal. It landed. The shipped outer-loop table marks each row agent-invocable or not, and the profile generator emits the three literal forms only for a row that is. That coverage could not have been written earlier because the trio's destination was itself unsettled — `cli/scripts/README.md` had these scripts executing from the installed package while the shipped instruction corpus invoked them from `scriptsDir`. The resolution taken is `scriptsDir`, and that README now records it, the mechanism that was not chosen, and the cost of the one that was.
 
-The second was **the reader for the `forge` configuration key**, and item 6 is not where it belongs. `forge` — `"github"`, `"gitlab"` or `"none"` — is declared in the schema with no default and documented in `config.md` §5, and was declared with no consumer, on the principle that a config key costs an adopter nothing until something reads it, and `config.md`'s row used to name item 6 as the item delivering that reader, reasoning that pull-request and remote conventions are the outer-loop wrappers' business. Item 6 has now shipped and `push-branch.sh` opens no pull request and consults no platform: none of the key's three values would change a line of it. The reader belongs instead to the **forge coupling** — an issue-label trigger, draft-pull-request output, comment-based park-and-ask — which no row in this table delivers and which therefore carries no number to cite. That row in `config.md` has been rewritten to name the work rather than a number, because a numeric citation resolving through this table sent the reader to an item that shipped without it. The coupling's first part, the issue-label trigger, has since landed with a reader — `init` and the trigger itself read the key — and a reporter, `doctor` → `forge`, which names every state, so *the decision not yet made* is now reported rather than silent (`github-issue-trigger.md`). The coupling's other two parts, draft-pull-request output and comment-based park-and-ask, have since landed with their readers — `remote-run.sh`'s `deliver`, `report` and `control`, and the `harness-control.yml` workflow `init` writes — under the same reporter, `doctor` → `forge`, which grades the control workflow (`github-run-control.md`). The debt is paid, and `config.md`'s row says the coupling is delivered.
+The second was **the reader for the `forge` configuration key**, and item 6 is not where it belongs. `forge` — `"github"`, `"gitlab"` or `"none"` — is declared in the schema with no default and documented in `config.md` §5, and was declared with no consumer, on the principle that a config key costs an adopter nothing until something reads it, and `config.md`'s row used to name item 6 as the item delivering that reader, reasoning that pull-request and remote conventions are the outer-loop wrappers' business. Item 6 has now shipped and `push-branch.sh` opens no pull request and consults no platform: none of the key's three values would change a line of it. The reader belongs instead to the **forge coupling** — an issue-label trigger, draft-pull-request output, comment-based park-and-ask — which no row in this table delivers and which therefore carries no number to cite. That row in `config.md` has been rewritten to name the work rather than a number, because a numeric citation resolving through this table sent the reader to an item that shipped without it. The coupling's first part, the issue-label trigger, has since landed with a reader — `init` and the trigger itself read the key — and a reporter, `doctor` → `forge`, which names every state, so *the decision not yet made* is now reported rather than silent (`github-issue-trigger.md`). The coupling's other two parts, draft-pull-request output and comment-based park-and-ask, have since landed with their readers — `remote-run.sh`'s `deliver`, `report` and `control`, and the `devscene-control.yml` workflow `init` writes — under the same reporter, `doctor` → `forge`, which grades the control workflow (`github-run-control.md`). The debt is paid, and `config.md`'s row says the coupling is delivered.
 
 **A second key is now in the state `forge` was in before its trigger landed, and this release put it there.** `design.source` — `"figma"`, `"penpot"` or `"none"` — is declared in the schema and documented in `config.md` §5 with no default and no consumer, on the same principle. Its reader is the **design-source coupling**: an adapter reading design tokens and frame/node structure into the flow's inputs, which no row in this table delivers and which therefore carries no number to cite either. The root `ARCHITECTURE.md`'s `## 8. Declaring a seam before building it` states what that interface is and is not, and states plainly that the key repeats the `forge` outcome rather than `qa.driver`'s. The debt is the same debt rather than a new one: until the coupling lands, `design.source` stays declared and **unreported** — `checkEnum` returns on an absent optional key and `doctor` carries no check of its own — so *the decision not yet made* is again the one state no reporter names. Giving it a reporter is part of the coupling's work, not a separate debt.
 
@@ -2998,7 +2991,7 @@ Every number that command reports, other than 1 and 2, must have a row above. Ad
 
 ## 7. Releasing
 
-A release is four steps, in this order. **The tag comes before the npm publication:** the `Install the pinned plugin` step of a workflow rendered by the new CLI clones the tag `devscene--v<version>`, and refuses the run when that tag is missing (`cli/templates/github/workflows/harness-run.yml`).
+A release is four steps, in this order. **The tag comes before the npm publication:** the `Install the pinned plugin` step of a workflow rendered by the new CLI clones the tag `devscene--v<version>`, and refuses the run when that tag is missing (`cli/templates/github/workflows/devscene-run.yml`).
 
 **One command runs all four.** From a checkout of `dev`, at a terminal, with `gh` logged in:
 

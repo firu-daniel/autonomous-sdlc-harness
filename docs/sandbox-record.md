@@ -85,7 +85,7 @@ One row per leg of [`development.md`](development.md) → **Gate 15**'s leg tabl
 - **macOS:** Seatbelt, arm64, the probe's clone layout. The one exception is `job-layout`, which runs only in job mode (`run --job`).
 - **Linux container:** Debian 12 in Gate 15's container on colima, bubblewrap 0.8.0.
 - **Runner:** a GitHub-hosted runner in job mode, `ubuntu-26.04` `20261101.186.1`, bubblewrap 0.11.1, Gate 12 rounds 14 and 15 (§9). The one addition is round 16 on `ubuntu-24.04` `20261101.360.1`, bubblewrap 0.9.0, where a row records it.
-- **Real job:** one task through `harness-run.yml`, end to end, on the runner image above, Gate 12 round 15 (§10).
+- **Real job:** one task through `devscene-run.yml`, end to end, on the runner image above, Gate 12 round 15 (§10).
 
 | Leg | Platform | Date | Claude Code | Rows | Verdict |
 |---|---|---|---|---|---|

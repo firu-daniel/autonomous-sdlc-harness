@@ -1,5 +1,5 @@
 /**
- * The `harness-run.yml` and `harness-resume.yml` workflow templates, read as text.
+ * The `devscene-run.yml` and `devscene-resume.yml` workflow templates, read as text.
  *
  * **The contract these tests enforce.** The seven `workflow_dispatch` inputs `remote-run.sh`
  * sends, with `action`'s options exactly `run`, `pause`, `warm` and `stop`; a job only for `run`
@@ -56,13 +56,13 @@
  * runs `git worktree add`, the only `git clone` is `Install the pinned plugin`'s, and `Run the
  * harness` alone runs `autonomous-watcher.sh job`, in the checkout.
  *
- * For `harness-resume.yml`: the `schedule` and `workflow_dispatch` triggers; `permissions: {}` at workflow
+ * For `devscene-resume.yml`: the `schedule` and `workflow_dispatch` triggers; `permissions: {}` at workflow
  * level and the `poll` job's grants exactly `contents: read`, `actions: write`, `issues: write` and
  * `pull-requests: write`; `remote-run.sh poll` its only call into the script family;
  * `HARNESS_PUSH_URL` passed through `env:`; no template token at all; every GitHub expression spaced; none inside a `run:` block;
  * its state upload under `always()` named `POLL_STATE_ARTIFACT_NAME`, as `remote-run.sh` spells it.
  *
- * For `harness-trigger.yml`: the `issues` and `repository_dispatch` triggers, `labeled` the only
+ * For `devscene-trigger.yml`: the `issues` and `repository_dispatch` triggers, `labeled` the only
  * `issues` type so `opened` never starts a second run, and `TRIGGER_DISPATCH_EVENT_TYPE` the only
  * dispatch type; `permissions: {}` at workflow level and the `trigger` job's grants exactly
  * `contents: write`, `actions: write` and `issues: write`; the
@@ -74,7 +74,7 @@
  * job's `env:` passing `RUN_ACTORS_VARIABLE` from `vars.` on the line after
  * `HARNESS_TRIGGER_ALLOWED_BOTS`, and the `# DECLARED MIRRORS` block naming it.
  *
- * For `harness-control.yml`: the `issue_comment`, `pull_request_review`, `issues`, `pull_request` and
+ * For `devscene-control.yml`: the `issue_comment`, `pull_request_review`, `issues`, `pull_request` and
  * `delete` triggers, `created`, `submitted`, `closed` and `closed` their only types, and neither
  * `pull_request_target` nor `pull_request_review_comment` outside a comment line; the `run-name`
  * falling back to the deleted ref; `permissions: {}` at workflow level and the `control` job's grants
@@ -95,7 +95,7 @@
  * `Set up Node`, `Install the claude CLI when absent` and `Fetch the pinned plugin`, which come before
  * the act step, each `if: github.event_name == 'issue_comment' && steps.needs.outputs.agent != 'no'`
  * and `continue-on-error: true`, the last
- * reading `CLI_VERSION_VARIABLE` from `harness-run.yml`, cloning the release-tag prefix that file's
+ * reading `CLI_VERSION_VARIABLE` from `devscene-run.yml`, cloning the release-tag prefix that file's
  * `Install the pinned plugin` step clones, and writing `HARNESS_MENTION_PLUGIN_DIR` to
  * `$GITHUB_ENV`; one `concurrency:` group on the job,
  * `harness-review-` plus the head ref for a review and the run's own id for a comment, with
@@ -108,12 +108,12 @@
  * branch, with `# <action> v<major>.<minor>.<patch>` on the line directly above it, naming the same
  * action; the `# ACTION PINS.` header names exactly the set of those action-and-version pairs, so a pin
  * the file dropped or a bump the header forgot fails. The checkout credential: `persist-credentials:
- * false` on exactly the checkouts `CREDENTIAL_SHAPES` lists unpersisted — `harness-run.yml`'s `run`
+ * false` on exactly the checkouts `CREDENTIAL_SHAPES` lists unpersisted — `devscene-run.yml`'s `run`
  * and `warm` — every other checkout keeping it because its job pushes or fetches with it or, for
  * `poll`, runs `git ls-remote` against origin, and a `# THE CHECKOUT CREDENTIAL.` block
- * (`# THE CHECKOUT.` in `harness-trigger.yml`) naming why; and no `actions/upload-artifact` step
- * carrying `.git/config` off the runner — `harness-run.yml`'s path under `${{ runner.temp }}`,
- * `harness-resume.yml`'s exactly `POLL_STATE_DIR`, a state-directory subpath, and none in the other two.
+ * (`# THE CHECKOUT.` in `devscene-trigger.yml`) naming why; and no `actions/upload-artifact` step
+ * carrying `.git/config` off the runner — `devscene-run.yml`'s path under `${{ runner.temp }}`,
+ * `devscene-resume.yml`'s exactly `POLL_STATE_DIR`, a state-directory subpath, and none in the other two.
  * And outside a `|` / `>` block body, no mapping value that opens as a plain scalar carries `: ` or
  * ` #`: the first breaks the parse, the second silently truncates the value as a comment. These are
  * text-level readings; no YAML parser is loaded.
@@ -238,7 +238,7 @@ test('only run and warm start a job, and pause only a failing one from the wrong
 
 test('the wrong-ref job reads the ref and the branch through env and fails, naming the ref to use', () => {
   const start = LINES.indexOf('  wrong-ref:');
-  assert.notEqual(start, -1, 'harness-run.yml carries a wrong-ref job');
+  assert.notEqual(start, -1, 'devscene-run.yml carries a wrong-ref job');
   const block = blockUnder(start);
   const text = block.join('\n');
   assert.match(text, /^ {10}IN_REF: \$\{\{ github\.ref_name \}\}$/m);
@@ -254,7 +254,7 @@ test('the wrong-ref job reads the ref and the branch through env and fails, nami
 
 test('the collect job follows run unless cancelled, shares the review group, reads no secret and runs collect', () => {
   const start = LINES.indexOf('  collect:');
-  assert.notEqual(start, -1, 'harness-run.yml carries a collect job');
+  assert.notEqual(start, -1, 'devscene-run.yml carries a collect job');
   const block = blockUnder(start);
   const text = block.join('\n');
   assert.ok(block.includes('    needs: [run, deliver]'), text);
@@ -832,7 +832,7 @@ test('no run-job step runs npm or npx in the checkout: each runs from $RUNNER_TE
   assert.equal(invoking, 4, 'the refusal, the claude CLI install, the profile and the preflight');
 });
 
-// RED ONCE, each mutation of harness-run.yml run once, observed failing as recorded, and reverted:
+// RED ONCE, each mutation of devscene-run.yml run once, observed failing as recorded, and reverted:
 //   the refusal step moved below `Install the pinned plugin`  -> the first case's order assertion fails (and the second case's)
 //   the refusal step moved to right after `Read the configuration` -> the second case's "after the refusal" fails (and the first case's order)
 //   `&& env.SCRIPTS_DIR != ''` dropped from `Push the branch`'s if: -> the second case's always() assertion fails
@@ -1408,11 +1408,11 @@ test('control: the comment-only steps run after the agent check and before the a
   assert.ok(names.indexOf('Fetch the pinned plugin') > names.indexOf('Install the claude CLI when absent'));
 });
 
-test("control: Fetch the pinned plugin reads harness-run.yml's pin, clones its release tag and hands the directory on", () => {
+test("control: Fetch the pinned plugin reads devscene-run.yml's pin, clones its release tag and hands the directory on", () => {
   const fetch = controlSteps().find((s) => s.name === 'Fetch the pinned plugin').text;
   const [body] = runBodies(fetch.split('\n'));
   assert.ok(body.includes(`${CLI_VERSION_VARIABLE}:`), 'reads the pin variable');
-  assert.ok(body.includes(`.github/workflows/${WORKFLOW_RUN_FILE}`), 'reads it from harness-run.yml');
+  assert.ok(body.includes(`.github/workflows/${WORKFLOW_RUN_FILE}`), 'reads it from devscene-run.yml');
   assert.ok(body.includes('devscene--v'), 'clones the release tag');
   assert.match(body, /^\s*echo "HARNESS_MENTION_PLUGIN_DIR=\$plugin_dir" >> "\$GITHUB_ENV"$/m);
   assert.ok(!body.includes('claude plugin install'), 'installs nothing');
@@ -1420,7 +1420,7 @@ test("control: Fetch the pinned plugin reads harness-run.yml's pin, clones its r
   assert.equal(tagPrefix(fetch), tagPrefix(install));
 });
 
-test('control: the claude CLI install mirrors harness-run.yml', () => {
+test('control: the claude CLI install mirrors devscene-run.yml', () => {
   const body = (lines, name) => {
     const at = lines.findIndex((l) => l.trim() === `- name: ${name}`);
     assert.notEqual(at, -1);

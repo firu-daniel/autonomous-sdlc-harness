@@ -8,14 +8,13 @@
  * them read these constants rather than retyping a literal, and so does `generators/repoRoot.ts`,
  * which spells the two workflow `.bak` ignore rules whatever `execution.target` says. It owns the
  * {@link RUN_ACTORS_VARIABLE} allow-list's semantics as well as its name — {@link effectiveRunActors}
- * and {@link runActorAdmitted} — and `remote-run.sh` and `harness-run.yml`'s gate step each restate
+ * and {@link runActorAdmitted} — and `remote-run.sh` and `devscene-run.yml`'s gate step each restate
  * that rule in shell.
  *
  * Except in `generators/repoRoot.ts`, nothing here is consulted unless `config/model.ts` →
  * `remoteExecutionApplies(config)` is true: every other consumer tests that switch first. That one
  * is ungated because a gated rule would change `.gitignore` in the same run that turns remote
- * execution on. The issue-trigger names (`WORKFLOW_TRIGGER_*`, `TRIGGER_*`, `DEFAULT_TRIGGER_LABEL`,
- * `LEGACY_TRIGGER_LABEL`)
+ * execution on. The issue-trigger names (`WORKFLOW_TRIGGER_*`, `TRIGGER_*`, `DEFAULT_TRIGGER_LABEL`)
  * and the run-control names (`WORKFLOW_CONTROL_*`, `COMMAND_*`, `COMMENT_MARKER`,
  * `REVIEW_ROUND_STATE`, `STATE_LABEL_PREFIX`, `RUN_STATES`, `STATE_LABELS`, `PR_CREATE_SETTING`,
  * `PR_CREATE_SETTING_PATH`, `MENTION_*`) are gated tighter
@@ -23,10 +22,10 @@
  *
  * **Shell and YAML mirrors that must agree byte for byte.** The compiler cannot reach them, so each
  * declares the mirror in its own header, and a rename here is an edit to each of them:
- * `cli/templates/scripts/remote-run.sh`, `cli/templates/github/workflows/harness-run.yml`,
- * `cli/templates/github/workflows/harness-resume.yml`,
- * `cli/templates/github/workflows/harness-trigger.yml`,
- * `cli/templates/github/workflows/harness-control.yml`,
+ * `cli/templates/scripts/remote-run.sh`, `cli/templates/github/workflows/devscene-run.yml`,
+ * `cli/templates/github/workflows/devscene-resume.yml`,
+ * `cli/templates/github/workflows/devscene-trigger.yml`,
+ * `cli/templates/github/workflows/devscene-control.yml`,
  * `cli/templates/scripts/lib/harness-run-lib.sh`, which mirrors {@link WORKFLOW_RUN_FILE} and
  * {@link STATE_ARTIFACT_NAME} for the GitHub route its notification producers print,
  * {@link GIT_TOKEN_SECRET} as the `HARNESS_GIT_TOKEN` source of `hr_credential_values_var`, and
@@ -53,22 +52,22 @@ import { unquoteYamlScalar } from '../core/yamlScalar.js';
 /** The adopter-side directory GitHub reads workflows from. */
 export const WORKFLOWS_DIR = '.github/workflows';
 
-export const WORKFLOW_RUN_FILE = 'harness-run.yml';
+export const WORKFLOW_RUN_FILE = 'devscene-run.yml';
 export const WORKFLOW_RUN_PATH = `${WORKFLOWS_DIR}/${WORKFLOW_RUN_FILE}`;
 
-export const WORKFLOW_RESUME_FILE = 'harness-resume.yml';
+export const WORKFLOW_RESUME_FILE = 'devscene-resume.yml';
 export const WORKFLOW_RESUME_PATH = `${WORKFLOWS_DIR}/${WORKFLOW_RESUME_FILE}`;
 
 /** The workflow that turns a labelled issue or a `repository_dispatch` event into a remote run. */
-export const WORKFLOW_TRIGGER_FILE = 'harness-trigger.yml';
+export const WORKFLOW_TRIGGER_FILE = 'devscene-trigger.yml';
 export const WORKFLOW_TRIGGER_PATH = `${WORKFLOWS_DIR}/${WORKFLOW_TRIGGER_FILE}`;
 
 /** The workflow that turns a comment command or a review into a harness action. */
-export const WORKFLOW_CONTROL_FILE = 'harness-control.yml';
+export const WORKFLOW_CONTROL_FILE = 'devscene-control.yml';
 export const WORKFLOW_CONTROL_PATH = `${WORKFLOWS_DIR}/${WORKFLOW_CONTROL_FILE}`;
 
 /** The first word of a command comment, matched case-insensitively. */
-export const COMMAND_HANDLE = '@sdlc-harness';
+export const COMMAND_HANDLE = '@dev-scene';
 
 /**
  * The verbs a command comment may carry after {@link COMMAND_HANDLE}. `status` is read-only: it
@@ -124,17 +123,17 @@ export const MENTION_COMMAND = `/${PLUGIN_NAME}:${MENTION_COMMAND_NAME}`;
 
 /**
  * The prefix of the hidden line every harness comment carries; the whole line is
- * `<!-- sdlc-harness event=<event> branch=<branch>[ question=<n>][ engine=<engine>] -->`, where
+ * `<!-- devscene event=<event> branch=<branch>[ question=<n>][ engine=<engine>] -->`, where
  * `engine=` is carried only by a `reply` posted after a successful dispatch. A comment containing
  * the prefix anywhere is never a command.
  */
-export const COMMENT_MARKER = '<!-- sdlc-harness';
+export const COMMENT_MARKER = '<!-- devscene';
 
 /** The `review.state` that starts a review round, lowercase as the webhook payload carries it. */
 export const REVIEW_ROUND_STATE = 'changes_requested';
 
 /** The prefix every run-state label's name starts with. */
-export const STATE_LABEL_PREFIX = 'sdlc-harness: ';
+export const STATE_LABEL_PREFIX = 'devscene: ';
 
 /** The states a run's pull request is labelled with, one label each. */
 export const RUN_STATES = ['running', 'parked', 'paused', 'done', 'failed', 'stopped'] as const;
@@ -170,31 +169,7 @@ export const REMOTE_STOP_VARIABLE = 'HARNESS_REMOTE_STOP';
 export const TRIGGER_LABEL_VARIABLE = 'HARNESS_TRIGGER_LABEL';
 
 /** The issue label that starts a run when {@link TRIGGER_LABEL_VARIABLE} is unset or empty. */
-export const DEFAULT_TRIGGER_LABEL = 'sdlc-harness';
-
-/**
- * The previous release's {@link DEFAULT_TRIGGER_LABEL}. The trigger still accepts it when its
- * workflow passes no label, which only that release's `harness-trigger.yml` does: it is never
- * re-rendered by `init --upgrade-workflows`, and its own `if:` already ran the job for this label.
- */
-export const LEGACY_TRIGGER_LABEL = 'harness';
-
-const TRIGGER_FALLBACK_PATTERN = new RegExp(`\\(\\s*vars\\.${TRIGGER_LABEL_VARIABLE}\\s*\\|\\|\\s*'([^']+)'\\s*\\)`);
-
-/**
- * The label a trigger workflow's text falls back to when {@link TRIGGER_LABEL_VARIABLE} is unset: the
- * single-quoted literal of the first `(vars.HARNESS_TRIGGER_LABEL || '<label>')`, or `undefined` when
- * no line carries one. Pure — the caller reads the file. It exists because the committed
- * `harness-trigger.yml` carries no version pin and is never upgraded, so its own fallback, not
- * {@link DEFAULT_TRIGGER_LABEL}, is what starts a run in a repository wired by an earlier release.
- */
-export function triggerFallbackLabel(text: string): string | undefined {
-  for (const line of text.split(/\r?\n/)) {
-    const match = TRIGGER_FALLBACK_PATTERN.exec(line);
-    if (match !== null) return match[1];
-  }
-  return undefined;
-}
+export const DEFAULT_TRIGGER_LABEL = 'devscene';
 
 /** Repository variable: comma-separated bot logins that may start a run; unset or empty admits none. */
 export const TRIGGER_ALLOWED_BOTS_VARIABLE = 'HARNESS_TRIGGER_ALLOWED_BOTS';
@@ -267,7 +242,7 @@ export function carriesRunActors(workflowText: string): boolean {
 
 /**
  * Whether a workflow's text reads `secrets.CLAUDE_CODE_OAUTH_TOKEN` or `secrets.ANTHROPIC_API_KEY`;
- * `false` marks a `harness-control.yml` written before a mention could be read. Pure — the caller
+ * `false` marks a `devscene-control.yml` written before a mention could be read. Pure — the caller
  * reads the file.
  */
 export function carriesMentionCredential(workflowText: string): boolean {
@@ -295,8 +270,8 @@ export const PR_CREATE_SETTING_PATH = 'Settings -> Actions -> General -> Workflo
 export const GH_CLI_VARIABLE = 'HARNESS_GH_CLI';
 
 /**
- * The job-level `env:` variable carrying the CLI version a rendered `harness-run.yml` is pinned to.
- * Mirrored in `cli/templates/github/workflows/harness-run.yml`, once per job.
+ * The job-level `env:` variable carrying the CLI version a rendered `devscene-run.yml` is pinned to.
+ * Mirrored in `cli/templates/github/workflows/devscene-run.yml`, once per job.
  */
 export const CLI_VERSION_VARIABLE = 'HARNESS_CLI_VERSION';
 

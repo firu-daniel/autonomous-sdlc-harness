@@ -24,7 +24,7 @@
  *    `$HOME`. `hr_cache_dir()` in `cli/templates/scripts/lib/harness-run-lib.sh` mirrors
  *    {@link machineCacheDir} the same way, over `XDG_CACHE_HOME` and `$HOME/.cache`: the retrieval
  *    launcher resolves the runtime it `exec`s through it, so a change to either resolution is an
- *    edit to both. `cli/templates/github/workflows/harness-run.yml` mirrors {@link machineCacheDir}'s
+ *    edit to both. `cli/templates/github/workflows/devscene-run.yml` mirrors {@link machineCacheDir}'s
  *    resolution too — `XDG_CACHE_HOME`, else `$HOME/.cache`, then {@link MACHINE_DIR_NAME} — in its
  *    retrieval-cache path, so a change to that resolution or to {@link MACHINE_DIR_NAME} is an edit
  *    to the workflow template as well. `cli/templates/scripts/run-analytics.sh` mirrors

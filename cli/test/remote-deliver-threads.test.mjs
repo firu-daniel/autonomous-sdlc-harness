@@ -27,7 +27,7 @@ const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
 const COLLECTED_AT = '2026-01-01T00:00:00Z';
 const REASON = '**Observation 3 — "Rename the helper."** Out of scope: the name is the public API.';
-const THREAD_MARKER = '<!-- sdlc-harness event=thread branch=feat_x round=1 -->\n';
+const THREAD_MARKER = '<!-- devscene event=thread branch=feat_x round=1 -->\n';
 
 const STUB = `#!/usr/bin/env node
 const { appendFileSync, existsSync, readFileSync, writeFileSync } = require('node:fs');
@@ -111,13 +111,13 @@ async function threadsFixture(t, { engine = 'user_review', unmarkedNewest = fals
   const index = `${reviews}/feat_x_fix_plan.md`;
   await commitFile(
     `${STATE_DIR}/task_prompts/feat_x_task_prompt.md`,
-    `# Add comments\n\nDo it.\n\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`sdlc-harness\`.\n`,
+    `# Add comments\n\nDo it.\n\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`devscene\`.\n`,
     'fixture: task prompt',
   );
   await commitFile(`${STATE_DIR}/flow_progress/feat_x_progress.md`, '# Progress\n', 'fixture: ledger');
   await commitFile(
     `${reviews}/feat_x_review.md`,
-    `## Review by @bob\n\nFix it.\n\n<!-- sdlc-harness round collected_at=${COLLECTED_AT} reviews=1 comments=101,102,103 -->\n`,
+    `## Review by @bob\n\nFix it.\n\n<!-- devscene round collected_at=${COLLECTED_AT} reviews=1 comments=101,102,103 -->\n`,
     'chore: add user review for feat_x',
   );
   const indexText = (mark) =>
@@ -254,7 +254,7 @@ test('a thread carrying an earlier round\'s harness reply is still replied to an
   const f = await threadsFixture(t);
   const page = JSON.parse(threadsPage());
   page.data.repository.pullRequest.reviewThreads.nodes[0].comments.nodes.push(
-    comment(106, '2026-01-02T00:00:00Z', 'Not changed in this round: earlier.\n\n<!-- sdlc-harness event=thread branch=feat_x round=7 -->\n'),
+    comment(106, '2026-01-02T00:00:00Z', 'Not changed in this round: earlier.\n\n<!-- devscene event=thread branch=feat_x round=7 -->\n'),
   );
   const result = await f.deliver({ STUB_THREADS: JSON.stringify(page) });
   assert.equal(result.status, 0, result.stderr);

@@ -2,8 +2,6 @@
 
 **Who reads this:** the maintainer filing this report on anthropics/claude-code, and anyone checking whether a later Claude Code version lifts the harness's Linux interim position. It is a **draft to file, not a filed issue**: until an issue number is recorded here, nothing upstream has been asked. The interim position it would lift is `docs/sandbox-record.md`, residual 12. It owns the report's text and its asks; the measurements it quotes are recorded in `docs/sandbox-verification.md` (§0 *The probe's first Linux run (2026-10-29)*, §0 *The targeted check (2026-10-29)*, §5 F9, §5 AP2, §5 *Session 1* and AP7, §5 *The round's head, taken 2026-10-31*, and §8 GW1 and GW2), and that document stays their record.
 
-Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed. The repository the report names is now `firu-daniel/devscene`.
-
 Everything from `## Report` to the end of `### Asks` is written to be pasted as is. `<clone>` is the run copy, a `git clone --shared` of the main checkout, and `<main>` is the main checkout; both stand in for absolute paths under the container user's home directory.
 
 ---

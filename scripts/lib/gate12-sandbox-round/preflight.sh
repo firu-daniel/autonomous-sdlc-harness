@@ -22,7 +22,7 @@
 #      not list it. `ssh -G` evaluates the operator's own ssh configuration, so a `Match exec` there
 #      runs; it opens no connection, so its failure is a refusal, not a failed call.
 #   6. origin's GitHub default branch (`gh repo view`, held in G12_GITHUB_DEFAULT) carries no
-#      .github/workflows/harness-run.yml, or one without the step `Install the sandbox prerequisites`:
+#      .github/workflows/devscene-run.yml, or one without the step `Install the sandbox prerequisites`:
 #      a workflow rendered before the sandbox series (docs/development.md, the round's step 5).
 # A refusal raises 2. A failed gh or git call raises 3.
 #
@@ -165,15 +165,15 @@ g12_preflight() {
   [ -n "$G12_GITHUB_DEFAULT" ] ||
     { g12_preflight_failed "gh repo view $G12_REPO printed no default branch"; return; }
 
-  workflow="origin/$G12_GITHUB_DEFAULT:.github/workflows/harness-run.yml"
+  workflow="origin/$G12_GITHUB_DEFAULT:.github/workflows/devscene-run.yml"
   git -C "$G12_ROOT" cat-file -e "$workflow" 2>/dev/null ||
     { g12_preflight_refuse "$workflow is absent: render it with init --upgrade-workflows at the sandbox-series version (docs/development.md, Gate 12 round step 5)"; return; }
   workflow="$(git -C "$G12_ROOT" show "$workflow")" ||
-    { g12_preflight_failed "git show origin/$G12_GITHUB_DEFAULT:.github/workflows/harness-run.yml failed"; return; }
+    { g12_preflight_failed "git show origin/$G12_GITHUB_DEFAULT:.github/workflows/devscene-run.yml failed"; return; }
   case "$workflow" in
     *"Install the sandbox prerequisites"*) ;;
     *)
-      g12_preflight_refuse "origin/$G12_GITHUB_DEFAULT's harness-run.yml has no step Install the sandbox prerequisites: it was rendered before the sandbox series (0.6.7 has neither it nor Sweep the sandbox placeholders); re-render it with init --upgrade-workflows (docs/development.md, Gate 12 round step 5)"
+      g12_preflight_refuse "origin/$G12_GITHUB_DEFAULT's devscene-run.yml has no step Install the sandbox prerequisites: it was rendered before the sandbox series (0.6.7 has neither it nor Sweep the sandbox placeholders); re-render it with init --upgrade-workflows (docs/development.md, Gate 12 round step 5)"
       return
       ;;
   esac

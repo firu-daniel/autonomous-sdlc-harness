@@ -4,8 +4,6 @@
 
 It cites rather than restates [`remote-execution.md`](remote-execution.md), whose `### Verified in Gate 12 round 2` and `round 3` rows it does not repeat.
 
-Measurements recorded in this document before the product was renamed DevScene were taken under its earlier name; the name in their quoted commands, paths and messages has been respelled to `devscene`, and nothing else in them was changed.
-
 ---
 
 ## How this was researched
@@ -95,7 +93,7 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 
 **Consequence:**
 - `feat_forge_run_triggers`: its lead holds. A trigger job that cuts a branch from the default branch and commits only a task prompt pushes with `GITHUB_TOKEN`. The existing remote-run limit is confirmed: a run whose task edits a workflow file cannot push it without a workflows-capable `HARNESS_GIT_TOKEN`, and the push fails with the message above.
-- `feat_github_native_adoption`: the open question it must settle first is settled — a setup or upgrade job running under `GITHUB_TOKEN` can never write `harness-run.yml`, `harness-resume.yml` or a trigger workflow, so the first workflow file always needs a person or a token with workflow permission (S2).
+- `feat_github_native_adoption`: the open question it must settle first is settled — a setup or upgrade job running under `GITHUB_TOKEN` can never write `devscene-run.yml`, `devscene-resume.yml` or a trigger workflow, so the first workflow file always needs a person or a token with workflow permission (S2).
 
 ### S2. Which tokens can write workflow files — a fine-grained PAT, a classic PAT, a GitHub App installation token, a Codespace's token? How does each expire, and how is each created?
 
@@ -136,7 +134,7 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 
 **Consequence:**
 - `feat_forge_run_control`: the lead *"A PR opened, or a push made, with `GITHUB_TOKEN` starts no other workflow, so the adopter's CI does not run on the draft PR"* is out of date for the PR. A draft PR opened with `GITHUB_TOKEN` gets CI runs that wait for a person to approve them; a PR opened with `HARNESS_GIT_TOKEN` (a PAT or app token) gets them without approval. The push part holds. Lifecycle and park comments the harness posts with `GITHUB_TOKEN` will never re-trigger its own `issue_comment` workflow, which answers part of "never triggers itself"; a comment posted with `HARNESS_GIT_TOKEN` would trigger it and needs the self-filter the prompt asks for.
-- `feat_forge_run_triggers`: the trigger job's comment on the issue, and its branch push, start no other workflow; its `workflow_dispatch` of `harness-run.yml` does.
+- `feat_forge_run_triggers`: the trigger job's comment on the issue, and its branch push, start no other workflow; its `workflow_dispatch` of `devscene-run.yml` does.
 - `feat_github_native_adoption`: a setup PR opened with `GITHUB_TOKEN` shows the adopter an **Approve workflows to run** banner for their CI.
 
 ### S4. The setting "Allow GitHub Actions to create and approve pull requests": its default for a new personal repository and a new organisation, where it is set, and whether a workflow can read it.
@@ -172,7 +170,7 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
   - `é` × 32,763 (65,536 bytes of JSON) → accepted; `é` × 65,525 (65,535 JSON characters, 131,060 bytes) → accepted; `é` × 65,526 → `inputs are too large.` (characters, not bytes).
 
 **Consequence:**
-- `feat_forge_run_control`: the 65,535-character limit it cites is right, and it applies to the whole inputs object, so a park answer posted as a comment and relayed as `answers` must fit together with the other inputs. The existing check in `remote-run.sh` is the one to reuse, once a payload carrying escaped characters has been measured against it (see the Answer). A new `workflow_dispatch` input (the prompt's forge-reference candidate) takes one of the 25 slots; `harness-run.yml` declares 7 today (`docs/remote-execution.md` → `## 5.`).
+- `feat_forge_run_control`: the 65,535-character limit it cites is right, and it applies to the whole inputs object, so a park answer posted as a comment and relayed as `answers` must fit together with the other inputs. The existing check in `remote-run.sh` is the one to reuse, once a payload carrying escaped characters has been measured against it (see the Answer). A new `workflow_dispatch` input (the prompt's forge-reference candidate) takes one of the 25 slots; `devscene-run.yml` declares 7 today (`docs/remote-execution.md` → `## 5.`).
 - `feat_github_native_adoption`: a settings form built from `workflow_dispatch` inputs has at most 25 fields, and all its values together are capped at 65,535 characters.
 - `docs/remote-execution.md` → `## 6.`'s row *"A `workflow_dispatch` inputs payload is limited to 65,535 characters"* is now measured. This branch does not edit that file; a later change can move the row.
 
@@ -212,12 +210,12 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
   ```
   event=issues action=labeled actor=firu-daniel triggering_actor=firu-daniel sender=firu-daniel sender_type=User label=question review_state= ref=refs/heads/main secret_present=true
   ```
-- Observation by the maintainer, measured by the planning session, Gate 12, 2026-09-30 11:43 UTC: the maintainer created issue #3 in the web UI with the label `harness` set at creation. `gh api repos/firu-daniel/harness-gate12/issues/3/events` shows `{"actor":"firu-daniel","created_at":"2026-09-30T11:43:01Z","label":"harness"}` for the `labeled` event, and the issue's `createdAt` is `2026-09-30T11:43:00Z`. Two `probe-listen.yml` runs followed, `36710247909` and `36710247923`, logging:
+- Observation by the maintainer, measured by the planning session, Gate 12, 2026-09-30 11:43 UTC: the maintainer created issue #3 in the web UI with the label `devscene` set at creation. `gh api repos/firu-daniel/harness-gate12/issues/3/events` shows `{"actor":"firu-daniel","created_at":"2026-09-30T11:43:01Z","label":"devscene"}` for the `labeled` event, and the issue's `createdAt` is `2026-09-30T11:43:00Z`. Two `probe-listen.yml` runs followed, `36710247909` and `36710247923`, logging:
   ```
   event=issues action=opened actor=firu-daniel triggering_actor=firu-daniel sender=firu-daniel sender_type=User label= review_state= ref=refs/heads/main secret_present=true
-  event=issues action=labeled actor=firu-daniel triggering_actor=firu-daniel sender=firu-daniel sender_type=User label=harness review_state= ref=refs/heads/main secret_present=true
+  event=issues action=labeled actor=firu-daniel triggering_actor=firu-daniel sender=firu-daniel sender_type=User label=devscene review_state= ref=refs/heads/main secret_present=true
   ```
-  A label set while the issue is being created raises `labeled` too, as a separate event, and its `sender` is the creator. The same run's payload carries the issue's `title` and `body` (`gh issue view 3 --json title,body,labels` → `"title":"Test research issue title"`, `"body":"Test research issue body"`, label `harness`).
+  A label set while the issue is being created raises `labeled` too, as a separate event, and its `sender` is the creator. The same run's payload carries the issue's `title` and `body` (`gh issue view 3 --json title,body,labels` → `"title":"Test research issue title"`, `"body":"Test research issue body"`, label `devscene`).
 - Not established: whether a label an issue form adds at creation (`labels:` in the form) raises `labeled`, and with which `sender`. The form syntax page says only: "Labels that will automatically be added to issues created with this template." (https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms#top-level-syntax, retrieved 2026-09-30). The triage role was not measured, because the measurement had no second account.
 
 **Consequence:**
@@ -446,7 +444,7 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 
 **Verdict:** `verified`
 
-**Answer:** Yes. Once `probe-disable.yml` was disabled, its `workflow_dispatch` was refused and neither a label nor a matching push started it. Re-enabled, the label started it again. So the resume poller, which disables itself, must stay a file of its own, as `harness-resume.yml` already is.
+**Answer:** Yes. Once `probe-disable.yml` was disabled, its `workflow_dispatch` was refused and neither a label nor a matching push started it. Re-enabled, the label started it again. So the resume poller, which disables itself, must stay a file of its own, as `devscene-resume.yml` already is.
 
 **Evidence:**
 - Measurement, Gate 12, 2026-09-30 10:17 UTC, maintainer's `gh`: `gh workflow disable probe-disable.yml` → state `disabled_manually`. `gh workflow run probe-disable.yml` → `could not create workflow dispatch event: HTTP 422: Cannot trigger a 'workflow_dispatch' on a disabled workflow`. A label at 10:17:17Z and a push of `probe-a3/one` at 10:17:20Z each started the listener but not `probe disable`. After `gh workflow enable`, a label at 10:17:32Z started `probe disable` at 10:17:33Z.
@@ -458,10 +456,10 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 
 **Verdict:** `partly true` — it prefills, but only while the URL stays under roughly 7–9.5 KB.
 
-**Answer:** Observed by the maintainer: values up to 6,000 characters (URL 7,151) prefilled. From 8,000 (URL 9,499), GitHub showed `Whoa there! Your request URL is too long.` Today's `harness-run.yml` template (URL 40,224) does not fit. Committing takes two clicks.
+**Answer:** Observed by the maintainer: values up to 6,000 characters (URL 7,151) prefilled. From 8,000 (URL 9,499), GitHub showed `Whoa there! Your request URL is too long.` Today's `devscene-run.yml` template (URL 40,224) does not fit. Committing takes two clicks.
 
 **Evidence:**
-- Observation by the maintainer, 2026-09-30 ~10:10 UTC, links to `https://github.com/firu-daniel/harness-gate12/new/main?filename=.github%2Fworkflows%2Fprobe-a4.yml&value=<URL-encoded text>`: value 120 / 2,000 / 4,000 / 6,000 characters (URL 267 / 2,467 / 4,815 / 7,151) → the editor opened with filename and content filled. Value 8,000 and above (URL 9,499 and above), and the 24,207-character `harness-run.yml` template (URL 40,224) → `Whoa there! Your request URL is too long.` Committing the 120-character file: **Commit changes…**, then **Commit changes** in the dialog.
+- Observation by the maintainer, 2026-09-30 ~10:10 UTC, links to `https://github.com/firu-daniel/harness-gate12/new/main?filename=.github%2Fworkflows%2Fprobe-a4.yml&value=<URL-encoded text>`: value 120 / 2,000 / 4,000 / 6,000 characters (URL 267 / 2,467 / 4,815 / 7,151) → the editor opened with filename and content filled. Value 8,000 and above (URL 9,499 and above), and the 24,207-character `devscene-run.yml` template (URL 40,224) → `Whoa there! Your request URL is too long.` Committing the 120-character file: **Commit changes…**, then **Commit changes** in the dialog.
 
 **Consequence:** none now.
 
@@ -621,7 +619,7 @@ A lead is listed here when its entry's evidence shows it wrong, wholly or in par
 3. **`feat_github_native_adoption`**, *Leads* › *Workflow files and `GITHUB_TOKEN`*, candidate (a): *"It costs the adopter one more secret, and it expires"*. A fine-grained PAT may be created with no expiry unless an organisation policy caps it (the organisation default is 366 days), and a classic PAT's expiry is optional ([S2](#s2-which-tokens-can-write-workflow-files--a-fine-grained-pat-a-classic-pat-a-github-app-installation-token-a-codespaces-token-how-does-each-expire-and-how-is-each-created)).
 4. **`feat_github_native_adoption`**, *Options to evaluate*: *"A reusable workflow or composite action published on the GitHub Actions Marketplace."* A reusable workflow cannot be published to the Marketplace; only an action (a composite action included) or an app can ([A2](#a2-github-marketplace-can-a-reusable-workflow-be-listed-or-only-an-action)).
 5. **`feat_github_native_adoption`**, *Options to evaluate* › *A browser-hosted development environment: GitHub Codespaces*: *"A button in the harness README, or a `devcontainer.json` the setup adds, opens a Codespace on the adopter's repository."* A `codespaces.new` link opens the repository it names, so a button in the harness README opens the harness repository, not the adopter's. A `devcontainer.json` in the adopter's own repository is unaffected ([A9](#a9-github-codespaces-claude-with-the-plugin-sign-in-setup-token-pushing-workflow-files-cost-a-readme-button)).
-6. **`feat_github_native_adoption`**, *Options to evaluate* › *A prefilled new-file link*: *"so adding the file is one click plus a commit"*. It holds only for a small file. From a URL of about 9.5 KB, GitHub returns `Whoa there! Your request URL is too long.`, which rules out today's 24 KB `harness-run.yml`. The commit is two clicks ([A4](#a4-does-githubs-newbranchfilenamevalue-link-prefill-a-new-file-and-up-to-what-length)).
+6. **`feat_github_native_adoption`**, *Options to evaluate* › *A prefilled new-file link*: *"so adding the file is one click plus a commit"*. It holds only for a small file. From a URL of about 9.5 KB, GitHub returns `Whoa there! Your request URL is too long.`, which rules out today's 24 KB `devscene-run.yml`. The commit is two clicks ([A4](#a4-does-githubs-newbranchfilenamevalue-link-prefill-a-new-file-and-up-to-what-length)).
 7. **`feat_github_native_adoption`**, *Options to evaluate* › *Copilot and GitHub's agent integrations*: *"Copilot Extensions, which as far as is known are being retired in favour of MCP"*. They are already retired: disabled on 2025-11-10. Two other details of the same bullet are dated: "the Copilot coding agent" is now named Copilot cloud agent, and it and the third-party coding agents consume AI credits plus Actions minutes ([A7](#a7-copilot-cloud-agent-third-party-coding-agents-on-github-copilot-extensions)).
 8. **`feat_github_native_adoption`**, *Leads* › *Workflow files and `GITHUB_TOKEN`*, candidate (c): *"a GitHub App's installation token with the _Workflows_ permission, whether an app of the harness's own or Anthropic's Claude app"*. Anthropic's app is not a candidate. Its installation token can be minted only with Anthropic's private key, and its *Workflows* permission is stated both ways by Anthropic's own sources ([A6](#a6-github-apps-what-one-needs-hosted-the-workflows-permission-a-thin-relay-and-hosting-cost), [A8](#a8-the-claude-github-app-what-it-installs-its-permissions-its-credentials)).
 

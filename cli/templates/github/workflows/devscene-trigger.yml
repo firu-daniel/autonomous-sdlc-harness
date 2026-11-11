@@ -1,4 +1,4 @@
-# harness-trigger.yml — starts a devscene task run when an
+# devscene-trigger.yml — starts a devscene task run when an
 # issue is labelled, or when a `repository_dispatch` asks for one.
 #
 # WHO WRITES IT. `devscene init`, only when harness.config.json's
@@ -10,17 +10,17 @@
 #
 # WHAT IT DOES. One job runs `remote-run.sh trigger`, which does everything
 # else: it authorises the start, derives the branch, places and commits the task
-# prompt, pushes, dispatches harness-run.yml, comments on the issue and removes
+# prompt, pushes, dispatches devscene-run.yml, comments on the issue and removes
 # the label. Every decision lives in that script; this file carries only the
 # events, the permissions and the label filter. The `run-name` below is not
-# harness-run.yml's `harness <action> <branch>` title, so no run lookup
+# devscene-run.yml's `harness <action> <branch>` title, so no run lookup
 # `remote-run.sh` makes by that title can match a trigger run.
 #
 # THE EVENTS.
 #   issues, type `labeled` only, never `opened`: labelling an issue at creation
 #     raises `labeled` too, so listening to both would start twice
 #     (docs/github-integration-research.md, T1). The job runs only for the
-#     label the HARNESS_TRIGGER_LABEL variable names (`sdlc-harness` when
+#     label the HARNESS_TRIGGER_LABEL variable names (`devscene` when
 #     unset), and passes the job that same label, never an empty one;
 #     every other label yields a skipped job, which runs no runner and bills
 #     nothing (docs/remote-execution.md, `### Verified in Gate 12 round 2`).
@@ -42,7 +42,7 @@
 # level grants nothing, and the `trigger` job's own block sets every permission
 # it does not list to `none`, so a job added later inherits nothing:
 #   contents: write   push the new branch carrying the task prompt
-#   actions: write    dispatch harness-run.yml and look up the run it created
+#   actions: write    dispatch devscene-run.yml and look up the run it created
 #   issues: write     comment on the issue and remove the trigger label
 # The job reads no repository secret: it needs only its own token, so the
 # credential secrets never reach the job that reads untrusted issue text.
@@ -76,7 +76,7 @@
 # DECLARED MIRRORS — a rename on either side is an edit to both:
 #   cli/src/remote/githubActions.ts   WORKFLOW_TRIGGER_FILE, HARNESS_RUNNER,
 #                                     HARNESS_REMOTE_STOP, HARNESS_TRIGGER_LABEL,
-#                                     DEFAULT_TRIGGER_LABEL (`sdlc-harness`),
+#                                     DEFAULT_TRIGGER_LABEL (`devscene`),
 #                                     HARNESS_TRIGGER_ALLOWED_BOTS,
 #                                     HARNESS_RUN_ACTORS,
 #                                     TRIGGER_DISPATCH_EVENT_TYPE (`harness-task`)
@@ -98,7 +98,7 @@
 # together. The version stays on its own line, never trailing the `uses:` value:
 # a value carrying ` #` is never a plain scalar.
 
-name: harness-trigger
+name: devscene-trigger
 run-name: harness trigger ${{ github.event.issue.number || github.event.action }}
 
 on:
@@ -115,7 +115,7 @@ defaults:
 
 jobs:
   trigger:
-    if: github.event_name == 'repository_dispatch' || github.event.label.name == (vars.HARNESS_TRIGGER_LABEL || 'sdlc-harness')
+    if: github.event_name == 'repository_dispatch' || github.event.label.name == (vars.HARNESS_TRIGGER_LABEL || 'devscene')
     runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
     permissions:
       contents: write
@@ -125,7 +125,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
       HARNESS_REMOTE_SLUG: ${{ github.repository }}
-      HARNESS_TRIGGER_LABEL: ${{ vars.HARNESS_TRIGGER_LABEL || 'sdlc-harness' }}
+      HARNESS_TRIGGER_LABEL: ${{ vars.HARNESS_TRIGGER_LABEL || 'devscene' }}
       HARNESS_TRIGGER_ALLOWED_BOTS: ${{ vars.HARNESS_TRIGGER_ALLOWED_BOTS }}
       HARNESS_RUN_ACTORS: ${{ vars.HARNESS_RUN_ACTORS }}
     steps:
