@@ -106,7 +106,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_env_variables/tas
 11. [x] **Task 11** — Rename the variables in the `remote-run` suite and the smaller remote suites _(layer: cli)_ _(points: 15)_
 12. [x] **Task 12** — Rename the variables in the watcher and restart-watcher suites _(layer: cli)_ _(points: 15)_
 13. [x] **Task 13** — Rename the variables in the remaining cli-only suites and the timing helper _(layer: cli)_ _(points: 10)_
-14. [ ] **Task 14** — Rename the anchor and QA keys in the plugin's shell library and QA helpers _(layer: plugin)_ _(points: 10)_
+14. [x] **Task 14** — Rename the anchor and QA keys in the plugin's shell library and QA helpers _(layer: plugin)_ _(points: 10)_
 15. [ ] **Task 15** — Rename the anchor read, the remote-stop variable and the QA prefix in the plugin's prose _(layer: plugin)_ _(points: 15)_
 16. [ ] **Task 16** — Bring the self-adopted script copies to the renamed template bytes _(layer: general)_ _(points: 10)_
 17. [ ] **Task 17** — Rename the variables in the sandbox-probe scripts, the probe runner workflow and the arm-A eval script _(layer: general)_ _(points: 10)_
