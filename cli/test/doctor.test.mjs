@@ -2489,8 +2489,8 @@ const PUSH_ENV_FILE = 'push.env';
 const REPO_PUSH_ENV_PATH = '.claude/push-notify.env';
 
 /** The two keys the notifier recognises, asserted by name because the report names them and not values. */
-const PUSH_URL_KEY = 'HARNESS_PUSH_URL';
-const PUSH_CMD_KEY = 'HARNESS_PUSH_CMD';
+const PUSH_URL_KEY = 'DEVSCENE_PUSH_URL';
+const PUSH_CMD_KEY = 'DEVSCENE_PUSH_CMD';
 
 /**
  * The two values the cases below write, chosen so `assert.ok(!output.includes(…))` means what it
@@ -3231,20 +3231,20 @@ const FIXTURE_LINTER_BINARY = 'harness-fixture-linter';
 
 /**
  * The variable the watcher reaches its agent binary through, and the name it falls back to when no
- * unit sets it — `autonomous-watcher.sh`'s `AGENT_CLI="${HARNESS_AGENT_CLI:-claude}"`.
+ * unit sets it — `autonomous-watcher.sh`'s `AGENT_CLI="${DEVSCENE_AGENT_CLI:-claude}"`.
  *
  * Spelled as literals for the reason the unit directories above are: these are the shipped script's
  * strings, so a fixture written against them is written against the contract rather than against a
  * restatement of the code that has to satisfy it. The default is what an unedited unit resolves —
  * `daemon/units.ts` choice 5 renders `PATH` and nothing else — so it is what these cases stub.
  */
-const AGENT_CLI_VARIABLE = 'HARNESS_AGENT_CLI';
+const AGENT_CLI_VARIABLE = 'DEVSCENE_AGENT_CLI';
 const DEFAULT_AGENT_CLI = 'claude';
 
 /**
  * Add one environment variable to an installed unit by hand, in that backend's own shape.
  *
- * This is the only way a unit carries `HARNESS_AGENT_CLI` today, which is why it is written here
+ * This is the only way a unit carries `DEVSCENE_AGENT_CLI` today, which is why it is written here
  * rather than asked of {@link renderUnit}: an operator's edit is the case under test. Both forms are
  * anchored on the rendered `PATH`, so the addition lands in the same stanza the service manager
  * reads — appended to a systemd file it would fall into `[Install]` and be ignored.
@@ -3358,7 +3358,7 @@ test('the daemon-path check grades the installed unit, and never above a warning
     // The agent CLI is the one required binary no machine supplies, so it is supplied here — and the
     // unit is given the same directory the shell has, which is the state a fresh `daemon install`
     // leaves behind. It is stubbed under the *default* name because the unit sets no
-    // `HARNESS_AGENT_CLI`, and the shell's value below is one no machine resolves: the check grades
+    // `DEVSCENE_AGENT_CLI`, and the shell's value below is one no machine resolves: the check grades
     // what the daemon will launch, so this passes.
     const envPath = `${toolchain}${delimiter}${process.env.PATH ?? ''}`;
     const { home, unit } = await installUnitCarrying(subtest, dir, envPath);
@@ -3381,7 +3381,7 @@ test('the daemon-path check grades the installed unit, and never above a warning
     const { home } = await installUnitCarrying(subtest, dir, SERVICE_MANAGER_DEFAULT_PATH);
 
     // The shell resolves the agent and the unit does not, which is the only configuration in which
-    // the finding is the check's rather than the machine's. The shell's `HARNESS_AGENT_CLI` names a
+    // the finding is the check's rather than the machine's. The shell's `DEVSCENE_AGENT_CLI` names a
     // third binary, which the daemon never sees and the warning must therefore never mention.
     const env = {
       HOME: home,
@@ -3415,7 +3415,7 @@ test('the daemon-path check grades the installed unit, and never above a warning
     const envPath = `${toolchain}${delimiter}${process.env.PATH ?? ''}`;
     const { home } = await installUnitCarrying(subtest, dir, envPath);
 
-    // An empty value stands in for an unset one: `${HARNESS_AGENT_CLI:-claude}` reads them alike,
+    // An empty value stands in for an unset one: `${DEVSCENE_AGENT_CLI:-claude}` reads them alike,
     // and it holds whether or not the account running this suite exports the variable.
     const base = { HOME: home, PATH: envPath };
     const unset = await runCli(dir, ['doctor'], { ...base, [AGENT_CLI_VARIABLE]: '' });
@@ -5892,12 +5892,12 @@ test('Acceptance 1: with docs.retrievalBackend absent, doctor reports what an ex
  *
  * **The rule these cases enforce: remote setup is graded from local evidence, and exactly the two
  * conditions that stop a remote run from being dispatched move the exit status.** Every case points
- * `HARNESS_GH_CLI` at a stub that records any invocation, so the machine's own `gh` is never reached
+ * `DEVSCENE_GH_CLI` at a stub that records any invocation, so the machine's own `gh` is never reached
  * and a run that spawned one is caught; the literals are the shipped contract's
  * (`remote/githubActions.ts`, `cli/templates/github/workflows/`), for the reason the unit directories
  * above are spelled out.
  */
-const GH_CLI_VARIABLE = 'HARNESS_GH_CLI';
+const GH_CLI_VARIABLE = 'DEVSCENE_GH_CLI';
 const FIXTURE_GH_CLI = 'harness-fixture-gh';
 const REMOTE_RUN_WORKFLOW = '.github/workflows/devscene-run.yml';
 const REMOTE_RESUME_WORKFLOW = '.github/workflows/devscene-resume.yml';
@@ -5991,7 +5991,7 @@ test('the remote-execution check grades local evidence and fails only what stops
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'remote-execution');
     assert.ok(line?.includes('doctor --check-github'), `${stdout}\n${stderr}`);
-    for (const name of ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'HARNESS_RUNNER']) {
+    for (const name of ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'DEVSCENE_RUNNER']) {
       assert.ok(line.includes(name), `the pass does not name ${name}:\n${line}`);
     }
   });
@@ -6051,14 +6051,14 @@ test('the remote-execution check grades local evidence and fails only what stops
     assert.ok(line.includes('gh auth refresh -s workflow'), line);
   });
 
-  const PIN_LINE = /^([ \t]*HARNESS_CLI_VERSION:).*$/gm;
+  const PIN_LINE = /^([ \t]*DEVSCENE_CLI_VERSION:).*$/gm;
   const STALE_PIN = '0.0.1';
   const UPGRADE_ROUTE = 'init --upgrade-workflows';
   const rewritePins = (dir, replace) => {
     const path = join(dir, REMOTE_RUN_WORKFLOW);
     const before = readFileSync(path, 'utf8');
     const after = before.replace(PIN_LINE, replace);
-    assert.notEqual(after, before, 'devscene-run.yml carries no HARNESS_CLI_VERSION line to rewrite');
+    assert.notEqual(after, before, 'devscene-run.yml carries no DEVSCENE_CLI_VERSION line to rewrite');
     writeFileSync(path, after, 'utf8');
   };
   const assertMoveRoute = (line) => {
@@ -6138,7 +6138,7 @@ test('the remote-execution check grades local evidence and fails only what stops
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'remote-execution');
-    assert.ok(line?.includes('carries no HARNESS_CLI_VERSION line'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('carries no DEVSCENE_CLI_VERSION line'), `${stdout}\n${stderr}`);
   });
 
   await t.test('the upgrade route it names clears the warning', async (subtest) => {
@@ -6158,16 +6158,16 @@ test('the remote-execution check grades local evidence and fails only what stops
     assert.ok(reportLine(after.stdout, 'pass', 'remote-execution')?.includes("rendered for this CLI's own version"), `${after.stdout}\n${after.stderr}`);
   });
 
-  const RUN_ACTORS_LINE = /^[ \t]*HARNESS_RUN_ACTORS:.*\r?\n/gm;
-  const BEFORE_RUN_ACTORS = 'was written before `HARNESS_RUN_ACTORS`';
+  const RUN_ACTORS_LINE = /^[ \t]*DEVSCENE_RUN_ACTORS:.*\r?\n/gm;
+  const BEFORE_RUN_ACTORS = 'was written before `DEVSCENE_RUN_ACTORS`';
 
-  await t.test('on, with devscene-run.yml written before HARNESS_RUN_ACTORS, warns with the upgrade route', async (subtest) => {
+  await t.test('on, with devscene-run.yml written before DEVSCENE_RUN_ACTORS, warns with the upgrade route', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await pushWorkflows(dir);
     const path = join(dir, REMOTE_RUN_WORKFLOW);
     const before = readFileSync(path, 'utf8');
     const after = before.replace(RUN_ACTORS_LINE, '');
-    assert.notEqual(after, before, 'devscene-run.yml carries no HARNESS_RUN_ACTORS line to remove');
+    assert.notEqual(after, before, 'devscene-run.yml carries no DEVSCENE_RUN_ACTORS line to remove');
     writeFileSync(path, after, 'utf8');
     const stub = await ghStub(subtest);
 
@@ -6180,7 +6180,7 @@ test('the remote-execution check grades local evidence and fails only what stops
     assert.ok(line.includes('docs/remote-execution.md, section 7, Upgrading'), line);
   });
 
-  await t.test('on, with devscene-run.yml as init writes it, says nothing about HARNESS_RUN_ACTORS', async (subtest) => {
+  await t.test('on, with devscene-run.yml as init writes it, says nothing about DEVSCENE_RUN_ACTORS', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await pushWorkflows(dir);
     const stub = await ghStub(subtest);
@@ -6267,7 +6267,7 @@ test('daemon-path names gh when remote execution is on, and not when it is off',
  * The `remote-github` check and `doctor --check-github`.
  *
  * **The rule these cases enforce: GitHub is asked only when the flag asks, and "cannot tell" is never
- * graded as "missing".** `HARNESS_GH_CLI` points at a stub that logs every invocation and answers per
+ * graded as "missing".** `DEVSCENE_GH_CLI` points at a stub that logs every invocation and answers per
  * subcommand from files each case writes, so each row of the grading table is one answer changed from
  * a healthy set. A timed-out call is simulated by the stub signalling itself, which hands the check
  * exactly what `runGh`'s bound does — a `null` status — without spending that 30 s bound per case.
@@ -6336,7 +6336,7 @@ function answerGh(stub, overrides = {}) {
   const healthy = {
     auth: { out: 'Logged in to github.com\n' },
     run: { out: 'devscene-run - devscene-run.yml\n' },
-    secrets: { out: JSON.stringify([{ name: 'CLAUDE_CODE_OAUTH_TOKEN' }, { name: 'HARNESS_PUSH_URL' }]) },
+    secrets: { out: JSON.stringify([{ name: 'CLAUDE_CODE_OAUTH_TOKEN' }, { name: 'DEVSCENE_PUSH_URL' }]) },
     resume: { out: 'devscene-resume - devscene-resume.yml\n' },
     workflows: { out: workflowListing() },
     variables: { out: '[]' },
@@ -6455,10 +6455,10 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.deepEqual(ghInvocations(stub), Object.values(GH_CALLS).map((args) => args.join(' ')));
   });
 
-  await t.test('a HARNESS_RUNNER value is reported as the runner label', async (subtest) => {
+  await t.test('a DEVSCENE_RUNNER value is reported as the runner label', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
-    answerGh(stub, { variables: { out: JSON.stringify([{ name: 'HARNESS_RUNNER', value: 'fixture-runner' }]) } });
+    answerGh(stub, { variables: { out: JSON.stringify([{ name: 'DEVSCENE_RUNNER', value: 'fixture-runner' }]) } });
 
     const { stdout, stderr } = await checkGithub(dir, stub);
 
@@ -6468,7 +6468,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
   await t.test('both credential secrets pass with the billing note', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
-    const names = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'HARNESS_PUSH_URL'];
+    const names = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'DEVSCENE_PUSH_URL'];
     answerGh(stub, { secrets: { out: JSON.stringify(names.map((name) => ({ name }))) } });
 
     const { status, stdout, stderr } = await checkGithub(dir, stub);
@@ -6482,7 +6482,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     ['gh does not spawn', {}, `${FIXTURE_GH_CLI}-absent`, 'install the GitHub CLI', 0],
     ['gh auth status exits non-zero', { auth: { err: 'You are not logged into any GitHub hosts.\n', status: 1 } }, undefined, 'gh auth login', 1],
     ['GitHub does not know devscene-run.yml', { run: { err: 'could not find any workflows named devscene-run.yml\n', status: 1 } }, undefined, "push .github/workflows/devscene-run.yml to the repository's default branch", 9],
-    ['neither credential secret is set', { secrets: { out: JSON.stringify([{ name: 'HARNESS_PUSH_URL' }]) } }, undefined, 'billing follows ANTHROPIC_API_KEY when both are set', 8],
+    ['neither credential secret is set', { secrets: { out: JSON.stringify([{ name: 'DEVSCENE_PUSH_URL' }]) } }, undefined, 'billing follows ANTHROPIC_API_KEY when both are set', 8],
   ];
   for (const [name, overrides, ghName, expected, calls] of failing) {
     await t.test(`fails when ${name}`, async (subtest) => {
@@ -6500,9 +6500,9 @@ test('the remote-github check asks GitHub only under --check-github and grades e
   }
 
   const warning = [
-    ['HARNESS_PUSH_URL is absent', { secrets: { out: JSON.stringify([{ name: 'CLAUDE_CODE_OAUTH_TOKEN' }]) } }, 'notifications from a remote run reach no one'],
+    ['DEVSCENE_PUSH_URL is absent', { secrets: { out: JSON.stringify([{ name: 'CLAUDE_CODE_OAUTH_TOKEN' }]) } }, 'notifications from a remote run reach no one'],
     ['GitHub does not know devscene-resume.yml', { resume: { err: 'could not find any workflows named devscene-resume.yml\n', status: 1 } }, 'usage auto-resume is unavailable'],
-    ['HARNESS_REMOTE_STOP is set', { variables: { out: JSON.stringify([{ name: 'HARNESS_REMOTE_STOP', value: '1' }]) } }, 'every remote start and continuation is stopped'],
+    ['DEVSCENE_REMOTE_STOP is set', { variables: { out: JSON.stringify([{ name: 'DEVSCENE_REMOTE_STOP', value: '1' }]) } }, 'every remote start and continuation is stopped'],
     ['a gh call is stopped past its bound', { secrets: { kill: true } }, 'cannot tell which repository secrets are set: `gh secret list --json name` gave no answer, because it was stopped before it answered (timed out)'],
     ['gh cannot reach GitHub', { auth: { err: 'error connecting to api.github.com\ncheck your internet connection or https://githubstatus.com\n', status: 1 } }, 'cannot tell whether gh is authenticated'],
     ['the repository keeps artifacts for fewer than 30 days', { retention: { out: JSON.stringify({ days: 7 }) } }, 'the repository keeps artifacts for 7 days, so a remote run parked or paused longer than that loses its state bundle: raise it under Settings → Actions → General → Artifact and log retention'],
@@ -6524,7 +6524,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     });
   }
 
-  await t.test('an unset HARNESS_RUN_ACTORS in a user-owned repository names the owner as the only actor', async (subtest) => {
+  await t.test('an unset DEVSCENE_RUN_ACTORS in a user-owned repository names the owner as the only actor', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub);
@@ -6533,10 +6533,10 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'remote-github');
-    assert.ok(line?.includes('HARNESS_RUN_ACTORS is unset, so only the repository owner, fixture-owner, may start, steer, answer and review a run'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('DEVSCENE_RUN_ACTORS is unset, so only the repository owner, fixture-owner, may start, steer, answer and review a run'), `${stdout}\n${stderr}`);
   });
 
-  await t.test('an unset HARNESS_RUN_ACTORS in an organisation-owned repository warns with gh variable set', async (subtest) => {
+  await t.test('an unset DEVSCENE_RUN_ACTORS in an organisation-owned repository warns with gh variable set', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub, { owner: { out: JSON.stringify({ owner: { login: 'fixture-org', type: 'Organization' } }) } });
@@ -6545,8 +6545,8 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
-    assert.ok(line?.includes('HARNESS_RUN_ACTORS is unset and fixture-org is an Organization, not a user, so no person may start, steer, answer or review a run'), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('`gh variable set HARNESS_RUN_ACTORS --body <login,login>`'), line);
+    assert.ok(line?.includes('DEVSCENE_RUN_ACTORS is unset and fixture-org is an Organization, not a user, so no person may start, steer, answer or review a run'), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('`gh variable set DEVSCENE_RUN_ACTORS --body <login,login>`'), line);
   });
 
   await t.test('a refused owner read is a cannot-tell warning and no second one', async (subtest) => {
@@ -6562,26 +6562,26 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.ok(!line.includes('no person may'), line);
   });
 
-  await t.test('HARNESS_RUN_ACTORS of * with the subscription token warns and reads no owner', async (subtest) => {
+  await t.test('DEVSCENE_RUN_ACTORS of * with the subscription token warns and reads no owner', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
-    answerGh(stub, { variables: { out: JSON.stringify([{ name: 'HARNESS_RUN_ACTORS', value: '*' }]) } });
+    answerGh(stub, { variables: { out: JSON.stringify([{ name: 'DEVSCENE_RUN_ACTORS', value: '*' }]) } });
 
     const { status, stdout, stderr } = await checkGithub(dir, stub);
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
-    assert.ok(line?.includes("HARNESS_RUN_ACTORS is `*` while CLAUDE_CODE_OAUTH_TOKEN is set, so every writer's runs spend one person's subscription"), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes("DEVSCENE_RUN_ACTORS is `*` while CLAUDE_CODE_OAUTH_TOKEN is set, so every writer's runs spend one person's subscription"), `${stdout}\n${stderr}`);
     assert.ok(line.includes('every collaborator with write access may start, steer, answer and review a run'), line);
     assert.ok(!ghInvocations(stub).includes(GH_CALLS.owner.join(' ')), ghInvocations(stub).join('\n'));
   });
 
-  await t.test('HARNESS_RUN_ACTORS of * with only ANTHROPIC_API_KEY carries no subscription warning', async (subtest) => {
+  await t.test('DEVSCENE_RUN_ACTORS of * with only ANTHROPIC_API_KEY carries no subscription warning', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub, {
-      variables: { out: JSON.stringify([{ name: 'HARNESS_RUN_ACTORS', value: '*' }]) },
-      secrets: { out: JSON.stringify([{ name: 'ANTHROPIC_API_KEY' }, { name: 'HARNESS_PUSH_URL' }]) },
+      variables: { out: JSON.stringify([{ name: 'DEVSCENE_RUN_ACTORS', value: '*' }]) },
+      secrets: { out: JSON.stringify([{ name: 'ANTHROPIC_API_KEY' }, { name: 'DEVSCENE_PUSH_URL' }]) },
     });
 
     const { status, stdout, stderr } = await checkGithub(dir, stub);
@@ -6591,11 +6591,11 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.ok(!`${stdout}\n${stderr}`.includes('subscription'), `${stdout}\n${stderr}`);
   });
 
-  await t.test('a listed HARNESS_RUN_ACTORS is a note naming each login, and reads no owner', async (subtest) => {
+  await t.test('a listed DEVSCENE_RUN_ACTORS is a note naming each login, and reads no owner', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub, {
-      variables: { out: JSON.stringify([{ name: 'HARNESS_RUN_ACTORS', value: 'alice, bob' }]) },
+      variables: { out: JSON.stringify([{ name: 'DEVSCENE_RUN_ACTORS', value: 'alice, bob' }]) },
       // Writers all on the list, so the beyond-the-list warning does not turn this pass into a warn.
       collaborators: { out: JSON.stringify([{ login: 'alice', permissions: { push: true } }, { login: 'bob', permissions: { push: true } }]) },
     });
@@ -6604,7 +6604,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'remote-github');
-    assert.ok(line?.includes('HARNESS_RUN_ACTORS admits alice, bob, so only those logins may'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('DEVSCENE_RUN_ACTORS admits alice, bob, so only those logins may'), `${stdout}\n${stderr}`);
     assert.ok(!ghInvocations(stub).includes(GH_CALLS.owner.join(' ')), ghInvocations(stub).join('\n'));
   });
 
@@ -6614,7 +6614,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
       { login: 'fixture-owner', permissions: { admin: true, maintain: true, push: true, triage: true, pull: true } },
       ...more.map(([login, push]) => ({ login, permissions: { admin: false, maintain: false, push, triage: true, pull: true } })),
     ]);
-  const writersWarning = 'can write to the repository without being on HARNESS_RUN_ACTORS';
+  const writersWarning = 'can write to the repository without being on DEVSCENE_RUN_ACTORS';
 
   await t.test('a writer beyond the list while the subscription token is set warns, naming them and the edited-workflow risk', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
@@ -6653,7 +6653,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
     assert.ok(
-      line?.includes('cannot tell whether any writer is beyond HARNESS_RUN_ACTORS') && line.includes('a full page of 100 collaborators'),
+      line?.includes('cannot tell whether any writer is beyond DEVSCENE_RUN_ACTORS') && line.includes('a full page of 100 collaborators'),
       `${stdout}\n${stderr}`,
     );
     assert.ok(!line.includes(writersWarning), line);
@@ -6663,7 +6663,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub, {
-      variables: { out: JSON.stringify([{ name: 'HARNESS_RUN_ACTORS', value: 'bob, fixture-owner' }]) },
+      variables: { out: JSON.stringify([{ name: 'DEVSCENE_RUN_ACTORS', value: 'bob, fixture-owner' }]) },
       collaborators: { out: collaborators(['Bob', true]) },
     });
 
@@ -6683,14 +6683,14 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'remote-github');
-    assert.ok(line?.includes('writers beyond HARNESS_RUN_ACTORS not checked: `gh api repos/{owner}/{repo}/collaborators?per_page=100` needs push access (it exited 1: HTTP 403'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('writers beyond DEVSCENE_RUN_ACTORS not checked: `gh api repos/{owner}/{repo}/collaborators?per_page=100` needs push access (it exited 1: HTTP 403'), `${stdout}\n${stderr}`);
   });
 
   await t.test('only ANTHROPIC_API_KEY makes no collaborators read', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub, {
-      secrets: { out: JSON.stringify([{ name: 'ANTHROPIC_API_KEY' }, { name: 'HARNESS_PUSH_URL' }]) },
+      secrets: { out: JSON.stringify([{ name: 'ANTHROPIC_API_KEY' }, { name: 'DEVSCENE_PUSH_URL' }]) },
       collaborators: { out: collaborators(['Bob', true]) },
     });
 
@@ -6701,11 +6701,11 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.ok(!`${stdout}\n${stderr}`.includes(writersWarning), `${stdout}\n${stderr}`);
   });
 
-  await t.test('HARNESS_RUN_ACTORS of * makes no collaborators read', async (subtest) => {
+  await t.test('DEVSCENE_RUN_ACTORS of * makes no collaborators read', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub, {
-      variables: { out: JSON.stringify([{ name: 'HARNESS_RUN_ACTORS', value: '*' }]) },
+      variables: { out: JSON.stringify([{ name: 'DEVSCENE_RUN_ACTORS', value: '*' }]) },
       collaborators: { out: collaborators(['Bob', true]) },
     });
 
@@ -6803,14 +6803,14 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
-    assert.ok(line?.includes('HARNESS_PUSH_URL is not a repository secret'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('DEVSCENE_PUSH_URL is not a repository secret'), `${stdout}\n${stderr}`);
     assert.ok(line.includes('GitHub knows devscene-trigger.yml and devscene-control.yml, and the label `devscene` exists'), line);
   });
 
   await t.test('with the trigger on, a failing grade still carries the trigger confirmation', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     const stub = await answeringGhStub(subtest);
-    answerGh(stub, { secrets: { out: JSON.stringify([{ name: 'HARNESS_PUSH_URL' }]) } });
+    answerGh(stub, { secrets: { out: JSON.stringify([{ name: 'DEVSCENE_PUSH_URL' }]) } });
     answerTriggerGh(stub);
 
     const { status, stdout, stderr } = await checkGithub(dir, stub);
@@ -6896,7 +6896,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
   const prSettingOff = { prSetting: { out: JSON.stringify({ default_workflow_permissions: 'read', can_approve_pull_request_reviews: false }) } };
 
-  await t.test('with the trigger on, the pull-request setting off and no HARNESS_GIT_TOKEN warns naming the setting', async (subtest) => {
+  await t.test('with the trigger on, the pull-request setting off and no DEVSCENE_GIT_TOKEN warns naming the setting', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub);
@@ -6906,9 +6906,9 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
-    assert.ok(line?.includes('Allow GitHub Actions to create and approve pull requests is off and HARNESS_GIT_TOKEN is not a repository secret'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('Allow GitHub Actions to create and approve pull requests is off and DEVSCENE_GIT_TOKEN is not a repository secret'), `${stdout}\n${stderr}`);
     assert.ok(line.includes('Settings -> Actions -> General -> Workflow permissions'), line);
-    assert.ok(line.includes('`gh secret set HARNESS_GIT_TOKEN`'), line);
+    assert.ok(line.includes('`gh secret set DEVSCENE_GIT_TOKEN`'), line);
   });
 
   await t.test('with the trigger on, the pull-request setting off and an unreadable secret list is cannot tell', async (subtest) => {
@@ -6921,14 +6921,14 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
-    assert.ok(line?.includes('whether HARNESS_GIT_TOKEN is set could not be read'), `${stdout}\n${stderr}`);
-    assert.ok(!line.includes('HARNESS_GIT_TOKEN is not a repository secret'), line);
+    assert.ok(line?.includes('whether DEVSCENE_GIT_TOKEN is set could not be read'), `${stdout}\n${stderr}`);
+    assert.ok(!line.includes('DEVSCENE_GIT_TOKEN is not a repository secret'), line);
   });
 
-  await t.test('with the trigger on, the pull-request setting off and HARNESS_GIT_TOKEN set is a note', async (subtest) => {
+  await t.test('with the trigger on, the pull-request setting off and DEVSCENE_GIT_TOKEN set is a note', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     const stub = await answeringGhStub(subtest);
-    const names = ['CLAUDE_CODE_OAUTH_TOKEN', 'HARNESS_PUSH_URL', 'HARNESS_GIT_TOKEN'];
+    const names = ['CLAUDE_CODE_OAUTH_TOKEN', 'DEVSCENE_PUSH_URL', 'DEVSCENE_GIT_TOKEN'];
     answerGh(stub, { secrets: { out: JSON.stringify(names.map((name) => ({ name }))) } });
     answerTriggerGh(stub, prSettingOff);
 
@@ -6936,7 +6936,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'remote-github');
-    assert.ok(line?.includes('a run opens its draft pull request with HARNESS_GIT_TOKEN'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('a run opens its draft pull request with DEVSCENE_GIT_TOKEN'), `${stdout}\n${stderr}`);
   });
 
   await t.test('with the trigger on, a refused pull-request-setting read is a not-checked note', async (subtest) => {
@@ -6952,10 +6952,10 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.ok(line?.includes('the pull-request setting was not checked: `gh api repos/{owner}/{repo}/actions/permissions/workflow` may need more access than this login has (it exited 1: HTTP 403'), `${stdout}\n${stderr}`);
   });
 
-  await t.test('with the trigger on, HARNESS_TRIGGER_LABEL names the label and allowed bots are a note', async (subtest) => {
+  await t.test('with the trigger on, DEVSCENE_TRIGGER_LABEL names the label and allowed bots are a note', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     const stub = await answeringGhStub(subtest);
-    const variables = [{ name: 'HARNESS_TRIGGER_LABEL', value: 'go' }, { name: 'HARNESS_TRIGGER_ALLOWED_BOTS', value: 'renovate[bot], dependabot[bot]' }];
+    const variables = [{ name: 'DEVSCENE_TRIGGER_LABEL', value: 'go' }, { name: 'DEVSCENE_TRIGGER_ALLOWED_BOTS', value: 'renovate[bot], dependabot[bot]' }];
     answerGh(stub, { variables: { out: JSON.stringify(variables) } });
     answerTriggerGh(stub, { labels: { out: JSON.stringify([{ name: 'go' }]) } });
 
@@ -6964,7 +6964,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'remote-github');
     assert.ok(line?.includes('the label `go` exists'), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('HARNESS_TRIGGER_ALLOWED_BOTS admits renovate[bot], dependabot[bot], each of which can start a run without a permission check'), line);
+    assert.ok(line.includes('DEVSCENE_TRIGGER_ALLOWED_BOTS admits renovate[bot], dependabot[bot], each of which can start a run without a permission check'), line);
   });
 });
 
@@ -7056,7 +7056,7 @@ test('the forge check names every forge state and never fails', async (t) => {
     const line = reportLine(stderr, 'warn', 'forge');
     assert.ok(line?.includes('GitHub cannot reach this machine'), `${stdout}\n${stderr}`);
     assert.ok(line.includes('config set execution.target github-actions'), line);
-    assert.ok(line.includes('HARNESS_RUNNER'), line);
+    assert.ok(line.includes('DEVSCENE_RUNNER'), line);
   });
 
   await t.test('github with remote execution on and the trigger workflow absent warns with init as the remedy', async (subtest) => {
@@ -7142,7 +7142,7 @@ test('the forge check names every forge state and never fails', async (t) => {
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'forge');
-    assert.ok(line?.includes('HARNESS_TRIGGER_LABEL label (default `devscene`) starts a task run'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('DEVSCENE_TRIGGER_LABEL label (default `devscene`) starts a task run'), `${stdout}\n${stderr}`);
     assert.ok(line.includes(REMOTE_CONTROL_WORKFLOW), line);
     assert.ok(line.includes('`@dev-scene <verb>` comment'), line);
     assert.ok(line.includes('a mention of `@dev-scene` anywhere else in a comment is read by an agent, which carries out answer, pause, resume, status and asks the commenter to confirm stop, clear'), line);
@@ -7152,15 +7152,15 @@ test('the forge check names every forge state and never fails', async (t) => {
     assert.ok(line.includes('doctor --check-github'), line);
   });
 
-  const BEFORE_RUN_ACTORS = 'written before `HARNESS_RUN_ACTORS`';
+  const BEFORE_RUN_ACTORS = 'written before `DEVSCENE_RUN_ACTORS`';
 
-  await t.test('github with devscene-control.yml written before HARNESS_RUN_ACTORS warns naming it alone and init --force', async (subtest) => {
+  await t.test('github with devscene-control.yml written before DEVSCENE_RUN_ACTORS warns naming it alone and init --force', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await configure(dir, [['forge', 'github']], { init: true });
     const path = join(dir, REMOTE_CONTROL_WORKFLOW);
     const before = readFileSync(path, 'utf8');
-    const after = before.replace(/^[ \t]*HARNESS_RUN_ACTORS:.*\r?\n/gm, '');
-    assert.notEqual(after, before, 'devscene-control.yml carries no HARNESS_RUN_ACTORS line to remove');
+    const after = before.replace(/^[ \t]*DEVSCENE_RUN_ACTORS:.*\r?\n/gm, '');
+    assert.notEqual(after, before, 'devscene-control.yml carries no DEVSCENE_RUN_ACTORS line to remove');
     writeFileSync(path, after, 'utf8');
     await pushWorkflows(dir);
     const stub = await ghStub(subtest);
@@ -7175,7 +7175,7 @@ test('the forge check names every forge state and never fails', async (t) => {
     assert.ok(line.includes('`npx devscene init --force`'), line);
   });
 
-  await t.test('github with both forge workflows as init writes them says nothing about HARNESS_RUN_ACTORS', async (subtest) => {
+  await t.test('github with both forge workflows as init writes them says nothing about DEVSCENE_RUN_ACTORS', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await configure(dir, [['forge', 'github']], { init: true });
     await pushWorkflows(dir);
