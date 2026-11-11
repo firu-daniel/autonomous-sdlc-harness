@@ -27,3 +27,5 @@
 
 - `git grep -n -F 'autonomous-sdlc-harness' -- docs/remote-execution.md docs/github-run-control.md docs/github-issue-trigger.md` prints nothing.
 - `git diff -U0 -- docs/remote-execution.md docs/github-run-control.md docs/github-issue-trigger.md` shows no changed line starting with `#`, and no changed occurrence of `sdlc-harness` that is not part of the full old product name.
+
+**Disclosure placement (implementer record):** the sentence was added only to `docs/remote-execution.md`, directly under its `**Who reads this:**` paragraph, because its `**Established.** The release tag's shape.` record (a tag created 2026-09-09, its message and the `git cat-file -p` command) was respelled. `docs/github-run-control.md`'s respelled hits are commands a reader is told to run, reply templates, and one `## 8. What is not verified here` table row describing an unverified behaviour (`-p /devscene:harness-read-mention`), not a measured record; its `### Verified in Gate 12 round …` records carried no old-name text. `docs/github-issue-trigger.md`'s hits are all instructions. Neither of those two gained the sentence.

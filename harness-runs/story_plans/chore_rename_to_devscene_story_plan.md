@@ -76,7 +76,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_rename_to_devscene/task_<K
 21. [x] **Task 21** — Respell `schemas/`, `evals/` and the Python docs-retrieval service _(layer: general)_ _(points: 15)_
 22. [x] **Task 22** — Respell `docs/development.md`, the gate contracts included _(layer: general)_ _(points: 20)_
 23. [x] **Task 23** — Respell the CLI, analyze, config, watcher and outer-loop reference documents _(layer: general)_ _(points: 20)_
-24. [ ] **Task 24** — Respell the remote-execution and GitHub run-control documents _(layer: general)_ _(points: 20)_
+24. [x] **Task 24** — Respell the remote-execution and GitHub run-control documents _(layer: general)_ _(points: 20)_
 25. [ ] **Task 25** — Respell the sandbox records and the orchestrator cost measurement _(layer: general)_ _(points: 15)_
 26. [ ] **Task 26** — Respell the retrieval documents and the research directories _(layer: general)_ _(points: 20)_
 27. [ ] **Task 27** — Mark the example's capture as historical, respell its live files, and record the example `.claude/` paste _(layer: general)_ _(points: 15)_
