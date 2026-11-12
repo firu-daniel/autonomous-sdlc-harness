@@ -95,7 +95,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_adopter_layout/ta
 11. [x] **Task 9** — Rename in the non-script templates and the package READMEs _(layer: cli)_ _(points: 15)_
 12. [x] **Task 10** — Rename in the plugin's guards, shared library, QA helpers and hooks README _(layer: plugin)_ _(points: 15)_
 13. [x] **Task 11** — Rename the analyze and read-mention commands, respell the command files and plugin READMEs, and re-point the agents' citations of the analyze command _(layer: plugin)_ _(points: 20)_
-14. [ ] **Task 12** — Respell the plugin agent definitions _(layer: plugin)_ _(points: 15)_
+14. [x] **Task 12** — Respell the plugin agent definitions _(layer: plugin)_ _(points: 15)_
 15. [ ] **Task 13** — Respell the first half of the plugin instruction documents _(layer: plugin)_ _(points: 15)_
 16. [ ] **Task 14** — Respell the second half of the plugin instructions, the samples and the plugin flow documents _(layer: plugin)_ _(points: 15)_
 17. [ ] **Task 16** — Rename in this repository's sandbox-probe and Gate 12 scripts _(layer: general)_ _(points: 15)_

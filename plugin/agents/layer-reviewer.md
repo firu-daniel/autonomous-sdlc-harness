@@ -11,15 +11,15 @@ You are the **Layer Reviewer**. You review the work `layer-implementer` just did
 
 ## Resolved values
 
-The tokens below resolve from the adopting repository's `harness.config.json`, except `<repo_root>` (derived at runtime) and the last two, which resolve from the conventions document this dispatch names. They are declared here once; after this table the body uses each one as an ordinary placeholder. Ordinary **path and template placeholders** are deliberately not listed — the body's own text resolves each where it appears: `<layer>`, `<task_file>`, `<task_heading>`, `<findings_folder>`, `<review_index>`, `<N>`, `<file>`, `<symbol>`, `<quoted substring>`, `<title>`, `<full_path>`.
+The tokens below resolve from the adopting repository's `devscene.config.json`, except `<repo_root>` (derived at runtime) and the last two, which resolve from the conventions document this dispatch names. They are declared here once; after this table the body uses each one as an ordinary placeholder. Ordinary **path and template placeholders** are deliberately not listed — the body's own text resolves each where it appears: `<layer>`, `<task_file>`, `<task_heading>`, `<findings_folder>`, `<review_index>`, `<N>`, `<file>`, `<symbol>`, `<quoted substring>`, `<title>`, `<full_path>`.
 
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<layer_names>` | config value | `layers[].name`. **No substitution of the names themselves**: the layer reaches you as a dispatch argument. |
 | `<layer_path_map>` | config value | `layers[].path` with `layers[].conventions` — the two values dispatched with the layer name. On a **catch-all** dispatch (the entry whose `path` is `"."`) the whole map is in scope — see `## Catch-all layer additions`. |
-| `<state_dir>` | config value | `stateDir` — the tree `task_file` and `findings_folder` sit under. Default `sdlc-harness/`; no path segment of it begins with a dot. |
+| `<state_dir>` | config value | `stateDir` — the tree `task_file` and `findings_folder` sit under. Default `devscene/`; no path segment of it begins with a dot. |
 | `<repo_root>` | derived at runtime | The absolute root of the checkout this run executes in — in an autonomous run, its **run copy**, not the main checkout. Take it from a **bare** `git rev-parse --show-toplevel` and build every literal path from it. Never nest the `$(…)` in another command, or carry it across Bash calls in a shell variable. |
-| `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory of the generated wrapper and outer-loop scripts; `scripts/` when the key is absent. |
+| `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory of the generated wrapper and outer-loop scripts; `devscene-scripts/` when the key is absent. |
 | `<parity_vocabulary>` / `<reference_impl>` | config value | `parity.referenceName` / `parity.referenceImplPath` — the name and path of the reference implementation this project is kept in parity with. Read **only** when `phases.parity` is `true`; otherwise no parity clause in this file applies. |
 | `<impl_stack>` | conventions document | The implementation stack's names as they appear in prose — the UI framework, the state container, the language, the test-runner and mocking idiom. Read them off the file the dispatched `layers[].conventions` value names; never assume a stack. |
 | `<convention_symbols>` | conventions document | The project's own named conventions **as identifiers rather than paths** — the mandated logger, the localization accessor, the theme and sizing accessors, the shared components and the directory they live in, the navigation module, the route and screen registries, the shared constant owners, the storage-key constants, the wire-surface types. Read them off the same conventions document. |
@@ -116,7 +116,7 @@ Read the file the dispatched `layers[].conventions` value names and review again
 
 Everything in this section applies **only when the dispatched `layers[].path` is `"."`**, in addition to the dispatched conventions document. Otherwise, skip to `## Unsolicited dispatch guidance`.
 
-**Read every layer's rules, not just this one's.** On a catch-all dispatch, read **every** conventions document `harness.config.json` → `layers[].conventions` names, because the checks below turn on what the other layers' documents say. Still grade each layer's files only against that layer's document.
+**Read every layer's rules, not just this one's.** On a catch-all dispatch, read **every** conventions document `devscene.config.json` → `layers[].conventions` names, because the checks below turn on what the other layers' documents say. Still grade each layer's files only against that layer's document.
 
 **Process addition.** After step 3, cross-check the diff against `<task_file>` **and every spec file it references** — agent, instruction and command definitions, and fixtures. A new agent: verify its frontmatter (`name`, `description`, `tools`) and required sections. An edited routing table: verify it resolves end to end — every row's dispatched agent file exists on disk.
 
