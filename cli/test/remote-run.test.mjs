@@ -32,7 +32,7 @@
  * **For `continue` and `poll`, the rule is that a re-dispatch carries the bundle's own `chain` plus
  * one, and nothing is sent for a branch that is stopped, deleted on `origin`, under
  * `DEVSCENE_REMOTE_STOP`, or at the chain limit**: a `continue` case records at most one `workflow run`,
- * and a branch whose `harness stop` run is newer than its newest `harness run` run, or that the
+ * and a branch whose `devscene stop` run is newer than its newest `devscene run` run, or that the
  * fixture's bare `origin` no longer has, gets no `workflow run` and no `workflow enable`. These cases
  * run on `loopFixture`, which puts every branch they name on `origin` first. A
  * `poll` never dispatches a run that is not yet `completed`, counts one carrying a usage-paused
@@ -42,7 +42,7 @@
  * `STUB_RUN_LIST_AFTER_DISABLE` and `STUB_ARTIFACTS_AFTER_DISABLE` when those are set. A dispatch
  * that keeps failing is retried until a count or a deadline bound, then notified once and no longer
  * waiting; the count is carried between ticks the way GitHub carries it — the test copies a tick's
- * `poll_state/current/` aside and serves it as the next tick's `harness-poll-state` artifact, listed
+ * `poll_state/current/` aside and serves it as the next tick's `devscene-poll-state` artifact, listed
  * under `STUB_RESUME_RUN_LIST`, and `STUB_FAIL_TIMES` fails `STUB_FAIL_ON` only for its first calls
  * as counted in the stub's own log. A completed run's listed bundle that cannot be downloaded keeps the
  * poller enabled under its own consecutive count, and at the bound sends one push-only
@@ -112,7 +112,7 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit, snapshotTree } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REGISTRY = `${STATE_DIR}/autonomous_logs/registry.json`;
 const CLARIFY_DIR = `${STATE_DIR}/clarifications/feat_x`;
 
@@ -180,11 +180,11 @@ if (line.startsWith('run download')) {
 `;
 
 const ACTIVE_RUNS = JSON.stringify([
-  { databaseId: 11, displayTitle: 'harness run feat_x', status: 'in_progress' },
-  { databaseId: 12, displayTitle: 'harness run feat_x', status: 'completed' },
-  { databaseId: 13, displayTitle: 'harness run feat_x', status: 'queued' },
-  { databaseId: 14, displayTitle: 'harness run feat_x', status: 'waiting' },
-  { databaseId: 15, displayTitle: 'harness stop feat_x', status: 'queued' },
+  { databaseId: 11, displayTitle: 'devscene run feat_x', status: 'in_progress' },
+  { databaseId: 12, displayTitle: 'devscene run feat_x', status: 'completed' },
+  { databaseId: 13, displayTitle: 'devscene run feat_x', status: 'queued' },
+  { databaseId: 14, displayTitle: 'devscene run feat_x', status: 'waiting' },
+  { databaseId: 15, displayTitle: 'devscene stop feat_x', status: 'queued' },
 ]);
 
 /** An `init`-wired fixture with `execution.target` set, and a recorder stub beside it. */
@@ -199,7 +199,7 @@ async function remoteFixture(t, target = 'github-actions') {
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target };
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
@@ -421,7 +421,7 @@ const REMOTE_LOG = `${STATE_DIR}/autonomous_logs/feat_x.remote.log`;
 const runUrl = (id) => `https://github.com/o/r/actions/runs/${id}`;
 
 /** One `gh run list` entry; `createdAt` orders runs, as GitHub's own list does. */
-function ghRun(id, status, minute, title = 'harness run feat_x', headSha = undefined) {
+function ghRun(id, status, minute, title = 'devscene run feat_x', headSha = undefined) {
   return {
     databaseId: id,
     displayTitle: title,
@@ -651,16 +651,16 @@ test('status leaves the registry and every file under the state directory byte-i
 
   const result = await remoteRun(fx, ['status', 'feat_x'], syncEnv({
     runs: [
-      ghRun(103, 'completed', 3, 'harness pause feat_x'),
+      ghRun(103, 'completed', 3, 'devscene pause feat_x'),
       ghRun(102, 'completed', 2),
       ghRun(101, 'completed', 1),
-      ghRun(9, 'completed', 0, 'harness run other'),
+      ghRun(9, 'completed', 0, 'devscene run other'),
     ],
   }));
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /103 {2}harness pause feat_x/);
-  assert.match(result.stdout, /102 {2}harness run feat_x/);
-  assert.doesNotMatch(result.stdout, /harness run other/);
+  assert.match(result.stdout, /103 {2}devscene pause feat_x/);
+  assert.match(result.stdout, /102 {2}devscene run feat_x/);
+  assert.doesNotMatch(result.stdout, /devscene run other/);
   assert.match(result.stdout, /remote_synced_at: 5/);
   assert.match(result.stdout, /run 102 finished after the last sync/);
   assert.match(result.stdout, /^[\x00-\x7f]*$/);
@@ -872,7 +872,7 @@ const LINEAGE_DRAFT = `${STATE_DIR}/story_plans/feat_x_story_plan.md`;
 async function lineageFixture(t, commits) {
   const fx = await remoteFixture(t);
   const { dir } = fx;
-  const { defaultBranch } = JSON.parse(readFileSync(join(dir, 'harness.config.json'), 'utf8'));
+  const { defaultBranch } = JSON.parse(readFileSync(join(dir, 'devscene.config.json'), 'utf8'));
   await runGit(dir, ['add', '-A']);
   await runGit(dir, ['commit', '--quiet', '-m', 'fixture: adopt the harness']);
   await runGit(dir, ['push', '--quiet', '--force', '--no-verify', 'origin', `HEAD:refs/heads/${defaultBranch}`]);
@@ -903,7 +903,7 @@ test('restore on a recreated branch skips the earlier lineage\'s run: a first jo
   const fx = await lineageFixture(t, 1);
   const env = {
     ...syncEnv({
-      runs: [ghRun(601, 'completed', 1, 'harness run feat_x', FOREIGN_SHA)],
+      runs: [ghRun(601, 'completed', 1, 'devscene run feat_x', FOREIGN_SHA)],
       artifacts: { 601: ['harness-state'] },
       bundles: { 601: plannedBundle(fx, 'stale') },
     }),
@@ -929,7 +929,7 @@ test('restore of a branch resumed in its own lineage downloads exactly its own r
   const fx = await lineageFixture(t, 1);
   const result = await remoteRun(fx, ['restore', 'feat_x', '--resume', 'pause'], {
     ...syncEnv({
-      runs: [ghRun(602, 'completed', 2, 'harness run feat_x', fx.shas[0]), ghRun(601, 'completed', 1, 'harness run feat_x', FOREIGN_SHA)],
+      runs: [ghRun(602, 'completed', 2, 'devscene run feat_x', fx.shas[0]), ghRun(601, 'completed', 1, 'devscene run feat_x', FOREIGN_SHA)],
       artifacts: { 601: ['harness-state'], 602: ['harness-state'] },
       bundles: { 601: jobBundle(fx, 'stale'), 602: jobBundle(fx, 'own') },
     }),
@@ -946,7 +946,7 @@ test('restore selects a run dispatched on an earlier own commit of a branch with
   const fx = await lineageFixture(t, 2);
   const result = await remoteRun(fx, ['restore', 'feat_x', '--resume', 'pause'], {
     ...syncEnv({
-      runs: [ghRun(701, 'completed', 1, 'harness run feat_x', fx.shas[0])],
+      runs: [ghRun(701, 'completed', 1, 'devscene run feat_x', fx.shas[0])],
       artifacts: { 701: ['harness-state'] },
       bundles: { 701: jobBundle(fx, 'first') },
     }),
@@ -962,7 +962,7 @@ test('restore with HEAD at origin/<defaultBranch> selects unbounded and says so'
   const fx = await lineageFixture(t, 0);
   const result = await remoteRun(fx, ['restore', 'feat_x', '--resume', 'none'], {
     ...syncEnv({
-      runs: [ghRun(801, 'completed', 1, 'harness run feat_x', FOREIGN_SHA)],
+      runs: [ghRun(801, 'completed', 1, 'devscene run feat_x', FOREIGN_SHA)],
       artifacts: { 801: ['harness-state'] },
       bundles: { 801: jobBundle(fx, 'any') },
     }),
@@ -1117,7 +1117,7 @@ async function saveJob(fx) {
 /** Serve `out` as run 401's `harness-state` to `fx`, whose job is run 999, and restore it. */
 function restoreFrom(fx, out, headSha = undefined) {
   return remoteRun(fx, ['restore', 'feat_x', '--resume', 'pause'], {
-    ...syncEnv({ runs: [ghRun(401, 'completed', 1, 'harness run feat_x', headSha)], artifacts: { 401: ['harness-state'] }, bundles: { 401: out } }),
+    ...syncEnv({ runs: [ghRun(401, 'completed', 1, 'devscene run feat_x', headSha)], artifacts: { 401: ['harness-state'] }, bundles: { 401: out } }),
     GITHUB_RUN_ID: '999',
   });
 }
@@ -1190,7 +1190,7 @@ test('restore keeps a planning file the fresh checkout already carries, and repo
 
 const NOTIFY = `${INIT_SCRIPTS_DIR}/autonomous-notify.sh`;
 const THIS_RUN = { GITHUB_RUN_ID: '900', GITHUB_SERVER_URL: 'https://github.com', GITHUB_REPOSITORY: 'o/r' };
-/** The job running `continue`: run 900, still in progress, the newest `harness run feat_x`. */
+/** The job running `continue`: run 900, still in progress, the newest `devscene run feat_x`. */
 const CURRENT_RUN = ghRun(900, 'in_progress', 5);
 
 /** Replace the fixture's notifier with a recorder of event, branch, detail and exported slug. */
@@ -1218,7 +1218,7 @@ function loopBundle(fx, name, fields) {
 /** `remoteFixture` with each of `branches` on its bare `origin`, at the default branch's commit. */
 async function loopFixture(t, branches = ['feat_x', 'feat_a', 'feat_b']) {
   const fx = await remoteFixture(t);
-  const { defaultBranch } = JSON.parse(readFileSync(join(fx.dir, 'harness.config.json'), 'utf8'));
+  const { defaultBranch } = JSON.parse(readFileSync(join(fx.dir, 'devscene.config.json'), 'utf8'));
   for (const b of branches) {
     const push = await runGit(fx.dir, ['push', '--quiet', '--force', '--no-verify', 'origin', `refs/remotes/origin/${defaultBranch}:refs/heads/${b}`]);
     assert.equal(push.status, 0, push.stderr);
@@ -1376,7 +1376,7 @@ test('continue on decision stop sends nothing and notifies nothing', async (t) =
 test('continue for a stopped branch sends no workflow run and no enable, and notifies nothing, in either arm', async (t) => {
   const fx = await loopFixture(t);
   const notes = recordNotifications(fx);
-  const runs = [ghRun(901, 'completed', 6, 'harness stop feat_x'), CURRENT_RUN];
+  const runs = [ghRun(901, 'completed', 6, 'devscene stop feat_x'), CURRENT_RUN];
   for (const [name, decision] of [['c', 'continue'], ['w', 'wait-poller']]) {
     const b = loopBundle(fx, name, { decision, chain: '1', status: 'paused', pause_reason: 'usage' });
     const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv(runs));
@@ -1443,7 +1443,7 @@ test('continue with a failing run list fails closed: nothing sent, one paused no
 /** `remoteFixture` with `forge` `github`, its tree on origin, and `feat_x` pushed with a prompt started from issue 7. */
 async function forgeFixture(t) {
   const fx = await remoteFixture(t);
-  const configPath = join(fx.dir, 'harness.config.json');
+  const configPath = join(fx.dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.forge = 'github';
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
@@ -1569,8 +1569,8 @@ const GONE_STOP = {
   ...LOCAL_STOP,
   STUB_REPO_VIEW: '{"nameWithOwner":"o/r","defaultBranchRef":{"name":"trunk"}}',
   STUB_RUN_LIST: JSON.stringify([
-    { databaseId: 21, displayTitle: 'harness run feat_x', status: 'completed', headSha: 'aaaaaaa', createdAt: '2026-01-01T00:00:00Z' },
-    { databaseId: 22, displayTitle: 'harness run feat_x', status: 'completed', headSha: 'bbbbbbb', createdAt: '2026-01-02T00:00:00Z' },
+    { databaseId: 21, displayTitle: 'devscene run feat_x', status: 'completed', headSha: 'aaaaaaa', createdAt: '2026-01-01T00:00:00Z' },
+    { databaseId: 22, displayTitle: 'devscene run feat_x', status: 'completed', headSha: 'bbbbbbb', createdAt: '2026-01-02T00:00:00Z' },
   ]),
   STUB_CONTENTS: GONE_PROMPT,
 };
@@ -1700,7 +1700,7 @@ test('poll dispatches the due branch and keeps the poller for the one still wait
   const fx = await loopFixture(t);
   recordNotifications(fx);
   const result = await remoteRun(fx, ['poll'], syncEnv({
-    runs: [ghRun(702, 'completed', 2, 'harness run feat_b'), ghRun(701, 'completed', 1, 'harness run feat_a')],
+    runs: [ghRun(702, 'completed', 2, 'devscene run feat_b'), ghRun(701, 'completed', 1, 'devscene run feat_a')],
     artifacts: { 701: ['harness-state'], 702: ['harness-state'] },
     bundles: { 701: usageBundle(fx, 'a', true), 702: usageBundle(fx, 'b', false) },
   }));
@@ -1717,7 +1717,7 @@ test('poll with only a due branch dispatches it, then disables the poller', asyn
   const fx = await loopFixture(t);
   recordNotifications(fx);
   const result = await remoteRun(fx, ['poll'], syncEnv({
-    runs: [ghRun(701, 'completed', 1, 'harness run feat_a')],
+    runs: [ghRun(701, 'completed', 1, 'devscene run feat_a')],
     artifacts: { 701: ['harness-state'] },
     bundles: { 701: usageBundle(fx, 'a', true) },
   }));
@@ -1737,8 +1737,8 @@ test('poll with DEVSCENE_REMOTE_STOP set sends nothing, and carries the poller s
   writeFileSync(join(previous, 'poll_state.json'), JSON.stringify(carried));
   const result = await remoteRun(fx, ['poll'], {
     ...syncEnv({
-      runs: [ghRun(701, 'completed', 1, 'harness run feat_a')],
-      artifacts: { 701: ['harness-state'], 5001: ['harness-poll-state'] },
+      runs: [ghRun(701, 'completed', 1, 'devscene run feat_a')],
+      artifacts: { 701: ['harness-state'], 5001: ['devscene-poll-state'] },
       bundles: { 701: usageBundle(fx, 'a', true), 5001: previous },
     }),
     STUB_RESUME_RUN_LIST: JSON.stringify([{ databaseId: 5001, createdAt: '2026-01-01T00:00:00Z' }]),
@@ -1749,11 +1749,11 @@ test('poll with DEVSCENE_REMOTE_STOP set sends nothing, and carries the poller s
   assert.deepEqual(pollState(fx), carried);
 });
 
-test('poll skips a due branch whose harness stop run is newer, and disables itself when it was the only one waiting', async (t) => {
+test('poll skips a due branch whose devscene stop run is newer, and disables itself when it was the only one waiting', async (t) => {
   const fx = await loopFixture(t);
   recordNotifications(fx);
   const result = await remoteRun(fx, ['poll'], syncEnv({
-    runs: [ghRun(802, 'completed', 2, 'harness stop feat_x'), ghRun(801, 'completed', 1)],
+    runs: [ghRun(802, 'completed', 2, 'devscene stop feat_x'), ghRun(801, 'completed', 1)],
     artifacts: { 801: ['harness-state'] },
     bundles: { 801: usageBundle(fx, 'x', true) },
   }));
@@ -1763,11 +1763,11 @@ test('poll skips a due branch whose harness stop run is newer, and disables itse
   assert.deepEqual(joined(fx).filter((line) => line.startsWith('workflow ')), ['workflow disable devscene-resume.yml']);
 });
 
-test('poll dispatches a due branch whose harness stop run is older than its newest harness run', async (t) => {
+test('poll dispatches a due branch whose devscene stop run is older than its newest devscene run', async (t) => {
   const fx = await loopFixture(t);
   recordNotifications(fx);
   const result = await remoteRun(fx, ['poll'], syncEnv({
-    runs: [ghRun(802, 'completed', 2), ghRun(801, 'completed', 1, 'harness stop feat_x')],
+    runs: [ghRun(802, 'completed', 2), ghRun(801, 'completed', 1, 'devscene stop feat_x')],
     artifacts: { 802: ['harness-state'] },
     bundles: { 802: usageBundle(fx, 'x', true) },
   }));
@@ -1803,14 +1803,14 @@ const DISPATCH_B = 'workflow run devscene-run.yml --ref feat_b -f action=run -f 
  * usage-paused bundle and enabled the poller.
  */
 function interleaveEnv(fx, aPaused) {
-  const a = ghRun(711, 'in_progress', 3, 'harness run feat_a');
-  const b = ghRun(702, 'completed', 2, 'harness run feat_b');
+  const a = ghRun(711, 'in_progress', 3, 'devscene run feat_a');
+  const b = ghRun(702, 'completed', 2, 'devscene run feat_b');
   const env = syncEnv({
     runs: [a, b],
     artifacts: { 702: ['harness-state'] },
     bundles: { 702: usageBundle(fx, 'b', true), 711: usageBundle(fx, 'a', false) },
   });
-  env.STUB_RUN_LIST_AFTER_DISABLE = JSON.stringify([ghRun(703, 'queued', 4, 'harness run feat_b'), a, b]);
+  env.STUB_RUN_LIST_AFTER_DISABLE = JSON.stringify([ghRun(703, 'queued', 4, 'devscene run feat_b'), a, b]);
   if (aPaused) env.STUB_ARTIFACTS_AFTER_DISABLE = JSON.stringify({ 702: ['harness-state'], 711: ['harness-state'] });
   return env;
 }
@@ -1855,7 +1855,7 @@ test('poll counts an unfinished run already carrying a usage-paused bundle as wa
   const fx = await loopFixture(t);
   const notes = recordNotifications(fx);
   const result = await remoteRun(fx, ['poll'], syncEnv({
-    runs: [ghRun(711, 'in_progress', 3, 'harness run feat_a')],
+    runs: [ghRun(711, 'in_progress', 3, 'devscene run feat_a')],
     artifacts: { 711: ['harness-state'] },
     bundles: { 711: usageBundle(fx, 'a', true) },
   }));
@@ -1874,7 +1874,7 @@ function recentDueBundle(fx, name) {
 
 /**
  * One tick over feat_x's completed run `runId`. `served`, when given, is the previous tick's state
- * directory, listed as poller run 5000 + `tick`'s `harness-poll-state` artifact.
+ * directory, listed as poller run 5000 + `tick`'s `devscene-poll-state` artifact.
  */
 function pollTick(fx, { tick, runId, bundleDir, served = null, extra = {} }) {
   const artifacts = { [runId]: ['harness-state'] };
@@ -1882,7 +1882,7 @@ function pollTick(fx, { tick, runId, bundleDir, served = null, extra = {} }) {
   const resumeRuns = [];
   if (served !== null) {
     const stateRun = 5000 + tick;
-    artifacts[stateRun] = ['harness-poll-state'];
+    artifacts[stateRun] = ['devscene-poll-state'];
     bundles[stateRun] = served;
     resumeRuns.push({ databaseId: stateRun, createdAt: '2026-01-01T00:00:00Z' });
   }
@@ -2119,9 +2119,9 @@ test('poll with a give-up bound that is not a non-negative integer exits 1 and d
 /** 2026-01-01T00:00:10Z, as an epoch second. */
 const PAUSE_CREATED = 1767225610;
 const PAUSE_RUNS = JSON.stringify([
-  { databaseId: 5, displayTitle: 'harness run feat_x', status: 'in_progress', createdAt: '2026-01-01T00:01:00Z' },
-  { databaseId: 6, displayTitle: 'harness pause feat_xy', status: 'completed', createdAt: '2026-01-01T00:01:00Z' },
-  { databaseId: 7, displayTitle: 'harness pause feat_x', status: 'completed', createdAt: '2026-01-01T00:00:10Z' },
+  { databaseId: 5, displayTitle: 'devscene run feat_x', status: 'in_progress', createdAt: '2026-01-01T00:01:00Z' },
+  { databaseId: 6, displayTitle: 'devscene pause feat_xy', status: 'completed', createdAt: '2026-01-01T00:01:00Z' },
+  { databaseId: 7, displayTitle: 'devscene pause feat_x', status: 'completed', createdAt: '2026-01-01T00:00:10Z' },
 ]);
 
 test('pause-requested: 0 for an exact-title run at or after the epoch, 5 for none, 1 for a usage error, 3 when gh fails', async (t) => {
@@ -2374,7 +2374,7 @@ test('status with no registry reads the newest bundle from GitHub, prints its op
     TMPDIR: tmp,
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /101 {2}harness run feat_x/);
+  assert.match(result.stdout, /101 {2}devscene run feat_x/);
   assert.match(result.stdout, /no local record; state from GitHub \(newest run\):/);
   assert.match(result.stdout, /^ {2}state: parked$/m);
   assert.match(result.stdout, /^remote-run\.sh: open question question_1\.md$/m);
@@ -2401,7 +2401,7 @@ test('status with no record and no run on GitHub prints the no-run line and exit
   const fx = await remoteFixture(t);
   const result = await remoteRun(fx, ['status', 'feat_x'], syncEnv({ runs: [] }));
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /remote-run\.sh: no local record, and no run titled 'harness run feat_x' on GitHub/);
+  assert.match(result.stdout, /remote-run\.sh: no local record, and no run titled 'devscene run feat_x' on GitHub/);
   assert.equal(existsSync(join(fx.dir, REGISTRY)), false);
 });
 
@@ -2449,11 +2449,11 @@ test('status with no record and an unrecognised bundle is refused with exit 2, n
 });
 
 /** One `list_all_runs` entry, carrying the branch as `headBranch`. */
-const branchRun = (id, b, minute) => ({ ...ghRun(id, 'completed', minute, `harness run ${b}`), headBranch: b });
+const branchRun = (id, b, minute) => ({ ...ghRun(id, 'completed', minute, `devscene run ${b}`), headBranch: b });
 
 test('list prints only the unrecorded, live, unprotected branch, and creates no registry', async (t) => {
   const fx = await remoteFixture(t);
-  const configPath = join(fx.dir, 'harness.config.json');
+  const configPath = join(fx.dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.protectedBranches = [...new Set([...(config.protectedBranches ?? []), 'main', config.defaultBranch])];
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
@@ -2466,7 +2466,7 @@ test('list prints only the unrecorded, live, unprotected branch, and creates no 
     runs: [
       branchRun(5, 'feat_rec', 5),
       branchRun(4, 'feat_x', 4),
-      { ...ghRun(3, 'completed', 3, 'harness pause feat_gone'), headBranch: 'feat_gone' },
+      { ...ghRun(3, 'completed', 3, 'devscene pause feat_gone'), headBranch: 'feat_gone' },
       branchRun(2, 'feat_gone', 2),
       branchRun(1, 'main', 1),
     ],
@@ -2572,7 +2572,7 @@ async function reviewFixture(t, reviews = [], { forge = false } = {}) {
   const fx = await remoteFixture(t);
   const { dir } = fx;
   const bootstrapMarker = join(dir, STATE_DIR, 'stub', 'bootstrap.marker');
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.commands.depInstall = `printf x > '${bootstrapMarker}'`;
   delete config.commands.build;
@@ -2705,7 +2705,7 @@ test('review with no harness run on GitHub and no --allow-no-run is refused; ori
   const before = await fx.originRefs();
   const result = await remoteRun(fx, ['review', 'feat_x', '--review-file', fx.reviewFile], syncEnv({ runs: [] }));
   assert.equal(result.status, 2, result.stderr);
-  assert.match(result.stderr, /no `harness run feat_x` run on GitHub/);
+  assert.match(result.stderr, /no `devscene run feat_x` run on GitHub/);
   assert.equal(await fx.originRefs(), before);
   assert.deepEqual(joined(fx).filter((line) => line.startsWith('workflow run')), []);
 });

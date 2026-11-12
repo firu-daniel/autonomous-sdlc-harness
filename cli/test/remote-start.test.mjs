@@ -38,7 +38,7 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REGISTRY = `${STATE_DIR}/autonomous_logs/registry.json`;
 const PROMPT_REL = `${STATE_DIR}/task_prompts/feat_x_task_prompt.md`;
 const PROMPT_BYTES = 'Add comments to a content item.\n\n  "quoted" $HOME `tick` ünïcødé\n';
@@ -76,7 +76,7 @@ async function startFixture(t, target = 'github-actions') {
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target };
   config.protectedBranches = [...new Set([...(config.protectedBranches ?? []), 'main', config.defaultBranch])];
