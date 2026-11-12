@@ -184,7 +184,7 @@ export async function fetchModels(): Promise<void> {
 }
 
 /** The environment variable that selects the stubs; this constant is its only spelling in `cli/src`. */
-export const RETRIEVAL_STUB_ENV = 'AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB';
+export const RETRIEVAL_STUB_ENV = 'DEVSCENE_RETRIEVAL_STUB';
 
 /** {@link RETRIEVAL_STUB_ENV}'s value, unset read as empty; the only read of the variable in `cli/src`. */
 function stubEnvValue(): string {
