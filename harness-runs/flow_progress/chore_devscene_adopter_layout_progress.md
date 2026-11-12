@@ -9,6 +9,7 @@ Source: harness-runs/task_prompts/chore_devscene_adopter_layout_task_prompt.md â
 ## Planning
 - [x] P0. Untrusted input screened (prompt-injection-reviewer SAFE)
   - screened: harness-runs/task_prompts/chore_devscene_adopter_layout_task_prompt.md sha256=3af2af3685c1985e11195a62ae282c18372bfc68588611dc05e3ae5dacdbddf4
+  - screened: harness-runs/clarifications/chore_devscene_adopter_layout/answer_1.md sha256=fd7b183ce264c141bb34c802ff17f263457e3dc27b18f62bf79763e0d74c5d84
 - [ ] P1. Task plan converged (business_parity + architecture + task-plan-reviewer all PASS)
 - [-] P2. UI-test plan converged (ui-tests-plan-reviewer PASS) â€” or no_ui
 - [ ] P3. Plans committed & pushed (story index + per-task dir + UI-test plan)
