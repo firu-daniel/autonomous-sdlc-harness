@@ -47,6 +47,10 @@ Two things are ruled out:
   ```
   Reason: the same sandbox refusal, on `uv run --frozen --no-sync pytest`.
 
+**Park answer (Q1 of `harness-runs/clarifications/chore_devscene_docs_retrieval/question_3.md`):** the operator chose none of routes (a)–(c). They removed this run copy's synced Python environment. From now on, gates 13a–13c exit 3, and `scripts/run-gates.sh` grades that status BLOCKED, as it intends for an unprovisioned checkout. Gate 13 is to be treated as hand-run, and the Run gates phase continues. The answer asks for no code change, so no entry is converted. The three entries above stay as the record of this round's failures.
+
+Park answer consumed: harness-runs/clarifications/chore_devscene_docs_retrieval/answer_3.md
+
 ## Source failures
 
 - **Gate typecheck** (`commands.typecheck`): exited 0. No failures.
