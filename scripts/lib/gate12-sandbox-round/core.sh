@@ -48,7 +48,7 @@ g12_row_declare FR1 6 full-run - \
 g12_row_declare FR2 6 full-run - \
   "Install the sandbox prerequisites on the hosted runner and the doctor preflight after it, graded from the full run that grade --full-run names"
 g12_row_declare FR3 6 full-run - \
-  "commits and pushes through the wrappers, graded on the job: line of the Run the harness step log and on a wrapper's refusing line, since push-branch.sh exits 0 on a refusal and Run the harness concludes success even on a failed run"
+  "commits and pushes through the wrappers, graded on the job: line of the Run DevScene step log and on a wrapper's refusing line, since push-branch.sh exits 0 on a refusal and Run DevScene concludes success even on a failed run"
 g12_row_declare FR4 6 full-run - \
   "the permission_denials of the calls the flow needs, each quoted, graded from the full run that grade --full-run names"
 g12_row_declare FR5 6 full-run - \
@@ -72,7 +72,7 @@ g12_row_declare JS3 8 default-branch stall \
 g12_row_declare JS3N 8 source - \
   "read from the source, unreachable by construction: every job surface is write-protected in the session, because jobSurfacePaths derives from placeholderProtectedPaths in writeProtection.ts, and so is the checkout's whole .git, so the session cannot commit one before the stall, and a pushed one is JS1's refusal"
 g12_row_declare SB3 7 source - \
-  "read from the source, unreachable by construction: harness.config.json is write-protected in the session by protectedPaths, its CONFIG_FILENAME entry, which the profile carries into sandbox.filesystem.denyWrite and the Edit deny rules; a committed rewrite is a job surface (jobSurfacePaths), which the job refuses"
+  "read from the source, unreachable by construction: devscene.config.json is write-protected in the session by protectedPaths, its CONFIG_FILENAME entry, which the profile carries into sandbox.filesystem.denyWrite and the Edit deny rules; a committed rewrite is a job surface (jobSurfacePaths), which the job refuses"
 g12_row_declare RJ3 9 hand - \
   "a hand step on round step 9, a local leg: remote-run.sh start and review run from a mirror of the Gate 12 repository on the operator's machine, not through a job"
 

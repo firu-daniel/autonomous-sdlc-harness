@@ -147,7 +147,7 @@ sp_preflight() {
   # --- 3. <main> on the default branch.
   SP_DEFAULT_BRANCH="$(hr_default_branch "$SP_MAIN")" || SP_DEFAULT_BRANCH=""
   if [ -z "$SP_DEFAULT_BRANCH" ]; then
-    sp_preflight_refuse "cannot read defaultBranch from '$SP_MAIN/harness.config.json' (absent, invalid, or jq missing)"
+    sp_preflight_refuse "cannot read defaultBranch from '$SP_MAIN/devscene.config.json' (absent, invalid, or jq missing)"
     return 2
   fi
   head="$(git -C "$SP_MAIN" symbolic-ref --short HEAD 2>/dev/null)" || head=""
@@ -485,7 +485,7 @@ sp_snapshot_line() {
 }
 
 sp_snapshot_paths() {
-  printf '%s\n' "$SP_MAIN/harness.config.json" "$SP_MAIN/.git/config" "$SP_MAIN/.claude/settings.autonomous.json"
+  printf '%s\n' "$SP_MAIN/devscene.config.json" "$SP_MAIN/.git/config" "$SP_MAIN/.claude/settings.autonomous.json"
 }
 
 # sp_snapshot_take — create SP_TMP, the probe's only temp area, and record the three files' hashes in

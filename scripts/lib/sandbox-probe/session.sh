@@ -207,7 +207,7 @@ sp_setup() {
 
   # The four configured reads, each the library's own; 2 is "configuration unresolvable".
   SP_STATE_DIR="$(hr_state_dir "$SP_MAIN")" || {
-    sp__setup_refuse "cannot resolve stateDir from '$SP_MAIN/harness.config.json'"
+    sp__setup_refuse "cannot resolve stateDir from '$SP_MAIN/devscene.config.json'"
     return 2
   }
   SP_REGISTRY="$(hr_state_path "$SP_MAIN" autonomous_logs/registry.json)" || {
@@ -220,7 +220,7 @@ sp_setup() {
     0) ;;
     1) SP_AGENT_MODEL="" ;;
     *)
-      sp__setup_refuse "cannot resolve agentModel from '$SP_MAIN/harness.config.json'"
+      sp__setup_refuse "cannot resolve agentModel from '$SP_MAIN/devscene.config.json'"
       return 2
       ;;
   esac
@@ -231,7 +231,7 @@ sp_setup() {
     0) ;;
     1) SP_AGENT_EFFORT="" ;;
     *)
-      sp__setup_refuse "cannot resolve agentEffort from '$SP_MAIN/harness.config.json'"
+      sp__setup_refuse "cannot resolve agentEffort from '$SP_MAIN/devscene.config.json'"
       return 2
       ;;
   esac
@@ -239,7 +239,7 @@ sp_setup() {
 
   local scripts_rel
   scripts_rel="$(hr_scripts_dir "$SP_MAIN")" || {
-    sp__setup_refuse "cannot resolve scriptsDir from '$SP_MAIN/harness.config.json'"
+    sp__setup_refuse "cannot resolve scriptsDir from '$SP_MAIN/devscene.config.json'"
     return 2
   }
   SP_SCRIPTS="$SP_MAIN/$scripts_rel"

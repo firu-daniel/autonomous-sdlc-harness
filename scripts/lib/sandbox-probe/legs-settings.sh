@@ -196,7 +196,7 @@ sp_leg_credentials() {
   local target s1_cmd s5_cmd ctl_file pfile names name departure s4_ok=1 s4_why="" s4_list="" rest line
   local -a cmd_allowed
   target="$HOME/.ssh/config"
-  ctl_file="$SP_CLONE/harness.config.json"
+  ctl_file="$SP_CLONE/devscene.config.json"
   s1_cmd="cat ~/.ssh/config"
   s5_cmd="ssh-add -l"
   if ! sp__ctl_literal clone "$SP_CLONE" || ! sp__ctl_literal "home" "$HOME"; then

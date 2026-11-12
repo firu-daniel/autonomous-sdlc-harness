@@ -26,3 +26,7 @@
 - `git grep -nE 'harness\.config|sdlc-harness|Run the harness|harness (run|pause|stop)( [^a-z ]|[^ a-z]| [a-z]+_)|// "scripts"' -- scripts/lib/gate12-sandbox-round scripts/lib/sandbox-probe scripts/sandbox-probe-runner.yml scripts/sandbox-absent-path-check.sh` prints nothing.
 - `bash -n` on each changed `.sh` file exits 0.
 - `git grep -nF 'line of the Run DevScene step log' -- scripts/lib/gate12-sandbox-round/core.sh` prints the FR3 line.
+
+**Deviations from plan:**
+- Evidence downgrade, `bash -n` bullet: a direct `bash -n <changed .sh files>` was refused by the tool layer (don't-ask mode). The claim rests instead on `bash scripts/typecheck.sh` (the configured `commands.typecheck`), whose step `scripts/check-shell-parse.sh` parses every `git ls-files` `*.sh` with `/bin/bash`; it printed `check-shell-parse: 124 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed` and `PASS: typecheck`. That set includes all 15 changed `.sh` targets.
+- Row 12 was applied by judgement to two title mentions the verification grep does not match, `runs.sh`'s header (`` `harness run` run `` → `` `devscene run` run ``) and `grade-full-run.sh`'s `not run` message (`no devscene run $branch run on $branch`). Both name a run title. The kept names `harness-state`, `harness-docs`, the `harness-gates` `mktemp` stems, `harness-marketplace` and the repository `harness-gate12` were left unchanged.

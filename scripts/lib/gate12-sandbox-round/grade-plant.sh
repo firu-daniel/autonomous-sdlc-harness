@@ -40,7 +40,7 @@ g12_grade_state SB2 SB4 JS3 JS3N SB3 RJ3"
 G12_STEP_REFUSE="Refuse a branch that changed the job's own files"
 G12_STEP_CONFIG="Read the configuration"
 G12_STEP_BOOTSTRAP="Bootstrap the checkout"
-G12_STEP_HARNESS="Run the harness"
+G12_STEP_HARNESS="Run DevScene"
 G12_JS4_STEPS="$G12_STEP_REFUSE
 Install the claude CLI when absent
 Generate the job's permission profile

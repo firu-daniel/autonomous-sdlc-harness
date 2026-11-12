@@ -84,24 +84,24 @@ jobs:
       - name: Read the configuration
         id: config
         run: |
-          scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
-          retrieval=$(jq -r '(.phases.docs == true and .docs.retrieval == true)' harness.config.json)
+          scripts_dir=$(jq -r '.scriptsDir // "devscene-scripts"' devscene.config.json)
+          retrieval=$(jq -r '(.phases.docs == true and .docs.retrieval == true)' devscene.config.json)
           {
             echo "SCRIPTS_DIR=${scripts_dir%/}"
             echo "HARNESS_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/devscene/retrieval"
           } >> "$GITHUB_ENV"
           echo "retrieval=$retrieval" >> "$GITHUB_OUTPUT"
 
-      # Job-mode preflight check 3 refuses a checkout not on harness.config.json's defaultBranch, which
+      # Job-mode preflight check 3 refuses a checkout not on devscene.config.json's defaultBranch, which
       # can differ from GitHub's default branch, so every later step runs on the configured one.
       - name: Switch to the configured default branch
         env:
           IN_GH_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           gh_branch="$IN_GH_DEFAULT_BRANCH"
-          cfg=$(jq -r '.defaultBranch // empty' harness.config.json)
+          cfg=$(jq -r '.defaultBranch // empty' devscene.config.json)
           if [ -z "$cfg" ]; then
-            echo "::error::harness.config.json names no defaultBranch, so the probe has no branch its preflight accepts."
+            echo "::error::devscene.config.json names no defaultBranch, so the probe has no branch its preflight accepts."
             exit 1
           fi
           if [ "$cfg" != "$gh_branch" ]; then

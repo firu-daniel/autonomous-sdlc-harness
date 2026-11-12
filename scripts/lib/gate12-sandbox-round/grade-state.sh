@@ -12,7 +12,7 @@
 #         no token in its artifact (refused by the session); `fail` on a link or the token; `not run`
 #         otherwise.
 #   SB4   the bundle half of the clarifications arm's artifact: no link and no token is `pass`.
-#   JS3   only the watchdog lines that reach the `Run the harness` step log, and status.json; then one
+#   JS3   only the watchdog lines that reach the `Run DevScene` step log, and status.json; then one
 #         `source` line for the "from a temporary directory" clause.
 #
 #   g12_grade_state   SB2, SB4, JS3, each hand row and each source row, each when selected
@@ -283,18 +283,18 @@ g12_sb2_save_clause() {
     "$G12_ARM_LOG"
 }
 
-# The next job is the first `harness run <branch>` run created after the planted one.
+# The next job is the first `devscene run<branch>` run created after the planted one.
 g12_sb2_restore_clause() {
   local json next log rc
   json="$(gh run list --repo "$G12_REPO" --workflow devscene-run.yml --branch "$G12_SB2_BRANCH" \
     --json databaseId,displayTitle --limit 20 </dev/null)" ||
     { g12_refuse "gh run list --repo $G12_REPO --branch $G12_SB2_BRANCH failed"; G12_ARM_ID="$G12_SB2_ID"; g12_arm_gh_failed; return; }
-  next="$(jq -r --arg t "harness run $G12_SB2_BRANCH" --argjson id "$G12_SB2_ID" \
+  next="$(jq -r --arg t "devscene run$G12_SB2_BRANCH" --argjson id "$G12_SB2_ID" \
     '[.[]? | select(.displayTitle == $t and .databaseId > $id) | .databaseId] | sort | first // empty' \
     <<<"$json" 2>/dev/null)" ||
     { g12_refuse "gh run list --repo $G12_REPO --branch $G12_SB2_BRANCH printed what jq cannot read"; G12_ARM_ID="$G12_SB2_ID"; g12_arm_gh_failed; return; }
   if [ -z "$next" ]; then
-    g12_arm_set "not run" "no later harness run $G12_SB2_BRANCH run"
+    g12_arm_set "not run" "no later devscene run$G12_SB2_BRANCH run"
     return
   fi
   G12_ARM_ID="$next"
@@ -379,7 +379,7 @@ g12_grade_sb4() {
 # ---------------------------------------------------------------------------------------------
 # JS3. check_stalled_runs (cli/templates/scripts/autonomous-watcher.sh) runs stall_job_surfaces_ok
 # >>"$log_path", so the doctor report goes to the per-branch run log (the bundle's run.log), never to
-# the step log; only the watcher's `log` lines, tee'd to stdout, reach `Run the harness`. The two
+# the step log; only the watcher's `log` lines, tee'd to stdout, reach `Run DevScene`. The two
 # outcome lines matched below are check_stalled_runs's own.
 G12_JS3_SURFACE_REASON="the branch's own commits change a job surface, or that could not be checked"
 G12_JS3_ART=""

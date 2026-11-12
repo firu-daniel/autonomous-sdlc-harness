@@ -485,7 +485,7 @@ sp__pf_l1_job() {
 # .git/hooks before the defaultBranch read.
 sp__pf_l2() {
   local dir="$SP_TMP/dashrepo" dir_c out rc departure want want_c line got=""
-  departure="fixture built by the probe: $dir, a scratch main checkout with byte-for-byte copies of $SP_SCRIPTS/refresh-branch.sh and $SP_SCRIPTS/lib/ and a harness.config.json whose defaultBranch is -x; the call is the probe's own from the terminal, not a session's"
+  departure="fixture built by the probe: $dir, a scratch main checkout with byte-for-byte copies of $SP_SCRIPTS/refresh-branch.sh and $SP_SCRIPTS/lib/ and a devscene.config.json whose defaultBranch is -x; the call is the probe's own from the terminal, not a session's"
   if [ -e "$dir" ] || [ -L "$dir" ]; then
     sp_result_line planted-files L2 "not run" "$dir exists before the row" "$departure"
     return 0
@@ -508,13 +508,13 @@ sp__pf_l2() {
       "$departure"
     return 0
   fi
-  if ! jq '.defaultBranch = "-x"' "$SP_MAIN/harness.config.json" >"$dir/harness.config.json" 2>/dev/null; then
-    sp_result_line planted-files L2 "not run" "jq could not write $dir/harness.config.json" "$departure"
+  if ! jq '.defaultBranch = "-x"' "$SP_MAIN/devscene.config.json" >"$dir/devscene.config.json" 2>/dev/null; then
+    sp_result_line planted-files L2 "not run" "jq could not write $dir/devscene.config.json" "$departure"
     return 0
   fi
   dir_c="$(CDPATH= cd -P -- "$dir" 2>/dev/null && pwd -P)" || dir_c="$dir"
-  want="refresh-branch.sh: defaultBranch '-x' in '$dir/harness.config.json' starts with '-', which git would read as an option — refusing to merge"
-  want_c="refresh-branch.sh: defaultBranch '-x' in '$dir_c/harness.config.json' starts with '-', which git would read as an option — refusing to merge"
+  want="refresh-branch.sh: defaultBranch '-x' in '$dir/devscene.config.json' starts with '-', which git would read as an option — refusing to merge"
+  want_c="refresh-branch.sh: defaultBranch '-x' in '$dir_c/devscene.config.json' starts with '-', which git would read as an option — refusing to merge"
   out="$(bash "$dir/scripts/refresh-branch.sh" 2>&1 >/dev/null)"
   rc=$?
   while IFS= read -r line; do

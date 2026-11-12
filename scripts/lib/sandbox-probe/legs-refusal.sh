@@ -102,7 +102,7 @@ sp__rf2_grade() {
       esac ;;
     3)
       SP_VERDICT="not run"
-      SP_EVIDENCE="sandbox.optOut is taken in $main's harness.config.json, so the watcher does not judge the host" ;;
+      SP_EVIDENCE="sandbox.optOut is taken in $main's devscene.config.json, so the watcher does not judge the host" ;;
     *)
       SP_VERDICT="not run"
       SP_EVIDENCE="the watcher's prerequisite probe returned status '$st': ${refusal:-(no refusal text)}" ;;

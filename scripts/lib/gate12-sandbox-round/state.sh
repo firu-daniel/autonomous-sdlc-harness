@@ -35,7 +35,7 @@
 
 g12_scratch_dir() {
   hr_state_path "$G12_ROOT" scratch/gate12-sandbox-round ||
-    { g12_refuse "the state directory of '$G12_ROOT/harness.config.json' does not resolve"; return 1; }
+    { g12_refuse "the state directory of '$G12_ROOT/devscene.config.json' does not resolve"; return 1; }
 }
 
 g12_state_path() {

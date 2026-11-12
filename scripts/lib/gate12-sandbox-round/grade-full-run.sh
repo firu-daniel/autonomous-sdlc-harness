@@ -2,14 +2,14 @@
 # grade-full-run.sh — `grade --full-run <branch>`: FR1-FR7 of docs/sandbox-verification.md -> ## 10.,
 # round step 6, from the hand-driven full run of observation (xvi). The full run is not in the state
 # file; only its branch is given. Each row reads exactly what its **Read from** names: the branch's
-# `harness run <branch>` jobs through runs.sh, and, for FR4, the committed run-analytics.json. A
+# `devscene run<branch>` jobs through runs.sh, and, for FR4, the committed run-analytics.json. A
 # clause whose Read from is a source file prints a `source` line naming the file and symbol and is
 # not graded. grade-plant.sh's g12_grade_cmd calls g12_grade_full_run with a non-empty branch only;
 # this file uses that file's step names and its arm and fold helpers, and grade-state.sh's step names.
 #
-# THE JOBS. Oldest first, those whose title is `harness run <branch>`:
-#   parked job   the first whose Run the harness log carries `job: parked stop`
-#   resumed job  the first later one whose Run the harness log carries
+# THE JOBS. Oldest first, those whose title is `devscene run<branch>`:
+#   parked job   the first whose Run DevScene log carries `job: parked stop`
+#   resumed job  the first later one whose Run DevScene log carries
 #                `job: resuming parked run '<branch>' (answers `
 # A job not completed, or whose log is gone or unattributed, ends the search there: every row that
 # reads the job searched for takes that job's `not run` or `expired`.
@@ -48,7 +48,7 @@ g12_full_run_jobs() {
     g12_arm_set "not run" "the runs of $branch could not be listed (named on stderr)"
     return 1
   }
-  G12_FR_JOBS="$(jq -r --arg t "harness run $branch" \
+  G12_FR_JOBS="$(jq -r --arg t "devscene run$branch" \
     '[.[] | select(.displayTitle == $t)] | sort_by(.createdAt) | .[] | "\(.databaseId)"' \
     <<<"$json" 2>/dev/null)" || {
     g12_refuse "gh run list --repo $G12_REPO --branch $branch printed what jq cannot read"
@@ -57,7 +57,7 @@ g12_full_run_jobs() {
     return 1
   }
   if [ -z "$G12_FR_JOBS" ]; then
-    g12_arm_set "not run" "no harness run $branch run on $branch"
+    g12_arm_set "not run" "no devscene run$branch run on $branch"
     return 1
   fi
 }
@@ -233,7 +233,7 @@ g12_fr5_arm() {
 }
 
 # ---------------------------------------------------------------------------------------------
-# FR3: Run the harness concludes success even on a failed run, because run_job ends
+# FR3: Run DevScene concludes success even on a failed run, because run_job ends
 # `echo "job: $final $decision"` then `exit 0`, and its parked-on-answer stop prints `job: parked stop`
 # then `exit 0`; `decision` is `stop` by default and set to `continue` or `wait-poller` in its
 # supervision loop (run_job in cli/templates/scripts/autonomous-watcher.sh). So the verdict starts
@@ -241,7 +241,7 @@ g12_fr5_arm() {
 # push-branch.sh exits 0 on every refusal (cli/templates/scripts/push-branch.sh -> EVERY FAILURE PATH
 # IS NON-FATAL (exit 0)), so Push the branch concludes success on one, and the arm reads that step's
 # log too. A refusal by either wrapper fails the arm: push-branch.sh's in the Push the branch log, and
-# commit-on-branch.sh's in the Run the harness log should one ever reach it. A session's own
+# commit-on-branch.sh's in the Run DevScene log should one ever reach it. A session's own
 # commit-on-branch.sh refusal does not: it is the stderr of the session's tool call, which
 # spawn_engine sends into the run's log file through autonomous-format-stream.sh, and that
 # formatter drops tool_result bodies, so neither this step log nor the bundle's run.log carries
@@ -417,7 +417,7 @@ g12_fr6_restore() {
     "$G12_ARM_LOG"$'\n'"run $G12_FR_PARKED's bundle planning files:"$'\n'"$files"
 }
 
-# FR7: graded on the resumed job's Run the harness alone. verb_restore's `wrote answer_<n>.md for
+# FR7: graded on the resumed job's Run DevScene alone. verb_restore's `wrote answer_<n>.md for
 # <branch>` (remote-run.sh) is quoted beside it as context and decides nothing.
 g12_fr7_arm() {
   local branch="$1" line wrote
