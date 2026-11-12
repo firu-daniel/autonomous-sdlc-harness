@@ -125,15 +125,11 @@ const BACKEND = detectBackend();
 const NO_BACKEND = BACKEND.kind === 'none' ? `this host has no service manager: ${BACKEND.reason}` : false;
 
 /** The two generated artifacts these tests edit, addressed as the contract spells them. */
-const CONFIG_FILE = 'harness.config.json';
+const CONFIG_FILE = 'devscene.config.json';
 const PROFILE_FILE = '.claude/settings.autonomous.json';
 const SETTINGS_FILE = '.claude/settings.json';
 
-/**
- * Where a configless `init` writes the wrappers and outer-loop scripts — every `wiredFixture`. Kept
- * at `scripts` on purpose: `writeDocsServerEnv` (a seeded config without the key) and the
- * hand-written wrapper entry in the plugin-permissions case (the `scripts` collision it pins).
- */
+/** Where a configless `init` writes the wrappers and outer-loop scripts — every `wiredFixture`. */
 const SCRIPTS_DIR = INIT_SCRIPTS_DIR;
 
 /** The script the daemon runs, written by `init` into the configured `scriptsDir`. */
@@ -144,7 +140,7 @@ const HOOK_FILE = 'githooks/pre-push';
 
 /** The ignore file the managed block lives in, and the run-artifact directory at its default. */
 const GITIGNORE_FILE = '.gitignore';
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 
 /** The key a project-scope `plugin marketplace add` writes, and the one this checks the absence of. */
 const MARKETPLACES_KEY = 'extraKnownMarketplaces';
@@ -447,7 +443,7 @@ test('a stateDir that is dot-named, or reaches through a dot segment, fails', as
   // Both spellings, because the schema states them as two clauses and only the second catches the
   // traversal: the character class admits `.` and `/` after the first character, so a check that
   // applied the pattern alone would accept a value resolving to a dot-directory at run time.
-  for (const value of ['.sdlc-harness', 'sdlc/../.claude']) {
+  for (const value of ['.devscene', 'devscene/../.claude']) {
     await t.test(value, async (subtest) => {
       const dir = await wiredFixture(subtest);
       editJson(dir, CONFIG_FILE, (config) => {
@@ -2449,7 +2445,7 @@ test('--check-registry claims no registry read when npm does not resolve on PATH
  * `docs/cli.md` §6 documents, reproduced here as the one hand edit that produces it.
  *
  * `init` writes a `qa` section only under `--qa`, and `init --force` regenerates the generated files
- * but never `harness.config.json`, so no re-run repairs this and `doctor` is the only thing that
+ * but never `devscene.config.json`, so no re-run repairs this and `doctor` is the only thing that
  * sees it on every subsequent run. The `--force` step is in the case for that reason rather than as
  * setup: it is what shows the state survives the command an adopter would reach for.
  *
@@ -3862,13 +3858,13 @@ test('the PATH parsed out of a unit is the PATH that was rendered into it, for b
  * actually carry, so an edit made with them is the edit an adopter makes.
  */
 const CLAUDE_MD_FILE = '.claude/CLAUDE.md';
-const UNFILLED_MARKER = '<!-- harness:unfilled -->';
+const UNFILLED_MARKER = '<!-- devscene:unfilled -->';
 const GUIDANCE_MARKER = '**What belongs here**';
-const SETUP_PENDING_OPEN = '<!-- harness:setup-pending -->';
-const SETUP_PENDING_CLOSE = '<!-- /harness:setup-pending -->';
+const SETUP_PENDING_OPEN = '<!-- devscene:setup-pending -->';
+const SETUP_PENDING_CLOSE = '<!-- /devscene:setup-pending -->';
 
 /** The analyze command, as both remedies name it. */
-const ANALYZE_COMMAND = '/devscene:harness-analyze';
+const ANALYZE_COMMAND = '/devscene:analyze';
 
 /**
  * The conventions documents the wired config points at.
@@ -4109,7 +4105,7 @@ test('the setup-analysis check reports what is unfilled, and never above a warni
  * tree carries it rather than imported: a fixture edited through the constant the check reads would
  * assert only that one module agrees with itself.
  */
-const TASK_OFFER_FILE = '.claude/harness-task-offer.md';
+const TASK_OFFER_FILE = '.claude/devscene-task-offer.md';
 
 test('a freshly wired repository passes the task-offer-rules check', async (t) => {
   const dir = await wiredFixture(t);
@@ -4194,7 +4190,7 @@ test('a rules file no fence names warns, names both remedies, and leaves the exi
   assert.ok(stderr.includes(TASK_OFFER_FILE), `the warning does not name the orphaned file:\n${stderr}`);
 
   // Both remedies, because they cost different things and the adopter picks: the section added by
-  // hand keeps everything `/devscene:harness-analyze` filled, the forced re-render does not.
+  // hand keeps everything `/devscene:analyze` filled, the forced re-render does not.
   assert.ok(stderr.includes(TASK_OFFER_SECTION), `the warning does not name the section to add by hand:\n${stderr}`);
   assert.match(stderr, /devscene init --force/);
   assert.match(stdout, CLEAN_SUMMARY);
@@ -4296,7 +4292,7 @@ test('(e) a fence that does not name the opt-out script passes with the script d
   const path = join(dir, CLAUDE_MD_FILE);
   const projectFile = readFileSync(path, 'utf8');
   assert.ok(projectFile.includes(TASK_OFFER_CHECK_INVOCATION), `${CLAUDE_MD_FILE} does not name the invocation, so this case proves nothing`);
-  writeFileSync(path, projectFile.split(TASK_OFFER_CHECK_INVOCATION).join('test ! -e .claude/harness-no-offer'));
+  writeFileSync(path, projectFile.split(TASK_OFFER_CHECK_INVOCATION).join('test ! -e .claude/devscene-no-offer'));
   await rm(join(dir, TASK_OFFER_CHECK_FILE));
 
   const { status, stdout, stderr } = await runCli(dir, ['doctor']);
@@ -4360,7 +4356,7 @@ async function wiredLayeredFixture(t) {
  *
  * **The subject is the disappearing signal**, which is why the first case runs `doctor` twice. Before
  * this check, the only trace that a `flat` fallback profile had never been examined was
- * `setup-analysis`'s skeleton warning — and `/devscene:harness-analyze conventions` clears that by filling the
+ * `setup-analysis`'s skeleton warning — and `/devscene:analyze conventions` clears that by filling the
  * documents, without the profile having been looked at at all. The second run in case (a) is that
  * state, reached by hand: `setup-analysis` passes and this check still warns.
  *
@@ -4622,7 +4618,7 @@ const FLAT_DIRS = Object.freeze(['cmd', 'lib', 'pkg', 'tools', 'test']);
  * pass on a reworded sentence.
  */
 const STANDING_GAP_REMEDY =
-  'If any of them is a real layer, run `/devscene:harness-analyze` in a session here and answer `skip` for every already-filled document; ' +
+  'If any of them is a real layer, run `/devscene:analyze` in a session here and answer `skip` for every already-filled document; ' +
   'a no-argument run with `--yes` takes `merge` on all of them and rewrites documents nobody asked to touch. ' +
   'The profile itself is applied through `npx devscene config set layers`';
 
@@ -4703,7 +4699,7 @@ test('the layer-drift check names the directories no layer covers, and is not gr
   await t.test('a recorded review does not silence it — a layer hand-added after the review still drifts', async (subtest) => {
     const dir = await wiredLayeredFixture(subtest);
     mkdirSync(join(dir, DRIFTED_DIR), { recursive: true });
-    // The record `/devscene:harness-analyze layers` writes, hand-added in the shape `config set
+    // The record `/devscene:analyze layers` writes, hand-added in the shape `config set
     // detection.review` takes. It clears `layer-profile` and nothing else: a verdict is a statement
     // about the profile at the moment it was reviewed, so a directory that appeared afterwards is
     // exactly Finding 38's entry 2 — "a layer is hand-added between runs".
@@ -5074,6 +5070,13 @@ test('the plugin-permissions check prints the entries to paste, and never above 
 
   subtests.push(t.test('a helper entry under no resolved root is named on the passing line, and a wrapper entry never is', async (subtest) => {
     const dir = await wiredFixture(subtest, ['--qa']);
+    // `scriptsDir` set to `scripts` explicitly and re-wired: only there does a wrapper's own entry
+    // collide with the plugin's `scripts/` helper form.
+    editJson(dir, CONFIG_FILE, (config) => {
+      config.scriptsDir = 'scripts';
+    });
+    const rewired = await runCli(dir, ['init', '--qa']);
+    assert.equal(rewired.status, 0, `the second init exited ${rewired.status}\n${rewired.stdout}\n${rewired.stderr}`);
     const root = await pluginInstallRootFixture(subtest, HELPERS);
     // A second plugin root nothing on this machine records: the shape an upgrade leaves behind,
     // since the install root carries the plugin version and the entries pasted against the previous
@@ -5081,8 +5084,7 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     const stale = await pluginInstallRootFixture(subtest, HELPERS);
     const home = await claudeConfigHome(subtest, [{ scope: 'user', installPath: root }]);
     const staleEntry = pluginEntries(stale, [HELPERS[0]])[0];
-    // A wrapper's own entry: repo-root-absolute, and byte-shaped exactly like a plugin helper's. Kept
-    // at `scripts`, the absent-key `scriptsDir`, because only there does that collision exist.
+    // A wrapper's own entry: repo-root-absolute, and byte-shaped exactly like a plugin helper's.
     const wrapperEntry = `Bash(bash ${dir}/scripts/test.sh:*)`;
     allowInProfile(dir, [pluginReadEntry(root), ...pluginEntries(root, HELPERS), staleEntry, wrapperEntry]);
 

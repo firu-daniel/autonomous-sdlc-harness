@@ -242,8 +242,8 @@ test("the usage gate's paired write and a local pause classification both surviv
   const fixture = await createWatcherFixture(t);
   if (fixture === null) return;
   const watcher = join(fixture.dir, INIT_SCRIPTS_DIR, 'autonomous-watcher.sh');
-  const logPath = join(fixture.dir, 'sdlc-harness', 'autonomous_logs', `${fixture.branch}.log`);
-  writeFileSync(join(fixture.dir, 'sdlc-harness', 'PAUSE_ACK'), '');
+  const logPath = join(fixture.dir, 'devscene', 'autonomous_logs', `${fixture.branch}.log`);
+  writeFileSync(join(fixture.dir, 'devscene', 'PAUSE_ACK'), '');
   const env = {
     AUTO_TAIL_TERMINAL: '0',
     USAGE_LANE_STATE_ENABLED: '0',
@@ -278,15 +278,15 @@ test("a remote-run.sh stop racing the watcher's writes loses neither, every roun
   const { dir } = fixture;
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
 
   // A `gh` that accepts every call and lists no active run, in the style of `cli/test/remote-run.test.mjs` → `STUB`.
-  const logsDir = join(dir, 'sdlc-harness', 'autonomous_logs');
+  const logsDir = join(dir, 'devscene', 'autonomous_logs');
   mkdirSync(logsDir, { recursive: true });
-  const stub = join(dir, 'sdlc-harness', 'gh-stub');
+  const stub = join(dir, 'devscene', 'gh-stub');
   writeFileSync(stub, "#!/usr/bin/env node\nif (process.argv.slice(2).join(' ').startsWith('run list')) process.stdout.write('[]');\n", { mode: 0o755 });
   const registry = join(logsDir, 'registry.json');
   const env = {

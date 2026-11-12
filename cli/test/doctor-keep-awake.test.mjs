@@ -22,7 +22,7 @@ import test from 'node:test';
 
 import { createFixture, runCli } from './helpers/fixture.mjs';
 
-const CONFIG_FILE = 'harness.config.json';
+const CONFIG_FILE = 'devscene.config.json';
 
 /** The `off` arm's sentence, as `doctor/keepAwake.ts` → `assessKeepAwake` writes it. */
 const OFF_TEXT = 'off: `execution.keepAwake` is false';

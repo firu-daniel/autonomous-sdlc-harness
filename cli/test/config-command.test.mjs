@@ -37,7 +37,7 @@ import test from 'node:test';
 import { createFixture, ignoredAmong, INIT_SCRIPTS_DIR, readJson, runCli, snapshotTree } from './helpers/fixture.mjs';
 
 /** The file every verb reads, and the sibling a real `set` leaves the previous values in. */
-const CONFIG_FILE = 'harness.config.json';
+const CONFIG_FILE = 'devscene.config.json';
 const BACKUP_FILE = `${CONFIG_FILE}.bak`;
 
 /** The wrapper invocation `init` writes into `commands.test`, spelled out rather than imported. */
@@ -175,7 +175,7 @@ test('set stores the value as JSON and leaves the previous file one file away', 
 /**
  * The arming moment: `config set phases.qa true` is the documented route to turning the phase on
  * without re-running `init`, and it writes no `qa` section — `init` writes one only under `--qa`, and
- * `init --force` never rewrites `harness.config.json` at all. So the command that arms the phase is
+ * `init --force` never rewrites `devscene.config.json` at all. So the command that arms the phase is
  * the only place an adopter can be told the driver was never chosen, and it has to say so there.
  *
  * The negative control is in the same case on purpose: a repository whose `qa` section `init --qa`
