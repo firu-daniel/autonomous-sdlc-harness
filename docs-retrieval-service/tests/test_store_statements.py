@@ -16,8 +16,8 @@ from typing import Any
 import psycopg
 import pytest
 
-from harness_docs_retrieval.errors import ServiceError
-from harness_docs_retrieval.store import (
+from devscene_docs_retrieval.errors import ServiceError
+from devscene_docs_retrieval.store import (
     BM25_INDEX,
     BM25_INDEX_DEFINITION,
     BM25_ORDER_CLAUSE,

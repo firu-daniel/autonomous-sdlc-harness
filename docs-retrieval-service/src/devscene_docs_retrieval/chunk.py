@@ -21,7 +21,7 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 
-from harness_docs_retrieval.jscompat import js_trim
+from devscene_docs_retrieval.jscompat import js_trim
 
 
 @dataclass(frozen=True)

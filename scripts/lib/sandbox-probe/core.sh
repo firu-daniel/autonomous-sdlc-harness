@@ -57,7 +57,7 @@ sp_leg_declare scratch "SR1,SR2" \
   "scratch-run.sh runs a probe file sandboxed, and a write outside the allowed roots from inside that file is refused" \
   "§4 The profile's denials"
 sp_leg_declare retrieval "MC1" \
-  "the harness-docs MCP server answers a search_docs call outside the sandbox, or the leg is not run where no .mcp.json wires it" \
+  "the devscene-docs MCP server answers a search_docs call outside the sandbox, or the leg is not run where no .mcp.json wires it" \
   "§4 The profile's denials"
 sp_leg_declare wrappers "CS4,P3,CW2,P1c,CW5,P1b,CW6" \
   "the main checkout's wrappers run outside the sandbox and land on the clone, while the clone's own copies, the compound and both assignment prefixes stay sandboxed or are neutralised, each prefixed call allowed through --allowedTools; a measured call refused at the permission layer is not run, and every P3, CW2, P1c, CW5, P1b and CW6 result names the layer that answered" \

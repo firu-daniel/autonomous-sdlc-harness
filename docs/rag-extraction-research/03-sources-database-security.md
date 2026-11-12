@@ -19,7 +19,7 @@ Maintainer framing applied: the stack is not locked; one engine serves both a lo
   - `CREATE EXTENSION IF NOT EXISTS` for both extensions;
   - `ALTER EXTENSION <name> UPDATE` for any extension whose `extversion` differs from `default_version`;
   - the `CREATE` statements for `meta` and `chunks`, the HNSW index and the BM25 index (`text_config='english'`);
-  - a `meta` write (`docs-retrieval-service/src/harness_docs_retrieval/store.py:89-102`, `:156-160`, `:385-397`).
+  - a `meta` write (`docs-retrieval-service/src/devscene_docs_retrieval/store.py:89-102`, `:156-160`, `:385-397`).
 - The SQL names no schema (`store.py:139-155`).
 - After any write, the refresh issues `REINDEX INDEX chunks_bm25` under an `ACCESS EXCLUSIVE` lock (`docs-retrieval-service/README.md:153`).
 - The shipped image is `pgvector/pgvector:0.8.7-pg18` plus `pg_textsearch` `v1.5.1` (`postgres/Dockerfile:26-49`).

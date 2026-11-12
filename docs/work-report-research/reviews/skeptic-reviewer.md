@@ -75,7 +75,7 @@ verdict: FAIL
 
 1. `core:365` is cited for the caller's reliance on PASS (report:176). Line 365 is the FAIL arm; the PASS arm is `:364`.
 2. Lead 13 (CLAUDE.md read list) is not discussed explicitly. `.claude/CLAUDE.md` names the same set (`conventions.md` plus the per-layer files plus `lessons.md` for branch-level review), so there is no conflict. Say so in one line.
-3. The `mcp__harness-docs__search_docs` locator-only rule (`:77`, `:79`) has no conditional item. It is inert here (`phases.docs: false`), but a docs-enabled adopter loses its tick. Add an `n/a`-able item or fold it into S6.
+3. The `mcp__devscene-docs__search_docs` locator-only rule (`:77`, `:79`) has no conditional item. It is inert here (`phases.docs: false`), but a docs-enabled adopter loses its tick. Add an `n/a`-able item or fold it into S6.
 4. An adjust dispatch that removes every finding (meta-review drops all of them) is not covered by the k-index scheme or the mode list.
 
 Verified without finding (spot-checks): `skeptic-reviewer.md:10, :14, :23, :60, :62, :75, :76, :81, :87, :90, :93, :99, :102, :107, :116, :152, :160, :178, :194`; `committer.md:45, :89, :113`; `core:360, :367, :387, :676, :681`; `review-plan-reviewer.md:82, :108`; `autonomous_pause_and_ledger.md:82-84`; `plan_orchestration_instructions_autonomous.md:161, :184, :309`; `run_mode_instructions.md:83`; `docs_orchestration_instructions_autonomous.md:24`; `unit_loop_core.md:202` and `## The test-run rule` (732); `dispatch_discipline_instructions.md:68, :72`; `hooks.json` (sole matcher `Bash`); `settings.autonomous.json:45, :50`.

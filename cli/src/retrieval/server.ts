@@ -33,7 +33,7 @@ import { ABSTAIN_MESSAGE, DEFAULT_RESULTS, MAX_RESULTS, renderResults, searchDoc
 import { openRetrieval, type RetrievalSession } from './session.js';
 
 /** The server name an adopter's `.mcp.json` registers. */
-export const DOCS_SERVER_NAME = 'harness-docs';
+export const DOCS_SERVER_NAME = 'devscene-docs';
 
 /** The one tool this server exposes. */
 export const SEARCH_TOOL_NAME = 'search_docs';

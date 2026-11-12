@@ -16,10 +16,10 @@
  *   {@link PYTHON_DEFAULT_DATABASE_URL} and {@link PYTHON_BACKEND_UNAVAILABLE_EXIT}.
  * - `docs-retrieval-service/compose.yaml` → `postgres` — the user, password, database and port inside
  *   {@link PYTHON_DEFAULT_DATABASE_URL}.
- * - `docs-retrieval-service/src/harness_docs_retrieval/self_check.py` — `SELF_CHECK_QUESTIONS`
+ * - `docs-retrieval-service/src/devscene_docs_retrieval/self_check.py` — `SELF_CHECK_QUESTIONS`
  *   ({@link SELF_CHECK_QUESTIONS}), `CheckLine.render` (the line shape {@link parseSelfCheck} reads)
  *   and `_check_index`'s not-attempted detail ({@link SELF_CHECK_INDEX_NOT_ATTEMPTED}).
- * - `docs-retrieval-service/src/harness_docs_retrieval/store.py` — `DATABASE_URL_ENV`
+ * - `docs-retrieval-service/src/devscene_docs_retrieval/store.py` — `DATABASE_URL_ENV`
  *   ({@link PYTHON_DATABASE_URL_VARIABLE}).
  * - `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_path_with_fallbacks` —
  *   {@link LAUNCHER_PATH_FALLBACKS} and the policy {@link launcherSearchPath} reproduces.
@@ -32,7 +32,7 @@
  */
 
 /** The Python package's console script. */
-export const PYTHON_RETRIEVAL_COMMAND = 'harness-docs-retrieval';
+export const PYTHON_RETRIEVAL_COMMAND = 'devscene-docs-retrieval';
 
 /** The sub-command the launcher runs as its child to serve MCP over stdio, never `exec`ed. */
 export const PYTHON_SERVE_SUB_COMMAND = 'serve-mcp';
@@ -44,13 +44,13 @@ export const PYTHON_SELF_CHECK_SUB_COMMAND = 'self-check';
 export const PYTHON_FETCH_MODELS_SUB_COMMAND = 'fetch-models';
 
 /** The variable the Python backend reads its Postgres connection string from. */
-export const PYTHON_DATABASE_URL_VARIABLE = 'HARNESS_DOCS_RETRIEVAL_DATABASE_URL';
+export const PYTHON_DATABASE_URL_VARIABLE = 'DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL';
 
 /**
  * The connection string used when {@link PYTHON_DATABASE_URL_VARIABLE} is unset. The credentials are
  * the compose file's throwaway values for a loopback-only container, never a real secret.
  */
-export const PYTHON_DEFAULT_DATABASE_URL = 'postgresql://harness:harness@127.0.0.1:5432/docs_retrieval';
+export const PYTHON_DEFAULT_DATABASE_URL = 'postgresql://devscene:devscene@127.0.0.1:5432/docs_retrieval';
 
 /** The launcher's exit code when the Python backend is selected but cannot be started. */
 export const PYTHON_BACKEND_UNAVAILABLE_EXIT = 3;
@@ -95,7 +95,7 @@ export function parseSelfCheck(stdout: string): ReadonlyMap<SelfCheckQuestion, S
 
 /**
  * The connection string the server will use: `serverEnv[PYTHON_DATABASE_URL_VARIABLE]` when
- * `serverEnv` (the `harness-docs` server's `env` object in `.mcp.json`) is an object holding a
+ * `serverEnv` (the `devscene-docs` server's `env` object in `.mcp.json`) is an object holding a
  * non-empty string there, else {@link PYTHON_DEFAULT_DATABASE_URL}. A shell export is deliberately not
  * consulted: the agent runner never passes one to the server (`docs/retrieval.md` → **How the variable
  * reaches the server, since an export does not.**).

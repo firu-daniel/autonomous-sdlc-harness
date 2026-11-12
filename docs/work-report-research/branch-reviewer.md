@@ -30,7 +30,7 @@ Measured with `wc -w` in this repository (layers `cli`, `plugin`, catch-all `gen
 | `<reference_impl>` methods, read in full (`:92`, parity on only) | on demand | variable |
 | Per-unit `review_*.md` under `per_task_findings_root` (Pass 2, `:128`) | on demand | variable (empty in autonomous, `plan_orchestration_instructions_autonomous.md:167`) |
 | `unit_loop_core.md` → `## The test-run rule` (`:145`) | on demand | 732 |
-| `<docs_root>`, `mcp__harness-docs__search_docs` (`:69-70`, docs on only) | on demand | variable |
+| `<docs_root>`, `mcp__devscene-docs__search_docs` (`:69-70`, docs on only) | on demand | variable |
 | Adjust re-dispatch only (`core.md:308`): `<findings_file>`, plus the existing index and `finding_<N>.md` files it adjusts | up-front (adjust only) | variable |
 | `layer-reviewer.md`, `skeptic-reviewer.md`, `review-plan-reviewer.md`, `code_review_instructions.md`, `plan_orchestration_instructions_core.md` (named for context only, `:12`, `:14`, `:226`, `:155`, `:42`) | not read | 3 997 / 5 373 / 4 421 / 1 041 / 16 609 |
 

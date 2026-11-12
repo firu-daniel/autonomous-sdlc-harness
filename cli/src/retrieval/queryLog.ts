@@ -28,7 +28,7 @@
  * starts the server from `.mcp.json` and passes only the MCP SDK's fixed inherited set —
  * `getDefaultEnvironment()` in `@modelcontextprotocol/sdk/client/stdio.js` is `HOME`, `LOGNAME`,
  * `PATH`, `SHELL` and `USER` on POSIX — so an exported variable does not reach the child. The route is
- * an `env` entry the operator adds by hand to the `harness-docs` server in their own `.mcp.json`,
+ * an `env` entry the operator adds by hand to the `devscene-docs` server in their own `.mcp.json`,
  * which `init` merges rather than overwrites. `init` must not generate the key: generating it would
  * make this a surface an adopter who wants nothing has to read. So the spelling lives here and in the
  * adopter's own hand-edited file only, never under `cli/templates/`, and there is no mirror for this
@@ -50,7 +50,7 @@ import type { Reporter } from '../core/report.js';
  * not a `devscene.config.json` key — an adopter who does not set it gains no new surface, so there is
  * nothing for `config`, `doctor` or the config check to grow.
  */
-export const RETRIEVAL_LOG_ENV = 'AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG';
+export const RETRIEVAL_LOG_ENV = 'DEVSCENE_RETRIEVAL_LOG';
 
 /**
  * How a call ended, one value per exit from `cli/src/retrieval/server.ts` → `answer` that reaches this

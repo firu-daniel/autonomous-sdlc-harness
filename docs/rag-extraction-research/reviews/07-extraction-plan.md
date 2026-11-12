@@ -51,7 +51,7 @@ Confirmed:
    - Adoption itself writes those names. In straightedge, `git grep -lE "harness.config|devscene|HARNESS_" main -- .claude` matches 8 files: `CLAUDE.md`, `settings.json`, `settings.autonomous.json`, `harness-task-offer.md`, `context/conventions.md` and others.
    - **Change:**
      - Scope the check to the analyze-written prose: `.claude/context/*.md` and the filled sections of `CLAUDE.md`.
-     - Grep there only for the product-code names a cut should have removed: `harness_docs_retrieval`, `HARNESS_DOCS_RETRIEVAL`, `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL`, `harness-docs`, `cli/dist`, `docs_index` and `retrievalApplies`.
+     - Grep there only for the product-code names a cut should have removed: `devscene_docs_retrieval`, `DEVSCENE_DOCS_RETRIEVAL`, `DEVSCENE_RETRIEVAL`, `devscene-docs`, `cli/dist`, `docs_index` and `retrievalApplies`.
 
 4. **§5, §6 steps 2–12, Open question 1 and the Fork verdict contradict ruling R3.7.**
    - R3.7, the maintainer's ruling: finish the sandbox series (#170), then the DevScene rename (#151–#156), and only then RagScene. No RagScene work runs before the rename is done, `ragscenedev` included.

@@ -16,12 +16,12 @@ from typing import NoReturn
 import pytest
 
 from fakes import InMemoryDocStore
-from harness_docs_retrieval import cli, service
-from harness_docs_retrieval.models import MODEL_CACHE_ENV
-from harness_docs_retrieval.self_check import SELF_CHECK_QUESTIONS
-from harness_docs_retrieval.service import CONFIG_FILENAME
-from harness_docs_retrieval.store import DATABASE_URL_ENV, DocStore
-from harness_docs_retrieval.stubs import RETRIEVAL_STUB_ENV
+from devscene_docs_retrieval import cli, service
+from devscene_docs_retrieval.models import MODEL_CACHE_ENV
+from devscene_docs_retrieval.self_check import SELF_CHECK_QUESTIONS
+from devscene_docs_retrieval.service import CONFIG_FILENAME
+from devscene_docs_retrieval.store import DATABASE_URL_ENV, DocStore
+from devscene_docs_retrieval.stubs import RETRIEVAL_STUB_ENV
 from model_cache import plant_model_files
 
 UNREACHABLE_DATABASE_URL = "postgresql://127.0.0.1:1/none"
@@ -29,7 +29,7 @@ UNREACHABLE_DATABASE_URL = "postgresql://127.0.0.1:1/none"
 # One file, no preamble chunk (the title alone), two `##` sections.
 DOC = "# A\n\n## One\n\nfirst body\n\n## Two\n\nsecond body\n"
 
-RUN_MAIN = "import sys; from harness_docs_retrieval.cli import main; sys.exit(main(sys.argv[1:]))"
+RUN_MAIN = "import sys; from devscene_docs_retrieval.cli import main; sys.exit(main(sys.argv[1:]))"
 
 
 def _repo(root: Path) -> Path:
@@ -167,6 +167,6 @@ def test_fetch_models_under_the_stub_refuses_and_downloads_nothing(
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == (
-        f"harness-docs-retrieval: fetch-models: refusing to download while {RETRIEVAL_STUB_ENV}"
+        f"devscene-docs-retrieval: fetch-models: refusing to download while {RETRIEVAL_STUB_ENV}"
         " is set, because a stub run never downloads; unset it to fetch the real models\n"
     )

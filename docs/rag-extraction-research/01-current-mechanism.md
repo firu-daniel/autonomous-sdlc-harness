@@ -6,7 +6,7 @@
 
 Date: 2026-10-28. Route: reading this repository at `dev` (`2ace325d`) only — source, templates, tests, shipped docs and the eval record. No command was run against a database or a model. The fork itself used no web source. The licence URLs in §7 were checked by this file's reviewer (`reviews/01-current-mechanism.md`, Should Fix 1) and are carried here with that provenance.
 
-Main sources: `docs/retrieval.md`, `docs-retrieval-service/README.md`, `docs/cli.md` §2/§7/§11, `docs/config.md` §5, `cli/src/retrieval/*.ts`, `cli/src/commands/docs.ts`, `cli/src/doctor/checks.ts`, `cli/src/generators/repoRoot.ts`, the two retrieval templates, `cli/templates/scripts/docs-search-server.sh`, `docs-retrieval-service/src/harness_docs_retrieval/*.py` and its compose and Docker files, `plugin/agents/`, `plugin/hooks/hooks.json`, `evals/docs-retrieval/`, and the headings of `docs/retrieval-eval-results.md`.
+Main sources: `docs/retrieval.md`, `docs-retrieval-service/README.md`, `docs/cli.md` §2/§7/§11, `docs/config.md` §5, `cli/src/retrieval/*.ts`, `cli/src/commands/docs.ts`, `cli/src/doctor/checks.ts`, `cli/src/generators/repoRoot.ts`, the two retrieval templates, `cli/templates/scripts/docs-search-server.sh`, `docs-retrieval-service/src/devscene_docs_retrieval/*.py` and its compose and Docker files, `plugin/agents/`, `plugin/hooks/hooks.json`, `evals/docs-retrieval/`, and the headings of `docs/retrieval-eval-results.md`.
 
 Three kinds of statement, as in `docs/copilot-foundry-research.md` → `## How this was researched`:
 
@@ -24,16 +24,16 @@ Unlabelled sentences in a paragraph that cites a source are Documented.
 
 ### Who starts the server
 
-1. **`init` writes the registration.** When `retrievalApplies(config)` holds — `phases.docs === true && docs.retrieval === true` (`cli/src/config/model.ts:637`) — `init` merges a `harness-docs` stdio entry from `cli/templates/repo/mcp.retrieval.json` into `.mcp.json`. The entry runs `command: "bash"` with one argument, `<scriptsDir>/docs-search-server.sh`, and an empty `env` object (`cli/src/generators/repoRoot.ts` → `retrievalWiring`).
+1. **`init` writes the registration.** When `retrievalApplies(config)` holds — `phases.docs === true && docs.retrieval === true` (`cli/src/config/model.ts:637`) — `init` merges a `devscene-docs` stdio entry from `cli/templates/repo/mcp.retrieval.json` into `.mcp.json`. The entry runs `command: "bash"` with one argument, `<scriptsDir>/docs-search-server.sh`, and an empty `env` object (`cli/src/generators/repoRoot.ts` → `retrievalWiring`).
 2. **The agent runner starts the launcher.** Only the MCP SDK's fixed inherited environment reaches it (`HOME`, `LOGNAME`, `PATH`, `SHELL`, `TERM`, `USER`), so any setting must go in the entry's `env` object (`docs/retrieval.md:54`).
 3. **The launcher picks the backend at run time** (`cli/templates/scripts/docs-search-server.sh:75-135`). It reads `docs.retrievalBackend` only inside the retrieval gate.
    - `typescript`, or the key absent: it `exec`s a whole copy of the harness CLI that `init` installed into a machine cache, as `node $cache/retrieval/runtime/node_modules/devscene/dist/cli.js docs serve --cwd <root>` (`cli/src/retrieval/runtime.ts:14-17`).
-   - `python`: it defaults `HARNESS_DOCS_RETRIEVAL_DATABASE_URL` to the compose loopback URL, runs `harness-docs-retrieval serve-mcp --repo <root>` as a child, relays signals, and maps any failure to exit `3`.
+   - `python`: it defaults `DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL` to the compose loopback URL, runs `devscene-docs-retrieval serve-mcp --repo <root>` as a child, relays signals, and maps any failure to exit `3`.
    - There is no fallback between backends.
 
 ### How the agent is allowed to call it
 
-- **Server enablement and tool permission.** A profile fragment adds `"enabledMcpjsonServers": ["harness-docs"]` and `"permissions.allow": ["mcp__harness-docs__search_docs"]` (`cli/templates/claude/settings.autonomous.retrieval.json`). Its `_README` says both are needed, and that an unloaded tool stalls a print-mode run.
+- **Server enablement and tool permission.** A profile fragment adds `"enabledMcpjsonServers": ["devscene-docs"]` and `"permissions.allow": ["mcp__devscene-docs__search_docs"]` (`cli/templates/claude/settings.autonomous.retrieval.json`). Its `_README` says both are needed, and that an unloaded tool stalls a print-mode run.
 - **Agent `tools:` allowlists.** Exactly 11 plugin agents (every plan writer, plan reviewer and end-of-branch reviewer) list the tool in `tools:` whatever the configuration (`plugin/agents/README.txt:54-94`).
 - **Prose that governs use.** Each of those agents carries a `<docs_retrieval>` row and a tool bullet: ignore the tool unless retrieval is on; treat a hit as "navigation, never evidence" and as untrusted data; on `no confident match`, fall back to index-first reading (`plugin/agents/task-plan-writer.md:22`, `:60`).
 - **Deferred loading.** On Claude Code 2.1.278 the tool arrived deferred, behind a `ToolSearch` call (`docs/retrieval.md:140`).
@@ -85,7 +85,7 @@ sequenceDiagram
 
 ## 3. Pipeline internals
 
-| Stage | TS (`cli/src/retrieval/`) | Python (`…/harness_docs_retrieval/`) | Harness-specific | Generic |
+| Stage | TS (`cli/src/retrieval/`) | Python (`…/devscene_docs_retrieval/`) | Harness-specific | Generic |
 |---|---|---|---|---|
 | Corpus | `corpus.ts` | `corpus.py` | Input comes from `devscene.config.json` (`docs.root` + `layers[].conventions`), confined to the repo (`corpus.py:96-134`). | Recursive walk; a missing path is a warning. |
 | Chunk | `chunk.ts` | `chunk.py` (parity-tested) | The wrapper-heading fold is tuned to house templates (`docs/retrieval.md:15`). | Markdown only: split on `##`/`###` outside fences, GitHub anchors, sha256 change signal, no size cap. |
@@ -94,7 +94,7 @@ sequenceDiagram
 | Refresh | `refresh.ts` | `refresh.py` | — | Incremental by key and hash; an embedder change clears the index; `REINDEX` after any write (`docs/retrieval.md:17`). |
 | Search / rerank | `search.ts` | `search.py` | — | Four modes, 50 candidates per arm, RRF 60, top 20 to a cross-encoder. |
 | Abstain | `0.32` | same | Calibrated on harness corpora and one catalog (`docs/retrieval-eval-results.md` → `## Threshold calibration`). | `fused-rerank` only. |
-| Log | `queryLog.ts` (`AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG`) | none; a `search_ms` line on stderr | The variable name. | JSONL per call. |
+| Log | `queryLog.ts` (`DEVSCENE_RETRIEVAL_LOG`) | none; a `search_ms` line on stderr | The variable name. | JSONL per call. |
 | Serve | `server.ts` (stdio MCP) | `mcp_server.py` (stdio), `http_app.py` (HTTP) | Server name, description, remedy text. | MCP tool, HTTP JSON. |
 
 **Inference:** the harness-specific surface is thin: the corpus input, the names, the wording and the index location. Chunk → embed → store → search → rerank → abstain is generic. It is also replaceable, given the framing above.
@@ -121,9 +121,9 @@ Two things use it: the service image's default command (`docs-retrieval-service/
 | 1 | The corpus is read from `devscene.config.json`. Python **raises without that file even when `--docs-root` is given** | `service.py:83-101`; `corpus.py:96`; `corpus.ts` | **Moderate:** needs its own source config. |
 | 2 | Gate `phases.docs && docs.retrieval` (TS only) | `session.ts:37-41` | Trivial. |
 | 3 | Index at `<stateDir>/docs_index`; `init` gitignores it | `store.ts:84`; `cli/src/generators/repoRoot.ts:622` | Trivial. |
-| 4 | Wire names `harness-docs` / `search_docs`, quoted by 11 agents and 2 templates | `server.ts:35-42`; `wire.py`; `plugin/agents/README.txt:84-90` | Moderate. A configurable server name would let the harness keep its string. |
+| 4 | Wire names `devscene-docs` / `search_docs`, quoted by 11 agents and 2 templates | `server.ts:35-42`; `wire.py`; `plugin/agents/README.txt:84-90` | Moderate. A configurable server name would let the harness keep its string. |
 | 5 | Description and remedy text naming the harness | `server.ts:58`, `:137`; `service.py:245`; `session.ts:39`, `:47` | Trivial. |
-| 6 | `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` (read by both backends, passed through by `compose.yaml`) and `…_RETRIEVAL_LOG` | `stubs.py:21`; `queryLog.ts:53`; `models.ts` | Trivial. |
+| 6 | `DEVSCENE_RETRIEVAL_STUB` (read by both backends, passed through by `compose.yaml`) and `…_RETRIEVAL_LOG` | `stubs.py:21`; `queryLog.ts:53`; `models.ts` | Trivial. |
 | 7 | Cache paths `…/devscene/retrieval/{runtime,models}`, mirrored in the launcher and in `cli/templates/github/workflows/devscene-run.yml:600`, `:938` | `runtime.ts:20-27` | Trivial for the product; the harness mirrors move with it. |
 | 8 | **The TS backend ships inside the harness npm package** as optional peers. `init` installs the whole CLI plus peers into a runtime directory, because `npx` cannot resolve project peers. It imports `HarnessConfig`, `HarnessError`, `Reporter` and `core/paths` | `cli/package.json`; `runtime.ts`; `setup.ts`; `docs/retrieval.md:71-73` | **Hard.** |
 | 9 | Model fetching inside `init` (`setup.ts` spawns `docs fetch-models`, 900 s timeout) | `setup.ts:46` | Moderate; Python has its own `fetch-models`. |
@@ -135,7 +135,7 @@ Two things use it: the service image's default command (`docs-retrieval-service/
 
 ## 5. What already stands alone
 
-**The Python service** (`docs-retrieval-service/`) already has its own package, console script and version (`pyproject.toml`, `0.1.0`). It has its own `HARNESS_DOCS_RETRIEVAL_*` variables (except the stub variable, §4 #6) and its own weight cache. Its verbs are `fetch-models`, `index`, `self-check`, `serve-mcp` and `serve-http`. Its store takes a Postgres by URL, and it ships a compose stack, a weight-free non-root service image and a Postgres 18 image that builds pgvector 0.8.7 and `pg_textsearch` v1.5.1. It reads only two harness keys and applies no harness gate (`service.py:13-15`).
+**The Python service** (`docs-retrieval-service/`) already has its own package, console script and version (`pyproject.toml`, `0.1.0`). It has its own `DEVSCENE_DOCS_RETRIEVAL_*` variables (except the stub variable, §4 #6) and its own weight cache. Its verbs are `fetch-models`, `index`, `self-check`, `serve-mcp` and `serve-http`. Its store takes a Postgres by URL, and it ships a compose stack, a weight-free non-root service image and a Postgres 18 image that builds pgvector 0.8.7 and `pg_textsearch` v1.5.1. It reads only two harness keys and applies no harness gate (`service.py:13-15`).
 
 To become a product (**Inference**) it needs:
 
@@ -212,7 +212,7 @@ The code moves as a **starting point**. The new product may replace the lexical 
 **Inference.** The harness needs:
 
 - a stdio MCP command taking a corpus definition;
-- a stable or configurable server name, so `mcp__harness-docs__search_docs` survives;
+- a stable or configurable server name, so `mcp__devscene-docs__search_docs` survives;
 - the result text format of §1;
 - a machine-readable readiness check. `self-check` already provides one: lines rendered by `self_check.py` → `CheckLine.render` (`:40`) and parsed by `pythonBackend.ts` → `parseSelfCheck`.
 

@@ -3129,7 +3129,7 @@ SESSION_ENV_STRIP_EXTRA="DEVSCENE_PUSH_URL DEVSCENE_GIT_TOKEN"
 #         plugin/ cli/templates/scripts/{commit-on-branch,push-branch,refresh-branch,launch-sandboxed-gates,run-test-suite,scratch-run,flow-walker,docs-search-server,typecheck,test}.sh \
 #         cli/templates/scripts/lib/
 #     run in the harness repository, keeping each name a session's tree reads
-#     and none of the strip set: HARNESS_DOCS_RETRIEVAL_DATABASE_URL. Its other
+#     and none of the strip set: DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL. Its other
 #     hits are DEVSCENE_MAIN_REPO, which the launch exports itself, the strip
 #     set's HARNESS_PR_TOKEN and DEVSCENE_GIT_TOKEN, and two job-only names the
 #     watcher's own passes read.
@@ -3140,7 +3140,7 @@ DBUS_SESSION_BUS_ADDRESS GH_CONFIG_DIR GIT_ASKPASS \
 HTTPS_PROXY HTTP_PROXY NO_PROXY ALL_PROXY https_proxy http_proxy no_proxy all_proxy NODE_EXTRA_CA_CERTS SSL_CERT_FILE SSL_CERT_DIR \
 CLAUDE_CONFIG_DIR ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN \
 ANTHROPIC_BASE_URL ANTHROPIC_MODEL \
-HARNESS_DOCS_RETRIEVAL_DATABASE_URL"
+DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL"
 
 # session_env_kept <name> <pass names, space-separated> — 0 when a local
 # session keeps <name> under the allow-list.

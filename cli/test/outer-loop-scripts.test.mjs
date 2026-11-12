@@ -1765,7 +1765,7 @@ test("the docs-retrieval server launcher execs the runtime's docs serve for its 
 /**
  * A launcher fixture: `init`, then `devscene.config.json` rewritten with the `docs` / `phases.docs`
  * values the case states, a planted TypeScript runtime that reports its argv on stderr, and —
- * unless `fake` is `false` — a fake `harness-docs-retrieval` first on `PATH` that reports its argv
+ * unless `fake` is `false` — a fake `devscene-docs-retrieval` first on `PATH` that reports its argv
  * and database variable as JSON on stderr, after an optional prelude line, and exits `fake.status`.
  * `HOME` is a fixture directory, so `~/.local/bin` cannot supply a real backend.
  */

@@ -20,7 +20,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from harness_docs_retrieval.jscompat import utf16_sort_key
+from devscene_docs_retrieval.jscompat import utf16_sort_key
 
 
 @dataclass(frozen=True)

@@ -15,7 +15,7 @@ Case (d) pins the marker's other two branches, which no score comparison can see
 The corpus is `evals/docs-retrieval/corpora/fixture-catalog/docs/*.md`, copied under `tmp_path`;
 the queries are every `query` of `evals/docs-retrieval/queries/fixture-catalog.jsonl`. Vectors come
 from the `hash-v1` stub, so no weights load. The module is skipped wherever
-`HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL` is unset.
+`DEVSCENE_DOCS_RETRIEVAL_TEST_DATABASE_URL` is unset.
 """
 
 import asyncio
@@ -27,10 +27,10 @@ from typing import Any
 import psycopg
 import pytest
 
-from harness_docs_retrieval.chunk import DocChunk, chunk_markdown
-from harness_docs_retrieval.models import EMBEDDING_DIMENSIONS, Embedder
-from harness_docs_retrieval.refresh import RefreshResult, refresh_index
-from harness_docs_retrieval.store import (
+from devscene_docs_retrieval.chunk import DocChunk, chunk_markdown
+from devscene_docs_retrieval.models import EMBEDDING_DIMENSIONS, Embedder
+from devscene_docs_retrieval.refresh import RefreshResult, refresh_index
+from devscene_docs_retrieval.store import (
     BM25_INDEX,
     BM25_ORDER_CLAUSE,
     CHUNKS_TABLE,
@@ -42,7 +42,7 @@ from harness_docs_retrieval.store import (
     StoredChunk,
     open_postgres_store,
 )
-from harness_docs_retrieval.stubs import RETRIEVAL_STUB_ENV, resolve_models
+from devscene_docs_retrieval.stubs import RETRIEVAL_STUB_ENV, resolve_models
 from ts_bridge import CHECKOUT_ROOT
 
 pytestmark = pytest.mark.container

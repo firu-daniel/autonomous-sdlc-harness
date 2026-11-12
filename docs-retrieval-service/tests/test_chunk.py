@@ -8,7 +8,7 @@ TypeScript.
 
 import hashlib
 
-from harness_docs_retrieval.chunk import chunk_markdown, heading_slug
+from devscene_docs_retrieval.chunk import chunk_markdown, heading_slug
 
 FENCE = "```"
 

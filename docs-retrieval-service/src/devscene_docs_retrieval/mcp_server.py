@@ -33,15 +33,15 @@ from mcp.server.stdio import stdio_server
 from mcp.shared._stream_protocols import ReadStream, WriteStream  # typing only; no public export
 from mcp.shared.message import SessionMessage
 
-from harness_docs_retrieval import __version__
-from harness_docs_retrieval.jscompat import js_to_fixed, json_stringify, json_stringify_str
-from harness_docs_retrieval.service import (
+from devscene_docs_retrieval import __version__
+from devscene_docs_retrieval.jscompat import js_to_fixed, json_stringify, json_stringify_str
+from devscene_docs_retrieval.service import (
     RetrievalSession,
     ServiceConfig,
     answer,
     open_session,
 )
-from harness_docs_retrieval.wire import DOCS_SERVER_NAME, SEARCH_TOOL, SEARCH_TOOL_NAME
+from devscene_docs_retrieval.wire import DOCS_SERVER_NAME, SEARCH_TOOL, SEARCH_TOOL_NAME
 
 TIMING_LINE_PREFIX = f"{DOCS_SERVER_NAME}: search_ms="
 

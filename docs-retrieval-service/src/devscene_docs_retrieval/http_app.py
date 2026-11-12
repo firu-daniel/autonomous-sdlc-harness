@@ -18,9 +18,9 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 
-from harness_docs_retrieval.jscompat import json_stringify
-from harness_docs_retrieval.search import SEARCH_MODES, SearchMode
-from harness_docs_retrieval.service import (
+from devscene_docs_retrieval.jscompat import json_stringify
+from devscene_docs_retrieval.search import SEARCH_MODES, SearchMode
+from devscene_docs_retrieval.service import (
     RetrievalSession,
     ServiceConfig,
     answer,

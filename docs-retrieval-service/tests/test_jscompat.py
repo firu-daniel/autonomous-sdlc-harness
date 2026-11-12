@@ -10,7 +10,7 @@ import json
 
 import pytest
 
-from harness_docs_retrieval.jscompat import (
+from devscene_docs_retrieval.jscompat import (
     JS_WHITESPACE,
     js_object_keys,
     js_to_fixed,

@@ -1738,7 +1738,7 @@ test("the mobile note's remedy wires both halves, where a plain re-run wires onl
 });
 
 /** The docs-retrieval server `.mcp.json` declares when retrieval is on, spelled as the contract. */
-const DOCS_SERVER = 'harness-docs';
+const DOCS_SERVER = 'devscene-docs';
 /** The `.mcp.json` entry for that server, whose script sits under the config's `scriptsDir`. */
 function docsServerEntry(scriptsDir) {
   return { type: 'stdio', command: 'bash', args: [`${scriptsDir}/docs-search-server.sh`], env: {} };
@@ -2086,7 +2086,7 @@ test('retrieval setup installs nothing when the runtime is planted, names the in
 
     const fetch = await runCli(dir, ['docs', 'fetch-models'], env);
     assert.notEqual(fetch.status, 0, 'docs fetch-models ran under the stub');
-    assert.match(fetch.stderr, /AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB/, `the refusal does not name the stub:\n${fetch.stderr}`);
+    assert.match(fetch.stderr, /DEVSCENE_RETRIEVAL_STUB/, `the refusal does not name the stub:\n${fetch.stderr}`);
 
     const { stderr } = await initOk(dir, ['--docs', '--docs-retrieval'], env);
     assert.ok(

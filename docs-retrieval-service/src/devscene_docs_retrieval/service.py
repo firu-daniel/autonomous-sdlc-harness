@@ -28,16 +28,16 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from harness_docs_retrieval.errors import ServiceError
-from harness_docs_retrieval.jscompat import js_object_keys, js_trim, json_stringify_str
-from harness_docs_retrieval.models import (
+from devscene_docs_retrieval.errors import ServiceError
+from devscene_docs_retrieval.jscompat import js_object_keys, js_trim, json_stringify_str
+from devscene_docs_retrieval.models import (
     Embedder,
     Reranker,
     model_cache_dir,
     model_files_present,
 )
-from harness_docs_retrieval.refresh import RefreshResult, refresh_index
-from harness_docs_retrieval.search import (
+from devscene_docs_retrieval.refresh import RefreshResult, refresh_index
+from devscene_docs_retrieval.search import (
     DEFAULT_RESULTS,
     MAX_RESULTS,
     SearchMode,
@@ -45,15 +45,15 @@ from harness_docs_retrieval.search import (
     render_results,
     search_docs,
 )
-from harness_docs_retrieval.store import (
+from devscene_docs_retrieval.store import (
     DATABASE_URL_ENV,
     DIMENSIONS_META_KEY,
     DocStore,
     driver_message,
     open_postgres_store,
 )
-from harness_docs_retrieval.stubs import resolve_models
-from harness_docs_retrieval.wire import COVERAGE_NOTE_PREFIX, DOCS_SERVER_NAME, SEARCH_TOOL_NAME
+from devscene_docs_retrieval.stubs import resolve_models
+from devscene_docs_retrieval.wire import COVERAGE_NOTE_PREFIX, DOCS_SERVER_NAME, SEARCH_TOOL_NAME
 
 CONFIG_FILENAME = "devscene.config.json"
 
@@ -166,7 +166,7 @@ async def open_session(config: ServiceConfig) -> RetrievalSession:
     if not models.present:
         raise ServiceError(
             f"the docs-retrieval model cache at {cache_dir} is missing "
-            f"{', '.join(models.missing)}: run harness-docs-retrieval fetch-models where an "
+            f"{', '.join(models.missing)}: run devscene-docs-retrieval fetch-models where an "
             "operator is present, which downloads the models"
         )
     embedder, reranker = resolve_models(allow_remote=False)

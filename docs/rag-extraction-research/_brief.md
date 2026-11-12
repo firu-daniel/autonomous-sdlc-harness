@@ -4,7 +4,7 @@ Research only. **Nothing under `plugin/`, `cli/`, `docs-retrieval-service/`, `sc
 
 ## The question
 
-The maintainer is thinking of moving the docs-retrieval mechanism (the RAG: corpus → chunking → embeddings + BM25 in Postgres → fused + reranked search, served as the `harness-docs` MCP server's `search_docs` tool) **out of this repository into its own repository and product**, for clients and adopters who are not necessarily using the harness.
+The maintainer is thinking of moving the docs-retrieval mechanism (the RAG: corpus → chunking → embeddings + BM25 in Postgres → fused + reranked search, served as the `devscene-docs` MCP server's `search_docs` tool) **out of this repository into its own repository and product**, for clients and adopters who are not necessarily using the harness.
 
 Framing given by the maintainer, to be taken as settled:
 

@@ -55,7 +55,7 @@ agent definition and fails `claude plugin validate --strict` with
 The docs-retrieval grant — one roster, one wire
 -----------------------------------------------
 
-The docs-retrieval search tool `mcp__harness-docs__search_docs` is granted to
+The docs-retrieval search tool `mcp__devscene-docs__search_docs` is granted to
 exactly these eleven agents:
 
   architecture-reviewer.md
@@ -89,7 +89,7 @@ name (`cli/templates/repo/mcp.retrieval.json`,
 `cli/templates/claude/settings.autonomous.retrieval.json`). Re-derive the roster
 with
 
-  grep -rln --include='*.md' "mcp__harness-docs__search_docs" plugin/agents
+  grep -rln --include='*.md' "mcp__devscene-docs__search_docs" plugin/agents
 
 whose output must be exactly the eleven files listed above; the `--include` keeps
 this file, which names the tool, out of the result.

@@ -5471,7 +5471,7 @@ test('doctor --remote-job fails an unusable profile where a default run warns', 
  * **The rule the `retrieval-python-*` cases below enforce: exactly one backend is graded, and the
  * other's checks pass saying why.** With `docs.retrievalBackend` absent every pre-branch check reports
  * what it did before. Under `python` the three Python checks grade one `self-check` run of a fake
- * `harness-docs-retrieval` first on `PATH`, with `HOME` a temp directory, so no case reaches Python, a
+ * `devscene-docs-retrieval` first on `PATH`, with `HOME` a temp directory, so no case reaches Python, a
  * database, a model or the network; a case whose machine already has the command on a launcher
  * fallback directory skips rather than run it.
  */
@@ -5584,8 +5584,8 @@ const TYPESCRIPT_NOT_SELECTED_SENTENCE =
   'docs.retrievalBackend is python, so the launcher starts the Python backend rather than this runtime and it is not graded; init still installs it, so switching back costs nothing';
 
 const PYTHON_INSTALL_REMEDY_TEXT = 'install the package with its `models` extra';
-const COMPOSE_DEFAULT_DATABASE_URL = 'postgresql://harness:harness@127.0.0.1:5432/docs_retrieval';
-const DATABASE_URL_VARIABLE = 'HARNESS_DOCS_RETRIEVAL_DATABASE_URL';
+const COMPOSE_DEFAULT_DATABASE_URL = 'postgresql://devscene:devscene@127.0.0.1:5432/docs_retrieval';
+const DATABASE_URL_VARIABLE = 'DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL';
 
 /** The ids `CHECKS` holds other than the Python backend's, frozen so an added id is visible. */
 const PRE_BRANCH_CHECK_IDS = Object.freeze([
@@ -5599,15 +5599,15 @@ const PRE_BRANCH_CHECK_IDS = Object.freeze([
   'retrieval-dependencies', 'retrieval-model-cache', 'retrieval-index',
 ]);
 
-/** A real `harness-docs-retrieval` on a directory the check always searches, which no case may run. */
-const REAL_PYTHON_COMMAND = LAUNCHER_PATH_FALLBACKS.map((dir) => join(dir, 'harness-docs-retrieval')).find((path) => existsSync(path));
+/** A real `devscene-docs-retrieval` on a directory the check always searches, which no case may run. */
+const REAL_PYTHON_COMMAND = LAUNCHER_PATH_FALLBACKS.map((dir) => join(dir, 'devscene-docs-retrieval')).find((path) => existsSync(path));
 
 /** Separates one fake invocation's record from the next. */
 const RECORD_SEPARATOR = '--- self-check invocation';
 
 /** `self-check`'s all-pass answer, in `CheckLine.render`'s shape. */
 const SELF_CHECK_ALL_OK = Object.freeze([
-  'ok   packages: harness_docs_retrieval and its models extra import',
+  'ok   packages: devscene_docs_retrieval and its models extra import',
   'ok   weights: both weights are cached in the fake cache',
   'ok   index: 2 files, 4 chunks',
 ]);
@@ -5668,11 +5668,11 @@ async function pythonDoctorFixture(t, { backend = 'python', docs = true, fake } 
       `exit ${fake.status}`,
       '',
     ].join('\n');
-    writeFileSync(join(bin, 'harness-docs-retrieval'), script, { mode: 0o755 });
+    writeFileSync(join(bin, 'devscene-docs-retrieval'), script, { mode: 0o755 });
   }
 
   // git only, by symlink, so the repository checks resolve without putting a machine directory that
-  // could hold a real `harness-docs-retrieval` ahead of the launcher's own fallbacks.
+  // could hold a real `devscene-docs-retrieval` ahead of the launcher's own fallbacks.
   const tools = await pathWithoutJq(t);
   const env = { ...retrievalEnv(cacheHome), PATH: [bin, tools, '/usr/bin', '/bin'].join(delimiter), HOME: home };
   return { dir: fixture.dir, record, env };
@@ -5690,9 +5690,9 @@ function readRecord(record) {
     });
 }
 
-/** Write `.mcp.json` with a `harness-docs` server carrying `env`; `scripts/` is the absent key's, as `writeRetrievalConfig` seeds none. */
+/** Write `.mcp.json` with a `devscene-docs` server carrying `env`; `scripts/` is the absent key's, as `writeRetrievalConfig` seeds none. */
 function writeDocsServerEnv(dir, env) {
-  const mcp = { mcpServers: { 'harness-docs': { command: 'bash', args: ['scripts/docs-search-server.sh'], env } } };
+  const mcp = { mcpServers: { 'devscene-docs': { command: 'bash', args: ['scripts/docs-search-server.sh'], env } } };
   writeFileSync(join(dir, MCP_FILE), `${JSON.stringify(mcp, null, 2)}\n`, 'utf8');
 }
 
@@ -5773,7 +5773,7 @@ test('retrieval-python-* under python: each self-check answer grades its check, 
 
   await t.test('FAIL weights fails the model cache naming fetch-models', async (subtest) => {
     const lines = [
-      'ok   packages: harness_docs_retrieval and its models extra import',
+      'ok   packages: devscene_docs_retrieval and its models extra import',
       'FAIL weights: BAAI/bge-small-en-v1.5 is not cached',
       'FAIL index: not attempted, because weights failed',
     ];
@@ -5784,12 +5784,12 @@ test('retrieval-python-* under python: each self-check answer grades its check, 
     const model = reportedChecks(stdout, stderr).get('retrieval-python-model-cache');
     assert.equal(model?.status, 'FAIL', stderr);
     assert.ok(model.detail.includes('BAAI/bge-small-en-v1.5 is not cached'), model.detail);
-    assert.ok(model.detail.includes('harness-docs-retrieval fetch-models'), model.detail);
+    assert.ok(model.detail.includes('devscene-docs-retrieval fetch-models'), model.detail);
   });
 
   await t.test('FAIL index fails naming the compose command, with no password in the line', async (subtest) => {
     const lines = [
-      'ok   packages: harness_docs_retrieval and its models extra import',
+      'ok   packages: devscene_docs_retrieval and its models extra import',
       'ok   weights: both weights are cached in the fake cache',
       'FAIL index: could not connect to the database',
     ];
@@ -5803,10 +5803,10 @@ test('retrieval-python-* under python: each self-check answer grades its check, 
     assert.ok(index.detail.includes('docker compose up -d --wait postgres'), index.detail);
     assert.ok(index.detail.includes('docs-retrieval-service/'), index.detail);
     assert.ok(index.detail.includes('127.0.0.1:5432/docs_retrieval'), index.detail);
-    assert.ok(!index.detail.includes(':harness@'), `the line printed the password: ${index.detail}`);
+    assert.ok(!index.detail.includes(':devscene@'), `the line printed the password: ${index.detail}`);
   });
 
-  await t.test('no command on PATH fails all three, the dependencies check naming the install remedy', { skip: REAL_PYTHON_COMMAND === undefined ? false : `a real harness-docs-retrieval is installed at ${REAL_PYTHON_COMMAND}, which this case would run` }, async (subtest) => {
+  await t.test('no command on PATH fails all three, the dependencies check naming the install remedy', { skip: REAL_PYTHON_COMMAND === undefined ? false : `a real devscene-docs-retrieval is installed at ${REAL_PYTHON_COMMAND}, which this case would run` }, async (subtest) => {
     const { dir, env } = await pythonDoctorFixture(subtest);
 
     const { stdout, stderr } = await runCli(dir, ['doctor'], env);
@@ -5849,7 +5849,7 @@ test('retrieval-python-*: the self-check child sees the .mcp.json database URL, 
     assert.deepEqual(readRecord(record).map((run) => run.databaseUrl), [COMPOSE_DEFAULT_DATABASE_URL]);
   });
 
-  await t.test("with .mcp.json's harness-docs env carrying a URL, that URL", async (subtest) => {
+  await t.test("with .mcp.json's devscene-docs env carrying a URL, that URL", async (subtest) => {
     const { dir, record, env } = await pythonDoctorFixture(subtest, { fake: { lines: SELF_CHECK_ALL_OK, status: 0 } });
     const url = 'postgresql://other@127.0.0.1:5433/repo_two';
     writeDocsServerEnv(dir, { [DATABASE_URL_VARIABLE]: url });
