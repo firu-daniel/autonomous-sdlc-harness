@@ -93,7 +93,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_adopter_layout/ta
 9. [x] **Task 7** — Rename in the commit, push, refresh, worktree, cleanup and scratch wrapper templates _(layer: cli)_ _(points: 15)_
 10. [x] **Task 8** — Rename in the remaining script templates and the scripts README _(layer: cli)_ _(points: 15)_
 11. [x] **Task 9** — Rename in the non-script templates and the package READMEs _(layer: cli)_ _(points: 15)_
-12. [ ] **Task 10** — Rename in the plugin's guards, shared library, QA helpers and hooks README _(layer: plugin)_ _(points: 15)_
+12. [x] **Task 10** — Rename in the plugin's guards, shared library, QA helpers and hooks README _(layer: plugin)_ _(points: 15)_
 13. [ ] **Task 11** — Rename the analyze and read-mention commands, respell the command files and plugin READMEs, and re-point the agents' citations of the analyze command _(layer: plugin)_ _(points: 20)_
 14. [ ] **Task 12** — Respell the plugin agent definitions _(layer: plugin)_ _(points: 15)_
 15. [ ] **Task 13** — Respell the first half of the plugin instruction documents _(layer: plugin)_ _(points: 15)_

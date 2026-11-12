@@ -180,7 +180,7 @@
 #                                                   admits nothing either — see
 #                                                   the note above)
 #   anchor is not inside a git repository      -> silent
-#   repository has no harness.config.json      -> silent (no jurisdiction)
+#   repository has no devscene.config.json     -> silent (no jurisdiction)
 #   configuration unreadable or invalid JSON   -> silent, and NO built-in
 #     (`hc_safe_prefixes` returns 1)              fallback prefix list
 #   workspace will not resolve                 -> silent (no path-anchored arms)
@@ -194,7 +194,7 @@
 #   every piece matches                        -> allow
 #
 # JURISDICTION IS A DELIBERATE SCOPING DECISION. A repository with no
-# `harness.config.json` at its resolved root has not adopted the harness, so this
+# `devscene.config.json` at its resolved root has not adopted the harness, so this
 # guard grants nothing there — a plugin hook fires in EVERY session the plugin is
 # enabled for, including repositories that never ran `init`. The repository is
 # resolved from the command the hook was handed (the first `git -C <dir>`, else a
@@ -318,7 +318,7 @@
 #                                               and the stem arm matches it
 #     any of the above with <commands.*> that this <repo> does not configure
 #     any of the above in a <repo> whose config is invalid JSON
-#     any of the above in a <repo> with no harness.config.json
+#     any of the above in a <repo> with no devscene.config.json
 
 set -u
 set -f
