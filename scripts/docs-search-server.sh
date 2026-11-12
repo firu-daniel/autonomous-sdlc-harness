@@ -2,7 +2,7 @@
 # docs-search-server.sh — start the docs-retrieval MCP server for the checkout
 # this script sits in, on the backend `docs.retrievalBackend` selects.
 #
-# WHO RUNS IT. The agent runner, from the `harness-docs` entry `init` writes into
+# WHO RUNS IT. The agent runner, from the `devscene-docs` entry `init` writes into
 # `.mcp.json` when `docs.retrieval` is on — never a dispatched agent's Bash call,
 # so its row in `cli/src/generators/outerLoopScripts.ts` is
 # `agentInvocable: false` and the generated permission profile carries no entry
@@ -38,7 +38,7 @@
 #     mirror `RETRIEVAL_CACHE_DIRNAME`, `RETRIEVAL_RUNTIME_DIRNAME` and
 #     `RUNTIME_CLI_RELATIVE` in `cli/src/retrieval/runtime.ts`;
 #   `hr_cache_dir` mirrors `machineCacheDir()` in `cli/src/machine/paths.ts`;
-#   `harness-docs-retrieval`, `serve-mcp`, `HARNESS_DOCS_RETRIEVAL_DATABASE_URL`,
+#   `devscene-docs-retrieval`, `serve-mcp`, `DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL`,
 #     the default connection string and exit 3 mirror `PYTHON_RETRIEVAL_COMMAND`,
 #     `PYTHON_SERVE_SUB_COMMAND`, `PYTHON_DATABASE_URL_VARIABLE`,
 #     `PYTHON_DEFAULT_DATABASE_URL` and `PYTHON_BACKEND_UNAVAILABLE_EXIT` in
@@ -87,17 +87,17 @@ elif [ "$config_status" -eq 0 ] && hr_docs_retrieval_applies "$root"; then
 fi
 
 if [ "$backend" = python ]; then
-  if ! command -v harness-docs-retrieval >/dev/null 2>&1; then
-    echo "docs-search-server: the Python backend is selected but \`harness-docs-retrieval\` does not resolve on PATH (interpreter or package missing); see docs/retrieval.md and run \`npx devscene doctor\`" >&2
+  if ! command -v devscene-docs-retrieval >/dev/null 2>&1; then
+    echo "docs-search-server: the Python backend is selected but \`devscene-docs-retrieval\` does not resolve on PATH (interpreter or package missing); see docs/retrieval.md and run \`npx devscene doctor\`" >&2
     exit 3
   fi
-  if [ -z "${HARNESS_DOCS_RETRIEVAL_DATABASE_URL-}" ]; then
-    HARNESS_DOCS_RETRIEVAL_DATABASE_URL='postgresql://harness:harness@127.0.0.1:5432/docs_retrieval'
+  if [ -z "${DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL-}" ]; then
+    DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL='postgresql://devscene:devscene@127.0.0.1:5432/docs_retrieval'
   fi
-  export HARNESS_DOCS_RETRIEVAL_DATABASE_URL
+  export DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL
 
   # A background job's stdin is /dev/null unless it is passed explicitly.
-  harness-docs-retrieval serve-mcp --repo "$root" <&0 &
+  devscene-docs-retrieval serve-mcp --repo "$root" <&0 &
   child=$!
   trapped=0
   trap 'trapped=1; kill -TERM "$child" 2>/dev/null || true' TERM
@@ -117,7 +117,7 @@ if [ "$backend" = python ]; then
   if [ "$child_status" -eq 0 ]; then
     exit 0
   fi
-  echo "docs-search-server: the Python backend exited with status $child_status before or while serving; the line above (\`harness-docs-retrieval: …\`) names why; run \`npx devscene doctor\`" >&2
+  echo "docs-search-server: the Python backend exited with status $child_status before or while serving; the line above (\`devscene-docs-retrieval: …\`) names why; run \`npx devscene doctor\`" >&2
   exit 3
 fi
 
