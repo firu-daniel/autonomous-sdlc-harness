@@ -14,7 +14,7 @@
 # Gate 16 parses every tracked or untracked-unignored shell script with `bash -n` under `/bin/bash`,
 # the bash 3.2 floor on macOS: an unattended run refuses a free-standing `bash -n`, and this script
 # is a route to one.
-# `commands.test` in `harness.config.json` points here for exactly that reason: `npm test` is gate 4
+# `commands.test` in `devscene.config.json` points here for exactly that reason: `npm test` is gate 4
 # alone, and a branch review that reads it as "verified" is reading the other eight automatable
 # gates' worth of silence as a pass.
 #
@@ -51,7 +51,7 @@ set -uo pipefail
 
 # Anchor to the repository root from this script's own location, never the caller's directory —
 # the same reasoning as the wrappers `init` writes, but by git's discovery from this script's own
-# directory rather than their `harness.config.json` walk (`docs/sandbox-verification.md` §5 F15).
+# directory rather than their `devscene.config.json` walk (`docs/sandbox-verification.md` §5 F15).
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(git -C "$script_dir" rev-parse --show-toplevel 2>/dev/null)"
 if [ -z "$repo_root" ] || ! cd "$repo_root"; then
@@ -499,7 +499,7 @@ echo "== gates this script cannot run"
 echo "  4  its jq 1.6 leg, the suite under Debian 12's jq 1.6 in gate 15's container, which needs a network and a person"
 echo "  5  doctor's exit contract, by hand against gate 4's scratch repository"
 echo "  7  the five adoption shapes, against real directories outside this checkout"
-echo "  8  /devscene:harness-analyze, which is judgement and runs inside a model session"
+echo "  8  /devscene:analyze, which is judgement and runs inside a model session"
 echo "  9  examples/notes-app, which installs dependencies inside the checkout"
 echo "  10 docs retrieval with the real models, which downloads them and needs a network"
 echo "  12 remote execution, against a real GitHub repository with a runner, a credential and minutes"

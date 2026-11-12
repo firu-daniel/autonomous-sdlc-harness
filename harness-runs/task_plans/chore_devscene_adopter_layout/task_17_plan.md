@@ -29,3 +29,13 @@ Task 29 writes the gate-8 fenced block's two lines into `docs/development.md` as
 - `git grep -nE 'harness\.config|sdlc-harness|harness-analyze' -- scripts/check-command-spelling.sh scripts/run-gates.sh scripts/publish-main.sh` prints nothing.
 - Run this read-only probe of the new pattern from the checkout root: `git --no-pager grep -nE '(^|[^A-Za-z0-9_.}/:-])/analyze([^A-Za-z0-9_./-]|\.([^A-Za-z0-9_/-]|$)|$)' -- . ':(exclude).claude/' ':(exclude)examples/notes-app/.claude/' ':(exclude)examples/notes-app/devscene/' ':(exclude)harness-runs/' ':(exclude)scripts/check-command-spelling.sh'`. Every line it prints is `cli/src/commands/init.ts`'s measured line or, once Task 29 lands, one of `docs/development.md`'s two gate-8 lines. Record which of these exist at this task's commit.
 - `bash -n` on each of the three scripts exits 0.
+
+**Verification record (implementer, this task's commit):**
+
+- `git -C <root> --no-pager grep -nE 'harness\.config|sdlc-harness|harness-analyze' -- scripts/check-command-spelling.sh scripts/run-gates.sh scripts/publish-main.sh` printed nothing.
+- The new-pattern probe printed exactly one line: `cli/src/commands/init.ts:316: * - \`claude -p "/analyze" --permission-mode plan --max-turns 2 --output-format stream-json --verbose\`:` (Task 3's measured line). Neither `docs/development.md` gate-8 line exists yet; both exemptions cover no line until Task 29 lands.
+- `bash scripts/typecheck.sh` (`commands.typecheck`): `Check-shell-parse: 124 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`, then `PASS: typecheck`.
+
+**Deviations from plan:**
+
+- Evidence downgrade: the standalone `bash -n /…/scripts/<name>.sh` was refused by the tool layer for each of the three scripts. The `bash -n` claim rests instead on `commands.typecheck`'s shell-parse step, which parses every tracked or untracked-unignored shell script with `/bin/bash -n` (`scripts/run-gates.sh` header, Gate 16) and reported 0 failed over 124 files; Phase G's run re-verifies it.

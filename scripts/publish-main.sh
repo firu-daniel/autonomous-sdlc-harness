@@ -6,8 +6,8 @@
 # it removes, so it never reaches `main`.
 #
 # THE BRANCH MODEL IT SERVES. `dev` is the trunk: it carries the product AND the adoption
-# (harness.config.json, .claude/, scripts/, githooks/, harness-runs/), feature branches are cut
-# from it and merge back into it by pull request, and `defaultBranch` in harness.config.json names
+# (devscene.config.json, .claude/, scripts/, githooks/, harness-runs/), feature branches are cut
+# from it and merge back into it by pull request, and `defaultBranch` in devscene.config.json names
 # it, so worktrees are cut from it too. `main` carries the product and nothing else, and is never a
 # merge target. A merge from dev into a main that deleted those paths would raise a modify/delete
 # conflict on every artifact touched since the previous merge; this script builds the tree directly
@@ -56,7 +56,7 @@
 # publication, main has no `Published-from` trailer anywhere, and main's tip must then be an
 # ancestor of dev — true for the dev that was branched from it.
 #
-# THE REMOVED PATHS are root-level and exact. examples/notes-app/.claude/ and its sdlc-harness/
+# THE REMOVED PATHS are root-level and exact. examples/notes-app/.claude/ and its devscene/
 # are the fixture and are kept. The managed block `init` writes into .gitignore is cut out of that
 # file rather than the file removed.
 #
@@ -71,7 +71,7 @@ set -uo pipefail
 publish_branch="publish"
 
 removed_paths=(
-  harness.config.json
+  devscene.config.json
   .claude
   .gitattributes
   githooks
