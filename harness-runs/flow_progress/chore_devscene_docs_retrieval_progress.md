@@ -11,7 +11,7 @@ Source: harness-runs/task_prompts/chore_devscene_docs_retrieval_task_prompt.md â
   - screened: harness-runs/task_prompts/chore_devscene_docs_retrieval_task_prompt.md sha256=f06756a144e12242ebb0e409ebd7ff74aad0bc6bfab410edd3b1a2d3a77c0554
 - [x] P1. Task plan converged (business_parity + architecture + task-plan-reviewer all PASS)
 - [-] P2. UI-test plan converged (ui-tests-plan-reviewer PASS) â€” or no_ui
-- [ ] P3. Plans committed & pushed (story index + per-task dir + UI-test plan)
+- [x] P3. Plans committed & pushed (story index + per-task dir + UI-test plan)
 
 ## Implementation
 - [ ] A.      Tasks implemented (story-index readiness all [x])
