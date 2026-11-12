@@ -44,3 +44,16 @@
 - `grep -n "PYTHON_MODELS = 'docs-retrieval-service/src/devscene_docs_retrieval/models.py'" scripts/check-model-revisions.mjs` finds the constant, and `ls docs-retrieval-service/src/devscene_docs_retrieval/models.py` succeeds.
 - `node -e "JSON.parse(require('fs').readFileSync('examples/notes-app/.claude/settings.autonomous.json','utf8'))"` exits zero.
 - `git grep -nE 'harness[-_]docs|HARNESS_(DOCS_)?RETRIEVAL|AUTONOMOUS_SDLC_HARNESS_RETRIEVAL' -- scripts/lib/sandbox-probe scripts/sandbox-probe-runner.yml scripts/check-model-revisions.mjs evals examples/notes-app/.claude` returns no hits.
+
+- **Deviations from plan:**
+  - The two `bash -n` claims (`scripts/lib/sandbox-probe/core.sh`, `scripts/lib/sandbox-probe/legs-local.sh`) were not executed: both calls were refused by the session's permission mode ("Permission to use Bash has been denied because Claude Code is running in don't ask mode"). The claim rests instead on `bash scripts/typecheck.sh` (the configured `commands.typecheck`), run from the checkout root, whose shell-parse leg printed `check-shell-parse: 124 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed` and whose verdict line was `PASS: typecheck`.
+  - The closing `git grep` probe still returns one hit, `examples/notes-app/.claude/settings.autonomous.json:11` (`search_docs` on the `harness-docs` server), because the edit to that file was refused; see `## Disposition`. Every other target returns no hit.
+
+## Disposition
+
+- **(a) Attempted:** the fourth work item — replacing "`search_docs` on the `harness-docs` server" with "`search_docs` on the `devscene-docs` server" in the `_README` sentence of `examples/notes-app/.claude/settings.autonomous.json`, through the Edit tool. The other nine targets were edited and verified; this one file is unchanged.
+- **(b) Refusal, quoted (two identical attempts):** "Permission to use Edit has been denied because Claude Code is running in don't ask mode." Edits through the same tool to the nine targets outside a `.claude/` path segment in the same session succeeded, so the refusal tracks the `.claude/**` path.
+- **(c) Why no permission entry lifts it:** the checkout's `.claude/settings.json` holds `permissions.allow` = `["Bash(bash scripts/task-offer-check.sh)"]` and no Edit or Write entry; the run's own profile under `~/.local/state/devscene/run-profiles/` was itself refused for reading. The target sits under a `.claude/` segment, which is the measured instance of the tool layer's guard on `.claude/**` writes, evaluated ahead of `permissions.allow`.
+- **(d) Operator remedy, one paste, run from the checkout root on branch `chore_devscene_docs_retrieval`:**
+  `sed -i '' 's/`search_docs` on the `harness-docs` server/`search_docs` on the `devscene-docs` server/' examples/notes-app/.claude/settings.autonomous.json && node -e "JSON.parse(require('fs').readFileSync('examples/notes-app/.claude/settings.autonomous.json','utf8'))" && git grep -nE 'harness[-_]docs' -- examples/notes-app/.claude`
+  (on GNU sed drop the `''` after `-i`). Afterwards line 11 must equal `cli/templates/claude/settings.autonomous.json` line 11 with `{{scriptsDir}}` rendered as `scripts`, and the `git grep` must print nothing.

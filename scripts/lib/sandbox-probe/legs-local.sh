@@ -660,20 +660,20 @@ EOF
 sp_leg_retrieval() {
   local f wired="" pfile
   for f in "$SP_CLONE/.mcp.json" "$SP_MAIN/.mcp.json"; do
-    if [ -f "$f" ] && jq -e '.mcpServers["harness-docs"] | type == "object"' "$f" >/dev/null 2>&1; then
+    if [ -f "$f" ] && jq -e '.mcpServers["devscene-docs"] | type == "object"' "$f" >/dev/null 2>&1; then
       wired="$f"
       break
     fi
   done
   if [ -z "$wired" ]; then
     sp_result_line retrieval MC1 "not run" \
-      "no harness-docs server in .mcp.json (docs retrieval is not wired in this repository)" ""
+      "no devscene-docs server in .mcp.json (docs retrieval is not wired in this repository)" ""
     return 0
   fi
   pfile="$SP_TMP/retrieval.prompt"
   sp_prompt_new "$pfile"
-  sp_prompt_tool "$pfile" "mcp__harness-docs__search_docs, with query set to exactly: sandbox, and k set to exactly 1."
+  sp_prompt_tool "$pfile" "mcp__devscene-docs__search_docs, with query set to exactly: sandbox, and k set to exactly 1."
   sp__local_session retrieval "$pfile"
-  sp_judge_mcp "$SP_STREAM" mcp__harness-docs__search_docs
+  sp_judge_mcp "$SP_STREAM" mcp__devscene-docs__search_docs
   sp_result_line retrieval MC1 "$SP_VERDICT" "$SP_EVIDENCE (server from $wired)" "$(sp_departures)"
 }

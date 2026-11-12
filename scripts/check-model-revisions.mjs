@@ -5,7 +5,7 @@
 // THE RULE. Drift is a notice, an unresolvable pin is a failure, and an outage is a warning. Each
 // retrieval path pins two Hugging Face revisions: the CLI's in `MODEL_REVISIONS`
 // (`cli/src/retrieval/models.ts`), the Python service's as `EMBEDDING_*` / `RERANK_*` constants
-// (`docs-retrieval-service/src/harness_docs_retrieval/models.py`). A pin behind upstream `main` is
+// (`docs-retrieval-service/src/devscene_docs_retrieval/models.py`). A pin behind upstream `main` is
 // a deliberate choice, so it prints `::notice::`; a pin upstream answers `404` for would break every
 // adopter's fresh `fetch-models`, so it prints `::error::` and fails. A network failure or any other
 // non-2xx answer prints `::warning::`, is not retried, and leaves the exit alone. A pin that cannot
@@ -24,7 +24,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const NAME = 'check-model-revisions';
 const HUB = 'https://huggingface.co/api/models';
 const PIN = /^[0-9a-f]{40}$/;
-const PYTHON_MODELS = 'docs-retrieval-service/src/harness_docs_retrieval/models.py';
+const PYTHON_MODELS = 'docs-retrieval-service/src/devscene_docs_retrieval/models.py';
 const CLI_MODELS = 'cli/dist/retrieval/models.js';
 
 if (process.argv.length > 2) {

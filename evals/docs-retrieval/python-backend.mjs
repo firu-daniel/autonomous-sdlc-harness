@@ -7,7 +7,7 @@
  * `docs-retrieval-service/README.md` → `## Standing it up` makes — with one stated exception:
  * `evals/docs-retrieval/vector-agreement.mjs` reads stored document vectors back from the compose
  * database through `psql`, because no entry point exposes them, and depends on
- * `docs-retrieval-service/src/harness_docs_retrieval/store.py`'s `chunks` and `meta` schema in doing
+ * `docs-retrieval-service/src/devscene_docs_retrieval/store.py`'s `chunks` and `meta` schema in doing
  * so; this module owns the {@link COMPOSE_DIR} and {@link POSTGRES_SERVICE} that read-back route uses,
  * as it owns {@link WRAPPER_PATH} and {@link wrapperArgs} for the entry points — **and every figure is
  * scored by the eval's own `evals/docs-retrieval/metrics.mjs`.** Nothing here re-implements a search, a chunker or a
@@ -15,7 +15,7 @@
  *
  * Every name the CLI already owns is imported from `cli/dist/retrieval/pythonBackend.js` and
  * `cli/dist/retrieval/models.js`. The names it does not own are spelled once, below, each with its
- * owner: the sub-commands from `docs-retrieval-service/src/harness_docs_retrieval/cli.py` →
+ * owner: the sub-commands from `docs-retrieval-service/src/devscene_docs_retrieval/cli.py` →
  * `SUB_COMMANDS`, the paths and response keys from `http_app.py` → `create_app`, and the `index:`
  * summary line from `cli.py` → `_run_index`.
  *
@@ -109,7 +109,7 @@ function lines(text) {
   return String(text ?? '').split(/\r?\n/).filter((line) => line.length > 0);
 }
 
-/** The child's own `harness-docs-retrieval: <message>` line, else its last stderr line. */
+/** The child's own `devscene-docs-retrieval: <message>` line, else its last stderr line. */
 function childMessage(stderr) {
   const all = lines(stderr);
   const own = all.filter((line) => line.startsWith(MESSAGE_PREFIX) && !line.startsWith(WARNING_PREFIX));

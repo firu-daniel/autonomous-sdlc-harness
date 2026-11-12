@@ -61,7 +61,7 @@ import {
   scrub,
 } from './python-backend.mjs';
 
-/** `docs-retrieval-service/src/harness_docs_retrieval/store.py` → `EMBEDDER_META_KEY`. */
+/** `docs-retrieval-service/src/devscene_docs_retrieval/store.py` → `EMBEDDER_META_KEY`. */
 const EMBEDDER_META_KEY = 'embedder';
 
 /** The fp32 export's graph; `MODEL_FILES` lists only the q8 one. */

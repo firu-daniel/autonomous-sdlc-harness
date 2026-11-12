@@ -88,7 +88,7 @@ jobs:
           retrieval=$(jq -r '(.phases.docs == true and .docs.retrieval == true)' devscene.config.json)
           {
             echo "SCRIPTS_DIR=${scripts_dir%/}"
-            echo "HARNESS_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/devscene/retrieval"
+            echo "DEVSCENE_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/devscene/retrieval"
           } >> "$GITHUB_ENV"
           echo "retrieval=$retrieval" >> "$GITHUB_OUTPUT"
 
