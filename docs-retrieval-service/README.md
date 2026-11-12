@@ -44,7 +44,7 @@ export HARNESS_DOCS_RETRIEVAL_DATABASE_URL=postgresql://harness:harness@127.0.0.
 | `self-check` | `--repo`, `--docs-root` | Prints one line per question, `packages`, `weights`, `index` in that order, each `ok   <question>: …` or `FAIL <question>: …`. It exits `0` only when all three are `ok`. `index` is not attempted when an earlier line failed. |
 | `fetch-models` | none | Downloads both models into the weight cache. This is the only command that downloads. |
 
-`--repo` names the repository whose `harness.config.json` is read, read-only, for `docs.root` and `layers[]` only. `--docs-root` overrides `docs.root` alone. Each sub-command runs through the wrapper, one per line:
+`--repo` names the repository whose `devscene.config.json` is read, read-only, for `docs.root` and `layers[]` only. `--docs-root` overrides `docs.root` alone. Each sub-command runs through the wrapper, one per line:
 
 ```
 bash scripts/python-service.sh run fetch-models

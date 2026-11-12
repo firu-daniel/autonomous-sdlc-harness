@@ -10,7 +10,7 @@ too, and models load with remote loading disabled; nothing here passes `allow_re
 Departures from `server.ts` and `session.ts`:
 
 - `queryLog.ts` is not ported: `answer()` writes no log record and reads no query-log variable.
-- The service owns its config: it reads `harness.config.json` read-only, takes `docs.root` and
+- The service owns its config: it reads `devscene.config.json` read-only, takes `docs.root` and
   `layers[]` alone, and applies no `phases.docs` / `docs.retrieval` gate.
 - The store's meta layout is known here and to `store.py` only; `probe()` is how an entry point
   reaches it.
@@ -55,12 +55,12 @@ from harness_docs_retrieval.store import (
 from harness_docs_retrieval.stubs import resolve_models
 from harness_docs_retrieval.wire import COVERAGE_NOTE_PREFIX, DOCS_SERVER_NAME, SEARCH_TOOL_NAME
 
-CONFIG_FILENAME = "harness.config.json"
+CONFIG_FILENAME = "devscene.config.json"
 
 
 @dataclass(frozen=True)
 class ServiceConfig:
-    """`corpus_config` carries `harness.config.json`'s own keys, `docs.root` and `layers` only."""
+    """`corpus_config` carries `devscene.config.json`'s own keys, `docs.root` and `layers` only."""
 
     repo_root: str
     corpus_config: Mapping[str, Any]
@@ -71,7 +71,7 @@ def add_service_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--repo",
         default=None,
-        help="the repository whose harness.config.json is read (default: the current directory)",
+        help="the repository whose devscene.config.json is read (default: the current directory)",
     )
     parser.add_argument(
         "--docs-root",
@@ -83,7 +83,7 @@ def add_service_options(parser: argparse.ArgumentParser) -> None:
 def load_service_config(
     *, repo: str | None, docs_root: str | None, environ: Mapping[str, str]
 ) -> ServiceConfig:
-    """Reads `<repo or cwd>/harness.config.json` read-only and the database URL from `environ`."""
+    """Reads `<repo or cwd>/devscene.config.json` read-only and the database URL from `environ`."""
     repo_root = os.path.abspath(repo) if repo else os.getcwd()
     path = os.path.join(repo_root, CONFIG_FILENAME)
     try:

@@ -411,7 +411,7 @@ export function renderQueryLogSection(result) {
     `actually waits for.`,
     ``,
     `**The fixture repository, and its configuration.** \`docs serve\` refuses unless \`phases.docs\` and`,
-    `\`docs.retrieval\` are both true, and this repository's \`harness.config.json\` satisfies neither and is`,
+    `\`docs.retrieval\` are both true, and this repository's \`devscene.config.json\` satisfies neither and is`,
     `deliberately left alone — so **these numbers are not this repository's own configuration**. The pass`,
     `mirrors the resolved \`${result.corpus}\` corpus into a git-initialized repository under the system`,
     `temp directory, one commit, removed at the end: ${result.fixture.files} files copied at their own`,

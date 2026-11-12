@@ -3,7 +3,7 @@ the same corpus renders byte-identical `search_docs` output from both backends, 
 included, and both servers advertise the same tool listing over the wire. The TypeScript server
 runs on PGlite, the Python server on the Postgres named by
 `HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL`, and both read one fixture directory and one
-`harness.config.json`.
+`devscene.config.json`.
 
 A mismatch is first assumed to be a port defect and is fixed in the module that owns the rule. One
 that traces to engine behaviour (tie order among equal scores, a planner choosing the BM25 index

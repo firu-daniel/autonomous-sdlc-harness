@@ -9,7 +9,7 @@ the harness's plan shape, and only the files show that.
 
 ## What to read
 
-`harness.config.json` at the working directory's root supplies two values every invariant below is
+`devscene.config.json` at the working directory's root supplies two values every invariant below is
 read against — `stateDir` and the `layers[].name` list. Read them from that file rather than
 assuming a default; an arm that changed either is still graded against its own configuration. Under
 `<stateDir>` the story index is `story_plans/<branch>_story_plan.md` and the per-task files are
@@ -57,7 +57,7 @@ baseline arm that satisfies any of those four is the finding, not a rounding err
 scaffolded tree is leaking the answer or the prompt has stopped being neutral, and both are defects
 in this case rather than results.
 
-**Invariant 1 is not evidence on its own.** The tree names `stateDir` in `harness.config.json` and
+**Invariant 1 is not evidence on its own.** The tree names `stateDir` in `devscene.config.json` and
 carries a seeded `<stateDir>/task_prompts/<branch>_task_prompt.md`, so a baseline arm can reasonably
 infer that a plan belongs under `<stateDir>` and write one there. Score it as it falls and do not
 read it as a leak. Invariant 3 sits between the two: a 1:1 index-to-per-task mapping is a plausible

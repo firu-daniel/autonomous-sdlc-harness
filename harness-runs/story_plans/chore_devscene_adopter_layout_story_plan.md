@@ -100,7 +100,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_adopter_layout/ta
 16. [x] **Task 14** — Respell the second half of the plugin instructions, the samples and the plugin flow documents _(layer: plugin)_ _(points: 15)_
 17. [x] **Task 16** — Rename in this repository's sandbox-probe and Gate 12 scripts _(layer: general)_ _(points: 15)_
 18. [x] **Task 17** — Respell the command-spelling gate, `run-gates.sh` and `publish-main.sh` _(layer: general)_ _(points: 10)_
-19. [ ] **Task 18** — Rename the config file the Python retrieval service reads, and respell the evals _(layer: general)_ _(points: 15)_
+19. [x] **Task 18** — Rename the config file the Python retrieval service reads, and respell the evals _(layer: general)_ _(points: 15)_
 20. [ ] **Task 19** — Respell the `init`, scripts-directory, offer and preset suites with the fixture helper _(layer: cli)_ _(points: 20)_
 21. [ ] **Task 20** — Respell the `config`, `doctor`, `daemon` and profile suites _(layer: cli)_ _(points: 20)_
 22. [ ] **Task 21** — Respell the wrapper, clone and worktree suites _(layer: cli)_ _(points: 20)_

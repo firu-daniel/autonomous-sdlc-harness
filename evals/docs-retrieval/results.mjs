@@ -231,7 +231,7 @@ function provenanceSection(corpus) {
     '  taken before such a document existed is therefore a different corpus.',
     layers[0] === undefined
       ? '- `layers[]`: none — this corpus is read as a repository of its own and carries no conventions documents.'
-      : "- `layers[]`, read out of the resolved checkout's `harness.config.json` and never composed here:",
+      : "- `layers[]`, read out of the resolved checkout's `devscene.config.json` and never composed here:",
     ...layers.map(layerLine),
     ...(corpus.backend === undefined ? [] : BACKEND_ROUTES[corpus.backend]),
     `- Query set: \`${corpus.queries.path}\` — ${corpus.queries.positives} positive, ${corpus.queries.negatives} negative.`,

@@ -116,7 +116,7 @@ _MISSING = object()
 
 
 def corpus_files(repo_root: str, config: Mapping[str, Any]) -> CorpusFiles:
-    """The corpus of `config`, which carries `harness.config.json`'s own keys, at `repo_root`."""
+    """The corpus of `config`, which carries `devscene.config.json`'s own keys, at `repo_root`."""
     absolute: list[str] = []
     warnings: list[str] = []
     real_root = os.path.realpath(repo_root)

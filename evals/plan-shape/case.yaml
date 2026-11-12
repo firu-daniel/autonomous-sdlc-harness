@@ -25,21 +25,21 @@
 # below matters.
 #
 # It is a **git repository with one commit, checked out on `feat_body_char_count`**, not a plain
-# copy. The copied `harness.config.json`'s `commands.*` name wrapper scripts that derive their
+# copy. The copied `devscene.config.json`'s `commands.*` name wrapper scripts that derive their
 # working directory from git and exit 1 in a tree that is not a repository — so the tree is
 # initialised and committed deliberately, and neither arm's verification commands would run without
 # it. It is on a branch rather than on `main` because every graded path embeds the branch name, each
 # route resolves that name from `git branch --show-current`, and `main` is in that config's
 # `protectedBranches`.
 #
-# It is an **adopted** repository with no plan written in it yet. That `harness.config.json` is what
+# It is an **adopted** repository with no plan written in it yet. That `devscene.config.json` is what
 # makes it adopted: it carries the layer vocabulary (`layers[].name`, `layers[].path`) the grader's
 # `_(layer: …)_` invariant is read against — as copied, five rows named `data`, `domain`,
 # `presentation`, `tests` and `general` — and the `stateDir` the story index is expected under, and
 # its `commands.*` resolve because `scripts/` is copied beside it. Its `layers[].conventions` paths
 # into `.claude/` resolve as well, one document per row: those documents are the plan writer's
 # mandated first read, they carry none of the graded shape, and the vocabulary they state is in
-# `harness.config.json` too — `scaffold.sh`'s copy-list comment states that with the two greps that
+# `devscene.config.json` too — `scaffold.sh`'s copy-list comment states that with the two greps that
 # show it. Read the names from the copied file rather than from here; the grader does.
 #
 # What the tree withholds is what an arm is measured on **producing**: `<stateDir>/story_plans/` and
