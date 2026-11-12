@@ -71,7 +71,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_devscene_docs_retrieva
 6. [x] **Task 6** — Move the Python test suite to the renamed package, variables and login _(layer: general)_ _(points: 15)_
 7. [x] **Task 7** — Rename the Python service's container, compose, README and toolchain route, and provision its environment _(layer: general)_ _(points: 15)_
 8. [x] **Task 8** — Rename the retrieval names in this repository's sandbox probe, model-pin check, evals and the notes-app profile _(layer: general)_ _(points: 15)_
-9. [ ] **Task 9** — Rename the retrieval names in `ARCHITECTURE.md` and the `docs/` prose documents _(layer: general)_ _(points: 15)_
+9. [x] **Task 9** — Rename the retrieval names in `ARCHITECTURE.md` and the `docs/` prose documents _(layer: general)_ _(points: 15)_
 10. [ ] **Task 10** — Rename the retrieval names throughout `docs/retrieval-eval-results.md` _(layer: general)_ _(points: 10)_
 11. [ ] **Task 11** — Rename the retrieval names in the research records, keep the quoted lines, and run the Done-when closure _(layer: general)_ _(points: 10)_
 
