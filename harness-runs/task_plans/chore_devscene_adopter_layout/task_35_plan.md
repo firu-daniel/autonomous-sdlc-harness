@@ -30,7 +30,7 @@
   - (b) a path in `## Paste record`;
   - (c) the three conventions documents `.claude/context/{conventions,cli,plugin}.md`;
   - (d) the frozen capture `examples/notes-app/.claude/CLAUDE.md` and `examples/notes-app/.claude/context/*.md`;
-  - (e) a deliberate leftover: `examples/notes-app/README.md` (its `autonomous-sdlc-harness` line), `ROADMAP.md` (its two *"Interactive session vs harness run"* prose lines), `docs/sandbox-verification.md` (*"No harness run."*), `docs/watcher.md` (*"for a harness run — locally"*), and `docs/rag-extraction-research/reviews/07-extraction-plan.md` (the recorded grep line and the *"devscene4 renames …"* line).
+  - (e) a deliberate leftover: `examples/notes-app/README.md` (its `autonomous-sdlc-harness` line), `ROADMAP.md` (its two *"Interactive session vs harness run"* prose lines), `docs/sandbox-verification.md` (*"No harness run."*), `docs/watcher.md` (*"for a harness run — locally"*), `docs/rag-extraction-research/reviews/07-extraction-plan.md` (the recorded grep line and the *"devscene4 renames …"* line), `cli/templates/scripts/remote-run.sh` and, after the cutover, `scripts/remote-run.sh` (the header's *"for a harness run: the"* and the *"is what proves a harness run."* comment, row 12 noun-phrase prose), and `docs/rag-extraction-research/07-extraction-plan.md` (the *"still carries the `harness:setup-pending` block"* line, a recorded observation of another repository's file).
 
   For each (e) file, `git grep -nE` with the same pattern on that file prints only the named lines.
 - `git ls-files -- '*harness.config*' '*harness-task-offer*' 'plugin/commands/harness-*'` prints only `harness.config.json`, `.claude/harness-task-offer.md` and `examples/notes-app/.claude/harness-task-offer.md`, which are (a) and (b).

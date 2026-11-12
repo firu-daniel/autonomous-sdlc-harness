@@ -42,7 +42,7 @@ The rules applied are `.claude/context/conventions.md`, `.claude/context/cli.md`
 
 1. [x] **Finding 1** — Restore the space in the Gate 12 graders' `devscene run <branch>` title match and their comments _(layer: general)_
 2. [x] **Finding 2** — Respell the three `harness.config.json` comment lines in this repository's `githooks/pre-push` _(layer: general)_
-3. [ ] **Finding 3** — Add the three kept lines to Task 35's closing-check deliberate-leftover list _(layer: general)_
+3. [x] **Finding 3** — Add the three kept lines to Task 35's closing-check deliberate-leftover list _(layer: general)_
 
 ---
 
