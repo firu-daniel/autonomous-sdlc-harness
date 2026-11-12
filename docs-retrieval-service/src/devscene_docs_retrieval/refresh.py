@@ -16,10 +16,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from harness_docs_retrieval.chunk import DocChunk, chunk_markdown
-from harness_docs_retrieval.corpus import corpus_files, read_corpus_file
-from harness_docs_retrieval.models import Embedder
-from harness_docs_retrieval.store import (
+from devscene_docs_retrieval.chunk import DocChunk, chunk_markdown
+from devscene_docs_retrieval.corpus import corpus_files, read_corpus_file
+from devscene_docs_retrieval.models import Embedder
+from devscene_docs_retrieval.store import (
     EMBEDDER_META_KEY,
     INDEX_STATE_META_KEY,
     INDEX_STATE_PENDING,

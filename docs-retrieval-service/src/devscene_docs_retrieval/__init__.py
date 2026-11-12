@@ -1,4 +1,4 @@
-"""The `harness-docs-retrieval` package.
+"""The `devscene-docs-retrieval` package.
 
 `__version__` is kept equal to `pyproject.toml`'s `[project] version`.
 """
