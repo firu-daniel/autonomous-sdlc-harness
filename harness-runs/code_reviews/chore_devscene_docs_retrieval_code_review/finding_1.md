@@ -44,3 +44,16 @@ No test file covers this JSON file, so the fix runs no test. The full suite runs
 
 - [ ] Apply the one-sentence replacement.
 - [ ] Confirm the `git grep` above prints nothing.
+
+## Disposition
+
+- **(a) Attempted:** the one-sentence replacement in **Fix.** above, using the Edit tool, at `examples/notes-app/.claude/settings.autonomous.json`. The target is the `_README` entry that begins "THE OUTER-LOOP SCRIPTS AN AGENT RUNS ARE LISTED THE SAME WAYS". Two attempts were made with identical arguments.
+- **(b) Refusal, quoted (both attempts):** "Permission to use Edit has been denied because Claude Code is running in don't ask mode." No code file was written. The replacement was not routed through Bash, a wrapper script or the operator `node -e` command.
+- **(c) Why no permission entry lifts it:** the target path has a `.claude/` segment. The tool layer guards writes to such paths before the permission profile is consulted. Task 8's `## Disposition` and the architecture review's Finding 1 disposition record the same refusal at this path, so this dispatch is the third to hit it. Profile read: `.claude/settings.json` holds only `permissions.allow: ["Bash(bash scripts/task-offer-check.sh)"]` and the plugin enablement. The per-run profile under the operator's `~/.local/state/devscene/run-profiles/` was refused on read in this session, so its contents are not reported.
+- **(d) Operator remedy** — one paste, run from the checkout root on branch `chore_devscene_docs_retrieval`:
+
+  ```
+  node -e "const f='examples/notes-app/.claude/settings.autonomous.json',fs=require('fs'),s=fs.readFileSync(f,'utf8'),o='\`search_docs\` on the \`harness-docs\` server',n='\`search_docs\` on the \`devscene-docs\` server';if(s.split(o).length!==2)throw new Error('expected exactly one match');const t=s.replace(o,n);JSON.parse(t);fs.writeFileSync(f,t)" && git grep -nE 'harness[-_]docs' -- examples/notes-app/.claude
+  ```
+
+  The trailing `git grep` must print nothing. Then commit that one file with a `fix:` subject.
