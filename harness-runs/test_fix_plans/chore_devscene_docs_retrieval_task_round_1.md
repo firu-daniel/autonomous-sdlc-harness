@@ -12,7 +12,7 @@ The typecheck gate passed and the test gate exited 1. Gate 6a failed because two
 
 This list is the **single source of truth** for the fix loop. It walks the entries top to bottom and takes the first `[ ]`. `[ ]` markers anywhere else, including the sub-step bullets inside the per-finding files, are informational only.
 
-1. [ ] **Finding 1** — Rewrite the home-directory paths two run artifacts carry. _(layer: general)_
+1. [x] **Finding 1** — Rewrite the home-directory paths two run artifacts carry. _(layer: general)_
 
 ## Must Fix
 
