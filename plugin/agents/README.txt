@@ -6,7 +6,7 @@ the plan writers and their plan reviewers, the per-unit and end-of-branch code
 reviewers, the skeptic, the docs writer and reviewer, the committer, the
 prompt-injection reviewer that screens each untrusted input file before an
 autonomous run acts on it, and the interactive-test (QA) agent. Roadmap item 4 filled it. It also holds the pair the
-setup command `/devscene:harness-analyze` dispatches — the
+setup command `/devscene:analyze` dispatches — the
 conventions writer, which writes one conventions document per dispatch, and the
 conventions reviewer, which works on two axes: a document pass, dispatched once
 per document, reading that one document and never re-reading it, and a corpus
@@ -74,7 +74,7 @@ The set is every plan writer, every plan reviewer and every end-of-branch
 reviewer; the per-unit `layer-reviewer`, the implementers, the committer,
 `docs-writer` and the interactive-test agents are excluded, as are
 `docs-reviewer`, `statistics-plan-writer` (which writes a report, not a plan)
-and the conventions pair `/devscene:harness-analyze` dispatches.
+and the conventions pair `/devscene:analyze` dispatches.
 
 Each of those allowlists names the tool whatever the configuration, and each
 contract's `<docs_retrieval>` row and bullet tell the agent to ignore it unless

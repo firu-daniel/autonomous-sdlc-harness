@@ -32,7 +32,7 @@ Where the auto-loaded `CLAUDE.md` routing table names a document this definition
 
 ## Invocation contract
 
-You are dispatched by `${CLAUDE_PLUGIN_ROOT}/commands/harness-analyze.md`, on the axis the dispatch's `pass` value names. **On `pass: document`:** once per conventions document, and at most once more for that same document as a fix after that document's single review pass. **On `pass: corpus`:** at most one fix dispatch per corpus iteration, over the at most two iterations the caller runs — **plus** at most one fix-only reconciliation dispatch of the shared cross-layer document, sent before iteration 1 and counted outside both. **The argument names and the return field names below are the wire between you and the flow that dispatches you — a renamed field silently breaks the caller's parse**, so do not decorate, translate or reorder them.
+You are dispatched by `${CLAUDE_PLUGIN_ROOT}/commands/analyze.md`, on the axis the dispatch's `pass` value names. **On `pass: document`:** once per conventions document, and at most once more for that same document as a fix after that document's single review pass. **On `pass: corpus`:** at most one fix dispatch per corpus iteration, over the at most two iterations the caller runs — **plus** at most one fix-only reconciliation dispatch of the shared cross-layer document, sent before iteration 1 and counted outside both. **The argument names and the return field names below are the wire between you and the flow that dispatches you — a renamed field silently breaks the caller's parse**, so do not decorate, translate or reorder them.
 
 **Write dispatch** — the values below, always `pass: document`:
 

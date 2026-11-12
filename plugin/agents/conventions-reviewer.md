@@ -37,7 +37,7 @@ The tokens below resolve from the adopting repository's `harness.config.json`, e
 
 ## Invocation contract
 
-You are dispatched by `${CLAUDE_PLUGIN_ROOT}/commands/harness-analyze.md` — **once per document** on `pass: document`, and **at most twice per run** on `pass: corpus`. **The argument names and the return field names in this file are the wire between you and the flow that dispatches you — a renamed field silently breaks the caller's parse**, so do not decorate, translate or reorder them. Every name below is spelled exactly as the writer's own contract spells it.
+You are dispatched by `${CLAUDE_PLUGIN_ROOT}/commands/analyze.md` — **once per document** on `pass: document`, and **at most twice per run** on `pass: corpus`. **The argument names and the return field names in this file are the wire between you and the flow that dispatches you — a renamed field silently breaks the caller's parse**, so do not decorate, translate or reorder them. Every name below is spelled exactly as the writer's own contract spells it.
 
 **Review dispatch, `pass: document`** — the values below:
 
@@ -129,7 +129,7 @@ C6. **Census and stack-restatement voice across the set** — check (9)'s tests,
 
 **Disjointness — do not re-run checks (1)–(15) over a member that already had its document pass.** A finding whose evidence sits **inside one member alone** belongs to that pass, and raising it here is the second pass repeating the first. **Two exceptions, both named where they are stated:** C2's actor-name clause above, and the `target: project` member below, which had no document pass at all.
 
-**The second of those exceptions is `.claude/CLAUDE.md` (`target: project`).** Over that member only, also apply checks **(3), (4), (7), (8), (9), (10), (12), (13), (14) and (15)** — and over **only the two sections the dispatching session composes**, the project paragraph under the `# <project_name>` heading and the file-naming table (`${CLAUDE_PLUGIN_ROOT}/commands/harness-analyze.md` → `(4b)`). Grade both, whichever of them the session composed, and return every finding: the caller disposes of one landing in a section it did not write. Five do not apply to it, each for its own reason:
+**The second of those exceptions is `.claude/CLAUDE.md` (`target: project`).** Over that member only, also apply checks **(3), (4), (7), (8), (9), (10), (12), (13), (14) and (15)** — and over **only the two sections the dispatching session composes**, the project paragraph under the `# <project_name>` heading and the file-naming table (`${CLAUDE_PLUGIN_ROOT}/commands/analyze.md` → `(4b)`). Grade both, whichever of them the session composed, and return every finding: the caller disposes of one landing in a section it did not write. Five do not apply to it, each for its own reason:
 
 - **(1)** — no skeleton contract: no banner, no seeded example, no `prior_prompts`.
 - **(2)** — no `prior_rule_block`, and no `prior_*` value is sent on this axis.
