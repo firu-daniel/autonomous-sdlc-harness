@@ -10,7 +10,7 @@ Confirmed:
 - **This repository.** `2c01123c` is a single commit of 350 files, none of them retrieval files. `e43781aa` and `cba2ac24` are dated 2026-09-16. `dev` has 142 commits, all by one author, and no `Co-Authored-By` trailer on the moving paths.
 - **The moving paths.** They have 25 commits on `dev`. `docs-retrieval-service/` has 50 tracked files, `evals/docs-retrieval/` has 51, and `docs/retrieval-eval-results.md` is 1.4 MB.
 - **Citations into this repository.** `supply-chain.yml:62` and `:100` are right, as are `run-gates.sh:193` and `cli/package.json:19-32`.
-- **The corpus-reader trap.** `service.py:83-101` reads `<cwd>/harness.config.json` and keeps its `layers` even when `--docs-root` is given, and `evals/docs-retrieval/README.md:52` says the same of `self-docs`.
+- **The corpus-reader trap.** `service.py:83-101` reads `<cwd>/devscene.config.json` and keeps its `layers` even when `--docs-root` is given, and `evals/docs-retrieval/README.md:52` says the same of `self-docs`.
 - **State-directory counts.** `harness-runs/` has 2 642 tracked files, and #55 (`624867e7`) has 53 run artifacts among its 105 files.
 - **straightedge.** It has 8 commits and a single `general` layer, carries the `setup-pending` "declined" block and has the `.extraction-source/` comment; `06595cc` says "Nothing is published yet".
 - **Detection rows.** Rows 1 and 4 are as `docs/cli.md` § 4 states them.
@@ -35,7 +35,7 @@ Confirmed:
 2. **§2 leaves the TS half with no CLI, and its tests and evals depend on files marked "Stay". §3.2 bar items 1, 2 and 4 therefore cannot pass with the inventory as listed.**
    - **No CLI.** `cli/src/commands/docs.ts`, which holds the `index`, `search`, `serve` and `fetch-models` verbs, is "Stay", and nothing in the moving set replaces it.
    - **Tests.** `cli/test/docs-retrieval.test.mjs`, a "Duplicated" suite, drives `docs index/search/serve` through `runCli` and `CLI_ENTRY`. It also imports `../dist/core/mainRepoAnchor.js` (line 25).
-   - **Test helper.** `runCli` and `CLI_ENTRY` come from `cli/test/helpers/fixture.mjs`, which is not in the inventory. It has 710 lines, re-exports `dist/config/model.js`, and its `writeRetrievalConfig` writes a `harness.config.json`. `docs-retrieval-refresh-end-state.test.mjs` uses it too.
+   - **Test helper.** `runCli` and `CLI_ENTRY` come from `cli/test/helpers/fixture.mjs`, which is not in the inventory. It has 710 lines, re-exports `dist/config/model.js`, and its `writeRetrievalConfig` writes a `devscene.config.json`. `docs-retrieval-refresh-end-state.test.mjs` uses it too.
    - **Evals.**
      - `query-log-pass.mjs:58` and `index-build.mjs:38` spawn `cli/dist/cli.js docs serve`.
      - `python-backend.mjs:48`, `vector-agreement.mjs:50`, `mcp-backend-pass.mjs:46`, `bm25-history.mjs:81` and `bm25-refresh-rule.mjs:45` import `pythonBackend.js`, which is "Stay".
@@ -140,11 +140,11 @@ Confirmed:
 
 13. **What the stable-point criteria assume about the move.** With R3.7, step 14 always runs after the rename, so its "and the freeze over" prerequisite is redundant. Keep the move outside any later harness-wide freeze, and say so once rather than as F5.
 
-14. **The "functional" bar has gaps that let couplings through to `harness-analyze`.**
+14. **The "functional" bar has gaps that let couplings through to `analyze`.**
     - Item 6's grep is case-sensitive on `HARNESS_`, so shimmed `HarnessError`, `HarnessConfig` and `retrievalApplies` survive, and a conventions writer would encode them as rules.
     - **Change:**
       - Add `Harness[A-Z]`, `retrievalApplies`, `docs_index` and `stateDir` to the grep.
-      - Add two testable items: "each backend indexes a directory that has no `harness.config.json`", and "`serve` answers one `search_docs` over stdio in each runtime".
+      - Add two testable items: "each backend indexes a directory that has no `devscene.config.json`", and "`serve` answers one `search_docs` over stdio in each runtime".
       - Make "CI green" name the workflow and the job.
 
 15. **§5 and §6 contradict the synthesis without saying so.**

@@ -89,7 +89,7 @@ This refines the cut in `01-current-mechanism.md` → `## 7`. Paths are given as
 
 **How the harness reads the tree (Documented).**
 - **Detection** is a first-match file-existence table (`docs/cli.md` → `## 4. Stack detection`). Row 4 takes a root Python manifest. The `monorepo` row takes a root `package.json` with `workspaces`, which is how straightedge was detected.
-- **Layer lists** come from analyze's `layers` target, which runs first (`plugin/commands/harness-analyze.md` → `## Steps`, step 1, `--apply-layers`).
+- **Layer lists** come from analyze's `layers` target, which runs first (`plugin/commands/analyze.md` → `## Steps`, step 1, `--apply-layers`).
 - **`existing` mode** takes the adopter's written material as sources (step 2). A copied README that still names harness machinery would become evidence, so the cut has to come first.
 
 **Proposed layout and layers (Inference).**
