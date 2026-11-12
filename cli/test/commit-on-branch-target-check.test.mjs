@@ -37,7 +37,7 @@ const CONFIG = {
   version: 1,
   defaultBranch: 'trunk',
   protectedBranches: ['trunk', 'release/*'],
-  stateDir: 'sdlc-harness/',
+  stateDir: 'devscene/',
   githooksDir: 'githooks',
   layers: [],
   commands: {},
@@ -55,7 +55,7 @@ async function markerProgram(root, name) {
 }
 
 /**
- * A main checkout on `feat_main` carrying `harness.config.json`, `githooks/`, the three wrappers
+ * A main checkout on `feat_main` carrying `devscene.config.json`, `githooks/`, the three wrappers
  * and their `lib/`, with `core.hooksPath` set to `githooks` and the identity in its configuration;
  * a linked worktree `wt` on `branch`, bootstrapped as `setup-worktree.sh` does; and a scratch
  * repository outside both, on `feat_s`, whose `core.fsmonitor` writes the marker `scratch-fsmonitor`.
@@ -77,7 +77,7 @@ async function fixture(t, { branch = 'feat_w' } = {}) {
   await runGit(main, ['init', '--quiet', '-b', 'trunk']);
   await runGit(main, ['config', 'user.email', 'fixture@example.invalid']);
   await runGit(main, ['config', 'user.name', 'Harness Fixture']);
-  await writeFile(join(main, 'harness.config.json'), `${JSON.stringify(CONFIG)}\n`);
+  await writeFile(join(main, 'devscene.config.json'), `${JSON.stringify(CONFIG)}\n`);
   await mkdir(join(main, 'githooks'));
   await writeFile(join(main, 'githooks', 'README'), 'hooks\n');
   await mkdir(join(main, 'scripts'));
@@ -85,7 +85,7 @@ async function fixture(t, { branch = 'feat_w' } = {}) {
     await cp(join(TEMPLATE_SCRIPTS, name), join(main, 'scripts', name));
   }
   await cp(join(TEMPLATE_SCRIPTS, 'lib'), join(main, 'scripts', 'lib'), { recursive: true });
-  await runGit(main, ['add', 'harness.config.json', 'githooks', 'scripts']);
+  await runGit(main, ['add', 'devscene.config.json', 'githooks', 'scripts']);
   await runGit(main, ['commit', '--quiet', '-m', 'fixture: seed']);
   await runGit(main, ['config', 'core.hooksPath', 'githooks']);
   await runGit(main, ['checkout', '--quiet', '-b', 'feat_main']);
@@ -252,8 +252,8 @@ test('(g) A branch whose name starts with - is refused', async (t) => {
 test('(h) A branch the main configuration protects is refused, whatever the worktree’s own copy says', async (t) => {
   const f = await fixture(t, { branch: 'release/x' });
   // The worktree's committed configuration drops release/*; the main checkout's still protects it.
-  await writeFile(join(f.wt, 'harness.config.json'), `${JSON.stringify({ ...CONFIG, protectedBranches: ['trunk'] })}\n`);
-  await runGit(f.wt, ['add', 'harness.config.json']);
+  await writeFile(join(f.wt, 'devscene.config.json'), `${JSON.stringify({ ...CONFIG, protectedBranches: ['trunk'] })}\n`);
+  await runGit(f.wt, ['add', 'devscene.config.json']);
   await runGit(f.wt, ['commit', '--quiet', '--no-verify', '-m', 'fixture: unprotect']);
   await assertRefused(f, {
     target: f.wt,
@@ -270,8 +270,8 @@ test('(i) A main configuration that cannot be read is refused, whatever the work
     target: f.wt,
     view: f.view.wt,
     branch: 'feat_w',
-    pattern: /^commit-on-branch\.sh: cannot resolve '.*\/main\/harness\.config\.json' — refusing to commit$/m,
-    between: () => writeFile(join(f.main, 'harness.config.json'), '{"version":'),
+    pattern: /^commit-on-branch\.sh: cannot resolve '.*\/main\/devscene\.config\.json' — refusing to commit$/m,
+    between: () => writeFile(join(f.main, 'devscene.config.json'), '{"version":'),
   });
 });
 

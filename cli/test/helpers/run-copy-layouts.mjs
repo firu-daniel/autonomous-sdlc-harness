@@ -79,11 +79,11 @@ export async function buildRunCopyLayouts(t) {
   await runGit(main, ['config', 'user.email', 'fixture@example.invalid']);
   await runGit(main, ['config', 'user.name', 'Harness Fixture']);
   await writeFile(
-    join(main, 'harness.config.json'),
+    join(main, 'devscene.config.json'),
     `${JSON.stringify({ version: 1, defaultBranch: LAYOUT_BASE, stateDir: `${LAYOUT_STATE_DIR}/` })}\n`,
   );
   await writeFile(join(main, '.gitignore'), `${LAYOUT_STATE_DIR}/\n`);
-  await runGit(main, ['add', 'harness.config.json', '.gitignore']);
+  await runGit(main, ['add', 'devscene.config.json', '.gitignore']);
   await runGit(main, ['commit', '--quiet', '-m', 'fixture: seed']);
   await mkdir(join(main, LAYOUT_STATE_DIR, 'autonomous_logs'), { recursive: true });
 

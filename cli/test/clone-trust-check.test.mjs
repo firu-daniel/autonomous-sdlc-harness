@@ -9,7 +9,7 @@
  * carry the main checkout's identity (`user.name`, `user.email`) at its exact value, and nothing
  * else that identifies or signs. Anything else is refused, naming a key or a file and never a
  * value, and the check writes nothing — not the registry, not its lock, not a ref. A main
- * checkout whose `harness.config.json` cannot be resolved is refused with a sentence naming that
+ * checkout whose `devscene.config.json` cannot be resolved is refused with a sentence naming that
  * file; only a resolvable configuration with no matching record is refused as "records no
  * clone".** The one
  * accepted shape of a redirecting file: a `.git/config.worktree` or `.git/objects/info/http-alternates`
@@ -46,7 +46,7 @@ const LIB = join(PACKAGE_ROOT, 'templates', 'scripts', 'lib', 'harness-run-lib.s
 const CONFIG = {
   version: 1,
   defaultBranch: 'trunk',
-  stateDir: 'sdlc-harness/',
+  stateDir: 'devscene/',
   githooksDir: 'githooks',
   layers: [],
   commands: {},
@@ -94,7 +94,7 @@ const CHECK = `hr_wrapper_target_check_var "$1" "$2"; s=$?
 printf 'status=%s\\nkind=%s\\ngitdir=%s\\nbranch=%s\\nrefusal=%s\\n' "$s" "$HR_TARGET_KIND" "$HR_TARGET_GITDIR" "$HR_TARGET_BRANCH" "$HR_TARGET_REFUSAL"`;
 
 /**
- * A bare origin; a main checkout on `trunk` carrying `harness.config.json` and `githooks/`, with
+ * A bare origin; a main checkout on `trunk` carrying `devscene.config.json` and `githooks/`, with
  * its registry directory made; and, unless `clone` is false, the clone of {@link BRANCH} that
  * `hr_clone_create_var` makes at `<root>/main-feat_c`. With `identity` false the main checkout sets
  * no `user.*` key and makes its seed commit under {@link IDENTITY}.
@@ -114,18 +114,18 @@ async function fixture(t, { clone = true, identity = true } = {}) {
     await runGit(main, ['config', 'user.email', 'fixture@example.invalid']);
     await runGit(main, ['config', 'user.name', 'Harness Fixture']);
   }
-  await writeFile(join(main, 'harness.config.json'), `${JSON.stringify(CONFIG)}\n`);
+  await writeFile(join(main, 'devscene.config.json'), `${JSON.stringify(CONFIG)}\n`);
   await mkdir(join(main, 'githooks'));
   await writeFile(join(main, 'githooks', 'README'), 'hooks\n');
-  await runGit(main, ['add', 'harness.config.json', 'githooks']);
+  await runGit(main, ['add', 'devscene.config.json', 'githooks']);
   await runGit(main, [...(identity ? [] : IDENTITY), 'commit', '--quiet', '-m', 'fixture: seed']);
   await runGit(main, ['config', 'core.hooksPath', 'githooks']);
   await runGit(main, ['remote', 'add', 'origin', origin]);
   await runGit(main, ['push', '--quiet', 'origin', 'trunk']);
   await runGit(main, ['fetch', '--quiet', 'origin']);
-  await mkdir(join(main, 'sdlc-harness', 'autonomous_logs'), { recursive: true });
+  await mkdir(join(main, 'devscene', 'autonomous_logs'), { recursive: true });
 
-  const registry = join(main, 'sdlc-harness', 'autonomous_logs', 'registry.json');
+  const registry = join(main, 'devscene', 'autonomous_logs', 'registry.json');
   const f = {
     root,
     origin,
@@ -334,17 +334,17 @@ test('(e) A record with no copy_kind, or whose worktree names another path, is r
   });
 });
 
-test('(e2) A main checkout whose harness.config.json cannot be resolved is refused as such, not as a missing record', async (t) => {
-  const CONFIG_UNRESOLVED = /cannot be located, because '.*\/harness\.config\.json' cannot be resolved$/;
+test('(e2) A main checkout whose devscene.config.json cannot be resolved is refused as such, not as a missing record', async (t) => {
+  const CONFIG_UNRESOLVED = /cannot be located, because '.*\/devscene\.config\.json' cannot be resolved$/;
   const variants = {
     truncated: async (f) => {
-      const path = join(f.main, 'harness.config.json');
+      const path = join(f.main, 'devscene.config.json');
       const saved = await readFile(path, 'utf8');
       await writeFile(path, '{"version":');
       return { env: {}, restore: () => writeFile(path, saved) };
     },
     absent: async (f) => {
-      const path = join(f.main, 'harness.config.json');
+      const path = join(f.main, 'devscene.config.json');
       const saved = await readFile(path, 'utf8');
       await rm(path);
       return { env: {}, restore: () => writeFile(path, saved) };
@@ -363,7 +363,7 @@ test('(e2) A main checkout whose harness.config.json cannot be resolved is refus
       const refusal = await assertRefused(f, f.clone, CONFIG_UNRESOLVED, env);
       assert.match(refusal, NOT_LISTED);
       assert.doesNotMatch(refusal, NO_CLONE_RECORD);
-      assert.ok(refusal.includes(`'${join(f.main, 'harness.config.json')}'`), refusal);
+      assert.ok(refusal.includes(`'${join(f.main, 'devscene.config.json')}'`), refusal);
       assert.equal(await exists(`${f.registry}.lock`), false);
       await restore();
       const g = await f.check(f.clone);

@@ -10,7 +10,7 @@
  * temporary working copy or branch removes it on every exit path, success and failure alike, and
  * never removes one it did not create."*
  *
- * Each case builds a main checkout carrying `harness.config.json`, a local bare origin and the
+ * Each case builds a main checkout carrying `devscene.config.json`, a local bare origin and the
  * registry directory under the system temp directory, and sources the library from the template
  * tree; every clone lands at `hr_worktree_dir`, `<root>/main-<branch>`. A forced failure is a `git`
  * shim first on `PATH`, the technique `cli/test/wrapper-target-check.test.mjs` uses. The temp-tree
@@ -48,7 +48,7 @@ const CONFIG = {
   version: 1,
   defaultBranch: 'trunk',
   protectedBranches: ['release/*'],
-  stateDir: 'sdlc-harness/',
+  stateDir: 'devscene/',
   githooksDir: 'githooks',
   layers: [],
   commands: {},
@@ -103,7 +103,7 @@ async function listing(dir) {
 }
 
 /**
- * A bare origin; a main checkout on `trunk` carrying `harness.config.json`, with its registry
+ * A bare origin; a main checkout on `trunk` carrying `devscene.config.json`, with its registry
  * directory made and the registry seeded with {@link BYSTANDER} in `jq`'s own layout.
  *
  * @param {import('node:test').TestContext} t
@@ -121,13 +121,13 @@ async function fixture(t, { objectFormat } = {}) {
   await runGit(main, ['init', '--quiet', '-b', 'trunk', ...format]);
   await runGit(main, ['config', 'user.email', 'fixture@example.invalid']);
   await runGit(main, ['config', 'user.name', 'Harness Fixture']);
-  await writeFile(join(main, 'harness.config.json'), `${JSON.stringify(CONFIG)}\n`);
-  await runGit(main, ['add', 'harness.config.json']);
+  await writeFile(join(main, 'devscene.config.json'), `${JSON.stringify(CONFIG)}\n`);
+  await runGit(main, ['add', 'devscene.config.json']);
   await runGit(main, ['commit', '--quiet', '-m', 'fixture: seed']);
   await runGit(main, ['remote', 'add', 'origin', origin]);
   await runGit(main, ['push', '--quiet', 'origin', 'trunk']);
   await runGit(main, ['fetch', '--quiet', 'origin']);
-  const logs = join(main, 'sdlc-harness', 'autonomous_logs');
+  const logs = join(main, 'devscene', 'autonomous_logs');
   await mkdir(logs, { recursive: true });
   const registry = join(logs, 'registry.json');
   const writeRegistry = (runs) => writeFile(registry, `${JSON.stringify({ runs }, null, 2)}\n`);

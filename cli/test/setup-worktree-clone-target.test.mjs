@@ -27,7 +27,7 @@ const CONFIG = {
   version: 1,
   defaultBranch: 'trunk',
   protectedBranches: ['trunk'],
-  stateDir: 'sdlc-harness/',
+  stateDir: 'devscene/',
   githooksDir: 'githooks',
   layers: [],
   commands: {},
@@ -37,7 +37,7 @@ const BRANCH = 'feat_c';
 const output = (result) => `${result.stdout}\n${result.stderr}`;
 
 /**
- * A main checkout on `trunk` carrying `harness.config.json`, `githooks/pre-push` and
+ * A main checkout on `trunk` carrying `devscene.config.json`, `githooks/pre-push` and
  * `scripts/setup-worktree.sh` with its `lib/`, and the clone of {@link BRANCH} `hr_clone_create_var`
  * makes at `<root>/main-feat_c`.
  *
@@ -51,14 +51,14 @@ async function fixture(t) {
   await runGit(main, ['init', '--quiet', '-b', 'trunk']);
   await runGit(main, ['config', 'user.email', 'fixture@example.invalid']);
   await runGit(main, ['config', 'user.name', 'Harness Fixture']);
-  await writeFile(join(main, 'harness.config.json'), `${JSON.stringify(CONFIG)}\n`);
+  await writeFile(join(main, 'devscene.config.json'), `${JSON.stringify(CONFIG)}\n`);
   await writeFile(join(main, 'githooks', 'pre-push'), '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 });
   await mkdir(join(main, 'scripts'));
   await cp(join(TEMPLATE_SCRIPTS, 'setup-worktree.sh'), join(main, 'scripts', 'setup-worktree.sh'));
   await cp(join(TEMPLATE_SCRIPTS, 'lib'), join(main, 'scripts', 'lib'), { recursive: true });
-  await runGit(main, ['add', 'harness.config.json', 'githooks', 'scripts']);
+  await runGit(main, ['add', 'devscene.config.json', 'githooks', 'scripts']);
   await runGit(main, ['commit', '--quiet', '-m', 'fixture: seed']);
-  await mkdir(join(main, 'sdlc-harness', 'autonomous_logs'), { recursive: true });
+  await mkdir(join(main, 'devscene', 'autonomous_logs'), { recursive: true });
 
   const created = await runBash(root, [
     '-c',

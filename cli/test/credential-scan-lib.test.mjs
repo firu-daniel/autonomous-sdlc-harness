@@ -193,7 +193,7 @@ test('a reason or branch carrying a newline is refused, with nothing written', a
 
 test('hr_session_pass_env prints the valid names and refuses an unreadable configuration', async (t) => {
   const f = await fixture(t);
-  const config = join(f.repo, 'harness.config.json');
+  const config = join(f.repo, 'devscene.config.json');
   const read = () => f.call('hr_session_pass_env "$1"; echo "status=$?"', [f.repo]);
   const cases = [
     [
@@ -217,7 +217,7 @@ test('hr_session_pass_env prints the valid names and refuses an unreadable confi
     assert.equal(r.stdout, expected, label);
   }
   await rm(config);
-  assert.equal((await read()).stdout, 'status=2\n', 'a missing harness.config.json');
+  assert.equal((await read()).stdout, 'status=2\n', 'a missing devscene.config.json');
 });
 
 test('hr_profile_env_var_names prints the valid names in file order and refuses a bad profile', async (t) => {

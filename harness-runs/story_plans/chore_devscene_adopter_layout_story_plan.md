@@ -103,7 +103,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_adopter_layout/ta
 19. [x] **Task 18** — Rename the config file the Python retrieval service reads, and respell the evals _(layer: general)_ _(points: 15)_
 20. [x] **Task 19** — Respell the `init`, scripts-directory, offer and preset suites with the fixture helper _(layer: cli)_ _(points: 20)_
 21. [x] **Task 20** — Respell the `config`, `doctor`, `daemon` and profile suites _(layer: cli)_ _(points: 20)_
-22. [ ] **Task 21** — Respell the wrapper, clone and worktree suites _(layer: cli)_ _(points: 20)_
+22. [x] **Task 21** — Respell the wrapper, clone and worktree suites _(layer: cli)_ _(points: 20)_
 23. [ ] **Task 22** — Respell the `remote-run`, remote-names, workflow-template and delivery suites _(layer: cli)_ _(points: 20)_
 24. [ ] **Task 23** — Respell the run-control, collect, report, progress and trigger suites _(layer: cli)_ _(points: 20)_
 25. [ ] **Task 24** — Respell the watcher, restart-watcher, keep-awake and ledger suites _(layer: cli)_ _(points: 20)_

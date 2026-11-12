@@ -1,10 +1,10 @@
 /**
  * The shipped `commit-on-branch.sh`, `push-branch.sh` and `refresh-branch.sh` on a registered clone
- * whose main checkout's `harness.config.json` cannot be resolved, driven as the permission profile
+ * whose main checkout's `devscene.config.json` cannot be resolved, driven as the permission profile
  * runs them: the MAIN checkout's copies, with the clone as their target.
  *
  * **The rule these tests exist to enforce: on a registered clone, the main checkout's three wrappers
- * name an unresolvable configuration with the same `cannot resolve '<main>/harness.config.json'` line
+ * name an unresolvable configuration with the same `cannot resolve '<main>/devscene.config.json'` line
  * and exit status as on the main checkout, move no ref, and keep the clone arm's registry sentence
  * for a clone the readable registry does not record.** Each wrapper loads that configuration ahead of
  * its target check; a scratch repository is still refused by the target check, so the hoist did not
@@ -30,7 +30,7 @@ const CONFIG = {
   version: 1,
   defaultBranch: 'trunk',
   protectedBranches: ['trunk'],
-  stateDir: 'sdlc-harness/',
+  stateDir: 'devscene/',
   githooksDir: 'githooks',
   layers: [],
   commands: {},
@@ -47,7 +47,7 @@ const output = (result) => `${result.stdout}\n${result.stderr}`;
 const lines = (text) => text.split('\n');
 
 /**
- * A bare origin; a main checkout on `trunk` carrying `harness.config.json`, `githooks/`, `notes.txt`
+ * A bare origin; a main checkout on `trunk` carrying `devscene.config.json`, `githooks/`, `notes.txt`
  * and the three wrappers with their `lib/`, its `core.hooksPath` `githooks`; and the clone of
  * {@link BRANCH} `hr_clone_create_var` makes at `<root>/main-feat_c`.
  *
@@ -64,7 +64,7 @@ async function fixture(t) {
   await runGit(main, ['init', '--quiet', '-b', 'trunk']);
   await runGit(main, ['config', 'user.email', 'fixture@example.invalid']);
   await runGit(main, ['config', 'user.name', 'Harness Fixture']);
-  await writeFile(join(main, 'harness.config.json'), `${JSON.stringify(CONFIG)}\n`);
+  await writeFile(join(main, 'devscene.config.json'), `${JSON.stringify(CONFIG)}\n`);
   await writeFile(join(main, 'githooks', 'README'), 'hooks\n');
   await writeFile(join(main, 'notes.txt'), 'seeded notes\n');
   await mkdir(join(main, 'scripts'));
@@ -72,12 +72,12 @@ async function fixture(t) {
     await cp(join(TEMPLATE_SCRIPTS, name), join(main, 'scripts', name));
   }
   await cp(join(TEMPLATE_SCRIPTS, 'lib'), join(main, 'scripts', 'lib'), { recursive: true });
-  await runGit(main, ['add', 'harness.config.json', 'githooks', 'notes.txt', 'scripts']);
+  await runGit(main, ['add', 'devscene.config.json', 'githooks', 'notes.txt', 'scripts']);
   await runGit(main, ['commit', '--quiet', '-m', 'fixture: seed']);
   await runGit(main, ['config', 'core.hooksPath', 'githooks']);
   await runGit(main, ['remote', 'add', 'origin', origin]);
   await runGit(main, ['push', '--quiet', 'origin', 'trunk']);
-  await mkdir(join(main, 'sdlc-harness', 'autonomous_logs'), { recursive: true });
+  await mkdir(join(main, 'devscene', 'autonomous_logs'), { recursive: true });
 
   const created = await runBash(root, [
     '-c',
@@ -91,8 +91,8 @@ async function fixture(t) {
   const clone = join(root, `main-${BRANCH}`);
 
   const script = (name) => join(main, 'scripts', name);
-  const config = join(main, 'harness.config.json');
-  const registry = join(main, 'sdlc-harness', 'autonomous_logs', 'registry.json');
+  const config = join(main, 'devscene.config.json');
+  const registry = join(main, 'devscene', 'autonomous_logs', 'registry.json');
   return {
     root,
     origin,

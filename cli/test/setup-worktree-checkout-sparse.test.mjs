@@ -37,7 +37,7 @@ const CONFIG = {
   version: 1,
   defaultBranch: 'trunk',
   protectedBranches: ['trunk'],
-  stateDir: 'sdlc-harness/',
+  stateDir: 'devscene/',
   githooksDir: 'githooks',
   layers: [],
   commands: {},
@@ -51,7 +51,7 @@ const REFUSED = /^push-branch\.sh: refusing to push: /m;
 const output = (result) => `${result.stdout}\n${result.stderr}`;
 
 /**
- * A bare origin and a main checkout on `feat_main` carrying `harness.config.json`, a passing
+ * A bare origin and a main checkout on `feat_main` carrying `devscene.config.json`, a passing
  * `githooks/pre-push` and the three scripts under test, with one seed commit origin has not seen.
  *
  * @param {import('node:test').TestContext} t
@@ -68,14 +68,14 @@ async function fixture(t) {
   await runGit(main, ['init', '--quiet', '-b', MAIN_BRANCH]);
   await runGit(main, ['config', 'user.email', 'fixture@example.invalid']);
   await runGit(main, ['config', 'user.name', 'Harness Fixture']);
-  await writeFile(join(main, 'harness.config.json'), `${JSON.stringify(CONFIG)}\n`);
+  await writeFile(join(main, 'devscene.config.json'), `${JSON.stringify(CONFIG)}\n`);
   await mkdir(join(main, 'githooks'));
   await writeFile(join(main, 'githooks', 'pre-push'), '#!/bin/sh\nexit 0\n');
   await chmod(join(main, 'githooks', 'pre-push'), 0o755);
   await mkdir(join(main, 'scripts'));
   for (const name of SCRIPTS) await cp(join(TEMPLATE_SCRIPTS, name), join(main, 'scripts', name));
   await cp(join(TEMPLATE_SCRIPTS, 'lib'), join(main, 'scripts', 'lib'), { recursive: true });
-  await runGit(main, ['add', 'harness.config.json', 'githooks', 'scripts']);
+  await runGit(main, ['add', 'devscene.config.json', 'githooks', 'scripts']);
   await runGit(main, ['commit', '--quiet', '-m', 'fixture: seed']);
   await runGit(main, ['remote', 'add', 'origin', origin]);
 
