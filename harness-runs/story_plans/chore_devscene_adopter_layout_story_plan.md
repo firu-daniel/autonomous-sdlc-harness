@@ -108,7 +108,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_adopter_layout/ta
 24. [x] **Task 23** — Respell the run-control, collect, report, progress and trigger suites _(layer: cli)_ _(points: 20)_
 25. [x] **Task 24** — Respell the watcher, restart-watcher, keep-awake and ledger suites _(layer: cli)_ _(points: 20)_
 26. [x] **Task 25** — Respell the outer-loop-scripts, walker, prompt-injection, analytics and test-suite suites _(layer: cli)_ _(points: 15)_
-27. [ ] **Task 26** — Respell the suites that read the plugin and this repository's scripts, and point four of them at the template run library _(layer: cli)_ _(points: 20)_
+27. [x] **Task 26** — Respell the suites that read the plugin and this repository's scripts, and point four of them at the template run library _(layer: cli)_ _(points: 20)_
 28. [ ] **Task 27** — Respell `README.md`, `ARCHITECTURE.md`, `CONTRIBUTING.md`, `ROADMAP.md` and `llms.txt` _(layer: general)_ _(points: 15)_
 29. [ ] **Task 28** — Respell `docs/cli.md`, `docs/analyze.md` and the rest of `docs/config.md`, and drop the split-default prose _(layer: general)_ _(points: 15)_
 30. [ ] **Task 29** — Respell `docs/development.md`, gates 6, 8 and 12 included _(layer: general)_ _(points: 20)_

@@ -133,7 +133,7 @@ const STEP = {
   config: 'Read the configuration',
   bootstrap: 'Bootstrap the checkout',
   preflight: 'Preflight with doctor',
-  harness: 'Run the harness',
+  harness: 'Run DevScene',
   save: 'Save the state bundle',
 };
 const refuseBlock = workflow.slice(workflow.indexOf(`- name: ${STEP.refuse}`));
@@ -154,7 +154,7 @@ test('every step name this suite cans is a step of the run job', () => {
 const TS = '2026-11-04T10:00:00.0000000Z';
 const WTS = '2026-11-04T10:00:00';
 const TOKEN = '0123456789abcdef0123456789abcdef';
-const RUNNER_STATE = '/home/runner/work/gate12/gate12/sdlc-harness';
+const RUNNER_STATE = '/home/runner/work/gate12/gate12/devscene';
 const branchOf = (row, arm) => `gate12_${row.toLowerCase()}_${arm}_20261104000000`;
 const watcherLine = (text) => `${WTS} ${WATCHER_TAG} ${text}`;
 const shq = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
@@ -474,7 +474,7 @@ test('JS1: a later harness run listed by gh run list leaves the expected shape p
   const later = [branchOf('JS1', 'settings'), branchOf('JS1', 'remote-run')].map((b, i) => ({
     databaseId: 900 + i,
     createdAt: '2026-11-04T11:00:00Z',
-    displayTitle: `harness run ${b}`,
+    displayTitle: `devscene run ${b}`,
     status: 'completed',
   }));
   await stage(fixture, js1(), { 'run list': { stdout: `${JSON.stringify(later)}\n` } });

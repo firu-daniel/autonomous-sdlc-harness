@@ -4,7 +4,7 @@
  *
  * **The rule these tests exist to enforce: the QA account lock set lives at
  * `<main checkout>/<stateDir>/qa_user_locks/` — the MAIN checkout's directory, with `stateDir` read
- * from the main checkout's `harness.config.json` — whichever working copy the script runs from, so a
+ * from the main checkout's `devscene.config.json` — whichever working copy the script runs from, so a
  * reserve issued in a linked worktree and a release issued in the main checkout agree on one lock;
  * a reserve prints only the slot it claimed and exits 0, a held slot or a full set exits 3, and a
  * repository with no main checkout (a bare repository's worktree) makes a reserve exit 1 and a
@@ -16,7 +16,7 @@
  * is relative or names no main checkout changes nothing.**
  *
  * The fixture is built by hand rather than by `init`, so the configuration under test is exactly the
- * one written here. The worktree's and the clone's own `harness.config.json` are each rewritten to
+ * one written here. The worktree's and the clone's own `devscene.config.json` are each rewritten to
  * name a different `stateDir`, so a lock landing in any working copy's own state directory — rather
  * than the main checkout's — fails the location assertion by name.
  *
@@ -79,13 +79,13 @@ async function lockFixture(t) {
   await runGit(main, ['init', '--quiet', '-b', BASE]);
   await runGit(main, ['config', 'user.email', 'fixture@example.invalid']);
   await runGit(main, ['config', 'user.name', 'Harness Fixture']);
-  await writeFile(join(main, 'harness.config.json'), `${JSON.stringify(CONFIG)}\n`);
+  await writeFile(join(main, 'devscene.config.json'), `${JSON.stringify(CONFIG)}\n`);
   await writeFile(join(main, CREDS), CREDENTIALS);
-  await runGit(main, ['add', 'harness.config.json', CREDS]);
+  await runGit(main, ['add', 'devscene.config.json', CREDS]);
   await runGit(main, ['commit', '--quiet', '-m', 'fixture: seed']);
   await runGit(main, ['worktree', 'add', '--quiet', '-b', 'feat_w', wt]);
   await writeFile(
-    join(wt, 'harness.config.json'),
+    join(wt, 'devscene.config.json'),
     `${JSON.stringify({ ...CONFIG, stateDir: 'wt-state' })}\n`,
   );
   return {
@@ -107,7 +107,7 @@ async function cloneOf(f) {
   const clone = join(f.root, 'clone');
   await runGit(f.root, ['clone', '--quiet', '--shared', f.main, clone]);
   await writeFile(
-    join(clone, 'harness.config.json'),
+    join(clone, 'devscene.config.json'),
     `${JSON.stringify({ ...CONFIG, stateDir: 'clone-state' })}\n`,
   );
   return { clone, cloneLockSet: join(clone, 'clone-state', 'qa_user_locks') };
@@ -124,7 +124,7 @@ async function registeredCloneOf(f) {
   await mkdir(join(f.main, STATE_DIR, 'autonomous_logs'), { recursive: true });
   const clone = await createRegisteredClone(f.root, f.main, 'feat_reg', join(f.root, 'xdg-state'));
   await writeFile(
-    join(clone, 'harness.config.json'),
+    join(clone, 'devscene.config.json'),
     `${JSON.stringify({ ...CONFIG, stateDir: 'clone-state' })}\n`,
   );
   return { clone, cloneStateDir: join(clone, 'clone-state') };
