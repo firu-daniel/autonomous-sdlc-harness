@@ -105,7 +105,7 @@ function planReview(index, i) {
   ];
 }
 
-const findings = (folder, n) => `sdlc-harness/${folder}/${BRANCH}/review_${n}.md`;
+const findings = (folder, n) => `devscene/${folder}/${BRANCH}/review_${n}.md`;
 
 /** A walk from `start` through the writer's first return. */
 const OPEN = [{ start: true }, { outcome: 'returned' }];
@@ -217,7 +217,7 @@ test('(4) with phases.parity false the parity gate is skipped and records no pas
 
   assert.deepEqual(actions, [
     writer(0),
-    // `### 2`: "Skip this gate unless `phases.parity` is `true` in `harness.config.json`. … the loop
+    // `### 2`: "Skip this gate unless `phases.parity` is `true` in `devscene.config.json`. … the loop
     // proceeds to the next step" — no parity dispatch.
     architecture(0, 0, [['skip', 'business_parity_review skipped']]),
     planReview(0, 0),

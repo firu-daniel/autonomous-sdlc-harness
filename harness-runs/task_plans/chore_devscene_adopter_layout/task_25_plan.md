@@ -28,3 +28,8 @@
 
 - `git grep -nE 'harness\.config|sdlc-harness|harness-scripts' --` followed by this task's fourteen target paths prints nothing.
 - Each target test file passes through `npm test --workspace cli -- test/<name>.test.mjs`, from the repository root, one plain foreground command per file. `helpers/walker.mjs` is exercised by the walker suites.
+
+**Deviations from plan:**
+- The Work list names rows 1–3 only. Two targets also pinned the old absent-`scriptsDir` fallback `scripts`, which `DEFAULTS.scriptsDir` (`cli/src/config/model.ts`) now gives as `devscene-scripts`. With rows 1–3 alone, `outer-loop-scripts.test.mjs` failed 5 cases: they sourced `scripts/lib/harness-run-lib.sh`, which `init` no longer writes. Following spelling-table row 14, I changed `outer-loop-scripts.test.mjs` → `SEEDED_SCRIPTS_DIR` and `run-test-suite.test.mjs` → `WRAPPER` from `scripts` to `devscene-scripts`, and updated the doc comment above each. Both suites pass after this change.
+- Not changed, because they are synthetic transcript command strings and not paths `init` writes: `run-analytics.test.mjs` (`<repo_root>/scripts/x.sh`, `<main_repo>/scripts/y.sh`) and `run-analytics-rounds.test.mjs` → `WAIT` (`bash scripts/run-test-suite.sh --wait …`). Both suites pass with these strings unchanged.
+- The first `outer-loop-scripts.test.mjs` run was piped through `grep`, which breaks the test-run rule's point 6. It was rerun as one plain foreground command, and that rerun is the result recorded.

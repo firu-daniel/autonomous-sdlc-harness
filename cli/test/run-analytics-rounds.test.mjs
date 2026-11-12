@@ -82,7 +82,7 @@ async function adopted(t) {
   const claudeHome = await mkdtemp(join(tmpdir(), 'run-analytics-rounds-home-'));
   t.after(() => rm(claudeHome, { recursive: true, force: true }));
 
-  const { stateDir } = readJson(join(dir, 'harness.config.json'));
+  const { stateDir } = readJson(join(dir, 'devscene.config.json'));
   const streamRel = join(stateDir, 'autonomous_logs', `${BRANCH}.stream.jsonl`);
   mkdirSync(join(dir, stateDir, 'autonomous_logs'), { recursive: true });
   writeFileSync(join(dir, streamRel), streamText());

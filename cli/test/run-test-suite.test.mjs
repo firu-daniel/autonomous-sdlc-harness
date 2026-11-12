@@ -37,9 +37,9 @@ import test from 'node:test';
 import { createFixture, runBash, runCli, runGit, snapshotTree } from './helpers/fixture.mjs';
 import { scaleBound } from './helpers/timing.mjs';
 
-const STATE_DIR = 'sdlc-harness';
-/** Stays `scripts` on purpose: `seededConfig()` omits `scriptsDir`, so `init` writes there, the absent key's value. */
-const WRAPPER = 'scripts/run-test-suite.sh';
+const STATE_DIR = 'devscene';
+/** Stays `devscene-scripts` on purpose: `seededConfig()` omits `scriptsDir`, so `init` writes there, the absent key's value. */
+const WRAPPER = 'devscene-scripts/run-test-suite.sh';
 
 /** The branch every fixture is put on; its `/` is what the log directory's sanitizing turns to `-`. */
 const BRANCH = 'feat/run-gates';
@@ -130,7 +130,7 @@ async function wiredFixture(t, { typecheck } = {}) {
   const fixture = await createFixture({
     files: {
       'package.json': { name: 'fixture-project', private: true, version: '0.0.0' },
-      'harness.config.json': seededConfig({ typecheck }),
+      'devscene.config.json': seededConfig({ typecheck }),
       'stub.sh': STUB,
       'typecheck-stub.sh': TC_STUB,
     },
@@ -931,7 +931,7 @@ test('commands.typecheck `<none>` padded with whitespace is still the sentinel, 
 
 test('commands.typecheck unset refuses with exit 2, its own stderr line and nothing written', async (t) => {
   const dir = await wiredFixture(t, { typecheck: TC_STUB_COMMAND });
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   delete config.commands.typecheck;
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
@@ -941,7 +941,7 @@ test('commands.typecheck unset refuses with exit 2, its own stderr line and noth
 
   assert.equal(result.status, 2);
   assert.equal(result.stdout, '');
-  assert.equal(result.stderr, 'run-test-suite.sh: commands.typecheck is not set in harness.config.json\n');
+  assert.equal(result.stderr, 'run-test-suite.sh: commands.typecheck is not set in devscene.config.json\n');
   assert.deepEqual(counterLines(dir, TC_COUNTER), [], 'the refusal ran the typecheck');
   assert.deepEqual(counterLines(dir), [], 'the refusal ran the test');
   assert.deepEqual(await snapshotTree(dir), before, 'the refusal wrote a file');
