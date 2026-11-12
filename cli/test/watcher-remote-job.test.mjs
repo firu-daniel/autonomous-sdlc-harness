@@ -96,7 +96,7 @@ import { INIT_SCRIPTS_DIR, runBash, runGit } from './helpers/fixture.mjs';
 import { scaleBound } from './helpers/timing.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const PROMPT_DELIMITER = '----- end of prompt -----';
 
 /** The bound on one watcher run — the header argues the value. */
@@ -170,9 +170,9 @@ const nowSecs = () => Math.floor(Date.now() / 1000);
 /** GitHub's `createdAt` shape — whole seconds, `Z` — for an epoch second. */
 const iso = (secs) => new Date(secs * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
 
-/** A canned `run list` answer carrying one `harness pause feat_x` run created at <secs>. */
+/** A canned `run list` answer carrying one `devscene pause feat_x` run created at <secs>. */
 const pauseRunList = (secs) =>
-  JSON.stringify([{ databaseId: 99, displayTitle: 'harness pause feat_x', status: 'completed', createdAt: iso(secs) }]);
+  JSON.stringify([{ databaseId: 99, displayTitle: 'devscene pause feat_x', status: 'completed', createdAt: iso(secs) }]);
 
 /** Stub bodies. `STATE` is the state directory and `REC` the recorder directory. */
 const HONOUR_PAUSE = (tenths) =>
@@ -228,7 +228,7 @@ async function createJobFixture(t, { runAnalytics = false } = {}) {
   const ghLog = join(recorder, 'gh.log');
   await writeFile(ghStub, GH_STUB, { mode: 0o755 });
 
-  const config = JSON.parse(readFileSync(join(w.dir, 'harness.config.json'), 'utf8'));
+  const config = JSON.parse(readFileSync(join(w.dir, 'devscene.config.json'), 'utf8'));
 
   // Every job input a runner would set is pinned empty here, so a suite run inside a real
   // GitHub Actions job reads none of that job's own values.
@@ -545,7 +545,7 @@ test('pause note: kept only for a pause resume of a paused job of the same engin
     const result = await f.j.job([f.j.branch, 'task', 'pause']);
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
     const prompt = f.j.prompts().at(-1);
-    assert.match(prompt, /RESUME from a PAUSE: read sdlc-harness\/PAUSE_PROGRESS\.md/);
+    assert.match(prompt, /RESUME from a PAUSE: read devscene\/PAUSE_PROGRESS\.md/);
     assert.doesNotMatch(prompt, STOP_KILL);
     assert.equal(readFileSync(f.notePath, 'utf8'), NOTE);
     assert.deepEqual(f.superseded(), []);
@@ -666,7 +666,7 @@ test('a job killed mid-run leaves running / continue', async (t) => {
   j.assertLaneUntouched();
 });
 
-test('control poll: a harness pause run newer than the start pauses the run for the user', async (t) => {
+test('control poll: a devscene pause run newer than the start pauses the run for the user', async (t) => {
   const j = await createJobFixture(t);
   if (j === null) return;
 
@@ -719,8 +719,8 @@ test('control poll: a pause the listing shows only after a poll that missed it i
   assert.equal(lastLine(result.stdout), 'job: paused stop');
   assert.equal(j.status().pause_reason, 'user');
   assert.ok(j.ghCalls().filter((c) => c.startsWith('run list')).length >= 2, j.ghCalls().join('\n'));
-  assert.match(result.stdout, /job: control poll of 'feat_x' since \d+ \(exit 5\): remote-run\.sh: no 'harness pause feat_x' run/);
-  assert.match(result.stdout, /job: control poll of 'feat_x' since \d+ \(exit 0\): remote-run\.sh: a 'harness pause feat_x' run/);
+  assert.match(result.stdout, /job: control poll of 'feat_x' since \d+ \(exit 5\): remote-run\.sh: no 'devscene pause feat_x' run/);
+  assert.match(result.stdout, /job: control poll of 'feat_x' since \d+ \(exit 0\): remote-run\.sh: a 'devscene pause feat_x' run/);
 });
 
 test('control poll: a usage refusal is a failed poll', async (t) => {
@@ -1035,7 +1035,7 @@ test('phases.qa: a job tells the task and user_review engines the QA phase is sk
     await t.test(`phases.qa ${qa}`, async (t) => {
       const j = await createJobFixture(t);
       if (j === null) return;
-      const configPath = join(j.dir, 'harness.config.json');
+      const configPath = join(j.dir, 'devscene.config.json');
       const config = JSON.parse(readFileSync(configPath, 'utf8'));
       await writeFile(configPath, `${JSON.stringify({ ...config, phases: { ...config.phases, qa } }, null, 2)}\n`, 'utf8');
 
@@ -1066,7 +1066,7 @@ const FORGE_ISSUE = 7;
  * left as it was: the push goes through a throwaway clone.
  */
 async function wireForge(j, forge) {
-  const configPath = join(j.dir, 'harness.config.json');
+  const configPath = join(j.dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   if (forge === null) delete config.forge;
@@ -1194,7 +1194,7 @@ test('progress: a job reports a ledger phase change on its pull request', async 
     const j = await createJobFixture(t);
     if (j === null) return;
     await wireForge(j, 'github');
-    const configPath = join(j.dir, 'harness.config.json');
+    const configPath = join(j.dir, 'devscene.config.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
     config.execution = { ...config.execution, progressComments: false };
     await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');

@@ -110,7 +110,7 @@ import {
   stallVerdictNotified,
 } from './helpers/watcher.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REGISTRY_PATH = `${STATE_DIR}/autonomous_logs/registry.json`;
 const SETTINGS = '.claude/settings.json';
 const PIN = ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'submodule.recurse=false'];
@@ -188,7 +188,7 @@ async function createStallFixture(t, { job = false } = {}) {
   let blobs = 0;
   const markerBody = (name, tail = 'exit 0') => `#!/bin/sh\n: > '${join(markers, name)}'\n${tail}\n`;
 
-  const configPath = join(w.dir, 'harness.config.json');
+  const configPath = join(w.dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   delete config.commands.depInstall;
   delete config.commands.build;

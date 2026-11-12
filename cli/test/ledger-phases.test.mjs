@@ -56,7 +56,7 @@ before(async () => {
   dir = fixture.dir;
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
-  originalConfig = readFileSync(join(dir, 'harness.config.json'), 'utf8');
+  originalConfig = readFileSync(join(dir, 'devscene.config.json'), 'utf8');
 });
 
 after(async () => {
@@ -317,7 +317,7 @@ test('hr_progress_comments answers through its status alone', async (t) => {
       } else {
         config.execution = { ...(config.execution ?? {}), progressComments: value };
       }
-      writeFileSync(join(dir, 'harness.config.json'), `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+      writeFileSync(join(dir, 'devscene.config.json'), `${JSON.stringify(config, null, 2)}\n`, 'utf8');
       const r = await libCall('hr_progress_comments "$1"', [dir]);
       assert.equal(r.status, status);
       assert.equal(r.stdout, '');

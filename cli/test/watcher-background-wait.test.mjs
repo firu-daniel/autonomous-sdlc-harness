@@ -1,7 +1,7 @@
 /**
  * The written watcher's background-wait ceiling and its stopped-agents tripwire — the export in
  * `spawn_engine`'s launch subshell and `log_stopped_background_tasks` in `autonomous-watcher.sh` —
- * driven through a pause-resume launch: a `paused` record, an empty `sdlc-harness/RESUME`, one `tick`.
+ * driven through a pause-resume launch: a `paused` record, an empty `devscene/RESUME`, one `tick`.
  *
  * **The rule this suite enforces: every engine session the watcher spawns carries a zero
  * background-wait ceiling whatever the watcher's own environment says, and a session whose CLI
@@ -29,7 +29,7 @@ import test from 'node:test';
 
 import { createWatcherFixture, finishedLedgerBody } from './helpers/watcher.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const CEILING = 'CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS';
 const STOPPED_LINE =
   'Background tasks still running 10m after the last turn (subagent "Write task plan with answers"); stopping them. Set CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 to wait indefinitely.';

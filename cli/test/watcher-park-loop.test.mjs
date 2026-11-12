@@ -183,7 +183,7 @@ test('a legacy in-flight park is not caught, and a pause-resume is not counted',
   assert.equal(events(w).includes('park_loop'), false);
 
   await t.test('pause-resume: a parked exit leaves park_loop_cycles as it was', async () => {
-    const stateDir = join(w.dir, 'sdlc-harness');
+    const stateDir = join(w.dir, 'devscene');
     await w.seedRecord({ status: 'paused', park_loop_cycles: '1', resume_max_question_index: '5' });
     await writeFile(join(stateDir, 'PAUSE_ACK'), '', 'utf8');
     await writeFile(join(stateDir, 'RESUME'), '', 'utf8');
