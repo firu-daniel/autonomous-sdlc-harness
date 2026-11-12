@@ -769,7 +769,7 @@ export async function plantRetrievalRuntime(cacheHome, { version } = {}) {
 }
 
 /**
- * Write a valid `harness.config.json` into `dir` with retrieval on: `phases.docs` true, `docs.root`
+ * Write a valid `devscene.config.json` into `dir` with retrieval on: `phases.docs` true, `docs.root`
  * `docs`, and one catch-all layer whose conventions document is `conventions.md`.
  *
  * @param {string} dir
@@ -779,11 +779,11 @@ export async function writeRetrievalConfig(dir) {
   const config = {
     version: 1,
     defaultBranch: 'main',
-    stateDir: 'sdlc-harness',
+    stateDir: 'devscene',
     layers: [{ name: 'general', path: '.', conventions: 'conventions.md' }],
     commands: { typecheck: 'echo typecheck', test: 'echo test' },
     phases: { docs: true },
     docs: { root: 'docs', retrieval: true },
   };
-  await writeFile(insideFixture(dir, 'harness.config.json'), `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+  await writeFile(insideFixture(dir, 'devscene.config.json'), `${JSON.stringify(config, null, 2)}\n`, 'utf8');
 }

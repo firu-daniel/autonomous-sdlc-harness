@@ -3,7 +3,7 @@
  * `scriptsDir` carries the placeholder `.git` a bubblewrap host leaves (F15).
  *
  * **The rule these tests exist to enforce: a script's root is the nearest ancestor holding
- * `harness.config.json` that `git -C` confirms as its own top, whatever stands at
+ * `devscene.config.json` that `git -C` confirms as its own top, whatever stands at
  * `<scriptsDir>/.git`; `hr_wrapper_main_of`'s answers are unchanged.**
  *
  * Every case runs under `helpers/runner-git-shim.mjs`, which substitutes two things and states why:
@@ -22,7 +22,7 @@ import { createFixture, readJson, runBash, runCli, runGit } from './helpers/fixt
 import { RUN_LIB } from './helpers/run-copy-layouts.mjs';
 import { installRunnerGitShim, plantPlaceholder } from './helpers/runner-git-shim.mjs';
 
-const SCRIPTS_DIR = 'harness-scripts';
+const SCRIPTS_DIR = 'devscene-scripts';
 const NESTED_SCRIPTS_DIR = 'tools/harness';
 const PROFILE_FILE = '.claude/settings.autonomous.json';
 const PLACEHOLDERS = ['empty-file', 'device'];
@@ -34,7 +34,7 @@ function config(scriptsDir) {
     version: 1,
     projectName: 'fixture-project',
     defaultBranch: 'main',
-    stateDir: 'sdlc-harness/',
+    stateDir: 'devscene/',
     scriptsDir,
     layers: [{ name: 'general', path: '.', conventions: '.claude/context/conventions.md' }],
     commands: { typecheck: 'echo typecheck', test: 'echo test' },
@@ -67,7 +67,7 @@ async function shimmedFixture(t, files) {
 
 /** The adopted layout: a configuration and a tracked file in `scriptsDir`. */
 function adoptedFiles(scriptsDir) {
-  const files = { 'harness.config.json': config(scriptsDir) };
+  const files = { 'devscene.config.json': config(scriptsDir) };
   if (scriptsDir !== '.') files[`${scriptsDir}/README.md`] = 'scripts\n';
   return files;
 }
@@ -82,7 +82,7 @@ function assertRefusal(answer, what) {
   assert.deepEqual(answer, { status: 1, stdout: '' }, what);
 }
 
-test('(a) job layout: harness-scripts/.git absent or a placeholder, the root', async (t) => {
+test('(a) job layout: devscene-scripts/.git absent or a placeholder, the root', async (t) => {
   for (const shape of ['absent', ...PLACEHOLDERS]) {
     await t.test(shape, async (t) => {
       const f = await shimmedFixture(t, adoptedFiles(SCRIPTS_DIR));
@@ -135,7 +135,7 @@ test("(d) scriptsDir '.': the root", async (t) => {
   assertRoot(await f.lib('hr_script_root', f.dir), f.dir, "scriptsDir '.'");
 });
 
-test("(e) no harness.config.json anywhere: hr_repo_root's answer, a refusal under a placeholder", async (t) => {
+test("(e) no devscene.config.json anywhere: hr_repo_root's answer, a refusal under a placeholder", async (t) => {
   for (const shape of ['absent', ...PLACEHOLDERS]) {
     await t.test(shape, async (t) => {
       const f = await shimmedFixture(t, { [`${SCRIPTS_DIR}/README.md`]: 'scripts\n' });
@@ -149,12 +149,12 @@ test("(e) no harness.config.json anywhere: hr_repo_root's answer, a refusal unde
   }
 });
 
-test('(f) a planted harness-scripts/harness.config.json: still the root', async (t) => {
+test('(f) a planted devscene-scripts/devscene.config.json: still the root', async (t) => {
   for (const shape of ['absent', ...PLACEHOLDERS]) {
     await t.test(shape, async (t) => {
       const f = await shimmedFixture(t, {
         ...adoptedFiles(SCRIPTS_DIR),
-        [`${SCRIPTS_DIR}/harness.config.json`]: config('.'),
+        [`${SCRIPTS_DIR}/devscene.config.json`]: config('.'),
       });
       const scripts = join(f.dir, SCRIPTS_DIR);
       if (shape !== 'absent') await plantPlaceholder(join(scripts, '.git'), shape);
@@ -173,7 +173,7 @@ test("a planted <scriptsDir>/.git still cannot move an unsandboxed wrapper's mai
     });
   }
 
-  await t.test('a directory .git with no commondir: answers harness-scripts, which the profile stops', async (t) => {
+  await t.test('a directory .git with no commondir: answers devscene-scripts, which the profile stops', async (t) => {
     const f = await shimmedFixture(t, {
       ...adoptedFiles(SCRIPTS_DIR),
       'package.json': { name: 'fixture-project', private: true, version: '0.0.0' },

@@ -27,7 +27,7 @@
  * - `twoLineClone`: the copy's `alternates` line-count refusals dropped stayed green, because
  *   `hr_clone_target_check_var` refuses a second `alternates` line too; dropped together with that
  *   call, `twoLineClone` printed the main checkout and exited 0.
- * - the marker case: the copy's `harness-no-offer` test removed — `main` printed itself with the
+ * - the marker case: the copy's `devscene-no-offer` test removed — `main` printed itself with the
  *   marker present.
  * - the template case: `` `$(git rev-parse --show-toplevel)` `` reinserted into the item in memory —
  *   the template test failed.
@@ -45,11 +45,11 @@ import { buildRunCopyLayouts, createRegisteredClone } from './helpers/run-copy-l
 
 const TEMPLATE = join(WORKSPACE_ROOT, 'cli', 'templates', 'claude', 'CLAUDE.md');
 const SCRIPT = join(WORKSPACE_ROOT, 'cli', 'templates', 'scripts', 'task-offer-check.sh');
-const MARKER = join('.claude', 'harness-no-offer');
+const MARKER = join('.claude', 'devscene-no-offer');
 
 const ITEM_START = '4. **Opt-out.**';
 const TOKEN = '{{taskOfferCheckCommand}}';
-const ALLOWED_SPANS = ['.claude/harness-no-offer', TOKEN];
+const ALLOWED_SPANS = ['.claude/devscene-no-offer', TOKEN];
 const SHELL_SYNTAX = ['$(', '&&', '||', '|', ';', 'sed '];
 
 const RESOLVED = ['main', 'worktree', 'registeredClone'];

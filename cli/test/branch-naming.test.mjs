@@ -104,9 +104,9 @@ function pushBranch(name) {
 
 before(async () => {
   dir = await initFixture();
-  config = JSON.parse(readFileSync(join(dir, 'harness.config.json'), 'utf8'));
+  config = JSON.parse(readFileSync(join(dir, 'devscene.config.json'), 'utf8'));
   config.protectedBranches = [...(config.protectedBranches ?? []), PROTECTED_GLOB];
-  writeFileSync(join(dir, 'harness.config.json'), `${JSON.stringify(config, null, 2)}\n`);
+  writeFileSync(join(dir, 'devscene.config.json'), `${JSON.stringify(config, null, 2)}\n`);
 });
 
 after(async () => {
