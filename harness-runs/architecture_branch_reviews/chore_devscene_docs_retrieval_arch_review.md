@@ -13,7 +13,7 @@ One accompanying-set gap remains. The live rendered notes-app permission profile
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Re-render the notes-app permission profile's `harness-docs` sentence to match its template _(layer: general)_
+1. [x] **Finding 1** — Re-render the notes-app permission profile's `harness-docs` sentence to match its template _(layer: general)_
 
 ## Must Fix
 

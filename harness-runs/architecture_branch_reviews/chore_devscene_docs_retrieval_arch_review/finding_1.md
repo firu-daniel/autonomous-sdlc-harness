@@ -14,3 +14,12 @@ The edit sits under a `.claude/` path segment, which the run's tool layer refuse
 
 - [ ] Apply the one-sentence replacement.
 - [ ] Confirm `git grep -nE 'harness[-_]docs' -- examples/notes-app/.claude` prints nothing.
+
+## Disposition
+
+- **(a) Attempted:** the one-sentence replacement of "`search_docs` on the `harness-docs` server" with "`search_docs` on the `devscene-docs` server" in the `_README` entry beginning "THE OUTER-LOOP SCRIPTS AN AGENT RUNS ARE LISTED THE SAME WAYS" of `examples/notes-app/.claude/settings.autonomous.json`, through the Edit tool. The file is unchanged; no other file was edited.
+- **(b) Refusal, quoted (two identical attempts, same edit):** "Permission to use Edit has been denied because Claude Code is running in don't ask mode."
+- **(c) Why no permission entry lifts it:** the run's profile (`~/.local/state/devscene/run-profiles/users-daniel-work-devscene/chore_devscene_docs_retrieval.json`, read this session) already holds `Edit(//Users/daniel/Work/devscene-*/**)` in `allow`, and none of its `Edit(...)` `deny` rules names `examples/notes-app/` or a `.claude/settings.autonomous.json` under this run copy — the only `settings.autonomous.json` deny is the main checkout's own. The checkout's `.claude/settings.json` holds no Edit entry. A call the profile allows and does not deny was still refused, at a path under a `.claude/` segment: the tool layer's guard on `.claude/**` writes, evaluated ahead of the permission profile. Same refusal as `task_8_plan.md` → `## Disposition`.
+- **(d) Operator remedy, one paste, from the checkout root on branch `chore_devscene_docs_retrieval` (portable, no `sed -i` dialect):**
+  `node -e "const f='examples/notes-app/.claude/settings.autonomous.json',fs=require('fs'),s=fs.readFileSync(f,'utf8'),o='\`search_docs\` on the \`harness-docs\` server',n='\`search_docs\` on the \`devscene-docs\` server';if(s.split(o).length!==2)throw new Error('expected exactly one match');const t=s.replace(o,n);JSON.parse(t);fs.writeFileSync(f,t)" ; git grep -nE 'harness[-_]docs' -- examples/notes-app/.claude`
+  The `git grep` must print nothing. Afterwards the entry equals the same entry of `cli/templates/claude/settings.autonomous.json` with `{{scriptsDir}}` rendered as `scripts`.
