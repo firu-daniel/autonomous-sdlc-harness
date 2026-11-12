@@ -33,7 +33,7 @@ None.
 
 6. **Stale or loose path: `devscene-run.yml:597-654` (§4 #7).** The file is `cli/templates/github/workflows/devscene-run.yml`. The cache path appears twice, at :600 (`run` job) and :938 (`warm` job), as `cli/src/retrieval/runtime.ts:25-27` says. The range given misses the second. Change: cite the full path and `:600`, `:938`.
 
-7. **Incomplete statement in §5, "its own `HARNESS_DOCS_RETRIEVAL_*` environment variables".** The Python service also reads `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` (`stubs.py:21`), and its own `compose.yaml` passes that variable through. §4 #6 records this; §5 contradicts it by omission. Change: add "(except the stub variable, §4 #6)".
+7. **Incomplete statement in §5, "its own `DEVSCENE_DOCS_RETRIEVAL_*` environment variables".** The Python service also reads `DEVSCENE_RETRIEVAL_STUB` (`stubs.py:21`), and its own `compose.yaml` passes that variable through. §4 #6 records this; §5 contradicts it by omission. Change: add "(except the stub variable, §4 #6)".
 
 8. **Length: about 4 780 words against a 2 000 – 4 000 target.** Cuts worth about 900 words, with no loss of evidence:
    - §1 `### Sequence`: the mermaid diagram repeats the numbered prose and the pipeline table. Drop it, or drop the prose list it duplicates (about 150 words).
@@ -55,7 +55,7 @@ None.
 ## Citations verified (all hold unless listed above)
 
 - `cli/src/config/model.ts:637` — `retrievalApplies`.
-- `cli/src/generators/repoRoot.ts` → `retrievalWiring` refuses any server other than `harness-docs` (:443-447).
+- `cli/src/generators/repoRoot.ts` → `retrievalWiring` refuses any server other than `devscene-docs` (:443-447).
 - `cli/templates/repo/mcp.retrieval.json` — `bash`, one `args` string, empty `env`.
 - `cli/templates/claude/settings.autonomous.retrieval.json` — enablement plus allow, and the `_README` stall wording.
 - `docs-search-server.sh:58-87`, `:75-87` (backend choice), `:89-122` (Python: default URL, child, signal relay, exit 3) and `:124-135` (TS `exec node $cache/retrieval/runtime/node_modules/devscene/dist/cli.js docs serve`).

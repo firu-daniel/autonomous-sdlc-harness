@@ -30,7 +30,7 @@ Measured with `wc -w`. The conventions documents are this repository's (`devscen
 | `plugin/instructions/unit_loop_core.md` → `## The test-run rule` | on demand (`:103`) | 728 (file 9 143) |
 | `plugin/instructions/plan_orchestration_instructions_core.md` | on demand, **grep only** for `^## Phase` (`:143`) | ~15 lines of output (file 16 609) |
 | `plugin/agents/branch-reviewer.md`, `skeptic-reviewer.md` | named for identity (`:12`), not read | 0 |
-| `mcp__harness-docs__search_docs` | on demand, only when `phases.docs` ∧ `docs.retrieval` (`:75`) | variable |
+| `mcp__devscene-docs__search_docs` | on demand, only when `phases.docs` ∧ `docs.retrieval` (`:75`) | variable |
 | Inputs: story index, review index, every `finding_<N>.md`, diff hunks | per dispatch, input not convention | variable |
 
 Lead 13 (read-list conflicts) does not apply. `.claude/CLAUDE.md` → `## Context files` asks a reviewer for `conventions.md`, the layer documents and, at branch level, the lessons ledger. All of these are already in the agent's own list (`:73–74`), so the agent's set is the larger one and is the one counted. The test-run rule section measures 732 words with the next heading excluded; 728 was an earlier count.
@@ -148,7 +148,7 @@ Resolve these from `devscene.config.json`; other placeholders resolve where they
 | `<layer_names>` | `layers[].name`, unchanged; also the permitted values of the `_(layer: …)_` tag. |
 | `<layer_path_map>` | Every `layers[]` `path` + `conventions`, all in scope. Paths are repo-relative, like `git diff --name-only` output. |
 | `<state_dir>` | `stateDir` (default `devscene/`). In a pathspec, strip the trailing slash: `devscene//*` matches nothing. |
-| `<docs_root>` / `<docs_retrieval>` | `docs.root` / `docs.retrieval`, only when `phases.docs` is `true`. Retrieval off → ignore `mcp__harness-docs__search_docs`. |
+| `<docs_root>` / `<docs_retrieval>` | `docs.root` / `docs.retrieval`, only when `phases.docs` is `true`. Retrieval off → ignore `mcp__devscene-docs__search_docs`. |
 | `<parity_vocabulary>` / `<reference_impl>` | `parity.referenceName` / `parity.referenceImplPath`, only when `phases.parity` is `true`; otherwise every parity clause is inert. |
 | `<convention_symbols>` | The mandated identifiers named in the conventions documents of `<layer_path_map>`. |
 ```

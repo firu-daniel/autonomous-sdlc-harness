@@ -31,7 +31,7 @@ This repository has `phases.parity: false` (`devscene.config.json`), so the agen
 | Plan inputs: story or fix-plan index + **every** detail file + `prompt_path` (plan mode) | up-front, variable | n/a |
 | Branch diff hunks (`git diff -U15`) + `plan_path` for intent (diff mode) | up-front, variable | n/a |
 | `<reference_impl>` sources, one whole method per decision (`:108`, `:122`) | on demand | n/a |
-| `<docs_root>` and `mcp__harness-docs__search_docs`, only when `phases.docs` (`:109–110`) | on demand, navigation only | n/a |
+| `<docs_root>` and `mcp__devscene-docs__search_docs`, only when `phases.docs` (`:109–110`) | on demand, navigation only | n/a |
 | `architecture-reviewer.md`, `layer-reviewer.md`, `branch-reviewer.md` (`:158–159`) | named for scope only, never read | — |
 
 **Read-list conflict (lead 13).** The agent definition never mentions the lessons ledger, but CLAUDE.md routes branch-level reviewers to it. The larger set wins, because CLAUDE.md is auto-loaded and its table says "read the relevant file". So the ledger is counted for diff mode.
@@ -216,7 +216,7 @@ Mode: <plan-a | plan-b | diff> · iteration <iteration> · Must Fix count <N>
     - `plan_orchestration_instructions_core.md:190`;
     - `user_review_fix_plan_writing_instructions_core.md:107`.
 - **Tools and tick timing (lead 1, corrected).**
-  - The allowlist is `Read, Glob, Grep, Bash, Write, mcp__harness-docs__search_docs` (`:4`).
+  - The allowlist is `Read, Glob, Grep, Bash, Write, mcp__devscene-docs__search_docs` (`:4`).
   - `Bash(sed:*)` is allowed (`cli/templates/claude/settings.autonomous.json:39`), so ticking each item with `sed -i` is *possible*.
   - The single end-of-run write is chosen for two reasons:
     - `:12` makes the missing `Edit` a deliberate read-only guarantee ("Do not treat it as an oversight to work around"), and a `sed -i` on its own output is exactly that workaround;

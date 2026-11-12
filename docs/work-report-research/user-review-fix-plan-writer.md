@@ -36,7 +36,7 @@ The basis is this repository: `stateDir: harness-runs`, three layers, and `phase
 | `unit_loop_core.md` → `## The test-run rule` (:108, :118) | on demand | 732 |
 | `remote-run.sh` header `deliver` paragraph (:443–460; "shape owned by", :105, :108, :117) | on demand | 189 |
 | `branch-reviewer.md` / `layer-reviewer.md` (:10, :104) | cited, never read | 6 175 / 3 997 |
-| `mcp__harness-docs__search_docs` (:73) | on demand when `phases.docs` and `docs.retrieval` are on | n/a here |
+| `mcp__devscene-docs__search_docs` (:73) | on demand when `phases.docs` and `docs.retrieval` are on | n/a here |
 
 **Read-list conflict (lead 13).** `CLAUDE.md:40` binds "planning", while the definition says "Never read all of them up front" (:68).
 

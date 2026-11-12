@@ -36,7 +36,7 @@ The basis is this repository (`devscene.config.json`: layers `cli`, `plugin` and
 | Earlier-round logs (:49) | on demand (rounds 2–4) | variable |
 | Failing test/gate source and the code it exercises (:50) | on demand | variable |
 | The fix layer's conventions document (:51): `context/cli.md` 2 647, `plugin.md` 4 174, `conventions.md` 5 864 (notes-app 2 304–5 125) | on demand (in practice one or more per dispatch) | 2 647–5 864 each |
-| `<docs_root>` / `mcp__harness-docs__search_docs` (:53) | on demand, only with `phases.docs` and `docs.retrieval` | n/a here |
+| `<docs_root>` / `mcp__devscene-docs__search_docs` (:53) | on demand, only with `phases.docs` and `docs.retrieval` | n/a here |
 | The architecture findings file (revision prompt, :41) | up-front on revision | variable |
 
 ## Dispatch sites and phases

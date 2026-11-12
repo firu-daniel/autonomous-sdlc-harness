@@ -29,7 +29,7 @@ This repository has `phases.qa: false` (`devscene.config.json`), so the agent ne
 | **Up-front total (web-playwright)** | | **22 532** |
 | `examples/notes-app/.claude/context/conventions.md` | **conflict (lead 13):** `examples/notes-app/.claude/CLAUDE.md:32` tells every agent doing "Any implementation, review or planning" to read it; the definition does not list it, and `presentation.md:24` points to it only for the attribute names. Counted as on-demand in the main column, with a larger-set row in the ledger | 5 125 |
 | Surface layer source (`src/presentation`) | on demand, grep only (`:66`, `:132`) | variable |
-| `<docs_root>` / `mcp__harness-docs__search_docs` | on demand, only when `phases.docs` is on (`:67–68`); off in notes-app | 0 |
+| `<docs_root>` / `mcp__devscene-docs__search_docs` | on demand, only when `phases.docs` is on (`:67–68`); off in notes-app | 0 |
 | Inputs: task prompt, story index `## Context`, every `task_<N>_plan.md`, UI-test index, every `ui_test_<N>.md` | per dispatch, inputs rather than conventions | variable |
 
 What the agent actually uses from the two sibling files (counts include each heading line):

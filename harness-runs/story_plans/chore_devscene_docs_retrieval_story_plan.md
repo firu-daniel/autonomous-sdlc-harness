@@ -73,7 +73,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_devscene_docs_retrieva
 8. [x] **Task 8** — Rename the retrieval names in this repository's sandbox probe, model-pin check, evals and the notes-app profile _(layer: general)_ _(points: 15)_
 9. [x] **Task 9** — Rename the retrieval names in `ARCHITECTURE.md` and the `docs/` prose documents _(layer: general)_ _(points: 15)_
 10. [x] **Task 10** — Rename the retrieval names throughout `docs/retrieval-eval-results.md` _(layer: general)_ _(points: 10)_
-11. [ ] **Task 11** — Rename the retrieval names in the research records, keep the quoted lines, and run the Done-when closure _(layer: general)_ _(points: 10)_
+11. [x] **Task 11** — Rename the retrieval names in the research records, keep the quoted lines, and run the Done-when closure _(layer: general)_ _(points: 10)_
 
 ## Scope register
 

@@ -23,7 +23,7 @@ Measured with `wc -w` in this repository (layers `cli`, `plugin`, `general` at `
 | `<state_dir>/lessons.md` (`:119`) | up-front | 1 199 |
 | `unit_loop_core.md` → `## The test-run rule`, "in every mode" (`:120`); whole section incl. 17-entry citer roster | up-front | 732 (point 4 `:150` alone 90; with point 3 `:149`, which point 4 is "conditioned on", 150) |
 | `test-fix-plan-writer.md` → `## Process` → **Rewrite machine paths before quoting.** (`:121`, sub-case (c) only) | up-front in (c) | 85 |
-| `<docs_root>` + `mcp__harness-docs__search_docs` (`:117–118`) | on demand, docs on only | n/a here |
+| `<docs_root>` + `mcp__devscene-docs__search_docs` (`:117–118`) | on demand, docs on only | n/a here |
 | `business-parity-reviewer.md`, `branch-reviewer.md`, `layer-reviewer.md` (`:160–161`, scope pointers only, never told to read) | not read | — |
 | Dispatch inputs: plan index + every detail file (plan mode) / diff hunks (diff mode) | up-front, variable | n/a |
 

@@ -22,7 +22,7 @@ Counts are for this repository's self-adoption (`devscene.config.json` → 3 lay
 | Task prompt (initial write), or findings file + targeted plan files (revision) | up-front | variable — the same before and after, so excluded |
 | **Up-front total (fixed part)** | | **26 291** |
 | `plugin/instructions/unit_loop_core.md` → `## The test-run rule` (:118, :144) | on demand | 732 |
-| `<docs_root>` corpus + `mcp__harness-docs__search_docs` (:59–60) | on demand, only when `phases.docs` is on | n/a here |
+| `<docs_root>` corpus + `mcp__devscene-docs__search_docs` (:59–60) | on demand, only when `phases.docs` is on | n/a here |
 | `<reference_impl>` sources (steps 2–4) | on demand, only when `phases.parity` is on | n/a here |
 | `plugin/agents/task-plan-reviewer.md` (named at :153, never told to read) | not read | 6 038 |
 | `sample_task_plan.md` → links to `sample_code_review.md`, `sample_user_review_fix_plan.md`, `sample_statistics.md` (:30–32) | not read (other families) | — |
