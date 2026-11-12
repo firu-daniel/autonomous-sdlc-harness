@@ -89,7 +89,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_adopter_layout/ta
 5. [x] **Task 3** — Respell the commands, core paths, daemon unit and detection modules in `cli/src` _(layer: cli)_ _(points: 15)_
 6. [x] **Task 4** — Respell `doctor`, the remaining generators, the remote names and retrieval in `cli/src` _(layer: cli)_ _(points: 15)_
 7. [x] **Task 5** — Rename in the run library, watcher and restart-watcher templates and the watcher test helper _(layer: cli)_ _(points: 20)_
-8. [ ] **Task 6** — Rename in the `remote-run.sh` template and the four workflow templates, run titles included _(layer: cli)_ _(points: 20)_
+8. [x] **Task 6** — Rename in the `remote-run.sh` template and the four workflow templates, run titles included _(layer: cli)_ _(points: 20)_
 9. [ ] **Task 7** — Rename in the commit, push, refresh, worktree, cleanup and scratch wrapper templates _(layer: cli)_ _(points: 15)_
 10. [ ] **Task 8** — Rename in the remaining script templates and the scripts README _(layer: cli)_ _(points: 15)_
 11. [ ] **Task 9** — Rename in the non-script templates and the package READMEs _(layer: cli)_ _(points: 15)_

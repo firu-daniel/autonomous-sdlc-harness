@@ -26,3 +26,8 @@
 - `git grep -nE "harness-state|harness-task'" -- cli/templates/scripts/remote-run.sh` still prints the two kept constants.
 - `bash -n cli/templates/scripts/remote-run.sh` exits 0.
 - `git diff -U0 -- cli/templates/github/workflows` shows only respelled substrings: no changed indentation, no added or removed line, and every `run-name:` and `name: Run DevScene` line still a plain scalar.
+
+**Deviations from plan:**
+
+- The first verification grep does not print nothing. It prints two `remote-run.sh` lines: the header (line 2, *"every call from this machine to GitHub for a harness run: the"*) and the comment in `control_close` (line 7418, *"… is what proves a harness run."*). Both use "harness run" as a noun phrase. The story's spelling table, row 12, says prose like that stays (*"No harness run."*), and the table outranks the grep. The regex's `[^ a-z]` alternative matches the `:` and `.` that follow them. Both lines are left unchanged.
+- The tool layer refused the standalone `bash -n cli/templates/scripts/remote-run.sh` ("Permission to use Bash has been denied because Claude Code is running in don't ask mode"). The parse claim rests on `bash scripts/typecheck.sh` instead. Its first step, `scripts/check-shell-parse.sh`, runs `bash -n` over every shell script git lists, which includes this tracked template. It printed `124 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed` and ended with `PASS: typecheck`.

@@ -1,7 +1,7 @@
 # devscene-run.yml — runs one devscene run in a GitHub Actions job,
 # on a GitHub-hosted or a self-hosted runner chosen by the DEVSCENE_RUNNER variable.
 #
-# WHO WRITES IT. `devscene init`, only when harness.config.json's
+# WHO WRITES IT. `devscene init`, only when devscene.config.json's
 # `execution.target` is `github-actions`. Written create-if-absent: from then on
 # it is yours to tune, and a re-run of `init` keeps your copy.
 # `init --upgrade-workflows` re-renders it at that CLI's version, after a `.bak`,
@@ -17,7 +17,7 @@
 #   answers          JSON object {"<n>": "<answer text>"}     (resume=answer)
 #   park_loop_clear  true clears the restored park-loop count
 #   chain            automatic dispatches since the last user action; 0 from a user
-# `run-name` is `harness <action> <branch>`: the job's pause poll and
+# `run-name` is `devscene <action> <branch>`: the job's pause poll and
 # `remote-run.sh continue` / `poll` match runs by that title, so it is a wire.
 #
 # TWO RULES EVERY EDIT KEEPS.
@@ -111,7 +111,7 @@
 # default branch with that branch as its input, so the two already agree.
 # `stop` is exempt because a deleted branch's stop marker is sent from the
 # default branch, its own ref being gone, and the stop check matches the
-# `harness stop <branch>` title across every branch's runs, under any ref.
+# `devscene stop <branch>` title across every branch's runs, under any ref.
 #
 # THE RUN-ACTOR GATE. The first step of `open`, `run`, `deliver` and `collect`,
 # byte-identical in all four, refuses a `github.triggering_actor` the repository
@@ -138,7 +138,7 @@
 #
 # THE JOB'S OWN FILES. `Check out the run's branch` checks out the run's branch,
 # and every later step runs or loads that tree's files: its scriptsDir scripts,
-# harness.config.json, .claude/settings.json and .mcp.json. A previous job's
+# devscene.config.json, .claude/settings.json and .mcp.json. A previous job's
 # agent can commit any of them. `Refuse a branch that changed the job's own
 # files` runs the pinned CLI's `doctor --job-surfaces=<default branch>`, which
 # reads the trusted configuration from the GitHub default branch, the branch
@@ -170,7 +170,7 @@
 #     runtime ships. They are the npm runs left in the checkout, so both still
 #     read a branch-written .npmrc or node_modules/.
 #
-# WHY THE RUN JOB CUTS NO RUN COPY. `Run the harness` runs
+# WHY THE RUN JOB CUTS NO RUN COPY. `Run DevScene` runs
 # `autonomous-watcher.sh job` in the job's own checkout, $GITHUB_WORKSPACE,
 # which job mode treats as both the main checkout and the run's working copy
 # (that script's anchors comment and its JOB MODE). So no step creates a run
@@ -220,7 +220,7 @@
 #     DEVSCENE_SELF_PAUSE_AFTER_MINUTES, DEVSCENE_MAX_CHAIN, and the watcher
 #     tunables listed in the `run` job's `env:` under their own names. An unset
 #     variable arrives empty and the script reading it applies its own default.
-#   harness.config.json, at run time: `scriptsDir` and whether docs retrieval
+#   devscene.config.json, at run time: `scriptsDir` and whether docs retrieval
 #     applies. No configured value is frozen into this file.
 #
 # A WORKFLOW-FILE CHANGE CANNOT BE PUSHED FROM THIS WORKFLOW. A workflow edit is
@@ -364,7 +364,7 @@
 # budget value from `runner.environment` into GITHUB_ENV, so the harness step's
 # timeout-minutes reads a single `env` value rather than an expression over the
 # runner kind. Gate 12 round 2, on 2026-09-29, found every devscene-run.yml run
-# accepted and its `Run the harness` step run: the expression-valued
+# accepted and its `Run DevScene` step run: the expression-valued
 # timeout-minutes is accepted.
 #
 # THE PLUGIN PIN. The job clones the marketplace repository at the release tag
@@ -391,8 +391,8 @@
 # block unprivileged user namespaces, and loads it with `apparmor_parser -r`.
 # Then, on Linux, it always verifies that bwrap's child can itself create a
 # user namespace, and a failed verification fails the job unless
-# `sandbox.optOut` is taken, so `Run the harness` never starts a session that
-# cannot run Bash: no step from this one to `Run the harness` carries a status
+# `sandbox.optOut` is taken, so `Run DevScene` never starts a session that
+# cannot run Bash: no step from this one to `Run DevScene` carries a status
 # function. What still runs after that failure: the `run` job's bundle-saving
 # and reporting steps, and the `deliver` and `collect` jobs, both `needs:` it
 # under `!cancelled()`. The `run` job has started, so remote-run.sh's
@@ -422,7 +422,7 @@
 # That was v4; the v7 pinned above has not yet been observed by a gate round.
 
 name: devscene-run
-run-name: harness ${{ inputs.action }} ${{ inputs.branch }}
+run-name: devscene ${{ inputs.action }} ${{ inputs.branch }}
 
 on:
   workflow_dispatch:
@@ -584,7 +584,7 @@ jobs:
       - name: Read the configuration for opening
         if: env.HARNESS_STOPPED != '1'
         run: |
-          scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
+          scripts_dir=$(jq -r '.scriptsDir // "devscene-scripts"' devscene.config.json)
           echo "SCRIPTS_DIR=${scripts_dir%/}" >> "$GITHUB_ENV"
 
       - name: Open the draft pull request
@@ -773,7 +773,7 @@ jobs:
         run: |
           sha=$(git -C "$GITHUB_WORKSPACE" rev-parse --verify --quiet "refs/remotes/origin/$HARNESS_GITHUB_DEFAULT_BRANCH^{commit}") || { echo "::error::cannot read the default branch's commit from the job's fresh checkout; nothing from this branch runs in this job."; exit 1; }
           echo "HARNESS_GITHUB_DEFAULT_COMMIT=$sha" >> "$GITHUB_ENV"
-          default_branch=$(git -C "$GITHUB_WORKSPACE" show "$sha:harness.config.json" | jq -r '.defaultBranch // empty') && [ -n "$default_branch" ] || { echo "::error::cannot read defaultBranch from the default branch's harness.config.json; nothing from this branch runs in this job."; exit 1; }
+          default_branch=$(git -C "$GITHUB_WORKSPACE" show "$sha:devscene.config.json" | jq -r '.defaultBranch // empty') && [ -n "$default_branch" ] || { echo "::error::cannot read defaultBranch from the default branch's devscene.config.json; nothing from this branch runs in this job."; exit 1; }
           base=$(git -C "$GITHUB_WORKSPACE" rev-parse --verify --quiet "refs/remotes/origin/$default_branch^{commit}") || { echo "::error::cannot read origin/$default_branch's commit from the job's fresh checkout; nothing from this branch runs in this job."; exit 1; }
           echo "HARNESS_DEFAULT_BRANCH_COMMIT=$base" >> "$GITHUB_ENV"
 
@@ -781,8 +781,8 @@ jobs:
         id: config
         if: env.HARNESS_STOPPED != '1'
         run: |
-          scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
-          retrieval=$(jq -r '(.phases.docs == true and .docs.retrieval == true)' harness.config.json)
+          scripts_dir=$(jq -r '.scriptsDir // "devscene-scripts"' devscene.config.json)
+          retrieval=$(jq -r '(.phases.docs == true and .docs.retrieval == true)' devscene.config.json)
           {
             echo "SCRIPTS_DIR=${scripts_dir%/}"
             echo "HARNESS_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/devscene/retrieval"
@@ -1008,7 +1008,7 @@ jobs:
         if: env.HARNESS_STOPPED != '1'
         run: bash "$SCRIPTS_DIR/remote-run.sh" restore "$HARNESS_INPUT_BRANCH" --resume "$HARNESS_INPUT_RESUME"
 
-      - name: Run the harness
+      - name: Run DevScene
         if: env.HARNESS_STOPPED != '1'
         timeout-minutes: ${{ fromJSON(env.DEVSCENE_STEP_TIMEOUT_MINUTES || env.HARNESS_HOSTED_JOB_LIMIT_MINUTES) }}
         env:
@@ -1020,7 +1020,7 @@ jobs:
           unset IN_OAUTH IN_API
           bash "$SCRIPTS_DIR/autonomous-watcher.sh" job "$HARNESS_INPUT_BRANCH" "$HARNESS_INPUT_ENGINE" "$HARNESS_INPUT_RESUME"
 
-      # A cancelled or timed-out `Run the harness` step kills the watcher with its session, so
+      # A cancelled or timed-out `Run DevScene` step kills the watcher with its session, so
       # run_job's exit sweep never runs and the session's sandbox placeholders stay on disk; a
       # leftover <scriptsDir>/.git makes push-branch.sh refuse to place itself and push nothing.
       # Best-effort: it never fails the job.
@@ -1183,7 +1183,7 @@ jobs:
       - name: Read the configuration for delivering
         if: env.HARNESS_STOPPED != '1'
         run: |
-          scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
+          scripts_dir=$(jq -r '.scriptsDir // "devscene-scripts"' devscene.config.json)
           echo "SCRIPTS_DIR=${scripts_dir%/}" >> "$GITHUB_ENV"
 
       # A run job refused before its upload saved no bundle; deliver then reads no status and posts nothing.
@@ -1288,7 +1288,7 @@ jobs:
 
       - name: Read the configuration for collecting
         run: |
-          scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
+          scripts_dir=$(jq -r '.scriptsDir // "devscene-scripts"' devscene.config.json)
           echo "SCRIPTS_DIR=${scripts_dir%/}" >> "$GITHUB_ENV"
 
       - name: Set the git identity for collecting
@@ -1331,7 +1331,7 @@ jobs:
             echo "::error::this runner lacks: jq."
             exit 1
           fi
-          retrieval=$(jq -r '(.phases.docs == true and .docs.retrieval == true)' harness.config.json)
+          retrieval=$(jq -r '(.phases.docs == true and .docs.retrieval == true)' devscene.config.json)
           echo "HARNESS_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/devscene/retrieval" >> "$GITHUB_ENV"
           echo "retrieval=$retrieval" >> "$GITHUB_OUTPUT"
           if [ "$retrieval" != true ]; then
