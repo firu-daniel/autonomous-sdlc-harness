@@ -73,7 +73,7 @@ import { delimiter, join } from 'node:path';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli } from './fixture.mjs';
 import { scaleBound } from './timing.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const WATCHER_PATH = `${INIT_SCRIPTS_DIR}/autonomous-watcher.sh`;
 const NOTIFY_PATH = `${INIT_SCRIPTS_DIR}/autonomous-notify.sh`;
 const RUN_ANALYTICS_PATH = `${INIT_SCRIPTS_DIR}/run-analytics.sh`;
@@ -276,7 +276,7 @@ export async function createWatcherFixture(t, { branch = 'feat_x', runAnalytics 
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
   // Choice 8: a local session keeps only the allow-list, so the recorders' own variables are listed.
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.sandbox = { ...(config.sandbox ?? {}), passEnv: [...RECORDER_PASS_ENV] };
   await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');

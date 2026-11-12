@@ -30,3 +30,9 @@
 - `git grep -nE 'harness\.config|sdlc-harness|harness-scripts|Run the harness|harness (run|pause|stop)( [^a-z ]|[^ a-z]| [a-z]+_)|scriptsDir "scripts"' -- cli/templates/scripts/lib/harness-run-lib.sh cli/templates/scripts/autonomous-watcher.sh cli/templates/scripts/restart-watcher.sh cli/test/helpers/watcher.mjs` prints nothing.
 - `bash -n` on each of the three shell templates exits 0.
 - `git grep -n 'harness-state' -- cli/templates/scripts/lib/harness-run-lib.sh` still prints its `STATE_ARTIFACT_NAME` mirror, a kept name.
+
+**Deviations from plan:**
+
+- Row 14 also applied to the REPRO comments of `autonomous-watcher.sh` and `restart-watcher.sh`: `"$d/scripts…` → `"$d/devscene-scripts…`. Their fixture configs set no `scriptsDir`, so with the new default the old `$d/scripts` location no longer matches the configured one; the plan listed only rows 1, 2, 11, 12 (watcher) and 1, 2 (restart-watcher).
+- `hr_scripts_dir`'s comment gained `Schema default \`devscene-scripts/\`.`, matching `hr_state_dir`'s.
+- `bash -n` on the three shell templates was refused by the tool layer. The claim rests instead on `bash scripts/typecheck.sh` (the configured `commands.typecheck`), whose `check-shell-parse` step reported `124 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`, followed by `PASS: typecheck`.
