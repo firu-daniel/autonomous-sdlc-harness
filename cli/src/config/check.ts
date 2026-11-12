@@ -1,5 +1,5 @@
 /**
- * The structural check on a `harness.config.json` value: a write guard, and `doctor`'s runtime
+ * The structural check on a `devscene.config.json` value: a write guard, and `doctor`'s runtime
  * re-check.
  *
  * **This is not a schema validator, and it must never grow into one.** The schema gate is
@@ -10,7 +10,7 @@
  * hand-edited since it was last validated (`docs/config.md` §3 — "a config can be edited by hand
  * after validation").
  *
- * **Update this file in the same change as any edit to `schemas/harness.config.schema.json`.** The
+ * **Update this file in the same change as any edit to `schemas/devscene.config.schema.json`.** The
  * key sets below mirror the schema's `properties` and `required`, so a key added there and not here
  * is reported as unknown — a false error — and a key removed there and not here passes silently.
  *
@@ -39,12 +39,6 @@
  * because each entry widens a session's environment and the list is read as an audit. `treeGuards` is an array whose every entry carries exactly a non-empty
  * `test` and `covers`.
  *
- * **An absent `scriptsDir` is a warning, and it is the one optional key reported for absence
- * alone.** Every other absent optional key means what `init` would write for it; this one means
- * `DEFAULTS.scriptsDir` while `init` now writes `INIT_SCRIPTS_DIR`, so an omitted key is the only
- * value whose meaning differs from a freshly generated one. A generated config always carries the
- * key, so the warning never reaches a fresh `init`.
- *
  * ## What it deliberately does not re-implement
  *
  * - **`uniqueItems`** on `protectedBranches` and `parity.toolchainCommands`. A duplicate entry is
@@ -62,7 +56,6 @@ import {
   COMMAND_NONE_SENTINEL,
   CONFIG_VERSION,
   DESIGN_SOURCES,
-  DEFAULTS,
   DETECTION_PRESET_NAMES,
   EXECUTION_TARGETS,
   FORGE_KINDS,
@@ -682,7 +675,7 @@ function checkTreeGuards(value: unknown, problems: Problems): void {
 }
 
 /**
- * Check a parsed value against the shape `harness.config.json` must have, and return everything
+ * Check a parsed value against the shape `devscene.config.json` must have, and return everything
  * wrong with it — never throwing, so one pass names every problem.
  *
  * Takes `unknown` deliberately: its callers hold whatever `JSON.parse` produced, and the answer to
@@ -710,12 +703,6 @@ export function checkConfigShape(value: unknown): ConfigProblem[] {
   }
 
   for (const key of TOP_LEVEL_STRING_KEYS) checkString(value, key, '', problems);
-  if (value['scriptsDir'] === undefined) {
-    problems.warn(
-      'scriptsDir',
-      `is not set, so every reader falls back to ${DEFAULTS.scriptsDir} — the directory releases before 0.6.6 wrote into, which a fresh init no longer writes. Set it explicitly to the directory your scripts are in, with npx devscene config set scriptsDir <dir>, so its meaning cannot change under you.`,
-    );
-  }
   checkStringArray(value, 'protectedBranches', '', problems);
   checkEnum(
     value,
@@ -757,7 +744,7 @@ export function checkConfigShape(value: unknown): ConfigProblem[] {
       'preset',
       'detection',
       DETECTION_PRESET_NAMES,
-      'It records which layer preset detection selected, so a value naming no real preset makes this record describe a detection that never happened — and nothing re-derives it, because harness.config.json is exempt from --force and a plain init re-run leaves the record standing.',
+      'It records which layer preset detection selected, so a value naming no real preset makes this record describe a detection that never happened — and nothing re-derives it, because devscene.config.json is exempt from --force and a plain init re-run leaves the record standing.',
       problems,
     );
     for (const key of DETECTION_STRING_KEYS) checkString(detection, key, 'detection', problems);

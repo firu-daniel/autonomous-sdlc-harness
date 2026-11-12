@@ -1,15 +1,15 @@
 /**
- * Command: `config` — read and update `harness.config.json`.
+ * Command: `config` — read and update `devscene.config.json`.
  *
  * **The rule this module exists to enforce: this command is exactly as wide as the one line the
  * shipped documentation promises for it — read and update — and no wider.** It addresses one value
  * at a time by a dotted key path, prints it or replaces it, and hands every judgement about whether
  * the result is a legal config to `config/check.ts`. It is **not** a validator: the gate that checks
- * a file against `schemas/harness.config.schema.json` is `npm run validate:config`, whose validator
+ * a file against `schemas/devscene.config.schema.json` is `npm run validate:config`, whose validator
  * is a workspace development dependency this package does not ship and this command does not read.
  * The structural check that does run here runs on the **result of the edit**, and exists for exactly
  * one reason — to stop this command corrupting the file it was asked to change. It also runs on the
- * **input**: `get` and `set` refuse a `harness.config.json` that already carries an `error` problem,
+ * **input**: `get` and `set` refuse a `devscene.config.json` that already carries an `error` problem,
  * before a value is read or a mutator applied. `list` does not — see below.
  *
  * ## Three non-obvious choices, and where each comes from
@@ -48,7 +48,7 @@
  *   insertion, a removal or a reorder.
  * - **It does not remove a key.** A value can be replaced; deleting an optional key is a hand edit,
  *   which keeps the number of ways this command can shrink an adopter's config at zero.
- * - **It writes nothing but `harness.config.json`** (plus that file's `.bak` sibling, written by the
+ * - **It writes nothing but `devscene.config.json`** (plus that file's `.bak` sibling, written by the
  *   engine), and it runs no external command. It does *read* one other file: a `set` of a branch-guard
  *   key opens the generated pre-push hook to grade its `case` label against the set the result
  *   resolves, because the alternative is asserting that state unread ({@link guardState}).
@@ -92,7 +92,7 @@ import type { CommandContext, Subcommand } from './registry.js';
  * It is the string the registry has carried since the skeleton, and `cli/README.md` repeats it. This
  * command implements that promise; it does not restate it more widely.
  */
-const SUMMARY = 'Read and update harness.config.json';
+const SUMMARY = 'Read and update devscene.config.json';
 
 /** The roadmap item this command belongs to, as the registry reports it. */
 const ROADMAP_ITEM = 13;
@@ -561,7 +561,7 @@ function branchGuardMessage(
  * a two-step that passes through this state (set the raw line, re-run `init`, set the wrapper form).
  * Normalising the value here — writing the invocation and putting the raw line in the wrapper —
  * would make `get` answer something other than what was `set`, and would break the module header's
- * *"It writes nothing but `harness.config.json`"*.
+ * *"It writes nothing but `devscene.config.json`"*.
  */
 function set(ctx: CommandContext, key: string, raw: string): number {
   const repoRoot = resolveRepoRoot(ctx.cwd);
