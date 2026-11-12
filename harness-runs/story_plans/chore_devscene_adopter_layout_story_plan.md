@@ -113,7 +113,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_adopter_layout/ta
 29. [x] **Task 28** — Respell `docs/cli.md`, `docs/analyze.md` and the rest of `docs/config.md`, and drop the split-default prose _(layer: general)_ _(points: 15)_
 30. [x] **Task 29** — Respell `docs/development.md`, gates 6, 8 and 12 included _(layer: general)_ _(points: 20)_
 31. [x] **Task 30** — Respell the remote-execution, run-control, issue-trigger and watcher documents _(layer: general)_ _(points: 20)_
-32. [ ] **Task 31** — Respell the sandbox, guard and outer-loop verification records _(layer: general)_ _(points: 20)_
+32. [x] **Task 31** — Respell the sandbox, guard and outer-loop verification records _(layer: general)_ _(points: 20)_
 33. [ ] **Task 32** — Respell the retrieval, decision and research documents _(layer: general)_ _(points: 15)_
 34. [ ] **Task 33** — Respell the work-report research documents _(layer: general)_ _(points: 10)_
 35. [ ] **Task 34** — Respell the example's live files and the examples README _(layer: general)_ _(points: 10)_
