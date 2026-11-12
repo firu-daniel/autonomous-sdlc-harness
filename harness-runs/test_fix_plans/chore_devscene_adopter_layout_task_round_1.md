@@ -13,7 +13,7 @@ Gate 13 (13a–13c, `BLOCKED` — the Python service environment is not provisio
 This list is the **single source of truth** for the fix loop. Any `[ ]` markers elsewhere in this plan or its per-finding files are informational only.
 
 1. [x] **Finding 1** — Respell the `Switch to the configured default branch` assertion to `devscene.config.json`. _(layer: cli)_
-2. [ ] **Finding 2** — Put the SB2 clarifications arm's expected paths back in `diff-tree` order. _(layer: cli)_
+2. [x] **Finding 2** — Put the SB2 clarifications arm's expected paths back in `diff-tree` order. _(layer: cli)_
 
 ## Must Fix
 

@@ -53,10 +53,13 @@ const ARMS = [
   {
     row: 'SB2',
     arm: 'clarifications',
-    paths: ({ stateDir }, branch) => [
-      '100644 gate12-sb2-token.txt',
-      `120000 ${stateDir}/clarifications/${branch}/gate12-link.md`,
-    ],
+    // Sorted on the path alone: where the link lands relative to the token depends on the state directory's spelling.
+    paths: ({ stateDir }, branch) =>
+      ['100644 gate12-sb2-token.txt', `120000 ${stateDir}/clarifications/${branch}/gate12-link.md`].sort((a, b) => {
+        const pa = a.slice(a.indexOf(' ') + 1);
+        const pb = b.slice(b.indexOf(' ') + 1);
+        return pa < pb ? -1 : pa > pb ? 1 : 0;
+      }),
   },
   { row: 'SB2', arm: 'pause-note', paths: () => [`100644 ${PAUSE_TOKEN_FILE}`] },
   { row: 'RJ2', arm: 'profile', paths: () => ['100644 .claude/settings.autonomous.json'] },
