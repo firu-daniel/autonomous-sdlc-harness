@@ -498,7 +498,7 @@ pis_run_args() {
   PIS_REPO_ABS=$(cd -P -- "$repo" 2>/dev/null && pwd -P) || pis_fault "--repo '$repo' is not a directory"
   command -v sha256sum >/dev/null 2>&1 || command -v shasum >/dev/null 2>&1 \
     || pis_fault "neither sha256sum nor shasum resolves"
-  PIS_SD=$(pis_state_dir "$PIS_REPO_ABS") || pis_fault "cannot resolve stateDir from $PIS_REPO_ABS/harness.config.json"
+  PIS_SD=$(pis_state_dir "$PIS_REPO_ABS") || pis_fault "cannot resolve stateDir from $PIS_REPO_ABS/devscene.config.json"
   PIS_BRANCH="$branch"
   PIS_ENGINE="$engine"
 }

@@ -17,8 +17,8 @@ import { test } from 'node:test';
 
 import { createFixture, ignoredAmong, runCli } from './helpers/fixture.mjs';
 
-const HIDDEN_README = 'sdlc-harness/scratch/README.md';
-const COMMITTED_README = 'sdlc-harness/task_prompts/README.md';
+const HIDDEN_README = 'devscene/scratch/README.md';
+const COMMITTED_README = 'devscene/task_prompts/README.md';
 const NOTE = /the managed \.gitignore block ignores by (its|their) contents, so git status will not list/;
 
 async function fixtureFor(t) {

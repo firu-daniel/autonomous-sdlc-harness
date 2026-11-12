@@ -69,7 +69,7 @@ sequenceDiagram
     participant FS as Repo Markdown
     participant DB as Store (PGlite dir | Postgres URL)
     CC->>L: spawn per .mcp.json
-    L->>S: exec (TS) / child (Py), backend from harness.config.json
+    L->>S: exec (TS) / child (Py), backend from devscene.config.json
     S->>DB: open: CREATE EXTENSION IF NOT EXISTS, tables, stale-extension UPDATE
     CC->>S: tools/call search_docs {query, k}
     S->>FS: read + chunk every corpus file
@@ -87,7 +87,7 @@ sequenceDiagram
 
 | Stage | TS (`cli/src/retrieval/`) | Python (`…/harness_docs_retrieval/`) | Harness-specific | Generic |
 |---|---|---|---|---|
-| Corpus | `corpus.ts` | `corpus.py` | Input comes from `harness.config.json` (`docs.root` + `layers[].conventions`), confined to the repo (`corpus.py:96-134`). | Recursive walk; a missing path is a warning. |
+| Corpus | `corpus.ts` | `corpus.py` | Input comes from `devscene.config.json` (`docs.root` + `layers[].conventions`), confined to the repo (`corpus.py:96-134`). | Recursive walk; a missing path is a warning. |
 | Chunk | `chunk.ts` | `chunk.py` (parity-tested) | The wrapper-heading fold is tuned to house templates (`docs/retrieval.md:15`). | Markdown only: split on `##`/`###` outside fences, GitHub anchors, sha256 change signal, no size cap. |
 | Embed | `models.ts` (bge-small q8 ONNX) | `models.py` (bge-small fp32) | The cache path and the stub variable carry harness names. | Pinned revisions, offline loads, English. |
 | Store | `store.ts`, PGlite at `<stateDir>/docs_index` (`:84`) | `store.py`, Postgres by URL | `stateDir` sets the location. | `meta` + `chunks`, HNSW cosine, `pg_textsearch` BM25 (`english`). |
@@ -118,7 +118,7 @@ Two things use it: the service image's default command (`docs-retrieval-service/
 
 | # | Coupling | Where | Rank |
 |---|---|---|---|
-| 1 | The corpus is read from `harness.config.json`. Python **raises without that file even when `--docs-root` is given** | `service.py:83-101`; `corpus.py:96`; `corpus.ts` | **Moderate:** needs its own source config. |
+| 1 | The corpus is read from `devscene.config.json`. Python **raises without that file even when `--docs-root` is given** | `service.py:83-101`; `corpus.py:96`; `corpus.ts` | **Moderate:** needs its own source config. |
 | 2 | Gate `phases.docs && docs.retrieval` (TS only) | `session.ts:37-41` | Trivial. |
 | 3 | Index at `<stateDir>/docs_index`; `init` gitignores it | `store.ts:84`; `cli/src/generators/repoRoot.ts:622` | Trivial. |
 | 4 | Wire names `harness-docs` / `search_docs`, quoted by 11 agents and 2 templates | `server.ts:35-42`; `wire.py`; `plugin/agents/README.txt:84-90` | Moderate. A configurable server name would let the harness keep its string. |
@@ -131,7 +131,7 @@ Two things use it: the service image's default command (`docs-retrieval-service/
 | 11 | **Byte parity between backends:** `jscompat.py` ports JS semantics, and five parity tests run TS through `cli/dist` (`ts_bridge.*`) | `docs-retrieval-service/README.md:155-163` | **Moderate to hard.** Goes away if only one implementation remains. |
 | 12 | Eval harness `evals/docs-retrieval/` (6 066 lines; **15 modules import `../../cli/dist/…`**), its corpora, query sets and the 32k-line results file | e.g. `args.mjs:29`, `results.mjs:30-31` | Moderate. It is the product's only quality evidence, and it is bound to the TS module layout. |
 | 13 | Python provisioning clones this repo at the harness tag `devscene--v<version>` | `docs/retrieval.md:185-200` | Trivial; it becomes the product's own release. |
-| 14 | Harness-side wiring and housekeeping: the launcher and `harness-run-lib.sh`; schema keys `docs.retrieval`/`docs.retrievalBackend`; gate 13, gate 10, `scripts/python-service.sh`, the `uv-audit` and `model-revisions` jobs; the `cli/test/docs-retrieval*` and `retrieval-*` suites; the remote job's TS-only provisioning | `docs-search-server.sh`; `schemas/harness.config.schema.json:279-288`; `scripts/run-gates.sh:227`; `supply-chain.yml:62-114`; `docs/retrieval.md:262` | Launcher and schema stay. CI, gates and tests are moderate to recreate on whichever side keeps the code. |
+| 14 | Harness-side wiring and housekeeping: the launcher and `harness-run-lib.sh`; schema keys `docs.retrieval`/`docs.retrievalBackend`; gate 13, gate 10, `scripts/python-service.sh`, the `uv-audit` and `model-revisions` jobs; the `cli/test/docs-retrieval*` and `retrieval-*` suites; the remote job's TS-only provisioning | `docs-search-server.sh`; `schemas/devscene.config.schema.json:279-288`; `scripts/run-gates.sh:227`; `supply-chain.yml:62-114`; `docs/retrieval.md:262` | Launcher and schema stay. CI, gates and tests are moderate to recreate on whichever side keeps the code. |
 
 ## 5. What already stands alone
 
@@ -172,7 +172,7 @@ Single connection, single tenant, Linux and publication are covered in §6.
 | Markdown only (`*.md`); no PDF, HTML, DOCX, RST or plain text | Documented | `corpus.py:72`; `chunk.ts` header |
 | No chunk-size cap. What happens past the models' window is **Unconfirmed**; handling it is named as open work | Documented / Unconfirmed | `→ ### The maintainer's decision` |
 | Local files only, confined inside `--repo`; no remote source | Documented | `corpus.py:39-52`, `:109-110` |
-| `harness.config.json` required even with `--docs-root` | Documented | `service.py:83-101` |
+| `devscene.config.json` required even with `--docs-root` | Documented | `service.py:83-101` |
 | **Refresh before every query:** every call reads and chunks every file and lists every stored hash. Cost at 10k–100k files is unmeasured, and worse over the image's bind mount (`/repo:ro`) or a network mount | Documented (mechanism: `refresh.py:77-84`, `refresh.ts:83-86`) / Inference (cost) |
 | Cold build is about 57 ms/chunk on an M4, so 100k chunks extrapolates to about 1.6 h; the repo deliberately publishes no projection | Inference; `docs/retrieval.md:88` |
 | **Not a plain connection string.** The current store needs Postgres **≥ 18.4** (pg_textsearch 1.5.1 will not load on 18.2), `shared_preload_libraries=pg_textsearch`, and a role that can run `CREATE EXTENSION IF NOT EXISTS vector; … pg_textsearch` (issued on every open) and `ALTER EXTENSION … UPDATE` (issued when an installed version is stale). Which managed providers allow this is fork 03's | Documented: `postgres/Dockerfile:15`; `compose.yaml`; `store.py:89-93`, `:130-133`; `README.md:147` |
@@ -242,7 +242,7 @@ The harness pins the product's version.
 
 ## Fork verdict
 
-Retrieval here is pulled by agents only, with no hooks. Its harness coupling sits in a thin band: the corpus read from `harness.config.json`, names and paths, wording, the launcher, and `init`/`doctor` provisioning. The Python service is the natural extraction candidate: it already has its own package, verbs, cache, Postgres-by-URL store, compose stack and unshipped HTTP API, while the TypeScript backend is entangled with the harness npm package. The minimum cut is to move `docs-retrieval-service/` and the eval record, give the product its own source config and a tenant key, and leave the launcher, grants and schema keys in the harness, consuming a stdio MCP command plus `self-check`. Because the stack is not locked, the moved code is a starting point, and the eval harness is what should judge any replacement engine or model. The larger risk is the product claim, not the seam: the one real measurement favours lexical, the backends disagree, and the §6 gaps all bear on large-docs users. Confidence is high on the mechanism and coupling and moderate on the cut, which turns on Open questions 1–3.
+Retrieval here is pulled by agents only, with no hooks. Its harness coupling sits in a thin band: the corpus read from `devscene.config.json`, names and paths, wording, the launcher, and `init`/`doctor` provisioning. The Python service is the natural extraction candidate: it already has its own package, verbs, cache, Postgres-by-URL store, compose stack and unshipped HTTP API, while the TypeScript backend is entangled with the harness npm package. The minimum cut is to move `docs-retrieval-service/` and the eval record, give the product its own source config and a tenant key, and leave the launcher, grants and schema keys in the harness, consuming a stdio MCP command plus `self-check`. Because the stack is not locked, the moved code is a starting point, and the eval harness is what should judge any replacement engine or model. The larger risk is the product claim, not the seam: the one real measurement favours lexical, the backends disagree, and the §6 gaps all bear on large-docs users. Confidence is high on the mechanism and coupling and moderate on the cut, which turns on Open questions 1–3.
 
 ## Review response
 

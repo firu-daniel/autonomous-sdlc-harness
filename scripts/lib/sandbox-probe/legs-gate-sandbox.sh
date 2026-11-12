@@ -26,7 +26,7 @@
 # their own clones. sp_extra_clone registers the clone and its branch for teardown.
 #
 # THE DEPARTURE, "a fixture written from an ordinary terminal" (docs/sandbox-verification.md §0): the
-# probe's own shell rewrites the target's harness.config.json to commands.typecheck `<none>` and
+# probe's own shell rewrites the target's devscene.config.json to commands.typecheck `<none>` and
 # commands.test `bash <target>/sbx_gs_test.sh`, and restores it byte-identically on every path, a pending
 # restore covering an interrupt. A restore `cmp` refuses is exit 3, the shasum guard's class.
 #
@@ -199,7 +199,7 @@ for name in ${names[@]+"${names[@]}"}; do
     *) printf '%s unset\n' "$name" ;;
   esac >>"$rec/gs4.env"
 done
-cat "$target/harness.config.json" 2>"$rec/gs4_control.stderr" >"$rec/gs4.control"
+cat "$target/devscene.config.json" 2>"$rec/gs4_control.stderr" >"$rec/gs4.control"
 printf '%s\n' "$?" >"$rec/gs4_control.status"
 
 : >"$rec/done"
@@ -422,15 +422,15 @@ sp__gs_all() {
   done
 }
 
-# sp__gs_restore <target> — put back harness.config.json, and .git/config when it changed, from the copies
+# sp__gs_restore <target> — put back devscene.config.json, and .git/config when it changed, from the copies
 # saved before the session; the pending restore and the leg's own last step. Status 1, raising exit 3, when
 # a `cmp` refuses either.
 sp__gs_restore() {
   local target="${1:-}" rc=0
   if [ -n "$SP__GS_SAVED" ] && [ -f "$SP__GS_SAVED" ]; then
-    cp -- "$SP__GS_SAVED" "$target/harness.config.json" 2>/dev/null
-    if ! cmp -s -- "$SP__GS_SAVED" "$target/harness.config.json"; then
-      sp_refuse "gate-sandbox: '$target/harness.config.json' is not byte-identical to its saved copy '$SP__GS_SAVED'; restore it by hand"
+    cp -- "$SP__GS_SAVED" "$target/devscene.config.json" 2>/dev/null
+    if ! cmp -s -- "$SP__GS_SAVED" "$target/devscene.config.json"; then
+      sp_refuse "gate-sandbox: '$target/devscene.config.json' is not byte-identical to its saved copy '$SP__GS_SAVED'; restore it by hand"
       sp_exit_raise 3
       rc=1
     fi
@@ -501,7 +501,7 @@ EOF
   sp_session gate-sandbox "$SP__GS_PROFILE" "$pfile" --cwd "$SP__GS_TARGET"
   end="$(date +%s)"
   departure="$(sp_departures)"
-  departure="${departure:+$departure; }a fixture written from an ordinary terminal: the target's harness.config.json with commands.typecheck <none> and commands.test bash $script"
+  departure="${departure:+$departure; }a fixture written from an ordinary terminal: the target's devscene.config.json with commands.typecheck <none> and commands.test bash $script"
   if [ -z "$SP_STREAM" ] || [ ! -f "$SP_STREAM" ]; then
     sp_refuse "session gate-sandbox did not launch; see $SP_TMP/gate-sandbox.stderr"
     SP__GS_WHY="session gate-sandbox did not launch; see $SP_TMP/gate-sandbox.stderr"
@@ -594,11 +594,11 @@ sp_leg_gate_sandbox() {
     [ -n "$line" ] && drops="${drops:+$drops; }$line"
   done <"$drops_file"
   if ! scripts_rel="$(hr_scripts_dir "$SP__GS_TARGET")" || [ -z "$scripts_rel" ]; then
-    sp__gs_all "cannot resolve scriptsDir from '$SP__GS_TARGET/harness.config.json'"
+    sp__gs_all "cannot resolve scriptsDir from '$SP__GS_TARGET/devscene.config.json'"
     return 0
   fi
   if ! state_rel="$(hr_state_dir "$SP__GS_TARGET")" || [ -z "$state_rel" ]; then
-    sp__gs_all "cannot resolve stateDir from '$SP__GS_TARGET/harness.config.json'"
+    sp__gs_all "cannot resolve stateDir from '$SP__GS_TARGET/devscene.config.json'"
     return 0
   fi
   branch="$(hr_current_branch "$SP__GS_TARGET")"
@@ -640,9 +640,9 @@ sp_leg_gate_sandbox() {
   [ -e "$lfile" ] || lfile_new=1
 
   # 2. Saved and restore-registered before the target's copy changes.
-  if ! cp -p -- "$SP__GS_TARGET/harness.config.json" "$SP__GS_SAVED" 2>/dev/null ||
+  if ! cp -p -- "$SP__GS_TARGET/devscene.config.json" "$SP__GS_SAVED" 2>/dev/null ||
     ! cp -p -- "$SP__GS_TARGET/.git/config" "$SP__GS_GITCFG_SAVED" 2>/dev/null; then
-    sp__gs_all "could not save the target's harness.config.json and .git/config under '$SP_TMP'"
+    sp__gs_all "could not save the target's devscene.config.json and .git/config under '$SP_TMP'"
     return 0
   fi
   if ! jq --arg t "bash $script" '.commands.typecheck = "<none>" | .commands.test = $t' \
@@ -654,11 +654,11 @@ sp_leg_gate_sandbox() {
     sp__gs_all "could not register the gate-sandbox restore"
     return 0
   fi
-  if cp -- "$rewritten" "$SP__GS_TARGET/harness.config.json" 2>/dev/null; then
+  if cp -- "$rewritten" "$SP__GS_TARGET/devscene.config.json" 2>/dev/null; then
     sp__gs_body "$outside" "$script" "$rec" "$lane/$SP_GS_LABEL.running" "$vfile" "$lfile" "$lib" "$drops" ||
       sp__gs_all "$SP__GS_WHY"
   else
-    sp__gs_all "could not rewrite '$SP__GS_TARGET/harness.config.json'"
+    sp__gs_all "could not rewrite '$SP__GS_TARGET/devscene.config.json'"
   fi
 
   # 9. Every path past step 2 reaches here.

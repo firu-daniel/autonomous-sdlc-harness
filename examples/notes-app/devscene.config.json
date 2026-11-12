@@ -5,7 +5,7 @@
   "protectedBranches": [
     "main"
   ],
-  "stateDir": "sdlc-harness/",
+  "stateDir": "devscene",
   "appDir": ".",
   "scriptsDir": "scripts",
   "githooksDir": "githooks",

@@ -9,7 +9,7 @@
 # dropped (`autonomous-watcher.sh` → `run_profile_edit_drops`), and this guard
 # is what refuses the file tools there.
 #
-# NO JURISDICTION TEST, DELIBERATELY. This guard reads no `harness.config.json`
+# NO JURISDICTION TEST, DELIBERATELY. This guard reads no `devscene.config.json`
 # and does not source `lib/harness-config-lib.sh`: it applies on every platform
 # and in every session that loads the plugin, adopted repository or not. What it
 # protects is git's own redirection files in any repository, and refusing a

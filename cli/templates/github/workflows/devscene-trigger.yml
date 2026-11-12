@@ -1,7 +1,7 @@
 # devscene-trigger.yml — starts a devscene task run when an
 # issue is labelled, or when a `repository_dispatch` asks for one.
 #
-# WHO WRITES IT. `devscene init`, only when harness.config.json's
+# WHO WRITES IT. `devscene init`, only when devscene.config.json's
 # `forge` is `github` and its `execution.target` is `github-actions`. Written
 # create-if-absent: from then on it is yours to tune, and a re-run of `init`
 # keeps your copy. `init --upgrade-workflows` does NOT re-render it: it carries
@@ -13,7 +13,7 @@
 # prompt, pushes, dispatches devscene-run.yml, comments on the issue and removes
 # the label. Every decision lives in that script; this file carries only the
 # events, the permissions and the label filter. The `run-name` below is not
-# devscene-run.yml's `harness <action> <branch>` title, so no run lookup
+# devscene-run.yml's `devscene <action> <branch>` title, so no run lookup
 # `remote-run.sh` makes by that title can match a trigger run.
 #
 # THE EVENTS.
@@ -99,7 +99,7 @@
 # a value carrying ` #` is never a plain scalar.
 
 name: devscene-trigger
-run-name: harness trigger ${{ github.event.issue.number || github.event.action }}
+run-name: devscene trigger ${{ github.event.issue.number || github.event.action }}
 
 on:
   issues:
@@ -149,7 +149,7 @@ jobs:
 
       - name: Read the configuration
         run: |
-          scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
+          scripts_dir=$(jq -r '.scriptsDir // "devscene-scripts"' devscene.config.json)
           echo "SCRIPTS_DIR=${scripts_dir%/}" >> "$GITHUB_ENV"
 
       - name: Set the git identity

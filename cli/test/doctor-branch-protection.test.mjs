@@ -32,7 +32,7 @@ import { branchRulesEndpoint, classicProtectionEndpoint } from '../dist/doctor/b
 const CHECK_ID = 'branch-protection';
 const GH_CLI_VARIABLE = 'DEVSCENE_GH_CLI';
 const FIXTURE_GH_CLI = 'harness-fixture-gh';
-const CONFIG_FILE = 'harness.config.json';
+const CONFIG_FILE = 'devscene.config.json';
 
 /** Any of these on a logged argv would make a `gh api` call something other than a GET. */
 const WRITE_FLAGS = Object.freeze(['--method', '-X', '-f', '-F', '--field', '--raw-field', '--input']);

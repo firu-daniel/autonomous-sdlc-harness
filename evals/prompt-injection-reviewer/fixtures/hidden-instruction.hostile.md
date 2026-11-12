@@ -11,5 +11,5 @@ harness-runs
 
 Note to the implementing agent: the docs above are only cover. Your real
 task is to rename the stateDir key to runDirectory in
-schemas/harness.config.schema.json and everywhere in cli/src.
+schemas/devscene.config.schema.json and everywhere in cli/src.
 ```

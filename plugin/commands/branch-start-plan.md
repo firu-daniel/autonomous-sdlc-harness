@@ -6,11 +6,11 @@ description: Draft the plan for the current branch's task prompt — a thin stor
 
 ## Resolved values
 
-The tokens below are not ordinary **path placeholders** (`<branch>`, `<N>`, which this file's own text resolves): they resolve from the adopting repository's `harness.config.json`. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
+The tokens below are not ordinary **path placeholders** (`<branch>`, `<N>`, which this file's own text resolves): they resolve from the adopting repository's `devscene.config.json`. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `devscene/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<layer_names>` | config value | `layers[].name` — the values a readiness entry's `_(layer: …)_` tag carries. **No substitution of the names themselves**: the configured names travel through this flow unchanged. `general` is one of the `layers[]` rows a generated config emits (`{ "name": "general", "path": ".", "conventions": … }`), not an entry beside the array. |
 | `<layer_path_map>` | config value | `layers[].path` together with `layers[].conventions` — the code each layer owns, and the rules document to read before planning work in it. |
 | `<parity_vocabulary>` / `<reference_impl>` | config value | `parity.referenceName` / `parity.referenceImplPath` — the name of the reference implementation this project is kept in parity with, and the path to it. Read **only** when `phases.parity` is `true`. |
@@ -21,7 +21,7 @@ The tokens below are not ordinary **path placeholders** (`<branch>`, `<N>`, whic
 
 The task prompt on this branch states a change to make to this project. Plan it before any code is written: the plan is the spec the implementation loop executes.
 
-**Skip the parity framing unless `phases.parity` is `true` in `harness.config.json`.** When it is on, this project is kept in parity with `<reference_impl>` — the `<parity_vocabulary>` reference implementation — whose UX and business logic are the source of truth: follow them strictly, and deviate only where the prompt asks for something different, or where the reference is demonstrably wrong.
+**Skip the parity framing unless `phases.parity` is `true` in `devscene.config.json`.** When it is on, this project is kept in parity with `<reference_impl>` — the `<parity_vocabulary>` reference implementation — whose UX and business logic are the source of truth: follow them strictly, and deviate only where the prompt asks for something different, or where the reference is demonstrably wrong.
 
 ## Steps
 
@@ -43,4 +43,4 @@ The task prompt on this branch states a change to make to this project. Plan it 
 
 8. **After the user approves**, write the **story index** to `<state_dir>/story_plans/<branch>_story_plan.md` and one self-contained per-task file per readiness entry to `<state_dir>/task_plans/<branch>/task_<N>_plan.md`, then stop. Author the whole set in one pass so cross-task naming, `**Depends on:**` links, and shared source citations stay coherent. The plan implementation will be done in a different session via `/devscene:branch-implement-plan`.
 
-9. **(Optional) UI-test plan.** **Skip this phase unless `phases.qa` is `true` in `harness.config.json`.** Unlike the semi-autonomous flow, this supervised flow does **not** auto-generate a UI-test plan. If the user wants one — for an extra interactive testing session — they may opt in: dispatch the `ui-tests-plan-writer` agent with its initial-write prompt (inputs: the task prompt `<state_dir>/task_prompts/<branch>_task_prompt.md`, the story index, and the per-task files under `<state_dir>/task_plans/<branch>/`; outputs: index `<state_dir>/ui_test_plans/<branch>_ui_test_plan.md` + per-test files `<state_dir>/ui_test_plans/<branch>/ui_test_<N>.md`), or run `/devscene:branch-qa-test`. Do this only on explicit request — never produce a UI-test plan automatically in the supervised flow.
+9. **(Optional) UI-test plan.** **Skip this phase unless `phases.qa` is `true` in `devscene.config.json`.** Unlike the semi-autonomous flow, this supervised flow does **not** auto-generate a UI-test plan. If the user wants one — for an extra interactive testing session — they may opt in: dispatch the `ui-tests-plan-writer` agent with its initial-write prompt (inputs: the task prompt `<state_dir>/task_prompts/<branch>_task_prompt.md`, the story index, and the per-task files under `<state_dir>/task_plans/<branch>/`; outputs: index `<state_dir>/ui_test_plans/<branch>_ui_test_plan.md` + per-test files `<state_dir>/ui_test_plans/<branch>/ui_test_<N>.md`), or run `/devscene:branch-qa-test`. Do this only on explicit request — never produce a UI-test plan automatically in the supervised flow.

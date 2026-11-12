@@ -17,7 +17,7 @@ import test from 'node:test';
 
 import { createFixture, readJson, runCli, snapshotTree } from './helpers/fixture.mjs';
 
-const CONFIG_FILE = 'harness.config.json';
+const CONFIG_FILE = 'devscene.config.json';
 
 /** A repository whose stack detection resolves every command, so `init` writes a config the check passes. */
 function nodeProjectFiles() {

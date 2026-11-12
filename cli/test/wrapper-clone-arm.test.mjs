@@ -43,7 +43,7 @@ const CONFIG = {
   version: 1,
   defaultBranch: 'trunk',
   protectedBranches: ['trunk'],
-  stateDir: 'sdlc-harness/',
+  stateDir: 'devscene/',
   githooksDir: 'githooks',
   layers: [],
   commands: {},
@@ -68,7 +68,7 @@ const exists = (path) =>
   );
 
 /**
- * A bare origin; a main checkout on `trunk` carrying `harness.config.json`, `githooks/`, `notes.txt`
+ * A bare origin; a main checkout on `trunk` carrying `devscene.config.json`, `githooks/`, `notes.txt`
  * and the three wrappers with their `lib/`, its `core.hooksPath` `githooks`; the clone of
  * {@link BRANCH} `hr_clone_create_var` makes at `<root>/main-feat_c`; and a linked worktree `wt` on
  * {@link WT_BRANCH}, bootstrapped as `setup-worktree.sh` step 4 does.
@@ -89,7 +89,7 @@ async function fixture(t) {
   await runGit(main, ['init', '--quiet', '-b', 'trunk']);
   await runGit(main, ['config', 'user.email', 'fixture@example.invalid']);
   await runGit(main, ['config', 'user.name', 'Harness Fixture']);
-  await writeFile(join(main, 'harness.config.json'), `${JSON.stringify(CONFIG)}\n`);
+  await writeFile(join(main, 'devscene.config.json'), `${JSON.stringify(CONFIG)}\n`);
   await writeFile(join(main, 'githooks', 'README'), 'hooks\n');
   await writeFile(join(main, 'notes.txt'), 'seeded notes\n');
   await mkdir(join(main, 'scripts'));
@@ -97,12 +97,12 @@ async function fixture(t) {
     await cp(join(TEMPLATE_SCRIPTS, name), join(main, 'scripts', name));
   }
   await cp(join(TEMPLATE_SCRIPTS, 'lib'), join(main, 'scripts', 'lib'), { recursive: true });
-  await runGit(main, ['add', 'harness.config.json', 'githooks', 'notes.txt', 'scripts']);
+  await runGit(main, ['add', 'devscene.config.json', 'githooks', 'notes.txt', 'scripts']);
   await runGit(main, ['commit', '--quiet', '-m', 'fixture: seed']);
   await runGit(main, ['config', 'core.hooksPath', 'githooks']);
   await runGit(main, ['remote', 'add', 'origin', origin]);
   await runGit(main, ['push', '--quiet', 'origin', 'trunk']);
-  await mkdir(join(main, 'sdlc-harness', 'autonomous_logs'), { recursive: true });
+  await mkdir(join(main, 'devscene', 'autonomous_logs'), { recursive: true });
 
   const created = await runBash(root, [
     '-c',
@@ -160,9 +160,9 @@ async function fixture(t) {
     /** A commit in the main repository on top of `parent`, reaching no branch. */
     looseCommit: async (parent, message) =>
       (await runGit(main, ['commit-tree', `${parent}^{tree}`, '-p', parent, '-m', message])).stdout.trim(),
-    /** The main checkout's `harness.config.json` protecting {@link BRANCH} too. */
+    /** The main checkout's `devscene.config.json` protecting {@link BRANCH} too. */
     protectBranch: () =>
-      writeFile(join(main, 'harness.config.json'), `${JSON.stringify({ ...CONFIG, protectedBranches: ['trunk', BRANCH] })}\n`),
+      writeFile(join(main, 'devscene.config.json'), `${JSON.stringify({ ...CONFIG, protectedBranches: ['trunk', BRANCH] })}\n`),
     /** A program that leaves the marker `name` and fails. */
     marker: async (name) => {
       const file = join(root, `${name}-marker.sh`);

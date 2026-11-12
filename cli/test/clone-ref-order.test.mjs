@@ -8,7 +8,7 @@
  * side.**
  *
  * Each case builds, under the system temp directory, a main checkout carrying a hand-written
- * `harness.config.json` and its `autonomous_logs/` directory, a local bare origin, a copy of the
+ * `devscene.config.json` and its `autonomous_logs/` directory, a local bare origin, a copy of the
  * template library, and the clone `hr_clone_create_var` makes; the library is sourced from that
  * copy. The race is a `git` shim first on `PATH`, the technique `cli/test/run-copy-clone-arm.test.mjs`
  * uses: on the first call whose arguments contain its trigger, it commits once in the clone by
@@ -35,7 +35,7 @@ const LIB = join(PACKAGE_ROOT, 'templates', 'scripts', 'lib', 'harness-run-lib.s
 const CONFIG = {
   version: 1,
   defaultBranch: 'trunk',
-  stateDir: 'sdlc-harness/',
+  stateDir: 'devscene/',
   githooksDir: 'githooks',
   layers: [],
   commands: {},
@@ -76,7 +76,7 @@ printf 'status=%s\\ntip=%s\\nrefusal=%s\\n' "$s" "$HR_RUN_COPY_TIP" "$HR_RUN_FF_
 
 /**
  * A bare origin whose `trunk` carries `githooks/pre-push`; a main checkout on `trunk` carrying
- * `harness.config.json` and `autonomous_logs/`; the library copied to `<root>/lib/`; and the clone of
+ * `devscene.config.json` and `autonomous_logs/`; the library copied to `<root>/lib/`; and the clone of
  * {@link BRANCH} at `<root>/main-feat_c`.
  *
  * @param {import('node:test').TestContext} t
@@ -95,14 +95,14 @@ async function fixture(t) {
   await runGit(main, ['init', '--quiet', '-b', 'trunk']);
   await runGit(main, ['config', 'user.email', 'fixture@example.invalid']);
   await runGit(main, ['config', 'user.name', 'Harness Fixture']);
-  await writeFile(join(main, 'harness.config.json'), `${JSON.stringify(CONFIG)}\n`);
+  await writeFile(join(main, 'devscene.config.json'), `${JSON.stringify(CONFIG)}\n`);
   await writeFile(join(main, 'githooks', 'pre-push'), '#!/bin/sh\nexit 0\n');
-  await runGit(main, ['add', 'harness.config.json', 'githooks/pre-push']);
+  await runGit(main, ['add', 'devscene.config.json', 'githooks/pre-push']);
   await runGit(main, ['commit', '--quiet', '-m', 'fixture: seed']);
   await runGit(main, ['remote', 'add', 'origin', origin]);
   await runGit(main, ['push', '--quiet', 'origin', 'trunk']);
   await runGit(main, ['fetch', '--quiet', 'origin']);
-  await mkdir(join(main, 'sdlc-harness', 'autonomous_logs'), { recursive: true });
+  await mkdir(join(main, 'devscene', 'autonomous_logs'), { recursive: true });
 
   /** Run `body` with the fixture's library copy sourced; `$1`… are `args`. */
   const run = (body, args, env = {}) => runBash(root, ['-c', `. "$1" || exit 99; shift; ${body}`, 'hr', lib, ...args], env);

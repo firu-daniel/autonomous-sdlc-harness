@@ -6,7 +6,7 @@
 
 ## Read tree
 
-Counts are for this repository's self-adoption (`harness.config.json` → 3 layers, `phases.parity/docs/qa` all `false`).
+Counts are for this repository's self-adoption (`devscene.config.json` → 3 layers, `phases.parity/docs/qa` all `false`).
 
 | File | Up-front / on-demand | Words |
 |---|---|---|

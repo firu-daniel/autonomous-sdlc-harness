@@ -110,7 +110,7 @@ sp__rf_pick_conflict() {
   SP__RF_C_LINE=""
   SP__RF_WHY=""
   if ! prot="$(hr_run_protected_rel_paths "$SP_MAIN")"; then
-    SP__RF_WHY="the protected set is unresolvable from $SP_MAIN/harness.config.json"
+    SP__RF_WHY="the protected set is unresolvable from $SP_MAIN/devscene.config.json"
     return 1
   fi
   while IFS= read -r f; do

@@ -5,7 +5,7 @@
 #
 # THE CONTRACT.
 #   1. Scan set: `git grep --untracked` over tracked and untracked-unignored files, excluding
-#      `.claude/`, `examples/notes-app/.claude/`, `examples/notes-app/sdlc-harness/`, `harness-runs/`
+#      `.claude/`, `examples/notes-app/.claude/`, `examples/notes-app/devscene/`, `harness-runs/`
 #      and this script.
 #   2. Pattern: PATTERN below. A path citation (`commands/branch-start-plan.md`) and the qualified
 #      spelling do not match; a sentence-final bare spelling does.
@@ -25,10 +25,10 @@
 # `bash scripts/check-command-spelling.sh`, and the plant was removed until `git diff` on the file was
 # empty. The `<path>:<line>` coordinates are the output of that one run, not anchors into the current
 # file.
-#   docs/cli.md, plant: Run `/harness-analyze` here.
+#   docs/cli.md, plant: Run `/analyze` here.
 #     exit 1; check-command-spelling: docs/cli.md:447 — bare command spelling; write /devscene:<name>
 #     reverted, rerun: exit 0, no output
-#   docs/development.md, outside the gate-8 block, plant: Run `/harness-analyze` here.
+#   docs/development.md, outside the gate-8 block, plant: Run `/analyze` here.
 #     exit 1; check-command-spelling: docs/development.md:495 — bare command spelling; write /devscene:<name>
 #   docs/cli.md, plant: Then run /branch-status.
 #     exit 1; check-command-spelling: docs/cli.md:447 — bare command spelling; write /devscene:<name>
@@ -47,19 +47,19 @@ if [ -z "$repo_root" ] || ! cd "$repo_root"; then
   exit 1
 fi
 
-PATTERN='(^|[^A-Za-z0-9_.}/:-])/(branch-([a-z-]*[a-z]|\*)|harness-analyze)([^A-Za-z0-9_./-]|\.([^A-Za-z0-9_/-]|$)|$)'
+PATTERN='(^|[^A-Za-z0-9_.}/:-])/(branch-([a-z-]*[a-z]|\*)|analyze)([^A-Za-z0-9_./-]|\.([^A-Za-z0-9_/-]|$)|$)'
 
 EXEMPTIONS=(
   # (a) the gate-8 fenced block, typed by a person in a session with the plugin installed
-  'docs/development.md|line|/harness-analyze --dry-run'
-  'docs/development.md|line|/harness-analyze'
+  'docs/development.md|line|/analyze --dry-run'
+  'docs/development.md|line|/analyze'
   # (b) a bare spelling quoted as the measured subject of a record
   'docs/development.md|contains|**A third debt belongs to no row at all, and it is paid:**'
   'cli/templates/scripts/autonomous-watcher.sh|contains|#   "/branch-start-plan-autonomous": exit 0'
   'cli/templates/scripts/autonomous-watcher.sh|contains|#     `/branch-start-plan-autonomous`. The instructions'
   'scripts/autonomous-watcher.sh|contains|#   "/branch-start-plan-autonomous": exit 0'
   'scripts/autonomous-watcher.sh|contains|#     `/branch-start-plan-autonomous`. The instructions'
-  'cli/src/commands/init.ts|contains|claude -p "/harness-analyze" --permission-mode plan'
+  'cli/src/commands/init.ts|contains|claude -p "/analyze" --permission-mode plan'
   'docs/outer-loop-verification.md|contains|| `task` | `/branch-start-plan-autonomous` |'
   'docs/outer-loop-verification.md|contains|| `user_review` | `/branch-start-user-review-fix-autonomous` |'
   'docs/outer-loop-verification.md|contains|| `docs` | `/branch-start-docs-autonomous` |'
@@ -130,7 +130,7 @@ done
 matches="$(git --no-pager grep --untracked --no-color -I -nE -e "$PATTERN" -- . \
   ':(exclude).claude/' \
   ':(exclude)examples/notes-app/.claude/' \
-  ':(exclude)examples/notes-app/sdlc-harness/' \
+  ':(exclude)examples/notes-app/devscene/' \
   ':(exclude)harness-runs/' \
   ':(exclude)scripts/check-command-spelling.sh')"
 status=$?

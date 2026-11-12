@@ -25,7 +25,7 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REPOSITORY = 'octo/fixture';
 const BOT = 'github-actions[bot]';
 const PR_12 = JSON.stringify([{ number: 12, isCrossRepository: false, isDraft: true }]);
@@ -71,7 +71,7 @@ async function progressFixture(t) {
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   config.forge = 'github';
@@ -252,8 +252,8 @@ test('a stopped branch posts nothing', async (t) => {
   const f = await progressFixture(t);
   const result = await f.progress({
     STUB_RUN_LIST: JSON.stringify([
-      { displayTitle: 'harness stop feat_x', createdAt: '2026-01-02T00:00:00Z' },
-      { displayTitle: 'harness run feat_x', createdAt: '2026-01-01T00:00:00Z' },
+      { displayTitle: 'devscene stop feat_x', createdAt: '2026-01-02T00:00:00Z' },
+      { displayTitle: 'devscene run feat_x', createdAt: '2026-01-01T00:00:00Z' },
     ]),
   });
   assert.equal(result.status, 0, result.stderr);

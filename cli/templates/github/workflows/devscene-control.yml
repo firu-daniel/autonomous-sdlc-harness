@@ -4,7 +4,7 @@
 # user-review round, and stops a run when its issue or pull request is closed
 # or its branch is deleted.
 #
-# WHO WRITES IT. `devscene init`, only when harness.config.json's
+# WHO WRITES IT. `devscene init`, only when devscene.config.json's
 # `forge` is `github` and its `execution.target` is `github-actions`. Written
 # create-if-absent: from then on it is yours to tune, and a re-run of `init`
 # keeps your copy. `init --upgrade-workflows` does NOT re-render it: it carries
@@ -26,7 +26,7 @@
 # Every decision lives in that script; this file carries only the events, the
 # permissions, a prefilter, the concurrency group, and on a comment job the
 # credential, the agent CLI and the pinned plugin that session needs.
-# The `run-name` below is not devscene-run.yml's `harness <action> <branch>`
+# The `run-name` below is not devscene-run.yml's `devscene <action> <branch>`
 # title, so no run lookup `remote-run.sh` makes by that title can match it.
 #
 # THE EVENTS.
@@ -243,7 +243,7 @@
 # `curl | bash`, are the same install with less integrity checking.
 
 name: devscene-control
-run-name: harness control ${{ github.event.issue.number || github.event.pull_request.number || github.event.ref }}
+run-name: devscene control ${{ github.event.issue.number || github.event.pull_request.number || github.event.ref }}
 
 on:
   issue_comment:
@@ -303,7 +303,7 @@ jobs:
 
       - name: Read the configuration
         run: |
-          scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
+          scripts_dir=$(jq -r '.scriptsDir // "devscene-scripts"' devscene.config.json)
           echo "SCRIPTS_DIR=${scripts_dir%/}" >> "$GITHUB_ENV"
 
       - name: Set the git identity

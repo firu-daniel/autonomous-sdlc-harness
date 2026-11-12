@@ -58,7 +58,7 @@ import {
   createWatcherFixture,
 } from './helpers/watcher.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const BASE_PROFILE = '.claude/settings.autonomous.json';
 const LIB_PATH = `${INIT_SCRIPTS_DIR}/lib/harness-run-lib.sh`;
 const SANDBOX_CLAUSE = ['sandbox.enabled', 'sandbox.failIfUnavailable', 'sandbox.allowUnsandboxedCommands'];
@@ -105,7 +105,7 @@ async function adoptedFixture(t, { optOut = false } = {}) {
   const w = await createWatcherFixture(t);
   if (w === null) return null;
 
-  const configPath = join(w.dir, 'harness.config.json');
+  const configPath = join(w.dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   delete config.commands.depInstall;
   delete config.commands.build;

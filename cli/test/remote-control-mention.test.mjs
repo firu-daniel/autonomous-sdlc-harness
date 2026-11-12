@@ -38,7 +38,7 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
 const COMMENTS_JQ = '.[] | {login: .user.login, body: .body}';
@@ -46,7 +46,7 @@ const ENGINE_COMMENTS_JQ = '.[] | {login: .user.login, at: .created_at, body: .b
 const REPLY_MARKER = '<!-- devscene event=reply branch=feat_x -->';
 const OAUTH = 'oauth-credential-value-1234';
 const API_KEY = 'api-credential-value-5678';
-const MENTION_COMMAND = '/devscene:harness-read-mention';
+const MENTION_COMMAND = '/devscene:read-mention';
 const COMMANDS = ['answer [<n>]', 'pause', 'resume', 'stop', 'clear', 'status'];
 
 const DIFF = 'diff --git a/notes.txt b/notes.txt\n--- a/notes.txt\n+++ b/notes.txt\n@@ -1 +1 @@\n-old\n+new\n';
@@ -93,7 +93,7 @@ if (args[0] === 'pr' && args[1] === 'view') {
 } else if (args[0] === 'run' && args[1] === 'list') {
   const branch = args[args.indexOf('--branch') + 1];
   process.stdout.write(process.env.STUB_RUN_LIST
-    || JSON.stringify([{ databaseId: 501, displayTitle: 'harness run ' + branch, status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]));
+    || JSON.stringify([{ databaseId: 501, displayTitle: 'devscene run ' + branch, status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]));
 } else if (args[0] === 'run' && args[1] === 'download') {
   const dir = args[args.indexOf('-D') + 1];
   mkdirSync(dir, { recursive: true });
@@ -131,7 +131,7 @@ const result = (decision) => JSON.stringify({ type: 'result', subtype: 'success'
  * An adopted fixture on `origin` with `feat_x` pushed, a gh stub, an agent stub and a throwaway plugin.
  *
  * @param {import('node:test').TestContext} t
- * @param {Record<string, unknown>} [settings] keys merged into `harness.config.json` before it is committed
+ * @param {Record<string, unknown>} [settings] keys merged into `devscene.config.json` before it is committed
  */
 async function controlFixture(t, settings = {}) {
   const fixture = await createFixture({
@@ -144,7 +144,7 @@ async function controlFixture(t, settings = {}) {
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   config.forge = 'github';
@@ -188,7 +188,7 @@ async function controlFixture(t, settings = {}) {
   const pluginDir = join(stubDir, 'plugin');
   mkdirSync(join(pluginDir, 'commands'), { recursive: true });
   mkdirSync(join(pluginDir, 'instructions'), { recursive: true });
-  writeFileSync(join(pluginDir, 'commands', 'harness-read-mention.md'), '');
+  writeFileSync(join(pluginDir, 'commands', 'read-mention.md'), '');
   const emptyPluginDir = join(stubDir, 'plugin-without-command');
   mkdirSync(join(emptyPluginDir, 'instructions'), { recursive: true });
   const log = join(stubDir, 'gh.log');
@@ -431,7 +431,7 @@ test('the session\'s model is the configured agentModel', async (t) => {
 test('the context directory holds comment.md opening with the handle, run.md and the open questions', async (t) => {
   const f = await controlFixture(t);
   const run = await f.control('Thanks!\n@dev-scene which question is open?', {}, {
-    STUB_RUN_LIST: JSON.stringify([{ databaseId: 601, displayTitle: 'harness run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' }]),
+    STUB_RUN_LIST: JSON.stringify([{ databaseId: 601, displayTitle: 'devscene run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' }]),
     STUB_ARTIFACTS: JSON.stringify({ artifacts: [{ name: 'harness-state', expired: false }] }),
     STUB_BUNDLE_STATUS: 'parked',
     STUB_BUNDLE_FIELDS: JSON.stringify({ engine: 'task' }),
@@ -500,7 +500,7 @@ test('on an issue there is no diff.patch', async (t) => {
   const { files } = f.agentCalls()[0];
   assert.ok(!('diff.patch' in files), Object.keys(files).join(' '));
   assert.match(files['item.md'], /^kind: issue\nnumber: 7\ntitle: An issue\n/);
-  assert.match(files['conversation.md'], /^### @github-actions\[bot\] at .*\n\(posted by the harness\)\n\nStarted a harness run/);
+  assert.match(files['conversation.md'], /^### @github-actions\[bot\] at .*\n\(posted by the harness\)\n\nStarted a harness run on the branch/);
   assert.ok(!f.calls().some((call) => call.line.startsWith('pr diff')));
 });
 
@@ -674,9 +674,9 @@ const ANSWER_DISPATCH = (answers) =>
   `workflow run devscene-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=task -f resume=answer -f answers=${JSON.stringify(answers)} -f chain=0`;
 const LABEL_WRITE = /\/labels -f labels\[\]=/;
 
-/** The environment of a completed `harness run feat_x` run whose bundle carries <status>, <fields> and <questions>. */
+/** The environment of a completed `devscene run feat_x` run whose bundle carries <status>, <fields> and <questions>. */
 const finishedRun = (status, fields = {}, questions = '') => ({
-  STUB_RUN_LIST: JSON.stringify([{ databaseId: 601, displayTitle: 'harness run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' }]),
+  STUB_RUN_LIST: JSON.stringify([{ databaseId: 601, displayTitle: 'devscene run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' }]),
   STUB_ARTIFACTS: JSON.stringify({ artifacts: [{ name: 'harness-state', expired: false }] }),
   STUB_BUNDLE_STATUS: status,
   STUB_BUNDLE_FIELDS: JSON.stringify(fields),

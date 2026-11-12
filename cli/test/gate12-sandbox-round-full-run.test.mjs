@@ -9,7 +9,7 @@
  * concluded success, and a restore with no placed line passes FR6 only when the parked job's bundle
  * holds no planning file; an expired bundle is `expired`. Round 13's two jobs are replayed on both.
  *
- * THE CANNED ANSWERS. `gh run list … --branch <b>` lists the branch's `harness run <b>` jobs; the
+ * THE CANNED ANSWERS. `gh run list … --branch <b>` lists the branch's `devscene run <b>` jobs; the
  * `gh` stub (Task 10's `ghStub`) answers each job's `run view <id> --repo <slug> --json
  * status,conclusion,jobs` and its `--log` (tab-separated `run\t<step>\t<line>`) by route. FR4's
  * `run-analytics.json` is committed on the branch and pushed to the fixture's bare origin.
@@ -32,7 +32,7 @@
  * - `cli/templates/scripts/push-branch.sh`: the prefix of its `$HR_WT_CONFIG_REFUSAL` refusal, and
  *   its detached-HEAD refusal.
  * - `cli/templates/scripts/commit-on-branch.sh`: the prefix of its `$HR_WT_CONFIG_REFUSAL` refusal,
- *   and its detached-HEAD refusal. Its two FR3 cases put the line in `Run the harness`, where the
+ *   and its detached-HEAD refusal. Its two FR3 cases put the line in `Run DevScene`, where the
  *   shipped watcher never writes a session's refusal; they pin the arm's matcher, not a path a real
  *   run reaches.
  * A refusal's reason is composed at run time, so it is canned in round 13's shape.
@@ -156,7 +156,7 @@ const STEP = {
   install: 'Install the sandbox prerequisites',
   preflight: 'Preflight with doctor',
   restore: "Restore the previous job's state",
-  harness: 'Run the harness',
+  harness: 'Run DevScene',
   push: 'Push the branch',
   save: 'Save the state bundle',
 };
@@ -187,7 +187,7 @@ const SAVED = `${SAVED_OPEN}${B}${SAVED_INTO}/home/runner/work/_temp/harness-sta
 const RESTORED = `${RESTORED_OPEN}${PARKED}${RESTORED_INTO}${WORKTREE}`;
 const PLACED = `${PLACED_OPEN}2${PLACED_FOR}${B}${PLACED_KEPT}0${PLACED_TAIL}`;
 const WROTE = `${WROTE_OPEN}1${WROTE_FOR}${B}`;
-const LINK = `${WORKTREE}/sdlc-harness/clarifications/${B}/link.md`;
+const LINK = `${WORKTREE}/devscene/clarifications/${B}/link.md`;
 const COPY_SKIP = `${SKIP_PREFIX}${LINK}: ${LINK}${SKIP_SUFFIX}`;
 const SAVE_SKIP = `${SAVE_SKIP_PREFIX}${LINK}: ${WORKTREE}/outside.txt${SAVE_SKIP_SUFFIX}`;
 const WT_CONFIG_REASON = `${WORKTREE}/.git/config.worktree sets core.sparsecheckout; remove the file, then re-run setup-worktree.sh in that working copy`;
@@ -222,7 +222,7 @@ function job(id, minute, lines, { overrides = {}, expired = false } = {}) {
  * @param {{ resumed?: boolean, wrote?: boolean, preflight?: string, finalLine?: string | null,
  *   notLaunching?: boolean, saveExtra?: string[], parkedExpired?: boolean, install?: string[],
  *   placed?: boolean, pushExtra?: string[], harnessExtra?: string[] }} [options] `pushExtra` and
- *   `harnessExtra` are appended to the completed job's `Push the branch` and `Run the harness` logs.
+ *   `harnessExtra` are appended to the completed job's `Push the branch` and `Run DevScene` logs.
  * @returns {Job[]}
  */
 function fullRun({
@@ -355,7 +355,7 @@ async function stage(fixture, jobs, { analytics = ANALYTICS, artifacts = { [PARK
   await pushBranch(fixture, analytics === null ? { 'notes.md': 'no analytics\n' } : { [analyticsRel(fixture)]: analytics });
 
   // Listed newest first, as `gh run list` answers: the grader orders by createdAt.
-  const listed = [...jobs].reverse().map((j) => ({ databaseId: j.id, createdAt: j.createdAt, displayTitle: `harness run ${B}`, status: 'completed' }));
+  const listed = [...jobs].reverse().map((j) => ({ databaseId: j.id, createdAt: j.createdAt, displayTitle: `devscene run ${B}`, status: 'completed' }));
   const routes = {
     [`run list --repo ${GATE12_SLUG} --workflow devscene-run.yml --branch ${B}`]: { stdout: `${JSON.stringify(listed)}\n` },
   };
@@ -480,7 +480,7 @@ test('FR2: an install step that logged a ##[warning] line is pass, that line rec
   assert.ok(record.includes(warning), record);
 });
 
-test('FR3: a final job whose Run the harness succeeded but logged job: failed stop is fail quoting that line', async (t) => {
+test('FR3: a final job whose Run DevScene succeeded but logged job: failed stop is fail quoting that line', async (t) => {
   const fixture = await fixtureFor(t);
   const failed = `${JOB_FINAL}failed stop`;
   await stage(fixture, fullRun({ finalLine: failed }));
@@ -499,7 +499,7 @@ test('FR3: a final job with no job: <final> <decision> line is fail', async (t) 
   assert.ok(fr3.evidence.includes(`run ${COMPLETED}`), fr3.evidence);
 });
 
-test('FR3: a commit-on-branch.sh refusal in the final job\'s Run the harness log is fail quoting that line', async (t) => {
+test('FR3: a commit-on-branch.sh refusal in the final job\'s Run DevScene log is fail quoting that line', async (t) => {
   const fixture = await fixtureFor(t);
   await stage(fixture, fullRun({ harnessExtra: [COMMIT_REFUSAL] }));
   const { one } = await grade(fixture);
@@ -517,7 +517,7 @@ test('FR3: the em-dash push-branch.sh refusal in a Push the branch that conclude
   assert.ok(fr3.evidence.includes(`run ${COMPLETED}: ${PUSH_DETACHED}`), fr3.evidence);
 });
 
-test('FR3: the em-dash commit-on-branch.sh refusal in Run the harness is fail', async (t) => {
+test('FR3: the em-dash commit-on-branch.sh refusal in Run DevScene is fail', async (t) => {
   const fixture = await fixtureFor(t);
   await stage(fixture, fullRun({ harnessExtra: [COMMIT_DETACHED] }));
   const { one } = await grade(fixture);

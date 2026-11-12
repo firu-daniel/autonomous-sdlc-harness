@@ -31,7 +31,7 @@ import { CASE_CONCURRENCY } from './helpers/concurrency.mjs';
 import { createFixture, retrievalEnv, runCli } from './helpers/fixture.mjs';
 import { COPY_GIT_PATHS } from '../dist/generators/writeProtection.js';
 
-const CONFIG_FILE = 'harness.config.json';
+const CONFIG_FILE = 'devscene.config.json';
 const PROFILE_FILE = '.claude/settings.autonomous.json';
 const CHECK_ID = 'profile-sandbox';
 const WRITE_CHECK_ID = 'profile-write-protection';

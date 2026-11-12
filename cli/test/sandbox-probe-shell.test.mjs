@@ -37,7 +37,7 @@ const IDENTITY = ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.i
 const PROBE_FILE = 'sandbox-probe.sh';
 const PROBE_LIB = join('lib', 'sandbox-probe');
 const DOCTOR_IDS = ['profile-sandbox', 'profile-write-protection', 'profile-main-anchor', 'sandbox-prerequisites'];
-const GUARDED = ['harness.config.json', '.git/config', '.claude/settings.autonomous.json'];
+const GUARDED = ['devscene.config.json', '.git/config', '.claude/settings.autonomous.json'];
 
 /** A shell single-quoted literal. */
 function shellQuote(value) {
@@ -80,7 +80,7 @@ async function probeFixture(t) {
   await cp(join(WORKSPACE_ROOT, 'scripts', PROBE_FILE), join(scripts, PROBE_FILE));
   await cp(join(WORKSPACE_ROOT, 'scripts', PROBE_LIB), join(scripts, PROBE_LIB), { recursive: true });
 
-  const config = JSON.parse(readFileSync(join(w.dir, 'harness.config.json'), 'utf8'));
+  const config = JSON.parse(readFileSync(join(w.dir, 'devscene.config.json'), 'utf8'));
   await writeFile(join(w.dir, '.git', 'info', 'exclude'), '/watcher-test/\n', { flag: 'a' });
   await runGit(w.dir, ['add', '-A']);
   await runGit(w.dir, [...IDENTITY, 'commit', '--quiet', '--no-verify', '-m', 'fixture: adopt the harness and the probe']);
@@ -315,7 +315,7 @@ test('preflight refuses in order, exit 2, leaving nothing behind', async (t) => 
 
   await t.test('5. a [gone] branch matching a protected pattern is the sweep’s to keep, not refused', async (t) => {
     // The fixture protects only its checked-out default branch, so a glob is added for the case.
-    const configPath = join(f.dir, 'harness.config.json');
+    const configPath = join(f.dir, 'devscene.config.json');
     const original = readFileSync(configPath);
     const config = JSON.parse(original.toString('utf8'));
     config.protectedBranches = [...(config.protectedBranches ?? []), 'release/*'];

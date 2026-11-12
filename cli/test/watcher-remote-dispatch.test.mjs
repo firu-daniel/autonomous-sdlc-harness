@@ -36,7 +36,7 @@ import {
   TICK_TIMEOUT_MS,
 } from './helpers/watcher.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REGISTRY_PATH = `${STATE_DIR}/autonomous_logs/registry.json`;
 
 /** `gh`, recorded: each argument vector appended to `STUB_LOG`; a call starting `STUB_FAIL_ON` exits 4. */
@@ -81,7 +81,7 @@ async function createDispatchFixture(t, { target = 'github-actions', branch } = 
   const w = await createWatcherFixture(t, branch === undefined ? undefined : { branch });
   if (w === null) return null;
 
-  const configPath = join(w.dir, 'harness.config.json');
+  const configPath = join(w.dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   delete config.commands.depInstall;
   delete config.commands.build;
@@ -404,9 +404,9 @@ const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** `hr_inbox_branch_refusal_var`'s three reasons; the root is matched loosely, the temp dir may be a symlink. */
 const INVALID_REASON = (b) => `'${escapeRe(b)}' is not a valid branch name \\(git check-ref-format --branch\\)`;
-const PROTECTED_REASON = (b) => `'${escapeRe(b)}' is a protected branch in '[^']*/harness\\.config\\.json'`;
+const PROTECTED_REASON = (b) => `'${escapeRe(b)}' is a protected branch in '[^']*/devscene\\.config\\.json'`;
 const UNRESOLVABLE_REASON = (b) =>
-  `whether '${escapeRe(b)}' is protected cannot be judged: the protected set in '[^']*/harness\\.config\\.json' cannot be resolved`;
+  `whether '${escapeRe(b)}' is protected cannot be judged: the protected set in '[^']*/devscene\\.config\\.json' cannot be resolved`;
 
 const rejectionLine = (fname, reason) =>
   new RegExp(`rejecting '${escapeRe(fname)}': ${reason} — nothing created, committed or launched`);
@@ -419,7 +419,7 @@ const archivedRejections = (f, fname) =>
 const registryRuns = (f) =>
   existsSync(join(f.dir, REGISTRY_PATH)) ? JSON.parse(readFileSync(join(f.dir, REGISTRY_PATH), 'utf8')).runs ?? {} : {};
 
-const defaultBranchOf = (f) => JSON.parse(readFileSync(join(f.dir, 'harness.config.json'), 'utf8')).defaultBranch;
+const defaultBranchOf = (f) => JSON.parse(readFileSync(join(f.dir, 'devscene.config.json'), 'utf8')).defaultBranch;
 
 /** Each refused drop: out of the inbox, archived once, and no working copy or run log for its branch. */
 function assertRefusedAtIntake(f, drops) {
@@ -494,7 +494,7 @@ test('while the protected set cannot be resolved any drop is refused at intake',
   const f = await createDispatchFixture(t, { target: null });
   if (f === null) return;
 
-  const broken = JSON.parse(readFileSync(join(f.dir, 'harness.config.json'), 'utf8'));
+  const broken = JSON.parse(readFileSync(join(f.dir, 'devscene.config.json'), 'utf8'));
   delete broken.defaultBranch;
   const brokenPath = join(f.dir, 'watcher-test', 'no-default-branch.json');
   await writeFile(brokenPath, `${JSON.stringify(broken, null, 2)}\n`, 'utf8');
@@ -511,7 +511,7 @@ test('while the protected set cannot be resolved any drop is refused at intake',
   ].join('\n');
   const result = await runBash(
     f.dir,
-    ['-c', script, '_', f.watcherPath, brokenPath, join(f.dir, 'harness.config.json')],
+    ['-c', script, '_', f.watcherPath, brokenPath, join(f.dir, 'devscene.config.json')],
     f.watcherEnv(),
     { timeoutMs: TICK_TIMEOUT_MS, signal: t.signal },
   );

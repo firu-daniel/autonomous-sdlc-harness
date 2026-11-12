@@ -18,7 +18,7 @@
 # IT IS NOT A WAY AROUND THAT GUARD — IT RE-IMPLEMENTS ITS INTENT. The guard's
 # dangerous case is a merge or rebase issued while HEAD is ON a protected branch,
 # which would put unreviewed work on the integration line. This script makes that
-# decision itself, from the MAIN checkout's `harness.config.json` at run time
+# decision itself, from the MAIN checkout's `devscene.config.json` at run time
 # through `lib/harness-run-lib.sh` rather than from a branch name written into
 # this file, and refuses (exit 2) before anything is fetched or merged. The
 # library's unresolvable answer is a refusal here too, never a permit.
@@ -99,12 +99,12 @@
 # (`hr_remote_url_configured`; the reasoning: `push-branch.sh` → the paragraph
 # of the same name). `--local` makes no network call and is not checked.
 #
-# THE TARGET'S `harness.config.json` IS NOT TRUSTED EITHER. A worktree's own
+# THE TARGET'S `devscene.config.json` IS NOT TRUSTED EITHER. A worktree's own
 # copy is a tracked file in a sandbox-writable tree, so a sandboxed command
 # could commit one that names any ref as `defaultBranch` — which this
 # unsandboxed script would then fetch and merge — or that drops a branch from
 # `protectedBranches`. So `defaultBranch` and the protected set are read from
-# the MAIN checkout's `harness.config.json` — the checkout the target check
+# the MAIN checkout's `devscene.config.json` — the checkout the target check
 # above derives from this file's own location, and a file the permission
 # profile write-protects — whichever checkout is the target; the target's own
 # copy is never read for them. A main checkout whose configuration cannot be
@@ -130,7 +130,7 @@
 # `submodule.recurse` in the main configuration never has the checkout run git
 # in a submodule under its `.git/modules/<name>/config`, which a sandboxed
 # command can write. The check compares that `core.hooksPath` against the
-# `githooksDir` in the worktree's own `harness.config.json` — the one
+# `githooksDir` in the worktree's own `devscene.config.json` — the one
 # configured value read from the worktree, and an inert one: a rewritten copy
 # can only make the check accept a different
 # `core.hooksPath`, which the pin overrides on every call.
@@ -187,7 +187,7 @@
 #      has uncommitted tracked changes / a target this script does not trust,
 #      or a main checkout it cannot place (THE TARGET IS NOT TRUSTED above) /
 #      the main checkout's configuration could not be read (THE TARGET'S
-#      `harness.config.json` IS NOT TRUSTED EITHER above) /
+#      `devscene.config.json` IS NOT TRUSTED EITHER above) /
 #      a per-working-copy configuration or a hooks directory this script does
 #      not trust (THE PER-WORKING-COPY CONFIG IS NOT TRUSTED above) / a
 #      `defaultBranch` or a branch starting with `-` / a fetch from a remote
@@ -226,7 +226,7 @@
 #
 #   b=$(mktemp -d)/origin.git; git init -q --bare "$b"
 #   d=$(mktemp -d); git -C "$d" init -q -b trunk; git -C "$d" remote add origin "$b"
-#   printf '%s' '{"version":1,"defaultBranch":"trunk","protectedBranches":["trunk","release/*"],"stateDir":"sdlc-harness/","layers":[],"commands":{}}' > "$d/harness.config.json"
+#   printf '%s' '{"version":1,"defaultBranch":"trunk","protectedBranches":["trunk","release/*"],"stateDir":"devscene/","layers":[],"commands":{}}' > "$d/devscene.config.json"
 #   printf 'a\n' > "$d/f.txt"; git -C "$d" add -A; git -C "$d" commit -qm seed
 #   git -C "$d" push -q -u origin trunk
 #   git -C "$d" checkout -q -b feat_x
@@ -256,7 +256,7 @@
 #                     outside the script runs there (cli/test/
 #                     wrapper-target-check.test.mjs case (p3) stages it with a
 #                     `git` shim, and cases (p) and (p2) the two exit-1 paths)
-#   unresolvable      printf 'x' > "$d/harness.config.json"; same call -> exit 1,
+#   unresolvable      printf 'x' > "$d/devscene.config.json"; same call -> exit 1,
 #                     nothing merged; restore -> exit 0
 #   --local           commit on trunk WITHOUT pushing, then from feat_x:
 #                     bash "$d/scripts/refresh-branch.sh" --local -> exit 0
@@ -314,7 +314,7 @@
 #
 #   The configuration is the main checkout's, on a clean worktree as above:
 #   git -C "$d" branch other trunk; git -C "$d" push -q origin other
-#   printf '%s' '{"version":1,"defaultBranch":"other","protectedBranches":[],"stateDir":"sdlc-harness/","layers":[],"commands":{}}' > "$w/harness.config.json"
+#   printf '%s' '{"version":1,"defaultBranch":"other","protectedBranches":[],"stateDir":"devscene/","layers":[],"commands":{}}' > "$w/devscene.config.json"
 #   git -C "$w" commit -qam "rewrite config"
 #
 #   another base      bash "$d/scripts/refresh-branch.sh" "$w" -> exit 0, a
@@ -381,7 +381,7 @@ if ! main_top="$(hr_wrapper_main_of "$script_dir")"; then
   echo "refresh-branch.sh: refusing to refresh: cannot place this script in a main checkout (its .git is a symbolic link, or a directory holding a commondir)" >&2
   exit 1
 fi
-# THE TARGET'S `harness.config.json` IS NOT TRUSTED EITHER (header): every
+# THE TARGET'S `devscene.config.json` IS NOT TRUSTED EITHER (header): every
 # configured value below is read at the main checkout, never at "$top".
 cfg_root="$main_top"
 
@@ -390,9 +390,9 @@ cfg_root="$main_top"
 # is a protected set that cannot be judged. It runs ahead of the target check,
 # so a clone target gets this refusal rather than the clone arm's registry
 # sentence, and ahead of the pin and the git-version check. It reads only
-# `<cfg_root>/harness.config.json` and makes no git call.
+# `<cfg_root>/devscene.config.json` and makes no git call.
 if ! hr_config_load "$cfg_root"; then
-  echo "refresh-branch.sh: cannot resolve '$cfg_root/harness.config.json' — refusing to merge" >&2
+  echo "refresh-branch.sh: cannot resolve '$cfg_root/devscene.config.json' — refusing to merge" >&2
   echo "  (no configuration there, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)" >&2
   exit 1
 fi
@@ -462,15 +462,15 @@ fi
 
 base="$(hr_default_branch "$cfg_root")" || base=""
 if [ -z "$base" ]; then
-  echo "refresh-branch.sh: no defaultBranch in '$cfg_root/harness.config.json' — refusing to merge" >&2
+  echo "refresh-branch.sh: no defaultBranch in '$cfg_root/devscene.config.json' — refusing to merge" >&2
   exit 1
 fi
 # A base git would parse as an option. Defence in depth: the main checkout's
-# harness.config.json is write-protected from the sandbox, and no branch git
+# devscene.config.json is write-protected from the sandbox, and no branch git
 # creates starts with `-`.
 case "$base" in
   -*)
-    echo "refresh-branch.sh: defaultBranch '$base' in '$cfg_root/harness.config.json' starts with '-', which git would read as an option — refusing to merge" >&2
+    echo "refresh-branch.sh: defaultBranch '$base' in '$cfg_root/devscene.config.json' starts with '-', which git would read as an option — refusing to merge" >&2
     exit 1
     ;;
 esac
@@ -508,12 +508,12 @@ case "$protected" in
 $patterns
 EOF
     echo "refresh-branch.sh: HEAD is on protected branch '$branch' — refusing to merge into it" >&2
-    echo "  protected set (from '$cfg_root/harness.config.json'): $protected_set" >&2
+    echo "  protected set (from '$cfg_root/devscene.config.json'): $protected_set" >&2
     echo "  this wrapper only merges '$base' INTO a working branch; check one out and re-run" >&2
     exit 2
     ;;
   2)
-    echo "refresh-branch.sh: cannot resolve '$cfg_root/harness.config.json' — refusing to merge" >&2
+    echo "refresh-branch.sh: cannot resolve '$cfg_root/devscene.config.json' — refusing to merge" >&2
     exit 1
     ;;
 esac

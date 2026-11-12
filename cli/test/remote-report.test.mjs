@@ -33,7 +33,7 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
 const MARKER = (event, branch) => `<!-- devscene event=${event} branch=${branch} -->`;
@@ -78,7 +78,7 @@ async function reportFixture(t, { forge = 'github' } = {}) {
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   if (forge === null) delete config.forge;
@@ -283,8 +283,8 @@ test('failed on a branch whose stop marker is newer posts nothing', async (t) =>
   const f = await reportFixture(t);
   const result = await f.report(['failed', 'feat_x'], {
     STUB_RUN_LIST: JSON.stringify([
-      { displayTitle: 'harness stop feat_x', createdAt: '2026-01-02T00:00:00Z' },
-      { displayTitle: 'harness run feat_x', createdAt: '2026-01-01T00:00:00Z' },
+      { displayTitle: 'devscene stop feat_x', createdAt: '2026-01-02T00:00:00Z' },
+      { displayTitle: 'devscene run feat_x', createdAt: '2026-01-01T00:00:00Z' },
     ]),
   });
   assert.equal(result.status, 0, result.stderr);
@@ -292,10 +292,10 @@ test('failed on a branch whose stop marker is newer posts nothing', async (t) =>
   assert.match(result.stdout, /already reported/);
 });
 
-/** A `harness stop feat_x` newer than the newest `harness run feat_x`: the stop overtook the job. */
+/** A `devscene stop feat_x` newer than the newest `devscene run feat_x`: the stop overtook the job. */
 const STOP_NEWER = JSON.stringify([
-  { displayTitle: 'harness stop feat_x', createdAt: '2026-01-02T00:00:00Z' },
-  { displayTitle: 'harness run feat_x', createdAt: '2026-01-01T00:00:00Z' },
+  { displayTitle: 'devscene stop feat_x', createdAt: '2026-01-02T00:00:00Z' },
+  { displayTitle: 'devscene run feat_x', createdAt: '2026-01-01T00:00:00Z' },
 ]);
 const STOPPED_LINE = /^remote-run\.sh: report: feat_x was stopped, and the stop already reported the run; nothing posted$/m;
 const labelWrites = (calls) => calls.filter((call) => /^api --method (POST|DELETE) [^ ]*\/labels\b/.test(call.line));
@@ -330,8 +330,8 @@ test('resumed after a harness run newer than the stop posts and sets running', a
   const f = await reportFixture(t);
   const result = await f.report(['resumed', 'feat_x'], {
     STUB_RUN_LIST: JSON.stringify([
-      { displayTitle: 'harness run feat_x', createdAt: '2026-01-03T00:00:00Z' },
-      { displayTitle: 'harness stop feat_x', createdAt: '2026-01-02T00:00:00Z' },
+      { displayTitle: 'devscene run feat_x', createdAt: '2026-01-03T00:00:00Z' },
+      { displayTitle: 'devscene stop feat_x', createdAt: '2026-01-02T00:00:00Z' },
     ]),
   });
   assert.equal(result.status, 0, result.stderr);

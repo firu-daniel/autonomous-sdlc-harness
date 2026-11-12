@@ -14,7 +14,7 @@
  * legitimately.
  *
  * Registered as a tree guard by Task 11 of `fix_clone_main_repo_resolution`, which adds this
- * file's `treeGuards` entry to `harness.config.json`.
+ * file's `treeGuards` entry to `devscene.config.json`.
  *
  * A later suite adds a corpus case as a row in `CASES`, with no new runner code. A `forbidden` entry
  * is either a string, matched by `includes`, or a `RegExp` without the `g` flag, matched by `test`.

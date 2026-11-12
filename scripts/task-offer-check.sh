@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # task-offer-check.sh — answer the change-request fence's opt-out test: print
 # the main checkout of the working directory's checkout and exit 0 only when
-# one was found and `.claude/harness-no-offer` is absent there.
+# one was found and `.claude/devscene-no-offer` is absent there.
 #
 # EXIT MAP.
 #   0  the offer may proceed; the canonical main checkout is the one line on
@@ -51,7 +51,7 @@
 #
 #   main checkout  (cd "$d" && bash scripts/task-offer-check.sh; echo $?)
 #                  -> the canonical "$d" on stdout, then 0
-#   opted out      mkdir -p "$d/.claude" && : > "$d/.claude/harness-no-offer"
+#   opted out      mkdir -p "$d/.claude" && : > "$d/.claude/devscene-no-offer"
 #                  (cd "$d" && bash scripts/task-offer-check.sh; echo $?)
 #                  -> nothing printed, 1
 #   not a checkout (cd "$w" && bash "$d/scripts/task-offer-check.sh"; echo $?)
@@ -106,6 +106,6 @@ else
 fi
 
 [ -n "$main" ] || exit 1
-[ ! -e "$main/.claude/harness-no-offer" ] || exit 1
+[ ! -e "$main/.claude/devscene-no-offer" ] || exit 1
 printf '%s\n' "$main"
 exit 0

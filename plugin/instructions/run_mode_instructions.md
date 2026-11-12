@@ -2,11 +2,11 @@
 
 ## Resolved values
 
-The token below is neither a Mode-contract **binding** (this file declares none — the `**Placeholder resolution.**` note below states where the ones it *uses* come from) nor an ordinary **path placeholder** (`<branch>` and `<prompt_path>`, plus the names this file's own text defines at their use sites — that same note enumerates them): it resolves from the adopting repository's `harness.config.json`. It is declared here once, and after this table the body uses it as an ordinary placeholder.
+The token below is neither a Mode-contract **binding** (this file declares none — the `**Placeholder resolution.**` note below states where the ones it *uses* come from) nor an ordinary **path placeholder** (`<branch>` and `<prompt_path>`, plus the names this file's own text defines at their use sites — that same note enumerates them): it resolves from the adopting repository's `devscene.config.json`. It is declared here once, and after this table the body uses it as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `devscene/`. It is never dot-named: no path segment of it may begin with a dot. |
 
 **Phase configuration, and why the body never names it.** This house also gates whole phases from the adopting repository's configuration (`phases.qa`, `phases.docs`, `phases.parity`). The consequence, made concrete here because it names this house's configuration: a phase already disabled there is skipped whatever a run mode says, and **a run mode never re-enables it** — which is the body's subtractive-only rule (`## The closed directive set — the only four things a run mode may switch off`) applied to this house, not an addition to it.
 

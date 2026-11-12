@@ -16,7 +16,7 @@ The hard constraint holds (−1 154 agent-owned words). The saving comes from cu
 
 ## Read tree
 
-Measured with `wc -w` in this checkout. `harness.config.json` sets `stateDir: harness-runs`, the layers `cli`, `plugin` and `general` (`.`), and all `phases.*` to `false`.
+Measured with `wc -w` in this checkout. `devscene.config.json` sets `stateDir: harness-runs`, the layers `cli`, `plugin` and `general` (`.`), and all `phases.*` to `false`.
 
 | File | Up-front / on-demand | Words |
 |---|---|---|

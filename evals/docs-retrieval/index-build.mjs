@@ -53,7 +53,7 @@ export function assertRealModelsAreAvailable() {
   if (!models.present) {
     throw new Error(
       `eval: the model cache under ${cacheDir} is incomplete, so no real-model number can be taken; ` +
-        `missing: ${models.missing.join(', ')}. Run the harness's retrieval setup to fetch them`,
+        `missing: ${models.missing.join(', ')}. Run DevScene's retrieval setup to fetch them`,
     );
   }
 

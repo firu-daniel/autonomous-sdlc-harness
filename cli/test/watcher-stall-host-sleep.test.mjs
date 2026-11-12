@@ -40,7 +40,7 @@ import {
   TICK_TIMEOUT_MS,
 } from './helpers/watcher.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const INBOX = `${STATE_DIR}/autonomous_inbox`;
 const LOGS = `${STATE_DIR}/autonomous_logs`;
 const IDENTITY = ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid'];
@@ -94,7 +94,7 @@ async function sleepFixture(t) {
   const w = await createWatcherFixture(t);
   if (w === null) return null;
 
-  const configPath = join(w.dir, 'harness.config.json');
+  const configPath = join(w.dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   delete config.commands.depInstall;
   delete config.commands.build;

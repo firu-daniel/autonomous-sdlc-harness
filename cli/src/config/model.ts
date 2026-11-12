@@ -1,7 +1,7 @@
 /**
- * The typed in-memory model of `harness.config.json`, and the schema's own declared defaults.
+ * The typed in-memory model of `devscene.config.json`, and the schema's own declared defaults.
  *
- * **The rule this module exists to enforce: this file mirrors `schemas/harness.config.schema.json`
+ * **The rule this module exists to enforce: this file mirrors `schemas/devscene.config.schema.json`
  * key for key and invents nothing.** The schema is authoritative — it is what
  * `npm run validate:config` checks an adopter's file against — so a key here that is not there is
  * a key no config may legally carry, and a default here that disagrees with the schema's `default`
@@ -20,7 +20,7 @@
  */
 
 /** The config file's name, at the adopting repository's root. */
-export const CONFIG_FILENAME = 'harness.config.json';
+export const CONFIG_FILENAME = 'devscene.config.json';
 
 /** The only format version this release recognises — the schema's `version` const. */
 export const CONFIG_VERSION = 1;
@@ -54,7 +54,7 @@ export interface HarnessDetection {
    * `config set detection.review`.
    */
   commandFamily?: string;
-  /** The layer-profile review's verdict, written by `/devscene:harness-analyze` through `config set detection.review`. */
+  /** The layer-profile review's verdict, written by `/devscene:analyze` through `config set detection.review`. */
   review?: HarnessLayerReview;
 }
 
@@ -183,10 +183,10 @@ export interface HarnessTreeGuard {
 }
 
 /**
- * `harness.config.json`, in memory.
+ * `devscene.config.json`, in memory.
  *
  * Key order below is the schema's own, so a generator that fills this object top to bottom writes
- * a file whose key order matches `examples/harness.config.json`. Required keys are non-optional
+ * a file whose key order matches `examples/devscene.config.json`. Required keys are non-optional
  * here; optional keys are optional, and a reader that wants an optional key's effective value
  * falls back to {@link DEFAULTS} rather than re-deriving one.
  */
@@ -267,10 +267,6 @@ export interface HarnessConfig {
  * either, and {@link sandboxAllowedDomains} and {@link configuredTreeGuards} fall back to
  * `sandbox.allowedDomains` and `treeGuards` below.
  *
- * `scriptsDir` is the one key whose generated value differs from its default: `init` writes
- * {@link INIT_SCRIPTS_DIR}, while the value here stays the absent-key meaning every reader falls
- * back to, so a configuration that omits the key keeps finding its scripts where they already are.
- *
  * `as const` makes these literals, so a caller copies rather than aliases them —
  * `[...DEFAULTS.protectedBranches]`, `{ ...DEFAULTS.phases }` — and no generator can mutate the
  * defaults out from under the next one.
@@ -279,9 +275,9 @@ export const DEFAULTS = {
   version: CONFIG_VERSION,
   defaultBranch: 'main',
   protectedBranches: ['main'],
-  stateDir: 'sdlc-harness/',
+  stateDir: 'devscene/',
   appDir: '.',
-  scriptsDir: 'scripts',
+  scriptsDir: 'devscene-scripts',
   githooksDir: 'githooks',
   agentModel: 'opus',
   clientEnvPrefix: null,
@@ -292,15 +288,8 @@ export const DEFAULTS = {
   treeGuards: [],
 } as const;
 
-/**
- * The `scriptsDir` `init` writes into a configuration it generates.
- *
- * Deliberately not {@link DEFAULTS}`.scriptsDir`, which mirrors the schema `default` and so is the
- * **absent-key** meaning: the directory every release before 0.6.6 wrote into, and still where a
- * configuration that omits the key keeps its scripts. Changing that meaning would strand those
- * scripts silently.
- */
-export const INIT_SCRIPTS_DIR = 'harness-scripts';
+/** The `scriptsDir` `init` writes into a configuration it generates — the schema default. */
+export const INIT_SCRIPTS_DIR = DEFAULTS.scriptsDir;
 
 /**
  * The schema's `forge` `enum`, mirrored verbatim: the code-hosting platforms the flow knows.
@@ -387,7 +376,7 @@ export const STATE_DIR_DOT_PATTERN = /(^|\/)\./;
  * `bundle` the only resolver, so there is no second runner to stay neutral about. Its profile is a
  * source root — `app/` or `lib/`, whichever exists — rather than a Rails layer list, because
  * naming a Rails application's `app/` sub-directories as layers would decide its architecture, and
- * that is `/devscene:harness-analyze`'s. A Rails-shaped repository does not reach this preset at all: it
+ * that is `/devscene:analyze`'s. A Rails-shaped repository does not reach this preset at all: it
  * matches `api-service:route-directory` on its `app/controllers`, keeps that profile, and gains
  * the Bundler commands through the command family, which is selected independently of the preset.
  * A repository whose root `package.json` declares a script the npm commands are derived from does

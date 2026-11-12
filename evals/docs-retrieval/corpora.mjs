@@ -4,7 +4,7 @@
  * **The rule this module exists to enforce: the eval owns the retrieval *gate* and nothing else of
  * the configuration.** `cli/src/retrieval/session.ts` refuses to open a session unless
  * `retrievalApplies(config)` — `phases.docs` and `docs.retrieval` both true — and this repository's
- * `harness.config.json` has `phases.docs: false` and no `docs` key. That file is deliberately not
+ * `devscene.config.json` has `phases.docs: false` and no `docs` key. That file is deliberately not
  * changed. `cli/src/retrieval/corpus.ts`'s header states that the gate "is its callers' to check,
  * not this module's", so the eval supplies `phases` and `docs` itself and drives `corpusFiles` →
  * `refreshIndex` → `searchDocs` directly, never `openRetrieval`.
@@ -13,7 +13,7 @@
  * `cli/src/retrieval/corpus.ts` states the corpus is "every Markdown file under `docs.root` plus
  * every conventions document `layers[]` names — nothing else, and no copy of that list elsewhere".
  * So `self-docs` reads `layers[]` and `stateDir` out of the resolved checkout's real
- * `harness.config.json` verbatim and overrides `docs.root` alone: no layer list is retyped here, not
+ * `devscene.config.json` verbatim and overrides `docs.root` alone: no layer list is retyped here, not
  * as a literal, not as a default, not as a fallback. A layer added to that file is covered by the
  * next run with no edit to this one. A configuration that is absent or carries no `layers` is
  * refused by name rather than substituted for.

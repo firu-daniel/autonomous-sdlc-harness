@@ -85,8 +85,8 @@ test('the run-control names keep their literal values', () => {
   assert.deepEqual([...MENTION_ACTIONS], ['command', 'reply', 'clarify', 'fixes', 'none']);
   assert.deepEqual([...MENTION_ACT_VERBS], ['answer', 'pause', 'resume', 'status']);
   assert.deepEqual([...MENTION_CONFIRM_VERBS], ['stop', 'clear']);
-  assert.equal(MENTION_COMMAND_NAME, 'harness-read-mention');
-  assert.equal(MENTION_COMMAND, '/devscene:harness-read-mention');
+  assert.equal(MENTION_COMMAND_NAME, 'read-mention');
+  assert.equal(MENTION_COMMAND, '/devscene:read-mention');
 });
 
 test('the mention act and confirm verbs partition COMMAND_VERBS', () => {
@@ -182,7 +182,7 @@ test('harness-run-lib.sh mirrors WORKFLOW_RUN_FILE and STATE_ARTIFACT_NAME byte 
 });
 
 test('forgeTriggerApplies holds only for github with github-actions execution', () => {
-  const base = { version: 1, defaultBranch: 'main', stateDir: 'sdlc-harness/', layers: [], commands: {} };
+  const base = { version: 1, defaultBranch: 'main', stateDir: 'devscene/', layers: [], commands: {} };
   assert.equal(forgeTriggerApplies({ ...base, execution: { target: 'github-actions' } }), false);
   assert.equal(forgeTriggerApplies({ ...base, forge: 'github' }), false);
   assert.equal(forgeTriggerApplies({ ...base, forge: 'github', execution: { target: 'github-actions' } }), true);

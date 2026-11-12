@@ -137,7 +137,7 @@ fi
 . "$M/scripts/lib/harness-run-lib.sh"
 # The watcher's `spawn_engine` resolves its `--add-dir` state root the same way.
 if ! S=$(hr_state_path "$M"); then
-  echo "sandbox-absent-path-check: the state directory under '$M' is unresolvable from harness.config.json" >&2
+  echo "sandbox-absent-path-check: the state directory under '$M' is unresolvable from devscene.config.json" >&2
   exit 1
 fi
 

@@ -26,7 +26,7 @@ import { INIT_SCRIPTS_DIR, runBash } from './helpers/fixture.mjs';
 import { scaleBound } from './helpers/timing.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const CEILING = 'CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS';
 const BASE_PROFILE = '.claude/settings.autonomous.json';
 const JOB_TIMEOUT_MS = scaleBound(120_000);
@@ -43,9 +43,9 @@ function exported(names) {
   return Object.fromEntries(names.map((name) => [name, `value-of-${name}`]));
 }
 
-/** The fixture's `harness.config.json` with `sandbox.passEnv` set to `names`, or removed for `undefined`. */
+/** The fixture's `devscene.config.json` with `sandbox.passEnv` set to `names`, or removed for `undefined`. */
 async function setPassEnv(f, names) {
-  const configPath = join(f.dir, 'harness.config.json');
+  const configPath = join(f.dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   const sandbox = { ...(config.sandbox ?? {}) };
   if (names === undefined) delete sandbox.passEnv;

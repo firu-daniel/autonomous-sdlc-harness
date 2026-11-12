@@ -41,7 +41,7 @@ import { INIT_SCRIPTS_DIR, runBash, runGit } from './helpers/fixture.mjs';
 import { scaleBound } from './helpers/timing.mjs';
 import { createWatcherFixture, finishedLedgerBody } from './helpers/watcher.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REPOSITORY = 'octo/fixture';
 const ISSUE = 7;
 const PR_URL = `https://github.com/${REPOSITORY}/pull/12`;
@@ -92,9 +92,9 @@ const nowSecs = () => Math.floor(Date.now() / 1000);
 /** GitHub's `createdAt` shape — whole seconds, `Z` — for an epoch second. */
 const iso = (secs) => new Date(secs * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
 
-/** A canned `run list` answer carrying one `harness pause <branch>` run created at <secs>. */
+/** A canned `run list` answer carrying one `devscene pause <branch>` run created at <secs>. */
 const pauseRunList = (branch, secs) =>
-  JSON.stringify([{ databaseId: 99, displayTitle: `harness pause ${branch}`, status: 'completed', createdAt: iso(secs) }]);
+  JSON.stringify([{ databaseId: 99, displayTitle: `devscene pause ${branch}`, status: 'completed', createdAt: iso(secs) }]);
 
 /** Stub body: acknowledge PAUSE and exit 0 once it appears. `STATE` is the state directory. */
 const HONOUR_PAUSE = (tenths) =>
@@ -111,7 +111,7 @@ const lastLine = (text) => text.trimEnd().split('\n').at(-1);
  * task prompt whose provenance line names {@link ISSUE}, through a throwaway clone.
  */
 async function wireForge(w, scratch) {
-  const configPath = join(w.dir, 'harness.config.json');
+  const configPath = join(w.dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   config.forge = 'github';
@@ -360,7 +360,7 @@ async function playSequence(t, { job2Env = () => ({}), job2Stub = HONOUR_PAUSE(P
   assert.ok(completed[0].body.includes(PR_URL), completed[0].body);
 }
 
-test('user pause: park, answer, a harness pause run, then a pause resume completes and delivers', async (t) => {
+test('user pause: park, answer, a devscene pause run, then a pause resume completes and delivers', async (t) => {
   await playSequence(t, {
     job2Env: () => {
       const start = nowSecs() - 10;

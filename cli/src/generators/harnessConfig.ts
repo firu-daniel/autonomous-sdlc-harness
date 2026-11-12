@@ -1,11 +1,11 @@
 /**
- * Generator: the adopting repository's `harness.config.json`.
+ * Generator: the adopting repository's `devscene.config.json`.
  *
  * It assembles one object out of stack detection and the explicit `init` flags, refuses to write
  * one it can already tell is invalid, and enqueues it under the `create-if-absent` contract so a
  * second `init` never rewrites a config the adopter has edited unless it was asked to — which is
  * the whole of what `--reset-config` is. It is the artifact the schema gate
- * validates, so everything below is written to satisfy `schemas/harness.config.schema.json` rather
+ * validates, so everything below is written to satisfy `schemas/devscene.config.schema.json` rather
  * than to look tidy.
  *
  * ## Three non-obvious choices, and where each comes from
@@ -14,7 +14,7 @@
  *    frame: "its value is a URI or a path resolved relative to this file's own location, not a
  *    repo-relative path". An adopter's repository has no stable relative path to a schema shipped
  *    inside an installed package, so any value written here would be wrong somewhere.
- *    `examples/harness.config.json` keeps the key because that file sits beside the schema.
+ *    `examples/devscene.config.json` keeps the key because that file sits beside the schema.
  * 2. **An optional section is omitted entirely rather than emitted empty or null.**
  *    `additionalProperties: false` holds at every level, and an empty `qa: {}` or a
  *    `parity: { }` says nothing a reader or `doctor` can act on while looking like a decision that
@@ -23,7 +23,7 @@
  *    `DEFAULTS`.
  * 3. **`commands.typecheck` / `test` / `devServer` hold the wrapper *invocation*; `build` and
  *    `depInstall` hold the **raw** detected line** (the `commands` object of
- *    `examples/harness.config.json`).
+ *    `examples/devscene.config.json`).
  *    The invocation string is never formatted here — it comes from `generators/scripts.ts`'s
  *    {@link wrapperInvocation}, and the file name from its {@link WRAPPER_SCRIPTS} table — because
  *    the value written here, the wrapper file that generator writes, and the permission profile's
@@ -145,7 +145,7 @@ export interface HarnessConfigFlags {
   readonly projectName?: string;
   /** `--default-branch`. Detected from the repository when absent — see {@link resolveDefaultBranch}. */
   readonly defaultBranch?: string;
-  /** `--state-dir`. Defaults to the schema's `sdlc-harness/`. */
+  /** `--state-dir`. Defaults to the schema's `devscene/`. */
   readonly stateDir?: string;
   /** `--scripts-dir`. Defaults to {@link INIT_SCRIPTS_DIR}. */
   readonly scriptsDir?: string;
@@ -408,11 +408,11 @@ function buildCommands(scriptsDir: string, raw: RawCommands): HarnessCommands {
  * on the same single-derivation rule the reporting lines in `detect/presets.ts` read it by, and the
  * written key means **this family derived at least one of the two required commands**.
  *
- * **No `review` key is written here.** It is the `/devscene:harness-analyze` command's to record through
+ * **No `review` key is written here.** It is the `/devscene:analyze` command's to record through
  * `config set detection.review`, and an empty object would read as a review that happened.
  *
  * **Written on the run that generates the file, and never refreshed by a plain re-run.**
- * `harness.config.json` is one of the artifacts `--force` does not upgrade (`docs/cli.md` §3), so a
+ * `devscene.config.json` is one of the artifacts `--force` does not upgrade (`docs/cli.md` §3), so a
  * re-run keeps whatever record the file already holds and `--reset-config` is what rebuilds it —
  * the same sentence {@link writeHarnessConfig}'s deferred start-over note already makes about every
  * other re-derived value. The finding this implements said `init --force` refreshes it; that was
@@ -696,7 +696,7 @@ function resolveQaDriver(
  *
  * Keys are set in the schema's own order, because the write engine serializes the object as it
  * stands and JSON keeps insertion order: assembling in schema order is what makes the generated
- * file read like `examples/harness.config.json` and what makes an unchanged re-write byte-identical.
+ * file read like `examples/devscene.config.json` and what makes an unchanged re-write byte-identical.
  * Nothing here touches the filesystem beyond the read-only git probes behind
  * {@link resolveDefaultBranch}.
  *
@@ -796,7 +796,7 @@ export function buildConfig({
     // still on and the config check warns about the missing path, which is the actionable half.
     if (flags.referenceImpl === undefined) {
       report(
-        '--parity was given without --reference-impl, so no parity section was written: set parity.referenceImplPath in harness.config.json before the phase runs, or it has nothing to compare a change against',
+        '--parity was given without --reference-impl, so no parity section was written: set parity.referenceImplPath in devscene.config.json before the phase runs, or it has nothing to compare a change against',
       );
     } else {
       config.parity = { referenceImplPath: flags.referenceImpl };

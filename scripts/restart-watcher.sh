@@ -120,13 +120,13 @@
 # recorder standing in for the CLI, with no daemon and no service manager:
 #
 #   w=$(mktemp -d); d="$w/demo"; git init -q -b trunk "$d"
-#   printf '%s' '{"version":1,"projectName":"demo","defaultBranch":"trunk","stateDir":"sdlc-harness/","layers":[],"commands":{}}' > "$d/harness.config.json"
-#   mkdir -p "$d/scripts/lib" "$d/sdlc-harness/autonomous_logs" "$w/bin"
-#   # copy this script into "$d/scripts" and lib/harness-run-lib.sh beside it
+#   printf '%s' '{"version":1,"projectName":"demo","defaultBranch":"trunk","stateDir":"devscene/","layers":[],"commands":{}}' > "$d/devscene.config.json"
+#   mkdir -p "$d/devscene-scripts/lib" "$d/devscene/autonomous_logs" "$w/bin"
+#   # copy this script into "$d/devscene-scripts" and lib/harness-run-lib.sh beside it
 #   printf '#!/usr/bin/env bash\necho "$*" >> "%s/calls"\n' "$w" > "$w/bin/hcli"
 #   chmod +x "$w/bin/hcli"
-#   reg="$d/sdlc-harness/autonomous_logs/registry.json"
-#   run() { PATH="$w/bin:$PATH" DEVSCENE_CLI="${DEVSCENE_CLI:-hcli}" bash "$d/scripts/restart-watcher.sh" "$@"; echo "exit $?"; }
+#   reg="$d/devscene/autonomous_logs/registry.json"
+#   run() { PATH="$w/bin:$PATH" DEVSCENE_CLI="${DEVSCENE_CLI:-hcli}" bash "$d/devscene-scripts/restart-watcher.sh" "$@"; echo "exit $?"; }
 #
 #   in flight     printf '%s' '{"runs":{"feat_x":{"status":"running"}}}' > "$reg"
 #                 run            -> the in-flight report, exit 2, and no
@@ -275,10 +275,10 @@ remote=""
 hr_config_load "$main_repo"
 cfg_status=$?
 if [ "$cfg_status" -eq 1 ]; then
-  echo "restart-watcher.sh: there is no '$main_repo/harness.config.json' — nothing was restarted" >&2
+  echo "restart-watcher.sh: there is no '$main_repo/devscene.config.json' — nothing was restarted" >&2
   exit 1
 elif [ "$cfg_status" -ne 0 ]; then
-  unknown="'$main_repo/harness.config.json' could not be resolved (unreadable, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)"
+  unknown="'$main_repo/devscene.config.json' could not be resolved (unreadable, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)"
 else
   registry="$(hr_state_path "$main_repo" autonomous_logs/registry.json)" || registry=""
   if [ -z "$registry" ]; then

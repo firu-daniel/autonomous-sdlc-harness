@@ -6,16 +6,16 @@ This file defines the **mechanism** by which a mode-free `…_instructions_core.
 
 ## Resolved values
 
-**These are a third vocabulary.** The tokens below are neither the **bindings** this file defines (`## Binding vocabulary`, which a fork supplies) nor the **path placeholders** `### Bindings vs. path placeholders` governs (which resolve from a flow's entry core `## Setup`): they resolve from the runtime or from the adopting repository's `harness.config.json`, identically for every flow, and are declared here once so the body below can use each one as an ordinary placeholder. Adding them does not blur this file's own two-vocabulary distinction — it names a third that resolves from neither place.
+**These are a third vocabulary.** The tokens below are neither the **bindings** this file defines (`## Binding vocabulary`, which a fork supplies) nor the **path placeholders** `### Bindings vs. path placeholders` governs (which resolve from a flow's entry core `## Setup`): they resolve from the runtime or from the adopting repository's `devscene.config.json`, identically for every flow, and are declared here once so the body below can use each one as an ordinary placeholder. Adding them does not blur this file's own two-vocabulary distinction — it names a third that resolves from neither place.
 
 **`<app_root>` and `<app_dir>` are deliberately two names.** `<app_root>` is the **binding** — the flow's app root, the value a fork supplies — and `<app_dir>` is the **config token** it is built from (`<app_root>` = `<repo_root>/<app_dir>`). `<repo_root>` is the one name that appears in both tables: `## Binding vocabulary` declares it as a binding a fork must supply, and the row below states how a fork obtains its value.
 
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<repo_root>` | derived at runtime | The absolute root of the checkout the flow is executing in. Obtain it with a **bare** `git rev-parse --show-toplevel` and build every literal path from the result. Never embed the `$(…)` substitution inside another shell command, and never stash it in a shell variable across separate Bash calls — separate calls do not share shell state. |
-| `<app_dir>` | config value | `harness.config.json` → `appDir` — the app's directory inside the checkout, repo-relative. The binding `<app_root>` is built from it. |
+| `<app_dir>` | config value | `devscene.config.json` → `appDir` — the app's directory inside the checkout, repo-relative. The binding `<app_root>` is built from it. |
 | `<scripts_dir>` | config value | `scriptsDir` — the directory the wrapper scripts named in this file live in. The commit / push / watcher scripts named by path here are outer-loop scripts rather than generated wrappers — they are named by their destination path, and the item that delivers them settles it. |
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `devscene/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<reference_impl>` | config value | `parity.referenceImplPath` — the reference implementation this project is kept in parity with. Read **only** when `phases.parity` is `true`. |
 | `<qa_creds_path>` | config value | `qa.credentialsPath` — the repo-relative path of the gitignored test-account file. Read only when `phases.qa` is `true`. |
 

@@ -20,7 +20,7 @@ Paths are relative to the checkout root (from `git rev-parse --show-toplevel`). 
 | Dispatched `layers[].conventions`: this repo's `.claude/context/plugin.md` 4 174 / `cli.md` 2 647; template `cli/templates/claude/context/layer.md` 441 | up-front (one) | 2 647–4 174 |
 | `.claude/context/conventions.md`. `.claude/CLAUDE.md:40` routes "**Any implementation**" here, for every layer (lead 13); adopter template 974 | up-front | 5 864 |
 | Catch-all dispatch only: **every** `layers[].conventions` (`layer-implementer.md:84`) | up-front on `path "."` | 12 685 (this repo) |
-| `harness.config.json` (the layer set, `layer-implementer.md:84`; the `commands.*` / `phases.*` reads in `## Resolved values`) | up-front | 154 |
+| `devscene.config.json` (the layer set, `layer-implementer.md:84`; the `commands.*` / `phases.*` reads in `## Resolved values`) | up-front | 154 |
 | `plugin/instructions/unit_loop_core.md` → `## The test-run rule`, points 1–6 (lines 140–153). "Apply" on every dispatch (`layer-implementer.md:152`) | up-front | 644 |
 | Unit detail file; fix iteration: findings file; row `A`: story index `## Context` | up-front, variable | n/a (point-in-time) |
 | `unit_loop_core.md` → `## Substitution table` (row-`G.4` match `:154`, gate-class phase derivation `:172`) | on demand | 4 333 |
@@ -179,7 +179,7 @@ All "after" figures are **estimates**. Only the template was drafted and counted
 | `.claude/CLAUDE.md` | 1 695 | 1 695 | 0 |
 | `.claude/context/plugin.md` | 4 174 | 4 174 | 0 |
 | `.claude/context/conventions.md` (`CLAUDE.md` routing) | 5 864 | 5 864 | 0 |
-| `harness.config.json` | 154 | 154 | 0 |
+| `devscene.config.json` | 154 | 154 | 0 |
 | Test-run rule (points 1–6) | 644 | 644 | 0 |
 | **Total** | **18 818** | **~15 287** | **−3 531** |
 

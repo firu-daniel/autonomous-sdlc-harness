@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # preflight.sh — the Gate 12 round driver's start-up refusals and its read of the Gate 12 repository's
-# own harness.config.json (`g12_preflight`). scripts/gate12-sandbox-round.sh calls it before every
+# own devscene.config.json (`g12_preflight`). scripts/gate12-sandbox-round.sh calls it before every
 # --repo subcommand; nothing else in the driver may run first.
 #
 # THE REFUSALS, IN ORDER. Each prints one `g12_refuse` line naming its cause and makes g12_preflight
@@ -12,7 +12,7 @@
 #      held in G12_ROOT); or that top level is this script's own (G12_SCRIPT_ROOT), compared
 #      canonically; or it carries scripts/lib/gate12-sandbox-round/core.sh, so it is any checkout
 #      of the repository that ships this driver.
-#   3. G12_ROOT/harness.config.json is absent: not adopted.
+#   3. G12_ROOT/devscene.config.json is absent: not adopted.
 #   4. The configuration read below cannot resolve a value, or its screen refuses one.
 #   5. The raw `remote.origin.url` (the value the operator wrote, not `git remote get-url`) is not
 #      https://github.com/<o>/<n>[.git], git@github.com:<o>/<n>[.git], or git@<alias>:<o>/<n>[.git]
@@ -56,7 +56,7 @@ g12_preflight_failed() {
 
 # g12_config_screen <key> <hr_ reader> <variable> — the library's value for <key>, screened.
 g12_config_screen() {
-  local key="$1" reader="$2" var="$3" config="$G12_ROOT/harness.config.json" value status
+  local key="$1" reader="$2" var="$3" config="$G12_ROOT/devscene.config.json" value status
   value="$("$reader" "$G12_ROOT")"
   status=$?
   case "$status" in
@@ -104,8 +104,8 @@ g12_preflight() {
     return
   fi
 
-  [ -f "$G12_ROOT/harness.config.json" ] ||
-    { g12_preflight_refuse "'$G12_ROOT' is not adopted: it carries no harness.config.json"; return; }
+  [ -f "$G12_ROOT/devscene.config.json" ] ||
+    { g12_preflight_refuse "'$G12_ROOT' is not adopted: it carries no devscene.config.json"; return; }
   # Warmed unsubstituted so the three readers' subshells reuse one parse.
   hr_config_load "$G12_ROOT" || :
   g12_config_screen stateDir hr_state_dir G12_STATE_DIR || return

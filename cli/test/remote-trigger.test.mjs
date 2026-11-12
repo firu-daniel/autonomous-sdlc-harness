@@ -24,7 +24,7 @@
  * per-login table, answers the name-derivation run-history probe from a per-branch `STUB_HISTORY` table
  * (no history by default), answers every other `run list` from `STUB_RUN_LIST` — one answer per call, the last repeated, its
  * `headSha` `ORIGIN` replaced by `refs/heads/<branch>` of the bare origin at `STUB_ORIGIN` — by default one
- * `harness run <branch>` run carrying a `url` and that `headSha`, answers an issue's label list with `[]`, and logs each argument vector with any
+ * `devscene run <branch>` run carrying a `url` and that `headSha`, answers an issue's label list with `[]`, and logs each argument vector with any
  * `--body-file`'s content; a call starting `STUB_FAIL_ON` exits 4. No case reaches the network.
  */
 
@@ -37,7 +37,7 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REPOSITORY = 'octo/fixture';
 const TITLE = 'Add comments to items';
 const BRANCH = 'add_comments_to_items';
@@ -80,7 +80,7 @@ if (args[0] === 'api' && permission) {
   } catch {}
   const answers = process.env.STUB_RUN_LIST
     ? JSON.parse(process.env.STUB_RUN_LIST)
-    : [[{ displayTitle: 'harness run ' + branch, url: 'https://example.test/runs/' + branch, headSha: 'ORIGIN' }]];
+    : [[{ displayTitle: 'devscene run ' + branch, url: 'https://example.test/runs/' + branch, headSha: 'ORIGIN' }]];
   const made = readFileSync(process.env.STUB_LOG, 'utf8').split('\\n').filter((line) => line.includes('"args":["run","list"') && !line.includes('"--json","databaseId"')).length;
   const runs = answers[Math.min(made, answers.length) - 1];
   process.stdout.write(JSON.stringify(runs.map((run) => (run.headSha === 'ORIGIN' ? { ...run, headSha: sha } : run))));
@@ -104,7 +104,7 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   config.forge = forge;
@@ -522,13 +522,13 @@ test('a dispatch that fails after the push exits 3 and comments the manual way o
   assert.equal(removals(calls).length, 1);
 });
 
-/** A `harness run <BRANCH>` run of an earlier push: same title, another `headSha`. */
+/** A `devscene run <BRANCH>` run of an earlier push: same title, another `headSha`. */
 const OLDER_RUN = {
-  displayTitle: `harness run ${BRANCH}`,
+  displayTitle: `devscene run ${BRANCH}`,
   url: 'https://example.test/runs/older',
   headSha: '0123456789abcdef0123456789abcdef01234567',
 };
-const DISPATCHED_RUN = { displayTitle: `harness run ${BRANCH}`, url: 'https://example.test/runs/dispatched', headSha: 'ORIGIN' };
+const DISPATCHED_RUN = { displayTitle: `devscene run ${BRANCH}`, url: 'https://example.test/runs/dispatched', headSha: 'ORIGIN' };
 
 test('the comment names the run whose headSha was pushed, when it appears on a later lookup', async (t) => {
   const f = await triggerFixture(t);

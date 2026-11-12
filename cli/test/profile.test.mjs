@@ -107,11 +107,13 @@ const PROFILE_FILE = '.claude/settings.autonomous.json';
 const PROFILE_TEMPLATE = join(PACKAGE_ROOT, 'templates', 'claude', 'settings.autonomous.json');
 
 /**
- * The absent-key `scriptsDir`. Stays `scripts` on purpose: every case using it either hands the value
- * to `renderProfile` itself or seeds it in `harness.config.json`. A configless `init` writes
- * `INIT_SCRIPTS_DIR` instead.
+ * The one default `scriptsDir`: the value an absent key resolves to and the directory a configless
+ * `init` writes. Spelled here rather than read from `INIT_SCRIPTS_DIR`, so a moved default shows.
  */
-const SCRIPTS_DIR = 'scripts';
+const SCRIPTS_DIR = 'devscene-scripts';
+
+/** The `scriptsDir` whose wrapper entries collide with the plugin's `scripts/` helper form. */
+const COLLIDING_SCRIPTS_DIR = 'scripts';
 
 /** A `scriptsDir` that is neither the default nor a single segment, so a naive join would show. */
 const RELOCATED_SCRIPTS_DIR = 'tools/harness';
@@ -223,7 +225,7 @@ function seededConfig(overrides) {
     version: 1,
     projectName: 'fixture-project',
     defaultBranch: 'main',
-    stateDir: 'sdlc-harness/',
+    stateDir: 'devscene/',
     layers: [{ name: 'general', path: '.', conventions: '.claude/context/conventions.md' }],
     commands: { typecheck: 'echo typecheck', test: 'echo test' },
     ...overrides,
@@ -263,7 +265,7 @@ function allEntries(profile) {
 
 /** The sibling-worktree pattern the profile was generated with, read back from the wired repository. */
 function worktreeGlobFor(dir) {
-  return join(dirname(dir), `${readJson(join(dir, 'harness.config.json')).projectName}-*`);
+  return join(dirname(dir), `${readJson(join(dir, 'devscene.config.json')).projectName}-*`);
 }
 
 /**
@@ -379,7 +381,7 @@ test('an outer-loop script an agent runs is allow-listed in two forms, and every
   // moved the directory has.
   for (const scriptsDir of [INIT_SCRIPTS_DIR, RELOCATED_SCRIPTS_DIR]) {
     await t.test(`scriptsDir ${scriptsDir}`, async (subtest) => {
-      const seeded = scriptsDir === INIT_SCRIPTS_DIR ? {} : { 'harness.config.json': seededConfig({ scriptsDir }) };
+      const seeded = scriptsDir === INIT_SCRIPTS_DIR ? {} : { 'devscene.config.json': seededConfig({ scriptsDir }) };
       const { dir, profile } = await profileFor(subtest, [], seeded);
       const worktreeGlob = worktreeGlobFor(dir);
       // The grant lists only: `deny` carries the write protection's `Edit` rules for the
@@ -696,7 +698,7 @@ async function retrievalProfileFor(t, { docsPhase, retrieval }) {
     phases: { docs: docsPhase },
     docs: { root: 'docs', ...(retrieval ? { retrieval: true } : {}) },
   });
-  const dir = await fixtureFor(t, { 'harness.config.json': config, 'docs/README.md': '# docs\n' });
+  const dir = await fixtureFor(t, { 'devscene.config.json': config, 'docs/README.md': '# docs\n' });
   const cacheHome = await mkdtemp(join(tmpdir(), 'harness-retrieval-cache-'));
   t.after(() => rm(cacheHome, { recursive: true, force: true }));
   await plantModelFiles(cacheHome);
@@ -880,22 +882,22 @@ test('a plugin root reads back out of either entry form, and an entry naming no 
     }
   });
 
-  // Seeded at `scripts`, the absent-key value: only there does a wrapper's repo-root-absolute entry
-  // collide with the plugin-helper form, which is the collision the read-back below pins.
-  const { dir, profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ scriptsDir: SCRIPTS_DIR }) });
+  // Seeded at `scripts` explicitly: only there does a wrapper's repo-root-absolute entry collide with
+  // the plugin-helper form, which is the collision the read-back below pins.
+  const { dir, profile } = await profileFor(t, [], { 'devscene.config.json': seededConfig({ scriptsDir: COLLIDING_SCRIPTS_DIR }) });
   const allow = entries(profile, 'allow');
   const worktreeGlob = worktreeGlobFor(dir);
 
   await t.test('the repository root, out of the two entries init really wrote', async () => {
-    const [wrapper] = await writtenWrappers(dir, SCRIPTS_DIR);
+    const [wrapper] = await writtenWrappers(dir, COLLIDING_SCRIPTS_DIR);
     assert.ok(wrapper !== undefined, 'this fixture wrote no wrapper, so there is no generated entry to read back');
 
-    for (const entry of [readRule(dir), bashScriptRule(join(dir, SCRIPTS_DIR, wrapper))]) {
+    for (const entry of [readRule(dir), bashScriptRule(join(dir, COLLIDING_SCRIPTS_DIR, wrapper))]) {
       assert.ok(allow.includes(entry), `the generated profile carries no entry ${entry}, so this case reads back a string nothing writes`);
       assert.equal(
         pluginRootEntryTarget(entry),
         dir,
-        `${entry} read back as something other than this checkout: under the default scriptsDir it is ` +
+        `${entry} read back as something other than this checkout: under a \`scripts\` scriptsDir it is ` +
           'byte-identical to what the plugin-helper form builds, so answering nothing here would make a ' +
           "caller's exclusion of its own repository root dead code",
       );
@@ -905,8 +907,8 @@ test('a plugin root reads back out of either entry form, and an entry naming no 
   await t.test('an entry that names no directory at all', () => {
     for (const [described, entry] of [
       ['a browser tool', `${MCP_PREFIX}playwright__browser_click`],
-      ['the repo-relative wrapper form', `Bash(${scriptInvocation(SCRIPTS_DIR, 'test.sh')}:*)`],
-      ['the sibling-worktree wrapper form', bashScriptRule(join(worktreeGlob, SCRIPTS_DIR, 'test.sh'))],
+      ['the repo-relative wrapper form', `Bash(${scriptInvocation(COLLIDING_SCRIPTS_DIR, 'test.sh')}:*)`],
+      ['the sibling-worktree wrapper form', bashScriptRule(join(worktreeGlob, COLLIDING_SCRIPTS_DIR, 'test.sh'))],
       ['the sibling-worktree read form', readRule(worktreeGlob)],
       ['a toolchain rule, which carries no bash prefix', `Bash(${join('/', 'fixture-toolchain', 'analyze')}:*)`],
     ]) {
@@ -931,7 +933,7 @@ const UNSANDBOXED_ROWS = OUTER_LOOP_SCRIPTS.filter((script) => script.runsUnsand
 const ALLOWED_DOMAIN = { domain: 'registry.example.org', reason: 'the fixture installs packages from it' };
 
 test('the sandbox block is strict, excludes only the main checkout\'s git wrappers, and grants the state directory', async (t) => {
-  const { dir, profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ scriptsDir: SCRIPTS_DIR }) });
+  const { dir, profile } = await profileFor(t, [], { 'devscene.config.json': seededConfig({ scriptsDir: SCRIPTS_DIR }) });
 
   // Each graded leaf against the shipped template, never a restated value.
   const template = JSON.parse(readFileSync(PROFILE_TEMPLATE, 'utf8'));
@@ -980,7 +982,7 @@ test('the sandbox block is strict, excludes only the main checkout\'s git wrappe
   assert.ok(`${push} "${join(worktreeGlob, 'x')}"`.startsWith(push));
   assert.ok(!`bash ${SCRIPTS_DIR}/${outerLoopRelativePath(UNSANDBOXED_ROWS[pushIndex])}`.startsWith(push));
 
-  const stateDirAbs = join(dir, 'sdlc-harness');
+  const stateDirAbs = join(dir, 'devscene');
   assert.deepEqual(profile.sandbox.filesystem.allowWrite, [stateDirAbs], 'allowWrite does not name the state directory');
 
   for (const tool of ['WebFetch', 'WebSearch']) {
@@ -991,7 +993,7 @@ test('the sandbox block is strict, excludes only the main checkout\'s git wrappe
 
 test('a configured domain is allowed with its reason, and the loopback host only with the browser wiring', async (t) => {
   const sandbox = { allowedDomains: [ALLOWED_DOMAIN] };
-  const { profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ sandbox }) });
+  const { profile } = await profileFor(t, [], { 'devscene.config.json': seededConfig({ sandbox }) });
   assert.deepEqual(profile.sandbox.network.allowedDomains, [ALLOWED_DOMAIN.domain]);
   assert.ok(
     profile._README.some((line) => line.includes(ALLOWED_DOMAIN.domain) && line.includes(ALLOWED_DOMAIN.reason)),
@@ -1006,7 +1008,7 @@ test('a configured domain is allowed with its reason, and the loopback host only
 
 test('the opt-out shows in the profile, and keeps every deny entry', async (t) => {
   const sandbox = { optOut: { reason: 'the fixture runner has no sandbox support' } };
-  const { profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ sandbox }) });
+  const { profile } = await profileFor(t, [], { 'devscene.config.json': seededConfig({ sandbox }) });
   assert.equal(profile.sandbox.enabled, false);
   assert.equal(profile.sandbox.failIfUnavailable, false);
   assert.ok(profile._README.some((line) => line.startsWith(SANDBOX_OPT_OUT_MARKER)), 'no _README line starts with the opt-out marker');
@@ -1042,7 +1044,7 @@ test('credentials are denied to sandboxed commands and to the file tools, with t
   }
 
   const sandbox = { optOut: { reason: 'the fixture runner has no sandbox support' } };
-  const { profile: optedOut } = await profileFor(t, [], { 'harness.config.json': seededConfig({ sandbox }) });
+  const { profile: optedOut } = await profileFor(t, [], { 'devscene.config.json': seededConfig({ sandbox }) });
   const optedOutDeny = entries(optedOut, 'deny');
   for (const { path } of shipped.files) {
     for (const rule of credentialReadPair(path)) assert.ok(optedOutDeny.includes(rule), `the opt-out dropped ${rule}`);
@@ -1054,7 +1056,7 @@ test('a domain carrying a quote is the adopter\'s to fix, never this CLI\'s faul
 
   // End to end, the configuration check refuses it before the generator runs: that refusal is
   // asserted here, and the generator's own screen is asserted below.
-  const dir = await fixtureFor(t, { 'harness.config.json': seededConfig({ sandbox: { allowedDomains: [quoted] } }) });
+  const dir = await fixtureFor(t, { 'devscene.config.json': seededConfig({ sandbox: { allowedDomains: [quoted] } }) });
   const result = await runCli(dir, ['init']);
   assert.equal(result.status, 1, `init exited ${result.status}\n${result.stdout}\n${result.stderr}`);
   assert.match(`${result.stdout}${result.stderr}`, /sandbox\.allowedDomains/);
@@ -1110,7 +1112,7 @@ function assertUnprotected(profile, path, except = []) {
 const LIB_SUBDIR = OUTER_LOOP_SCRIPTS.find((script) => script.file === 'harness-run-lib.sh').subdir;
 
 test('every path that runs outside the sandbox is write-protected on both sides', async (t) => {
-  const { dir, profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ scriptsDir: SCRIPTS_DIR }) });
+  const { dir, profile } = await profileFor(t, [], { 'devscene.config.json': seededConfig({ scriptsDir: SCRIPTS_DIR }) });
   const glob = worktreeGlobFor(dir);
   const githooks = DEFAULTS.githooksDir;
 
@@ -1191,7 +1193,7 @@ test('every path that runs outside the sandbox is write-protected on both sides'
     `denyWrite names ${DOCS_SEARCH_SERVER_SCRIPT_NAME} with retrieval off`,
   );
 
-  const stateDirAbs = join(dir, 'sdlc-harness');
+  const stateDirAbs = join(dir, 'devscene');
   assert.ok(profile.sandbox.filesystem.allowWrite.includes(stateDirAbs), 'allowWrite does not name the state directory');
   assertUnprotected(profile, stateDirAbs, [join(stateDirAbs, 'autonomous_logs', 'registry.json')]);
 
@@ -1257,7 +1259,7 @@ test('every path that runs outside the sandbox is write-protected on both sides'
 });
 
 test('the _README says what the sandbox leaves outside and points at its document of record', async (t) => {
-  const { profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ scriptsDir: SCRIPTS_DIR }) });
+  const { profile } = await profileFor(t, [], { 'devscene.config.json': seededConfig({ scriptsDir: SCRIPTS_DIR }) });
   const lines = profile._README;
   const startingWith = (prefix) => lines.filter((line) => line.startsWith(prefix));
   const exactlyOne = (prefix) => {
@@ -1323,15 +1325,15 @@ test('the docs-search launcher and its worktree library are write-protected only
 });
 
 test('a scriptsDir with a trailing slash protects the library the writer wrote', async (t) => {
-  const { dir, profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ scriptsDir: `${SCRIPTS_DIR}/` }) });
+  const { dir, profile } = await profileFor(t, [], { 'devscene.config.json': seededConfig({ scriptsDir: `${SCRIPTS_DIR}/` }) });
   assert.ok(existsSync(join(dir, SCRIPTS_DIR, LIB_SUBDIR)), 'the fixture wrote no library directory');
   assertProtected(profile, `${dir}/${SCRIPTS_DIR}/${LIB_SUBDIR}`, 'directory');
 });
 
 test('the run registry is write-protected by its exact path, under the configured state directory', async (t) => {
   // Spelled as `autonomous-watcher.sh` spells it, not read from the generator's constants.
-  for (const stateDir of ['sdlc-harness/', 'run-state']) {
-    const { dir, profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ stateDir }) });
+  for (const stateDir of ['devscene/', 'run-state']) {
+    const { dir, profile } = await profileFor(t, [], { 'devscene.config.json': seededConfig({ stateDir }) });
     const logs = join(dir, stateDir.replace(/\/$/, ''), 'autonomous_logs');
     const registry = join(logs, 'registry.json');
     assertProtected(profile, registry, 'file');
@@ -1367,7 +1369,7 @@ test('each plugin root in additionalDirectories is write-protected, and the stat
 
 test('with the sandbox opted out the file-tool write protection still applies', async (t) => {
   const sandbox = { optOut: { reason: 'the fixture runner has no sandbox support' } };
-  const { dir, profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ scriptsDir: SCRIPTS_DIR, sandbox }) });
+  const { dir, profile } = await profileFor(t, [], { 'devscene.config.json': seededConfig({ scriptsDir: SCRIPTS_DIR, sandbox }) });
   for (const row of UNSANDBOXED_ROWS) {
     const path = join(dir, SCRIPTS_DIR, outerLoopRelativePath(row));
     const rule = `Edit(/${path})`;

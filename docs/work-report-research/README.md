@@ -33,7 +33,7 @@ Fix the bugs first, then thin. Each step gets its own task prompt and branch.
 - **UI tests and QA:** ui-tests-plan-writer, ui-tests-plan-reviewer, qa-tester and the two mobile stubs. The largest saving is reading only qa-tester's capability set.
 - **Fix-plan and statistics writers:** user-review-fix-plan-writer, test-fix-plan-writer and statistics-plan-writer.
 - **Docs:** docs-writer and docs-reviewer.
-- **Conventions:** conventions-writer and conventions-reviewer, together with their caller `harness-analyze.md`.
+- **Conventions:** conventions-writer and conventions-reviewer, together with their caller `analyze.md`.
 
 The orchestrator instruction files that no agent reads are out of this series.
 
@@ -104,7 +104,7 @@ The idea as briefed was: copy a template file to `<state_dir>/work_reports/<bran
    - A trailing `## Work report` section of the artifact the agent already writes: the findings file on FAIL (layer, architecture, parity and task-plan reviewers), `review_<i>.md` every time (docs-reviewer), `statistics.md`, or the unit detail file (layer-implementer).
    - Or a non-`review_`-prefixed file in a folder some commit already stages whole: `work_report_<k>.md` with a next-free `k` (branch-reviewer, review-plan-reviewer, test-fix-plan-writer).
    - Only three writers need a new tree, keyed by walker node, prompt verb or round instead of a ledger id: task-plan-writer, ui-tests-plan-writer and user-review-fix-plan-writer. Each needs its path added to the matching commit.
-4. **Return the report inline on paths that must write nothing:** PASS for the no-disk reviewers, `blocker:`, `## Questions`, and every conventions-writer/-reviewer dispatch (`harness-analyze` has no committer).
+4. **Return the report inline on paths that must write nothing:** PASS for the no-disk reviewers, `blocker:`, `## Questions`, and every conventions-writer/-reviewer dispatch (`analyze` has no committer).
 5. **Keep the report from being mistaken for a wire line.**
    - No report line may begin with a parsed key: the template header uses `outcome:`, never `verdict:`.
    - Evidence uses `key=N` forms.
@@ -116,7 +116,7 @@ The idea as briefed was: copy a template file to `<state_dir>/work_reports/<bran
 ## Edits that cut across agents (needed before any report lands)
 
 - **PASS-writes-nothing contracts.** Narrow them to "no *findings* file on PASS" only where a report is filed on PASS. Otherwise keep them and return the report inline.
-- **Reviewers grade writers against the writer's own definition.** `ui-tests-plan-reviewer` grades `ui-tests-plan-writer`, `docs-reviewer` grades `docs-writer`, and `conventions-reviewer` grades `conventions-writer`. A writer's template must therefore stay inside the text its reviewer reads, and thinning must not remove a graded rule. Paired reports must be landed together; the conventions pair already shares one combined `harness-analyze.md` change.
+- **Reviewers grade writers against the writer's own definition.** `ui-tests-plan-reviewer` grades `ui-tests-plan-writer`, `docs-reviewer` grades `docs-writer`, and `conventions-reviewer` grades `conventions-writer`. A writer's template must therefore stay inside the text its reviewer reads, and thinning must not remove a graded rule. Paired reports must be landed together; the conventions pair already shares one combined `analyze.md` change.
 - **Readers of findings files need an ignore rule for the report section:**
   - writers applying "Must Fix items" (`docs-writer.md:63`, task-plan revision);
   - `/devscene:branch-status`'s keyword scan (it would match "deferred");

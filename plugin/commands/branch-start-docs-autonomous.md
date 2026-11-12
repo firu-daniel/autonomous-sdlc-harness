@@ -4,15 +4,15 @@ description: Run the current branch's documentation checklist end-to-end autonom
 
 # Scope: Run the current branch's docs checklist end-to-end, autonomously (write every doc → branch ready for review)
 
-**Skip this flow unless `phases.docs` is `true` in `harness.config.json`.**
+**Skip this flow unless `phases.docs` is `true` in `devscene.config.json`.**
 
 ## Resolved values
 
-The tokens below are not ordinary **path placeholders** (`<branch>`, `<slug>`, which this file's own text resolves): they resolve from the adopting repository's `harness.config.json`, except `<MAIN_REPO>` and `<repo_root>`, which are derived at runtime. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
+The tokens below are not ordinary **path placeholders** (`<branch>`, `<slug>`, which this file's own text resolves): they resolve from the adopting repository's `devscene.config.json`, except `<MAIN_REPO>` and `<repo_root>`, which are derived at runtime. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `devscene/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<docs_root>` | config value | `docs.root` — the repo-relative directory holding the documentation corpus this flow builds. Read **only** when `phases.docs` is `true`, which is the same gate that decides whether this flow runs at all. |
 | `<scripts_dir>` | config value | `scriptsDir` — the directory the outer-loop scripts live in. This file names two of them — `autonomous-watcher.sh`, as the owner of the responsibilities this command deliberately does not have, and `push-branch.sh`, in the hard boundary, under `<MAIN_REPO>` — and invokes neither. |
 | `<MAIN_REPO>` | derived at runtime | The main checkout — the path a bare `printenv DEVSCENE_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none. Spell it as a literal absolute path in the command, never through a substitution or a variable. |

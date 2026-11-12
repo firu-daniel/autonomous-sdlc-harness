@@ -2,7 +2,7 @@
 # git-commit-branch-guard.sh — PreToolUse guard for `git commit`: auto-allow the
 # commit when the repository it names is on an ordinary branch, and ask for
 # confirmation when that branch is one the repository's own
-# `harness.config.json` protects, when HEAD is detached, or when the protected
+# `devscene.config.json` protects, when HEAD is detached, or when the protected
 # set cannot be resolved at all. No branch name is baked into this file: a
 # repository whose default branch is not the usual one gets its own answer.
 #
@@ -52,7 +52,7 @@
 #   anything else                       -> allow
 #
 # JURISDICTION IS A DELIBERATE SCOPING DECISION, NOT AN OVERSIGHT. A repository
-# with no `harness.config.json` at its resolved root has not adopted the
+# with no `devscene.config.json` at its resolved root has not adopted the
 # harness, so this guard emits neither `allow` nor `ask` there — a plugin hook
 # fires in EVERY session the plugin is enabled for, including repositories that
 # never ran `init`, and a guard that answered them would either nag or grant in
@@ -72,7 +72,7 @@
 #   <dir> on a configured protected one  -> "ask", reason naming the branch
 #   <dir> on a detached HEAD             -> "ask"
 #   <dir>'s config invalid JSON          -> "ask", reason naming the config
-#   <dir> with no harness.config.json    -> no output, exit 0
+#   <dir> with no devscene.config.json   -> no output, exit 0
 #
 #   The worktree case, with no `-C` in the command — the payload's own cwd is
 #   what gets judged, not the directory this process happens to run in:

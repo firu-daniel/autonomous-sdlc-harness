@@ -111,8 +111,8 @@ export const MENTION_CONFIRM_VERBS: readonly CommandVerb[] = COMMAND_VERBS.filte
   (verb) => MENTION_VERB_HANDLING[verb] === 'confirm',
 );
 
-/** The basename of the plugin slash command `plugin/commands/harness-read-mention.md`, the slash-command name verbatim. */
-export const MENTION_COMMAND_NAME = 'harness-read-mention';
+/** The basename of the plugin slash command `plugin/commands/read-mention.md`, the slash-command name verbatim. */
+export const MENTION_COMMAND_NAME = 'read-mention';
 
 /**
  * The plugin-qualified slash command `remote-run.sh control` passes as the session's `-p` prompt, the
@@ -157,7 +157,7 @@ export const WORKFLOW_TEMPLATE_DIR = 'github/workflows';
 export const STATE_ARTIFACT_NAME = 'harness-state';
 
 /** The Actions artifact each resume-poller tick uploads its carried state as, for the next tick. */
-export const POLL_STATE_ARTIFACT_NAME = 'harness-poll-state';
+export const POLL_STATE_ARTIFACT_NAME = 'devscene-poll-state';
 
 /** Repository variable naming the `runs-on` label; unset means `ubuntu-latest`. */
 export const RUNNER_VARIABLE = 'DEVSCENE_RUNNER';

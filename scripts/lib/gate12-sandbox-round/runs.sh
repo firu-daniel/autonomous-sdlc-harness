@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# runs.sh — the Gate 12 round driver's readers of one recorded `harness run` run: its `run` job's
+# runs.sh — the Gate 12 round driver's readers of one recorded `devscene run` run: its `run` job's
 # steps, a step's log lines, its `harness-state` artifact, and the per-row evidence file. Every
 # grader reads a run through these and nothing else, so docs/sandbox-verification.md -> ## 10. ->
 # Reading a result. is applied in one place:

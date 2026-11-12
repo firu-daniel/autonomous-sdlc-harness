@@ -8,13 +8,13 @@ Run `${CLAUDE_PLUGIN_ROOT}/instructions/user_review_fix_plan_writing_instruction
 
 ## Resolved values
 
-The tokens below are neither Mode-contract **bindings** (`## Mode contract — bindings`, immediately below) nor ordinary **path placeholders** (`<branch>`, and the `<findings_file>` / `<feedback>` the core binds at their points of use): they resolve from the runtime or from the adopting repository's `harness.config.json`, are declared here once, and after this table the body uses each one as an ordinary placeholder.
+The tokens below are neither Mode-contract **bindings** (`## Mode contract — bindings`, immediately below) nor ordinary **path placeholders** (`<branch>`, and the `<findings_file>` / `<feedback>` the core binds at their points of use): they resolve from the runtime or from the adopting repository's `devscene.config.json`, are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<repo_root>` | derived at runtime | The absolute root of the checkout this session runs in. Obtain it with a **bare** `git rev-parse --show-toplevel` and build every literal path from the result. Never embed the `$(…)` substitution inside another shell command, and never stash it in a shell variable across separate Bash calls — separate calls do not share shell state. |
 | `<app_dir>` | config value | `appDir` — the app's directory inside the checkout, repo-relative. The **binding** `<app_root>` below is built from it (`<repo_root>/<app_dir>`) and is deliberately a different name: this row is the configured directory, that one is the resolved root. |
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path the core names is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path the core names is relative to. Default `devscene/`. It is never dot-named: no path segment of it may begin with a dot. |
 
 ---
 

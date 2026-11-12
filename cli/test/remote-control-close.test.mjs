@@ -31,7 +31,7 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
 const MARKER = (event, branch) => `<!-- devscene event=${event} branch=${branch} -->`;
@@ -81,7 +81,7 @@ if (args[0] === 'repo' && args[1] === 'view') {
 } else if (args[0] === 'run' && args[1] === 'list') {
   const branch = args[args.indexOf('--branch') + 1];
   process.stdout.write(process.env.STUB_RUN_LIST
-    || JSON.stringify([{ databaseId: 501, displayTitle: 'harness run ' + branch, status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]));
+    || JSON.stringify([{ databaseId: 501, displayTitle: 'devscene run ' + branch, status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]));
 } else if (args[0] === 'run' && args[1] === 'download') {
   const dir = args[args.indexOf('-D') + 1];
   mkdirSync(dir, { recursive: true });
@@ -107,7 +107,7 @@ async function closeFixture(t) {
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   config.forge = 'github';
@@ -275,7 +275,7 @@ test('pull request #9 merged: the note says merged', async (t) => {
 test('branch deleted: the marker rides GitHub\'s default branch and the issue is read at the run\'s commit', async (t) => {
   const f = await closeFixture(t);
   const result = await f.control('delete', deleted(), {
-    STUB_RUN_LIST: JSON.stringify([{ databaseId: 501, displayTitle: 'harness run feat_x', status: 'in_progress', headSha: HEAD_SHA, createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]),
+    STUB_RUN_LIST: JSON.stringify([{ databaseId: 501, displayTitle: 'devscene run feat_x', status: 'in_progress', headSha: HEAD_SHA, createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]),
   });
   const body = assertStopped(f, result, { ref: GITHUB_DEFAULT, on: 7 });
   assert.match(body, /Stopped because @alice deleted the branch `feat_x`\./);
@@ -288,7 +288,7 @@ test('branch deleted: the marker rides GitHub\'s default branch and the issue is
 test('branch deleted with its unmerged pull request still labelled running: #9 is commented and labelled stopped beside the issue', async (t) => {
   const f = await closeFixture(t);
   const result = await f.control('delete', deleted(), {
-    STUB_RUN_LIST: JSON.stringify([{ databaseId: 501, displayTitle: 'harness run feat_x', status: 'in_progress', headSha: HEAD_SHA, createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]),
+    STUB_RUN_LIST: JSON.stringify([{ databaseId: 501, displayTitle: 'devscene run feat_x', status: 'in_progress', headSha: HEAD_SHA, createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]),
     STUB_PRS: JSON.stringify([{ number: 9, isCrossRepository: false, mergedAt: null, labels: [{ name: 'devscene: running' }] }]),
   });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
@@ -331,7 +331,7 @@ test('a branch deletion by a user DEVSCENE_RUN_ACTORS does not admit still stops
   const f = await closeFixture(t);
   const result = await f.control('delete', deleted(), {
     DEVSCENE_RUN_ACTORS: 'carol',
-    STUB_RUN_LIST: JSON.stringify([{ databaseId: 501, displayTitle: 'harness run feat_x', status: 'in_progress', headSha: HEAD_SHA, createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]),
+    STUB_RUN_LIST: JSON.stringify([{ databaseId: 501, displayTitle: 'devscene run feat_x', status: 'in_progress', headSha: HEAD_SHA, createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]),
   });
   const body = assertStopped(f, result, { ref: GITHUB_DEFAULT, on: 7 });
   assert.match(body, /Stopped because @alice deleted the branch `feat_x`\./);
@@ -374,7 +374,7 @@ test('a deleted tag does nothing and calls no gh', async (t) => {
 test('a completed run is left alone', async (t) => {
   const f = await closeFixture(t);
   const result = await f.control('issues', issueClosed(), {
-    STUB_RUN_LIST: JSON.stringify([{ databaseId: 601, displayTitle: 'harness run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' }]),
+    STUB_RUN_LIST: JSON.stringify([{ databaseId: 601, displayTitle: 'devscene run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' }]),
     STUB_ARTIFACTS: JSON.stringify({ artifacts: [{ name: 'harness-state', expired: false }] }),
     STUB_BUNDLE_STATUS: 'completed',
   });
@@ -385,8 +385,8 @@ test('a branch already stopped is left alone', async (t) => {
   const f = await closeFixture(t);
   const result = await f.control('pull_request', prClosed({ merged: true }), {
     STUB_RUN_LIST: JSON.stringify([
-      { databaseId: 700, displayTitle: 'harness stop feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T01:00:00Z', url: 'https://example.test/runs/700' },
-      { databaseId: 501, displayTitle: 'harness run feat_x', status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' },
+      { databaseId: 700, displayTitle: 'devscene stop feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T01:00:00Z', url: 'https://example.test/runs/700' },
+      { databaseId: 501, displayTitle: 'devscene run feat_x', status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' },
     ]),
   });
   assertIgnored(f, result, /close ignored: the run on `feat_x` is already stopped/);

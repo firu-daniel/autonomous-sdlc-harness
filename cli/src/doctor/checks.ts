@@ -1178,7 +1178,7 @@ const JJ_DIR = '.jj';
  * **A plain git repository passes as "not graded"**, in {@link BASE_FRESHNESS_CHECK}'s wording. That
  * arm is what keeps `doctor` silent about jj for every adopter who does not use it.
  *
- * It reads **no configuration** — so it answers the same on a repository whose `harness.config.json`
+ * It reads **no configuration** — so it answers the same on a repository whose `devscene.config.json`
  * is broken, which is a repository an adopter is especially likely to be running `doctor` against —
  * and it writes nothing.
  */
@@ -1443,7 +1443,7 @@ const BASE_FRESHNESS_CHECK: Check = {
  * file that enforces it. The hook is `create-if-absent` (`generators/githooks.ts`), so it carries
  * the set that was substituted into its `case` label when `init` wrote it, while every documented
  * way of correcting `defaultBranch` afterwards — `init --reset-config --default-branch <name>`,
- * `config set defaultBranch <name>`, an edit to `harness.config.json` — changes only the config. The
+ * `config set defaultBranch <name>`, an edit to `devscene.config.json` — changes only the config. The
  * measured state is a repository reporting 18 pass, 4 warn, 0 fail whose hook **allowed** a push to
  * the integration line and **refused** one to an ordinary feature branch, because nothing anywhere
  * compared the rendered list to the value it was rendered from. This is that comparison, and it is
@@ -1678,7 +1678,7 @@ const JQ_CHECK: Check = {
   run: () => {
     if (!resolvesOnPath('jq')) {
       return fail(
-        `jq does not resolve on PATH: the plugin's guards and the generated outer-loop scripts both read harness.config.json through it, so every guard exits 0 silently and every script takes its closed path — install jq ${JQ_MIN_MAJOR}.${JQ_MIN_MINOR} or newer`,
+        `jq does not resolve on PATH: the plugin's guards and the generated outer-loop scripts both read devscene.config.json through it, so every guard exits 0 silently and every script takes its closed path — install jq ${JQ_MIN_MAJOR}.${JQ_MIN_MINOR} or newer`,
       );
     }
 
@@ -1714,7 +1714,7 @@ const JQ_CHECK: Check = {
     }
 
     return pass(
-      `jq ${version} is on PATH (\`jq --version\` printed ${JSON.stringify(printed)}), at or above the ${JQ_MIN_MAJOR}.${JQ_MIN_MINOR} floor the plugin's guards and the generated outer-loop scripts both need to resolve harness.config.json`,
+      `jq ${version} is on PATH (\`jq --version\` printed ${JSON.stringify(printed)}), at or above the ${JQ_MIN_MAJOR}.${JQ_MIN_MINOR} floor the plugin's guards and the generated outer-loop scripts both need to resolve devscene.config.json`,
     );
   },
 };
@@ -2203,7 +2203,7 @@ function footprintRow(inspected: InspectedEntry, cap: string): FootprintRow {
   // `machine_footprint_report` prints `—` for the same entry; the two may not disagree.
   const { config: loaded, problems } = loadConfig(entry.root);
   if (loaded === undefined) {
-    const reason = problems[0]?.message ?? 'no readable harness.config.json';
+    const reason = problems[0]?.message ?? 'no readable devscene.config.json';
     // No readable configuration means no known `stateDir`, so there is no run registry to read and
     // the schema default is a GUESS at another checkout's layout. `autonomous-watcher.sh`'s
     // `footprint_live_runs` reaches its registry through `hr_state_path`, which fails with the same
@@ -4015,7 +4015,7 @@ const STATE_DIR_CHECK: Check = {
     }
 
     // `resolve` rather than `join`: the two clauses above have already established that the value is
-    // relative and dot-free, and resolving drops the trailing separator a configured `sdlc-harness/`
+    // relative and dot-free, and resolving drops the trailing separator a configured `devscene/`
     // carries, so the path this check names is the one every other message names.
     const root = resolvePath(ctx.repoRoot, raw);
     if (!isDirectory(root)) {
@@ -4440,7 +4440,7 @@ function detectionProvenance(detection: HarnessDetection): string {
  *
  * **It is deliberately blind to the conventions documents.** {@link SETUP_ANALYSIS_CHECK} above
  * grades those, and its skeleton warning was the last indirect trace that a fallback profile had
- * never been examined — a trace `/devscene:harness-analyze conventions` clears by filling the documents,
+ * never been examined — a trace `/devscene:analyze conventions` clears by filling the documents,
  * leaving `doctor` green about a profile nobody looked at. This check reads no document, so that
  * command does not move it.
  *
@@ -6520,7 +6520,7 @@ export const CHECKS: readonly Check[] = Object.freeze([
  * changed any path in {@link jobSurfacePaths}, the files a remote job runs or loads from its checkout.
  *
  * Every value it grades by is the trusted side's: the configuration, its `defaultBranch` and the
- * surface list derived from it come from `<trusted ref>:harness.config.json`, never from `HEAD`, so a
+ * surface list derived from it come from `<trusted ref>:devscene.config.json`, never from `HEAD`, so a
  * branch cannot widen what it may change by rewriting its own configuration. The trusted ref and the
  * base are `refs/remotes/origin/<branch>` and `refs/remotes/origin/<defaultBranch>`, or, under
  * `@<commit>`, the recorded commit for the configuration and — under `@<commit>@<base>` — the recorded

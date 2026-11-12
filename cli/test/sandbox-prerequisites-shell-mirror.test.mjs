@@ -350,10 +350,10 @@ test('hr_sandbox_prereq_probe_var leaves a host whose uname fails to failIfUnava
   }
 });
 
-/** Write `content` as `harness.config.json` in a fresh temp directory (none when `undefined`). */
+/** Write `content` as `devscene.config.json` in a fresh temp directory (none when `undefined`). */
 function configDir(content) {
   const dir = mkdtempSync(join(tmpdir(), 'sandbox-opt-out-'));
-  if (content !== undefined) writeFileSync(join(dir, 'harness.config.json'), content);
+  if (content !== undefined) writeFileSync(join(dir, 'devscene.config.json'), content);
   return dir;
 }
 

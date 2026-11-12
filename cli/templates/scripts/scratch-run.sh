@@ -107,7 +107,7 @@
 # IT IS DELIBERATELY NOT A WRAPPER. It carries no adopter command line — it is
 # not a `WRAPPER_SCRIPTS` row, answers to no `commands.*` key, and has no
 # `{{command}}` for `init` to inline. Like every outer-loop script it ships fixed
-# and reads `harness.config.json` at run time.
+# and reads `devscene.config.json` at run time.
 #
 # IT PRINTS NOTHING OF ITS OWN ON THE RUN PATH. The file's stdout and stderr are
 # the answer, and a caller reading a probe's output must not have to filter a
@@ -132,30 +132,30 @@
 #   66   the extension has no interpreter in the table below
 #   67   the file is not there, or is not a readable regular file
 #   68   the run-time context could not be established — the shared library is
-#        unreadable, this is not a git repository, `harness.config.json` could
+#        unreadable, this is not a git repository, `devscene.config.json` could
 #        not be resolved, or the scratch directory has never been materialized
 #   69   the interpreter the extension names is not on PATH
 #
 # REPRO — reproduce any decision by hand, against a throwaway fixture:
 #
 #   d=$(mktemp -d); git -C "$d" init -q -b feat_x
-#   printf '%s' '{"version":1,"defaultBranch":"main","stateDir":"sdlc-harness/","layers":[],"commands":{}}' > "$d/harness.config.json"
-#   mkdir -p "$d/sdlc-harness/scratch"
-#   printf 'import sys\nprint("ok", sys.argv[1:])\n' > "$d/sdlc-harness/scratch/probe.py"
+#   printf '%s' '{"version":1,"defaultBranch":"main","stateDir":"devscene/","layers":[],"commands":{}}' > "$d/devscene.config.json"
+#   mkdir -p "$d/devscene/scratch"
+#   printf 'import sys\nprint("ok", sys.argv[1:])\n' > "$d/devscene/scratch/probe.py"
 #   cp -R <scripts_dir>/. "$d/scripts/"   # this file and its lib/
 #
-#   the probe       (cd "$d" && scripts/scratch-run.sh sdlc-harness/scratch/probe.py a b)
+#   the probe       (cd "$d" && scripts/scratch-run.sh devscene/scratch/probe.py a b)
 #                   -> prints `ok ['a', 'b']`, exit 0
 #   its own status  a probe ending `sys.exit(7)`                        -> exit 7
-#   absolute form   scripts/scratch-run.sh "$d/sdlc-harness/scratch/probe.py"  -> runs
-#   outside         scripts/scratch-run.sh harness.config.json          -> exit 65
-#   traversal       scripts/scratch-run.sh sdlc-harness/scratch/../../harness.config.json
+#   absolute form   scripts/scratch-run.sh "$d/devscene/scratch/probe.py"  -> runs
+#   outside         scripts/scratch-run.sh devscene.config.json          -> exit 65
+#   traversal       scripts/scratch-run.sh devscene/scratch/../../devscene.config.json
 #                                                                       -> exit 65
-#   itself          scripts/scratch-run.sh sdlc-harness/scratch/.       -> exit 65
+#   itself          scripts/scratch-run.sh devscene/scratch/.       -> exit 65
 #   unknown ext     mv probe.py probe.pl; same call                     -> exit 66
 #   shell probe     mv probe.py probe.sh; same call                     -> exit 66
-#   absent file     scripts/scratch-run.sh sdlc-harness/scratch/nope.py -> exit 67
-#   unresolvable    printf 'x' > "$d/harness.config.json"; same call    -> exit 68
+#   absent file     scripts/scratch-run.sh devscene/scratch/nope.py -> exit 67
+#   unresolvable    printf 'x' > "$d/devscene.config.json"; same call    -> exit 68
 
 # Deliberately no `-e`: every refusal below is an explicit `exit`, and an
 # implicit one would skip the message that says what was refused and why.
@@ -239,7 +239,7 @@ case "$HR_SCRATCH_WHY" in
     exit 67
     ;;
   no-config)
-    echo "scratch-run.sh: cannot resolve '$repo_root/harness.config.json' — refusing to run anything" >&2
+    echo "scratch-run.sh: cannot resolve '$repo_root/devscene.config.json' — refusing to run anything" >&2
     echo "  (no configuration there, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)" >&2
     exit 68
     ;;

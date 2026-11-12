@@ -2,13 +2,13 @@
 
 ## Resolved values
 
-The tokens below are neither Mode-contract **bindings** (this file declares none) nor ordinary **path placeholders** (`<branch>`, `<N>`, `<qa_port>`, `<round>`, `<qa_review_findings_dir>`, `<fix_plan_path>`, `<fix_finding_dir>`, `<ui_test_index>`, `<ui_test_files_dir>`, which this file's own text resolves): they are derived at runtime or resolve from the adopting repository's `harness.config.json`. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
+The tokens below are neither Mode-contract **bindings** (this file declares none) nor ordinary **path placeholders** (`<branch>`, `<N>`, `<qa_port>`, `<round>`, `<qa_review_findings_dir>`, `<fix_plan_path>`, `<fix_finding_dir>`, `<ui_test_index>`, `<ui_test_files_dir>`, which this file's own text resolves): they are derived at runtime or resolve from the adopting repository's `devscene.config.json`. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<repo_root>` | derived at runtime | The absolute root of the checkout this session runs in. Obtain it with a **bare** `git rev-parse --show-toplevel` and build every literal path from the result. Never embed the `$(…)` substitution inside another shell command, and never stash it in a shell variable across separate Bash calls — separate calls do not share shell state. |
 | `<worktree_glob>` | derived at runtime | The **parent directory of `<repo_root>`** (the work root) joined to the configured `projectName` stem and a `-*` suffix — the sibling run-copy pattern every autonomous run copy matches, and the pattern the generated permission profile is materialized with. |
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `devscene/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<app_dir>` | config value | `appDir` — the app's directory inside the checkout, repo-relative. The app root the dev server serves is `<repo_root>/<app_dir>`. |
 | `<scripts_dir>` | config value | `scriptsDir` — the directory the generated wrapper scripts live in: the one the configured `commands.devServer` string in the next row normally points into. The QA helper scripts this file names by path (`find-free-port.sh`, `poll-dev-server.sh`, `kill-dev-server.sh`, and the `reserve-qa-user.sh` / `release-qa-user.sh` pair it names only to disclaim) are **not** under it — they are plugin assets, addressed as `${CLAUDE_PLUGIN_ROOT}/scripts/<name>.sh`. |
 | `<dev_server_cmd>` | config value | `commands.devServer`. It **normally** holds the repo-relative wrapper invocation — `bash` followed by that wrapper's path under `<scripts_dir>` (i.e. `bash <scriptsDir>/start-dev-server.sh`). **Run the configured string as-is**, appending only the port: never rebuild it from its parts, and never write an absolute path in its place. If that call is **refused**, the key holds a raw command line rather than the wrapper invocation — run `bash <scripts_dir>/start-dev-server.sh`, whose body is the line `init` inlined into it — not necessarily the configured string, if the key was edited after that wrapper was written — and report in your return which string you ran. |
@@ -30,7 +30,7 @@ You drive the agents; you do **not** edit app code, you do **not** edit the UI-t
 
 ### 1. Ensure a UI-test plan exists
 
-**Skip this flow unless `phases.qa` is `true` in `harness.config.json`.**
+**Skip this flow unless `phases.qa` is `true` in `devscene.config.json`.**
 
 1. Determine the current git branch with `git branch --show-current`.
 2. Confirm the story index exists at `<state_dir>/story_plans/<branch>_story_plan.md` (the writer and qa-tester need it). If missing, stop and ask the user.

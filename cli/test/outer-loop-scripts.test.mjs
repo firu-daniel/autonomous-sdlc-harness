@@ -100,8 +100,8 @@ const LIB_PATH = `${SCRIPTS_DIR}/${LIB_SUBDIR}/${LIB_FILE}`;
 /** A `scriptsDir` that is neither the default nor a single segment, so a naive join would show. */
 const RELOCATED_SCRIPTS_DIR = 'tools/harness';
 
-/** Stays `scripts` on purpose: the absent key's value, where `init` writes for a `seededConfig()` that omits `scriptsDir`. */
-const SEEDED_SCRIPTS_DIR = 'scripts';
+/** Stays `devscene-scripts` on purpose: the absent key's value, where `init` writes for a `seededConfig()` that omits `scriptsDir`. */
+const SEEDED_SCRIPTS_DIR = 'devscene-scripts';
 
 /** The package's own template tree, which no `scriptsDir` moves. */
 const TEMPLATE_SCRIPTS = join(PACKAGE_ROOT, 'templates', 'scripts');
@@ -135,7 +135,7 @@ const RUNTIME_ENTRY = [
 ];
 
 /** The state directory a default `init` writes, and the one directory a file may be run out of. */
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const SCRATCH_DIR = `${STATE_DIR}/scratch`;
 
 /** The shipped template the written copy must equal byte for byte. */
@@ -165,7 +165,7 @@ function seededConfig(overrides) {
   return {
     version: 1,
     defaultBranch: 'main',
-    stateDir: 'sdlc-harness/',
+    stateDir: 'devscene/',
     layers: [{ name: 'general', path: '.', conventions: '.claude/context/conventions.md' }],
     commands: { typecheck: 'echo typecheck', test: 'echo test' },
     ...overrides,
@@ -280,7 +280,7 @@ test('the library is sourced-only: running it directly does nothing and exits 0'
 
 test("the library's typed reader answers from the configured file", async (t) => {
   const set = await fixtureFor(t, {
-    files: { ...nodeProjectFiles(), 'harness.config.json': seededConfig({ agentEffort: 'xhigh' }) },
+    files: { ...nodeProjectFiles(), 'devscene.config.json': seededConfig({ agentEffort: 'xhigh' }) },
   });
   await initOk(set);
 
@@ -299,7 +299,7 @@ test("the library's typed reader answers from the configured file", async (t) =>
   // key reads as unset from every document — and this one is what a reader given a default breaks,
   // so the pair pins the shape neither assertion pins alone.
   const unset = await fixtureFor(t, {
-    files: { ...nodeProjectFiles(), 'harness.config.json': seededConfig() },
+    files: { ...nodeProjectFiles(), 'devscene.config.json': seededConfig() },
   });
   await initOk(unset);
 
@@ -310,14 +310,14 @@ test("the library's typed reader answers from the configured file", async (t) =>
 
 test('hr_execution_target applies the schema default, reads the enum and refuses a value outside it', async (t) => {
   const dir = await fixtureFor(t, {
-    files: { ...nodeProjectFiles(), 'harness.config.json': seededConfig() },
+    files: { ...nodeProjectFiles(), 'devscene.config.json': seededConfig() },
   });
   await initOk(dir);
 
   // Each call is its own `bash`, so the per-process cache is cold and reads the file as rewritten.
   const withExecution = (execution) =>
     writeFileSync(
-      join(dir, 'harness.config.json'),
+      join(dir, 'devscene.config.json'),
       `${JSON.stringify(execution === undefined ? seededConfig() : seededConfig({ execution }))}\n`,
     );
 
@@ -340,14 +340,14 @@ test('hr_execution_target applies the schema default, reads the enum and refuses
 
 test('hr_forge reads the enum, reports an absent key as undecided and refuses a value outside it', async (t) => {
   const dir = await fixtureFor(t, {
-    files: { ...nodeProjectFiles(), 'harness.config.json': seededConfig() },
+    files: { ...nodeProjectFiles(), 'devscene.config.json': seededConfig() },
   });
   await initOk(dir);
 
   // Each call is its own `bash`, so the per-process cache is cold and reads the file as rewritten.
   const withForge = (forge) =>
     writeFileSync(
-      join(dir, 'harness.config.json'),
+      join(dir, 'devscene.config.json'),
       `${JSON.stringify(forge === undefined ? seededConfig() : seededConfig({ forge }))}\n`,
     );
 
@@ -370,14 +370,14 @@ test('hr_forge reads the enum, reports an absent key as undecided and refuses a 
 
 test('hr_docs_retrieval_backend applies the schema default, reads the enum and refuses a value outside it', async (t) => {
   const dir = await fixtureFor(t, {
-    files: { ...nodeProjectFiles(), 'harness.config.json': seededConfig() },
+    files: { ...nodeProjectFiles(), 'devscene.config.json': seededConfig() },
   });
   await initOk(dir);
 
   // Each call is its own `bash`, so the per-process cache is cold and reads the file as rewritten.
   const withDocs = (docs) =>
     writeFileSync(
-      join(dir, 'harness.config.json'),
+      join(dir, 'devscene.config.json'),
       `${JSON.stringify(docs === undefined ? seededConfig() : seededConfig({ docs }))}\n`,
     );
 
@@ -403,7 +403,7 @@ test('hr_docs_retrieval_backend applies the schema default, reads the enum and r
   assert.equal(wrongParent.status, 0, `hr_docs_retrieval_backend exited ${wrongParent.status} for a string \`docs\`: ${wrongParent.stderr}`);
   assert.equal(wrongParent.stdout, 'typescript\n', 'hr_docs_retrieval_backend did not read a string `docs` as an absent key');
 
-  writeFileSync(join(dir, 'harness.config.json'), '{ not json\n');
+  writeFileSync(join(dir, 'devscene.config.json'), '{ not json\n');
   const unparsable = await sourceAndCall(dir, 'hr_docs_retrieval_backend', SEEDED_SCRIPTS_DIR);
   assert.equal(unparsable.status, 2, `hr_docs_retrieval_backend exited ${unparsable.status} for a config jq cannot parse`);
   assert.equal(unparsable.stdout, '', 'hr_docs_retrieval_backend printed a value for a config jq cannot parse');
@@ -411,7 +411,7 @@ test('hr_docs_retrieval_backend applies the schema default, reads the enum and r
 
 test('hr_docs_retrieval_applies answers through its status alone, mirroring retrievalApplies', async (t) => {
   const dir = await fixtureFor(t, {
-    files: { ...nodeProjectFiles(), 'harness.config.json': seededConfig() },
+    files: { ...nodeProjectFiles(), 'devscene.config.json': seededConfig() },
   });
   await initOk(dir);
 
@@ -424,13 +424,13 @@ test('hr_docs_retrieval_applies answers through its status alone, mirroring retr
     { name: 'docs on, retrieval a string', overrides: { phases: { docs: true }, docs: { retrieval: 'true' } }, status: 2 },
   ];
   for (const row of rows) {
-    writeFileSync(join(dir, 'harness.config.json'), `${JSON.stringify(seededConfig(row.overrides))}\n`);
+    writeFileSync(join(dir, 'devscene.config.json'), `${JSON.stringify(seededConfig(row.overrides))}\n`);
     const result = await sourceAndCall(dir, 'hr_docs_retrieval_applies', SEEDED_SCRIPTS_DIR);
     assert.equal(result.status, row.status, `hr_docs_retrieval_applies exited ${result.status} for ${row.name}: ${result.stderr}`);
     assert.equal(result.stdout, '', `hr_docs_retrieval_applies printed to stdout for ${row.name}`);
   }
 
-  writeFileSync(join(dir, 'harness.config.json'), '{ not json\n');
+  writeFileSync(join(dir, 'devscene.config.json'), '{ not json\n');
   const unparsable = await sourceAndCall(dir, 'hr_docs_retrieval_applies', SEEDED_SCRIPTS_DIR);
   assert.equal(unparsable.status, 2, `hr_docs_retrieval_applies exited ${unparsable.status} for a config jq cannot parse`);
   assert.equal(unparsable.stdout, '', 'hr_docs_retrieval_applies printed to stdout for a config jq cannot parse');
@@ -460,7 +460,7 @@ test('hr_inbox_branch_refusal_var refuses an invalid, protected or unresolvable 
   const dir = await fixtureFor(t, { files: nodeProjectFiles() });
   await initOk(dir);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   const protectedName = config.defaultBranch;
   assert.equal(typeof protectedName, 'string', 'the fixture config carries no `defaultBranch` to read as protected');
@@ -475,7 +475,7 @@ test('hr_inbox_branch_refusal_var refuses an invalid, protected or unresolvable 
   const invalid = (branch) => `1|'${branch}' is not a valid branch name (git check-ref-format --branch)`;
 
   assert.equal(await judge('feat_x'), '0|');
-  assert.equal(await judge(protectedName), `1|'${protectedName}' is a protected branch in '${dir}/harness.config.json'`);
+  assert.equal(await judge(protectedName), `1|'${protectedName}' is a protected branch in '${dir}/devscene.config.json'`);
   for (const branch of ['a..b', 'foo.lock', '-x', '']) {
     assert.equal(await judge(branch), invalid(branch), `'${branch}' was not refused as invalid`);
   }
@@ -496,7 +496,7 @@ test('hr_inbox_branch_refusal_var refuses an invalid, protected or unresolvable 
   writeFileSync(configPath, `${JSON.stringify(config)}\n`);
   assert.equal(
     await judge('feat_x'),
-    `1|whether 'feat_x' is protected cannot be judged: the protected set in '${dir}/harness.config.json' cannot be resolved`,
+    `1|whether 'feat_x' is protected cannot be judged: the protected set in '${dir}/devscene.config.json' cannot be resolved`,
   );
 });
 
@@ -777,7 +777,7 @@ test('hr_run_protected_rel_paths is copySurfacePaths', async (t) => {
     assert.equal(printed.status, 0, printed.stderr);
     return printed.stdout.split('\n').filter((line) => line !== '');
   };
-  const config = JSON.parse(text(dir, 'harness.config.json'));
+  const config = JSON.parse(text(dir, 'devscene.config.json'));
   assert.deepEqual(await lines(), [...copySurfacePaths(config)]);
 
   const changed = {
@@ -786,8 +786,8 @@ test('hr_run_protected_rel_paths is copySurfacePaths', async (t) => {
     phases: { ...config.phases, docs: true },
     docs: { ...config.docs, retrieval: true },
   };
-  writeFileSync(join(dir, 'harness.config.json'), `${JSON.stringify(changed, null, 2)}\n`);
-  const expected = [...copySurfacePaths(JSON.parse(text(dir, 'harness.config.json')))];
+  writeFileSync(join(dir, 'devscene.config.json'), `${JSON.stringify(changed, null, 2)}\n`);
+  const expected = [...copySurfacePaths(JSON.parse(text(dir, 'devscene.config.json')))];
   assert.ok(expected.includes(`${SCRIPTS_DIR}/lib`), `the changed configuration projects no retrieval paths: ${expected}`);
   assert.deepEqual(await lines(), expected);
 });
@@ -1114,7 +1114,7 @@ test('--force regenerates an edited outer-loop script only after leaving its con
 
 test('a configured scriptsDir is where the outer-loop scripts land, and the only place', async (t) => {
   const dir = await fixtureFor(t, {
-    files: { ...nodeProjectFiles(), 'harness.config.json': seededConfig({ scriptsDir: RELOCATED_SCRIPTS_DIR }) },
+    files: { ...nodeProjectFiles(), 'devscene.config.json': seededConfig({ scriptsDir: RELOCATED_SCRIPTS_DIR }) },
   });
 
   await initOk(dir);
@@ -1177,7 +1177,7 @@ test('the flow walker, its gate library and its graph land verbatim under script
     ['a relocated scriptsDir', RELOCATED_SCRIPTS_DIR, seededConfig({ scriptsDir: RELOCATED_SCRIPTS_DIR })],
   ]) {
     await t.test(name, async (subtest) => {
-      const files = config === undefined ? nodeProjectFiles() : { ...nodeProjectFiles(), 'harness.config.json': config };
+      const files = config === undefined ? nodeProjectFiles() : { ...nodeProjectFiles(), 'devscene.config.json': config };
       const dir = await fixtureFor(subtest, { files });
 
       await initOk(dir);
@@ -1276,7 +1276,7 @@ test('the test-suite runner lands verbatim under scriptsDir, and a re-run keeps 
     ['a relocated scriptsDir', RELOCATED_SCRIPTS_DIR, seededConfig({ scriptsDir: RELOCATED_SCRIPTS_DIR })],
   ]) {
     await t.test(name, async (subtest) => {
-      const files = config === undefined ? nodeProjectFiles() : { ...nodeProjectFiles(), 'harness.config.json': config };
+      const files = config === undefined ? nodeProjectFiles() : { ...nodeProjectFiles(), 'devscene.config.json': config };
       const dir = await fixtureFor(subtest, { files });
       const path = `${scriptsDir}/${TEST_SUITE_RUNNER}`;
 
@@ -1321,7 +1321,7 @@ async function scratchFixture(t) {
 
   // A file inside the scratch directory that points out of it: the branch `[ -L "$target" ]` exists
   // for. Planted rather than described, because a target that is not there is refused either way.
-  symlinkSync(join(dir, 'harness.config.json'), join(dir, SCRATCH_DIR, 'link.py'));
+  symlinkSync(join(dir, 'devscene.config.json'), join(dir, SCRATCH_DIR, 'link.py'));
   // A directory inside it that points out of it: the branch `pwd -P` on both sides exists for, and
   // the file beneath it is real, so a refusal cannot be the absent-file one wearing another name.
   symlinkSync(join(dir, STATE_DIR, 'story_plans'), join(dir, SCRATCH_DIR, 'elsewhere'));
@@ -1763,7 +1763,7 @@ test("the docs-retrieval server launcher execs the runtime's docs serve for its 
 });
 
 /**
- * A launcher fixture: `init`, then `harness.config.json` rewritten with the `docs` / `phases.docs`
+ * A launcher fixture: `init`, then `devscene.config.json` rewritten with the `docs` / `phases.docs`
  * values the case states, a planted TypeScript runtime that reports its argv on stderr, and —
  * unless `fake` is `false` — a fake `harness-docs-retrieval` first on `PATH` that reports its argv
  * and database variable as JSON on stderr, after an optional prelude line, and exits `fake.status`.
@@ -1773,7 +1773,7 @@ async function launcherFixture(t, { docs, phasesDocs = true, fake = { status: 0 
   const dir = await fixtureFor(t, { files: nodeProjectFiles() });
   await initOk(dir);
   writeFileSync(
-    join(dir, 'harness.config.json'),
+    join(dir, 'devscene.config.json'),
     `${JSON.stringify(seededConfig({ phases: { docs: phasesDocs }, docs }))}\n`,
   );
   const cacheHome = join(dir, 'cache');

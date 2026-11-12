@@ -156,7 +156,7 @@ const DAEMON_USAGE: readonly string[] = Object.freeze([
   'systemctl --user commands to load, start or stop it are printed for you to run: a per-user systemd',
   'instance is not reliably addressable from an arbitrary process.',
   '',
-  'list needs neither a repository nor a harness.config.json: it reads the machine-local registry that',
+  'list needs neither a repository nor a devscene.config.json: it reads the machine-local registry that',
   'install records every installation in, and marks this checkout when it is run inside one.',
   '',
   'The unit file is written outside the repository, at ~/Library/LaunchAgents (launchd) or',

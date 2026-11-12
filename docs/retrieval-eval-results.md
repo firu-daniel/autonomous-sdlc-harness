@@ -1785,7 +1785,7 @@ within a row.
   under it joins the corpus that measures it — and where that root is this checkout's own `docs/`, this
   file, `docs/retrieval-eval-results.md`, is one of its members and is counted in the stamp above. A stamp
   taken before such a document existed is therefore a different corpus.
-- `layers[]`, read out of the resolved checkout's `harness.config.json` and never composed here:
+- `layers[]`, read out of the resolved checkout's `devscene.config.json` and never composed here:
   - `cli` (path `cli`) → `.claude/context/cli.md`
   - `plugin` (path `plugin`) → `.claude/context/plugin.md`
   - `general` (path `.`) → `.claude/context/conventions.md`
@@ -4631,7 +4631,7 @@ within a row.
   under it joins the corpus that measures it — and where that root is this checkout's own `docs/`, this
   file, `docs/retrieval-eval-results.md`, is one of its members and is counted in the stamp above. A stamp
   taken before such a document existed is therefore a different corpus.
-- `layers[]`, read out of the resolved checkout's `harness.config.json` and never composed here:
+- `layers[]`, read out of the resolved checkout's `devscene.config.json` and never composed here:
   - `ad-hoc-1` (path `.`) → `.claude/context/conventions.md`
 - Query set: `evals/docs-retrieval/queries/gate10-catalog.jsonl` — 44 positive, 25 negative.
 - `k`: 5; repetitions per query: 1.
@@ -20134,7 +20134,7 @@ within a row.
   under it joins the corpus that measures it — and where that root is this checkout's own `docs/`, this
   file, `docs/retrieval-eval-results.md`, is one of its members and is counted in the stamp above. A stamp
   taken before such a document existed is therefore a different corpus.
-- `layers[]`, read out of the resolved checkout's `harness.config.json` and never composed here:
+- `layers[]`, read out of the resolved checkout's `devscene.config.json` and never composed here:
   - `cli` (path `cli`) → `.claude/context/cli.md`
   - `plugin` (path `plugin`) → `.claude/context/plugin.md`
   - `general` (path `.`) → `.claude/context/conventions.md`
@@ -23003,7 +23003,7 @@ within a row.
   under it joins the corpus that measures it — and where that root is this checkout's own `docs/`, this
   file, `docs/retrieval-eval-results.md`, is one of its members and is counted in the stamp above. A stamp
   taken before such a document existed is therefore a different corpus.
-- `layers[]`, read out of the resolved checkout's `harness.config.json` and never composed here:
+- `layers[]`, read out of the resolved checkout's `devscene.config.json` and never composed here:
   - `cli` (path `cli`) → `.claude/context/cli.md`
   - `plugin` (path `plugin`) → `.claude/context/plugin.md`
   - `general` (path `.`) → `.claude/context/conventions.md`
@@ -26454,7 +26454,7 @@ incremental refresh cannot masquerade as a cold one. The **model cache was warm*
 download is gate 10's leg (i), and it is out of this section's scope.
 
 **The four runs, kept rather than averaged.** CLI route, `docs index` into a fresh index directory each
-time. CPU sat at 452–459% throughout all four, and `du -sh sdlc-harness/docs_index` returned **72M** after
+time. CPU sat at 452–459% throughout all four, and `du -sh devscene/docs_index` returned **72M** after
 every one of them.
 
 | Run | Context | Wall time | Seconds |
@@ -26543,7 +26543,7 @@ reports its latency separately from library-level arm E, because it is the only 
 the per-call incremental refresh and the MCP round trip — what an agent actually waits for.
 
 **The fixture repository, and its configuration.** `docs serve` refuses unless `phases.docs` and
-`docs.retrieval` are both true, and this repository's `harness.config.json` satisfies neither and is
+`docs.retrieval` are both true, and this repository's `devscene.config.json` satisfies neither and is
 deliberately left alone — so **these numbers are not this repository's own configuration**. The pass
 mirrors the resolved `self-docs` corpus into a git-initialized repository under the system temp
 directory, one commit, removed at the end: 13 files copied at their own repo-relative paths, which
@@ -26742,7 +26742,7 @@ when authoring started, so every record is written.
   is not a comparison over like-phrased sets.
 
 **The label pre-flight.** A launcher in the run's scratch directory reads `HARNESS_EVAL_CORPUS_ROOT`, reads
-the conventions documents the catalog's own `harness.config.json` `layers[]` names, and calls
+the conventions documents the catalog's own `devscene.config.json` `layers[]` names, and calls
 `corpusConfig({ repoRoot, docsRoot: 'docs', conventions, corpusId: 'gate10-catalog' })` → `buildIndex` in
 memory → `loadQueries` → `assertLabelsResolve`, and nothing else. Run on 2026-09-23 over the complete set,
 and re-run the same day after the operator's corrections below:
@@ -26762,7 +26762,7 @@ import { assertLabelsResolve, loadQueries } from '../../evals/docs-retrieval/que
 
 const repoRoot = process.env.HARNESS_EVAL_CORPUS_ROOT;
 if (!repoRoot) throw new Error('HARNESS_EVAL_CORPUS_ROOT is not set');
-const harness = JSON.parse(readFileSync(join(repoRoot, 'harness.config.json'), 'utf8'));
+const harness = JSON.parse(readFileSync(join(repoRoot, 'devscene.config.json'), 'utf8'));
 const conventions = harness.layers.map((layer) => layer.conventions);
 const { id, config, repoRoot: root } = corpusConfig({ repoRoot, docsRoot: 'docs', conventions, corpusId: 'gate10-catalog' });
 const queries = loadQueries('evals/docs-retrieval/queries/gate10-catalog.jsonl');
@@ -26964,7 +26964,7 @@ const { percentile } = await import(join(checkout, 'evals/docs-retrieval/metrics
 
 const repoRoot = process.env.HARNESS_EVAL_CORPUS_ROOT;
 if (!repoRoot) throw new Error('HARNESS_EVAL_CORPUS_ROOT is not set');
-const harness = JSON.parse(readFileSync(join(repoRoot, 'harness.config.json'), 'utf8'));
+const harness = JSON.parse(readFileSync(join(repoRoot, 'devscene.config.json'), 'utf8'));
 const conventions = harness.layers.map((layer) => layer.conventions).filter(Boolean);
 const { config, repoRoot: root } = corpusConfig({ repoRoot, docsRoot: 'docs', conventions, corpusId: 'gate10-catalog' });
 const queries = loadQueries(join(checkout, 'evals/docs-retrieval/queries/gate10-catalog.jsonl'));
@@ -28291,7 +28291,7 @@ output was not captured.
 - TypeScript, first attempt (`agent-session-typescript.failed.jsonl`): `config set
   docs.retrievalBackend typescript`.
 - TypeScript, second attempt (`agent-session-typescript.jsonl`): the key deleted from `<repo>`'s
-  `harness.config.json` by hand. An absent key selects the TypeScript backend.
+  `devscene.config.json` by hand. An absent key selects the TypeScript backend.
 
 **What came back.** Each figure is from the stream's `system/init` and `result` events and its
 `tool_use` / `tool_result` blocks. Session and account identifiers are left out.
@@ -28308,7 +28308,7 @@ output was not captured.
 `harness-docs` was `failed` at `system/init`, and the agent answered without the tool. The stream does
 not record why. `agent-session.md` records the cause the operator found. The launcher's runtime is the
 published `devscene@0.5.0` that `init` installed machine-wide, and it refused
-`harness.config.json` with *"docs.retrievalBackend: unknown key"*. So, on this machine, once the key was
+`devscene.config.json` with *"docs.retrievalBackend: unknown key"*. So, on this machine, once the key was
 set to `typescript` the TypeScript server would not start. The Python session ran with the key set and
 connected. For the same reason, the second TypeScript session's server is that published runtime, not
 this checkout's `cli/dist`.
@@ -31111,7 +31111,7 @@ the after-fix run compares with.
   pg_textsearch.library_version` `1.5.1`, and `pg_extension.extversion` `pg_textsearch` `1.5.1` and
   `vector` `0.8.7`.
 - **The `self-docs` snapshot.** A scratch program wrote every file of commit `d15e5cc3` under `docs/`,
-  `.claude/context/`, `evals/docs-retrieval/queries/` and `harness.config.json`, 76 files, from `git
+  `.claude/context/`, `evals/docs-retrieval/queries/` and `devscene.config.json`, 76 files, from `git
   ls-tree -r --name-only` and `git show`, into a scratch directory, and removed it once the readings
   below were taken. The runs read it as `--repo`. Its stamp is `{ files: 71, chunks: 829 }`, with 15
   positive and 5 negative queries.
@@ -31428,7 +31428,7 @@ By the stamp rule, nothing here is compared value for value with any other `gate
   `--other fixture-catalog` stood. No time was taken: this leg reads scores and plans only. The Python
   backend was not run.
 - **The command.** It is leg (vii)'s TypeScript command, with `--docs-root expause_web/docs` and seven
-  `--conventions`. Those are the seven documents the catalog's own `harness.config.json` names:
+  `--conventions`. Those are the seven documents the catalog's own `devscene.config.json` names:
   `.claude/context/data-layer.md`, `domain.md`, `presentation.md`, `tests.md`, `flutter.md`, `backend.md`
   and `conventions.md`. The captures went to
   `harness-runs/scratch/fix-bm25/route-2-typescript-gate10-catalog-1.txt` and `…-2.txt`.

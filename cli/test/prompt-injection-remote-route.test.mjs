@@ -84,7 +84,7 @@ before(async () => {
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   config.forge = 'github';
@@ -191,7 +191,7 @@ function bundle(branch, id) {
 function restoreAnswers(branch, answers, bundles) {
   const runs = Object.keys(bundles).map((id) => ({
     databaseId: Number(id),
-    displayTitle: `harness run ${branch}`,
+    displayTitle: `devscene run ${branch}`,
     status: 'completed',
     conclusion: 'success',
     createdAt: `2026-01-01T00:${String(Number(id) % 60).padStart(2, '0')}:00Z`,

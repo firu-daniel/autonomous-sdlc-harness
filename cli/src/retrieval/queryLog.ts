@@ -47,7 +47,7 @@ import type { Reporter } from '../core/report.js';
  * The environment variable that turns the log on; this constant is its only spelling in `cli/src`.
  * Its value is a path to a file: set and non-empty, one JSON line is appended per `search_docs` call;
  * unset or empty, nothing is opened, nothing is written and no code path changes. It is deliberately
- * not a `harness.config.json` key — an adopter who does not set it gains no new surface, so there is
+ * not a `devscene.config.json` key — an adopter who does not set it gains no new surface, so there is
  * nothing for `config`, `doctor` or the config check to grow.
  */
 export const RETRIEVAL_LOG_ENV = 'AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG';

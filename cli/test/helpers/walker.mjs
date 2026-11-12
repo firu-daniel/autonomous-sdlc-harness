@@ -26,7 +26,7 @@ const FLOW = 'task_plan_writing';
 /** The fixture's own copy of the graph — the one a mutation check edits, never the template. */
 export const WALKER_GRAPH_PATH = `${INIT_SCRIPTS_DIR}/flows/${FLOW}.graph.json`;
 
-const CONFIG_PATH = 'harness.config.json';
+const CONFIG_PATH = 'devscene.config.json';
 
 /** The seed `init`'s own tests use: a repository whose stack detection resolves every command. */
 function nodeProjectFiles() {

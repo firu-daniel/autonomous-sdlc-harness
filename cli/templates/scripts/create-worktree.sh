@@ -78,7 +78,7 @@
 # that clears it. The trap is cleared only on the success exit.
 #
 # FAIL CLOSED ON A CONFIGURATION IT CANNOT READ. The directory name, the default
-# branch and the registry path all come from `harness.config.json` at run time,
+# branch and the registry path all come from `devscene.config.json` at run time,
 # through `lib/harness-run-lib.sh`, and none of them has a remembered fallback:
 # a guessed default branch would branch a run off the wrong history, and a
 # guessed directory would create a working copy the permission profile does not
@@ -147,11 +147,11 @@
 #
 #   w=$(mktemp -d); b="$w/origin.git"; git init -q --bare "$b"
 #   d="$w/demo"; git init -q -b trunk "$d"; git -C "$d" remote add origin "$b"
-#   printf '%s' '{"version":1,"projectName":"demo","defaultBranch":"trunk","stateDir":"sdlc-harness/","layers":[],"commands":{"depInstall":"printf x > deps.marker"}}' > "$d/harness.config.json"
+#   printf '%s' '{"version":1,"projectName":"demo","defaultBranch":"trunk","stateDir":"devscene/","layers":[],"commands":{"depInstall":"printf x > deps.marker"}}' > "$d/devscene.config.json"
 #   mkdir -p "$d/scripts/lib"   # copy this script + setup-worktree.sh + lib/ there
 #   git -C "$d" add -A && git -C "$d" commit -qm seed && git -C "$d" push -q -u origin trunk
 #   rm_copy() { ( . "$d/scripts/lib/harness-run-lib.sh"; hr_clone_remove_var "$d" "$1" ); }
-#   reg="$d/sdlc-harness/autonomous_logs/registry.json"
+#   reg="$d/devscene/autonomous_logs/registry.json"
 #
 #   new branch     bash "$d/scripts/create-worktree.sh" feat/x
 #                  -> "$w/demo-feat-x" on feat/x, its `.git` a directory and
@@ -217,7 +217,7 @@
 #                     '^branch\.feat/s\.'` print nothing; no copy, local branch
 #                     or record is left
 #                  (rm "$b/hooks/post-receive" restores the fixture)
-#   unresolvable   printf 'x' > "$d/harness.config.json"; either mode -> exit 1,
+#   unresolvable   printf 'x' > "$d/devscene.config.json"; either mode -> exit 1,
 #                  nothing created
 
 set -euo pipefail
@@ -280,7 +280,7 @@ main_repo="$(hr_main_repo "$top")" || main_repo=""
 cfg_status=0
 hr_config_load "$main_repo" || cfg_status=$?
 if [ "$cfg_status" -ne 0 ]; then
-  echo "create-worktree.sh: cannot resolve '$main_repo/harness.config.json' — refusing to create a worktree" >&2
+  echo "create-worktree.sh: cannot resolve '$main_repo/devscene.config.json' — refusing to create a worktree" >&2
   echo "  (no configuration there, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)" >&2
   exit 1
 fi
@@ -313,7 +313,7 @@ if [ -z "$worktree_dir" ]; then
 fi
 registry="$(hr_state_path "$main_repo" autonomous_logs/registry.json)" || registry=""
 if [ -z "$registry" ]; then
-  echo "create-worktree.sh: cannot resolve the run registry's path from '$main_repo/harness.config.json' — refusing" >&2
+  echo "create-worktree.sh: cannot resolve the run registry's path from '$main_repo/devscene.config.json' — refusing" >&2
   exit 1
 fi
 regdir="$(hr_registry_dir "$registry")"
@@ -369,7 +369,7 @@ if [ "$existing" -eq 1 ]; then
 else
   default_branch="$(hr_default_branch "$main_repo")" || default_branch=""
   if [ -z "$default_branch" ]; then
-    echo "create-worktree.sh: no defaultBranch in '$main_repo/harness.config.json' — refusing" >&2
+    echo "create-worktree.sh: no defaultBranch in '$main_repo/devscene.config.json' — refusing" >&2
     exit 1
   fi
   # The copy is branched from the default branch's commit as origin reports

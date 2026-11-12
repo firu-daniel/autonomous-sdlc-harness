@@ -9,12 +9,12 @@ argument-hint: "[<branch>:] [reason]"
 
 The tokens below are not ordinary **path placeholders** (`<branch>`, `<MAIN_REPO>`, `<worktree>`, `<branch_fold>`, `<scratch>`, which this
 file's own text resolves — `<MAIN_REPO>` in step 1, `<worktree>` from the registry record in step 4 and `<branch_fold>` and `<scratch>` in step 2): they
-resolve from the adopting repository's `harness.config.json`. They are declared here once, and after this
+resolve from the adopting repository's `devscene.config.json`. They are declared here once, and after this
 table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `devscene/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<scripts_dir>` | config value | `scriptsDir` — the directory the outer-loop scripts live in, repo-relative; a script is invoked from the root of the checkout this session runs in. This file names two of them: `remote-run.sh`, which it invokes — its `sync` verb, for a remote record, and its `fetch` and `discard` verbs, for a prefix naming a branch with no record, all in step 2, and its `pause` verb, on the GitHub route in step 4 — and `autonomous-watcher.sh`, **only** in the scope fence, as a file it must not modify and never invokes. It modifies neither. |
 
 ---
@@ -97,7 +97,7 @@ written and the reason is not sent.
    **GitHub route** — in place of steps 4 and 5. Never write `PAUSE`. Run
    `bash <scripts_dir>/remote-run.sh pause <branch>` and report its result: exit 0, the pause dispatch was
    sent; exit 2 or 3, report its message — nothing reached the run. On a send, report that the job finds the
-   `harness pause <branch>` run by polling and yields at its next clean checkpoint exactly as a local run
+   `devscene pause <branch>` run by polling and yields at its next clean checkpoint exactly as a local run
    does, and that `/devscene:branch-resume <branch>` resumes it. To stop a remote run outright
    rather than pause it, `bash <scripts_dir>/remote-run.sh stop <branch>` cancels its job and its chain —
    report that command; never run it.

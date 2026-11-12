@@ -31,7 +31,7 @@ import {
   TICK_TIMEOUT_MS,
 } from './helpers/watcher.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const INBOX = `${STATE_DIR}/autonomous_inbox`;
 const LOGS = `${STATE_DIR}/autonomous_logs`;
 const IDENTITY = ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid'];
@@ -95,7 +95,7 @@ function stubBodies(records) {
 /**
  * A watcher fixture adopted on `origin`'s default branch, with the hold stubs, a power-supply
  * directory on mains and a stub engine that writes its own pid; `keepAwake` sets
- * `execution.keepAwake` in its `harness.config.json`.
+ * `execution.keepAwake` in its `devscene.config.json`.
  *
  * @param {import('node:test').TestContext} t
  * @param {{ keepAwake?: unknown }} [options]
@@ -104,7 +104,7 @@ async function keepAwakeFixture(t, { keepAwake } = {}) {
   const w = await createWatcherFixture(t);
   if (w === null) return null;
 
-  const configPath = join(w.dir, 'harness.config.json');
+  const configPath = join(w.dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   delete config.commands.depInstall;
   delete config.commands.build;
@@ -342,7 +342,7 @@ test('(l) macOS: a hold released by execution.keepAwake false is taken again onc
   const f = await keepAwakeFixture(t);
   if (f === null) return;
 
-  const configPath = join(f.dir, 'harness.config.json');
+  const configPath = join(f.dir, 'devscene.config.json');
   const setKeepAwake = async (keepAwake) => {
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
     config.execution = { ...(config.execution ?? {}), keepAwake };

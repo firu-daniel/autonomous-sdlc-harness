@@ -70,7 +70,7 @@ None.
 - `Dockerfile:46`.
 - `docs/retrieval.md:196` ("not published to any package index").
 - `.github/workflows/` holds three files, and none builds a wheel or image.
-- `service.py:83-101` — the config read raises before `docs_root` is consulted, so `--docs-root` does not avoid `harness.config.json`. `cli.py:44`, `:58` and `:64` call it for `serve-mcp`, `serve-http` and `index`.
+- `service.py:83-101` — the config read raises before `docs_root` is consulted, so `--docs-root` does not avoid `devscene.config.json`. `cli.py:44`, `:58` and `:64` call it for `serve-mcp`, `serve-http` and `index`.
 - `service.py:13-15`, `:245`.
 - `refresh.py:77-84` and `refresh.ts:83-86` — every call runs `corpus_files`, reads and chunks every file, then `list_chunk_hashes`. `service.py:241` (Python) and `server.ts:132` (TS) refresh on every call. Confirms the re-read-every-query claim.
 - `corpus.py:39-52`, `:72`, `:96-134`, `:109-110`.
@@ -80,7 +80,7 @@ None.
 - `postgres/Dockerfile` — PG 18, pgvector 0.8.7, pg_textsearch v1.5.1.
 - `pyproject.toml` — version 0.1.0, no `license` field.
 - `NOTICE:6`, `cli/NOTICE:6` (section 4(d)).
-- `schemas/harness.config.schema.json:10-11`, `:279-288`.
+- `schemas/devscene.config.schema.json:10-11`, `:279-288`.
 - `scripts/run-gates.sh:227` (gate 13); `supply-chain.yml:74`, `:100-114`.
 - `docs/retrieval.md:15`, `:17`, `:31`, `:54`, `:71-73`, `:88`, `:140`, `:159`, `:168`, `:170`, `:171`, `:185-200`, `:235-250`, `:262`, `:268`, `:269`, `:288`, `:296`.
 - `docs/retrieval-eval-results.md:4607`, `:4610` (0.909 / 0.795; 1.7 ms / 1099.7 ms), and every cited `##`/`###` heading exists.

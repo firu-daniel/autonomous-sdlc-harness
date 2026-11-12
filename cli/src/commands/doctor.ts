@@ -228,7 +228,7 @@ const DOCTOR_USAGE: readonly string[] = Object.freeze([
   'default dontAsk mode. It reaches no network.',
   '',
   `${JOB_SURFACES_FLAG}=<branch> runs one check, job-surfaces, instead of the list, and takes no other`,
-  "doctor option. It reads harness.config.json from refs/remotes/origin/<branch>, never from the run",
+  "doctor option. It reads devscene.config.json from refs/remotes/origin/<branch>, never from the run",
   "branch, and fails when the run branch's own commits — those since its merge base with",
   'origin/<defaultBranch> — changed any path the remote job runs or loads from its checkout. With',
   '@<commit> (a full 40- or 64-character lower-case id), the configuration is read from <commit> and the',

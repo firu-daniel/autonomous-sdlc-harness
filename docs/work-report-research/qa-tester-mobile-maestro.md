@@ -9,7 +9,7 @@
 | File | Up-front / on demand | Words |
 |---|---|---|
 | `plugin/agents/qa-tester-mobile-maestro.md` | up-front (the whole load) | 1 183 |
-| `harness.config.json` (`phases.qa`, `qa.driver` only) | up-front, two keys | n/a (config, not prose) |
+| `devscene.config.json` (`phases.qa`, `qa.driver` only) | up-front, two keys | n/a (config, not prose) |
 | `plugin/agents/qa-tester.md` → `## Output contract` → `### 3. Tests blocked` | **not read**: the blocked line's shape is cited, but the literal is inlined at `:16-18`, so no read is needed | (qa-tester.md is 7 201) |
 | `plugin/agents/qa-tester.md` (whole, as the "inherited contract") | only for whoever *implements* the variant; never read by the stub at runtime (`:49`) | 7 201 |
 | `CLAUDE.md` (auto-loaded) | up-front, harness-wide, same for every agent | excluded, as in batch 1 |

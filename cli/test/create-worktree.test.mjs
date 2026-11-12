@@ -15,7 +15,7 @@
  * a local ref.**
  *
  * Each case builds the script header's REPRO fixture under the system temp directory: a bare
- * `origin`, a committed `harness.config.json` whose `commands.depInstall` writes `deps.marker`, and
+ * `origin`, a committed `devscene.config.json` whose `commands.depInstall` writes `deps.marker`, and
  * `create-worktree.sh`, `setup-worktree.sh` and `lib/` copied in from `cli/templates/scripts/` — the
  * shipped scripts carry no template token, so the copy is what `init` would write. The main
  * `.git/config` sets the repo-relative `core.hooksPath` `githooks` that `init` writes, so an unpinned
@@ -54,7 +54,8 @@ const CONFIG = {
   version: 1,
   projectName: 'demo',
   defaultBranch: 'trunk',
-  stateDir: 'sdlc-harness/',
+  stateDir: 'devscene/',
+  scriptsDir: 'scripts',
   layers: [],
   commands: { depInstall: 'printf x > deps.marker' },
 };
@@ -80,9 +81,9 @@ async function reproFixture(t) {
   await runGit(d, ['config', 'user.name', 'fixture']);
   await runGit(d, ['config', 'core.hooksPath', 'githooks']);
   await runGit(d, ['remote', 'add', 'origin', b]);
-  await writeFile(join(d, 'harness.config.json'), JSON.stringify(CONFIG), 'utf8');
+  await writeFile(join(d, 'devscene.config.json'), JSON.stringify(CONFIG), 'utf8');
   await writeFile(join(d, '.gitignore'), 'deps.marker\nbranch-deps.marker\n', 'utf8');
-  // `scripts` stays on purpose: `CONFIG` omits `scriptsDir`, whose absent-key value this copy matches.
+  // `scripts` stays on purpose: `CONFIG` sets `scriptsDir: 'scripts'` explicitly, which this copy matches.
   await mkdir(join(d, 'scripts', 'lib'), { recursive: true });
   for (const name of ['create-worktree.sh', 'setup-worktree.sh', 'lib/harness-run-lib.sh']) {
     await cp(join(TEMPLATE_SCRIPTS, name), join(d, 'scripts', name));
@@ -90,7 +91,7 @@ async function reproFixture(t) {
   await runGit(d, ['add', '-A']);
   await runGit(d, ['commit', '--quiet', '-m', 'seed']);
   await runGit(d, ['push', '--quiet', '-u', 'origin', 'trunk']);
-  const regdir = join(d, 'sdlc-harness', 'autonomous_logs');
+  const regdir = join(d, 'devscene', 'autonomous_logs');
   const registry = join(regdir, 'registry.json');
 
   return {
@@ -246,7 +247,7 @@ test('a --no-bootstrap cut is a clone, pushed from the main checkout and mirrore
 
   assert.equal(status, 0, `create-worktree.sh exited ${status}\n${stdout}\n${stderr}`);
   const copy = f.copyOf('feat/q');
-  assert.ok(existsSync(join(copy, 'harness.config.json')), 'the working copy was not populated');
+  assert.ok(existsSync(join(copy, 'devscene.config.json')), 'the working copy was not populated');
   assert.equal(existsSync(join(copy, 'deps.marker')), false, 'a --no-bootstrap cut ran the dependency install');
   await assertClone(f, copy, 'feat/q');
   await assertPushedAndMirrored(f, copy, 'feat/q');
@@ -436,7 +437,7 @@ test('(E5) an honest --existing branch is cloned at its tip and bootstrapped fro
   const commit = await plumbCommit(
     f,
     [
-      { path: 'harness.config.json', content: JSON.stringify(branchConfig) },
+      { path: 'devscene.config.json', content: JSON.stringify(branchConfig) },
       { path: 'src/e5.txt', content: 'e5\n' },
     ],
     'E5',

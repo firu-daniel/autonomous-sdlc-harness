@@ -46,7 +46,7 @@ const configFor = (projectName, appDir) => ({
   defaultBranch: 'main',
   protectedBranches: ['main'],
   appDir,
-  stateDir: 'sdlc-harness',
+  stateDir: 'devscene',
   scriptsDir: 'packages/storefront/scripts',
   commands: { depInstall: 'npm ci', test: 'npm test' },
   phases: { qa: true },
@@ -81,12 +81,12 @@ async function seed(dir, config) {
   await runGit(dir, ['init', '--quiet', '-b', 'main']);
   await runGit(dir, ['config', 'user.email', 'fixture@example.invalid']);
   await runGit(dir, ['config', 'user.name', 'Harness Fixture']);
-  await writeFile(join(dir, 'harness.config.json'), `${JSON.stringify(config)}\n`);
+  await writeFile(join(dir, 'devscene.config.json'), `${JSON.stringify(config)}\n`);
   for (const [rel, content] of Object.entries(FILES)) {
     await mkdir(dirname(join(dir, rel)), { recursive: true });
     await writeFile(join(dir, rel), content);
   }
-  await runGit(dir, ['add', 'harness.config.json', ...Object.keys(FILES)]);
+  await runGit(dir, ['add', 'devscene.config.json', ...Object.keys(FILES)]);
   await runGit(dir, ['commit', '--quiet', '-m', 'fixture: seed']);
   await runGit(dir, ['checkout', '--quiet', '-b', 'feat_probe']);
 }

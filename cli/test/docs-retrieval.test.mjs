@@ -127,7 +127,7 @@ test('(g) docs index refuses with docs.retrieval false', async (t) => {
   const result = await runCli(dir, ['docs', 'index'], env);
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /docs retrieval is off in harness\.config\.json/);
+  assert.match(result.stderr, /docs retrieval is off in devscene\.config\.json/);
   assert.deepEqual(await snapshotTree(dir), before);
 });
 
@@ -266,7 +266,7 @@ test('search (f): docs search --dry-run answers from memory and leaves the tree 
   assert.ok(hybrid.split('\n')[0].startsWith('1. docs/guide.md#offline (score '), hybrid);
 
   assert.deepEqual(await snapshotTree(dir), before);
-  assert.equal(existsSync(join(dir, 'sdlc-harness', 'docs_index')), false);
+  assert.equal(existsSync(join(dir, 'devscene', 'docs_index')), false);
 });
 
 test('docs refuses an unknown sub-verb and an unknown flag, naming docs --help', async (t) => {
@@ -350,7 +350,7 @@ test('serve (e): docs serve with docs.retrieval false exits non-zero before the 
 
   assert.notEqual(result.status, 0);
   assert.equal(result.stdout, '');
-  assert.match(result.stderr, /docs retrieval is off in harness\.config\.json/);
+  assert.match(result.stderr, /docs retrieval is off in devscene\.config\.json/);
 });
 
 test('serve (f): docs serve --dry-run exits non-zero before the handshake and writes nothing', async (t) => {

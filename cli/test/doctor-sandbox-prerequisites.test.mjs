@@ -32,7 +32,7 @@ import {
   NESTED_USERNS_HELPER,
 } from '../dist/doctor/sandboxPrerequisites.js';
 
-const CONFIG_FILE = 'harness.config.json';
+const CONFIG_FILE = 'devscene.config.json';
 const CHECK_ID = 'sandbox-prerequisites';
 const OPT_OUT_REASON = 'r';
 const IS_DARWIN = process.platform === 'darwin';

@@ -59,7 +59,7 @@ function text(dir, relativePath) {
 async function wiredFixture(t, { forge, target }) {
   const dir = await fixtureFor(t);
   await initOk(dir);
-  const path = join(dir, 'harness.config.json');
+  const path = join(dir, 'devscene.config.json');
   const config = readJson(path);
   if (forge !== undefined) config.forge = forge;
   if (target !== undefined) config.execution = { target };

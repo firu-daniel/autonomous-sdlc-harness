@@ -38,7 +38,7 @@ import {
 
 const STEP = 'Install the sandbox prerequisites';
 const PREFLIGHT = 'Preflight with doctor';
-const HARNESS = 'Run the harness';
+const HARNESS = 'Run DevScene';
 const PRESENT_LINE = 'The sandbox prerequisites are present.';
 const ATTR_READING = 'bwrap//&unpriv_bwrap (enforce)';
 const UID_MAP_ERROR = 'unshare: write failed /proc/self/uid_map: Operation not permitted';

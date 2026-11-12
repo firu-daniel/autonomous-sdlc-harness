@@ -29,7 +29,7 @@ import test from 'node:test';
 import { INIT_SCRIPTS_DIR, runGit } from './helpers/fixture.mjs';
 import { createWatcherFixture, TICK_TIMEOUT_MS } from './helpers/watcher.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const IDENTITY = ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid'];
 const SUBJECT = 'chore: Record run analytics for feat_x';
 const OUT_REL = `${STATE_DIR}/run_analytics/feat_x`;
@@ -73,7 +73,7 @@ async function adoptedFixture(t) {
   const w = await createWatcherFixture(t, { runAnalytics: true });
   if (w === null) return null;
 
-  const config = JSON.parse(await readFile(join(w.dir, 'harness.config.json'), 'utf8'));
+  const config = JSON.parse(await readFile(join(w.dir, 'devscene.config.json'), 'utf8'));
   await writeFile(join(w.dir, '.git', 'info', 'exclude'), '/watcher-test/\n', { flag: 'a' });
   await runGit(w.dir, ['add', '-A']);
   await runGit(w.dir, [...IDENTITY, 'commit', '--quiet', '--no-verify', '-m', 'fixture: adopt the harness']);

@@ -25,8 +25,8 @@
 # this path, or a refusal; else the `git rev-parse --git-common-dir` answer —
 # so every run copy names the same one) and <stateDir> is `stateDir` from the
 # main checkout's
-# `harness.config.json` when it has one, else this working copy's, defaulting to
-# `sdlc-harness`. THE TWO HALVES OF THE
+# `devscene.config.json` when it has one, else this working copy's, defaulting to
+# `devscene`. THE TWO HALVES OF THE
 # PAIR MUST AGREE ON THAT DERIVATION: change it in one file alone and every lock
 # the other half is holding is silently retired, because each would then look in
 # a directory the other never writes. The repository is resolved from `$PWD` and
@@ -92,7 +92,7 @@ if [ -z "$main" ]; then
 fi
 cfg_root="$main"
 hc_config_file "$main" >/dev/null || cfg_root="$root"
-state_rel=$(hc_config_dir "$cfg_root" stateDir sdlc-harness) || state_rel="sdlc-harness"
+state_rel=$(hc_config_dir "$cfg_root" stateDir devscene) || state_rel="devscene"
 
 LOCK_DIR="$main/$state_rel/qa_user_locks"
 

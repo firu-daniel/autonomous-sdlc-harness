@@ -43,8 +43,8 @@
  *    rather than by resolving the entry to a file, so the repo-relative form and the
  *    repo-root-absolute one are judged by the same rule. The run copy's exact form is the watcher's
  *    per-run copy's to add, and no base profile carries a wrapper row under the sibling-worktree glob.
- * 3. **Assertions name the contract literally** — `sdlc-harness/`, `version: 1`,
- *    `bash harness-scripts/typecheck.sh`, `.claude/settings.autonomous.json` — rather than importing
+ * 3. **Assertions name the contract literally** — `devscene/`, `version: 1`,
+ *    `bash devscene-scripts/typecheck.sh`, `.claude/settings.autonomous.json` — rather than importing
  *    the constants the generators wrote them from. Comparing generated output against the constant
  *    that generated it proves only that the CLI is self-consistent. Two exceptions. The identity of
  *    the plugin is derived from the two shipped manifests rather than spelled out here, because
@@ -100,29 +100,29 @@ import { scaleBound } from './helpers/timing.mjs';
 import { PUSH_DESTINATION_FORMS } from '../dist/generators/notifications.js';
 
 /** The generated artifacts this file addresses by name — the contract, spelled out once. */
-const CONFIG_FILE = 'harness.config.json';
+const CONFIG_FILE = 'devscene.config.json';
 const PROFILE_FILE = '.claude/settings.autonomous.json';
 const SETTINGS_FILE = '.claude/settings.json';
 const CLAUDE_MD = '.claude/CLAUDE.md';
 const SHARED_STUB = '.claude/context/conventions.md';
 const CONTEXT_DIR = '.claude/context';
 const QA_SCENARIOS_FILE = '.claude/qa_test_scenarios.md';
-const TASK_OFFER_FILE = '.claude/harness-task-offer.md';
+const TASK_OFFER_FILE = '.claude/devscene-task-offer.md';
 const MCP_FILE = '.mcp.json';
 const GITIGNORE_FILE = '.gitignore';
 
 /**
  * Two of the three configured directories, at their documented defaults. The third is
- * `INIT_SCRIPTS_DIR`, imported rather than spelled: it is what a configless `init` writes, which is
- * not the schema default an absent key means.
+ * `INIT_SCRIPTS_DIR`, imported rather than spelled: it is what a configless `init` writes and what an
+ * absent key means.
  */
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const GITHOOKS_DIR = 'githooks';
 
 /**
  * The `scriptsDir` every config this file seeds by hand carries explicitly. A seeded config's scripts
- * are addressed through it, never through `INIT_SCRIPTS_DIR`; it is spelled out so the seed is not
- * also a case about the absent-key warning.
+ * are addressed through it, never through `INIT_SCRIPTS_DIR`; it differs from that value so a kept
+ * config's scripts cannot be mistaken for a configless run's.
  */
 const SEEDED_SCRIPTS_DIR = 'scripts';
 
@@ -134,7 +134,7 @@ const GLOB_BRANCH = 'release/*';
 
 /** The schema's `required` list, and the two declared defaults a generated config carries. */
 const REQUIRED_CONFIG_KEYS = ['version', 'defaultBranch', 'stateDir', 'layers', 'commands'];
-const STATE_DIR_VALUE = 'sdlc-harness/';
+const STATE_DIR_VALUE = 'devscene/';
 const QA_DRIVER_VALUE = 'web-playwright';
 
 /** A driver that is legal and is not the default, and one that is not a driver at all. */
@@ -333,9 +333,9 @@ const GENERIC_STUB_NOTE = 'no dedicated skeleton';
  * exact strings off documents in an adopter's repository, so comparing generated output against the
  * constant that generated it would leave a renamed marker passing.
  */
-const UNFILLED_MARKER = '<!-- harness:unfilled -->';
+const UNFILLED_MARKER = '<!-- devscene:unfilled -->';
 const GUIDANCE_MARKER = '**What belongs here**';
-const ANALYZE_COMMAND = '/devscene:harness-analyze';
+const ANALYZE_COMMAND = '/devscene:analyze';
 
 /** How the reporter renders a step heading, and the whole of what delimits one block from the next. */
 const STEP_MARKER = '== ';
@@ -775,7 +775,7 @@ const { MARKETPLACE_NAME, PLUGIN_KEY } = await loadCompiled('generators/projectS
 
 describe('init', { concurrency: CASE_CONCURRENCY }, () => { // body deliberately not re-indented: keeps the diff and `git blame` readable
 
-test('a first init exits 0 and writes a schema-shaped harness.config.json', async (t) => {
+test('a first init exits 0 and writes a schema-shaped devscene.config.json', async (t) => {
   const dir = await fixtureFor(t, { files: nodeProjectFiles() });
 
   const { stdout } = await initOk(dir);
@@ -846,7 +846,7 @@ test('a first init writes the context files and the settings wiring with no toke
 
   // Not an unfilled conventions skeleton: no marker-driven reader may mistake it for one.
   const offer = text(dir, TASK_OFFER_FILE);
-  for (const marker of ['<!-- harness:unfilled -->', '**What belongs here**']) {
+  for (const marker of ['<!-- devscene:unfilled -->', '**What belongs here**']) {
     assert.ok(!offer.includes(marker), `${TASK_OFFER_FILE} carries the unfilled-skeleton marker ${marker}`);
   }
 
@@ -885,7 +885,7 @@ test('a first init writes the pre-push guard, executable and rendered', async (t
  * `init --force` re-renders it from the config in effect — config is read-if-present on every run,
  * so `--force` upgrades the other generated files to overwrite-after-`.bak` while leaving the file
  * the edit lives in alone — and deleting the hook and re-running `init` is the same remedy without
- * `--force`. The note may carry no claim that `--force` rebuilds `harness.config.json`; that is
+ * `--force`. The note may carry no claim that `--force` rebuilds `devscene.config.json`; that is
  * `--reset-config`'s behaviour, and naming it here would send the edit back to the path that
  * discards it.
  *
@@ -1263,7 +1263,7 @@ test('an unresolvable deploy command at the repository root gets the failing wra
   const { stderr } = await initOk(dir);
 
   assertRendered(dir, 'deploy.sh');
-  assert.match(text(dir, 'deploy.sh'), /harness_fail "harness: put the deploy command line in deploy\.sh"/);
+  assert.match(text(dir, 'deploy.sh'), /harness_fail "devscene: put the deploy command line in deploy\.sh"/);
   assert.match(stderr, /deploy\.sh was written as a wrapper that fails with a message/);
   assert.doesNotMatch(stderr, /recurse forever/);
 });
@@ -1460,7 +1460,7 @@ test('the command line writeWrapperScripts returns is the one it inlined into th
     key: 'deploy',
     file: 'deploy.sh',
     invocation: `bash ${INIT_SCRIPTS_DIR}/deploy.sh`,
-    command: 'harness_fail "harness: put the deploy command line in deploy.sh"',
+    command: 'harness_fail "devscene: put the deploy command line in deploy.sh"',
     unresolved: true,
     carried: false,
   });
@@ -2345,7 +2345,7 @@ test('a second init keeps an edited config and an edited conventions stub', asyn
  * than gone. Both halves are asserted, because a flag that wrote the backup and then kept the file
  * would satisfy either one alone.
  *
- * **It is not a configuration semantic**, and `harness.config.json` is the single exception the rest
+ * **It is not a configuration semantic**, and `devscene.config.json` is the single exception the rest
  * of this case exists to fix in place. The config is read whenever it is there, on every run and
  * this flag included, and no `.bak` of it is written — because the artifacts regenerated in the same
  * run are all rendered from the config *in effect*, so a `--force` that rebuilt the file first would
@@ -2553,7 +2553,7 @@ test('init --reset-config rebuilds the config from detection and the flags, afte
  * its wrapper invocations under whichever directory that config means.
  */
 function seededScriptsDirFiles(scriptsDir) {
-  const wrapperDir = scriptsDir ?? SEEDED_SCRIPTS_DIR;
+  const wrapperDir = scriptsDir ?? INIT_SCRIPTS_DIR;
   return {
     ...nodeProjectFiles(),
     [CONFIG_FILE]: {
@@ -2568,31 +2568,31 @@ function seededScriptsDirFiles(scriptsDir) {
 }
 
 /**
- * `scriptsDir` is the one key whose generated value is not its absent-key meaning: a fresh `init`
- * writes `harness-scripts`, while an existing adoption — kept, forced or rebuilt — stays where its
- * scripts already are. The kept and rebuild cases are graded on the bytes on disk.
+ * A fresh `init` writes `devscene-scripts`, the value an absent key means too, while an existing
+ * adoption — kept, forced or rebuilt — stays where its scripts already are. The kept and rebuild
+ * cases are graded on the bytes on disk.
  */
 test('init writes scriptsDir fresh, keeps it on a kept config, and re-reads it on a rebuild', async (t) => {
-  await t.test('a configless init writes harness-scripts, wires both commands to it, and allow-lists it', async (subtest) => {
+  await t.test('a configless init writes devscene-scripts, wires both commands to it, and allow-lists it', async (subtest) => {
     const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
 
     await initOk(dir);
 
     const config = readJson(join(dir, CONFIG_FILE));
-    assert.equal(config.scriptsDir, 'harness-scripts');
-    assert.equal(config.commands.typecheck, 'bash harness-scripts/typecheck.sh');
-    assert.equal(config.commands.test, 'bash harness-scripts/test.sh');
+    assert.equal(config.scriptsDir, 'devscene-scripts');
+    assert.equal(config.commands.typecheck, 'bash devscene-scripts/typecheck.sh');
+    assert.equal(config.commands.test, 'bash devscene-scripts/test.sh');
     const allow = readJson(join(dir, PROFILE_FILE)).permissions.allow;
     const worktreeGlob = join(dirname(dir), `${config.projectName}-*`);
     for (const name of ['typecheck.sh', 'test.sh']) {
       for (const entry of [
-        `Bash(bash harness-scripts/${name}:*)`,
-        `Bash(bash ${join(dir, 'harness-scripts', name)}:*)`,
+        `Bash(bash devscene-scripts/${name}:*)`,
+        `Bash(bash ${join(dir, 'devscene-scripts', name)}:*)`,
       ]) {
         assert.ok(allow.includes(entry), `the profile does not allow-list ${name} as ${entry}`);
       }
       assert.ok(
-        !allow.includes(`Bash(bash ${join(worktreeGlob, 'harness-scripts', name)}:*)`),
+        !allow.includes(`Bash(bash ${join(worktreeGlob, 'devscene-scripts', name)}:*)`),
         `the profile allow-lists ${name} under the sibling-worktree glob, a row the guard matches literally`,
       );
     }
@@ -2665,14 +2665,14 @@ test('init writes scriptsDir fresh, keeps it on a kept config, and re-reads it o
     );
   });
 
-  await t.test('--reset-config over a config with no scriptsDir writes the absent-key meaning explicitly', async (subtest) => {
+  await t.test('--reset-config over a config with no scriptsDir writes devscene-scripts explicitly', async (subtest) => {
     const dir = await fixtureFor(subtest, { files: seededScriptsDirFiles(undefined) });
 
     await initOk(dir, ['--reset-config']);
 
     const rebuilt = text(dir, CONFIG_FILE);
-    assert.equal(JSON.parse(rebuilt).scriptsDir, SEEDED_SCRIPTS_DIR);
-    assert.match(rebuilt, /"scriptsDir": "scripts"/);
+    assert.equal(JSON.parse(rebuilt).scriptsDir, INIT_SCRIPTS_DIR);
+    assert.match(rebuilt, /"scriptsDir": "devscene-scripts"/);
   });
 
   await t.test('--reset-config --scripts-dir writes the flag value over the re-read one', async (subtest) => {
@@ -2850,7 +2850,7 @@ test('--dry-run writes nothing and reports what a real run would have written', 
   const { stdout } = await initOk(dir, ['--dry-run']);
 
   assert.deepEqual(await snapshotTree(dir), before, '--dry-run wrote to the repository');
-  assert.match(stdout, /^\+ would create\s+harness\.config\.json$/m);
+  assert.match(stdout, /^\+ would create\s+devscene\.config\.json$/m);
   assert.match(stdout, /^Summary: \d+ would create, \d+ would ensure$/m);
 });
 
@@ -2873,7 +2873,7 @@ test('an existing .gitignore and .mcp.json keep their content and gain the manag
   assert.match(ignore, /^node_modules\/$/m);
   assert.equal(occurrences(ignore, GITIGNORE_MARKER), 1, 'a second init added a second managed block');
   assert.equal(occurrences(ignore, '.claude/settings.local.json'), 1, 'a line already present was appended again');
-  assert.equal(occurrences(ignore, '.claude/harness-no-offer'), 1, 'the opt-out marker rule is not in the block exactly once');
+  assert.equal(occurrences(ignore, '.claude/devscene-no-offer'), 1, 'the opt-out marker rule is not in the block exactly once');
   assert.equal(occurrences(ignore, '.claude/push-notify.env'), 1);
   assert.equal(occurrences(ignore, `${STATE_DIR}/autonomous_logs/*`), 1);
   // A run-control rule, and — with the browser group gated on and written last — a line from each
@@ -3192,7 +3192,7 @@ test('git ignores every run-control artifact and none of the tree that must stay
     // asked for here — in the run with every phase off — rather than only beside the browser group.
     CLIENT_ENV_RULE,
     // The change-request offer's opt-out marker: written by a user's own answer, never committed.
-    '.claude/harness-no-offer',
+    '.claude/devscene-no-offer',
     // The backup `config set` writes before every write. No `config set` has run in this fixture, so
     // this one is asked as a pathname rather than as a file — which is what `ignoredAmong` is for —
     // and it gets no `exists` check. Task 3's fixture asks it with the file really on disk.
@@ -3213,7 +3213,7 @@ test('git ignores every run-control artifact and none of the tree that must stay
     `${STATE_DIR}/autonomous_logs/README.md`,
     `${STATE_DIR}/autonomous_inbox/README.md`,
     `${STATE_DIR}/clarifications/README.md`,
-    // The control for a backup rule one character too broad: `harness.config.json*` would take the
+    // The control for a backup rule one character too broad: `devscene.config.json*` would take the
     // committed configuration with it.
     CONFIG_FILE,
   ];
@@ -3352,7 +3352,7 @@ test('stack detection maps each seeded layout to its preset', async (t) => {
       }
       if (testCase.name === 'flat') {
         assert.match(stderr, /unrecognised layout/);
-        assert.match(stderr, /\/devscene:harness-analyze/);
+        assert.match(stderr, /\/devscene:analyze/);
         // The fallback row's own evidence string, which is what turns "nothing matched" into a
         // recorded fact instead of an absence a later reader has to guess at.
         assert.equal(config.detection.evidence, 'no signal matched');
@@ -3366,7 +3366,7 @@ const GAP_NOTE = 'covered by no layer';
 
 /** The two remedy leads, so a case can assert which arm composed the sentence it read. */
 const CONFIG_SET_LAYERS = 'config set layers';
-const ANALYZE_FIRST_REMEDY = 'run `/devscene:harness-analyze` in a session here and answer `skip`';
+const ANALYZE_FIRST_REMEDY = 'run `/devscene:analyze` in a session here and answer `skip`';
 
 /** A directory an adopter adds beside the ones the preset wrote rows for, per fixture shape. */
 const API_DRIFTED_DIR = 'src/handlers';
@@ -3385,7 +3385,7 @@ const GAP_LAYERED_DIRS = Object.freeze(['src/data', 'src/domain', 'src/presentat
  */
 const GAP_PUBSPEC = 'name: fixture\nenvironment:\n  sdk: ">=3.0.0 <4.0.0"\n';
 
-/** The record `/devscene:harness-analyze layers` writes, in the shape `config set detection.review` takes. */
+/** The record `/devscene:analyze layers` writes, in the shape `config set detection.review` takes. */
 const REVIEW_VERDICT = 'considered-no-change';
 const REVIEW_DATE = '2026-08-01';
 
@@ -3479,7 +3479,7 @@ test('init names the source directories no layer covers, as doctor does', async 
     const dir = await fixtureFor(subtest, { files: { 'pubspec.yaml': GAP_PUBSPEC, 'lib/main.dart': 'void main() {}\n' } });
     await initOk(dir);
     // The two hand edits an adopter's own repository makes between runs: a directory added after the
-    // profile was written, and the record `/devscene:harness-analyze layers` leaves behind.
+    // profile was written, and the record `/devscene:analyze layers` leaves behind.
     mkdirSync(join(dir, FLUTTER_DRIFTED_DIR), { recursive: true });
     editConfig(dir, (config) => {
       config.detection.review = { verdict: REVIEW_VERDICT, at: REVIEW_DATE };
@@ -3501,7 +3501,7 @@ test('init names the source directories no layer covers, as doctor does', async 
       `the note tells an adopter with a recorded review to re-derive the same decision:\n${note}`,
     );
     assert.ok(
-      note.indexOf(CONFIG_SET_LAYERS) < note.indexOf('/devscene:harness-analyze', note.indexOf(GAP_NOTE)),
+      note.indexOf(CONFIG_SET_LAYERS) < note.indexOf('/devscene:analyze', note.indexOf(GAP_NOTE)),
       `the remedy does not lead with the route that needs no session:\n${note}`,
     );
   });
@@ -5403,7 +5403,7 @@ test('each conventions stub names the analyze target of the layer that points at
  *
  * The config schema's `name` pattern admits `project`, `conventions` and `layers`, so this is a
  * legal repository rather than a hypothetical one. The rule is that the reserved meaning wins and
- * the run says so: a footer reading `/devscene:harness-analyze project` would send the adopter at the
+ * the run says so: a footer reading `/devscene:analyze project` would send the adopter at the
  * always-loaded project file while promising this layer's document, which is the silent resolution
  * the collision rule exists to refuse.
  */
@@ -5480,8 +5480,8 @@ test('the shared conventions skeleton carries the commit-policy section the comm
  * command tells an untouched section of this file from a written one (this file carries neither
  * half of the untouched-skeleton test that answers the same question for a conventions document).
  */
-const SETUP_PENDING_OPEN = '<!-- harness:setup-pending -->';
-const SETUP_PENDING_CLOSE = '<!-- /harness:setup-pending -->';
+const SETUP_PENDING_OPEN = '<!-- devscene:setup-pending -->';
+const SETUP_PENDING_CLOSE = '<!-- /devscene:setup-pending -->';
 const BANNER_ACCEPTED = 'was accepted at setup';
 const BANNER_DECLINED = 'the analysis was declined at setup';
 const BANNER_DISPOSAL = 'the block can be deleted by hand once these sections are written';
@@ -5600,9 +5600,9 @@ test('the generated project file spells the harness commands qualified by the pl
 
   const content = text(dir, CLAUDE_MD);
   for (const spelling of [
-    '/devscene:harness-analyze',
+    '/devscene:analyze',
     '/devscene:branch-*',
-    '/devscene:harness-*',
+    '/devscene:read-mention',
   ]) {
     assert.ok(content.includes(spelling), `${CLAUDE_MD} does not carry the qualified spelling ${spelling}`);
   }
@@ -6919,7 +6919,7 @@ test('the self-adoption escape opens the harness-own-repository refusal, and onl
     assert.doesNotMatch(result.stderr, /refusing to wire the harness's own repository/);
     // The absence above would also hold if `init` had failed before ever reaching the gate, so the
     // arm asks for a line the run can only have printed from the other side of it.
-    assert.match(result.stdout, /would create\s+harness\.config\.json/);
+    assert.match(result.stdout, /would create\s+devscene\.config\.json/);
     assert.equal(await exists(dir, CONFIG_FILE), false);
   });
 
@@ -7008,7 +7008,7 @@ test('init offers to create the repository it needs, and creates one only when t
     );
     // The preview is still a preview of the whole run: a dry run that created nothing but also
     // planned nothing would pass the two assertions above while telling the adopter nothing.
-    assert.match(result.stdout, /would create\s+harness\.config\.json/);
+    assert.match(result.stdout, /would create\s+devscene\.config\.json/);
   });
 
   await t.test('--git-init --dry-run previews the root git would report, not the one it was reached by', async (subtest) => {
@@ -7129,7 +7129,7 @@ test('init commits into a repository with no commit, and never into one with com
     const { stdout, stderr } = await initOk(dir, ['--git-init'], NO_COMMIT_IDENTITY);
 
     assert.equal(await exists(dir, CONFIG_FILE), true);
-    assert.match(stdout, /created\s+harness\.config\.json/);
+    assert.match(stdout, /created\s+devscene\.config\.json/);
     assert.equal(await commitCount(dir), UNBORN);
 
     // Asserted against the CLI's own sentence, never git's: git's wording for a missing identity
@@ -7796,7 +7796,7 @@ function discardedFlagWarnings(stderr) {
 
 /**
  * A flag that supplies a **configuration value** is silently ignored on any run that reads an
- * existing `harness.config.json` — and a flag silently ignored is worse than one rejected. So the
+ * existing `devscene.config.json` — and a flag silently ignored is worse than one rejected. So the
  * run names every one it dropped, by the spelling it was typed with, and names the two commands
  * that would have applied it.
  *
@@ -7807,7 +7807,7 @@ function discardedFlagWarnings(stderr) {
  *
  * **The class is the property, not the one flag.** The last case is the negative control that keeps
  * it honest: `--marketplace` also names a value, and that value reaches the committed
- * `.claude/settings.json` rather than `harness.config.json` (`generators/projectSettings.ts`) — so
+ * `.claude/settings.json` rather than `devscene.config.json` (`generators/projectSettings.ts`) — so
  * whether the config was kept says nothing about it, and this warning must not name it.
  *
  * **And the class is about where the value is *written*, not about everything the flag reaches.**
@@ -8800,7 +8800,7 @@ test('the GitHub workflows arrive with execution.target github-actions, and only
 
     // The commit, scope and push lines, with the `git add` line checked by its prefix, are the four
     // commands `docs/remote-execution.md` → `## 7. Turning it on` step 3 prints.
-    const { defaultBranch } = readJson(join(dir, 'harness.config.json'));
+    const { defaultBranch } = readJson(join(dir, 'devscene.config.json'));
     const names = [
       'CLAUDE_CODE_OAUTH_TOKEN',
       'ANTHROPIC_API_KEY',

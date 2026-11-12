@@ -1,7 +1,7 @@
 # devscene-resume.yml — resumes usage-paused devscene runs once
 # their usage window has reset, with no local machine involved.
 #
-# WHO WRITES IT. `devscene init`, only when harness.config.json's
+# WHO WRITES IT. `devscene init`, only when devscene.config.json's
 # `execution.target` is `github-actions`. Written create-if-absent: from then on
 # it is yours to tune, and a re-run of `init` keeps your copy.
 # `init --upgrade-workflows` re-renders it together with the run workflow, after
@@ -10,7 +10,7 @@
 # WHY A POLLER. A `schedule` trigger is a recurring cron read from the default
 # branch, not a one-shot timer, so resuming at a recorded reset time means
 # polling. Each tick runs `remote-run.sh poll`: it downloads each branch's
-# newest `harness run` bundle and dispatches `resume: pause` for every
+# newest `devscene run` bundle and dispatches `resume: pause` for every
 # usage-paused run whose recorded reset has passed.
 #
 # IT DISABLES ITSELF. When a tick leaves no run waiting, `poll` runs
@@ -43,9 +43,9 @@
 #     the poller gives up on it; 3 when unset) and
 #     DEVSCENE_POLL_GIVE_UP_AFTER_MINUTES (minutes after the usage reset past
 #     which it gives up; 360 when unset).
-#   harness.config.json, at run time: `scriptsDir` and `stateDir`. No
+#   devscene.config.json, at run time: `scriptsDir` and `stateDir`. No
 #     configured value is frozen into this file.
-#   The previous tick's `harness-poll-state` artifact, which `poll` downloads.
+#   The previous tick's `devscene-poll-state` artifact, which `poll` downloads.
 #     The job's `actions: write` covers listing and downloading its own
 #     workflow's artifacts.
 #
@@ -63,12 +63,12 @@
 # then never see a deleted run branch, and never drop its poll state. The one
 # upload, `Upload the poller state`, takes its `path:` from POLL_STATE_DIR,
 # `<stateDir>/autonomous_logs/poll_state/current`, set by `Read the
-# configuration` from harness.config.json's `stateDir`: a subdirectory of the
+# configuration` from devscene.config.json's `stateDir`: a subdirectory of the
 # state directory holding no `.git/`, so no artifact carries the checkout's
 # .git/config. An edit keeps it so: never point an upload-artifact `path:` at
 # the workspace root or at `.git/` while the checkout persists its credential.
 #
-# WHAT IT WRITES. The `harness-poll-state` artifact: the failed-dispatch and
+# WHAT IT WRITES. The `devscene-poll-state` artifact: the failed-dispatch and
 #   failed-download counts `poll` carries to the next tick, kept 7 days.
 #
 # THE RULE EVERY EDIT KEEPS. Every GitHub expression has a space after its
@@ -148,8 +148,8 @@ jobs:
             echo "::error::this runner lacks:$missing. Install them on the self-hosted runner, or use a GitHub-hosted one."
             exit 1
           fi
-          scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
-          state_dir=$(jq -r '.stateDir // "sdlc-harness"' harness.config.json)
+          scripts_dir=$(jq -r '.scriptsDir // "devscene-scripts"' devscene.config.json)
+          state_dir=$(jq -r '.stateDir // "devscene"' devscene.config.json)
           {
             echo "SCRIPTS_DIR=${scripts_dir%/}"
             echo "POLL_STATE_DIR=${state_dir%/}/autonomous_logs/poll_state/current"
@@ -163,7 +163,7 @@ jobs:
         # actions/upload-artifact v7.0.1
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: harness-poll-state
+          name: devscene-poll-state
           path: ${{ env.POLL_STATE_DIR }}
           overwrite: true
           if-no-files-found: ignore

@@ -58,7 +58,7 @@ import {
 } from './helpers/watcher.mjs';
 import { scaleBound } from './helpers/timing.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const LIB_PATH = `${INIT_SCRIPTS_DIR}/lib/harness-run-lib.sh`;
 const REGISTRY_PATH = `${STATE_DIR}/autonomous_logs/registry.json`;
 const IDENTITY = ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid'];
@@ -105,7 +105,7 @@ async function adoptedFixture(t) {
   const w = await createWatcherFixture(t);
   if (w === null) return null;
 
-  const configPath = join(w.dir, 'harness.config.json');
+  const configPath = join(w.dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   delete config.commands.depInstall;
   delete config.commands.build;
@@ -697,7 +697,7 @@ const PLANT_AND_CRASH = [
 async function jobFixture(t) {
   const f = await adoptedFixture(t);
   if (f === null) return null;
-  const config = JSON.parse(readFileSync(join(f.dir, 'harness.config.json'), 'utf8'));
+  const config = JSON.parse(readFileSync(join(f.dir, 'devscene.config.json'), 'utf8'));
   const defaultCommit = (await runGit(f.dir, ['rev-parse', 'HEAD'])).stdout.trim();
   await runGit(f.dir, ['checkout', '--quiet', '-b', f.branch]);
 

@@ -1,7 +1,7 @@
 /**
  * The written watcher's zero-exit classification over the run's own ledger — `classify_run_exit`
  * in `autonomous-watcher.sh`, reading `hr_run_ledger_state` — driven through a pause-resume launch:
- * a `paused` record, an empty `sdlc-harness/RESUME`, one `tick`; through a park resume for the
+ * a `paused` record, an empty `devscene/RESUME`, one `tick`; through a park resume for the
  * answer case; and, for the inputs no resume pass isolates (a first launch, a stall restart, an
  * earlier park), by calling `classify_run_exit` in a shell that sourced the installed watcher.
  *
@@ -35,7 +35,7 @@ import test from 'node:test';
 import { runBash } from './helpers/fixture.mjs';
 import { createWatcherFixture, TICK_TIMEOUT_MS } from './helpers/watcher.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const RESUME_COMMAND = '/devscene:branch-resume feat_x';
 
 const TASK_IDS = ['P1', 'P2', 'P3', 'A', 'A1.5g', 'A1.5f', 'A2g', 'A2f', 'Bg', 'Bm', 'C', 'C2g', 'C2m', 'C2f', 'E', 'G', 'D'];
@@ -339,5 +339,5 @@ test('note, real pause: a PAUSE_ACK after an unfinished exit restores the note-n
 
   await resumeOnce(f, ':', 'task', false);
 
-  assert.match(f.prompts().at(-1), /RESUME from a PAUSE: read sdlc-harness\/PAUSE_PROGRESS\.md/);
+  assert.match(f.prompts().at(-1), /RESUME from a PAUSE: read devscene\/PAUSE_PROGRESS\.md/);
 });

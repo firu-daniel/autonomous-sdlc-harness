@@ -440,7 +440,7 @@ test('the control job passes the run-actor allow-list from vars, and declares it
 });
 
 test('the run-name title, the runner line and the permissions', () => {
-  assert.ok(LINES.includes('run-name: harness ${{ inputs.action }} ${{ inputs.branch }}'));
+  assert.ok(LINES.includes('run-name: devscene ${{ inputs.action }} ${{ inputs.branch }}'));
   for (const line of LINES.filter((l) => /^\s*runs-on:/.test(l))) {
     assert.equal(line.trim(), "runs-on: ${{ vars.DEVSCENE_RUNNER || 'ubuntu-latest' }}");
   }
@@ -557,7 +557,7 @@ test('the run job stores its push credential before anything reaches origin and 
   const { list, at } = namedJobSteps('run');
   const store = at('Store the push credential outside the checkout');
   assert.equal(store, at('Set the git identity') + 1, 'the credential is stored right after the git identity');
-  for (const later of ["Restore the previous job's state", 'Bootstrap the checkout', 'Run the harness', 'Push the branch']) {
+  for (const later of ["Restore the previous job's state", 'Bootstrap the checkout', 'Run DevScene', 'Push the branch']) {
     assert.ok(store < at(later), `the store precedes ${later}`);
   }
   assert.equal(ifOf(list[store].join('\n')), "env.HARNESS_STOPPED != '1'");
@@ -716,7 +716,7 @@ test('the preflight runs doctor --remote-job, after the profile is generated and
   };
   const preflight = at('Preflight with doctor');
   assert.ok(at("Generate the job's permission profile") < preflight);
-  assert.ok(preflight < at('Run the harness'));
+  assert.ok(preflight < at('Run DevScene'));
   const [body] = runBodies(steps()[preflight].split('\n'));
   assert.equal(body, 'npx --yes "devscene@$DEVSCENE_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --remote-job');
 });
@@ -744,7 +744,7 @@ const REFUSAL_BODY = [
 const RECORD_BODY = [
   'sha=$(git -C "$GITHUB_WORKSPACE" rev-parse --verify --quiet "refs/remotes/origin/$HARNESS_GITHUB_DEFAULT_BRANCH^{commit}") || { echo "::error::cannot read the default branch\'s commit from the job\'s fresh checkout; nothing from this branch runs in this job."; exit 1; }',
   'echo "HARNESS_GITHUB_DEFAULT_COMMIT=$sha" >> "$GITHUB_ENV"',
-  'default_branch=$(git -C "$GITHUB_WORKSPACE" show "$sha:harness.config.json" | jq -r \'.defaultBranch // empty\') && [ -n "$default_branch" ] || { echo "::error::cannot read defaultBranch from the default branch\'s harness.config.json; nothing from this branch runs in this job."; exit 1; }',
+  'default_branch=$(git -C "$GITHUB_WORKSPACE" show "$sha:devscene.config.json" | jq -r \'.defaultBranch // empty\') && [ -n "$default_branch" ] || { echo "::error::cannot read defaultBranch from the default branch\'s devscene.config.json; nothing from this branch runs in this job."; exit 1; }',
   'base=$(git -C "$GITHUB_WORKSPACE" rev-parse --verify --quiet "refs/remotes/origin/$default_branch^{commit}") || { echo "::error::cannot read origin/$default_branch\'s commit from the job\'s fresh checkout; nothing from this branch runs in this job."; exit 1; }',
   'echo "HARNESS_DEFAULT_BRANCH_COMMIT=$base" >> "$GITHUB_ENV"',
 ].join('\n');
@@ -875,7 +875,7 @@ function assertRunJobCutsNoCopy(text) {
     }
   }
   assert.deepEqual(cloning, [PLUGIN_STEP], 'the only git clone is the marketplace checkout');
-  assert.deepEqual(watching, ['Run the harness'], 'one step runs the watcher in job mode');
+  assert.deepEqual(watching, ['Run DevScene'], 'one step runs the watcher in job mode');
 }
 
 const RENDERED = renderTemplate(
@@ -897,13 +897,14 @@ test('the no-copy assertion fails on a rendered file whose run job calls create-
     (_, indent, call) => `${indent}bash "$SCRIPTS_DIR/create-worktree.sh"\n${indent}${call}`,
   );
   assert.notEqual(mutated, RENDERED, 'the perturbation landed');
-  assert.throws(() => assertRunJobCutsNoCopy(mutated), /Run the harness names create-worktree\.sh/);
+  assert.throws(() => assertRunJobCutsNoCopy(mutated), /Run DevScene names create-worktree\.sh/);
 });
 
 test('no configured directory is frozen into the file', () => {
   assert.doesNotMatch(TEXT, /(^|[^A-Za-z0-9_])scripts\//m);
-  // A segment of its own: the machine cache path's `devscene/` is not the state dir.
-  assert.doesNotMatch(TEXT, /(^|[^A-Za-z0-9_-])sdlc-harness\//m);
+  // A segment of its own, and not the machine cache path's `$HOME/.cache}/devscene/`, which shares
+  // the state dir's default spelling without being it.
+  assert.doesNotMatch(TEXT, /(?<!\.cache\}\/)(?<![A-Za-z0-9_-])devscene\//m);
 });
 
 test('the poller: a schedule, a hand trigger, and exactly its four permissions', () => {
@@ -1247,10 +1248,10 @@ test("control: the job's if: prefilters on the handle, the marker and the review
   assert.ok(cond.includes("(github.event_name == 'delete' && github.event.ref_type == 'branch')"));
 });
 
-test('control: the run-name never matches a harness <action> <branch> title', () => {
+test('control: the run-name never matches a devscene <action> <branch> title', () => {
   assert.ok(
     CONTROL_LINES.includes(
-      'run-name: harness control ${{ github.event.issue.number || github.event.pull_request.number || github.event.ref }}',
+      'run-name: devscene control ${{ github.event.issue.number || github.event.pull_request.number || github.event.ref }}',
     ),
   );
 });

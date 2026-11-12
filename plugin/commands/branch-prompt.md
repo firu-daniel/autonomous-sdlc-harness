@@ -7,11 +7,11 @@ argument-hint: <free-text task description>
 
 ## Resolved values
 
-The tokens below are not ordinary **path placeholders** (`<branch>`, `<MAIN_REPO>`, which this file's own text resolves — `<MAIN_REPO>` in step 1): two are derived at runtime and the rest resolve from the adopting repository's `harness.config.json`. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
+The tokens below are not ordinary **path placeholders** (`<branch>`, `<MAIN_REPO>`, which this file's own text resolves — `<MAIN_REPO>` in step 1): two are derived at runtime and the rest resolve from the adopting repository's `devscene.config.json`. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `devscene/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<work_root>` | derived at runtime | The parent directory of `<MAIN_REPO>` — the directory the sibling run copies are created in. |
 | `<project_name>` | config value | `projectName` — the stem a sibling run copy's directory is named from (`init` defaults it to the repository's directory name). |
 | `<sanitized_branch>` | derived at runtime | `<branch>` with every `/` replaced by `-` — the suffix of a sibling run copy's directory name. |

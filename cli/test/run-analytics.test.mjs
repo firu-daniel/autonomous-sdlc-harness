@@ -82,7 +82,7 @@ async function adopted(t, { dropLastLine = false } = {}) {
   const claudeHome = await mkdtemp(join(tmpdir(), 'run-analytics-home-'));
   t.after(() => rm(claudeHome, { recursive: true, force: true }));
 
-  const { stateDir } = readJson(join(dir, 'harness.config.json'));
+  const { stateDir } = readJson(join(dir, 'devscene.config.json'));
   const streamRel = join(stateDir, 'autonomous_logs', `${BRANCH}.stream.jsonl`);
   const streamPath = join(dir, streamRel);
   await mkdir(join(dir, stateDir, 'autonomous_logs'), { recursive: true });

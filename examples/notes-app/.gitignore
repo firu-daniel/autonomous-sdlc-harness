@@ -1,6 +1,6 @@
 # >>> devscene (managed block: this line to the next blank line; re-run init to extend it) >>>
 # Machine-local files this repository names by path but never commits. Each path is a
-# value in harness.config.json, so it is the same for everyone who clones, while the file
+# value in devscene.config.json, so it is the same for everyone who clones, while the file
 # it names never leaves the machine. Where one of these has a committed `.example`
 # sibling, that sibling is what a fresh clone copies from. The client env file is the one whose
 # DIRECTORY is the configured value (`appDir`) while its name is fixed: setup-worktree.sh symlinks
@@ -16,25 +16,25 @@
 # offer. It lives at the main worktree's root and is checked there from every worktree of this
 # checkout, so one answer covers them all - its existence is the whole signal, so it has no
 # contents to commit.
-.claude/harness-no-offer
+.claude/devscene-no-offer
 # The run daemon's transcripts, event logs and run registry are machine-local. The
 # directory itself is committed, because its README is the contract for what belongs in
 # it, so the contents are ignored and that one file is excepted - an ignore rule on the
 # directory would take the README with it, and git cannot re-include a file whose parent
 # directory is excluded.
-sdlc-harness/autonomous_logs/*
-!sdlc-harness/autonomous_logs/README.md
+devscene/autonomous_logs/*
+!devscene/autonomous_logs/README.md
 # The unattended loop's stop, pause and dispatch-count control files, written flat at the root of
 # the run-artifact tree while a run is in flight. The tree around them is committed, so one
 # `git add` of it would take whichever exist at that moment - and a committed STOP halts every run
 # for everyone who clones, at a step whose own instruction forbids deleting the file.
-sdlc-harness/.dispatch_counter
-sdlc-harness/STOP
-sdlc-harness/AUTONOMOUS_STOP
-sdlc-harness/PAUSE
-sdlc-harness/RESUME
-sdlc-harness/PAUSE_ACK
-sdlc-harness/PAUSE_PROGRESS.md
+devscene/.dispatch_counter
+devscene/STOP
+devscene/AUTONOMOUS_STOP
+devscene/PAUSE
+devscene/RESUME
+devscene/PAUSE_ACK
+devscene/PAUSE_PROGRESS.md
 # The questions a parked run asks and the answers it is given are machine-local, while the
 # directory's README is the committed contract for the exchange - so the contents are ignored and
 # that one file is excepted, exactly as for the log directory above. A question sits one level
@@ -47,24 +47,24 @@ sdlc-harness/PAUSE_PROGRESS.md
 # wherever the two sit relative to each other, because git cannot re-include a file whose parent
 # directory is excluded - `doctor`'s `ignore-rules` check reports that state and names every line to
 # delete.
-sdlc-harness/clarifications/*
-!sdlc-harness/clarifications/README.md
+devscene/clarifications/*
+!devscene/clarifications/README.md
 # The drop point the unattended loop takes its work from. The prompts left in it are machine-local
 # and its README is the committed contract for what belongs there, so the contents are ignored and
 # that one file is excepted, exactly as for the log directory above.
-sdlc-harness/autonomous_inbox/*
-!sdlc-harness/autonomous_inbox/README.md
+devscene/autonomous_inbox/*
+!devscene/autonomous_inbox/README.md
 # The throwaway files an agent runs a probe or a mutation check from. They are written to be executed
 # once and deleted, never to be committed or read back, while the directory's README is the committed
 # contract for that - so the contents are ignored and that one file is excepted, exactly as for the
 # log directory above.
-sdlc-harness/scratch/*
-!sdlc-harness/scratch/README.md
+devscene/scratch/*
+!devscene/scratch/README.md
 # The backup `config set` copies the configuration to before every write, and the one .bak an
 # adopter gets without asking for it: applying a layer split is the documented path, so without this
 # rule a wired repository carries an untracked file from its first `config set` onward. The leading
 # slash anchors it at the repository root, the only place the configuration is written.
-/harness.config.json.bak
+/devscene.config.json.bak
 # What the browser half of a run leaves in the working copy. These rules and these comments are
 # rendered only where a browser is actually driven - the interactive-test phase on AND its driver
 # the browser one - because only that driver starts an MCP server, so a repository that drives none
@@ -83,7 +83,7 @@ sdlc-harness/scratch/*
 # tree, so an unattended run's launch check tolerates it as a <state_dir> artifact even if this rule
 # is ever dropped. Machine-local evidence of one run: no contract file is committed under it, and a
 # re-run takes its own screenshots.
-sdlc-harness/qa_artifacts/
+devscene/qa_artifacts/
 # A screenshot the browser server wrote at the repository ROOT under a bare name, because it
 # sanitized the filename it was given rather than honouring the subdirectory in it. DEFENSIVE in the
 # same sense as the rule two above: it costs nothing while the file never appears, and a re-run

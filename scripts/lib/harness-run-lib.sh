@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # harness-run-lib.sh — the one place every generated outer-loop script resolves
 # the repository it is operating on, reads that repository's
-# `harness.config.json` at run time, answers "is this branch protected?",
+# `devscene.config.json` at run time, answers "is this branch protected?",
 # routes an inbox filename to its engine and branch (`hr_inbox_route_var`) and
 # judges whether that branch may be taken in (`hr_inbox_branch_refusal_var`),
 # derives a branch name from a title (`hr_derive_branch`), judges whether a
@@ -73,7 +73,7 @@
 # their shared contract — the three-state answer, the protected set and the
 # floors below — not by sharing code.
 #
-# JURISDICTION. Configuration is read at `<repo_root>/harness.config.json` and
+# JURISDICTION. Configuration is read at `<repo_root>/devscene.config.json` and
 # nowhere else, where `<repo_root>` is resolved from a bare
 # `git rev-parse --show-toplevel` at the directory the caller names — or, in the
 # git-free section, at the checkout `hr_checkout_top_nogit` finds. Which root
@@ -83,7 +83,7 @@
 # (`hr_wrapper_main_of` their own location) for every configured value they
 # decide by — `defaultBranch`, `protectedBranches`, and the `githooksDir`
 # `hr_pinned_hooks_path` pins — never the worktree they act in, whose
-# `harness.config.json` the sandbox can rewrite. `launch-sandboxed-gates.sh`,
+# `devscene.config.json` the sandbox can rewrite. `launch-sandboxed-gates.sh`,
 # a main-checkout script the profile runs unsandboxed the same way, passes the
 # MAIN checkout for `scriptsDir`; its one target read, `stateDir`, is data that
 # places the lane it reads, and every target byte it runs runs inside its own
@@ -160,7 +160,7 @@
 #      and `hr_remote_move_aside`, and nothing there but a writer's own failed temp
 #      file, or a symbolic link `hr_remote_status_write` removes at its
 #      `<out_json>`, is ever removed. Also `hr_remote_state_dir_var`'s private
-#      `mktemp -d` directory and the one `harness.config.json` it holds, removed
+#      `mktemp -d` directory and the one `devscene.config.json` it holds, removed
 #      (`rm -f`, then `rmdir`) before it returns.
 #   4. THE ARTIFACT PLACEMENT writes one artifact into a working copy and
 #      commits it, and the commit it shares with `commit-on-branch.sh` commits
@@ -321,7 +321,7 @@
 # `hr_remote_status_write` alone, as provenance values copied into
 # `status.json` — never a configured value and never policy.
 # `HARNESS_GITHUB_DEFAULT_COMMIT` is read by `hr_remote_state_dir_var` alone, to
-# choose WHICH `harness.config.json` is read — the one at that commit — never
+# choose WHICH `devscene.config.json` is read — the one at that commit — never
 # as a value in place of one. `GH_TOKEN`, `GITHUB_TOKEN`, `HARNESS_PR_TOKEN` and
 # `DEVSCENE_GIT_TOKEN` are read by `hr_credential_values_var` alone, as values
 # to scan for — never a configured value and never policy, and never printed.
@@ -337,7 +337,7 @@
 #     0  protected      — the branch matched a pattern in the resolved set
 #     1  not protected  — the set was resolved and the branch is not in it
 #     2  unresolvable   — the configuration could not be resolved at all
-#                         (no `harness.config.json`, an unreadable one, absent
+#                         (no `devscene.config.json`, an unreadable one, absent
 #                         or pre-1.5 `jq`, invalid JSON, more than one JSON
 #                         document, or the required `defaultBranch` missing)
 #
@@ -358,7 +358,7 @@
 # business acting in. `hr_phase_enabled` answers through the same three
 # statuses and prints nothing: 0 is `true`, 1 is `false` or unset, and 2 also
 # covers an unknown phase name or a non-boolean value. A reader that wants the
-# finer distinction between "no `harness.config.json` at all" and "one that would not parse" calls
+# finer distinction between "no `devscene.config.json` at all" and "one that would not parse" calls
 # `hr_config_load` directly, which returns 1 for the first and 2 for the second.
 #
 # THE PROTECTED SET. It is *(`protectedBranches` if present, else that key's
@@ -373,17 +373,17 @@
 #
 # THE ONE BRANCH NAME IN THIS FILE IS `protectedBranches`'s SCHEMA DEFAULT, and
 # it is not the hardcoding the rule above is about. It is spelled exactly once,
-# in `hr_protected_default_var`, mirroring `schemas/harness.config.schema.json`
+# in `hr_protected_default_var`, mirroring `schemas/devscene.config.schema.json`
 # and the same default the CLI applies when it generates the committed pre-push
 # hook — so for one configuration the hook and this library RESOLVE the same
 # set. They can still ENFORCE different sets, because they differ in when they
-# resolve it: this library re-reads `harness.config.json` on every call, while
+# resolve it: this library re-reads `devscene.config.json` on every call, while
 # the hook is written create-if-absent and carries the set substituted into its
 # `case` label when `init` wrote it. An edit to `protectedBranches` therefore
 # binds a wrapper at once and binds the hook only after `init --force`, or
 # after deleting the hook and re-running `init`. A third run re-renders the
 # hook as a CONSEQUENCE rather than as a way to change the set: `init
-# --reset-config` rebuilds `harness.config.json` itself, and re-renders the
+# --reset-config` rebuilds `devscene.config.json` itself, and re-renders the
 # hook from the rebuilt file when the `case` label the hook carried no longer
 # matches the set that file resolves — after a `.bak`, and never when the label
 # cannot be read. It is not a route to reach for deliberately: the rebuild
@@ -498,7 +498,7 @@
 # `hr_config_load` runs ONE `jq` and holds the result in shell variables, so a
 # script that reads a dozen keys forks `jq` once instead of a dozen times. The
 # entry is keyed by root and stamped with `$$`, never by the file's contents:
-# a caller that outlives an edit to `harness.config.json` — the watcher, which
+# a caller that outlives an edit to `devscene.config.json` — the watcher, which
 # runs for days — is answered from the document it replaced until it calls
 # `hr_config_reset`. THE WATCHER CALLS IT ONCE AT THE TOP OF EVERY TICK; a
 # one-shot wrapper never needs to. A `$(…)` runs in a SUBSHELL, which inherits
@@ -523,19 +523,19 @@
 #                     hr_phase_enabled "$root" qa; echo $?  -> 1
 #                     {"defaultBranch":"main","phases":{"qa":"yes"}}
 #                     hr_phase_enabled "$root" qa; echo $?  -> 2
-#   adopted + broken  printf 'x' > "$root/harness.config.json"
+#   adopted + broken  printf 'x' > "$root/devscene.config.json"
 #                     hr_branch_is_protected "$root" <branch>; echo $?  -> 2
 #                     hr_state_dir "$root"; echo $?                     -> 2, prints nothing
-#   not adopted       mv "$root/harness.config.json" "$root/../saved.json"
+#   not adopted       mv "$root/devscene.config.json" "$root/../saved.json"
 #                     hr_config_file "$root"; echo $?                   -> 1, prints nothing
 #                     hr_config_load "$root"; echo $?                   -> 1
 #   not a repository  hr_repo_root /tmp; echo $?                        -> 1, prints nothing
-#   script root       a job layout, `scriptsDir` `harness-scripts`, with the
+#   script root       a job layout, `scriptsDir` `devscene-scripts`, with the
 #                     placeholder a bubblewrap host leaves:
-#                     : > "$root/harness-scripts/.git"
-#                     hr_repo_root "$root/harness-scripts"; echo $?   -> 1 where
+#                     : > "$root/devscene-scripts/.git"
+#                     hr_repo_root "$root/devscene-scripts"; echo $?   -> 1 where
 #                        git dies on the placeholder
-#                     hr_script_root "$root/harness-scripts"          -> $root
+#                     hr_script_root "$root/devscene-scripts"          -> $root
 #                     no configuration anywhere above the directory:
 #                     hr_script_root <dir>  -> exactly `hr_repo_root <dir>`'s
 #                        output and status
@@ -685,7 +685,7 @@ hr_repo_root() {
 
 # Print the repository root of the script whose own directory is <script_dir>:
 # the nearest of <script_dir> (made physical) and its ancestors, up to `/`, that
-# holds a regular `harness.config.json` and for which the bare
+# holds a regular `devscene.config.json` and for which the bare
 # `git -C <d> rev-parse --show-toplevel` prints <d> itself. A candidate for
 # which git answers another directory, or refuses, is passed over. When none
 # confirms, `hr_repo_root <script_dir>`'s output and status, unchanged. Return 1,
@@ -698,11 +698,11 @@ hr_repo_root() {
 # a script's own directory refuses. Asking git only at directories that already
 # hold the configuration never starts that discovery at a placeholder level.
 #
-# WHY THE WALK KEYS ON `harness.config.json`: it places the root by the file
+# WHY THE WALK KEYS ON `devscene.config.json`: it places the root by the file
 # every adopted root holds, so a script that cannot read the configuration
 # still learns how deep its `scriptsDir` is.
 #
-# A PLANTED `<scriptsDir>/harness.config.json` CANNOT MOVE THE ANSWER: git
+# A PLANTED `<scriptsDir>/devscene.config.json` CANNOT MOVE THE ANSWER: git
 # confirms that candidate only with a `.git` beside it, and the profile
 # write-protects `<p>/.git` at every level `<p>` of `scriptsDir`, the same
 # protection `hr_wrapper_main_of` relies on.
@@ -715,7 +715,7 @@ hr_script_root() {
   [ -n "$dir" ] || return 1
   d=$( CDPATH= cd -P -- "$dir" 2>/dev/null && pwd -P ) || return 1
   while :; do
-    if [ -f "$d/harness.config.json" ]; then
+    if [ -f "$d/devscene.config.json" ]; then
       if top=$(git -C "$d" rev-parse --show-toplevel 2>/dev/null); then
         if [ "$top" = "$d" ]; then
           printf '%s\n' "$d"
@@ -1113,7 +1113,7 @@ hr_wrapper_target_check_var() {
 #      registry at `hr_state_path <main> autonomous_logs/registry.json` gives
 #      `copy_kind` `clone` for <branch> and a `worktree` that is <target>. A
 #      registry path `hr_state_path` cannot derive, because
-#      `<main>/harness.config.json` cannot be resolved, is refused with its own
+#      `<main>/devscene.config.json` cannot be resolved, is refused with its own
 #      sentence naming that file; only a resolvable configuration with no
 #      matching record gets the "records no clone" sentence;
 #   2. <target> is `hr_worktree_dir <main> <branch>`;
@@ -1164,7 +1164,7 @@ hr_clone_target_check_var() {
   wt_c=""
   if [ -n "$branch" ]; then
     if ! registry=$(hr_state_path "$main" autonomous_logs/registry.json); then
-      HR_TARGET_REFUSAL="$refused: its .git is not a regular pointer file, and the run registry that would record a clone of $main cannot be located, because '$main/harness.config.json' cannot be resolved"
+      HR_TARGET_REFUSAL="$refused: its .git is not a regular pointer file, and the run registry that would record a clone of $main cannot be located, because '$main/devscene.config.json' cannot be resolved"
       return 1
     fi
     if [ -f "$registry" ] && [ -r "$registry" ] \
@@ -1375,7 +1375,7 @@ hr_worktree_config_file() {
 # Print the `core.hooksPath` value `setup-worktree.sh` writes into the checkout
 # at <top>: `<top>/<githooksDir>`. The writer and `hr_worktree_config_check_var`
 # both take it from here, so they cannot drift. Return 1 when `githooksDir`
-# cannot be read from `<top>/harness.config.json`.
+# cannot be read from `<top>/devscene.config.json`.
 hr_worktree_hooks_path() {
   local top="${1-}" rel
   [ -n "$top" ] || return 1
@@ -1452,7 +1452,7 @@ hr_worktree_config_check_var() {
   elif [ "$hooks_count" -eq 1 ]; then
     expected=$(hr_worktree_hooks_path "$top") || expected=""
     if [ -z "$expected" ]; then
-      parts="${parts:+$parts; }cannot resolve githooksDir from '$top/harness.config.json' to check the core.hooksPath in $f"
+      parts="${parts:+$parts; }cannot resolve githooksDir from '$top/devscene.config.json' to check the core.hooksPath in $f"
     elif [ "$hooks_has_value" -ne 1 ] || [ "$hooks_value" != "$expected" ]; then
       parts="${parts:+$parts; }$f sets core.hooksPath to something other than $expected, the value setup-worktree.sh writes"
     fi
@@ -1727,7 +1727,7 @@ hr_clone_config_check_var() {
 # `<common>/hooks`), with `<common>` from `hr_common_dir_nogit` and `<main>` its
 # parent — never the worktree's, which the sandbox can write. It is accepted
 # only when, compared canonically, it equals `<main>/<githooksDir>` (read from
-# the MAIN checkout's `harness.config.json`) or `<common>/hooks`: the two
+# the MAIN checkout's `devscene.config.json`) or `<common>/hooks`: the two
 # directories the permission profile write-protects. A foreign hooks directory,
 # such as one `init` left in place, is refused. The wrappers pass their own
 # main checkout (`hr_wrapper_main_of`) as <top>, whatever their target, so the
@@ -1756,7 +1756,7 @@ hr_pinned_hooks_path() {
   esac
 
   if ! rel=$(hr_githooks_dir "$main"); then
-    HR_PINNED_HOOKS_REFUSAL="cannot resolve githooksDir from '$main/harness.config.json', so the hooks directory to pin cannot be judged"
+    HR_PINNED_HOOKS_REFUSAL="cannot resolve githooksDir from '$main/devscene.config.json', so the hooks directory to pin cannot be judged"
     return 1
   fi
   if ! resolved=$(hr_canonical_path_nogit "$resolved"); then
@@ -1785,7 +1785,7 @@ hr_config_file_var() {
   local root="${1-}" f
   HR_CFG_FILE=""
   [ -n "$root" ] || return 1
-  f="${root%/}/harness.config.json"
+  f="${root%/}/devscene.config.json"
   [ -f "$f" ] && [ -r "$f" ] || return 1
   HR_CFG_FILE="$f"
   return 0
@@ -1801,7 +1801,7 @@ hr_config_file() {
 }
 
 # Drop the cache. A one-shot wrapper never needs this; the watcher calls it at
-# the top of every tick, so an edit to `harness.config.json` is picked up
+# the top of every tick, so an edit to `devscene.config.json` is picked up
 # without restarting the daemon.
 hr_config_reset() {
   HR_CFG_PID=""
@@ -1848,7 +1848,7 @@ hr_tsv_unescape_var() {
 #
 #   0  loaded        — the document is present, parses as an object, and
 #                      carries the required `defaultBranch`
-#   1  not adopted   — there is no `harness.config.json` at <root>
+#   1  not adopted   — there is no `devscene.config.json` at <root>
 #   2  unresolvable  — it is there and could not be turned into an answer:
 #                      unreadable, absent or pre-1.5 `jq`, invalid JSON, more
 #                      than one JSON document, not an object, or no
@@ -1883,7 +1883,7 @@ hr_config_load() {
   HR_CFG_PID=$$
   HR_CFG_ROOT="$root"
 
-  f="${root%/}/harness.config.json"
+  f="${root%/}/devscene.config.json"
   if [ ! -e "$f" ]; then
     HR_CFG_STATE="absent"
     return 1
@@ -2098,14 +2098,15 @@ hr_config_dir() {
 # ---------------------------------------------------------------------------
 
 # `stateDir` — every run artifact's repo-relative home. Schema default
-# `sdlc-harness/`, normalized here to carry no trailing slash.
+# `devscene/`, normalized here to carry no trailing slash.
 hr_state_dir() {
-  hr_config_dir "${1-}" stateDir "sdlc-harness"
+  hr_config_dir "${1-}" stateDir "devscene"
 }
 
 # `scriptsDir` — where the generated wrappers, and this library, are written.
+# Schema default `devscene-scripts/`.
 hr_scripts_dir() {
-  hr_config_dir "${1-}" scriptsDir "scripts"
+  hr_config_dir "${1-}" scriptsDir "devscene-scripts"
 }
 
 # `appDir` — the repo-relative directory the application lives in. It anchors
@@ -2275,7 +2276,7 @@ hr_progress_comments() {
 # and the shell mirror of `cli/src/config/model.ts` → `keepAwakeEnabled`.
 # PRINTS NOTHING: 0 = `true` or absent (the schema default); 1 = `false`; 2 =
 # the configuration is unresolvable or the value is not a boolean. The watcher
-# passes the MAIN checkout, never a run copy, whose `harness.config.json` the
+# passes the MAIN checkout, never a run copy, whose `devscene.config.json` the
 # sandbox can rewrite.
 hr_keep_awake() {
   local root="${1-}"
@@ -2296,7 +2297,7 @@ hr_keep_awake() {
 
 # `sandbox.optOut` — 0 when the opt-out is taken (a `reason` that is a string
 # and not blank); 1 otherwise. The caller passes the MAIN checkout, never a run
-# copy, whose `harness.config.json` the sandbox can rewrite. Every non-0 answer,
+# copy, whose `devscene.config.json` the sandbox can rewrite. Every non-0 answer,
 # including every `hr_config_load` failure — an absent, unparsable or
 # multi-document file, or a missing `defaultBranch` — means NOT opted out, so a
 # refusal that rests on it stands.
@@ -2313,7 +2314,7 @@ hr_sandbox_opted_out() {
 # `cli/src/config/model.ts` → `SANDBOX_PASS_ENV_PATTERN`; any other element is
 # skipped. 0, printing nothing, when the key is absent, empty or not an array.
 # 2, printing nothing, on any `hr_config_load` failure, a missing
-# `harness.config.json` included: the main checkout must have one. Reads
+# `devscene.config.json` included: the main checkout must have one. Reads
 # through the cache like `hr_sandbox_opted_out`, so the watcher's per-tick
 # `hr_config_reset` covers it. The caller passes the MAIN checkout. Its
 # caller: `autonomous-watcher.sh` → `spawn_engine`.
@@ -2576,7 +2577,7 @@ hr_keep_awake_mode_var() {
     return 0
   fi
   if ! hr_config_load "$root"; then
-    HR_KEEP_AWAKE_REASON='harness.config.json could not be read'
+    HR_KEEP_AWAKE_REASON='devscene.config.json could not be read'
     return 0
   fi
   hr_keep_awake "$root" || rc=$?
@@ -3003,8 +3004,8 @@ hr_inbox_route_var() {
 # <root>, may be acted on. 0 with `HR_INBOX_REFUSAL` empty; otherwise 1 with
 # `HR_INBOX_REFUSAL` set to exactly one of:
 #   '<branch>' is not a valid branch name (git check-ref-format --branch)
-#   '<branch>' is a protected branch in '<root>/harness.config.json'
-#   whether '<branch>' is protected cannot be judged: the protected set in '<root>/harness.config.json' cannot be resolved
+#   '<branch>' is a protected branch in '<root>/devscene.config.json'
+#   whether '<branch>' is protected cannot be judged: the protected set in '<root>/devscene.config.json' cannot be resolved
 # Never any other status. Validity is judged first, so a name git rejects is
 # reported as such even when the configuration is also unreadable.
 #
@@ -3028,8 +3029,8 @@ hr_inbox_branch_refusal_var() {
   hr_branch_is_protected "$root" "$branch" || status=$?
   case "$status" in
     1) return 0 ;;
-    0) HR_INBOX_REFUSAL="'$branch' is a protected branch in '$root/harness.config.json'" ;;
-    *) HR_INBOX_REFUSAL="whether '$branch' is protected cannot be judged: the protected set in '$root/harness.config.json' cannot be resolved" ;;
+    0) HR_INBOX_REFUSAL="'$branch' is a protected branch in '$root/devscene.config.json'" ;;
+    *) HR_INBOX_REFUSAL="whether '$branch' is protected cannot be judged: the protected set in '$root/devscene.config.json' cannot be resolved" ;;
   esac
   return 1
 }
@@ -4133,7 +4134,7 @@ hr_run_copy_clean() {
 }
 
 # hr_run_protected_rel_paths <main> — print the worktree-relative protected set,
-# one path per line, from `<main>/harness.config.json` alone. The mirror of
+# one path per line, from `<main>/devscene.config.json` alone. The mirror of
 # `copySurfacePaths` the header's MIRROR block names: same order, same spelling.
 # 1, printing nothing, when the configuration cannot be read.
 hr_run_protected_rel_paths() {
@@ -4178,7 +4179,7 @@ hr_run_trusted_base_var() {
   base=$(hr_default_branch "$HR_RUN_MAIN") || base=""
   case "$base" in
     '' | -*)
-      HR_RUN_REFUSAL="$why: no usable defaultBranch in '$HR_RUN_MAIN/harness.config.json'"
+      HR_RUN_REFUSAL="$why: no usable defaultBranch in '$HR_RUN_MAIN/devscene.config.json'"
       return 1
       ;;
   esac
@@ -4292,7 +4293,7 @@ hr_run_surface_check_var() {
     return 1
   fi
   if ! set=$(hr_run_protected_rel_paths "$HR_RUN_MAIN"); then
-    HR_RUN_SURFACE_REFUSAL="cannot read the protected set from '$HR_RUN_MAIN/harness.config.json'"
+    HR_RUN_SURFACE_REFUSAL="cannot read the protected set from '$HR_RUN_MAIN/devscene.config.json'"
     return 1
   fi
   while IFS= read -r p; do
@@ -4301,7 +4302,7 @@ hr_run_surface_check_var() {
 $set
 EOF
   if [ "${#paths[@]}" -eq 0 ]; then
-    HR_RUN_SURFACE_REFUSAL="the protected set read from '$HR_RUN_MAIN/harness.config.json' is empty"
+    HR_RUN_SURFACE_REFUSAL="the protected set read from '$HR_RUN_MAIN/devscene.config.json' is empty"
     return 1
   fi
 
@@ -5118,7 +5119,7 @@ hr_run_copy_live_var() {
     fi
   done
   if ! registry=$(hr_state_path "$main" autonomous_logs/registry.json); then
-    HR_LIVE_COPY_WHY="the run registry's path cannot be resolved from '$main/harness.config.json'"
+    HR_LIVE_COPY_WHY="the run registry's path cannot be resolved from '$main/devscene.config.json'"
     return 2
   fi
   wt=$(hr_registry_peek "$registry" "$branch" worktree) || wt=""
@@ -5222,16 +5223,16 @@ hr_clone_create_var() {
   case "$?" in
     1) ;;
     0)
-      HR_CLONE_REFUSAL="$why: '$main/harness.config.json' protects it"
+      HR_CLONE_REFUSAL="$why: '$main/devscene.config.json' protects it"
       return 1
       ;;
     *)
-      HR_CLONE_REFUSAL="$why: the protected set in '$main/harness.config.json' cannot be resolved"
+      HR_CLONE_REFUSAL="$why: the protected set in '$main/devscene.config.json' cannot be resolved"
       return 1
       ;;
   esac
   if ! registry=$(hr_state_path "$main" autonomous_logs/registry.json); then
-    HR_CLONE_REFUSAL="$why: the run registry's path cannot be resolved from '$main/harness.config.json'"
+    HR_CLONE_REFUSAL="$why: the run registry's path cannot be resolved from '$main/devscene.config.json'"
     return 1
   fi
   regdir=$(hr_registry_dir "$registry")
@@ -5329,7 +5330,7 @@ hr_clone_create_var() {
     done
 
     if ! default=$(hr_default_branch "$main") || [ -z "$default" ]; then
-      failed="reading defaultBranch from $main/harness.config.json"
+      failed="reading defaultBranch from $main/devscene.config.json"
       break
     fi
     want="${nl}refs/remotes/origin/HEAD${nl}refs/remotes/origin/$default${nl}refs/remotes/origin/$branch$nl"
@@ -5624,11 +5625,11 @@ hr_commit_placed() {
 $patterns
 EOF
       echo "hr_commit_placed: branch '$branch' is protected — refusing to commit" >&2
-      echo "  protected set (from harness.config.json): $protected_set" >&2
+      echo "  protected set (from devscene.config.json): $protected_set" >&2
       return 2
       ;;
     2)
-      echo "hr_commit_placed: cannot resolve '$HR_RUN_MAIN/harness.config.json' — refusing to commit" >&2
+      echo "hr_commit_placed: cannot resolve '$HR_RUN_MAIN/devscene.config.json' — refusing to commit" >&2
       echo "  (no configuration there, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)" >&2
       return 1
       ;;
@@ -6295,7 +6296,7 @@ hr_remote_status_get() {
 # 0 resolved; 1 a missing argument; 2 unresolvable.
 #
 # IN A JOB (`HARNESS_GITHUB_DEFAULT_COMMIT` non-empty) THE SOURCE IS TRUSTED:
-# `harness.config.json` at that commit, which the workflow records before any
+# `devscene.config.json` at that commit, which the workflow records before any
 # session, because the checkout's own copy is the session's to rewrite. The
 # value must be a full 40- or 64-character lower-case object id. The blob is
 # read through `hr_run_main_git` (no hook, no replace refs, no grafts) into a
@@ -6332,7 +6333,7 @@ hr_remote_state_dir_var() {
     fi
     if [ "$rc" -eq 0 ]; then
       if ( hr_run_main_set_var "$root" \
-        && hr_run_main_git cat-file blob "$commit:harness.config.json" >"$tmp/harness.config.json" ) 2>/dev/null \
+        && hr_run_main_git cat-file blob "$commit:devscene.config.json" >"$tmp/devscene.config.json" ) 2>/dev/null \
         && value=$(hr_state_dir "$tmp"); then
         HR_REMOTE_STATE_DIR=$value
         HR_REMOTE_STATE_FROM='trusted'
@@ -6341,7 +6342,7 @@ hr_remote_state_dir_var() {
       fi
     fi
     if [ -n "$tmp" ]; then
-      rm -f "$tmp/harness.config.json"
+      rm -f "$tmp/devscene.config.json"
       rmdir "$tmp" 2>/dev/null
     fi
     hr_config_load "$root" >/dev/null 2>&1 || :

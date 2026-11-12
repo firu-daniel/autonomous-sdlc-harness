@@ -29,14 +29,15 @@ const HAND_SET = [
 const CONFIG = {
   version: 1,
   defaultBranch: 'main',
-  stateDir: 'sdlc-harness',
+  stateDir: 'devscene',
+  scriptsDir: 'scripts',
   layers: [{ name: 'general', path: '.', conventions: '.claude/context/conventions.md' }],
   commands: { typecheck: 'bash scripts/typecheck.sh', test: 'bash scripts/test.sh' },
 };
 
 const PROJECT_FILES = {
   'package.json': { name: 'fixture-project', private: true, version: '0.0.0', scripts: { test: 'node --test' } },
-  'harness.config.json': CONFIG,
+  'devscene.config.json': CONFIG,
 };
 
 const HARNESS_IDENTITY = {

@@ -36,7 +36,7 @@ export async function openRetrieval(options: {
 
   if (!retrievalApplies(config)) {
     throw new HarnessError(
-      'docs retrieval is off in harness.config.json: it needs phases.docs true and docs.retrieval true (`npx devscene config set docs.retrieval true`)',
+      'docs retrieval is off in devscene.config.json: it needs phases.docs true and docs.retrieval true (`npx devscene config set docs.retrieval true`)',
     );
   }
 

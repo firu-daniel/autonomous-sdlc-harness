@@ -11,10 +11,10 @@ set -euo pipefail
 case_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fixture="$(cd "$case_dir/../../examples/notes-app" && pwd)"
 
-# Both track the copied `harness.config.json`: `state_dir` is its `stateDir`, and `branch` is a
+# Both track the copied `devscene.config.json`: `state_dir` is its `stateDir`, and `branch` is a
 # name of this case's choosing that is not in its `protectedBranches`. Change either there and here
 # together.
-state_dir="sdlc-harness"
+state_dir="devscene"
 branch="feat_body_char_count"
 
 dest="${1:-.}"
@@ -26,7 +26,7 @@ if [ -n "$(ls -A "$dest")" ]; then
 fi
 
 # An allowlist rather than a filtered copy, so a file added to the fixture later cannot silently
-# reach an arm. One tree must never reach one: the captured `sdlc-harness/` run artifacts, which
+# reach an arm. One tree must never reach one: the captured `devscene/` run artifacts, which
 # hold a finished plan in the exact shape the grader scores, so an arm handed them scores on copying
 # rather than on capability — the baseline arm hardest of all, since copying is the only route by
 # which it could produce that shape at all. Its `task_prompts/` half is the single exception and is
@@ -34,25 +34,25 @@ fi
 #
 # `.claude/CLAUDE.md` and `.claude/context/` ARE copied, because withholding them would degrade the
 # arm without protecting anything. They are the `layers[].conventions` targets of the copied
-# `harness.config.json` and the plan writer's mandated first read
+# `devscene.config.json` and the plan writer's mandated first read
 # (`plugin/agents/task-plan-writer.md` → `## Read first`), and they carry none of the graded shape —
 # re-runnable against `examples/notes-app/`, and last re-run there on 2026-09-07 against the
 # regenerated capture, both still exiting 1:
 #     grep -rn "Phase 2 Readiness\|_(points:\|_(layer:" .claude/                        → exit 1
 #     grep -rin "readiness\|story index\|story_plan\|task_plan\|per-task file" .claude/ → exit 1
-# The layer vocabulary they state is in `harness.config.json` as well, which is copied and which
+# The layer vocabulary they state is in `devscene.config.json` as well, which is copied and which
 # `graders/plan-shape.md` → `## What to read` reads that vocabulary from — so withholding them
 # withholds nothing from the arm that the grader is not already reading out of a file the arm holds.
 # The rest of `.claude/` stays out, and this list is exhaustive against the copied fixture — every
 # member the allowlist below does not take is named here with its reason. `settings.json` and
 # `settings.autonomous.json`, because arm enablement and permissions belong to the runner rather
 # than to the tree. The two `*.env.example` files and `qa_test_scenarios.md`, because no planning
-# run reads them. `harness-task-offer.md`, for that same reason: it drives the change-request offer
-# dialogue in an adopter's own interactive session (`cli/templates/claude/harness-task-offer.md`,
+# run reads them. `devscene-task-offer.md`, for that same reason: it drives the change-request offer
+# dialogue in an adopter's own interactive session (`cli/templates/claude/devscene-task-offer.md`,
 # "One `AskUserQuestion`, before any of the work"), which no planning run reaches. It carries none
 # of the graded shape either — both greps above were re-run with it in the tree.
 #
-# `scripts/` is copied precisely because `harness.config.json` is. That config's
+# `scripts/` is copied precisely because `devscene.config.json` is. That config's
 # `commands.typecheck` / `commands.test` / `commands.devServer` hold the *wrapper invocation*
 # rather than the raw npm line (`cli/src/generators/harnessConfig.ts`, "Three non-obvious
 # choices", choice 3), so a tree carrying the config without the wrappers is one whose configured
@@ -62,14 +62,14 @@ fi
 # `.gitignore` is copied for its project section — `dist/` and `node_modules/`, which appear the
 # moment an arm runs `commands.depInstall` and `commands.test` and would otherwise be swept into
 # the arm's next commit. The managed block above that section is partly live now that both trees are
-# partly scaffolded: its `sdlc-harness/.dispatch_counter` line covers the counter the plan flow
+# partly scaffolded: its `devscene/.dispatch_counter` line covers the counter the plan flow
 # writes into the seeded state directory on entry, and its STOP / PAUSE lines cover the control files
 # an operator may drop beside it. Its `.claude/*.env` and `.claude/settings.local.json` lines stay
 # inert, because none of those files is copied. `.gitattributes` is left out: it normalises line
 # endings across contributing machines, and this tree has one.
 #
 # Re-run record, same date: every entry of the list below resolved in the regenerated fixture, and
-# `state_dir` above still matched that tree's `harness.config.json` `stateDir`.
+# `state_dir` above still matched that tree's `devscene.config.json` `stateDir`.
 for entry in \
   src \
   test \
@@ -79,7 +79,7 @@ for entry in \
   tsconfig.json \
   index.html \
   styles.css \
-  harness.config.json \
+  devscene.config.json \
   scripts \
   .gitignore \
   .claude/CLAUDE.md \

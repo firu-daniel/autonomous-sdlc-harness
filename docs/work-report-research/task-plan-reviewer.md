@@ -16,7 +16,7 @@ Goal (a) is weak here: tick timing cannot be verified and nobody reads the repor
 
 ## Read tree
 
-Measured with `wc -w`. The conventions docs are this repository's (`harness.config.json` → `layers`: cli, plugin, general). An adopter's are typically about 440–970 words each (`cli/templates/claude/context/layer.md` 441, `conventions.md` 974).
+Measured with `wc -w`. The conventions docs are this repository's (`devscene.config.json` → `layers`: cli, plugin, general). An adopter's are typically about 440–970 words each (`cli/templates/claude/context/layer.md` 441, `conventions.md` 974).
 
 | File | Up-front / on-demand | Words |
 |---|---|---|
@@ -89,7 +89,7 @@ The checklist is **embedded in the agent definition**, replacing `## Process`, a
 ## Work report checklist
 Fill in once before returning (in the findings file on FAIL, in `pass_report_<k>.md` on PASS) as `- [x] <ID>. **<title>** → <evidence>`; titles only, no descriptions. Gate off or not owed: `n/a — <reason>`. Evidence uses repo-relative paths, never absolute paths, timestamps or env output.
 
-- [ ] R1. **Resolve root and config** — Run bare `git rev-parse --show-toplevel`; bind `## Resolved values` from `harness.config.json`. Evidence: "resolved", not the path.
+- [ ] R1. **Resolve root and config** — Run bare `git rev-parse --show-toplevel`; bind `## Resolved values` from `devscene.config.json`. Evidence: "resolved", not the path.
 - [ ] R2. **Read every conventions document** — Read each distinct `layers[].conventions` file in full; treat it as authoritative over memory.
 - [ ] R3. **Read samples and lessons** — Read `sample_story_plan.md`, the three `sample_story/task_<N>_plan.md`, and `<state_dir>/lessons.md`.
 - [ ] R4. **Read prompt, index, every task file** — Read `prompt_path`, the story index, every `task_<N>_plan.md`; open plan targets at cited ranges only.

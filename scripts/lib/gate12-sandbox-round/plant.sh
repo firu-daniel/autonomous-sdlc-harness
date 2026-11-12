@@ -150,8 +150,8 @@ g12_dispatch() {
     n=$((n + 1))
     if json="$(gh run list --repo "$G12_REPO" --workflow devscene-run.yml --branch "$branch" \
       --json databaseId,createdAt,displayTitle --limit 20)"; then
-      # The title is devscene-run.yml's run-name, `harness <action> <branch>`.
-      id="$(jq -r --arg t "harness run $branch" \
+      # The title is devscene-run.yml's run-name, `devscene <action> <branch>`.
+      id="$(jq -r --arg t "devscene run $branch" \
         '[.[] | select(.displayTitle == $t)] | sort_by(.createdAt) | last | .databaseId // empty' <<<"$json")" || id=""
       case "$id" in "" | *[!0-9]*) id="" ;; *) break ;; esac
     fi
@@ -165,7 +165,7 @@ g12_dispatch() {
     return 3
   fi
   if [ -z "$id" ]; then
-    g12_refuse "no run titled 'harness run $branch' after $tries lookups, recorded as run_id null; find it with: $lookup"
+    g12_refuse "no run titled 'devscene run $branch' after $tries lookups, recorded as run_id null; find it with: $lookup"
     g12_exit_raise 3
     return 3
   fi

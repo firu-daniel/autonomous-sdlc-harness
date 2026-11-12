@@ -15,7 +15,7 @@ Required changes:
 
 ## Read tree
 
-This repository has `phases.qa: false` (`harness.config.json`), so the agent never runs here. All counts below are for the bundled adopter `examples/notes-app` (`phases.qa: true`, `qa.driver: web-playwright`, surface layer `presentation`). Every count is from `wc -w`.
+This repository has `phases.qa: false` (`devscene.config.json`), so the agent never runs here. All counts below are for the bundled adopter `examples/notes-app` (`phases.qa: true`, `qa.driver: web-playwright`, surface layer `presentation`). Every count is from `wc -w`.
 
 | File | Up-front / on demand | Words |
 |---|---|---|

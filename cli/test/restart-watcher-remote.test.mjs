@@ -17,7 +17,7 @@ import test from 'node:test';
 import { INIT_SCRIPTS_DIR, runBash } from './helpers/fixture.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
-const REGISTRY_PATH = 'sdlc-harness/autonomous_logs/registry.json';
+const REGISTRY_PATH = 'devscene/autonomous_logs/registry.json';
 const SCRIPT_PATH = `${INIT_SCRIPTS_DIR}/restart-watcher.sh`;
 const REMOTE_LINE = 'remote (not affected by a restart): feat_r running';
 
@@ -36,7 +36,7 @@ async function createRestartFixture(t, registry) {
   const calls = join(bin, 'calls');
   await mkdir(bin, { recursive: true });
   await writeFile(join(bin, 'hcli'), `#!/usr/bin/env bash\necho "$*" >> '${calls}'\n`, { mode: 0o755 });
-  await mkdir(join(w.dir, 'sdlc-harness', 'autonomous_logs'), { recursive: true });
+  await mkdir(join(w.dir, 'devscene', 'autonomous_logs'), { recursive: true });
   await writeFile(join(w.dir, REGISTRY_PATH), JSON.stringify(registry), 'utf8');
 
   return {

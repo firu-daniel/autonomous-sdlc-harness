@@ -30,7 +30,7 @@
  * ## Three non-obvious choices, and where each comes from
  *
  * 1. **Every wrapper is allow-listed in two forms here, not one, and a third per run.** `commands.*`
- *    is repo-relative — every path in `harness.config.json` is (`docs/config.md` §5) — while a
+ *    is repo-relative — every path in `devscene.config.json` is (`docs/config.md` §5) — while a
  *    profile entry is conventionally absolute. A profile carrying only the absolute form would leave
  *    the configured verification command matching neither `allow` nor `deny`, and so refused. So
  *    each selected wrapper contributes the repo-relative invocation an agent runs verbatim from the

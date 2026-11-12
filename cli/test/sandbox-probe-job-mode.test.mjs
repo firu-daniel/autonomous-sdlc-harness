@@ -8,8 +8,11 @@
  * `HEAD`, its `.git/config`, its tracked files and its origin.**
  *
  * Job mode places the checkout it measures from `--job`'s argument, not from its own location, so the
- * probe runs **in place** from `WORKSPACE_ROOT/scripts/sandbox-probe.sh`, aimed at an adopted fixture
- * under `os.tmpdir()`. The one exception is the probe's-own-checkout refusal, which runs a committed
+ * probe runs from a **staged copy** ({@link stageProbe}), aimed at an adopted fixture under
+ * `os.tmpdir()`: `sandbox-probe.sh` and `lib/sandbox-probe/` beside the template run library
+ * `cli/templates/scripts/lib/harness-run-lib.sh` as `lib/harness-run-lib.sh`, in a throwaway git
+ * repository of its own, because preflight sources the run library beside the probe and the copy in
+ * place would source this checkout's self-adopted one. The one exception is the probe's-own-checkout refusal, which runs a committed
  * copy of the probe inside a second fixture, so no case's outcome depends on what kind of checkout this
  * repository is. Each case's `TMPDIR` is its own directory, read afterwards for a leftover
  * `sandbox-probe.*`.
@@ -22,7 +25,7 @@
 
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { chmod, cp, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -36,7 +39,7 @@ import { createWatcherFixture } from './helpers/watcher.mjs';
 const IDENTITY = ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid'];
 const PROBE_FILE = 'sandbox-probe.sh';
 const PROBE_LIB = join('lib', 'sandbox-probe');
-const IN_PLACE_PROBE = join(WORKSPACE_ROOT, 'scripts', PROBE_FILE);
+const TEMPLATE_RUN_LIB = join(WORKSPACE_ROOT, 'cli', 'templates', 'scripts', 'lib', 'harness-run-lib.sh');
 const DOCTOR_IDS = ['profile-sandbox', 'profile-write-protection', 'profile-main-anchor', 'sandbox-prerequisites'];
 const PROBE_BRANCH_GLOB = 'chore_sbx_probe_*';
 const RUN_TIMEOUT_MS = scaleBound(180_000);
@@ -61,6 +64,22 @@ async function caseTmp(t) {
   const dir = realpathSync(await mkdtemp(join(tmpdir(), 'sandbox-probe-job-case-')));
   t.after(() => rm(dir, { recursive: true, force: true }));
   return dir;
+}
+
+/**
+ * The probe staged under a fresh case directory that is its own `git init` repository — never the
+ * fixture, which job-mode preflight would refuse as the probe's own checkout.
+ *
+ * @returns {Promise<string>} the staged `sandbox-probe.sh`
+ */
+async function stageProbe(t) {
+  const stage = await caseTmp(t);
+  await runGit(stage, ['init', '--quiet']);
+  await mkdir(join(stage, 'lib'));
+  await cp(join(WORKSPACE_ROOT, 'scripts', PROBE_FILE), join(stage, PROBE_FILE));
+  await cp(join(WORKSPACE_ROOT, 'scripts', PROBE_LIB), join(stage, PROBE_LIB), { recursive: true });
+  await cp(TEMPLATE_RUN_LIB, join(stage, 'lib', 'harness-run-lib.sh'));
+  return join(stage, PROBE_FILE);
 }
 
 async function probeLeftovers(tmp) {
@@ -89,7 +108,7 @@ async function jobFixture(t, { withProbe = false } = {}) {
     await cp(join(WORKSPACE_ROOT, 'scripts', PROBE_FILE), join(scripts, PROBE_FILE));
     await cp(join(WORKSPACE_ROOT, 'scripts', PROBE_LIB), join(scripts, PROBE_LIB), { recursive: true });
   }
-  const config = JSON.parse(readFileSync(join(w.dir, 'harness.config.json'), 'utf8'));
+  const config = JSON.parse(readFileSync(join(w.dir, 'devscene.config.json'), 'utf8'));
   assert.ok(existsSync(join(w.dir, '.claude', 'settings.autonomous.json')), 'init generated the base profile');
   await writeFile(join(w.dir, '.git', 'info', 'exclude'), '/watcher-test/\n/home/\n', { flag: 'a' });
   await runGit(w.dir, ['add', '-A']);
@@ -169,8 +188,9 @@ async function assertRestored(f, before) {
 test('preflight --job refuses, creating nothing', async (t) => {
   const f = await jobFixture(t);
   if (f === null) return;
+  const staged = await stageProbe(t);
   const preflight = (tmp, extraArgs = [], seams = {}, target = f.dir) =>
-    probe(f, IN_PLACE_PROBE, ['preflight', '--job', target, ...extraArgs], tmp, seams);
+    probe(f, staged, ['preflight', '--job', target, ...extraArgs], tmp, seams);
 
   await t.test("1. the probe's own checkout", async (t) => {
     const copy = await jobFixture(t, { withProbe: true });
@@ -273,12 +293,13 @@ test('preflight --job refuses, creating nothing', async (t) => {
 test('a job-mode run leaves the checkout as it found it', async (t) => {
   const f = await jobFixture(t);
   if (f === null) return;
+  const staged = await stageProbe(t);
 
   await t.test('a leg with no job rows: setup and teardown in full, no session', async (t) => {
     const before = await checkoutState(f);
     const tmp = await caseTmp(t);
 
-    const run = await probe(f, IN_PLACE_PROBE, ['run', '--job', f.dir, '--leg', 'git'], tmp);
+    const run = await probe(f, staged,['run', '--job', f.dir, '--leg', 'git'], tmp);
 
     assert.equal(run.status, 0, run.stderr);
     for (const row of ['CS3', 'CL5']) {
@@ -297,7 +318,7 @@ test('a job-mode run leaves the checkout as it found it', async (t) => {
     const before = await checkoutState(f);
     const tmp = await caseTmp(t);
 
-    const run = await probe(f, IN_PLACE_PROBE, ['run', '--job', f.dir, '--leg', 'git'], tmp, {
+    const run = await probe(f, staged, ['run', '--job', f.dir, '--leg', 'git'], tmp, {
       SANDBOX_PROBE_DOCTOR: DOCTOR_FAIL,
     });
 
@@ -325,10 +346,11 @@ test('an interrupted job-mode run still tears down', async (t) => {
   ]);
   const before = await checkoutState(f);
   const tmp = await caseTmp(t);
+  const staged = await stageProbe(t);
 
   const running = probe(
     f,
-    IN_PLACE_PROBE,
+    staged,
     ['run', '--job', f.dir, '--leg', 'job-layout'],
     tmp,
     { SANDBOX_PROBE_AGENT_CLI: sessionStub },

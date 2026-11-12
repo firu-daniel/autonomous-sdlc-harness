@@ -19,7 +19,7 @@ The cost of change 3 is that a PASS, the case where skipped full-method reads do
 
 ## Read tree
 
-This repository has `phases.parity: false` (`harness.config.json`), so the agent is never dispatched here. The counts describe a hypothetical dispatch with parity on against this repo's three layers. A default `init` adopter is shown for contrast.
+This repository has `phases.parity: false` (`devscene.config.json`), so the agent is never dispatched here. The counts describe a hypothetical dispatch with parity on against this repo's three layers. A default `init` adopter is shown for contrast.
 
 | File | Up-front / on-demand | Words |
 |---|---|---|
