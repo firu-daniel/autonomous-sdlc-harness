@@ -22,7 +22,7 @@
  * paginated `pulls/<n>/comments` and `pulls/<n>/reviews` listings from `STUB_PR_COMMENTS` and
  * `STUB_PR_REVIEWS` (raw API objects, one page each), the permission call per login from
  * `STUB_PERMISSIONS`, `run list` from `STUB_RUN_LIST` (by default one completed
- * `harness run <branch>` run with no state bundle, which reads as `failed`), a run's jobs from
+ * `devscene run <branch>` run with no state bundle, which reads as `failed`), a run's jobs from
  * `STUB_JOBS` (none by default), its artifact list and `run download` from `STUB_BUNDLES` (run id ->
  * `status.json` fields; none by default), the post-dispatch `headSha` lookup with origin's tip under
  * `STUB_LIST_DISPATCHED`, and the labels GET with `[]`. `HARNESS_TRIGGER_LOOKUP_SECS` is `0`, so a
@@ -37,7 +37,7 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
 const REVIEW_DIR = `${STATE_DIR}/user_reviews`;
@@ -79,7 +79,7 @@ if (args[0] === 'pr' && args[1] === 'list') {
 } else if (args[0] === 'run' && args[1] === 'list' && process.env.STUB_LIST_DISPATCHED && args.includes('url,displayTitle,headSha')) {
   const branch = args[args.indexOf('--branch') + 1];
   const tip = require('node:child_process').execFileSync('git', ['ls-remote', 'origin', 'refs/heads/' + branch], { encoding: 'utf8' }).split('\\t')[0];
-  process.stdout.write(JSON.stringify([{ displayTitle: 'harness run ' + branch, headSha: tip, url: 'https://example.test/runs/777' }]));
+  process.stdout.write(JSON.stringify([{ displayTitle: 'devscene run ' + branch, headSha: tip, url: 'https://example.test/runs/777' }]));
 } else if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/issues\\/[0-9]+\\/labels$/.test(args[1] ?? '')) {
   process.stdout.write('[]');
 } else if (args[0] === 'api') {
@@ -87,7 +87,7 @@ if (args[0] === 'pr' && args[1] === 'list') {
 } else if (args[0] === 'run' && args[1] === 'list') {
   const branch = args[args.indexOf('--branch') + 1];
   process.stdout.write(process.env.STUB_RUN_LIST
-    || JSON.stringify([{ databaseId: 601, displayTitle: 'harness run ' + branch, status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' }]));
+    || JSON.stringify([{ databaseId: 601, displayTitle: 'devscene run ' + branch, status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' }]));
 }
 `;
 
@@ -108,7 +108,7 @@ async function reviewFixture(t) {
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   config.forge = 'github';
@@ -539,11 +539,11 @@ test('a head without the story index is refused: the round cannot start on it', 
   await f.pushBranch('feat_z', { story: false });
   const before = await f.originRefs();
   await assertRefused(f, await f.control({ head: 'feat_z' }), before,
-    /`feat_z` carries no story index \(`sdlc-harness\/story_plans\/feat_z_story_plan\.md`\).*cannot start on this branch/);
+    /`feat_z` carries no story index \(`devscene\/story_plans\/feat_z_story_plan\.md`\).*cannot start on this branch/);
 });
 
-/** A `run list` answer whose newest `harness run feat_x` run, 501, is `in_progress`. */
-const IN_PROGRESS = JSON.stringify([{ databaseId: 501, displayTitle: 'harness run feat_x', status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]);
+/** A `run list` answer whose newest `devscene run feat_x` run, 501, is `in_progress`. */
+const IN_PROGRESS = JSON.stringify([{ databaseId: 501, displayTitle: 'devscene run feat_x', status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]);
 
 /** Assert the in-flight answer: exit 0, one reply matching <pattern>, no dispatch, origin unchanged. */
 const assertAcknowledged = async (f, result, before, pattern) => {
@@ -605,8 +605,8 @@ test('a review on a stopped paused run names it stopped, with resume as the way 
   const before = await f.originRefs();
   const result = await f.control({}, {
     STUB_RUN_LIST: JSON.stringify([
-      { databaseId: 700, displayTitle: 'harness stop feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T01:00:00Z', url: 'https://example.test/runs/700' },
-      { databaseId: 601, displayTitle: 'harness run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' },
+      { databaseId: 700, displayTitle: 'devscene stop feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T01:00:00Z', url: 'https://example.test/runs/700' },
+      { databaseId: 601, displayTitle: 'devscene run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' },
     ]),
     STUB_BUNDLES: JSON.stringify({ 601: { status: 'paused', pause_reason: 'user' } }),
   });

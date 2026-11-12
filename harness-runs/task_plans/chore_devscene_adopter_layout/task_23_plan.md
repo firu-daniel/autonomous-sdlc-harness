@@ -22,3 +22,7 @@
 
 - `git grep -nE 'harness\.config|sdlc-harness|harness-scripts|harness-read-mention|harness (run|pause|stop|control|trigger)( [^a-z ]|[^ a-z]| [a-z]+_)|harness <action>|harness [$][{][{]' --` followed by this task's ten target paths prints nothing.
 - Each target test file passes through `npm test --workspace cli -- test/<name>.test.mjs`, from the repository root, one plain foreground command per file.
+
+**Deviations from plan:**
+- `remote-control-mention.test.mjs`'s conversation assertion ended its regex at `/…Started a harness run/`. That is the trigger's start sentence, which is prose and is kept, but the Verification grep's `[^ a-z]` alternative matches the closing `/`. The regex was extended to `Started a harness run on the branch/`, which is the same sentence and asserts the same bytes, so the grep comes back clean without respelling prose.
+- The Verification grep does not match the regex-escaped `harness\.config\.json` in `remote-control-needs-agent.test.mjs` (`forge unset answers no, with no gh call`). It was respelled to `devscene\.config\.json` after that suite failed on it, and a widened grep for escaped forms of rows 1–3 and 7 over the ten targets returns nothing.

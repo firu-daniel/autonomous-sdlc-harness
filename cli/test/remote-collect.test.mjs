@@ -43,7 +43,7 @@ import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './help
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
 const NOTIFY = `${INIT_SCRIPTS_DIR}/autonomous-notify.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
 const REVIEW_DIR = `${STATE_DIR}/user_reviews`;
@@ -108,7 +108,7 @@ const run = (id, title, status, createdAt) => ({
 });
 
 /** The run holding the `collect` job: in progress, its `run` job completed, its bundle `completed`. */
-const THIS_RUN = run(601, 'harness run feat_x', 'in_progress', '2026-01-01T00:00:00Z');
+const THIS_RUN = run(601, 'devscene run feat_x', 'in_progress', '2026-01-01T00:00:00Z');
 
 /** One review, as the pull request's reviews endpoint returns it. */
 const review = (id, login, fields = {}) => ({
@@ -139,7 +139,7 @@ async function collectFixture(t, { ledger = true } = {}) {
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   config.forge = 'github';
@@ -312,7 +312,7 @@ test('a newer run listed: nothing, since its own end collects', async (t) => {
   const f = await collectFixture(t);
   const before = await f.originRefs();
   const result = await f.collect({
-    STUB_RUN_LIST: JSON.stringify([run(602, 'harness run feat_x', 'queued', '2026-01-03T00:00:00Z'), THIS_RUN]),
+    STUB_RUN_LIST: JSON.stringify([run(602, 'devscene run feat_x', 'queued', '2026-01-03T00:00:00Z'), THIS_RUN]),
   });
   await assertNothing(f, result, before, /feat_x is running; that run's own end collects/);
 });
@@ -328,7 +328,7 @@ test('a stop marker newer than the run: nothing', async (t) => {
   const f = await collectFixture(t);
   const before = await f.originRefs();
   const result = await f.collect({
-    STUB_RUN_LIST: JSON.stringify([run(603, 'harness stop feat_x', 'completed', '2026-01-03T00:00:00Z'), THIS_RUN]),
+    STUB_RUN_LIST: JSON.stringify([run(603, 'devscene stop feat_x', 'completed', '2026-01-03T00:00:00Z'), THIS_RUN]),
   });
   await assertNothing(f, result, before, /feat_x is stopped; no round started/);
 });
@@ -383,8 +383,8 @@ test('--pr names the pull request even when none is listed; a --pr that is not a
   assert.ok(f.calls().some((call) => call.line === `api --paginate repos/${REPOSITORY}/pulls/12/reviews`));
 });
 
-/** An older `harness run feat_x` run, completed, before THIS_RUN. */
-const OLDER_RUN = run(600, 'harness run feat_x', 'completed', '2025-12-31T00:00:00Z');
+/** An older `devscene run feat_x` run, completed, before THIS_RUN. */
+const OLDER_RUN = run(600, 'devscene run feat_x', 'completed', '2025-12-31T00:00:00Z');
 const NOT_STARTED_WHY = 'The job was not started because your account is locked due to a billing issue.';
 const ROUTE_CHOICE = '<task, user_review or docs: the one the run was started with>';
 
@@ -490,7 +490,7 @@ test('a run whose job never started on a stopped branch: nothing posted', async 
   const env = neverStarted({ olderBundle: true, comments: { 12: [botComment('round')] } });
   const result = await f.collect({
     ...env,
-    STUB_RUN_LIST: JSON.stringify([run(603, 'harness stop feat_x', 'completed', '2026-01-03T00:00:00Z'), THIS_RUN, OLDER_RUN]),
+    STUB_RUN_LIST: JSON.stringify([run(603, 'devscene stop feat_x', 'completed', '2026-01-03T00:00:00Z'), THIS_RUN, OLDER_RUN]),
   });
   await assertNothing(f, result, before, /feat_x is stopped; no round started/);
   assert.deepEqual(labelCalls(f.calls()), []);

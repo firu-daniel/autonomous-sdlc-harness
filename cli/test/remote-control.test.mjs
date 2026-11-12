@@ -9,7 +9,7 @@
  * replies.** Each ignored shape is driven and asserted to call no `gh` at all; each refusal arm —
  * `DEVSCENE_REMOTE_STOP`, the coupling off, a `read` answer, a failed permission call, a writer the list
  * does not admit, `ghost`, an unlisted bot, an unknown verb, a fork, a head
- * with neither a task prompt, the ledger nor a `harness run` in flight, a protected branch, an issue with no genuine
+ * with neither a task prompt, the ledger nor a `devscene run` run in flight, a protected branch, an issue with no genuine
  * start, an issue whose started branch is gone from origin — is asserted to send no `workflow run` and
  * to post exactly one reply. On an issue, only a `github-actions[bot]` comment that opens with the
  * trigger's start sentence and ends with the `started` marker names the branch, and that marker makes
@@ -22,7 +22,7 @@
  * (by default a same-repository `OPEN` pull request with head `feat_x`), `pr list` from `STUB_PRS`, the
  * paginated comment listing from `STUB_COMMENTS` (raw API objects, projected as the `--jq` asks), the
  * permission call from the `STUB_PERMISSIONS` table (`FAIL` exits 4), `run list` from `STUB_RUN_LIST` (by
- * default one `in_progress` `harness run <branch>` run), a run's artifact list from `STUB_ARTIFACTS`, a
+ * default one `in_progress` `devscene run <branch>` run), a run's artifact list from `STUB_ARTIFACTS`, a
  * `run download` by writing a status.json whose `status` is `STUB_BUNDLE_STATUS`, and the labels GET with
  * `[]`. `STUB_BUNDLE_FIELDS` adds fields to that status.json, and `STUB_BUNDLE_QUESTIONS` writes an open
  * `clarifications/feat_x/question_<n>.md` beside it for each <n>. `STUB_ITEM_COMMENTS` (number to
@@ -41,7 +41,7 @@
  * and never evaluated, to label the run `running` only when no other question stays open, and to refuse
  * a hold, an expired bundle, a job in progress, an unnamed or unknown index and an oversized payload.
  *
- * With a `harness stop feat_x` run newer than the newest `harness run feat_x` run in `STUB_RUN_LIST`,
+ * With a `devscene stop feat_x` run newer than the newest `devscene run feat_x` run in `STUB_RUN_LIST`,
  * every reply naming the state names it `stopped` — never `paused`, `parked` or `running` — while
  * `resume` on a stopped paused run, `answer` on a stopped parked one and `clear` on a stopped hold
  * still dispatch.
@@ -61,7 +61,7 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
 const MARKER = (event, branch) => `<!-- devscene event=${event} branch=${branch} -->`;
@@ -110,7 +110,7 @@ if (args[0] === 'pr' && args[1] === 'view') {
 } else if (args[0] === 'run' && args[1] === 'list') {
   const branch = args[args.indexOf('--branch') + 1];
   process.stdout.write(process.env.STUB_RUN_LIST
-    || JSON.stringify([{ databaseId: 501, displayTitle: 'harness run ' + branch, status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]));
+    || JSON.stringify([{ databaseId: 501, displayTitle: 'devscene run ' + branch, status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]));
 } else if (args[0] === 'run' && args[1] === 'download') {
   const dir = args[args.indexOf('-D') + 1];
   mkdirSync(dir, { recursive: true });
@@ -142,7 +142,7 @@ async function controlFixture(t, { forge = 'github', ledger: ledgerText = '# Pro
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   config.forge = forge;
@@ -422,11 +422,11 @@ test('a closed pull request is refused', async (t) => {
 
 const FEAT_Y_PR = JSON.stringify({ headRefName: 'feat_y', isCrossRepository: false, state: 'OPEN' });
 const featYRun = (status, fields = {}) =>
-  ({ databaseId: 801, displayTitle: 'harness run feat_y', status, createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/801', ...fields });
+  ({ databaseId: 801, displayTitle: 'devscene run feat_y', status, createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/801', ...fields });
 /** control_run_in_flight's listing, the one `run list` asking for `displayTitle,status` alone. */
 const inFlightListings = (calls) => calls.filter((call) => call.line.startsWith('run list ') && call.line.includes('--json displayTitle,status --limit'));
 const NOT_HARNESS_BRANCH_REFUSAL =
-  /`feat_y` is not a harness branch: its tip carries neither a task prompt nor a flow-progress ledger, and no `harness run feat_y` run is queued or in progress\. Only a branch a harness run works on can be commanded\./;
+  /`feat_y` is not a harness branch: its tip carries neither a task prompt nor a flow-progress ledger, and no `devscene run feat_y` run is queued or in progress\. Only a branch a harness run works on can be commanded\./;
 
 test('a branch with a ledger is accepted with no in-flight listing', async (t) => {
   const f = await controlFixture(t);
@@ -622,7 +622,7 @@ test('stop with no run on the branch is refused', async (t) => {
 test('pause on a parked run is refused naming parked, with no dispatch', async (t) => {
   const f = await controlFixture(t);
   const result = await f.control('@dev-scene pause', {}, {
-    STUB_RUN_LIST: JSON.stringify([{ databaseId: 601, displayTitle: 'harness run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' }]),
+    STUB_RUN_LIST: JSON.stringify([{ databaseId: 601, displayTitle: 'devscene run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' }]),
     STUB_ARTIFACTS: JSON.stringify({ artifacts: [{ name: 'harness-state', expired: false }] }),
     STUB_BUNDLE_STATUS: 'parked',
   });
@@ -658,9 +658,9 @@ test('another event name, or an unreadable event file, exits 1 with no gh call',
 const RESUME_DISPATCH = 'workflow run devscene-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=task -f resume=pause -f chain=0';
 const CLEAR_DISPATCH = 'workflow run devscene-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=task -f resume=pause -f park_loop_clear=true -f chain=0';
 
-/** The environment of a completed `harness run feat_x` run whose bundle carries <status> and <fields>. */
+/** The environment of a completed `devscene run feat_x` run whose bundle carries <status> and <fields>. */
 const finishedRun = (status, fields = {}, questions = '') => ({
-  STUB_RUN_LIST: JSON.stringify([{ databaseId: 601, displayTitle: 'harness run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' }]),
+  STUB_RUN_LIST: JSON.stringify([{ databaseId: 601, displayTitle: 'devscene run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' }]),
   STUB_ARTIFACTS: JSON.stringify({ artifacts: [{ name: 'harness-state', expired: false }] }),
   STUB_BUNDLE_STATUS: status,
   STUB_BUNDLE_FIELDS: JSON.stringify(fields),
@@ -842,15 +842,15 @@ test('an answer carrying a command substitution and a backtick is sent byte for 
   assert.ok(!existsSync(join(f.dir, 'pwned')));
 });
 
-/** A `harness stop feat_x` run newer than every `harness run feat_x` run the cases below list. */
-const STOP_RUN = { databaseId: 700, displayTitle: 'harness stop feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T01:00:00Z', url: 'https://example.test/runs/700' };
+/** A `devscene stop feat_x` run newer than every `devscene run feat_x` run the cases below list. */
+const STOP_RUN = { databaseId: 700, displayTitle: 'devscene stop feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T01:00:00Z', url: 'https://example.test/runs/700' };
 
 /** <env> with STOP_RUN added to its run list. */
 const stopped = (env) => ({ ...env, STUB_RUN_LIST: JSON.stringify([STOP_RUN, ...JSON.parse(env.STUB_RUN_LIST)]) });
 
-/** A newest `harness run feat_x` run still `in_progress`, created before STOP_RUN. */
+/** A newest `devscene run feat_x` run still `in_progress`, created before STOP_RUN. */
 const CANCELLING = {
-  STUB_RUN_LIST: JSON.stringify([{ databaseId: 501, displayTitle: 'harness run feat_x', status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]),
+  STUB_RUN_LIST: JSON.stringify([{ databaseId: 501, displayTitle: 'devscene run feat_x', status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]),
 };
 
 test('a stopped run whose bundle reads running (paused, killed) is named stopped by pause and answer; resume still dispatches', async (t) => {
@@ -922,14 +922,14 @@ const atOffset = (secs) => new Date(Date.parse(NEVER_STARTED_AT) + secs * 1000).
 const timedComment = (body, secs, login = BOT) => ({ user: { login }, created_at: atOffset(secs), body });
 
 /**
- * The environment of a newest `harness run feat_x` run, 602, that completed with no artifact and whose
+ * The environment of a newest `devscene run feat_x` run, 602, that completed with no artifact and whose
  * `run` job GitHub never started, under an older run, 601, that carries a bundle when <olderBundle>;
  * <comments> maps an item number to its comments.
  */
 const neverStarted = ({ olderBundle, comments }) => ({
   STUB_RUN_LIST: JSON.stringify([
-    { databaseId: 602, displayTitle: 'harness run feat_x', status: 'completed', conclusion: 'cancelled', createdAt: NEVER_STARTED_AT, url: 'https://example.test/runs/602' },
-    { databaseId: 601, displayTitle: 'harness run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' },
+    { databaseId: 602, displayTitle: 'devscene run feat_x', status: 'completed', conclusion: 'cancelled', createdAt: NEVER_STARTED_AT, url: 'https://example.test/runs/602' },
+    { databaseId: 601, displayTitle: 'devscene run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' },
   ]),
   STUB_ARTIFACTS_BY_RUN: JSON.stringify({
     601: { artifacts: olderBundle ? [{ name: 'harness-state', expired: false }] : [] },
@@ -975,7 +975,7 @@ test('a reply marker carrying an engine inside the slack before the run answers 
 
 /**
  * A first run GitHub never started, as `verb_start` leaves it: `feat_y` on origin with no ledger, no pull
- * request, and one `harness run feat_y` run that completed with no artifact and a `run` job with no
+ * request, and one `devscene run feat_y` run that completed with no artifact and a `run` job with no
  * steps; issue 7 carries the `started` marker <secs> from the run's `createdAt`.
  */
 const firstRunNeverStarted = (secs) => ({

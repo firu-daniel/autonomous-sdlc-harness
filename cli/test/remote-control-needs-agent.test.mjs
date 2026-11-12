@@ -23,7 +23,7 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REPOSITORY = 'octo/fixture';
 const MENTION = "Let's @dev-scene pause";
 const PERMISSION_CALL = `api repos/${REPOSITORY}/collaborators/alice/permission`;
@@ -52,7 +52,7 @@ require('node:fs').appendFileSync(process.env.STUB_AGENT_LOG, JSON.stringify(pro
  * An adopted fixture with a gh stub and an agent stub.
  *
  * @param {import('node:test').TestContext} t
- * @param {{ forge?: boolean }} [options] `forge: false` leaves `forge` out of `harness.config.json`
+ * @param {{ forge?: boolean }} [options] `forge: false` leaves `forge` out of `devscene.config.json`
  */
 async function controlFixture(t, { forge = true } = {}) {
   const fixture = await createFixture({
@@ -65,7 +65,7 @@ async function controlFixture(t, { forge = true } = {}) {
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   if (forge) config.forge = 'github';
@@ -202,7 +202,7 @@ test('DEVSCENE_REMOTE_STOP answers no, with no gh call', async (t) => {
 test('forge unset answers no, with no gh call', async (t) => {
   const f = await controlFixture(t, { forge: false });
   assertAnswer(f, await f.control(MENTION), 2,
-    /^remote-run\.sh: control: needs-agent: no, the default branch's `harness\.config\.json` does not turn run control on/, []);
+    /^remote-run\.sh: control: needs-agent: no, the default branch's `devscene\.config\.json` does not turn run control on/, []);
 });
 
 test('a re-run by an unlisted triggering actor answers no, with no gh call', async (t) => {
