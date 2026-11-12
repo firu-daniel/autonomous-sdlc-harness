@@ -19,7 +19,7 @@
 # scripts directory's copy of this script with no argument. It then
 # reads EVERY configured value — `appDir`, `qa.credentialsPath`, `githooksDir`,
 # `commands.depInstall`, `commands.build` — from the main checkout's
-# `harness.config.json`, runs each step in <dir>, and writes the main
+# `devscene.config.json`, runs each step in <dir>, and writes the main
 # checkout's `githooksDir` under <dir> as the copy's `core.hooksPath`.
 #
 # A registered clone as <dir> takes that `core.hooksPath` in its own
@@ -104,7 +104,7 @@
 #
 # FAIL CLOSED ON A CONFIGURATION IT CANNOT READ. Every path and command below is
 # configured, and none has a remembered fallback, so an absent or unreadable
-# `harness.config.json` is a refusal that changes nothing — not a bootstrap that
+# `devscene.config.json` is a refusal that changes nothing — not a bootstrap that
 # guesses where the hooks are.
 #
 # Usage: setup-worktree.sh [--target <dir>]
@@ -125,7 +125,7 @@
 #
 #   w=$(mktemp -d); d="$w/demo"; git init -q -b trunk "$d"; mkdir -p "$d/githooks"
 #   printf '#!/usr/bin/env bash\nexit 0\n' > "$d/githooks/pre-push"
-#   printf '%s' '{"version":1,"defaultBranch":"trunk","stateDir":"sdlc-harness/","githooksDir":"githooks","layers":[],"commands":{"depInstall":"printf x > deps.marker"}}' > "$d/harness.config.json"
+#   printf '%s' '{"version":1,"defaultBranch":"trunk","stateDir":"devscene/","githooksDir":"githooks","layers":[],"commands":{"depInstall":"printf x > deps.marker"}}' > "$d/devscene.config.json"
 #   mkdir -p "$d/scripts/lib"   # copy this script + lib/ there
 #
 #   ordinary        bash "$d/scripts/setup-worktree.sh"
@@ -142,7 +142,7 @@
 #                     head -1 | sed 's/^worktree //')/.env"
 #                   -> a sibling working copy's .env is a SYMLINK to that file;
 #                      one that already has its own .env is left untouched
-#   unresolvable    printf 'x' > "$d/harness.config.json"; re-run -> exit 1,
+#   unresolvable    printf 'x' > "$d/devscene.config.json"; re-run -> exit 1,
 #                   nothing installed and no git configuration written
 
 set -uo pipefail
@@ -202,7 +202,7 @@ fi
 cfg_status=0
 hr_config_load "$cfg_root" || cfg_status=$?
 if [ "$cfg_status" -ne 0 ]; then
-  echo "setup-worktree.sh: cannot resolve '$cfg_root/harness.config.json' — refusing to bootstrap" >&2
+  echo "setup-worktree.sh: cannot resolve '$cfg_root/devscene.config.json' — refusing to bootstrap" >&2
   echo "  (no configuration there, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)" >&2
   exit 1
 fi
