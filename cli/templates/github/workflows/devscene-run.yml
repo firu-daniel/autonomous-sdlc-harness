@@ -785,7 +785,7 @@ jobs:
           retrieval=$(jq -r '(.phases.docs == true and .docs.retrieval == true)' devscene.config.json)
           {
             echo "SCRIPTS_DIR=${scripts_dir%/}"
-            echo "HARNESS_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/devscene/retrieval"
+            echo "DEVSCENE_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/devscene/retrieval"
           } >> "$GITHUB_ENV"
           echo "retrieval=$retrieval" >> "$GITHUB_OUTPUT"
 
@@ -847,7 +847,7 @@ jobs:
         # actions/cache/restore v6.1.0
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: ${{ env.HARNESS_RETRIEVAL_CACHE }}
+          path: ${{ env.DEVSCENE_RETRIEVAL_CACHE }}
           key: harness-retrieval-${{ runner.os }}-${{ env.DEVSCENE_CLI_VERSION }}
 
       - name: Generate the job's permission profile
@@ -1332,7 +1332,7 @@ jobs:
             exit 1
           fi
           retrieval=$(jq -r '(.phases.docs == true and .docs.retrieval == true)' devscene.config.json)
-          echo "HARNESS_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/devscene/retrieval" >> "$GITHUB_ENV"
+          echo "DEVSCENE_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/devscene/retrieval" >> "$GITHUB_ENV"
           echo "retrieval=$retrieval" >> "$GITHUB_OUTPUT"
           if [ "$retrieval" != true ]; then
             echo "::notice::docs retrieval does not apply to this configuration: there is no cache to warm."
@@ -1352,7 +1352,7 @@ jobs:
         # actions/cache v6.1.0
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: ${{ env.HARNESS_RETRIEVAL_CACHE }}
+          path: ${{ env.DEVSCENE_RETRIEVAL_CACHE }}
           key: harness-retrieval-${{ runner.os }}-${{ env.DEVSCENE_CLI_VERSION }}
 
       - name: Install what is missing

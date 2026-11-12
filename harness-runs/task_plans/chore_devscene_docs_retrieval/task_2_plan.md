@@ -39,3 +39,7 @@
 - `bash -n cli/templates/scripts/docs-search-server.sh` and `bash -n cli/templates/scripts/autonomous-watcher.sh` exit zero.
 - `npm test --workspace cli -- test/outer-loop-scripts.test.mjs` passes. It is the one test file this task edits. Its launcher cases put a fake `devscene-docs-retrieval` (named through `PYTHON_RETRIEVAL_COMMAND`) on `PATH` and assert the child's argv and its `DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL` default. That proves the template and Task 1's constants agree end to end.
 - `git grep -nE 'harness[-_]docs|HARNESS_(DOCS_)?RETRIEVAL|AUTONOMOUS_SDLC_HARNESS_RETRIEVAL|harness:harness' -- cli/templates cli/test/outer-loop-scripts.test.mjs` returns no hits.
+
+**Deviations from plan:**
+
+- Evidence downgrade: the two `bash -n` checks named under **Verification** were refused by the permission layer and not run. The syntax claim instead rests on the configured `commands.typecheck` (`bash scripts/typecheck.sh`), whose `check-shell-parse` step reported `124 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`, followed by `PASS: typecheck`. On top of that, `npm test --workspace cli -- test/outer-loop-scripts.test.mjs` runs the edited launcher (77 pass, 0 fail, 2 skipped by sandbox conditions unrelated to this change) and the watcher-template guard `test/watcher-main-anchor.test.mjs` runs the edited watcher (3 pass).
