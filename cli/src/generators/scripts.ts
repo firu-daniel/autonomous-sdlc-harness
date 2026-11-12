@@ -454,7 +454,7 @@ function unresolvedFix(key: WrapperKey, file: WrapperFile): string {
  * comment above that line asks for.
  */
 function unresolvedBody(key: WrapperKey, file: WrapperFile): string {
-  return `harness_fail "devscene:${unresolvedFix(key, file)}"`;
+  return `harness_fail "devscene: ${unresolvedFix(key, file)}"`;
 }
 
 /**

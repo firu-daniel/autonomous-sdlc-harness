@@ -1263,7 +1263,7 @@ test('an unresolvable deploy command at the repository root gets the failing wra
   const { stderr } = await initOk(dir);
 
   assertRendered(dir, 'deploy.sh');
-  assert.match(text(dir, 'deploy.sh'), /harness_fail "devscene:put the deploy command line in deploy\.sh"/);
+  assert.match(text(dir, 'deploy.sh'), /harness_fail "devscene: put the deploy command line in deploy\.sh"/);
   assert.match(stderr, /deploy\.sh was written as a wrapper that fails with a message/);
   assert.doesNotMatch(stderr, /recurse forever/);
 });
@@ -1460,7 +1460,7 @@ test('the command line writeWrapperScripts returns is the one it inlined into th
     key: 'deploy',
     file: 'deploy.sh',
     invocation: `bash ${INIT_SCRIPTS_DIR}/deploy.sh`,
-    command: 'harness_fail "devscene:put the deploy command line in deploy.sh"',
+    command: 'harness_fail "devscene: put the deploy command line in deploy.sh"',
     unresolved: true,
     carried: false,
   });

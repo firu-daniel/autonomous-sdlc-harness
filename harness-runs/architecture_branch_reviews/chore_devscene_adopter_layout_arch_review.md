@@ -33,7 +33,7 @@ The rules applied are `.claude/context/conventions.md`, `.claude/context/cli.md`
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Restore the space in the generated `harness_fail "devscene: ` placeholder prefix _(layer: cli)_
+1. [x] **Finding 1** — Restore the space in the generated `harness_fail "devscene: ` placeholder prefix _(layer: cli)_
 
 ## Must Fix
 
