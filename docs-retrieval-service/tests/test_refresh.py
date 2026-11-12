@@ -18,16 +18,16 @@ from typing import Any
 import pytest
 
 from fakes import InMemoryDocStore, doc_chunk
-from harness_docs_retrieval.chunk import DocChunk
-from harness_docs_retrieval.models import Embedder
-from harness_docs_retrieval.refresh import EMBED_BATCH_SIZE, RefreshResult, refresh_index
-from harness_docs_retrieval.store import (
+from devscene_docs_retrieval.chunk import DocChunk
+from devscene_docs_retrieval.models import Embedder
+from devscene_docs_retrieval.refresh import EMBED_BATCH_SIZE, RefreshResult, refresh_index
+from devscene_docs_retrieval.store import (
     EMBEDDER_META_KEY,
     INDEX_STATE_META_KEY,
     INDEX_STATE_PENDING,
     INDEX_STATE_REBUILT,
 )
-from harness_docs_retrieval.stubs import RETRIEVAL_STUB_ENV, resolve_models
+from devscene_docs_retrieval.stubs import RETRIEVAL_STUB_ENV, resolve_models
 
 CONFIG: dict[str, Any] = {
     "docs": {"root": "docs"},

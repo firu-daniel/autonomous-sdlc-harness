@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from harness_docs_retrieval.search import (
+from devscene_docs_retrieval.search import (
     ABSTAIN_MESSAGE,
     ABSTAIN_SCORE_THRESHOLD,
     ARM_CANDIDATES,

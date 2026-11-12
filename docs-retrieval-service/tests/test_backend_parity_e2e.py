@@ -2,7 +2,7 @@
 the same corpus renders byte-identical `search_docs` output from both backends, abstention
 included, and both servers advertise the same tool listing over the wire. The TypeScript server
 runs on PGlite, the Python server on the Postgres named by
-`HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL`, and both read one fixture directory and one
+`DEVSCENE_DOCS_RETRIEVAL_TEST_DATABASE_URL`, and both read one fixture directory and one
 `devscene.config.json`.
 
 A mismatch is first assumed to be a port defect and is fixed in the module that owns the rule. One
@@ -28,12 +28,12 @@ import pytest
 from mcp import Client, types
 from mcp.client.stdio import StdioServerParameters
 
-from harness_docs_retrieval.jscompat import utf16_len
-from harness_docs_retrieval.models import MODEL_CACHE_ENV
-from harness_docs_retrieval.search import ABSTAIN_MESSAGE
-from harness_docs_retrieval.store import DATABASE_URL_ENV
-from harness_docs_retrieval.stubs import RETRIEVAL_STUB_ENV
-from harness_docs_retrieval.wire import SEARCH_TOOL_NAME
+from devscene_docs_retrieval.jscompat import utf16_len
+from devscene_docs_retrieval.models import MODEL_CACHE_ENV
+from devscene_docs_retrieval.search import ABSTAIN_MESSAGE
+from devscene_docs_retrieval.store import DATABASE_URL_ENV
+from devscene_docs_retrieval.stubs import RETRIEVAL_STUB_ENV
+from devscene_docs_retrieval.wire import SEARCH_TOOL_NAME
 from model_cache import plant_model_files
 from ts_bridge import CHECKOUT_ROOT, TsFixture, ts_fixture
 
@@ -151,7 +151,7 @@ async def _compare(ts_client: Client, py_client: Client) -> None:
 
 
 def _console_script() -> str:
-    return str(Path(sys.executable).parent / "harness-docs-retrieval")
+    return str(Path(sys.executable).parent / "devscene-docs-retrieval")
 
 
 def _servers(

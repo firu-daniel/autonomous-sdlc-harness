@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from harness_docs_retrieval.corpus import (
+from devscene_docs_retrieval.corpus import (
     corpus_files,
     inside_repo,
     normalize_repo_dir,
