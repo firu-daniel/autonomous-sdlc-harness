@@ -10,11 +10,11 @@ Before the fix plan is handed off, it passes through **two** plan-review gates: 
 
 ## Resolved values
 
-**Three vocabularies of `<…>` name appear in this file, and they resolve from three different places.** Mode-contract **bindings** (`## Mode contract — bindings this file uses`, immediately below) resolve from the binding table of the fork you were dispatched via. Ordinary **path placeholders** (`<branch>`, `<user_review_path>`, `<fix_plan_path>`, `<fix_finding_dir>`) resolve from `## Flow` steps 1–3, which are this family's Setup. The tokens in the table below are neither: they resolve from the adopting repository's `harness.config.json`, are declared here once, and after this table the body uses each one as an ordinary placeholder.
+**Three vocabularies of `<…>` name appear in this file, and they resolve from three different places.** Mode-contract **bindings** (`## Mode contract — bindings this file uses`, immediately below) resolve from the binding table of the fork you were dispatched via. Ordinary **path placeholders** (`<branch>`, `<user_review_path>`, `<fix_plan_path>`, `<fix_finding_dir>`) resolve from `## Flow` steps 1–3, which are this family's Setup. The tokens in the table below are neither: they resolve from the adopting repository's `devscene.config.json`, are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `devscene/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<app_dir>` | config value | `appDir` — the app's directory inside the checkout, repo-relative. The **binding** `<app_root>` is built from it (`<repo_root>/<app_dir>`) and is deliberately a different name: this row is the configured directory, that one is the resolved root. |
 | `<parity_vocabulary>` / `<reference_impl>` | config value | `parity.referenceName` / `parity.referenceImplPath` — the name of the reference implementation this project is kept in parity with, and the path to it. Read **only** when `phases.parity` is `true`; when it is `false` this flow's business-parity gate (`## Flow` step 7) does not run and neither token is dereferenced. |
 
@@ -88,7 +88,7 @@ Every **other** `<…>` name in this file is either a **config value** declared 
 
 6. **If the writer returns a `## Questions` section** above its output contract: **stop and route the questions through `<ask>` verbatim**. If answers come back, redispatch the writer with each answer appended to the prompt between the markers of `${CLAUDE_PLUGIN_ROOT}/instructions/untrusted_input.md` → `## The markers` and go back to step 6. Do not invent answers and do not paraphrase the questions.
 
-7. **Business-parity-review gate (plan-review mode).** **Skip this gate unless `phases.parity` is `true` in `harness.config.json`.** A skipped gate is **not** a converged gate: the flow proceeds straight to step 8, records no pass for it, and reports none at `## Convergence`.
+7. **Business-parity-review gate (plan-review mode).** **Skip this gate unless `phases.parity` is `true` in `devscene.config.json`.** A skipped gate is **not** a converged gate: the flow proceeds straight to step 8, records no pass for it, and reports none at `## Convergence`.
 
    Once the writer has returned a real plan with no outstanding `## Questions`, review the *drafted* fix plan for `<parity_vocabulary>` business-logic parity problems **before** the architecture gate and **before** the hand-off — catching a parity deviation in the planned fixes before architecture-review effort is spent and before the plan is acted on. This is an automated writer↔reviewer mini-loop nested inside this flow, bounded only by a 5-iteration cap. Do NOT pause between parity iterations — the plan is handed off only once both gates PASS (or a cap trips).
 

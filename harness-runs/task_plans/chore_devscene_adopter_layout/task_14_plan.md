@@ -22,3 +22,5 @@
 
 - `git grep -nE 'harness\.config|sdlc-harness|harness-scripts|harness-analyze|harness-read-mention|harness:unfilled|harness (run|pause|stop)( [^a-z ]|[^ a-z]| [a-z]+_)|`scripts/` when the key is absent' -- plugin` prints nothing. With Tasks 10–13 this covers the whole plugin.
 - `git diff -U0 -- plugin/samples` shows no changed `_(points:` tag, task heading or finding title.
+
+**Deviations from plan:** The work bullet for the flow documents names rows 1, 2 and 6, but `AUTONOMOUS_FLOW_WHITEBOARD.md` also carries `/devscene:harness-read-mention` twice (the command-plane row and the counts paragraph), which the verification grep's `harness-read-mention` alternative requires gone. Applied row 7 there too (`/devscene:read-mention`, whose file `plugin/commands/read-mention.md` exists since Task 11). `git diff --word-diff=porcelain -- plugin` shows only rows 1, 2, 6 and 7 substrings changed.

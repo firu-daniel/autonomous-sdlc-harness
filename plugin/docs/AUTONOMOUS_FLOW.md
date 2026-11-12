@@ -12,11 +12,11 @@ The flow takes a branch's **task prompt** and carries it to "branch ready for re
 
 ## Resolved values
 
-The tokens below are neither Mode-contract **bindings** (this document declares none; the one it names in passing, `<per_unit_review>`, is supplied by each flow's own fork) nor ordinary **path placeholders** (`<branch>`, `<n>`, `<N>`, `<layer>`, which this document's own text resolves at their point of use): they resolve from the adopting repository's `harness.config.json`, except `<MAIN_REPO>`, which is derived at runtime. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
+The tokens below are neither Mode-contract **bindings** (this document declares none; the one it names in passing, `<per_unit_review>`, is supplied by each flow's own fork) nor ordinary **path placeholders** (`<branch>`, `<n>`, `<N>`, `<layer>`, which this document's own text resolves at their point of use): they resolve from the adopting repository's `devscene.config.json`, except `<MAIN_REPO>`, which is derived at runtime. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this document is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this document is relative to. Default `devscene/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<default_branch>` | config value | `defaultBranch` — the branch work starts from and merges back into, and therefore the diff base the branch gates compute against. Never a remembered branch name. |
 | `<protected_branches>` | config value | `protectedBranches` — the branches an automated run may never commit or push to. The effective set is these together with `<default_branch>`. |
 | `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory `init` writes the outer-loop scripts into. This document names those scripts by that destination rather than by a path inside the plugin, because they do not ship inside it. |
