@@ -25,3 +25,9 @@
 - `git grep -nE 'harness\.config|sdlc-harness|harness-scripts|harness-task-offer|harness-no-offer|harness-analyze|harness-read-mention|harness-watcher@|harness:unfilled|harness:setup-pending|harness-poll-state|Run the harness|harness (run|pause|stop|control|trigger)( [^a-z ]|[^ a-z]| [a-z]+_)|harness <action>|harness [$][{][{]|for the second by default' -- docs/development.md` prints nothing.
 - `git grep -nxE '/analyze( --dry-run)?' -- docs/development.md` prints exactly the two gate-8 lines.
 - `git grep -nF 'line of the Run DevScene step log' -- docs/development.md scripts/lib/gate12-sandbox-round/core.sh` prints the FR3 text in both files.
+
+**Deviations from plan:**
+- Verification bullet 2: `git grep -x` is refused by this git (`error: unknown switch `x'`). Ran the equivalent anchored `git grep -nE '^/analyze( --dry-run)?$' -- docs/development.md` instead; it printed exactly lines 598 and 599.
+- Gate 6 carve-out: naming the `init.ts` line by its literal text (`claude -p "/analyze" …`) put a bare spelling on line 424, and `bash scripts/check-command-spelling.sh` exited 1 on it. The carve-out names it as "the measured bare-spelling `claude -p` line of the `Headless first-message leg, re-measured:` paragraph in `cli/src/commands/init.ts`"; the check then exited 0.
+- Row 12 judgement: `git commit -m "Add the harness run control"` (a commit message, not a run title) and "no harness run was started from the issue" (prose noun) keep their spelling.
+- `cli/test/gate12-sandbox-round-docs.test.mjs` reads this file but is neither a file this unit edited nor a selected tree guard: not run, deferred to the Run gates phase. The FR3 row was compared by `git grep -hF` against `core.sh`'s description and is byte-equal.
