@@ -56,7 +56,7 @@
 #
 #   1. Version manager. A stack that pins its toolchain through a version
 #      manager needs that manager's init file sourced before anything installs.
-#      Point `HARNESS_VERSION_MANAGER_INIT` at that file (in the watcher's
+#      Point `DEVSCENE_VERSION_MANAGER_INIT` at that file (in the watcher's
 #      environment, or in the operator's shell profile) and it is sourced here.
 #      Unset, or naming a file that is not readable, is a SILENT no-op: most
 #      projects have no such file and a note about it every run is noise.
@@ -221,7 +221,7 @@ fi
 status=0
 
 # --- 1. Version manager, if this machine uses one. -------------------------
-vm_init="${HARNESS_VERSION_MANAGER_INIT:-}"
+vm_init="${DEVSCENE_VERSION_MANAGER_INIT:-}"
 if [ -n "$vm_init" ] && [ -r "$vm_init" ]; then
   echo "setup-worktree.sh: sourcing version-manager init '$vm_init'"
   # shellcheck source=/dev/null

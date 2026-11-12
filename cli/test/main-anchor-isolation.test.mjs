@@ -2,7 +2,7 @@
  * The suite's isolation from the main checkout's anchor.
  *
  * **The rule this test exists to enforce: no child the suite's runners start sees the parent's
- * anchor.** The watcher exports `HARNESS_MAIN_REPO` to every session it launches, a session's gate
+ * anchor.** The watcher exports `DEVSCENE_MAIN_REPO` to every session it launches, a session's gate
  * runs included, and a plugin reader that inherited it would act on the real main checkout rather
  * than a fixture's. One case runs `runBash` in a child `node` holding the anchor and reads what the
  * shell saw; the other reads the suite's sources for a `process.env` spread whose object does not

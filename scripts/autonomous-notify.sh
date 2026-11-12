@@ -59,17 +59,17 @@
 # sourced under `set -a` so a value reaches a child process; NO VALUE IS EVER
 # PRINTED, by this script or in a failure line — only paths and key names. A key
 # ALREADY IN THE ENVIRONMENT WINS over the file's value for that key: an operator
-# checking delivery with `HARNESS_PUSH_CMD=… autonomous-notify.sh …` means that
+# checking delivery with `DEVSCENE_PUSH_CMD=… autonomous-notify.sh …` means that
 # command, and a file quietly overriding it would send the check somewhere else.
 #
 # DELIVERY IS TWO INDEPENDENT ARMS, NOT A PRECEDENCE CHAIN.
 #
-#   HARNESS_PUSH_CMD  a local command. It receives the MESSAGE ON STANDARD INPUT
-#                     and the title in the environment as `HARNESS_PUSH_TITLE`.
+#   DEVSCENE_PUSH_CMD  a local command. It receives the MESSAGE ON STANDARD INPUT
+#                     and the title in the environment as `DEVSCENE_PUSH_TITLE`.
 #                     It is not a `{title}`/`{message}` template — nothing is
 #                     substituted into it, which is also what keeps a message
 #                     containing shell metacharacters from being re-parsed.
-#   HARNESS_PUSH_URL  an endpoint that accepts a POST. The message is the body,
+#   DEVSCENE_PUSH_URL  an endpoint that accepts a POST. The message is the body,
 #                     the title rides in a `Title:` header, and a failure retries
 #                     once with a JSON body so either shape of endpoint works.
 #
@@ -116,20 +116,20 @@
 # REPRO — reproduce any decision by hand, with a recorder standing in for a real
 # push target and nothing real configured:
 #
-#   w=$(mktemp -d); printf '#!/bin/sh\ncat > "%s/body"; printf %%s "$HARNESS_PUSH_TITLE" > "%s/title"\n' "$w" "$w" > "$w/rec"
+#   w=$(mktemp -d); printf '#!/bin/sh\ncat > "%s/body"; printf %%s "$DEVSCENE_PUSH_TITLE" > "%s/title"\n' "$w" "$w" > "$w/rec"
 #   chmod +x "$w/rec"
 #
-#   both arms    HARNESS_PUSH_CMD="$w/rec" HARNESS_PUSH_URL=http://127.0.0.1:9/x \
+#   both arms    DEVSCENE_PUSH_CMD="$w/rec" DEVSCENE_PUSH_URL=http://127.0.0.1:9/x \
 #                  bash <repo>/<scripts_dir>/autonomous-notify.sh completed feat/x; echo $?
 #                -> "$w/title" begins `[<slug>] ` and names feat/x, "$w/body"
 #                   holds the message, ONE stderr line for the failed POST, and 0
-#   url only     HARNESS_PUSH_URL=http://127.0.0.1:9/x bash …/autonomous-notify.sh failed feat/x
+#   url only     DEVSCENE_PUSH_URL=http://127.0.0.1:9/x bash …/autonomous-notify.sh failed feat/x
 #                -> one stderr line, exit 0
-#   neither      env -u HARNESS_PUSH_CMD -u HARNESS_PUSH_URL bash …/autonomous-notify.sh paused feat/x
+#   neither      env -u DEVSCENE_PUSH_CMD -u DEVSCENE_PUSH_URL bash …/autonomous-notify.sh paused feat/x
 #                -> the degrade line naming the paths looked at, exit 0
-#   file order   put `HARNESS_PUSH_CMD=<recorder A>` in
+#   file order   put `DEVSCENE_PUSH_CMD=<recorder A>` in
 #                  "${XDG_CONFIG_HOME:-$HOME/.config}/devscene/push.env"
-#                and `HARNESS_PUSH_CMD=<recorder B>` in the repository's `pushEnvPath`
+#                and `DEVSCENE_PUSH_CMD=<recorder B>` in the repository's `pushEnvPath`
 #                -> A records; remove that file and B records
 #   unknown      bash …/autonomous-notify.sh sneezed feat/x; echo $?   -> generic title, 0
 #   usage        bash …/autonomous-notify.sh completed; echo $?        -> usage on stderr, 2
@@ -239,8 +239,8 @@ checked=""
 # Held across the source so an explicitly-invoked value survives it — see the
 # header: the environment wins per key, and a file supplies only what the
 # environment did not.
-env_cmd="${HARNESS_PUSH_CMD:-}"
-env_url="${HARNESS_PUSH_URL:-}"
+env_cmd="${DEVSCENE_PUSH_CMD:-}"
+env_url="${DEVSCENE_PUSH_URL:-}"
 if [ "$have_lib" -eq 1 ]; then
   while IFS= read -r candidate; do
     [ -n "$candidate" ] || continue
@@ -259,8 +259,8 @@ if [ "$have_lib" -eq 1 ]; then
 $(hr_push_env_files "$root")
 EOF
 fi
-[ -n "$env_cmd" ] && export HARNESS_PUSH_CMD="$env_cmd"
-[ -n "$env_url" ] && export HARNESS_PUSH_URL="$env_url"
+[ -n "$env_cmd" ] && export DEVSCENE_PUSH_CMD="$env_cmd"
+[ -n "$env_url" ] && export DEVSCENE_PUSH_URL="$env_url"
 
 # --- Desktop notification. Platform-gated by `command -v` (see the header): both
 # mechanisms are macOS-only, both are skipped silently elsewhere, and each is
@@ -303,16 +303,16 @@ json_escape() {
 # --- Push. Two independent arms; neither is conditional on the other's outcome.
 pushed=0
 
-if [ -n "${HARNESS_PUSH_CMD:-}" ]; then
+if [ -n "${DEVSCENE_PUSH_CMD:-}" ]; then
   pushed=1
   # The message goes in on STDIN and the title in the environment — the command
   # string is never rewritten, so a message carrying quotes, backticks or a `$`
   # cannot be re-parsed as shell.
-  printf '%s\n' "$MESSAGE" | HARNESS_PUSH_TITLE="$TITLE" bash -c "$HARNESS_PUSH_CMD" >/dev/null 2>&1 ||
-    echo "$self: HARNESS_PUSH_CMD exited non-zero (the other delivery arms were unaffected)" >&2
+  printf '%s\n' "$MESSAGE" | DEVSCENE_PUSH_TITLE="$TITLE" bash -c "$DEVSCENE_PUSH_CMD" >/dev/null 2>&1 ||
+    echo "$self: DEVSCENE_PUSH_CMD exited non-zero (the other delivery arms were unaffected)" >&2
 fi
 
-if [ -n "${HARNESS_PUSH_URL:-}" ]; then
+if [ -n "${DEVSCENE_PUSH_URL:-}" ]; then
   pushed=1
   if command -v curl >/dev/null 2>&1; then
     # A plain body first, a JSON body second: the two shapes cover both the
@@ -321,14 +321,14 @@ if [ -n "${HARNESS_PUSH_URL:-}" ]; then
     curl -sf -m 10 \
       -H "Title: $TITLE" \
       -d "$MESSAGE" \
-      "$HARNESS_PUSH_URL" >/dev/null 2>&1 ||
+      "$DEVSCENE_PUSH_URL" >/dev/null 2>&1 ||
       curl -sf -m 10 \
         -H "Content-Type: application/json" \
         -d "{\"title\":\"$(json_escape "$TITLE")\",\"message\":\"$(json_escape "$MESSAGE")\"}" \
-        "$HARNESS_PUSH_URL" >/dev/null 2>&1 ||
-      echo "$self: HARNESS_PUSH_URL POST failed (the other delivery arms were unaffected)" >&2
+        "$DEVSCENE_PUSH_URL" >/dev/null 2>&1 ||
+      echo "$self: DEVSCENE_PUSH_URL POST failed (the other delivery arms were unaffected)" >&2
   else
-    echo "$self: curl is not on PATH, so HARNESS_PUSH_URL could not be posted to" >&2
+    echo "$self: curl is not on PATH, so DEVSCENE_PUSH_URL could not be posted to" >&2
   fi
 fi
 
@@ -336,9 +336,9 @@ if [ "$pushed" -eq 0 ]; then
   # Not an error — see the header. The paths are named so an operator can see
   # where the settings were expected; no value is printed.
   if [ -n "$checked" ]; then
-    echo "$self: no HARNESS_PUSH_CMD/HARNESS_PUSH_URL set; push skipped (looked in: $checked)" >&2
+    echo "$self: no DEVSCENE_PUSH_CMD/DEVSCENE_PUSH_URL set; push skipped (looked in: $checked)" >&2
   else
-    echo "$self: no HARNESS_PUSH_CMD/HARNESS_PUSH_URL set and no credential file could be looked for; push skipped" >&2
+    echo "$self: no DEVSCENE_PUSH_CMD/DEVSCENE_PUSH_URL set and no credential file could be looked for; push skipped" >&2
   fi
 fi
 

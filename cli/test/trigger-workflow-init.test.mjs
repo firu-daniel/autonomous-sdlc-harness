@@ -67,11 +67,11 @@ async function wiredFixture(t, { forge, target }) {
   return dir;
 }
 
-const RUN_ACTORS_COMMAND = 'gh variable set HARNESS_RUN_ACTORS --body <login,...>';
+const RUN_ACTORS_COMMAND = 'gh variable set DEVSCENE_RUN_ACTORS --body <login,...>';
 
-/** First-setup step 2 states what an unset HARNESS_RUN_ACTORS admits, with its command on a line of its own. */
+/** First-setup step 2 states what an unset DEVSCENE_RUN_ACTORS admits, with its command on a line of its own. */
 function assertRunActorsStep(stdout) {
-  assert.ok(stdout.includes('HARNESS_RUN_ACTORS'), `the report does not name HARNESS_RUN_ACTORS:\n${stdout}`);
+  assert.ok(stdout.includes('DEVSCENE_RUN_ACTORS'), `the report does not name DEVSCENE_RUN_ACTORS:\n${stdout}`);
   assert.ok(
     stdout.split('\n').some((line) => line.trim() === RUN_ACTORS_COMMAND),
     `the report does not print ${RUN_ACTORS_COMMAND} on a line of its own:\n${stdout}`,
@@ -93,16 +93,16 @@ test('init writes the trigger and control workflows only for forge github with r
       assert.ok(addLine.includes(path), `the git add line does not name ${path}: ${addLine}`);
     }
     assert.ok(stdout.includes(LABEL_COMMAND), `the report does not print the label command:\n${stdout}`);
-    assert.ok(stdout.includes('HARNESS_TRIGGER_LABEL'), `the report does not name HARNESS_TRIGGER_LABEL:\n${stdout}`);
-    assert.ok(stdout.includes('HARNESS_TRIGGER_ALLOWED_BOTS'), `the report does not name HARNESS_TRIGGER_ALLOWED_BOTS:\n${stdout}`);
+    assert.ok(stdout.includes('DEVSCENE_TRIGGER_LABEL'), `the report does not name DEVSCENE_TRIGGER_LABEL:\n${stdout}`);
+    assert.ok(stdout.includes('DEVSCENE_TRIGGER_ALLOWED_BOTS'), `the report does not name DEVSCENE_TRIGGER_ALLOWED_BOTS:\n${stdout}`);
     assertRunActorsStep(stdout);
     assert.ok(
       !stdout.includes('Only a person with write or admin access, or a listed bot, starts one.'),
-      `the label step still carries the sentence that omits HARNESS_RUN_ACTORS:\n${stdout}`,
+      `the label step still carries the sentence that omits DEVSCENE_RUN_ACTORS:\n${stdout}`,
     );
     assert.ok(stdout.includes('`devscene: <state>`'), `the report does not tell the state labels apart:\n${stdout}`);
     assert.ok(stdout.includes(PR_SETTING), `the report does not name the pull-request setting:\n${stdout}`);
-    assert.ok(stdout.includes('HARNESS_GIT_TOKEN, which opens the pull request'), `the report does not offer HARNESS_GIT_TOKEN for the pull request:\n${stdout}`);
+    assert.ok(stdout.includes('DEVSCENE_GIT_TOKEN, which opens the pull request'), `the report does not offer DEVSCENE_GIT_TOKEN for the pull request:\n${stdout}`);
     assert.ok(stdout.includes('machine account'), `the report does not carry the machine-account advice:\n${stdout}`);
     assert.ok(stdout.includes('@dev-scene followed by answer, pause, resume, stop, clear, status steers'), `the report does not name the comment commands:\n${stdout}`);
     assert.ok(
@@ -158,12 +158,12 @@ test('init writes the trigger and control workflows only for forge github with r
     assert.equal(text(dir, TRIGGER_FILE), TRIGGER_TEMPLATE, '--force did not restore the template');
   });
 
-  await t.test('forge absent with github-actions: --upgrade-workflows names HARNESS_RUN_ACTORS but neither the trigger nor init --force', async (subtest) => {
+  await t.test('forge absent with github-actions: --upgrade-workflows names DEVSCENE_RUN_ACTORS but neither the trigger nor init --force', async (subtest) => {
     const dir = await wiredFixture(subtest, { target: 'github-actions' });
     await initOk(dir);
     writeFileSync(
       join(dir, RUN_FILE),
-      text(dir, RUN_FILE).replace(/HARNESS_CLI_VERSION: '[^']*'/g, "HARNESS_CLI_VERSION: '0.0.1'"),
+      text(dir, RUN_FILE).replace(/DEVSCENE_CLI_VERSION: '[^']*'/g, "DEVSCENE_CLI_VERSION: '0.0.1'"),
       'utf8',
     );
     const { stdout } = await initOk(dir, ['--upgrade-workflows']);
@@ -171,7 +171,7 @@ test('init writes the trigger and control workflows only for forge github with r
     const afterHeading = stdout.slice(stdout.indexOf('== workflow upgrade') + 1);
     const nextHeading = afterHeading.indexOf('\n== ');
     const upgradeBlock = nextHeading === -1 ? afterHeading : afterHeading.slice(0, nextHeading);
-    assert.ok(upgradeBlock.includes('HARNESS_RUN_ACTORS'), `the upgrade block does not name HARNESS_RUN_ACTORS:\n${stdout}`);
+    assert.ok(upgradeBlock.includes('DEVSCENE_RUN_ACTORS'), `the upgrade block does not name DEVSCENE_RUN_ACTORS:\n${stdout}`);
     assert.ok(!upgradeBlock.includes('devscene-trigger.yml'), `the upgrade block names devscene-trigger.yml with no forge workflows:\n${stdout}`);
     assert.ok(!upgradeBlock.includes('init --force'), `the upgrade block sends an adopter with no forge workflows to init --force:\n${stdout}`);
   });

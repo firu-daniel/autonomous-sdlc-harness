@@ -119,7 +119,7 @@ The hard couplings, hardest first:
 - **Asset resolution (§2.3).** `${CLAUDE_PLUGIN_ROOT}` coverage outside MCP frontmatter is **unconfirmed**, and so is support for `commands/`. A headless first message naming the plan engine's command (the watcher's `ENGINE_COMMAND_TASK`) may need the commands carried as skills instead.
 - **Root context (§2.4).** If the CLI does not read `CLAUDE.md`, an `AGENTS.md` written by `init` would carry the same content.
 - **Event stream and usage gate (§2.5).** Copilot's JSONL is a different schema, and it has no `rate_limit_event` windows. The usage gate would give way to `--max-ai-credits`, which is the *Budget governor* row of [`ROADMAP.md`](../ROADMAP.md).
-- **Launch and credentials (§2.6).** The binary seam already exists (`${HARNESS_AGENT_CLI:-claude}`), but every flag is Claude's spelling, and `agentModel: "opus"` is a Claude Code alias that Copilot would not resolve.
+- **Launch and credentials (§2.6).** The binary seam already exists (`${DEVSCENE_AGENT_CLI:-claude}`), but every flag is Claude's spelling, and `agentModel: "opus"` is a Claude Code alias that Copilot would not resolve.
 
 **Inference:** this is the *Engine / provider abstraction* row of [`ROADMAP.md`](../ROADMAP.md) with a concrete first candidate. The adapter contract of [`ARCHITECTURE.md`](../ARCHITECTURE.md) §7 could be tested against it. It is the best long-term route for a Copilot-only company and the most work.
 

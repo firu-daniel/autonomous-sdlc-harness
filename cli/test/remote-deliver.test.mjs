@@ -16,7 +16,7 @@
  *
  * The fixture is `remote-report.test.mjs`'s — `feat_x` on origin with its provenance line for issue 7 and
  * its ledger — plus a bundle directory whose `status.json` (schema `1`) the test writes. `gh` is a stub
- * reached through `HARNESS_GH_CLI`: it logs each argument vector with any `body=@` / `--body-file`
+ * reached through `DEVSCENE_GH_CLI`: it logs each argument vector with any `body=@` / `--body-file`
  * content and the `GH_TOKEN` it ran with, answers `pr list` from `STUB_PRS`, `pr create` with
  * `https://github.com/octo/fixture/pull/12`, `pr ready` with nothing, and fails a call starting
  * `STUB_FAIL_ON` with `STUB_FAIL_MESSAGE` up to `STUB_FAIL_TIMES` times. No case reaches the network.
@@ -130,7 +130,7 @@ async function deliverFixture(t, { forge = 'github', qa = false, status = 'compl
     /** @param {Record<string, string>} [env] */
     deliver: (env = {}) =>
       runBash(dir, [SCRIPT, 'deliver', 'feat_x', bundle], {
-        HARNESS_GH_CLI: stub,
+        DEVSCENE_GH_CLI: stub,
         STUB_LOG: log,
         GITHUB_REPOSITORY: REPOSITORY,
         GITHUB_SERVER_URL: 'https://github.com',
@@ -191,7 +191,7 @@ test('an open draft is marked ready with HARNESS_PR_TOKEN, commented on it and o
   assert.equal(flips.length, 1);
   assert.deepEqual(flips[0].args, FLIP_ARGS);
   assert.equal(flips[0].token, PR_TOKEN);
-  assert.match(result.stdout, /^remote-run\.sh: deliver: marked pull request #12 ready for review with HARNESS_GIT_TOKEN$/m);
+  assert.match(result.stdout, /^remote-run\.sh: deliver: marked pull request #12 ready for review with DEVSCENE_GIT_TOKEN$/m);
   for (const call of calls) if (call !== flips[0]) assert.notEqual(call.token, PR_TOKEN, call.line);
   assert.equal(allComments(calls).length, 2);
   const [onPr] = commentsOn(calls, 12);
@@ -230,7 +230,7 @@ test('a flip refused with HARNESS_PR_TOKEN is retried once with the job token, a
   assert.deepEqual(flips.map((call) => [call.args, call.token]), [[FLIP_ARGS, PR_TOKEN], [FLIP_ARGS, JOB_TOKEN]]);
   const warnings = warningsOf(result);
   assert.equal(warnings.length, 1);
-  assert.match(warnings[0], /HARNESS_GIT_TOKEN was refused: .*nope.*retrying once with the job's token/);
+  assert.match(warnings[0], /DEVSCENE_GIT_TOKEN was refused: .*nope.*retrying once with the job's token/);
   assert.match(result.stdout, /^remote-run\.sh: deliver: marked pull request #12 ready for review with the job's token$/m);
   assert.match(commentsOn(calls, 12)[0].body, /now marked ready for your review/);
 });
@@ -247,7 +247,7 @@ test('with HARNESS_PR_TOKEN set, an open non-draft is turned back to a draft wit
     result.stdout,
     /^remote-run\.sh: deliver: turned pull request #12 back to a draft so marking it ready fires ready_for_review on this tip$/m,
   );
-  assert.match(result.stdout, /ready for review with HARNESS_GIT_TOKEN$/m);
+  assert.match(result.stdout, /ready for review with DEVSCENE_GIT_TOKEN$/m);
   assert.deepEqual(warningsOf(result), []);
   assert.match(commentsOn(calls, 12)[0].body, /now marked ready for your review/);
 });
@@ -367,7 +367,7 @@ for (const [label, status] of [['a parked bundle', 'parked'], ['no status.json',
   });
 }
 
-test('the Actions refusal is not retried, and the issue alone names the setting and HARNESS_GIT_TOKEN', async (t) => {
+test('the Actions refusal is not retried, and the issue alone names the setting and DEVSCENE_GIT_TOKEN', async (t) => {
   const f = await deliverFixture(t);
   const result = await f.deliver({
     STUB_FAIL_ON: 'pr create',
@@ -380,7 +380,7 @@ test('the Actions refusal is not retried, and the issue alone names the setting 
   assert.equal(readies(calls).length, 0);
   const [posted] = commentsOn(calls, 7);
   assert.match(posted.body, /Allow GitHub Actions to create and approve pull requests/);
-  assert.match(posted.body, /HARNESS_GIT_TOKEN/);
+  assert.match(posted.body, /DEVSCENE_GIT_TOKEN/);
   assert.equal(allComments(calls).length, 1);
   assert.deepEqual(labelAdds(calls, 7), ['labels[]=devscene: done']);
 });

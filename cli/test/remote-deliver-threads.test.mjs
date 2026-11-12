@@ -9,7 +9,7 @@
  * `user_reviews/feat_x_review.md` whose marker records `comments=101,102,103`, a fix-plan index whose
  * `[x] **Finding 1**` flip lands in a commit of its own, `finding_1.md` and `finding_2.md` carrying
  * `**Review comments:** 101` and `102`, and an Out-of-scope bullet ending ` **Review comments:** 103`.
- * `gh` is a stub reached through `HARNESS_GH_CLI`: it logs each argument vector with any `body=@` content,
+ * `gh` is a stub reached through `DEVSCENE_GH_CLI`: it logs each argument vector with any `body=@` content,
  * answers the `api graphql` listing from `STUB_THREADS` and the mutation with a resolved thread, and fails a
  * call starting `STUB_FAIL_ON`. No case reaches the network.
  */
@@ -150,7 +150,7 @@ async function threadsFixture(t, { engine = 'user_review', unmarkedNewest = fals
     /** @param {Record<string, string>} [env] */
     deliver: (env = {}) =>
       runBash(dir, [SCRIPT, 'deliver', 'feat_x', bundle], {
-        HARNESS_GH_CLI: stub,
+        DEVSCENE_GH_CLI: stub,
         STUB_LOG: log,
         GITHUB_REPOSITORY: REPOSITORY,
         GITHUB_SERVER_URL: 'https://github.com',

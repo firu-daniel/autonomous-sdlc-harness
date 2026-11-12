@@ -23,7 +23,7 @@
  * (`helpers/timing.mjs`) and sits below the per-test timeout (`--test-timeout=1800000`) even at the
  * scale's cap, for the reason `watcher-remote-job.test.mjs`'s header gives. Every fixture
  * is torn down in process by `createWatcherFixture`'s `t.after`. No case reaches the network: `gh` is a
- * stub reached through `HARNESS_GH_CLI`. The stop case's killed job is the exception to `runBash`: it is
+ * stub reached through `DEVSCENE_GH_CLI`. The stop case's killed job is the exception to `runBash`: it is
  * spawned as its own detached group, which the case waits on for at most `KILL_WAIT_TENTHS`, scaled
  * likewise, and then kills and reaps whether or not the session was seen to start.
  */
@@ -194,7 +194,7 @@ async function createSequenceFixture(t) {
     GH_TOKEN: '',
     HARNESS_PR_TOKEN: '',
     RUNNER_TEMP: runnerTemp,
-    HARNESS_GH_CLI: ghStub,
+    DEVSCENE_GH_CLI: ghStub,
     STUB_LOG: ghLog,
     STUB_RUN_LIST: '[]',
     HOME: join(w.dir, 'home'),
@@ -209,7 +209,7 @@ async function createSequenceFixture(t) {
       REMOTE_CONTROL_POLL_SECS: '1',
       REMOTE_AUTO_RESUME_DELAY_SECS: '0',
       STATE: state,
-      HARNESS_AGENT_CLI: stubPath,
+      DEVSCENE_AGENT_CLI: stubPath,
       CLAR: w.clarDir,
       POLL_INTERVAL_SECS: '1',
       ...env,

@@ -36,7 +36,7 @@
  *   profile are already three views of one string (`generators/scripts.ts`); an always-loaded file
  *   repeating them would be a fourth, drifting the moment `scriptsDir` moves.
  * - **It does not invent credential key names.** The two example files carry harness-generic keys —
- *   `HARNESS_PUSH_*`, `HARNESS_QA_<n>_*` — and say so in their own header comments, so an adopter
+ *   `DEVSCENE_PUSH_*`, `DEVSCENE_QA_<n>_*` — and say so in their own header comments, so an adopter
  *   carrying settings over from another runner renames the keys rather than the reader.
  */
 

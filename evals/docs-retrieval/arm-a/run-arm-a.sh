@@ -33,7 +33,7 @@
 # retrieval tool outside the read-only fence, and arm A would measure that tool
 # instead of navigation.
 #
-# THE AGENT BINARY IS REACHED THROUGH `${HARNESS_AGENT_CLI:-claude}`, the one
+# THE AGENT BINARY IS REACHED THROUGH `${DEVSCENE_AGENT_CLI:-claude}`, the one
 # indirection `ARCHITECTURE.md` §4 records as the place the engine binary is
 # chosen; §5 inventories its read sites.
 #
@@ -108,7 +108,7 @@
 
 set -euo pipefail
 
-AGENT_CLI="${HARNESS_AGENT_CLI:-claude}"
+AGENT_CLI="${DEVSCENE_AGENT_CLI:-claude}"
 
 # The read-only tool set, identical for both variants. `Read`, `Grep` and `Glob`
 # are what navigating a catalog needs; granting no `Bash`, no `Write`, no `Edit`
@@ -225,7 +225,7 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 69
 fi
 if ! command -v "$AGENT_CLI" >/dev/null 2>&1; then
-  echo "run-arm-a.sh: '$AGENT_CLI' is not on PATH (set HARNESS_AGENT_CLI to name it)" >&2
+  echo "run-arm-a.sh: '$AGENT_CLI' is not on PATH (set DEVSCENE_AGENT_CLI to name it)" >&2
   exit 69
 fi
 

@@ -18,7 +18,7 @@
  * outside directory holding it. The bundle is then walked with `lstat`, following nothing: no entry
  * may be a link, no file may contain the token, and the file set and each file's bytes must be
  * exactly the honest sources the case left in place. `gh` is a recorder stub through
- * `HARNESS_GH_CLI`, and every `save` but (T)'s passes `HARNESS_GITHUB_DEFAULT_COMMIT` empty so that
+ * `DEVSCENE_GH_CLI`, and every `save` but (T)'s passes `HARNESS_GITHUB_DEFAULT_COMMIT` empty so that
  * an ambient value cannot select trusted mode; (TR) sets it only for the restore it drives.
  *
  * RED ONCE — each mutation applied once to `cli/templates/scripts/lib/harness-run-lib.sh` (M3 and
@@ -159,7 +159,7 @@ async function saveFixture(t, state = STATE_DIR) {
     },
     save(env = {}) {
       return runBash(dir, [SCRIPT, 'save', 'feat_x', out], {
-        HARNESS_GH_CLI: stub,
+        DEVSCENE_GH_CLI: stub,
         STUB_LOG: join(stubDir, 'gh.log'),
         HARNESS_GITHUB_DEFAULT_COMMIT: '',
         GITHUB_RUN_ID: '',

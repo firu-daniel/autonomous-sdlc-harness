@@ -1023,7 +1023,7 @@ apart from the pooled figure, and no root index is written to close the gap.
 *The invocation.* None of these spends a token. Confirm the agent CLI's print-mode flags — `-p`,
 `--output-format stream-json`, `--verbose`, `--allowed-tools`, `--disallowed-tools`,
 `--strict-mcp-config` and `--model` — against its own help, naming the binary the way
-`HARNESS_AGENT_CLI` below does if it is not `claude`:
+`DEVSCENE_AGENT_CLI` below does if it is not `claude`:
 
 ```
 claude --help
@@ -1110,7 +1110,7 @@ realistic adopter case, since an adopter's agents navigate with it loaded too. A
 `toolCalls`, the session's tool calls counted by name: it is how a reader later tells whether A-index
 grepped instead of following its index, and whether any session used a tool outside the fence.
 
-The agent binary is reached through `${HARNESS_AGENT_CLI:-claude}` — set `HARNESS_AGENT_CLI` to name it
+The agent binary is reached through `${DEVSCENE_AGENT_CLI:-claude}` — set `DEVSCENE_AGENT_CLI` to name it
 if `claude` is not what is on your PATH. That single indirection is the place the engine binary is
 chosen (`ARCHITECTURE.md` §4).
 

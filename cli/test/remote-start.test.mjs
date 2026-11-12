@@ -14,7 +14,7 @@
  * and pushed to the fixture's bare `origin` as its default branch, so `create-worktree.sh` cuts a real
  * clone from it at the derived sibling path. A pre-existing copy at that path is a clone with its own
  * registry record, made by the library's `hr_clone_create_var`; one case plants a hand-made linked
- * worktree there instead. `gh` is a recorder stub reached through `HARNESS_GH_CLI`, appending each
+ * worktree there instead. `gh` is a recorder stub reached through `DEVSCENE_GH_CLI`, appending each
  * argument vector as one JSON line, as in `remote-run.test.mjs`. No case reaches the network.
  *
  * RED ONCE — each mutation applied once to `cli/templates/scripts/remote-run.sh`, the file run, the
@@ -107,7 +107,7 @@ async function startFixture(t, target = 'github-actions') {
     prompt,
     defaultBranch: config.defaultBranch,
     start: (args, env = {}) =>
-      runBash(dir, [SCRIPT, 'start', ...args], { HARNESS_GH_CLI: stub, STUB_LOG: log, ...env }),
+      runBash(dir, [SCRIPT, 'start', ...args], { DEVSCENE_GH_CLI: stub, STUB_LOG: log, ...env }),
     calls: () =>
       existsSync(log)
         ? readFileSync(log, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line).join(' '))
@@ -167,7 +167,7 @@ test('a start commits the prompt on origin/feat_x, then sends exactly one task d
 test('a relative --prompt-file resolves against the caller\'s directory', async (t) => {
   const f = await startFixture(t);
   const result = await runBash(dirname(f.prompt), [join(f.dir, SCRIPT), 'start', 'feat_x', '--prompt-file', 'prompt.md'], {
-    HARNESS_GH_CLI: join(dirname(f.prompt), 'gh'),
+    DEVSCENE_GH_CLI: join(dirname(f.prompt), 'gh'),
     STUB_LOG: join(dirname(f.prompt), 'gh.log'),
   });
   assert.equal(result.status, 0, result.stderr);

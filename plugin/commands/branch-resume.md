@@ -43,7 +43,7 @@ it ends. The only scripts it invokes are `<scripts_dir>/remote-run.sh sync`, for
 
 ## Steps
 
-1. Resolve `<MAIN_REPO>` as the path a bare `printenv HARNESS_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none; the registry is
+1. Resolve `<MAIN_REPO>` as the path a bare `printenv DEVSCENE_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none; the registry is
    `<MAIN_REPO>/<state_dir>/autonomous_logs/registry.json` (shaped `{"runs": {"<branch>": {...}}}`).
 2. **Which-branch resolution.** If `$ARGUMENTS` starts with `<branch>:` (or is just a bare `<branch>`),
    parse it. Otherwise read the registry: if **exactly one** run has `status: "paused"`, target it;
@@ -92,7 +92,7 @@ it ends. The only scripts it invokes are `<scripts_dir>/remote-run.sh sync`, for
 
 6. **GitHub route** — in place of steps 3–5. Never write `RESUME`. The local kill switch
    `<MAIN_REPO>/<state_dir>/AUTONOMOUS_STOP` does not gate a dispatch to GitHub; the job-side brake is the
-   repository variable `HARNESS_REMOTE_STOP` — say so when the local kill switch is present. `<engine>` is
+   repository variable `DEVSCENE_REMOTE_STOP` — say so when the local kill switch is present. `<engine>` is
    the record's `engine` field or `fetch`'s `engine:`; when it is empty, report the GitHub route
    (`docs/remote-execution.md` → `### Working a run from GitHub alone`) and stop — never guess the engine,
    since the workflow input defaults to `task`. By state:

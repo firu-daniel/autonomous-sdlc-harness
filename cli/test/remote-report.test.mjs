@@ -19,7 +19,7 @@
  * The fixture is `remote-trigger.test.mjs`'s shape — `init`, `execution.target` `github-actions`,
  * `forge` `github`, the adopted tree pushed to the fixture's bare `origin` — plus branches pushed with a
  * task prompt and, unless a case says otherwise, `flow_progress/<branch>_progress.md`. `gh` is a stub
- * reached through `HARNESS_GH_CLI`: it logs each argument vector with the content of any `body=@<path>`,
+ * reached through `DEVSCENE_GH_CLI`: it logs each argument vector with the content of any `body=@<path>`,
  * answers `pr ready` with nothing, `pr list` from `STUB_PRS`, a label read from `STUB_LABELS` and `run list` from
  * `STUB_RUN_LIST` (each `[]` by default), and exits 4 on a call starting `STUB_FAIL_ON`. No case reaches
  * the network.
@@ -139,13 +139,13 @@ async function reportFixture(t, { forge = 'github' } = {}) {
      */
     report: (args, env = {}) =>
       runBash(dir, [SCRIPT, 'report', ...args], {
-        HARNESS_GH_CLI: stub,
+        DEVSCENE_GH_CLI: stub,
         STUB_LOG: log,
         GITHUB_REPOSITORY: REPOSITORY,
         GITHUB_SERVER_URL: 'https://github.com',
         GITHUB_RUN_ID: '',
         RUNNER_TEMP: runnerTemp,
-        HARNESS_TRIGGER_LABEL: '',
+        DEVSCENE_TRIGGER_LABEL: '',
         STUB_PRS: '',
         STUB_LABELS: '',
         STUB_RUN_LIST: '',

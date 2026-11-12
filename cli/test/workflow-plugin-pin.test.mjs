@@ -129,7 +129,7 @@ function runStep(w, env) {
 
 test('(a) a workflow rendered for 9.0.0 installs 9.0.0 while the default branch carries 9.1.0', async (t) => {
   const w = await world(t);
-  const result = await runStep(w, { HARNESS_CLI_VERSION: '9.0.0' });
+  const result = await runStep(w, { DEVSCENE_CLI_VERSION: '9.0.0' });
   assert.equal(result.status, 0, result.stdout + result.stderr);
   const recorded = readFileSync(join(w.state, 'marketplace'), 'utf8').trim();
   assert.equal(recorded, join(w.runnerTemp, 'harness-marketplace'));
@@ -140,7 +140,7 @@ test('(a) a workflow rendered for 9.0.0 installs 9.0.0 while the default branch 
 
 test('(b) a version with no release tag refuses, naming the tag and the upgrade route', async (t) => {
   const w = await world(t);
-  const result = await runStep(w, { HARNESS_CLI_VERSION: '9.2.0' });
+  const result = await runStep(w, { DEVSCENE_CLI_VERSION: '9.2.0' });
   assert.notEqual(result.status, 0);
   const output = result.stdout + result.stderr;
   assert.ok(output.includes('devscene--v9.2.0'), output);
@@ -151,7 +151,7 @@ test('(b) a version with no release tag refuses, naming the tag and the upgrade 
 
 test('(c) an installed version other than the rendered one refuses, naming both and the upgrade route', async (t) => {
   const w = await world(t);
-  const result = await runStep(w, { HARNESS_CLI_VERSION: '9.0.0', STUB_REPORTED_VERSION: '9.1.0' });
+  const result = await runStep(w, { DEVSCENE_CLI_VERSION: '9.0.0', STUB_REPORTED_VERSION: '9.1.0' });
   assert.notEqual(result.status, 0);
   const output = result.stdout + result.stderr;
   for (const fragment of ['9.1.0', '9.0.0', UPGRADE_ROUTE, COMMIT_SET]) assert.ok(output.includes(fragment), output);
@@ -160,7 +160,7 @@ test('(c) an installed version other than the rendered one refuses, naming both 
 
 test('(d) the tag clone prints no detached-HEAD advice', async (t) => {
   const w = await world(t);
-  const result = await runStep(w, { HARNESS_CLI_VERSION: '9.0.0' });
+  const result = await runStep(w, { DEVSCENE_CLI_VERSION: '9.0.0' });
   const output = result.stdout + result.stderr;
   assert.equal(result.status, 0, output);
   assert.ok(!output.includes('detached HEAD'), output);

@@ -242,7 +242,7 @@
 # rename there is an edit here, byte for byte:
 #   HR_REMOTE_WORKFLOW_RUN_FILE mirrors  WORKFLOW_RUN_FILE
 #   HR_REMOTE_STATE_ARTIFACT    mirrors  STATE_ARTIFACT_NAME
-#   hr_credential_values_var    mirrors  GIT_TOKEN_SECRET  (its `HARNESS_GIT_TOKEN` source)
+#   hr_credential_values_var    mirrors  GIT_TOKEN_SECRET  (its `DEVSCENE_GIT_TOKEN` source)
 #   HR_REMOTE_WORKFLOWS_DIR     mirrors  WORKFLOWS_DIR
 #
 # MIRROR OF `plugin/instructions/autonomous_pause_and_ledger.md` →
@@ -323,7 +323,7 @@
 # `HARNESS_GITHUB_DEFAULT_COMMIT` is read by `hr_remote_state_dir_var` alone, to
 # choose WHICH `harness.config.json` is read — the one at that commit — never
 # as a value in place of one. `GH_TOKEN`, `GITHUB_TOKEN`, `HARNESS_PR_TOKEN` and
-# `HARNESS_GIT_TOKEN` are read by `hr_credential_values_var` alone, as values
+# `DEVSCENE_GIT_TOKEN` are read by `hr_credential_values_var` alone, as values
 # to scan for — never a configured value and never policy, and never printed.
 #
 # CONFIGURATION IS READ AT RUN TIME, NOT FROZEN AT GENERATION TIME. That is the
@@ -739,7 +739,7 @@ hr_script_root() {
 # from it, while a run itself executes in its own clone beside it. A script that
 # used its own checkout for both would write a second, invisible inbox per copy.
 #
-# Inside a clone it answers the clone itself. It never reads HARNESS_MAIN_REPO,
+# Inside a clone it answers the clone itself. It never reads DEVSCENE_MAIN_REPO,
 # because its callers run unsandboxed and place the main checkout from their own
 # location.
 hr_main_repo() {
@@ -5793,7 +5793,7 @@ hr_credential_file_add() {
 # `HR_CREDENTIAL_FORMS` (`raw` or `base64`) from every credential this host
 # holds, each recorded raw and as the base64 of `x-access-token:<value>`:
 #   `GH_TOKEN`, `GITHUB_TOKEN`                    the job token
-#   `HARNESS_PR_TOKEN`, `HARNESS_GIT_TOKEN`       HARNESS_GIT_TOKEN
+#   `HARNESS_PR_TOKEN`, `DEVSCENE_GIT_TOKEN`      DEVSCENE_GIT_TOKEN
 #   each `http.*.extraheader` in <main_top>/.git/config — the value, and where
 #   it ends `basic <b64>` that <b64> and the token it decodes from
 #   `x-access-token:<token>`                     the persisted extraheader
@@ -5815,8 +5815,8 @@ hr_credential_values_var() {
   [ "$#" -eq 0 ] || shift
   hr_credential_add "${GH_TOKEN-}" 'the job token'
   hr_credential_add "${GITHUB_TOKEN-}" 'the job token'
-  hr_credential_add "${HARNESS_PR_TOKEN-}" 'HARNESS_GIT_TOKEN'
-  hr_credential_add "${HARNESS_GIT_TOKEN-}" 'HARNESS_GIT_TOKEN'
+  hr_credential_add "${HARNESS_PR_TOKEN-}" 'DEVSCENE_GIT_TOKEN'
+  hr_credential_add "${DEVSCENE_GIT_TOKEN-}" 'DEVSCENE_GIT_TOKEN'
 
   if [ -n "$main_top" ]; then
     cfg="${main_top%/}/.git/config"

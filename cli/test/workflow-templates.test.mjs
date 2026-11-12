@@ -19,11 +19,11 @@
  * and `warm` `contents: read`; the `deliver` job's last step, `Open the pull request and report`,
  * running `remote-run.sh deliver` after `Download the state bundle`, which downloads
  * `STATE_ARTIFACT_NAME` and exits 0 with one `::notice::` line when it cannot,
- * `continue-on-error: true`, with `HARNESS_PR_TOKEN` drawn from `secrets.HARNESS_GIT_TOKEN`
+ * `continue-on-error: true`, with `HARNESS_PR_TOKEN` drawn from `secrets.DEVSCENE_GIT_TOKEN`
  * through `env:`; the `open` job's last step, `Open the draft pull request`, running
  * `remote-run.sh open`, its `if:` exactly `env.HARNESS_STOPPED != '1'`, `continue-on-error: true`,
  * the same `HARNESS_PR_TOKEN` through `env:` and no expression in its `run:` line; no line of the
- * `run` job naming `HARNESS_GIT_TOKEN` or `HARNESS_PR_TOKEN`; the `run` job's `Store the push
+ * `run` job naming `DEVSCENE_GIT_TOKEN` or `HARNESS_PR_TOKEN`; the `run` job's `Store the push
  * credential outside the checkout` step right after `Set the git identity`, before `Bootstrap the
  * checkout` and `Restore the previous job's state`, and `Erase the push credential` its last step,
  * under `always()` and `continue-on-error: true`; the `open` and `deliver` checkouts the default
@@ -59,7 +59,7 @@
  * For `devscene-resume.yml`: the `schedule` and `workflow_dispatch` triggers; `permissions: {}` at workflow
  * level and the `poll` job's grants exactly `contents: read`, `actions: write`, `issues: write` and
  * `pull-requests: write`; `remote-run.sh poll` its only call into the script family;
- * `HARNESS_PUSH_URL` passed through `env:`; no template token at all; every GitHub expression spaced; none inside a `run:` block;
+ * `DEVSCENE_PUSH_URL` passed through `env:`; no template token at all; every GitHub expression spaced; none inside a `run:` block;
  * its state upload under `always()` named `POLL_STATE_ARTIFACT_NAME`, as `remote-run.sh` spells it.
  *
  * For `devscene-trigger.yml`: the `issues` and `repository_dispatch` triggers, `labeled` the only
@@ -72,7 +72,7 @@
  * credential secrets never reach the job reading issue text; no `concurrency:` key, which would drop a
  * pending trigger; no template token; every expression spaced, and none inside a `run:` block; the
  * job's `env:` passing `RUN_ACTORS_VARIABLE` from `vars.` on the line after
- * `HARNESS_TRIGGER_ALLOWED_BOTS`, and the `# DECLARED MIRRORS` block naming it.
+ * `DEVSCENE_TRIGGER_ALLOWED_BOTS`, and the `# DECLARED MIRRORS` block naming it.
  *
  * For `devscene-control.yml`: the `issue_comment`, `pull_request_review`, `issues`, `pull_request` and
  * `delete` triggers, `created`, `submitted`, `closed` and `closed` their only types, and neither
@@ -102,7 +102,7 @@
  * `cancel-in-progress: false`, so review jobs on one branch run one at a time and no comment job is
  * ever replaced; no template token; every expression spaced, and none inside a `run:` block; the
  * job's `env:` passing `RUN_ACTORS_VARIABLE` from `vars.` on the line after
- * `HARNESS_TRIGGER_ALLOWED_BOTS`, and the `# DECLARED MIRRORS` block naming it.
+ * `DEVSCENE_TRIGGER_ALLOWED_BOTS`, and the `# DECLARED MIRRORS` block naming it.
  *
  * For all four: every `uses:` value names `<owner>/<repo>[/<path>]@` a 40-hex commit, never a tag or a
  * branch, with `# <action> v<major>.<minor>.<patch>` on the line directly above it, naming the same
@@ -415,11 +415,11 @@ test('the run-actor gate, under bash -e -o pipefail, passes the bot and admitted
 
 /**
  * Asserts a workflow's job passes `RUN_ACTORS_VARIABLE` from `vars.` on the line right after its
- * `HARNESS_TRIGGER_ALLOWED_BOTS` env line, and that its `# DECLARED MIRRORS` block names it.
+ * `DEVSCENE_TRIGGER_ALLOWED_BOTS` env line, and that its `# DECLARED MIRRORS` block names it.
  */
 function assertPassesRunActors(file, lines) {
-  const bots = lines.findIndex((l) => /^ {6}HARNESS_TRIGGER_ALLOWED_BOTS: /.test(l));
-  assert.notEqual(bots, -1, `${file} passes HARNESS_TRIGGER_ALLOWED_BOTS`);
+  const bots = lines.findIndex((l) => /^ {6}DEVSCENE_TRIGGER_ALLOWED_BOTS: /.test(l));
+  assert.notEqual(bots, -1, `${file} passes DEVSCENE_TRIGGER_ALLOWED_BOTS`);
   assert.equal(lines[bots + 1], `      ${RUN_ACTORS_VARIABLE}: \${{ vars.${RUN_ACTORS_VARIABLE} }}`, file);
   const start = lines.findIndex((l) => l.startsWith('# DECLARED MIRRORS'));
   assert.notEqual(start, -1, `${file} carries a DECLARED MIRRORS block`);
@@ -442,7 +442,7 @@ test('the control job passes the run-actor allow-list from vars, and declares it
 test('the run-name title, the runner line and the permissions', () => {
   assert.ok(LINES.includes('run-name: harness ${{ inputs.action }} ${{ inputs.branch }}'));
   for (const line of LINES.filter((l) => /^\s*runs-on:/.test(l))) {
-    assert.equal(line.trim(), "runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}");
+    assert.equal(line.trim(), "runs-on: ${{ vars.DEVSCENE_RUNNER || 'ubuntu-latest' }}");
   }
   const pushing = ['contents: write', 'actions: write', 'issues: write', 'pull-requests: write'];
   assertPermissions(LINES, {
@@ -482,10 +482,10 @@ test('the deliver job opens the pull request and reports as its last step, after
   const step = list[deliver].join('\n');
   assert.equal(ifOf(step), "env.HARNESS_STOPPED != '1'");
   assert.match(step, /^\s*continue-on-error: true$/m);
-  assert.match(step, /^\s*HARNESS_PR_TOKEN: \$\{\{ secrets\.HARNESS_GIT_TOKEN \}\}$/m);
+  assert.match(step, /^\s*HARNESS_PR_TOKEN: \$\{\{ secrets\.DEVSCENE_GIT_TOKEN \}\}$/m);
   const [body] = runBodies(list[deliver]);
   assert.equal(body, 'bash "$SCRIPTS_DIR/remote-run.sh" deliver "$HARNESS_INPUT_BRANCH" "$RUNNER_TEMP/harness-state"');
-  assert.deepEqual(names.slice(0, 2), [GATE_STEPS.deliver, 'Stop when HARNESS_REMOTE_STOP is set before delivering']);
+  assert.deepEqual(names.slice(0, 2), [GATE_STEPS.deliver, 'Stop when DEVSCENE_REMOTE_STOP is set before delivering']);
 });
 
 test('the deliver job downloads STATE_ARTIFACT_NAME, and a missing bundle is one notice and exit 0', () => {
@@ -524,10 +524,10 @@ test('the open job opens the draft pull request only in a person-started job, be
   const step = list[open].join('\n');
   assert.equal(ifOf(step), "env.HARNESS_STOPPED != '1'");
   assert.match(step, /^\s*continue-on-error: true$/m);
-  assert.match(step, /^\s*HARNESS_PR_TOKEN: \$\{\{ secrets\.HARNESS_GIT_TOKEN \}\}$/m);
+  assert.match(step, /^\s*HARNESS_PR_TOKEN: \$\{\{ secrets\.DEVSCENE_GIT_TOKEN \}\}$/m);
   const [body] = runBodies(list[open]);
   assert.equal(body, 'bash "$SCRIPTS_DIR/remote-run.sh" open "$HARNESS_INPUT_BRANCH"');
-  assert.deepEqual(names.slice(0, 2), [GATE_STEPS.open, 'Stop when HARNESS_REMOTE_STOP is set before opening']);
+  assert.deepEqual(names.slice(0, 2), [GATE_STEPS.open, 'Stop when DEVSCENE_REMOTE_STOP is set before opening']);
 });
 
 test('open and deliver gate every step after the stop check on it, and share one job-level env', () => {
@@ -540,17 +540,17 @@ test('open and deliver gate every step after the stop check on it, and share one
     'GH_TOKEN: ${{ github.token }}',
     'HARNESS_REMOTE_SLUG: ${{ github.repository }}',
     'HARNESS_INPUT_BRANCH: ${{ inputs.branch }}',
-    'HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}',
+    'DEVSCENE_REMOTE_STOP: ${{ vars.DEVSCENE_REMOTE_STOP }}',
     `${RUN_ACTORS_VARIABLE}: \${{ vars.${RUN_ACTORS_VARIABLE} }}`,
   ]);
 });
 
-// The rule: the job that runs the agent never references HARNESS_GIT_TOKEN, so no step of it can
+// The rule: the job that runs the agent never references DEVSCENE_GIT_TOKEN, so no step of it can
 // hand that token to the session or write it into the checkout.
-test('no line of the run job names HARNESS_GIT_TOKEN or HARNESS_PR_TOKEN', () => {
+test('no line of the run job names DEVSCENE_GIT_TOKEN or HARNESS_PR_TOKEN', () => {
   const block = blockUnder(jobStart('run'));
   assert.ok(block.length > 0);
-  for (const line of block) assert.doesNotMatch(line, /HARNESS_GIT_TOKEN|HARNESS_PR_TOKEN/, line);
+  for (const line of block) assert.doesNotMatch(line, /DEVSCENE_GIT_TOKEN|HARNESS_PR_TOKEN/, line);
 });
 
 test('the run job stores its push credential before anything reaches origin and erases it last', () => {
@@ -718,7 +718,7 @@ test('the preflight runs doctor --remote-job, after the profile is generated and
   assert.ok(at("Generate the job's permission profile") < preflight);
   assert.ok(preflight < at('Run the harness'));
   const [body] = runBodies(steps()[preflight].split('\n'));
-  assert.equal(body, 'npx --yes "devscene@$HARNESS_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --remote-job');
+  assert.equal(body, 'npx --yes "devscene@$DEVSCENE_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --remote-job');
 });
 
 /** A step's own top-level `<key>:` value, or `undefined` when the step does not set it. */
@@ -738,7 +738,7 @@ function dedent(body) {
 const REFUSAL_STEP = "Refuse a branch that changed the job's own files";
 const RECORD_STEP = "Record the default branch's commit";
 const REFUSAL_BODY = [
-  'npx --yes "devscene@$HARNESS_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH" \\',
+  'npx --yes "devscene@$DEVSCENE_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH" \\',
   '  || { echo "::error::this branch\'s own commits changed files the job runs or loads, named in this step\'s doctor report; nothing from it runs in this job."; exit 1; }',
 ].join('\n');
 const RECORD_BODY = [
@@ -926,7 +926,7 @@ test('the poller runs remote-run.sh poll and nothing else of the family', () => 
 });
 
 test('the poller passes the push secret through env, so its failed notice can be delivered', () => {
-  assert.match(RESUME_TEXT, /^ {6}HARNESS_PUSH_URL: \$\{\{ secrets\.HARNESS_PUSH_URL \}\}$/m);
+  assert.match(RESUME_TEXT, /^ {6}DEVSCENE_PUSH_URL: \$\{\{ secrets\.DEVSCENE_PUSH_URL \}\}$/m);
 });
 
 /** The `#   <action>   v<x.y.z>` lines under `# ACTION PINS.`, as `<action> v<x.y.z>`, up to a bare `#` or a line of prose. */

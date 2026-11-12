@@ -1,6 +1,6 @@
 /**
  * `remote-run.sh`'s sending verbs — `dispatch`, `pause`, `warm` and `stop` — against a fixture `init`
- * wired, with `gh` replaced by a recorder stub through `HARNESS_GH_CLI`.
+ * wired, with `gh` replaced by a recorder stub through `DEVSCENE_GH_CLI`.
  *
  * **The rule these tests exist to enforce: the script is the one shell-side producer of the run
  * workflow's inputs, so each verb sends exactly the argument vector the input contract states, a
@@ -31,7 +31,7 @@
  *
  * **For `continue` and `poll`, the rule is that a re-dispatch carries the bundle's own `chain` plus
  * one, and nothing is sent for a branch that is stopped, deleted on `origin`, under
- * `HARNESS_REMOTE_STOP`, or at the chain limit**: a `continue` case records at most one `workflow run`,
+ * `DEVSCENE_REMOTE_STOP`, or at the chain limit**: a `continue` case records at most one `workflow run`,
  * and a branch whose `harness stop` run is newer than its newest `harness run` run, or that the
  * fixture's bare `origin` no longer has, gets no `workflow run` and no `workflow enable`. These cases
  * run on `loopFixture`, which puts every branch they name on `origin` first. A
@@ -50,7 +50,7 @@
  * started is not waiting and reported by nothing here. Most
  * cases replace the fixture's `autonomous-notify.sh` with a recorder, as the watcher suite does, so no
  * desktop banner fires; the failed-enable case keeps the real notifier and records through
- * `HARNESS_PUSH_CMD`, with `XDG_CONFIG_HOME` pointed into the fixture so no machine push file is read.
+ * `DEVSCENE_PUSH_CMD`, with `XDG_CONFIG_HOME` pointed into the fixture so no machine push file is read.
  *
  * **For the forge coupling, the rule is that `continue`'s notification and a complete `stop` reach the
  * run's issue as a comment naming no slash command, plus the state label, while a partial stop and a
@@ -220,7 +220,7 @@ async function remoteFixture(t, target = 'github-actions') {
 
 /** Run the script from the fixture root with the stub as `gh`. */
 function remoteRun(fx, args, env = {}) {
-  return runBash(fx.dir, [SCRIPT, ...args], { HARNESS_GH_CLI: fx.stub, STUB_LOG: fx.log, HARNESS_TRIGGER_LOOKUP_SECS: '0', ...env });
+  return runBash(fx.dir, [SCRIPT, ...args], { DEVSCENE_GH_CLI: fx.stub, STUB_LOG: fx.log, HARNESS_TRIGGER_LOOKUP_SECS: '0', ...env });
 }
 
 /** Every argument vector the stub recorded, in call order. */
@@ -296,7 +296,7 @@ test('a relative --answers-from resolves against the caller\'s directory, not th
   const result = await runBash(sub, [join(fx.dir, SCRIPT),
     'dispatch', 'feat_x', '--engine', 'task', '--resume', 'answer',
     '--answers-from', 'answers', '--indexes', '1',
-  ], { HARNESS_GH_CLI: fx.stub, STUB_LOG: fx.log });
+  ], { DEVSCENE_GH_CLI: fx.stub, STUB_LOG: fx.log });
   assert.equal(result.status, 0, result.stderr);
   const [argv] = calls(fx);
   const answersArgs = argv.filter((arg) => arg.startsWith('answers='));
@@ -406,7 +406,7 @@ test('gh exiting non-zero yields exit 3 naming the first line of its stderr', as
 
 test('gh that cannot be found yields exit 3', async (t) => {
   const fx = await remoteFixture(t);
-  const result = await remoteRun(fx, ['warm'], { HARNESS_GH_CLI: join(fx.dir, 'no-such-gh') });
+  const result = await remoteRun(fx, ['warm'], { DEVSCENE_GH_CLI: join(fx.dir, 'no-such-gh') });
   assert.equal(result.status, 3);
   assert.match(result.stderr, /not found/);
 });
@@ -1302,21 +1302,21 @@ test('continue at the chain limit notifies failed and dispatches nothing; one be
   assert.match(notes()[0].detail, /chain limit reached/);
 
   const atThree = loopBundle(fx, 'three', { decision: 'continue', chain: '3' });
-  assert.equal((await remoteRun(fx, ['continue', 'feat_x', atThree], continueEnv([CURRENT_RUN], { HARNESS_MAX_CHAIN: '3' }))).status, 0);
+  assert.equal((await remoteRun(fx, ['continue', 'feat_x', atThree], continueEnv([CURRENT_RUN], { DEVSCENE_MAX_CHAIN: '3' }))).status, 0);
   assert.deepEqual(workflowRuns(fx), []);
   assert.equal(notes().length, 2);
 
   const belowThree = loopBundle(fx, 'two', { decision: 'continue', chain: '2' });
-  assert.equal((await remoteRun(fx, ['continue', 'feat_x', belowThree], continueEnv([CURRENT_RUN], { HARNESS_MAX_CHAIN: '3' }))).status, 0);
+  assert.equal((await remoteRun(fx, ['continue', 'feat_x', belowThree], continueEnv([CURRENT_RUN], { DEVSCENE_MAX_CHAIN: '3' }))).status, 0);
   assert.equal(workflowRuns(fx).length, 1);
   assert.ok(workflowRuns(fx)[0].endsWith('-f chain=3'), workflowRuns(fx)[0]);
 });
 
-test('continue with HARNESS_REMOTE_STOP set sends nothing and notifies paused once', async (t) => {
+test('continue with DEVSCENE_REMOTE_STOP set sends nothing and notifies paused once', async (t) => {
   const fx = await loopFixture(t);
   const notes = recordNotifications(fx);
   const b = loopBundle(fx, 'c', { decision: 'continue', chain: '1' });
-  const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv([CURRENT_RUN], { HARNESS_REMOTE_STOP: '1' }));
+  const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv([CURRENT_RUN], { DEVSCENE_REMOTE_STOP: '1' }));
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(calls(fx), []);
   assert.equal(notes().length, 1);
@@ -1337,7 +1337,7 @@ test('continue on wait-poller enables the resume poller and notifies nothing', a
   assert.deepEqual(notes(), []);
 });
 
-test('continue on wait-poller with a failing enable sends a paused notification through HARNESS_PUSH_CMD', async (t) => {
+test('continue on wait-poller with a failing enable sends a paused notification through DEVSCENE_PUSH_CMD', async (t) => {
   const fx = await loopFixture(t);
   const stubDir = join(fx.dir, STATE_DIR, 'stub');
   const body = join(stubDir, 'push-body');
@@ -1346,8 +1346,8 @@ test('continue on wait-poller with a failing enable sends a paused notification 
   const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv([CURRENT_RUN], {
     STUB_FAIL_ON: 'workflow enable',
     STUB_FAIL_STDERR: 'HTTP 403: Resource not accessible by integration',
-    HARNESS_PUSH_CMD: `cat > '${body}'; printf %s "$HARNESS_PUSH_TITLE" > '${title}'`,
-    HARNESS_PUSH_URL: '',
+    DEVSCENE_PUSH_CMD: `cat > '${body}'; printf %s "$DEVSCENE_PUSH_TITLE" > '${title}'`,
+    DEVSCENE_PUSH_URL: '',
     XDG_CONFIG_HOME: join(stubDir, 'xdg'),
     HARNESS_REMOTE_SLUG: 'o/r',
   }));
@@ -1477,11 +1477,11 @@ const LOCAL_STOP = {
   GITHUB_REPOSITORY: '', GITHUB_SERVER_URL: '', GITHUB_RUN_ID: '', RUNNER_TEMP: '',
 };
 
-test('continue with HARNESS_REMOTE_STOP under forge github also comments on the issue, naming no slash command', async (t) => {
+test('continue with DEVSCENE_REMOTE_STOP under forge github also comments on the issue, naming no slash command', async (t) => {
   const fx = await forgeFixture(t);
   const notes = recordNotifications(fx);
   const b = loopBundle(fx, 'c', { decision: 'continue', chain: '1' });
-  const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv([CURRENT_RUN], { HARNESS_REMOTE_STOP: '1', RUNNER_TEMP: '' }));
+  const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv([CURRENT_RUN], { DEVSCENE_REMOTE_STOP: '1', RUNNER_TEMP: '' }));
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(workflowRuns(fx), []);
   assert.equal(notes().length, 1);
@@ -1490,7 +1490,7 @@ test('continue with HARNESS_REMOTE_STOP under forge github also comments on the 
 
   const comments = posted(fx).filter((call) => call.args.join(' ').startsWith(COMMENT_ON_7));
   assert.equal(comments.length, 1, joined(fx).join('\n'));
-  assert.match(comments[0].body, /`HARNESS_REMOTE_STOP`/);
+  assert.match(comments[0].body, /`DEVSCENE_REMOTE_STOP`/);
   assert.match(comments[0].body, /`@dev-scene resume`/);
   assert.doesNotMatch(comments[0].body, /\/devscene:/);
   assert.deepEqual(joined(fx).filter((line) => line.startsWith(LABEL_ON_7)), [`${LABEL_ON_7} -f labels[]=devscene: paused`]);
@@ -1729,7 +1729,7 @@ test('poll with only a due branch dispatches it, then disables the poller', asyn
   ]);
 });
 
-test('poll with HARNESS_REMOTE_STOP set sends nothing, and carries the poller state unchanged', async (t) => {
+test('poll with DEVSCENE_REMOTE_STOP set sends nothing, and carries the poller state unchanged', async (t) => {
   const fx = await loopFixture(t);
   const carried = { feat_a: { run_id: '701', failures: '2', notified: '' } };
   const previous = join(fx.dir, STATE_DIR, 'stub', 'poll_states', 'stop');
@@ -1742,7 +1742,7 @@ test('poll with HARNESS_REMOTE_STOP set sends nothing, and carries the poller st
       bundles: { 701: usageBundle(fx, 'a', true), 5001: previous },
     }),
     STUB_RESUME_RUN_LIST: JSON.stringify([{ databaseId: 5001, createdAt: '2026-01-01T00:00:00Z' }]),
-    HARNESS_REMOTE_STOP: '1',
+    DEVSCENE_REMOTE_STOP: '1',
   });
   assert.equal(result.status, 0, result.stderr);
   assert.ok(calls(fx).every((argv) => argv[0] !== 'workflow'), joined(fx).join('\n'));
@@ -2108,7 +2108,7 @@ test('poll skips a completed run with no bundle whose run job started', async (t
 test('poll with a give-up bound that is not a non-negative integer exits 1 and dispatches nothing', async (t) => {
   const fx = await loopFixture(t);
   recordNotifications(fx);
-  for (const name of ['HARNESS_POLL_MAX_DISPATCH_FAILURES', 'HARNESS_POLL_GIVE_UP_AFTER_MINUTES']) {
+  for (const name of ['DEVSCENE_POLL_MAX_DISPATCH_FAILURES', 'DEVSCENE_POLL_GIVE_UP_AFTER_MINUTES']) {
     const result = await pollTick(fx, { tick: 1, runId: 801, bundleDir: usageBundle(fx, 'x', true), extra: { [name]: 'x' } });
     assert.equal(result.status, 1, name);
     assert.match(result.stderr, new RegExp(name));

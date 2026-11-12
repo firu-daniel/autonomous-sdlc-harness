@@ -4,7 +4,7 @@
  * fence item that names it (`cli/templates/claude/CLAUDE.md` → item **4. Opt-out.**).
  *
  * **The rule these tests exist to enforce: the fence's opt-out script answers as the #214 one-liner
- * did in every listed layout, under bash and zsh, whether or not `HARNESS_MAIN_REPO` is set — the
+ * did in every listed layout, under bash and zsh, whether or not `DEVSCENE_MAIN_REPO` is set — the
  * main checkout and exit 0 only where it resolved one and found no marker there, and otherwise a
  * non-zero exit with nothing on stdout — and refuses the one accepted stricter case.** That stricter
  * case — a registered clone carrying a non-empty `config.worktree` (an empty one is the shape
@@ -19,7 +19,7 @@
  * RED ONCE — 2026-10-30, each mutation made only on a throwaway copy of the script and `lib/` under
  * the system temp root (or of the template text in memory), run once against a scratch copy of this
  * file pointed at it, and never committed:
- * - the anchor case: the copy printing `HARNESS_MAIN_REPO` and exiting 0 when it is set — the
+ * - the anchor case: the copy printing `DEVSCENE_MAIN_REPO` and exiting 0 when it is set — the
  *   anchored run differed from the unanchored one in every layout case and the no-git case.
  * - the unregistered clone and the stricter case: `hr_clone_target_check_var` replaced by `true` in
  *   the copy — `unregisteredClone`, both planted clones and the jq-less `registeredClone` printed the

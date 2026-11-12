@@ -54,10 +54,10 @@ const CONFIG = {
   qa: { credentialsPath: CREDS },
 };
 const CREDENTIALS = [
-  'HARNESS_QA_1_EMAIL=one@example.invalid',
-  'HARNESS_QA_1_PASSWORD=x',
-  'HARNESS_QA_2_EMAIL=two@example.invalid',
-  'HARNESS_QA_2_PASSWORD=x',
+  'DEVSCENE_QA_1_EMAIL=one@example.invalid',
+  'DEVSCENE_QA_1_PASSWORD=x',
+  'DEVSCENE_QA_2_EMAIL=two@example.invalid',
+  'DEVSCENE_QA_2_PASSWORD=x',
   '',
 ].join('\n');
 

@@ -561,7 +561,7 @@ sp__parity_q() {
 sp__parity_launch() {
   local line arg
   sp_launch_args "$1" dontAsk "$SP__PARITY_CLONE" "$SP__PARITY_MAIN" "$SP__PARITY_STATE"
-  line="HARNESS_MAIN_REPO=$(sp__parity_q "$SP__PARITY_MAIN") claude"
+  line="DEVSCENE_MAIN_REPO=$(sp__parity_q "$SP__PARITY_MAIN") claude"
   for arg in "${SP_LAUNCH_ARGS[@]}" --allowedTools "$2"; do
     line="$line $(sp__parity_q "$arg")"
   done
@@ -572,7 +572,7 @@ sp__parity_launch() {
 # placeholders, as a preview; sp_leg_headless_parity passes the live paths.
 #
 # THE LAUNCH LINES MIRROR THE HEADLESS ONES. Each carries what sp_session launches with, from the same
-# sp_launch_args: HARNESS_MAIN_REPO, --settings, --permission-mode dontAsk, --model and --effort when the
+# sp_launch_args: DEVSCENE_MAIN_REPO, --settings, --permission-mode dontAsk, --model and --effort when the
 # configuration names them, and both --add-dir entries (<clone>, <main>/<stateDir>); then the
 # `--allowedTools` rule of the headless leg it stands for, read from the values those legs launch with
 # (SP__NET_UNLISTED_CMD, SP_DD_RULE), so the two cannot drift. Left out, because an interactive session

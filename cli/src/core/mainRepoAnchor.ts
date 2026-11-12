@@ -7,20 +7,20 @@
  * {@link MAIN_REPO_ANCHOR_READ}, and **no unsandboxed outer-loop script reads it**: an assignment
  * prefix on an excluded call could set it, so a script running outside the sandbox would be trusting
  * a value any caller can choose. The name is spelled here and nowhere else in `cli/src`
- * (`grep -rn HARNESS_MAIN_REPO cli/src`); every other module takes it through an import.
+ * (`grep -rn DEVSCENE_MAIN_REPO cli/src`); every other module takes it through an import.
  *
  * The mirrors outside that scope, which cannot import and must spell the same literal —
- * `git grep -n HARNESS_MAIN_REPO`, run from the repository root, reaches all of them, together with
+ * `git grep -n DEVSCENE_MAIN_REPO`, run from the repository root, reaches all of them, together with
  * the worked example's rendered profile and the documents that quote the name:
  *
  * - `cli/templates/scripts/autonomous-watcher.sh` → `spawn_engine`'s
- *   `export HARNESS_MAIN_REPO="$MAIN_REPO"`, which sets it for every session the watcher launches;
+ *   `export DEVSCENE_MAIN_REPO="$MAIN_REPO"`, which sets it for every session the watcher launches;
  * - `plugin/hooks/lib/harness-config-lib.sh` → `hc_main_root`;
  * - the plugin's `<MAIN_REPO>` resolution row and clause, which are prose.
  */
 
 /** The environment variable the watcher sets to the main checkout's absolute root. */
-export const MAIN_REPO_ANCHOR_VARIABLE = 'HARNESS_MAIN_REPO';
+export const MAIN_REPO_ANCHOR_VARIABLE = 'DEVSCENE_MAIN_REPO';
 
 /** The one command a plugin reader runs to read the anchor: bare, so one literal rule matches it. */
 export const MAIN_REPO_ANCHOR_READ = `printenv ${MAIN_REPO_ANCHOR_VARIABLE}`;

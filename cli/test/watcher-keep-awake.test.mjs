@@ -141,7 +141,7 @@ async function keepAwakeFixture(t, { keepAwake } = {}) {
   await w.setStub(engineBody());
 
   const env = () => ({
-    HARNESS_GH_CLI: ghStub,
+    DEVSCENE_GH_CLI: ghStub,
     STUB_LOG: join(rec, 'gh.log'),
     GITHUB_ACTIONS: '',
     HR_POWER_SUPPLY_DIR: power,

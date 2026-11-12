@@ -66,6 +66,7 @@ import {
   type JobSurfacesTarget,
 } from '../doctor/checks.js';
 import { NOTIFY_SCRIPT_NAME, outerLoopScriptPath } from '../generators/outerLoopScripts.js';
+import { RUNNER_VARIABLE } from '../remote/githubActions.js';
 import type { CommandContext, Subcommand } from './registry.js';
 
 /** The command's one-line summary, in the usage block and at the head of its own `--help`. */
@@ -210,7 +211,7 @@ const DOCTOR_USAGE: readonly string[] = Object.freeze([
   `${CHECK_GITHUB_FLAG} is off by default for the same reason. With it on and execution.target`,
   'github-actions, remote-github asks gh whether it is authenticated, whether GitHub knows',
   'devscene-run.yml and devscene-resume.yml, which secret names are set (names only, never values) and',
-  'which runner HARNESS_RUNNER selects. A call that times out or cannot reach GitHub warns rather than',
+  `which runner ${RUNNER_VARIABLE} selects. A call that times out or cannot reach GitHub warns rather than`,
   'fails. Every call is a read, so --dry-run does not suppress it either. With forge github,',
   "branch-protection reads each protected branch's ruleset rules, and its classic branch protection",
   'where those fall short; every read is a GET. Without the flag that check warns that it did not',

@@ -43,7 +43,7 @@
 #      `switch --discard-changes` discards only the probe's own edits.
 #   6. `doctor --remote-job` exits non-zero (the first `!! FAIL` line is named), or prints no PASS line
 #      for one of the four ids above. Its command: SANDBOX_PROBE_DOCTOR in <main>; else, when
-#      HARNESS_CLI_VERSION is set, `npx --yes devscene@<version> doctor --cwd <main>
+#      DEVSCENE_CLI_VERSION is set, `npx --yes devscene@<version> doctor --cwd <main>
 #      --remote-job` from SP_TMP, as the job runs it from runner.temp; else the probe checkout's own
 #      cli/dist/cli.js with the same arguments. Sets SP_JOB_DOCTOR_OUT (its whole output) and
 #      SP_JOB_PREREQ_LINE (its sandbox-prerequisites line, verbatim).
@@ -60,7 +60,7 @@
 #   SANDBOX_PROBE_DOCTOR     a command line run by `bash -c` in <main>, replacing
 #                            `node <main>/cli/dist/cli.js doctor`, and in job mode the
 #                            `doctor --remote-job` command
-#   SANDBOX_PROBE_AGENT_CLI  replaces `claude`, as HARNESS_AGENT_CLI does for the watcher
+#   SANDBOX_PROBE_AGENT_CLI  replaces `claude`, as DEVSCENE_AGENT_CLI does for the watcher
 #   SANDBOX_PROBE_BWRAP      replaces `bwrap` in check 6 under `absent` (platform.sh → sp_prereq_cmd)
 #   SANDBOX_PROBE_SOCAT      replaces `socat` likewise
 #
@@ -344,9 +344,9 @@ sp__preflight_job_doctor() {
   if [ -n "${SANDBOX_PROBE_DOCTOR:-}" ]; then
     SP_JOB_DOCTOR_OUT="$(cd "$SP_MAIN" && bash -c "$SANDBOX_PROBE_DOCTOR" 2>&1)"
     rc=$?
-  elif [ -n "${HARNESS_CLI_VERSION:-}" ]; then
+  elif [ -n "${DEVSCENE_CLI_VERSION:-}" ]; then
     # From SP_TMP, never the checkout, as the job runs it from runner.temp.
-    SP_JOB_DOCTOR_OUT="$(cd "$SP_TMP" && npx --yes "devscene@$HARNESS_CLI_VERSION" doctor --cwd "$SP_MAIN" --remote-job 2>&1)"
+    SP_JOB_DOCTOR_OUT="$(cd "$SP_TMP" && npx --yes "devscene@$DEVSCENE_CLI_VERSION" doctor --cwd "$SP_MAIN" --remote-job 2>&1)"
     rc=$?
   else
     cli_js="$SP__JOB_PROBE_TOP/cli/dist/cli.js"

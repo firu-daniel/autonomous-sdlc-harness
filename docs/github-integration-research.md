@@ -92,7 +92,7 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
   - `gh api -X PUT repos/$REPO/contents/.github/workflows/probe-api.yml` → `{"message":"Resource not accessible by integration","documentation_url":"https://docs.github.com/rest/repos/contents#create-or-update-file-contents","status":"403"}`.
 
 **Consequence:**
-- `feat_forge_run_triggers`: its lead holds. A trigger job that cuts a branch from the default branch and commits only a task prompt pushes with `GITHUB_TOKEN`. The existing remote-run limit is confirmed: a run whose task edits a workflow file cannot push it without a workflows-capable `HARNESS_GIT_TOKEN`, and the push fails with the message above.
+- `feat_forge_run_triggers`: its lead holds. A trigger job that cuts a branch from the default branch and commits only a task prompt pushes with `GITHUB_TOKEN`. The existing remote-run limit is confirmed: a run whose task edits a workflow file cannot push it without a workflows-capable `DEVSCENE_GIT_TOKEN`, and the push fails with the message above.
 - `feat_github_native_adoption`: the open question it must settle first is settled — a setup or upgrade job running under `GITHUB_TOKEN` can never write `devscene-run.yml`, `devscene-resume.yml` or a trigger workflow, so the first workflow file always needs a person or a token with workflow permission (S2).
 
 ### S2. Which tokens can write workflow files — a fine-grained PAT, a classic PAT, a GitHub App installation token, a Codespace's token? How does each expire, and how is each created?
@@ -118,7 +118,7 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 
 **Consequence:**
 - `feat_github_native_adoption`: candidate (a)'s cost is one more secret, and the token's lifetime is the adopter's choice rather than a forced expiry. Candidate (c)'s token lives an hour and is minted by whoever holds the app's private key (A6). Candidate (d) is confirmed for Codespaces: the codespace's own token pushes workflow files with no extra configuration (A9).
-- `feat_forge_run_control`: `HARNESS_GIT_TOKEN`, if it is to open PRs or push workflow edits, is a fine-grained PAT with Contents, Pull requests and (for workflow files) Workflows write, or a classic PAT with `repo` and `workflow`.
+- `feat_forge_run_control`: `DEVSCENE_GIT_TOKEN`, if it is to open PRs or push workflow edits, is a fine-grained PAT with Contents, Pull requests and (for workflow files) Workflows write, or a classic PAT with `repo` and `workflow`.
 
 ### S3. Which events raised with `GITHUB_TOKEN` start other workflows, and which do not — pushes, PR creation, comments, labels?
 
@@ -133,7 +133,7 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 - Measurement, Gate 12, 2026-09-30 10:14 UTC: the draft PR #2, opened with `GITHUB_TOKEN` (C3), created listener run `36701163631` with event `pull_request`, actor `github-actions[bot]`, status `completed` and conclusion `action_required`.
 
 **Consequence:**
-- `feat_forge_run_control`: the lead *"A PR opened, or a push made, with `GITHUB_TOKEN` starts no other workflow, so the adopter's CI does not run on the draft PR"* is out of date for the PR. A draft PR opened with `GITHUB_TOKEN` gets CI runs that wait for a person to approve them; a PR opened with `HARNESS_GIT_TOKEN` (a PAT or app token) gets them without approval. The push part holds. Lifecycle and park comments the harness posts with `GITHUB_TOKEN` will never re-trigger its own `issue_comment` workflow, which answers part of "never triggers itself"; a comment posted with `HARNESS_GIT_TOKEN` would trigger it and needs the self-filter the prompt asks for.
+- `feat_forge_run_control`: the lead *"A PR opened, or a push made, with `GITHUB_TOKEN` starts no other workflow, so the adopter's CI does not run on the draft PR"* is out of date for the PR. A draft PR opened with `GITHUB_TOKEN` gets CI runs that wait for a person to approve them; a PR opened with `DEVSCENE_GIT_TOKEN` (a PAT or app token) gets them without approval. The push part holds. Lifecycle and park comments the harness posts with `GITHUB_TOKEN` will never re-trigger its own `issue_comment` workflow, which answers part of "never triggers itself"; a comment posted with `DEVSCENE_GIT_TOKEN` would trigger it and needs the self-filter the prompt asks for.
 - `feat_forge_run_triggers`: the trigger job's comment on the issue, and its branch push, start no other workflow; its `workflow_dispatch` of `devscene-run.yml` does.
 - `feat_github_native_adoption`: a setup PR opened with `GITHUB_TOKEN` shows the adopter an **Approve workflows to run** banner for their CI.
 
@@ -599,7 +599,7 @@ The count uses the unit `feat_github_native_adoption` set, from a repository wit
 | R1 Local install (today) | plugin marketplace add, plugin install, `init`, `config set execution.target`, `git add`, commit, `gh auth refresh -s workflow`, push, API key, secret, label an issue | 11 | no | `README.md`; [`remote-execution.md`](remote-execution.md) → `## 7. Turning it on` |
 | R2 Codespace setup | create codespace, install Claude Code, plugin commands, sign-in URL, sign-in code, `init` + `config set`, commit, push, open PR, merge, API key, secret, delete codespace, label an issue | 14 | no | A9, S2 |
 | R3 Prefilled thin callers + setup job | open link 1, commit, open link 2 (the poller needs its own file, A3), commit, API key, secret, PR setting (S4), **Run workflow** on setup, merge its PR, label an issue | 10 | no | A1, A3, A4, S1, S4 |
-| R4 Workflow-scoped PAT + setup job | open link, commit, create fine-grained PAT, `HARNESS_GIT_TOKEN` secret, API key, secret, **Run workflow** on setup, merge its PR, label an issue | 9 | no | S1, S2, A4 |
+| R4 Workflow-scoped PAT + setup job | open link, commit, create fine-grained PAT, `DEVSCENE_GIT_TOKEN` secret, API key, secret, **Run workflow** on setup, merge its PR, label an issue | 9 | no | S1, S2, A4 |
 | R5 Harness-hosted GitHub App | open install link, install, merge the app's setup PR, API key, secret, label an issue | 6 | yes: a server and a private key for every installation | A6 |
 | R6 Adopter-registered GitHub App | register app, generate key, install, key secret, client-ID variable, open link, commit, API key, secret, **Run workflow** on setup, merge, label an issue | 12 | no | A6 |
 | R7 Claude GitHub App | not applicable: installs `claude.yml`, not the harness | — | — | A8 |

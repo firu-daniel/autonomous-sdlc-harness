@@ -290,7 +290,7 @@ test("a remote-run.sh stop racing the watcher's writes loses neither, every roun
   writeFileSync(stub, "#!/usr/bin/env node\nif (process.argv.slice(2).join(' ').startsWith('run list')) process.stdout.write('[]');\n", { mode: 0o755 });
   const registry = join(logsDir, 'registry.json');
   const env = {
-    HARNESS_GH_CLI: stub,
+    DEVSCENE_GH_CLI: stub,
     AUTO_TAIL_TERMINAL: '0',
     USAGE_LANE_STATE_ENABLED: '0',
     USAGE_LANE_LOCK_ENABLED: '0',

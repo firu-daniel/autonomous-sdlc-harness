@@ -6,7 +6,7 @@
 # Usage: start-dev-server.sh [port] [argument...]
 # The port is optional and must be numeric when it is given; anything else is a usage error, so a
 # mistyped port can never be passed through as a flag. It reaches the command on one channel only,
-# exported as HARNESS_DEV_SERVER_PORT: it is shifted off before the remaining arguments are
+# exported as DEVSCENE_DEV_SERVER_PORT: it is shifted off before the remaining arguments are
 # forwarded, so the raw command line below is never handed the port positionally. A server that
 # takes its port only as an argument has to be given that variable on the raw line below.
 #
@@ -39,7 +39,7 @@ if [ -n "$port" ]; then
       ;;
   esac
   shift
-  export HARNESS_DEV_SERVER_PORT="$port"
+  export DEVSCENE_DEV_SERVER_PORT="$port"
 fi
 
 # Anchor to the repository root, derived from this script's own location and never from the

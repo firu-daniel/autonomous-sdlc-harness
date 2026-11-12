@@ -63,7 +63,7 @@
 # as an absent credentials file, so no new outcome is invented for it.
 #
 # THE KEY CONVENTION THIS ENUMERATION DEPENDS ON. Accounts are keyed
-# `HARNESS_QA_<n>_*` and slot <n> exists when `HARNESS_QA_<n>_EMAIL=` carries a
+# `DEVSCENE_QA_<n>_*` and slot <n> exists when `DEVSCENE_QA_<n>_EMAIL=` carries a
 # non-empty value on its own line — a commented-out or valueless block is not a
 # configured account. That prefix is the one the generated credentials template
 # ships (`cli/templates/claude/qa-accounts.env.example`, "Add accounts by
@@ -74,7 +74,7 @@
 #
 # WHY THE LOCKS LIVE IN THE MAIN CHECKOUT'S STATE DIRECTORY. The lock set is
 # `<main>/<stateDir>/qa_user_locks/`, where <main> is the repository's MAIN
-# checkout (`hc_main_root_var`: the `HARNESS_MAIN_REPO` anchor when it is set
+# checkout (`hc_main_root_var`: the `DEVSCENE_MAIN_REPO` anchor when it is set
 # and usable; else, in a run clone, the main checkout its
 # `objects/info/alternates` names and whose run registry records this clone at
 # this path, or a refusal; else the `git rev-parse --git-common-dir` answer —
@@ -124,7 +124,7 @@
 #
 # REPRO — reproduce any decision by hand. <repo> is a checkout that has adopted
 # the harness with `phases.qa: true`, `qa.credentialsPath` set, and a
-# credentials file holding `HARNESS_QA_1_EMAIL=` and `HARNESS_QA_2_EMAIL=`:
+# credentials file holding `DEVSCENE_QA_1_EMAIL=` and `DEVSCENE_QA_2_EMAIL=`:
 #
 #   cd <repo> && bash <plugin>/scripts/reserve-qa-user.sh [slot]
 #
@@ -141,7 +141,7 @@
 #   `qa.credentialsPath` unset, or the credentials file absent/empty -> exit 1
 #
 #   from a `git clone --shared <main> <clone>`, anchored:
-#     cd <clone> && HARNESS_MAIN_REPO=<main> bash <plugin>/scripts/reserve-qa-user.sh
+#     cd <clone> && DEVSCENE_MAIN_REPO=<main> bash <plugin>/scripts/reserve-qa-user.sh
 #                                   -> the slot is parked under
 #                                      <main>/<stateDir>/qa_user_locks, not the clone's
 #   the same clone, anchor unset    -> parked under <main>'s lock set when <main>'s
@@ -219,12 +219,12 @@ if [ ! -s "$creds" ]; then
 fi
 
 # --- the configured slots (ascending) ---------------------------------------
-# Slot <n> is the `HARNESS_QA_<n>_EMAIL=` block with a non-empty value. Only
+# Slot <n> is the `DEVSCENE_QA_<n>_EMAIL=` block with a non-empty value. Only
 # which slots exist is read here; no value is ever read or printed.
 
 slots=()
-for n in $(grep -Eo '^HARNESS_QA_[0-9]+_EMAIL=.+' "$creds" \
-  | sed -E 's/^HARNESS_QA_([0-9]+)_EMAIL=.*/\1/' | sort -un); do
+for n in $(grep -Eo '^DEVSCENE_QA_[0-9]+_EMAIL=.+' "$creds" \
+  | sed -E 's/^DEVSCENE_QA_([0-9]+)_EMAIL=.*/\1/' | sort -un); do
   slots+=("$n")
 done
 if [ "${#slots[@]}" -eq 0 ]; then

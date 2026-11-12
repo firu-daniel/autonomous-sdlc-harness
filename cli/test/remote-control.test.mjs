@@ -4,10 +4,10 @@
  *
  * **The rule these tests exist to enforce: only the handle as the first word of the first line,
  * followed by a command verb, is a command — any other mention of the handle is
- * `remote-control-mention.test.mjs`'s — only a write-or-admin human `HARNESS_RUN_ACTORS` admits or a listed bot is obeyed, the
+ * `remote-control-mention.test.mjs`'s — only a write-or-admin human `DEVSCENE_RUN_ACTORS` admits or a listed bot is obeyed, the
  * harness's own comments and every pull request from a fork are never acted on, and a refusal always
  * replies.** Each ignored shape is driven and asserted to call no `gh` at all; each refusal arm —
- * `HARNESS_REMOTE_STOP`, the coupling off, a `read` answer, a failed permission call, a writer the list
+ * `DEVSCENE_REMOTE_STOP`, the coupling off, a `read` answer, a failed permission call, a writer the list
  * does not admit, `ghost`, an unlisted bot, an unknown verb, a fork, a head
  * with neither a task prompt, the ledger nor a `harness run` in flight, a protected branch, an issue with no genuine
  * start, an issue whose started branch is gone from origin — is asserted to send no `workflow run` and
@@ -17,7 +17,7 @@
  *
  * The fixture is `remote-report.test.mjs`'s shape — `init`, `execution.target` `github-actions`, `forge`
  * `github`, the adopted tree pushed to the fixture's bare `origin`, and `feat_x` pushed carrying its task
- * prompt (naming issue 7) and its flow-progress ledger. `gh` is a stub reached through `HARNESS_GH_CLI`:
+ * prompt (naming issue 7) and its flow-progress ledger. `gh` is a stub reached through `DEVSCENE_GH_CLI`:
  * it logs each argument vector with the content of any `body=@<path>`, answers `pr view` from `STUB_PR`
  * (by default a same-repository `OPEN` pull request with head `feat_x`), `pr list` from `STUB_PRS`, the
  * paginated comment listing from `STUB_COMMENTS` (raw API objects, projected as the `--jq` asks), the
@@ -205,7 +205,7 @@ async function controlFixture(t, { forge = 'github', ledger: ledgerText = '# Pro
       const issue = { number, ...(pr ? { pull_request: { url: `https://api.github.com/repos/${REPOSITORY}/pulls/${number}` } } : {}) };
       writeFileSync(eventPath, JSON.stringify({ action, comment: { body }, issue, sender: { login, type } }));
       return runBash(dir, [SCRIPT, 'control'], {
-        HARNESS_GH_CLI: stub,
+        DEVSCENE_GH_CLI: stub,
         STUB_LOG: log,
         GITHUB_EVENT_NAME: 'issue_comment',
         GITHUB_EVENT_PATH: eventPath,
@@ -213,12 +213,12 @@ async function controlFixture(t, { forge = 'github', ledger: ledgerText = '# Pro
         GITHUB_SERVER_URL: 'https://github.com',
         GITHUB_RUN_ID: '',
         RUNNER_TEMP: runnerTemp,
-        HARNESS_REMOTE_STOP: '',
-        HARNESS_TRIGGER_ALLOWED_BOTS: '',
-        HARNESS_RUN_ACTORS: '*',
+        DEVSCENE_REMOTE_STOP: '',
+        DEVSCENE_TRIGGER_ALLOWED_BOTS: '',
+        DEVSCENE_RUN_ACTORS: '*',
         GITHUB_RUN_ATTEMPT: '',
         GITHUB_TRIGGERING_ACTOR: '',
-        HARNESS_TRIGGER_LABEL: '',
+        DEVSCENE_TRIGGER_LABEL: '',
         STUB_PERMISSIONS: JSON.stringify({ alice: 'write' }),
         STUB_PR: '',
         STUB_PRS: '',
@@ -323,7 +323,7 @@ test('a read answer is refused with one reply and no dispatch', async (t) => {
   const result = await f.control('@dev-scene pause', {}, { STUB_PERMISSIONS: JSON.stringify({ alice: 'read' }) });
   const reply = assertRefused(f, result, /permission of @alice as read/);
   assert.match(reply.body, /^@alice: `pause` was not run: /);
-  assert.match(reply.body, /HARNESS_TRIGGER_ALLOWED_BOTS/);
+  assert.match(reply.body, /DEVSCENE_TRIGGER_ALLOWED_BOTS/);
 });
 
 test('a failed permission call is refused, never a pass', async (t) => {
@@ -332,26 +332,26 @@ test('a failed permission call is refused, never a pass', async (t) => {
   assertRefused(f, result, /permission check for @alice failed/);
 });
 
-test('a write commenter HARNESS_RUN_ACTORS does not admit is refused naming the list', async (t) => {
+test('a write commenter DEVSCENE_RUN_ACTORS does not admit is refused naming the list', async (t) => {
   const f = await controlFixture(t);
   const result = await f.control('@dev-scene pause', { login: 'bob' }, {
-    HARNESS_RUN_ACTORS: 'alice',
+    DEVSCENE_RUN_ACTORS: 'alice',
     STUB_PERMISSIONS: JSON.stringify({ alice: 'write', bob: 'write' }),
   });
-  const reply = assertRefused(f, result, /@bob is not on the repository variable HARNESS_RUN_ACTORS/);
+  const reply = assertRefused(f, result, /@bob is not on the repository variable DEVSCENE_RUN_ACTORS/);
   assert.match(reply.body, /^@bob: `pause` was not run: /);
-  assert.match(reply.body, /whom the repository variable `HARNESS_RUN_ACTORS` admits \(when unset, the owner alone of a repository a personal account owns, and nobody in an organisation-owned one\)/);
+  assert.match(reply.body, /whom the repository variable `DEVSCENE_RUN_ACTORS` admits \(when unset, the owner alone of a repository a personal account owns, and nobody in an organisation-owned one\)/);
 });
 
-test('HARNESS_RUN_ACTORS entries are trimmed and matched case-insensitively', async (t) => {
+test('DEVSCENE_RUN_ACTORS entries are trimmed and matched case-insensitively', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@dev-scene pause', {}, { HARNESS_RUN_ACTORS: ' ALICE ' });
+  const result = await f.control('@dev-scene pause', {}, { DEVSCENE_RUN_ACTORS: ' ALICE ' });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.deepEqual(dispatches(f.calls()).map((call) => call.line), [PAUSE_DISPATCH]);
 });
 
-test('a re-run of a command by a person HARNESS_RUN_ACTORS does not admit is refused', async (t) => {
-  const rerun = { HARNESS_RUN_ACTORS: 'alice', GITHUB_RUN_ATTEMPT: '2' };
+test('a re-run of a command by a person DEVSCENE_RUN_ACTORS does not admit is refused', async (t) => {
+  const rerun = { DEVSCENE_RUN_ACTORS: 'alice', GITHUB_RUN_ATTEMPT: '2' };
 
   const f = await controlFixture(t);
   const result = await f.control('@dev-scene pause', {}, { ...rerun, GITHUB_TRIGGERING_ACTOR: 'bob' });
@@ -374,14 +374,14 @@ test('ghost is refused', async (t) => {
 test('an unlisted bot is refused with no permission call', async (t) => {
   const f = await controlFixture(t);
   const result = await f.control('@dev-scene pause', { login: 'renovate[bot]', type: 'Bot' });
-  assertRefused(f, result, /not listed in HARNESS_TRIGGER_ALLOWED_BOTS/);
+  assertRefused(f, result, /not listed in DEVSCENE_TRIGGER_ALLOWED_BOTS/);
   assert.deepEqual(permissionCalls(f.calls()), []);
 });
 
-test('HARNESS_REMOTE_STOP refuses every command', async (t) => {
+test('DEVSCENE_REMOTE_STOP refuses every command', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@dev-scene pause', {}, { HARNESS_REMOTE_STOP: '1' });
-  assertRefused(f, result, /HARNESS_REMOTE_STOP/);
+  const result = await f.control('@dev-scene pause', {}, { DEVSCENE_REMOTE_STOP: '1' });
+  assertRefused(f, result, /DEVSCENE_REMOTE_STOP/);
   assert.deepEqual(permissionCalls(f.calls()), []);
 });
 

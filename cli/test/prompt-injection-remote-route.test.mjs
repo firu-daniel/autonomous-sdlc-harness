@@ -10,7 +10,7 @@
  * `restore <branch> --resume answer`'s, and the open-question set is the one `report parked` posts from.
  *
  * Not covered: a real job on GitHub. That check is the post-release follow-up the story index's
- * manual setup names; here every `gh` call goes to a recorder stub reached through `HARNESS_GH_CLI`,
+ * manual setup names; here every `gh` call goes to a recorder stub reached through `DEVSCENE_GH_CLI`,
  * the union of the stubs `cli/test/remote-report.test.mjs` and `cli/test/remote-run.test.mjs` drive:
  * it logs each argument vector with the content of any `body=@<path>`, answers `run list` from
  * `STUB_RUN_LIST`, a run's artifact list from `STUB_ARTIFACTS`, and materialises `STUB_BUNDLES` on
@@ -154,13 +154,13 @@ async function screen(verb, branch) {
 async function reportParked(branch) {
   const log = join(stubDir, `${branch}.report.log`);
   const result = await runBash(dir, [REMOTE, 'report', 'parked', branch], {
-    HARNESS_GH_CLI: stub,
+    DEVSCENE_GH_CLI: stub,
     STUB_LOG: log,
     GITHUB_REPOSITORY: REPOSITORY,
     GITHUB_SERVER_URL: 'https://github.com',
     GITHUB_RUN_ID: '',
     RUNNER_TEMP: join(stubDir, 'runner-temp'),
-    HARNESS_TRIGGER_LABEL: '',
+    DEVSCENE_TRIGGER_LABEL: '',
     STUB_RUN_LIST: '',
   });
   assert.equal(result.status, 0, result.stderr);
@@ -198,7 +198,7 @@ function restoreAnswers(branch, answers, bundles) {
     url: `https://github.com/${REPOSITORY}/actions/runs/${id}`,
   }));
   return runBash(dir, [REMOTE, 'restore', branch, '--resume', 'answer'], {
-    HARNESS_GH_CLI: stub,
+    DEVSCENE_GH_CLI: stub,
     STUB_LOG: join(stubDir, `${branch}.restore.log`),
     HARNESS_TRIGGER_LOOKUP_SECS: '0',
     GITHUB_RUN_ID: '999',

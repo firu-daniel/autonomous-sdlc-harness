@@ -72,7 +72,7 @@
 # --no-ext-diff --no-textconv` fed the list on stdin, are scanned by
 # `lib/harness-run-lib.sh` → `hr_stream_has_credential` against the values
 # `hr_credential_values_var` collects once: `GH_TOKEN`/`GITHUB_TOKEN`,
-# `HARNESS_PR_TOKEN`/`HARNESS_GIT_TOKEN`, each `http.*.extraheader` in the main
+# `HARNESS_PR_TOKEN`/`DEVSCENE_GIT_TOKEN`, each `http.*.extraheader` in the main
 # `.git/config`, the passwords in each file a `credential.*.helper` there of
 # exactly `store --file <absolute path>` names, and those in `$HOME/.git-credentials`
 # and the XDG credential file — each raw and as the base64 of

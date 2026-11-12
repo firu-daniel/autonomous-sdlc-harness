@@ -20,7 +20,7 @@
 #   issues, type `labeled` only, never `opened`: labelling an issue at creation
 #     raises `labeled` too, so listening to both would start twice
 #     (docs/github-integration-research.md, T1). The job runs only for the
-#     label the HARNESS_TRIGGER_LABEL variable names (`devscene` when
+#     label the DEVSCENE_TRIGGER_LABEL variable names (`devscene` when
 #     unset), and passes the job that same label, never an empty one;
 #     every other label yields a skipped job, which runs no runner and bills
 #     nothing (docs/remote-execution.md, `### Verified in Gate 12 round 2`).
@@ -33,8 +33,8 @@
 #     the authority.
 #
 # WHO CAN START A RUN. `remote-run.sh`'s `trigger` paragraph owns the check —
-# the labeller, bots and HARNESS_TRIGGER_ALLOWED_BOTS, the permission call, the
-# allow-list HARNESS_RUN_ACTORS, and the `repository_dispatch` sender check —
+# the labeller, bots and DEVSCENE_TRIGGER_ALLOWED_BOTS, the permission call, the
+# allow-list DEVSCENE_RUN_ACTORS, and the `repository_dispatch` sender check —
 # and the order its refusals are made in. Nothing here pre-filters on it.
 #
 # THE PERMISSIONS, declared because the default token may be read-only
@@ -48,7 +48,7 @@
 # credential secrets never reach the job that reads untrusted issue text.
 #
 # THE CHECKOUT. The default branch, with the job's own token and never
-# HARNESS_GIT_TOKEN: a branch pushed with GITHUB_TOKEN starts no workflow
+# DEVSCENE_GIT_TOKEN: a branch pushed with GITHUB_TOKEN starts no workflow
 # (docs/remote-execution.md, `### Verified in Gate 12 round 3`), so the prompt
 # commit does not run your CI. A full fetch, because pushing a new branch from
 # a shallow clone has not been measured anywhere. The checkout keeps the
@@ -74,11 +74,11 @@
 #     no token.
 #
 # DECLARED MIRRORS — a rename on either side is an edit to both:
-#   cli/src/remote/githubActions.ts   WORKFLOW_TRIGGER_FILE, HARNESS_RUNNER,
-#                                     HARNESS_REMOTE_STOP, HARNESS_TRIGGER_LABEL,
+#   cli/src/remote/githubActions.ts   WORKFLOW_TRIGGER_FILE, DEVSCENE_RUNNER,
+#                                     DEVSCENE_REMOTE_STOP, DEVSCENE_TRIGGER_LABEL,
 #                                     DEFAULT_TRIGGER_LABEL (`devscene`),
-#                                     HARNESS_TRIGGER_ALLOWED_BOTS,
-#                                     HARNESS_RUN_ACTORS,
+#                                     DEVSCENE_TRIGGER_ALLOWED_BOTS,
+#                                     DEVSCENE_RUN_ACTORS,
 #                                     TRIGGER_DISPATCH_EVENT_TYPE (`harness-task`)
 #   cli/src/config/model.ts           DEFAULTS.scriptsDir
 #
@@ -115,19 +115,19 @@ defaults:
 
 jobs:
   trigger:
-    if: github.event_name == 'repository_dispatch' || github.event.label.name == (vars.HARNESS_TRIGGER_LABEL || 'devscene')
-    runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    if: github.event_name == 'repository_dispatch' || github.event.label.name == (vars.DEVSCENE_TRIGGER_LABEL || 'devscene')
+    runs-on: ${{ vars.DEVSCENE_RUNNER || 'ubuntu-latest' }}
     permissions:
       contents: write
       actions: write
       issues: write
     env:
       GH_TOKEN: ${{ github.token }}
-      HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
+      DEVSCENE_REMOTE_STOP: ${{ vars.DEVSCENE_REMOTE_STOP }}
       HARNESS_REMOTE_SLUG: ${{ github.repository }}
-      HARNESS_TRIGGER_LABEL: ${{ vars.HARNESS_TRIGGER_LABEL || 'devscene' }}
-      HARNESS_TRIGGER_ALLOWED_BOTS: ${{ vars.HARNESS_TRIGGER_ALLOWED_BOTS }}
-      HARNESS_RUN_ACTORS: ${{ vars.HARNESS_RUN_ACTORS }}
+      DEVSCENE_TRIGGER_LABEL: ${{ vars.DEVSCENE_TRIGGER_LABEL || 'devscene' }}
+      DEVSCENE_TRIGGER_ALLOWED_BOTS: ${{ vars.DEVSCENE_TRIGGER_ALLOWED_BOTS }}
+      DEVSCENE_RUN_ACTORS: ${{ vars.DEVSCENE_RUN_ACTORS }}
     steps:
       - name: Check out the default branch
         # actions/checkout v7.0.1

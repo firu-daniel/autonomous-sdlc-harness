@@ -84,8 +84,8 @@ async function refusalFixture(t, { edit = () => {}, regenerate = false } = {}) {
     drop: () => writeFile(join(w.dir, INBOX, `${w.branch}_task_prompt.md`), 'do the thing\n', 'utf8'),
     tickWith: (sandboxProbe) =>
       sandboxProbe === undefined
-        ? w.tick({ HARNESS_GH_CLI: ghStub, STUB_LOG: ghLog })
-        : w.tick({ HARNESS_GH_CLI: ghStub, STUB_LOG: ghLog }, { sandboxProbe }),
+        ? w.tick({ DEVSCENE_GH_CLI: ghStub, STUB_LOG: ghLog })
+        : w.tick({ DEVSCENE_GH_CLI: ghStub, STUB_LOG: ghLog }, { sandboxProbe }),
     /** The inbox's drops: its `.processed/` archive and the `README.md` `init` writes are not drops. */
     inbox: () => readdirSync(join(w.dir, INBOX)).filter((name) => name !== '.processed' && name !== 'README.md'),
     archive: () => (existsSync(join(w.dir, ARCHIVE)) ? readdirSync(join(w.dir, ARCHIVE)) : []),

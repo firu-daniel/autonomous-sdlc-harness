@@ -121,7 +121,7 @@
 #   from a payload     cmd=$(hc_payload_command "$payload")
 #                      root=$(hc_resolve_repo_root "$cmd" "$(hc_payload_cwd "$payload")")
 #
-#   main checkout      HARNESS_MAIN_REPO=<a main checkout> bash -c '. <lib>; hc_main_root <any checkout>'
+#   main checkout      DEVSCENE_MAIN_REPO=<a main checkout> bash -c '. <lib>; hc_main_root <any checkout>'
 #                      -> the anchor's physical path; with the anchor unset, or set
 #                         to a directory that is not a main checkout, today's
 #                         common-dir answer for <any checkout> that is not a clone
@@ -659,7 +659,7 @@ hc_repo_root() {
 # directly, never inside `$(…)`, or the two variables are lost with the
 # subshell. Three arms, the first that applies deciding:
 #
-#   1. THE ANCHOR. `HARNESS_MAIN_REPO`, which the launcher sets, when it is an
+#   1. THE ANCHOR. `DEVSCENE_MAIN_REPO`, which the launcher sets, when it is an
 #      absolute directory whose `.git` is a directory free of `commondir`: that
 #      directory, for any <root>. An absent or unusable value falls through.
 #   2. THE CLONE ARM, taken when `<root>/.git` is a real directory and
@@ -700,7 +700,7 @@ hc_repo_root() {
 # No guard calls this function or `hc_main_root`, so no guard's decision
 # depends on the anchor or the registry; the QA-lock helpers do.
 hc_main_root_var() {
-  local root="${1-}" common="" anchor="${HARNESS_MAIN_REPO-}" root_c="" gd=""
+  local root="${1-}" common="" anchor="${DEVSCENE_MAIN_REPO-}" root_c="" gd=""
   local alt="" alt_line="" extra="" alt_c="" cand="" hf="" head_line="" branch=""
   local state_rel="" registry="" out="" kind="" wt="" wt_c="" want="" want_c=""
   HC_MAIN_ROOT=""

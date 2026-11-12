@@ -203,7 +203,7 @@ outside() { bash "$O/inspect.sh" "$1" "$O/entries.txt" "$C" "$M" "$SIB" >"$O/out
 session() { # <name> <prompt> [claude argument...]
   local name=$1 prompt=$2
   shift 2
-  (cd "$C" && exec env HARNESS_MAIN_REPO="$M" claude -p "$prompt" \
+  (cd "$C" && exec env DEVSCENE_MAIN_REPO="$M" claude -p "$prompt" \
     --settings "$SETTINGS" --permission-mode dontAsk --model "$MODEL" \
     --add-dir "$C" --add-dir "$S" \
     --allowedTools "Bash(git status:*)" \

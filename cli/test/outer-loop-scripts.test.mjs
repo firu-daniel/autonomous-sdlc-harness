@@ -2025,7 +2025,7 @@ test('the sweep bounds a hanging fetch and releases its output pipe', async (t) 
   const started = Date.now();
   const { stdout } = await runBash(dir, [join(dir, `${SCRIPTS_DIR}/cleanup-merged-worktrees.sh`)], {
     PATH: `${shims}:${process.env.PATH ?? ''}`,
-    HARNESS_FETCH_TIMEOUT: String(ceiling),
+    DEVSCENE_FETCH_TIMEOUT: String(ceiling),
   });
   const elapsed = (Date.now() - started) / 1000;
 
@@ -2102,7 +2102,7 @@ test('the sweep releases its output pipe on a bounded fetch when a terminal is a
   try {
     ({ stdout, stderr } = await runBash(dir, ['-c', outer], {
       PATH: `${shims}:${process.env.PATH ?? ''}`,
-      HARNESS_FETCH_TIMEOUT: String(ceiling),
+      DEVSCENE_FETCH_TIMEOUT: String(ceiling),
       PTY_SCRIPT: scriptBin,
       PTY_INNER: inner,
       PTY_SWEEP: join(dir, `${SCRIPTS_DIR}/cleanup-merged-worktrees.sh`),
@@ -2135,7 +2135,7 @@ test('the sweep releases its output pipe on a bounded fetch when a terminal is a
   );
 });
 
-test('a HARNESS_FETCH_TIMEOUT that is not a usable ceiling falls back to the default, never to unbounded', async (t) => {
+test('a DEVSCENE_FETCH_TIMEOUT that is not a usable ceiling falls back to the default, never to unbounded', async (t) => {
   const dir = await fixtureFor(t, { files: nodeProjectFiles() });
   await initOk(dir);
 
@@ -2148,7 +2148,7 @@ test('a HARNESS_FETCH_TIMEOUT that is not a usable ceiling falls back to the def
   // fires on the first poll, disabling the sweep for good. Both are in the table below.
   const sweep = text(dir, `${SCRIPTS_DIR}/cleanup-merged-worktrees.sh`);
   const clause = sweep.match(/^fetch_timeout=.*?^fi$/ms);
-  assert.ok(clause, 'the sweep carries no HARNESS_FETCH_TIMEOUT validation clause');
+  assert.ok(clause, 'the sweep carries no DEVSCENE_FETCH_TIMEOUT validation clause');
 
   // `probe` reports the resolved ceiling AND what the loop's own test says about it at waited=0:
   // `fires` means a ceiling that expires immediately, `never` a ceiling that can never expire.
@@ -2157,16 +2157,16 @@ if [ 0 -ge "$fetch_timeout" ] 2>/dev/null; then verdict=fires; elif [ 1 -ge "$fe
 printf '%s %s' "$fetch_timeout" "$verdict"`;
 
   for (const value of ['', 'abc', '0', '00', '000', '-5', '4x', '99999999999999999999', '3601']) {
-    const { stdout } = await runBash(dir, ['-c', probe], { HARNESS_FETCH_TIMEOUT: value });
+    const { stdout } = await runBash(dir, ['-c', probe], { DEVSCENE_FETCH_TIMEOUT: value });
     assert.equal(
       stdout,
       '60 bounded',
-      `HARNESS_FETCH_TIMEOUT='${value}' resolved to '${stdout}' instead of the bounded 60s default`,
+      `DEVSCENE_FETCH_TIMEOUT='${value}' resolved to '${stdout}' instead of the bounded 60s default`,
     );
   }
 
   for (const value of ['1', '5', '3600']) {
-    const { stdout } = await runBash(dir, ['-c', probe], { HARNESS_FETCH_TIMEOUT: value });
+    const { stdout } = await runBash(dir, ['-c', probe], { DEVSCENE_FETCH_TIMEOUT: value });
     assert.equal(stdout, `${value} bounded`, `a usable ceiling of ${value}s was not honoured: '${stdout}'`);
   }
 });

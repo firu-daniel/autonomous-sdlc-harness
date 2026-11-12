@@ -19,7 +19,7 @@
 #
 # THE LOCK SET IS THE ONE `reserve-qa-user.sh` DOCUMENTS:
 # `<main>/<stateDir>/qa_user_locks/`, where <main> is the repository's main
-# checkout (`hc_main_root_var`: the `HARNESS_MAIN_REPO` anchor when it is set
+# checkout (`hc_main_root_var`: the `DEVSCENE_MAIN_REPO` anchor when it is set
 # and usable; else, in a run clone, the main checkout its
 # `objects/info/alternates` names and whose run registry records this clone at
 # this path, or a refusal; else the `git rev-parse --git-common-dir` answer —
@@ -52,7 +52,7 @@
 #                              -> one stderr line, exit 0 (no main checkout)
 #
 #   from a `git clone --shared <main> <clone>`, anchored:
-#     cd <clone> && HARNESS_MAIN_REPO=<main> bash <plugin>/scripts/release-qa-user.sh <slot>
+#     cd <clone> && DEVSCENE_MAIN_REPO=<main> bash <plugin>/scripts/release-qa-user.sh <slot>
 #                              -> releases <main>/<stateDir>/qa_user_locks/<slot>,
 #                                 not the clone's
 #   the same clone, anchor unset

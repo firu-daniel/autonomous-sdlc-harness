@@ -4,7 +4,7 @@
  *
  * **The rule these tests exist to enforce: a round starts only when the branch is settled, not stopped,
  * has an open pull request and has a review requesting changes no earlier round recorded, by an author
- * not refused — a refused author including a writer `HARNESS_RUN_ACTORS` does not admit, whose items
+ * not refused — a refused author including a writer `DEVSCENE_RUN_ACTORS` does not admit, whose items
  * are dropped with one line while the rest of the round still starts; every other
  * outcome starts nothing and exits 0; and a `review` child that fails is told to the pull request in
  * exactly one comment, never retried.** A started round is asserted on origin's bytes — the `chore: add
@@ -197,15 +197,15 @@ async function collectFixture(t, { ledger = true } = {}) {
      */
     collect: (env = {}, args = []) =>
       runBash(dir, [SCRIPT, 'collect', 'feat_x', ...args], {
-        HARNESS_GH_CLI: stub,
+        DEVSCENE_GH_CLI: stub,
         STUB_LOG: log,
         GITHUB_REPOSITORY: REPOSITORY,
         GITHUB_SERVER_URL: 'https://github.com',
         GITHUB_RUN_ID: '',
         RUNNER_TEMP: runnerTemp,
-        HARNESS_REMOTE_STOP: '',
-        HARNESS_TRIGGER_ALLOWED_BOTS: '',
-        HARNESS_RUN_ACTORS: '*',
+        DEVSCENE_REMOTE_STOP: '',
+        DEVSCENE_TRIGGER_ALLOWED_BOTS: '',
+        DEVSCENE_RUN_ACTORS: '*',
         HARNESS_TRIGGER_LOOKUP_SECS: '0',
         STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false }]),
         STUB_RUN_LIST: JSON.stringify([THIS_RUN]),
@@ -273,15 +273,15 @@ test('settled, with one pending review: one round commit and one user_review dis
   assert.ok(note?.body.includes(`Round 1 from pull request #12 (https://github.com/${REPOSITORY}/pull/12) by @bob`), note?.body);
 });
 
-test('a writer HARNESS_RUN_ACTORS does not admit has their items dropped with one line, and the admitted round is still dispatched', async (t) => {
+test('a writer DEVSCENE_RUN_ACTORS does not admit has their items dropped with one line, and the admitted round is still dispatched', async (t) => {
   const f = await collectFixture(t);
   const result = await f.collect({
-    HARNESS_RUN_ACTORS: 'alice',
+    DEVSCENE_RUN_ACTORS: 'alice',
     STUB_PERMISSIONS: JSON.stringify({ alice: 'write', bob: 'write' }),
     STUB_PR_REVIEWS: JSON.stringify([review(5, 'alice'), review(6, 'bob')]),
   });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-  assert.match(result.stdout, /dropped 1 item\(s\) by @bob: @bob is not on the repository variable HARNESS_RUN_ACTORS/);
+  assert.match(result.stdout, /dropped 1 item\(s\) by @bob: @bob is not on the repository variable DEVSCENE_RUN_ACTORS/);
   assert.equal(await f.originSubject(), 'chore: add user review for feat_x');
   const round = await f.originFile(`${REVIEW_DIR}/feat_x_review.md`);
   assert.ok(round.startsWith('## Review by @alice\n\nReview 5 by alice.\n'), round);
@@ -333,11 +333,11 @@ test('a stop marker newer than the run: nothing', async (t) => {
   await assertNothing(f, result, before, /feat_x is stopped; no round started/);
 });
 
-test('HARNESS_REMOTE_STOP set: nothing, and no gh call', async (t) => {
+test('DEVSCENE_REMOTE_STOP set: nothing, and no gh call', async (t) => {
   const f = await collectFixture(t);
   const before = await f.originRefs();
-  const result = await f.collect({ HARNESS_REMOTE_STOP: '1' });
-  await assertNothing(f, result, before, /HARNESS_REMOTE_STOP is set; no round started/);
+  const result = await f.collect({ DEVSCENE_REMOTE_STOP: '1' });
+  await assertNothing(f, result, before, /DEVSCENE_REMOTE_STOP is set; no round started/);
   assert.deepEqual(f.calls(), []);
 });
 

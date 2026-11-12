@@ -3,7 +3,7 @@
  *
  * **The rule these tests exist to enforce: every remote-execution name has one owner,
  * `cli/src/remote/githubActions.ts`, and the one way this CLI runs `gh` honours the
- * `HARNESS_GH_CLI` test seam.** No case reaches the network: `gh` is always a stub under a
+ * `DEVSCENE_GH_CLI` test seam.** No case reaches the network: `gh` is always a stub under a
  * scratch directory, or a path that does not exist.
  */
 
@@ -124,11 +124,11 @@ test('remote-run.sh mirrors the run-control names byte for byte', () => {
 // The YAML and shell mirrors spell these byte for byte, so a rename must fail here first.
 test('the issue-trigger names keep their literal values', () => {
   assert.equal(WORKFLOW_TRIGGER_FILE, 'devscene-trigger.yml');
-  assert.equal(TRIGGER_LABEL_VARIABLE, 'HARNESS_TRIGGER_LABEL');
+  assert.equal(TRIGGER_LABEL_VARIABLE, 'DEVSCENE_TRIGGER_LABEL');
   assert.equal(DEFAULT_TRIGGER_LABEL, 'devscene');
-  assert.equal(TRIGGER_ALLOWED_BOTS_VARIABLE, 'HARNESS_TRIGGER_ALLOWED_BOTS');
+  assert.equal(TRIGGER_ALLOWED_BOTS_VARIABLE, 'DEVSCENE_TRIGGER_ALLOWED_BOTS');
   assert.equal(TRIGGER_DISPATCH_EVENT_TYPE, 'harness-task');
-  assert.equal(RUN_ACTORS_VARIABLE, 'HARNESS_RUN_ACTORS');
+  assert.equal(RUN_ACTORS_VARIABLE, 'DEVSCENE_RUN_ACTORS');
   assert.equal(RUN_ACTORS_EVERY_WRITER, '*');
 });
 
@@ -157,8 +157,8 @@ test('effectiveRunActors and runActorAdmitted apply the allow-list grammar', () 
 });
 
 test('carriesRunActors tells a workflow that reads the allow-list from one that does not', () => {
-  assert.equal(carriesRunActors('        env:\n          RUN_ACTORS: ${{ vars.HARNESS_RUN_ACTORS }}\n'), true);
-  assert.equal(carriesRunActors('        env:\n          RUNNER: ${{ vars.HARNESS_RUNNER }}\n'), false);
+  assert.equal(carriesRunActors('        env:\n          RUN_ACTORS: ${{ vars.DEVSCENE_RUN_ACTORS }}\n'), true);
+  assert.equal(carriesRunActors('        env:\n          RUNNER: ${{ vars.DEVSCENE_RUNNER }}\n'), false);
 });
 
 test('carriesMentionCredential tells a control workflow that passes the agent a credential from one that does not', () => {

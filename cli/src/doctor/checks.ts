@@ -2288,7 +2288,7 @@ const MACHINE_FOOTPRINT_CHECK: Check = {
 
 /**
  * The environment variable the run watcher reaches its agent binary through, and the name it falls
- * back to — `autonomous-watcher.sh`'s `AGENT_CLI="${HARNESS_AGENT_CLI:-claude}"`, the one place a
+ * back to — `autonomous-watcher.sh`'s `AGENT_CLI="${DEVSCENE_AGENT_CLI:-claude}"`, the one place a
  * run's engine binary is chosen.
  *
  * **It is read out of the installed unit, never out of this process.** A user agent inherits the
@@ -2298,7 +2298,7 @@ const MACHINE_FOOTPRINT_CHECK: Check = {
  * renders `PATH` and nothing else, so an unedited unit falls through to the default here just as the
  * watcher's `:-` does, and a unit an operator added the key to is graded against the CLI it names.
  */
-const AGENT_CLI_VARIABLE = 'HARNESS_AGENT_CLI';
+const AGENT_CLI_VARIABLE = 'DEVSCENE_AGENT_CLI';
 const DEFAULT_AGENT_CLI = 'claude';
 
 /** One binary an unattended run invokes by name, and every configured reason it has to. */
@@ -2495,7 +2495,7 @@ function commandHeads(config: HarnessConfig, repoRoot: string): CommandHeads {
  * outer-loop script runs; `jq`, which the generated `lib/harness-run-lib.sh` reaches every
  * configuration through and which {@link JQ_CHECK} already treats as a hard floor; and the agent CLI
  * above, whose name arrives as the installed unit's value — `undefined` or empty when the unit does
- * not set it, which is the default case because `${HARNESS_AGENT_CLI:-claude}` reads an empty value
+ * not set it, which is the default case because `${DEVSCENE_AGENT_CLI:-claude}` reads an empty value
  * as unset too. **A conditional fourth joins them only when {@link remoteExecutionApplies}:** the
  * binary run as `gh`, which `remote-run.sh` dispatches every remote run through. Its name is the
  * unit's own {@link GH_CLI_VARIABLE} value when set and non-empty, else {@link DEFAULT_GH_CLI}, on
@@ -3029,24 +3029,24 @@ function writersOf(stdout: string): { readonly logins: readonly string[]; readon
  *   ({@link WORKFLOWS_ENDPOINT}) because `gh workflow view` answers for an unparsed file too, as Gate 12
  *   round 7 observed. `devscene-trigger.yml` and `devscene-control.yml` are judged only when
  *   {@link forgeTriggerApplies}.
- * - `warn` — `HARNESS_PUSH_URL` absent; `devscene-resume.yml` unknown to GitHub; `HARNESS_REMOTE_STOP`
+ * - `warn` — `DEVSCENE_PUSH_URL` absent; `devscene-resume.yml` unknown to GitHub; `DEVSCENE_REMOTE_STOP`
  *   set; the workflow listing unread, or not reaching a judged harness workflow because the repository
  *   has more workflows than one page lists, so whether GitHub could parse it cannot be told; artifact retention below {@link ARTIFACT_RETENTION_WARN_DAYS} days; when
  *   {@link forgeTriggerApplies}, `devscene-trigger.yml` or `devscene-control.yml` unknown to GitHub, no
- *   label by the effective trigger name, or the pull-request setting off with no `HARNESS_GIT_TOKEN`
+ *   label by the effective trigger name, or the pull-request setting off with no `DEVSCENE_GIT_TOKEN`
  *   secret; and any call that timed out, could not reach GitHub, or answered in a shape not
  *   understood — *cannot tell* is not *missing*, so it never fails.
  * - the pull-request setting off while the secret list was unreadable is a *cannot tell* warning,
- *   never the missing-`HARNESS_GIT_TOKEN` one.
- * - the effective trigger label is `HARNESS_TRIGGER_LABEL`, else {@link DEFAULT_TRIGGER_LABEL}.
+ *   never the missing-`DEVSCENE_GIT_TOKEN` one.
+ * - the effective trigger label is `DEVSCENE_TRIGGER_LABEL`, else {@link DEFAULT_TRIGGER_LABEL}.
  * - both credential secrets present is a note, not a finding: billing follows `ANTHROPIC_API_KEY`.
- * - a non-empty `HARNESS_TRIGGER_ALLOWED_BOTS` is a note naming the bots, which start runs without a
+ * - a non-empty `DEVSCENE_TRIGGER_ALLOWED_BOTS` is a note naming the bots, which start runs without a
  *   permission check. When the trigger does not apply, no trigger, control or pull-request-setting
  *   read is made.
  * - the retention read refused (typically HTTP 403: the endpoint needs admin access) is a note too —
  *   the read is best-effort, and a collaborator without admin can still run remotely. A refused
  *   pull-request-setting read is a note on the same terms.
- * - the pull-request setting off with `HARNESS_GIT_TOKEN` set is a note: the `open` step at the run's
+ * - the pull-request setting off with `DEVSCENE_GIT_TOKEN` set is a note: the `open` step at the run's
  *   start opens the pull request with that token instead, and `deliver` opens one only when none is
  *   open at completion.
  * - all three trigger answers positive — both workflows known and the label present — is confirmed on
@@ -3056,7 +3056,7 @@ function writersOf(stdout: string): { readonly logins: readonly string[]; readon
  *   those reads — `gh` not runnable, no usable login, or no readable answer to the login probe — asks
  *   GitHub nothing about the trigger.
  * - who may start, steer, answer and review a run is {@link effectiveRunActors} of
- *   `HARNESS_RUN_ACTORS`, read only when the variable listing was. An unset list adds a read of the
+ *   `DEVSCENE_RUN_ACTORS`, read only when the variable listing was. An unset list adds a read of the
  *   repository's owner ({@link REPOSITORY_ENDPOINT}); any answer but a readable owner — refused, timed
  *   out, unreachable or an unread shape — is a *cannot tell* warning, and the list then grades as
  *   admitting nobody with no second warning. `*`, a list of logins, and an unset list in a user-owned
