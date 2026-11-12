@@ -11,7 +11,7 @@ __pycache__/
 
 # >>> devscene (managed block: this line to the next blank line; re-run init to extend it) >>>
 # Machine-local files this repository names by path but never commits. Each path is a
-# value in harness.config.json, so it is the same for everyone who clones, while the file
+# value in devscene.config.json, so it is the same for everyone who clones, while the file
 # it names never leaves the machine. Where one of these has a committed `.example`
 # sibling, that sibling is what a fresh clone copies from. The client env file is the one whose
 # DIRECTORY is the configured value (`appDir`) while its name is fixed: setup-worktree.sh symlinks
@@ -31,7 +31,7 @@ __pycache__/
 # offer. It lives at the main worktree's root and is checked there from every worktree of this
 # checkout, so one answer covers them all - its existence is the whole signal, so it has no
 # contents to commit.
-.claude/harness-no-offer
+.claude/devscene-no-offer
 # The run daemon's transcripts, event logs and run registry are machine-local. The
 # directory itself is committed, because its README is the contract for what belongs in
 # it, so the contents are ignored and that one file is excepted - an ignore rule on the
@@ -85,7 +85,7 @@ harness-runs/test_run_logs/*
 # adopter gets without asking for it: applying a layer split is the documented path, so without this
 # rule a wired repository carries an untracked file from its first `config set` onward. The leading
 # slash anchors it at the repository root, the only place the configuration is written.
-/harness.config.json.bak
+/devscene.config.json.bak
 # The copies `init --upgrade-workflows` and `init --force` take of the two remote-execution workflows
 # and of the permission profile. The upgrade's report names each workflow copy in a diff command, and
 # the profile copy carries this machine's absolute paths just as the profile does. Every other .bak a
