@@ -101,7 +101,7 @@ test('(a)-(e) docs index refreshes incrementally, deletes, and rebuilds on a new
 
   // (e) The rebuild's clear() is not counted as deletions.
   assert.equal(
-    await indexOk(dir, { ...env, AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB: 'hash-v2' }),
+    await indexOk(dir, { ...env, DEVSCENE_RETRIEVAL_STUB: 'hash-v2' }),
     'docs index: 2 files, 7 chunks; embedded 7, unchanged 0, deleted 0; rebuilt for a new embedder',
   );
 });
@@ -393,7 +393,7 @@ test('serve (g): a skipped corpus file becomes a note line on the tool result, d
 });
 
 /** The variable `cli/src/retrieval/queryLog.ts` owns; its only spelling outside that module. */
-const LOG_ENV = 'AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG';
+const LOG_ENV = 'DEVSCENE_RETRIEVAL_LOG';
 
 /**
  * The key set of one record, which the `feat_docs_retrieval_eval` branch reads as a contract: it is

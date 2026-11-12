@@ -686,8 +686,8 @@ test('the phase on with a mobile driver carries no browser wiring, while the bro
 });
 
 /** The docs-retrieval half's server and its one tool entry, spelled as the contract. */
-const DOCS_SERVER = 'harness-docs';
-const DOCS_TOOL_ENTRY = 'mcp__harness-docs__search_docs';
+const DOCS_SERVER = 'devscene-docs';
+const DOCS_TOOL_ENTRY = 'mcp__devscene-docs__search_docs';
 
 /**
  * The profile `init` generates over a seeded config carrying `phases.docs` and `docs.retrieval` as

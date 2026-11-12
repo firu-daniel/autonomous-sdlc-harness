@@ -710,7 +710,7 @@ const RETRIEVAL_MODEL_REVISIONS = Object.freeze({
  * @returns {Record<string, string>}
  */
 export function retrievalEnv(cacheHome) {
-  return { XDG_CACHE_HOME: cacheHome, AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB: 'hash-v1' };
+  return { XDG_CACHE_HOME: cacheHome, DEVSCENE_RETRIEVAL_STUB: 'hash-v1' };
 }
 
 /**

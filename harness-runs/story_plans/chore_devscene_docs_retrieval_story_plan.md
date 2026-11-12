@@ -65,7 +65,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_devscene_docs_retrieva
 
 1. [x] **Task 1** — Rename the server, Python command, variables and login in `cli/src/retrieval/` and the retrieval wiring templates _(layer: cli)_ _(points: 20)_
 2. [x] **Task 2** — Rename the retrieval names in the launcher, watcher and workflow templates under `cli/templates/` _(layer: cli)_ _(points: 15)_
-3. [ ] **Task 3** — Move the CLI test suites and the sandbox-probe fixtures to the new names _(layer: cli)_ _(points: 15)_
+3. [x] **Task 3** — Move the CLI test suites and the sandbox-probe fixtures to the new names _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — Rename `mcp__harness-docs__search_docs` in every agent allowlist and in `plugin/agents/README.txt` _(layer: plugin)_ _(points: 10)_
 5. [ ] **Task 5** — Rename the Python package to `devscene_docs_retrieval` / `devscene-docs-retrieval` and regenerate `uv.lock` _(layer: general)_ _(points: 20)_
 6. [ ] **Task 6** — Move the Python test suite to the renamed package, variables and login _(layer: general)_ _(points: 15)_
