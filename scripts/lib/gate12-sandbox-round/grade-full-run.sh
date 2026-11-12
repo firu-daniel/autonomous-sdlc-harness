@@ -2,12 +2,12 @@
 # grade-full-run.sh — `grade --full-run <branch>`: FR1-FR7 of docs/sandbox-verification.md -> ## 10.,
 # round step 6, from the hand-driven full run of observation (xvi). The full run is not in the state
 # file; only its branch is given. Each row reads exactly what its **Read from** names: the branch's
-# `devscene run<branch>` jobs through runs.sh, and, for FR4, the committed run-analytics.json. A
+# `devscene run <branch>` jobs through runs.sh, and, for FR4, the committed run-analytics.json. A
 # clause whose Read from is a source file prints a `source` line naming the file and symbol and is
 # not graded. grade-plant.sh's g12_grade_cmd calls g12_grade_full_run with a non-empty branch only;
 # this file uses that file's step names and its arm and fold helpers, and grade-state.sh's step names.
 #
-# THE JOBS. Oldest first, those whose title is `devscene run<branch>`:
+# THE JOBS. Oldest first, those whose title is `devscene run <branch>`:
 #   parked job   the first whose Run DevScene log carries `job: parked stop`
 #   resumed job  the first later one whose Run DevScene log carries
 #                `job: resuming parked run '<branch>' (answers `
@@ -48,7 +48,7 @@ g12_full_run_jobs() {
     g12_arm_set "not run" "the runs of $branch could not be listed (named on stderr)"
     return 1
   }
-  G12_FR_JOBS="$(jq -r --arg t "devscene run$branch" \
+  G12_FR_JOBS="$(jq -r --arg t "devscene run $branch" \
     '[.[] | select(.displayTitle == $t)] | sort_by(.createdAt) | .[] | "\(.databaseId)"' \
     <<<"$json" 2>/dev/null)" || {
     g12_refuse "gh run list --repo $G12_REPO --branch $branch printed what jq cannot read"
@@ -57,7 +57,7 @@ g12_full_run_jobs() {
     return 1
   }
   if [ -z "$G12_FR_JOBS" ]; then
-    g12_arm_set "not run" "no devscene run$branch run on $branch"
+    g12_arm_set "not run" "no devscene run $branch run on $branch"
     return 1
   fi
 }

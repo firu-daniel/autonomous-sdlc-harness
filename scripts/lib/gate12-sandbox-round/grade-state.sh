@@ -283,18 +283,18 @@ g12_sb2_save_clause() {
     "$G12_ARM_LOG"
 }
 
-# The next job is the first `devscene run<branch>` run created after the planted one.
+# The next job is the first `devscene run <branch>` run created after the planted one.
 g12_sb2_restore_clause() {
   local json next log rc
   json="$(gh run list --repo "$G12_REPO" --workflow devscene-run.yml --branch "$G12_SB2_BRANCH" \
     --json databaseId,displayTitle --limit 20 </dev/null)" ||
     { g12_refuse "gh run list --repo $G12_REPO --branch $G12_SB2_BRANCH failed"; G12_ARM_ID="$G12_SB2_ID"; g12_arm_gh_failed; return; }
-  next="$(jq -r --arg t "devscene run$G12_SB2_BRANCH" --argjson id "$G12_SB2_ID" \
+  next="$(jq -r --arg t "devscene run $G12_SB2_BRANCH" --argjson id "$G12_SB2_ID" \
     '[.[]? | select(.displayTitle == $t and .databaseId > $id) | .databaseId] | sort | first // empty' \
     <<<"$json" 2>/dev/null)" ||
     { g12_refuse "gh run list --repo $G12_REPO --branch $G12_SB2_BRANCH printed what jq cannot read"; G12_ARM_ID="$G12_SB2_ID"; g12_arm_gh_failed; return; }
   if [ -z "$next" ]; then
-    g12_arm_set "not run" "no later devscene run$G12_SB2_BRANCH run"
+    g12_arm_set "not run" "no later devscene run $G12_SB2_BRANCH run"
     return
   fi
   G12_ARM_ID="$next"
