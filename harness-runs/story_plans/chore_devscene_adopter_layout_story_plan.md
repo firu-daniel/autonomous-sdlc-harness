@@ -116,7 +116,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_adopter_layout/ta
 32. [x] **Task 31** — Respell the sandbox, guard and outer-loop verification records _(layer: general)_ _(points: 20)_
 33. [x] **Task 32** — Respell the retrieval, decision and research documents _(layer: general)_ _(points: 15)_
 34. [x] **Task 33** — Respell the work-report research documents _(layer: general)_ _(points: 10)_
-35. [ ] **Task 34** — Respell the example's live files and the examples README _(layer: general)_ _(points: 10)_
+35. [x] **Task 34** — Respell the example's live files and the examples README _(layer: general)_ _(points: 10)_
 36. [ ] **Task 35** — Respell this repository's `.gitignore` and `pre-push` hook, and run the closing check against the cutover and paste records _(layer: general)_ _(points: 15)_
 
 ## Scope register
