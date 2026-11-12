@@ -2,11 +2,11 @@
 
 ## Resolved values
 
-The tokens below are neither Mode-contract **bindings** (this file declares none — the `**Placeholder resolution.**` note below states where the ones it *uses* come from) nor ordinary **path placeholders** (`<branch>`, and the locally-defined counters `<n>` / `<N>`): they resolve from the adopting repository's `harness.config.json`, except `<MAIN_REPO>` and `<repo_root>`, which are derived at runtime. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
+The tokens below are neither Mode-contract **bindings** (this file declares none — the `**Placeholder resolution.**` note below states where the ones it *uses* come from) nor ordinary **path placeholders** (`<branch>`, and the locally-defined counters `<n>` / `<N>`): they resolve from the adopting repository's `devscene.config.json`, except `<MAIN_REPO>` and `<repo_root>`, which are derived at runtime. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `devscene/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory the generated wrapper scripts live in. The two scripts this file names by path, `commit-on-branch.sh` in `## Commit mechanics` and `push-branch.sh` in `## Push`, are outer-loop scripts rather than generated wrappers — they are named by their destination path, and the item that delivers them settles it. Both are invoked under `<MAIN_REPO>` rather than repo-relative, because the main checkout's copy is the one the unattended permission profile runs outside the sandbox. |
 | `<MAIN_REPO>` | derived at runtime | The main checkout — the path a bare `printenv DEVSCENE_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
 | `<repo_root>` | derived at runtime | The run-copy root this run executes in — the value the activating flow's `<repo_root>` binding gives and `$REPO_ROOT` holds. In the commit and push commands, spell it as a literal absolute path, never through a substitution or a variable. |

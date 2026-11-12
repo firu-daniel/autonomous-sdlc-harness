@@ -1,15 +1,15 @@
 # Docs phase — keep the "second brain" in sync with a shipped change (post-implementation, mode 2)
 
-**Skip this phase unless `phases.docs` is `true` in `harness.config.json`.**
+**Skip this phase unless `phases.docs` is `true` in `devscene.config.json`.**
 
 ## Resolved values
 
-The tokens below are neither Mode-contract **bindings** (this file declares none) nor ordinary **path placeholders** (`<branch>`, `<slug>`, `<i>`, `<n>`, `<doc_title>`, which this file's own text resolves): they resolve from the adopting repository's `harness.config.json`. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
+The tokens below are neither Mode-contract **bindings** (this file declares none) nor ordinary **path placeholders** (`<branch>`, `<slug>`, `<i>`, `<n>`, `<doc_title>`, which this file's own text resolves): they resolve from the adopting repository's `devscene.config.json`. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<docs_root>` | config value | `docs.root` — the repo-relative directory holding the documentation corpus this phase writes into. Read **only** when `phases.docs` is `true`, which is the same gate that decides whether this phase runs at all. |
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. Inside a git pathspec, substitute it with any trailing slash stripped: `sdlc-harness//*` matches no path, so the doubled separator makes an exclusion pathspec silently inert. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `devscene/`. Inside a git pathspec, substitute it with any trailing slash stripped: `devscene//*` matches no path, so the doubled separator makes an exclusion pathspec silently inert. It is never dot-named: no path segment of it may begin with a dot. |
 | `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory the generated wrapper scripts live in. This file uses the token **only** in the auto-skip rule's non-product-path list; it never invokes a commit or push wrapper by path — the runnable form lives in `${CLAUDE_PLUGIN_ROOT}/instructions/docs_orchestration_instructions_autonomous.md` → `## Commit mechanics (single source of truth)` and is not restated here. |
 | `<default_branch>` | config value | `defaultBranch` — the branch work starts from and merges back into, and therefore the diff base the auto-skip rule computes the branch's changed files against. |
 
