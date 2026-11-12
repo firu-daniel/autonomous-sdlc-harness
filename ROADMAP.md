@@ -144,7 +144,7 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | Interactive session vs harness run | One plain interactive session against one harness run, on a simple feature and on a complex one, compared on token cost, session duration and branch quality. Quality is measured by running the harness's branch review over both branches, so the interactive session's gaps — and the harness's own weak spots — show up the same way. Numbers stated in the README. | Open |
 | `init` warns when there is no remote | Without a remote, an in-place run reports done with every commit left local. `doctor` fails on it and the Done summary flags it; `init` should warn at setup too. | Open |
 | Guided default-branch change | One command that moves the integration line: sets `defaultBranch` and `protectedBranches` together, re-renders `githooks/pre-push`, checks that `origin/<branch>` exists, and refuses while runs are active, since work cut from the old base would be reviewed and refreshed against the new one. Today these are separate steps; `doctor` catches the stale hook and the missing remote branch, but not the runs in flight. | Open |
-| Adoption beside existing tooling (0.6.6) | New adoptions write their scripts to `harness-scripts/`, with `init --scripts-dir <dir>` to choose another; existing adoptions never move. The workflow templates pin every action to a commit SHA and grant least-privilege permissions per job. Shipped files pass `typos`. The `zizmor` findings that stand are listed with their reasons in [`docs/remote-execution.md`](docs/remote-execution.md) §11. | Done |
+| Adoption beside existing tooling (0.6.6) | New adoptions write their scripts to `devscene-scripts/`, with `init --scripts-dir <dir>` to choose another; existing adoptions never move. The workflow templates pin every action to a commit SHA and grant least-privilege permissions per job. Shipped files pass `typos`. The `zizmor` findings that stand are listed with their reasons in [`docs/remote-execution.md`](docs/remote-execution.md) §11. | Done |
 
 ## Security and containment
 
@@ -172,7 +172,7 @@ Parts of the harness extracted as products of their own.
 
 | Feature | What it is | Status |
 |---|---|---|
-| README summary and checklist | Open with three plain lines — what it is, what you get — and a five-step checklist: install, `init`, `/devscene:harness-analyze` (in Claude Code, not the terminal), `doctor`, start the daemon. Caveats move below it. | Done |
+| README summary and checklist | Open with three plain lines — what it is, what you get — and a five-step checklist: install, `init`, `/devscene:analyze` (in Claude Code, not the terminal), `doctor`, start the daemon. Caveats move below it. | Done |
 | Compact the README | Cut the README to what a new reader needs: short sentences, one idea per paragraph, and the long measured caveats moved into the docs they belong to, linked rather than inlined. | Done |
 | Threat model | Name what the guards protect against (agent mistakes, protected branches — via the deny floor, `git push` on ask, per-agent tool allowlists and the `PreToolUse` guards) and what they don't: allowed commands such as tests, builds and the dev server run agent-written code, which in an unattended run runs inside the sandbox, while the file tools, hooks, MCP servers, the four excluded scripts and the bootstrap's configured install and build commands run outside it ([`docs/sandbox-record.md`](docs/sandbox-record.md) §1, §2). Point to the sandbox or a container for what it does not cover. | Open |
 
