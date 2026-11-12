@@ -1,55 +1,55 @@
 {
   "branch": "chore_devscene_docs_retrieval",
   "run": {
-    "active_ms": 2796568,
+    "active_ms": 3302770,
     "api_retries": 0,
-    "cache_hit_ratio": 0.9583,
-    "cache_read_tokens": 39624765,
-    "cache_write_1h_tokens": 222786,
+    "cache_hit_ratio": 0.9567,
+    "cache_read_tokens": 47584268,
+    "cache_write_1h_tokens": 398080,
     "cache_write_5m_tokens": 0,
-    "cache_write_tokens": 1722475,
-    "complete_sessions": 1,
-    "duration_api_ms": 2490777,
-    "duration_ms": 2797935,
+    "cache_write_tokens": 2150436,
+    "complete_sessions": 2,
+    "duration_api_ms": 2956901,
+    "duration_ms": 3306023,
     "first_at": "2026-11-12T14:07:42.587Z",
     "host_suspended_ms": 0,
     "idle_ms": 0,
-    "input_tokens": 804,
-    "last_at": "2026-11-12T14:54:19.155Z",
+    "input_tokens": 1034,
+    "last_at": "2026-11-12T15:17:21.568Z",
     "network": {
       "gate_log_matches": [],
       "gate_logs_scanned": 0,
       "refusals": [],
       "sessions_not_scanned": 0,
-      "sessions_scanned": 1
+      "sessions_scanned": 2
     },
-    "output_tokens": 282855,
-    "permission_denials": 17,
+    "output_tokens": 335672,
+    "permission_denials": 22,
     "rate_limit_peak": {
-      "seven_day": 0.3
+      "seven_day": 0.31
     },
     "requests": {
-      "count": 382,
+      "count": 491,
       "max_ms": 83057,
       "over_threshold": 0,
-      "p50_ms": 2319,
-      "p90_ms": 9691,
-      "p99_ms": 41844
+      "p50_ms": 2184,
+      "p90_ms": 8063,
+      "p99_ms": 36367
     },
-    "sessions": 1,
+    "sessions": 2,
     "slowest_subagent": {
       "description": "Write the task plan",
       "duration_ms": 705517,
       "session": 1,
       "type": "devscene:task-plan-writer"
     },
-    "span_ms": 2796568,
+    "span_ms": 4178981,
     "subagents_failed": 0,
     "subagents_killed": 0,
-    "thinking_tokens": 3523,
-    "token_sessions": 1,
-    "total_cost_usd": 22.866002,
-    "wall_ms": 2796568
+    "thinking_tokens": 6013,
+    "token_sessions": 2,
+    "total_cost_usd": 28.18085,
+    "wall_ms": 3302770
   },
   "schema": 1,
   "sessions": [
@@ -11341,6 +11341,3530 @@
             "permission_denied": false,
             "result_bytes": 415,
             "started_at": "2026-11-12T14:38:05.082Z",
+            "tool": "Bash"
+          }
+        ]
+      }
+    },
+    {
+      "complete": true,
+      "cost": {
+        "by_model": {
+          "claude-opus-5-5": 5.314847599999997
+        },
+        "cache_hit_ratio": 0.949,
+        "cache_read_tokens": 7959503,
+        "cache_write_1h_tokens": 175294,
+        "cache_write_5m_tokens": 0,
+        "cache_write_tokens": 427961,
+        "input_tokens": 230,
+        "output_tokens": 52817,
+        "thinking_tokens": 2490,
+        "token_source": "model_usage",
+        "total_cost_usd": 5.314847599999997
+      },
+      "first_at": "2026-11-12T15:08:55.366Z",
+      "last_at": "2026-11-12T15:17:21.568Z",
+      "network_refusals": [],
+      "reliability": {
+        "api_retries": 0,
+        "api_retry_errors": {},
+        "num_turns": 49,
+        "permission_denials": 5,
+        "rate_limit_peak": {
+          "seven_day": 0.31
+        },
+        "stop_reason": "end_turn",
+        "subagents_failed": 0,
+        "subagents_killed": 0,
+        "subagents_spawned": 6,
+        "terminal_reason": "completed",
+        "ttft_ms": 1866
+      },
+      "requests": {
+        "by_context": {
+          "devscene:committer": {
+            "count": 18,
+            "max_ms": 5850,
+            "over_threshold": 0,
+            "p50_ms": 1834,
+            "p90_ms": 5014,
+            "p99_ms": 5850
+          },
+          "devscene:layer-implementer": {
+            "count": 49,
+            "max_ms": 10674,
+            "over_threshold": 0,
+            "p50_ms": 2338,
+            "p90_ms": 4931,
+            "p99_ms": 10674
+          },
+          "devscene:prompt-injection-reviewer": {
+            "count": 3,
+            "max_ms": 4382,
+            "over_threshold": 0,
+            "p50_ms": 2019,
+            "p90_ms": 4382,
+            "p99_ms": 4382
+          },
+          "orchestrator": {
+            "count": 39,
+            "max_ms": 10891,
+            "over_threshold": 0,
+            "p50_ms": 1678,
+            "p90_ms": 3614,
+            "p99_ms": 10891
+          }
+        },
+        "items": [
+          {
+            "after_retry": false,
+            "cache_read_tokens": 13513,
+            "cache_write_tokens": 21829,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": null,
+            "message_id": "msg_011CgyFAWVyK2jTtaAzx26WJ",
+            "output_tokens": 8,
+            "started_at": "2026-11-12T15:08:55.366Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 35342,
+            "cache_write_tokens": 8372,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1208,
+            "message_id": "msg_011CgyFAe1uXjsirT2V1Kga8",
+            "output_tokens": 8,
+            "started_at": "2026-11-12T15:08:56.612Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 43714,
+            "cache_write_tokens": 1132,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1938,
+            "message_id": "msg_011CgyFArJLtqw9arLhswGUs",
+            "output_tokens": 16,
+            "started_at": "2026-11-12T15:09:00.223Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 44846,
+            "cache_write_tokens": 2696,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1531,
+            "message_id": "msg_011CgyFB3gC31sNk22cWdi38",
+            "output_tokens": 7,
+            "started_at": "2026-11-12T15:09:02.477Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 47542,
+            "cache_write_tokens": 5674,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1802,
+            "message_id": "msg_011CgyFBEPNQSgwFjC6SVWf5",
+            "output_tokens": 16,
+            "started_at": "2026-11-12T15:09:05.267Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 53216,
+            "cache_write_tokens": 365,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1445,
+            "message_id": "msg_011CgyFBNp8SE7tetg5E5QZz",
+            "output_tokens": 68,
+            "started_at": "2026-11-12T15:09:06.882Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 53581,
+            "cache_write_tokens": 179,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1877,
+            "message_id": "msg_011CgyFBXdDE3RedPuBmHh3E",
+            "output_tokens": 16,
+            "started_at": "2026-11-12T15:09:09.351Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 11098,
+            "context": "devscene:prompt-injection-reviewer",
+            "input_tokens": 2,
+            "latency_ms": 2019,
+            "message_id": "msg_011CgyFBfmr5xxYNWusyd1Yq",
+            "output_tokens": 184,
+            "started_at": "2026-11-12T15:09:11.373Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 11098,
+            "cache_write_tokens": 5586,
+            "context": "devscene:prompt-injection-reviewer",
+            "input_tokens": 2,
+            "latency_ms": 4382,
+            "message_id": "msg_011CgyFBqR36zGuNFA7BwgLE",
+            "output_tokens": 470,
+            "started_at": "2026-11-12T15:09:16.005Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 16684,
+            "cache_write_tokens": 600,
+            "context": "devscene:prompt-injection-reviewer",
+            "input_tokens": 2,
+            "latency_ms": 1825,
+            "message_id": "msg_011CgyFCCqPMYbToJB9RjSo1",
+            "output_tokens": 108,
+            "started_at": "2026-11-12T15:09:18.500Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 53760,
+            "cache_write_tokens": 492,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1459,
+            "message_id": "msg_011CgyFCSqWkLzyTKxLhSAAK",
+            "output_tokens": 16,
+            "started_at": "2026-11-12T15:09:21.397Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 54252,
+            "cache_write_tokens": 245,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 2304,
+            "message_id": "msg_011CgyFCZPu5nBJyG1CnoAJs",
+            "output_tokens": 16,
+            "started_at": "2026-11-12T15:09:23.752Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 54497,
+            "cache_write_tokens": 334,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1817,
+            "message_id": "msg_011CgyFCjwQbotrMeqM5cCor",
+            "output_tokens": 16,
+            "started_at": "2026-11-12T15:09:25.723Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 54831,
+            "cache_write_tokens": 167,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1407,
+            "message_id": "msg_011CgyFCt8mQrVdBnW3mp2yf",
+            "output_tokens": 8,
+            "started_at": "2026-11-12T15:09:27.262Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 54998,
+            "cache_write_tokens": 265,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1780,
+            "message_id": "msg_011CgyFD3zqzVs33ShStspMu",
+            "output_tokens": 71,
+            "started_at": "2026-11-12T15:09:29.928Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 55263,
+            "cache_write_tokens": 24032,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1726,
+            "message_id": "msg_011CgyFDDXb4TKvbfCyxjwbY",
+            "output_tokens": 8,
+            "started_at": "2026-11-12T15:09:32.112Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 79295,
+            "cache_write_tokens": 2419,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 3337,
+            "message_id": "msg_011CgyFDRNUopeW8YENHe4Aj",
+            "output_tokens": 6,
+            "started_at": "2026-11-12T15:09:36.502Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 81714,
+            "cache_write_tokens": 865,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1628,
+            "message_id": "msg_011CgyFDjfpRtHtzyk54axFM",
+            "output_tokens": 16,
+            "started_at": "2026-11-12T15:09:39.053Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 82579,
+            "cache_write_tokens": 8045,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1678,
+            "message_id": "msg_011CgyFDrhEV2ciDUKEX54rU",
+            "output_tokens": 5,
+            "started_at": "2026-11-12T15:09:40.750Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 90624,
+            "cache_write_tokens": 20348,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1520,
+            "message_id": "msg_011CgyFEFq2uSTp7ip8pe7Zp",
+            "output_tokens": 8,
+            "started_at": "2026-11-12T15:09:45.998Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 110972,
+            "cache_write_tokens": 314,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1060,
+            "message_id": "msg_011CgyFEU4yGE5DvQucR56mh",
+            "output_tokens": 69,
+            "started_at": "2026-11-12T15:09:48.417Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 111286,
+            "cache_write_tokens": 363,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1054,
+            "message_id": "msg_011CgyFEyGPfN4G4syyq94Ej",
+            "output_tokens": 52,
+            "started_at": "2026-11-12T15:09:55.217Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 111649,
+            "cache_write_tokens": 14527,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1802,
+            "message_id": "msg_011CgyFFAsu9o654Cd8Fi56t",
+            "output_tokens": 16,
+            "started_at": "2026-11-12T15:09:58.706Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 126176,
+            "cache_write_tokens": 35794,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1739,
+            "message_id": "msg_011CgyFFMQezV3hMW47sDxnk",
+            "output_tokens": 3,
+            "started_at": "2026-11-12T15:10:01.084Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 161970,
+            "cache_write_tokens": 10085,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 2343,
+            "message_id": "msg_011CgyFFbR2QUuVmGKQgeiRy",
+            "output_tokens": 5,
+            "started_at": "2026-11-12T15:10:04.958Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 172055,
+            "cache_write_tokens": 1311,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 2045,
+            "message_id": "msg_011CgyFFtNVGAbGHB7Vt37rG",
+            "output_tokens": 7,
+            "started_at": "2026-11-12T15:10:08.643Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 173366,
+            "cache_write_tokens": 320,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1586,
+            "message_id": "msg_011CgyFG7hRjbC3JstebzP7d",
+            "output_tokens": 6,
+            "started_at": "2026-11-12T15:10:11.290Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 22782,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 1627,
+            "message_id": "msg_011CgyFGULAUNBkVgQc5Bpze",
+            "output_tokens": 100,
+            "started_at": "2026-11-12T15:10:16.066Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 22782,
+            "cache_write_tokens": 881,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 1443,
+            "message_id": "msg_011CgyFGbRognHvjfy5MJ9ZG",
+            "output_tokens": 302,
+            "started_at": "2026-11-12T15:10:17.639Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 23663,
+            "cache_write_tokens": 19275,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 3876,
+            "message_id": "msg_011CgyFGmhBR3MJ7CN94CU86",
+            "output_tokens": 915,
+            "started_at": "2026-11-12T15:10:22.455Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 42938,
+            "cache_write_tokens": 2063,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 2618,
+            "message_id": "msg_011CgyFHK5aC9LMza23AjFZj",
+            "output_tokens": 496,
+            "started_at": "2026-11-12T15:10:28.537Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 45001,
+            "cache_write_tokens": 6751,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 3457,
+            "message_id": "msg_011CgyFHd2pQmLPErFYvPPa7",
+            "output_tokens": 394,
+            "started_at": "2026-11-12T15:10:33.622Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 51752,
+            "cache_write_tokens": 1794,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 1801,
+            "message_id": "msg_011CgyFHwcGUcysj8FwJ23Kq",
+            "output_tokens": 161,
+            "started_at": "2026-11-12T15:10:36.297Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 53546,
+            "cache_write_tokens": 417,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 1982,
+            "message_id": "msg_011CgyFJ5ntqGnUdGAYUw1WN",
+            "output_tokens": 291,
+            "started_at": "2026-11-12T15:10:38.398Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 53963,
+            "cache_write_tokens": 3715,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 2175,
+            "message_id": "msg_011CgyFJJCG37GSVn2MHfFYM",
+            "output_tokens": 220,
+            "started_at": "2026-11-12T15:10:41.490Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 57678,
+            "cache_write_tokens": 331,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 1214,
+            "message_id": "msg_011CgyFJfvEPo7e4uquS4sWT",
+            "output_tokens": 211,
+            "started_at": "2026-11-12T15:10:45.617Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 58009,
+            "cache_write_tokens": 1064,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 8574,
+            "message_id": "msg_011CgyFJxg33RZg7uWzDQWgC",
+            "output_tokens": 1018,
+            "started_at": "2026-11-12T15:10:56.894Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 173686,
+            "cache_write_tokens": 2212,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1531,
+            "message_id": "msg_011CgyFLWeBGGUq62LZBcsQg",
+            "output_tokens": 8,
+            "started_at": "2026-11-12T15:11:10.887Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 175898,
+            "cache_write_tokens": 359,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1047,
+            "message_id": "msg_011CgyFLinRqZz1MyzALmjMz",
+            "output_tokens": 40,
+            "started_at": "2026-11-12T15:11:13.235Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 21225,
+            "context": "devscene:committer",
+            "input_tokens": 2,
+            "latency_ms": 1622,
+            "message_id": "msg_011CgyFLvB2frrcxpk7UqXWJ",
+            "output_tokens": 413,
+            "started_at": "2026-11-12T15:11:16.396Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 21225,
+            "cache_write_tokens": 1941,
+            "context": "devscene:committer",
+            "input_tokens": 2,
+            "latency_ms": 1990,
+            "message_id": "msg_011CgyFMAuYnDEX71NAi4M7i",
+            "output_tokens": 190,
+            "started_at": "2026-11-12T15:11:20.310Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 23166,
+            "cache_write_tokens": 297,
+            "context": "devscene:committer",
+            "input_tokens": 2,
+            "latency_ms": 1699,
+            "message_id": "msg_011CgyFML1VkzPPVbqXQ4tUi",
+            "output_tokens": 153,
+            "started_at": "2026-11-12T15:11:22.140Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 23463,
+            "cache_write_tokens": 372,
+            "context": "devscene:committer",
+            "input_tokens": 2,
+            "latency_ms": 1834,
+            "message_id": "msg_011CgyFMTSUByjXaa4anrYip",
+            "output_tokens": 185,
+            "started_at": "2026-11-12T15:11:23.996Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 23835,
+            "cache_write_tokens": 262,
+            "context": "devscene:committer",
+            "input_tokens": 2,
+            "latency_ms": 2436,
+            "message_id": "msg_011CgyFMbWuL6wTatfbu5xBF",
+            "output_tokens": 236,
+            "started_at": "2026-11-12T15:11:26.483Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 24097,
+            "cache_write_tokens": 1352,
+            "context": "devscene:committer",
+            "input_tokens": 2,
+            "latency_ms": 5014,
+            "message_id": "msg_011CgyFMnQyjXbRCzCNWkTjj",
+            "output_tokens": 532,
+            "started_at": "2026-11-12T15:11:31.628Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 25449,
+            "cache_write_tokens": 563,
+            "context": "devscene:committer",
+            "input_tokens": 2,
+            "latency_ms": 1555,
+            "message_id": "msg_011CgyFNAF9WABMGVBpqAhVn",
+            "output_tokens": 127,
+            "started_at": "2026-11-12T15:11:33.271Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 26012,
+            "cache_write_tokens": 135,
+            "context": "devscene:committer",
+            "input_tokens": 2,
+            "latency_ms": 3542,
+            "message_id": "msg_011CgyFNHFpiS7MpZ2Eiyp8c",
+            "output_tokens": 376,
+            "started_at": "2026-11-12T15:11:36.903Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 26147,
+            "cache_write_tokens": 416,
+            "context": "devscene:committer",
+            "input_tokens": 2,
+            "latency_ms": 1682,
+            "message_id": "msg_011CgyFNbNjdPEahiKJaW3Y2",
+            "output_tokens": 219,
+            "started_at": "2026-11-12T15:11:39.276Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 26563,
+            "cache_write_tokens": 759,
+            "context": "devscene:committer",
+            "input_tokens": 2,
+            "latency_ms": 1504,
+            "message_id": "msg_011CgyFNmEppH1QyqurzoZS4",
+            "output_tokens": 130,
+            "started_at": "2026-11-12T15:11:41.413Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 176257,
+            "cache_write_tokens": 741,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 3614,
+            "message_id": "msg_011CgyFPQq1dVqm4TVZCNmoM",
+            "output_tokens": 3,
+            "started_at": "2026-11-12T15:11:52.299Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 176998,
+            "cache_write_tokens": 823,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 2080,
+            "message_id": "msg_011CgyFPn5Sj9ERqHduFgs7F",
+            "output_tokens": 7,
+            "started_at": "2026-11-12T15:11:55.741Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 177821,
+            "cache_write_tokens": 969,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1163,
+            "message_id": "msg_011CgyFQ6q4tsjo91jDMzAZH",
+            "output_tokens": 48,
+            "started_at": "2026-11-12T15:11:59.223Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 14160,
+            "cache_write_tokens": 7813,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 1720,
+            "message_id": "msg_011CgyFQJVHfCKTSDjaahy9f",
+            "output_tokens": 84,
+            "started_at": "2026-11-12T15:12:02.406Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 21973,
+            "cache_write_tokens": 865,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 1777,
+            "message_id": "msg_011CgyFQS2UNSs9QCFF9tyhG",
+            "output_tokens": 196,
+            "started_at": "2026-11-12T15:12:04.310Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 22838,
+            "cache_write_tokens": 17262,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 2054,
+            "message_id": "msg_011CgyFQc8SCc5ZH1KZ47cnp",
+            "output_tokens": 222,
+            "started_at": "2026-11-12T15:12:06.915Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 40100,
+            "cache_write_tokens": 5748,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 3748,
+            "message_id": "msg_011CgyFQmJqPH49Za1FU5257",
+            "output_tokens": 411,
+            "started_at": "2026-11-12T15:12:10.812Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 45848,
+            "cache_write_tokens": 1040,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 4462,
+            "message_id": "msg_011CgyFR3xCaZ65CMExVxhtY",
+            "output_tokens": 441,
+            "started_at": "2026-11-12T15:12:15.416Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 46888,
+            "cache_write_tokens": 1339,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 5324,
+            "message_id": "msg_011CgyFRPrmweC2f6aq9zuvi",
+            "output_tokens": 648,
+            "started_at": "2026-11-12T15:12:20.876Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 48227,
+            "cache_write_tokens": 877,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 4446,
+            "message_id": "msg_011CgyFRnstAua8aj5mJX13G",
+            "output_tokens": 1020,
+            "started_at": "2026-11-12T15:12:25.432Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 49104,
+            "cache_write_tokens": 4056,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 2338,
+            "message_id": "msg_011CgyFSPeAfY3VpSZF94r7f",
+            "output_tokens": 1380,
+            "started_at": "2026-11-12T15:12:31.442Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 53160,
+            "cache_write_tokens": 2051,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 2187,
+            "message_id": "msg_011CgyFT5z43QjyQ7qPkwwX7",
+            "output_tokens": 772,
+            "started_at": "2026-11-12T15:12:40.714Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 55211,
+            "cache_write_tokens": 3653,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 1847,
+            "message_id": "msg_011CgyFTXUyqnnTv8dsmHDkh",
+            "output_tokens": 1635,
+            "started_at": "2026-11-12T15:12:46.325Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 58864,
+            "cache_write_tokens": 2493,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 1626,
+            "message_id": "msg_011CgyFUMAPd7dZL3P9QqZ62",
+            "output_tokens": 852,
+            "started_at": "2026-11-12T15:12:57.273Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 61357,
+            "cache_write_tokens": 4685,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 2053,
+            "message_id": "msg_011CgyFUoWQQF5K7ASx42yMF",
+            "output_tokens": 1708,
+            "started_at": "2026-11-12T15:13:03.865Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 66042,
+            "cache_write_tokens": 2583,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 1822,
+            "message_id": "msg_011CgyFVfAtrGXgain2tePJF",
+            "output_tokens": 1196,
+            "started_at": "2026-11-12T15:13:15.257Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 68625,
+            "cache_write_tokens": 3773,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 2006,
+            "message_id": "msg_011CgyFWKgtQ6a13BuApYRSv",
+            "output_tokens": 1843,
+            "started_at": "2026-11-12T15:13:24.419Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 72398,
+            "cache_write_tokens": 2766,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 2117,
+            "message_id": "msg_011CgyFXEbpovVAyY4eqG13e",
+            "output_tokens": 354,
+            "started_at": "2026-11-12T15:13:36.942Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 75164,
+            "cache_write_tokens": 1590,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 2703,
+            "message_id": "msg_011CgyFXUFsTxiC3Mi2LsdVp",
+            "output_tokens": 374,
+            "started_at": "2026-11-12T15:13:40.733Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 76754,
+            "cache_write_tokens": 3210,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 2493,
+            "message_id": "msg_011CgyFXjPSebcDGXihf5bcq",
+            "output_tokens": 344,
+            "started_at": "2026-11-12T15:13:44.052Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 79964,
+            "cache_write_tokens": 695,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 1569,
+            "message_id": "msg_011CgyFYAuN5p2AQN5aqJKHq",
+            "output_tokens": 290,
+            "started_at": "2026-11-12T15:13:49.099Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 80659,
+            "cache_write_tokens": 1301,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 1602,
+            "message_id": "msg_011CgyFYN6ZgGgqvQqQKH5LX",
+            "output_tokens": 128,
+            "started_at": "2026-11-12T15:13:51.742Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 178790,
+            "cache_write_tokens": 2382,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1273,
+            "message_id": "msg_011CgyFZiK1zeYysuBrxns3Z",
+            "output_tokens": 16,
+            "started_at": "2026-11-12T15:14:09.697Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 181172,
+            "cache_write_tokens": 110,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 936,
+            "message_id": "msg_011CgyFZp81oYuQuyZWK9pGR",
+            "output_tokens": 40,
+            "started_at": "2026-11-12T15:14:10.741Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 12762,
+            "cache_write_tokens": 8358,
+            "context": "devscene:committer",
+            "input_tokens": 2,
+            "latency_ms": 1455,
+            "message_id": "msg_011CgyFZzoD3qXxBLSAruj3W",
+            "output_tokens": 321,
+            "started_at": "2026-11-12T15:14:13.695Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 21120,
+            "cache_write_tokens": 1780,
+            "context": "devscene:committer",
+            "input_tokens": 2,
+            "latency_ms": 2151,
+            "message_id": "msg_011CgyFaDAMDpn8orKnYiDNb",
+            "output_tokens": 177,
+            "started_at": "2026-11-12T15:14:17.334Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 22900,
+            "cache_write_tokens": 397,
+            "context": "devscene:committer",
+            "input_tokens": 2,
+            "latency_ms": 2707,
+            "message_id": "msg_011CgyFaNxxect2ReJMuFzXv",
+            "output_tokens": 232,
+            "started_at": "2026-11-12T15:14:20.131Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 23297,
+            "cache_write_tokens": 1348,
+            "context": "devscene:committer",
+            "input_tokens": 2,
+            "latency_ms": 3637,
+            "message_id": "msg_011CgyFaauoEKG58NkzaQ2ck",
+            "output_tokens": 359,
+            "started_at": "2026-11-12T15:14:23.898Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 24645,
+            "cache_write_tokens": 415,
+            "context": "devscene:committer",
+            "input_tokens": 2,
+            "latency_ms": 1845,
+            "message_id": "msg_011CgyFarZ9E3nW3wH5yxMtQ",
+            "output_tokens": 179,
+            "started_at": "2026-11-12T15:14:25.763Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 25060,
+            "cache_write_tokens": 256,
+            "context": "devscene:committer",
+            "input_tokens": 2,
+            "latency_ms": 5850,
+            "message_id": "msg_011CgyFazbaPij9uzHhZCMkL",
+            "output_tokens": 748,
+            "started_at": "2026-11-12T15:14:31.662Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 25316,
+            "cache_write_tokens": 789,
+            "context": "devscene:committer",
+            "input_tokens": 2,
+            "latency_ms": 1074,
+            "message_id": "msg_011CgyFbUoDP1aQCdHRLdrVF",
+            "output_tokens": 156,
+            "started_at": "2026-11-12T15:14:33.498Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 26105,
+            "cache_write_tokens": 252,
+            "context": "devscene:committer",
+            "input_tokens": 2,
+            "latency_ms": 1369,
+            "message_id": "msg_011CgyFbbXXZYzz67QUG9Tad",
+            "output_tokens": 130,
+            "started_at": "2026-11-12T15:14:35.361Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 181282,
+            "cache_write_tokens": 705,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 2498,
+            "message_id": "msg_011CgyFcBzT2NhCPDB214s6N",
+            "output_tokens": 153,
+            "started_at": "2026-11-12T15:14:44.519Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 181987,
+            "cache_write_tokens": 278,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 886,
+            "message_id": "msg_011CgyFcPpMxwzmZdsnRi1xR",
+            "output_tokens": 48,
+            "started_at": "2026-11-12T15:14:45.709Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 14160,
+            "cache_write_tokens": 7904,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 1315,
+            "message_id": "msg_011CgyFcdaLtkiDBNs3xZScd",
+            "output_tokens": 85,
+            "started_at": "2026-11-12T15:14:49.275Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 22064,
+            "cache_write_tokens": 866,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 1532,
+            "message_id": "msg_011CgyFcjUJLZtZpfPvSJbxX",
+            "output_tokens": 302,
+            "started_at": "2026-11-12T15:14:50.948Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 22930,
+            "cache_write_tokens": 18137,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 2665,
+            "message_id": "msg_011CgyFcvUaetF3E1MRuBpPR",
+            "output_tokens": 267,
+            "started_at": "2026-11-12T15:14:54.643Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 41067,
+            "cache_write_tokens": 4690,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 1338,
+            "message_id": "msg_011CgyFd8KEE4D6bSZ6VzyNH",
+            "output_tokens": 90,
+            "started_at": "2026-11-12T15:14:56.099Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 45757,
+            "cache_write_tokens": 8995,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 3657,
+            "message_id": "msg_011CgyFdE4Fghs2DHQBiqEEL",
+            "output_tokens": 345,
+            "started_at": "2026-11-12T15:14:59.761Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 54752,
+            "cache_write_tokens": 2682,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 1707,
+            "message_id": "msg_011CgyFdWJ4tVzvMgz1eCZLP",
+            "output_tokens": 131,
+            "started_at": "2026-11-12T15:15:01.611Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 57434,
+            "cache_write_tokens": 2788,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 4931,
+            "message_id": "msg_011CgyFddio6GtaU8gEngFDn",
+            "output_tokens": 519,
+            "started_at": "2026-11-12T15:15:06.565Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 60222,
+            "cache_write_tokens": 1503,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 2960,
+            "message_id": "msg_011CgyFe1aCae6vLKHnNu3B6",
+            "output_tokens": 263,
+            "started_at": "2026-11-12T15:15:09.687Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 61725,
+            "cache_write_tokens": 290,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 3331,
+            "message_id": "msg_011CgyFeFCzNKcotNpLWxy3V",
+            "output_tokens": 366,
+            "started_at": "2026-11-12T15:15:13.183Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 62015,
+            "cache_write_tokens": 421,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 4052,
+            "message_id": "msg_011CgyFeVbRnzUsnbX2WFh4Q",
+            "output_tokens": 493,
+            "started_at": "2026-11-12T15:15:17.356Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 62436,
+            "cache_write_tokens": 722,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 1566,
+            "message_id": "msg_011CgyFeoh6qR2g7EryH8JjZ",
+            "output_tokens": 197,
+            "started_at": "2026-11-12T15:15:18.992Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 63158,
+            "cache_write_tokens": 4288,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 2481,
+            "message_id": "msg_011CgyFewzfrrxDQ8Ecq6y85",
+            "output_tokens": 1291,
+            "started_at": "2026-11-12T15:15:21.949Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 67446,
+            "cache_write_tokens": 1689,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 2494,
+            "message_id": "msg_011CgyFfbxhAVNnmQpFiS8Lq",
+            "output_tokens": 1612,
+            "started_at": "2026-11-12T15:15:30.786Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 69135,
+            "cache_write_tokens": 2262,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 7163,
+            "message_id": "msg_011CgyFgSc99NXtf83oW4GKa",
+            "output_tokens": 1955,
+            "started_at": "2026-11-12T15:15:46.897Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 71397,
+            "cache_write_tokens": 2696,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 2637,
+            "message_id": "msg_011CgyFhWAF1pBMPXMyDyMxR",
+            "output_tokens": 484,
+            "started_at": "2026-11-12T15:15:56.553Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 74093,
+            "cache_write_tokens": 1693,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 2868,
+            "message_id": "msg_011CgyFhoWH17VTjSURpnfST",
+            "output_tokens": 269,
+            "started_at": "2026-11-12T15:16:01.041Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 75786,
+            "cache_write_tokens": 365,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 3717,
+            "message_id": "msg_011CgyFi2a6KL4gqsQ1SVzAt",
+            "output_tokens": 374,
+            "started_at": "2026-11-12T15:16:04.951Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 76151,
+            "cache_write_tokens": 455,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 3026,
+            "message_id": "msg_011CgyFiKLtiY7ERXXVV3o12",
+            "output_tokens": 234,
+            "started_at": "2026-11-12T15:16:08.129Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 76606,
+            "cache_write_tokens": 295,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 1425,
+            "message_id": "msg_011CgyFiYa8NrfULZ2QkcSY3",
+            "output_tokens": 114,
+            "started_at": "2026-11-12T15:16:09.680Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 76901,
+            "cache_write_tokens": 225,
+            "context": "devscene:layer-implementer",
+            "input_tokens": 2,
+            "latency_ms": 10674,
+            "message_id": "msg_011CgyFisXerYzVLdFaiZeJi",
+            "output_tokens": 1215,
+            "started_at": "2026-11-12T15:16:23.358Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 182265,
+            "cache_write_tokens": 2284,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 10891,
+            "message_id": "msg_011CgyFknXpWrgrd9nzBkoRR",
+            "output_tokens": 3,
+            "started_at": "2026-11-12T15:16:49.491Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 184549,
+            "cache_write_tokens": 1665,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 4884,
+            "message_id": "msg_011CgyFmbHfwzYk86i4nBD1M",
+            "output_tokens": 16,
+            "started_at": "2026-11-12T15:16:54.485Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 186214,
+            "cache_write_tokens": 711,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1912,
+            "message_id": "msg_011CgyFmxT9zFZAtCtMZ2KcW",
+            "output_tokens": 16,
+            "started_at": "2026-11-12T15:16:56.413Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 186925,
+            "cache_write_tokens": 242,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 1539,
+            "message_id": "msg_011CgyFn8okMGLdUeEXgCKCk",
+            "output_tokens": 16,
+            "started_at": "2026-11-12T15:16:58.384Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 187167,
+            "cache_write_tokens": 315,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 745,
+            "message_id": "msg_011CgyFnbUNH7hYB3YGymru9",
+            "output_tokens": 34,
+            "started_at": "2026-11-12T15:17:03.942Z"
+          },
+          {
+            "after_retry": false,
+            "cache_read_tokens": 187482,
+            "cache_write_tokens": 1325,
+            "context": "orchestrator",
+            "input_tokens": 2,
+            "latency_ms": 8084,
+            "message_id": "msg_011CgyFoKLnNKqsQAT6H2LzH",
+            "output_tokens": 8,
+            "started_at": "2026-11-12T15:17:20.776Z"
+          }
+        ],
+        "overall": {
+          "count": 109,
+          "max_ms": 10891,
+          "over_threshold": 0,
+          "p50_ms": 1877,
+          "p90_ms": 4462,
+          "p99_ms": 10674
+        }
+      },
+      "session_id": "a41ec99d-d8d7-4050-a34d-bd4c6838e5b4",
+      "subagents": [
+        {
+          "agent_id": "af00d2b319f12b16c",
+          "cache_read_tokens": 45066,
+          "cache_write_tokens": 18652,
+          "description": "Screen answer_1 for injection",
+          "duration_ms": 10587,
+          "input_tokens": 8,
+          "output_tokens": 796,
+          "requests": 3,
+          "started_at": "2026-11-12T15:09:09.351Z",
+          "token_source": "transcript",
+          "type": "devscene:prompt-injection-reviewer",
+          "wall_share": 0.0209
+        },
+        {
+          "agent_id": "a0996f47b3fc8f5f9",
+          "cache_read_tokens": 468405,
+          "cache_write_tokens": 60187,
+          "description": "Implement Task 5 (resume)",
+          "duration_ms": 54920,
+          "input_tokens": 22,
+          "output_tokens": 5596,
+          "requests": 10,
+          "started_at": "2026-11-12T15:10:14.436Z",
+          "token_source": "transcript",
+          "type": "devscene:layer-implementer",
+          "wall_share": 0.1085
+        },
+        {
+          "agent_id": "ac489262bb26825f9",
+          "cache_read_tokens": 247279,
+          "cache_write_tokens": 27638,
+          "description": "Commit Task 5",
+          "duration_ms": 33913,
+          "input_tokens": 22,
+          "output_tokens": 2754,
+          "requests": 10,
+          "started_at": "2026-11-12T15:11:14.772Z",
+          "token_source": "transcript",
+          "type": "devscene:committer",
+          "wall_share": 0.067
+        },
+        {
+          "agent_id": "a155850c5bf155a4b",
+          "cache_read_tokens": 1119296,
+          "cache_write_tokens": 68001,
+          "description": "Implement Task 6",
+          "duration_ms": 127750,
+          "input_tokens": 40,
+          "output_tokens": 15903,
+          "requests": 19,
+          "started_at": "2026-11-12T15:12:00.674Z",
+          "token_source": "transcript",
+          "type": "devscene:layer-implementer",
+          "wall_share": 0.2524
+        },
+        {
+          "agent_id": "ad54837b2e6ebe53a",
+          "cache_read_tokens": 207562,
+          "cache_write_tokens": 13912,
+          "description": "Commit Task 6",
+          "duration_ms": 29783,
+          "input_tokens": 18,
+          "output_tokens": 2482,
+          "requests": 8,
+          "started_at": "2026-11-12T15:14:12.238Z",
+          "token_source": "transcript",
+          "type": "devscene:committer",
+          "wall_share": 0.0588
+        },
+        {
+          "agent_id": "a0e1aa7dbe908ede9",
+          "cache_read_tokens": 1232361,
+          "cache_write_tokens": 64277,
+          "description": "Implement Task 7",
+          "duration_ms": 110651,
+          "input_tokens": 42,
+          "output_tokens": 12279,
+          "requests": 20,
+          "started_at": "2026-11-12T15:14:47.949Z",
+          "token_source": "transcript",
+          "type": "devscene:layer-implementer",
+          "wall_share": 0.2186
+        }
+      ],
+      "time": {
+        "active_ms": 506202,
+        "duration_api_ms": 466124,
+        "duration_ms": 508088,
+        "host_suspended_ms": 0,
+        "idle_gaps": [],
+        "idle_ms": 0,
+        "idle_threshold_s": 120,
+        "suspend_source": "none",
+        "wall_ms": 506202
+      },
+      "tools": {
+        "by_tool": [
+          {
+            "context": "orchestrator",
+            "count": 6,
+            "max_ms": 127750,
+            "tool": "Agent",
+            "total_ms": 367604
+          },
+          {
+            "context": "devscene:committer",
+            "count": 22,
+            "max_ms": 5193,
+            "tool": "Bash",
+            "total_ms": 13667
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "count": 40,
+            "max_ms": 3004,
+            "tool": "Bash",
+            "total_ms": 15470
+          },
+          {
+            "context": "orchestrator",
+            "count": 29,
+            "max_ms": 5046,
+            "tool": "Bash",
+            "total_ms": 14008
+          },
+          {
+            "context": "devscene:committer",
+            "count": 2,
+            "max_ms": 51,
+            "tool": "Edit",
+            "total_ms": 100
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "count": 55,
+            "max_ms": 86,
+            "tool": "Edit",
+            "total_ms": 2022
+          },
+          {
+            "context": "orchestrator",
+            "count": 1,
+            "max_ms": 55,
+            "tool": "Edit",
+            "total_ms": 55
+          },
+          {
+            "context": "devscene:prompt-injection-reviewer",
+            "count": 2,
+            "max_ms": 148,
+            "tool": "Glob",
+            "total_ms": 227
+          },
+          {
+            "context": "devscene:committer",
+            "count": 2,
+            "max_ms": 22,
+            "tool": "Read",
+            "total_ms": 42
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "count": 42,
+            "max_ms": 298,
+            "tool": "Read",
+            "total_ms": 1581
+          },
+          {
+            "context": "devscene:prompt-injection-reviewer",
+            "count": 3,
+            "max_ms": 19,
+            "tool": "Read",
+            "total_ms": 29
+          },
+          {
+            "context": "orchestrator",
+            "count": 7,
+            "max_ms": 290,
+            "tool": "Read",
+            "total_ms": 1330
+          },
+          {
+            "context": "orchestrator",
+            "count": 1,
+            "max_ms": 30,
+            "tool": "Skill",
+            "total_ms": 30
+          },
+          {
+            "context": "orchestrator",
+            "count": 3,
+            "max_ms": 51,
+            "tool": "Write",
+            "total_ms": 83
+          }
+        ],
+        "items": [
+          {
+            "context": "orchestrator",
+            "duration_ms": 30,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 54,
+            "started_at": "2026-11-12T15:08:55.376Z",
+            "tool": "Skill"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 223,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 2046,
+            "started_at": "2026-11-12T15:08:57.211Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 139,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 57,
+            "started_at": "2026-11-12T15:08:57.756Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 148,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 29,
+            "started_at": "2026-11-12T15:08:58.137Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 33,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 3490,
+            "started_at": "2026-11-12T15:09:00.223Z",
+            "tool": "Read"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 148,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 2594,
+            "started_at": "2026-11-12T15:09:00.798Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 151,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 14640,
+            "started_at": "2026-11-12T15:09:03.314Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 170,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 297,
+            "started_at": "2026-11-12T15:09:05.267Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 111,
+            "is_error": true,
+            "permission_denied": false,
+            "result_bytes": 60,
+            "started_at": "2026-11-12T15:09:07.363Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 10587,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 752,
+            "started_at": "2026-11-12T15:09:09.351Z",
+            "tool": "Agent"
+          },
+          {
+            "context": "devscene:prompt-injection-reviewer",
+            "duration_ms": 5,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 303,
+            "started_at": "2026-11-12T15:09:11.373Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:prompt-injection-reviewer",
+            "duration_ms": 5,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 10703,
+            "started_at": "2026-11-12T15:09:11.618Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:prompt-injection-reviewer",
+            "duration_ms": 148,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 141,
+            "started_at": "2026-11-12T15:09:16.005Z",
+            "tool": "Glob"
+          },
+          {
+            "context": "devscene:prompt-injection-reviewer",
+            "duration_ms": 79,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 25,
+            "started_at": "2026-11-12T15:09:16.596Z",
+            "tool": "Glob"
+          },
+          {
+            "context": "devscene:prompt-injection-reviewer",
+            "duration_ms": 19,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 3236,
+            "started_at": "2026-11-12T15:09:18.500Z",
+            "tool": "Read"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 51,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 241,
+            "started_at": "2026-11-12T15:09:21.397Z",
+            "tool": "Write"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 154,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 155,
+            "started_at": "2026-11-12T15:09:23.752Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 132,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 31,
+            "started_at": "2026-11-12T15:09:25.723Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 130,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 31,
+            "started_at": "2026-11-12T15:09:28.018Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 290,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 65081,
+            "started_at": "2026-11-12T15:09:30.096Z",
+            "tool": "Read"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 121,
+            "is_error": true,
+            "permission_denied": false,
+            "result_bytes": 5436,
+            "started_at": "2026-11-12T15:09:33.044Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 132,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1065,
+            "started_at": "2026-11-12T15:09:37.293Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 19,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 21030,
+            "started_at": "2026-11-12T15:09:39.053Z",
+            "tool": "Read"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 55,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 166,
+            "started_at": "2026-11-12T15:09:43.747Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 244,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 52247,
+            "started_at": "2026-11-12T15:09:44.234Z",
+            "tool": "Read"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 419,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 72,
+            "started_at": "2026-11-12T15:09:46.938Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 5046,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 415,
+            "started_at": "2026-11-12T15:09:49.117Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 267,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 30068,
+            "started_at": "2026-11-12T15:09:55.875Z",
+            "tool": "Read"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 133,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 7644,
+            "started_at": "2026-11-12T15:09:56.771Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 236,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 29696,
+            "started_at": "2026-11-12T15:09:58.706Z",
+            "tool": "Read"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 241,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 65262,
+            "started_at": "2026-11-12T15:09:59.104Z",
+            "tool": "Read"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 159,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 28672,
+            "started_at": "2026-11-12T15:10:02.456Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 207,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1979,
+            "started_at": "2026-11-12T15:10:06.391Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 116,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 31,
+            "started_at": "2026-11-12T15:10:09.588Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 54920,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 4014,
+            "started_at": "2026-11-12T15:10:14.436Z",
+            "tool": "Agent"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 130,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 57,
+            "started_at": "2026-11-12T15:10:16.066Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 23,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 8084,
+            "started_at": "2026-11-12T15:10:17.639Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 236,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 41596,
+            "started_at": "2026-11-12T15:10:17.963Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 18,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 303,
+            "started_at": "2026-11-12T15:10:18.561Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 158,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 6,
+            "started_at": "2026-11-12T15:10:22.455Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 149,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 6,
+            "started_at": "2026-11-12T15:10:24.270Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 146,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1781,
+            "started_at": "2026-11-12T15:10:25.773Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 170,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 8022,
+            "started_at": "2026-11-12T15:10:28.537Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 93,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 3634,
+            "started_at": "2026-11-12T15:10:30.072Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 30,
+            "is_error": true,
+            "permission_denied": true,
+            "result_bytes": 727,
+            "started_at": "2026-11-12T15:10:33.622Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 136,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 2319,
+            "started_at": "2026-11-12T15:10:34.360Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 119,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 526,
+            "started_at": "2026-11-12T15:10:36.297Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 19,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1315,
+            "started_at": "2026-11-12T15:10:38.398Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 130,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 7062,
+            "started_at": "2026-11-12T15:10:39.185Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 2913,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 219,
+            "started_at": "2026-11-12T15:10:41.490Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 148,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1164,
+            "started_at": "2026-11-12T15:10:45.617Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 1914,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 511,
+            "started_at": "2026-11-12T15:10:46.406Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 55,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 234,
+            "started_at": "2026-11-12T15:10:56.894Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 111,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1,
+            "started_at": "2026-11-12T15:11:11.578Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 67,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 31,
+            "started_at": "2026-11-12T15:11:12.121Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 33913,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1087,
+            "started_at": "2026-11-12T15:11:14.772Z",
+            "tool": "Agent"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 142,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 57,
+            "started_at": "2026-11-12T15:11:16.396Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 121,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 27,
+            "started_at": "2026-11-12T15:11:16.948Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 145,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 29,
+            "started_at": "2026-11-12T15:11:17.600Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 162,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1279,
+            "started_at": "2026-11-12T15:11:18.158Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 131,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 211,
+            "started_at": "2026-11-12T15:11:20.310Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 22,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 451,
+            "started_at": "2026-11-12T15:11:22.140Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 51,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 166,
+            "started_at": "2026-11-12T15:11:23.996Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 131,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 2791,
+            "started_at": "2026-11-12T15:11:26.483Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 88,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 51,
+            "started_at": "2026-11-12T15:11:31.628Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 90,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 4,
+            "started_at": "2026-11-12T15:11:33.271Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 691,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 72,
+            "started_at": "2026-11-12T15:11:36.903Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 185,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 31,
+            "started_at": "2026-11-12T15:11:39.276Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 151,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1413,
+            "started_at": "2026-11-12T15:11:39.758Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 5193,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 415,
+            "started_at": "2026-11-12T15:11:41.413Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 69,
+            "is_error": true,
+            "permission_denied": true,
+            "result_bytes": 727,
+            "started_at": "2026-11-12T15:11:53.106Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 70,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 31,
+            "started_at": "2026-11-12T15:11:53.591Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 130,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1052,
+            "started_at": "2026-11-12T15:11:57.314Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 106,
+            "is_error": true,
+            "permission_denied": false,
+            "result_bytes": 11,
+            "started_at": "2026-11-12T15:11:57.954Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 127750,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 4920,
+            "started_at": "2026-11-12T15:12:00.674Z",
+            "tool": "Agent"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 127,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 57,
+            "started_at": "2026-11-12T15:12:02.406Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 17,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 4025,
+            "started_at": "2026-11-12T15:12:04.310Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 244,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 41596,
+            "started_at": "2026-11-12T15:12:04.617Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 149,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 11940,
+            "started_at": "2026-11-12T15:12:06.915Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 142,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1283,
+            "started_at": "2026-11-12T15:12:10.812Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 136,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1807,
+            "started_at": "2026-11-12T15:12:15.416Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 110,
+            "is_error": true,
+            "permission_denied": true,
+            "result_bytes": 727,
+            "started_at": "2026-11-12T15:12:20.876Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 18,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 873,
+            "started_at": "2026-11-12T15:12:25.432Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 17,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1559,
+            "started_at": "2026-11-12T15:12:26.127Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 17,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 577,
+            "started_at": "2026-11-12T15:12:26.829Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 18,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 2108,
+            "started_at": "2026-11-12T15:12:27.681Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 14,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 511,
+            "started_at": "2026-11-12T15:12:28.400Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 22,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1393,
+            "started_at": "2026-11-12T15:12:29.082Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 16,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 169,
+            "started_at": "2026-11-12T15:12:31.442Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 16,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 166,
+            "started_at": "2026-11-12T15:12:32.705Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 17,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 172,
+            "started_at": "2026-11-12T15:12:33.690Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 46,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 184,
+            "started_at": "2026-11-12T15:12:34.892Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 47,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 153,
+            "started_at": "2026-11-12T15:12:36.242Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 43,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 171,
+            "started_at": "2026-11-12T15:12:37.393Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 47,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 178,
+            "started_at": "2026-11-12T15:12:38.480Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 16,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 230,
+            "started_at": "2026-11-12T15:12:40.714Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 19,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1733,
+            "started_at": "2026-11-12T15:12:41.468Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 17,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 668,
+            "started_at": "2026-11-12T15:12:42.216Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 19,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1085,
+            "started_at": "2026-11-12T15:12:42.968Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 17,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 562,
+            "started_at": "2026-11-12T15:12:43.716Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 22,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 2073,
+            "started_at": "2026-11-12T15:12:44.456Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 44,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 153,
+            "started_at": "2026-11-12T15:12:46.325Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 42,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 169,
+            "started_at": "2026-11-12T15:12:47.473Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 46,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 169,
+            "started_at": "2026-11-12T15:12:48.673Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 15,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 172,
+            "started_at": "2026-11-12T15:12:49.824Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 15,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 174,
+            "started_at": "2026-11-12T15:12:50.971Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 15,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 174,
+            "started_at": "2026-11-12T15:12:52.171Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 16,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 178,
+            "started_at": "2026-11-12T15:12:53.371Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 49,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 178,
+            "started_at": "2026-11-12T15:12:54.624Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 47,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 147,
+            "started_at": "2026-11-12T15:12:55.600Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 16,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 596,
+            "started_at": "2026-11-12T15:12:57.273Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 31,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 296,
+            "started_at": "2026-11-12T15:12:58.175Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 17,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 4684,
+            "started_at": "2026-11-12T15:12:59.072Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 18,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 493,
+            "started_at": "2026-11-12T15:12:59.975Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 18,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1149,
+            "started_at": "2026-11-12T15:13:00.975Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 22,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 123,
+            "started_at": "2026-11-12T15:13:01.790Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 50,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 176,
+            "started_at": "2026-11-12T15:13:03.865Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 45,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 176,
+            "started_at": "2026-11-12T15:13:05.015Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 44,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 178,
+            "started_at": "2026-11-12T15:13:06.216Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 45,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 172,
+            "started_at": "2026-11-12T15:13:07.368Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 44,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 172,
+            "started_at": "2026-11-12T15:13:08.615Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 17,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 173,
+            "started_at": "2026-11-12T15:13:09.764Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 19,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 192,
+            "started_at": "2026-11-12T15:13:10.963Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 17,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 161,
+            "started_at": "2026-11-12T15:13:12.314Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 16,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 179,
+            "started_at": "2026-11-12T15:13:13.419Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 4,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 185,
+            "started_at": "2026-11-12T15:13:15.257Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 122,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 777,
+            "started_at": "2026-11-12T15:13:16.206Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 15,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 348,
+            "started_at": "2026-11-12T15:13:17.205Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 17,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 859,
+            "started_at": "2026-11-12T15:13:18.107Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 18,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 377,
+            "started_at": "2026-11-12T15:13:19.061Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 15,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 241,
+            "started_at": "2026-11-12T15:13:20.006Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 18,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1380,
+            "started_at": "2026-11-12T15:13:20.815Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 38,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 126,
+            "started_at": "2026-11-12T15:13:21.721Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 18,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 891,
+            "started_at": "2026-11-12T15:13:22.395Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 45,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 172,
+            "started_at": "2026-11-12T15:13:24.419Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 45,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 176,
+            "started_at": "2026-11-12T15:13:25.564Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 86,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 145,
+            "started_at": "2026-11-12T15:13:26.713Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 44,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 173,
+            "started_at": "2026-11-12T15:13:27.866Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 45,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 142,
+            "started_at": "2026-11-12T15:13:28.965Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 45,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 173,
+            "started_at": "2026-11-12T15:13:30.113Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 45,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 180,
+            "started_at": "2026-11-12T15:13:31.314Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 17,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 149,
+            "started_at": "2026-11-12T15:13:32.612Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 15,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 182,
+            "started_at": "2026-11-12T15:13:33.764Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 16,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 171,
+            "started_at": "2026-11-12T15:13:34.809Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 160,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 31,
+            "started_at": "2026-11-12T15:13:36.942Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 148,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 2411,
+            "started_at": "2026-11-12T15:13:37.882Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 148,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 139,
+            "started_at": "2026-11-12T15:13:40.733Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 126,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 7062,
+            "started_at": "2026-11-12T15:13:41.433Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 126,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 369,
+            "started_at": "2026-11-12T15:13:44.052Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 2836,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 219,
+            "started_at": "2026-11-12T15:13:44.694Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 16,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 833,
+            "started_at": "2026-11-12T15:13:49.099Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 148,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1086,
+            "started_at": "2026-11-12T15:13:49.566Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 141,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 31,
+            "started_at": "2026-11-12T15:13:49.999Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 19,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 126,
+            "started_at": "2026-11-12T15:13:51.742Z",
+            "tool": "Read"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 108,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 31,
+            "started_at": "2026-11-12T15:14:09.697Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 29783,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1085,
+            "started_at": "2026-11-12T15:14:12.238Z",
+            "tool": "Agent"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 98,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 57,
+            "started_at": "2026-11-12T15:14:13.695Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 95,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 29,
+            "started_at": "2026-11-12T15:14:14.157Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 114,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1155,
+            "started_at": "2026-11-12T15:14:14.593Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 91,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 27,
+            "started_at": "2026-11-12T15:14:15.092Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 90,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 477,
+            "started_at": "2026-11-12T15:14:17.334Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 130,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 2791,
+            "started_at": "2026-11-12T15:14:20.131Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 20,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 129,
+            "started_at": "2026-11-12T15:14:23.898Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 49,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 166,
+            "started_at": "2026-11-12T15:14:25.763Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 762,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 72,
+            "started_at": "2026-11-12T15:14:31.662Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 122,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 31,
+            "started_at": "2026-11-12T15:14:33.498Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 107,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 76,
+            "started_at": "2026-11-12T15:14:33.885Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 4828,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 415,
+            "started_at": "2026-11-12T15:14:35.361Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 160,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 31,
+            "started_at": "2026-11-12T15:14:44.663Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 110651,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 4819,
+            "started_at": "2026-11-12T15:14:47.949Z",
+            "tool": "Agent"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 141,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 57,
+            "started_at": "2026-11-12T15:14:49.275Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 19,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 5089,
+            "started_at": "2026-11-12T15:14:50.948Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 298,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 41596,
+            "started_at": "2026-11-12T15:14:51.387Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 4,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 303,
+            "started_at": "2026-11-12T15:14:51.974Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 118,
+            "is_error": true,
+            "permission_denied": false,
+            "result_bytes": 9844,
+            "started_at": "2026-11-12T15:14:54.643Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 5,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 22342,
+            "started_at": "2026-11-12T15:14:56.099Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 143,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 5778,
+            "started_at": "2026-11-12T15:14:59.761Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 23,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 6366,
+            "started_at": "2026-11-12T15:15:01.611Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 162,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1916,
+            "started_at": "2026-11-12T15:15:06.565Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 165,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 49,
+            "started_at": "2026-11-12T15:15:09.687Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 121,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 94,
+            "started_at": "2026-11-12T15:15:13.183Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 70,
+            "is_error": true,
+            "permission_denied": true,
+            "result_bytes": 727,
+            "started_at": "2026-11-12T15:15:17.356Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 17,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1699,
+            "started_at": "2026-11-12T15:15:18.992Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 20,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 7110,
+            "started_at": "2026-11-12T15:15:19.448Z",
+            "tool": "Read"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 47,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 201,
+            "started_at": "2026-11-12T15:15:21.949Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 44,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 201,
+            "started_at": "2026-11-12T15:15:23.248Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 42,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 201,
+            "started_at": "2026-11-12T15:15:24.200Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 52,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 201,
+            "started_at": "2026-11-12T15:15:28.240Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 47,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 191,
+            "started_at": "2026-11-12T15:15:30.786Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 48,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 191,
+            "started_at": "2026-11-12T15:15:31.880Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 15,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 191,
+            "started_at": "2026-11-12T15:15:33.279Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 14,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 191,
+            "started_at": "2026-11-12T15:15:34.629Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 16,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 191,
+            "started_at": "2026-11-12T15:15:35.779Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 46,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 191,
+            "started_at": "2026-11-12T15:15:37.731Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 50,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 191,
+            "started_at": "2026-11-12T15:15:39.684Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 50,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 229,
+            "started_at": "2026-11-12T15:15:46.897Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 45,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 229,
+            "started_at": "2026-11-12T15:15:48.248Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 47,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 229,
+            "started_at": "2026-11-12T15:15:49.553Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 48,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 229,
+            "started_at": "2026-11-12T15:15:50.702Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 48,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 229,
+            "started_at": "2026-11-12T15:15:51.799Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 14,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 229,
+            "started_at": "2026-11-12T15:15:52.848Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 15,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 229,
+            "started_at": "2026-11-12T15:15:53.901Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 126,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 31,
+            "started_at": "2026-11-12T15:15:56.553Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 82,
+            "is_error": true,
+            "permission_denied": true,
+            "result_bytes": 727,
+            "started_at": "2026-11-12T15:15:57.104Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 134,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 2045,
+            "started_at": "2026-11-12T15:15:58.039Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 193,
+            "is_error": true,
+            "permission_denied": false,
+            "result_bytes": 182,
+            "started_at": "2026-11-12T15:16:01.041Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 152,
+            "is_error": true,
+            "permission_denied": false,
+            "result_bytes": 171,
+            "started_at": "2026-11-12T15:16:04.951Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 126,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 117,
+            "started_at": "2026-11-12T15:16:08.129Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 3004,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 219,
+            "started_at": "2026-11-12T15:16:09.680Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 58,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 234,
+            "started_at": "2026-11-12T15:16:23.358Z",
+            "tool": "Edit"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 103,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 1360,
+            "started_at": "2026-11-12T15:16:49.498Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 16,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 220,
+            "started_at": "2026-11-12T15:16:54.485Z",
+            "tool": "Write"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 432,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 72,
+            "started_at": "2026-11-12T15:16:56.413Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 4813,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 415,
+            "started_at": "2026-11-12T15:16:58.384Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 16,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 227,
+            "started_at": "2026-11-12T15:17:12.676Z",
+            "tool": "Write"
+          }
+        ],
+        "polling": [
+          {
+            "command": "bash scripts/typecheck.sh",
+            "context": "devscene:layer-implementer",
+            "count": 3,
+            "total_ms": 8753
+          },
+          {
+            "command": "git rev-parse --show-toplevel",
+            "context": "devscene:layer-implementer",
+            "count": 3,
+            "total_ms": 398
+          }
+        ],
+        "slowest": [
+          {
+            "context": "devscene:committer",
+            "duration_ms": 5193,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 415,
+            "started_at": "2026-11-12T15:11:41.413Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 5046,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 415,
+            "started_at": "2026-11-12T15:09:49.117Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 4828,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 415,
+            "started_at": "2026-11-12T15:14:35.361Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "orchestrator",
+            "duration_ms": 4813,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 415,
+            "started_at": "2026-11-12T15:16:58.384Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 3004,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 219,
+            "started_at": "2026-11-12T15:16:09.680Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 2913,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 219,
+            "started_at": "2026-11-12T15:10:41.490Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 2836,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 219,
+            "started_at": "2026-11-12T15:13:44.694Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:layer-implementer",
+            "duration_ms": 1914,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 511,
+            "started_at": "2026-11-12T15:10:46.406Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 762,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 72,
+            "started_at": "2026-11-12T15:14:31.662Z",
+            "tool": "Bash"
+          },
+          {
+            "context": "devscene:committer",
+            "duration_ms": 691,
+            "is_error": false,
+            "permission_denied": false,
+            "result_bytes": 72,
+            "started_at": "2026-11-12T15:11:36.903Z",
             "tool": "Bash"
           }
         ]
