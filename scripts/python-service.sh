@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The one route to the Python toolchain of `docs-retrieval-service/` (the `harness-docs-retrieval`
+# The one route to the Python toolchain of `docs-retrieval-service/` (the `devscene-docs-retrieval`
 # package). Every Python command goes through this file so that it is spellable as a literal an
 # unattended run can issue, e.g. `bash scripts/python-service.sh test tests/test_cli.py`.
 #
@@ -13,7 +13,7 @@
 #   lint                 ruff check, then ruff format --check.
 #   typecheck            mypy (strict, over src and tests).
 #   test [path...]       pytest, paths forwarded verbatim; default the whole suite.
-#   run [args...]        the `harness-docs-retrieval` console script, arguments forwarded verbatim.
+#   run [args...]        the `devscene-docs-retrieval` console script, arguments forwarded verbatim.
 #   container-test       the `container`-marked tests against a throwaway Postgres: starts only the
 #                        compose `postgres` service under a per-checkout project name on a
 #                        per-checkout loopback port, runs `pytest -m container -rs`, and removes that
@@ -31,7 +31,7 @@
 #   4  container-test only: SKIPPED, because `docker` is not on PATH. A loud skip, not a pass.
 #
 # Nothing lands inside the checkout: the environment and every tool cache live under
-# ${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval/, keyed per checkout, so gate 6a's `$HOME`
+# ${XDG_CACHE_HOME:-$HOME/.cache}/devscene-docs-retrieval/, keyed per checkout, so gate 6a's `$HOME`
 # grep over the tree gains no hit.
 #
 # Deliberately no `-e`: each failure is mapped onto the exit contract above.
@@ -48,7 +48,7 @@ usage() {
   echo "usage: bash scripts/python-service.sh <lock|sync [--with-models]|lint|typecheck|test [path...]|run [args...]|container-test>" >&2
 }
 
-cache_root="${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval"
+cache_root="${XDG_CACHE_HOME:-$HOME/.cache}/devscene-docs-retrieval"
 checkout_key="$(printf '%s' "$repo_root" | cksum | awk '{print $1}')"
 export UV_PROJECT_ENVIRONMENT="$cache_root/venvs/$checkout_key"
 export PYTHONDONTWRITEBYTECODE=1
@@ -123,7 +123,7 @@ case "$command_name" in
     ;;
   run)
     require_env
-    graded uv run --frozen --no-sync harness-docs-retrieval "$@"
+    graded uv run --frozen --no-sync devscene-docs-retrieval "$@"
     ;;
   container-test)
     if [ "$#" -ne 0 ]; then usage; exit 2; fi
@@ -133,9 +133,9 @@ case "$command_name" in
     fi
     require_env
     compose_file="$repo_root/docs-retrieval-service/compose.yaml"
-    project="harness-docs-retrieval-test-$checkout_key"
+    project="devscene-docs-retrieval-test-$checkout_key"
     # Off the compose default 5432, and per checkout, so two worktrees' runs do not collide.
-    export HARNESS_DOCS_RETRIEVAL_PG_PORT="$((40000 + checkout_key % 20000))"
+    export DEVSCENE_DOCS_RETRIEVAL_PG_PORT="$((40000 + checkout_key % 20000))"
     teardown() {
       if ! docker compose -f "$compose_file" -p "$project" down -v >/dev/null 2>&1; then
         echo "container-test: warning: 'docker compose -p ${project} down -v' failed; remove that project by hand" >&2
@@ -151,7 +151,7 @@ case "$command_name" in
       exit 1
     fi
     # The credentials and database are compose.yaml's `postgres` service environment.
-    export HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL="postgresql://harness:harness@127.0.0.1:${HARNESS_DOCS_RETRIEVAL_PG_PORT}/docs_retrieval"
+    export DEVSCENE_DOCS_RETRIEVAL_TEST_DATABASE_URL="postgresql://devscene:devscene@127.0.0.1:${DEVSCENE_DOCS_RETRIEVAL_PG_PORT}/docs_retrieval"
     if uv run --frozen --no-sync pytest -m container -rs; then
       exit 0
     fi
