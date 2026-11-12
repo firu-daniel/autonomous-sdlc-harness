@@ -1,6 +1,6 @@
 # The `{{layerName}}` layer
 
-> **Read this when:** the change you are implementing or reviewing lands in the `{{layerName}}` layer — the directory `harness.config.json` gives that name. **Skip when:** it lands in another layer; each one has its own file, and the rules that span all of them live in the cross-layer conventions document.
+> **Read this when:** the change you are implementing or reviewing lands in the `{{layerName}}` layer — the directory `devscene.config.json` gives that name. **Skip when:** it lands in another layer; each one has its own file, and the rules that span all of them live in the cross-layer conventions document.
 
 **Purpose.** The rules this layer's implementer and its reviewer both read before they start. A task is assigned to exactly one layer, so whatever is written here is what that task is held to and the only layer document that task loads.
 
@@ -17,4 +17,4 @@
 
 _Run `{{analyzeInvocation}}` to fill this in from this repository's own code, or replace everything above with the `{{layerName}}` layer's own rules; either way this file is yours from here on and a re-run of `devscene init` keeps your copy — and if you write it by hand, the marker on the last line goes with it._
 
-<!-- harness:unfilled -->
+<!-- devscene:unfilled -->
