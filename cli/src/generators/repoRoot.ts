@@ -18,7 +18,7 @@
  * 1. **What is ignored is the *file*, never the *path*.** `pushEnvPath`, `qa.credentialsPath` and
  *    the client env file at `<appDir>/.env` name machine-local files whose location is repo-scoped
  *    configuration — the same for everyone who clones — which is why the path is in
- *    `harness.config.json` and only the contents stay local (`schemas/harness.config.schema.json`).
+ *    `devscene.config.json` and only the contents stay local (`schemas/devscene.config.schema.json`).
  *    Each is ignored under the path the config actually holds, so an adopter who moves one moves its
  *    ignore rule with it, and the committed `.example` sibling a fresh clone copies from is
  *    deliberately *not* matched by any of the three. The third differs from the other two only in how
@@ -326,7 +326,7 @@ export interface RepoRootResult {
  *
  * **`assertNoneSurvive` is off**, because every value substituted here is a configured path and a
  * configured path is the adopter's to write. One carrying `{{…}}` would be a strange thing to put in
- * `harness.config.json`, but it is not a fault in this CLI, and the post-check reports its findings
+ * `devscene.config.json`, but it is not a fault in this CLI, and the post-check reports its findings
  * as exactly that.
  *
  * **The lax {@link normalizeRepoDir} is what feeds it**, not the strict variant: a gitignore pattern

@@ -15,7 +15,7 @@
  * ## Three non-obvious choices, and where each comes from
  *
  * 1. **`commands.*` holds the wrapper *invocation*; the wrapper file holds the *raw* command
- *    line.** The `commands` object of `examples/harness.config.json` is the worked shape:
+ *    line.** The `commands` object of `examples/devscene.config.json` is the worked shape:
  *    `"typecheck": "bash packages/storefront/scripts/typecheck.sh"` in the config, with the
  *    `npm run …` / `pytest` / `go vet …` line inside the script. `deploy.command` (that
  *    file's `deploy` object) takes the same wrapper form on its own object. The wrappers
@@ -435,7 +435,7 @@ export function selectWrapper(config: HarnessConfig, key: WrapperKey): WrapperSe
 function unresolvedFix(key: WrapperKey, file: WrapperFile): string {
   return key === 'deploy'
     ? `put the deploy command line in ${file}`
-    : `set ${configKeyPath(key)} in harness.config.json`;
+    : `set ${configKeyPath(key)} in devscene.config.json`;
 }
 
 /**
@@ -454,7 +454,7 @@ function unresolvedFix(key: WrapperKey, file: WrapperFile): string {
  * comment above that line asks for.
  */
 function unresolvedBody(key: WrapperKey, file: WrapperFile): string {
-  return `harness_fail "harness: ${unresolvedFix(key, file)}"`;
+  return `harness_fail "devscene:${unresolvedFix(key, file)}"`;
 }
 
 /**
@@ -651,7 +651,7 @@ export function writeWrapperScripts({
 
     if (placeholder) {
       warnings.push(
-        `${configKeyPath(key)} still holds the placeholder init wrote, so no ${file} was written and none is allow-listed: set it in harness.config.json and re-run init`,
+        `${configKeyPath(key)} still holds the placeholder init wrote, so no ${file} was written and none is allow-listed: set it in devscene.config.json and re-run init`,
       );
       continue;
     }

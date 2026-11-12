@@ -16,7 +16,7 @@
  * ## Five non-obvious choices, and where each comes from
  *
  * 1. **No configured value is rendered into either file; only this CLI's own version is.** The job
- *    reads `harness.config.json` at run time, so a workflow frozen with a configured value would go
+ *    reads `devscene.config.json` at run time, so a workflow frozen with a configured value would go
  *    wrong the moment the key changed. The version is the exception because it is the pin the job
  *    installs the plugin and runs `npx devscene@<version>` against, and it is read
  *    through `core/paths.ts` → `ownManifestString`, the one reader of this package's manifest.
