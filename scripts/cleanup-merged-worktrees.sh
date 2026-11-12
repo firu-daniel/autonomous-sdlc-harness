@@ -51,7 +51,7 @@
 # THE THREE REFUSALS. It never touches
 #
 #   * a PROTECTED branch — the set resolved at run time from this repository's
-#     `harness.config.json` (`protectedBranches`, or that key's schema default,
+#     `devscene.config.json` (`protectedBranches`, or that key's schema default,
 #     unioned with `defaultBranch`), through lib/harness-run-lib.sh. There is no
 #     list of branch names in this file: one written here would delete branches
 #     an adopter had protected, the moment their configuration named anything
@@ -114,7 +114,7 @@
 # from this side — so every input it cannot resolve ends the run
 # instead of being worked around:
 #
-#   * the shared library, or `<repo_root>/harness.config.json`, cannot be read
+#   * the shared library, or `<repo_root>/devscene.config.json`, cannot be read
 #     (absent, unreadable, invalid JSON, more than one document, no
 #     `defaultBranch`, or `jq` missing or older than 1.5) — it cannot prove any
 #     branch is unprotected;
@@ -163,13 +163,13 @@
 #   export XDG_STATE_HOME=$(mktemp -d)
 #   w=$(mktemp -d); b="$w/origin.git"; git init -q --bare "$b"
 #   d="$w/demo"; git init -q -b trunk "$d"; git -C "$d" remote add origin "$b"
-#   printf '%s' '{"version":1,"projectName":"demo","defaultBranch":"trunk","protectedBranches":["trunk","release/*"],"stateDir":"sdlc-harness/","layers":[],"commands":{}}' > "$d/harness.config.json"
+#   printf '%s' '{"version":1,"projectName":"demo","defaultBranch":"trunk","protectedBranches":["trunk","release/*"],"stateDir":"devscene/","layers":[],"commands":{}}' > "$d/devscene.config.json"
 #   mkdir -p "$d/scripts/lib"   # copy this script + lib/ there
 #   git -C "$d" add -A && git -C "$d" commit -qm seed
 #   git -C "$d" push -q -u origin trunk
 #   for r in feat_gone feat_old feat_live release/1.0; do git -C "$d" branch "$r"; \
 #     git -C "$d" push -q -u origin "$r"; done
-#   mkdir -p "$d/sdlc-harness/autonomous_logs"
+#   mkdir -p "$d/devscene/autonomous_logs"
 #   bash -c '. "$1/scripts/lib/harness-run-lib.sh"
 #     hr_clone_create_var "$1" feat_gone trunk || echo "$HR_CLONE_REFUSAL"' _ "$d"
 #   bash -c '. "$1/scripts/lib/harness-run-lib.sh"; r=$(hr_state_path "$1" \
@@ -217,7 +217,7 @@
 #                 -> the skip line for feat_gone; its clone, branch and planted
 #                    profile are untouched (same with "parked", "park_loop" and
 #                    "paused")
-#   unresolvable  printf 'x' > "$d/harness.config.json"
+#   unresolvable  printf 'x' > "$d/devscene.config.json"
 #                 -> one line, exit 0, nothing deleted
 #   offline       git -C "$d" remote set-url origin /nonexistent.git
 #                 -> the fetch message, exit 0, nothing deleted
@@ -289,7 +289,7 @@ fi
 cfg_status=0
 hr_config_load "$main_repo" || cfg_status=$?
 if [ "$cfg_status" -ne 0 ]; then
-  echo "cleanup-merged-worktrees.sh: cannot resolve '$main_repo/harness.config.json' — refusing to delete anything"
+  echo "cleanup-merged-worktrees.sh: cannot resolve '$main_repo/devscene.config.json' — refusing to delete anything"
   echo "  (no configuration there, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)"
   exit 0
 fi

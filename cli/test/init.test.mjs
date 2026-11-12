@@ -5602,7 +5602,7 @@ test('the generated project file spells the harness commands qualified by the pl
   for (const spelling of [
     '/devscene:analyze',
     '/devscene:branch-*',
-    '/devscene:harness-*',
+    '/devscene:read-mention',
   ]) {
     assert.ok(content.includes(spelling), `${CLAUDE_MD} does not carry the qualified spelling ${spelling}`);
   }

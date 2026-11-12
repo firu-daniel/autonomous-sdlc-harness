@@ -393,7 +393,7 @@
 # IT REFUSES TO START ON A CONFIGURATION IT CANNOT READ. A watcher that guessed
 # would watch a directory nobody drops files into, log where nobody tails, and
 # honor a kill switch nobody can reach — silently, for as long as it runs. So an
-# unreadable library, a location outside a repository, or a `harness.config.json`
+# unreadable library, a location outside a repository, or a `devscene.config.json`
 # that is absent, unparsable, multi-document, missing `defaultBranch` or beyond
 # the `jq` floor ends the process with ONE line on stderr and a non-zero status,
 # before anything is created. Those lines go to stderr rather than to the watcher
@@ -406,7 +406,7 @@
 #
 # is sourced when it is a file, and its absence is a silent no-op. It exists so an
 # operator can change a tunable WITHOUT editing a generated file — a repository-
-# scoped tunable would be a `harness.config.json` key and there is none, and this
+# scoped tunable would be a `devscene.config.json` key and there is none, and this
 # location survives a `daemon install` that re-renders the service unit. Its scope
 # is the tunables below and nothing else BY INTENT; the mechanism is assignment
 # order, so a value resolved above this point is reachable from the file whether
@@ -724,15 +724,15 @@
 # REPRO — reproduce any decision by hand, against a throwaway fixture:
 #
 #   w=$(mktemp -d); d="$w/demo"; git init -q -b trunk "$d"
-#   printf '%s' '{"version":1,"projectName":"demo","defaultBranch":"trunk","stateDir":"sdlc-harness/","layers":[],"commands":{}}' > "$d/harness.config.json"
-#   mkdir -p "$d/scripts/lib"   # copy this script, autonomous-notify.sh and lib/ there
-#   r="$d/sdlc-harness/autonomous_logs/registry.json"
+#   printf '%s' '{"version":1,"projectName":"demo","defaultBranch":"trunk","stateDir":"devscene/","layers":[],"commands":{}}' > "$d/devscene.config.json"
+#   mkdir -p "$d/devscene-scripts/lib"   # copy this script, autonomous-notify.sh and lib/ there
+#   r="$d/devscene/autonomous_logs/registry.json"
 #
-#   status        bash "$d/scripts/autonomous-watcher.sh" status
+#   status        bash "$d/devscene-scripts/autonomous-watcher.sh" status
 #                 -> creates "$r" as {"runs":{}}, prints the no-runs line and the
 #                    resolved-tunables line
-#   one pass      bash "$d/scripts/autonomous-watcher.sh" tick; echo $?   -> 0
-#   kill switch   touch "$d/sdlc-harness/AUTONOMOUS_STOP"
+#   one pass      bash "$d/devscene-scripts/autonomous-watcher.sh" tick; echo $?   -> 0
+#   kill switch   touch "$d/devscene/AUTONOMOUS_STOP"
 #                 -> tick logs the kill-switch line, does nothing else, exits 0,
 #                    and the file is still there afterwards
 #   vanished pid  printf '%s' '{"runs":{"feat_x":{"status":"running","pid":999999}}}' > "$r"
@@ -740,7 +740,7 @@
 #                    notification (point DEVSCENE_PUSH_CMD at a recorder to see it)
 #   live pid      the same record with this shell's own $$ -> it stays `running`
 #   the count     bash -c '. "$1" status >/dev/null; running_count' _ \
-#                   "$d/scripts/autonomous-watcher.sh"
+#                   "$d/devscene-scripts/autonomous-watcher.sh"
 #                 -> exactly `0` (or `1` for the live pid), with no log text in
 #                    it. Sourcing with a subcommand runs that subcommand and then
 #                    leaves the functions defined, which is how a pure reader is
@@ -756,29 +756,29 @@
 #                 chmod +x "$s"
 #                 DEVSCENE_AGENT_CLI="$s" bash -c \
 #                   '. "$1" status >/dev/null; launch_run feat_x "$2" "$3" task; wait' \
-#                   _ "$d/scripts/autonomous-watcher.sh" "$d" \
-#                   "$d/sdlc-harness/autonomous_logs/feat_x.log"
+#                   _ "$d/devscene-scripts/autonomous-watcher.sh" "$d" \
+#                   "$d/devscene/autonomous_logs/feat_x.log"
 #                 -> the record goes `running` then `completed`, ONE `completed`
 #                    notification fires, and BOTH the run log and its sibling
 #                    feat_x.stream.jsonl have content. Then, against the same
 #                    fixture: a stub ending `exit 2` -> `failed` with the code in
 #                    the detail; an unanswered
-#                    "$d/sdlc-harness/clarifications/feat_x/question_1.md"
-#                    -> `parked` whatever the code; "$d/sdlc-harness/PAUSE_ACK"
-#                    -> `paused`, and a "$d/sdlc-harness/RESUME" that existed
+#                    "$d/devscene/clarifications/feat_x/question_1.md"
+#                    -> `parked` whatever the code; "$d/devscene/PAUSE_ACK"
+#                    -> `paused`, and a "$d/devscene/RESUME" that existed
 #                    beforehand is gone. PAUSE_ACK together with an unanswered
 #                    question is `paused` — that ordering is the contract.
 #                    A stub that writes a task ledger at
-#                    "$d/sdlc-harness/flow_progress/feat_x_progress.md" with
+#                    "$d/devscene/flow_progress/feat_x_progress.md" with
 #                    `D` left `[ ]` -> `paused`, pause_reason `unfinished`, ONE
 #                    `paused` notification naming branch-resume and no
 #                    `completed`; every id settled -> `completed`. Launched
 #                    with `docs` in place of `task`, a checklist at
-#                    "$d/sdlc-harness/docs_catalog/feat_x_docs.md" carrying a
+#                    "$d/devscene/docs_catalog/feat_x_docs.md" carrying a
 #                    `- [ ] ` entry -> `paused`, pause_reason `unfinished`
 #   the prompt   point the stub at one that saves its own "$2" (the argument
 #                 after -p) to a file
-#                 -> it NAMES sdlc-harness/task_prompts/feat_x_task_prompt.md and
+#                 -> it NAMES devscene/task_prompts/feat_x_task_prompt.md and
 #                    the absolute kill-switch path, and carries no line of that
 #                    prompt file's contents. `registry_set feat_x engine docs`
 #                    first -> it names the docs checklist instead, and carries no
@@ -786,7 +786,7 @@
 #   a flag        point the stub at one that saves its WHOLE argument vector
 #                 ("$@") instead of only the argument after -p, and launch it as
 #                 the `a launch` entry does
-#                 -> with `agentEffort` set in the fixture's harness.config.json
+#                 -> with `agentEffort` set in the fixture's devscene.config.json
 #                    the saved vector carries `--effort <that level>`; remove the
 #                    key and it carries no effort flag at all, while `--model` is
 #                    present either way
@@ -805,10 +805,10 @@
 #   a drop        give "$d" a bare "origin" and a seed commit first (see
 #                 create-worktree.sh's REPRO), then
 #                 printf 'do the thing\n' > \
-#                   "$d/sdlc-harness/autonomous_inbox/feat_x_task_prompt.md"
-#                 DEVSCENE_AGENT_CLI="$s" bash "$d/scripts/autonomous-watcher.sh" tick
+#                   "$d/devscene/autonomous_inbox/feat_x_task_prompt.md"
+#                 DEVSCENE_AGENT_CLI="$s" bash "$d/devscene-scripts/autonomous-watcher.sh" tick
 #                 -> a working copy at "$w/demo-feat_x" checked out on feat_x,
-#                    the prompt at sdlc-harness/task_prompts/feat_x_task_prompt.md
+#                    the prompt at devscene/task_prompts/feat_x_task_prompt.md
 #                    inside it, `git -C "$w/demo-feat_x" log -1` showing
 #                    "chore: add task prompt for feat_x", the branch on the bare
 #                    repository, the inbox file archived as
@@ -816,12 +816,12 @@
 #                    the stub launched. Drop the IDENTICAL file again -> the
 #                    "already committed (identical re-drop)" line and NO commit
 #   routing       feat_x_review_2.md   -> branch feat_x, the review engine, the
-#                    file placed under sdlc-harness/user_reviews/ with its round
+#                    file placed under devscene/user_reviews/ with its round
 #                    suffix intact and NOT committed — on a local run; a remote
 #                    review drop is committed and pushed before dispatch (see
 #                    REMOTE DISPATCH and the `remote review` entry)
 #                 feat_x_docs.md       -> branch feat_x, the docs engine, the
-#                    checklist committed under sdlc-harness/docs_catalog/
+#                    checklist committed under devscene/docs_catalog/
 #                 foo_review_task_prompt.md -> branch foo_review, task engine
 #                 foo_task_prompt_review.md -> branch foo_task_prompt, review
 #                 notes.md             -> archived as rejected_<ts>_notes.md,
@@ -834,7 +834,7 @@
 #                    (a..b_task_prompt.md, foo.lock_review_2.md), and when the
 #                    protected set cannot be resolved
 #                 README.md            -> left in place, never archived
-#   a guard       with "$d/sdlc-harness/AUTONOMOUS_STOP" present, or the registry
+#   a guard       with "$d/devscene/AUTONOMOUS_STOP" present, or the registry
 #                 already at MAX_PARALLEL_RUNS live runs, the dropped file STAYS
 #                 in the inbox and nothing launches; with a `parked`, `paused` or
 #                 `park_loop` record for that branch it is archived as
@@ -845,17 +845,17 @@
 #                   DEVSCENE_AGENT_CLI="$s" bash -c '. "$1" status >/dev/null
 #                     hr_sandbox_prereq_probe_var() { HR_SANDBOX_MISSING="bwrap socat"
 #                       HR_SANDBOX_REFUSAL="needs bubblewrap"; return 1; }
-#                     tick; wait' _ "$d/scripts/autonomous-watcher.sh"
+#                     tick; wait' _ "$d/devscene-scripts/autonomous-watcher.sh"
 #                 -> the record `failed`, the inbox file archived as
 #                    failed_<ts>_feat_x_task_prompt.md, ONE `failed`
 #                    notification naming bubblewrap, and the stub NOT launched.
 #                    A non-blank `"sandbox":{"optOut":{"reason":"…"}}` in
-#                    "$d/harness.config.json" -> it launches
+#                    "$d/devscene.config.json" -> it launches
 #   a resume      from a `parked` record whose run wrote question_1.md,
 #                 question_2.md and question_3.md under
-#                 "$d/sdlc-harness/clarifications/feat_x/", write answer_1.md and
+#                 "$d/devscene/clarifications/feat_x/", write answer_1.md and
 #                 answer_2.md there
-#                 DEVSCENE_AGENT_CLI="$s" bash "$d/scripts/autonomous-watcher.sh" tick
+#                 DEVSCENE_AGENT_CLI="$s" bash "$d/devscene-scripts/autonomous-watcher.sh" tick
 #                 -> nothing happens: the record stays `parked`. Write answer_3.md
 #                    and tick again -> the record goes `running` with
 #                    resumed_for_index "1 2 3", ONE `resumed` notification, and
@@ -879,20 +879,20 @@
 #                 gone, the `park loop cleared` line is logged, and the run
 #                 resumes in that same pass. PARK_LOOP_MAX_CYCLES=0 -> it never
 #                 trips; a session the pause resume launched never counts
-#   a pause       a `paused` record with "$d/sdlc-harness/PAUSE_ACK" and
+#   a pause       a `paused` record with "$d/devscene/PAUSE_ACK" and
 #                 PAUSE_PROGRESS.md present -> tick does nothing until
-#                 "$d/sdlc-harness/RESUME" exists; then the record is `running`,
+#                 "$d/devscene/RESUME" exists; then the record is `running`,
 #                 PAUSE / RESUME / PAUSE_ACK are gone, PAUSE_PROGRESS.md is
 #                 UNTOUCHED, and the prompt names
-#                 sdlc-harness/flow_progress/feat_x_progress.md. With
+#                 devscene/flow_progress/feat_x_progress.md. With
 #                 AUTONOMOUS_STOP present, or at MAX_PARALLEL_RUNS, neither
 #                 resume pass acts and every sentinel is still there afterwards
 #   a stall       launch as above with a stub that SLEEPS (so the pid stays
 #                 alive and the record stays `running`), then back-date BOTH
 #                 halves of the liveness signal:
 #                   touch -t 202001010000 \
-#                     "$d/sdlc-harness/autonomous_logs/feat_x.log" \
-#                     "$d/sdlc-harness/autonomous_logs/feat_x.stream.jsonl"
+#                     "$d/devscene/autonomous_logs/feat_x.log" \
+#                     "$d/devscene/autonomous_logs/feat_x.stream.jsonl"
 #                 -> STALL_KILL_SECS=99999999 bash …/autonomous-watcher.sh tick
 #                    logs ONE stall-watchdog warn line and sets stall_warned=1; a
 #                    second tick adds none; `touch`ing the .stream.jsonl clears
@@ -900,7 +900,7 @@
 #                    STALL_WARN_SECS=1 STALL_KILL_SECS=2, the tick kills the stub
 #                    AND its child, `git -C "$w/demo-feat_x" status --porcelain`
 #                    is empty (an uncommitted edit made before the tick is gone),
-#                    sdlc-harness/PAUSE_PROGRESS.md in that working copy carries
+#                    devscene/PAUSE_PROGRESS.md in that working copy carries
 #                    the auto-recovery note, stall_restarts is 1, the record is
 #                    `running` again and the stub's saved prompt carries the
 #                    pause-resume clause. A stub SPINNING on CPU instead of
@@ -911,7 +911,7 @@
 #                    The reset asks origin for the default branch's commit, so
 #                    the fixture needs `a drop`'s origin; without one the run
 #                    is given up, naming that.
-#                    `touch "$d/sdlc-harness/autonomous_logs/.usage_hold"` ->
+#                    `touch "$d/devscene/autonomous_logs/.usage_hold"` ->
 #                    the whole pass is skipped even past the kill threshold, and
 #                    STALL_CHECK_ENABLED=0 does the same
 #   a hold        put a stub `caffeinate` that saves its "$@" and its own $$
@@ -924,7 +924,7 @@
 #   a wake        with `a stall`'s back-dated liveness files and its sleeping
 #                 stub, back-date the last pass:
 #                   echo $(( $(date +%s) - 4000 )) > \
-#                     "$d/sdlc-harness/autonomous_logs/.host_last_tick"
+#                     "$d/devscene/autonomous_logs/.host_last_tick"
 #                 -> STALL_WARN_SECS=1 STALL_KILL_SECS=2 bash …/autonomous-watcher.sh
 #                    tick logs `host-wake:` and `measuring silence from the wake`,
 #                    no `is hung` line, and the run is still `running`
@@ -932,13 +932,13 @@
 #   gate          one event to its stream and read the gate without acting:
 #                   printf '{"type":"rate_limit_event","rate_limit_info":{"status":"allowed_warning","rateLimitType":"five_hour","resetsAt":%s,"isUsingOverage":false}}\n' \
 #                     "$(( $(date +%s) + 3600 ))" \
-#                     >> "$d/sdlc-harness/autonomous_logs/feat_x.stream.jsonl"
-#                   bash "$d/scripts/autonomous-watcher.sh" usage
+#                     >> "$d/devscene/autonomous_logs/feat_x.stream.jsonl"
+#                   bash "$d/devscene-scripts/autonomous-watcher.sh" usage
 #                 -> state=warning, resume_at_epoch = that resetsAt + 120, zero
 #                    usage-paused runs, marker absent — and the registry and the
 #                    marker are byte-identical afterwards. Then
 #                    USAGE_WARNING_DEBOUNCE=1 bash …/autonomous-watcher.sh tick
-#                    -> sdlc-harness/PAUSE in "$w/demo-feat_x", the record tagged
+#                    -> devscene/PAUSE in "$w/demo-feat_x", the record tagged
 #                    paused_by=usage with that usage_resume_at, and
 #                    autonomous_logs/.usage_hold present — after which a fresh
 #                    inbox drop stays in the inbox. The debounce counts
@@ -957,8 +957,8 @@
 #                    pause on the missing data
 #   auto-resume   from that `paused` record, put its resume time in the past
 #                   bash -c '. "$1" status >/dev/null; registry_set feat_x usage_resume_at 1' \
-#                     _ "$d/scripts/autonomous-watcher.sh"
-#                 -> the next tick drops sdlc-harness/RESUME, clears BOTH tags,
+#                     _ "$d/devscene-scripts/autonomous-watcher.sh"
+#                 -> the next tick drops devscene/RESUME, clears BOTH tags,
 #                    and the pause-resume pass relaunches the run. Clear
 #                    `paused_by` first (which is what a hand pause looks like) and
 #                    that record is never touched again
@@ -999,9 +999,9 @@
 #                    USAGE_LANE_LOCK_ENABLED=0 turns the lock half off again.
 #                    The record half above is driven independently with
 #                    USAGE_LANE_STATE_ENABLED
-#   a job         j="$d/sdlc-harness/autonomous_logs/remote_status.json"
+#   a job         j="$d/devscene/autonomous_logs/remote_status.json"
 #                 DEVSCENE_AGENT_CLI="$s" POLL_INTERVAL_SECS=1 bash \
-#                   "$d/scripts/autonomous-watcher.sh" job feat_x task none
+#                   "$d/devscene-scripts/autonomous-watcher.sh" job feat_x task none
 #                 -> exit 2 and no stub launch; again with HARNESS_JOB_MODE=1 ->
 #                    `job: completed stop` as the last line, exit 0, "$j" with
 #                    status `completed` and decision `stop`, NO `launched`
@@ -1018,10 +1018,10 @@
 #                    auto_resumes "0". Kill the job's process group mid-run -> "$j"
 #                    stays at `running` / `continue`. Point DEVSCENE_GH_CLI at a
 #                    stub (see remote-run.sh's REPRO) and use a stub agent that
-#                    writes "$d/sdlc-harness/PAUSE_ACK" once PAUSE appears:
+#                    writes "$d/devscene/PAUSE_ACK" once PAUSE appears:
 #                    REMOTE_SELF_PAUSE_AFTER_SECS=1 -> `job: paused continue`,
 #                    pause_reason `budget`, no `paused` notification; a `run
-#                    list` answer carrying a `harness pause feat_x` run created
+#                    list` answer carrying a `devscene pause feat_x` run created
 #                    after the start -> `job: paused stop`, pause_reason `user`.
 #                    A stub writing PAUSE_ACK unrequested, then exiting 0 ->
 #                    one auto-resume, `job: completed stop`; a stub ending
@@ -1032,14 +1032,14 @@
 #                    1 + REMOTE_AUTO_RESUME_MAX times, `job: paused stop`, "$j"
 #                    with pause_reason `unfinished`. A
 #                    stub writing a task ledger at
-#                    "$d/sdlc-harness/flow_progress/feat_x_progress.md" and
+#                    "$d/devscene/flow_progress/feat_x_progress.md" and
 #                    sleeping past a few polls, the ledger never ticked ->
 #                    the watcher log carries one `remote-run.sh: report:` line
 #                    from the first pass and one from the job's end, none
 #                    between
 #   remote drop  `a drop`'s fixture, with "$d"'s own files committed and pushed
 #                 to origin's default branch, `"execution":{"target":
-#                 "github-actions"}` in its harness.config.json, and
+#                 "github-actions"}` in its devscene.config.json, and
 #                 DEVSCENE_GH_CLI pointed at a recorder (see remote-run.sh's
 #                 REPRO); drop feat_x_task_prompt.md and tick
 #                 -> the prompt committed and pushed as in `a drop`, ONE
@@ -1097,8 +1097,8 @@
 #                 with the mirror's PAUSE -> each tick sends no `gh` call, does
 #                 NOT launch the stub, and leaves every mirror file and the
 #                 record's status as they were
-#   unresolvable  printf 'x' > "$d/harness.config.json"
-#                 -> one line on stderr, exit 1, nothing under "$d/sdlc-harness"
+#   unresolvable  printf 'x' > "$d/devscene.config.json"
+#                 -> one line on stderr, exit 1, nothing under "$d/devscene"
 
 set -u
 
@@ -1293,7 +1293,7 @@ fi
 # Warm the library's per-process cache once, unsubstituted, and make the refusal
 # here rather than letting each reader below fail separately with its own message.
 hr_config_load "$MAIN_REPO" ||
-  fatal "cannot resolve '$MAIN_REPO/harness.config.json' (absent, unreadable, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5) — refusing to start"
+  fatal "cannot resolve '$MAIN_REPO/devscene.config.json' (absent, unreadable, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5) — refusing to start"
 
 INBOX_DIR="$(hr_state_path "$MAIN_REPO" autonomous_inbox)" || INBOX_DIR=""
 LOGS_DIR="$(hr_state_path "$MAIN_REPO" autonomous_logs)" || LOGS_DIR=""
@@ -1430,7 +1430,7 @@ fi
 # value like the model above, consumed by the launch pass. Resolved HERE, on
 # the far side of the override channel, ON PURPOSE: it is a repository-scoped
 # pin every contributor and every headless run must agree on, so the committed
-# `harness.config.json` value wins and the machine-local file cannot move it.
+# `devscene.config.json` value wins and the machine-local file cannot move it.
 # DO NOT MOVE THIS ABOVE THE SOURCE: the header's "scope is the tunables below
 # and nothing else" describes intent rather than mechanism — the file is sourced
 # under `set -a`, so a plain assignment in it overwrites ANY variable already
@@ -1633,7 +1633,7 @@ LAST_USAGE_CHECK=0
 USAGE_WARNING_STREAK=0
 
 # Job mode's own policies (see JOB MODE in the header); a local watcher reads
-# none of them. How often the control poll asks GitHub for a `harness pause
+# none of them. How often the control poll asks GitHub for a `devscene pause
 # <branch>` run — each poll is one `gh run list`.
 REMOTE_CONTROL_POLL_SECS="${REMOTE_CONTROL_POLL_SECS:-60}"
 # Not a tunable. How far each control poll's next lower bound reaches back:
@@ -1907,7 +1907,7 @@ job_report() {
 #                       `remote-run.sh sync`), and `unfinished` locally too:
 #                       `usage` the usage gate requested it; `budget` job mode
 #                       did, REMOTE_SELF_PAUSE_AFTER_SECS into a hosted job;
-#                       `user` job mode did, on a `harness pause <branch>` run;
+#                       `user` job mode did, on a `devscene pause <branch>` run;
 #                       `overload` nobody requested it — the run's own
 #                       API-overload self-pause; `unfinished` the session exited
 #                       0 before its ledger finished (task / user_review: the
@@ -2219,7 +2219,7 @@ footprint_grade() {
 # process that is gone — so on a machine whose daemons run under more than one
 # account the two counts can differ by those runs, and by nothing else.
 # 0 whenever that registry is absent or unreadable, AND whenever that root's
-# harness.config.json cannot be read: hr_state_path fails with the config read,
+# devscene.config.json cannot be read: hr_state_path fails with the config read,
 # so the registry is never located and the schema default is not guessed at.
 # `doctor`'s footprintRow returns 0 in the same case. A PURE READER.
 footprint_live_runs() {
@@ -2782,7 +2782,7 @@ run_profile_render() {
   entries="$(run_profile_entries "$copy" "$kind")" || rc=$?
   case "$rc" in
     0) ;;
-    1) RUN_PROFILE_REFUSAL="the run copy's protected paths could not be read from harness.config.json, or the denyWrite list from $SETTINGS_PROFILE"; return 1 ;;
+    1) RUN_PROFILE_REFUSAL="the run copy's protected paths could not be read from devscene.config.json, or the denyWrite list from $SETTINGS_PROFILE"; return 1 ;;
     2) RUN_PROFILE_REFUSAL="git worktree list failed in $MAIN_REPO"; return 1 ;;
     3) RUN_PROFILE_REFUSAL="a per-run profile entry carries a quote, a '*' or a tab, or the run copy's path carries a '\$', a backquote, '&', ';', '|', '<', '>' or a newline"; return 1 ;;
     4) RUN_PROFILE_REFUSAL="the run copy's kind '$kind' is not clone"; return 1 ;;
@@ -2793,7 +2793,7 @@ run_profile_render() {
     return 1
   fi
   if ! run_profile_wrapper_prefixes "$copy"; then
-    RUN_PROFILE_REFUSAL="the scripts directory could not be read from harness.config.json"
+    RUN_PROFILE_REFUSAL="the scripts directory could not be read from devscene.config.json"
     return 1
   fi
   if ! drops="$(run_profile_glob_drops)"; then
@@ -2893,7 +2893,7 @@ run_profile_check() {
   fi
   if [ -n "$copy" ]; then
     if ! run_profile_wrapper_prefixes "$copy"; then
-      RUN_PROFILE_REFUSAL="the scripts directory could not be read from harness.config.json"
+      RUN_PROFILE_REFUSAL="the scripts directory could not be read from devscene.config.json"
       return 1
     fi
     main="$RUN_PROFILE_MAIN_PREFIX"
@@ -3303,7 +3303,7 @@ spawn_engine() {
     # Local only: a job's environment is the runner's, not a person's shell.
     # The main checkout's configuration, never the run copy's.
     if ! pass_names="$(hr_session_pass_env "$MAIN_REPO")"; then
-      spawn_refuse "$branch" "sandbox.passEnv could not be read from the main checkout's harness.config.json, so the session's allow-list is unknown"
+      spawn_refuse "$branch" "sandbox.passEnv could not be read from the main checkout's devscene.config.json, so the session's allow-list is unknown"
       return 1
     fi
     pass_names="$(printf '%s\n' "$pass_names" | tr '\n' ' ')"
@@ -5148,7 +5148,7 @@ process_inbox_file() {
   # The intake refusal — see above. Nothing above it may write a file.
   if ! hr_inbox_branch_refusal_var "$MAIN_REPO" "$branch"; then
     log "rejecting '$fname': $HR_INBOX_REFUSAL — nothing created, committed or launched"
-    reject_preserving_status "$branch" "$file" "$fname" "(refused at intake: $HR_INBOX_REFUSAL — nothing created, committed or launched; rename the drop to an unprotected, valid branch name, or, when the protected set cannot be resolved, repair harness.config.json, then drop it again)" "$WATCHER_LOG"
+    reject_preserving_status "$branch" "$file" "$fname" "(refused at intake: $HR_INBOX_REFUSAL — nothing created, committed or launched; rename the drop to an unprotected, valid branch name, or, when the protected set cannot be resolved, repair devscene.config.json, then drop it again)" "$WATCHER_LOG"
     return 0
   fi
 
@@ -5161,7 +5161,7 @@ process_inbox_file() {
   # pass). REMOTE DISPATCH in the header; remote=0 is today's path throughout.
   local target remote=0
   target="$(hr_execution_target "$MAIN_REPO")" || {
-    log "execution.target is unresolvable in '$MAIN_REPO/harness.config.json' — treating the drop of '$fname' as local"
+    log "execution.target is unresolvable in '$MAIN_REPO/devscene.config.json' — treating the drop of '$fname' as local"
     target="local"
   }
   [ "$target" = "github-actions" ] && remote=1
@@ -6033,7 +6033,7 @@ tick() {
   # its passes and a wake is never mistaken for silence.
   host_wake_pass
 
-  # Drop the library's per-process cache so an edit to `harness.config.json` is
+  # Drop the library's per-process cache so an edit to `devscene.config.json` is
   # picked up without restarting the daemon. The anchors above are start-up
   # values and stay as they are for this process's life — moving the state
   # directory under a live watcher needs a restart, by design.
@@ -6256,7 +6256,7 @@ job_control_poll() {
     JOB_USER_PAUSE_DROPPED=1
     registry_set "$branch" pause_reason user
     touch "$state_abs/PAUSE"
-    log "job: a 'harness pause $branch' run was created at or after $since — dropped PAUSE (reason user)"
+    log "job: a 'devscene pause $branch' run was created at or after $since — dropped PAUSE (reason user)"
   fi
   job_write_status "$branch" "$remote_status" continue "job started"
 }
@@ -6596,7 +6596,7 @@ run_job() {
 }
 
 # job_sweep <branch> — the `job-sweep` entry, the workflow's `Sweep the sandbox
-# placeholders` step: one job-mode manifest sweep after a `Run the harness` step
+# placeholders` step: one job-mode manifest sweep after a `Run DevScene` step
 # whose watcher was killed with its session, so `run_job`'s exit sweep never
 # ran. A leftover `<scriptsDir>/.git` was already swept by the start-up
 # recovery; this pass takes what does not stop `hr_main_repo`. Not gated on the
