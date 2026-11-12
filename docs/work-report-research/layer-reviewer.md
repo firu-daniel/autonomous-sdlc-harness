@@ -20,13 +20,13 @@ The hard constraint holds, mainly through thinning (the 644-word catch-all secti
 
 ## Read tree
 
-Measured with `wc -w` in this repository. `harness.config.json` defines the layers `cli`, `plugin` and `general` at `.`.
+Measured with `wc -w` in this repository. `devscene.config.json` defines the layers `cli`, `plugin` and `general` at `.`.
 
 | File | Up-front / on-demand | Words |
 |---|---|---|
 | `plugin/agents/layer-reviewer.md` | up-front | 3 997 |
 | `.claude/CLAUDE.md` (auto-loaded; template `cli/templates/claude/CLAUDE.md` = 1 320) | up-front | 1 695 |
-| `harness.config.json` (gives `stateDir`, `scriptsDir`, `phases.parity`, `layers[]` — `layer-reviewer.md:14`, `:119`) | up-front | 154 |
+| `devscene.config.json` (gives `stateDir`, `scriptsDir`, `phases.parity`, `layers[]` — `layer-reviewer.md:14`, `:119`) | up-front | 154 |
 | Dispatched `layers[].conventions`: `.claude/context/plugin.md` / `cli.md` / `conventions.md` | up-front (one of) | 4 174 / 2 647 / 5 864 |
 | `.claude/context/conventions.md`, required by the CLAUDE.md table for "Any implementation, review or planning" (`.claude/CLAUDE.md` → `## Context files`) | up-front on a non-catch-all dispatch | 5 864 |
 | Every `layers[].conventions` (catch-all only, `layer-reviewer.md:119`) | up-front on catch-all | 12 685 |
@@ -165,7 +165,7 @@ It would be shared by the ten agents on the `dispatch_discipline_instructions.md
 | `layer_review_catch_all.md` (read via R4 when `path == "."`) | (inside the 3 997) | ~670 | +670 |
 | **Subtotal, catch-all** | **3 997** | **~3 177** | **−820** |
 
-**Unchanged up-front:** CLAUDE.md 1 695, `harness.config.json` 154, conventions docs 2 647–12 685, task file.
+**Unchanged up-front:** CLAUDE.md 1 695, `devscene.config.json` 154, conventions docs 2 647–12 685, task file.
 
 **Full per-dispatch load in this repo:**
 

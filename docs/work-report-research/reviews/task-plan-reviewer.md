@@ -36,7 +36,7 @@ Counts checked: every Read-tree figure and every section total in the prose-clas
 ## Nice to Have
 
 1. The `.gitignore:35–47` citation is this repository's own ignore block. Cite the adopter template that `init` writes as well.
-2. R1 "read `harness.config.json` layers, stateDir, phases" is implied by `## Resolved values` (`:14–24`) rather than stated as a step. Mark it as such.
+2. R1 "read `devscene.config.json` layers, stateDir, phases" is implied by `## Resolved values` (`:14–24`) rather than stated as a step. Mark it as such.
 
 ## Bug claims
 

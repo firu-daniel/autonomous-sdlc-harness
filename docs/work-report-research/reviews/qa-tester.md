@@ -35,7 +35,7 @@ Counts checked: every Read-tree figure and every section count in `## Prose clas
 
 ## Should Fix
 
-1. **Read tree omits `harness.config.json`.** The agent reads it up front for `phases.qa`, `qa.driver`, `layers[]`, `stateDir` and more (`qa-tester.md:12`, `:14`, `:27–40`). It is 154 words here and 185 in notes-app. Change: add the row and update the per-dispatch totals.
+1. **Read tree omits `devscene.config.json`.** The agent reads it up front for `phases.qa`, `qa.driver`, `layers[]`, `stateDir` and more (`qa-tester.md:12`, `:14`, `:27–40`). It is 154 words here and 185 in notes-app. Change: add the row and update the per-dispatch totals.
 
 2. **Lead 12 (evidence leakage) is not addressed.**
    - Q1 asks for the "final URL" as evidence, and that URL carries the per-run probed port (`:63`), so the content differs on every run.

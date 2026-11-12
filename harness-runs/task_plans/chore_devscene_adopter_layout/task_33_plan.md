@@ -18,3 +18,8 @@ The twenty-seven files under `docs/work-report-research/` the scope register lis
 **Verification:**
 
 - `git grep -nE 'harness\.config|sdlc-harness|harness-scripts|harness-analyze|harness:unfilled' -- docs/work-report-research` prints nothing.
+
+**Deviations from plan:**
+- `docs-reviewer.md` line 15 also carries `harness-analyze`, outside the row-6 file list; row 6 applied there so the Verification grep prints nothing.
+- `conventions-writer.md` also carries `harness:unfilled` (row 9, named by the Verification grep) and `harness-read-mention` (row 7); both rows applied there, per `## Context` → *Every task applies it*.
+- Bulk `perl -pi` substitution was refused by the tool layer; the same substring replacements were made with per-file `Edit` `replace_all` instead. Verification grep (widened to rows 1–11) ran and printed nothing.

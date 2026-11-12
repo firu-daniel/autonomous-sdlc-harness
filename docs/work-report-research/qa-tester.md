@@ -11,7 +11,7 @@ Measured with `wc -w` in this checkout (layers `cli`, `plugin`, `general` at `.`
 | File | Up-front / on-demand | Words |
 |---|---|---|
 | `plugin/agents/qa-tester.md` (incl. 132-word frontmatter) | up-front | 7 201 |
-| `harness.config.json` (`phases.qa`, `qa.driver`, `layers[]`, `stateDir`…; `qa-tester.md:12`, `:14`, `:27–40`) | up-front | 154 (notes-app 185) |
+| `devscene.config.json` (`phases.qa`, `qa.driver`, `layers[]`, `stateDir`…; `qa-tester.md:12`, `:14`, `:27–40`) | up-front | 154 (notes-app 185) |
 | `.claude/CLAUDE.md` (auto-loaded; template `cli/templates/claude/CLAUDE.md` 1 320; notes-app 1 676) | up-front | 1 695 |
 | **Every** `layers[].conventions` doc (`qa-tester.md:81`, "Every conventions document `<layer_path_map>` names"): `.claude/context/conventions.md` + `cli.md` + `plugin.md` | up-front | 5 864 + 2 647 + 4 174 = 12 685 (notes-app: 15 781) |
 | `ui_test_index` + `ui_test_<T>.md` (`qa-tester.md:91`) | up-front | variable |
@@ -130,7 +130,7 @@ Up-front, agent-owned:
 | Work report template (embedded) | 0 | 358 | +358 |
 | **Subtotal** | **7 201** | **~4 654** | **−2 547** |
 
-Unchanged up-front: `harness.config.json` 154 (notes-app 185), CLAUDE.md 1 695 (notes-app 1 676), conventions docs 12 685 (notes-app 15 781), UI-test files.
+Unchanged up-front: `devscene.config.json` 154 (notes-app 185), CLAUDE.md 1 695 (notes-app 1 676), conventions docs 12 685 (notes-app 15 781), UI-test files.
 **Full per dispatch:** this repo 21 735 → ~19 188; notes-app 24 843 → ~22 296.
 
 On demand: unchanged (`qa_test_scenarios.md` 1 231, creds file, settings profile). The `ref:` targets are sections of `qa-tester.md` itself, already loaded — no new on-demand reads.

@@ -4,9 +4,9 @@
 
 **Recommend with changes.** There should be no report file at all. That is not because the agent lacks a write path: it has `Bash`, so `cat` or `sed` redirection could write one. The reasons are these:
 - The agent's `tools:` allowlist omits `Write` and `Edit` on purpose. That omission is its read-only guarantee (`plugin/agents/conventions-reviewer.md:13`), and `.claude/context/plugin.md` → `## Frontmatter` makes widening past the output surface a finding.
-- A `/devscene:harness-analyze` run has no committer behind it, so a file would be untracked litter (`docs/analyze.md:217`, §12 (d2)).
+- A `/devscene:analyze` run has no committer behind it, so a file would be untracked litter (`docs/analyze.md:217`, §12 (d2)).
 
-The checklist should be **embedded in the agent definition** and **returned inline** as a final `work_report:` field after `summary:`. Its one named consumer is step 6 of `harness-analyze`, under the sibling report's **combined caller edit**, which this report adopts. Goal (a) is weak here, because the record exists only in the session. Goal (b) is real: the agent runs 15 + 6 checks, each with its own exemptions.
+The checklist should be **embedded in the agent definition** and **returned inline** as a final `work_report:` field after `summary:`. Its one named consumer is step 6 of `analyze`, under the sibling report's **combined caller edit**, which this report adopts. Goal (a) is weak here, because the record exists only in the session. Goal (b) is real: the agent runs 15 + 6 checks, each with its own exemptions.
 
 Most of the up-front saving does not depend on the report:
 - narrowing the read of `conventions-writer.md` to the four sections the reviewer grades against, plus the writer's checklist;
@@ -41,12 +41,12 @@ The definition wins. Count the larger set only as a worst case.
 
 | Caller | Step | Pass | Dispatches per run |
 |---|---|---|---|
-| `plugin/commands/harness-analyze.md` → `(4c)` (`:344-379`) | after each delegated document's write | `document` | 1 per written document, never repeated (`:79`) |
+| `plugin/commands/analyze.md` → `(4c)` (`:344-379`) | after each delegated document's write | `document` | 1 per written document, never repeated (`:79`) |
 | same → `(4d)` Iteration 1 (`:455-458`) | after all documents | `corpus`, `iteration: 1` | 0–1. Skipped when there are fewer than two members or no `fixable` member (`:451`) |
 | same → `(4d)` Iteration 2 (`:476`) | over the narrowed set | `corpus`, `iteration: 2` | 0–1 |
 
 - **No branch flow, ledger or unit loop dispatches this agent.** `dispatch_discipline_instructions.md:70` excludes it from the roster for that reason.
-- The dispatch is a closed block (`harness-analyze.md:374-379`).
+- The dispatch is a closed block (`analyze.md:374-379`).
 - The caller already takes the named field: "Take the reviewer's `findings:` return" (`:365-368`), and "Take its `findings:` and group them" (`:458`).
 
 ## Prose classification
@@ -115,7 +115,7 @@ work_report:
 | `conventions-reviewer.md` | The REDUNDANT 1 182 words: `:13`'s rationale down to one sentence; the `<app_dir>` row; the `<repo_root>` row (point to CLAUDE.md); check (7)'s duplicated probe sentence; the `docs/analyze.md` / Gate 8 asides at `:61`, `:90`, `:148`; the verdict rationale in `## What you do not do`; "Minimal prose" | REFERENCE trimmed only at the edges (2 568 → ~2 250). ACTION is **kept** (1 110), because the check prose and its corrections stay | Frontmatter, both dispatch tables, the stop condition, the id space, false positives (a)–(c), and `## Output contract` plus one `work_report:` line | 83 + 950 + 2 250 + 1 110 + template ≈ **4 393 + template** |
 | `conventions-writer.md` (as read) | Read instruction at `:15` narrowed to `## Scope`, `## The document`, `## The fix dispatch`, `## House rules`, plus the writer's checklist if the sibling plan lands | — | The writer file is unchanged by this plan | 2 638 (narrowing alone) |
 | `.claude/CLAUDE.md` | — | — | Unchanged | ≥ 1 320 |
-| `harness-analyze.md` | — | — | No separate sentence. This report adopts `docs/work-report-research/conventions-writer.md` → `## Combined caller change`: forward `findings:` only, a no-forwarding rule for `work_report:`, and step 6 printing each reviewer report reduced to its unticked and `n/a` items (≈ 90 words caller-side, shared with the sibling) | — |
+| `analyze.md` | — | — | No separate sentence. This report adopts `docs/work-report-research/conventions-writer.md` → `## Combined caller change`: forward `findings:` only, a no-forwarding rule for `work_report:`, and step 6 printing each reviewer report reduced to its unticked and `n/a` items (≈ 90 words caller-side, shared with the sibling) | — |
 
 **Dependency on the sibling plan.** Both plans touch `conventions-writer.md`. Any rule the reviewer grades must keep its home in the four narrowed sections, and the writer's checklist may only point into them. The sibling's draft does this: its items carry `ref: ## The document` and `ref: ## Resolved values`, and its `## Verdict` keeps the content-contract REFERENCE in place. Its W13 self-check, however, restates House-rules content (line-number shapes, repo-relative paths, the `.claude/**` write ban), so `## House rules` must not be shortened to template-only. If the two plans cannot be landed together, the narrowing waits for the joint thinning (sibling open question 3).
 
@@ -139,7 +139,7 @@ The embedded template measures **373 words** (`wc -w`).
   - `<branch>` is whatever the adopter has checked out.
   - Nothing commits it (`docs/analyze.md:217`).
   - A write through `Bash` would break the guarantee the allowlist omission makes tool-level (`:13`).
-- **Lead 1 (tools).** `harness-analyze` is supervised, so `cli/templates/claude/settings.autonomous.json` does not govern it. The choice of no file rests on the read-only guarantee and the missing committer, not on whether a tool exists to write one.
+- **Lead 1 (tools).** `analyze` is supervised, so `cli/templates/claude/settings.autonomous.json` does not govern it. The choice of no file rests on the read-only guarantee and the missing committer, not on whether a tool exists to write one.
 - **Inline return.** Needs no index, no key, no commit, no hook exemption and no orphan rule (leads 3, 8, 9 and 10 are all n/a). Step 6 keys each report by `document_path` on the document pass and by `iteration` on the corpus pass.
 - **Dispatches per run:** N document passes plus at most 2 corpus passes.
 - **Hooks:** none apply, since the agent writes nothing.
@@ -163,7 +163,7 @@ This report chooses (ii), so that step 6 reports both agents the same way. (i) i
 | Ref-starvation (lead 7) | Avoided, because every `ref:` points into the agent's own loaded file |
 | Main-session context | 150–400 words per dispatch, or about 1–3k over a run. `docs/analyze.md` §11 names this as the cost delegation avoids; the step-6 reduction limits what is printed, not what is received |
 | Tool calls | None extra |
-| Wire edits | One field in `## Output contract`; the combined `harness-analyze.md` edit; `docs/analyze.md` `## 8` field sets |
+| Wire edits | One field in `## Output contract`; the combined `analyze.md` edit; `docs/analyze.md` `## 8` field sets |
 
 ## Open questions
 

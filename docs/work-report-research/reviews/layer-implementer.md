@@ -44,7 +44,7 @@ Checked: every `wc -w` in the Read tree and ledger (all within 5 %); ledger arit
 
 3. **Lead 13 (read-list conflicts) is not addressed.**
    - `.claude/CLAUDE.md`'s routing table sends "Any implementation" to `context/conventions.md`, which is 5 864 words. So a `plugin`-layer dispatch loads 18 678 words up front, not 12 814. For a fresh adopter, add `cli/templates/claude/context/conventions.md` (974 words).
-   - `harness.config.json` (154 words) is also read but not listed. The agent is told to take the layer set from it (`layer-implementer.md:84`).
+   - `devscene.config.json` (154 words) is also read but not listed. The agent is told to take the layer set from it (`layer-implementer.md:84`).
    - The constraint still holds, because the same amount is added before and after.
 
    Change: add these rows and say which read list wins.

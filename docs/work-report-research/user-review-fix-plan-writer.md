@@ -24,7 +24,7 @@ The basis is this repository: `stateDir: harness-runs`, three layers, and `phase
 |---|---|---|
 | `plugin/agents/user-review-fix-plan-writer.md` | up-front | 4 095 |
 | `.claude/CLAUDE.md` (auto-loaded) | up-front | 1 695 (notes-app 1 676) |
-| `harness.config.json` (`## Resolved values`, :12–26) | up-front | 154 |
+| `devscene.config.json` (`## Resolved values`, :12–26) | up-front | 154 |
 | User-review file (step 1, :79) | up-front | variable; excluded |
 | `<state_dir>/lessons.md` ("always, before step 6", :72; step 6 runs on initial write only, :120) | up-front (write) | 1 199 (notes-app 442) |
 | `sample_user_review_fix_plan.md` + `finding_{1,2,3}.md` (step 4 "Reference", :97; an unreadable sample is a `blocker:`, :75) | up-front in practice (write) | 985 + 974 = 1 959 |

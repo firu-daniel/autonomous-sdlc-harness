@@ -14,7 +14,7 @@ Goal (a) holds only through the pasted-evidence fields. Tick timing cannot be ve
 
 ## Read tree
 
-Measured with `wc -w`. The conventions documents are this repository's (`harness.config.json` → `layers`: cli, plugin, general). An adopter's are typically 300–974 words each (`cli/templates/claude/context/*.md`).
+Measured with `wc -w`. The conventions documents are this repository's (`devscene.config.json` → `layers`: cli, plugin, general). An adopter's are typically 300–974 words each (`cli/templates/claude/context/*.md`).
 
 | File | Up-front / on demand | Words |
 |---|---|---|
@@ -139,7 +139,7 @@ Draft of the largest cut, `## Resolved values` (662 → 166 words, `wc -w`):
 ```markdown
 ## Resolved values
 
-Resolve these from `harness.config.json`; other placeholders resolve where they appear.
+Resolve these from `devscene.config.json`; other placeholders resolve where they appear.
 
 | Token | Resolve from |
 |---|---|
@@ -147,7 +147,7 @@ Resolve these from `harness.config.json`; other placeholders resolve where they 
 | `<repo_root>` | A bare `git rev-parse --show-toplevel`, per `CLAUDE.md` → checkout root. In an autonomous run this is the run's own worktree. |
 | `<layer_names>` | `layers[].name`, unchanged; also the permitted values of the `_(layer: …)_` tag. |
 | `<layer_path_map>` | Every `layers[]` `path` + `conventions`, all in scope. Paths are repo-relative, like `git diff --name-only` output. |
-| `<state_dir>` | `stateDir` (default `sdlc-harness/`). In a pathspec, strip the trailing slash: `sdlc-harness//*` matches nothing. |
+| `<state_dir>` | `stateDir` (default `devscene/`). In a pathspec, strip the trailing slash: `devscene//*` matches nothing. |
 | `<docs_root>` / `<docs_retrieval>` | `docs.root` / `docs.retrieval`, only when `phases.docs` is `true`. Retrieval off → ignore `mcp__harness-docs__search_docs`. |
 | `<parity_vocabulary>` / `<reference_impl>` | `parity.referenceName` / `parity.referenceImplPath`, only when `phases.parity` is `true`; otherwise every parity clause is inert. |
 | `<convention_symbols>` | The mandated identifiers named in the conventions documents of `<layer_path_map>`. |
