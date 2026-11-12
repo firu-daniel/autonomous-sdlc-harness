@@ -76,12 +76,12 @@ backend=typescript
 config_status=0
 hr_config_load "$root" || config_status=$?
 if [ "$config_status" -eq 2 ]; then
-  echo "docs-search-server: $root/harness.config.json could not be read, so the default backend (typescript) was taken" >&2
+  echo "docs-search-server: $root/devscene.config.json could not be read, so the default backend (typescript) was taken" >&2
 elif [ "$config_status" -eq 0 ] && hr_docs_retrieval_applies "$root"; then
   backend_status=0
   backend="$(hr_docs_retrieval_backend "$root")" || backend_status=$?
   if [ "$backend_status" -ne 0 ]; then
-    echo "docs-search-server: docs.retrievalBackend in $root/harness.config.json is neither \`typescript\` nor \`python\`; set one of them, then run \`npx devscene doctor\`" >&2
+    echo "docs-search-server: docs.retrievalBackend in $root/devscene.config.json is neither \`typescript\` nor \`python\`; set one of them, then run \`npx devscene doctor\`" >&2
     exit 1
   fi
 fi

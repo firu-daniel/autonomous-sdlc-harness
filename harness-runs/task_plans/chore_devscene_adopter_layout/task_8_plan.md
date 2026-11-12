@@ -25,3 +25,6 @@
 
 - `git grep -nE 'harness\.config|sdlc-harness|harness-scripts|harness-no-offer|harness-task-offer|harness-analyze' -- cli/templates/scripts` prints nothing. With Tasks 5–7 this covers the whole tree.
 - `bash -n` on each changed `.sh` file exits 0.
+
+- **Deviations from plan:** The per-file `bash -n <file>` calls were refused by the permission mode (don't-ask). That claim rests instead on the whole-tree `bash scripts/typecheck.sh` run, whose `check-shell-parse` step parses every shell file `git ls-files --cached --others --exclude-standard` lists, the twelve changed `.sh` targets included, and printed `124 files checked with /bin/bash (bash 3.2.57(1)-release), 0 failed`, then `PASS: typecheck`.
+- **Deviations from plan:** `remote-run.sh` (Task 6's file, not a target here) still carries "harness run" noun-phrase prose; row 12 leaves it, and it matches no verification pattern. `README.md` keeps `harness-docs-retrieval serve-mcp` (the out-of-scope Python package name). `run-analytics.sh`'s REPRO copies the scripts to `$d/scripts/` and invokes them by that path, which needs no `scriptsDir`, so row 14 does not apply there.
