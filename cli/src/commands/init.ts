@@ -7,7 +7,7 @@
  * reproducible: a second `init` over the same repository produces the same result, and an adopter can
  * re-derive the recorded preset from the detection table by hand. It is also why judgement-dependent
  * work — reading real code to refine a layer profile, filling a conventions stub — belongs to
- * `/devscene:harness-analyze` and is deliberately absent from this file. The offer to run it
+ * `/devscene:analyze` and is deliberately absent from this file. The offer to run it
  * ({@link resolveAnalyzeOffer}) adds no model call and no external process here: the answer's whole
  * material effect is which banner wording the generated always-loaded file carries and which closing
  * pointer this run prints.
@@ -306,15 +306,15 @@ const MARKETPLACE_ADD_COMMAND = `${AGENT_CLI} plugin marketplace add ${SLUG_SHAP
  * respelled (`docs/analyze.md` §9).
  *
  * Headless first-message leg, re-measured: Claude Code 2.1.274, from this checkout with the plugin
- * enabled; the `system`/`init` event of both runs listed `devscene:harness-analyze`
- * among its slash commands and did not list `harness-analyze`. (Taken under the product's earlier
+ * enabled; the `system`/`init` event of both runs listed `devscene:analyze`
+ * among its slash commands and did not list `analyze`. (Taken under the product's earlier
  * name; only the name is respelled here.)
- * - `claude -p "/devscene:harness-analyze" --permission-mode plan --max-turns 2 --output-format stream-json --verbose`:
+ * - `claude -p "/devscene:analyze" --permission-mode plan --max-turns 2 --output-format stream-json --verbose`:
  *   exit 1; no `Skill` call, the first tool call was the command's own `Bash` read of the
  *   unfilled-stub markers; final `result` event `is_error: true`, `result: null`, verbatim message
  *   `Reached maximum number of turns (2)`.
- * - `claude -p "/harness-analyze" --permission-mode plan --max-turns 2 --output-format stream-json --verbose`:
- *   exit 1; the first tool call was `Skill` naming `devscene:harness-analyze`, which
+ * - `claude -p "/analyze" --permission-mode plan --max-turns 2 --output-format stream-json --verbose`:
+ *   exit 1; the first tool call was `Skill` naming `devscene:analyze`, which
  *   loaded the command; final `result` event `is_error: true`, `result: null`, verbatim message
  *   `Reached maximum number of turns (2)`.
  * Both exits are the two-turn cap, not a resolution failure: the prefixed spelling ran the command
@@ -2320,8 +2320,8 @@ async function run(ctx: CommandContext): Promise<number> {
 
   const plan = new WritePlan();
 
-  // A rebuild keeps the scripts directory the file being rebuilt names, an absent key read as the
-  // absent-key meaning; `--scripts-dir` wins over it. An unreadable file answers nothing, and so does
+  // A rebuild keeps the scripts directory the file being rebuilt names, an absent key read as
+  // `DEFAULTS.scriptsDir`, the value `init` writes; `--scripts-dir` wins over it. An unreadable file answers nothing, and so does
   // a value that is not a string or that `--scripts-dir` would refuse: the rebuild writes the
   // generated value, and this invocation says so whichever config lands.
   let rebuiltScriptsDir: string | undefined;
@@ -2437,7 +2437,7 @@ async function run(ctx: CommandContext): Promise<number> {
 
   // Immediately after the wrappers, into the same directory: the outer-loop scripts and the library
   // they source. Unlike the wrappers these are **not** configurable command lines — they carry no
-  // token at all and read `harness.config.json` at run time — so a re-run leaves an adopter's edited
+  // token at all and read `devscene.config.json` at run time — so a re-run leaves an adopter's edited
   // script byte-identical and `--force` regenerates it only after a `.bak`. They are written before
   // the permission profile for the same reason the wrappers are: the profile allow-lists the literal
   // paths of the agent-invocable ones, and a profile written first would name files that do not
@@ -2958,7 +2958,7 @@ function analyzeRecordSentence(
  * `<target>` over the configured layer names *plus* {@link RESERVED_ANALYZE_TARGETS} — the three
  * targets that name no layer. It states what the command does in the settled terms, including the
  * one thing it does not do: a layer-profile revision is proposed and reaches
- * `harness.config.json` only through {@link CONFIG_SET_LAYERS_COMMAND} after an explicit yes
+ * `devscene.config.json` only through {@link CONFIG_SET_LAYERS_COMMAND} after an explicit yes
  * (`docs/analyze.md` §3). And it ends with {@link analyzeRecordSentence} — given the generator's
  * `claudeMdBackupWouldCarryContent` and `claudeMdBackupExisted`, the two inputs to that sentence no
  * reading taken here could supply — so what the step claims about the tree is what the write engine actually did to it — in

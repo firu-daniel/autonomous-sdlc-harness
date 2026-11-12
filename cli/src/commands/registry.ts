@@ -27,7 +27,7 @@ export interface GlobalFlags {
   readonly dryRun: boolean;
   /**
    * Overwrite a create-if-absent artifact, after a `.bak` sibling has been written — never
-   * `harness.config.json`, which `init` reads whenever it is there and which `init --reset-config`
+   * `devscene.config.json`, which `init` reads whenever it is there and which `init --reset-config`
    * alone rebuilds, so the values a `--force` run regenerates from are still the adopter's.
    */
   readonly force: boolean;

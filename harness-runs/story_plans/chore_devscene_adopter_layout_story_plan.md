@@ -86,7 +86,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_devscene_adopter_layout/ta
 2. [x] **Task 1** — Rename the config file constant, the default directories and the analyze command, and drop the absent-`scriptsDir` warning _(layer: cli)_ _(points: 20)_
 3. [x] **Task 36** — State the renamed `stateDir` and `scriptsDir` defaults in `docs/config.md` _(layer: general)_ _(points: 5)_
 4. [x] **Task 2** — Rename the change-request offer file and the two hidden markers in the generator and its `claude/` templates _(layer: cli)_ _(points: 20)_
-5. [ ] **Task 3** — Respell the commands, core paths, daemon unit and detection modules in `cli/src` _(layer: cli)_ _(points: 15)_
+5. [x] **Task 3** — Respell the commands, core paths, daemon unit and detection modules in `cli/src` _(layer: cli)_ _(points: 15)_
 6. [ ] **Task 4** — Respell `doctor`, the remaining generators, the remote names and retrieval in `cli/src` _(layer: cli)_ _(points: 15)_
 7. [ ] **Task 5** — Rename in the run library, watcher and restart-watcher templates and the watcher test helper _(layer: cli)_ _(points: 20)_
 8. [ ] **Task 6** — Rename in the `remote-run.sh` template and the four workflow templates, run titles included _(layer: cli)_ _(points: 20)_

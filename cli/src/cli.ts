@@ -62,7 +62,7 @@ const GLOBAL_OPTIONS: ReadonlyArray<{
     key: 'force',
     aliases: ['--force'],
     summary:
-      'Overwrite an existing generated file, after a .bak; never harness.config.json, which init reads (--reset-config rebuilds it)',
+      'Overwrite an existing generated file, after a .bak; never devscene.config.json, which init reads (--reset-config rebuilds it)',
   },
   {
     key: 'quiet',

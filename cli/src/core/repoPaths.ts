@@ -1,5 +1,5 @@
 /**
- * Normalising the repo-relative paths `harness.config.json` holds.
+ * Normalising the repo-relative paths `devscene.config.json` holds.
  *
  * **The rule this module exists to enforce: there is one normalisation, and the variant that
  * resolves `..` is spelled differently from the one that does not.** Every path in the config file
@@ -25,7 +25,7 @@
 import { posix } from 'node:path';
 
 /**
- * A repo-relative directory as `harness.config.json` writes it: forward slashes, no trailing
+ * A repo-relative directory as `devscene.config.json` writes it: forward slashes, no trailing
  * separator, no leading `./`. The repository root normalises to `.`.
  *
  * **This is the default — reach for it unless the caller has the specific reason below.** It leaves
