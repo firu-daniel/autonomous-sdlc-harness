@@ -170,7 +170,7 @@ test("the job's own steps are copied, byte for byte", () => {
 
   assert.ok(at('Read the configuration') < at(SWITCH));
   assert.ok(at(SWITCH) < at('Install the claude CLI when absent'));
-  assert.match(step(SWITCH).run, /jq -r '\.defaultBranch[^']*' harness\.config\.json/);
+  assert.match(step(SWITCH).run, /jq -r '\.defaultBranch[^']*' devscene\.config\.json/);
 });
 
 test('a failed install step stops the job before the probe session', () => {

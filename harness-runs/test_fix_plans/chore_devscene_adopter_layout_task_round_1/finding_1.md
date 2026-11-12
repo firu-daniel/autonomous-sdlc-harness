@@ -36,5 +36,5 @@ assert.match(step(SWITCH).run, /jq -r '\.defaultBranch[^']*' devscene\.config\.j
 
 Leave `scripts/sandbox-probe-runner.yml` unchanged. Check the module header (lines 1–21) still reads true after the edit — it names neither config file, so no header change is expected.
 
-- [ ] Respell the regex at the `step(SWITCH).run` assertion.
-- [ ] Confirm `git grep -n 'harness\\.config' -- cli/test/sandbox-probe-runner-workflow.test.mjs` prints nothing.
+- [x] Respell the regex at the `step(SWITCH).run` assertion.
+- [x] Confirm `git grep -n 'harness\\.config' -- cli/test/sandbox-probe-runner-workflow.test.mjs` prints nothing.
