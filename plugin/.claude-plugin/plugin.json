@@ -1,7 +1,7 @@
 {
   "name": "devscene",
   "displayName": "DevScene",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "DevScene, an autonomous SDLC harness for Claude Code: plan, implement, review, QA and ship a branch end to end.",
   "author": { "name": "firu-daniel", "url": "https://github.com/firu-daniel" },
   "homepage": "https://github.com/firu-daniel/devscene",

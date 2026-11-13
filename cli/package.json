@@ -1,6 +1,6 @@
 {
   "name": "devscene",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "The outer loop of DevScene, an autonomous SDLC harness: init, doctor, config and daemon management for the harness Claude Code plugin, plus opt-in local docs retrieval.",
   "license": "Apache-2.0",
   "author": "firu-daniel",
