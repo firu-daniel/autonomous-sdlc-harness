@@ -22,6 +22,8 @@
 - [ ] `plugin/commands/branch-start-user-review-fix-autonomous.md`: the `- **Fix-plan writing**` bullet's *"the business-parity gate, the architecture gate and their 5-iteration caps"* and step 6's *"the business-parity and architecture gates and their 5-iteration caps"* become both gates run every round and the one five-round cap the core applies at the step-8 round close; both places' overrides lists (*"the fix-plan + source-review commit at convergence (Override 3), the pause/resume + flow-progress ledger (Override 4)"* and *"Override 3 (…), Override 4 (…)"*) gain *the commit of each fix-plan review round (Override 6)*.
 - [ ] `plugin/commands/branch-start-user-review-fix-plan.md` step 4: *"both plan-review gates and their 5-iteration caps"* becomes both plan-review gates, run every round, and the one five-round cap the core applies at the step-8 round close.
 
+- **Deviations from plan:** Semi-autonomous hand-off step 3 also changes *"Check which of the four"* to *"five"* and drops the parenthetical *"(every plan reviewer passed first time)"*, which no longer holds once every plan gate writes a round file on `PASS` (Tasks 15–17). The supervised fix-plan fork's step 9 carries the same stale parenthetical *"(both gates passed first time)"* and names no `<state_dir>/plan_revisions/<branch>/` folder; neither is in this task's Work list, so both are left as found and surfaced to the orchestrator.
+
 **Verification:**
 
 - `grep -n "5-iteration cap\|latest findings path plus the one-paragraph" plugin/instructions/task_plan_writing_instructions_semi_autonomous.md plugin/instructions/user_review_fix_plan_writing_instructions.md plugin/commands/branch-start-user-review-fix-autonomous.md plugin/commands/branch-start-user-review-fix-plan.md` finds nothing.
