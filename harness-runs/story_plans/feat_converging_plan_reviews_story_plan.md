@@ -39,7 +39,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_converging_plan_reviews
 7. [x] **Task 7** — Carry the revision notes in the remote bundle's planning paths, and keep a job restore from mixing a committed round with a newer draft, and log what it withholds _(layer: cli)_ _(points: 20)_
 8. [x] **Task 8** — Add the `plan_revisions` run-artifact directory and restate the five plan-gate folder READMEs _(layer: cli)_ _(points: 15)_
 9. [x] **Task 9** — Pin the per-round and planning-pause commit path sets at the commit wrapper _(layer: cli)_ _(points: 10)_
-10. [ ] **Task 10** — Add the shared module `plugin/instructions/plan_review_rounds.md` _(layer: plugin)_ _(points: 20)_
+10. [x] **Task 10** — Add the shared module `plugin/instructions/plan_review_rounds.md` _(layer: plugin)_ _(points: 20)_
 11. [ ] **Task 11** — Restate the task-plan core for round routing, round files and the new dispatch keys _(layer: plugin)_ _(points: 20)_
 12. [ ] **Task 12** — Restate the user-review fix-plan core: both gates every round, one counter, per-round gate folders, converging from round 3 _(layer: plugin)_ _(points: 20)_
 13. [ ] **Task 13** — Make `task-plan-writer`'s revision work by target file and leave a revision note _(layer: plugin)_ _(points: 10)_
