@@ -25,7 +25,7 @@ Three findings remain:
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 2** — Restate `plugin/instructions/README.md`'s instruction-file count and later-added list to include `plan_review_rounds.md` _(layer: plugin)_
+1. [x] **Finding 2** — Restate `plugin/instructions/README.md`'s instruction-file count and later-added list to include `plan_review_rounds.md` _(layer: plugin)_
 2. [ ] **Finding 3** — Restate `schemas/negative/README.md` to five `flow-graph-schema-*` negatives and describe `flow-graph-schema-round-without-gates.json` _(layer: general)_
 3. [ ] **Finding 1** — Make the fix-plan core's step 5 continue `fix_round` from the round files on disk instead of resetting it to 0 _(layer: plugin)_
 
