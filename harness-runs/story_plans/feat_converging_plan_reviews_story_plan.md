@@ -35,7 +35,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_converging_plan_reviews
 3. [x] **Task 3** — Walk round nodes in `flow-walker.sh`: every gate every round, round-numbered arguments, review mode, cap payload and the round number on `start` _(layer: cli)_ _(points: 20)_
 4. [x] **Task 4** — Re-pin `flow-walker.test.mjs` to round routing and add the every-gate, once-per-round, cap and review-mode cases _(layer: cli)_ _(points: 20)_
 5. [x] **Task 5** — Re-pin `flow-walker-resume.test.mjs` and add the mid-round resume and convergence-from-the-ledger cases _(layer: cli)_ _(points: 20)_
-6. [ ] **Task 6** — Carry `flow-walker-ui-and-reentry.test.mjs` onto round routing, keep case (6)'s counter reset, and pin a fresh cap budget after an answered cap park _(layer: cli)_ _(points: 15)_
+6. [x] **Task 6** — Carry `flow-walker-ui-and-reentry.test.mjs` onto round routing, keep case (6)'s counter reset, and pin a fresh cap budget after an answered cap park _(layer: cli)_ _(points: 15)_
 7. [ ] **Task 7** — Carry the revision notes in the remote bundle's planning paths, and keep a job restore from mixing a committed round with a newer draft, and log what it withholds _(layer: cli)_ _(points: 20)_
 8. [ ] **Task 8** — Add the `plan_revisions` run-artifact directory and restate the five plan-gate folder READMEs _(layer: cli)_ _(points: 15)_
 9. [ ] **Task 9** — Pin the per-round and planning-pause commit path sets at the commit wrapper _(layer: cli)_ _(points: 10)_
