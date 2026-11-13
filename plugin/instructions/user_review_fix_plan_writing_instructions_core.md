@@ -164,7 +164,7 @@ Every **other** `<…>` name in this file is either a **config value** declared 
 
     `<feedback>` travels between the markers of `${CLAUDE_PLUGIN_ROOT}/instructions/untrusted_input.md` → `## The markers`, its marked blocks following the `Revision note:` line, `<source>` being `live answer` for feedback typed in the session, or each appended file's repo-relative path when a fork's resumability rule enters here.
 
-    Before dispatching, set `fix_round += 1` and then `cap_base = fix_round`; `<revision_note>` is step 5's path at that `fix_round`. Where this session has not set `fix_round` — step 4's **extend** outcome — first set it to the highest `review_<k>.md` index in the two `user_review_<N>/` gate folders, or `-1` when neither holds one; a fork's resumability rule sets its own.
+    Before dispatching, set `fix_round += 1` and then `cap_base = fix_round`; `<revision_note>` is step 5's path at that `fix_round`. Where this session has not set `fix_round` — step 4's **extend** outcome, or a fork's resumability rule that enters here — first set it to the highest `review_<k>.md` index in the two `user_review_<N>/` gate folders, read with an `ls` (names only, never contents), or `-1` when neither holds one.
 
     Then go back to step 6 — re-check for `## Questions` on the revised plan, then re-run **both** gates on it as one round (the parity gate, step 7, when `phases.parity` is `true`, then the architecture gate, step 8, and its round close) before it is re-presented.
 

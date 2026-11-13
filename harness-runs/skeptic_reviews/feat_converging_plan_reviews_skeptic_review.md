@@ -17,7 +17,7 @@
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 2** — Name `<state_dir>/plan_revisions/<branch>/` in commit-point entry 18's path-set description _(layer: plugin)_
-2. [ ] **Finding 1** — Make the fix-plan core's step 11 recover `fix_round` from the round files on every entry that has not set it, the autonomous fork's Override 2(a) answered-park resume included _(layer: plugin)_
+2. [x] **Finding 1** — Make the fix-plan core's step 11 recover `fix_round` from the round files on every entry that has not set it, the autonomous fork's Override 2(a) answered-park resume included _(layer: plugin)_
 
 ---
 
