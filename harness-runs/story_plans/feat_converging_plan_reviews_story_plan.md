@@ -30,7 +30,7 @@ This branch changes how the two plan-writing loops review a plan. In the task-pl
 
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_converging_plan_reviews/task_<K>_plan.md`. Ordered bottom-up by ship sequence in the configured layer order — `cli`, then `plugin`, then the catch-all `general` last. Task 32 was added in revision and sits at position 28, after Task 27, so the entry number and the task number differ from there on. Task 33 (`cli`) was split out of Task 32 in revision and sits at position 29, directly after Task 32 and so after `general` entries, by the same exception: it tests Task 32's grader, and contract-before-consumer puts the consumer after it.
 
-1. [ ] **Task 1** — Report a plan-review round's evidence from the gate library: verdicts, FAIL counts and `fw_round_evidence` _(layer: cli)_ _(points: 20)_
+1. [x] **Task 1** — Report a plan-review round's evidence from the gate library: verdicts, FAIL counts and `fw_round_evidence` _(layer: cli)_ _(points: 20)_
 2. [ ] **Task 2** — Restate the planning graph as format 2 with the `plan_round` decision node _(layer: cli)_ _(points: 10)_
 3. [ ] **Task 3** — Walk round nodes in `flow-walker.sh`: every gate every round, round-numbered arguments, review mode, cap payload and the round number on `start` _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Re-pin `flow-walker.test.mjs` to round routing and add the every-gate, once-per-round, cap and review-mode cases _(layer: cli)_ _(points: 20)_
