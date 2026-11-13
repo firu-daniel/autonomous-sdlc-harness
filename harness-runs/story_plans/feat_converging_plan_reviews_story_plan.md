@@ -60,7 +60,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_converging_plan_reviews
 28. [x] **Task 32** — Make Gate 12's FR6 grader and its contract accept a restore that withholds the task-plan drafts _(layer: general)_ _(points: 10)_
 29. [x] **Task 33** — Pin a withheld restore as an FR6 pass in `gate12-sandbox-round-full-run.test.mjs` _(layer: cli)_ _(points: 10)_
 30. [x] **Task 28** — Restate `docs/flow-graph-walker.md` for round routing, the new arguments and the round number on `start` _(layer: general)_ _(points: 15)_
-31. [ ] **Task 29** — Rewrite the remote-execution decision record on committing unconverged plans _(layer: general)_ _(points: 15)_
+31. [x] **Task 29** — Rewrite the remote-execution decision record on committing unconverged plans _(layer: general)_ _(points: 15)_
 32. [ ] **Task 30** — Record the decisions and the measurement baseline in `docs/converging-plan-reviews.md` _(layer: general)_ _(points: 15)_
 33. [ ] **Task 31** — Mark `Converging plan reviews` done in `ROADMAP.md` and make it the base of `Parallel plan reviews` _(layer: general)_ _(points: 5)_
 
