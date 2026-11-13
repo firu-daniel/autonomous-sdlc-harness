@@ -1,6 +1,6 @@
 # Copilot and Foundry integration research
 
-**Who reads this:** the maintainer deciding whether, and how, the harness can be adopted inside a company whose only licensed AI coding product is GitHub Copilot (Business or Enterprise), and the planner of any branch that changes how a run authenticates, which engine it launches, or how it caps spend. It owns the findings below, each with its source, as of 2026-10-16, and the routes and recommendation drawn from them. It does not own any design choice: any change it describes to `cli/templates/github/workflows/harness-run.yml`, `cli/templates/scripts/autonomous-watcher.sh`, `doctor` or anything else is a later branch's to make.
+**Who reads this:** the maintainer deciding whether, and how, the harness can be adopted inside a company whose only licensed AI coding product is GitHub Copilot (Business or Enterprise), and the planner of any branch that changes how a run authenticates, which engine it launches, or how it caps spend. It owns the findings below, each with its source, as of 2026-10-16, and the routes and recommendation drawn from them. It does not own any design choice: any change it describes to `cli/templates/github/workflows/devscene-run.yml`, `cli/templates/scripts/autonomous-watcher.sh`, `doctor` or anything else is a later branch's to make.
 
 It cites rather than restates [`ARCHITECTURE.md`](../ARCHITECTURE.md) §5–§9 — the engine-axis inventory and the nine-operation adapter contract — and [`team-accounts-research.md`](team-accounts-research.md), which covers credentials for a team that does have Claude accounts. [`github-integration-research.md`](github-integration-research.md) A7 recorded, earlier, that Copilot's cloud agent and third-party agents documented no custom plugin, permission profile or launch line; §3 and §4 below supersede that entry where the two disagree.
 
@@ -43,7 +43,7 @@ The hard couplings, hardest first:
 3. **Plugin packaging and asset resolution** — `${CLAUDE_PLUGIN_ROOT}` across the plugin corpus, slash-command resolution from a headless first message (the `ENGINE_COMMAND_TASK` string in `cli/templates/scripts/autonomous-watcher.sh`), and the marketplace format.
 4. **An auto-loaded root context file** (`CLAUDE.md`) in every sub-agent. It fails silently when absent.
 5. **The headless event stream** — the `stream-json` schema, and `rate_limit_event` records whose `five_hour` / `seven_day` windows drive the usage gate.
-6. **Launch flags and credentials** — `-p`, `--settings`, `--permission-mode`, `--add-dir`, `--model`, `--effort`, and `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`, which `cli/templates/github/workflows/harness-run.yml` requires one of.
+6. **Launch flags and credentials** — `-p`, `--settings`, `--permission-mode`, `--add-dir`, `--model`, `--effort`, and `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`, which `cli/templates/github/workflows/devscene-run.yml` requires one of.
 
 ---
 
@@ -119,7 +119,7 @@ The hard couplings, hardest first:
 - **Asset resolution (§2.3).** `${CLAUDE_PLUGIN_ROOT}` coverage outside MCP frontmatter is **unconfirmed**, and so is support for `commands/`. A headless first message naming the plan engine's command (the watcher's `ENGINE_COMMAND_TASK`) may need the commands carried as skills instead.
 - **Root context (§2.4).** If the CLI does not read `CLAUDE.md`, an `AGENTS.md` written by `init` would carry the same content.
 - **Event stream and usage gate (§2.5).** Copilot's JSONL is a different schema, and it has no `rate_limit_event` windows. The usage gate would give way to `--max-ai-credits`, which is the *Budget governor* row of [`ROADMAP.md`](../ROADMAP.md).
-- **Launch and credentials (§2.6).** The binary seam already exists (`${HARNESS_AGENT_CLI:-claude}`), but every flag is Claude's spelling, and `agentModel: "opus"` is a Claude Code alias that Copilot would not resolve.
+- **Launch and credentials (§2.6).** The binary seam already exists (`${DEVSCENE_AGENT_CLI:-claude}`), but every flag is Claude's spelling, and `agentModel: "opus"` is a Claude Code alias that Copilot would not resolve.
 
 **Inference:** this is the *Engine / provider abstraction* row of [`ROADMAP.md`](../ROADMAP.md) with a concrete first candidate. The adapter contract of [`ARCHITECTURE.md`](../ARCHITECTURE.md) §7 could be tested against it. It is the best long-term route for a Copilot-only company and the most work.
 
@@ -135,7 +135,7 @@ Whether it loads a repository's `.claude/` plugins, hooks, subagents or MCP serv
 
 ### 4.4 Claude sessions in VS Code
 
-VS Code runs Claude sessions on the Claude Agent SDK. Usage is billed through Copilot when a Copilot model is picked, the sessions "use Claude project configuration" in the workspace, and an organisation may manage the setting `github.copilot.chat.claudeAgent.enabled`. **Documented:** https://code.visualstudio.com/docs/agents/agent-types/third-party-agents. **Inference:** this can carry the supervised `/autonomous-sdlc-harness:branch-*` flows by hand, not unattended runs. VS Code's own local harness ignoring hook matchers (§3.4) is a reason to prefer the Claude session over it.
+VS Code runs Claude sessions on the Claude Agent SDK. Usage is billed through Copilot when a Copilot model is picked, the sessions "use Claude project configuration" in the workspace, and an organisation may manage the setting `github.copilot.chat.claudeAgent.enabled`. **Documented:** https://code.visualstudio.com/docs/agents/agent-types/third-party-agents. **Inference:** this can carry the supervised `/devscene:branch-*` flows by hand, not unattended runs. VS Code's own local harness ignoring hook matchers (§3.4) is a reason to prefer the Claude session over it.
 
 ### 4.5 Not recommended: Claude Code on a Copilot token through a proxy
 
@@ -181,7 +181,7 @@ Model and effort are set the same way as today. The watcher passes `--model "$AG
 
 The constraints:
 
-1. **The `opus` alias must be pinned.** Without `ANTHROPIC_DEFAULT_OPUS_MODEL`, the `opus` alias on Foundry resolves to **Opus 4.6**, and Foundry has no startup model check, so requests to a missing deployment simply fail. **Documented** (same page). Opus 4.6 is offered only as *Hosted on Anthropic*, not *Hosted on Azure*. **Documented** (platform page, model table). `agentModel` defaults to `opus` (`schemas/harness.config.schema.json`). So an adopter sets `ANTHROPIC_DEFAULT_OPUS_MODEL` (and the Sonnet and Haiku variables) to a deployed model such as `claude-opus-5-5`, or writes a full model ID into `agentModel`. Deployment names that differ from model IDs also need `modelOverrides` for the 1M window to be detected.
+1. **The `opus` alias must be pinned.** Without `ANTHROPIC_DEFAULT_OPUS_MODEL`, the `opus` alias on Foundry resolves to **Opus 4.6**, and Foundry has no startup model check, so requests to a missing deployment simply fail. **Documented** (same page). Opus 4.6 is offered only as *Hosted on Anthropic*, not *Hosted on Azure*. **Documented** (platform page, model table). `agentModel` defaults to `opus` (`schemas/devscene.config.schema.json`). So an adopter sets `ANTHROPIC_DEFAULT_OPUS_MODEL` (and the Sonnet and Haiku variables) to a deployed model such as `claude-opus-5-5`, or writes a full model ID into `agentModel`. Deployment names that differ from model IDs also need `modelOverrides` for the 1M window to be detected.
 2. **The usage gate does nothing.** It pauses runs on `rate_limit_event` five-hour and seven-day windows (`cli/templates/scripts/autonomous-watcher.sh`, the usage-gate parser), which only a Claude subscription emits. On Foundry it never fires: safe, but uncapped. The spend controls available are an Azure budget alert and Claude Code's `--max-budget-usd`, which today only the mention session in `cli/templates/scripts/remote-run.sh` passes.
 3. **Hosting option.** *Hosted on Azure* keeps prompts and completions inside Azure and serves Opus 5.5 and 5, Opus 4.8, Sonnet 5.5 and 5, and Haiku. It does not support server-side code execution, newer web-search and web-fetch tool versions, API Agent Skills, programmatic tool calling, or the Files API. Claude Code detects an Azure-hosted deployment and adapts, and the harness depends on none of those features. Fable 5.1 requires *Hosted on Anthropic*. **Documented** (platform page).
 4. **Not supported on Foundry at all:** the Message Batches API, the Models API, the Admin and Compliance APIs, server-side fallback, and the current computer-use and browser-use toolsets. **Documented** (platform page). The harness uses none of them; its QA phase drives a browser through MCP servers, not the API toolset.
@@ -226,16 +226,16 @@ None of this is decided here. Each item is a later branch's.
 
 - **Local runs need no code change** — only the §5.1 environment variables and the model pin from §5.3.
 - **Remote runs on GitHub Actions do not work on Foundry today.** Claude Code reads the Foundry variables on any machine, a runner included, so nothing in the engine blocks it. What blocks it is the workflow:
-  - `cli/templates/github/workflows/harness-run.yml`'s *Check the credentials* step fails the job unless the `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` secret is set.
-  - Its *Run the harness* step exports only those two before `autonomous-watcher.sh job`.
-  - `harness-control.yml` passes the same two to the mention session.
+  - `cli/templates/github/workflows/devscene-run.yml`'s *Check the credentials* step fails the job unless the `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` secret is set.
+  - Its *Run DevScene* step exports only those two before `autonomous-watcher.sh job`.
+  - `devscene-control.yml` passes the same two to the mention session.
 
   Supporting Foundry would take three changes:
   1. **Accept a Foundry credential** as a third option, by one of two routes:
      - **Key** — an `ANTHROPIC_FOUNDRY_API_KEY` secret, exported with `CLAUDE_CODE_USE_FOUNDRY=1` and `ANTHROPIC_FOUNDRY_RESOURCE`.
      - **Keyless, preferred** — Azure workload identity federation: `permissions: id-token: write` and an `azure/login` step before the run. Claude Code's default Azure credential chain then picks up the Azure CLI sign-in, and no secret is stored.
   2. **Export the model pins** (`ANTHROPIC_DEFAULT_OPUS_MODEL` and its Sonnet and Haiku siblings) from repository variables, for the reason in §5.3.
-  3. **Make the same change in `harness-control.yml`** for the mention session.
+  3. **Make the same change in `devscene-control.yml`** for the mention session.
 
   `claude-code-action` already has a provider input for Foundry using OIDC, which shows the shape (https://code.claude.com/docs/en/github-actions). The usage gate is as inert on a runner as it is locally, and per-run cost is §5.4's.
 - **`doctor`** could warn when a provider is selected and the `opus` alias is unpinned.

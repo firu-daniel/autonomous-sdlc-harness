@@ -27,7 +27,7 @@ export interface GlobalFlags {
   readonly dryRun: boolean;
   /**
    * Overwrite a create-if-absent artifact, after a `.bak` sibling has been written — never
-   * `harness.config.json`, which `init` reads whenever it is there and which `init --reset-config`
+   * `devscene.config.json`, which `init` reads whenever it is there and which `init --reset-config`
    * alone rebuilds, so the values a `--force` run regenerates from are still the adopter's.
    */
   readonly force: boolean;
@@ -87,9 +87,9 @@ export function commandListLines(): readonly string[] {
 /** One command's own usage, without the global options block the entry point appends. */
 export function commandSynopsis(command: Subcommand): readonly string[] {
   return [
-    `npx autonomous-sdlc-harness ${command.name} — ${command.summary}`,
+    `npx devscene ${command.name} — ${command.summary}`,
     '',
-    `Usage: npx autonomous-sdlc-harness ${command.name} [options]`,
+    `Usage: npx devscene ${command.name} [options]`,
     ...(command.usage === undefined ? [] : ['', ...command.usage]),
   ];
 }

@@ -110,7 +110,7 @@ import {
   stallVerdictNotified,
 } from './helpers/watcher.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REGISTRY_PATH = `${STATE_DIR}/autonomous_logs/registry.json`;
 const SETTINGS = '.claude/settings.json';
 const PIN = ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'submodule.recurse=false'];
@@ -188,7 +188,7 @@ async function createStallFixture(t, { job = false } = {}) {
   let blobs = 0;
   const markerBody = (name, tail = 'exit 0') => `#!/bin/sh\n: > '${join(markers, name)}'\n${tail}\n`;
 
-  const configPath = join(w.dir, 'harness.config.json');
+  const configPath = join(w.dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   delete config.commands.depInstall;
   delete config.commands.build;
@@ -216,7 +216,7 @@ async function createStallFixture(t, { job = false } = {}) {
   const stallEnv = (env) => ({
     REC: rec,
     REGISTRY: join(w.dir, REGISTRY_PATH),
-    HARNESS_GH_CLI: ghStub,
+    DEVSCENE_GH_CLI: ghStub,
     STUB_LOG: join(rec, 'gh.log'),
     STALL_CHECK_ENABLED: '1',
     STALL_WARN_SECS: '1',
@@ -311,7 +311,7 @@ async function createStallFixture(t, { job = false } = {}) {
           REMOTE_CONTROL_POLL_SECS: '1',
           REMOTE_AUTO_RESUME_MAX: '0',
           REMOTE_AUTO_RESUME_DELAY_SECS: '0',
-          HARNESS_CLI_VERSION: CLI_VERSION,
+          DEVSCENE_CLI_VERSION: CLI_VERSION,
           HARNESS_GITHUB_DEFAULT_BRANCH: config.defaultBranch,
           HARNESS_GITHUB_DEFAULT_COMMIT: defaultCommit,
           HARNESS_DEFAULT_BRANCH_COMMIT: defaultCommit,
@@ -694,7 +694,7 @@ test('(J3) job mode on an honest branch runs the pinned check from a scratch dir
   assertResumed(f);
   assert.deepEqual(f.npxArgv(), [
     '--yes',
-    `autonomous-sdlc-harness@${CLI_VERSION}`,
+    `devscene@${CLI_VERSION}`,
     'doctor',
     '--cwd',
     f.dir,
@@ -725,21 +725,21 @@ async function realNpxEnv(t, f) {
   };
 }
 
-/** A session-written `package.json` and `node_modules/autonomous-sdlc-harness` whose bin runs `body`. */
+/** A session-written `package.json` and `node_modules/devscene` whose bin runs `body`. */
 async function plantLocalPackage(f, body) {
   const pkg = JSON.parse(readFileSync(join(f.copy, 'package.json'), 'utf8'));
-  pkg.dependencies = { 'autonomous-sdlc-harness': CLI_VERSION };
+  pkg.dependencies = { devscene: CLI_VERSION };
   await writeFile(join(f.copy, 'package.json'), `${JSON.stringify(pkg, null, 2)}\n`, 'utf8');
-  const dir = join(f.copy, 'node_modules', 'autonomous-sdlc-harness');
+  const dir = join(f.copy, 'node_modules', 'devscene');
   await mkdir(dir, { recursive: true });
   await writeFile(
     join(dir, 'package.json'),
-    JSON.stringify({ name: 'autonomous-sdlc-harness', version: CLI_VERSION, bin: { 'autonomous-sdlc-harness': 'cli.js' } }),
+    JSON.stringify({ name: 'devscene', version: CLI_VERSION, bin: { devscene: 'cli.js' } }),
     'utf8',
   );
   await writeFile(join(dir, 'cli.js'), `#!/usr/bin/env node\n${body}\nprocess.exit(0);\n`, { mode: 0o755 });
   await mkdir(join(f.copy, 'node_modules', '.bin'), { recursive: true });
-  await symlink('../autonomous-sdlc-harness/cli.js', join(f.copy, 'node_modules', '.bin', 'autonomous-sdlc-harness'));
+  await symlink('../devscene/cli.js', join(f.copy, 'node_modules', '.bin', 'devscene'));
 }
 
 test('(J4) a session-written .npmrc never reaches the real npx: the offline fetch fails and the run is given up', async (t) => {

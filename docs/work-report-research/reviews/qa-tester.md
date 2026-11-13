@@ -35,7 +35,7 @@ Counts checked: every Read-tree figure and every section count in `## Prose clas
 
 ## Should Fix
 
-1. **Read tree omits `harness.config.json`.** The agent reads it up front for `phases.qa`, `qa.driver`, `layers[]`, `stateDir` and more (`qa-tester.md:12`, `:14`, `:27–40`). It is 154 words here and 185 in notes-app. Change: add the row and update the per-dispatch totals.
+1. **Read tree omits `devscene.config.json`.** The agent reads it up front for `phases.qa`, `qa.driver`, `layers[]`, `stateDir` and more (`qa-tester.md:12`, `:14`, `:27–40`). It is 154 words here and 185 in notes-app. Change: add the row and update the per-dispatch totals.
 
 2. **Lead 12 (evidence leakage) is not addressed.**
    - Q1 asks for the "final URL" as evidence, and that URL carries the per-run probed port (`:63`), so the content differs on every run.
@@ -47,7 +47,7 @@ Counts checked: every Read-tree figure and every section count in `## Prose clas
 
 4. **Template misses a goal-(b) rule.** The rule "missing test attribute → Should Fix finding" (`:116`) is the kind most easily skipped, and no item covers it. Change: add it to Q8 or as its own conditional item.
 
-5. **Collision claim on `/autonomous-sdlc-harness:branch-qa-test` re-dispatch needs nuance.** `qa_test_instructions.md:114` says a re-run after a fix "resolves its own next-free round folder in step 3, so it never overwrites". Only the same-invocation clarification re-dispatch reuses the folder. Change: narrow the `## Storage and lifecycle` Index row to that case.
+5. **Collision claim on `/devscene:branch-qa-test` re-dispatch needs nuance.** `qa_test_instructions.md:114` says a re-run after a fix "resolves its own next-free round folder in step 3, so it never overwrites". Only the same-invocation clarification re-dispatch reuses the folder. Change: narrow the `## Storage and lifecycle` Index row to that case.
 
 6. **Side effect on round resolution is not mentioned.** Today a clean round creates no folder (`core:483`, `qa_test_instructions.md:97`). With PASS reports, every round creates one, and the next-free `<round>` resolution consumes it: `qa_test_instructions.md:77` and user-review `QA.0` step 1 (`user_review_fixes_instructions_core.md` → `### QA.0`). That is harmless but changes numbering. Change: note it in the PASS-writes-nothing row.
 

@@ -17,7 +17,7 @@ import test from 'node:test';
 import { INIT_SCRIPTS_DIR, runBash } from './helpers/fixture.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const GATE_ON = { USAGE_CHECK_ENABLED: '1', USAGE_CHECK_INTERVAL_SECS: '0' };
 
 const nowSecs = () => Math.floor(Date.now() / 1000);

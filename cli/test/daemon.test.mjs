@@ -117,8 +117,8 @@ const WATCHER_IN_REPO = `${INIT_SCRIPTS_DIR}/autonomous-watcher.sh`;
 const LIB_IN_REPO = `${INIT_SCRIPTS_DIR}/lib/harness-run-lib.sh`;
 
 /** The fixed halves of the two identities — everything about them that is not the repository. */
-const LAUNCHD_LABEL_PREFIX = 'com.autonomous-sdlc-harness.watcher.';
-const SYSTEMD_UNIT_PREFIX = 'harness-watcher@';
+const LAUNCHD_LABEL_PREFIX = 'com.devscene.watcher.';
+const SYSTEMD_UNIT_PREFIX = 'devscene-watcher@';
 const SYSTEMD_UNIT_SUFFIX = '.service';
 
 /** Everything a label may be made of, so a service manager can be asked for it by name. */
@@ -131,7 +131,7 @@ const LABEL_CHARSET = /^[a-z0-9.@_-]+$/;
  * the label: this is the published format (`docs/watcher.md` §7), so a reader of a hand-seeded
  * fixture below is reading the contract, not a restatement of the code that has to satisfy it.
  */
-const MACHINE_DIR = 'autonomous-sdlc-harness';
+const MACHINE_DIR = 'devscene';
 const REGISTRY_FILE = 'repos.json';
 const REGISTRY_SCHEMA = 1;
 
@@ -272,7 +272,7 @@ async function seedRegistry(machine, repos) {
 }
 
 /** One registry row, with the fields `docs/watcher.md` §7 says it carries and nothing else. */
-function entryFor(root, { label = 'com.autonomous-sdlc-harness.watcher.seeded', unitPath, backend = 'launchd' }) {
+function entryFor(root, { label = 'com.devscene.watcher.seeded', unitPath, backend = 'launchd' }) {
   return { root, projectName: 'seeded-project', label, backend, unitPath, registered_at: 1786575259 };
 }
 
@@ -354,7 +354,7 @@ function stopLinesFor(kind, label) {
 
 /** Enough of a configuration for a renderer that reads two keys off it. */
 function renderConfig(overrides) {
-  return { projectName: 'fixture-project', stateDir: 'sdlc-harness/', ...overrides };
+  return { projectName: 'fixture-project', stateDir: 'devscene/', ...overrides };
 }
 
 /**
@@ -494,7 +494,7 @@ test('--watcher overrides the resolved path, and is what the unit would run', { 
 
 test('both unit templates render with the resolved watcher path and no token left in them', async (t) => {
   const dir = await wiredFixture(t);
-  const config = readJson(join(dir, 'harness.config.json'));
+  const config = readJson(join(dir, 'devscene.config.json'));
   const watcherPath = join(dir, FIXTURE_WATCHER);
 
   for (const kind of ['launchd', 'systemd']) {
@@ -517,7 +517,7 @@ test('both unit templates render with the resolved watcher path and no token lef
       // three values that make the unit describe this repository rather than a template.
       assert.ok(unit.text.includes(watcherPath), `the ${kind} unit does not name the watcher it would run`);
       assert.ok(unit.text.includes(dir), `the ${kind} unit does not name the repository it would run in`);
-      assert.ok(unit.text.includes(join(dir, 'sdlc-harness')), `the ${kind} unit does not name the artifact tree`);
+      assert.ok(unit.text.includes(join(dir, 'devscene')), `the ${kind} unit does not name the artifact tree`);
       assert.ok(!unit.text.includes('{{'), `the ${kind} unit still carries an unsubstituted token`);
     });
   }
@@ -535,7 +535,7 @@ test('a checkout path with a space, a % or a quote is escaped for the directive 
 
   assert.equal(directive('ExecStart'), `ExecStart=/bin/bash "/home/ada/100%% mine/my \\"repo\\"/${WATCHER_IN_REPO}"`);
   assert.equal(directive('WorkingDirectory'), 'WorkingDirectory=/home/ada/100%% mine/my "repo"');
-  assert.equal(directive('StandardOutput'), 'StandardOutput=append:/home/ada/100%% mine/my "repo"/sdlc-harness/autonomous_logs/watcher.out.log');
+  assert.equal(directive('StandardOutput'), 'StandardOutput=append:/home/ada/100%% mine/my "repo"/devscene/autonomous_logs/watcher.out.log');
 
   // And nowhere in the unit's directives is a lone `%` left — the comment block is exempt because
   // systemd never expands one, and it documents the `%i` this design does not use.
@@ -685,7 +685,7 @@ test('no comment in a rendered unit carries the double hyphen XML forbids, whate
   });
 
   await t.test('a substituted value cannot reintroduce it, at any run length', () => {
-    // Three hyphens, deliberately an odd run. `schemas/harness.config.schema.json` constrains
+    // Three hyphens, deliberately an odd run. `schemas/devscene.config.schema.json` constrains
     // `projectName` only by `{"type":"string","minLength":1}` and `descriptiveProjectName` otherwise
     // falls back to the repository directory name, so this is both a legal configuration and a legal
     // directory name. The odd run is what discriminates: it fails on no escape at all *and* on an
@@ -740,12 +740,12 @@ test('the daemon is identified by a slug of its repository, and both backends sp
     assert.equal(repoSlug(repoRoot), slug, `the slug derived for ${repoRoot}`);
 
     const launchd = unitFor('launchd', repoRoot, { unitDir: launchAgents });
-    assert.equal(launchd.label, `com.autonomous-sdlc-harness.watcher.${slug}`);
-    assert.equal(launchd.targetPath, `${launchAgents}/com.autonomous-sdlc-harness.watcher.${slug}.plist`);
+    assert.equal(launchd.label, `com.devscene.watcher.${slug}`);
+    assert.equal(launchd.targetPath, `${launchAgents}/com.devscene.watcher.${slug}.plist`);
 
     const systemd = unitFor('systemd', repoRoot, { unitDir: systemdUser });
-    assert.equal(systemd.label, `harness-watcher@${slug}.service`);
-    assert.equal(systemd.targetPath, `${systemdUser}/harness-watcher@${slug}.service`);
+    assert.equal(systemd.label, `devscene-watcher@${slug}.service`);
+    assert.equal(systemd.targetPath, `${systemdUser}/devscene-watcher@${slug}.service`);
 
     // A path with a space, an accent or a length problem must not reach the label: this is the
     // check `projectName` used to carry, on the value that now names the service.
@@ -806,7 +806,7 @@ test('an unknown verb is refused, and the refusal names the verbs there are', as
   assert.match(stderr, /install, start, stop or list/);
   // Nothing about the repository was read before the refusal: an unwired fixture refuses the same
   // way a wired one does, which is what keeps a typo a typo rather than a report about the config.
-  assert.ok(!existsSync(join(fixture.dir, 'harness.config.json')));
+  assert.ok(!existsSync(join(fixture.dir, 'devscene.config.json')));
 });
 
 /**
@@ -1262,7 +1262,7 @@ test('a registered repository that is gone is reported, and only --prune removes
 
   // A unit file that exists, so the surviving row's grade is about the repository rather than about
   // a unit this test forgot to create.
-  const unitPath = join(elsewhere, 'com.autonomous-sdlc-harness.watcher.kept.plist');
+  const unitPath = join(elsewhere, 'com.devscene.watcher.kept.plist');
   await writeFile(unitPath, '<plist/>\n', 'utf8');
 
   const kept = repoSlug(dir);
@@ -1314,7 +1314,7 @@ test('daemon list needs no repository and no config, and marks nothing when it i
   const { status, stdout, stderr } = await runCli(outside, ['daemon', 'list'], machine.env);
 
   assert.equal(status, 0, `daemon list outside a repository exited ${status}\n${stdout}\n${stderr}`);
-  assert.ok(!existsSync(join(outside, 'harness.config.json')), 'the fixture was wired, so this proved nothing');
+  assert.ok(!existsSync(join(outside, 'devscene.config.json')),'the fixture was wired, so this proved nothing');
   const row = rowFor(stdout, slug);
   assert.ok(row !== undefined, `the seeded entry was not listed:\n${stdout}`);
   assert.ok(row.startsWith(' '), `something was marked as the current checkout:\n${row}`);

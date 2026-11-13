@@ -14,13 +14,13 @@ The hard constraint holds: the agent's own share drops from 3 483 to about 2 632
 
 ## Read tree
 
-This repository has `phases.docs: false` (`harness.config.json` → `phases`), so `docs-writer` never runs here. Its files are measured as a stand-in adopter: layers `cli`, `plugin` and `general` (`.`).
+This repository has `phases.docs: false` (`devscene.config.json` → `phases`), so `docs-writer` never runs here. Its files are measured as a stand-in adopter: layers `cli`, `plugin` and `general` (`.`).
 
 | File | Up-front / on-demand | Words |
 |---|---|---|
 | `plugin/agents/docs-writer.md` (frontmatter + body) | up-front | 3 483 |
 | `.claude/CLAUDE.md` (auto-loaded; template `cli/templates/claude/CLAUDE.md` = 1 320) | up-front | 1 695 |
-| `harness.config.json` (`layers`, `docs.root`, `stateDir`, `phases`, `parity`, per `docs-writer.md:20-29`) | up-front | 154 |
+| `devscene.config.json` (`layers`, `docs.root`, `stateDir`, `phases`, `parity`, per `docs-writer.md:20-29`) | up-front | 154 |
 | **Every** `layers[].conventions`: `.claude/context/cli.md` 2 647 + `plugin.md` 4 174 + `conventions.md` 5 864. These are up-front because `<convention_symbols>`/`<impl_stack>` are read "off the conventions documents `<layer_path_map>` names" (`docs-writer.md:28-29`), across the "**entire** map" (`:23`) | up-front | 12 685 |
 | Dispatch payload: `entry` blob, or branch diff + `INDEX.md` + docs tree (survey), or diff + current `output_path` (update) | up-front, variable | n/a |
 | INDEX dispatch inputs: the checklist, every doc under `<docs_root>/features/` and `concepts/`, `parity_gaps.md`, `needs_review.md` (`docs_orchestration…:84`) | up-front on the INDEX dispatch, variable, large (the whole corpus) | n/a |
@@ -71,7 +71,7 @@ Section word counts come from `sed -n 'a,bp' plugin/agents/docs-writer.md | wc -
 | `## Output contract` (182-188) | 145 | – | 15 | 130 | – | Return field names; `docs_orchestration…:68`, `docs_phase…:36` and `:45` parse these |
 | **Total** | **3 479** of 3 483 (4 words in `---` rules) | **660** | **997** | **866** | **956** | |
 
-The other up-front files (CLAUDE.md, the conventions documents and `harness.config.json`) are adopter content shared with every layer agent. They are outside this agent's thinning scope.
+The other up-front files (CLAUDE.md, the conventions documents and `devscene.config.json`) are adopter content shared with every layer agent. They are outside this agent's thinning scope.
 
 ## Draft work report template
 
@@ -85,7 +85,7 @@ The other up-front files (CLAUDE.md, the conventions documents and `harness.conf
 ```markdown
 # Work report — docs-writer · <doc_slug> · iteration <i> (precedes review_<i>.md)
 
-- [ ] W1. **Resolve root and configuration** — Run a bare `git rev-parse --show-toplevel`; read `layers`, `docs.root`, `phases.parity` from `harness.config.json`.
+- [ ] W1. **Resolve root and configuration** — Run a bare `git rev-parse --show-toplevel`; read `layers`, `docs.root`, `phases.parity` from `devscene.config.json`.
 - [ ] W2. **Open every named input** — Read each conventions document, `existing_doc`, `findings_file` handed to you; any unreadable: return `blocker:`, write no document.
 - [ ] W3. **Fix round: findings only** — `n/a` unless `findings_file`. Apply each Must Fix, never its `## Work report`; no re-research. Evidence: finding ids applied.
 - [ ] W4. **Forward-trace every layer hop** — Read each hop, surface to backend, in configured layer order; never infer a hop from a name. Evidence: repo-relative path per hop. (ref: docs-writer.md → ## Research methodology)
@@ -164,7 +164,7 @@ The reviewer will also read the W-items. W11 now matches its check 2, so the ear
 |---|---|---|---|
 | `plugin/agents/docs-writer.md` (template + `## Work report` 428 embedded; ignore line +15; `iteration` +12; value test +25) | 3 483 | ~2 632 | **−851** |
 | `.claude/CLAUDE.md` | 1 695 | 1 695 | 0 |
-| `harness.config.json` | 154 | 154 | 0 |
+| `devscene.config.json` | 154 | 154 | 0 |
 | Conventions documents (all three) | 12 685 | 12 685 | 0 |
 | **Up-front total per writer dispatch** | **18 017** | **~17 166** | **−851 (−4.7 %; −24 % of the agent's own share)** |
 

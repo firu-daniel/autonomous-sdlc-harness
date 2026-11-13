@@ -14,7 +14,7 @@
  * checkout.**
  *
  * Each case builds, under the system temp directory, a main checkout carrying a hand-written
- * `harness.config.json` (`githooksDir` `githooks`) and its `autonomous_logs/` directory, a local bare
+ * `devscene.config.json` (`githooksDir` `githooks`) and its `autonomous_logs/` directory, a local bare
  * origin standing in for the network `hr_run_trusted_base_var` asks, whose default branch carries a
  * committed `githooks/pre-push`, and the clone `hr_clone_create_var` makes at `hr_worktree_dir`. The
  * library is sourced from the template tree through `runBash`. A ref moved under a call is a `git`
@@ -43,7 +43,7 @@ const LIB = join(PACKAGE_ROOT, 'templates', 'scripts', 'lib', 'harness-run-lib.s
 const CONFIG = {
   version: 1,
   defaultBranch: 'trunk',
-  stateDir: 'sdlc-harness/',
+  stateDir: 'devscene/',
   githooksDir: 'githooks',
   layers: [],
   commands: {},
@@ -100,7 +100,7 @@ const loose = (objects, oid) => join(objects, oid.slice(0, 2), oid.slice(2));
 
 /**
  * A bare origin whose `trunk` carries `githooks/pre-push`; a main checkout on `trunk` carrying
- * `harness.config.json` and `autonomous_logs/`; and the clone of {@link BRANCH} at `<root>/main-feat_c`.
+ * `devscene.config.json` and `autonomous_logs/`; and the clone of {@link BRANCH} at `<root>/main-feat_c`.
  *
  * @param {import('node:test').TestContext} t
  */
@@ -115,15 +115,15 @@ async function fixture(t) {
   await runGit(main, ['init', '--quiet', '-b', 'trunk']);
   await runGit(main, ['config', 'user.email', 'fixture@example.invalid']);
   await runGit(main, ['config', 'user.name', 'Harness Fixture']);
-  await writeFile(join(main, 'harness.config.json'), `${JSON.stringify(CONFIG)}\n`);
+  await writeFile(join(main, 'devscene.config.json'), `${JSON.stringify(CONFIG)}\n`);
   await writeFile(join(main, 'githooks', 'pre-push'), PRE_PUSH);
   await writeFile(join(main, 'notes.txt'), NOTES);
-  await runGit(main, ['add', 'harness.config.json', 'githooks/pre-push', 'notes.txt']);
+  await runGit(main, ['add', 'devscene.config.json', 'githooks/pre-push', 'notes.txt']);
   await runGit(main, ['commit', '--quiet', '-m', 'fixture: seed']);
   await runGit(main, ['remote', 'add', 'origin', origin]);
   await runGit(main, ['push', '--quiet', 'origin', 'trunk']);
   await runGit(main, ['fetch', '--quiet', 'origin']);
-  await mkdir(join(main, 'sdlc-harness', 'autonomous_logs'), { recursive: true });
+  await mkdir(join(main, 'devscene', 'autonomous_logs'), { recursive: true });
 
   const created = globals(
     await lib(
@@ -283,7 +283,7 @@ test('(c) The artifact commit on a clone moves both refs, leaves the clone clean
   assert.ok(await exists(join(markers, 'reference-transaction')), 'the control hook never ran');
   await rm(join(markers, 'reference-transaction'));
 
-  const rel = join('sdlc-harness', 'reviews', 'r.md');
+  const rel = join('devscene', 'reviews', 'r.md');
   await mkdir(dirname(join(f.clone, rel)), { recursive: true });
   await writeFile(join(f.clone, rel), 'review\n');
   const before = await f.mainTip();

@@ -19,15 +19,15 @@ discipline as Overrides D/E/F).
 ## Resolved values
 
 The `<…>` names in this file that resolve from **outside** it — from the runtime, or from the adopting
-repository's `harness.config.json` — are declared here once. After this table the body uses each one as an
+repository's `devscene.config.json` — are declared here once. After this table the body uses each one as an
 ordinary path placeholder, exactly as it uses `<branch>`, `<entry-id>` and `<n>`.
 
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<repo_root>` | derived at runtime | The absolute root of the checkout this run is executing in — in an autonomous run, the **run copy**, not the main checkout. Obtain it with a **bare** `git rev-parse --show-toplevel` and build every literal path from the result. Never embed the `$(…)` substitution inside another shell command, and never stash it in a shell variable across separate Bash calls — separate calls do not share shell state. |
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to, the ledger and the four pause sentinels included. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to, the ledger and the four pause sentinels included. Default `devscene/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<scripts_dir>` | config value | `scriptsDir` — the directory the project-command wrapper scripts live in. The three outer-loop scripts this file names (`autonomous-watcher.sh`, `commit-on-branch.sh`, `push-branch.sh`) are written into it by setup as well — copied verbatim rather than rendered from a detected command line, since each reads the configuration at run time — so every `<scripts_dir>/…` invocation below resolves in a wired repository. `commit-on-branch.sh` and `push-branch.sh` are both invoked as the main checkout's copy, `<MAIN_REPO>/<scripts_dir>/…`. The two guard hooks it names (`allow-safe-compounds.sh`, `git-commit-branch-guard.sh`) ship as plugin hooks and are **not** under it either: they are named bare and take no prefix. |
-| `<MAIN_REPO>` | derived at runtime | The main checkout — the path a bare `printenv HARNESS_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
+| `<MAIN_REPO>` | derived at runtime | The main checkout — the path a bare `printenv DEVSCENE_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
 | `<default_branch>` | config value | `defaultBranch` — the branch work starts from and merges back into. Never a remembered branch name. Bound for completeness — no step in this file consumes it. |
 | `<protected_branches>` | config value | `protectedBranches` — the branches the commit wrapper and the `git-commit-branch-guard.sh` hook refuse to commit or push to, and the set the guard quotes back in its refusal message (§1.6). The effective set is these together with `<default_branch>`. |
 | `<worktree_glob>` | derived at runtime | The **parent directory of `<repo_root>`** (the work root) joined to the configured `projectName` stem and a `-*` suffix — the sibling pattern an autonomous run's run copies match, and the pattern the generated permission profile is materialized with. It is **absolute**, so a permission rule written over it takes one leading slash of its own — `Edit(/<worktree_glob>/**)`, two slashes in the rendered rule, never three; §2.2 sub-step (a) states that rule where it is used. |
@@ -55,7 +55,7 @@ against a crash or pause.
 
 ### 1.3 Templates (fixed — the driving fork lays this down verbatim, substituting `<branch>`)
 
-**Task engine** (`/autonomous-sdlc-harness:branch-start-plan-autonomous`):
+**Task engine** (`/devscene:branch-start-plan-autonomous`):
 ```markdown
 # Flow progress — <branch>   (engine: task)
 
@@ -63,7 +63,7 @@ against a crash or pause.
 Source: <state_dir>/task_prompts/<branch>_task_prompt.md → `### Run mode`
 - skipped: <directive ids, comma-separated, or `none`>
 - ignored: <verbatim directive> (<reason>) — one line per ignored directive; omit the line entirely when there are none
-- phases: parity=<true|false>, qa=<true|false>, docs=<true|false>   (from harness.config.json, read at this write; an unset flag is false)
+- phases: parity=<true|false>, qa=<true|false>, docs=<true|false>   (from devscene.config.json, read at this write; an unset flag is false)
 - remote-skipped: <run-mode directive ids this run's execution environment cannot run — today only `qa` — comma-separated, or `none`>   (from the launch prompt's remote-job clause, read at this write; `none` for a local run)
 
 ## Planning
@@ -89,7 +89,7 @@ Source: <state_dir>/task_prompts/<branch>_task_prompt.md → `### Run mode`
 - [ ] D.      Branch statistics committed & pushed
 ```
 
-**User-review engine** (`/autonomous-sdlc-harness:branch-start-user-review-fix-autonomous`), re-seeded per round `<n>`:
+**User-review engine** (`/devscene:branch-start-user-review-fix-autonomous`), re-seeded per round `<n>`:
 ```markdown
 # Flow progress — <branch>   (engine: user_review, round <n>)
 
@@ -97,7 +97,7 @@ Source: <state_dir>/task_prompts/<branch>_task_prompt.md → `### Run mode`
 Source: <state_dir>/task_prompts/<branch>_task_prompt.md → `### Run mode`
 - skipped: <directive ids, comma-separated, or `none`>
 - ignored: <verbatim directive> (<reason>) — one line per ignored directive; omit the line entirely when there are none
-- phases: parity=<true|false>, qa=<true|false>, docs=<true|false>   (from harness.config.json, read at this write; an unset flag is false)
+- phases: parity=<true|false>, qa=<true|false>, docs=<true|false>   (from devscene.config.json, read at this write; an unset flag is false)
 - remote-skipped: <run-mode directive ids this run's execution environment cannot run — today only `qa` — comma-separated, or `none`>   (from the launch prompt's remote-job clause, read at this write; `none` for a local run)
 
 ## Fix planning
@@ -132,7 +132,7 @@ meaning.
   and that is the distinction this marker set exists to carry.
 - `[-]` — **skipped before the run began.** The phase never ran, no artifact exists, and none is owed. Three
   provenances put an entry here and there is no fourth: an **authored run-mode directive** naming the phase,
-  a **`phases.*` flag that is `false`** in `harness.config.json`, and an **execution-environment exclusion**
+  a **`phases.*` flag that is `false`** in `devscene.config.json`, and an **execution-environment exclusion**
   — the run executes where the phase cannot run, which the launch prompt's remote-job clause states. All
   three are knowable at ledger-creation time, because the ledger is created after the configuration and the
   launch prompt have been read. All three are also **recorded** at that moment — the run mode on the block's
@@ -205,7 +205,7 @@ QA cannot run* distinguishable from *nobody recorded where it ran*. A ledger cre
 **run-mode directive ids** (`${CLAUDE_PLUGIN_ROOT}/instructions/run_mode_instructions.md`'s vocabulary),
 never ledger entry ids such as `E` or `R4`, and the only id it can carry today is `qa`: every reader of it —
 §1.3 item 3, §1.4's seeding, the autonomous forks' Done-summary override — keys on that literal. §1.8's completion
-check compares only the `phases:` line with the live `harness.config.json`: the `remote-skipped:` line has no
+check compares only the `phases:` line with the live `devscene.config.json`: the `remote-skipped:` line has no
 live counterpart, so it is never a §1.8 disagreement. For what a directive id is, which ids exist, and what makes a directive ignored, see
 `${CLAUDE_PLUGIN_ROOT}/instructions/run_mode_instructions.md` — none of that is restated here.
 
@@ -224,10 +224,10 @@ convergence, not the iteration count (the existing `>= 5` caps own that).
 `<state_dir>/flow_progress/<branch>_progress.md` already exists (a resume), do NOT recreate or reset it — read
 it. The task engine has exactly one ledger per branch and it only ever grows monotonically. On the create
 path the fork writes the `## Run mode` block — the run mode it read at its own Setup, on the `phases:`
-line the flags it read from `harness.config.json`, and on the `remote-skipped:` line the phase ids the launch
+line the flags it read from `devscene.config.json`, and on the `remote-skipped:` line the phase ids the launch
 prompt's remote-job clause excludes (`none` when it carries no such clause) — and, in that **same write**,
 seeds a `[-]`-eligible entry as `[-]` rather than `[ ]` when a `skipped:` id names it, **or** the `phases.*`
-flag gating it is `false` in `harness.config.json`, **or** the recorded `remote-skipped:` line names `qa` and
+flag gating it is `false` in `devscene.config.json`, **or** the recorded `remote-skipped:` line names `qa` and
 the entry is `E` — never `P2` (§1.3 maps switch to entry). The configuration and the launch prompt are read
 before the ledger is written, so all three provenances are known at that one write, and a resume, which
 re-reads the recorded block rather than the prompt, keeps the `remote-skipped:` line. Because a
@@ -248,9 +248,9 @@ existing ledger's header round to the **active round** (the latest `<branch>_rev
 §1.7 skips the entire fix cycle — **silently voiding the round**.
 
 On the **create** and **re-seed** paths alike the `## Run mode` block is derived for the active round from the
-run mode the fork read at its Setup, the flags it read from `harness.config.json` and **that round's** launch
+run mode the fork read at its Setup, the flags it read from `devscene.config.json` and **that round's** launch
 prompt's remote-job clause, in the same write as the fresh all-`[ ]` `R1–R5` and `RG`, and `R4` is seeded `[-]` when a
-`skipped:` id names it, **or** `phases.qa` is `false` in `harness.config.json`, **or** the recorded
+`skipped:` id names it, **or** `phases.qa` is `false` in `devscene.config.json`, **or** the recorded
 `remote-skipped:` line names `qa`. Because the re-seed re-records that line from the round's own launch
 prompt, a round run locally after a remote one is not excluded. On the **same-round resume** path the block
 is read, never rewritten — like every entry around it.
@@ -262,7 +262,7 @@ prompt alone changes nothing any running fork reads. A `phases.*` value edited m
 ledger either — but it is **not** symmetric with the run mode, and the difference is load-bearing. A run-mode
 gate re-reads the **recorded block** (`${CLAUDE_PLUGIN_ROOT}/instructions/run_mode_instructions.md` →
 `## The durable record`), so a prompt edit reaches nothing a running fork reads. Each phase's
-**`Skip this phase unless …`** configuration gate re-reads the **live `harness.config.json`** on every entry,
+**`Skip this phase unless …`** configuration gate re-reads the **live `devscene.config.json`** on every entry,
 so a flag edit can run a phase whose entries were seeded `[-]`, or skip one whose entries are `[ ]` — and no
 flip repairs either state (§1.5). **Changing a `phases.*` value mid-branch therefore means editing the live
 file, the recorded `phases:` line and the markers it seeded in one act — all three, or none.** A ledger whose
@@ -403,7 +403,7 @@ suffers.
 the ledger. The watcher (`<scripts_dir>/autonomous-watcher.sh`) only *names* it in the resume prose it emits
 into a relaunch prompt ("continue at the first phase entry still marked [ ] and SKIP every phase already
 marked [x]"), which stays true verbatim under `[-]`, since a `[-]` entry is neither of the two markers that
-sentence quantifies over. The branch-status command never opens the ledger at all. `/autonomous-sdlc-harness:branch-resume` **does**
+sentence quantifies over. The branch-status command never opens the ledger at all. `/devscene:branch-resume` **does**
 state the marker set in its own resume prose ("skipping every phase already marked `[x]` or `[-]`"), so it is
 edited whenever that set changes — it already carries the third marker. To re-derive which surfaces name a
 marker at all, grep the corpus for the literal `[-]`.
@@ -417,10 +417,10 @@ the ledger is fully resolved **before** it flips the terminal entry:
   clarification-digest write) and **immediately before** the terminal entry's flip.
   Not per phase, and not after the flip.
 - **What is read.** The committed ledger, whole — both checklist sections, every phase entry — plus the
-  `## Run mode` block's `phases:` line and the live `harness.config.json`. The block contributes no *entry*:
+  `## Run mode` block's `phases:` line and the live `devscene.config.json`. The block contributes no *entry*:
   it carries no checkbox by design (§1.3).
 - **The predicate.** Every phase entry **other than the terminal entry itself** is `[x]` or `[-]`, **and**
-  the recorded `phases:` line matches the live `harness.config.json`. The terminal entry is `[ ]` at this
+  the recorded `phases:` line matches the live `devscene.config.json`. The terminal entry is `[ ]` at this
   instant by construction — it is the flip this check gates — so it is never its own subject. A `phases:`
   disagreement means a `phases.*` value was edited mid-branch (§1.4 **Tie-break**), so at least one `[-]` or
   `[ ]` no longer describes what the gates did.
@@ -449,7 +449,7 @@ the check self-satisfying; §1.5 already bars writing `[x]` over a phase that ne
 wrongly seeded entry is a seeding fix, not a flip.
 
 **Cost, and interaction with the invariants.** The check is a read of one short committed file the fork
-already opens on every (re-)entry (§1.7), plus `harness.config.json`. It dispatches nothing, so it touches no `MAX_TOTAL_DISPATCHES`
+already opens on every (re-)entry (§1.7), plus `devscene.config.json`. It dispatches nothing, so it touches no `MAX_TOTAL_DISPATCHES`
 budget; it commits nothing, so it adds no commit point to §3's clean-tree set. Its fail path leaves the tree
 clean, because every earlier Phase-D artifact is already committed.
 
@@ -463,12 +463,12 @@ watcher-owned resume, and differ only in **who notices** and **who resumes**:
 
 | Trigger | Detected by | Path in | Auto-resumes? |
 |---|---|---|---|
-| Operator pause (`/autonomous-sdlc-harness:branch-pause`) | the operator | drops `<state_dir>/PAUSE` → run honors it at a clean boundary (**§2.2**) | no — waits for `/autonomous-sdlc-harness:branch-resume` |
-| **Usage limit** (5 h `five_hour` / weekly `seven_day`) | the **watcher**, parsing `rate_limit_event` off the run's `<branch>.stream.jsonl` — the local daemon for a local run, the job's own watcher (`autonomous-watcher.sh job`) for a remote one | watcher drops `<state_dir>/PAUSE` → run honors it (**§2.2**) | **yes** — watcher records `usage_resume_at` and drops `RESUME` when the window resets; a remote run is resumed by its job, waiting in-job, or else by the `harness-resume.yml` poller dispatching a new job — never by a `RESUME` dropped locally |
-| **API overload** (`529` / `500` / `503`) | the **run itself**, from a failed Agent dispatch | run writes `PAUSE_ACK` directly — **no `PAUSE` request** (**§2.5**) | no — an outage has no predictable reset; waits for `/autonomous-sdlc-harness:branch-resume` (a remote job's bounded exception: §2.5 **Who resumes.**) |
+| Operator pause (`/devscene:branch-pause`) | the operator | drops `<state_dir>/PAUSE` → run honors it at a clean boundary (**§2.2**) | no — waits for `/devscene:branch-resume` |
+| **Usage limit** (5 h `five_hour` / weekly `seven_day`) | the **watcher**, parsing `rate_limit_event` off the run's `<branch>.stream.jsonl` — the local daemon for a local run, the job's own watcher (`autonomous-watcher.sh job`) for a remote one | watcher drops `<state_dir>/PAUSE` → run honors it (**§2.2**) | **yes** — watcher records `usage_resume_at` and drops `RESUME` when the window resets; a remote run is resumed by its job, waiting in-job, or else by the `devscene-resume.yml` poller dispatching a new job — never by a `RESUME` dropped locally |
+| **API overload** (`529` / `500` / `503`) | the **run itself**, from a failed Agent dispatch | run writes `PAUSE_ACK` directly — **no `PAUSE` request** (**§2.5**) | no — an outage has no predictable reset; waits for `/devscene:branch-resume` (a remote job's bounded exception: §2.5 **Who resumes.**) |
 | **Job time budget** (remote execution, GitHub-hosted runner) | the **job's watcher** | drops `<state_dir>/PAUSE` → run honors it (**§2.2**) | **yes** — the next chained job resumes from the ledger |
 
-A remote run's operator pause reaches the job as the `harness pause <branch>` dispatch the operator's command sends, and the job's watcher drops `PAUSE` into
+A remote run's operator pause reaches the job as the `devscene pause <branch>` dispatch the operator's command sends, and the job's watcher drops `PAUSE` into
 its checkout, so it is honored by the same §2.2 path. Nothing in §2.2 or §2.4 changes for a remote run.
 
 So the usage gate is *not* a self-pause: it is watcher-detected and routed through the ordinary request/ack
@@ -484,10 +484,10 @@ what fixes classification**, so the run-side rule in §2.5 is required regardles
 ### 2.1 Files — FLAT under `<state_dir>/`, machine-local (never commit them)
 | File | Role | Written / removed by |
 |---|---|---|
-| `<state_dir>/PAUSE` | **request** (input): pause this run | user drops it (or `/autonomous-sdlc-harness:branch-pause`); **watcher** removes on resume |
+| `<state_dir>/PAUSE` | **request** (input): pause this run | user drops it (or `/devscene:branch-pause`); **watcher** removes on resume |
 | `<state_dir>/PAUSE_PROGRESS.md` | append-only pause note (phase, ledger state, next step) | driving fork appends; kept across resumes by the local watcher; a remote job keeps it only on a pause resume of a job that paused for the same engine (§2.3) |
 | `<state_dir>/PAUSE_ACK` | **ack**: "I actually paused" (drives registry `paused`) | driving fork **writes** (never `touch` — §2.2b); also written *unrequested* on a §2.5 self-pause; **watcher** removes on resume |
-| `<state_dir>/RESUME` | **trigger** (input): resume this run | user drops it (or `/autonomous-sdlc-harness:branch-resume`); **watcher** removes on resume |
+| `<state_dir>/RESUME` | **trigger** (input): resume this run | user drops it (or `/devscene:branch-resume`); **watcher** removes on resume |
 
 They are **flat** under `<state_dir>/` — deliberately **never** a `<state_dir>/pause/` subdir, because on a
 case-insensitive filesystem (macOS default) `<state_dir>/PAUSE` and `<state_dir>/pause/` are the **same path**
@@ -603,7 +603,7 @@ sandbox was not measured — BG9):
 
 In the nothing-pending case (BG1) that exit is `rc=0` with no `PAUSE_ACK`, so
 `classify_run_exit` finds the ledger unfinished and records the run `paused` with `pause_reason` `unfinished`:
-the flow stops mid-phase and waits for `/autonomous-sdlc-harness:branch-resume`. A pending task or
+the flow stops mid-phase and waits for `/devscene:branch-resume`. A pending task or
 `Monitor` is still no resumption mechanism: the wake-up in BG5 and BG6 is observed behaviour of one CLI
 version, not a contract this flow relies on; a session waiting silently gives the stall watchdog no output, so
 a silence longer than `STALL_KILL_SECS` (default 2700 s, `<scripts_dir>/autonomous-watcher.sh` →
@@ -618,7 +618,7 @@ session sleeps. Writing `PAUSE_ACK` and ending the session is the **only** durab
       `#<n>`), and **the tracked-tree state** (see the dirty-tree rule below).
    b. Write `<state_dir>/PAUSE_ACK` (Write tool or `echo "" > <state_dir>/PAUSE_ACK`; **never** `touch` — §2.2b).
    c. Emit `PAUSED: <branch> — <phase> (API overload)` to the run log. The `(API overload)` suffix is what tells
-      this pause apart from a usage pause or a hand-dropped `/autonomous-sdlc-harness:branch-pause` in the notification's log tail.
+      this pause apart from a usage pause or a hand-dropped `/devscene:branch-pause` in the notification's log tail.
    d. **End the session** — truly stop and yield, exactly as §2.2d.
 
 **Dirty-tracked tree — this pause deliberately diverges from §2.2.** §2.2 *defers* a pause while a unit is
@@ -643,13 +643,13 @@ never marking a test passed on the strength of an uncommitted claim.
 **Who resumes.** Nothing auto-resumes an overload pause. An outage has no predictable reset the way the 5 h
 usage window does, so — unlike the usage auto-pause, which records `usage_resume_at` and drops `RESUME`
 itself — the run sits at registry `paused` at zero dispatch cost until a `<state_dir>/RESUME` lands. The operator
-resumes it with `/autonomous-sdlc-harness:branch-resume` once the incident is clear. Because the status is genuinely `paused`, both
-`/autonomous-sdlc-harness:branch-resume` and `resume_paused_runs` act on it normally, which is precisely what a falsely-`completed`
+resumes it with `/devscene:branch-resume` once the incident is clear. Because the status is genuinely `paused`, both
+`/devscene:branch-resume` and `resume_paused_runs` act on it normally, which is precisely what a falsely-`completed`
 run denies them.
 
 A remote job is the one exception. There the job's watcher resumes an overload self-pause from the committed
 ledger automatically, after a delay (`REMOTE_AUTO_RESUME_DELAY_SECS`), at most `REMOTE_AUTO_RESUME_MAX` times per
-run; past that bound the run stays `paused` and waits for `/autonomous-sdlc-harness:branch-resume` as above. The
+run; past that bound the run stays `paused` and waits for `/devscene:branch-resume` as above. The
 outage still has no predictable reset — the bound is what answers that there, capping what a persistent fault
 can cost.
 

@@ -6,7 +6,7 @@
  * that module's `## Who may cite this` names exactly those sites.**
  *
  * Registered as a tree guard by Task 9 of `fix_untrusted_input_framing_subagents`, which adds this
- * file's `treeGuards` entry to `harness.config.json`.
+ * file's `treeGuards` entry to `devscene.config.json`.
  *
  * Not covered, deliberately — both are review's: that a pointer sits at the right sentence, and
  * that a citer restates the rule beside it.

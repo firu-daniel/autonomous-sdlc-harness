@@ -47,7 +47,7 @@
 # SAFETY-CRITICAL CONSEQUENCE. Not reaching the commit branch-guard also means
 # not reaching its protected-branch refusal, so this script MUST make that
 # decision itself — and it makes it from the MAIN checkout's
-# `harness.config.json` at run time (THE TARGET'S `harness.config.json` IS NOT
+# `devscene.config.json` at run time (THE TARGET'S `devscene.config.json` IS NOT
 # TRUSTED EITHER below), through `lib/harness-run-lib.sh`, never from a list of
 # branch names written into this file. A remembered list enforces the wrong set
 # the moment `protectedBranches` changes, and enforces nothing at all in a
@@ -77,10 +77,10 @@
 # `config.worktree`. A `HEAD` flipped to another branch after the read is not
 # followed: only `refs/heads/<branch>` moves.
 #
-# THE TARGET'S `harness.config.json` IS NOT TRUSTED EITHER. A worktree's own
+# THE TARGET'S `devscene.config.json` IS NOT TRUSTED EITHER. A worktree's own
 # copy is a tracked file in a sandbox-writable tree, so a sandboxed command
 # could commit one whose `protectedBranches` drops the branch it is on. The
-# protected set is read from the MAIN checkout's `harness.config.json`, a file
+# protected set is read from the MAIN checkout's `devscene.config.json`, a file
 # the permission profile write-protects, whichever checkout is the target; a
 # main checkout whose configuration cannot be read is a refusal (exit 1), never
 # a fall-back to the target's (`push-branch.sh` → the paragraph of the same
@@ -183,7 +183,7 @@
 # `detached HEAD — refusing to commit`, `'<dir>' is not a git repository —
 # refusing to commit`, `branch '<branch>' is protected — refusing to commit`
 # (followed by its `protected set` line) and `cannot resolve
-# '<main>/harness.config.json' — refusing to commit` (followed by its
+# '<main>/devscene.config.json' — refusing to commit` (followed by its
 # parenthesised causes). A usage error keeps its own line and its usage hint.
 # The exit-1 `committed <short_sha> on <branch>, but …` line is not a refusal
 # and does not begin with that prefix.
@@ -264,7 +264,7 @@
 # REPRO — reproduce any decision by hand, against a throwaway fixture:
 #
 #   d=$(mktemp -d); git -C "$d" init -q -b feat_x
-#   printf '%s' '{"version":1,"defaultBranch":"trunk","protectedBranches":["trunk","release/*"],"stateDir":"sdlc-harness/","layers":[],"commands":{}}' > "$d/harness.config.json"
+#   printf '%s' '{"version":1,"defaultBranch":"trunk","protectedBranches":["trunk","release/*"],"stateDir":"devscene/","layers":[],"commands":{}}' > "$d/devscene.config.json"
 #   mkdir -p "$d/scripts"; cp -R <this script> <its lib/> "$d/scripts/"
 #   git -C "$d" add -A && git -C "$d" commit -qm seed
 #   printf 'x\n' > "$d/f.txt"
@@ -278,8 +278,8 @@
 #                     and `git -C "$d" status --porcelain` is unchanged
 #   not in the set    git -C "$d" checkout -q -b main; printf 'y\n' >> "$d/f.txt";
 #                     same call -> exit 0 (the set is configured, not remembered)
-#   unresolvable      printf 'x' > "$d/harness.config.json"; same call -> exit 1,
-#                     no commit; then `git -C "$d" checkout -q -- harness.config.json`
+#   unresolvable      printf 'x' > "$d/devscene.config.json"; same call -> exit 1,
+#                     no commit; then `git -C "$d" checkout -q -- devscene.config.json`
 #   deleted path      rm "$d/f.txt"; passing `f.txt` -> a "skipping" line,
 #                     exit 3, the deletion NOT committed; passing `.` instead
 #                     -> exit 0, and `git -C "$d" ls-files f.txt` prints nothing
@@ -395,9 +395,9 @@ fi
 # the protected-branch decision below read the warmed cache. It runs ahead of
 # the target check, so a clone target gets this refusal rather than the clone
 # arm's registry sentence, and ahead of the pin, so it is not the pin's either.
-# It reads only `<main_top>/harness.config.json` and makes no git call.
+# It reads only `<main_top>/devscene.config.json` and makes no git call.
 if ! hr_config_load "$main_top"; then
-  echo "commit-on-branch.sh: cannot resolve '$main_top/harness.config.json' — refusing to commit" >&2
+  echo "commit-on-branch.sh: cannot resolve '$main_top/devscene.config.json' — refusing to commit" >&2
   echo "  (no configuration there, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)" >&2
   exit 1
 fi
@@ -448,7 +448,7 @@ case "$branch" in
     ;;
 esac
 
-# THE TARGET'S `harness.config.json` IS NOT TRUSTED EITHER (header): the
+# THE TARGET'S `devscene.config.json` IS NOT TRUSTED EITHER (header): the
 # protected-branch decision is the main checkout's. Called unsubstituted so the
 # library's per-process cache is warmed here and the `$(hr_protected_patterns …)`
 # in the refusal message below re-reads nothing.
@@ -471,13 +471,13 @@ case "$protected" in
 $patterns
 EOF
     echo "commit-on-branch.sh: branch '$branch' is protected — refusing to commit" >&2
-    echo "  protected set (from harness.config.json): $protected_set" >&2
+    echo "  protected set (from devscene.config.json): $protected_set" >&2
     exit 2
     ;;
   2)
     # Fail closed: a configuration that cannot be read is a branch that cannot
     # be judged.
-    echo "commit-on-branch.sh: cannot resolve '$main_top/harness.config.json' — refusing to commit" >&2
+    echo "commit-on-branch.sh: cannot resolve '$main_top/devscene.config.json' — refusing to commit" >&2
     echo "  (no configuration there, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)" >&2
     exit 1
     ;;

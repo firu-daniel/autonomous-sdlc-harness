@@ -46,7 +46,7 @@
 #                 usage error or when it writes no usable credential; erase:
 #                 always 0, 1 only on a usage error: its paragraph)
 #     0  sent (for stop: the action=stop marker was dispatched, and every
-#        queued, waiting or in-progress `harness run` run of that branch was
+#        queued, waiting or in-progress `devscene run` run of that branch was
 #        asked to cancel, or there was none); for status and fetch: printed
 #        (for fetch, `state: none` included); for sync: the record is
 #        current (including "no run listed yet", which writes nothing); for
@@ -137,11 +137,11 @@
 #
 # `fetch` IS THE COMMANDS' READ OF ONE BRANCH ON GITHUB, needing no local
 # record. Gated like a sending verb. <out_dir> must be an existing, empty
-# directory. It reads the newest `harness run <branch>` run through the same
+# directory. It reads the newest `devscene run <branch>` run through the same
 # derivation `sync` makes (`remote_state`), downloads that run's state bundle
 # into <out_dir> when one applies, and prints these lines, each always present
 # and empty when unknown — the key names are a wire the commands parse:
-#   run_id:  run_url:  run_status:   the newest `harness run <branch>` run
+#   run_id:  run_url:  run_status:   the newest `devscene run <branch>` run
 #   state:           `none` when no such run is listed, else the derivation's
 #   pause_reason:  engine:  detail:   from the derivation
 #   open_questions:  space-separated <n> of every top-level
@@ -160,12 +160,12 @@
 # creates nothing and writes nothing else.
 #
 # `review` PLACES A USER REVIEW ROUND ON THE BRANCH TIP AND DISPATCHES IT, for
-# `/autonomous-sdlc-harness:branch-user-review` on a run that executes on
+# `/devscene:branch-user-review` on a run that executes on
 # GitHub. In order, stopping at the first failure: refuse a protected branch
 # and a review file that is not a readable regular file (2; a relative
 # --review-file resolves against the caller's directory); refuse a branch that
 # `branch_settled_var`, the settledness test `control` and `collect` share, reads as not
-# settled (2). Its newest `harness run <branch>` run decides: none listed is
+# settled (2). Its newest `devscene run <branch>` run decides: none listed is
 # settled only under --allow-no-run; a `completed` one is read by
 # `remote_state`; any other is in flight as `running` until its `RUN_JOB_NAME`
 # job has completed, and then read by `remote_state` as a finished run. Settled
@@ -203,7 +203,7 @@
 # `hr_user_review_subject`'s `chore: add user review for <branch>` by
 # `hr_commit_placed`'s plumbing in the main checkout, running no hook, and
 # pushed (each failure 4); the cut copy is removed; then `dispatch --engine
-# user_review --resume none --chain 0`, after which it holds until a `harness run
+# user_review --resume none --chain 0`, after which it holds until a `devscene run
 # <branch>` run whose `headSha` is the pushed commit is listed — `run_by_sha_var`,
 # `trigger`'s bounded lookup — so a review job serialized behind it never reads
 # the branch as settled before GitHub lists the new run; a lookup that runs out
@@ -220,7 +220,7 @@
 # job's checkout, and every `show`, `ls-tree`, `cat-file` and `log` of
 # `refs/remotes/origin/*` in the root checkout.
 # --allow-no-run EXISTS FOR A LOCALLY EXECUTED BRANCH REVIEWED ON GITHUB: such
-# a branch has no `harness run <branch>` run, and its round runs through
+# a branch has no `devscene run <branch>` run, and its round runs through
 # `WORKFLOW_RUN_FILE` because a GitHub-started round always does. Its local
 # record carries no `execution: github-actions`, so it is neither read as the
 # copy nor written; the round runs remotely, and the branch's local working
@@ -237,31 +237,23 @@
 #                        into a variable and is only ever an argument or file
 #                        bytes, never shell source; `.repository.owner.login`
 #                        and `.repository.owner.type` only when
-#                        `HARNESS_RUN_ACTORS` is unset
+#                        `DEVSCENE_RUN_ACTORS` is unset
 #   GITHUB_REPOSITORY, GITHUB_SERVER_URL, GITHUB_RUN_ID   the `gh` target and
 #                        the URLs its comments name
-#   HARNESS_REMOTE_STOP  non-empty: every start is refused
-#   HARNESS_TRIGGER_LABEL   the trigger label; when empty, `DEFAULT_TRIGGER_LABEL`
-#                        or `LEGACY_TRIGGER_LABEL`, per the paragraph below
-#   HARNESS_TRIGGER_ALLOWED_BOTS   comma-separated bot logins allowed to start
-#   HARNESS_RUN_ACTORS   comma-separated people allowed to act on a run, `*`
+#   DEVSCENE_REMOTE_STOP  non-empty: every start is refused
+#   DEVSCENE_TRIGGER_LABEL   the trigger label; when empty, `DEFAULT_TRIGGER_LABEL`
+#   DEVSCENE_TRIGGER_ALLOWED_BOTS   comma-separated bot logins allowed to start
+#   DEVSCENE_RUN_ACTORS   comma-separated people allowed to act on a run, `*`
 #                        for every writer; unset admits a `User` owner alone
 #                        (`run_actor_listed`)
 #   HARNESS_TRIGGER_LOOKUP_SECS    seconds between run lookups; `5` when empty.
 #                        A test seam
 #   RUNNER_TEMP          where the prompt snapshot is written; a `mktemp -d`
 #                        directory under `${TMPDIR:-/tmp}` when empty
-# THE LEGACY LABEL. The workflow `init` now writes always passes a non-empty
-# `HARNESS_TRIGGER_LABEL`; only the previous release's workflow, which
-# `init --upgrade-workflows` never re-renders, passes it empty, and its `if:`
-# already ran the job for `LEGACY_TRIGGER_LABEL`. So when it is empty either
-# `DEFAULT_TRIGGER_LABEL` or `LEGACY_TRIGGER_LABEL` is accepted, and the comment
-# and the label removal name the one applied; a new workflow starts on
-# `LEGACY_TRIGGER_LABEL` only when the variable names it.
 # An `action` other than `labeled`, or another label, is one line and exit 0
 # with no `gh` call. Otherwise refused, in this order, each refusal one issue
 # comment naming the reason and the way on:
-#   1. `HARNESS_REMOTE_STOP` is set
+#   1. `DEVSCENE_REMOTE_STOP` is set
 #   2. `hr_forge` is not `github` or `hr_execution_target` is not
 #      `github-actions` — before any authorisation, so a disabled trigger asks
 #      GitHub nothing about the labeller
@@ -270,32 +262,32 @@
 #      empty, or not a login shape (`^[A-Za-z0-9][A-Za-z0-9-]*$`, plus `[bot]`
 #      for a `Bot`)
 #   5. `sender.type` is not `User` and the login is not an exact entry of
-#      `HARNESS_TRIGGER_ALLOWED_BOTS` — checked by the listing alone, with no
+#      `DEVSCENE_TRIGGER_ALLOWED_BOTS` — checked by the listing alone, with no
 #      permission call, because the permission API answers `none` or 404 for a bot
 #   6. a `User` whose `collaborators/<login>/permission` is not `admin` or
 #      `write` — `maintain` reads as `write` and `triage` as `read` there; a
 #      failed call is "could not confirm write access", never a pass
-#   7. a writer `HARNESS_RUN_ACTORS` does not admit — after refusal 6, so a
+#   7. a writer `DEVSCENE_RUN_ACTORS` does not admit — after refusal 6, so a
 #      non-writer is still told about write access
 # Refusals 4 to 7 are `authorise_actor`, the one actor check `control` reuses.
 # Before them, after refusal 2, a re-run (GITHUB_RUN_ATTEMPT above 1) whose
 # GITHUB_TRIGGERING_ACTOR is not `github-actions[bot]` and is not admitted by
-# `HARNESS_RUN_ACTORS` is refused (`rerun_actor_listed`), on both event kinds:
+# `DEVSCENE_RUN_ACTORS` is refused (`rerun_actor_listed`), on both event kinds:
 # a re-run replays the event, so its sender is whoever first acted.
 # Then it fetches `origin <defaultBranch>` (a failure tolerated), derives the
 # branch with `hr_derive_branch <title> issue_<number>`, passing `gh` so a name
 # with run-workflow history counts as taken (2 or 3 refused), writes
 # the snapshot — `# <title>`, the body's bytes, `---` and a provenance sentence
 # naming the issue, the labeller, the label and the time — and runs `start` as a
-# child. After a start it looks up the `harness run <branch>` run whose
+# child. After a start it looks up the `devscene run <branch>` run whose
 # `headSha` is the `origin/<branch>` commit `start` pushed, at most
 # `TRIGGER_RUN_LOOKUP_TRIES` times, falling back to the branch's filtered run
 # list, and comments the branch and that URL; the comment never names an older
 # run of the branch. Every comment ends with the marker
-# `<!-- sdlc-harness event=started branch=<branch> -->` on a start and
+# `<!-- devscene event=started branch=<branch> -->` on a start and
 # `event=refused` otherwise (`branch=` empty before one is derived), and is
 # followed by removing the label, so re-applying it is deliberate; then a start
-# sets the state label `sdlc-harness: running`. That comment, that removal and
+# sets the state label `devscene: running`. That comment, that removal and
 # that one label are the trigger's only writes to the issue; a refusal sets no
 # label. A removal or a label set that fails is one `::warning::` line.
 # A `repository_dispatch` reads `.action` (where GitHub puts the `event_type`)
@@ -308,7 +300,7 @@
 # no labeller: GitHub sends one only for a fine-grained token with Contents
 # write or a classic token with `repo`, so the token holder is the authority,
 # and refusals 3 to 6 do not apply. After refusal 2 a `User` sender
-# (`.sender.login`, `.sender.type`) that `HARNESS_RUN_ACTORS` does not admit is
+# (`.sender.login`, `.sender.type`) that `DEVSCENE_RUN_ACTORS` does not admit is
 # refused with no permission call, and so is a sender with no type unless the
 # list is `*`, failing closed; any other sender type passes. The fallback name is `task_<GITHUB_RUN_ID>`
 # and the snapshot's provenance sentence names the event type, `source` when
@@ -366,7 +358,7 @@
 # own comment) are one line each, as is any other event. The comment names the
 # next GitHub action — never a slash command — then <note> byte for byte, then
 # this run's URL when `GITHUB_RUN_ID` is set, then the marker line
-# `<!-- sdlc-harness event=<event> branch=<branch> -->`. The pause reason and
+# `<!-- devscene event=<event> branch=<branch> -->`. The pause reason and
 # reset come from the registry record, read only when the registry file exists.
 # `parked` instead posts one comment per open question — `open_questions_in`
 # over `$root`'s state directory, ascending — carrying `question_<n>.md` less
@@ -398,7 +390,7 @@
 # phase) or `not started` for `Planning`, `Implementation`, `Branch review`,
 # `Done` (a round: `Fix plan`, `Fix implementation`, `Branch review`, `Done`) —
 # plain list items, no timestamp, no run URL — then the marker
-# `<!-- sdlc-harness event=progress branch=<branch> -->`, gaining ` round=<n>`
+# `<!-- devscene event=progress branch=<branch> -->`, gaining ` round=<n>`
 # for a round. One paginated comment listing picks the newest
 # `github-actions[bot]` comment whose last non-empty line is that marker: none
 # is one `forge_comment`; a body equal to the render (carriage returns and
@@ -520,11 +512,11 @@
 # on the pull request, its readiness clause by the flip's outcome, and one on
 # the issue naming the pull request's number and URL, each when known; with no
 # pull request, one comment on the issue alone naming why none could be opened
-# — the Actions setting and `HARNESS_GIT_TOKEN` on `PR_CREATE_FORBIDDEN`, else
+# — the Actions setting and `DEVSCENE_GIT_TOKEN` on `PR_CREATE_FORBIDDEN`, else
 # gh's error — with the branch's compare URL; nowhere when neither is known.
 # Each names reviewing and requesting changes as the next action, and with
 # `phases.qa` true the local `branch-qa-test` still owed. Then
-# `sdlc-harness: done` on the issue and the pull request, each when known. It
+# `devscene: done` on the issue and the pull request, each when known. It
 # writes at most one pull request, one conversion back to a draft, one flip,
 # a round's thread replies and
 # resolves, two comments and those labels, and never pushes. It never fails its caller: every problem, a refused flip
@@ -535,7 +527,7 @@
 # a review `control` answered "collected" waits at most for the run in flight.
 # Job-side for its root and self-gated, as `report` and `deliver` are
 # (`forge_on`, one line when off). In order, each stop one line and exit 0:
-# `HARNESS_REMOTE_STOP` set; `remote_branch_stopped` finding the branch stopped,
+# `DEVSCENE_REMOTE_STOP` set; `remote_branch_stopped` finding the branch stopped,
 # or failing; `branch_settled_var`, read as `control` reads it, failing; the
 # newest run's job never started — when that run is this one (or
 # `GITHUB_RUN_ID` is unset), `report`'s `not_started` on its pull request or
@@ -576,22 +568,22 @@
 # body carrying `COMMENT_MARKER` anywhere (the harness's own comment, whoever
 # posted it); and a body that does not hold `COMMAND_HANDLE` as a word
 # anywhere, compared lowercase (the ERE `(^|[^a-z0-9])<handle>([^a-z0-9-]|$)`).
-# So `pause` and `foo@sdlc-harnessx` start nothing. THE EXACT FORM is a first
+# So `pause` and `foo@dev-scenex` start nothing. THE EXACT FORM is a first
 # line — a trailing CR stripped, leading spaces and tabs skipped — opening with
 # a word equal to `COMMAND_HANDLE`, compared lowercase, whose next word,
 # lowercased, is a `COMMAND_VERBS` word: that is the verb, and `CONTROL_ARGS`
 # the rest of that line. Any other body holding the handle is A MENTION
-# (`CONTROL_MENTION`, no verb): `Let's @sdlc-harness pause`, `> @sdlc-harness
-# pause`, the handle on a later line, and `@sdlc-harness check the question`
+# (`CONTROL_MENTION`, no verb): `Let's @dev-scene pause`, `> @dev-scene
+# pause`, the handle on a later line, and `@dev-scene check the question`
 # alike, each read by MENTION below. Then refused, in this order, each a reply
 # and exit 2:
-#   1. `HARNESS_REMOTE_STOP` is set
+#   1. `DEVSCENE_REMOTE_STOP` is set
 #   2. `forge_on` fails — before any authorisation, so a disabled coupling asks
 #      GitHub nothing about the commenter
 #      then a re-run whose GITHUB_TRIGGERING_ACTOR `rerun_actor_listed`
 #      refuses, before the event's own actor is checked
 #   3. `authorise_actor` fails: `AUTH_WHY`, and who may command a run — a
-#      writer the `HARNESS_RUN_ACTORS` allow-list admits, or a listed bot
+#      writer the `DEVSCENE_RUN_ACTORS` allow-list admits, or a listed bot
 #   4. the exact form's verb is one no arm carries out (`control_verb_handled`;
 #      no such word exists today): the reply lists every command and names
 #      `docs/github-run-control.md`. Skipped for a mention.
@@ -616,9 +608,9 @@
 # reads the state (`control_state_var`; a failed read is exit 3), then refuses
 # with no session: no saved credential (exit 2, the reply listing every
 # command); no `commands/<basename of MENTION_COMMAND>.md` under
-# `HARNESS_MENTION_PLUGIN_DIR` (exit 3, naming `HARNESS_CLI_VERSION` in
-# `harness-run.yml` and `docs/remote-execution.md` -> `### Upgrading`); and an
-# agent binary, `${HARNESS_AGENT_CLI:-claude}`, that `command -v` does not
+# `HARNESS_MENTION_PLUGIN_DIR` (exit 3, naming `DEVSCENE_CLI_VERSION` in
+# `devscene-run.yml` and `docs/remote-execution.md` -> `### Upgrading`); and an
+# agent binary, `${DEVSCENE_AGENT_CLI:-claude}`, that `command -v` does not
 # resolve (exit 3). The plugin directory is a path only: nothing under it is
 # sourced or run by this script. THE CONTEXT DIRECTORY, a fresh one under
 # `RUNNER_TEMP` (removed on exit): `comment.md` (`handle: <COMMAND_HANDLE>`,
@@ -645,7 +637,7 @@
 # `hr_agent_model` (a command declares no `model:`) and the flag left off only
 # when the configuration cannot be read; never `--bare`, which reads no
 # OAuth token, and never `--disable-slash-commands`, which would stop the `-p`
-# command expanding. The command is `plugin/commands/harness-read-mention.md`
+# command expanding. The command is `plugin/commands/read-mention.md`
 # (`MENTION_COMMAND`), and it loads `plugin/instructions/mention_reading.md`,
 # whose `## Output contract` restates the decision contract validated here: a
 # field renamed on either side is an edit to both. A command declares no
@@ -673,7 +665,7 @@
 # `MENTION_TEXT_MAX_BYTES` with a `(cut)` line — then a footer saying an agent
 # wrote it and changed nothing, listing the commands; `fixes` posts this
 # script's text pointing at a review requesting changes or
-# `/autonomous-sdlc-harness:branch-user-review`; `command` with a verb in
+# `/devscene:branch-user-review`; `command` with a verb in
 # `MENTION_ACT_VERBS` is carried out by that verb's own arm (`control_run_verb`)
 # from the exact form's `CONTROL_ARGS` and `CONTROL_BODY` — for `answer`, the
 # command line then the decision's `answer` below it, byte for byte — every
@@ -711,7 +703,7 @@
 # started, which committed only its task prompt, is still commandable; an
 # issue keeps its marker after its branch is deleted, so a marker-named branch
 # gone from origin is refused as deleted, and a failed existence check is a
-# refusal naming the read; or when a `harness run <branch>` run is queued,
+# refusal naming the read; or when a `devscene run <branch>` run is queued,
 # waiting, requested, pending or in progress (`control_run_in_flight`), so a
 # run is commandable from its first minute on its pull request too. Otherwise
 # it is not a harness branch. A failed listing is a refusal naming the read.
@@ -822,7 +814,7 @@
 # inline comment, by any author and whatever its review's state, whose id is
 # unrecorded, whose body carries no `COMMENT_MARKER`, and whose `created_at` is
 # at or after the boundary or whose review is pending. Every distinct author
-# of a pending item passes `authorise_actor`, the `HARNESS_RUN_ACTORS`
+# of a pending item passes `authorise_actor`, the `DEVSCENE_RUN_ACTORS`
 # allow-list included; a refused author's items — a writer the list refuses
 # among them — are dropped with one line naming the login, `AUTH_WHY` and the
 # count, and a failed permission call (status 4) fails the collection. A round is placed only when at
@@ -836,7 +828,7 @@
 # the review has since been dismissed.`, or for any other state `Reviewed
 # pull request … at <submitted_at> (state <state>).`; then, when any is
 # kept, `## Inline comments`, oldest `created_at` first; then the marker line
-# `<!-- sdlc-harness round collected_at=<utc> reviews=<id,…> comments=<id,…> -->`
+# `<!-- devscene round collected_at=<utc> reviews=<id,…> comments=<id,…> -->`
 # listing exactly the ids written. Each comment is a `### `<path>`, line
 # <n>` heading (`original line <n> (outdated)` when `line` is null), `Made on
 # commit `<original_commit_id or commit_id>`.`, `By @<login>: <url>`, its body
@@ -874,10 +866,10 @@
 # repository is not `GITHUB_REPOSITORY`; a `ref_type` other than `branch`, or
 # a ref `valid_branch` rejects. A CLOSE IS NEVER REPLIED TO: each gate below,
 # in order, is one line and exit 0, with no comment, label or dispatch —
-#   1. `HARNESS_REMOTE_STOP` is set
+#   1. `DEVSCENE_REMOTE_STOP` is set
 #   2. `forge_on` fails
 #   3. the actor: on `issues` and `pull_request`, `authorise_actor` refused
-#      (statuses 1–3 and 5, so a writer the `HARNESS_RUN_ACTORS` allow-list
+#      (statuses 1–3 and 5, so a writer the `DEVSCENE_RUN_ACTORS` allow-list
 #      refuses is ignored too), the line naming the login and `AUTH_WHY`; on
 #      `delete`, only a `Bot` sender `trigger_bot_listed` does not list, and
 #      never the allow-list: deleting a branch already needs write access, the
@@ -892,7 +884,7 @@
 #      this pull request; an `ls-remote` that
 #      cannot answer is one line and proceeds
 # There is no harness-branch check (`forge_recognised`): a merged or deleted
-# branch may no longer carry its task prompt or ledger, and a listed `harness run <b>` run is the
+# branch may no longer carry its task prompt or ledger, and a listed `devscene run <b>` run is the
 # proof. The state is read by `control_state_var`: only `running`, `parked`,
 # `park_loop` and `paused` are acted on; `completed`, `failed` and `none` are
 # `left alone: the run on <b> is <state>`, and one `remote_branch_stopped`
@@ -903,7 +895,7 @@
 # `… deleted the branch `<b>`.` (with `--branch-gone`). Every note but the
 # deletion's adds that the workflow runs and their `harness-state` artifacts
 # are kept; a closed pull request's `stopped` comment says to reopen it, or to
-# use the issue, before commenting `@sdlc-harness resume`. The runs and
+# use the issue, before commenting `@dev-scene resume`. The runs and
 # artifacts are kept. Reopening the issue or the pull
 # request does nothing. A `pull_request` close job runs the pull request's
 # merge-commit copy of the workflow, as a review job does
@@ -935,7 +927,7 @@
 # `GITHUB_RUN_ID` (restore: this run is never its own previous run) and
 # `GITHUB_STEP_SUMMARY` (save) are the runner's own.
 #
-# `restore` SELECTS the newest `completed` run titled `harness run <branch>`,
+# `restore` SELECTS the newest `completed` run titled `devscene run <branch>`,
 # other than `GITHUB_RUN_ID`, carrying a `harness-state` artifact — walking
 # past a run with none, and stopping at one whose artifact has expired, since
 # an older copy would be staler state. An expired one restores nothing: under
@@ -985,11 +977,11 @@
 # and exit 0.
 #
 # THE STATE DIRECTORY `save` AND `restore` USE IS `hr_remote_state_dir_var`'s:
-# in a job, `stateDir` from `harness.config.json` at
+# in a job, `stateDir` from `devscene.config.json` at
 # `HARNESS_GITHUB_DEFAULT_COMMIT`, because the checkout's own copy is the
 # session's to rewrite and could point the bundle at any directory; outside a
 # job, the checkout's own. Where the two differ in a job, each prints
-# `the checkout's harness.config.json names stateDir '<checkout>', the trusted
+# `the checkout's devscene.config.json names stateDir '<checkout>', the trusted
 # configuration at <commit> names '<trusted>'; using '<trusted>'` on stderr.
 # A LINKED SOURCE IS SKIPPED, NEVER FOLLOWED: `save` tests the status file and
 # `autonomous_logs/registry.json` component by component before reading
@@ -1002,17 +994,17 @@
 # is the run workflow's last job step (under `!cancelled()`); `poll` is the
 # whole body of the resume poller, `WORKFLOW_RESUME_FILE`. Both read, from the
 # environment the workflows set:
-#   HARNESS_MAX_CHAIN    the automatic-dispatch limit; `24` when empty. Not a
+#   DEVSCENE_MAX_CHAIN    the automatic-dispatch limit; `24` when empty. Not a
 #                        non-negative integer: nothing is dispatched
-#   HARNESS_POLL_MAX_DISPATCH_FAILURES   `poll` only: failed re-dispatches of
+#   DEVSCENE_POLL_MAX_DISPATCH_FAILURES   `poll` only: failed re-dispatches of
 #                        one paused run, and consecutive failed downloads of
 #                        one run's listed bundle, each counted apart, before it
 #                        gives up; `3` when empty
-#   HARNESS_POLL_GIVE_UP_AFTER_MINUTES   `poll` only: minutes after a run's
+#   DEVSCENE_POLL_GIVE_UP_AFTER_MINUTES   `poll` only: minutes after a run's
 #                        `usage_resume_at` past which a failed re-dispatch gives
 #                        up; `360` when empty. Either one not a non-negative
 #                        integer: nothing is dispatched
-#   HARNESS_REMOTE_STOP  non-empty: nothing is dispatched
+#   DEVSCENE_REMOTE_STOP  non-empty: nothing is dispatched
 #   HARNESS_REMOTE_SLUG  exported as `HARNESS_REPO_SLUG` before a notification,
 #                        so it names the repository rather than a runner path
 #   GITHUB_RUN_ID, GITHUB_SERVER_URL, GITHUB_REPOSITORY   the run URL
@@ -1032,13 +1024,13 @@
 # `continue <branch> <bundle_dir>` reads the bundle `save` just wrote:
 #   no status.json   the harness step never started: one `failed` naming the
 #                    run URL, no dispatch
-#   decision continue   refused, in this order: `HARNESS_REMOTE_STOP` set (one
+#   decision continue   refused, in this order: `DEVSCENE_REMOTE_STOP` set (one
 #                    `paused`); the branch stopped (one log line, no
 #                    notification — the user asked for it); the branch absent
 #                    on origin (one log line, no notification; an
 #                    `ls-remote` that cannot answer is one line and proceeds,
 #                    since the dispatch then fails loudly); chain unreadable
-#                    or `chain + 1` over `HARNESS_MAX_CHAIN` (one `failed`);
+#                    or `chain + 1` over `DEVSCENE_MAX_CHAIN` (one `failed`);
 #                    otherwise re-dispatched. A dispatch that fails is one
 #                    `paused` naming its error
 #   decision wait-poller   the branch stopped, or absent on origin: one log
@@ -1049,33 +1041,33 @@
 #                    `paused` saying auto-resume is unavailable
 #   decision stop    nothing: job mode has already notified
 # A job killed by its step timeout re-dispatches, because job mode writes
-# `decision: continue` the moment it starts; `HARNESS_MAX_CHAIN` is what bounds
+# `decision: continue` the moment it starts; `DEVSCENE_MAX_CHAIN` is what bounds
 # a job that is killed every time.
 #
 # WHY RE-DISPATCH IS NOT LEFT TO `!cancelled()` ALONE. A user's `stop` cancels a
 # running job, so its `continue` step never runs — but a usage-paused run
 # waiting for the poller has no job to cancel. The stop marker reaches it:
 # `remote_branch_stopped` finds a branch stopped when its newest run titled
-# `harness stop <branch>` was created after its newest `harness run <branch>`,
+# `devscene stop <branch>` was created after its newest `devscene run <branch>`,
 # from one bounded newest-first listing of every branch. A marker outside the
-# window is older than every `harness run` inside it, and a user's later
+# window is older than every `devscene run` inside it, and a user's later
 # dispatch is newer than the marker, so it un-stops the branch with no extra
 # step. It runs ahead of every dispatch and every enable. A listing that fails
 # fails CLOSED in `continue`: nothing sent, one `paused` naming gh's error.
 #
 # `poll` FIRST CARRIES ITS STATE: the newest run of `WORKFLOW_RESUME_FILE` other
-# than `GITHUB_RUN_ID` (bounded) carrying an unexpired `harness-poll-state`
+# than `GITHUB_RUN_ID` (bounded) carrying an unexpired `devscene-poll-state`
 # artifact is downloaded to `<state_dir>/autonomous_logs/poll_state/previous/`;
 # any failure to find or read it is one line and an empty state. Its
 # `poll_state.json` is {"<branch>": {"run_id", "failures", "notified",
 # "download_failures"}}, the last absent until a download fails; an
-# entry whose `run_id` is not the branch's newest `harness run` run is dropped,
+# entry whose `run_id` is not the branch's newest `devscene run` run is dropped,
 # so a new run restarts the count. `poll` writes the state to `poll_state/
-# current/` on every exit, `HARNESS_REMOTE_STOP` included, and the poller
+# current/` on every exit, `DEVSCENE_REMOTE_STOP` included, and the poller
 # uploads that directory.
 #
-# `poll`: `HARNESS_REMOTE_STOP` set exits 0 with nothing sent. Otherwise one
-# listing; each branch's newest `harness run <branch>` run decides. A run not
+# `poll`: `DEVSCENE_REMOTE_STOP` set exits 0 with nothing sent. Otherwise one
+# listing; each branch's newest `devscene run <branch>` run decides. A run not
 # yet `completed` is never dispatched (its own `continue` will decide): with no
 # `harness-state` artifact it is skipped, not waiting; with one whose bundle
 # says `status: paused` / `pause_reason: usage` it is waiting, because the job
@@ -1089,15 +1081,15 @@
 # and a run whose state entry says `notified`. A failed artifact lookup on a
 # `completed` run counts as a failed download of its bundle, below. A listed
 # bundle that cannot be downloaded is waiting, counted per run in `download_failures` and reset by a
-# later successful download; at `HARNESS_POLL_MAX_DISPATCH_FAILURES`
+# later successful download; at `DEVSCENE_POLL_MAX_DISPATCH_FAILURES`
 # consecutive failures it sends exactly one `bundle_unreadable` push
 # notification, with no comment and no label, the entry marked `notified`, and
 # is no longer waiting. Due
 # (reset passed): re-dispatched under the same chain limit — a refusal is one
 # `failed` and not waiting; a success drops the branch's state entry. A
 # dispatch that fails counts one more failure for that run and is still
-# waiting, until the count reaches `HARNESS_POLL_MAX_DISPATCH_FAILURES` or the
-# reset is over `HARNESS_POLL_GIVE_UP_AFTER_MINUTES` in the past: then exactly
+# waiting, until the count reaches `DEVSCENE_POLL_MAX_DISPATCH_FAILURES` or the
+# reset is over `DEVSCENE_POLL_GIVE_UP_AFTER_MINUTES` in the past: then exactly
 # one `paused` naming the dispatch error and the resume command, the entry
 # marked `notified`, and not waiting. Reset ahead: waiting. No branch waiting
 # after the tick: `gh workflow disable WORKFLOW_RESUME_FILE`, then one fresh
@@ -1115,7 +1107,7 @@
 # `execution.target` nor a registry record, run gh from `hr_repo_root` of the
 # working directory unless `--repo` names one, and write nothing.
 # `pause-requested` lists the branch's runs and exits 0 when one whose
-# `displayTitle` is exactly `harness pause <branch>` has a `createdAt` at or
+# `displayTitle` is exactly `devscene pause <branch>` has a `createdAt` at or
 # after <since_epoch> — AT, because `createdAt` has one-second resolution and
 # the caller passes a bound that starts at the job's own starting bound and
 # afterwards lags each query by an overlap (`CONTROL_POLL_OVERLAP_SECS` in
@@ -1136,25 +1128,25 @@
 # directory under `${TMPDIR:-/tmp}` removed on exit, printing the state, pause
 # reason, detail, engine and run URL, each open question (the rule `fetch`
 # states) with its `## Q<k>` heading lines; an expired bundle's expired line is
-# its `detail`. No `harness run <branch>` run listed prints one line and
+# its `detail`. No `devscene run <branch>` run listed prints one line and
 # exits 0. There is no sync to compare against, so no finished-since line.
 #
 # `list` IS `branch-status`'s DIGEST: one listing (`list_all_runs`) and one
 # `git ls-remote --heads origin`, never a bundle. It prints `on GitHub, no
 # local record: <branch> <url>` for each branch `unrecorded_runs` keeps — its
-# newest run titled exactly `harness run <branch>`, no registry record,
+# newest run titled exactly `devscene run <branch>`, no registry record,
 # unprotected and a live head on origin — or `no run on GitHub without a local
 # record`.
 #
 # `status` WITH A RECORD WRITES NOTHING AT ALL — no registry (it does not even
 # create an absent one), no download, no file. It prints the branch's newest runs titled
-# `harness run <branch>` or `harness pause <branch>` (bounded), the record's
+# `devscene run <branch>` or `devscene pause <branch>` (bounded), the record's
 # `status`, `pause_reason`, `remote_run_url` and `remote_synced_at`, whether
-# a `harness run` finished after the last sync, and — reading the newest
+# a `devscene run` finished after the last sync, and — reading the newest
 # finished run's artifact list — a line naming its bundle's expiry and the
 # way on when that bundle has expired.
 #
-# `sync` READS THE NEWEST `harness run <branch>` RUN. Any status but
+# `sync` READS THE NEWEST `devscene run <branch>` RUN. Any status but
 # `completed` (queued, in_progress, waiting, requested, pending) sets the record
 # `running` and downloads nothing. Otherwise that run — the newest finished one
 # — decides, in exactly one of five cases, tested in this order:
@@ -1219,19 +1211,19 @@
 #   chain            automatic dispatches since the last user action; a
 #                    user's dispatch sends 0                (action=run only)
 #
-# The workflow's `run-name` is `harness <action> <branch>`, and the job-side
+# The workflow's `run-name` is `devscene <action> <branch>`, and the job-side
 # pause poll and `continue` / `poll` match runs by that title, so the spelling
 # is a wire: `pause` and `stop` send the branch as their `branch` input for
 # exactly that reason.
 #
 # `stop` DOES FOUR THINGS, IN THIS ORDER. (1) It ALWAYS dispatches action=stop
-# on the branch — a jobless run titled `harness stop <branch>` that GitHub keeps
+# on the branch — a jobless run titled `devscene stop <branch>` that GitHub keeps
 # as the stop marker `continue` and `poll` read. It is first because it is the
 # only part that reaches a usage-paused run waiting on the resume poller, which
 # has no job to cancel; a marker dispatch that fails exits 3 at once, before any
 # cancel. (2) It lists the branch's runs of the workflow and cancels each run
-# titled `harness run <branch>` whose status is `queued`, `in_progress` or
-# `waiting` — never a jobless `harness stop` / `harness pause` marker, which has
+# titled `devscene run <branch>` whose status is `queued`, `in_progress` or
+# `waiting` — never a jobless `devscene stop` / `devscene pause` marker, which has
 # no job to stop and may complete before its cancel lands — trying every one even
 # after a failure. (3) Only when (1) and (2) all succeeded, and only when a
 # local registry record exists, it writes `remote_stopped_at` and sets `status`
@@ -1249,9 +1241,9 @@
 # stopped. `--branch-gone` is for a branch GitHub no longer has: (1)'s marker
 # is dispatched with `--ref` set to GitHub's own default branch (read as `warm`
 # reads it; a failed read exits 3 before anything is sent) and still carries
-# `-f branch=<branch>`, so its `harness stop <branch>` title is unchanged;
+# `-f branch=<branch>`, so its `devscene stop <branch>` title is unchanged;
 # (2)'s listing also reads `headSha,createdAt`; (4) reads the issue from the
-# task prompt at the newest `harness run <branch>` run's `headSha` through the
+# task prompt at the newest `devscene run <branch>` run's `headSha` through the
 # contents API rather than from `origin/<branch>` (a failed read is one line
 # and no issue), and its text says the branch was deleted, so the run cannot
 # be resumed, and that its workflow runs and artifacts are kept. (4) also
@@ -1314,7 +1306,7 @@
 # WHERE gh RUNS. From the main checkout (`hr_main_repo` of the working
 # directory) unless `--repo <root>` names another, so gh resolves the
 # repository from that checkout's remote. The configuration read is that
-# root's `harness.config.json`.
+# root's `devscene.config.json`.
 #
 # WHAT IT NEVER DOES. It never launches a local session but `control`'s one
 # read-only mention session (MENTION, in `control`'s paragraph), never writes the
@@ -1338,7 +1330,7 @@
 # directory `sync` uses, and `report`'s writes for the round. Its settledness
 # read, when the newest run's job GitHub never started, also fetches origin's
 # <branch>, force-writing `refs/remotes/origin/<branch>` in the root checkout:
-# for a local `/autonomous-sdlc-harness:branch-user-review`, the main checkout. A user's chain-0 `dispatch --resume answer|pause`
+# for a local `/devscene:branch-user-review`, the main checkout. A user's chain-0 `dispatch --resume answer|pause`
 # writes the record's `status`, `resumed_at` and `resume_kind` in one write
 # when the main checkout's registry file exists and holds a record with
 # `execution: github-actions`; any other `dispatch` writes nothing. `trigger` writes its snapshot and comment
@@ -1391,12 +1383,11 @@
 #   WORKFLOW_RESUME_FILE mirrors  WORKFLOW_RESUME_FILE
 #   STATE_ARTIFACT_NAME  mirrors  STATE_ARTIFACT_NAME
 #   POLL_STATE_ARTIFACT_NAME mirrors POLL_STATE_ARTIFACT_NAME
-#   HARNESS_GH_CLI       mirrors  GH_CLI_VARIABLE (the binary run as `gh`)
-#   HARNESS_TRIGGER_LABEL        mirrors  TRIGGER_LABEL_VARIABLE
+#   DEVSCENE_GH_CLI       mirrors  GH_CLI_VARIABLE (the binary run as `gh`)
+#   DEVSCENE_TRIGGER_LABEL        mirrors  TRIGGER_LABEL_VARIABLE
 #   DEFAULT_TRIGGER_LABEL        mirrors  DEFAULT_TRIGGER_LABEL
-#   LEGACY_TRIGGER_LABEL         mirrors  LEGACY_TRIGGER_LABEL
-#   HARNESS_TRIGGER_ALLOWED_BOTS mirrors  TRIGGER_ALLOWED_BOTS_VARIABLE
-#   HARNESS_RUN_ACTORS           mirrors  RUN_ACTORS_VARIABLE
+#   DEVSCENE_TRIGGER_ALLOWED_BOTS mirrors  TRIGGER_ALLOWED_BOTS_VARIABLE
+#   DEVSCENE_RUN_ACTORS           mirrors  RUN_ACTORS_VARIABLE
 #   TRIGGER_DISPATCH_EVENT_TYPE  mirrors  TRIGGER_DISPATCH_EVENT_TYPE ('harness-task')
 #   WORKFLOW_CONTROL_FILE        mirrors  WORKFLOW_CONTROL_FILE
 #   COMMAND_HANDLE               mirrors  COMMAND_HANDLE
@@ -1418,15 +1409,15 @@
 # REPRO — every verb and every refusal, against a throwaway fixture, with gh
 # replaced by a recorder stub (nothing reaches the network):
 #
-#   d=$(mktemp -d); git -C "$d" init -q; (cd "$d" && npx autonomous-sdlc-harness init)
-#   jq '.execution = {target: "github-actions"}' "$d/harness.config.json" > "$d/c" && mv "$d/c" "$d/harness.config.json"
+#   d=$(mktemp -d); git -C "$d" init -q; (cd "$d" && npx devscene init)
+#   jq '.execution = {target: "github-actions"}' "$d/devscene.config.json" > "$d/c" && mv "$d/c" "$d/devscene.config.json"
 #   s=$(mktemp -d)/gh; printf '%s\n' '#!/bin/sh' 'echo "$*" >> "$0.log"' \
-#     'case "$1 $2" in "run list") echo "[{\"databaseId\":7,\"displayTitle\":\"harness run feat_x\",\"status\":\"in_progress\"}]";;' \
+#     'case "$1 $2" in "run list") echo "[{\"databaseId\":7,\"displayTitle\":\"devscene run feat_x\",\"status\":\"in_progress\"}]";;' \
 #     '"repo view") echo "{\"defaultBranchRef\":{\"name\":\"main\"}}";; esac' > "$s"; chmod +x "$s"
-#   export HARNESS_GH_CLI="$s"; cd "$d"
+#   export DEVSCENE_GH_CLI="$s"; cd "$d"
 #
 #   dispatch   bash scripts/remote-run.sh dispatch feat_x --engine task; echo $?
-#              -> 0; "$s.log" gains `workflow run harness-run.yml --ref feat_x
+#              -> 0; "$s.log" gains `workflow run devscene-run.yml --ref feat_x
 #                 -f action=run -f branch=feat_x -f engine=task -f resume=none -f chain=0`
 #   pause      bash scripts/remote-run.sh pause feat_x        -> 0, `-f action=pause`
 #   warm       bash scripts/remote-run.sh warm                -> 0, `--ref main -f action=warm`
@@ -1436,12 +1427,12 @@
 #   no config  bash scripts/remote-run.sh pause feat_x --repo /tmp   -> 1
 #   local      jq '.execution.target = "local"' ... then any verb    -> 2, log unchanged
 #   no answer  bash scripts/remote-run.sh dispatch feat_x --engine task --resume answer \
-#                --answers-from "$d/sdlc-harness/clarifications/feat_x" --indexes 9   -> 2
+#                --answers-from "$d/devscene/clarifications/feat_x" --indexes 9   -> 2
 #   too big    head -c 70000 /dev/zero | tr '\0' a > <clar_dir>/answer_1.md, then
 #              --resume answer --answers-from <clar_dir> --indexes 1  -> 2, log unchanged
 #   gh fails   printf '%s\n' '#!/bin/sh' 'echo "boom" >&2' 'exit 4' > "$s"
 #              bash scripts/remote-run.sh pause feat_x        -> 3, names `boom`
-#   gh absent  HARNESS_GH_CLI=/nonexistent bash scripts/remote-run.sh warm   -> 3
+#   gh absent  DEVSCENE_GH_CLI=/nonexistent bash scripts/remote-run.sh warm   -> 3
 #
 #   start needs the adopted tree on origin's default branch (commit and push
 #   it first) and a prompt file outside the checkout, say /tmp/p.md:
@@ -1452,7 +1443,7 @@
 #              -> 2, log unchanged, nothing pushed
 #   no prompt  bash scripts/remote-run.sh start feat_y --prompt-file /nonexistent
 #              -> 2, log unchanged, nothing pushed
-#   review     after that start, a `run list` answer whose newest `harness run
+#   review     after that start, a `run list` answer whose newest `devscene run
 #              feat_x` run is `completed` with a bundle saying `completed`:
 #              bash scripts/remote-run.sh review feat_x --review-file /tmp/r.md
 #              -> 0; origin/feat_x gains `chore: add user review for feat_x`
@@ -1470,18 +1461,18 @@
 #              or sent
 #   in flight  the newest run `in_progress`, its jobs listing no completed
 #              `run` job -> 2, nothing pushed or sent
-#   no run     no `harness run feat_x` run listed -> 2, nothing pushed; with
+#   no run     no `devscene run feat_x` run listed -> 2, nothing pushed; with
 #              --allow-no-run -> 0, placed and dispatched as `review` above
 #   reported   report's setup, then review ... --actor alice --source
 #              https://github.com/o/r/pull/12#pullrequestreview-1 -> 0; one
 #              comment on 7 naming `Round <n>`, the source and `@alice`, then
-#              `sdlc-harness: running` on 7
+#              `devscene: running` on 7
 #   fetch      t=$(mktemp -d); bash scripts/remote-run.sh fetch feat_x "$t"
 #              -> 0; prints `state: running` (or, with no run listed,
 #                 `state: none`), every other key present
-#   discard    mkdir -p sdlc-harness/scratch/branch-pause-feat_x, then
-#              bash scripts/remote-run.sh discard sdlc-harness/scratch/branch-pause-feat_x
-#              -> 0, the directory gone; discard sdlc-harness/autonomous_logs
+#   discard    mkdir -p devscene/scratch/branch-pause-feat_x, then
+#              bash scripts/remote-run.sh discard devscene/scratch/branch-pause-feat_x
+#              -> 0, the directory gone; discard devscene/autonomous_logs
 #              -> 2, nothing removed; no gh call either way
 #
 #   no record  with no registry, the "a bundle" stub below with question_1.md:
@@ -1489,18 +1480,18 @@
 #              parked` and `open question question_1.md`; nothing written
 #   list       start's setup, a feat_x pushed to origin, no registry, and a
 #              `run list` answer carrying `headBranch` feat_x, `displayTitle`
-#              `harness run feat_x` and a `url`: bash scripts/remote-run.sh
+#              `devscene run feat_x` and a `url`: bash scripts/remote-run.sh
 #              list -> 0; prints `on GitHub, no local record: feat_x <url>`;
 #              no registry is created
 #   adopt      bash scripts/remote-run.sh adopt -> 1, an unknown verb; no gh
 #              call, no registry
 #
 #   status and sync need a remote record, and a `run list` answer whose runs
-#   carry `displayTitle` `harness run feat_x` and a `url`:
-#   r=sdlc-harness/autonomous_logs/registry.json; mkdir -p "${r%/*}"
+#   carry `displayTitle` `devscene run feat_x` and a `url`:
+#   r=devscene/autonomous_logs/registry.json; mkdir -p "${r%/*}"
 #   printf '{"runs":{"feat_x":{"execution":"github-actions","worktree":"%s"}}}' "$d" > "$r"
 #   status     bash scripts/remote-run.sh status feat_x       -> 0; prints the runs
-#              titled `harness run feat_x` / `harness pause feat_x`, the record's
+#              titled `devscene run feat_x` / `devscene pause feat_x`, the record's
 #              fields and the finished-since line; "$r" byte-identical
 #   sync       with the newest such run `in_progress`: bash scripts/remote-run.sh
 #              sync feat_x -> 0; the record is `running`, no `run download` logged
@@ -1550,39 +1541,39 @@
 #   never started  no remote_status.json and no registry: save -> 0, /tmp/b
 #              empty
 #
-#   continue and poll: point HARNESS_PUSH_CMD at a recorder for notifications;
+#   continue and poll: point DEVSCENE_PUSH_CMD at a recorder for notifications;
 #   <b> is a bundle directory whose status.json carries schema "1":
 #   continue   decision continue, chain "3": bash scripts/remote-run.sh continue
 #              feat_x <b> -> 0; `run list ...`, then `workflow run ... -f
 #              resume=pause -f chain=4`
-#   limit      HARNESS_MAX_CHAIN=3, same bundle -> 0, no `workflow run`, one
+#   limit      DEVSCENE_MAX_CHAIN=3, same bundle -> 0, no `workflow run`, one
 #              `failed`; chain "x" -> the same ("chain unreadable")
-#   remote stop  HARNESS_REMOTE_STOP=1 -> 0, nothing sent, one `paused`
-#   stopped    a `run list` answer whose `harness stop feat_x` run is newer than
-#              its `harness run feat_x` run -> 0, no `workflow run`, no
+#   remote stop  DEVSCENE_REMOTE_STOP=1 -> 0, nothing sent, one `paused`
+#   stopped    a `run list` answer whose `devscene stop feat_x` run is newer than
+#              its `devscene run feat_x` run -> 0, no `workflow run`, no
 #              `workflow enable`, no notification
 #   list fails a stub failing `run list` -> 0, nothing sent, one `paused`
-#   wait-poller  decision wait-poller -> `workflow enable harness-resume.yml`;
+#   wait-poller  decision wait-poller -> `workflow enable devscene-resume.yml`;
 #              a stub failing it -> one `paused` naming its stderr
 #   no status  an empty <b> -> 0, one `failed` naming the run URL
-#   poll       a `run list` answer with a completed `harness run feat_x` run
+#   poll       a `run list` answer with a completed `devscene run feat_x` run
 #              whose bundle says paused / usage / usage_resume_at 1: bash
 #              scripts/remote-run.sh poll -> 0; `run download`, `workflow run
-#              ... -f resume=pause`, then `workflow disable harness-resume.yml`;
+#              ... -f resume=pause`, then `workflow disable devscene-resume.yml`;
 #              with usage_resume_at far ahead -> no dispatch, no disable
 #   no dispatch  that due bundle with usage_resume_at a minute ago and a stub
 #              failing `workflow run`: three ticks, each serving the previous
-#              tick's poll_state/current/ as run <id>'s `harness-poll-state`
-#              under `run list --workflow harness-resume.yml` -> ticks 1-2 no
+#              tick's poll_state/current/ as run <id>'s `devscene-poll-state`
+#              under `run list --workflow devscene-resume.yml` -> ticks 1-2 no
 #              notification, no disable; tick 3 one `paused` naming the error
-#              and branch-resume, then `workflow disable harness-resume.yml`
-#   interleave that due run plus an `in_progress` `harness run feat_y` run
+#              and branch-resume, then `workflow disable devscene-resume.yml`
+#   interleave that due run plus an `in_progress` `devscene run feat_y` run
 #              with no artifact, and a stub that, once its log holds `workflow
 #              disable`, lists `harness-state` for feat_y's run with a
 #              paused / usage bundle -> the feat_x dispatch, `workflow disable`,
-#              then `workflow enable harness-resume.yml`; no feat_y dispatch
+#              then `workflow enable devscene-resume.yml`; no feat_y dispatch
 #
-#   the job's reads: a `run list` answer whose run has `displayTitle` `harness
+#   the job's reads: a `run list` answer whose run has `displayTitle` `devscene
 #   pause feat_x` and `createdAt` `2026-01-01T00:00:10Z` (epoch 1767225610):
 #   pause-requested  bash scripts/remote-run.sh pause-requested feat_x 1767225600
 #              -> 0; with 1767225620 -> 5; a stub failing `run list` -> 3;
@@ -1593,21 +1584,21 @@
 #              run-created-at 42 -> prints 1767225610, 0; a failing stub -> 3
 #
 #   trigger needs start's setup plus `"forge": "github"`, an event file e.json
-#   {"action":"labeled","label":{"name":"sdlc-harness"},"sender":{"login":"alice",
+#   {"action":"labeled","label":{"name":"devscene"},"sender":{"login":"alice",
 #   "type":"User"},"issue":{"number":7,"title":"Add comments","body":"x",
 #   "html_url":"https://github.com/o/r/issues/7","state":"open"}}, and a stub
 #   answering `api repos/o/r/collaborators/alice/permission` with
 #   {"permission":"write"}; export GITHUB_EVENT_NAME=issues GITHUB_EVENT_PATH=e.json
-#   GITHUB_REPOSITORY=o/r HARNESS_TRIGGER_LOOKUP_SECS=0 HARNESS_RUN_ACTORS='*':
+#   GITHUB_REPOSITORY=o/r HARNESS_TRIGGER_LOOKUP_SECS=0 DEVSCENE_RUN_ACTORS='*':
 #   trigger    bash scripts/remote-run.sh trigger -> 0; origin/add_comments gains
-#              the prompt commit, "$s.log" gains `workflow run harness-run.yml
+#              the prompt commit, "$s.log" gains `workflow run devscene-run.yml
 #              --ref add_comments ...`, `issue comment 7 ...` naming the branch,
-#              then `issue edit 7 ... --remove-label sdlc-harness`
+#              then `issue edit 7 ... --remove-label devscene`
 #   read       the permission answer {"permission":"read"} -> 2, no `workflow
 #              run`, one comment naming write access, the label removed
-#   not listed HARNESS_RUN_ACTORS=bob -> 2, no `workflow run`, one comment
-#              naming HARNESS_RUN_ACTORS, the label removed
-#   unset      HARNESS_RUN_ACTORS= and e.json gaining
+#   not listed DEVSCENE_RUN_ACTORS=bob -> 2, no `workflow run`, one comment
+#              naming DEVSCENE_RUN_ACTORS, the label removed
+#   unset      DEVSCENE_RUN_ACTORS= and e.json gaining
 #              "repository":{"owner":{"login":"alice","type":"User"}} -> 0, as
 #              `trigger`; the owner `bob` instead -> 2, the comment naming @bob
 #   ignored    e.json's label name `bug` -> 0, one line, "$s.log" unchanged
@@ -1623,10 +1614,10 @@
 #   list` and `api repos/o/r/issues/7/labels` with []; GITHUB_REPOSITORY=o/r:
 #   paused     bash scripts/remote-run.sh report paused feat_x -> 0; "$s.log"
 #              gains `api --method POST repos/o/r/issues/7/comments -F body=@…`
-#              naming `@sdlc-harness resume`, then `api --method POST
-#              repos/o/r/issues/7/labels -f labels[]=sdlc-harness: paused`
+#              naming `@dev-scene resume`, then `api --method POST
+#              repos/o/r/issues/7/labels -f labels[]=devscene: paused`
 #   forge off  `"forge": "none"`, then the same -> 0, one line, "$s.log" unchanged
-#   progress   a task ledger at sdlc-harness/flow_progress/feat_x_progress.md in
+#   progress   a task ledger at devscene/flow_progress/feat_x_progress.md in
 #              the checkout and the stub answering `pr list` with [{"number":12,
 #              "isCrossRepository":false}]: bash scripts/remote-run.sh report
 #              progress feat_x -> 0; "$s.log" gains `api --paginate
@@ -1641,7 +1632,7 @@
 #              a `--draft` create with `--base main --head feat_x`, then `pr
 #              ready 12` with the job's token, then one comment on 12 saying
 #              it is now marked ready, then one on issue 7 naming #12 and
-#              /pull/12, then `sdlc-harness: done` on 7 and 12
+#              /pull/12, then `devscene: done` on 7 and 12
 #   reused     the stub answering `pr list` with [{"number":12,
 #              "isCrossRepository":false,"isDraft":false}] -> 0, no create, no
 #              `pr ready`, the pull request's comment saying it is not a draft
@@ -1661,14 +1652,14 @@
 #   open needs deliver's setup without the bundle:
 #   open       bash scripts/remote-run.sh open feat_x -> 0; "$s.log" gains a
 #              `--draft` create with `--base main --head feat_x`, then
-#              `sdlc-harness: running` on 12, then one comment on issue 7
+#              `devscene: running` on 12, then one comment on issue 7
 #              naming /pull/12 and ending in `event=opened branch=feat_x`
 #   reused     the stub answering `pr list` with [{"number":12,
 #              "isCrossRepository":false}] -> 0, one line, no create, no comment
 #
 #   collect needs deliver's setup, a story index on feat_x, a stub answering
 #   `pr list` with [{"number":12,"isCrossRepository":false}], `run list` with a
-#   `completed` `harness run feat_x` run whose bundle says `completed`, `api
+#   `completed` `devscene run feat_x` run whose bundle says `completed`, `api
 #   --paginate repos/o/r/pulls/12/reviews` with one `CHANGES_REQUESTED` review
 #   by alice, and the permission call with {"permission":"write"}:
 #   collect    bash scripts/remote-run.sh collect feat_x -> 0; origin/feat_x
@@ -1679,34 +1670,34 @@
 #   control needs report's setup, a stub answering `pr view 12 ...` with
 #   {"headRefName":"feat_x","isCrossRepository":false,"state":"OPEN"}, the
 #   permission call with {"permission":"write"}, and `run list` with an
-#   `in_progress` `harness run feat_x` run; an event file c.json
-#   {"action":"created","comment":{"body":"@sdlc-harness pause"},"issue":{"number":12,
+#   `in_progress` `devscene run feat_x` run; an event file c.json
+#   {"action":"created","comment":{"body":"@dev-scene pause"},"issue":{"number":12,
 #   "pull_request":{"url":"x"}},"sender":{"login":"alice","type":"User"}};
 #   export GITHUB_EVENT_NAME=issue_comment GITHUB_EVENT_PATH=c.json GITHUB_REPOSITORY=o/r:
 #   pause      bash scripts/remote-run.sh control -> 0; "$s.log" gains `workflow
-#              run harness-run.yml --ref feat_x -f action=pause -f branch=feat_x`,
+#              run devscene-run.yml --ref feat_x -f action=pause -f branch=feat_x`,
 #              then one comment on 12 naming @alice
 #   ignored    c.json's body `pause` -> 0, one line, "$s.log" unchanged
-#   mention    c.json's body `Let's @sdlc-harness pause`, with
+#   mention    c.json's body `Let's @dev-scene pause`, with
 #              HARNESS_MENTION_PLUGIN_DIR=<a throwaway directory holding an
-#              empty commands/harness-read-mention.md>, IN_OAUTH=x and
-#              HARNESS_AGENT_CLI=<a stub printing {"type":"result",
+#              empty commands/read-mention.md>, IN_OAUTH=x and
+#              DEVSCENE_AGENT_CLI=<a stub printing {"type":"result",
 #              "subtype":"success","is_error":false,"structured_output":
 #              {"action":"reply","text":"It is running.","reason":"r"}}>
 #              -> 0; "$s.log" gains one comment on 12 opening `@alice: It is
 #              running.`, and no `workflow run`
 #   act        the same with the stub's structured_output {"action":"command",
 #              "verb":"pause","reason":"r"} -> 0; "$s.log" gains `workflow run
-#              harness-run.yml --ref feat_x -f action=pause -f branch=feat_x`,
+#              devscene-run.yml --ref feat_x -f action=pause -f branch=feat_x`,
 #              then one comment on 12 opening `Read from your mention as
-#              `@sdlc-harness pause`.`
+#              `@dev-scene pause`.`
 #   needs-agent  the mention's c.json, `control --needs-agent` -> 0, one line
 #              `needs-agent: yes, a mention by @alice on #12`; "$s.log" holds
 #              only the permission call
-#   needs-agent  c.json's body `@sdlc-harness pause` -> 2, one `needs-agent: no`
+#   needs-agent  c.json's body `@dev-scene pause` -> 2, one `needs-agent: no`
 #   exact      line naming the exact form; "$s.log" unchanged
-#   needs-agent  the mention with HARNESS_RUN_ACTORS=bob -> 2, one `needs-agent:
-#   unlisted   no` line naming HARNESS_RUN_ACTORS; nothing posted
+#   needs-agent  the mention with DEVSCENE_RUN_ACTORS=bob -> 2, one `needs-agent:
+#   unlisted   no` line naming DEVSCENE_RUN_ACTORS; nothing posted
 
 set -u
 
@@ -1719,23 +1710,22 @@ fi
 # shellcheck source=lib/harness-run-lib.sh
 . "$hr_lib"
 
-WORKFLOW_RUN_FILE='harness-run.yml'
-WORKFLOW_RESUME_FILE='harness-resume.yml'
+WORKFLOW_RUN_FILE='devscene-run.yml'
+WORKFLOW_RESUME_FILE='devscene-resume.yml'
 STATE_ARTIFACT_NAME='harness-state'
-POLL_STATE_ARTIFACT_NAME='harness-poll-state'
-DEFAULT_TRIGGER_LABEL='sdlc-harness'
-LEGACY_TRIGGER_LABEL='harness'
+POLL_STATE_ARTIFACT_NAME='devscene-poll-state'
+DEFAULT_TRIGGER_LABEL='devscene'
 TRIGGER_DISPATCH_EVENT_TYPE='harness-task'
-WORKFLOW_CONTROL_FILE='harness-control.yml'
-COMMAND_HANDLE='@sdlc-harness'
+WORKFLOW_CONTROL_FILE='devscene-control.yml'
+COMMAND_HANDLE='@dev-scene'
 COMMAND_VERBS='answer pause resume stop clear status'
 MENTION_ACTIONS='command reply clarify fixes none'
 MENTION_ACT_VERBS='answer pause resume status'
 MENTION_CONFIRM_VERBS='stop clear'
-MENTION_COMMAND='/autonomous-sdlc-harness:harness-read-mention'
-COMMENT_MARKER='<!-- sdlc-harness'
+MENTION_COMMAND='/devscene:read-mention'
+COMMENT_MARKER='<!-- devscene'
 REVIEW_ROUND_STATE='changes_requested'
-STATE_LABEL_PREFIX='sdlc-harness: '
+STATE_LABEL_PREFIX='devscene: '
 RUN_STATES='running parked paused done failed stopped'
 PR_CREATE_SETTING='Allow GitHub Actions to create and approve pull requests'
 PR_CREATE_SETTING_PATH='Settings -> Actions -> General -> Workflow permissions'
@@ -1753,13 +1743,13 @@ MENTION_TEXT_MAX_BYTES=60000
 MENTION_COMMENTS_MAX=30
 # The mention session's spend bound: a bound on one read, not a measured cost.
 MENTION_MAX_BUDGET_USD=1
-# Name no login: the job sees only the `harness pause` run, whose actor is the bot.
+# Name no login: the job sees only the `devscene pause` run, whose actor is the bot.
 PAUSE_FOLDED_NOTE='A pause was requested on this run before it parked, so it is folded into this park: the run waits for the answer and continues once it is answered, and no separate `paused` comment follows.'
 PAUSE_FOLDED_HOLD_NOTE='A pause was requested on this run before it was put on hold, so it is folded into this hold: the run waits for the hold to be cleared and continues once it is, and no separate `paused` comment follows.'
-GH="${HARNESS_GH_CLI:-gh}"
+GH="${DEVSCENE_GH_CLI:-gh}"
 
 # How many runs `status` prints, and how many `run list` returns for status
-# and sync — enough to reach past interleaved `harness pause` runs.
+# and sync — enough to reach past interleaved `devscene pause` runs.
 STATUS_RUNS_SHOWN=10
 RUN_LIST_LIMIT=50
 # The one listing of every branch's runs that the stop marker and `poll` read.
@@ -1781,7 +1771,7 @@ POLL_STATE_RUNS_LIMIT=10
 TRIGGER_RUN_LOOKUP_TRIES=6
 TRIGGER_LOOKUP_SECS_DEFAULT=5
 # The `run` job's name in WORKFLOW_RUN_FILE: its key, since it has no `name:`.
-# `branch_settled_var` reads that job's status; harness-run.yml's header
+# `branch_settled_var` reads that job's status; devscene-run.yml's header
 # declares the mirror.
 RUN_JOB_NAME='run'
 # How far before the previous round's `collected_at` `round_collect` lists
@@ -2174,10 +2164,10 @@ status_no_record=0
 case "$verb" in
   restore|save)
     # The state directory the bundle library resolves, trusted inside a job.
-    hr_remote_state_dir_var "$root" || setup_fail "cannot resolve '$root/harness.config.json'"
+    hr_remote_state_dir_var "$root" || setup_fail "cannot resolve '$root/devscene.config.json'"
     ;;
   continue|poll|discard)
-    hr_state_path "$root" >/dev/null || setup_fail "cannot resolve '$root/harness.config.json'"
+    hr_state_path "$root" >/dev/null || setup_fail "cannot resolve '$root/devscene.config.json'"
     ;;
   pause-requested|run-created-at|push-credential)
     # No gate, and nothing of the configuration is read.
@@ -2190,7 +2180,7 @@ case "$verb" in
     ;;
   status|sync)
     registry=$(hr_state_path "$root" autonomous_logs/registry.json) || {
-      echo "remote-run.sh: cannot resolve '$root/harness.config.json'" >&2
+      echo "remote-run.sh: cannot resolve '$root/devscene.config.json'" >&2
       exit "$EXIT_USAGE"
     }
     # Tested with -f first: hr_registry_get creates an absent registry, and
@@ -2199,7 +2189,7 @@ case "$verb" in
       # No record: GitHub alone answers, behind the sending verbs' gate.
       status_no_record=1
       target=$(hr_execution_target "$root") || {
-        echo "remote-run.sh: cannot resolve '$root/harness.config.json' (or execution.target is outside its enum)" >&2
+        echo "remote-run.sh: cannot resolve '$root/devscene.config.json' (or execution.target is outside its enum)" >&2
         exit "$EXIT_USAGE"
       }
       if [ "$target" != github-actions ]; then
@@ -2213,7 +2203,7 @@ case "$verb" in
     ;;
   *)
     target=$(hr_execution_target "$root") || {
-      echo "remote-run.sh: cannot resolve '$root/harness.config.json' (or execution.target is outside its enum)" >&2
+      echo "remote-run.sh: cannot resolve '$root/devscene.config.json' (or execution.target is outside its enum)" >&2
       exit "$EXIT_USAGE"
     }
     if [ "$target" != github-actions ]; then
@@ -2348,12 +2338,12 @@ verb_stop() {
   echo "remote-run.sh: dispatched the action=stop marker for $branch"
 
   gh_call run list --workflow "$WORKFLOW_RUN_FILE" --branch "$branch" --json "$fields" --limit 100 || gh_fail "listing the runs of '$branch' failed"
-  ids=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness run $branch" '.[] | select(.displayTitle == $t and (.status == "queued" or .status == "in_progress" or .status == "waiting")) | .databaseId' 2>/dev/null) || {
+  ids=$(printf '%s' "$GH_OUT" | jq -r --arg t "devscene run $branch" '.[] | select(.displayTitle == $t and (.status == "queued" or .status == "in_progress" or .status == "waiting")) | .databaseId' 2>/dev/null) || {
     GH_ERR="its run list is not the expected JSON"
     gh_fail "listing the runs of '$branch' failed"
   }
   if [ -n "$gone" ]; then
-    gone_sha=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness run $branch" \
+    gone_sha=$(printf '%s' "$GH_OUT" | jq -r --arg t "devscene run $branch" \
       '[.[] | select(.displayTitle == $t)] | max_by(.createdAt // "") | .headSha // empty' 2>/dev/null) || gone_sha=""
   fi
   for id in $ids; do
@@ -2558,8 +2548,8 @@ open_questions_in() {
 status_tmp=""
 status_from_github() {
   local n
-  if [ -z "$(titled_runs "harness run $branch" | jq -c '.[0] // empty')" ]; then
-    echo "remote-run.sh: no local record, and no run titled 'harness run $branch' on GitHub"
+  if [ -z "$(titled_runs "devscene run $branch" | jq -c '.[0] // empty')" ]; then
+    echo "remote-run.sh: no local record, and no run titled 'devscene run $branch' on GitHub"
     return 0
   fi
   echo "remote-run.sh: no local record; state from GitHub (newest run):"
@@ -2583,7 +2573,7 @@ status_from_github() {
 verb_status() {
   local runs finished_id synced_id field
   list_runs
-  runs=$(titled_runs "harness run $branch" "harness pause $branch") || runs='[]'
+  runs=$(titled_runs "devscene run $branch" "devscene pause $branch") || runs='[]'
   echo "remote-run.sh: runs of $WORKFLOW_RUN_FILE for $branch, newest first:"
   printf '%s' "$runs" | jq -r --argjson n "$STATUS_RUNS_SHOWN" '
     if length == 0 then "  (none)" else
@@ -2596,7 +2586,7 @@ verb_status() {
   for field in status pause_reason remote_run_url remote_synced_at; do
     printf '  %s: %s\n' "$field" "$(hr_registry_get "$registry" "$branch" "$field")"
   done
-  finished_id=$(printf '%s' "$runs" | jq -r --arg t "harness run $branch" \
+  finished_id=$(printf '%s' "$runs" | jq -r --arg t "devscene run $branch" \
     '[.[] | select(.displayTitle == $t and .status == "completed")][0].databaseId // empty | tostring')
   synced_id=$(hr_registry_get "$registry" "$branch" remote_run_id)
   if [ -n "$finished_id" ] && [ "$finished_id" != "$synced_id" ]; then
@@ -2622,7 +2612,7 @@ sync_expired() {
 
 # remote_state <download_dir> [<applied_run_id>] — the one derivation of a
 # branch's newest remote state, from list_runs' answer in GH_OUT; `sync`,
-# `fetch`, `review` and `status` with no local record all call it. RS_STATE is `none` (no `harness run
+# `fetch`, `review` and `status` with no local record all call it. RS_STATE is `none` (no `devscene run
 # <branch>` run listed), `running` (the newest is not `completed`), `applied`
 # (its id is <applied_run_id>: `sync`'s case 1, decided there), or the state
 # of `sync`'s cases 2-5, which it derives in that order. A bundle is downloaded
@@ -2657,7 +2647,7 @@ remote_state() {
   RS_PAUSE_REASON=""; RS_DETAIL=""; RS_ENGINE=""; RS_USAGE_RESUME_AT=""
   RS_PARK_LOOP_CYCLES=""; RS_BUNDLE=0; RS_DOWNLOAD=""; RS_RUN_CREATED_AT=""
   RS_NOT_STARTED=0
-  RS_RUNS=$(titled_runs "harness run $branch") || RS_RUNS='[]'
+  RS_RUNS=$(titled_runs "devscene run $branch") || RS_RUNS='[]'
   newest=$(printf '%s' "$RS_RUNS" | jq -c '.[0] // empty')
   if [ -z "$newest" ]; then
     RS_STATE=none
@@ -2690,7 +2680,7 @@ remote_state() {
     hr_remote_names_var
     if [ -z "$download" ]; then
       download=$(hr_state_path "$root" "autonomous_logs/remote_download/$branch/$RS_RUN_ID") || {
-        echo "remote-run.sh: cannot resolve '$root/harness.config.json'" >&2
+        echo "remote-run.sh: cannot resolve '$root/devscene.config.json'" >&2
         exit "$EXIT_USAGE"
       }
     fi
@@ -2766,7 +2756,7 @@ remote_state() {
 # branch_settled_var <download_dir> <allow_no_run 0|1> — the one settledness
 # test `review`, `control` and `collect` share: whether a user-review round may be placed
 # on the branch now. Lists the runs itself, then derives RS_* through
-# `remote_state`. The newest `harness run <branch>` run decides:
+# `remote_state`. The newest `devscene run <branch>` run decides:
 #   none listed      settled only under <allow_no_run> 1 (RS_STATE `none`)
 #   `completed`      `remote_state` as ever
 #   anything else    its jobs are read: while no job named RUN_JOB_NAME exists
@@ -2782,7 +2772,7 @@ branch_settled_var() {
   list_runs
   # `remote_state` reads the listing from GH_OUT, which the jobs call replaces.
   listed="$GH_OUT"
-  newest=$(titled_runs "harness run $branch" | jq -c '.[0] // empty') || newest=""
+  newest=$(titled_runs "devscene run $branch" | jq -c '.[0] // empty') || newest=""
   if [ -n "$newest" ]; then
     status=$(printf '%s' "$newest" | jq -r '.status // ""')
     if [ "$status" != completed ]; then
@@ -2822,7 +2812,7 @@ verb_sync() {
 
   case "$RS_STATE" in
     none)
-      echo "remote-run.sh: no run titled 'harness run $branch' is listed yet; the record is unchanged"
+      echo "remote-run.sh: no run titled 'devscene run $branch' is listed yet; the record is unchanged"
       return 0
       ;;
     running)
@@ -2921,7 +2911,7 @@ restore_refuse() {
 # lineage_commits_var <checkout> — the branch's current lineage, read from refs
 # alone: never a fetch, never gh, nothing on stdout. A run is of the current
 # lineage when its `headSha` is a commit reachable from HEAD and not from
-# `origin/<defaultBranch>`. The list is complete because `harness-run.yml`
+# `origin/<defaultBranch>`. The list is complete because `devscene-run.yml`
 # checks out with `fetch-depth: 0`. It survives the branch's own history
 # edits because `refresh-branch.sh` merges and never rebases and
 # `push-branch.sh` never forces, so every own run's `headSha` stays an ancestor
@@ -2951,7 +2941,7 @@ lineage_commits_var() {
   return 0
 }
 
-# previous_bundle_run — PREV_RUN_ID is the newest finished `harness run
+# previous_bundle_run — PREV_RUN_ID is the newest finished `devscene run
 # <branch>` run, other than this job's own, carrying a state artifact, and
 # PREV_RUN_STATE is `present`, `expired` or empty when no run carries one. When
 # `lineage_commits_var` bounds the lineage, a run whose `headSha` is not in it
@@ -2971,7 +2961,7 @@ previous_bundle_run() {
     --json databaseId,displayTitle,status,createdAt,headSha --limit "$RUN_LIST_LIMIT" \
     || gh_fail "listing the runs of '$branch' failed"
   # jq 1.5: membership by `any(gen; cond)`, not `index` / `IN`.
-  out=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness run $branch" --arg self "${GITHUB_RUN_ID-}" \
+  out=$(printf '%s' "$GH_OUT" | jq -r --arg t "devscene run $branch" --arg self "${GITHUB_RUN_ID-}" \
     --arg bounded "$bounded" --arg lineage "$LINEAGE_COMMITS" '
     ($lineage | split("\n")) as $l
     | [.[] | select(.displayTitle == $t and .status == "completed" and (.databaseId | tostring) != $self)] as $done
@@ -3028,12 +3018,12 @@ remote_state_difference() {
   else
     checkout="no readable stateDir"
   fi
-  echo "remote-run.sh: ${1-}: the checkout's harness.config.json names $checkout, the trusted configuration at ${HARNESS_GITHUB_DEFAULT_COMMIT-} names '$HR_REMOTE_STATE_DIR'; using '$HR_REMOTE_STATE_DIR'" >&2
+  echo "remote-run.sh: ${1-}: the checkout's devscene.config.json names $checkout, the trusted configuration at ${HARNESS_GITHUB_DEFAULT_COMMIT-} names '$HR_REMOTE_STATE_DIR'; using '$HR_REMOTE_STATE_DIR'" >&2
 }
 
 verb_restore() {
   local id download status_file clar n tmp status_source state
-  hr_remote_state_dir_var "$root" || restore_fail "cannot resolve '$root/harness.config.json'"
+  hr_remote_state_dir_var "$root" || restore_fail "cannot resolve '$root/devscene.config.json'"
   remote_state_difference restore
   state="$root/$HR_REMOTE_STATE_DIR"
   if [ "$resume" = answer ]; then
@@ -3136,7 +3126,7 @@ verb_save() {
   local registry_file status_source status decision detail registry_absent=0 status_linked=''
   hr_remote_names_var
   hr_remote_state_dir_var "$root" || {
-    echo "remote-run.sh: save: cannot resolve '$root/harness.config.json'; no bundle written" >&2
+    echo "remote-run.sh: save: cannot resolve '$root/devscene.config.json'; no bundle written" >&2
     return 0
   }
   remote_state_difference save
@@ -3178,7 +3168,7 @@ verb_save() {
     hr_remote_bundle_write "$root" "$branch" "$registry_file" "$out_dir"
     case $? in
       0) echo "remote-run.sh: saved the bundle of $branch into $out_dir" ;;
-      2) echo "remote-run.sh: save: cannot resolve '$root/harness.config.json'; no bundle written" >&2 ;;
+      2) echo "remote-run.sh: save: cannot resolve '$root/devscene.config.json'; no bundle written" >&2 ;;
       *)
         if [ -f "$status_source" ]; then
           echo "remote-run.sh: save: assembling the bundle in '$out_dir' failed (not empty, or a copy failed)" >&2
@@ -3194,11 +3184,11 @@ verb_save() {
     status=$(hr_remote_status_get "$out_dir/$HR_REMOTE_STATUS_FILE" status) || status=""
     decision=$(hr_remote_status_get "$out_dir/$HR_REMOTE_STATUS_FILE" decision) || decision=""
     detail=$(hr_remote_status_get "$out_dir/$HR_REMOTE_STATUS_FILE" detail) || detail=""
-    printf '%s\n' "### harness run $(md_cell "$branch")" "" "| status | decision | detail |" "|---|---|---|" \
+    printf '%s\n' "### devscene run $(md_cell "$branch")" "" "| status | decision | detail |" "|---|---|---|" \
       "| $(md_cell "$status") | $(md_cell "$decision") | $(md_cell "$detail") |" "" >>"$GITHUB_STEP_SUMMARY" \
       || echo "remote-run.sh: save: cannot append to GITHUB_STEP_SUMMARY" >&2
   else
-    printf '%s\n' "### harness run $(md_cell "$branch")" "" "No status.json: the harness step never started." "" >>"$GITHUB_STEP_SUMMARY" \
+    printf '%s\n' "### devscene run $(md_cell "$branch")" "" "No status.json: the harness step never started." "" >>"$GITHUB_STEP_SUMMARY" \
       || echo "remote-run.sh: save: cannot append to GITHUB_STEP_SUMMARY" >&2
   fi
   return 0
@@ -3235,11 +3225,11 @@ this_run_url() {
   fi
 }
 
-# max_chain_var — MAX_CHAIN from HARNESS_MAX_CHAIN; 1 when it is not a
+# max_chain_var — MAX_CHAIN from DEVSCENE_MAX_CHAIN; 1 when it is not a
 # non-negative integer.
 MAX_CHAIN=""
 max_chain_var() {
-  MAX_CHAIN="${HARNESS_MAX_CHAIN:-$MAX_CHAIN_DEFAULT}"
+  MAX_CHAIN="${DEVSCENE_MAX_CHAIN:-$MAX_CHAIN_DEFAULT}"
   case "$MAX_CHAIN" in
     ''|*[!0-9]*) return 1 ;;
   esac
@@ -3262,12 +3252,12 @@ list_all_runs() {
   ALL_RUNS_LISTED=1
 }
 
-# remote_branch_stopped <branch> — 0 stopped (its newest `harness stop` run is
-# newer than its newest `harness run` run), 1 not stopped, 2 the listing failed.
+# remote_branch_stopped <branch> — 0 stopped (its newest `devscene stop` run is
+# newer than its newest `devscene run` run), 1 not stopped, 2 the listing failed.
 remote_branch_stopped() {
   local verdict
   list_all_runs || return 2
-  verdict=$(printf '%s' "$ALL_RUNS" | jq -r --arg s "harness stop $1" --arg r "harness run $1" '
+  verdict=$(printf '%s' "$ALL_RUNS" | jq -r --arg s "devscene stop $1" --arg r "devscene run $1" '
     ([.[] | select(.displayTitle == $s) | .createdAt // ""] | max // "") as $stop
     | ([.[] | select(.displayTitle == $r) | .createdAt // ""] | max // "") as $run
     | if $stop != "" and $stop > $run then "stopped" else "not" end' 2>/dev/null) || {
@@ -3342,16 +3332,16 @@ valid_engine() {
   return 1
 }
 
-STOPPED_LINE="a 'harness stop' run is newer than its newest 'harness run' run"
-RESUME_HINT="/autonomous-sdlc-harness:branch-resume"
+STOPPED_LINE="a 'devscene stop' run is newer than its newest 'devscene run' run"
+RESUME_HINT="/devscene:branch-resume"
 # A `paused` report on a usage pause says the run resumes by itself; a note
 # saying the automatic resume failed carries the action instead.
 USAGE_RESUME_NOTE="Comment \`$COMMAND_HANDLE resume\` after the limit resets to continue."
 
 continue_redispatch() {
   local status_file="$1" engine_value
-  if [ -n "${HARNESS_REMOTE_STOP-}" ]; then
-    notify paused "$branch" "Not re-dispatched: remote stop is set. Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch" "")." "Not continued: the repository variable \`HARNESS_REMOTE_STOP\` is set; clear it, then resume."
+  if [ -n "${DEVSCENE_REMOTE_STOP-}" ]; then
+    notify paused "$branch" "Not re-dispatched: remote stop is set. Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch" "")." "Not continued: the repository variable \`DEVSCENE_REMOTE_STOP\` is set; clear it, then resume."
     return 0
   fi
   remote_branch_stopped "$branch"
@@ -3365,13 +3355,13 @@ continue_redispatch() {
     2) echo "remote-run.sh: whether $branch exists on origin could not be checked ($REMOTE_BRANCH_ERR); proceeding" ;;
   esac
   if ! max_chain_var; then
-    notify failed "$branch" "Not re-dispatched: HARNESS_MAX_CHAIN '$MAX_CHAIN' is not a non-negative integer." "Not continued: the repository variable \`HARNESS_MAX_CHAIN\` ('$MAX_CHAIN') is not a non-negative integer."
+    notify failed "$branch" "Not re-dispatched: DEVSCENE_MAX_CHAIN '$MAX_CHAIN' is not a non-negative integer." "Not continued: the repository variable \`DEVSCENE_MAX_CHAIN\` ('$MAX_CHAIN') is not a non-negative integer."
     return 0
   fi
   next_chain_var "$status_file"
   case $? in
     1) notify failed "$branch" "Not re-dispatched: chain unreadable in status.json." "Not continued: the chain count in the run's status could not be read."; return 0 ;;
-    2) notify failed "$branch" "Not re-dispatched: chain limit reached ($NEXT_CHAIN over HARNESS_MAX_CHAIN $MAX_CHAIN)." "Not continued: the chain limit was reached ($NEXT_CHAIN over \`HARNESS_MAX_CHAIN\` $MAX_CHAIN)."; return 0 ;;
+    2) notify failed "$branch" "Not re-dispatched: chain limit reached ($NEXT_CHAIN over DEVSCENE_MAX_CHAIN $MAX_CHAIN)." "Not continued: the chain limit was reached ($NEXT_CHAIN over \`DEVSCENE_MAX_CHAIN\` $MAX_CHAIN)."; return 0 ;;
   esac
   engine_value=$(hr_remote_status_get "$status_file" engine) || engine_value=""
   if ! valid_engine "$engine_value"; then
@@ -3516,13 +3506,13 @@ POLL_MAX_FAILURES=""
 POLL_GIVE_UP_MINUTES=""
 POLL_BOUND_BAD=""
 poll_bounds_var() {
-  POLL_MAX_FAILURES="${HARNESS_POLL_MAX_DISPATCH_FAILURES:-$POLL_MAX_DISPATCH_FAILURES_DEFAULT}"
-  POLL_GIVE_UP_MINUTES="${HARNESS_POLL_GIVE_UP_AFTER_MINUTES:-$POLL_GIVE_UP_AFTER_MINUTES_DEFAULT}"
+  POLL_MAX_FAILURES="${DEVSCENE_POLL_MAX_DISPATCH_FAILURES:-$POLL_MAX_DISPATCH_FAILURES_DEFAULT}"
+  POLL_GIVE_UP_MINUTES="${DEVSCENE_POLL_GIVE_UP_AFTER_MINUTES:-$POLL_GIVE_UP_AFTER_MINUTES_DEFAULT}"
   case "$POLL_MAX_FAILURES" in
-    *[!0-9]*) POLL_BOUND_BAD="HARNESS_POLL_MAX_DISPATCH_FAILURES '$POLL_MAX_FAILURES'"; return 1 ;;
+    *[!0-9]*) POLL_BOUND_BAD="DEVSCENE_POLL_MAX_DISPATCH_FAILURES '$POLL_MAX_FAILURES'"; return 1 ;;
   esac
   case "$POLL_GIVE_UP_MINUTES" in
-    *[!0-9]*) POLL_BOUND_BAD="HARNESS_POLL_GIVE_UP_AFTER_MINUTES '$POLL_GIVE_UP_MINUTES'"; return 1 ;;
+    *[!0-9]*) POLL_BOUND_BAD="DEVSCENE_POLL_GIVE_UP_AFTER_MINUTES '$POLL_GIVE_UP_MINUTES'"; return 1 ;;
   esac
   return 0
 }
@@ -3535,7 +3525,7 @@ poll_fetch() {
   local id="$1" download
   POLL_STATUS_FILE=""
   download=$(hr_state_path "$root" "autonomous_logs/remote_download/$branch/$id") || {
-    echo "remote-run.sh: poll: cannot resolve '$root/harness.config.json' for $branch" >&2
+    echo "remote-run.sh: poll: cannot resolve '$root/devscene.config.json' for $branch" >&2
     return 1
   }
   POLL_STATUS_FILE="$download/$HR_REMOTE_STATUS_FILE"
@@ -3558,7 +3548,7 @@ poll_usage_paused() {
   [ "$status" = paused ] && [ "$reason" = usage ]
 }
 
-# poll_branch <run_id> <state> <may_dispatch> — one branch's newest `harness
+# poll_branch <run_id> <state> <may_dispatch> — one branch's newest `devscene
 # run` run; the global branch names it. Returns 0 when the branch is waiting.
 # With may_dispatch 0 nothing is sent and nothing notified: a due run that
 # would be dispatched counts as waiting, one that would be refused does not.
@@ -3645,7 +3635,7 @@ poll_branch() {
   next_chain_var "$POLL_STATUS_FILE"
   case $? in
     1) [ "$may_dispatch" -eq 0 ] || notify failed "$branch" "Not resumed by the poller: chain unreadable in status.json." "Not resumed after the usage limit: the chain count in the run's status could not be read."; return 1 ;;
-    2) [ "$may_dispatch" -eq 0 ] || notify failed "$branch" "Not resumed by the poller: chain limit reached ($NEXT_CHAIN over HARNESS_MAX_CHAIN $MAX_CHAIN)." "Not resumed after the usage limit: the chain limit was reached ($NEXT_CHAIN over \`HARNESS_MAX_CHAIN\` $MAX_CHAIN)."; return 1 ;;
+    2) [ "$may_dispatch" -eq 0 ] || notify failed "$branch" "Not resumed by the poller: chain limit reached ($NEXT_CHAIN over DEVSCENE_MAX_CHAIN $MAX_CHAIN)." "Not resumed after the usage limit: the chain limit was reached ($NEXT_CHAIN over \`DEVSCENE_MAX_CHAIN\` $MAX_CHAIN)."; return 1 ;;
   esac
   engine_value=$(hr_remote_status_get "$POLL_STATUS_FILE" engine) || engine_value=""
   if ! valid_engine "$engine_value"; then
@@ -3678,7 +3668,7 @@ poll_branch() {
   return 0
 }
 
-# poll_pass <may_dispatch> — poll_branch over each branch's newest `harness run`
+# poll_pass <may_dispatch> — poll_branch over each branch's newest `devscene run`
 # run in ALL_RUNS, skipping a branch this tick already dispatched. POLL_WAITING
 # lists the waiting branches, space-separated, and POLL_WAITING_COUNT counts
 # them. 1 when ALL_RUNS is unreadable.
@@ -3690,10 +3680,10 @@ poll_pass() {
   POLL_WAITING=""
   POLL_WAITING_COUNT=0
   entries=$(printf '%s' "$ALL_RUNS" | jq -r '
-    [.[] | select((.displayTitle // "") | startswith("harness run "))]
+    [.[] | select((.displayTitle // "") | startswith("devscene run "))]
     | group_by(.displayTitle)
     | map(sort_by([.createdAt, .databaseId]) | last)
-    | .[] | [(.displayTitle | ltrimstr("harness run ")), (.databaseId | tostring), (.status // "")] | @tsv' 2>/dev/null) || {
+    | .[] | [(.displayTitle | ltrimstr("devscene run ")), (.databaseId | tostring), (.status // "")] | @tsv' 2>/dev/null) || {
     GH_ERR="its run list is not the expected JSON"
     return 1
   }
@@ -3737,14 +3727,14 @@ poll_recheck() {
 # the count whatever this one met.
 verb_poll() {
   poll_state_load
-  if [ -n "${HARNESS_REMOTE_STOP-}" ]; then
+  if [ -n "${DEVSCENE_REMOTE_STOP-}" ]; then
     poll_state_write
     echo "remote-run.sh: poll: remote stop is set; nothing dispatched"
     return 0
   fi
   if ! max_chain_var; then
     poll_state_write
-    echo "remote-run.sh: poll: HARNESS_MAX_CHAIN '$MAX_CHAIN' is not a non-negative integer; nothing dispatched" >&2
+    echo "remote-run.sh: poll: DEVSCENE_MAX_CHAIN '$MAX_CHAIN' is not a non-negative integer; nothing dispatched" >&2
     exit "$EXIT_USAGE"
   fi
   if ! poll_bounds_var; then
@@ -3771,7 +3761,7 @@ verb_pause_requested() {
   local found
   list_runs
   # An unparsable createdAt is no match rather than a failed read.
-  found=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness pause $branch" --argjson since "$since_arg" '
+  found=$(printf '%s' "$GH_OUT" | jq -r --arg t "devscene pause $branch" --argjson since "$since_arg" '
     [.[] | select(.displayTitle == $t)
       | ((.createdAt // "") | try fromdateiso8601 catch null)
       | select(. != null and . >= $since)] | length' 2>/dev/null)
@@ -3782,10 +3772,10 @@ verb_pause_requested() {
       ;;
   esac
   if [ "$found" -gt 0 ]; then
-    echo "remote-run.sh: a 'harness pause $branch' run was created at or after $since_arg"
+    echo "remote-run.sh: a 'devscene pause $branch' run was created at or after $since_arg"
     return 0
   fi
-  echo "remote-run.sh: no 'harness pause $branch' run was created at or after $since_arg"
+  echo "remote-run.sh: no 'devscene pause $branch' run was created at or after $since_arg"
   exit "$EXIT_NO_PAUSE"
 }
 
@@ -4055,7 +4045,7 @@ verb_review() {
   if [ "$SETTLED" -ne 1 ]; then
     case "$RS_STATE" in
       none)
-        echo "remote-run.sh: refused, nothing written: no \`harness run $branch\` run on GitHub" >&2 ;;
+        echo "remote-run.sh: refused, nothing written: no \`devscene run $branch\` run on GitHub" >&2 ;;
       paused)
         if [ "$RS_PAUSE_REASON" = expired ]; then
           echo "remote-run.sh: refused, nothing written: $RS_DETAIL" >&2
@@ -4166,7 +4156,7 @@ NAMES
   if run_by_sha_var "$pushed"; then
     echo "remote-run.sh: the dispatched run of $branch is listed: $RUN_BY_SHA_URL"
   else
-    echo "::warning::remote-run.sh: no \`harness run $branch\` run of ${pushed:-the pushed commit} was listed after $TRIGGER_RUN_LOOKUP_TRIES lookups; the round is dispatched, but a review job reading $branch now may read it as settled"
+    echo "::warning::remote-run.sh: no \`devscene run $branch\` run of ${pushed:-the pushed commit} was listed after $TRIGGER_RUN_LOOKUP_TRIES lookups; the round is dispatched, but a review job reading $branch now may read it as settled"
   fi
 
   if remote_record_exists "$reg"; then
@@ -4197,7 +4187,7 @@ NAMES
 }
 
 # unrecorded_runs — UNRECORDED: one `<branch>\t<url>` line per branch whose
-# newest `harness run <branch>` run is on GitHub, newest first, dropping a
+# newest `devscene run <branch>` run is on GitHub, newest first, dropping a
 # branch with a registry record, one `hr_branch_is_protected` does not answer 1
 # for, and one that is not a live head on origin. One listing and one
 # `ls-remote`; writes nothing. Exits 3 when either fails.
@@ -4206,14 +4196,14 @@ unrecorded_runs() {
   local titled reg recorded="" heads="" live=$'\n' ref b url protected
   UNRECORDED=""
   reg=$(hr_state_path "$root" autonomous_logs/registry.json) || {
-    echo "remote-run.sh: cannot resolve '$root/harness.config.json'" >&2
+    echo "remote-run.sh: cannot resolve '$root/devscene.config.json'" >&2
     exit "$EXIT_USAGE"
   }
   list_all_runs || gh_fail "listing the runs of $WORKFLOW_RUN_FILE failed"
-  # Newest first, one line per branch: its newest `harness run <branch>` run.
+  # Newest first, one line per branch: its newest `devscene run <branch>` run.
   titled=$(printf '%s' "$ALL_RUNS" | jq -r '
-    [.[] | select((.displayTitle // "") | startswith("harness run "))
-         | . + {b: (.displayTitle | ltrimstr("harness run "))}]
+    [.[] | select((.displayTitle // "") | startswith("devscene run "))
+         | . + {b: (.displayTitle | ltrimstr("devscene run "))}]
     | sort_by([.createdAt, .databaseId]) | reverse
     | reduce .[] as $r ({seen: {}, out: []};
         if .seen[$r.b] then . else (.seen[$r.b] = true | .out += [$r]) end)
@@ -4310,7 +4300,7 @@ trigger_finish() {
   if [ "$trigger_source" = dispatch ]; then
     printf '%s\n' "$body"
     if [ -n "${GITHUB_STEP_SUMMARY-}" ]; then
-      printf '%s\n' "### harness trigger" "" "$body" "" >>"$GITHUB_STEP_SUMMARY" \
+      printf '%s\n' "### devscene trigger" "" "$body" "" >>"$GITHUB_STEP_SUMMARY" \
         || echo "::warning::remote-run.sh: trigger: cannot append to GITHUB_STEP_SUMMARY"
     fi
     exit "$code"
@@ -4350,9 +4340,9 @@ $2" refused
 }
 
 # trigger_bot_listed <login> — 0 when <login> is an exact entry of
-# HARNESS_TRIGGER_ALLOWED_BOTS, split on `,` with each entry trimmed.
+# DEVSCENE_TRIGGER_ALLOWED_BOTS, split on `,` with each entry trimmed.
 trigger_bot_listed() {
-  local rest="${HARNESS_TRIGGER_ALLOWED_BOTS-}," entry
+  local rest="${DEVSCENE_TRIGGER_ALLOWED_BOTS-}," entry
   while [ -n "$rest" ]; do
     entry=${rest%%,*}
     rest=${rest#*,}
@@ -4363,7 +4353,7 @@ trigger_bot_listed() {
   return 1
 }
 
-# run_actor_listed <login> — 0 when HARNESS_RUN_ACTORS admits <login>: split on
+# run_actor_listed <login> — 0 when DEVSCENE_RUN_ACTORS admits <login>: split on
 # `,`, each entry trimmed, empty entries dropped, matched case-insensitively,
 # `*` admitting everyone, an empty <login> admitted by `*` alone. A list with no
 # entries is unset, and admits only `.repository.owner.login` of the event file
@@ -4373,7 +4363,7 @@ trigger_bot_listed() {
 # bash 3.2 has no case-changing one.
 RUN_ACTORS_WHY=""
 run_actor_listed() {
-  local login="$1" want rest="${HARNESS_RUN_ACTORS-}," entry listed="" owner="" owner_type=""
+  local login="$1" want rest="${DEVSCENE_RUN_ACTORS-}," entry listed="" owner="" owner_type=""
   RUN_ACTORS_WHY=""
   want=$(printf '%s' "$login" | tr '[:upper:]' '[:lower:]')
   while [ -n "$rest" ]; do
@@ -4387,7 +4377,7 @@ run_actor_listed() {
     [ -n "$want" ] && [ "$(printf '%s' "$entry" | tr '[:upper:]' '[:lower:]')" = "$want" ] && return 0
   done
   if [ -n "$listed" ]; then
-    RUN_ACTORS_WHY="@$login is not on the repository variable HARNESS_RUN_ACTORS, the allow-list of who may start, command, answer or review a run."
+    RUN_ACTORS_WHY="@$login is not on the repository variable DEVSCENE_RUN_ACTORS, the allow-list of who may start, command, answer or review a run."
     return 1
   fi
   if [ -n "${GITHUB_EVENT_PATH-}" ] && [ -r "$GITHUB_EVENT_PATH" ]; then
@@ -4396,10 +4386,10 @@ run_actor_listed() {
   fi
   if [ "$owner_type" = User ] && [ -n "$owner" ]; then
     [ -n "$want" ] && [ "$(printf '%s' "$owner" | tr '[:upper:]' '[:lower:]')" = "$want" ] && return 0
-    RUN_ACTORS_WHY="@$login is not the repository owner, and the repository variable HARNESS_RUN_ACTORS is unset, which admits the owner, @$owner, alone."
+    RUN_ACTORS_WHY="@$login is not the repository owner, and the repository variable DEVSCENE_RUN_ACTORS is unset, which admits the owner, @$owner, alone."
     return 1
   fi
-  RUN_ACTORS_WHY="the repository variable HARNESS_RUN_ACTORS is unset, and this repository has no single owner to admit (its owner is ${owner_type:-unreadable}), so it admits nobody until it names the logins allowed, or * for every writer."
+  RUN_ACTORS_WHY="the repository variable DEVSCENE_RUN_ACTORS is unset, and this repository has no single owner to admit (its owner is ${owner_type:-unreadable}), so it admits nobody until it names the logins allowed, or * for every writer."
   return 1
 }
 
@@ -4422,7 +4412,7 @@ rerun_actor_listed() {
 # authorise_actor <login> <type> — the one actor check, shared by `trigger` and
 # `control`: 0 when authorised. Otherwise AUTH_WHY holds one sentence and the
 # status names the arm: 1 `ghost`, empty or not a login shape; 2 a non-`User`
-# not listed in HARNESS_TRIGGER_ALLOWED_BOTS, decided with no permission call,
+# not listed in DEVSCENE_TRIGGER_ALLOWED_BOTS, decided with no permission call,
 # because the permission API answers `none` or 404 for a bot, and never
 # consulting the run-actor list; 3 a `User` whose permission is not `admin` or
 # `write` (AUTH_PERMISSION holds it); 4 that permission call failed (GH_ERR
@@ -4444,7 +4434,7 @@ authorise_actor() {
   fi
   if [ "$type" != User ]; then
     trigger_bot_listed "$login" && return 0
-    AUTH_WHY="@$login is not a person, and is not listed in HARNESS_TRIGGER_ALLOWED_BOTS."
+    AUTH_WHY="@$login is not a person, and is not listed in DEVSCENE_TRIGGER_ALLOWED_BOTS."
     return 2
   fi
   if ! gh_call api "repos/${GITHUB_REPOSITORY-}/collaborators/$login/permission"; then
@@ -4462,7 +4452,7 @@ authorise_actor() {
   return 3
 }
 
-# run_by_sha_var <sha> — RUN_BY_SHA_URL: the URL of the `harness run
+# run_by_sha_var <sha> — RUN_BY_SHA_URL: the URL of the `devscene run
 # <branch>` run whose `headSha` is <sha>, a commit just pushed and dispatched,
 # looked up at most TRIGGER_RUN_LOOKUP_TRIES times, `HARNESS_TRIGGER_LOOKUP_SECS`
 # apart; 1 when none was listed within that bound, and at once when <sha> is
@@ -4479,7 +4469,7 @@ run_by_sha_var() {
   esac
   while [ -n "$sha" ]; do
     if gh_call run list --workflow "$WORKFLOW_RUN_FILE" --branch "$branch" --json url,displayTitle,headSha --limit 5; then
-      url=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness run $branch" --arg s "$sha" \
+      url=$(printf '%s' "$GH_OUT" | jq -r --arg t "devscene run $branch" --arg s "$sha" \
         '[.[]? | select(.displayTitle == $t and .headSha == $s) | .url | strings] | first // empty' 2>/dev/null) || url=""
       [ -z "$url" ] || break
     else
@@ -4534,10 +4524,7 @@ verb_trigger() {
       echo "remote-run.sh: trigger: '$GITHUB_EVENT_PATH' is not a readable event" >&2
       exit "$EXIT_USAGE"
     }
-    trigger_label="${HARNESS_TRIGGER_LABEL:-$DEFAULT_TRIGGER_LABEL}"
-    if [ -z "${HARNESS_TRIGGER_LABEL-}" ] && [ "$label" = "$LEGACY_TRIGGER_LABEL" ]; then
-      trigger_label="$LEGACY_TRIGGER_LABEL"
-    fi
+    trigger_label="${DEVSCENE_TRIGGER_LABEL:-$DEFAULT_TRIGGER_LABEL}"
     if [ "$action" != labeled ] || [ "$label" != "$trigger_label" ]; then
       echo "remote-run.sh: trigger: ignored, not the label '$trigger_label' being applied"
       return 0
@@ -4582,22 +4569,22 @@ verb_trigger() {
       "Send it as \`{\"event_type\": \"$TRIGGER_DISPATCH_EVENT_TYPE\", \"client_payload\": {\"title\": …, \"body\": …, \"source\": …}}\`, with a non-empty \`title\`."
   fi
 
-  if [ -n "${HARNESS_REMOTE_STOP-}" ]; then
-    trigger_refuse "the repository variable \`HARNESS_REMOTE_STOP\` is set, which stops every start." \
+  if [ -n "${DEVSCENE_REMOTE_STOP-}" ]; then
+    trigger_refuse "the repository variable \`DEVSCENE_REMOTE_STOP\` is set, which stops every start." \
       "Clear it under **Settings → Secrets and variables → Actions → Variables**, then $retry_then."
   fi
 
   forge=$(hr_forge "$root") || forge=""
   target=$(hr_execution_target "$root") || target=""
   if [ "$forge" != github ] || [ "$target" != github-actions ]; then
-    trigger_refuse "the default branch's \`harness.config.json\` does not turn the $trigger_source trigger on: it needs \`forge\` set to \`github\` (it is ${forge:-not set or unreadable}) and \`execution.target\` set to \`github-actions\` (it is ${target:-unreadable})." \
+    trigger_refuse "the default branch's \`devscene.config.json\` does not turn the $trigger_source trigger on: it needs \`forge\` set to \`github\` (it is ${forge:-not set or unreadable}) and \`execution.target\` set to \`github-actions\` (it is ${target:-unreadable})." \
       "Set both keys on the default branch, then $retry_then."
   fi
 
   # A re-run replays the event's sender; the re-runner is held to the list.
   if ! rerun_actor_listed; then
     trigger_refuse "$RUN_ACTORS_WHY" \
-      "Only a person the repository variable \`HARNESS_RUN_ACTORS\` admits may re-run this job; one of them can $retry_then."
+      "Only a person the repository variable \`DEVSCENE_RUN_ACTORS\` admits may re-run this job; one of them can $retry_then."
   fi
 
   # A dispatch's `User` sender is held to the allow-list with no permission
@@ -4606,11 +4593,11 @@ verb_trigger() {
   if [ "$trigger_source" = dispatch ]; then
     if [ -z "$sender_type" ] && ! run_actor_listed ""; then
       trigger_refuse "the dispatch's sender carries no account type, so it cannot be checked against the allow-list." \
-        "Set the repository variable \`HARNESS_RUN_ACTORS\` to \`*\` to admit every token holder, then $retry_then."
+        "Set the repository variable \`DEVSCENE_RUN_ACTORS\` to \`*\` to admit every token holder, then $retry_then."
     fi
     if [ "$sender_type" = User ] && ! run_actor_listed "$login"; then
       trigger_refuse "$RUN_ACTORS_WHY" \
-        "Add \`$login\` to the comma-separated repository variable \`HARNESS_RUN_ACTORS\`, or set it to \`*\` to admit every writer, then $retry_then."
+        "Add \`$login\` to the comma-separated repository variable \`DEVSCENE_RUN_ACTORS\`, or set it to \`*\` to admit every writer, then $retry_then."
     fi
   fi
 
@@ -4625,12 +4612,12 @@ verb_trigger() {
       0) ;;
       1) trigger_refuse "the label was applied by an account GitHub does not name (a deleted account shows as \`ghost\`)." \
            "A collaborator with write access can re-apply the label \`$trigger_label\`." ;;
-      2) trigger_refuse "@$login is not a person, and is not listed in the repository variable \`HARNESS_TRIGGER_ALLOWED_BOTS\`." \
+      2) trigger_refuse "@$login is not a person, and is not listed in the repository variable \`DEVSCENE_TRIGGER_ALLOWED_BOTS\`." \
            "Add \`$login\` to that comma-separated list to let it start runs, or have a collaborator with write access apply the label \`$trigger_label\`." ;;
       3) trigger_refuse "could not confirm write access for @$login: GitHub reports their permission as \`${AUTH_PERMISSION:-nothing}\`." \
            "Only a collaborator with write, maintain or admin access starts a run by labelling an issue; one of them can re-apply the label \`$trigger_label\`." ;;
       5) trigger_refuse "$AUTH_WHY" \
-           "Add \`$login\` to the comma-separated repository variable \`HARNESS_RUN_ACTORS\`, or set it to \`*\` to admit every writer, then re-apply the label \`$trigger_label\`." ;;
+           "Add \`$login\` to the comma-separated repository variable \`DEVSCENE_RUN_ACTORS\`, or set it to \`*\` to admit every writer, then re-apply the label \`$trigger_label\`." ;;
       *) trigger_refuse "could not confirm write access for @$login: the permission check failed ($GH_ERR)." \
            "Re-apply the label \`$trigger_label\` to try again." ;;
     esac
@@ -4825,7 +4812,7 @@ forge_issue_at_commit_var() {
   FORGE_ISSUE=""
   FORGE_TRIGGER_LABEL=""
   if ! [[ "${2-}" =~ ^[0-9a-f]{7,40}$ ]]; then
-    echo "remote-run.sh: report: no \`harness run $1\` run names a commit; the issue of $1 is unknown" >&2
+    echo "remote-run.sh: report: no \`devscene run $1\` run names a commit; the issue of $1 is unknown" >&2
     return 1
   fi
   state_rel=$(hr_state_dir "$root" 2>/dev/null) || state_rel=""
@@ -5117,8 +5104,8 @@ forge_question_body() {
 # its issue read from the task prompt at <sha>, and then each pull request
 # forge_gone_prs_var lists given the same comment, the label and its progress
 # comment marked stopped; nothing is posted only when neither is known. Every
-# event but `stopped` is withheld when the branch's newest `harness stop` run is
-# newer than its newest `harness run` run, read from a fresh listing.
+# event but `stopped` is withheld when the branch's newest `devscene stop` run is
+# newer than its newest `devscene run` run, read from a fresh listing.
 # `not_started` reads REPORT_NOT_STARTED_STATE (`paused`, else `failed`) and
 # REPORT_NOT_STARTED_ENGINE (empty or the recovered engine), set by its caller.
 # Always 0.
@@ -5228,7 +5215,7 @@ forge_report() {
     resumed)
       text="The harness run on \`$br\` resumed." ;;
     failed)
-      trigger_label="${FORGE_TRIGGER_LABEL:-${HARNESS_TRIGGER_LABEL:-$DEFAULT_TRIGGER_LABEL}}"
+      trigger_label="${FORGE_TRIGGER_LABEL:-${DEVSCENE_TRIGGER_LABEL:-$DEFAULT_TRIGGER_LABEL}}"
       if [ "$kind" = pr ] && [ "$engine" = user_review ]; then
         text="The harness run on \`$br\` failed. Its log is \`run.log\` in the run's \`$STATE_ARTIFACT_NAME\` artifact. To start again, submit a review on this pull request requesting changes. This pull request stays open."
       elif [ "$kind" = pr ]; then
@@ -5662,7 +5649,7 @@ deliver_comment() {
   if hr_phase_enabled "$root" qa; then
     text="$text
 
-The interactive-test phase was skipped on GitHub Actions. Before merging, run \`/autonomous-sdlc-harness:branch-qa-test $branch\` locally."
+The interactive-test phase was skipped on GitHub Actions. Before merging, run \`/devscene:branch-qa-test $branch\` locally."
   fi
   if [ -z "$tmp" ] || ! file=$(mktemp "$tmp/harness-deliver-comment.XXXXXX"); then
     echo "remote-run.sh: deliver: cannot create the comment file for #$number; no comment posted" >&2
@@ -5922,9 +5909,9 @@ verb_deliver() {
       flip_by=""
       if [ -n "${HARNESS_PR_TOKEN-}" ]; then
         if gh_call_token "$HARNESS_PR_TOKEN" pr ready "$FORGE_PR" --repo "$FORGE_REPO"; then
-          flip_by=HARNESS_GIT_TOKEN
+          flip_by=DEVSCENE_GIT_TOKEN
         else
-          echo "::warning::remote-run.sh: deliver: marking pull request #$FORGE_PR ready for review with HARNESS_GIT_TOKEN was refused: $GH_ERR; retrying once with the job's token"
+          echo "::warning::remote-run.sh: deliver: marking pull request #$FORGE_PR ready for review with DEVSCENE_GIT_TOKEN was refused: $GH_ERR; retrying once with the job's token"
         fi
       fi
       if [ -z "$flip_by" ]; then
@@ -5986,7 +5973,7 @@ Review it there; a review that requests changes starts another round."
   elif [ -n "$FORGE_ISSUE" ]; then
     compare="$FORGE_SERVER/$FORGE_REPO/compare/${base:-<default branch>}...$branch?expand=1"
     if [ "$forbidden" -eq 1 ]; then
-      text="The harness $noun on \`$branch\` $verb_done, but its pull request could not be opened: GitHub Actions is not permitted to create pull requests in this repository. Turn on *$PR_CREATE_SETTING* under $PR_CREATE_SETTING_PATH, or set the \`HARNESS_GIT_TOKEN\` secret, for the next run. For this one, open the pull request from the branch: $compare"
+      text="The harness $noun on \`$branch\` $verb_done, but its pull request could not be opened: GitHub Actions is not permitted to create pull requests in this repository. Turn on *$PR_CREATE_SETTING* under $PR_CREATE_SETTING_PATH, or set the \`DEVSCENE_GIT_TOKEN\` secret, for the next run. For this one, open the pull request from the branch: $compare"
     else
       text="The harness $noun on \`$branch\` $verb_done, but its pull request could not be opened: $create_err. Open it by hand from the branch: $compare"
     fi
@@ -6247,7 +6234,7 @@ control_stopped_refuse() {
 }
 
 # control_run_in_flight <branch> — 0 when a run titled exactly
-# `harness run <branch>` is queued, in_progress, waiting, requested or
+# `devscene run <branch>` is queued, in_progress, waiting, requested or
 # pending; 1 when none is; 2 with GH_ERR set when the listing failed or was
 # not a JSON array. Passes <branch> explicitly rather than reading the global
 # `branch` list_runs reads, and leaves GH_OUT as it found it.
@@ -6258,7 +6245,7 @@ control_run_in_flight() {
     GH_OUT="$saved"
     return 2
   fi
-  verdict=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness run $1" '
+  verdict=$(printf '%s' "$GH_OUT" | jq -r --arg t "devscene run $1" '
     if type != "array" then error("not an array") else
       if any(.[]; .displayTitle == $t
         and (.status == "queued" or .status == "in_progress" or .status == "waiting"
@@ -6282,8 +6269,8 @@ control_run_in_flight() {
 # control_branch_from_issue, whose issue's genuine `started` marker names it),
 # while it still exists on origin — gone is refused as deleted, a failed
 # existence check names the read, and no run list is read; or with a
-# `harness run <branch>` run in flight. Otherwise the refusal reads "neither a
-# task prompt nor a ledger, and no `harness run` in flight", and a failed listing names the read. Each
+# `devscene run <branch>` run in flight. Otherwise the refusal reads "neither a
+# task prompt nor a ledger, and no `devscene run` in flight", and a failed listing names the read. Each
 # refusal is a reply and exit 2, or 3 for a failed read.
 control_check_branch() {
   local b="$1" protected=0 exists=0 inflight=0
@@ -6295,7 +6282,7 @@ control_check_branch() {
     1) ;;
     0) control_refuse "$EXIT_REFUSED" "\`$b\` is a protected branch, which the harness never acts on" \
          "Comment on the pull request of the run's own branch instead." ;;
-    *) control_refuse "$EXIT_REFUSED" "whether \`$b\` is protected could not be judged from \`harness.config.json\`" \
+    *) control_refuse "$EXIT_REFUSED" "whether \`$b\` is protected could not be judged from \`devscene.config.json\`" \
          "Fix the configuration on the default branch, then comment again." ;;
   esac
   forge_fetch_branch "$b"
@@ -6313,7 +6300,7 @@ control_check_branch() {
       control_run_in_flight "$b" || inflight=$?
       case "$inflight" in
         0) ;;
-        1) control_refuse "$EXIT_REFUSED" "\`$b\` is not a harness branch: its tip carries neither a task prompt nor a flow-progress ledger, and no \`harness run $b\` run is queued or in progress" \
+        1) control_refuse "$EXIT_REFUSED" "\`$b\` is not a harness branch: its tip carries neither a task prompt nor a flow-progress ledger, and no \`devscene run $b\` run is queued or in progress" \
              "Only a branch a harness run works on can be commanded." ;;
         *) control_refuse "$EXIT_GH" "whether \`$b\` has a harness run in flight could not be read ($GH_ERR)" \
              "Comment again to retry." ;;
@@ -6794,7 +6781,7 @@ control_review_story() {
 # `branch`'s pull request <pr_number>, shared by `control` and `collect`: every
 # submitted review (never `PENDING`) that requests changes or carries a
 # non-blank body, and every inline comment, no earlier round consumed, by
-# every author `authorise_actor` accepts, the `HARNESS_RUN_ACTORS` allow-list
+# every author `authorise_actor` accepts, the `DEVSCENE_RUN_ACTORS` allow-list
 # included; a refused author's items are dropped with one line, while a
 # failed permission call (status 4) fails the collection. What earlier rounds consumed is
 # read from the marker lines of their files on origin's tip; with none marked,
@@ -7364,15 +7351,15 @@ control_close_ignore() {
 control_close() {
   local status=0 protected=0 b="" what note out
   local stop_flags=()
-  if [ -n "${HARNESS_REMOTE_STOP-}" ]; then
-    control_close_ignore "the repository variable HARNESS_REMOTE_STOP is set"
+  if [ -n "${DEVSCENE_REMOTE_STOP-}" ]; then
+    control_close_ignore "the repository variable DEVSCENE_REMOTE_STOP is set"
   fi
-  forge_on || control_close_ignore "the default branch's harness.config.json does not turn run control on"
+  forge_on || control_close_ignore "the default branch's devscene.config.json does not turn run control on"
   if [ "$CLOSE_KIND" = deleted ]; then
     # Deleting a branch already needs write access; only a bot is screened,
-    # never HARNESS_RUN_ACTORS (the header, THE CLOSE gate 3).
+    # never DEVSCENE_RUN_ACTORS (the header, THE CLOSE gate 3).
     if [ "$CONTROL_SENDER_TYPE" = Bot ] && ! trigger_bot_listed "$CONTROL_ACTOR"; then
-      control_close_ignore "@$CONTROL_ACTOR is a bot not listed in HARNESS_TRIGGER_ALLOWED_BOTS"
+      control_close_ignore "@$CONTROL_ACTOR is a bot not listed in DEVSCENE_TRIGGER_ALLOWED_BOTS"
     fi
   else
     case "$CONTROL_NUMBER" in
@@ -7413,7 +7400,7 @@ control_close() {
   case "$protected" in
     1) ;;
     0) control_close_ignore "\`$b\` is a protected branch" ;;
-    *) control_close_ignore "whether \`$b\` is protected could not be judged from harness.config.json" ;;
+    *) control_close_ignore "whether \`$b\` is protected could not be judged from devscene.config.json" ;;
   esac
   CONTROL_BRANCH="$b"
   if [ "$CLOSE_KIND" = pr_closed ] || [ "$CLOSE_KIND" = pr_merged ]; then
@@ -7428,7 +7415,7 @@ control_close() {
   fi
 
   # No forge_recognised check: a merged or deleted branch may no longer carry
-  # its task prompt or ledger, and a listed `harness run <b>` run is what proves a harness run.
+  # its task prompt or ledger, and a listed `devscene run <b>` run is what proves a harness run.
   if ! control_state_var "$b"; then
     echo "::error::remote-run.sh: control: the state of the run on \`$b\` could not be read ($CS_ERR)"
     exit "$EXIT_GH"
@@ -7596,7 +7583,7 @@ control_mention_context_extra() {
 
 # control_mention_session <dir> <out> <err> — the one read-only session, run
 # once in a subshell in <dir>; AGENT_STATUS is its exit. It carries no
-# HARNESS_MAIN_REPO anchor, because its tool set runs no command.
+# DEVSCENE_MAIN_REPO anchor, because its tool set runs no command.
 AGENT_STATUS=0
 control_mention_session() {
   local dir="$1" out="$2" err="$3" schema model model_args
@@ -7649,9 +7636,9 @@ control_mention() {
   base=${MENTION_COMMAND##*:}
   if [ -z "${HARNESS_MENTION_PLUGIN_DIR-}" ] || [ ! -f "$HARNESS_MENTION_PLUGIN_DIR/commands/$base.md" ]; then
     control_refuse "$EXIT_GH" "the harness plugin carrying the mention command is not available to this job" \
-      "The control job fetches the plugin at the version \`HARNESS_CLI_VERSION\` pins in \`harness-run.yml\`; see \`docs/remote-execution.md\` → \`### Upgrading\`, then comment again, or comment a command. $(control_commands_way)"
+      "The control job fetches the plugin at the version \`DEVSCENE_CLI_VERSION\` pins in \`devscene-run.yml\`; see \`docs/remote-execution.md\` → \`### Upgrading\`, then comment again, or comment a command. $(control_commands_way)"
   fi
-  AGENT_CLI="${HARNESS_AGENT_CLI:-claude}"
+  AGENT_CLI="${DEVSCENE_AGENT_CLI:-claude}"
   if ! command -v "$AGENT_CLI" >/dev/null 2>&1; then
     control_refuse "$EXIT_GH" "the agent binary \`$AGENT_CLI\` is not on this job's PATH" \
       "Comment a command instead. $(control_commands_way)"
@@ -7740,7 +7727,7 @@ control_mention() {
       text=$(cat "$file")
       control_reply "$EXIT_OK" "@$CONTROL_ACTOR: $text"$'\n\n'"_Written by an agent that read your mention; it changed nothing. $(control_commands_way)_" ;;
     fixes)
-      control_reply "$EXIT_OK" "@$CONTROL_ACTOR: a mention does not start a round of fixes. A review that requests changes on the run's pull request starts one (\`docs/github-run-control.md\` → \`## 2.\`). An author who cannot request changes on their own pull request starts the round locally with \`/autonomous-sdlc-harness:branch-user-review\` (\`## 4.\`)." ;;
+      control_reply "$EXIT_OK" "@$CONTROL_ACTOR: a mention does not start a round of fixes. A review that requests changes on the run's pull request starts one (\`docs/github-run-control.md\` → \`## 2.\`). An author who cannot request changes on their own pull request starts the round locally with \`/devscene:branch-user-review\` (\`## 4.\`)." ;;
     command)
       question=""
       [ "$verb" != answer ] || question=$(printf '%s' "$decision" | jq -r '.d.question | numbers | floor')
@@ -7795,8 +7782,8 @@ control_gates() {
   CG_WHY=""
   CG_WAY=""
   CG_AUTH=0
-  if [ -n "${HARNESS_REMOTE_STOP-}" ]; then
-    CG_WHY="the repository variable \`HARNESS_REMOTE_STOP\` is set, which stops every command"
+  if [ -n "${DEVSCENE_REMOTE_STOP-}" ]; then
+    CG_WHY="the repository variable \`DEVSCENE_REMOTE_STOP\` is set, which stops every command"
     CG_WAY="Clear it under **Settings → Secrets and variables → Actions → Variables**, then comment again."
     return 1
   fi
@@ -7804,21 +7791,21 @@ control_gates() {
   forge=$(hr_forge "$root") || forge=""
   target=$(hr_execution_target "$root") || target=""
   if [ "$forge" != github ] || [ "$target" != github-actions ]; then
-    CG_WHY="the default branch's \`harness.config.json\` does not turn run control on: it needs \`forge\` set to \`github\` (it is ${forge:-not set or unreadable}) and \`execution.target\` set to \`github-actions\` (it is ${target:-unreadable})"
+    CG_WHY="the default branch's \`devscene.config.json\` does not turn run control on: it needs \`forge\` set to \`github\` (it is ${forge:-not set or unreadable}) and \`execution.target\` set to \`github-actions\` (it is ${target:-unreadable})"
     CG_WAY="Set both keys on the default branch, then comment again."
     return 1
   fi
 
   if ! rerun_actor_listed; then
     CG_WHY="${RUN_ACTORS_WHY%.}"
-    CG_WAY="Only a person the repository variable \`HARNESS_RUN_ACTORS\` admits may re-run this job; one of them can comment again."
+    CG_WAY="Only a person the repository variable \`DEVSCENE_RUN_ACTORS\` admits may re-run this job; one of them can comment again."
     return 1
   fi
 
   authorise_actor "$CONTROL_ACTOR" "$CONTROL_SENDER_TYPE" || CG_AUTH=$?
   if [ "$CG_AUTH" -ne 0 ]; then
     CG_WHY="${AUTH_WHY%.}"
-    CG_WAY="Only a collaborator with write, maintain or admin access whom the repository variable \`HARNESS_RUN_ACTORS\` admits (when unset, the owner alone of a repository a personal account owns, and nobody in an organisation-owned one), or a bot listed in \`HARNESS_TRIGGER_ALLOWED_BOTS\`, commands a run."
+    CG_WAY="Only a collaborator with write, maintain or admin access whom the repository variable \`DEVSCENE_RUN_ACTORS\` admits (when unset, the owner alone of a repository a personal account owns, and nobody in an organisation-owned one), or a bot listed in \`DEVSCENE_TRIGGER_ALLOWED_BOTS\`, commands a run."
     return 1
   fi
   return 0
@@ -7972,8 +7959,8 @@ verb_collect() {
     echo "remote-run.sh: collect: the forge coupling is off (forge github and execution.target github-actions); nothing collected"
     exit "$EXIT_OK"
   fi
-  if [ -n "${HARNESS_REMOTE_STOP-}" ]; then
-    echo "remote-run.sh: collect: HARNESS_REMOTE_STOP is set; no round started"
+  if [ -n "${DEVSCENE_REMOTE_STOP-}" ]; then
+    echo "remote-run.sh: collect: DEVSCENE_REMOTE_STOP is set; no round started"
     exit "$EXIT_OK"
   fi
   if ! hr_have_jq; then
@@ -8120,7 +8107,7 @@ verb_discard() {
       echo "remote-run.sh: discard: the state directory's scratch/ under '$root' does not exist; nothing removed" >&2
       exit "$EXIT_USAGE" ;;
     3:*)
-      echo "remote-run.sh: cannot resolve '$root/harness.config.json'" >&2
+      echo "remote-run.sh: cannot resolve '$root/devscene.config.json'" >&2
       exit "$EXIT_USAGE" ;;
     *)
       usage "discard needs a <dir>" ;;

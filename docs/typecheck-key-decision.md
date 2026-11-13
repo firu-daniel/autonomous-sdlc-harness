@@ -1,6 +1,6 @@
 # `commands.typecheck` as a required key — a decision record
 
-**Who reads this:** whoever decides whether `commands.typecheck` stays a **required** configuration key. Read it beside the code it cites. §1 and §3 rest on `cli/src/config/check.ts`, `cli/src/config/model.ts`, `cli/src/detect/presets.ts` and `schemas/harness.config.schema.json`; §2 and the option sections add `cli/src/generators/scripts.ts`, `cli/src/generators/permissionProfile.ts`, `cli/src/generators/harnessConfig.ts` and `cli/src/doctor/checks.ts`. Every claim here is a statement about those files and is worth exactly what re-reading them says it is worth.
+**Who reads this:** whoever decides whether `commands.typecheck` stays a **required** configuration key. Read it beside the code it cites. §1 and §3 rest on `cli/src/config/check.ts`, `cli/src/config/model.ts`, `cli/src/detect/presets.ts` and `schemas/devscene.config.schema.json`; §2 and the option sections add `cli/src/generators/scripts.ts`, `cli/src/generators/permissionProfile.ts`, `cli/src/generators/harnessConfig.ts` and `cli/src/doctor/checks.ts`. Every claim here is a statement about those files and is worth exactly what re-reading them says it is worth.
 
 **What it settles.** One question, three answers, each of which binds **every** stack rather than the one that raised it: **(a)** make the key optional; **(b)** accept an explicit `none` sentinel that `doctor` grades as answered; **(c)** give the `php-composer` command family a typecheck fallback. That the cheapest-looking fix changes the contract for all stacks is why this is a decision record and not a patch.
 
@@ -14,7 +14,7 @@
 
 ## 1. The bind
 
-**The key is required twice, in two independent places.** `cli/src/config/check.ts` declares `COMMAND_REQUIRED = ['typecheck', 'test']`, and `schemas/harness.config.schema.json` lists the same two names in `properties.commands.required`. The schema states the intent in that object's `description`: "The shell commands the harness runs to verify a change. Only the two verification commands are required: a package with no development server or no separate build step is still a valid configuration." Neither place offers a third state; the key is present or the config is wrong.
+**The key is required twice, in two independent places.** `cli/src/config/check.ts` declares `COMMAND_REQUIRED = ['typecheck', 'test']`, and `schemas/devscene.config.schema.json` lists the same two names in `properties.commands.required`. The schema states the intent in that object's `description`: "The shell commands the harness runs to verify a change. Only the two verification commands are required: a package with no development server or no separate build step is still a valid configuration." Neither place offers a third state; the key is present or the config is wrong.
 
 **`checkCommands` gives an absent key an error and a placeholder one a warning.** Over `COMMAND_REQUIRED`, an `undefined` value produces the error `is required: the two verification commands are what "this change is done" means, so the flow cannot proceed without them`. Then, over every command key, a configured string that `isPlaceholder` accepts produces the warning `still holds the placeholder init wrote because it could not detect this command — replace it, or the run stops the first time it is invoked`.
 
@@ -32,7 +32,7 @@ Six sites are checked against `commands.typecheck` being absent, holding the pla
 
 **Wrapper generation — three arms, and they are not symmetric.** `selectWrapper` in `cli/src/generators/scripts.ts` is, in its own words, "The wrapper-selection rule, and the only place it is written down". It has exactly three returns:
 
-- **unset, empty, or whitespace** (`configuredCommand` returns `undefined`) → `{ selected: ALWAYS_SELECTED.includes(key), placeholder: false }`. `ALWAYS_SELECTED` is `typecheck` and `test`, so an absent `typecheck` key is still **selected**: the wrapper file is written, and because no line resolved, `resolveBody`'s third arm gives it `unresolvedBody` — `harness_fail` naming `set commands.typecheck in harness.config.json` — a script that fails and says why.
+- **unset, empty, or whitespace** (`configuredCommand` returns `undefined`) → `{ selected: ALWAYS_SELECTED.includes(key), placeholder: false }`. `ALWAYS_SELECTED` is `typecheck` and `test`, so an absent `typecheck` key is still **selected**: the wrapper file is written, and because no line resolved, `resolveBody`'s third arm gives it `unresolvedBody` — `harness_fail` naming `set commands.typecheck in devscene.config.json` — a script that fails and says why.
 - **the placeholder** (`isPlaceholder`) → `{ selected: false, placeholder: true, configured }`. No wrapper file is written at all.
 - **a filled line** → `{ selected: true, placeholder: false, configured }`. The wrapper is written with that line inlined, under `resolveBody`'s precedence.
 
@@ -154,7 +154,7 @@ the same order. **No verdict here** — §7 chooses.
 
 **1 — What changes in the contract.** Two edits, and only two: `COMMAND_REQUIRED` in
 `cli/src/config/check.ts` drops the name, and `properties.commands.required` in
-`schemas/harness.config.schema.json` drops it too. That object's `description` — "Only the two verification
+`schemas/devscene.config.schema.json` drops it too. That object's `description` — "Only the two verification
 commands are required" — becomes false with the edit and is rewritten with it. Nothing else in
 `checkCommands` moves: its placeholder loop runs over `COMMAND_KEYS`, not `COMMAND_REQUIRED`, so a key still
 holding the marker is warned exactly as before; only *absent* stops being an error.
@@ -170,7 +170,7 @@ Two type-level facts follow rather than being separate choices. `HarnessCommands
   returns `undefined`, so `selectWrapper` in `cli/src/generators/scripts.ts` takes its **first** return and
   `ALWAYS_SELECTED.includes('typecheck')` is true: the wrapper is **selected**. No line resolved, so
   `resolveBody`'s third arm gives it `unresolvedBody` — `harness_fail` naming `set commands.typecheck in
-  harness.config.json`. `init` therefore writes a `typecheck.sh` that runs nothing, fails, and tells the
+  devscene.config.json`. `init` therefore writes a `typecheck.sh` that runs nothing, fails, and tells the
   adopter to fill a key the contract no longer requires; and the profile allow-lists it. So option (a) owes
   one of two changes here: either **`ALWAYS_SELECTED` stops meaning "always"** for `typecheck`, or the absent
   case is **folded into the arm the placeholder already takes** — `{ selected: false }`, no file written. Not
@@ -245,7 +245,7 @@ rather than unfinished. Assessed below on the five dimensions §4 walks, in the 
 — §7 chooses.
 
 **1 — What changes in the contract.** Not the schema. `properties.commands.typecheck` in
-`schemas/harness.config.schema.json` declares `"type": "string"` with `"minLength": 1` and neither an `enum`
+`schemas/devscene.config.schema.json` declares `"type": "string"` with `"minLength": 1` and neither an `enum`
 nor a `pattern`, and `properties.commands.required` keeps both names — so a sentinel is **already a legal
 value of the existing type**, and (a)'s two edits have no counterpart here. That is the dimension-1 difference
 between the options: (a) widens what validates, (b) widens what a value means.
@@ -282,7 +282,7 @@ Two of the marker's properties do **not** carry over, and each is a choice (b) h
   holds the marker `init` writes", so the new state either sets a flag whose documentation it contradicts, or
   the interface grows a third case — and that flag has three readers: the two `doctor` checks named next,
   and `writeWrapperScripts` in the same module, whose `placeholder` branch is tested **ahead of** `selected`
-  and warns `<key> still holds the placeholder init wrote … set it in harness.config.json and re-run init`.
+  and warns `<key> still holds the placeholder init wrote … set it in devscene.config.json and re-run init`.
   Reported through the flag, a sentinel takes that branch on every `init` re-run and inherits a sentence that
   is false of an answered key and tells the adopter to undo the answer; reported through a third case, it
   inherits silence about a key that yields no wrapper and no permission entry, where every other such key says
@@ -392,7 +392,7 @@ objection; whether it is an honest occupant of the key is the closing question b
 
 **1 — What changes in the contract. Nothing — and that is (c)'s dimension-1 difference from both.** Checked
 rather than assumed: `COMMAND_REQUIRED` in `cli/src/config/check.ts` keeps both names, and
-`properties.commands.required` in `schemas/harness.config.schema.json` keeps both. `checkCommands` is
+`properties.commands.required` in `schemas/devscene.config.schema.json` keeps both. `checkCommands` is
 untouched, so an absent key still errors and a value `isPlaceholder` accepts is still warned; `HarnessCommands`
 in `cli/src/config/model.ts` keeps `typecheck: string`; `REQUIRED_COMMAND_KEYS` and `buildPreset` are
 unchanged. The diff is **one arm of one function**: an `else` after `composerCommands`' PHPStan and Psalm arms,
@@ -638,7 +638,7 @@ in `HarnessCommands`'s field comment and in `docs/config.md` §5's `commands.typ
 in four places" `model.ts` names.
 
 **What it must not touch.** No widening beyond (b): `COMMAND_REQUIRED` in `cli/src/config/check.ts` keeps
-both names and `properties.commands.required` in `schemas/harness.config.schema.json` keeps both — dropping
+both names and `properties.commands.required` in `schemas/devscene.config.schema.json` keeps both — dropping
 either is option (a), which this section rejects. And no family-level patch: `composerCommands` in
 `cli/src/detect/presets.ts` gains no arm, and `buildPreset` keeps filling an unresolved required key with
 `placeholderCommand`, because `init` must not assert on the adopter's behalf a claim detection did not

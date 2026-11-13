@@ -51,7 +51,7 @@ async function adoptedFixture(t, scriptsDir) {
   const fixture = await createFixture({
     files: {
       'package.json': { name: 'fixture-project', private: true, version: '0.0.0' },
-      'harness.config.json': {
+      'devscene.config.json': {
         version: 1,
         projectName: 'fixture-project',
         defaultBranch: 'main',
@@ -102,9 +102,9 @@ async function assertRunsAtRoot(f) {
 }
 
 for (const shape of PLACEHOLDERS) {
-  test(`(a) ${shape}: the wrappers run at the root with harness-scripts/.git a placeholder`, async (t) => {
-    const f = await adoptedFixture(t, 'harness-scripts');
-    await plantPlaceholder(join(f.dir, 'harness-scripts', '.git'), shape);
+  test(`(a) ${shape}: the wrappers run at the root with devscene-scripts/.git a placeholder`, async (t) => {
+    const f = await adoptedFixture(t, 'devscene-scripts');
+    await plantPlaceholder(join(f.dir, 'devscene-scripts', '.git'), shape);
     await assertRunsAtRoot(f);
   });
 
@@ -117,17 +117,17 @@ for (const shape of PLACEHOLDERS) {
 }
 
 test('(c) with no placeholder the wrappers run at the root, as before', async (t) => {
-  const f = await adoptedFixture(t, 'harness-scripts');
+  const f = await adoptedFixture(t, 'devscene-scripts');
   await assertRunsAtRoot(f);
 });
 
 test('(d) a copy of a rendered wrapper outside any repository refuses with no verdict line', async (t) => {
-  const f = await adoptedFixture(t, 'harness-scripts');
+  const f = await adoptedFixture(t, 'devscene-scripts');
   const outside = await realpath(await mkdtemp(join(tmpdir(), 'wrapper-root-outside-')));
   t.after(() => rm(outside, { recursive: true, force: true }));
   for (const { key, file } of WRAPPERS) {
     const copy = join(outside, file);
-    await cp(join(f.dir, 'harness-scripts', file), copy);
+    await cp(join(f.dir, 'devscene-scripts', file), copy);
     const result = await runBash(outside, [copy], f.env);
     assert.deepEqual(
       { status: result.status, stdout: result.stdout, stderr: result.stderr },
@@ -142,13 +142,13 @@ test('(d) a copy of a rendered wrapper outside any repository refuses with no ve
 });
 
 test('(e) doctor still reads each rendered wrapper\'s command line', async (t) => {
-  const f = await adoptedFixture(t, 'harness-scripts');
-  await plantPlaceholder(join(f.dir, 'harness-scripts', '.git'), 'empty-file');
+  const f = await adoptedFixture(t, 'devscene-scripts');
+  await plantPlaceholder(join(f.dir, 'devscene-scripts', '.git'), 'empty-file');
   // `init` keeps an existing config, so the raw lines are swapped for the invocations a fresh
   // adoption writes: only a key holding one makes `doctor` read the wrapper file.
-  const configPath = join(f.dir, 'harness.config.json');
+  const configPath = join(f.dir, 'devscene.config.json');
   const config = readJson(configPath);
-  for (const { key, file } of WRAPPERS) config.commands[key] = `bash harness-scripts/${file}`;
+  for (const { key, file } of WRAPPERS) config.commands[key] = `bash devscene-scripts/${file}`;
   await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
 
   const doctor = await runCli(f.dir, ['doctor'], f.env);
@@ -156,8 +156,8 @@ test('(e) doctor still reads each rendered wrapper\'s command line', async (t) =
   assert.match(doctor.stdout, /^PASS\s+command-wrappers\s/m);
   const resolves = report.split('\n').find((line) => /^PASS\s+command-resolves\s/.test(line)) ?? '';
   for (const { key, file } of WRAPPERS) {
-    assert.ok(resolves.includes(`commands.${key} → harness-scripts/${file}`), `command-resolves did not read ${file}`);
+    assert.ok(resolves.includes(`commands.${key} → devscene-scripts/${file}`), `command-resolves did not read ${file}`);
   }
-  const unread = report.split('\n').filter((line) => /\(harness-scripts\/(?:typecheck|test)\.sh[):]/.test(line));
+  const unread = report.split('\n').filter((line) => /\(devscene-scripts\/(?:typecheck|test)\.sh[):]/.test(line));
   assert.deepEqual(unread, [], 'a check reported a rendered wrapper\'s line as unread');
 });

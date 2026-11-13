@@ -9,12 +9,12 @@ argument-hint: "[<branch>:] [reason]"
 
 The tokens below are not ordinary **path placeholders** (`<branch>`, `<MAIN_REPO>`, `<worktree>`, `<branch_fold>`, `<scratch>`, which this
 file's own text resolves — `<MAIN_REPO>` in step 1, `<worktree>` from the registry record in step 4 and `<branch_fold>` and `<scratch>` in step 2): they
-resolve from the adopting repository's `harness.config.json`. They are declared here once, and after this
+resolve from the adopting repository's `devscene.config.json`. They are declared here once, and after this
 table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `devscene/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<scripts_dir>` | config value | `scriptsDir` — the directory the outer-loop scripts live in, repo-relative; a script is invoked from the root of the checkout this session runs in. This file names two of them: `remote-run.sh`, which it invokes — its `sync` verb, for a remote record, and its `fetch` and `discard` verbs, for a prefix naming a branch with no record, all in step 2, and its `pause` verb, on the GitHub route in step 4 — and `autonomous-watcher.sh`, **only** in the scope fence, as a file it must not modify and never invokes. It modifies neither. |
 
 ---
@@ -25,7 +25,7 @@ The autonomous flow has no way to *suspend* a run short of the hard `STOP` (whic
 auto-resumed). This command drops a **`<state_dir>/PAUSE`** request into a running run's **run copy**. At its
 next safety-contract checkpoint, if the tree has no uncommitted tracked changes (a clean boundary), the
 orchestrator appends a note to `<state_dir>/PAUSE_PROGRESS.md`, writes `<state_dir>/PAUSE_ACK`, and **ends its
-session** — the watcher marks the run `paused` and notifies. Resume later with `/autonomous-sdlc-harness:branch-resume <branch>`
+session** — the watcher marks the run `paused` and notifies. Resume later with `/devscene:branch-resume <branch>`
 (the watcher re-launches from the committed flow-progress ledger). Wraps "Pause / resume a run" in
 `${CLAUDE_PLUGIN_ROOT}/docs/AUTONOMOUS_FLOW.md`.
 
@@ -37,15 +37,15 @@ which it removes before it ends. The only scripts it invokes are `<scripts_dir>/
 `<scripts_dir>/remote-run.sh pause`, on the GitHub route; it names `remote-run.sh stop` in its report and never runs it. It must NOT modify
 `<scripts_dir>/autonomous-watcher.sh`, `<scripts_dir>/remote-run.sh`, the engines, or the instruction forks.
 
-**Usage:** type `/autonomous-sdlc-harness:branch-pause`. Optionally target a branch with a leading `<branch>: ` prefix and add a
-free-text reason after it, e.g. `/autonomous-sdlc-harness:branch-pause feat_settings_search: session token window nearly full`. The
+**Usage:** type `/devscene:branch-pause`. Optionally target a branch with a leading `<branch>: ` prefix and add a
+free-text reason after it, e.g. `/devscene:branch-pause feat_settings_search: session token window nearly full`. The
 reason (everything after any `<branch>: ` prefix) is written verbatim as the PAUSE file's body for your
 own audit — the orchestrator only checks the file's **presence**, never its content. On the GitHub route no `PAUSE` file is
 written and the reason is not sent.
 
 ## Steps
 
-1. Resolve `<MAIN_REPO>` as the path a bare `printenv HARNESS_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none; the registry is
+1. Resolve `<MAIN_REPO>` as the path a bare `printenv DEVSCENE_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none; the registry is
    `<MAIN_REPO>/<state_dir>/autonomous_logs/registry.json` (shaped `{"runs": {"<branch>": {...}}}`).
 2. **Which-branch resolution.** If `$ARGUMENTS` starts with `<branch>: `, parse it and strip the prefix
    (the remainder is the optional reason). Otherwise read the registry: if **exactly one** run has
@@ -90,14 +90,14 @@ written and the reason is not sent.
 5. Report: the run will honor the pause at its **next clean tracked-tree checkpoint** (it lets any pending
    commit finish first, so an in-flight unit is not left half-done), then write `PAUSE_PROGRESS.md` and end
    its session; the watcher will mark it `paused` and notify. Tell the user to resume later with
-   `/autonomous-sdlc-harness:branch-resume <branch>` (or by dropping `<state_dir>/RESUME` in the run copy). Note that the pause is
+   `/devscene:branch-resume <branch>` (or by dropping `<state_dir>/RESUME` in the run copy). Note that the pause is
    not instantaneous — the checkpoint is reached between sub-agent dispatches, so an in-flight dispatch
    (e.g. a long interactive-test or review) finishes first.
 
    **GitHub route** — in place of steps 4 and 5. Never write `PAUSE`. Run
    `bash <scripts_dir>/remote-run.sh pause <branch>` and report its result: exit 0, the pause dispatch was
    sent; exit 2 or 3, report its message — nothing reached the run. On a send, report that the job finds the
-   `harness pause <branch>` run by polling and yields at its next clean checkpoint exactly as a local run
-   does, and that `/autonomous-sdlc-harness:branch-resume <branch>` resumes it. To stop a remote run outright
+   `devscene pause <branch>` run by polling and yields at its next clean checkpoint exactly as a local run
+   does, and that `/devscene:branch-resume <branch>` resumes it. To stop a remote run outright
    rather than pause it, `bash <scripts_dir>/remote-run.sh stop <branch>` cancels its job and its chain —
    report that command; never run it.

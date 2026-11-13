@@ -1,5 +1,5 @@
 /**
- * `scripts/sandbox-probe-runner.yml`, held to the `harness-run.yml` job it reproduces and to the probe's guards.
+ * `scripts/sandbox-probe-runner.yml`, held to the `devscene-run.yml` job it reproduces and to the probe's guards.
  *
  * **The rules these tests exist to enforce:**
  * - **Same runner:** it runs where a job would run — the template `run` job's `runs-on`.
@@ -170,7 +170,7 @@ test("the job's own steps are copied, byte for byte", () => {
 
   assert.ok(at('Read the configuration') < at(SWITCH));
   assert.ok(at(SWITCH) < at('Install the claude CLI when absent'));
-  assert.match(step(SWITCH).run, /jq -r '\.defaultBranch[^']*' harness\.config\.json/);
+  assert.match(step(SWITCH).run, /jq -r '\.defaultBranch[^']*' devscene\.config\.json/);
 });
 
 test('a failed install step stops the job before the probe session', () => {

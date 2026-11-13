@@ -1,6 +1,6 @@
 # User service unit for the autonomous run watcher of {{projectName}}.
 #
-# A documented template rather than a system unit. `autonomous-sdlc-harness daemon install`
+# A documented template rather than a system unit. `devscene daemon install`
 # renders it to ~/.config/systemd/user/{{label}}, and it is driven with `systemctl --user`
 # throughout — `--user daemon-reload`, then `--user enable --now {{label}}`. As a user unit it
 # runs as the account that installed it, and so has that account's secret store and agent-runner
@@ -10,7 +10,7 @@
 #
 # The unit's name carries a slug of the repository it was installed from, so a second repository
 # on this machine installs its own watcher rather than overwriting this one. It is a concrete
-# file and not a `harness-watcher@.service` template unit: systemd resolves an instance name to a
+# file and not a `devscene-watcher@.service` template unit: systemd resolves an instance name to a
 # literal file of that name before falling back to a template, and a template would have to reach
 # the checkout path through %i — the value this file renders in below instead.
 #

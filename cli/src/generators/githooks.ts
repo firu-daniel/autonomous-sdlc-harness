@@ -22,12 +22,12 @@
  * *(`protectedBranches`, else that key's schema default)* ∪ *{`defaultBranch`}* — the same set
  * `hr_protected_patterns` in `scripts/lib/harness-run-lib.sh` gives the git wrappers, so one
  * configuration yields one set on both sides. What differs is **when**: the wrappers re-resolve it
- * from `harness.config.json` on every call, while this hook carries the set that was substituted
+ * from `devscene.config.json` on every call, while this hook carries the set that was substituted
  * into its `case` label when `init` wrote it, because the hook is `create-if-absent`. So an edit to
  * `protectedBranches` binds a wrapper at once and binds the hook only at `init --force` (or after
  * deleting the hook and re-running `init`), and until then the two enforce different sets. A third
  * run re-renders it as a **consequence** rather than as a way to change the set: `init
- * --reset-config` rebuilds `harness.config.json` itself, and {@link writeGitHooks} re-renders the
+ * --reset-config` rebuilds `devscene.config.json` itself, and {@link writeGitHooks} re-renders the
  * hook from the rebuilt file — after a `.bak` — but only when the `case` label the hook carried no
  * longer matches the set that file resolves, and never when that label cannot be read. The
  * asymmetry is the point: `--force` re-renders unconditionally, `--reset-config` re-renders only a
@@ -237,7 +237,7 @@ export interface GitHooksOptions {
   /** The command's write plan; this generator enqueues into it and never writes through `fs` itself. */
   readonly plan: WritePlan;
   /**
-   * Did this run **rebuild** `harness.config.json` — `init --reset-config`? The **one** input to the
+   * Did this run **rebuild** `devscene.config.json` — `init --reset-config`? The **one** input to the
    * re-render decision, and deliberately not a second one: the hook is re-rendered only where the
    * run that made its label wrong is the same run, so every ordinary re-run stays out of that path
    * entirely. `init` passes `flags.resetConfig`; nothing else sets it.
@@ -318,7 +318,7 @@ export function resolveGithooksDir(config: HarnessConfig): string {
   const normalized = normalizeRepoDir((config.githooksDir ?? DEFAULTS.githooksDir).trim());
   if (normalized === '.' || normalized === '') {
     throw new HarnessError(
-      `githooksDir is ${JSON.stringify(config.githooksDir)}, which names the repository root rather than a directory in it: git treats every file in the directory core.hooksPath names as a candidate hook, so the repository's whole top level would be in that role. Set githooksDir in harness.config.json to a directory name`,
+      `githooksDir is ${JSON.stringify(config.githooksDir)}, which names the repository root rather than a directory in it: git treats every file in the directory core.hooksPath names as a candidate hook, so the repository's whole top level would be in that role. Set githooksDir in devscene.config.json to a directory name`,
     );
   }
   return normalized;
@@ -432,7 +432,7 @@ function inspectWrittenGuard(hookFile: string, resolved: readonly string[]): Wri
  * what a **kept** hook carries rather than restating the set the config in effect holds. `--force`
  * regenerates the hook, after the write engine has copied it to a `.bak` sibling, and that *is* the
  * way to pick up a change to `protectedBranches`: config is read-if-present on every run, so an edit
- * living only in `harness.config.json` survives `--force` and is what the hook is re-rendered from.
+ * living only in `devscene.config.json` survives `--force` and is what the hook is re-rendered from.
  * Without `--force`, deleting the hook and re-running `init` re-renders it the same way, and is the
  * way to pick the change up without regenerating any other artifact.
  *
@@ -573,7 +573,7 @@ export function pointHooksPath({ repoRoot, githooksDir, dryRun = false }: HooksP
   if (current.value !== undefined) {
     if (!sameDirectory(repoRoot, current.value, configured)) {
       warnings.push(
-        `${HOOKS_PATH_KEY} already points at ${current.value}, not at the configured githooksDir ${configured}, so init left it exactly as it is - taking it over would disable whatever hooks you have there. The pre-push guard does not run until the two agree: either point it here with \`${manualFix}\`, or set githooksDir in harness.config.json to ${current.value} and re-run init`,
+        `${HOOKS_PATH_KEY} already points at ${current.value}, not at the configured githooksDir ${configured}, so init left it exactly as it is - taking it over would disable whatever hooks you have there. The pre-push guard does not run until the two agree: either point it here with \`${manualFix}\`, or set githooksDir in devscene.config.json to ${current.value} and re-run init`,
       );
       return { effect: 'left-alone', applied: false, configured, existing: current.value, warnings, notes };
     }

@@ -20,7 +20,7 @@
  *    takes `(t, extraFiles)` where the other two take `(t, options)`. Importing either name would
  *    yield an undefined import, and unifying the three is a refactor of files this file does not
  *    otherwise touch. This copy follows the `(t, options)` form.
- * 2. **A stack's commands are asserted as the values that land in `harness.config.json`**, not as
+ * 2. **A stack's commands are asserted as the values that land in `devscene.config.json`**, not as
  *    the raw lines inside the wrappers. That file is what every later reader consults, and a key
  *    holding a placeholder is a *written* key — so "this stack derives no build command" has to be
  *    asserted as absence, with the placeholder named separately when it is what actually happened.
@@ -49,7 +49,7 @@ import { CASE_CONCURRENCY } from './helpers/concurrency.mjs';
 import { createFixture, INIT_SCRIPTS_DIR, readJson, runCli, PACKAGE_ROOT, WORKSPACE_ROOT } from './helpers/fixture.mjs';
 
 /** The generated configuration every assertion here reads, relative to the fixture root. */
-const CONFIG_FILE = 'harness.config.json';
+const CONFIG_FILE = 'devscene.config.json';
 
 /** A module out of the compiled tree, refused with the same sentence `runCli` uses. */
 async function built(relativePath) {
@@ -781,7 +781,7 @@ const CODEGEN_NOTE = 'generates sources before they analyse';
  * in layers keeps the four-layer profile it has today and gains only the pair of commands it was
  * missing — that is case (k), and it is a regression control before it is a feature test. The row
  * catches what fell to `flat`: the feature-first `lib/`, whose decomposition into features is a
- * judgement call and therefore `/autonomous-sdlc-harness:harness-analyze`'s, so the preset names the
+ * judgement call and therefore `/devscene:analyze`'s, so the preset names the
  * one directory that is certain.
  *
  * The tool has **two positives**: an application marker file, or a Flutter SDK dependency in the
@@ -2241,7 +2241,7 @@ test('the guarded rows name exactly the scripts the npm command family answers o
 });
 
 test('every preset name reaches all three enumerations that have to carry it', () => {
-  const schema = JSON.parse(corpusFile('schemas', 'harness.config.schema.json'));
+  const schema = JSON.parse(corpusFile('schemas', 'devscene.config.schema.json'));
   const schemaEnum = schema.properties.detection.properties.preset.enum;
 
   for (const [label, text] of [
@@ -2259,7 +2259,7 @@ test('every preset name reaches all three enumerations that have to carry it', (
   assert.deepEqual(
     [...schemaEnum].sort(),
     [...PRESET_NAMES].sort(),
-    "schemas/harness.config.schema.json's detection.preset enum and PRESET_NAMES do not hold the same names. The schema validates what the CLI writes, so a name in one and not the other either fails validation on a config init just generated or admits a preset no row selects.",
+    "schemas/devscene.config.schema.json's detection.preset enum and PRESET_NAMES do not hold the same names. The schema validates what the CLI writes, so a name in one and not the other either fails validation on a config init just generated or admits a preset no row selects.",
   );
 });
 
@@ -2884,7 +2884,7 @@ test('the general-only warning names the disposition doctor will grade, per pres
     signal: 'monorepo:workspaces-key',
     layers: ['general'],
     warningCounts: {
-      "`/autonomous-sdlc-harness:harness-analyze`'s to propose": 1,
+      "`/devscene:analyze`'s to propose": 1,
       'grades this a decision rather than drift': 1,
     },
   });
@@ -2905,7 +2905,7 @@ test('the general-only warning names the disposition doctor will grade, per pres
     signal: 'api-service:go-module',
     layers: ['general'],
     warningCounts: {
-      "`/autonomous-sdlc-harness:harness-analyze`'s to propose": 1,
+      "`/devscene:analyze`'s to propose": 1,
       'grades this a decision rather than drift': 0,
     },
   });

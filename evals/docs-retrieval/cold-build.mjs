@@ -81,7 +81,7 @@ function directorySize(dir) {
  * **The corpus is named either way `corpusConfig` accepts one**, and the choice is forwarded rather
  * than narrowed here: a built-in id through `corpus`, or an ad-hoc corpus through `docsRoot` and the
  * repeatable `conventions`, which is the route that reads a documentation directory in place — no
- * `harness.config.json` in the target, no `init`, nothing written into it but the `dataDir` this
+ * `devscene.config.json` in the target, no `init`, nothing written into it but the `dataDir` this
  * measurement owns. `corpusConfig` refuses an invocation naming neither, and the returned `corpus`
  * field is the id it resolved, so an ad-hoc figure is stamped `ad-hoc` rather than passing for a
  * built-in one.

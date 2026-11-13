@@ -11,10 +11,10 @@ from typing import Any
 
 import pytest
 
-from harness_docs_retrieval import models
-from harness_docs_retrieval.errors import ServiceError
-from harness_docs_retrieval.models import Embedder, Reranker
-from harness_docs_retrieval.stubs import RETRIEVAL_STUB_ENV, STUB_VERSIONS, resolve_models
+from devscene_docs_retrieval import models
+from devscene_docs_retrieval.errors import ServiceError
+from devscene_docs_retrieval.models import Embedder, Reranker
+from devscene_docs_retrieval.stubs import RETRIEVAL_STUB_ENV, STUB_VERSIONS, resolve_models
 from ts_bridge import run_bridge
 
 STUB_INPUT: dict[str, Any] = {

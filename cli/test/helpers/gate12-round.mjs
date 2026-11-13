@@ -18,7 +18,7 @@
 
 import { spawn } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
-import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
 
@@ -28,14 +28,21 @@ import { runBash, runGit, WORKSPACE_ROOT } from './fixture.mjs';
 /** The `--repo` value the fixture's origin URL names. */
 export const GATE12_SLUG = 'fixture/gate12';
 
-/** The script every launcher runs unless a case names a copy. */
+/**
+ * The driver in place, and the source {@link makeGate12Fixture} stages from. Run directly only for an
+ * arm that exits before preflight (`--list`, `--help`): in place, preflight sources this checkout's
+ * self-adopted `scripts/lib/harness-run-lib.sh`, not the template copy `init` ships.
+ */
 export const ROUND_SCRIPT = join(WORKSPACE_ROOT, 'scripts', 'gate12-sandbox-round.sh');
+
+/** The run library `init` ships, staged beside the driver copy as `lib/harness-run-lib.sh`. */
+const TEMPLATE_RUN_LIB = join(WORKSPACE_ROOT, 'cli', 'templates', 'scripts', 'lib', 'harness-run-lib.sh');
 
 /** The step name the preflight's last check looks for in the default branch's workflow. */
 const INSTALL_STEP ='Install the sandbox prerequisites';
 
 const ORIGIN_URL = `https://github.com/${GATE12_SLUG}.git`;
-const WORKFLOW_TEMPLATE = join(WORKSPACE_ROOT, 'cli', 'templates', 'github', 'workflows', 'harness-run.yml');
+const WORKFLOW_TEMPLATE = join(WORKSPACE_ROOT, 'cli', 'templates', 'github', 'workflows', 'devscene-run.yml');
 const ISOLATED_GITCONFIG = resolve(import.meta.dirname, 'isolated-gitconfig');
 
 /** Every fixture root this module created; {@link cleanup} removes these and nothing else. */
@@ -54,6 +61,8 @@ const shq = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
  * @property {string} scriptsDir
  * @property {string} remoteRunLog the stub `remote-run.sh`'s argv log, one space-joined line per call
  * @property {string} stateFile the driver's state file inside the checkout
+ * @property {string} roundScript the staged driver copy every launcher runs, under `root` beside
+ *   `dir` — never inside it, which preflight refuses as a checkout carrying the driver
  */
 
 /**
@@ -62,7 +71,7 @@ const shq = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
  */
 export async function makeGate12Fixture({
   withInstallStep = true,
-  stateDir = 'sdlc-harness',
+  stateDir = 'devscene',
   scriptsDir = 'scripts',
   remoteRunExit = 0,
 } = {}) {
@@ -90,9 +99,9 @@ export async function makeGate12Fixture({
 
   const config = { version: 1, projectName: 'gate12', defaultBranch: 'main', stateDir, scriptsDir };
   const files = {
-    'harness.config.json': `${JSON.stringify(config, null, 2)}\n`,
+    'devscene.config.json': `${JSON.stringify(config, null, 2)}\n`,
     '.claude/settings.json': `${JSON.stringify({ permissions: { allow: [] } }, null, 2)}\n`,
-    '.github/workflows/harness-run.yml': workflow,
+    '.github/workflows/devscene-run.yml': workflow,
     // The scratch contents rule init's managed block renders for stateDir (repoRoot.ts → contentsIgnoredDirectory).
     '.gitignore': `${stateDir}/scratch/*\n`,
   };
@@ -115,6 +124,13 @@ export async function makeGate12Fixture({
 
   await ghStub(binDir, {});
 
+  const stage = join(root, 'round');
+  const roundScript = join(stage, 'gate12-sandbox-round.sh');
+  await mkdir(join(stage, 'lib'), { recursive: true });
+  await cp(ROUND_SCRIPT, roundScript);
+  await cp(join(WORKSPACE_ROOT, 'scripts', 'lib', 'gate12-sandbox-round'), join(stage, 'lib', 'gate12-sandbox-round'), { recursive: true });
+  await cp(TEMPLATE_RUN_LIB, join(stage, 'lib', 'harness-run-lib.sh'));
+
   return {
     root,
     dir,
@@ -124,6 +140,7 @@ export async function makeGate12Fixture({
     scriptsDir,
     remoteRunLog,
     stateFile: join(dir, stateDir, 'scratch', 'gate12-sandbox-round', 'state.json'),
+    roundScript,
   };
 }
 
@@ -170,7 +187,7 @@ function main() {
     return answer([{
       databaseId: state.runs[branch],
       createdAt: new Date().toISOString().replace(/\\.\\d{3}Z$/, 'Z'),
-      displayTitle: 'harness run ' + branch,
+      displayTitle: 'devscene run ' + branch,
       status: route.status ?? 'queued',
     }]);
   }
@@ -271,11 +288,11 @@ const stubPath = (fixture) => `${fixture.binDir}${delimiter}${process.env.PATH ?
  *
  * @param {Gate12Fixture} fixture
  * @param {readonly string[]} args
- * @param {{ env?: Record<string, string>, script?: string, timeoutMs?: number }} [options] `script` runs a
- *   copy instead of {@link ROUND_SCRIPT}; `timeoutMs` goes to `runBash`'s process-group bound, and
- *   without it the call is unbounded.
+ * @param {{ env?: Record<string, string>, script?: string, timeoutMs?: number }} [options] `script` runs
+ *   another copy instead of `fixture.roundScript`; `timeoutMs` goes to `runBash`'s process-group bound,
+ *   and without it the call is unbounded.
  */
-export function runRound(fixture, args, { env = {}, script = ROUND_SCRIPT, timeoutMs } = {}) {
+export function runRound(fixture, args, { env = {}, script = fixture.roundScript, timeoutMs } = {}) {
   const bound = timeoutMs === undefined ? undefined : { timeoutMs };
   return runBash(fixture.dir, [script, ...args], { PATH: stubPath(fixture), ...env }, bound);
 }
@@ -290,7 +307,7 @@ export function runRound(fixture, args, { env = {}, script = ROUND_SCRIPT, timeo
  * @returns {import('node:child_process').ChildProcess}
  */
 export function spawnRound(fixture, args, { env = {} } = {}) {
-  return spawn('bash', [ROUND_SCRIPT, ...args], {
+  return spawn('bash', [fixture.roundScript, ...args], {
     cwd: fixture.dir,
     env: { ...process.env, [MAIN_REPO_ANCHOR_VARIABLE]: '', GIT_CONFIG_GLOBAL: ISOLATED_GITCONFIG, GIT_CONFIG_NOSYSTEM: '1', PATH: stubPath(fixture), ...env },
     stdio: ['ignore', 'pipe', 'pipe'],

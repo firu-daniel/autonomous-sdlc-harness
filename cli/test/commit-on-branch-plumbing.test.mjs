@@ -35,7 +35,7 @@ const CONFIG = {
   version: 1,
   defaultBranch: 'trunk',
   protectedBranches: ['trunk', 'release/*'],
-  stateDir: 'sdlc-harness/',
+  stateDir: 'devscene/',
   githooksDir: 'githooks',
   layers: [],
   commands: {},
@@ -55,7 +55,7 @@ async function markerProgram(root, name) {
 }
 
 /**
- * A main checkout on `feat_main` carrying `harness.config.json`, `githooks/`, the three wrappers
+ * A main checkout on `feat_main` carrying `devscene.config.json`, `githooks/`, the three wrappers
  * and their `lib/`, plus `tracked.txt` and `dir/gone.txt`, with `core.hooksPath` set to `githooks`
  * and the identity in its configuration; and a linked worktree `wt` on `feat_w`, bootstrapped as
  * `setup-worktree.sh` does, holding an untracked `new.txt`.
@@ -73,7 +73,7 @@ async function fixture(t) {
   await runGit(main, ['init', '--quiet', '-b', 'trunk']);
   await runGit(main, ['config', 'user.email', 'fixture@example.invalid']);
   await runGit(main, ['config', 'user.name', 'Harness Fixture']);
-  await writeFile(join(main, 'harness.config.json'), `${JSON.stringify(CONFIG)}\n`);
+  await writeFile(join(main, 'devscene.config.json'), `${JSON.stringify(CONFIG)}\n`);
   await mkdir(join(main, 'githooks'));
   await writeFile(join(main, 'githooks', 'README'), 'hooks\n');
   await mkdir(join(main, 'scripts'));
@@ -84,7 +84,7 @@ async function fixture(t) {
   await writeFile(join(main, 'tracked.txt'), 'tracked\n');
   await mkdir(join(main, 'dir'));
   await writeFile(join(main, 'dir', 'gone.txt'), 'gone\n');
-  await runGit(main, ['add', 'harness.config.json', 'githooks', 'scripts', 'tracked.txt', 'dir']);
+  await runGit(main, ['add', 'devscene.config.json', 'githooks', 'scripts', 'tracked.txt', 'dir']);
   await runGit(main, ['commit', '--quiet', '-m', 'fixture: seed']);
   await runGit(main, ['config', 'core.hooksPath', 'githooks']);
   await runGit(main, ['checkout', '--quiet', '-b', 'feat_main']);

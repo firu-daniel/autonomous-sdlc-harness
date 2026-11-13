@@ -19,14 +19,14 @@
 #
 # THE LOCK SET IS THE ONE `reserve-qa-user.sh` DOCUMENTS:
 # `<main>/<stateDir>/qa_user_locks/`, where <main> is the repository's main
-# checkout (`hc_main_root_var`: the `HARNESS_MAIN_REPO` anchor when it is set
+# checkout (`hc_main_root_var`: the `DEVSCENE_MAIN_REPO` anchor when it is set
 # and usable; else, in a run clone, the main checkout its
 # `objects/info/alternates` names and whose run registry records this clone at
 # this path, or a refusal; else the `git rev-parse --git-common-dir` answer —
 # so every run copy names the same one) and <stateDir> is `stateDir` from the
 # main checkout's
-# `harness.config.json` when it has one, else this working copy's, defaulting to
-# `sdlc-harness`. THE TWO HALVES OF THE
+# `devscene.config.json` when it has one, else this working copy's, defaulting to
+# `devscene`. THE TWO HALVES OF THE
 # PAIR MUST AGREE ON THAT DERIVATION: change it in one file alone and every lock
 # the other half is holding is silently retired, because each would then look in
 # a directory the other never writes. The repository is resolved from `$PWD` and
@@ -52,7 +52,7 @@
 #                              -> one stderr line, exit 0 (no main checkout)
 #
 #   from a `git clone --shared <main> <clone>`, anchored:
-#     cd <clone> && HARNESS_MAIN_REPO=<main> bash <plugin>/scripts/release-qa-user.sh <slot>
+#     cd <clone> && DEVSCENE_MAIN_REPO=<main> bash <plugin>/scripts/release-qa-user.sh <slot>
 #                              -> releases <main>/<stateDir>/qa_user_locks/<slot>,
 #                                 not the clone's
 #   the same clone, anchor unset
@@ -92,7 +92,7 @@ if [ -z "$main" ]; then
 fi
 cfg_root="$main"
 hc_config_file "$main" >/dev/null || cfg_root="$root"
-state_rel=$(hc_config_dir "$cfg_root" stateDir sdlc-harness) || state_rel="sdlc-harness"
+state_rel=$(hc_config_dir "$cfg_root" stateDir devscene) || state_rel="devscene"
 
 LOCK_DIR="$main/$state_rel/qa_user_locks"
 

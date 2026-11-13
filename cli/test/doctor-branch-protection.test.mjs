@@ -5,7 +5,7 @@
  * `forge: github`, every call is a read, a pass is only a proven pass, cannot-tell is never graded as
  * missing, and the check never fails.**
  *
- * `HARNESS_GH_CLI` points at a file-local stub that logs its argv and answers from per-argv
+ * `DEVSCENE_GH_CLI` points at a file-local stub that logs its argv and answers from per-argv
  * `out` / `err` / `status` / `kill` files, in the manner of `doctor.test.mjs` → `answeringGhStub`; a
  * `kill` file makes the stub signal itself, which hands the check the `null` status a timed-out call
  * gives. Every case asserts its whole call log carries no write flag, prints no `FAIL` line for this
@@ -30,9 +30,9 @@ import { createFixture, readJson, runCli } from './helpers/fixture.mjs';
 import { branchRulesEndpoint, classicProtectionEndpoint } from '../dist/doctor/branchProtection.js';
 
 const CHECK_ID = 'branch-protection';
-const GH_CLI_VARIABLE = 'HARNESS_GH_CLI';
+const GH_CLI_VARIABLE = 'DEVSCENE_GH_CLI';
 const FIXTURE_GH_CLI = 'harness-fixture-gh';
-const CONFIG_FILE = 'harness.config.json';
+const CONFIG_FILE = 'devscene.config.json';
 
 /** Any of these on a logged argv would make a `gh api` call something other than a GET. */
 const WRITE_FLAGS = Object.freeze(['--method', '-X', '-f', '-F', '--field', '--raw-field', '--input']);

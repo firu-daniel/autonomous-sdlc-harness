@@ -10,8 +10,8 @@
  * ## Five non-obvious choices, and where each comes from
  *
  * 1. **The identity is per repository, not per project name.** The launchd label is
- *    `com.autonomous-sdlc-harness.watcher.<slug>` and the systemd unit name
- *    `harness-watcher@<slug>.service`, where `<slug>` is {@link repoSlug} of the repository the
+ *    `com.devscene.watcher.<slug>` and the systemd unit name
+ *    `devscene-watcher@<slug>.service`, where `<slug>` is {@link repoSlug} of the repository the
  *    daemon was installed from. Two repositories on one machine therefore install daemons that
  *    cannot collide — which two checkouts sharing a `projectName` would have, under a label built
  *    from that name. `docs/config.md` §4's `<launchd_label>` row is the register entry and
@@ -28,10 +28,10 @@
  *    under `Restart=always`, restarted forever. Both are escaped, per format and per directive; see
  *    {@link escapeSystemdValue} and {@link escapeSystemdArgument}. A newline is refused instead — it
  *    is not something to render carefully, it is something to report.
- * 4. **On systemd a *concrete* `harness-watcher@<slug>.service` file is written, not a template
+ * 4. **On systemd a *concrete* `devscene-watcher@<slug>.service` file is written, not a template
  *    unit plus an instance.** The `@` is what an operator reads as "one watcher per repository",
  *    and it costs nothing to spell it that way: systemd resolves an instance name to a literal
- *    file of that exact name *before* it falls back to the `harness-watcher@.service` template, so
+ *    file of that exact name *before* it falls back to the `devscene-watcher@.service` template, so
  *    the file installed here is the one `systemctl --user` acts on. A real template unit would have
  *    to reach the repository path through `%i`, i.e. carry the checkout path in the instance name,
  *    escaped into it. This design renders that path into `ExecStart` and `WorkingDirectory`
@@ -84,10 +84,10 @@ const UNIT_TEMPLATES = {
 } as const;
 
 /** Reverse-DNS prefix of the launchd label; {@link repoSlug} completes it. */
-const LAUNCHD_LABEL_PREFIX = 'com.autonomous-sdlc-harness.watcher';
+const LAUNCHD_LABEL_PREFIX = 'com.devscene.watcher';
 
 /** The systemd unit name, either side of {@link repoSlug}. */
-const SYSTEMD_UNIT_PREFIX = 'harness-watcher@';
+const SYSTEMD_UNIT_PREFIX = 'devscene-watcher@';
 const SYSTEMD_UNIT_SUFFIX = '.service';
 
 /** The longest a slug may be. Applied last, keeping the tail — see {@link repoSlug}. */
@@ -131,8 +131,8 @@ export interface RenderedUnit {
   readonly targetPath: string;
   /**
    * The identifier the backend addresses this service by: the launchd label
-   * `com.autonomous-sdlc-harness.watcher.<slug>`, or the systemd unit name
-   * `harness-watcher@<slug>.service` — the strings `launchctl` and `systemctl --user` respectively
+   * `com.devscene.watcher.<slug>`, or the systemd unit name
+   * `devscene-watcher@<slug>.service` — the strings `launchctl` and `systemctl --user` respectively
    * take, with `<slug>` from {@link repoSlug}.
    */
   readonly label: string;
@@ -360,7 +360,7 @@ export function unitEnvValue(kind: 'launchd' | 'systemd', text: string, key: str
 function assertSingleLine(token: string, value: string): void {
   if (/[\r\n]/.test(value)) {
     throw new HarnessError(
-      `the value for {{${token}}} contains a line break (${JSON.stringify(value)}), which would split the generated unit file into directives nobody wrote: move the checkout, or set the offending path in harness.config.json to one without a newline in it`,
+      `the value for {{${token}}} contains a line break (${JSON.stringify(value)}), which would split the generated unit file into directives nobody wrote: move the checkout, or set the offending path in devscene.config.json to one without a newline in it`,
     );
   }
 }
@@ -404,8 +404,8 @@ function render(file: string, values: Readonly<Record<string, string>>): string 
  * Render the daemon's unit for the detected backend, and compute where it is installed and what it
  * is then called.
  *
- * - **launchd** — `~/Library/LaunchAgents/com.autonomous-sdlc-harness.watcher.<slug>.plist`.
- * - **systemd** — `~/.config/systemd/user/harness-watcher@<slug>.service`.
+ * - **launchd** — `~/Library/LaunchAgents/com.devscene.watcher.<slug>.plist`.
+ * - **systemd** — `~/.config/systemd/user/devscene-watcher@<slug>.service`.
  * - **`none`** — throws, naming the platform and carrying detection's own reason, because a caller
  *   that reached this function with no backend has a question with no answer rather than a value to
  *   fall back on.

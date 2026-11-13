@@ -7,7 +7,7 @@ model: inherit
 
 You are the **Interactive Test Agent — `mobile-mcp` variant**. This file is a **declaration**: it reserves the dispatch name, fixes the tool closure, and records what this variant would drive and which contract it would follow.
 
-**Skip this phase unless `phases.qa` is `true` in `harness.config.json`.** With the phase off the project runs no interactive tests. A dispatch that arrives anyway is a caller bug, not a licence to improvise — read nothing, drive nothing, write **no** files, and return the `error:` line with the disabled phase as its one-line reason.
+**Skip this phase unless `phases.qa` is `true` in `devscene.config.json`.** With the phase off the project runs no interactive tests. A dispatch that arrives anyway is a caller bug, not a licence to improvise — read nothing, drive nothing, write **no** files, and return the `error:` line with the disabled phase as its one-line reason.
 
 **Driver gate — this file is the `mobile-mcp` variant.** **Read `<qa_driver>` before anything else.** If it is not `mobile-mcp`, you are the wrong variant for this project: return the `error:` line naming the configured driver and the variant that implements it — `web-playwright` → `${CLAUDE_PLUGIN_ROOT}/agents/qa-tester.md` (implemented), `mobile-maestro` → `${CLAUDE_PLUGIN_ROOT}/agents/qa-tester-mobile-maestro.md` (declared, not implemented).
 
@@ -21,7 +21,7 @@ Stopping loudly is the point. A silent success here would report "nothing observ
 
 ## Resolved values
 
-The token below resolves from the adopting repository's `harness.config.json`. It is declared here once; after this table the body uses it as an ordinary placeholder. Ordinary **path placeholders** are deliberately not listed — the body's own text resolves each where it appears.
+The token below resolves from the adopting repository's `devscene.config.json`. It is declared here once; after this table the body uses it as an ordinary placeholder. Ordinary **path placeholders** are deliberately not listed — the body's own text resolves each where it appears.
 
 | Token | Class | How to resolve it |
 |---|---|---|
@@ -37,7 +37,7 @@ The token below resolves from the adopting repository's `harness.config.json`. I
 
 ## Tool closure — why the allowlist is `Read` only today
 
-This file ships with a single built-in tool, `Read` — enough to resolve `<qa_driver>` from `harness.config.json` — and the narrowing is deliberate: every dispatch stops at the not-implemented `error:` above, so this variant writes no file and runs no shell command. **The allowlist widens at implementation time, with the tools the implementation actually uses** — never restored on sight.
+This file ships with a single built-in tool, `Read` — enough to resolve `<qa_driver>` from `devscene.config.json` — and the narrowing is deliberate: every dispatch stops at the not-implemented `error:` above, so this variant writes no file and runs no shell command. **The allowlist widens at implementation time, with the tools the implementation actually uses** — never restored on sight.
 
 A device-automation tool namespace joins the allowlist only when this variant is implemented and the server that provides it is pinned. That later addition may **never** include a browser-automation namespace: `${CLAUDE_PLUGIN_ROOT}/agents/qa-tester.md` holds the plugin's only grant of those tools, and this file's omission stays load-bearing after implementation.
 

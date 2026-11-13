@@ -4,7 +4,7 @@ in the TypeScript server's shape.
 
 The launcher and its library are copied out of `cli/templates/scripts/` into each fixture, never
 changed. Each case runs it with only the environment the agent runner would hand it, so the
-launcher resolves `harness-docs-retrieval` off the venv's `bin` on `PATH`, not off this process.
+launcher resolves `devscene-docs-retrieval` off the venv's `bin` on `PATH`, not off this process.
 
 Only the MCP-client case is `container`-marked, by its own decorator; a module-level marker would
 also mark the exit-3 case, which needs no database and must run wherever 13c runs. Both cases
@@ -28,12 +28,12 @@ import pytest
 from mcp import Client, types
 from mcp.client.stdio import StdioServerParameters
 
-from harness_docs_retrieval.models import MODEL_CACHE_ENV
-from harness_docs_retrieval.search import ABSTAIN_MESSAGE
-from harness_docs_retrieval.service import CONFIG_FILENAME
-from harness_docs_retrieval.store import DATABASE_URL_ENV
-from harness_docs_retrieval.stubs import RETRIEVAL_STUB_ENV
-from harness_docs_retrieval.wire import SEARCH_TOOL_NAME
+from devscene_docs_retrieval.models import MODEL_CACHE_ENV
+from devscene_docs_retrieval.search import ABSTAIN_MESSAGE
+from devscene_docs_retrieval.service import CONFIG_FILENAME
+from devscene_docs_retrieval.store import DATABASE_URL_ENV
+from devscene_docs_retrieval.stubs import RETRIEVAL_STUB_ENV
+from devscene_docs_retrieval.wire import SEARCH_TOOL_NAME
 from model_cache import plant_model_files
 from test_backend_parity_e2e import SNIPPET_EDGES_QUERY, _corpus
 from ts_bridge import CHECKOUT_ROOT, TsFixture, ts_fixture
@@ -110,7 +110,7 @@ def _closed_loopback_url() -> str:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
-    return f"postgresql://harness:harness@127.0.0.1:{port}/docs_retrieval"
+    return f"postgresql://devscene:devscene@127.0.0.1:{port}/docs_retrieval"
 
 
 def _only_text(result: types.CallToolResult) -> str:
@@ -187,7 +187,7 @@ def test_the_launcher_exits_3_when_the_python_backend_cannot_reach_its_store() -
     assert completed.returncode == _BACKEND_UNAVAILABLE_EXIT, stderr
     assert completed.stdout == b""
     lines = stderr.splitlines()
-    connect_prefix = "harness-docs-retrieval: could not connect"
+    connect_prefix = "devscene-docs-retrieval: could not connect"
     assert any(line.startswith(connect_prefix) for line in lines), stderr
     launcher_prefix = "docs-search-server: "
     assert any(line.startswith(launcher_prefix) and "doctor" in line for line in lines), stderr

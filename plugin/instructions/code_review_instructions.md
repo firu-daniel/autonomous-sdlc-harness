@@ -2,12 +2,12 @@
 
 ## Resolved values
 
-The tokens below are neither Mode-contract **bindings** (this file declares none) nor ordinary **path placeholders** (`<branch>`, `<N>`, `<log>`, which this file's own text resolves): `<repo_root>` is derived at runtime and the rest resolve from the adopting repository's `harness.config.json`. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
+The tokens below are neither Mode-contract **bindings** (this file declares none) nor ordinary **path placeholders** (`<branch>`, `<N>`, `<log>`, which this file's own text resolves): `<repo_root>` is derived at runtime and the rest resolve from the adopting repository's `devscene.config.json`. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<repo_root>` | derived at runtime | The absolute root of the checkout this session runs in. Obtain it with a **bare** `git rev-parse --show-toplevel` and build every literal path from the result. Never embed the `$(…)` substitution inside another shell command, and never stash it in a shell variable across separate Bash calls — separate calls do not share shell state. |
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `devscene/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory the generated wrapper scripts live in, including the gate wrapper step 6 runs. |
 | `<layer_path_map>` | config value | `layers[].path` together with `layers[].conventions` — the paths a scope hint narrows a re-review to, and the rules document that layer is reviewed against. |
 | `<parity_vocabulary>` / `<reference_impl>` | config value | `parity.referenceName` / `parity.referenceImplPath` — the name of the reference implementation this project is kept in parity with, and the path to it. Read **only** when `phases.parity` is `true`. |
@@ -23,7 +23,7 @@ The tokens below are neither Mode-contract **bindings** (this file declares none
    - The expected paths for the task prompt and **story index** files (`<state_dir>/task_prompts/<branch>_task_prompt.md` and `<state_dir>/story_plans/<branch>_story_plan.md`) so it can read them for context. The story index carries the shared `## Context` + the readiness list; per-task bodies live under `<state_dir>/task_plans/<branch>/task_<N>_plan.md` if the agent needs a task's detail.
    - Any user-supplied scope hint (e.g., "focus on one layer's `conventions` compliance" or "skip the test files"), if given.
 
-   The `branch-reviewer` agent's system prompt already covers diff-fetching, full file reads (no further sub-agent delegation for file reads), parity checks against the reference implementation (`<parity_vocabulary>`, at `<reference_impl>`), the Must Fix / Should Fix / Nice to Have format, the high-yield checklist, and the **split output** it produces — a thin **code-review index** plus one self-contained per-finding file per finding, with the `## Phase 2 Readiness — Ordered Fix List` section placed in the index (after Context, before the finding pointers). Do not duplicate or override those instructions in your prompt to it. *The parity item in that list applies only when `phases.parity` is `true` in `harness.config.json`; when it is `false` the agent has no reference implementation to compare against and the rest of its coverage is unchanged.*
+   The `branch-reviewer` agent's system prompt already covers diff-fetching, full file reads (no further sub-agent delegation for file reads), parity checks against the reference implementation (`<parity_vocabulary>`, at `<reference_impl>`), the Must Fix / Should Fix / Nice to Have format, the high-yield checklist, and the **split output** it produces — a thin **code-review index** plus one self-contained per-finding file per finding, with the `## Phase 2 Readiness — Ordered Fix List` section placed in the index (after Context, before the finding pointers). Do not duplicate or override those instructions in your prompt to it. *The parity item in that list applies only when `phases.parity` is `true` in `devscene.config.json`; when it is `false` the agent has no reference implementation to compare against and the rest of its coverage is unchanged.*
 
 3. **Present the review findings** returned by the agent to the user.
 
@@ -35,7 +35,7 @@ The tokens below are neither Mode-contract **bindings** (this file declares none
 
    1. **Run the gates**, because the implementers this branch's plan dispatched ran no suite, and their own whole-tree type-check runs do not gate the flow — a failure outside a unit's change is recorded as an evidence downgrade, neither fixed nor blocked on (`${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule`). The one wrapper run below runs both gates over the finished tree, the whole-tree type check and then the suite, and its verdict is the one that counts. From `<repo_root>`, run `bash <scripts_dir>/run-test-suite.sh task_supervised` and read only its stdout line:
       - `pass` → step 2.
-      - `fail <log>` → write no statistics. Tell the user the gates failed, name `<log>`, and stop; the log's per-gate sections show whether the type check, the suite or both failed, for the user to read. Once the failure is fixed, `/autonomous-sdlc-harness:branch-implement-review` re-runs the gates in its Phase 3 — a clean pass has no fix flow to return to.
+      - `fail <log>` → write no statistics. Tell the user the gates failed, name `<log>`, and stop; the log's per-gate sections show whether the type check, the suite or both failed, for the user to read. Once the failure is fixed, `/devscene:branch-implement-review` re-runs the gates in its Phase 3 — a clean pass has no fix flow to return to.
       - No stdout line → report the wrapper's one stderr line and stop.
       - The command starts both gates detached from this session and prints `pending` at once — or, when a run of its label already finished on this commit with nothing it reads changed since, starts nothing and prints that run's verdict at once (`<scripts_dir>/run-test-suite.sh` → the header comment opening `ONE RUN PER LABEL`). After each `pending`, re-issue the same command with `--wait` before the label, as a plain foreground command, until it prints the verdict line — the mechanism of `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_core.md` → `### G.1 Run the gates`. Never stop or re-launch a run in flight. No `Monitor` and no `sleep`. A `--wait` refusal is the no-line case.
 
@@ -47,6 +47,6 @@ The tokens below are neither Mode-contract **bindings** (this file declares none
 
       Dispatch with the first-write (pre-user-review) prompt above — the `statistics-plan-writer` agent owns the counting and the output format. Relay the returned `success_rate` / `statistics_file` to the user.
 
-   **If there ARE findings to fix, do NOT write statistics here.** The statistics write for a non-clean review happens after the fixes land — in the `/autonomous-sdlc-harness:branch-implement-review` fix flow (`${CLAUDE_PLUGIN_ROOT}/instructions/code_review_fixes_instructions.md`), once every review item is `[x]`. Writing here as well would double-write.
+   **If there ARE findings to fix, do NOT write statistics here.** The statistics write for a non-clean review happens after the fixes land — in the `/devscene:branch-implement-review` fix flow (`${CLAUDE_PLUGIN_ROOT}/instructions/code_review_fixes_instructions.md`), once every review item is `[x]`. Writing here as well would double-write.
 
-   Stop after this — fix implementation (when there are findings) happens in a separate session via `/autonomous-sdlc-harness:branch-implement-review`.
+   Stop after this — fix implementation (when there are findings) happens in a separate session via `/devscene:branch-implement-review`.

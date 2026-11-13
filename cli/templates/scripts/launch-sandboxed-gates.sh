@@ -32,14 +32,15 @@
 #
 # THE TARGET IS READ AS DATA ONLY. Outside the `bwrap` vector nothing here
 # executes, sources or `eval`s a path under <target>. It reads the target's git
-# records through the target check, its `harness.config.json` through
+# records through the target check, its `devscene.config.json` through
 # `hr_state_dir` (for `stateDir` alone), and its lane files through `-f`, `-e`
 # and `hr_lane_mtime`. `scriptsDir` and both profiles are read from the main
 # checkout and the machine lane, never from the target.
 #
 # NO ENVIRONMENT VARIABLE DECIDES TRUST IN THE TARGET. An assignment prefix on
 # an excluded call could set one, as `autonomous-watcher.sh`'s header says of
-# `HARNESS_MAIN_REPO`; nothing here reads that or any other `HARNESS_*` name.
+# `DEVSCENE_MAIN_REPO`; nothing here reads that or any other `DEVSCENE_*` or
+# `HARNESS_*` name.
 # What the environment does reach, as residuals:
 #   - `PATH` finds `bwrap`, `jq`, `git` and `setsid`, the trust
 #     `docs/sandbox-record.md` residual 5 states for the wrappers; `BASH_ENV`
@@ -101,7 +102,7 @@
 #       a refusal. The supervisor sweeps its placeholders after `bwrap` exits.
 #       A `<target>/<scripts_dir>/.git` entry is pinned like every other absent
 #       one, and the worker's scripts place their root past it from the nearest
-#       confirmed `harness.config.json` (`lib/harness-run-lib.sh` →
+#       confirmed `devscene.config.json` (`lib/harness-run-lib.sh` →
 #       `hr_script_root`), never by git's discovery from the scripts
 #       directory (F15).
 #   --ro-bind <target>/.claude <target>/.claude, and --ro-bind <p> <p> or
@@ -254,10 +255,10 @@ else
 fi
 
 # 9.
-scripts_dir="$(hr_scripts_dir "$main")" || refuse "cannot resolve scriptsDir from '$main/harness.config.json'"
-state_dir="$(hr_state_dir "$target")" || refuse "cannot resolve stateDir from '$target/harness.config.json'"
+scripts_dir="$(hr_scripts_dir "$main")" || refuse "cannot resolve scriptsDir from '$main/devscene.config.json'"
+state_dir="$(hr_state_dir "$target")" || refuse "cannot resolve stateDir from '$target/devscene.config.json'"
 case "$state_dir" in
-  /*) refuse "stateDir '$state_dir' in '$target/harness.config.json' is not repo-relative" ;;
+  /*) refuse "stateDir '$state_dir' in '$target/devscene.config.json' is not repo-relative" ;;
 esac
 log_dir="$target/$(hr_test_run_lane_dir "$state_dir" "$branch")" ||
   refuse "cannot read the branch of '$target' (detached HEAD?)"

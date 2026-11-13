@@ -1,5 +1,5 @@
 {
-  "$schema": "../harness.config.schema.json",
+  "$schema": "../devscene.config.schema.json",
   "version": 1,
   "projectName": "acme-shop",
   "defaultBranch": "main",

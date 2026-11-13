@@ -109,7 +109,7 @@ async function recordedRun(t, { transcript }) {
     await copyFile(TRANSCRIPT, join(subagents, `agent-${AGENT_ID}.jsonl`));
   }
 
-  const { stateDir } = readJson(join(dir, 'harness.config.json'));
+  const { stateDir } = readJson(join(dir, 'devscene.config.json'));
   const streamRel = join(stateDir, 'autonomous_logs', `${BRANCH}.stream.jsonl`);
   await mkdir(join(dir, stateDir, 'autonomous_logs'), { recursive: true });
   writeFileSync(join(dir, streamRel), readFileSync(FIXTURE_STREAM, 'utf8'));

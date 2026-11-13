@@ -15,7 +15,7 @@ import test from 'node:test';
 import { CHECKS } from '../dist/doctor/checks.js';
 import { createFixture, runCli } from './helpers/fixture.mjs';
 
-const CONFIG_FILE = 'harness.config.json';
+const CONFIG_FILE = 'devscene.config.json';
 const CHECK_ID = 'tree-guards';
 const NO_GUARDS_SENTENCE = 'no treeGuards are configured, so a unit runs no tree guard';
 

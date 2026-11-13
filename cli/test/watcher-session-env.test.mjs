@@ -26,13 +26,13 @@ import { INIT_SCRIPTS_DIR, runBash } from './helpers/fixture.mjs';
 import { scaleBound } from './helpers/timing.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const CEILING = 'CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS';
 const BASE_PROFILE = '.claude/settings.autonomous.json';
 const JOB_TIMEOUT_MS = scaleBound(120_000);
 
 /** The strip set as the shipped profile and the watcher spell it today. */
-const STRIPPED = ['GH_TOKEN', 'GITHUB_TOKEN', 'HARNESS_PR_TOKEN', 'NPM_TOKEN', 'HARNESS_PUSH_URL', 'HARNESS_GIT_TOKEN'];
+const STRIPPED = ['GH_TOKEN', 'GITHUB_TOKEN', 'HARNESS_PR_TOKEN', 'NPM_TOKEN', 'DEVSCENE_PUSH_URL', 'DEVSCENE_GIT_TOKEN'];
 
 function shellQuote(value) {
   return `'${value.replaceAll("'", `'\\''`)}'`;
@@ -43,9 +43,9 @@ function exported(names) {
   return Object.fromEntries(names.map((name) => [name, `value-of-${name}`]));
 }
 
-/** The fixture's `harness.config.json` with `sandbox.passEnv` set to `names`, or removed for `undefined`. */
+/** The fixture's `devscene.config.json` with `sandbox.passEnv` set to `names`, or removed for `undefined`. */
 async function setPassEnv(f, names) {
-  const configPath = join(f.dir, 'harness.config.json');
+  const configPath = join(f.dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   const sandbox = { ...(config.sandbox ?? {}) };
   if (names === undefined) delete sandbox.passEnv;
@@ -123,7 +123,7 @@ test('job mode: the session starts without the strip set, and the watcher keeps 
       RUNNER_TEMP: runnerTemp,
       REMOTE_CONTROL_POLL_SECS: '1',
       POLL_INTERVAL_SECS: '1',
-      HARNESS_GH_CLI: join(rec, 'gh-never-called'),
+      DEVSCENE_GH_CLI: join(rec, 'gh-never-called'),
       ANTHROPIC_API_KEY: 'value-of-ANTHROPIC_API_KEY',
       [CEILING]: '600000',
       ...exported(STRIPPED),
@@ -136,7 +136,7 @@ test('job mode: the session starts without the strip set, and the watcher keeps 
   const names = f.sessionNames();
   assert.ok(names, `the stub never ran:\n${f.watcherLog()}`);
   for (const name of STRIPPED) assert.equal(names.has(name), false, `${name} reached the session`);
-  for (const name of ['ANTHROPIC_API_KEY', 'HARNESS_MAIN_REPO', CEILING, 'GITHUB_RUN_ID']) {
+  for (const name of ['ANTHROPIC_API_KEY', 'DEVSCENE_MAIN_REPO', CEILING, 'GITHUB_RUN_ID']) {
     assert.ok(names.has(name), `${name} did not reach the session`);
   }
   assert.equal(f.sessionCeiling(), '0');
@@ -158,7 +158,7 @@ test('locally: the session keeps only the allow-list, and the strip wins over sa
     assert.ok(names, `the stub never ran:\n${f.watcherLog()}`);
     assert.equal(names.has('SOME_CLOUD_KEY'), false);
     assert.ok(names.has('PATH') && names.has('HOME'), [...names].join(' '));
-    assert.ok(names.has('HARNESS_MAIN_REPO'), [...names].join(' '));
+    assert.ok(names.has('DEVSCENE_MAIN_REPO'), [...names].join(' '));
     assert.equal(f.sessionCeiling(), '0');
   });
 

@@ -66,6 +66,7 @@ import {
   type JobSurfacesTarget,
 } from '../doctor/checks.js';
 import { NOTIFY_SCRIPT_NAME, outerLoopScriptPath } from '../generators/outerLoopScripts.js';
+import { RUNNER_VARIABLE } from '../remote/githubActions.js';
 import type { CommandContext, Subcommand } from './registry.js';
 
 /** The command's one-line summary, in the usage block and at the head of its own `--help`. */
@@ -209,8 +210,8 @@ const DOCTOR_USAGE: readonly string[] = Object.freeze([
   '',
   `${CHECK_GITHUB_FLAG} is off by default for the same reason. With it on and execution.target`,
   'github-actions, remote-github asks gh whether it is authenticated, whether GitHub knows',
-  'harness-run.yml and harness-resume.yml, which secret names are set (names only, never values) and',
-  'which runner HARNESS_RUNNER selects. A call that times out or cannot reach GitHub warns rather than',
+  'devscene-run.yml and devscene-resume.yml, which secret names are set (names only, never values) and',
+  `which runner ${RUNNER_VARIABLE} selects. A call that times out or cannot reach GitHub warns rather than`,
   'fails. Every call is a read, so --dry-run does not suppress it either. With forge github,',
   "branch-protection reads each protected branch's ruleset rules, and its classic branch protection",
   'where those fall short; every read is a GET. Without the flag that check warns that it did not',
@@ -227,7 +228,7 @@ const DOCTOR_USAGE: readonly string[] = Object.freeze([
   'default dontAsk mode. It reaches no network.',
   '',
   `${JOB_SURFACES_FLAG}=<branch> runs one check, job-surfaces, instead of the list, and takes no other`,
-  "doctor option. It reads harness.config.json from refs/remotes/origin/<branch>, never from the run",
+  "doctor option. It reads devscene.config.json from refs/remotes/origin/<branch>, never from the run",
   "branch, and fails when the run branch's own commits — those since its merge base with",
   'origin/<defaultBranch> — changed any path the remote job runs or loads from its checkout. With',
   '@<commit> (a full 40- or 64-character lower-case id), the configuration is read from <commit> and the',
@@ -354,7 +355,7 @@ function parseOptions(argv: readonly string[]): DoctorOptions {
     }
     throw new HarnessError(
       token.startsWith('-')
-        ? `doctor: unknown option ${JSON.stringify(token)} — the options doctor takes of its own are ${OWN_FLAGS.join(', ')}; run \`npx autonomous-sdlc-harness doctor --help\` for them and for the global options it accepts`
+        ? `doctor: unknown option ${JSON.stringify(token)} — the options doctor takes of its own are ${OWN_FLAGS.join(', ')}; run \`npx devscene doctor --help\` for them and for the global options it accepts`
         : `doctor: unexpected argument ${JSON.stringify(token)} — doctor takes no arguments, and checks the repository containing the current directory (or --cwd)`,
     );
   }
@@ -485,7 +486,7 @@ function sendTestNotification(ctx: CommandContext, checks: CheckContext): void {
   const script = outerLoopScriptPath(repoRoot, config, NOTIFY_SCRIPT_NAME);
   if (!existsSync(script)) {
     ctx.report.warn(
-      `${TEST_NOTIFICATION_FLAG} sent nothing: no notifier at ${script}. \`init\` writes it into the configured scriptsDir, so nothing there means it was removed or scriptsDir was changed without a re-run — run \`npx autonomous-sdlc-harness init\` to write it back. The exit status is the checks' and is unchanged`,
+      `${TEST_NOTIFICATION_FLAG} sent nothing: no notifier at ${script}. \`init\` writes it into the configured scriptsDir, so nothing there means it was removed or scriptsDir was changed without a re-run — run \`npx devscene init\` to write it back. The exit status is the checks' and is unchanged`,
     );
     return;
   }

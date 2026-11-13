@@ -1,11 +1,11 @@
 {
-  "$schema": "../schemas/harness.config.schema.json",
+  "$schema": "../schemas/devscene.config.schema.json",
   "version": 1,
   "projectName": "acme-shop",
   "defaultBranch": "main",
   "protectedBranches": ["main", "release/*"],
   "forge": "github",
-  "stateDir": "sdlc-harness/",
+  "stateDir": "devscene/",
   "appDir": "packages/storefront",
   "scriptsDir": "packages/storefront/scripts",
   "githooksDir": "githooks",

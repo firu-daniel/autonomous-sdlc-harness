@@ -4,7 +4,7 @@
  *
  * **The rule this suite enforces: a branch whose own commits changed a path the job runs or loads is
  * refused before the job trusts it, and the trusted configuration is the default branch's.** Each
- * case builds a bare origin, a default branch carrying `harness.config.json`, a run branch pushed
+ * case builds a bare origin, a default branch carrying `devscene.config.json`, a run branch pushed
  * over it, and a clone checked out on the run branch with `refs/remotes/origin/*` fetched. No case
  * reaches the network.
  *
@@ -12,8 +12,8 @@
  * observed, the mutation reverted:
  * - the configuration read from `HEAD` instead of the option's branch → "the branch rewrote its
  *   config" fails: `expected exit 1, got 0`.
- * - `harness.config.json` filtered out of `jobSurfacePaths`' answer → "a branch commit changing
- *   harness.config.json" and "the branch rewrote its config" fail: `expected exit 1, got 0`.
+ * - `devscene.config.json` filtered out of `jobSurfacePaths`' answer → "a branch commit changing
+ *   devscene.config.json" and "the branch rewrote its config" fail: `expected exit 1, got 0`.
  * - the comparison taken from `refs/remotes/origin/<defaultBranch>` instead of the merge base →
  *   "merged default" fails: `expected exit 0, got 1`.
  * - `refs/remotes/origin/<defaultBranch>` as the base and `refs/remotes/origin/<branch>` as the
@@ -39,13 +39,13 @@ import { runCli, runGit } from './helpers/fixture.mjs';
 
 const DEFAULT_BRANCH = 'main';
 const RUN_BRANCH = 'harness/run-1';
-const CONFIG_FILE = 'harness.config.json';
+const CONFIG_FILE = 'devscene.config.json';
 
 const CONFIG = {
   version: 1,
   projectName: 'demo',
   defaultBranch: DEFAULT_BRANCH,
-  stateDir: 'sdlc-harness/',
+  stateDir: 'devscene/',
   scriptsDir: 'scripts',
   githooksDir: 'githooks',
   layers: [{ name: 'general', path: '.', conventions: '.claude/context/conventions.md' }],

@@ -2,7 +2,7 @@
 
 ## Verdict
 
-**Do not recommend** a work report for the stub. It does one thing: an optional `Read` of `harness.config.json`, then a one-line `error:`. Its allowlist is `Read` only (`plugin/agents/qa-tester-mobile-mcp.md:4`), so it could not write a report, and its contract says "write **no** files" on every branch (`:10`, `:12`, `:14`). No flow ever dispatches it by name: flows always dispatch `qa-tester`, and that agent's own driver gate stops a mobile configuration (`plugin/commands/branch-qa-test.md:9`, `plugin/agents/README.txt:18-30`). **Recommend the thinning, though.** The file is 1 337 words, of which 89 % is REFERENCE (42 %) or REDUNDANT (47 %) per the classification table below; only 6 % is ACTION. The thinned stub, inlined below, is 360 words. The cost also lands on `ui-tests-plan-writer` and `ui-tests-plan-reviewer`, which read this file up front under `qa.driver: mobile-mcp` (`plugin/agents/ui-tests-plan-writer.md:84`, `plugin/agents/ui-tests-plan-reviewer.md:64`). When the variant is implemented, it should inherit `qa-tester`'s template and swap only the driver items. As in the sibling `qa-tester-mobile-maestro` report, its report goes in the FAIL index and is returned inline on PASS.
+**Do not recommend** a work report for the stub. It does one thing: an optional `Read` of `devscene.config.json`, then a one-line `error:`. Its allowlist is `Read` only (`plugin/agents/qa-tester-mobile-mcp.md:4`), so it could not write a report, and its contract says "write **no** files" on every branch (`:10`, `:12`, `:14`). No flow ever dispatches it by name: flows always dispatch `qa-tester`, and that agent's own driver gate stops a mobile configuration (`plugin/commands/branch-qa-test.md:9`, `plugin/agents/README.txt:18-30`). **Recommend the thinning, though.** The file is 1 337 words, of which 89 % is REFERENCE (42 %) or REDUNDANT (47 %) per the classification table below; only 6 % is ACTION. The thinned stub, inlined below, is 360 words. The cost also lands on `ui-tests-plan-writer` and `ui-tests-plan-reviewer`, which read this file up front under `qa.driver: mobile-mcp` (`plugin/agents/ui-tests-plan-writer.md:84`, `plugin/agents/ui-tests-plan-reviewer.md:64`). When the variant is implemented, it should inherit `qa-tester`'s template and swap only the driver items. As in the sibling `qa-tester-mobile-maestro` report, its report goes in the FAIL index and is returned inline on PASS.
 
 ## Read tree
 
@@ -10,7 +10,7 @@
 |---|---|---|
 | `plugin/agents/qa-tester-mobile-mcp.md` | up-front (the agent definition) | 1 337 |
 | `.claude/CLAUDE.md` (template `cli/templates/claude/CLAUDE.md`: 1 320) | up-front (auto-loaded) | 1 695 |
-| `harness.config.json` (only `phases.qa`, `qa.driver`) | up-front (the only file the stub reads: `:10`, `:12`, `:28`) | 154 (this repo) |
+| `devscene.config.json` (only `phases.qa`, `qa.driver`) | up-front (the only file the stub reads: `:10`, `:12`, `:28`) | 154 (this repo) |
 | `plugin/agents/qa-tester.md` → `## Output contract` → "3. Tests blocked" | cited (`:14`), but the error line is inlined at `:17`, so there is no need to read it | 7 201 (whole file) |
 | `plugin/agents/qa-tester.md` (operating contract) | cited (`:57`) for an implementer only; never read on a dispatch, which stops first | (same) |
 | `plugin/agents/qa-tester-mobile-maestro.md` | named in the driver-gate routing (`:12`); not read | 1 183 |
@@ -54,7 +54,7 @@ The only true ACTIONs are: read two config keys, pick one of three `error:` reas
 **For the stub: none.** If one were forced, it would be:
 
 ```markdown
-- [ ] S1. **Resolve gates** — Read `phases.qa` and `qa.driver` from `harness.config.json`; nothing else.
+- [ ] S1. **Resolve gates** — Read `phases.qa` and `qa.driver` from `devscene.config.json`; nothing else.
 - [ ] S2. **Return the blocker** — Return the matching `error:` line verbatim; write no file.
 ```
 
@@ -100,7 +100,7 @@ tools: Read
 model: inherit
 ---
 
-You are the **Interactive Test Agent — `mobile-mcp` variant**, declared but not implemented in this release. On every dispatch read only `phases.qa` and `qa.driver` from `harness.config.json`; read no plan, reserve no account, open no session, write **no** files, and return one `error:` line (`${CLAUDE_PLUGIN_ROOT}/agents/qa-tester.md` → `## Output contract` → "3. Tests blocked"), its reason the first that holds:
+You are the **Interactive Test Agent — `mobile-mcp` variant**, declared but not implemented in this release. On every dispatch read only `phases.qa` and `qa.driver` from `devscene.config.json`; read no plan, reserve no account, open no session, write **no** files, and return one `error:` line (`${CLAUDE_PLUGIN_ROOT}/agents/qa-tester.md` → `## Output contract` → "3. Tests blocked"), its reason the first that holds:
 
 1. `phases.qa` is not `true` — reason: the interactive-test phase is disabled.
 2. `qa.driver` is not `mobile-mcp` — reason: name the configured driver and the variant that implements it: `web-playwright` → `${CLAUDE_PLUGIN_ROOT}/agents/qa-tester.md` (implemented), `mobile-maestro` → `${CLAUDE_PLUGIN_ROOT}/agents/qa-tester-mobile-maestro.md` (declared, not implemented).
@@ -129,7 +129,7 @@ The draft keeps what `plugin/agents/README.txt:25-30` says a stub carries: valid
 |---|---|---|---|
 | `qa-tester-mobile-mcp.md` (up-front) | 1 337 | 360 | −977 |
 | `.claude/CLAUDE.md` (up-front, unchanged) | 1 695 | 1 695 | 0 |
-| `harness.config.json` (up-front, unchanged) | 154 | 154 | 0 |
+| `devscene.config.json` (up-front, unchanged) | 154 | 154 | 0 |
 | Work report template | 0 | 0 (none for the stub) | 0 |
 | **Up-front total** | **3 186** | **2 209** | **−977 (−31 %)** |
 | Stub only (the sibling report's basis) | 1 337 | 360 | −977 (−73 %) |
@@ -149,7 +149,7 @@ The draft keeps what `plugin/agents/README.txt:25-30` says a stub carries: valid
 
 ## Risks and costs
 
-- **Biggest risk (thinning, not the report): the implementation sweep.** `cli/src/config/model.ts:459-467` names this stub as a load-bearing hit of the `not implemented in this release` grep. A thinning that rewords the error literal or drops that phrase breaks the sweep. It would also break the agreement with `cli/src/generators/harnessConfig.ts:623`, `cli/src/config/check.ts:670` and `schemas/harness.config.schema.json:248`, which all promise that "every interactive-test dispatch returns a blocker". Keep the error line byte-identical.
+- **Biggest risk (thinning, not the report): the implementation sweep.** `cli/src/config/model.ts:459-467` names this stub as a load-bearing hit of the `not implemented in this release` grep. A thinning that rewords the error literal or drops that phrase breaks the sweep. It would also break the agreement with `cli/src/generators/harnessConfig.ts:623`, `cli/src/config/check.ts:670` and `schemas/devscene.config.schema.json:248`, which all promise that "every interactive-test dispatch returns a blocker". Keep the error line byte-identical.
 - **Tool-closure audit risk:** cutting the `## Tool closure` rationale could invite a maintainer to "restore" the default tool set on sight, which is the outcome `:42` guards against. Keep the one-line "widen only at implementation; never a browser namespace" rule.
 - **Readers' blocker rule:** renaming, moving or removing the file makes `ui-tests-plan-writer` and `ui-tests-plan-reviewer` return `blocker:` (`ui-tests-plan-writer.md:87`, `ui-tests-plan-reviewer.md:71`).
 - **Tests:** no test in `cli/test/` reads this file's prose or description. `init.test.mjs:2137-2143` and `config-command.test.mjs:255` key only on the `mobile-mcp` enum value.

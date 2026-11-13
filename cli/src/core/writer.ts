@@ -37,19 +37,19 @@
  *
  * | Artifact | Policy | Why |
  * |---|---|---|
- * | `harness.config.json` | `create-if-absent`, **not upgraded by `--force`** | The adopter edits it; a re-run must never rewrite it, and neither may `--force`: config is read-if-present, always. `init --reset-config` is the one path that rebuilds it, after a `.bak`. |
+ * | `devscene.config.json` | `create-if-absent`, **not upgraded by `--force`** | The adopter edits it; a re-run must never rewrite it, and neither may `--force`: config is read-if-present, always. `init --reset-config` is the one path that rebuilds it, after a `.bak`. |
  * | The permission profile (`.claude/settings.autonomous.json`) | `create-if-absent` | Hand-tuned after generation; an overwrite silently drops allow entries. |
- * | `.claude/CLAUDE.md` | `create-if-absent` | `/autonomous-sdlc-harness:harness-analyze` fills it; a re-run must not undo that. It carries neither the `<!-- harness:unfilled -->` marker nor the `**What belongs here**` block, so its setup state is the `<!-- harness:setup-pending -->` banner and `doctor`'s `setup-analysis` check, not the two-part test below. |
- * | `.claude/harness-task-offer.md` | `create-if-absent` | Nothing fills it — the always-loaded file's `## Where a change request runs` fence points at it by name, so a re-run must keep the adopter's edited copy and `--force` after a `.bak` is the upgrade path. |
- * | `.claude/context/*.md` stubs | `create-if-absent` | `/autonomous-sdlc-harness:harness-analyze` fills them; a re-run must not undo that. Filled is checkable, by the two-part test `init`, `doctor` and the command all apply: a stub still carrying its `<!-- harness:unfilled -->` marker **and** its `**What belongs here**` block is an untouched skeleton, and anything else was written — by the command or by hand. |
+ * | `.claude/CLAUDE.md` | `create-if-absent` | `/devscene:analyze` fills it; a re-run must not undo that. It carries neither the `<!-- devscene:unfilled -->` marker nor the `**What belongs here**` block, so its setup state is the `<!-- devscene:setup-pending -->` banner and `doctor`'s `setup-analysis` check, not the two-part test below. |
+ * | `.claude/devscene-task-offer.md` | `create-if-absent` | Nothing fills it — the always-loaded file's `## Where a change request runs` fence points at it by name, so a re-run must keep the adopter's edited copy and `--force` after a `.bak` is the upgrade path. |
+ * | `.claude/context/*.md` stubs | `create-if-absent` | `/devscene:analyze` fills them; a re-run must not undo that. Filled is checkable, by the two-part test `init`, `doctor` and the command all apply: a stub still carrying its `<!-- devscene:unfilled -->` marker **and** its `**What belongs here**` block is an untouched skeleton, and anything else was written — by the command or by hand. |
  * | `.claude/settings.json`, `.mcp.json` | `merge-json` (missing keys only) | Shared with other tooling; the adopter's own entries survive. |
  * | `.gitignore` | `merge-lines` (a managed block, lines not already present) | Every repo already has one. |
  * | The `stateDir` tree and its per-directory READMEs | `ensure-dir` + `create-if-absent` | Creating what is missing is the whole operation; an adopter may have rewritten a contract sentence. |
  * | The ledgers `lessons.md` / `improvement_suggestions.md` | `create-if-absent`, **not upgraded by `--force`** | Ledgers accumulate and nothing can re-derive one; the engine's `.bak` is single-generation, so `--force` may not touch them. |
- * | `.github/workflows/harness-run.yml` | `create-if-absent` | Written only when `execution.target` is `github-actions`; the adopter tunes the timeouts and the runner. `init --upgrade-workflows` is the upgrade path: it replaces the file after a `.bak`, only when its rendered CLI-version pin differs from this CLI's, and re-pins it. `--force` after a `.bak` is the blunt alternative. |
- * | `.github/workflows/harness-resume.yml` | `create-if-absent` | Written only when `execution.target` is `github-actions`; the adopter tunes the cron. `init --upgrade-workflows` is the upgrade path: after a `.bak`, only when `harness-run.yml`'s rendered pin differs, carrying the file's `- cron:` lines into the re-render. `--force` after a `.bak` is the blunt alternative. |
- * | `.github/workflows/harness-trigger.yml` | `create-if-absent` | Written only when `forge` is `github` and `execution.target` is `github-actions`; no pin, so `init --upgrade-workflows` leaves it; `--force` after a `.bak` is its upgrade path, as for the scripts it calls. |
- * | `.github/workflows/harness-control.yml` | `create-if-absent` | Written only when `forge` is `github` and `execution.target` is `github-actions`; no pin, so `init --upgrade-workflows` does not re-render it. Any `init` replaces, after a `.bak`, a copy byte-identical to a release's copy GitHub could not parse (today 0.6.1), and keeps every other copy; `--force` after a `.bak` remains the route for an edited one, as for the scripts it calls. |
+ * | `.github/workflows/devscene-run.yml` | `create-if-absent` | Written only when `execution.target` is `github-actions`; the adopter tunes the timeouts and the runner. `init --upgrade-workflows` is the upgrade path: it replaces the file after a `.bak`, only when its rendered CLI-version pin differs from this CLI's, and re-pins it. `--force` after a `.bak` is the blunt alternative. |
+ * | `.github/workflows/devscene-resume.yml` | `create-if-absent` | Written only when `execution.target` is `github-actions`; the adopter tunes the cron. `init --upgrade-workflows` is the upgrade path: after a `.bak`, only when `devscene-run.yml`'s rendered pin differs, carrying the file's `- cron:` lines into the re-render. `--force` after a `.bak` is the blunt alternative. |
+ * | `.github/workflows/devscene-trigger.yml` | `create-if-absent` | Written only when `forge` is `github` and `execution.target` is `github-actions`; no pin, so `init --upgrade-workflows` leaves it; `--force` after a `.bak` is its upgrade path, as for the scripts it calls. |
+ * | `.github/workflows/devscene-control.yml` | `create-if-absent` | Written only when `forge` is `github` and `execution.target` is `github-actions`; no pin, so `init --upgrade-workflows` does not re-render it. `--force` after a `.bak` is its upgrade path, as for the scripts it calls. |
  * | Git hook `pre-push`, wrapper scripts | `create-if-absent` | Adopter may have edited the guard. The hook alone is also replaced, after a `.bak`, by the one run that rebuilt the config it is rendered from (`init --reset-config`) — and only where its rendered `case` label no longer matches the set that config resolves, never where the label cannot be read. |
  *
  * `--force` upgrades **`create-if-absent` only** to overwrite-after-backup, and only where the
@@ -60,7 +60,7 @@
  * That override is what the two `not upgraded by --force` rows above are written against, and both
  * rows are the contract this engine now supports rather than a generator's private discipline. Two
  * callers take it up **for a whole artifact class**: `config/io.ts`'s `saveConfig` for
- * `harness.config.json` — `'never'` on an ordinary `init`, `'always'` on `init --reset-config` —
+ * `devscene.config.json` — `'never'` on an ordinary `init`, `'always'` on `init --reset-config` —
  * and `generators/stateDir.ts` for the two ledgers, `'never'` and nothing else, because no command
  * rebuilds a ledger. **Four more** read the tree and answer **per request**: `generators/claudeContext.ts`
  * sets `'never'` on a conventions stub that is already a skeleton whose `.bak` holds a filled
@@ -70,12 +70,11 @@
  * `generators/stateDir.ts` sets `'never'` on a run-artifact README whose bytes already are its
  * template, for that same reason; and
  * `generators/githooks.ts` sets `'always'` on the `pre-push` hook when the run rebuilt
- * `harness.config.json` (`init --reset-config`) **and** the hook's rendered `case` label no longer
+ * `devscene.config.json` (`init --reset-config`) **and** the hook's rendered `case` label no longer
  * matches the set that config resolves, so the run that made the guard wrong is the run that
  * re-renders it; and `generators/githubWorkflows.ts` sets `'always'` on both workflows under
- * `init --upgrade-workflows` when `harness-run.yml`'s rendered CLI-version pin differs from this CLI's
- * (on `harness-resume.yml` only when its bytes differ from the re-render), and on
- * `harness-control.yml` on any `init` when its bytes are a release's unparsable copy. None of them is a further
+ * `init --upgrade-workflows` when `devscene-run.yml`'s rendered CLI-version pin differs from this CLI's
+ * (on `devscene-resume.yml` only when its bytes differ from the re-render). None of them is a further
  * row above — all keep `create-if-absent`, and every other forced run over them still replaces after
  * a `.bak`.
  *
@@ -153,7 +152,7 @@ export interface WriteRequest {
    *
    * **Its class-wide users are the rows of the table above marked `not upgraded by --force`, and
    * only those** — every other user takes it per request, below:
-   * `config/io.ts`'s `saveConfig` for `harness.config.json`, where `'never'` is what
+   * `config/io.ts`'s `saveConfig` for `devscene.config.json`, where `'never'` is what
    * stops a `--force` run discarding an adopter's edited config and `'always'` is what lets
    * `init --reset-config` rebuild it on a run with no `--force`; and `generators/stateDir.ts` for
    * the two ledgers, `'never'` only, because an accumulating ledger has no derivable content for
@@ -170,7 +169,7 @@ export interface WriteRequest {
    * whatever the previous forced run left there. `generators/stateDir.ts` sets `'never'` on a
    * run-artifact README whose bytes already are its template, for that same identical-bytes reason.
    * `generators/githooks.ts` sets `'always'` on the
-   * `pre-push` hook of the run that rebuilt `harness.config.json`, and only where the label that
+   * `pre-push` hook of the run that rebuilt `devscene.config.json`, and only where the label that
    * hook renders no longer matches the set the rebuilt file resolves — the same reasoning in the
    * other direction: a label the reader cannot get back out is a guard somebody wrote by hand, so
    * that request sets nothing and the hook is kept, rather than spending the one reprieve on the

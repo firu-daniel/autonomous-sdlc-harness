@@ -243,7 +243,7 @@ export function applySandbox(profile: JsonObject, { repoRoot, config }: SandboxI
     sandbox['failIfUnavailable'] = false;
     appendReadme(
       profile,
-      `${SANDBOX_OPT_OUT_MARKER}: ${(expected.optOutReason ?? '').replace(/\.$/, '')}. Every Bash command an unattended run issues runs unsandboxed; \`failIfUnavailable\` is false with it, so a platform with no supported sandbox still starts; every \`deny\` entry still applies. To undo it, delete sandbox.optOut from ${CONFIG_FILENAME} and regenerate this file with \`npx autonomous-sdlc-harness init --force\`, which keeps a .bak of this one.`,
+      `${SANDBOX_OPT_OUT_MARKER}: ${(expected.optOutReason ?? '').replace(/\.$/, '')}. Every Bash command an unattended run issues runs unsandboxed; \`failIfUnavailable\` is false with it, so a platform with no supported sandbox still starts; every \`deny\` entry still applies. To undo it, delete sandbox.optOut from ${CONFIG_FILENAME} and regenerate this file with \`npx devscene init --force\`, which keeps a .bak of this one.`,
     );
   }
 }

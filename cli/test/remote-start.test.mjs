@@ -14,7 +14,7 @@
  * and pushed to the fixture's bare `origin` as its default branch, so `create-worktree.sh` cuts a real
  * clone from it at the derived sibling path. A pre-existing copy at that path is a clone with its own
  * registry record, made by the library's `hr_clone_create_var`; one case plants a hand-made linked
- * worktree there instead. `gh` is a recorder stub reached through `HARNESS_GH_CLI`, appending each
+ * worktree there instead. `gh` is a recorder stub reached through `DEVSCENE_GH_CLI`, appending each
  * argument vector as one JSON line, as in `remote-run.test.mjs`. No case reaches the network.
  *
  * RED ONCE — each mutation applied once to `cli/templates/scripts/remote-run.sh`, the file run, the
@@ -38,7 +38,7 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REGISTRY = `${STATE_DIR}/autonomous_logs/registry.json`;
 const PROMPT_REL = `${STATE_DIR}/task_prompts/feat_x_task_prompt.md`;
 const PROMPT_BYTES = 'Add comments to a content item.\n\n  "quoted" $HOME `tick` ünïcødé\n';
@@ -56,7 +56,7 @@ if (failOn && args.join(' ').startsWith(failOn)) {
 `;
 
 const TASK_DISPATCH =
-  'workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=task -f resume=none -f chain=0';
+  'workflow run devscene-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=task -f resume=none -f chain=0';
 
 /**
  * An `init`-wired fixture adopted on `origin`'s default branch, `main` among its protected branches,
@@ -76,7 +76,7 @@ async function startFixture(t, target = 'github-actions') {
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target };
   config.protectedBranches = [...new Set([...(config.protectedBranches ?? []), 'main', config.defaultBranch])];
@@ -107,7 +107,7 @@ async function startFixture(t, target = 'github-actions') {
     prompt,
     defaultBranch: config.defaultBranch,
     start: (args, env = {}) =>
-      runBash(dir, [SCRIPT, 'start', ...args], { HARNESS_GH_CLI: stub, STUB_LOG: log, ...env }),
+      runBash(dir, [SCRIPT, 'start', ...args], { DEVSCENE_GH_CLI: stub, STUB_LOG: log, ...env }),
     calls: () =>
       existsSync(log)
         ? readFileSync(log, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line).join(' '))
@@ -167,7 +167,7 @@ test('a start commits the prompt on origin/feat_x, then sends exactly one task d
 test('a relative --prompt-file resolves against the caller\'s directory', async (t) => {
   const f = await startFixture(t);
   const result = await runBash(dirname(f.prompt), [join(f.dir, SCRIPT), 'start', 'feat_x', '--prompt-file', 'prompt.md'], {
-    HARNESS_GH_CLI: join(dirname(f.prompt), 'gh'),
+    DEVSCENE_GH_CLI: join(dirname(f.prompt), 'gh'),
     STUB_LOG: join(dirname(f.prompt), 'gh.log'),
   });
   assert.equal(result.status, 0, result.stderr);

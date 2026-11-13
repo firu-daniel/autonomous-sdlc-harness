@@ -2,7 +2,7 @@
 # docs-search-server.sh — start the docs-retrieval MCP server for the checkout
 # this script sits in, on the backend `docs.retrievalBackend` selects.
 #
-# WHO RUNS IT. The agent runner, from the `harness-docs` entry `init` writes into
+# WHO RUNS IT. The agent runner, from the `devscene-docs` entry `init` writes into
 # `.mcp.json` when `docs.retrieval` is on — never a dispatched agent's Bash call,
 # so its row in `cli/src/generators/outerLoopScripts.ts` is
 # `agentInvocable: false` and the generated permission profile carries no entry
@@ -34,11 +34,11 @@
 # an ignored `SIGINT`, so an `INT` passed on as itself would never arrive.
 #
 # MIRRORS — a change to any owner below is an edit here too:
-#   `retrieval/runtime` and `node_modules/autonomous-sdlc-harness/dist/cli.js`
+#   `retrieval/runtime` and `node_modules/devscene/dist/cli.js`
 #     mirror `RETRIEVAL_CACHE_DIRNAME`, `RETRIEVAL_RUNTIME_DIRNAME` and
 #     `RUNTIME_CLI_RELATIVE` in `cli/src/retrieval/runtime.ts`;
 #   `hr_cache_dir` mirrors `machineCacheDir()` in `cli/src/machine/paths.ts`;
-#   `harness-docs-retrieval`, `serve-mcp`, `HARNESS_DOCS_RETRIEVAL_DATABASE_URL`,
+#   `devscene-docs-retrieval`, `serve-mcp`, `DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL`,
 #     the default connection string and exit 3 mirror `PYTHON_RETRIEVAL_COMMAND`,
 #     `PYTHON_SERVE_SUB_COMMAND`, `PYTHON_DATABASE_URL_VARIABLE`,
 #     `PYTHON_DEFAULT_DATABASE_URL` and `PYTHON_BACKEND_UNAVAILABLE_EXIT` in
@@ -76,28 +76,28 @@ backend=typescript
 config_status=0
 hr_config_load "$root" || config_status=$?
 if [ "$config_status" -eq 2 ]; then
-  echo "docs-search-server: $root/harness.config.json could not be read, so the default backend (typescript) was taken" >&2
+  echo "docs-search-server: $root/devscene.config.json could not be read, so the default backend (typescript) was taken" >&2
 elif [ "$config_status" -eq 0 ] && hr_docs_retrieval_applies "$root"; then
   backend_status=0
   backend="$(hr_docs_retrieval_backend "$root")" || backend_status=$?
   if [ "$backend_status" -ne 0 ]; then
-    echo "docs-search-server: docs.retrievalBackend in $root/harness.config.json is neither \`typescript\` nor \`python\`; set one of them, then run \`npx autonomous-sdlc-harness doctor\`" >&2
+    echo "docs-search-server: docs.retrievalBackend in $root/devscene.config.json is neither \`typescript\` nor \`python\`; set one of them, then run \`npx devscene doctor\`" >&2
     exit 1
   fi
 fi
 
 if [ "$backend" = python ]; then
-  if ! command -v harness-docs-retrieval >/dev/null 2>&1; then
-    echo "docs-search-server: the Python backend is selected but \`harness-docs-retrieval\` does not resolve on PATH (interpreter or package missing); see docs/retrieval.md and run \`npx autonomous-sdlc-harness doctor\`" >&2
+  if ! command -v devscene-docs-retrieval >/dev/null 2>&1; then
+    echo "docs-search-server: the Python backend is selected but \`devscene-docs-retrieval\` does not resolve on PATH (interpreter or package missing); see docs/retrieval.md and run \`npx devscene doctor\`" >&2
     exit 3
   fi
-  if [ -z "${HARNESS_DOCS_RETRIEVAL_DATABASE_URL-}" ]; then
-    HARNESS_DOCS_RETRIEVAL_DATABASE_URL='postgresql://harness:harness@127.0.0.1:5432/docs_retrieval'
+  if [ -z "${DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL-}" ]; then
+    DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL='postgresql://devscene:devscene@127.0.0.1:5432/docs_retrieval'
   fi
-  export HARNESS_DOCS_RETRIEVAL_DATABASE_URL
+  export DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL
 
   # A background job's stdin is /dev/null unless it is passed explicitly.
-  harness-docs-retrieval serve-mcp --repo "$root" <&0 &
+  devscene-docs-retrieval serve-mcp --repo "$root" <&0 &
   child=$!
   trapped=0
   trap 'trapped=1; kill -TERM "$child" 2>/dev/null || true' TERM
@@ -117,7 +117,7 @@ if [ "$backend" = python ]; then
   if [ "$child_status" -eq 0 ]; then
     exit 0
   fi
-  echo "docs-search-server: the Python backend exited with status $child_status before or while serving; the line above (\`harness-docs-retrieval: …\`) names why; run \`npx autonomous-sdlc-harness doctor\`" >&2
+  echo "docs-search-server: the Python backend exited with status $child_status before or while serving; the line above (\`devscene-docs-retrieval: …\`) names why; run \`npx devscene doctor\`" >&2
   exit 3
 fi
 
@@ -125,10 +125,10 @@ if ! cache_dir="$(hr_cache_dir)"; then
   echo "docs-search-server: neither XDG_CACHE_HOME nor HOME is set, so the retrieval runtime cannot be located" >&2
   exit 1
 fi
-entry="$cache_dir/retrieval/runtime/node_modules/autonomous-sdlc-harness/dist/cli.js"
+entry="$cache_dir/retrieval/runtime/node_modules/devscene/dist/cli.js"
 
 if [ ! -f "$entry" ]; then
-  echo "docs-search-server: no retrieval runtime at $entry; run \`npx autonomous-sdlc-harness init\` in a repository with docs.retrieval on" >&2
+  echo "docs-search-server: no retrieval runtime at $entry; run \`npx devscene init\` in a repository with docs.retrieval on" >&2
   exit 1
 fi
 

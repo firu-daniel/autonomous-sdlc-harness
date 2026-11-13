@@ -85,7 +85,7 @@ test('(b) with the option absent, detection and the stub win over the same files
 });
 
 test('(c) with the option on, an on-disk stub is not carried', () => {
-  const root = fixture({ 'typecheck.sh': 'harness_fail "harness: set commands.typecheck in harness.config.json"' });
+  const root = fixture({ 'typecheck.sh': 'harness_fail "devscene: set commands.typecheck in devscene.config.json"' });
   const { byFile } = run(root, { config: config(), carryOnDiskCommandLines: true });
 
   assert.equal(byFile['typecheck.sh'].carried, false);

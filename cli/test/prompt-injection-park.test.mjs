@@ -36,7 +36,7 @@ before(async () => {
   dir = fixture.dir;
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
-  stateDir = JSON.parse(readFileSync(join(dir, 'harness.config.json'), 'utf8')).stateDir.replace(/\/+$/, '');
+  stateDir = JSON.parse(readFileSync(join(dir, 'devscene.config.json'), 'utf8')).stateDir.replace(/\/+$/, '');
 });
 
 after(async () => {
@@ -156,10 +156,10 @@ test("a screen park's Q1 names the working copy, branch-status, the branch on Gi
   const q1 = text.slice(text.indexOf('\n## Q1 '));
   assert.ok(q1.startsWith(`\n## Q1 — Review \`${path}\` before this run goes on\n`), q1);
   assert.match(q1, /working copy/);
-  assert.match(q1, /`\/autonomous-sdlc-harness:branch-status` prints for/);
+  assert.match(q1, /`\/devscene:branch-status` prints for/);
   assert.ok(q1.includes(`on the branch \`${branch}\` itself`), q1);
   assert.match(q1, /The answer is what resumes the run/);
-  assert.match(q1, /`\/autonomous-sdlc-harness:branch-\*` commands/);
+  assert.match(q1, /`\/devscene:branch-\*` commands/);
   assert.doesNotMatch(text, /answer_\d+\.md/, 'a question file names no answer channel');
 });
 

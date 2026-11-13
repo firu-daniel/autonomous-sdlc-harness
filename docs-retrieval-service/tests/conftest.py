@@ -1,7 +1,7 @@
 """Shared test plumbing: the container gate and a throwaway database per test.
 
 The rule this module exists to enforce: a `container` test runs only against the Postgres named by
-`HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL` and is skipped loudly when it is unset, and every
+`DEVSCENE_DOCS_RETRIEVAL_TEST_DATABASE_URL` and is skipped loudly when it is unset, and every
 database a test creates is dropped on every exit path. No fixture is created inside this checkout.
 """
 
@@ -15,7 +15,7 @@ import pytest
 from psycopg import sql
 from psycopg.conninfo import make_conninfo
 
-TEST_DATABASE_URL_ENV = "HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL"
+TEST_DATABASE_URL_ENV = "DEVSCENE_DOCS_RETRIEVAL_TEST_DATABASE_URL"
 
 CONTAINER_SKIP_REASON = (
     f"container gate: {TEST_DATABASE_URL_ENV} is unset; "

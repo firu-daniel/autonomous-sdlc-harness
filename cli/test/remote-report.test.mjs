@@ -19,7 +19,7 @@
  * The fixture is `remote-trigger.test.mjs`'s shape — `init`, `execution.target` `github-actions`,
  * `forge` `github`, the adopted tree pushed to the fixture's bare `origin` — plus branches pushed with a
  * task prompt and, unless a case says otherwise, `flow_progress/<branch>_progress.md`. `gh` is a stub
- * reached through `HARNESS_GH_CLI`: it logs each argument vector with the content of any `body=@<path>`,
+ * reached through `DEVSCENE_GH_CLI`: it logs each argument vector with the content of any `body=@<path>`,
  * answers `pr ready` with nothing, `pr list` from `STUB_PRS`, a label read from `STUB_LABELS` and `run list` from
  * `STUB_RUN_LIST` (each `[]` by default), and exits 4 on a call starting `STUB_FAIL_ON`. No case reaches
  * the network.
@@ -33,10 +33,10 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
-const MARKER = (event, branch) => `<!-- sdlc-harness event=${event} branch=${branch} -->`;
+const MARKER = (event, branch) => `<!-- devscene event=${event} branch=${branch} -->`;
 
 const STUB = `#!/usr/bin/env node
 const { appendFileSync, readFileSync } = require('node:fs');
@@ -78,7 +78,7 @@ async function reportFixture(t, { forge = 'github' } = {}) {
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   if (forge === null) delete config.forge;
@@ -93,7 +93,7 @@ async function reportFixture(t, { forge = 'github' } = {}) {
    * null) and the trigger <label>, and, when <ledger>, its flow-progress ledger; with neither, the branch's
    * one commit is empty. The checkout returns to the default branch.
    */
-  const pushBranch = async (branch, { issueUrl = ISSUE_URL, prompt = true, ledger = true, label = 'sdlc-harness' } = {}) => {
+  const pushBranch = async (branch, { issueUrl = ISSUE_URL, prompt = true, ledger = true, label = 'devscene' } = {}) => {
     await runGit(dir, ['checkout', '--quiet', '-b', branch]);
     const files = [];
     if (prompt) {
@@ -139,13 +139,13 @@ async function reportFixture(t, { forge = 'github' } = {}) {
      */
     report: (args, env = {}) =>
       runBash(dir, [SCRIPT, 'report', ...args], {
-        HARNESS_GH_CLI: stub,
+        DEVSCENE_GH_CLI: stub,
         STUB_LOG: log,
         GITHUB_REPOSITORY: REPOSITORY,
         GITHUB_SERVER_URL: 'https://github.com',
         GITHUB_RUN_ID: '',
         RUNNER_TEMP: runnerTemp,
-        HARNESS_TRIGGER_LABEL: '',
+        DEVSCENE_TRIGGER_LABEL: '',
         STUB_PRS: '',
         STUB_LABELS: '',
         STUB_RUN_LIST: '',
@@ -190,12 +190,12 @@ test('paused with a user reason comments on the issue, naming resume, and adds t
   const posted = commentsOn(calls, 7);
   assert.equal(posted.length, 1);
   assert.equal(allComments(calls).length, 1);
-  assert.match(posted[0].body, /Comment `@sdlc-harness resume` to continue\./);
+  assert.match(posted[0].body, /Comment `@dev-scene resume` to continue\./);
   assert.ok(posted[0].body.endsWith(`\n\n${MARKER('paused', 'feat_x')}\n`), posted[0].body);
-  assert.doesNotMatch(posted[0].body, /\/autonomous-sdlc-harness:/);
+  assert.doesNotMatch(posted[0].body, /\/devscene:/);
   assert.deepEqual(
     labelAdds(calls, 7).map((call) => call.args.at(-1)),
-    ['labels[]=sdlc-harness: paused'],
+    ['labels[]=devscene: paused'],
   );
 });
 
@@ -213,13 +213,13 @@ test('paused on usage names the UTC reset and no resume command', async (t) => {
 test('an existing state label is removed by its encoded name, and any other label is untouched', async (t) => {
   const f = await reportFixture(t);
   const result = await f.report(['paused', 'feat_x'], {
-    STUB_LABELS: JSON.stringify([{ name: 'sdlc-harness: running' }, { name: 'bug' }]),
+    STUB_LABELS: JSON.stringify([{ name: 'devscene: running' }, { name: 'bug' }]),
   });
   assert.equal(result.status, 0, result.stderr);
   const deletes = f.calls().filter((call) => call.args[2] === 'DELETE');
   assert.deepEqual(
     deletes.map((call) => call.line),
-    [`api --method DELETE repos/${REPOSITORY}/issues/7/labels/sdlc-harness%3A%20running`],
+    [`api --method DELETE repos/${REPOSITORY}/issues/7/labels/devscene%3A%20running`],
   );
 });
 
@@ -234,7 +234,7 @@ test('an open same-repository pull request on a ledgered head takes the comment;
   assert.equal(allComments(calls).length, 1);
   assert.equal(labelAdds(calls, 7).length, 1);
   assert.equal(labelAdds(calls, 12).length, 1);
-  assert.equal(labelAdds(calls, 12)[0].args.at(-1), 'labels[]=sdlc-harness: running');
+  assert.equal(labelAdds(calls, 12)[0].args.at(-1), 'labels[]=devscene: running');
 });
 
 test('a pull request whose head carries neither a task prompt nor a ledger is not a target, and nothing is posted', async (t) => {
@@ -283,8 +283,8 @@ test('failed on a branch whose stop marker is newer posts nothing', async (t) =>
   const f = await reportFixture(t);
   const result = await f.report(['failed', 'feat_x'], {
     STUB_RUN_LIST: JSON.stringify([
-      { displayTitle: 'harness stop feat_x', createdAt: '2026-01-02T00:00:00Z' },
-      { displayTitle: 'harness run feat_x', createdAt: '2026-01-01T00:00:00Z' },
+      { displayTitle: 'devscene stop feat_x', createdAt: '2026-01-02T00:00:00Z' },
+      { displayTitle: 'devscene run feat_x', createdAt: '2026-01-01T00:00:00Z' },
     ]),
   });
   assert.equal(result.status, 0, result.stderr);
@@ -292,10 +292,10 @@ test('failed on a branch whose stop marker is newer posts nothing', async (t) =>
   assert.match(result.stdout, /already reported/);
 });
 
-/** A `harness stop feat_x` newer than the newest `harness run feat_x`: the stop overtook the job. */
+/** A `devscene stop feat_x` newer than the newest `devscene run feat_x`: the stop overtook the job. */
 const STOP_NEWER = JSON.stringify([
-  { displayTitle: 'harness stop feat_x', createdAt: '2026-01-02T00:00:00Z' },
-  { displayTitle: 'harness run feat_x', createdAt: '2026-01-01T00:00:00Z' },
+  { displayTitle: 'devscene stop feat_x', createdAt: '2026-01-02T00:00:00Z' },
+  { displayTitle: 'devscene run feat_x', createdAt: '2026-01-01T00:00:00Z' },
 ]);
 const STOPPED_LINE = /^remote-run\.sh: report: feat_x was stopped, and the stop already reported the run; nothing posted$/m;
 const labelWrites = (calls) => calls.filter((call) => /^api --method (POST|DELETE) [^ ]*\/labels\b/.test(call.line));
@@ -304,7 +304,7 @@ test('resumed after a stop overtook the job posts nothing and sets no label', as
   const f = await reportFixture(t);
   const result = await f.report(['resumed', 'feat_x'], {
     STUB_RUN_LIST: STOP_NEWER,
-    STUB_LABELS: JSON.stringify([{ name: 'sdlc-harness: stopped' }]),
+    STUB_LABELS: JSON.stringify([{ name: 'devscene: stopped' }]),
   });
   assert.equal(result.status, 0, result.stderr);
   const calls = f.calls();
@@ -330,8 +330,8 @@ test('resumed after a harness run newer than the stop posts and sets running', a
   const f = await reportFixture(t);
   const result = await f.report(['resumed', 'feat_x'], {
     STUB_RUN_LIST: JSON.stringify([
-      { displayTitle: 'harness run feat_x', createdAt: '2026-01-03T00:00:00Z' },
-      { displayTitle: 'harness stop feat_x', createdAt: '2026-01-02T00:00:00Z' },
+      { displayTitle: 'devscene run feat_x', createdAt: '2026-01-03T00:00:00Z' },
+      { displayTitle: 'devscene stop feat_x', createdAt: '2026-01-02T00:00:00Z' },
     ]),
   });
   assert.equal(result.status, 0, result.stderr);
@@ -339,7 +339,7 @@ test('resumed after a harness run newer than the stop posts and sets running', a
   assert.equal(commentsOn(calls, 7).length, 1);
   assert.deepEqual(
     labelAdds(calls, 7).map((call) => call.args.at(-1)),
-    ['labels[]=sdlc-harness: running'],
+    ['labels[]=devscene: running'],
   );
 });
 
@@ -357,7 +357,7 @@ test('failed on an issue names the run log and re-applying the trigger label', a
   assert.equal(result.status, 0, result.stderr);
   const [posted] = commentsOn(f.calls(), 7);
   assert.match(posted.body, /run\.log/);
-  assert.match(posted.body, /re-apply the label `sdlc-harness`/);
+  assert.match(posted.body, /re-apply the label `devscene`/);
   assert.match(posted.body, /Run: https:\/\/github\.com\/octo\/fixture\/actions\/runs\/4242/);
 });
 
@@ -368,7 +368,7 @@ test('failed on an issue names the label its provenance line records, not the de
   assert.equal(result.status, 0, result.stderr);
   const [posted] = commentsOn(f.calls(), 7);
   assert.match(posted.body, /re-apply the label `ai-run`/);
-  assert.ok(!posted.body.includes('`sdlc-harness`'), posted.body);
+  assert.ok(!posted.body.includes('`devscene`'), posted.body);
 });
 
 const prOn = (draft) => JSON.stringify([{ number: 12, isCrossRepository: false, isDraft: draft }]);
@@ -402,7 +402,7 @@ test('round whose undo is refused prints one ::warning:: line, exits 0 and keeps
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout.match(/^::warning::/gm)?.length, 1, result.stdout);
   assert.match(result.stdout, /back to a draft was refused: gh exited 4: stub gh failure/);
-  assert.deepEqual(labelAdds(f.calls(), 12).map((call) => call.args.at(-1)), ['labels[]=sdlc-harness: running']);
+  assert.deepEqual(labelAdds(f.calls(), 12).map((call) => call.args.at(-1)), ['labels[]=devscene: running']);
   const [posted] = commentsOn(f.calls(), 12);
   assert.ok(!posted.body.includes(DRAFT_AGAIN), posted.body);
   assert.match(posted.body, /Turning this pull request back to a draft was refused, so it stays ready for review while the round works\./);
@@ -414,7 +414,7 @@ test('failed on a pull request for a task run names closing it and re-applying t
   const result = await f.report(['failed', 'feat_x'], { STUB_PRS: prOn(true) });
   assert.equal(result.status, 0, result.stderr);
   const [posted] = commentsOn(f.calls(), 12);
-  assert.match(posted.body, /This draft pull request stays open: close it to discard the run, or re-apply the label `sdlc-harness` to issue #7 to start a new run on the next indexed branch\./);
+  assert.match(posted.body, /This draft pull request stays open: close it to discard the run, or re-apply the label `devscene` to issue #7 to start a new run on the next indexed branch\./);
   assert.doesNotMatch(posted.body, /requesting changes/);
 });
 
@@ -460,7 +460,7 @@ test('a failing label add creates the label once, then retries the add once', as
   const calls = f.calls();
   const creates = calls.filter((call) => call.line.startsWith(`api --method POST repos/${REPOSITORY}/labels `));
   assert.equal(creates.length, 1);
-  assert.ok(creates[0].args.includes('name=sdlc-harness: stopped'));
+  assert.ok(creates[0].args.includes('name=devscene: stopped'));
   assert.equal(labelAdds(calls, 7).length, 2);
   const order = calls.map((call) => call.line);
   assert.ok(order.indexOf(creates[0].line) > order.indexOf(labelAdds(calls, 7)[0].line));
@@ -501,7 +501,7 @@ const clarify = (dir, branch, files) => {
   mkdirSync(clar, { recursive: true });
   for (const [name, content] of Object.entries(files)) writeFileSync(join(clar, name), content);
 };
-const QUESTION_MARKER = (branch, n) => `<!-- sdlc-harness event=parked branch=${branch} question=${n} -->`;
+const QUESTION_MARKER = (branch, n) => `<!-- devscene event=parked branch=${branch} question=${n} -->`;
 
 test('parked posts each open question whole, ascending, with its answer form and question marker', async (t) => {
   const f = await reportFixture(t);
@@ -519,13 +519,13 @@ test('parked posts each open question whole, ascending, with its answer form and
   );
   for (const [call, n, bytes] of [[posted[0], 2, q2], [posted[1], 10, q10]]) {
     assert.ok(call.body.includes(`\n\n${bytes}\n`), call.body);
-    assert.ok(call.body.includes(`\`@sdlc-harness answer ${n}\``), call.body);
+    assert.ok(call.body.includes(`\`@dev-scene answer ${n}\``), call.body);
     assert.doesNotMatch(call.body, /may be left out/);
     assert.ok(call.body.endsWith(`\n\n${QUESTION_MARKER('feat_x', n)}\n`), call.body);
   }
   assert.deepEqual(
     labelAdds(calls, 7).map((call) => call.args.at(-1)),
-    ['labels[]=sdlc-harness: parked'],
+    ['labels[]=devscene: parked'],
   );
 });
 
@@ -579,10 +579,10 @@ test('a question line naming its own answer_<n>.md is left out; one answer sente
   assert.ok(posted, 'question 1 was posted');
   assert.ok(!posted.body.includes('answer_1.md'), posted.body);
   assert.ok(posted.body.includes('## Q1\n\nWhich colour?\n'), posted.body);
-  assert.equal(posted.body.split('Answer with a comment whose first line is `@sdlc-harness answer 1`').length, 2, posted.body);
+  assert.equal(posted.body.split('Answer with a comment whose first line is `@dev-scene answer 1`').length, 2, posted.body);
   const fence = posted.body.match(/\n```\n([^\n]*)\n([^\n]*)\n```\n/);
   assert.ok(fence, posted.body);
-  assert.equal(fence[1], '@sdlc-harness answer 1');
+  assert.equal(fence[1], '@dev-scene answer 1');
   assert.equal(fence[2], '<your answer>');
 });
 
@@ -594,7 +594,7 @@ test('a question line naming another index\'s answer file is kept', async (t) =>
   assert.equal(result.status, 0, result.stderr);
   const [posted] = allComments(f.calls());
   assert.ok(posted.body.includes(`\n${other}\n`), posted.body);
-  assert.match(posted.body, /\n```\n@sdlc-harness answer 1\n<your answer>\n```\n/);
+  assert.match(posted.body, /\n```\n@dev-scene answer 1\n<your answer>\n```\n/);
 });
 
 test('a question file over the bound is cut at a line boundary within the bound and names the artifact path', async (t) => {
@@ -615,7 +615,7 @@ test('a question file over the bound is cut at a line boundary within the bound 
   assert.ok(carried.endsWith('\n'));
   assert.ok(content.startsWith(carried));
   assert.match(posted.body, /The whole file is `clarifications\/feat_x\/question_3\.md` in the run's `harness-state` artifact/);
-  assert.match(posted.body, /\n```\n@sdlc-harness answer 3\n<your answer>\n```\n/);
+  assert.match(posted.body, /\n```\n@dev-scene answer 3\n<your answer>\n```\n/);
   assert.ok(Buffer.byteLength(posted.body) <= 262144);
 });
 
@@ -623,7 +623,7 @@ const PAUSE_FOLDED_NOTE =
   'A pause was requested on this run before it parked, so it is folded into this park: the run waits for the answer and continues once it is answered, and no separate `paused` comment follows.';
 const PAUSE_FOLDED_HOLD_NOTE =
   'A pause was requested on this run before it was put on hold, so it is folded into this hold: the run waits for the hold to be cleared and continues once it is, and no separate `paused` comment follows.';
-const COPY_BLOCK = (n) => `\n\`\`\`\n@sdlc-harness answer ${n}\n<your answer>\n\`\`\`\n`;
+const COPY_BLOCK = (n) => `\n\`\`\`\n@dev-scene answer ${n}\n<your answer>\n\`\`\`\n`;
 
 test('parked with a user pause pending carries the folded-pause line after the answer form', async (t) => {
   const f = await reportFixture(t);
@@ -682,7 +682,7 @@ test('paused with a user reason carries no folded-pause line', async (t) => {
 
 test('a question starting with a command line is posted verbatim under the question marker', async (t) => {
   const f = await reportFixture(t);
-  const question = '`@sdlc-harness stop`\n\n## Q1\n\nShould the run stop here?\n';
+  const question = '`@dev-scene stop`\n\n## Q1\n\nShould the run stop here?\n';
   clarify(f.dir, 'feat_x', { 'question_1.md': question });
   const result = await f.report(['parked', 'feat_x']);
   assert.equal(result.status, 0, result.stderr);

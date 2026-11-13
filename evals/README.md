@@ -39,10 +39,10 @@ nothing would have withheld the durable half to protect the cheap one, and it wo
 fallback below as well, which needs exactly that content and no envelope at all.
 
 **What `plan-shape/` asserts, and what it runs against.** Both arms get `plan-shape/prompt.md`
-unchanged — a `/autonomous-sdlc-harness:branch-start-plan-semi-autonomous` line the plugin arm resolves and the
+unchanged — a `/devscene:branch-start-plan-semi-autonomous` line the plugin arm resolves and the
 baseline arm reads as literal text, above one small, dull change to plan in the example notes
 application — and a working directory `plan-shape/scaffold.sh` builds out of
-`../examples/notes-app/`: its source, its toolchain, its generated `harness.config.json`,
+`../examples/notes-app/`: its source, its toolchain, its generated `devscene.config.json`,
 `scripts/` and `.claude/` conventions documents, plus the one task prompt every route into the plan
 flow halts without, initialised as a git repository with one commit on a feature branch. What the
 tree leaves out is what an arm is measured on **producing** — the story index and per-task files

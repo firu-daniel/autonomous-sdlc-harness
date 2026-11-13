@@ -181,7 +181,7 @@
 # FLOORS. Bash 3.2; no `jq` for `prescan`, which reads no configuration, while
 # `plan` reads `stateDir` and needs it; every `mktemp` names an explicit template.
 #
-# REPRO — in a throwaway fixture wired by `autonomous-sdlc-harness init`:
+# REPRO — in a throwaway fixture wired by `devscene init`:
 #
 #   printf 'clean\n' > ok.md
 #   bash scripts/prompt-injection-screen.sh prescan --repo . ok.md; echo $?
@@ -236,7 +236,7 @@ PIS_RE_MARKER='=== (BEGIN|END) UNTRUSTED DATA'
 # closing marker line of a review round collected on GitHub. A whole line in
 # exactly this shape carries no free text, so prescan-html-comment skips it;
 # any other `<!--` still hits.
-PIS_RE_ROUND_MARKER='<!-- sdlc-harness round collected_at=[0-9T:Z-]+ reviews=[0-9,]* comments=[0-9,]* -->'
+PIS_RE_ROUND_MARKER='<!-- devscene round collected_at=[0-9T:Z-]+ reviews=[0-9,]* comments=[0-9,]* -->'
 
 PIS_EXCERPT_MAX=160
 PIS_NL='
@@ -498,7 +498,7 @@ pis_run_args() {
   PIS_REPO_ABS=$(cd -P -- "$repo" 2>/dev/null && pwd -P) || pis_fault "--repo '$repo' is not a directory"
   command -v sha256sum >/dev/null 2>&1 || command -v shasum >/dev/null 2>&1 \
     || pis_fault "neither sha256sum nor shasum resolves"
-  PIS_SD=$(pis_state_dir "$PIS_REPO_ABS") || pis_fault "cannot resolve stateDir from $PIS_REPO_ABS/harness.config.json"
+  PIS_SD=$(pis_state_dir "$PIS_REPO_ABS") || pis_fault "cannot resolve stateDir from $PIS_REPO_ABS/devscene.config.json"
   PIS_BRANCH="$branch"
   PIS_ENGINE="$engine"
 }
@@ -728,12 +728,12 @@ The run detected a potential threat in \`$p\`. This screen is a tripwire, not a 
 
 **Route 1 — edit and resume.** Where you edit depends on where the run executes, which this file cannot tell:
 
-- On your machine: edit \`$p\` in the checkout this run executes in. For a watcher run that is its working copy, the \`worktree\` path \`/autonomous-sdlc-harness:branch-status\` prints for \`$branch\`, never your main checkout. Leave the edit uncommitted: the run commits it, by that path alone, once the screen passes it.
+- On your machine: edit \`$p\` in the checkout this run executes in. For a watcher run that is its working copy, the \`worktree\` path \`/devscene:branch-status\` prints for \`$branch\`, never your main checkout. Leave the edit uncommitted: the run commits it, by that path alone, once the screen passes it.
 - In a GitHub job: commit the edit to \`$p\` on the branch \`$branch\` itself, with GitHub's file editor or a push. Each job starts from the branch tip, so your edit is what the next job reads; your local mirror of the run is not that copy.
 
 Then answer this question as you answer any other. The answer is what resumes the run, and the resumed run screens the edited file again before anything else reads it.
 
-**Route 2 — run attended.** Run the branch locally through the supervised \`/autonomous-sdlc-harness:branch-*\` commands, where a person sees every step.
+**Route 2 — run attended.** Run the branch locally through the supervised \`/devscene:branch-*\` commands, where a person sees every step.
 
 Answering without editing the file does not move the run past this point: an unchanged file parks again, at the next question, with no agent dispatched.
 
@@ -752,7 +752,7 @@ pis_reask_doc() {
 
 The screen flagged the answer given to the question above as a potential threat. It was removed unread, so nothing in the run acted on it; its flagged lines are quoted below. This screen is a tripwire, not a security boundary: it can flag a harmless answer and miss a hostile one.
 
-Answer the question above again, the same way you answered it before. The new answer is screened like any other answer before anything reads it. Or run the branch attended, locally, through the supervised \`/autonomous-sdlc-harness:branch-*\` commands, where a person sees every step.
+Answer the question above again, the same way you answered it before. The new answer is screened like any other answer before anything reads it. Or run the branch attended, locally, through the supervised \`/devscene:branch-*\` commands, where a person sees every step.
 
 "
   pis_findings_block "$p"

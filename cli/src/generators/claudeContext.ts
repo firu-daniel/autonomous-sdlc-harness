@@ -4,7 +4,7 @@
  *
  * **The rule this module exists to enforce: which stubs are written, and which rows the routing
  * table carries, are both read off `layers[]` — never off a list kept here.** `layers[].conventions`
- * is "the document holding this layer's rules" (`schemas/harness.config.schema.json`), and the
+ * is "the document holding this layer's rules" (`schemas/devscene.config.schema.json`), and the
  * orchestrator assigns every task to exactly one layer, so a fixed file list here would put a
  * skeleton at a path no layer points at while leaving the path one *does* point at empty. A
  * generated table that disagrees with the configuration it was generated from is worse than no
@@ -31,12 +31,12 @@
  *
  * ## What this generator deliberately does not do
  *
- * - **It does not restate the project-command wrappers.** `commands.*` in `harness.config.json` is
+ * - **It does not restate the project-command wrappers.** `commands.*` in `devscene.config.json` is
  *   the canonical home for those invocations, and the config, the wrapper files and the permission
  *   profile are already three views of one string (`generators/scripts.ts`); an always-loaded file
  *   repeating them would be a fourth, drifting the moment `scriptsDir` moves.
  * - **It does not invent credential key names.** The two example files carry harness-generic keys —
- *   `HARNESS_PUSH_*`, `HARNESS_QA_<n>_*` — and say so in their own header comments, so an adopter
+ *   `DEVSCENE_PUSH_*`, `DEVSCENE_QA_<n>_*` — and say so in their own header comments, so an adopter
  *   carrying settings over from another runner renames the keys rather than the reader.
  */
 
@@ -89,7 +89,7 @@ export const QA_SCENARIOS_PATH = `${CLAUDE_DIR}/qa_test_scenarios.md`;
  * nothing writes and silently disables the offer. Exported because `doctor` addresses the same file
  * rather than re-spelling it.
  */
-export const TASK_OFFER_PATH = `${CLAUDE_DIR}/harness-task-offer.md`;
+export const TASK_OFFER_PATH = `${CLAUDE_DIR}/devscene-task-offer.md`;
 
 /** The templates' subdirectory under `cli/templates/`, addressed as {@link readTemplate} wants it. */
 const TEMPLATE_DIR = 'claude';
@@ -124,7 +124,7 @@ const CONTEXT_TEMPLATE_DIR = 'context';
  *   skeletons for three concerns no preset detects — local persistence, a documentation catalog,
  *   shared application state. Nothing `init` generates points at them, and the one route that reads
  *   one is an adopter pointing a `layers[].conventions` at that exact basename and re-running
- *   `init`. A path a `/autonomous-sdlc-harness:harness-analyze` layer-profile revision newly names
+ *   `init`. A path a `/devscene:analyze` layer-profile revision newly names
  *   does **not** reach them: that command never re-runs `init`, so `conventions-writer` composes the document with no file
  *   behind it. They are kept rather than deleted because writing one of those documents from
  *   nothing is the expensive part, and they are named here so a later reader does not take them for
@@ -166,7 +166,7 @@ const GENERIC_STUB_TEMPLATE = 'layer.md';
  * where they are produced: a template and these constants disagreeing makes every consumer report
  * every document as filled.
  */
-export const UNFILLED_STUB_MARKER = '<!-- harness:unfilled -->';
+export const UNFILLED_STUB_MARKER = '<!-- devscene:unfilled -->';
 
 /** The other half of the two-part test in {@link UNFILLED_STUB_MARKER}; never applied on its own. */
 export const SKELETON_GUIDANCE_MARKER = '**What belongs here**';
@@ -199,7 +199,7 @@ export const RESERVED_ANALYZE_TARGETS = ['project', 'conventions', 'layers'] as 
 
 /**
  * The delimiters of the **setup-pending banner** the generated project file carries under its
- * heading: the record of what the adopter answered `autonomous-sdlc-harness init`'s analyze offer
+ * heading: the record of what the adopter answered `devscene init`'s analyze offer
  * (`docs/analyze.md` §9), written into the one file every session in that repository loads without
  * being asked.
  *
@@ -220,10 +220,10 @@ export const RESERVED_ANALYZE_TARGETS = ['project', 'conventions', 'layers'] as 
  * the block is deleted by hand. The standing readers of what is still unfilled are that check and
  * {@link UNFILLED_STUB_MARKER}'s two-part test — never this banner.
  */
-export const SETUP_PENDING_OPEN = '<!-- harness:setup-pending -->';
+export const SETUP_PENDING_OPEN = '<!-- devscene:setup-pending -->';
 
 /** The banner's closing delimiter: the block {@link SETUP_PENDING_OPEN} documents ends here. */
-export const SETUP_PENDING_CLOSE = '<!-- /harness:setup-pending -->';
+export const SETUP_PENDING_CLOSE = '<!-- /devscene:setup-pending -->';
 
 /** What the adopter answered the analyze offer, as `init` resolved it. */
 export type AnalyzeOffer = 'accepted' | 'declined';
@@ -239,7 +239,7 @@ export type AnalyzeOffer = 'accepted' | 'declined';
  * plugin key into the settings file this clause names, so the state it reports is one the same run
  * left behind.
  */
-const PLUGIN_ORIGIN_CLAUSE = `\`${ANALYZE_COMMAND}\` is a command of the harness plugin, which \`npx autonomous-sdlc-harness init\` enabled for this repository in \`${CLAUDE_DIR}/settings.json\`, so it exists in a session that resolves that plugin.`;
+const PLUGIN_ORIGIN_CLAUSE = `\`${ANALYZE_COMMAND}\` is a command of the harness plugin, which \`npx devscene init\` enabled for this repository in \`${CLAUDE_DIR}/settings.json\`, so it exists in a session that resolves that plugin.`;
 
 /**
  * The banner's body, one blockquote per answer.
@@ -352,7 +352,7 @@ export interface ClaudeContextResult {
 
 /**
  * A link from `.claude/CLAUDE.md` to a repo-relative target — `context/data-layer.md` for a
- * conventions file in the usual place, `../sdlc-harness/lessons.md` for a ledger outside it.
+ * conventions file in the usual place, `../devscene/lessons.md` for a ledger outside it.
  *
  * Relative rather than repo-relative because the link is read from the file it sits in, and a
  * conventions path may legitimately point anywhere in the repository.
@@ -646,13 +646,13 @@ export function writeClaudeContext({
   plan.add({
     path: join(repoRoot, TASK_OFFER_PATH),
     policy: 'create-if-absent',
-    content: render('harness-task-offer.md', { pluginName: PLUGIN_NAME }),
+    content: render('devscene-task-offer.md', { pluginName: PLUGIN_NAME }),
     label: 'change-request offer rules',
   });
 
   if (claudeMdExisted && !force) {
     notes.push(
-      `${CLAUDE_MD_PATH} was already there and ${dryRun ? 'would be kept' : 'was kept'} as it stands, so the setup-pending banner ${dryRun ? 'would not be' : 'was not'} written into it: run \`npx autonomous-sdlc-harness doctor\` at any time for what is still unfilled`,
+      `${CLAUDE_MD_PATH} was already there and ${dryRun ? 'would be kept' : 'was kept'} as it stands, so the setup-pending banner ${dryRun ? 'would not be' : 'was not'} written into it: run \`npx devscene doctor\` at any time for what is still unfilled`,
     );
   }
 
@@ -732,7 +732,7 @@ export function writeClaudeContext({
     );
   } else {
     notes.push(
-      'no test-account example and no test-scenario rules were written, because phases.qa is off and both belong to the interactive test phase: turn the phase on in harness.config.json and re-run init to add them',
+      'no test-account example and no test-scenario rules were written, because phases.qa is off and both belong to the interactive test phase: turn the phase on in devscene.config.json and re-run init to add them',
     );
   }
 

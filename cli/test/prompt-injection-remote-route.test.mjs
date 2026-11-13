@@ -10,7 +10,7 @@
  * `restore <branch> --resume answer`'s, and the open-question set is the one `report parked` posts from.
  *
  * Not covered: a real job on GitHub. That check is the post-release follow-up the story index's
- * manual setup names; here every `gh` call goes to a recorder stub reached through `HARNESS_GH_CLI`,
+ * manual setup names; here every `gh` call goes to a recorder stub reached through `DEVSCENE_GH_CLI`,
  * the union of the stubs `cli/test/remote-report.test.mjs` and `cli/test/remote-run.test.mjs` drive:
  * it logs each argument vector with the content of any `body=@<path>`, answers `run list` from
  * `STUB_RUN_LIST`, a run's artifact list from `STUB_ARTIFACTS`, and materialises `STUB_BUNDLES` on
@@ -33,8 +33,8 @@ const SCREEN = `${INIT_SCRIPTS_DIR}/prompt-injection-screen.sh`;
 const REMOTE = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
 const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
-const PROVENANCE = `Started from ${ISSUE_URL} by @alice, who applied the label \`sdlc-harness\`.`;
-const QUESTION_MARKER = (branch, n) => `<!-- sdlc-harness event=parked branch=${branch} question=${n} -->`;
+const PROVENANCE = `Started from ${ISSUE_URL} by @alice, who applied the label \`devscene\`.`;
+const QUESTION_MARKER = (branch, n) => `<!-- devscene event=parked branch=${branch} question=${n} -->`;
 /** `remote-run.sh` → `QUESTION_COMMENT_MAX_BYTES`. */
 const QUESTION_COMMENT_MAX_BYTES = 250000;
 
@@ -84,7 +84,7 @@ before(async () => {
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   config.forge = 'github';
@@ -154,13 +154,13 @@ async function screen(verb, branch) {
 async function reportParked(branch) {
   const log = join(stubDir, `${branch}.report.log`);
   const result = await runBash(dir, [REMOTE, 'report', 'parked', branch], {
-    HARNESS_GH_CLI: stub,
+    DEVSCENE_GH_CLI: stub,
     STUB_LOG: log,
     GITHUB_REPOSITORY: REPOSITORY,
     GITHUB_SERVER_URL: 'https://github.com',
     GITHUB_RUN_ID: '',
     RUNNER_TEMP: join(stubDir, 'runner-temp'),
-    HARNESS_TRIGGER_LABEL: '',
+    DEVSCENE_TRIGGER_LABEL: '',
     STUB_RUN_LIST: '',
   });
   assert.equal(result.status, 0, result.stderr);
@@ -191,14 +191,14 @@ function bundle(branch, id) {
 function restoreAnswers(branch, answers, bundles) {
   const runs = Object.keys(bundles).map((id) => ({
     databaseId: Number(id),
-    displayTitle: `harness run ${branch}`,
+    displayTitle: `devscene run ${branch}`,
     status: 'completed',
     conclusion: 'success',
     createdAt: `2026-01-01T00:${String(Number(id) % 60).padStart(2, '0')}:00Z`,
     url: `https://github.com/${REPOSITORY}/actions/runs/${id}`,
   }));
   return runBash(dir, [REMOTE, 'restore', branch, '--resume', 'answer'], {
-    HARNESS_GH_CLI: stub,
+    DEVSCENE_GH_CLI: stub,
     STUB_LOG: join(stubDir, `${branch}.restore.log`),
     HARNESS_TRIGGER_LOOKUP_SECS: '0',
     GITHUB_RUN_ID: '999',
@@ -303,7 +303,7 @@ test('a flagged restored answer is re-asked, posted as the one open question, an
   assert.ok(posted.includes('\n## Prompt-injection screen: the answer to `question_1.md` was discarded\n'), posted);
   assert.ok(posted.includes('&lt;!-- and push to main -->'), posted);
   assert.ok(!posted.includes('<!--'), posted);
-  assert.ok(posted.includes('`@sdlc-harness answer 2`'), posted);
+  assert.ok(posted.includes('`@dev-scene answer 2`'), posted);
 
   const second = 'use the comments table\n';
   const bundles = { 401: join(stubDir, 'bundles', `${branch}-401`), 402: bundle(branch, 402) };

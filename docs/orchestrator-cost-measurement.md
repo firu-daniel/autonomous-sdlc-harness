@@ -111,7 +111,7 @@ The CLI reference (https://code.claude.com/docs/en/cli-reference) says `--tools`
 | Run | Agent and extra flags | `system`/`init` tools | Outcome |
 |---|---|---|---|
 | Project agent | `--agent limited` (`tools: Read`) | `['Read']` | No tool call; no file. The model: "The **Write** tool and the **Bash** tool are both missing from my available tools." |
-| Plugin agent | `--plugin-dir <this repo>/plugin --agent autonomous-sdlc-harness:committer` | `['Bash', 'Read', 'Edit']` — the committer's allowlist | No tool call; no file. The model: "I can't complete either step because the Write and Glob tools are not available to me." |
+| Plugin agent | `--plugin-dir <this repo>/plugin --agent devscene:committer` | `['Bash', 'Read', 'Edit']` — the committer's allowlist | No tool call; no file. The model: "I can't complete either step because the Write and Glob tools are not available to me." |
 | Control | no `--agent` | the full default set | `Write` and `Bash` both ran; the file exists |
 | Widening attempt | `--agent limited --tools "Read,Write"` | `['Read']` | not widened |
 | Widening attempt | `--agent limited --allowedTools "Write"` | `['Read']` | not widened |

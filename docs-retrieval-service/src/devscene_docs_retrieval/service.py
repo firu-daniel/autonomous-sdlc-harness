@@ -10,7 +10,7 @@ too, and models load with remote loading disabled; nothing here passes `allow_re
 Departures from `server.ts` and `session.ts`:
 
 - `queryLog.ts` is not ported: `answer()` writes no log record and reads no query-log variable.
-- The service owns its config: it reads `harness.config.json` read-only, takes `docs.root` and
+- The service owns its config: it reads `devscene.config.json` read-only, takes `docs.root` and
   `layers[]` alone, and applies no `phases.docs` / `docs.retrieval` gate.
 - The store's meta layout is known here and to `store.py` only; `probe()` is how an entry point
   reaches it.
@@ -28,16 +28,16 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from harness_docs_retrieval.errors import ServiceError
-from harness_docs_retrieval.jscompat import js_object_keys, js_trim, json_stringify_str
-from harness_docs_retrieval.models import (
+from devscene_docs_retrieval.errors import ServiceError
+from devscene_docs_retrieval.jscompat import js_object_keys, js_trim, json_stringify_str
+from devscene_docs_retrieval.models import (
     Embedder,
     Reranker,
     model_cache_dir,
     model_files_present,
 )
-from harness_docs_retrieval.refresh import RefreshResult, refresh_index
-from harness_docs_retrieval.search import (
+from devscene_docs_retrieval.refresh import RefreshResult, refresh_index
+from devscene_docs_retrieval.search import (
     DEFAULT_RESULTS,
     MAX_RESULTS,
     SearchMode,
@@ -45,22 +45,22 @@ from harness_docs_retrieval.search import (
     render_results,
     search_docs,
 )
-from harness_docs_retrieval.store import (
+from devscene_docs_retrieval.store import (
     DATABASE_URL_ENV,
     DIMENSIONS_META_KEY,
     DocStore,
     driver_message,
     open_postgres_store,
 )
-from harness_docs_retrieval.stubs import resolve_models
-from harness_docs_retrieval.wire import COVERAGE_NOTE_PREFIX, DOCS_SERVER_NAME, SEARCH_TOOL_NAME
+from devscene_docs_retrieval.stubs import resolve_models
+from devscene_docs_retrieval.wire import COVERAGE_NOTE_PREFIX, DOCS_SERVER_NAME, SEARCH_TOOL_NAME
 
-CONFIG_FILENAME = "harness.config.json"
+CONFIG_FILENAME = "devscene.config.json"
 
 
 @dataclass(frozen=True)
 class ServiceConfig:
-    """`corpus_config` carries `harness.config.json`'s own keys, `docs.root` and `layers` only."""
+    """`corpus_config` carries `devscene.config.json`'s own keys, `docs.root` and `layers` only."""
 
     repo_root: str
     corpus_config: Mapping[str, Any]
@@ -71,7 +71,7 @@ def add_service_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--repo",
         default=None,
-        help="the repository whose harness.config.json is read (default: the current directory)",
+        help="the repository whose devscene.config.json is read (default: the current directory)",
     )
     parser.add_argument(
         "--docs-root",
@@ -83,7 +83,7 @@ def add_service_options(parser: argparse.ArgumentParser) -> None:
 def load_service_config(
     *, repo: str | None, docs_root: str | None, environ: Mapping[str, str]
 ) -> ServiceConfig:
-    """Reads `<repo or cwd>/harness.config.json` read-only and the database URL from `environ`."""
+    """Reads `<repo or cwd>/devscene.config.json` read-only and the database URL from `environ`."""
     repo_root = os.path.abspath(repo) if repo else os.getcwd()
     path = os.path.join(repo_root, CONFIG_FILENAME)
     try:
@@ -166,7 +166,7 @@ async def open_session(config: ServiceConfig) -> RetrievalSession:
     if not models.present:
         raise ServiceError(
             f"the docs-retrieval model cache at {cache_dir} is missing "
-            f"{', '.join(models.missing)}: run harness-docs-retrieval fetch-models where an "
+            f"{', '.join(models.missing)}: run devscene-docs-retrieval fetch-models where an "
             "operator is present, which downloads the models"
         )
     embedder, reranker = resolve_models(allow_remote=False)
@@ -242,7 +242,7 @@ async def answer(
         except Exception as error:
             return _failure(
                 f"{SEARCH_TOOL_NAME}: refreshing the docs index failed: {driver_message(error)}; "
-                "run `npx autonomous-sdlc-harness doctor` in this repository"
+                "run `npx devscene doctor` in this repository"
             )
         for warning in refreshed.warnings:
             print(f"{DOCS_SERVER_NAME}: warning: {warning}", file=sys.stderr)

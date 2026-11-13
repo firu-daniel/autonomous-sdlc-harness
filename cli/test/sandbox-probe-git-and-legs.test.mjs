@@ -672,7 +672,7 @@ test('sp_result_line: fixed field order, double-quoted values', async (t) => {
 
 /**
  * The headless-parity checklist (`sp_print_parity_script` in `legs-settings.sh`). Its launch lines must
- * carry the flags the headless sessions launch with (`HARNESS_MAIN_REPO`, `--settings`,
+ * carry the flags the headless sessions launch with (`DEVSCENE_MAIN_REPO`, `--settings`,
  * `--permission-mode dontAsk`, `--model`/`--effort` when configured, both `--add-dir`s) and the
  * `--allowedTools` departures the headless N1, RT1 and CS2 sessions run with — both profiles set
  * `defaultMode: dontAsk`, so a bare `claude --settings <profile>` refuses every call at the permission
@@ -685,7 +685,7 @@ test('print-parity-script: launch lines carry the headless flags and departures,
   /** `blocks` expected for the given (already shell-spelled) words. */
   function expected({ clone, run, net, main, state, home, cs2, model = '' }) {
     const launch = (settings, rule) =>
-      `HARNESS_MAIN_REPO=${main} claude --settings ${settings} --permission-mode dontAsk${model} ` +
+      `DEVSCENE_MAIN_REPO=${main} claude --settings ${settings} --permission-mode dontAsk${model} ` +
       `--add-dir ${clone} --add-dir ${state} --allowedTools ${rule}`;
     return [
       `cd ${clone}`,
@@ -752,7 +752,7 @@ test('print-parity-script: launch lines carry the headless flags and departures,
       [
         '-c',
         'for f in "$1" "$2" "$3" "$4" "$5"; do . "$f"; done; shift 5; ' +
-          'SP_STATE_DIR=sdlc-harness SP_AGENT_MODEL=opus SP_AGENT_EFFORT=high; sp_print_parity_script "$@"',
+          'SP_STATE_DIR=devscene SP_AGENT_MODEL=opus SP_AGENT_EFFORT=high; sp_print_parity_script "$@"',
         '_',
         ...libs,
         '/w/clone',
@@ -770,7 +770,7 @@ test('print-parity-script: launch lines carry the headless flags and departures,
         run: '/s/run.json',
         net: '/t/sbx_net.json',
         main: '/w/main',
-        state: '/w/main/sdlc-harness',
+        state: '/w/main/devscene',
         home: "'/Users/a b/sbx_probe_rt1_marker'",
         cs2: '/w/main/.git/sbx_cs2_new',
         model: ' --model opus --effort high',

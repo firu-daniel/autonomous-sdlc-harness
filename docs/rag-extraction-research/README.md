@@ -17,7 +17,7 @@
 
 **Three kinds of statement**, as in [`../copilot-foundry-research.md`](../copilot-foundry-research.md) → `## How this was researched`: **Documented** (a fork or review cites a source), **Inference** (this synthesis's own unless attributed), **Unconfirmed** (no source states it, or sources disagree).
 
-**Maintainer rulings** (`_brief.md` → `## The question`, `## Round 2 rulings`). Round 1: (1) harness re-use is not the focus; (2) the stack is not locked; (3) models local by default, others by configuration; (4) a late entrant is fine; (5) one engine serves both stores. Round 2: **R2.1** withdraws (5): the engine may differ by store, Python is an enterprise lever, and **the client need not know which engine runs**; **R2.2** the `pg_textsearch` gap must be decided; **R2.3** the default is model-free and the MS MARCO reranker is not accepted; **R2.4** business-corpus measurement belongs to [#199](https://github.com/firu-daniel/autonomous-sdlc-harness/issues/199); **R2.5** the four security gaps are filed as #200–#203.
+**Maintainer rulings** (`_brief.md` → `## The question`, `## Round 2 rulings`). Round 1: (1) harness re-use is not the focus; (2) the stack is not locked; (3) models local by default, others by configuration; (4) a late entrant is fine; (5) one engine serves both stores. Round 2: **R2.1** withdraws (5): the engine may differ by store, Python is an enterprise lever, and **the client need not know which engine runs**; **R2.2** the `pg_textsearch` gap must be decided; **R2.3** the default is model-free and the MS MARCO reranker is not accepted; **R2.4** business-corpus measurement belongs to [#199](https://github.com/firu-daniel/devscene/issues/199); **R2.5** the four security gaps are filed as #200–#203.
 
 ---
 
@@ -221,10 +221,10 @@ Round 1's concurrent-session risk: under (b-pg), `pgembed` sessions share one se
 **`pg_textsearch` index-statistics drift (`05 → ## 3`).** `pg_textsearch` uses "physical index statistics, not MVCC-filtered corpus statistics". Dead tuples therefore count in `N`, `df` and `avg_doc_len` until `REINDEX` or compaction. Its scores match `tsvector-bm25` only right after a rebuild. Any score threshold shared across hosts must allow for this, or `tsvector-bm25` adopts the same "as of last rebuild" rule.
 
 **Security gaps in today's code, now filed (R2.5):**
-- [#200](https://github.com/firu-daniel/autonomous-sdlc-harness/issues/200): a symlink lets a file escape the corpus root (`03 → §3`).
-- [#201](https://github.com/firu-daniel/autonomous-sdlc-harness/issues/201): `/health` returns the driver's error text unreduced (`03 → §2`).
-- [#202](https://github.com/firu-daniel/autonomous-sdlc-harness/issues/202): HTTP on loopback lacks `Host`/`Origin`/content-type checks (`03 → §5`).
-- [#203](https://github.com/firu-daniel/autonomous-sdlc-harness/issues/203): no reconnect after a Postgres restart (`03 → §2`).
+- [#200](https://github.com/firu-daniel/devscene/issues/200): a symlink lets a file escape the corpus root (`03 → §3`).
+- [#201](https://github.com/firu-daniel/devscene/issues/201): `/health` returns the driver's error text unreduced (`03 → §2`).
+- [#202](https://github.com/firu-daniel/devscene/issues/202): HTTP on loopback lacks `Host`/`Origin`/content-type checks (`03 → §5`).
+- [#203](https://github.com/firu-daniel/devscene/issues/203): no reconnect after a Postgres restart (`03 → §2`).
 
 Covered by the design instead: DDL and writes on every query (the index/serve split); prompt injection from third-party corpora (provenance with every hit).
 

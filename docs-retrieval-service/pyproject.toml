@@ -1,5 +1,5 @@
 [project]
-name = "harness-docs-retrieval"
+name = "devscene-docs-retrieval"
 version = "0.1.0"
 description = "Docs-catalog retrieval service answering search_docs over MCP and HTTP, indexed in Postgres."
 requires-python = ">=3.11"
@@ -20,7 +20,7 @@ models = [
 ]
 
 [project.scripts]
-harness-docs-retrieval = "harness_docs_retrieval.cli:main"
+devscene-docs-retrieval = "devscene_docs_retrieval.cli:main"
 
 [dependency-groups]
 dev = [
@@ -35,7 +35,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/harness_docs_retrieval"]
+packages = ["src/devscene_docs_retrieval"]
 
 # Linux takes torch from the CPU-only index so the container image never pulls CUDA wheels.
 [tool.uv.sources]
@@ -78,5 +78,5 @@ select = ["E", "F", "I", "B", "UP"]
 testpaths = ["tests"]
 addopts = "-p no:cacheprovider -rs"
 markers = [
-    "container: needs a real Postgres reached through HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL",
+    "container: needs a real Postgres reached through DEVSCENE_DOCS_RETRIEVAL_TEST_DATABASE_URL",
 ]

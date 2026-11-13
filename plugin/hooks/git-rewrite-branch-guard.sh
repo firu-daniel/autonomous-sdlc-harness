@@ -60,7 +60,7 @@
 #   - the payload does not parse, or `jq` is absent      (no command to judge)
 #   - the command carries no `rm` / `git mv` / `git rm` at a command position
 #   - the anchor is not inside a git repository
-#   - the repository has no `harness.config.json`        (no jurisdiction)
+#   - the repository has no `devscene.config.json`        (no jurisdiction)
 #   - the configuration will not resolve — invalid or unreadable JSON, or no
 #     `defaultBranch` (`hc_branch_is_protected` -> 2, `hc_safe_prefixes` -> 1),
 #     or the workspace will not (`hc_path_anchored_patterns` -> 1)
@@ -106,7 +106,7 @@
 # `allow` — not emitting something else.
 #
 # JURISDICTION IS A DELIBERATE SCOPING DECISION, NOT AN OVERSIGHT. A repository
-# with no `harness.config.json` at its resolved root has not adopted the harness,
+# with no `devscene.config.json` at its resolved root has not adopted the harness,
 # so this guard allows nothing there — a plugin hook fires in EVERY session the
 # plugin is enabled for, including repositories that never ran `init`, and a
 # grant in a repository that never asked for one is a broken tool, not a
@@ -223,7 +223,7 @@
 #                                                   `<work_root>/<project_name>-*`
 #     any of the above with <repo> on a protected branch, or detached
 #     any of the above in a <repo> whose config is invalid JSON
-#     any of the above in a <repo> with no harness.config.json
+#     any of the above in a <repo> with no devscene.config.json
 
 set -u
 set -f

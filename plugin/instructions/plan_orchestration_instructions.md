@@ -6,11 +6,11 @@
 
 ## Resolved values
 
-The tokens below are neither Mode-contract **bindings** (this file declares none) nor ordinary **path placeholders** (`<branch>`, `<K>`, which this file's own text resolves): they resolve from the adopting repository's `harness.config.json`, are declared here once, and after this table the body uses each one as an ordinary placeholder.
+The tokens below are neither Mode-contract **bindings** (this file declares none) nor ordinary **path placeholders** (`<branch>`, `<K>`, which this file's own text resolves): they resolve from the adopting repository's `devscene.config.json`, are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `devscene/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<layer_names>` | config value | `layers[].name`. **No substitution of the names themselves** — the configured names travel through this file unchanged, because step 1's routing table passes the layer as a dispatch argument rather than selecting an agent filename by it. `general` is one of the `layers[]` rows a generated config emits (`{ "name": "general", "path": ".", "conventions": … }`), not an entry beside the array. |
 | `<layer_path_map>` | config value | `layers[].path` together with `layers[].conventions` — the scope step 1's routing table routes by, and the rules document step 2 passes to the specialist alongside the layer name. |
 | `<parity_vocabulary>` / `<reference_impl>` | config value | `parity.referenceName` / `parity.referenceImplPath` — the name of the reference implementation this project is kept in parity with, and the path to it. Read **only** when `phases.parity` is `true`. |
@@ -33,7 +33,7 @@ If every `[ ]` inside the index's readiness section is already `[x]`, say so and
 
      | Layer | Path / concern | Specialist |
      |---|---|---|
-     | any one of `<layer_names>` — **one row per `layers[]` entry** in `harness.config.json`, and no other value routes | that entry's `layers[].path`, read from `<layer_path_map>`, with its `layers[].conventions` as the rules document | `layer-implementer`, with the layer name passed as a dispatch argument alongside that entry's `path` and `conventions` |
+     | any one of `<layer_names>` — **one row per `layers[]` entry** in `devscene.config.json`, and no other value routes | that entry's `layers[].path`, read from `<layer_path_map>`, with its `layers[].conventions` as the rules document | `layer-implementer`, with the layer name passed as a dispatch argument alongside that entry's `path` and `conventions` |
 
      **The table is generic because the layer set is adopter-configured**: `layers[]` is an arbitrary list, so an agent-per-layer scheme cannot be generated for it — the layer travels as a dispatch argument to one agent instead of selecting one of a fixed set of agent filenames. `layer-implementer`'s reviewer counterpart, `layer-reviewer`, is **not** dispatched by this flow: step 3 below is this loop's review and you perform it in-session.
 
@@ -44,7 +44,7 @@ If every `[ ]` inside the index's readiness section is already `[x]`, say so and
 2. **Implement the task.**
 
    - **Inline:** edit directly.
-   - **Single-layer:** spawn the specialist once. Its system prompt covers conventions, parity rules, and output contract — your prompt to it must include file paths, the exact problem, the relevant source anchors of the reference implementation (`<parity_vocabulary>`, at `<reference_impl>`) the per-item detail file referenced, and any constraints (see "Sub-agent prompts" below). *The reference-implementation anchors apply only when `phases.parity` is `true` in `harness.config.json`.* Pass the per-item detail file path (`task_<K>_plan.md` / `finding_<K>.md`) to the specialist; also pass the index path for shared `## Context` it may need.
+   - **Single-layer:** spawn the specialist once. Its system prompt covers conventions, parity rules, and output contract — your prompt to it must include file paths, the exact problem, the relevant source anchors of the reference implementation (`<parity_vocabulary>`, at `<reference_impl>`) the per-item detail file referenced, and any constraints (see "Sub-agent prompts" below). *The reference-implementation anchors apply only when `phases.parity` is `true` in `devscene.config.json`.* Pass the per-item detail file path (`task_<K>_plan.md` / `finding_<K>.md`) to the specialist; also pass the index path for shared `## Context` it may need.
    - **Cross-layer:** dispatch sequentially. After each specialist returns, **briefly verify its output before the next dispatch** — bottom-layer mistakes propagate up and are expensive to unwind. The next specialist's prompt must reference what the previous one built (e.g., "the type `ItemSummary` was added under the data layer's configured `path`, at `summaries/itemSummary`, with fields `ownerId, itemId, tags` — wire your service to it"), and the prompt after that names the domain counterpart its caller binds to (e.g., "`ItemSummary` is remapped to `Item` under the domain layer's configured `path` — consume `Item` in the caller you are wiring, not the transport type"). One commit at the end of the chain covering all layers.
 
 3. **Always review the result** — read the modified file(s) and verify:
@@ -71,7 +71,7 @@ The agent does not see this conversation. Make every prompt self-contained:
 - State the **file path(s)** to read and modify.
 - Describe the **exact problem** (anchor it by symbol, heading or quoted substring; a line number only as a hint beside the anchor).
 - Give **precise instructions** for what to change.
-- Include the **relevant source anchors of the reference implementation** (`<parity_vocabulary>`, at `<reference_impl>`) referenced in the per-item detail file for any business-logic decision (remote-call name, threshold value, stored-document field name with its serialization annotation, gating condition, side-effect order). Without these the agent cannot verify parity. *Applies only when `phases.parity` is `true` in `harness.config.json`.*
+- Include the **relevant source anchors of the reference implementation** (`<parity_vocabulary>`, at `<reference_impl>`) referenced in the per-item detail file for any business-logic decision (remote-call name, threshold value, stored-document field name with its serialization annotation, gating condition, side-effect order). Without these the agent cannot verify parity. *Applies only when `phases.parity` is `true` in `devscene.config.json`.*
 - For cross-layer chains: explicitly tell each agent what the previous agent built — file path(s), key type names, key function names — so it can bind to real symbols instead of guessing.
 - State **constraints** (what NOT to touch, style rules to follow, patterns to match).
 

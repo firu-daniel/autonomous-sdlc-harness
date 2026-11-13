@@ -24,7 +24,7 @@ The basis is this repository: `stateDir: harness-runs`, three layers, and `phase
 |---|---|---|
 | `plugin/agents/user-review-fix-plan-writer.md` | up-front | 4 095 |
 | `.claude/CLAUDE.md` (auto-loaded) | up-front | 1 695 (notes-app 1 676) |
-| `harness.config.json` (`## Resolved values`, :12–26) | up-front | 154 |
+| `devscene.config.json` (`## Resolved values`, :12–26) | up-front | 154 |
 | User-review file (step 1, :79) | up-front | variable; excluded |
 | `<state_dir>/lessons.md` ("always, before step 6", :72; step 6 runs on initial write only, :120) | up-front (write) | 1 199 (notes-app 442) |
 | `sample_user_review_fix_plan.md` + `finding_{1,2,3}.md` (step 4 "Reference", :97; an unreadable sample is a `blocker:`, :75) | up-front in practice (write) | 985 + 974 = 1 959 |
@@ -36,7 +36,7 @@ The basis is this repository: `stateDir: harness-runs`, three layers, and `phase
 | `unit_loop_core.md` → `## The test-run rule` (:108, :118) | on demand | 732 |
 | `remote-run.sh` header `deliver` paragraph (:443–460; "shape owned by", :105, :108, :117) | on demand | 189 |
 | `branch-reviewer.md` / `layer-reviewer.md` (:10, :104) | cited, never read | 6 175 / 3 997 |
-| `mcp__harness-docs__search_docs` (:73) | on demand when `phases.docs` and `docs.retrieval` are on | n/a here |
+| `mcp__devscene-docs__search_docs` (:73) | on demand when `phases.docs` and `docs.retrieval` are on | n/a here |
 
 **Read-list conflict (lead 13).** `CLAUDE.md:40` binds "planning", while the definition says "Never read all of them up front" (:68).
 
@@ -47,7 +47,7 @@ The basis is this repository: `stateDir: harness-runs`, three layers, and `phase
 
 | Site (`user_review_fix_plan_writing_instructions_core.md`) | Flows | Prompt | Per round |
 |---|---|---|---|
-| step 5, :83–87 | supervised (`/autonomous-sdlc-harness:branch-start-user-review-fix-plan`) and autonomous (`/autonomous-sdlc-harness:branch-start-user-review-fix-autonomous`) | `Write the user-review fix plan. …` | 1, plus one per answered `## Questions` (:89, "answers appended") |
+| step 5, :83–87 | supervised (`/devscene:branch-start-user-review-fix-plan`) and autonomous (`/devscene:branch-start-user-review-fix-autonomous`) | `Write the user-review fix plan. …` | 1, plus one per answered `## Questions` (:89, "answers appended") |
 | step 7, :111–117 (only when `phases.parity` is on) | both | `Revise … per business-parity findings: …` | 0–5 |
 | step 8, :137–143 | both | `Revise … per architecture findings: …` | 0–5 |
 | step 11, :147–153 | supervised: on rejection-with-feedback (`…_instructions.md:44`), no cap; autonomous: only on an Override 2 (a) resume | `Revise … per user feedback: …` | 0–n |

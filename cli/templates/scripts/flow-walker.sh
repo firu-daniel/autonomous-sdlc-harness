@@ -85,7 +85,7 @@
 # REPRO — one PASS-everywhere walk in a throwaway fixture:
 #
 #   d=$(mktemp -d); git -C "$d" init -q -b feat_x
-#   printf '%s' '{"defaultBranch":"main","stateDir":"sdlc-harness/","phases":{"parity":true,"qa":true}}' > "$d/harness.config.json"
+#   printf '%s' '{"defaultBranch":"main","stateDir":"devscene/","phases":{"parity":true,"qa":true}}' > "$d/devscene.config.json"
 #   mkdir -p "$d/s/lib" "$d/s/flows"
 #   cp <scripts_dir>/flow-walker.sh "$d/s/"
 #   cp <scripts_dir>/lib/harness-run-lib.sh <scripts_dir>/lib/flow-walker-gates.sh "$d/s/lib/"
@@ -117,7 +117,7 @@ done
 # An older `init` keeps an existing lib/harness-run-lib.sh (create-if-absent), and one written
 # before this walker shipped lacks the phase reader every `skipped` gate calls.
 if ! declare -F hr_phase_enabled >/dev/null; then
-  printf 'flow-walker: %s predates this walker (it defines no hr_phase_enabled): delete that file and re-run autonomous-sdlc-harness init, which writes the current copy\n' "$fw_dir/lib/harness-run-lib.sh" >&2
+  printf 'flow-walker: %s predates this walker (it defines no hr_phase_enabled): delete that file and re-run devscene init, which writes the current copy\n' "$fw_dir/lib/harness-run-lib.sh" >&2
   exit 2
 fi
 
@@ -197,10 +197,10 @@ ROOT="$(hr_repo_root)" || fault "not inside a git repository"
 hr_config_load "$ROOT"
 case "$?" in
   0) ;;
-  1) fault "no harness.config.json at $ROOT" ;;
-  *) fault "cannot resolve $ROOT/harness.config.json (invalid JSON, no defaultBranch, or jq missing or older than 1.5)" ;;
+  1) fault "no devscene.config.json at $ROOT" ;;
+  *) fault "cannot resolve $ROOT/devscene.config.json (invalid JSON, no defaultBranch, or jq missing or older than 1.5)" ;;
 esac
-STATE_DIR="$(hr_state_dir "$ROOT")" || fault "cannot resolve stateDir from $ROOT/harness.config.json"
+STATE_DIR="$(hr_state_dir "$ROOT")" || fault "cannot resolve stateDir from $ROOT/devscene.config.json"
 STATE_FILE="$ROOT/$STATE_DIR/.flow_walker_state"
 
 # --- The graph --------------------------------------------------------------
@@ -491,7 +491,7 @@ arrive() {
           case "$status" in
             0) ;;
             1) applied=skipped ;;
-            *) refuse "cannot resolve phases.$phase in $ROOT/harness.config.json" ;;
+            *) refuse "cannot resolve phases.$phase in $ROOT/devscene.config.json" ;;
           esac
           ;;
         passedByExclusion)

@@ -317,9 +317,10 @@
 #                                                  and `>(` reaches a second
 #                                                  command)
 #   anchor is not inside a git repository       -> silent
-#   repository has no harness.config.json       -> silent (no jurisdiction)
-#   configuration unreadable or invalid JSON    -> silent (NEVER the `scripts`
-#                                                  default — see below)
+#   repository has no devscene.config.json      -> silent (no jurisdiction)
+#   configuration unreadable or invalid JSON    -> silent (NEVER the
+#                                                  `devscene-scripts` default —
+#                                                  see below)
 #   `scriptsDir` empty, absolute, `.`, or `..`-bearing
 #                                               -> silent (unusable root)
 #   any piece carries a torn `$(`               -> silent (its leading words say
@@ -350,14 +351,14 @@
 #   otherwise                                   -> allow
 #
 # THE DEFAULT APPLIES ONLY TO A READABLE CONFIGURATION. `scriptsDir` defaults to
-# `scripts` when the key is ABSENT from a configuration that parsed. It is never
+# `devscene-scripts` when the key is ABSENT from a configuration that parsed. It is never
 # guessed after a READ failure: an unreadable or invalid config would otherwise
 # hand this guard a plausible-looking allowed root nobody configured, which is
 # the permit this whole shape exists to withhold. `hc_config_readable` is
 # therefore tested before the directory is read.
 #
 # JURISDICTION IS A DELIBERATE SCOPING DECISION. A repository with no
-# `harness.config.json` at its resolved root has not adopted the harness, so this
+# `devscene.config.json` at its resolved root has not adopted the harness, so this
 # guard grants nothing there — a plugin hook fires in EVERY session the plugin is
 # enabled for, including repositories that never ran `init`. The repository is
 # resolved from the command the hook was handed (the first `git -C <dir>`, else a
@@ -423,7 +424,7 @@
 #     git status                                      no `.sh` token
 #     any of the above in a <repo> configuring a different `scriptsDir`
 #     any of the above in a <repo> whose config is invalid JSON
-#     any of the above in a <repo> with no harness.config.json
+#     any of the above in a <repo> with no devscene.config.json
 #
 #   NO OUTPUT — the ride-along family, each of which a script-path-only guard
 #   granted in full. The wrapper prefix is impeccable in every one; it is the
@@ -599,7 +600,7 @@ hc_config_load "$top" || :
 # the header: the default belongs to an absent key, not to a failed read.
 hc_config_readable "$top" || exit 0
 
-scripts_rel=$(hc_config_dir "$top" scriptsDir scripts) || exit 0
+scripts_rel=$(hc_config_dir "$top" scriptsDir devscene-scripts) || exit 0
 
 # An unusable configured root is silence, not a guess. An absolute or `.` value
 # would make the allowed root the whole repository (or the whole filesystem), and

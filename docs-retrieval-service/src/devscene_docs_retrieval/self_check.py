@@ -19,10 +19,10 @@ import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from harness_docs_retrieval.errors import one_line
-from harness_docs_retrieval.models import model_cache_dir, model_files_present
-from harness_docs_retrieval.service import load_service_config, open_session
-from harness_docs_retrieval.stubs import RETRIEVAL_STUB_ENV, stub_models_selected
+from devscene_docs_retrieval.errors import one_line
+from devscene_docs_retrieval.models import model_cache_dir, model_files_present
+from devscene_docs_retrieval.service import load_service_config, open_session
+from devscene_docs_retrieval.stubs import RETRIEVAL_STUB_ENV, stub_models_selected
 
 SELF_CHECK_QUESTIONS = ("packages", "weights", "index")
 

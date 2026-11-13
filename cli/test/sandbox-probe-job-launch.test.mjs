@@ -10,8 +10,9 @@
  * `job-sweep`, run before every manifest write as well as at teardown; and the agent's PID reaches the
  * prompt as a literal.**
  *
- * Each case runs a `bash -c` through `runBash`, sourcing the run library and `core.sh`, `platform.sh`,
- * `judge.sh`, `controls.sh`, `session.sh` and `job.sh` from `WORKSPACE_ROOT`, with the probe's variables
+ * Each case runs a `bash -c` through `runBash`, sourcing the template run library the copy `init` ships
+ * (`cli/templates/scripts/lib/harness-run-lib.sh`) and `core.sh`, `platform.sh`, `judge.sh`,
+ * `controls.sh`, `session.sh` and `job.sh` from `WORKSPACE_ROOT/scripts/lib/sandbox-probe/`, with the probe's variables
  * set after sourcing because the libraries blank them. Fixtures sit under `os.tmpdir()`, removed in process.
  * The manifest cases point `SP_MAIN` and `SP_SCRIPTS` at an `init`-written fixture (`createWatcherFixture`),
  * because the probe calls that watcher's own `placeholder_manifest_writable_root`.
@@ -31,7 +32,7 @@ import { INIT_SCRIPTS_DIR, runBash, seedRepository, WORKSPACE_ROOT } from './hel
 import { scaleBound } from './helpers/timing.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
-const RUN_LIB = join(WORKSPACE_ROOT, 'scripts', 'lib', 'harness-run-lib.sh');
+const RUN_LIB = join(WORKSPACE_ROOT, 'cli', 'templates', 'scripts', 'lib', 'harness-run-lib.sh');
 const PROBE_LIB = join(WORKSPACE_ROOT, 'scripts', 'lib', 'sandbox-probe');
 const LIBS = [
   RUN_LIB,
@@ -215,7 +216,7 @@ test('the job-mode placeholder manifest', async (t) => {
       ].join('\n'),
       m.w.watcherEnv(),
     );
-  const manifestAt = (runnerTemp) => join(runnerTemp, 'autonomous-sdlc-harness-placeholders', `${BRANCH}.absent`);
+  const manifestAt = (runnerTemp) => join(runnerTemp, 'devscene-placeholders', `${BRANCH}.absent`);
   /** The probe's lines less the pre-session sweep's, which the real watcher's `job-sweep` produces. */
   const manifestLines = (stderr) =>
     probeLines(stderr).filter((l) => !l.startsWith('sandbox-probe: job-sweep before this session: '));

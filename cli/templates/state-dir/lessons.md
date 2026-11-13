@@ -20,4 +20,4 @@ _The entry below is a worked example, not a lesson from this project — delete 
 
 _[Add headings of your own as themes emerge — one per recurring theme — and file each new lesson under the heading it belongs to.]_
 
-_Written by `autonomous-sdlc-harness init`, and yours from there on: a re-run never touches a ledger that already exists._
+_Written by `devscene init`, and yours from there on: a re-run never touches a ledger that already exists._

@@ -2,29 +2,29 @@
  * `remote-run.sh trigger`, the GitHub event adapter: an `issues` `labeled` event, or a `repository_dispatch`
  * of type `harness-task`, becomes a branch and a task text, then `start`.
  *
- * **The rule these tests exist to enforce: only a write-or-admin human `HARNESS_RUN_ACTORS` admits, or a
+ * **The rule these tests exist to enforce: only a write-or-admin human `DEVSCENE_RUN_ACTORS` admits, or a
  * listed bot, starts a run; every refusal sends no `workflow run` and posts one comment naming why; event
- * text is data.** Each refusal arm — `HARNESS_REMOTE_STOP`, a trigger the configuration does not turn on,
+ * text is data.** Each refusal arm — `DEVSCENE_REMOTE_STOP`, a trigger the configuration does not turn on,
  * a closed issue, `ghost`, an unlisted bot, a `read` answer, a failed permission call, a writer the
  * allow-list does not admit and a failed run-history listing — is driven here. The suite's builders set
  * the list to `*`, today's meaning; the allow-list cases override it, covering trimmed case-insensitive
  * entries, an unset list admitting a `User` owner alone and nobody otherwise, and a dispatch's `User`
  * sender held to the list where a `Bot` sender is not. A body
  * carrying shell syntax is committed byte for byte with nothing executed. A dispatch event has no issue,
- * so its cases assert feedback in the step summary and no `issue` call at all. With `HARNESS_TRIGGER_LABEL`
- * empty — only the previous release's workflow passes it so — the legacy label `harness` starts a run
- * too, and its removal names it; with the variable set, only the label it names does. Every issue comment
+ * so its cases assert feedback in the step summary and no `issue` call at all. With `DEVSCENE_TRIGGER_LABEL`
+ * empty only the default label `devscene` starts a run; with the variable set, only the label it names
+ * does. Every issue comment
  * ends with the hidden marker, `event=started branch=<branch>` on a start and `event=refused` otherwise, and
- * a start alone sets the state label `sdlc-harness: running`, after the trigger label's removal; a failed
+ * a start alone sets the state label `devscene: running`, after the trigger label's removal; a failed
  * label add is a warning, never a failed start.
  *
  * Each case drives `remote-start.test.mjs`'s fixture shape — `init`, `execution.target` set, the
  * adopted tree pushed to the fixture's bare `origin` — plus `forge: "github"` and an event file the
- * test writes. `gh` is a stub reached through `HARNESS_GH_CLI`: it answers the permission call from a
+ * test writes. `gh` is a stub reached through `DEVSCENE_GH_CLI`: it answers the permission call from a
  * per-login table, answers the name-derivation run-history probe from a per-branch `STUB_HISTORY` table
  * (no history by default), answers every other `run list` from `STUB_RUN_LIST` — one answer per call, the last repeated, its
  * `headSha` `ORIGIN` replaced by `refs/heads/<branch>` of the bare origin at `STUB_ORIGIN` — by default one
- * `harness run <branch>` run carrying a `url` and that `headSha`, answers an issue's label list with `[]`, and logs each argument vector with any
+ * `devscene run <branch>` run carrying a `url` and that `headSha`, answers an issue's label list with `[]`, and logs each argument vector with any
  * `--body-file`'s content; a call starting `STUB_FAIL_ON` exits 4. No case reaches the network.
  */
 
@@ -37,7 +37,7 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REPOSITORY = 'octo/fixture';
 const TITLE = 'Add comments to items';
 const BRANCH = 'add_comments_to_items';
@@ -80,7 +80,7 @@ if (args[0] === 'api' && permission) {
   } catch {}
   const answers = process.env.STUB_RUN_LIST
     ? JSON.parse(process.env.STUB_RUN_LIST)
-    : [[{ displayTitle: 'harness run ' + branch, url: 'https://example.test/runs/' + branch, headSha: 'ORIGIN' }]];
+    : [[{ displayTitle: 'devscene run ' + branch, url: 'https://example.test/runs/' + branch, headSha: 'ORIGIN' }]];
   const made = readFileSync(process.env.STUB_LOG, 'utf8').split('\\n').filter((line) => line.includes('"args":["run","list"') && !line.includes('"--json","databaseId"')).length;
   const runs = answers[Math.min(made, answers.length) - 1];
   process.stdout.write(JSON.stringify(runs.map((run) => (run.headSha === 'ORIGIN' ? { ...run, headSha: sha } : run))));
@@ -104,7 +104,7 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   config.forge = forge;
@@ -142,7 +142,7 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
     trigger: async (overrides = {}, env = {}, permissions = { alice: 'write' }) => {
       const event = {
         action: 'labeled',
-        label: { name: 'sdlc-harness' },
+        label: { name: 'devscene' },
         sender: { login: 'alice', type: 'User' },
         ...overrides,
         issue: {
@@ -161,7 +161,7 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
         t.after(() => rm(worktreeOf(branch), { recursive: true, force: true }));
       }
       return runBash(dir, [SCRIPT, 'trigger'], {
-        HARNESS_GH_CLI: stub,
+        DEVSCENE_GH_CLI: stub,
         STUB_LOG: log,
         STUB_PERMISSIONS: JSON.stringify(permissions),
         STUB_ORIGIN: origin,
@@ -171,10 +171,10 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
         GITHUB_SERVER_URL: 'https://github.com',
         GITHUB_RUN_ID: '4242',
         RUNNER_TEMP: runnerTemp,
-        HARNESS_REMOTE_STOP: '',
-        HARNESS_TRIGGER_LABEL: '',
-        HARNESS_TRIGGER_ALLOWED_BOTS: '',
-        HARNESS_RUN_ACTORS: '*',
+        DEVSCENE_REMOTE_STOP: '',
+        DEVSCENE_TRIGGER_LABEL: '',
+        DEVSCENE_TRIGGER_ALLOWED_BOTS: '',
+        DEVSCENE_RUN_ACTORS: '*',
         GITHUB_RUN_ATTEMPT: '',
         GITHUB_TRIGGERING_ACTOR: '',
         HARNESS_TRIGGER_LOOKUP_SECS: '0',
@@ -195,7 +195,7 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
         t.after(() => rm(worktreeOf(branch), { recursive: true, force: true }));
       }
       return runBash(dir, [SCRIPT, 'trigger'], {
-        HARNESS_GH_CLI: stub,
+        DEVSCENE_GH_CLI: stub,
         STUB_LOG: log,
         STUB_PERMISSIONS: '{}',
         STUB_ORIGIN: origin,
@@ -206,10 +206,10 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
         GITHUB_RUN_ID: '4242',
         GITHUB_STEP_SUMMARY: summary,
         RUNNER_TEMP: runnerTemp,
-        HARNESS_REMOTE_STOP: '',
-        HARNESS_TRIGGER_LABEL: '',
-        HARNESS_TRIGGER_ALLOWED_BOTS: '',
-        HARNESS_RUN_ACTORS: '*',
+        DEVSCENE_REMOTE_STOP: '',
+        DEVSCENE_TRIGGER_LABEL: '',
+        DEVSCENE_TRIGGER_ALLOWED_BOTS: '',
+        DEVSCENE_RUN_ACTORS: '*',
         GITHUB_RUN_ATTEMPT: '',
         GITHUB_TRIGGERING_ACTOR: '',
         HARNESS_TRIGGER_LOOKUP_SECS: '0',
@@ -235,7 +235,7 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
 
 const dispatches = (calls) => calls.filter((call) => call.line.startsWith('workflow run'));
 const comments = (calls) => calls.filter((call) => call.line.startsWith('issue comment 7'));
-const removals = (calls, label = 'sdlc-harness') =>
+const removals = (calls, label = 'devscene') =>
   calls.filter((call) => call.line === `issue edit 7 --repo ${REPOSITORY} --remove-label ${label}`);
 const permissionCalls = (calls) => calls.filter((call) => call.args[0] === 'api' && /\/collaborators\//.test(call.args[1] ?? ''));
 const LABELS_PATH = `repos/${REPOSITORY}/issues/7/labels`;
@@ -253,7 +253,7 @@ function assertRefused(f, result, reason) {
   assert.equal(posted.length, 1);
   assert.match(posted[0].body, /No run started/);
   assert.match(posted[0].body, reason);
-  assert.match(posted[0].body, /<!-- sdlc-harness event=refused branch=[a-z0-9_]* -->\n$/);
+  assert.match(posted[0].body, /<!-- devscene event=refused branch=[a-z0-9_]* -->\n$/);
   assert.equal(removals(calls).length, 1);
   assert.deepEqual(labelAdds(calls), []);
   return calls;
@@ -266,17 +266,17 @@ test('a start marks its comment started with the derived branch and sets running
   const calls = f.calls();
   const posted = comments(calls);
   assert.equal(posted.length, 1);
-  assert.ok(posted[0].body.endsWith(`\n\n<!-- sdlc-harness event=started branch=${BRANCH} -->\n`), posted[0].body);
+  assert.ok(posted[0].body.endsWith(`\n\n<!-- devscene event=started branch=${BRANCH} -->\n`), posted[0].body);
   const adds = labelAdds(calls);
-  assert.deepEqual(adds.map((call) => call.line), [`api --method POST ${LABELS_PATH} -f labels[]=sdlc-harness: running`]);
+  assert.deepEqual(adds.map((call) => call.line), [`api --method POST ${LABELS_PATH} -f labels[]=devscene: running`]);
   const removal = calls.findIndex((call) => call.line.startsWith('issue edit 7'));
   assert.ok(removal >= 0 && removal < calls.indexOf(adds[0]), 'running was added before the trigger label was removed');
 });
 
 test('a refusal before a branch is derived marks its comment refused with an empty branch', async (t) => {
   const f = await triggerFixture(t);
-  const calls = assertRefused(f, await f.trigger({}, { HARNESS_REMOTE_STOP: '1' }), /HARNESS_REMOTE_STOP/);
-  assert.ok(comments(calls)[0].body.endsWith('\n\n<!-- sdlc-harness event=refused branch= -->\n'));
+  const calls = assertRefused(f, await f.trigger({}, { DEVSCENE_REMOTE_STOP: '1' }), /DEVSCENE_REMOTE_STOP/);
+  assert.ok(comments(calls)[0].body.endsWith('\n\n<!-- devscene event=refused branch= -->\n'));
 });
 
 test('a failing state-label add still exits 0, with one warning line', async (t) => {
@@ -286,7 +286,7 @@ test('a failing state-label add still exits 0, with one warning line', async (t)
   assert.equal(dispatches(f.calls()).length, 1);
   const warnings = `${result.stdout}\n${result.stderr}`.split('\n').filter((line) => line.startsWith('::warning::'));
   assert.equal(warnings.length, 1, warnings.join('\n'));
-  assert.match(warnings[0], /sdlc-harness: running/);
+  assert.match(warnings[0], /devscene: running/);
 });
 
 test('a write user starts one run on the derived branch, comments it and removes the label', async (t) => {
@@ -296,7 +296,7 @@ test('a write user starts one run on the derived branch, comments it and removes
   const calls = f.calls();
   assert.deepEqual(
     dispatches(calls).map((call) => call.line),
-    [`workflow run harness-run.yml --ref ${BRANCH} -f action=run -f branch=${BRANCH} -f engine=task -f resume=none -f chain=0`],
+    [`workflow run devscene-run.yml --ref ${BRANCH} -f action=run -f branch=${BRANCH} -f engine=task -f resume=none -f chain=0`],
   );
   const posted = comments(calls);
   assert.equal(posted.length, 1);
@@ -313,7 +313,7 @@ test('a write user starts one run on the derived branch, comments it and removes
   assert.match(
     prompt,
     new RegExp(
-      `^# ${TITLE}\\n\\nLet a reader comment on a content item\\.\\n\\n\\n---\\n\\nStarted from https://github\\.com/${REPOSITORY}/issues/7 by @alice, who applied the label \`sdlc-harness\` at \\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ\\.`,
+      `^# ${TITLE}\\n\\nLet a reader comment on a content item\\.\\n\\n\\n---\\n\\nStarted from https://github\\.com/${REPOSITORY}/issues/7 by @alice, who applied the label \`devscene\` at \\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ\\.`,
     ),
   );
 });
@@ -341,16 +341,16 @@ test('an unlisted bot is refused without a permission call', async (t) => {
   const calls = assertRefused(
     f,
     await f.trigger({ sender: { login: 'helper[bot]', type: 'Bot' } }),
-    /HARNESS_TRIGGER_ALLOWED_BOTS/,
+    /DEVSCENE_TRIGGER_ALLOWED_BOTS/,
   );
   assert.deepEqual(permissionCalls(calls), []);
 });
 
-test('a bot listed in HARNESS_TRIGGER_ALLOWED_BOTS starts a run without a permission call', async (t) => {
+test('a bot listed in DEVSCENE_TRIGGER_ALLOWED_BOTS starts a run without a permission call', async (t) => {
   const f = await triggerFixture(t);
   const result = await f.trigger(
     { sender: { login: 'helper[bot]', type: 'Bot' } },
-    { HARNESS_TRIGGER_ALLOWED_BOTS: 'other[bot] , helper[bot]' },
+    { DEVSCENE_TRIGGER_ALLOWED_BOTS: 'other[bot] , helper[bot]' },
   );
   assert.equal(result.status, 0, result.stderr);
   const calls = f.calls();
@@ -363,56 +363,56 @@ test('a failing permission call is refused, never a pass', async (t) => {
   assertRefused(f, await f.trigger({}, {}, { alice: 'FAIL' }), /could not confirm write access/);
 });
 
-test('a writer not on HARNESS_RUN_ACTORS is refused after the permission call', async (t) => {
+test('a writer not on DEVSCENE_RUN_ACTORS is refused after the permission call', async (t) => {
   const f = await triggerFixture(t);
-  const calls = assertRefused(f, await f.trigger({}, { HARNESS_RUN_ACTORS: 'bob, carol' }), /HARNESS_RUN_ACTORS/);
+  const calls = assertRefused(f, await f.trigger({}, { DEVSCENE_RUN_ACTORS: 'bob, carol' }), /DEVSCENE_RUN_ACTORS/);
   assert.equal(permissionCalls(calls).length, 1);
 });
 
-test('HARNESS_RUN_ACTORS entries are trimmed and matched case-insensitively', async (t) => {
+test('DEVSCENE_RUN_ACTORS entries are trimmed and matched case-insensitively', async (t) => {
   const f = await triggerFixture(t);
-  const result = await f.trigger({}, { HARNESS_RUN_ACTORS: ' Alice ,bob' });
+  const result = await f.trigger({}, { DEVSCENE_RUN_ACTORS: ' Alice ,bob' });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.equal(dispatches(f.calls()).length, 1);
 });
 
-test('an unset HARNESS_RUN_ACTORS admits a User owner alone, and names the owner to anyone else', async (t) => {
+test('an unset DEVSCENE_RUN_ACTORS admits a User owner alone, and names the owner to anyone else', async (t) => {
   const f = await triggerFixture(t);
   const repository = { owner: { login: 'alice', type: 'User' } };
-  const owner = await f.trigger({ repository }, { HARNESS_RUN_ACTORS: '' });
+  const owner = await f.trigger({ repository }, { DEVSCENE_RUN_ACTORS: '' });
   assert.equal(owner.status, 0, `${owner.stdout}\n${owner.stderr}`);
   assert.equal(dispatches(f.calls()).length, 1);
 
   const g = await triggerFixture(t);
   assertRefused(
     g,
-    await g.trigger({ repository, sender: { login: 'bob', type: 'User' } }, { HARNESS_RUN_ACTORS: '' }, { bob: 'write' }),
+    await g.trigger({ repository, sender: { login: 'bob', type: 'User' } }, { DEVSCENE_RUN_ACTORS: '' }, { bob: 'write' }),
     /@alice/,
   );
 });
 
-test('an unset HARNESS_RUN_ACTORS on an organisation repository admits nobody, saying to set it or *', async (t) => {
+test('an unset DEVSCENE_RUN_ACTORS on an organisation repository admits nobody, saying to set it or *', async (t) => {
   const f = await triggerFixture(t);
   assertRefused(
     f,
-    await f.trigger({ repository: { owner: { login: 'octo', type: 'Organization' } } }, { HARNESS_RUN_ACTORS: '' }),
-    /HARNESS_RUN_ACTORS.*`\*`/s,
+    await f.trigger({ repository: { owner: { login: 'octo', type: 'Organization' } } }, { DEVSCENE_RUN_ACTORS: '' }),
+    /DEVSCENE_RUN_ACTORS.*`\*`/s,
   );
 });
 
-test('an unset HARNESS_RUN_ACTORS with no repository in the event fails closed', async (t) => {
+test('an unset DEVSCENE_RUN_ACTORS with no repository in the event fails closed', async (t) => {
   const f = await triggerFixture(t);
-  assertRefused(f, await f.trigger({}, { HARNESS_RUN_ACTORS: '' }), /HARNESS_RUN_ACTORS/);
+  assertRefused(f, await f.trigger({}, { DEVSCENE_RUN_ACTORS: '' }), /DEVSCENE_RUN_ACTORS/);
 });
 
-test('a read labeller on HARNESS_RUN_ACTORS is still refused, naming write access', async (t) => {
+test('a read labeller on DEVSCENE_RUN_ACTORS is still refused, naming write access', async (t) => {
   const f = await triggerFixture(t);
-  assertRefused(f, await f.trigger({}, { HARNESS_RUN_ACTORS: 'alice' }, { alice: 'read' }), /write access/);
+  assertRefused(f, await f.trigger({}, { DEVSCENE_RUN_ACTORS: 'alice' }, { alice: 'read' }), /write access/);
 });
 
-test('HARNESS_REMOTE_STOP refuses every start', async (t) => {
+test('DEVSCENE_REMOTE_STOP refuses every start', async (t) => {
   const f = await triggerFixture(t);
-  const calls = assertRefused(f, await f.trigger({}, { HARNESS_REMOTE_STOP: '1' }), /HARNESS_REMOTE_STOP/);
+  const calls = assertRefused(f, await f.trigger({}, { DEVSCENE_REMOTE_STOP: '1' }), /DEVSCENE_REMOTE_STOP/);
   assert.deepEqual(permissionCalls(calls), []);
 });
 
@@ -437,31 +437,21 @@ test('another action or another label is ignored with no gh call', async (t) => 
   assert.deepEqual(f.calls(), []);
 });
 
-test('with HARNESS_TRIGGER_LABEL empty, the legacy label starts a run and its removal names it', async (t) => {
+test('with DEVSCENE_TRIGGER_LABEL set to the default, another label is ignored with no gh call', async (t) => {
   const f = await triggerFixture(t);
-  const result = await f.trigger({ label: { name: 'harness' } });
-  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-  const calls = f.calls();
-  assert.equal(dispatches(calls).length, 1);
-  assert.equal(removals(calls, 'harness').length, 1);
-  assert.equal(removals(calls).length, 0);
-});
-
-test('with HARNESS_TRIGGER_LABEL set to the default, the legacy label is ignored with no gh call', async (t) => {
-  const f = await triggerFixture(t);
-  const result = await f.trigger({ label: { name: 'harness' } }, { HARNESS_TRIGGER_LABEL: 'sdlc-harness' });
+  const result = await f.trigger({ label: { name: 'start-run' } }, { DEVSCENE_TRIGGER_LABEL: 'devscene' });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /ignored/);
   assert.deepEqual(f.calls(), []);
 });
 
-test('with HARNESS_TRIGGER_LABEL naming the legacy label, that label starts a run', async (t) => {
+test('with DEVSCENE_TRIGGER_LABEL naming a custom label, that label starts a run', async (t) => {
   const f = await triggerFixture(t);
-  const result = await f.trigger({ label: { name: 'harness' } }, { HARNESS_TRIGGER_LABEL: 'harness' });
+  const result = await f.trigger({ label: { name: 'start-run' } }, { DEVSCENE_TRIGGER_LABEL: 'start-run' });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   const calls = f.calls();
   assert.equal(dispatches(calls).length, 1);
-  assert.equal(removals(calls, 'harness').length, 1);
+  assert.equal(removals(calls, 'start-run').length, 1);
 });
 
 test('a second issue with the same title starts on <slug>_2', async (t) => {
@@ -480,7 +470,7 @@ test('a name with run-workflow history and no branch starts on <slug>_2, probed 
   const calls = f.calls();
   assert.deepEqual(
     dispatches(calls).map((call) => call.line),
-    [`workflow run harness-run.yml --ref ${BRANCH}_2 -f action=run -f branch=${BRANCH}_2 -f engine=task -f resume=none -f chain=0`],
+    [`workflow run devscene-run.yml --ref ${BRANCH}_2 -f action=run -f branch=${BRANCH}_2 -f engine=task -f resume=none -f chain=0`],
   );
   const posted = comments(calls);
   assert.equal(posted.length, 1);
@@ -494,7 +484,7 @@ test('a failed run-history listing is refused, naming it', async (t) => {
   const f = await triggerFixture(t);
   assertRefused(
     f,
-    await f.trigger({}, { STUB_FAIL_ON: `run list --workflow harness-run.yml --branch ${BRANCH} --limit 1` }),
+    await f.trigger({}, { STUB_FAIL_ON: `run list --workflow devscene-run.yml --branch ${BRANCH} --limit 1` }),
     new RegExp(`the run history of ${BRANCH} could not be listed`),
   );
 });
@@ -527,18 +517,18 @@ test('a dispatch that fails after the push exits 3 and comments the manual way o
   const posted = comments(calls);
   assert.equal(posted.length, 1);
   assert.match(posted[0].body, new RegExp(`\`${BRANCH}\` was pushed`));
-  assert.match(posted[0].body, /harness-run\.yml.*Run workflow/s);
+  assert.match(posted[0].body, /devscene-run\.yml.*Run workflow/s);
   assert.match(posted[0].body, /Use workflow from\* set to/);
   assert.equal(removals(calls).length, 1);
 });
 
-/** A `harness run <BRANCH>` run of an earlier push: same title, another `headSha`. */
+/** A `devscene run <BRANCH>` run of an earlier push: same title, another `headSha`. */
 const OLDER_RUN = {
-  displayTitle: `harness run ${BRANCH}`,
+  displayTitle: `devscene run ${BRANCH}`,
   url: 'https://example.test/runs/older',
   headSha: '0123456789abcdef0123456789abcdef01234567',
 };
-const DISPATCHED_RUN = { displayTitle: `harness run ${BRANCH}`, url: 'https://example.test/runs/dispatched', headSha: 'ORIGIN' };
+const DISPATCHED_RUN = { displayTitle: `devscene run ${BRANCH}`, url: 'https://example.test/runs/dispatched', headSha: 'ORIGIN' };
 
 test('the comment names the run whose headSha was pushed, when it appears on a later lookup', async (t) => {
   const f = await triggerFixture(t);
@@ -562,7 +552,7 @@ test('the comment names the filtered run list, never an older run, when the disp
   const posted = comments(f.calls());
   assert.equal(posted.length, 1);
   assert.ok(
-    posted[0].body.includes(`https://github.com/${REPOSITORY}/actions/workflows/harness-run.yml?query=branch%3A${BRANCH}`),
+    posted[0].body.includes(`https://github.com/${REPOSITORY}/actions/workflows/devscene-run.yml?query=branch%3A${BRANCH}`),
     posted[0].body,
   );
   assert.doesNotMatch(posted[0].body, /runs\/older/);
@@ -581,7 +571,7 @@ test('a harness-task dispatch starts one run, snapshots its provenance and repor
   const calls = f.calls();
   assert.deepEqual(
     dispatches(calls).map((call) => call.line),
-    [`workflow run harness-run.yml --ref ${BRANCH} -f action=run -f branch=${BRANCH} -f engine=task -f resume=none -f chain=0`],
+    [`workflow run devscene-run.yml --ref ${BRANCH} -f action=run -f branch=${BRANCH} -f engine=task -f resume=none -f chain=0`],
   );
   assert.deepEqual(issueCalls(calls), []);
   const prompt = await f.committedPrompt(BRANCH);
@@ -622,9 +612,9 @@ test('a dispatch whose title has no slug starts on task_<GITHUB_RUN_ID>', async 
   assert.match(await f.committedPrompt('task_4242'), /^# 🚀🚀\n\nx\n\n---\n\nStarted by a repository_dispatch event of type `harness-task` at /);
 });
 
-test('a dispatch holds a User sender to HARNESS_RUN_ACTORS, and lets a Bot sender through', async (t) => {
+test('a dispatch holds a User sender to DEVSCENE_RUN_ACTORS, and lets a Bot sender through', async (t) => {
   const payload = { action: 'harness-task', client_payload: { title: TITLE, body: 'x' } };
-  const env = { HARNESS_RUN_ACTORS: 'alice' };
+  const env = { DEVSCENE_RUN_ACTORS: 'alice' };
 
   const refused = await triggerFixture(t);
   const result = await refused.dispatch({ ...payload, sender: { login: 'mallory', type: 'User' } }, env);
@@ -632,7 +622,7 @@ test('a dispatch holds a User sender to HARNESS_RUN_ACTORS, and lets a Bot sende
   assert.deepEqual(dispatches(refused.calls()), []);
   assert.deepEqual(permissionCalls(refused.calls()), []);
   assert.match(refused.summary(), /No run started/);
-  assert.match(refused.summary(), /HARNESS_RUN_ACTORS/);
+  assert.match(refused.summary(), /DEVSCENE_RUN_ACTORS/);
 
   const listed = await triggerFixture(t);
   const started = await listed.dispatch({ ...payload, sender: { login: 'Alice', type: 'User' } }, env);
@@ -649,15 +639,15 @@ test('a dispatch whose sender carries no type fails closed unless the list is *'
   const f = await triggerFixture(t);
   const result = await f.dispatch(
     { action: 'harness-task', client_payload: { title: TITLE, body: 'x' }, sender: { login: 'alice' } },
-    { HARNESS_RUN_ACTORS: 'alice' },
+    { DEVSCENE_RUN_ACTORS: 'alice' },
   );
   assert.equal(result.status, 2, `${result.stdout}\n${result.stderr}`);
   assert.deepEqual(dispatches(f.calls()), []);
-  assert.match(f.summary(), /HARNESS_RUN_ACTORS/);
+  assert.match(f.summary(), /DEVSCENE_RUN_ACTORS/);
 });
 
-test('a re-run by a person HARNESS_RUN_ACTORS does not admit is refused, whoever the event names', async (t) => {
-  const rerun = { HARNESS_RUN_ACTORS: 'alice', GITHUB_RUN_ATTEMPT: '2' };
+test('a re-run by a person DEVSCENE_RUN_ACTORS does not admit is refused, whoever the event names', async (t) => {
+  const rerun = { DEVSCENE_RUN_ACTORS: 'alice', GITHUB_RUN_ATTEMPT: '2' };
 
   const f = await triggerFixture(t);
   const calls = assertRefused(f, await f.trigger({}, { ...rerun, GITHUB_TRIGGERING_ACTOR: 'bob' }), /re-run by @bob/);

@@ -60,9 +60,9 @@ test('HR_TEST_RUN_LABEL_PATTERN accepts a gate label and refuses a leading dash 
 
 test('hr_test_run_lane_dir composes <state_dir>/test_run_logs/<sanitized branch>', async (t) => {
   const f = await fixture(t);
-  const relative = await f.call('hr_test_run_lane_dir "$1" "$2"; echo "status=$?"', ['sdlc-harness', 'feat/run-gates']);
+  const relative = await f.call('hr_test_run_lane_dir "$1" "$2"; echo "status=$?"', ['devscene', 'feat/run-gates']);
   assert.equal(relative.stderr, '');
-  assert.equal(relative.stdout, 'sdlc-harness/test_run_logs/feat-run-gates\nstatus=0\n');
+  assert.equal(relative.stdout, 'devscene/test_run_logs/feat-run-gates\nstatus=0\n');
 
   const absolute = await f.call('hr_test_run_lane_dir "$1" "$2"; echo "status=$?"', ['/x/harness-runs', 'fix/a/b']);
   assert.equal(absolute.stdout, '/x/harness-runs/test_run_logs/fix-a-b\nstatus=0\n');
@@ -70,7 +70,7 @@ test('hr_test_run_lane_dir composes <state_dir>/test_run_logs/<sanitized branch>
 
 test('hr_test_run_lane_dir fails, printing nothing, for a branch that does not sanitize', async (t) => {
   const f = await fixture(t);
-  const r = await f.call('hr_test_run_lane_dir "$1" "$2"; echo "status=$?"', ['sdlc-harness', '']);
+  const r = await f.call('hr_test_run_lane_dir "$1" "$2"; echo "status=$?"', ['devscene', '']);
   assert.equal(r.stderr, '');
   assert.equal(r.stdout, 'status=1\n');
 });

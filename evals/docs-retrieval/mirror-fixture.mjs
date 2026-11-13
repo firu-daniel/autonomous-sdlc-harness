@@ -33,7 +33,7 @@ function git(dir, args) {
  * A git-initialized fixture repository under the system temp directory, holding exactly the files the
  * resolved corpus names, at the same repo-relative paths.
  *
- * `repoRoot` is the checkout whose `harness.config.json` is merged; `resolved` is
+ * `repoRoot` is the checkout whose `devscene.config.json` is merged; `resolved` is
  * `evals/docs-retrieval/corpora.mjs` → `corpusConfig`'s `{ id, config, repoRoot }`. The layer entries
  * are the resolved ones mapped onto their copied paths, one for one, and no layer count and no
  * rules-document path is written here.

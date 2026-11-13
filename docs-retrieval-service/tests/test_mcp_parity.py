@@ -27,14 +27,14 @@ from mcp.client.stdio import StdioServerParameters
 from mcp.shared.message import SessionMessage
 
 from fakes import FakeSession
-from harness_docs_retrieval import mcp_server
-from harness_docs_retrieval.jscompat import json_stringify
-from harness_docs_retrieval.mcp_server import _encode_outgoing, _EncodingWriteStream, build_server
-from harness_docs_retrieval.models import MODEL_CACHE_ENV
-from harness_docs_retrieval.service import CONFIG_FILENAME
-from harness_docs_retrieval.store import DATABASE_URL_ENV
-from harness_docs_retrieval.stubs import RETRIEVAL_STUB_ENV
-from harness_docs_retrieval.wire import SEARCH_TOOL_NAME
+from devscene_docs_retrieval import mcp_server
+from devscene_docs_retrieval.jscompat import json_stringify
+from devscene_docs_retrieval.mcp_server import _encode_outgoing, _EncodingWriteStream, build_server
+from devscene_docs_retrieval.models import MODEL_CACHE_ENV
+from devscene_docs_retrieval.service import CONFIG_FILENAME
+from devscene_docs_retrieval.store import DATABASE_URL_ENV
+from devscene_docs_retrieval.stubs import RETRIEVAL_STUB_ENV
+from devscene_docs_retrieval.wire import SEARCH_TOOL_NAME
 from ts_bridge import ts_fixture
 
 CORPUS = {
@@ -111,7 +111,7 @@ def test_listing_and_refusals_match_the_typescript_server() -> None:
 
 
 def _console_script() -> str:
-    return str(Path(sys.executable).parent / "harness-docs-retrieval")
+    return str(Path(sys.executable).parent / "devscene-docs-retrieval")
 
 
 def test_an_empty_model_cache_is_refused_cleanly(tmp_path: Path) -> None:
@@ -139,7 +139,7 @@ def test_an_empty_model_cache_is_refused_cleanly(tmp_path: Path) -> None:
     assert result.stdout == ""
     lines = result.stderr.splitlines()
     assert len(lines) == 1, result.stderr
-    assert lines[0].startswith("harness-docs-retrieval: ")
+    assert lines[0].startswith("devscene-docs-retrieval: ")
     assert str(cache) in lines[0]
     assert "Traceback" not in result.stderr
 

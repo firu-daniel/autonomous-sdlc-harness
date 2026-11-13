@@ -293,7 +293,7 @@ esac
 root="$(hr_script_root "$script_dir")" || refuse "'$script_dir' is not inside a git repository"
 cd "$root" || refuse "cannot enter '$root'"
 
-state_dir="$(hr_state_dir "$root")" || refuse "cannot resolve '$root/harness.config.json'"
+state_dir="$(hr_state_dir "$root")" || refuse "cannot resolve '$root/devscene.config.json'"
 
 branch="$(hr_current_branch "$root")"
 [ -n "$branch" ] || refuse "no current branch (detached HEAD?)"
@@ -422,18 +422,18 @@ fi
 command_line="$(hr_command "$root" test)"
 case $? in
   0) ;;
-  2) refuse "cannot resolve '$root/harness.config.json'" ;;
+  2) refuse "cannot resolve '$root/devscene.config.json'" ;;
   *) command_line="" ;;
 esac
-[ -n "$command_line" ] || refuse "commands.test is not set in harness.config.json"
+[ -n "$command_line" ] || refuse "commands.test is not set in devscene.config.json"
 
 typecheck_line="$(hr_command "$root" typecheck)"
 case $? in
   0) ;;
-  2) refuse "cannot resolve '$root/harness.config.json'" ;;
+  2) refuse "cannot resolve '$root/devscene.config.json'" ;;
   *) typecheck_line="" ;;
 esac
-[ -n "$typecheck_line" ] || refuse "commands.typecheck is not set in harness.config.json"
+[ -n "$typecheck_line" ] || refuse "commands.typecheck is not set in devscene.config.json"
 
 typecheck_trimmed="${typecheck_line#"${typecheck_line%%[![:space:]]*}"}"
 typecheck_trimmed="${typecheck_trimmed%"${typecheck_trimmed##*[![:space:]]}"}"

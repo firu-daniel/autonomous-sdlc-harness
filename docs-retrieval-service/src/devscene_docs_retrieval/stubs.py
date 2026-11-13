@@ -13,12 +13,12 @@ import os
 import re
 from collections.abc import Sequence
 
-from harness_docs_retrieval import models
-from harness_docs_retrieval.errors import ServiceError
-from harness_docs_retrieval.jscompat import json_stringify_str
-from harness_docs_retrieval.models import EMBEDDING_DIMENSIONS, Embedder, Reranker
+from devscene_docs_retrieval import models
+from devscene_docs_retrieval.errors import ServiceError
+from devscene_docs_retrieval.jscompat import json_stringify_str
+from devscene_docs_retrieval.models import EMBEDDING_DIMENSIONS, Embedder, Reranker
 
-RETRIEVAL_STUB_ENV = "AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB"
+RETRIEVAL_STUB_ENV = "DEVSCENE_RETRIEVAL_STUB"
 
 STUB_VERSIONS = ("hash-v1", "hash-v2")
 

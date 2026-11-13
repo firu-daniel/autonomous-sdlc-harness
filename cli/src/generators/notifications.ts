@@ -66,10 +66,10 @@ import { machineConfigDir, MACHINE_DIR_MODE } from '../machine/paths.js';
 export const PUSH_ENV_FILENAME = 'push.env';
 
 /** The endpoint key. One of the two spellings the notifier recognises, and it recognises no others. */
-export const PUSH_URL_KEY = 'HARNESS_PUSH_URL';
+export const PUSH_URL_KEY = 'DEVSCENE_PUSH_URL';
 
 /** The local-command key, written empty here: a second delivery arm the operator may fill in later. */
-export const PUSH_CMD_KEY = 'HARNESS_PUSH_CMD';
+export const PUSH_CMD_KEY = 'DEVSCENE_PUSH_CMD';
 
 /** Mode of the written file: it holds a credential, so it is the owner's to read and nobody else's. */
 const PUSH_ENV_MODE = 0o600;
@@ -252,7 +252,7 @@ function pushEnvContent(url: string): string {
   const value = SHELL_SAFE_VALUE.test(url) ? url : `'${url}'`;
   return [
     '# Push notifications for unattended runs — machine-local, written by',
-    '# `npx autonomous-sdlc-harness init --notifications`.',
+    '# `npx devscene init --notifications`.',
     '#',
     '# This is the machine-local half of the pair `docs/watcher.md` §6 describes: it is read before',
     "# any repository's configured `pushEnvPath`, and while it exists that one is not read at all.",

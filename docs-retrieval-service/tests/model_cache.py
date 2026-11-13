@@ -7,7 +7,7 @@ even under the stub, passes for the same reason it passes on a real cache.
 
 from pathlib import Path
 
-from harness_docs_retrieval.models import (
+from devscene_docs_retrieval.models import (
     MODEL_IDS,
     MODEL_REVISIONS,
     ManifestEntry,

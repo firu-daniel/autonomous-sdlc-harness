@@ -46,7 +46,7 @@ async function adopted(t, stream = NETWORK) {
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const { stateDir } = readJson(join(dir, 'harness.config.json'));
+  const { stateDir } = readJson(join(dir, 'devscene.config.json'));
   const streamRel = join(stateDir, 'autonomous_logs', `${BRANCH}.stream.jsonl`);
   mkdirSync(join(dir, stateDir, 'autonomous_logs'), { recursive: true });
   copyFileSync(stream, join(dir, streamRel));

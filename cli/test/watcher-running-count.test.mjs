@@ -26,7 +26,7 @@ import test from 'node:test';
 import { runBash } from './helpers/fixture.mjs';
 import { createWatcherFixture, finishedLedgerBody, TICK_TIMEOUT_MS } from './helpers/watcher.mjs';
 
-const REGISTRY_PATH = 'sdlc-harness/autonomous_logs/registry.json';
+const REGISTRY_PATH = 'devscene/autonomous_logs/registry.json';
 
 /** A `sleep` child of this test, killed when the test ends; its pid answers `kill -0`. */
 function liveChild(t) {

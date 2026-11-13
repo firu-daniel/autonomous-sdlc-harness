@@ -1,14 +1,14 @@
-# harness-docs-retrieval
+# devscene-docs-retrieval
 
 **Who reads this:** an operator standing this service up, and whoever compares it against the TypeScript backend. It owns how to run the package, where its weights live, which precision and model ids it runs, and the record of where the store's contract did not carry over unchanged (`## The seam, as found`).
 
-`harness-docs-retrieval` is a second, opt-in docs-retrieval backend. It answers the same `search_docs` tool, over the same corpus, as `cli/src/retrieval/`, and keeps its index in a Postgres reached by connection string. The TypeScript implementation remains the default. **An adopter selects this backend with `docs.retrievalBackend: "python"`** ([`docs/config.md`](../docs/config.md) → `## 5. Key reference`, the `docs.retrievalBackend` row); with the key absent, an install is unchanged. Turning it on is [`docs/retrieval.md`](../docs/retrieval.md) → `## Turning on the Python backend`.
+`devscene-docs-retrieval` is a second, opt-in docs-retrieval backend. It answers the same `search_docs` tool, over the same corpus, as `cli/src/retrieval/`, and keeps its index in a Postgres reached by connection string. The TypeScript implementation remains the default. **An adopter selects this backend with `docs.retrievalBackend: "python"`** ([`docs/config.md`](../docs/config.md) → `## 5. Key reference`, the `docs.retrievalBackend` row); with the key absent, an install is unchanged. Turning it on is [`docs/retrieval.md`](../docs/retrieval.md) → `## Turning on the Python backend`.
 
 It is local-only: a Postgres the operator runs, no hosted API and no key.
 
 | Path | Holds |
 |---|---|
-| `src/harness_docs_retrieval/` | The package. One console entry point, `harness-docs-retrieval`, defined in `cli.py` → `SUB_COMMANDS`. |
+| `src/devscene_docs_retrieval/` | The package. One console entry point, `devscene-docs-retrieval`, defined in `cli.py` → `SUB_COMMANDS`. |
 | `tests/` | The `pytest` suite, including the parity cases that run the TypeScript code through `cli/dist`. |
 | `compose.yaml` | The `postgres` and `service` stack. |
 | `Dockerfile` | The service image. It carries no model weight. |
@@ -28,12 +28,12 @@ For real models, install the `models` extra (`sentence-transformers`, `torch`) i
 bash scripts/python-service.sh sync --with-models
 ```
 
-`run` forwards its arguments to the `harness-docs-retrieval` console script. The wrapper runs it from `docs-retrieval-service/`, so `--repo` defaults to that directory and a relative `--repo` resolves against it. Pass `--repo ..` to index this checkout.
+`run` forwards its arguments to the `devscene-docs-retrieval` console script. The wrapper runs it from `docs-retrieval-service/`, so `--repo` defaults to that directory and a relative `--repo` resolves against it. Pass `--repo ..` to index this checkout.
 
-Every sub-command except `fetch-models` reads its connection string from `HARNESS_DOCS_RETRIEVAL_DATABASE_URL`. The value below matches the compose file's `postgres` service on its default port:
+Every sub-command except `fetch-models` reads its connection string from `DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL`. The value below matches the compose file's `postgres` service on its default port:
 
 ```
-export HARNESS_DOCS_RETRIEVAL_DATABASE_URL=postgresql://harness:harness@127.0.0.1:5432/docs_retrieval
+export DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL=postgresql://devscene:devscene@127.0.0.1:5432/docs_retrieval
 ```
 
 | Sub-command | Flags | What it does and prints |
@@ -44,7 +44,7 @@ export HARNESS_DOCS_RETRIEVAL_DATABASE_URL=postgresql://harness:harness@127.0.0.
 | `self-check` | `--repo`, `--docs-root` | Prints one line per question, `packages`, `weights`, `index` in that order, each `ok   <question>: …` or `FAIL <question>: …`. It exits `0` only when all three are `ok`. `index` is not attempted when an earlier line failed. |
 | `fetch-models` | none | Downloads both models into the weight cache. This is the only command that downloads. |
 
-`--repo` names the repository whose `harness.config.json` is read, read-only, for `docs.root` and `layers[]` only. `--docs-root` overrides `docs.root` alone. Each sub-command runs through the wrapper, one per line:
+`--repo` names the repository whose `devscene.config.json` is read, read-only, for `docs.root` and `layers[]` only. `--docs-root` overrides `docs.root` alone. Each sub-command runs through the wrapper, one per line:
 
 ```
 bash scripts/python-service.sh run fetch-models
@@ -54,7 +54,7 @@ bash scripts/python-service.sh run serve-http --repo .. --host 127.0.0.1 --port 
 bash scripts/python-service.sh run serve-mcp --repo ..
 ```
 
-An anticipated failure prints one line, `harness-docs-retrieval: <message>`, on stderr and exits `1`. A missing or unknown sub-command exits `2`.
+An anticipated failure prints one line, `devscene-docs-retrieval: <message>`, on stderr and exits `1`. A missing or unknown sub-command exits `2`.
 
 ### The compose stack
 
@@ -68,10 +68,10 @@ This builds both images, starts `postgres` with `shared_preload_libraries=pg_tex
 
 | Mount | Source on the host | Override |
 |---|---|---|
-| `/repo` | `..` (this checkout's root) | `HARNESS_DOCS_RETRIEVAL_REPO` |
-| `/models` | `${HOME}/.cache/harness-docs-retrieval/models` | `HARNESS_DOCS_RETRIEVAL_MODEL_CACHE` |
+| `/repo` | `..` (this checkout's root) | `DEVSCENE_DOCS_RETRIEVAL_REPO` |
+| `/models` | `${HOME}/.cache/devscene-docs-retrieval/models` | `DEVSCENE_DOCS_RETRIEVAL_MODEL_CACHE` |
 
-The compose default for `/models` does not read `XDG_CACHE_HOME`. Where that variable moves the cache, set `HARNESS_DOCS_RETRIEVAL_MODEL_CACHE` to the same directory. The container never downloads anything, so start the stack after `fetch-models` has run on the host. A missing cache refuses at start.
+The compose default for `/models` does not read `XDG_CACHE_HOME`. Where that variable moves the cache, set `DEVSCENE_DOCS_RETRIEVAL_MODEL_CACHE` to the same directory. The container never downloads anything, so start the stack after `fetch-models` has run on the host. A missing cache refuses at start.
 
 To run only the database and use the service from the host:
 
@@ -83,18 +83,18 @@ docker compose up -d --wait postgres
 
 | Variable | Read by | Meaning |
 |---|---|---|
-| `HARNESS_DOCS_RETRIEVAL_DATABASE_URL` | the service | The connection string of the Postgres the index lives in. It is required, and the refusal message never quotes it back. |
-| `HARNESS_DOCS_RETRIEVAL_MODEL_CACHE` | the service, and `compose.yaml` as the `/models` mount source | The weight cache directory. An empty value counts as unset. |
-| `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` | the service | `hash-v1` or `hash-v2` selects the hash stub models. Any other non-empty value is refused. |
-| `HARNESS_DOCS_RETRIEVAL_REPO` | `compose.yaml` | The host directory mounted at `/repo`. |
-| `HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL` | tests only | The Postgres the `container`-marked tests use. When it is unset they skip loudly. `container-test` sets it. |
-| `HARNESS_DOCS_RETRIEVAL_PG_PORT` | `compose.yaml` | The loopback port `postgres` publishes, default `5432`. Test-only in practice: `container-test` sets a per-checkout port. |
+| `DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL` | the service | The connection string of the Postgres the index lives in. It is required, and the refusal message never quotes it back. |
+| `DEVSCENE_DOCS_RETRIEVAL_MODEL_CACHE` | the service, and `compose.yaml` as the `/models` mount source | The weight cache directory. An empty value counts as unset. |
+| `DEVSCENE_RETRIEVAL_STUB` | the service | `hash-v1` or `hash-v2` selects the hash stub models. Any other non-empty value is refused. |
+| `DEVSCENE_DOCS_RETRIEVAL_REPO` | `compose.yaml` | The host directory mounted at `/repo`. |
+| `DEVSCENE_DOCS_RETRIEVAL_TEST_DATABASE_URL` | tests only | The Postgres the `container`-marked tests use. When it is unset they skip loudly. `container-test` sets it. |
+| `DEVSCENE_DOCS_RETRIEVAL_PG_PORT` | `compose.yaml` | The loopback port `postgres` publishes, default `5432`. Test-only in practice: `container-test` sets a per-checkout port. |
 
 ## Weights, precision and ids
 
-**The cache** is `${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval/models`, or `HARNESS_DOCS_RETRIEVAL_MODEL_CACHE` when set. It is a separate cache from the Xenova ONNX one that `init` installs for the TypeScript backend. The models are the same, but the artifacts and the location are not. fp32 stores four bytes per parameter where q8 stores one, so budget disk for both caches.
+**The cache** is `${XDG_CACHE_HOME:-$HOME/.cache}/devscene-docs-retrieval/models`, or `DEVSCENE_DOCS_RETRIEVAL_MODEL_CACHE` when set. It is a separate cache from the Xenova ONNX one that `init` installs for the TypeScript backend. The models are the same, but the artifacts and the location are not. fp32 stores four bytes per parameter where q8 stores one, so budget disk for both caches.
 
-**Provisioning** is an operator running `fetch-models` with the `models` extra installed. No other run downloads anything: every other load is `local_files_only`. Every load, `fetch-models` included, loads the revision pinned in `models.py`; the pins are listed in [`docs/retrieval.md`](../docs/retrieval.md) → **Models.** `fetch-models` loads both models, runs each once, then writes `harness-docs-retrieval-models.json` into the cache. That manifest records each model's pinned revision and the files under it. A manifest recording any other revision, which an older `fetch-models` could write from whatever upstream `main` named at the time, reads as unfetched until `fetch-models` runs again. Every load passes `trust_remote_code=False`, and the pinned snapshots load `model.safetensors`. With `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` set, `fetch-models` refuses with exit `1` and downloads nothing, so unset it before fetching.
+**Provisioning** is an operator running `fetch-models` with the `models` extra installed. No other run downloads anything: every other load is `local_files_only`. Every load, `fetch-models` included, loads the revision pinned in `models.py`; the pins are listed in [`docs/retrieval.md`](../docs/retrieval.md) → **Models.** `fetch-models` loads both models, runs each once, then writes `devscene-docs-retrieval-models.json` into the cache. That manifest records each model's pinned revision and the files under it. A manifest recording any other revision, which an older `fetch-models` could write from whatever upstream `main` named at the time, reads as unfetched until `fetch-models` runs again. Every load passes `trust_remote_code=False`, and the pinned snapshots load `model.safetensors`. With `DEVSCENE_RETRIEVAL_STUB` set, `fetch-models` refuses with exit `1` and downloads nothing, so unset it before fetching.
 
 **The presence check runs even under the stub.** Before anything loads, every sub-command that opens the index checks that each manifest file is on disk. So a stub run still needs a fetched cache, the same way the TypeScript session checks its own cache. The tests plant a fake one.
 
@@ -107,11 +107,11 @@ docker compose up -d --wait postgres
 
 They are namespaced under `py-st` because nothing measured here shows the two backends' vectors are interchangeable, and a shared id would claim they are. They encode the precision, so a relevance difference can be attributed to it. The comparison decided that the embedder id stays namespaced, and made no proposal to share: [`docs/retrieval-eval-results.md`](../docs/retrieval-eval-results.md) → `## The Python backend against the TypeScript one` → `### Vector agreement, and the embedder id`. The embedder id is stored in the index, and a change to it forces a rebuild.
 
-**The stub** reuses `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` because its semantics are identical to the TypeScript side's. Its ids, vectors and scores equal the TypeScript stubs' bit for bit, which `tests/test_stubs.py` asserts against the running TypeScript code.
+**The stub** reuses `DEVSCENE_RETRIEVAL_STUB` because its semantics are identical to the TypeScript side's. Its ids, vectors and scores equal the TypeScript stubs' bit for bit, which `tests/test_stubs.py` asserts against the running TypeScript code.
 
 ## The wire and its timing
 
-The server name `harness-docs`, the tool `search_docs` and the permission string `mcp__harness-docs__search_docs` are the TypeScript side's (`src/harness_docs_retrieval/wire.py`). No file that quotes them was edited. The tool's description, input schema, `k` clamp, rendering, coverage `note: ` lines and abstention line are reproduced byte for byte.
+The server name `devscene-docs`, the tool `search_docs` and the permission string `mcp__devscene-docs__search_docs` are the TypeScript side's (`src/devscene_docs_retrieval/wire.py`). No file that quotes them was edited. The tool's description, input schema, `k` clamp, rendering, coverage `note: ` lines and abstention line are reproduced byte for byte.
 
 **`POST /search`** takes a JSON body with `query`, an optional `k`, and an optional `mode`: one of `lexical`, `vector`, `fused` or `fused-rerank`, default `fused-rerank`. Any other key is refused, as the MCP tool refuses it. A successful response carries:
 
@@ -124,9 +124,9 @@ A malformed body, a bad `mode` or an argument refusal answers `400 {"error": …
 
 **`GET /health`** answers `200` with `status: "ok"` and the `embedder` and `reranker` ids, or `503` with `status: "unavailable"` and the `error`.
 
-**Timing is exposed, never recorded.** `search_ms` in the HTTP response, and the stdio server's stderr line `harness-docs: search_ms=<ms>` (three decimals, after each call that searched), both time the library-level `search_docs` call alone. Neither includes the index refresh or the rendering.
+**Timing is exposed, never recorded.** `search_ms` in the HTTP response, and the stdio server's stderr line `devscene-docs: search_ms=<ms>` (three decimals, after each call that searched), both time the library-level `search_docs` call alone. Neither includes the index refresh or the rendering.
 
-**No query log.** This backend writes no query log and ignores `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG`, because the query log is out of scope for this port. A comparison measures it with what this backend ships instead:
+**No query log.** This backend writes no query log and ignores `DEVSCENE_RETRIEVAL_LOG`, because the query log is out of scope for this port. A comparison measures it with what this backend ships instead:
 
 - the `search_ms` exposure;
 - all four `mode`s on `POST /search`;
@@ -135,16 +135,16 @@ A malformed body, a bad `mode` or an argument refusal answers `400 {"error": …
 **Deliberate wire differences.** A client can tell the backends apart in these places only:
 
 - `serverInfo.version` is this package's version, kept equal to `pyproject.toml`'s.
-- stderr lines carry their own prefix. A corpus warning prints as `harness-docs: warning: <text>`, where the CLI's reporter prints `! <text>`. `index` prints `harness-docs-retrieval: warning: <text>`. The timing line has no TypeScript counterpart.
+- stderr lines carry their own prefix. A corpus warning prints as `devscene-docs: warning: <text>`, where the CLI's reporter prints `! <text>`. `index` prints `devscene-docs-retrieval: warning: <text>`. The timing line has no TypeScript counterpart.
 
 ## The seam, as found
 
-The `DocStore` contract carried over method for method, `rebuildIndexes` included as `rebuild_indexes` under departure 7's snake_case. **Every SQL statement `store.ts` issues is issued unchanged**, each through psycopg's `AsyncRawCursor` with native `$1` placeholders (`src/harness_docs_retrieval/store.py` → `statements`). These are the places where something did not carry over unchanged, each with its reason, taken from `store.py`'s `Departures from store.ts:` paragraph and the header of `postgres/Dockerfile`:
+The `DocStore` contract carried over method for method, `rebuildIndexes` included as `rebuild_indexes` under departure 7's snake_case. **Every SQL statement `store.ts` issues is issued unchanged**, each through psycopg's `AsyncRawCursor` with native `$1` placeholders (`src/devscene_docs_retrieval/store.py` → `statements`). These are the places where something did not carry over unchanged, each with its reason, taken from `store.py`'s `Departures from store.ts:` paragraph and the header of `postgres/Dockerfile`:
 
 1. **Extensions load on the server, not the client.** PGlite loads `vector` and `pg_textsearch` through `PGlite.create`'s `extensions` option, and a real Postgres has no client-side equivalent. Both are installed in the `postgres/` image. The `CREATE EXTENSION IF NOT EXISTS` statement itself is unchanged.
 2. **One server setting differs in where it comes from.** `pg_textsearch` must be in `shared_preload_libraries`. PGlite supplies that through the extension's own `setup`. Here `compose.yaml` passes `-c shared_preload_libraries=pg_textsearch`, and the image sets no server parameter. pgvector needs no preload in either.
 3. **Connection by string, not by directory.** `open_postgres_store(database_url, dimensions)` replaces `openPgliteStore({ dataDir, dimensions })`. The database is the server's, so this package creates no directory. A connection failure is a one-line error with the connection string replaced by `<connection string>`, because the driver can quote a malformed one back whole. The index is therefore scoped to a database, not to a checkout. The TypeScript index lives at `<repoRoot>/<stateDir>/docs_index`, so every checkout and worktree has its own. Here, two checkouts that share one connection string share one `chunks` table, and each refresh deletes the other's chunks as gone from its corpus. Selection settled it as one database per repository, shared by its checkouts and worktrees, with the costs stated in [`docs/retrieval.md`](../docs/retrieval.md) → `## Turning on the Python backend` → `### Its database`.
-4. **Extension and server versions.** pgvector is `0.8.7` on both sides, and the server is PostgreSQL 18 on both: `pgvector/pgvector:0.8.7-pg18` carries 18.6, the minor PGlite 0.5.10 bundles. That base replaced `0.8.1-pg18`, whose 18.2 server cannot load a `pg_textsearch` 1.5.1 built against newer 18.x headers (`postgres/Dockerfile` record 2). `pg_textsearch` is built from the upstream tag `v1.5.1`, chosen to match the `default_version` in the control file that PGlite's package bundles, and verified by the image build that downloads it (`postgres/Dockerfile` record 1). A database the 1.3.1 server built is not upgraded by the 1.5.1 server: measured on 2026-10-21 on such a database before any store opened it, `SELECT e.extname, e.extversion, a.default_version FROM pg_extension e JOIN pg_available_extensions a ON a.name = e.extname` reported `pg_textsearch` `1.3.1` against `1.5.1` and `vector` `0.8.1` against `0.8.7`, and `SELECT id FROM chunks ORDER BY text <@> to_bm25query('harness', 'chunks_bm25') LIMIT 50` returned 50 rows through `Index Scan using chunks_bm25`, with no error. Opened on 2026-10-21 by `open_postgres_store`, through `harness-docs-retrieval index --repo .. --docs-root docs` with the `hash-v1` stub, the same database moved to `pg_textsearch` `1.5.1` and `vector` `0.8.7`, each equal to its `default_version`, by the store's `ALTER EXTENSION <name> UPDATE` statements; the command printed `index: 71 files, 825 chunks; embedded 0, unchanged 825, deleted 0` and exited 0, `bm25_summarize_index('chunks_bm25')` read `total_docs: 825`, `docs_persisted: 825`, an empty memtable and the same four L0 segments, and the same lexical statement again returned 50 rows through `Index Scan using chunks_bm25`, with no error.
+4. **Extension and server versions.** pgvector is `0.8.7` on both sides, and the server is PostgreSQL 18 on both: `pgvector/pgvector:0.8.7-pg18` carries 18.6, the minor PGlite 0.5.10 bundles. That base replaced `0.8.1-pg18`, whose 18.2 server cannot load a `pg_textsearch` 1.5.1 built against newer 18.x headers (`postgres/Dockerfile` record 2). `pg_textsearch` is built from the upstream tag `v1.5.1`, chosen to match the `default_version` in the control file that PGlite's package bundles, and verified by the image build that downloads it (`postgres/Dockerfile` record 1). A database the 1.3.1 server built is not upgraded by the 1.5.1 server: measured on 2026-10-21 on such a database before any store opened it, `SELECT e.extname, e.extversion, a.default_version FROM pg_extension e JOIN pg_available_extensions a ON a.name = e.extname` reported `pg_textsearch` `1.3.1` against `1.5.1` and `vector` `0.8.1` against `0.8.7`, and `SELECT id FROM chunks ORDER BY text <@> to_bm25query('harness', 'chunks_bm25') LIMIT 50` returned 50 rows through `Index Scan using chunks_bm25`, with no error. Opened on 2026-10-21 by `open_postgres_store`, through `devscene-docs-retrieval index --repo .. --docs-root docs` with the `hash-v1` stub, the same database moved to `pg_textsearch` `1.5.1` and `vector` `0.8.7`, each equal to its `default_version`, by the store's `ALTER EXTENSION <name> UPDATE` statements; the command printed `index: 71 files, 825 chunks; embedded 0, unchanged 825, deleted 0` and exited 0, `bm25_summarize_index('chunks_bm25')` read `total_docs: 825`, `docs_persisted: 825`, an empty memtable and the same four L0 segments, and the same lexical statement again returned 50 rows through `Index Scan using chunks_bm25`, with no error.
 5. **The bound vector text.** `store.ts` formats each value with JS `String(value)`, and `store.py` uses Python's shortest round-trip `repr`. Both parse to the same number (`1` against `1.0`, `1e-7` against `1e-07`), but the bound text is not always byte-identical.
 6. **Programming errors.** Where `store.ts` throws through `internal(…)`, `store.py` raises `ValueError`.
 7. **Async only, one call at a time.** `DocStore` is a `Protocol` whose methods are all coroutines with snake_case names (`readMeta` becomes `read_meta`). There is no synchronous variant, so every caller awaits inside an event loop. The store holds one async connection, which must not be used concurrently. `RetrievalSession.lock` (`service.py`) therefore serialises every use, and calls are answered one at a time.

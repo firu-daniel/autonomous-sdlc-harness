@@ -35,9 +35,9 @@ from typing import Any, Protocol
 
 import psycopg
 
-from harness_docs_retrieval.chunk import DocChunk
-from harness_docs_retrieval.errors import ServiceError, one_line
-from harness_docs_retrieval.jscompat import js_trim
+from devscene_docs_retrieval.chunk import DocChunk
+from devscene_docs_retrieval.errors import ServiceError, one_line
+from devscene_docs_retrieval.jscompat import js_trim
 
 CHUNKS_TABLE = "chunks"
 
@@ -82,7 +82,7 @@ INDEX_STATE_PENDING = "pending"
 # `INDEX_STATE_META_KEY`'s value once `DocStore.rebuild_indexes` has returned over the stored rows.
 INDEX_STATE_REBUILT = "rebuilt"
 
-DATABASE_URL_ENV = "HARNESS_DOCS_RETRIEVAL_DATABASE_URL"
+DATABASE_URL_ENV = "DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL"
 
 # Each extension the store creates, to the statement that moves an older installed version to the
 # server's.

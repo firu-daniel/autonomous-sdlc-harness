@@ -18,7 +18,8 @@
  * The watcher is `fixtures/sandbox-probe/render-watcher-stub.sh`; teardown's clone removal, branch
  * deletion and snapshot check are stubbed.
  *
- * Each case runs a `bash -c` through `runBash` sourcing `scripts/lib/harness-run-lib.sh` (GS1 reads the done
+ * Each case runs a `bash -c` through `runBash` sourcing the template run library the copy `init` ships,
+ * `cli/templates/scripts/lib/harness-run-lib.sh` (GS1 reads the done
  * marker through its `hr_lane_mtime`), `core.sh`, `platform.sh`, `judge.sh`, `controls.sh`, `session.sh` and
  * `legs-gate-sandbox.sh`, then sets SP_PLATFORM to `linux`, since `platform.sh` empties it. Fixtures are
  * `mkdtemp`s under `os.tmpdir()`, removed in process when each case ends.
@@ -40,7 +41,7 @@ const PROBE_LIB = join(WORKSPACE_ROOT, 'scripts', 'lib', 'sandbox-probe');
 const RENDER_STUB = join(PACKAGE_ROOT, 'test', 'fixtures', 'sandbox-probe', 'render-watcher-stub.sh');
 const RENDER_BRANCH = 'chore_sbx_probe_fixture';
 const LIBS = [
-  join(WORKSPACE_ROOT, 'scripts', 'lib', 'harness-run-lib.sh'),
+  join(WORKSPACE_ROOT, 'cli', 'templates', 'scripts', 'lib', 'harness-run-lib.sh'),
   ...['core.sh', 'platform.sh', 'judge.sh', 'controls.sh', 'session.sh', 'legs-gate-sandbox.sh'].map((f) =>
     join(PROBE_LIB, f),
   ),
@@ -512,7 +513,7 @@ async function configGet(cwd, file, key) {
   return { status: run.status, value: run.stdout.trim() };
 }
 
-/** A bare origin and a main checkout on `main` carrying `harness.config.json` and `githooks/`, pushed. */
+/** A bare origin and a main checkout on `main` carrying `devscene.config.json` and `githooks/`, pushed. */
 async function seedMain(dir) {
   const origin = join(dir, 'origin.git');
   const main = join(dir, 'main');
@@ -522,17 +523,17 @@ async function seedMain(dir) {
   await runGit(main, ['init', '--quiet', '-b', 'main']);
   await runGit(main, ['config', 'user.email', 'fixture@example.invalid']);
   await runGit(main, ['config', 'user.name', 'Harness Fixture']);
-  const config = { version: 1, defaultBranch: 'main', stateDir: 'sdlc-harness/', githooksDir: 'githooks', layers: [], commands: {} };
-  await writeFile(join(main, 'harness.config.json'), `${JSON.stringify(config)}\n`);
+  const config = { version: 1, defaultBranch: 'main', stateDir: 'devscene/', githooksDir: 'githooks', layers: [], commands: {} };
+  await writeFile(join(main, 'devscene.config.json'), `${JSON.stringify(config)}\n`);
   await mkdir(join(main, 'githooks'));
   await writeFile(join(main, 'githooks', 'README'), 'hooks\n');
-  await runGit(main, ['add', 'harness.config.json', 'githooks']);
+  await runGit(main, ['add', 'devscene.config.json', 'githooks']);
   await runGit(main, ['commit', '--quiet', '-m', 'fixture: seed']);
   await runGit(main, ['config', 'core.hooksPath', 'githooks']);
   await runGit(main, ['remote', 'add', 'origin', origin]);
   await runGit(main, ['push', '--quiet', 'origin', 'main']);
   await runGit(main, ['fetch', '--quiet', 'origin']);
-  await mkdir(join(main, 'sdlc-harness', 'autonomous_logs'), { recursive: true });
+  await mkdir(join(main, 'devscene', 'autonomous_logs'), { recursive: true });
   return { origin, main };
 }
 

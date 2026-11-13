@@ -4,7 +4,7 @@
 // compiler and nothing else.
 //
 // The port arrives on the one channel `scripts/start-dev-server.sh` uses and on no other:
-// HARNESS_DEV_SERVER_PORT, which survives `npm run dev`. That wrapper shifts the port off before
+// DEVSCENE_DEV_SERVER_PORT, which survives `npm run dev`. That wrapper shifts the port off before
 // it forwards the rest, so the port never reaches this process as an argument and no positional is
 // read here. Unset, the port is 3000 — the port left for a human, one below the `qa.portSeed`
 // default a run takes.
@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const DEFAULT_PORT = 3000;
-const requested = process.env.HARNESS_DEV_SERVER_PORT;
+const requested = process.env.DEVSCENE_DEV_SERVER_PORT;
 const PORT = requested === undefined || requested === '' ? DEFAULT_PORT : Number(requested);
 if (!Number.isInteger(PORT) || PORT < 0 || PORT > 65535) {
   console.error(`notes-app dev server: port must be an integer 0-65535, got '${requested}'`);

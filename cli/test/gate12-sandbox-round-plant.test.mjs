@@ -45,18 +45,21 @@ const ARMS = [
     row: 'JS4',
     arm: 'node-modules',
     paths: () => [
-      '120000 node_modules/.bin/autonomous-sdlc-harness',
-      '100755 node_modules/autonomous-sdlc-harness/bin.js',
-      '100644 node_modules/autonomous-sdlc-harness/package.json',
+      '120000 node_modules/.bin/devscene',
+      '100755 node_modules/devscene/bin.js',
+      '100644 node_modules/devscene/package.json',
     ],
   },
   {
     row: 'SB2',
     arm: 'clarifications',
-    paths: ({ stateDir }, branch) => [
-      '100644 gate12-sb2-token.txt',
-      `120000 ${stateDir}/clarifications/${branch}/gate12-link.md`,
-    ],
+    // Sorted on the path alone: where the link lands relative to the token depends on the state directory's spelling.
+    paths: ({ stateDir }, branch) =>
+      ['100644 gate12-sb2-token.txt', `120000 ${stateDir}/clarifications/${branch}/gate12-link.md`].sort((a, b) => {
+        const pa = a.slice(a.indexOf(' ') + 1);
+        const pb = b.slice(b.indexOf(' ') + 1);
+        return pa < pb ? -1 : pa > pb ? 1 : 0;
+      }),
   },
   { row: 'SB2', arm: 'pause-note', paths: () => [`100644 ${PAUSE_TOKEN_FILE}`] },
   { row: 'RJ2', arm: 'profile', paths: () => ['100644 .claude/settings.autonomous.json'] },
@@ -247,7 +250,7 @@ test('a run lookup that never lists the run exits 3, records run_id null and nam
   assert.equal(state.runs[0].branch, branch);
   assert.equal(state.runs[0].run_id, null);
 
-  const lookup = `gh run list --repo ${GATE12_SLUG} --workflow harness-run.yml --branch ${branch} --json databaseId,createdAt,displayTitle --limit 20`;
+  const lookup = `gh run list --repo ${GATE12_SLUG} --workflow devscene-run.yml --branch ${branch} --json databaseId,createdAt,displayTitle --limit 20`;
   assert.ok(result.stderr.includes(lookup), result.stderr);
   const lookups = (await ghStubCalls(fixture.binDir)).filter((argv) => argv[0] === 'run' && argv[1] === 'list');
   assert.equal(lookups.length, 2);

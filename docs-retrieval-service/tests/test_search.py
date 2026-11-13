@@ -15,8 +15,8 @@ from collections.abc import Sequence
 import pytest
 
 from fakes import InMemoryDocStore, doc_chunk
-from harness_docs_retrieval.errors import ServiceError
-from harness_docs_retrieval.search import (
+from devscene_docs_retrieval.errors import ServiceError
+from devscene_docs_retrieval.search import (
     ABSTAIN_SCORE_THRESHOLD,
     RRF_K,
     SearchMode,

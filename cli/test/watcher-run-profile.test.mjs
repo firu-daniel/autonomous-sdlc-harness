@@ -58,7 +58,7 @@ import {
   createWatcherFixture,
 } from './helpers/watcher.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const BASE_PROFILE = '.claude/settings.autonomous.json';
 const LIB_PATH = `${INIT_SCRIPTS_DIR}/lib/harness-run-lib.sh`;
 const SANDBOX_CLAUSE = ['sandbox.enabled', 'sandbox.failIfUnavailable', 'sandbox.allowUnsandboxedCommands'];
@@ -105,7 +105,7 @@ async function adoptedFixture(t, { optOut = false } = {}) {
   const w = await createWatcherFixture(t);
   if (w === null) return null;
 
-  const configPath = join(w.dir, 'harness.config.json');
+  const configPath = join(w.dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   delete config.commands.depInstall;
   delete config.commands.build;
@@ -263,7 +263,7 @@ test('a task drop launches on a per-run copy at hr_run_profile_file: the base pl
   assert.ok(settings, `the stub was never called:\n${f.watcherLog()}`);
   const launchState = () => `record: ${JSON.stringify(f.record())}\nlog:\n${f.watcherLog()}`;
   assert.equal(settings, await f.profileFileFor(f.branch), `--settings is not hr_run_profile_file's path\n${launchState()}`);
-  assert.ok(settings.startsWith(`${f.watcherEnv().XDG_STATE_HOME}/autonomous-sdlc-harness/run-profiles/`), settings);
+  assert.ok(settings.startsWith(`${f.watcherEnv().XDG_STATE_HOME}/devscene/run-profiles/`), settings);
   assert.equal(f.record().copy_kind, 'clone', `copy_kind is not clone\n${launchState()}`);
   assert.equal(f.record().worktree, f.clone, `worktree is not the clone\n${launchState()}`);
 
@@ -751,7 +751,7 @@ test('a clone run\'s exit syncs its branch into the main checkout', async (t) =>
   await f.setStub(
     [
       'printf "one\\n" > sync-one.txt',
-      `bash "$HARNESS_MAIN_REPO/${INIT_SCRIPTS_DIR}/commit-on-branch.sh" --repo "$PWD" sync-one.txt -- 'test: commit through the wrapper' >> '${wrapperLog}' 2>&1 || echo WRAPPER_FAILED >> '${wrapperLog}'`,
+      `bash "$DEVSCENE_MAIN_REPO/${INIT_SCRIPTS_DIR}/commit-on-branch.sh" --repo "$PWD" sync-one.txt -- 'test: commit through the wrapper' >> '${wrapperLog}' 2>&1 || echo WRAPPER_FAILED >> '${wrapperLog}'`,
       'printf "two\\n" > sync-two.txt',
       `git add sync-two.txt && git -c core.hooksPath=/dev/null ${IDENTITY.join(' ')} commit -q -m 'test: commit directly in the clone' >> '${wrapperLog}' 2>&1 || echo DIRECT_FAILED >> '${wrapperLog}'`,
     ].join('\n'),

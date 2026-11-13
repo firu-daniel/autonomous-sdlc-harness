@@ -10,8 +10,8 @@
  *
  * The fixture is `remote-control-mention.test.mjs`'s shape, carried file-locally as each control suite
  * carries its own: `init`, `execution.target` `github-actions`, `forge` `github`, `gh` a logging stub
- * through `HARNESS_GH_CLI` answering the permission call from `STUB_PERMISSIONS` (`FAIL` fails it), and
- * `HARNESS_AGENT_CLI` a stub that records any call. Everything sits under the system temp directory, and
+ * through `DEVSCENE_GH_CLI` answering the permission call from `STUB_PERMISSIONS` (`FAIL` fails it), and
+ * `DEVSCENE_AGENT_CLI` a stub that records any call. Everything sits under the system temp directory, and
  * nothing reaches the network.
  */
 
@@ -23,9 +23,9 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REPOSITORY = 'octo/fixture';
-const MENTION = "Let's @sdlc-harness pause";
+const MENTION = "Let's @dev-scene pause";
 const PERMISSION_CALL = `api repos/${REPOSITORY}/collaborators/alice/permission`;
 
 const GH_STUB = `#!/usr/bin/env node
@@ -52,7 +52,7 @@ require('node:fs').appendFileSync(process.env.STUB_AGENT_LOG, JSON.stringify(pro
  * An adopted fixture with a gh stub and an agent stub.
  *
  * @param {import('node:test').TestContext} t
- * @param {{ forge?: boolean }} [options] `forge: false` leaves `forge` out of `harness.config.json`
+ * @param {{ forge?: boolean }} [options] `forge: false` leaves `forge` out of `devscene.config.json`
  */
 async function controlFixture(t, { forge = true } = {}) {
   const fixture = await createFixture({
@@ -65,7 +65,7 @@ async function controlFixture(t, { forge = true } = {}) {
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   if (forge) config.forge = 'github';
@@ -102,7 +102,7 @@ async function controlFixture(t, { forge = true } = {}) {
       const issue = { number: 12, pull_request: { url: `https://api.github.com/repos/${REPOSITORY}/pulls/12` } };
       writeFileSync(eventPath, JSON.stringify({ action: 'created', comment: { body }, issue, sender: { login, type } }));
       return runBash(dir, [SCRIPT, 'control', ...(plain ? [] : ['--needs-agent'])], {
-        HARNESS_GH_CLI: gh,
+        DEVSCENE_GH_CLI: gh,
         STUB_LOG: log,
         GITHUB_EVENT_NAME: event,
         GITHUB_EVENT_PATH: eventPath,
@@ -110,13 +110,13 @@ async function controlFixture(t, { forge = true } = {}) {
         GITHUB_SERVER_URL: 'https://github.com',
         GITHUB_RUN_ID: '',
         RUNNER_TEMP: runnerTemp,
-        HARNESS_REMOTE_STOP: '',
-        HARNESS_TRIGGER_ALLOWED_BOTS: '',
-        HARNESS_RUN_ACTORS: '*',
+        DEVSCENE_REMOTE_STOP: '',
+        DEVSCENE_TRIGGER_ALLOWED_BOTS: '',
+        DEVSCENE_RUN_ACTORS: '*',
         GITHUB_RUN_ATTEMPT: '',
         GITHUB_TRIGGERING_ACTOR: '',
         STUB_PERMISSIONS: JSON.stringify({ alice: 'write' }),
-        HARNESS_AGENT_CLI: agent,
+        DEVSCENE_AGENT_CLI: agent,
         STUB_AGENT_LOG: agentLog,
         IN_OAUTH: '',
         IN_API: '',
@@ -159,13 +159,13 @@ test('an admitted writer\'s mention answers yes, with only the permission call',
 
 test('the exact form answers no before any gate, with no gh call', async (t) => {
   const f = await controlFixture(t);
-  assertAnswer(f, await f.control('@sdlc-harness status'), 2,
-    /^remote-run\.sh: control: needs-agent: no, the comment is the exact form `@sdlc-harness status`$/, []);
+  assertAnswer(f, await f.control('@dev-scene status'), 2,
+    /^remote-run\.sh: control: needs-agent: no, the comment is the exact form `@dev-scene status`$/, []);
 });
 
 for (const [name, body] of [
   ['a comment without the handle', 'pause'],
-  ['a comment the harness posted', 'Paused.\n\n<!-- sdlc-harness event=reply branch=feat_x -->'],
+  ['a comment the harness posted', 'Paused.\n\n<!-- devscene event=reply branch=feat_x -->'],
 ]) {
   test(`${name} answers no after its ignored line, with no gh call`, async (t) => {
     const f = await controlFixture(t);
@@ -175,10 +175,10 @@ for (const [name, body] of [
   });
 }
 
-test('a writer HARNESS_RUN_ACTORS does not list answers no, naming the list', async (t) => {
+test('a writer DEVSCENE_RUN_ACTORS does not list answers no, naming the list', async (t) => {
   const f = await controlFixture(t);
-  assertAnswer(f, await f.control(MENTION, {}, { HARNESS_RUN_ACTORS: 'bob' }), 2,
-    /^remote-run\.sh: control: needs-agent: no, @alice is not on the repository variable HARNESS_RUN_ACTORS/, [PERMISSION_CALL]);
+  assertAnswer(f, await f.control(MENTION, {}, { DEVSCENE_RUN_ACTORS: 'bob' }), 2,
+    /^remote-run\.sh: control: needs-agent: no, @alice is not on the repository variable DEVSCENE_RUN_ACTORS/, [PERMISSION_CALL]);
 });
 
 test('a read collaborator answers no', async (t) => {
@@ -190,25 +190,25 @@ test('a read collaborator answers no', async (t) => {
 test('an unlisted bot answers no, with no gh call', async (t) => {
   const f = await controlFixture(t);
   assertAnswer(f, await f.control(MENTION, { login: 'helper[bot]', type: 'Bot' }), 2,
-    /^remote-run\.sh: control: needs-agent: no, @helper\[bot\] is not a person, and is not listed in HARNESS_TRIGGER_ALLOWED_BOTS$/, []);
+    /^remote-run\.sh: control: needs-agent: no, @helper\[bot\] is not a person, and is not listed in DEVSCENE_TRIGGER_ALLOWED_BOTS$/, []);
 });
 
-test('HARNESS_REMOTE_STOP answers no, with no gh call', async (t) => {
+test('DEVSCENE_REMOTE_STOP answers no, with no gh call', async (t) => {
   const f = await controlFixture(t);
-  assertAnswer(f, await f.control(MENTION, {}, { HARNESS_REMOTE_STOP: '1' }), 2,
-    /^remote-run\.sh: control: needs-agent: no, the repository variable `HARNESS_REMOTE_STOP` is set/, []);
+  assertAnswer(f, await f.control(MENTION, {}, { DEVSCENE_REMOTE_STOP: '1' }), 2,
+    /^remote-run\.sh: control: needs-agent: no, the repository variable `DEVSCENE_REMOTE_STOP` is set/, []);
 });
 
 test('forge unset answers no, with no gh call', async (t) => {
   const f = await controlFixture(t, { forge: false });
   assertAnswer(f, await f.control(MENTION), 2,
-    /^remote-run\.sh: control: needs-agent: no, the default branch's `harness\.config\.json` does not turn run control on/, []);
+    /^remote-run\.sh: control: needs-agent: no, the default branch's `devscene\.config\.json` does not turn run control on/, []);
 });
 
 test('a re-run by an unlisted triggering actor answers no, with no gh call', async (t) => {
   const f = await controlFixture(t);
   assertAnswer(f, await f.control(MENTION, {}, {
-    HARNESS_RUN_ACTORS: 'alice',
+    DEVSCENE_RUN_ACTORS: 'alice',
     GITHUB_RUN_ATTEMPT: '2',
     GITHUB_TRIGGERING_ACTOR: 'mallory',
   }), 2, /^remote-run\.sh: control: needs-agent: no, this job is a re-run by @mallory, /, []);
@@ -228,7 +228,7 @@ test('a delete event answers no, with no gh call', async (t) => {
 
 test('--needs-agent on another verb is a usage error', async (t) => {
   const f = await controlFixture(t);
-  const run = await runBash(f.dir, [SCRIPT, 'status', 'feat_x', '--needs-agent'], { HARNESS_GH_CLI: join(f.dir, 'no-gh') });
+  const run = await runBash(f.dir, [SCRIPT, 'status', 'feat_x', '--needs-agent'], { DEVSCENE_GH_CLI: join(f.dir, 'no-gh') });
   assert.equal(run.status, 1, `${run.stdout}\n${run.stderr}`);
   assert.match(run.stderr, /--needs-agent is a control option/);
   assert.deepEqual(needsLines(run.stdout), []);
@@ -236,11 +236,11 @@ test('--needs-agent on another verb is a usage error', async (t) => {
 
 test('the reason is the text plain control replies with for the same refusal', async (t) => {
   const f = await controlFixture(t);
-  const line = assertAnswer(f, await f.control(MENTION, {}, { HARNESS_RUN_ACTORS: 'bob' }), 2,
+  const line = assertAnswer(f, await f.control(MENTION, {}, { DEVSCENE_RUN_ACTORS: 'bob' }), 2,
     /^remote-run\.sh: control: needs-agent: no, /, [PERMISSION_CALL]);
   const reason = line.slice('remote-run.sh: control: needs-agent: no, '.length);
 
-  const plain = await f.control(MENTION, { plain: true }, { HARNESS_RUN_ACTORS: 'bob' });
+  const plain = await f.control(MENTION, { plain: true }, { DEVSCENE_RUN_ACTORS: 'bob' });
   assert.equal(plain.status, 2, `${plain.stdout}\n${plain.stderr}`);
   const posted = comments(f.calls());
   assert.equal(posted.length, 1);

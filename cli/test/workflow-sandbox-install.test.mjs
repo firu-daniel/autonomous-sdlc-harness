@@ -1,5 +1,5 @@
 /**
- * The `Install the sandbox prerequisites` step of the `harness-run.yml` template, pinned and run.
+ * The `Install the sandbox prerequisites` step of the `devscene-run.yml` template, pinned and run.
  *
  * **The rule these tests enforce: the step installs exactly the owner's packages, applies exactly
  * the owner's stock-profile remedy, writes and loads exactly the owner's profile, then always
@@ -38,7 +38,7 @@ import {
 
 const STEP = 'Install the sandbox prerequisites';
 const PREFLIGHT = 'Preflight with doctor';
-const HARNESS = 'Run the harness';
+const HARNESS = 'Run DevScene';
 const PRESENT_LINE = 'The sandbox prerequisites are present.';
 const ATTR_READING = 'bwrap//&unpriv_bwrap (enforce)';
 const UID_MAP_ERROR = 'unshare: write failed /proc/self/uid_map: Operation not permitted';

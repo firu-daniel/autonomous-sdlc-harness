@@ -2,7 +2,7 @@
 # autonomous-protected-branch-guard.sh — PreToolUse guard for Bash, and the only
 # guard in this plugin that answers `deny`. It refuses a `git push` / `git merge`
 # / `git rebase` it can PROVE targets a branch the resolved repository's own
-# `harness.config.json` protects, and it stays SILENT (exit 0, no output) on
+# `devscene.config.json` protects, and it stays SILENT (exit 0, no output) on
 # everything else, letting the permission system decide those. A `deny` beats any
 # allow, which is why nothing is refused on a guess.
 #
@@ -134,7 +134,7 @@
 #   anything else                              -> SILENT
 #
 # JURISDICTION IS A DELIBERATE SCOPING DECISION, NOT AN OVERSIGHT. A repository
-# with no `harness.config.json` at its resolved root has not adopted the harness,
+# with no `devscene.config.json` at its resolved root has not adopted the harness,
 # so this guard refuses nothing there — a plugin hook fires in EVERY session the
 # plugin is enabled for, including repositories that never ran `init`, and a
 # refusal in a repository that never asked for one is a broken tool, not a
@@ -248,7 +248,7 @@
 #     git -C <dir> commit -m "push to <protected>"  not a push/merge/rebase
 #     echo "git push <remote> <protected>"          inside a string, so no word
 #                                                   of it is exactly `git`
-#     any command, in a <dir> with no harness.config.json      not adopted
+#     any command, in a <dir> with no devscene.config.json      not adopted
 #     any command, with a <dir> that is not a git repository
 
 set -u
@@ -378,7 +378,7 @@ deny() {
 # Inside jurisdiction, a configuration that will not resolve is refused rather
 # than permitted: this guard cannot enforce a set it cannot read, and silence
 # here would be the permit it exists to withhold.
-patterns=$(hc_protected_patterns "$root") || deny "Blocked: the protected-branch configuration at $root/harness.config.json could not be resolved (invalid JSON, more than one JSON document, or no defaultBranch). This guard refuses rather than permits when it cannot read the set it enforces — fix the configuration, then retry."
+patterns=$(hc_protected_patterns "$root") || deny "Blocked: the protected-branch configuration at $root/devscene.config.json could not be resolved (invalid JSON, more than one JSON document, or no defaultBranch). This guard refuses rather than permits when it cannot read the set it enforces — fix the configuration, then retry."
 
 patterns_desc=$(printf '%s' "$patterns" | tr '\n' ',' | sed 's/,/, /g; s/, *$//')
 
@@ -391,7 +391,7 @@ ref_protected() {
   hc_branch_is_protected "$root" "${1-}"
   case $? in
     0) return 0 ;;
-    2) deny "Blocked: the protected-branch configuration at $root/harness.config.json stopped resolving while judging '${1-}'. This guard refuses rather than permits when it cannot read the set it enforces." ;;
+    2) deny "Blocked: the protected-branch configuration at $root/devscene.config.json stopped resolving while judging '${1-}'. This guard refuses rather than permits when it cannot read the set it enforces." ;;
   esac
   return 1
 }

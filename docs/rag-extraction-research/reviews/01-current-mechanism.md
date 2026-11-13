@@ -31,9 +31,9 @@ None.
 
 5. **Wrong count: the eval harness "imports `cli/dist` in ten modules" (§4 #14).** `grep -l "cli/dist" evals/docs-retrieval/*.mjs` returns 15 modules, each with a top-level `import … from '../../cli/dist/…'`, for example `args.mjs:29`, `results.mjs:30-31` and `check-floor.mjs:34-35`. The total of 6 066 lines is correct. Change: "fifteen modules". This makes the move cost of the eval harness higher than stated.
 
-6. **Stale or loose path: `harness-run.yml:597-654` (§4 #7).** The file is `cli/templates/github/workflows/harness-run.yml`. The cache path appears twice, at :600 (`run` job) and :938 (`warm` job), as `cli/src/retrieval/runtime.ts:25-27` says. The range given misses the second. Change: cite the full path and `:600`, `:938`.
+6. **Stale or loose path: `devscene-run.yml:597-654` (§4 #7).** The file is `cli/templates/github/workflows/devscene-run.yml`. The cache path appears twice, at :600 (`run` job) and :938 (`warm` job), as `cli/src/retrieval/runtime.ts:25-27` says. The range given misses the second. Change: cite the full path and `:600`, `:938`.
 
-7. **Incomplete statement in §5, "its own `HARNESS_DOCS_RETRIEVAL_*` environment variables".** The Python service also reads `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` (`stubs.py:21`), and its own `compose.yaml` passes that variable through. §4 #6 records this; §5 contradicts it by omission. Change: add "(except the stub variable, §4 #6)".
+7. **Incomplete statement in §5, "its own `DEVSCENE_DOCS_RETRIEVAL_*` environment variables".** The Python service also reads `DEVSCENE_RETRIEVAL_STUB` (`stubs.py:21`), and its own `compose.yaml` passes that variable through. §4 #6 records this; §5 contradicts it by omission. Change: add "(except the stub variable, §4 #6)".
 
 8. **Length: about 4 780 words against a 2 000 – 4 000 target.** Cuts worth about 900 words, with no loss of evidence:
    - §1 `### Sequence`: the mermaid diagram repeats the numbered prose and the pipeline table. Drop it, or drop the prose list it duplicates (about 150 words).
@@ -55,10 +55,10 @@ None.
 ## Citations verified (all hold unless listed above)
 
 - `cli/src/config/model.ts:637` — `retrievalApplies`.
-- `cli/src/generators/repoRoot.ts` → `retrievalWiring` refuses any server other than `harness-docs` (:443-447).
+- `cli/src/generators/repoRoot.ts` → `retrievalWiring` refuses any server other than `devscene-docs` (:443-447).
 - `cli/templates/repo/mcp.retrieval.json` — `bash`, one `args` string, empty `env`.
 - `cli/templates/claude/settings.autonomous.retrieval.json` — enablement plus allow, and the `_README` stall wording.
-- `docs-search-server.sh:58-87`, `:75-87` (backend choice), `:89-122` (Python: default URL, child, signal relay, exit 3) and `:124-135` (TS `exec node $cache/retrieval/runtime/node_modules/autonomous-sdlc-harness/dist/cli.js docs serve`).
+- `docs-search-server.sh:58-87`, `:75-87` (backend choice), `:89-122` (Python: default URL, child, signal relay, exit 3) and `:124-135` (TS `exec node $cache/retrieval/runtime/node_modules/devscene/dist/cli.js docs serve`).
 - `cli/src/retrieval/runtime.ts:14-17`, `:57-60` — `init` installs "the peers and this CLI, at its own version" into the machine-cache runtime directory. Confirms the copy-of-the-CLI claim.
 - `server.ts:35-42`, `:56-69` (schema `{query, k}`, `additionalProperties: false`, annotations), `:58` (description), `:82-96`, `:137` (remedy), `:149` (`mode: 'fused-rerank'` hard-coded, so no mode), `:201-211` (queue).
 - `wire.py:25-46` — the same schema and description.
@@ -70,7 +70,7 @@ None.
 - `Dockerfile:46`.
 - `docs/retrieval.md:196` ("not published to any package index").
 - `.github/workflows/` holds three files, and none builds a wheel or image.
-- `service.py:83-101` — the config read raises before `docs_root` is consulted, so `--docs-root` does not avoid `harness.config.json`. `cli.py:44`, `:58` and `:64` call it for `serve-mcp`, `serve-http` and `index`.
+- `service.py:83-101` — the config read raises before `docs_root` is consulted, so `--docs-root` does not avoid `devscene.config.json`. `cli.py:44`, `:58` and `:64` call it for `serve-mcp`, `serve-http` and `index`.
 - `service.py:13-15`, `:245`.
 - `refresh.py:77-84` and `refresh.ts:83-86` — every call runs `corpus_files`, reads and chunks every file, then `list_chunk_hashes`. `service.py:241` (Python) and `server.ts:132` (TS) refresh on every call. Confirms the re-read-every-query claim.
 - `corpus.py:39-52`, `:72`, `:96-134`, `:109-110`.
@@ -80,7 +80,7 @@ None.
 - `postgres/Dockerfile` — PG 18, pgvector 0.8.7, pg_textsearch v1.5.1.
 - `pyproject.toml` — version 0.1.0, no `license` field.
 - `NOTICE:6`, `cli/NOTICE:6` (section 4(d)).
-- `schemas/harness.config.schema.json:10-11`, `:279-288`.
+- `schemas/devscene.config.schema.json:10-11`, `:279-288`.
 - `scripts/run-gates.sh:227` (gate 13); `supply-chain.yml:74`, `:100-114`.
 - `docs/retrieval.md:15`, `:17`, `:31`, `:54`, `:71-73`, `:88`, `:140`, `:159`, `:168`, `:170`, `:171`, `:185-200`, `:235-250`, `:262`, `:268`, `:269`, `:288`, `:296`.
 - `docs/retrieval-eval-results.md:4607`, `:4610` (0.909 / 0.795; 1.7 ms / 1099.7 ms), and every cited `##`/`###` heading exists.

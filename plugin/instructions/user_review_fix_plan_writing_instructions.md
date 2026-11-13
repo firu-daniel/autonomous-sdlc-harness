@@ -8,13 +8,13 @@ Run `${CLAUDE_PLUGIN_ROOT}/instructions/user_review_fix_plan_writing_instruction
 
 ## Resolved values
 
-The tokens below are neither Mode-contract **bindings** (`## Mode contract — bindings`, immediately below) nor ordinary **path placeholders** (`<branch>`, and the `<findings_file>` / `<feedback>` the core binds at their points of use): they resolve from the runtime or from the adopting repository's `harness.config.json`, are declared here once, and after this table the body uses each one as an ordinary placeholder.
+The tokens below are neither Mode-contract **bindings** (`## Mode contract — bindings`, immediately below) nor ordinary **path placeholders** (`<branch>`, and the `<findings_file>` / `<feedback>` the core binds at their points of use): they resolve from the runtime or from the adopting repository's `devscene.config.json`, are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<repo_root>` | derived at runtime | The absolute root of the checkout this session runs in. Obtain it with a **bare** `git rev-parse --show-toplevel` and build every literal path from the result. Never embed the `$(…)` substitution inside another shell command, and never stash it in a shell variable across separate Bash calls — separate calls do not share shell state. |
 | `<app_dir>` | config value | `appDir` — the app's directory inside the checkout, repo-relative. The **binding** `<app_root>` below is built from it (`<repo_root>/<app_dir>`) and is deliberately a different name: this row is the configured directory, that one is the resolved root. |
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path the core names is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path the core names is relative to. Default `devscene/`. It is never dot-named: no path segment of it may begin with a dot. |
 
 ---
 
@@ -39,11 +39,11 @@ One row per binding declared in `user_review_fix_plan_writing_instructions_core.
 
 9. **Once both gates PASS**, **present the writer's contract summary** to the user — the `fix_plan_file` (index) path, the `fix_plan_dir` (per-finding folder) path, plus the counts (`valid_must_fix`, `valid_should_fix`, `valid_nice_to_have`, `invalid`), plus the mandatory `📌 Dispatch additions: …` disclosure line, in the exact form `${CLAUDE_PLUGIN_ROOT}/instructions/dispatch_discipline_instructions.md` → `## The disclosure line` gives it (including its `none` form, which is a normal outcome) — `<N>` is your own count of the blocks you wrote at the core's `## Convergence` record step, so producing it opens no fix-plan file. Emit the mandatory `📌 Run mode: …` disclosure line too, as its own line beside the `📌 Dispatch additions: …` line and never merged into it, in the exact form `${CLAUDE_PLUGIN_ROOT}/instructions/run_mode_instructions.md` → `## The disclosure line` gives it — including its `none` form (a prompt carrying no such section at all, a normal outcome) and its ignored-directive suffix; the core's `## Convergence` owns that obligation and the form, and this fork-held hand-off value is where it is emitted. Name any **plan-gate findings folder that exists** for this branch — `<state_dir>/business_parity_user_review_reviews/<branch>/`, `<state_dir>/architecture_user_review_reviews/<branch>/` — as **uncommitted artifacts to include when they commit the fix plan**: no flow step on this path stages them, so a commit covering only the fix-plan index, its per-finding folder and the source review loses them at PR time. Check which of the two are present and list only those; where neither exists (both gates passed first time), say nothing — an absent folder is a normal outcome, not a defect. Name `<state_dir>/lessons.md` the same way, only when `git status --short <state_dir>/lessons.md` reports it modified: the writer appended this round's lessons to it, and an uncommitted ledger is swept into the first fix commit. Ask for approval. Do not paste the fix plan content back; the user can open the file.
 
-10. **On approval:** the file is already on disk (the writer saved it). Stop and tell the user the next step is to run `/autonomous-sdlc-harness:branch-implement-user-review` in a fresh session.
+10. **On approval:** the file is already on disk (the writer saved it). Stop and tell the user the next step is to run `/devscene:branch-implement-user-review` in a fresh session.
 
 **On rejection-with-feedback:** carry the user's feedback as `<feedback>` into the core's **step 11** and continue there — it redispatches the writer in revision mode and re-runs **both** gates on the revised plan before it is re-presented here. This fork states no revision prompt of its own; step 11's dispatch, and its re-run-both-gates ordering, are the core's.
 
-**Entered from `## Flow` step 4's stop outcome** (a fix-plan index already exists for the active round and the user picks **stop**): the existing plan is good, so this loop has nothing to do — end the session and tell the user to run `/autonomous-sdlc-harness:branch-implement-user-review` next.
+**Entered from `## Flow` step 4's stop outcome** (a fix-plan index already exists for the active round and the user picks **stop**): the existing plan is good, so this loop has nothing to do — end the session and tell the user to run `/devscene:branch-implement-user-review` next.
 
 ---
 

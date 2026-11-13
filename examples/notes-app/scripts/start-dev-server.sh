@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Written by `autonomous-sdlc-harness init`, and yours from there on: edit it freely, a re-run
+# Written by `devscene init`, and yours from there on: edit it freely, a re-run
 # keeps your copy. It is what `commands.devServer` invokes: it starts the development server in
 # the background, from the repository root, and prints the pid and the log path a caller needs.
 #
 # Usage: start-dev-server.sh [port] [argument...]
 # The port is optional and must be numeric when it is given; anything else is a usage error, so a
 # mistyped port can never be passed through as a flag. It reaches the command on one channel only,
-# exported as HARNESS_DEV_SERVER_PORT: it is shifted off before the remaining arguments are
+# exported as DEVSCENE_DEV_SERVER_PORT: it is shifted off before the remaining arguments are
 # forwarded, so the raw command line below is never handed the port positionally. A server that
 # takes its port only as an argument has to be given that variable on the raw line below.
 #
@@ -39,25 +39,25 @@ if [ -n "$port" ]; then
       ;;
   esac
   shift
-  export HARNESS_DEV_SERVER_PORT="$port"
+  export DEVSCENE_DEV_SERVER_PORT="$port"
 fi
 
 # Anchor to the repository root, derived from this script's own location and never from the
 # caller's directory: `commands.*` are command lines run from the repository root and every path
-# in `harness.config.json` is repo-relative. The placement below answers with
+# in `devscene.config.json` is repo-relative. The placement below answers with
 # the checkout this copy belongs to, so every form the permission profiles allow-list — the
 # repo-relative one and its absolute twin in the base profile, and a run copy's own exact path in
 # the run watcher's per-run copy — runs at the root of the checkout it was invoked out of,
 # whatever directory the caller stood in.
 # The root is the nearest of the script's own directory and its ancestors that holds
-# `harness.config.json` and that git confirms as its own top level, so git's discovery never
+# `devscene.config.json` and that git confirms as its own top level, so git's discovery never
 # starts at a `<scriptsDir>/.git` placeholder a bubblewrap host mounts (F15); it is the run
 # library's `hr_script_root`, inlined because this wrapper sources no library.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root=""
 candidate="$(CDPATH= cd -P -- "$script_dir" 2>/dev/null && pwd -P)"
 while [ -n "$candidate" ]; do
-  if [ -f "$candidate/harness.config.json" ] && [ "$(git -C "$candidate" rev-parse --show-toplevel 2>/dev/null)" = "$candidate" ]; then
+  if [ -f "$candidate/devscene.config.json" ] && [ "$(git -C "$candidate" rev-parse --show-toplevel 2>/dev/null)" = "$candidate" ]; then
     repo_root="$candidate"
     break
   fi

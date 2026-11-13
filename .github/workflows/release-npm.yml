@@ -11,7 +11,7 @@ name: Release npm
 
 on:
   push:
-    tags: ['autonomous-sdlc-harness--v*']
+    tags: ['devscene--v*']
 
 # id-token: write is what lets npm exchange the job's OIDC token for a one-shot publish credential
 # (and sign the provenance statement). contents: read is the checkout. Nothing else.
@@ -48,7 +48,7 @@ jobs:
       - name: Check tag, manifests and npm
         run: |
           set -euo pipefail
-          tag_version="${GITHUB_REF_NAME#autonomous-sdlc-harness--v}"
+          tag_version="${GITHUB_REF_NAME#devscene--v}"
           cli_version="$(jq -r .version cli/package.json)"
           plugin_version="$(jq -r .version plugin/.claude-plugin/plugin.json)"
           echo "tag ${tag_version} · cli ${cli_version} · plugin ${plugin_version}"

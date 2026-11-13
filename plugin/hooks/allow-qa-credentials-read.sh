@@ -191,7 +191,7 @@
 #   command carries `>` or `>>` anywhere        -> silent
 #   command carries a refused token             -> silent
 #   anchor is not inside a git repository       -> silent
-#   repository has no harness.config.json       -> silent (no jurisdiction)
+#   repository has no devscene.config.json      -> silent (no jurisdiction)
 #   configuration unreadable or invalid JSON    -> silent (`hc_get` returns 1)
 #   `phases.qa` is not `true`                   -> silent (phase is off)
 #   `qa.credentialsPath` absent or empty        -> silent (nothing to key on)
@@ -213,7 +213,7 @@
 #   otherwise                                   -> allow
 #
 # JURISDICTION IS A DELIBERATE SCOPING DECISION. A repository with no
-# `harness.config.json` at its resolved root has not adopted the harness, so this
+# `devscene.config.json` at its resolved root has not adopted the harness, so this
 # guard grants nothing there — a plugin hook fires in EVERY session the plugin is
 # enabled for, including repositories that never ran `init`. The repository is
 # resolved from the command the hook was handed (the first `git -C <dir>`, else a
@@ -357,7 +357,7 @@
 #                                                 basename equality
 #     any of the above in a <repo> with `phases.qa` false or the path unset
 #     any of the above in a <repo> whose config is invalid JSON
-#     any of the above in a <repo> with no harness.config.json
+#     any of the above in a <repo> with no devscene.config.json
 
 set -u
 set -f

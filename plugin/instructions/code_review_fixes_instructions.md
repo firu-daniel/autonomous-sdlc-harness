@@ -1,11 +1,11 @@
 ## Resolved values
 
-The tokens below are neither Mode-contract **bindings** (this file declares none) nor ordinary **path placeholders** (`<branch>`, `<K>`, `<log>`, which this file's own text resolves): `<repo_root>` is derived at runtime and the rest resolve from the adopting repository's `harness.config.json`. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
+The tokens below are neither Mode-contract **bindings** (this file declares none) nor ordinary **path placeholders** (`<branch>`, `<K>`, `<log>`, which this file's own text resolves): `<repo_root>` is derived at runtime and the rest resolve from the adopting repository's `devscene.config.json`. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<repo_root>` | derived at runtime | The absolute root of the checkout this session runs in. Obtain it with a **bare** `git rev-parse --show-toplevel` and build every literal path from the result. Never embed the `$(…)` substitution inside another shell command, and never stash it in a shell variable across separate Bash calls — separate calls do not share shell state. |
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `devscene/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory the generated wrapper scripts live in, including the gate wrapper Phase 3 runs. |
 
 ---
@@ -25,7 +25,7 @@ Run this **once**, only when the **last** code-review item has been fixed — i.
 
 1. **Run the gates**, because the implementers this flow dispatched ran no suite, and their own whole-tree type-check runs do not gate the flow — a failure outside a unit's change is recorded as an evidence downgrade, neither fixed nor blocked on (`${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule`). The one wrapper run below runs both gates over the finished tree, the whole-tree type check and then the suite, and its verdict is the one that counts. From `<repo_root>`, run `bash <scripts_dir>/run-test-suite.sh task_supervised` and read only its stdout line:
    - `pass` → step 2.
-   - `fail <log>` → write no statistics. Tell the user the gates failed, name `<log>`, and stop; the log's per-gate sections show whether the type check, the suite or both failed, for the user to read. Once the failure is fixed, re-running `/autonomous-sdlc-harness:branch-implement-review` re-runs this phase.
+   - `fail <log>` → write no statistics. Tell the user the gates failed, name `<log>`, and stop; the log's per-gate sections show whether the type check, the suite or both failed, for the user to read. Once the failure is fixed, re-running `/devscene:branch-implement-review` re-runs this phase.
    - No stdout line → report the wrapper's one stderr line and stop.
    - The command starts both gates detached from this session and prints `pending` at once — or, when a run of its label already finished on this commit with nothing it reads changed since, starts nothing and prints that run's verdict at once (`<scripts_dir>/run-test-suite.sh` → the header comment opening `ONE RUN PER LABEL`). After each `pending`, re-issue the same command with `--wait` before the label, as a plain foreground command, until it prints the verdict line — the mechanism of `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_core.md` → `### G.1 Run the gates`. Never stop or re-launch a run in flight. No `Monitor` and no `sleep`. A `--wait` refusal is the no-line case.
 

@@ -16,7 +16,7 @@ Goal (a) is weak here: tick timing cannot be verified and nobody reads the repor
 
 ## Read tree
 
-Measured with `wc -w`. The conventions docs are this repository's (`harness.config.json` → `layers`: cli, plugin, general). An adopter's are typically about 440–970 words each (`cli/templates/claude/context/layer.md` 441, `conventions.md` 974).
+Measured with `wc -w`. The conventions docs are this repository's (`devscene.config.json` → `layers`: cli, plugin, general). An adopter's are typically about 440–970 words each (`cli/templates/claude/context/layer.md` 441, `conventions.md` 974).
 
 | File | Up-front / on-demand | Words |
 |---|---|---|
@@ -34,7 +34,7 @@ Measured with `wc -w`. The conventions docs are this repository's (`harness.conf
 | **Up-front total** | | **25 853** |
 | `plugin/agents/task-plan-writer.md` | on demand (cited :8, :128) | 6 476 |
 | `plugin/instructions/unit_loop_core.md` → `## The test-run rule` | on demand (:160) | 743 (file 9 143) |
-| `mcp__harness-docs__search_docs` results | on demand, only when `phases.docs` ∧ `docs.retrieval` (:61) | variable |
+| `mcp__devscene-docs__search_docs` results | on demand, only when `phases.docs` ∧ `docs.retrieval` (:61) | variable |
 | The plan under review, plus cited target ranges | per-dispatch input, not convention | variable |
 
 **Lead 13 (read-list conflicts).** `.claude/CLAUDE.md` → `## Context files` points planning and review work at `conventions.md`, the layer files and the lessons ledger. The definition already reads all of these (:56, :60), so the larger set is the definition's and there is no conflict. CLAUDE.md names the ledger as `<root>/harness-runs/lessons.md` and the definition as `<state_dir>/lessons.md`. They are the same file here (`stateDir: harness-runs`).
@@ -43,7 +43,7 @@ Measured with `wc -w`. The conventions docs are this repository's (`harness.conf
 
 | Site | Phase / flow | Count |
 |---|---|---|
-| `plugin/instructions/task_plan_writing_instructions_core.md` → `## Loop` → `### 4. Spawn task-plan-reviewer` (:208–218) | Planning loop. Shared only by the **semi-autonomous** fork (`task_plan_writing_instructions_semi_autonomous.md:53`) and the **autonomous** fork (`task_plan_writing_instructions_autonomous.md:230`). Supervised `/autonomous-sdlc-harness:branch-start-plan` drafts inline and dispatches no reviewer (`plugin/commands/branch-start-plan-semi-autonomous.md:21`). | 1 per revision, at most 5 per loop (`iteration >= 5` cap; `MAX_TOTAL_DISPATCHES` sizing at :62) |
+| `plugin/instructions/task_plan_writing_instructions_core.md` → `## Loop` → `### 4. Spawn task-plan-reviewer` (:208–218) | Planning loop. Shared only by the **semi-autonomous** fork (`task_plan_writing_instructions_semi_autonomous.md:53`) and the **autonomous** fork (`task_plan_writing_instructions_autonomous.md:230`). Supervised `/devscene:branch-start-plan` drafts inline and dispatches no reviewer (`plugin/commands/branch-start-plan-semi-autonomous.md:21`). | 1 per revision, at most 5 per loop (`iteration >= 5` cap; `MAX_TOTAL_DISPATCHES` sizing at :62) |
 | Walker node | `cli/templates/scripts/flows/task_plan_writing.graph.json:102–106` (`plan_review`, `findingsFolder: {state_dir}/task_plan_reviews/{branch}/`). `flow-walker.sh:382–385` emits `arg.iteration` = `fw_next_review_index` of that folder. | n/a |
 | Ledger | `autonomous_pause_and_ledger.md:69`, `P1. Task plan converged (… task-plan-reviewer all PASS)` | `P1` only |
 | Re-entry (`review` decision, core `## Setup` steps 5 and 7) | sends an existing draft back through the gates | +1 to 5 per re-entry |
@@ -89,7 +89,7 @@ The checklist is **embedded in the agent definition**, replacing `## Process`, a
 ## Work report checklist
 Fill in once before returning (in the findings file on FAIL, in `pass_report_<k>.md` on PASS) as `- [x] <ID>. **<title>** → <evidence>`; titles only, no descriptions. Gate off or not owed: `n/a — <reason>`. Evidence uses repo-relative paths, never absolute paths, timestamps or env output.
 
-- [ ] R1. **Resolve root and config** — Run bare `git rev-parse --show-toplevel`; bind `## Resolved values` from `harness.config.json`. Evidence: "resolved", not the path.
+- [ ] R1. **Resolve root and config** — Run bare `git rev-parse --show-toplevel`; bind `## Resolved values` from `devscene.config.json`. Evidence: "resolved", not the path.
 - [ ] R2. **Read every conventions document** — Read each distinct `layers[].conventions` file in full; treat it as authoritative over memory.
 - [ ] R3. **Read samples and lessons** — Read `sample_story_plan.md`, the three `sample_story/task_<N>_plan.md`, and `<state_dir>/lessons.md`.
 - [ ] R4. **Read prompt, index, every task file** — Read `prompt_path`, the story index, every `task_<N>_plan.md`; open plan targets at cited ranges only.
@@ -178,7 +178,7 @@ The shared receiving-side file proposed earlier is **withdrawn**. Screening is u
 | Path (revised) | **FAIL:** a trailing `## Work report` section of `<state_dir>/task_plan_reviews/<branch>/review_<iteration>.md`. **PASS:** `<state_dir>/task_plan_reviews/<branch>/pass_report_<k>.md`. The `<state_dir>/work_reports/…` tree is not used. The key is the caller's existing `findings_folder` (lead 4), with no ledger id, so it works in the semi-autonomous and autonomous flows, which are the only two that dispatch this agent. |
 | Index (lead 10) | On FAIL, the index is `iteration`, which is collision-safe: `fw_next_review_index` never back-fills (`flow-walker-gates.sh:34, 57–76`). On PASS, `iteration` is **not** safe: PASS writes no `review_<n>.md` (:192), so a `review` re-entry would get the same index again. The agent therefore picks `k` itself: the next free `pass_report_*.md` found with `Glob`. The name avoids the `review_` prefix, so neither `fw_next_review_index` (matches `review_*.md`, :63) nor `fw_round_count` (counts `review_*`, :80–87) shifts. No dispatch key, walker, graph or test change is needed. |
 | Original `report_path` design (MF1) | The withdrawn sixth key would have touched `flow-walker.sh:382–385`, the `plan_review` graph node (`task_plan_writing.graph.json:102–106`), the `arg.*` assertions in `cli/test/flow-walker.test.mjs:98–106`, `flow-walker-ui-and-reentry.test.mjs:81–83` and `flow-walker-resume.test.mjs:91–93`, "with five keys" (`task-plan-reviewer.md:32`), and the core dispatch block (`task_plan_writing_instructions_core.md:212–218`). Without all of those, the extra key arrives as unsolicited text. This cost is the reason it was dropped. |
-| Tools (lead 1) | `Read, Glob, Grep, Bash, Write, mcp__harness-docs__search_docs`; no `Edit` (:4). `sed -i` and `mkdir -p` are allow-listed for unattended runs (`cli/templates/claude/settings.autonomous.json:39, :45`; `plugin/hooks/lib/harness-config-lib.sh:62`), so in-place ticking would run. **The choice is a single write at the end**: the findings file is already one end `Write`, and in-place `sed` edits would defeat the tool-level read-only guarantee (:10). `cp` is not allow-listed, so the checklist lives in the definition, not in a template file. |
+| Tools (lead 1) | `Read, Glob, Grep, Bash, Write, mcp__devscene-docs__search_docs`; no `Edit` (:4). `sed -i` and `mkdir -p` are allow-listed for unattended runs (`cli/templates/claude/settings.autonomous.json:39, :45`; `plugin/hooks/lib/harness-config-lib.sh:62`), so in-place ticking would run. **The choice is a single write at the end**: the findings file is already one end `Write`, and in-place `sed` edits would defeat the tool-level read-only guarantee (:10). `cp` is not allow-listed, so the checklist lives in the definition, not in a template file. |
 | PASS must not touch disk (lead 2) | `:50` and `:192` must be narrowed to "no findings file on PASS". The PASS path now creates the findings folder, so core :210 ("only when it has findings to write") and `task_plan_writing_instructions_semi_autonomous.md:40` ("where none exists (every plan reviewer passed first time), say nothing") must change wording too. |
 | Commit, autonomous | The convergence commit already stages `task_plan_reviews/<branch>/` whole (`task_plan_writing_instructions_autonomous.md:140, :151`), so the "Pass all six" literal does **not** change. Untracked `<state_dir>` files are tolerated at checkpoints (`plan_orchestration_instructions_autonomous.md:281`). Remote runs bundle the same folder (`cli/templates/scripts/lib/harness-run-lib.sh:2151`), where a separate `work_reports/` tree would be lost. |
 | Commit, semi-autonomous (lead 8) | No flow step commits anything; the fork only tells the user to include the plan-review folders (`…_semi_autonomous.md:40`). The report has the same fate as the findings: committed if the user follows that note. Acceptable, given the line's wording fix above. |

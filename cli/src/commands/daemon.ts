@@ -112,7 +112,7 @@ const WATCHER_FLAG = '--watcher';
 const PRUNE_FLAG = '--prune';
 
 /** How the CLI is typed, for the messages that tell an operator what to run next. The `npx` prefix is not decoration: the rule for which occurrences carry it is stated once in `commands/init.ts`, beside its own `CLI`. */
-const CLI = 'npx autonomous-sdlc-harness';
+const CLI = 'npx devscene';
 
 /** Mode of the written unit file: readable by the service manager, writable only by its owner. */
 const UNIT_MODE = 0o644;
@@ -156,7 +156,7 @@ const DAEMON_USAGE: readonly string[] = Object.freeze([
   'systemctl --user commands to load, start or stop it are printed for you to run: a per-user systemd',
   'instance is not reliably addressable from an arbitrary process.',
   '',
-  'list needs neither a repository nor a harness.config.json: it reads the machine-local registry that',
+  'list needs neither a repository nor a devscene.config.json: it reads the machine-local registry that',
   'install records every installation in, and marks this checkout when it is run inside one.',
   '',
   'The unit file is written outside the repository, at ~/Library/LaunchAgents (launchd) or',
