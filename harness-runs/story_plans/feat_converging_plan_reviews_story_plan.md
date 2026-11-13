@@ -52,7 +52,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_converging_plan_reviews
 20. [x] **Task 20** — Commit each fix-plan review round in the autonomous fix-plan fork, and read convergence from `R1` on every resume _(layer: plugin)_ _(points: 20)_
 21. [x] **Task 21** — Restate the non-autonomous forks and the plan-loop entry commands for the new loop shape _(layer: plugin)_ _(points: 15)_
 22. [x] **Task 22** — Hand the planning rounds' incidental findings to `branch-reviewer` and `skeptic-reviewer` as leads _(layer: plugin)_ _(points: 10)_
-23. [ ] **Task 23** — Restate the implementation-flow readers of the plan-gate folders and add the new commit points _(layer: plugin)_ _(points: 10)_
+23. [x] **Task 23** — Restate the implementation-flow readers of the plan-gate folders and add the new commit points _(layer: plugin)_ _(points: 10)_
 24. [ ] **Task 24** — Restate the plan loop's routing in `AUTONOMOUS_FLOW.md` and its whiteboard _(layer: plugin)_ _(points: 10)_
 25. [ ] **Task 25** — Restate the flow-graph schema as format 2, move every fixture onto it, and add the round negatives _(layer: general)_ _(points: 20)_
 26. [ ] **Task 26** — Add `gate-in-round` to `check-flow-graph.sh` and restate its FAIL-cycle check for round nodes _(layer: general)_ _(points: 20)_
