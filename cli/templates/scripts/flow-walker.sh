@@ -766,7 +766,7 @@ start_round() {
     fi
     g_need "nodes.$g.findingsFolder"
     render_path "$GV"
-    FW_ARGS[$k]="$g=$ROOT/$SUBST"
+    FW_ARGS[$k]="$g=$ROOT/${SUBST%/}"
     k=$((k + 1))
   done
   ev="$(fw_round_evidence "${FW_ARGS[@]}")"
@@ -845,12 +845,13 @@ EOF
   fi
 }
 
-# Record the verdicts and files of the first <n> gates start_round read.
+# Record the verdicts and files of the first <n> gates start_round read, each
+# file repo-relative as render_path gives it.
 start_record() {
   local n="$1" j=0
   while [ "$j" -lt "$n" ]; do
     st_set "round.verdict.${FW_GN[$j]}" "${FW_GV[$j]}"
-    st_set "round.findings.${FW_GN[$j]}" "${FW_GF[$j]}"
+    st_set "round.findings.${FW_GN[$j]}" "${FW_GF[$j]#"$ROOT/"}"
     j=$((j + 1))
   done
 }
