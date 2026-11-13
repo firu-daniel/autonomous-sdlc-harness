@@ -148,7 +148,7 @@
 #      `autonomous_logs/remote_status.json`, `clarifications/<branch>/`,
 #      `PAUSE_PROGRESS.md`, `.flow_walker_state`, the move-aside directory
 #      `autonomous_logs/remote_superseded/` and, only where nothing exists yet,
-#      files under the eight planning paths `hr_remote_planning_paths` assigns;
+#      files under the nine planning paths `hr_remote_planning_paths` assigns;
 #      outside it, only the caller-named `<out_dir>` (its `planning/` included)
 #      of `hr_remote_bundle_write`, the caller-named `<dst>` of
 #      `hr_remote_copy_tree` (which `hr_remote_bundle_write` names under
@@ -442,7 +442,8 @@
 # `HR_LANE_OWNER_AT` and `HR_LANE_BROKEN_OWNER`, and the remote state bundle's
 # names, which `hr_remote_names_var` assigns, with `HR_REMOTE_PLANNING_PATHS`
 # (`hr_remote_planning_paths`) and `HR_REMOTE_PLANNING_PLACED` /
-# `HR_REMOTE_PLANNING_KEPT` (`hr_remote_bundle_restore`), `HR_REMOTE_ASIDE`
+# `HR_REMOTE_PLANNING_KEPT` / `HR_REMOTE_PLANNING_WITHHELD` /
+# `HR_REMOTE_WALKER_WITHHELD` (`hr_remote_bundle_restore`), `HR_REMOTE_ASIDE`
 # (`hr_remote_move_aside`), `HR_REMOTE_STATE_DIR`, `HR_REMOTE_STATE_FROM`
 # and `HR_REMOTE_STATE_CHECKOUT`
 # (`hr_remote_state_dir_var`) and `HR_REMOTE_LINKED`
@@ -6035,18 +6036,24 @@ HR_REMOTE_WORKFLOWS_DIR='.github/workflows'
 #                                          task_plan_reviews/<branch>
 #                                          business_parity_reviews/<branch>
 #                                          architecture_reviews/<branch>
+#                                          plan_revisions/<branch>
 #                                          ui_test_plan_reviews/<branch>
 #
 # The walker state loses its dot because `actions/upload-artifact` skips hidden
 # files by default. THE BUNDLE ITSELF IS NEVER COMMITTED. Every file outside
 # `planning/` is gitignored machine-local state, and the remote-status and
 # move-aside paths sit under `autonomous_logs/`, whose ignore rule already
-# covers them. The files under `planning/` are untracked drafts that the flow
-# commits itself at its P1/P3 convergence; the bundle only carries them.
+# covers them. The task-plan loop's files under `planning/` are committed and
+# pushed at each round's end and on a planning pause, so the bundle's copy of
+# them matters only before the first round commit, and a job restore withholds
+# it once the story index is tracked (`hr_remote_bundle_restore`). The UI-test-plan
+# loop's files stay untracked until its convergence; for them the bundle is
+# still the only carrier.
 #
 # THE PLANNING PATHS ARE A MIRROR of the contracts that write and stage them:
 # `plugin/instructions/task_plan_writing_instructions_autonomous.md` →
-# `## Override 3` and `## Override 4` staging lists, and
+# `## Override 3` and `## Override 4` staging lists and
+# `## Override 6 — commit each plan-review round`'s per-round staging list, and
 # `<scripts_dir>/flows/task_plan_writing.graph.json` → each node's `findingsFolder`. A path
 # added there is an edit to `hr_remote_planning_paths`. Only planning is
 # carried because the walker's one graph is `task_plan_writing.graph.json`;
@@ -6061,7 +6068,8 @@ HR_REMOTE_WORKFLOWS_DIR='.github/workflows'
 # the next job, and the user's local mirror. The walker state: the next job
 # only. `planning/`: the next job only, never a mirror — an untracked draft left
 # in the mirror would make its later fast-forward to `origin/<branch>` refuse,
-# because the draft's own convergence commit adds the same path. `run.log`: the
+# because a commit on the branch adds the same path — the per-round commit of
+# the task-plan files, or the UI-test plan's convergence commit. `run.log`: the
 # user only — `sync` copies it to the main checkout's logs directory itself,
 # and no restore places it.
 #
@@ -6147,7 +6155,7 @@ hr_github_resume_route() {
 
 # hr_remote_planning_paths <branch>
 #
-# Assigns `HR_REMOTE_PLANNING_PATHS`: the eight planning paths of the format
+# Assigns `HR_REMOTE_PLANNING_PATHS`: the nine planning paths of the format
 # above, relative to <state_dir>, newline-separated, no trailing slash. 1 with
 # an empty value for an empty <branch>.
 hr_remote_planning_paths() {
@@ -6161,6 +6169,7 @@ ui_test_plans/$branch
 task_plan_reviews/$branch
 business_parity_reviews/$branch
 architecture_reviews/$branch
+plan_revisions/$branch
 ui_test_plan_reviews/$branch"
   return 0
 }
@@ -6576,8 +6585,22 @@ hr_remote_move_aside() {
 # where nothing exists, counted in `HR_REMOTE_PLANNING_PLACED`; one whose target
 # exists is left byte-identical — the checkout's copy is the branch's committed
 # record — and counted in `HR_REMOTE_PLANNING_KEPT`. A symlink, a non-regular
-# entry or a path outside the set counts in neither. Both are `0` at entry and
-# stay `0` in `mirror` mode.
+# entry or a path outside the set counts in none of the three counters.
+#
+# A COMMITTED ROUND IS THE WHOLE TASK-PLAN STATE. When <root> tracks the story
+# index (`git ls-files --error-unmatch`; any non-zero exit, `git` absent
+# included, is untracked), every such file under the six task-plan paths — the
+# story index, `task_plans/`, `task_plan_reviews/`, `business_parity_reviews/`,
+# `architecture_reviews/`, `plan_revisions/` — is placed nowhere and counted in
+# `HR_REMOTE_PLANNING_WITHHELD`: those files are committed at every round's end,
+# so a draft newer than the commit — a job killed mid-round — placed beside it
+# would leave the next session walking a mixture of two revisions. When the
+# bundle carries a walker state and any withheld file is missing from <root> or
+# differs from its copy there (`cmp -s`), the walker state is not placed and
+# `HR_REMOTE_WALKER_WITHHELD` is `1`, so the next session's `start` decides from
+# the committed round. The UI-test-plan paths keep the never-overwrites rule in
+# both cases: they stay untracked until their convergence. All four counters
+# are `0` at entry and stay `0` in `mirror` mode.
 #
 # THE CLARIFICATION DIRECTORY IS REPLACED WHOLESALE, AND NOTHING IS DELETED. An
 # existing target is moved aside by `hr_remote_move_aside` before the bundle's
@@ -6591,9 +6614,11 @@ hr_remote_move_aside() {
 # `branch` other than <branch>) or <root>'s configuration is unresolvable.
 hr_remote_bundle_restore() {
   local bundle="${1-}" root="${2-}" branch="${3-}" mode="${4-}"
-  local state base named target tmp pdir file rel p inset
+  local state base named target tmp pdir file rel p inset tracked differs
   HR_REMOTE_PLANNING_PLACED=0
   HR_REMOTE_PLANNING_KEPT=0
+  HR_REMOTE_PLANNING_WITHHELD=0
+  HR_REMOTE_WALKER_WITHHELD=0
   [ -n "$bundle" ] && [ -n "$root" ] && [ -n "$branch" ] || return 1
   case "$mode" in
     job|mirror) ;;
@@ -6621,10 +6646,11 @@ hr_remote_bundle_restore() {
   fi
   [ "$mode" = job ] || return 0
 
-  if [ -f "$bundle/$HR_REMOTE_WALKER_FILE" ]; then
-    mkdir -p "$base" 2>/dev/null || return 1
-    cp "$bundle/$HR_REMOTE_WALKER_FILE" "$base/$HR_REMOTE_WALKER_SOURCE" 2>/dev/null || return 1
+  tracked=0
+  if git -C "$root" ls-files --error-unmatch -- "$state/story_plans/${branch}_story_plan.md" >/dev/null 2>&1; then
+    tracked=1
   fi
+  differs=0
   pdir="$bundle/$HR_REMOTE_PLANNING_DIR"
   if [ -d "$pdir" ] && [ ! -L "$pdir" ]; then
     hr_remote_planning_paths "$branch" || return 1
@@ -6646,6 +6672,19 @@ hr_remote_bundle_restore() {
 $HR_REMOTE_PLANNING_PATHS
 EOF
       [ "$inset" = 1 ] || continue
+      if [ "$tracked" = 1 ]; then
+        case "$rel" in
+          "story_plans/${branch}_story_plan.md" | "task_plans/$branch"/* | \
+          "task_plan_reviews/$branch"/* | "business_parity_reviews/$branch"/* | \
+          "architecture_reviews/$branch"/* | "plan_revisions/$branch"/*)
+            HR_REMOTE_PLANNING_WITHHELD=$((HR_REMOTE_PLANNING_WITHHELD + 1))
+            if [ ! -f "$base/$rel" ] || [ -L "$base/$rel" ] || ! cmp -s "$file" "$base/$rel"; then
+              differs=1
+            fi
+            continue
+            ;;
+        esac
+      fi
       if [ -e "$base/$rel" ] || [ -L "$base/$rel" ]; then
         HR_REMOTE_PLANNING_KEPT=$((HR_REMOTE_PLANNING_KEPT + 1))
         continue
@@ -6655,6 +6694,14 @@ EOF
       cp "$file" "$target" 2>/dev/null || return 1
       HR_REMOTE_PLANNING_PLACED=$((HR_REMOTE_PLANNING_PLACED + 1))
     done < <(find "$pdir" -type f 2>/dev/null)
+  fi
+  if [ -f "$bundle/$HR_REMOTE_WALKER_FILE" ]; then
+    if [ "$differs" = 1 ]; then
+      HR_REMOTE_WALKER_WITHHELD=1
+    else
+      mkdir -p "$base" 2>/dev/null || return 1
+      cp "$bundle/$HR_REMOTE_WALKER_FILE" "$base/$HR_REMOTE_WALKER_SOURCE" 2>/dev/null || return 1
+    fi
   fi
   mkdir -p "$base/$HR_REMOTE_LOGS_DIR" 2>/dev/null || return 1
   tmp=$(mktemp "$base/$HR_REMOTE_STATUS_SOURCE.tmp.XXXXXX" 2>/dev/null) || return 1

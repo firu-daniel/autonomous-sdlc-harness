@@ -998,6 +998,7 @@ test('the remote state bundle carries the planning drafts, and a job restore pla
     [`story_plans/${REMOTE_BRANCH}_story_plan.md`]: 'draft index\n',
     [`task_plans/${REMOTE_BRANCH}/task_1_plan.md`]: 'task 1\n',
     [`task_plan_reviews/${REMOTE_BRANCH}/review_0.md`]: 'review 0\n',
+    [`plan_revisions/${REMOTE_BRANCH}/task_plan_revision_1.md`]: 'revision 1\n',
   };
   for (const [path, content] of Object.entries(drafts)) plant(source, `${STATE_DIR}/${path}`, content);
 
@@ -1029,8 +1030,9 @@ test('the remote state bundle carries the planning drafts, and a job restore pla
   assert.equal(intoJob.status, 0, `the job restore exited ${intoJob.status}: ${intoJob.stderr}`);
   assert.equal(text(job, `${STATE_DIR}/task_plans/${REMOTE_BRANCH}/task_1_plan.md`), 'task 1\n');
   assert.equal(text(job, `${STATE_DIR}/task_plan_reviews/${REMOTE_BRANCH}/review_0.md`), 'review 0\n');
+  assert.equal(text(job, `${STATE_DIR}/plan_revisions/${REMOTE_BRANCH}/task_plan_revision_1.md`), 'revision 1\n');
   assert.equal(text(job, committed), 'committed index\n', 'the job restore overwrote the checkout\'s committed story index');
-  assert.equal(intoJob.stdout, '2 1\n', 'HR_REMOTE_PLANNING_PLACED / HR_REMOTE_PLANNING_KEPT are not 2 / 1');
+  assert.equal(intoJob.stdout, '3 1\n', 'HR_REMOTE_PLANNING_PLACED / HR_REMOTE_PLANNING_KEPT are not 3 / 1');
 
   const mirror = await fixtureFor(t, { files: nodeProjectFiles() });
   await initOk(mirror);
@@ -1046,6 +1048,40 @@ test('the remote state bundle carries the planning drafts, and a job restore pla
   for (const path of Object.keys(drafts)) {
     assert.ok(!mirrorNew.includes(`${STATE_DIR}/${path}`), `the mirror restore placed ${path}`);
   }
+
+  // Once the checkout tracks the story index, the committed round is the whole task-plan state.
+  plant(source, 'bundle-out/flow_walker_state', 'step=3\n');
+  const trackedCall = 'hr_remote_bundle_restore "$@" || exit $?; printf "%s %s %s %s\\n" "$HR_REMOTE_PLANNING_PLACED" "$HR_REMOTE_PLANNING_KEPT" "$HR_REMOTE_PLANNING_WITHHELD" "$HR_REMOTE_WALKER_WITHHELD"';
+  const commitPlanted = async (dir, files) => {
+    for (const [path, content] of Object.entries(files)) plant(dir, `${STATE_DIR}/${path}`, content);
+    await runGit(dir, ['add', '--force', ...Object.keys(files).map((path) => `${STATE_DIR}/${path}`)]);
+    await runGit(dir, ['commit', '--quiet', '--no-verify', '-m', 'committed round']);
+  };
+
+  const tracked = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(tracked);
+  const taskOne = `task_plans/${REMOTE_BRANCH}/task_1_plan.md`;
+  await commitPlanted(tracked, {
+    [`story_plans/${REMOTE_BRANCH}_story_plan.md`]: 'committed index\n',
+    [taskOne]: drafts[taskOne],
+  });
+  const beforeTracked = await snapshotTree(tracked);
+  const intoTracked = await libCall(tracked, trackedCall, [bundle, tracked, REMOTE_BRANCH, 'job']);
+  assert.equal(intoTracked.status, 0, `the tracked job restore exited ${intoTracked.status}: ${intoTracked.stderr}`);
+  assert.equal(intoTracked.stdout, '0 0 4 1\n', 'a tracked restore did not withhold all four task-plan drafts and the walk');
+  const afterTracked = await snapshotTree(tracked);
+  for (const path of Object.keys(drafts)) {
+    assert.deepEqual(afterTracked[`${STATE_DIR}/${path}`], beforeTracked[`${STATE_DIR}/${path}`], `the tracked restore placed or changed ${path}`);
+  }
+  assert.ok(!existsSync(join(tracked, REMOTE.walker)), 'the tracked restore placed a walk beside a differing committed round');
+
+  const identical = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(identical);
+  await commitPlanted(identical, drafts);
+  const intoIdentical = await libCall(identical, trackedCall, [bundle, identical, REMOTE_BRANCH, 'job']);
+  assert.equal(intoIdentical.status, 0, `the identical job restore exited ${intoIdentical.status}: ${intoIdentical.stderr}`);
+  assert.equal(intoIdentical.stdout, '0 0 4 0\n', 'an identical committed round withheld the walk');
+  assert.equal(text(identical, REMOTE.walker), 'step=3\n', 'the walk was not placed over an identical committed round');
 
   // A `..` segment cannot be created as a file name, so the escape is attempted through a symlink instead.
   plant(source, `bundle-out/planning/story_plans/other_story_plan.md`, 'outside the set\n');
@@ -1063,7 +1099,7 @@ test('the remote state bundle carries the planning drafts, and a job restore pla
   const hostileTree = Object.keys(await snapshotTree(hostile));
   assert.ok(!hostileTree.some((key) => key.endsWith('other_story_plan.md')), 'a file outside the planning set was placed');
   assert.ok(!hostileTree.some((key) => key.endsWith('linked.md')), 'a symlinked bundle entry was placed');
-  assert.equal(intoHostile.stdout, '3 0\n', 'the hostile entries were counted');
+  assert.equal(intoHostile.stdout, '4 0\n', 'the hostile entries were counted');
 });
 
 test('a bundle whose status.json carries an unrecognised schema restores nothing and exits 2', async (t) => {
