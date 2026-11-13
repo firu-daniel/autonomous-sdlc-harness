@@ -1,0 +1,25 @@
+### Task 30 — Record the decisions and the measurement baseline in `docs/converging-plan-reviews.md`
+
+**Goal:** Give this branch's decisions of record one home, each with its reason and its cost, and ship what the task prompt's closing measurement needs: the baseline of record, its counting method restated for a world where a `PASS` writes a file, the four metrics with the read-only commands that produce each, and an explicit statement that the comparison is owed by a later run over branches planned after this lands.
+
+**Depends on:** Task 10 (`plugin/instructions/plan_review_rounds.md` — the round file's `verdict:` line, `## Incidental findings (not gating)`, the precedence record). Tasks 11, 12, 19 and 20 (the two loops' new shape, the revision-note paths, the fix-plan folders `…/<branch>/user_review_<N>/`, the per-round commit subjects, the fix-plan resume rule). Task 28 (`docs/flow-graph-walker.md` → `### Item 7` and `### Item 2`, which hold the walker's decisions this document links to rather than restates).
+
+**Where this task stops.** No results are written: none can exist on this branch, as the story index's `## Context` assumption records. Nothing here restates a contract the plugin owns; it cites by path and heading (`.claude/context/plugin.md` → `## Citation`).
+
+### Targets
+
+- `docs/converging-plan-reviews.md` (new)
+- `README.md` — `## Where to read more`
+
+**Work:**
+
+- [ ] Open with **Who reads this** and **What it owns**, per the cross-layer rule for a document under `docs/`. `## 1. The decisions`, each as **Decision / Reason / Cost**: the revision notes' folder and file names (one writer-owned folder for both loops, numbered by the round they feed so a converging reviewer's lookup is its own index); the fix-plan gate folders per user-review round (a round-numbered file in a flat per-branch folder would overwrite an earlier user-review round); the precedence order and its named exception to *"`call stands` is unavailable for a Must Fix"*; the fix-plan resume that always restarts the round at its first gate (the orchestrator reads no findings file's contents, and the restart costs one parity review at most); the round counter kept apart from the round files' numbering in both loops — the task-plan walker carries the counter only in a continued saved walk and every `start` begins it at 0, and a resumed fix-plan session sets `cap_base` to the round it resumes at — so an answered cap park, an extend and a fresh write each get a full five-round budget, while the round files never overwrite an earlier round (cost: a loop paused and resumed without a saved walk can run more than five rounds in total before a cap); the walker's decisions by link to `docs/flow-graph-walker.md`.
+- [ ] `## 2. Known tech debt`: the user-review fix-plan loop's routing is prose, restated by hand; moving it onto a walker graph is a separate task tracked on its own, and is the precondition for giving that loop the walker's next-due-gate resume.
+- [ ] `## 3. The baseline`: the task prompt's FAIL-rounds-per-branch table for `task_plan_reviews/` and `architecture_reviews/`, quoted as data measured on 2026-11-13 from this repository's run artifacts, with its stated method — a file was written only on `FAIL`, so files per folder counted `FAIL` rounds, and the index carried on across re-entries — and `docs/orchestrator-cost-measurement.md` → *"A leaner plan loop"* as the earlier token figure it relates to.
+- [ ] `## 4. The comparison owed, and how to take it`: for runs planned after this lands — **`FAIL` rounds per branch**, restated as counting files carrying `verdict: FAIL`, distinct round indices per branch (a command such as `grep -l '^verdict: FAIL' harness-runs/task_plan_reviews/<branch>/review_*.md`, written out per folder); **cap hits**, from the clarification questions or escalations naming the plan loop's cap; **planning-phase tokens**, attributed per agent as `docs/orchestrator-cost-measurement.md` attributes them; **plan-level defects** among `branch-reviewer` / `skeptic-reviewer` findings, and how many a converging round had listed under `## Incidental findings (not gating)` — the last line testing the main risk. State that no opt-in seam is needed: every run already writes the verdict lines, the incidental sections and the stream logs these read, so the data exists without a new switch (`harness-runs/lessons.md` → *"A feature that ships as "not yet measured" ships the seam that will measure it"*). Every command is read-only, carries no expected count, and states the property its output must have.
+- [ ] `README.md` → `## Where to read more`: one bullet for the new document in the list's existing form, placed after `docs/orchestrator-cost-measurement.md`.
+
+**Verification:**
+
+- Every path and heading the document cites resolves: for each backticked repo path, `ls` it; for each `→ ## …` heading, `grep -n` it in the named file.
+- `grep -n "converging-plan-reviews.md" README.md` finds the new bullet, and no command in the new document states an expected count (`grep -nE "should (print|return) [0-9]" docs/converging-plan-reviews.md` finds nothing).
