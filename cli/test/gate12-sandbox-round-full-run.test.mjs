@@ -6,8 +6,8 @@
  * prints a source clause as `source` rather than grading it, and keeps FR4's quotes in full.** A
  * missing job is `not run` and a gone log is `expired`, never a pass. It prints no JS, SB or RJ line
  * and reads no state file. A wrapper's refusal line in either spelling fails FR3 although its step
- * concluded success, and a restore with no placed line passes FR6 only when the parked job's bundle
- * holds no planning file; an expired bundle is `expired`. Round 13's two jobs are replayed on both.
+ * concluded success, and a restore with neither a placed nor a withheld line passes FR6 only when the
+ * parked job's bundle holds no planning file; an expired bundle is `expired`. Round 13's two jobs are replayed on both.
  *
  * THE CANNED ANSWERS. `gh run list … --branch <b>` lists the branch's `devscene run <b>` jobs; the
  * `gh` stub (Task 10's `ghStub`) answers each job's `run view <id> --repo <slug> --json
@@ -23,7 +23,7 @@
  * - `cli/templates/scripts/autonomous-watcher.sh` → `log`'s `[watcher]` tag; `run_job`'s
  *   `job: launching run for '<b>'`, `job: parked stop`, `job: resuming parked run '<b>' (answers `
  *   and `job: <final> <decision>`; `spawn_refuse`'s `not launching '<b>': `.
- * - `cli/templates/scripts/remote-run.sh` → `verb_restore`'s restored, placed and wrote lines;
+ * - `cli/templates/scripts/remote-run.sh` → `verb_restore`'s restored, placed, withheld and wrote lines;
  *   `verb_save`'s saved line; `save_link_free`'s `remote-run.sh: save: skipped ` form.
  * - `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_remote_copy_tree`'s
  *   `remote state bundle: skipped ` prefix and ` is a symbolic link` suffix.
@@ -106,6 +106,11 @@ const [PLACED_OPEN, PLACED_FOR, PLACED_KEPT, PLACED_TAIL] = extract(
   /echo "(remote-run\.sh: placed )\$HR_REMOTE_PLANNING_PLACED( planning file\(s\) for )\$branch(; kept )\$HR_REMOTE_PLANNING_KEPT( the checkout already carries)"/,
   'verb_restore placed line',
 );
+const [WITHHELD_OPEN, WITHHELD_FOR, WITHHELD_TAIL] = extract(
+  verbRestore,
+  /echo "(remote-run\.sh: withheld )\$HR_REMOTE_PLANNING_WITHHELD( planning file\(s\) for )\$branch(; the checkout tracks its story index[^"]*)"/,
+  'verb_restore withheld line',
+);
 const [WROTE_OPEN, WROTE_FOR] = extract(verbRestore, /echo "(remote-run\.sh: wrote answer_)\$n(\.md for )\$branch"/, 'verb_restore wrote line');
 const [SAVED_OPEN, SAVED_INTO] = extract(
   fnBody(remoteRun, 'verb_save', REMOTE_RUN),
@@ -186,6 +191,7 @@ const RESUME = watcherLine(`${RESUMING_OPEN}${B}${RESUMING_ANSWERS}1) in ${WORKT
 const SAVED = `${SAVED_OPEN}${B}${SAVED_INTO}/home/runner/work/_temp/harness-state`;
 const RESTORED = `${RESTORED_OPEN}${PARKED}${RESTORED_INTO}${WORKTREE}`;
 const PLACED = `${PLACED_OPEN}2${PLACED_FOR}${B}${PLACED_KEPT}0${PLACED_TAIL}`;
+const WITHHELD = `${WITHHELD_OPEN}2${WITHHELD_FOR}${B}${WITHHELD_TAIL}`;
 const WROTE = `${WROTE_OPEN}1${WROTE_FOR}${B}`;
 const LINK = `${WORKTREE}/devscene/clarifications/${B}/link.md`;
 const COPY_SKIP = `${SKIP_PREFIX}${LINK}: ${LINK}${SKIP_SUFFIX}`;
@@ -221,7 +227,7 @@ function job(id, minute, lines, { overrides = {}, expired = false } = {}) {
  *
  * @param {{ resumed?: boolean, wrote?: boolean, preflight?: string, finalLine?: string | null,
  *   notLaunching?: boolean, saveExtra?: string[], parkedExpired?: boolean, install?: string[],
- *   placed?: boolean, pushExtra?: string[], harnessExtra?: string[] }} [options] `pushExtra` and
+ *   placed?: boolean, withheld?: boolean, pushExtra?: string[], harnessExtra?: string[] }} [options] `pushExtra` and
  *   `harnessExtra` are appended to the completed job's `Push the branch` and `Run DevScene` logs.
  * @returns {Job[]}
  */
@@ -230,6 +236,7 @@ function fullRun({
   resumed = true,
   wrote = true,
   placed = true,
+  withheld = false,
   preflight = 'success',
   finalLine = `${JOB_FINAL}completed stop`,
   notLaunching = false,
@@ -256,6 +263,7 @@ function fullRun({
     [STEP.install, PRESENT_LINE],
     [STEP.restore, RESTORED],
     ...(placed ? [[STEP.restore, PLACED]] : []),
+    ...(withheld ? [[STEP.restore, WITHHELD]] : []),
     ...(wrote ? [[STEP.restore, WROTE]] : []),
     [STEP.harness, RESUME],
     [STEP.harness, `${JOB_FINAL}paused continue`],
@@ -555,8 +563,18 @@ test('FR6: no placed line over a bundle holding two planning files is fail namin
   const { one } = await grade(fixture);
   const fr6 = one('FR6');
   assert.equal(fr6.result, 'fail', JSON.stringify(fr6));
-  assert.ok(fr6.evidence.includes('carries no placed <n> planning file(s) line'), fr6.evidence);
+  assert.ok(fr6.evidence.includes('carries no placed <n> planning file(s) line and no withheld <n> planning file(s) line'), fr6.evidence);
   assert.ok(fr6.evidence.includes(`run ${PARKED}'s bundle holds 2 planning file(s)`), fr6.evidence);
+});
+
+test('FR6: a withheld line over a bundle holding two planning files is pass naming the withheld count', async (t) => {
+  const fixture = await fixtureFor(t);
+  await stage(fixture, fullRun({ placed: false, withheld: true }));
+  const { one } = await grade(fixture);
+  const fr6 = one('FR6');
+  assert.equal(fr6.result, 'pass', JSON.stringify(fr6));
+  assert.ok(fr6.evidence.includes('withheld 2 planning file(s)'), fr6.evidence);
+  assert.ok(fr6.evidence.includes(`restored the bundle of run ${PARKED}`), fr6.evidence);
 });
 
 for (const [artifact, result] of [

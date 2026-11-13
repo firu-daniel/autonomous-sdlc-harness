@@ -58,7 +58,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_converging_plan_reviews
 26. [x] **Task 26** — Add `gate-in-round` to `check-flow-graph.sh` and restate its FAIL-cycle check for round nodes _(layer: general)_ _(points: 20)_
 27. [x] **Task 27** — Bring this checkout's self-adopted scripts and run-artifact READMEs level with the templates _(layer: general)_ _(points: 10)_
 28. [x] **Task 32** — Make Gate 12's FR6 grader and its contract accept a restore that withholds the task-plan drafts _(layer: general)_ _(points: 10)_
-29. [ ] **Task 33** — Pin a withheld restore as an FR6 pass in `gate12-sandbox-round-full-run.test.mjs` _(layer: cli)_ _(points: 10)_
+29. [x] **Task 33** — Pin a withheld restore as an FR6 pass in `gate12-sandbox-round-full-run.test.mjs` _(layer: cli)_ _(points: 10)_
 30. [ ] **Task 28** — Restate `docs/flow-graph-walker.md` for round routing, the new arguments and the round number on `start` _(layer: general)_ _(points: 15)_
 31. [ ] **Task 29** — Rewrite the remote-execution decision record on committing unconverged plans _(layer: general)_ _(points: 15)_
 32. [ ] **Task 30** — Record the decisions and the measurement baseline in `docs/converging-plan-reviews.md` _(layer: general)_ _(points: 15)_
