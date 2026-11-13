@@ -21,3 +21,5 @@
 
 - `grep -n "every FAIL, from whichever gate\|each capped at five iterations\|FAIL: revise, then re-run every gate" plugin/docs/AUTONOMOUS_FLOW.md plugin/docs/AUTONOMOUS_FLOW_WHITEBOARD.md` finds nothing.
 - Neither file gains frontmatter (`head -1` of each still prints its H1).
+
+**Deviations from plan:** The Work bullet for `AUTONOMOUS_FLOW_WHITEBOARD.md` says to keep the paragraph under the diagram, but that paragraph's last sentence, *"At convergence the plan is **committed**"*, is one of the claims the Goal says to correct. Its gate-order argument is unchanged; only that sentence now says an unattended run commits the plan at the end of every round and reads convergence from `P1` alone.
