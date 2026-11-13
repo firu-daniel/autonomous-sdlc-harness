@@ -12,7 +12,7 @@
  * 1. **A phase that is off gets no directories at all.** An adopter who never runs the parity phase
  *    has no reference implementation to compare against, so a `business_parity_*` directory in
  *    their tree would be an empty slot they cannot fill and cannot tell from one the flow forgot to
- *    write. Turning the phase on in `harness.config.json` and re-running `init` creates them, which
+ *    write. Turning the phase on in `devscene.config.json` and re-running `init` creates them, which
  *    is why the omission is safe as well as tidy.
  * 2. **The two ledgers are `create-if-absent` and are never truncated or rewritten.** They
  *    accumulate over a project's whole life and are the only copy of that history — the write
@@ -196,14 +196,14 @@ export interface StateDirResult {
 function assertWritableStateDir(raw: string): string {
   if (STATE_DIR_DOT_PATTERN.test(raw)) {
     throw new HarnessError(
-      `stateDir is ${JSON.stringify(raw)}, which has a path segment starting with '.': the run-artifact tree must not be dot-named or reach through a dot segment, because it has to be writable by an unattended run and a dot-path is where a host reserves directories an unattended run may not write to — measured for .claude/**, where such a run completes with exit 0 having written nothing. Set stateDir in harness.config.json to a name without a leading dot; do not "fix" it back to a dot-name`,
+      `stateDir is ${JSON.stringify(raw)}, which has a path segment starting with '.': the run-artifact tree must not be dot-named or reach through a dot segment, because it has to be writable by an unattended run and a dot-path is where a host reserves directories an unattended run may not write to — measured for .claude/**, where such a run completes with exit 0 having written nothing. Set stateDir in devscene.config.json to a name without a leading dot; do not "fix" it back to a dot-name`,
     );
   }
 
   const normalized = normalizeRepoDir(raw.trim());
   if (normalized === '.' || normalized === '') {
     throw new HarnessError(
-      `stateDir is ${JSON.stringify(raw)}, which names the repository root rather than a directory in it: the run-artifact tree is a directory of its own, and writing it at the root would scatter the flow's artifact directories through the repository. Set stateDir in harness.config.json to a directory name`,
+      `stateDir is ${JSON.stringify(raw)}, which names the repository root rather than a directory in it: the run-artifact tree is a directory of its own, and writing it at the root would scatter the flow's artifact directories through the repository. Set stateDir in devscene.config.json to a directory name`,
     );
   }
   return normalized;
@@ -295,7 +295,7 @@ export function writeStateDir({ repoRoot, config, plan }: StateDirOptions): Stat
       content: readTemplate(`${TEMPLATE_DIR}/${ledger}`),
       label: `ledger ${ledger}`,
       // Outside `--force` entirely (`core/writer.ts`'s `WriteRequest.forceOverride`), and for the
-      // same reason `harness.config.json` is: an accumulating ledger has no derivable content to
+      // same reason `devscene.config.json` is: an accumulating ledger has no derivable content to
       // regenerate, so an overwrite is pure loss — and the engine's `.bak` is single-generation, so
       // a second forced run takes the history with it. `--force` is an operation this CLI's own
       // remedy messages send an adopter to, so it has to be safe to run twice.
@@ -323,7 +323,7 @@ export function writeStateDir({ repoRoot, config, plan }: StateDirOptions): Stat
 
   if (skipped.length > 0) {
     notes.push(
-      `${skipped.length} artifact ${skipped.length === 1 ? 'directory belongs' : 'directories belong'} to a phase that is off, so ${skipped.length === 1 ? 'it was' : 'they were'} not created: turn the phase on in harness.config.json and re-run init to add ${skipped.length === 1 ? 'it' : 'them'}`,
+      `${skipped.length} artifact ${skipped.length === 1 ? 'directory belongs' : 'directories belong'} to a phase that is off, so ${skipped.length === 1 ? 'it was' : 'they were'} not created: turn the phase on in devscene.config.json and re-run init to add ${skipped.length === 1 ? 'it' : 'them'}`,
     );
   }
 

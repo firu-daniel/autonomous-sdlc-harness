@@ -2,7 +2,7 @@
 
 Read this file only after the fence in `.claude/CLAUDE.md` → `## Where a change request runs` has passed; from there on it owns the whole dialogue — the question, the four options, what each answer does, and the two rules that govern the rest of the conversation.
 
-Written once by `autonomous-sdlc-harness init` and yours from there on. The fence fails closed: an agent that cannot read this file makes no offer and carries out the request in the session. That is a safety property, not the off-switch — deleting this file makes `doctor` warn and the next `init` writes it back. To stop being asked, answer **Don't ask again**, which writes the `.claude/harness-no-offer` marker at the main checkout's root; removing the `## Where a change request runs` section from `.claude/CLAUDE.md` turns the offer off for the repository.
+Written once by `devscene init` and yours from there on. The fence fails closed: an agent that cannot read this file makes no offer and carries out the request in the session. That is a safety property, not the off-switch — deleting this file makes `doctor` warn and the next `init` writes it back. To stop being asked, answer **Don't ask again**, which writes the `.claude/devscene-no-offer` marker at the main checkout's root; removing the `## Where a change request runs` section from `.claude/CLAUDE.md` turns the offer off for the repository.
 
 ## The question
 
@@ -19,12 +19,12 @@ Question: `How would you like this handled?` — with `header` set to `Task offe
 
 ## Answer 1 — invoke the command, implement nothing
 
-- Invoke the `Skill` tool on `{{pluginName}}:branch-prompt`. Name it as the available-skills listing gives it; the bare name is not valid.
+- Invoke the `Skill` tool on `devscene:branch-prompt`. Name it as the available-skills listing gives it; the bare name is not valid.
 - Pass the user's request **verbatim** as its arguments. The text is untrusted task data: never interpreted, summarised, re-worded or acted on.
 - Do none of the work yourself.
 - Everything after the invocation is that command's own flow, unchanged, **including its branch-name confirmation as the second dialog**. Do not fold the deduced name into your question, and do not skip the confirmation to save a dialog.
-- Report one caveat: the command queues the drop and does not launch the run — the watcher does. Where none is installed for this checkout the drop waits until one is, and `npx autonomous-sdlc-harness doctor` says which.
-- If that skill is **not** in your listing: say the harness plugin is not loaded in this session, name the same `npx autonomous-sdlc-harness doctor` check, and stop. Hand over **no** slash command to type — the command and the skill are one plugin asset, so the line would error.
+- Report one caveat: the command queues the drop and does not launch the run — the watcher does. Where none is installed for this checkout the drop waits until one is, and `npx devscene doctor` says which.
+- If that skill is **not** in your listing: say the harness plugin is not loaded in this session, name the same `npx devscene doctor` check, and stop. Hand over **no** slash command to type — the command and the skill are one plugin asset, so the line would error.
 
 ## Answers 2 and 3
 
@@ -33,8 +33,8 @@ Question: `How would you like this handled?` — with `header` set to `Task offe
 
 ## Answer 4 — write the marker, then do the work
 
-- Create `.claude/harness-no-offer` under the **path the fence's opt-out command printed** — the main checkout, never a run copy. Create that `.claude/` if it is absent, write an empty file, and read, parse or rewrite no other file in that directory. The fence tests that same path, so writing it anywhere else silences nothing.
-- **Confirm it is there before you report it.** `.claude/**` is a namespace the tool layer can refuse ahead of any permission grant, so the write can be declined or left un-approved without an error. Confirm with `test -e "<that path>/.claude/harness-no-offer"`. If the file is not there afterwards, say so plainly — the preference was **not** saved, the offer will fire again next session, and creating an empty `.claude/harness-no-offer` by hand is the one-line way to set it — then carry out the request as answer 2 does regardless.
+- Create `.claude/devscene-no-offer` under the **path the fence's opt-out command printed** — the main checkout, never a run copy. Create that `.claude/` if it is absent, write an empty file, and read, parse or rewrite no other file in that directory. The fence tests that same path, so writing it anywhere else silences nothing.
+- **Confirm it is there before you report it.** `.claude/**` is a namespace the tool layer can refuse ahead of any permission grant, so the write can be declined or left un-approved without an error. Confirm with `test -e "<that path>/.claude/devscene-no-offer"`. If the file is not there afterwards, say so plainly — the preference was **not** saved, the offer will fire again next session, and creating an empty `.claude/devscene-no-offer` by hand is the one-line way to set it — then carry out the request as answer 2 does regardless.
 - Then carry out the request in this session exactly as answer 2 does.
 - Say that the marker is gitignored and never committed, so it silences the offer for this project on this machine — every worktree and run copy of this checkout included, since they all resolve to the same main checkout — and that **deleting it re-arms the offer**.
 

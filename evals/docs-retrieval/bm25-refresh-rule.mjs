@@ -13,7 +13,7 @@
  * index is not marked rebuilt, by issuing `END_STATE_STATEMENTS` (`cli/src/retrieval/store.ts`); on
  * Python, `refresh_index` likewise ends every refresh that wrote anything, and every refresh whose index
  * is not marked rebuilt, by issuing `END_STATE_STATEMENTS` through `DocStore.rebuild_indexes()`
- * (`docs-retrieval-service/src/harness_docs_retrieval/refresh.py`). Its `after` readings are the state
+ * (`docs-retrieval-service/src/devscene_docs_retrieval/refresh.py`). Its `after` readings are the state
  * the rule would leave.
  *
  * A refresh is the backend's own: on TypeScript `openPgliteStore` → `refreshIndex` → `close`, as

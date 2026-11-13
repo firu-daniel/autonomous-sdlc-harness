@@ -36,7 +36,7 @@ before(async () => {
   dir = fixture.dir;
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
-  stateDir = JSON.parse(readFileSync(join(dir, 'harness.config.json'), 'utf8')).stateDir.replace(/\/+$/, '');
+  stateDir = JSON.parse(readFileSync(join(dir, 'devscene.config.json'), 'utf8')).stateDir.replace(/\/+$/, '');
 });
 
 after(async () => {

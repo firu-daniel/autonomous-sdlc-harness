@@ -1,6 +1,6 @@
 /**
  * `hc_main_root` / `hc_main_root_var` from `plugin/hooks/lib/harness-config-lib.sh`, in every
- * run-copy layout, with and without the `HARNESS_MAIN_REPO` anchor.
+ * run-copy layout, with and without the `DEVSCENE_MAIN_REPO` anchor.
  *
  * **The rule these tests exist to enforce: with no anchor, the main checkout, a linked worktree of
  * it and a registered run clone of it all resolve to the main checkout, an unrelated repository

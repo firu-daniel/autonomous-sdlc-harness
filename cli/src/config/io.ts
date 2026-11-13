@@ -1,5 +1,5 @@
 /**
- * Loading and saving `harness.config.json` — the only place the CLI reads or writes that file.
+ * Loading and saving `devscene.config.json` — the only place the CLI reads or writes that file.
  *
  * Two properties this module exists to hold:
  *
@@ -13,7 +13,7 @@
  *
  * It also parses a configuration read from a git ref ({@link loadConfigText}): `fileAtRef` in
  * `core/git.ts` supplies those bytes and `parseJsonText` in `core/json.ts` parses them, so this module
- * is still the only place that checks `harness.config.json`, whatever read it.
+ * is still the only place that checks `devscene.config.json`, whatever read it.
  *
  * Every write is enqueued on the caller's {@link WritePlan} rather than performed here, so
  * `--dry-run` and `--force` keep meaning what the write engine says they mean and this module has
@@ -61,7 +61,7 @@ export interface UpdatedConfig {
 /** Applies an edit in place. Given a private copy, so a refused update leaves the file untouched. */
 export type ConfigMutator = (config: HarnessConfig) => void;
 
-/** Absolute path of `harness.config.json` for a repository. */
+/** Absolute path of `devscene.config.json` for a repository. */
 export function configPath(repoRoot: string): string {
   return join(repoRoot, CONFIG_FILENAME);
 }
@@ -111,7 +111,7 @@ export function loadConfigText(text: string | undefined, origin: string): Loaded
       problems: [
         {
           path: '',
-          message: `${CONFIG_FILENAME} not found at ${origin}: this repository is not wired yet — run \`npx autonomous-sdlc-harness init\``,
+          message: `${CONFIG_FILENAME} not found at ${origin}: this repository is not wired yet — run \`npx devscene init\``,
           severity: 'error',
         },
       ],

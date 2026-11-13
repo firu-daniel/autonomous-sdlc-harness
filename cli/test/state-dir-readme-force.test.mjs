@@ -17,7 +17,7 @@ import { test } from 'node:test';
 
 import { createFixture, runCli } from './helpers/fixture.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const EDITED = '# edited by the adopter\n';
 /** One README inside a contents-ignored directory, one committed. */
 const EDITED_READMES = [`${STATE_DIR}/scratch/README.md`, `${STATE_DIR}/task_prompts/README.md`];

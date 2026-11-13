@@ -125,15 +125,11 @@ const BACKEND = detectBackend();
 const NO_BACKEND = BACKEND.kind === 'none' ? `this host has no service manager: ${BACKEND.reason}` : false;
 
 /** The two generated artifacts these tests edit, addressed as the contract spells them. */
-const CONFIG_FILE = 'harness.config.json';
+const CONFIG_FILE = 'devscene.config.json';
 const PROFILE_FILE = '.claude/settings.autonomous.json';
 const SETTINGS_FILE = '.claude/settings.json';
 
-/**
- * Where a configless `init` writes the wrappers and outer-loop scripts — every `wiredFixture`. Kept
- * at `scripts` on purpose: `writeDocsServerEnv` (a seeded config without the key) and the
- * hand-written wrapper entry in the plugin-permissions case (the `scripts` collision it pins).
- */
+/** Where a configless `init` writes the wrappers and outer-loop scripts — every `wiredFixture`. */
 const SCRIPTS_DIR = INIT_SCRIPTS_DIR;
 
 /** The script the daemon runs, written by `init` into the configured `scriptsDir`. */
@@ -144,7 +140,7 @@ const HOOK_FILE = 'githooks/pre-push';
 
 /** The ignore file the managed block lives in, and the run-artifact directory at its default. */
 const GITIGNORE_FILE = '.gitignore';
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 
 /** The key a project-scope `plugin marketplace add` writes, and the one this checks the absence of. */
 const MARKETPLACES_KEY = 'extraKnownMarketplaces';
@@ -447,7 +443,7 @@ test('a stateDir that is dot-named, or reaches through a dot segment, fails', as
   // Both spellings, because the schema states them as two clauses and only the second catches the
   // traversal: the character class admits `.` and `/` after the first character, so a check that
   // applied the pattern alone would accept a value resolving to a dot-directory at run time.
-  for (const value of ['.sdlc-harness', 'sdlc/../.claude']) {
+  for (const value of ['.devscene', 'devscene/../.claude']) {
     await t.test(value, async (subtest) => {
       const dir = await wiredFixture(subtest);
       editJson(dir, CONFIG_FILE, (config) => {
@@ -474,7 +470,7 @@ test('a repository whose config has been removed fails, and says what to run', a
 
   assert.equal(status, 1);
   assert.match(stderr, failLine('config'));
-  assert.match(stderr, /npx autonomous-sdlc-harness init/);
+  assert.match(stderr, /npx devscene init/);
 });
 
 /** The nested application whose hand-fill path produces the state the command-wrappers check grades. */
@@ -2273,7 +2269,7 @@ test('a profile that starts no browser server warns, and the bare init --force i
   assert.match(broken.stderr, warnLine('browser-wiring'));
   assert.match(
     broken.stderr,
-    /`npx autonomous-sdlc-harness init --force`/,
+    /`npx devscene init --force`/,
     `the warning does not name the command that repairs it:\n${broken.stderr}`,
   );
   assert.doesNotMatch(
@@ -2449,7 +2445,7 @@ test('--check-registry claims no registry read when npm does not resolve on PATH
  * `docs/cli.md` §6 documents, reproduced here as the one hand edit that produces it.
  *
  * `init` writes a `qa` section only under `--qa`, and `init --force` regenerates the generated files
- * but never `harness.config.json`, so no re-run repairs this and `doctor` is the only thing that
+ * but never `devscene.config.json`, so no re-run repairs this and `doctor` is the only thing that
  * sees it on every subsequent run. The `--force` step is in the case for that reason rather than as
  * setup: it is what shows the state survives the command an adopter would reach for.
  *
@@ -2482,15 +2478,15 @@ test('a qa phase armed by hand warns about the unchosen driver, and init --force
 });
 
 /** The machine-local settings file, spelled from its two parts as the CLI resolves them. */
-const MACHINE_DIR = 'autonomous-sdlc-harness';
+const MACHINE_DIR = 'devscene';
 const PUSH_ENV_FILE = 'push.env';
 
 /** The repository-side half of the same precedence, at the path a generated config seeds. */
 const REPO_PUSH_ENV_PATH = '.claude/push-notify.env';
 
 /** The two keys the notifier recognises, asserted by name because the report names them and not values. */
-const PUSH_URL_KEY = 'HARNESS_PUSH_URL';
-const PUSH_CMD_KEY = 'HARNESS_PUSH_CMD';
+const PUSH_URL_KEY = 'DEVSCENE_PUSH_URL';
+const PUSH_CMD_KEY = 'DEVSCENE_PUSH_CMD';
 
 /**
  * The two values the cases below write, chosen so `assert.ok(!output.includes(…))` means what it
@@ -2746,7 +2742,7 @@ const REGISTRY_FILE = 'repos.json';
 const REGISTRY_SCHEMA = 1;
 
 /** A label no generated one collides with, so a report carrying it carries *this* seeded entry. */
-const SEEDED_LABEL = 'com.autonomous-sdlc-harness.watcher.seeded-by-the-doctor-suite';
+const SEEDED_LABEL = 'com.devscene.watcher.seeded-by-the-doctor-suite';
 
 /**
  * A throwaway `XDG_STATE_HOME`, the directory the registry resolves under, and the file itself.
@@ -3231,20 +3227,20 @@ const FIXTURE_LINTER_BINARY = 'harness-fixture-linter';
 
 /**
  * The variable the watcher reaches its agent binary through, and the name it falls back to when no
- * unit sets it — `autonomous-watcher.sh`'s `AGENT_CLI="${HARNESS_AGENT_CLI:-claude}"`.
+ * unit sets it — `autonomous-watcher.sh`'s `AGENT_CLI="${DEVSCENE_AGENT_CLI:-claude}"`.
  *
  * Spelled as literals for the reason the unit directories above are: these are the shipped script's
  * strings, so a fixture written against them is written against the contract rather than against a
  * restatement of the code that has to satisfy it. The default is what an unedited unit resolves —
  * `daemon/units.ts` choice 5 renders `PATH` and nothing else — so it is what these cases stub.
  */
-const AGENT_CLI_VARIABLE = 'HARNESS_AGENT_CLI';
+const AGENT_CLI_VARIABLE = 'DEVSCENE_AGENT_CLI';
 const DEFAULT_AGENT_CLI = 'claude';
 
 /**
  * Add one environment variable to an installed unit by hand, in that backend's own shape.
  *
- * This is the only way a unit carries `HARNESS_AGENT_CLI` today, which is why it is written here
+ * This is the only way a unit carries `DEVSCENE_AGENT_CLI` today, which is why it is written here
  * rather than asked of {@link renderUnit}: an operator's edit is the case under test. Both forms are
  * anchored on the rendered `PATH`, so the addition lands in the same stanza the service manager
  * reads — appended to a systemd file it would fall into `[Install]` and be ignored.
@@ -3358,7 +3354,7 @@ test('the daemon-path check grades the installed unit, and never above a warning
     // The agent CLI is the one required binary no machine supplies, so it is supplied here — and the
     // unit is given the same directory the shell has, which is the state a fresh `daemon install`
     // leaves behind. It is stubbed under the *default* name because the unit sets no
-    // `HARNESS_AGENT_CLI`, and the shell's value below is one no machine resolves: the check grades
+    // `DEVSCENE_AGENT_CLI`, and the shell's value below is one no machine resolves: the check grades
     // what the daemon will launch, so this passes.
     const envPath = `${toolchain}${delimiter}${process.env.PATH ?? ''}`;
     const { home, unit } = await installUnitCarrying(subtest, dir, envPath);
@@ -3381,7 +3377,7 @@ test('the daemon-path check grades the installed unit, and never above a warning
     const { home } = await installUnitCarrying(subtest, dir, SERVICE_MANAGER_DEFAULT_PATH);
 
     // The shell resolves the agent and the unit does not, which is the only configuration in which
-    // the finding is the check's rather than the machine's. The shell's `HARNESS_AGENT_CLI` names a
+    // the finding is the check's rather than the machine's. The shell's `DEVSCENE_AGENT_CLI` names a
     // third binary, which the daemon never sees and the warning must therefore never mention.
     const env = {
       HOME: home,
@@ -3415,7 +3411,7 @@ test('the daemon-path check grades the installed unit, and never above a warning
     const envPath = `${toolchain}${delimiter}${process.env.PATH ?? ''}`;
     const { home } = await installUnitCarrying(subtest, dir, envPath);
 
-    // An empty value stands in for an unset one: `${HARNESS_AGENT_CLI:-claude}` reads them alike,
+    // An empty value stands in for an unset one: `${DEVSCENE_AGENT_CLI:-claude}` reads them alike,
     // and it holds whether or not the account running this suite exports the variable.
     const base = { HOME: home, PATH: envPath };
     const unset = await runCli(dir, ['doctor'], { ...base, [AGENT_CLI_VARIABLE]: '' });
@@ -3862,13 +3858,13 @@ test('the PATH parsed out of a unit is the PATH that was rendered into it, for b
  * actually carry, so an edit made with them is the edit an adopter makes.
  */
 const CLAUDE_MD_FILE = '.claude/CLAUDE.md';
-const UNFILLED_MARKER = '<!-- harness:unfilled -->';
+const UNFILLED_MARKER = '<!-- devscene:unfilled -->';
 const GUIDANCE_MARKER = '**What belongs here**';
-const SETUP_PENDING_OPEN = '<!-- harness:setup-pending -->';
-const SETUP_PENDING_CLOSE = '<!-- /harness:setup-pending -->';
+const SETUP_PENDING_OPEN = '<!-- devscene:setup-pending -->';
+const SETUP_PENDING_CLOSE = '<!-- /devscene:setup-pending -->';
 
 /** The analyze command, as both remedies name it. */
-const ANALYZE_COMMAND = '/autonomous-sdlc-harness:harness-analyze';
+const ANALYZE_COMMAND = '/devscene:analyze';
 
 /**
  * The conventions documents the wired config points at.
@@ -4009,8 +4005,8 @@ test('the setup-analysis check reports what is unfilled, and never above a warni
     const line = detailLine(stderr, warnLine('setup-analysis'));
     assert.ok(line.includes(missing), `the warning does not name the path that resolves to nothing:\n${line}`);
     // A configured path has two ways of being wrong, and the remedies differ: the value, or the tree.
-    assert.match(line, /npx autonomous-sdlc-harness config set layers/);
-    assert.match(line, /npx autonomous-sdlc-harness init/);
+    assert.match(line, /npx devscene config set layers/);
+    assert.match(line, /npx devscene init/);
     assert.match(stdout, CLEAN_SUMMARY);
   });
 
@@ -4035,7 +4031,7 @@ test('the setup-analysis check reports what is unfilled, and never above a warni
     // adopter fixing it edits the row rather than searching the file for a string.
     assert.ok(line.includes(layerName), `the warning does not name the layer whose scope is missing:\n${line}`);
     assert.ok(line.includes(scope), `the warning does not name the directory that is not there:\n${line}`);
-    assert.match(line, /npx autonomous-sdlc-harness config set layers/);
+    assert.match(line, /npx devscene config set layers/);
 
     // The same repository with the directory created — and the states `init` leaves warning cleared
     // as the control case above clears them — reaches the pass line, which is what shows this is
@@ -4071,7 +4067,7 @@ test('the setup-analysis check reports what is unfilled, and never above a warni
     const line = detailLine(stderr, warnLine('setup-analysis'));
     assert.ok(line.includes(shared), `the warning does not name the shared document that is gone:\n${line}`);
     assert.match(line, /no layer points at it/);
-    assert.match(line, /npx autonomous-sdlc-harness init/);
+    assert.match(line, /npx devscene init/);
     assert.match(stdout, CLEAN_SUMMARY);
   });
 
@@ -4109,7 +4105,7 @@ test('the setup-analysis check reports what is unfilled, and never above a warni
  * tree carries it rather than imported: a fixture edited through the constant the check reads would
  * assert only that one module agrees with itself.
  */
-const TASK_OFFER_FILE = '.claude/harness-task-offer.md';
+const TASK_OFFER_FILE = '.claude/devscene-task-offer.md';
 
 test('a freshly wired repository passes the task-offer-rules check', async (t) => {
   const dir = await wiredFixture(t);
@@ -4141,7 +4137,7 @@ test('a deleted task-offer rules file warns, names the remedy, and leaves the ex
   assert.equal(status, 0, `doctor exited ${status} on a condition that only warns\n${stdout}\n${stderr}`);
   assert.match(stderr, warnLine('task-offer-rules'));
   assert.ok(stderr.includes(TASK_OFFER_FILE), `the warning does not name the file that is missing:\n${stderr}`);
-  assert.match(stderr, /autonomous-sdlc-harness init/);
+  assert.match(stderr, /devscene init/);
   assert.match(stdout, CLEAN_SUMMARY);
 });
 
@@ -4194,9 +4190,9 @@ test('a rules file no fence names warns, names both remedies, and leaves the exi
   assert.ok(stderr.includes(TASK_OFFER_FILE), `the warning does not name the orphaned file:\n${stderr}`);
 
   // Both remedies, because they cost different things and the adopter picks: the section added by
-  // hand keeps everything `/autonomous-sdlc-harness:harness-analyze` filled, the forced re-render does not.
+  // hand keeps everything `/devscene:analyze` filled, the forced re-render does not.
   assert.ok(stderr.includes(TASK_OFFER_SECTION), `the warning does not name the section to add by hand:\n${stderr}`);
-  assert.match(stderr, /autonomous-sdlc-harness init --force/);
+  assert.match(stderr, /devscene init --force/);
   assert.match(stdout, CLEAN_SUMMARY);
 });
 
@@ -4261,7 +4257,7 @@ test('(b) a deleted fence opt-out script warns, naming its path and init, and le
   const line = taskOfferRulesLine(stderr);
   assert.match(line, warnLine('task-offer-rules'));
   assert.ok(line.includes(join(dir, TASK_OFFER_CHECK_FILE)), `the warning does not name the script's path:\n${line}`);
-  assert.match(line, /autonomous-sdlc-harness init/);
+  assert.match(line, /devscene init/);
   assert.match(stdout, CLEAN_SUMMARY);
 });
 
@@ -4275,7 +4271,7 @@ test('(c) a settings file without the fence allow rule warns, naming the exact r
   const line = taskOfferRulesLine(stderr);
   assert.match(line, warnLine('task-offer-rules'));
   assert.ok(line.includes(`\`${TASK_OFFER_CHECK_RULE}\``), `the warning does not name the exact rule:\n${line}`);
-  assert.match(line, /autonomous-sdlc-harness init/);
+  assert.match(line, /devscene init/);
 });
 
 test('(d) an allow list holding only another entry warns and says to add the rule by hand', async (t) => {
@@ -4296,7 +4292,7 @@ test('(e) a fence that does not name the opt-out script passes with the script d
   const path = join(dir, CLAUDE_MD_FILE);
   const projectFile = readFileSync(path, 'utf8');
   assert.ok(projectFile.includes(TASK_OFFER_CHECK_INVOCATION), `${CLAUDE_MD_FILE} does not name the invocation, so this case proves nothing`);
-  writeFileSync(path, projectFile.split(TASK_OFFER_CHECK_INVOCATION).join('test ! -e .claude/harness-no-offer'));
+  writeFileSync(path, projectFile.split(TASK_OFFER_CHECK_INVOCATION).join('test ! -e .claude/devscene-no-offer'));
   await rm(join(dir, TASK_OFFER_CHECK_FILE));
 
   const { status, stdout, stderr } = await runCli(dir, ['doctor']);
@@ -4360,7 +4356,7 @@ async function wiredLayeredFixture(t) {
  *
  * **The subject is the disappearing signal**, which is why the first case runs `doctor` twice. Before
  * this check, the only trace that a `flat` fallback profile had never been examined was
- * `setup-analysis`'s skeleton warning — and `/autonomous-sdlc-harness:harness-analyze conventions` clears that by filling the
+ * `setup-analysis`'s skeleton warning — and `/devscene:analyze conventions` clears that by filling the
  * documents, without the profile having been looked at at all. The second run in case (a) is that
  * state, reached by hand: `setup-analysis` passes and this check still warns.
  *
@@ -4622,9 +4618,9 @@ const FLAT_DIRS = Object.freeze(['cmd', 'lib', 'pkg', 'tools', 'test']);
  * pass on a reworded sentence.
  */
 const STANDING_GAP_REMEDY =
-  'If any of them is a real layer, run `/autonomous-sdlc-harness:harness-analyze` in a session here and answer `skip` for every already-filled document; ' +
+  'If any of them is a real layer, run `/devscene:analyze` in a session here and answer `skip` for every already-filled document; ' +
   'a no-argument run with `--yes` takes `merge` on all of them and rewrites documents nobody asked to touch. ' +
-  'The profile itself is applied through `npx autonomous-sdlc-harness config set layers`';
+  'The profile itself is applied through `npx devscene config set layers`';
 
 /**
  * The directories a `layer-drift` warning listed, read back off the emitted detail.
@@ -4703,7 +4699,7 @@ test('the layer-drift check names the directories no layer covers, and is not gr
   await t.test('a recorded review does not silence it — a layer hand-added after the review still drifts', async (subtest) => {
     const dir = await wiredLayeredFixture(subtest);
     mkdirSync(join(dir, DRIFTED_DIR), { recursive: true });
-    // The record `/autonomous-sdlc-harness:harness-analyze layers` writes, hand-added in the shape `config set
+    // The record `/devscene:analyze layers` writes, hand-added in the shape `config set
     // detection.review` takes. It clears `layer-profile` and nothing else: a verdict is a statement
     // about the profile at the moment it was reviewed, so a directory that appeared afterwards is
     // exactly Finding 38's entry 2 — "a layer is hand-added between runs".
@@ -4727,7 +4723,7 @@ test('the layer-drift check names the directories no layer covers, and is not gr
     // And its remedy fits an already-declined profile: the direct route leads, and the standing
     // analyze-first sentence — the instruction that re-derives this very record — is gone.
     assert.ok(
-      line.includes('add its row with `npx autonomous-sdlc-harness config set layers`'),
+      line.includes('add its row with `npx devscene config set layers`'),
       `the remedy does not lead with the route that needs no session:\n${line}`,
     );
     assert.ok(!line.endsWith(STANDING_GAP_REMEDY), `the recorded-review remedy is the standing analyze-first one:\n${line}`);
@@ -5074,6 +5070,13 @@ test('the plugin-permissions check prints the entries to paste, and never above 
 
   subtests.push(t.test('a helper entry under no resolved root is named on the passing line, and a wrapper entry never is', async (subtest) => {
     const dir = await wiredFixture(subtest, ['--qa']);
+    // `scriptsDir` set to `scripts` explicitly and re-wired: only there does a wrapper's own entry
+    // collide with the plugin's `scripts/` helper form.
+    editJson(dir, CONFIG_FILE, (config) => {
+      config.scriptsDir = 'scripts';
+    });
+    const rewired = await runCli(dir, ['init', '--qa']);
+    assert.equal(rewired.status, 0, `the second init exited ${rewired.status}\n${rewired.stdout}\n${rewired.stderr}`);
     const root = await pluginInstallRootFixture(subtest, HELPERS);
     // A second plugin root nothing on this machine records: the shape an upgrade leaves behind,
     // since the install root carries the plugin version and the entries pasted against the previous
@@ -5081,8 +5084,7 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     const stale = await pluginInstallRootFixture(subtest, HELPERS);
     const home = await claudeConfigHome(subtest, [{ scope: 'user', installPath: root }]);
     const staleEntry = pluginEntries(stale, [HELPERS[0]])[0];
-    // A wrapper's own entry: repo-root-absolute, and byte-shaped exactly like a plugin helper's. Kept
-    // at `scripts`, the absent-key `scriptsDir`, because only there does that collision exist.
+    // A wrapper's own entry: repo-root-absolute, and byte-shaped exactly like a plugin helper's.
     const wrapperEntry = `Bash(bash ${dir}/scripts/test.sh:*)`;
     allowInProfile(dir, [pluginReadEntry(root), ...pluginEntries(root, HELPERS), staleEntry, wrapperEntry]);
 
@@ -5469,7 +5471,7 @@ test('doctor --remote-job fails an unusable profile where a default run warns', 
  * **The rule the `retrieval-python-*` cases below enforce: exactly one backend is graded, and the
  * other's checks pass saying why.** With `docs.retrievalBackend` absent every pre-branch check reports
  * what it did before. Under `python` the three Python checks grade one `self-check` run of a fake
- * `harness-docs-retrieval` first on `PATH`, with `HOME` a temp directory, so no case reaches Python, a
+ * `devscene-docs-retrieval` first on `PATH`, with `HOME` a temp directory, so no case reaches Python, a
  * database, a model or the network; a case whose machine already has the command on a launcher
  * fallback directory skips rather than run it.
  */
@@ -5477,7 +5479,7 @@ const RETRIEVAL_CHECK_IDS = ['retrieval-dependencies', 'retrieval-model-cache', 
 
 const RETRIEVAL_OFF_TEXT = 'docs.retrieval is off (it needs phases.docs and docs.retrieval both true)';
 
-const REMEDY = 'npx autonomous-sdlc-harness init';
+const REMEDY = 'npx devscene init';
 
 /** A retrieval-on fixture with a one-file corpus, a planted model cache and, unless told not to, a planted runtime. */
 async function retrievalDoctorFixture(t, { runtime = true, runtimeVersion } = {}) {
@@ -5514,7 +5516,7 @@ test('Acceptance 6 (a): with retrieval on and everything in place, the three ret
 
 test('Acceptance 6 (b): with the model cache removed, the model and index checks fail and doctor exits non-zero', async (t) => {
   const { dir, cacheHome, env } = await retrievalDoctorFixture(t);
-  await rm(join(cacheHome, 'autonomous-sdlc-harness', 'retrieval', 'models'), { recursive: true, force: true });
+  await rm(join(cacheHome, 'devscene', 'retrieval', 'models'), { recursive: true, force: true });
 
   const { status, stdout, stderr } = await runCli(dir, ['doctor'], env);
 
@@ -5547,7 +5549,7 @@ test('Acceptance 6 (d): with no runtime installed, or one at another version, re
       assert.notEqual(status, 0);
       assert.match(stderr, failLine('retrieval-dependencies'), stdout);
       const line = detailLine(stderr, failLine('retrieval-dependencies'));
-      assert.ok(line.includes('autonomous-sdlc-harness'), line);
+      assert.ok(line.includes('devscene'), line);
       assert.ok(line.includes(REMEDY), line);
     });
   }
@@ -5582,8 +5584,8 @@ const TYPESCRIPT_NOT_SELECTED_SENTENCE =
   'docs.retrievalBackend is python, so the launcher starts the Python backend rather than this runtime and it is not graded; init still installs it, so switching back costs nothing';
 
 const PYTHON_INSTALL_REMEDY_TEXT = 'install the package with its `models` extra';
-const COMPOSE_DEFAULT_DATABASE_URL = 'postgresql://harness:harness@127.0.0.1:5432/docs_retrieval';
-const DATABASE_URL_VARIABLE = 'HARNESS_DOCS_RETRIEVAL_DATABASE_URL';
+const COMPOSE_DEFAULT_DATABASE_URL = 'postgresql://devscene:devscene@127.0.0.1:5432/docs_retrieval';
+const DATABASE_URL_VARIABLE = 'DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL';
 
 /** The ids `CHECKS` holds other than the Python backend's, frozen so an added id is visible. */
 const PRE_BRANCH_CHECK_IDS = Object.freeze([
@@ -5597,15 +5599,15 @@ const PRE_BRANCH_CHECK_IDS = Object.freeze([
   'retrieval-dependencies', 'retrieval-model-cache', 'retrieval-index',
 ]);
 
-/** A real `harness-docs-retrieval` on a directory the check always searches, which no case may run. */
-const REAL_PYTHON_COMMAND = LAUNCHER_PATH_FALLBACKS.map((dir) => join(dir, 'harness-docs-retrieval')).find((path) => existsSync(path));
+/** A real `devscene-docs-retrieval` on a directory the check always searches, which no case may run. */
+const REAL_PYTHON_COMMAND = LAUNCHER_PATH_FALLBACKS.map((dir) => join(dir, 'devscene-docs-retrieval')).find((path) => existsSync(path));
 
 /** Separates one fake invocation's record from the next. */
 const RECORD_SEPARATOR = '--- self-check invocation';
 
 /** `self-check`'s all-pass answer, in `CheckLine.render`'s shape. */
 const SELF_CHECK_ALL_OK = Object.freeze([
-  'ok   packages: harness_docs_retrieval and its models extra import',
+  'ok   packages: devscene_docs_retrieval and its models extra import',
   'ok   weights: both weights are cached in the fake cache',
   'ok   index: 2 files, 4 chunks',
 ]);
@@ -5666,11 +5668,11 @@ async function pythonDoctorFixture(t, { backend = 'python', docs = true, fake } 
       `exit ${fake.status}`,
       '',
     ].join('\n');
-    writeFileSync(join(bin, 'harness-docs-retrieval'), script, { mode: 0o755 });
+    writeFileSync(join(bin, 'devscene-docs-retrieval'), script, { mode: 0o755 });
   }
 
   // git only, by symlink, so the repository checks resolve without putting a machine directory that
-  // could hold a real `harness-docs-retrieval` ahead of the launcher's own fallbacks.
+  // could hold a real `devscene-docs-retrieval` ahead of the launcher's own fallbacks.
   const tools = await pathWithoutJq(t);
   const env = { ...retrievalEnv(cacheHome), PATH: [bin, tools, '/usr/bin', '/bin'].join(delimiter), HOME: home };
   return { dir: fixture.dir, record, env };
@@ -5688,9 +5690,9 @@ function readRecord(record) {
     });
 }
 
-/** Write `.mcp.json` with a `harness-docs` server carrying `env`; `scripts/` is the absent key's, as `writeRetrievalConfig` seeds none. */
+/** Write `.mcp.json` with a `devscene-docs` server carrying `env`; `scripts/` is the absent key's, as `writeRetrievalConfig` seeds none. */
 function writeDocsServerEnv(dir, env) {
-  const mcp = { mcpServers: { 'harness-docs': { command: 'bash', args: ['scripts/docs-search-server.sh'], env } } };
+  const mcp = { mcpServers: { 'devscene-docs': { command: 'bash', args: ['scripts/docs-search-server.sh'], env } } };
   writeFileSync(join(dir, MCP_FILE), `${JSON.stringify(mcp, null, 2)}\n`, 'utf8');
 }
 
@@ -5771,7 +5773,7 @@ test('retrieval-python-* under python: each self-check answer grades its check, 
 
   await t.test('FAIL weights fails the model cache naming fetch-models', async (subtest) => {
     const lines = [
-      'ok   packages: harness_docs_retrieval and its models extra import',
+      'ok   packages: devscene_docs_retrieval and its models extra import',
       'FAIL weights: BAAI/bge-small-en-v1.5 is not cached',
       'FAIL index: not attempted, because weights failed',
     ];
@@ -5782,12 +5784,12 @@ test('retrieval-python-* under python: each self-check answer grades its check, 
     const model = reportedChecks(stdout, stderr).get('retrieval-python-model-cache');
     assert.equal(model?.status, 'FAIL', stderr);
     assert.ok(model.detail.includes('BAAI/bge-small-en-v1.5 is not cached'), model.detail);
-    assert.ok(model.detail.includes('harness-docs-retrieval fetch-models'), model.detail);
+    assert.ok(model.detail.includes('devscene-docs-retrieval fetch-models'), model.detail);
   });
 
   await t.test('FAIL index fails naming the compose command, with no password in the line', async (subtest) => {
     const lines = [
-      'ok   packages: harness_docs_retrieval and its models extra import',
+      'ok   packages: devscene_docs_retrieval and its models extra import',
       'ok   weights: both weights are cached in the fake cache',
       'FAIL index: could not connect to the database',
     ];
@@ -5801,10 +5803,10 @@ test('retrieval-python-* under python: each self-check answer grades its check, 
     assert.ok(index.detail.includes('docker compose up -d --wait postgres'), index.detail);
     assert.ok(index.detail.includes('docs-retrieval-service/'), index.detail);
     assert.ok(index.detail.includes('127.0.0.1:5432/docs_retrieval'), index.detail);
-    assert.ok(!index.detail.includes(':harness@'), `the line printed the password: ${index.detail}`);
+    assert.ok(!index.detail.includes(':devscene@'), `the line printed the password: ${index.detail}`);
   });
 
-  await t.test('no command on PATH fails all three, the dependencies check naming the install remedy', { skip: REAL_PYTHON_COMMAND === undefined ? false : `a real harness-docs-retrieval is installed at ${REAL_PYTHON_COMMAND}, which this case would run` }, async (subtest) => {
+  await t.test('no command on PATH fails all three, the dependencies check naming the install remedy', { skip: REAL_PYTHON_COMMAND === undefined ? false : `a real devscene-docs-retrieval is installed at ${REAL_PYTHON_COMMAND}, which this case would run` }, async (subtest) => {
     const { dir, env } = await pythonDoctorFixture(subtest);
 
     const { stdout, stderr } = await runCli(dir, ['doctor'], env);
@@ -5847,7 +5849,7 @@ test('retrieval-python-*: the self-check child sees the .mcp.json database URL, 
     assert.deepEqual(readRecord(record).map((run) => run.databaseUrl), [COMPOSE_DEFAULT_DATABASE_URL]);
   });
 
-  await t.test("with .mcp.json's harness-docs env carrying a URL, that URL", async (subtest) => {
+  await t.test("with .mcp.json's devscene-docs env carrying a URL, that URL", async (subtest) => {
     const { dir, record, env } = await pythonDoctorFixture(subtest, { fake: { lines: SELF_CHECK_ALL_OK, status: 0 } });
     const url = 'postgresql://other@127.0.0.1:5433/repo_two';
     writeDocsServerEnv(dir, { [DATABASE_URL_VARIABLE]: url });
@@ -5892,15 +5894,15 @@ test('Acceptance 1: with docs.retrievalBackend absent, doctor reports what an ex
  *
  * **The rule these cases enforce: remote setup is graded from local evidence, and exactly the two
  * conditions that stop a remote run from being dispatched move the exit status.** Every case points
- * `HARNESS_GH_CLI` at a stub that records any invocation, so the machine's own `gh` is never reached
+ * `DEVSCENE_GH_CLI` at a stub that records any invocation, so the machine's own `gh` is never reached
  * and a run that spawned one is caught; the literals are the shipped contract's
  * (`remote/githubActions.ts`, `cli/templates/github/workflows/`), for the reason the unit directories
  * above are spelled out.
  */
-const GH_CLI_VARIABLE = 'HARNESS_GH_CLI';
+const GH_CLI_VARIABLE = 'DEVSCENE_GH_CLI';
 const FIXTURE_GH_CLI = 'harness-fixture-gh';
-const REMOTE_RUN_WORKFLOW = '.github/workflows/harness-run.yml';
-const REMOTE_RESUME_WORKFLOW = '.github/workflows/harness-resume.yml';
+const REMOTE_RUN_WORKFLOW = '.github/workflows/devscene-run.yml';
+const REMOTE_RESUME_WORKFLOW = '.github/workflows/devscene-resume.yml';
 
 /** A `gh` stub that appends its argv to a log and fails — a default `doctor` must never run it. */
 async function ghStub(t) {
@@ -5919,7 +5921,7 @@ async function remoteFixture(t) {
     const result = await runCli(dir, args);
     assert.equal(result.status, 0, `${args.join(' ')} exited ${result.status}\n${result.stdout}\n${result.stderr}`);
   }
-  assert.ok(existsSync(join(dir, REMOTE_RUN_WORKFLOW)), 'init did not write harness-run.yml with remote execution on');
+  assert.ok(existsSync(join(dir, REMOTE_RUN_WORKFLOW)), 'init did not write devscene-run.yml with remote execution on');
   return dir;
 }
 
@@ -5991,12 +5993,12 @@ test('the remote-execution check grades local evidence and fails only what stops
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'remote-execution');
     assert.ok(line?.includes('doctor --check-github'), `${stdout}\n${stderr}`);
-    for (const name of ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'HARNESS_RUNNER']) {
+    for (const name of ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'DEVSCENE_RUNNER']) {
       assert.ok(line.includes(name), `the pass does not name ${name}:\n${line}`);
     }
   });
 
-  await t.test('on, with harness-run.yml absent, fails with init as the remedy', async (subtest) => {
+  await t.test('on, with devscene-run.yml absent, fails with init as the remedy', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await pushWorkflows(dir);
     await rm(join(dir, REMOTE_RUN_WORKFLOW));
@@ -6025,7 +6027,7 @@ test('the remote-execution check grades local evidence and fails only what stops
     assert.ok(line.includes('install the GitHub CLI'), line);
   });
 
-  await t.test('on, with harness-resume.yml absent, warns about branch-resume', async (subtest) => {
+  await t.test('on, with devscene-resume.yml absent, warns about branch-resume', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await pushWorkflows(dir);
     await rm(join(dir, REMOTE_RESUME_WORKFLOW));
@@ -6035,10 +6037,10 @@ test('the remote-execution check grades local evidence and fails only what stops
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-execution');
-    assert.ok(line?.includes('/autonomous-sdlc-harness:branch-resume'), stderr);
+    assert.ok(line?.includes('/devscene:branch-resume'), stderr);
   });
 
-  await t.test('on, with harness-run.yml not on origin/<defaultBranch>, warns to commit and push it', async (subtest) => {
+  await t.test('on, with devscene-run.yml not on origin/<defaultBranch>, warns to commit and push it', async (subtest) => {
     const dir = await remoteFixture(subtest);
     const stub = await ghStub(subtest);
 
@@ -6051,24 +6053,24 @@ test('the remote-execution check grades local evidence and fails only what stops
     assert.ok(line.includes('gh auth refresh -s workflow'), line);
   });
 
-  const PIN_LINE = /^([ \t]*HARNESS_CLI_VERSION:).*$/gm;
+  const PIN_LINE = /^([ \t]*DEVSCENE_CLI_VERSION:).*$/gm;
   const STALE_PIN = '0.0.1';
   const UPGRADE_ROUTE = 'init --upgrade-workflows';
   const rewritePins = (dir, replace) => {
     const path = join(dir, REMOTE_RUN_WORKFLOW);
     const before = readFileSync(path, 'utf8');
     const after = before.replace(PIN_LINE, replace);
-    assert.notEqual(after, before, 'harness-run.yml carries no HARNESS_CLI_VERSION line to rewrite');
+    assert.notEqual(after, before, 'devscene-run.yml carries no DEVSCENE_CLI_VERSION line to rewrite');
     writeFileSync(path, after, 'utf8');
   };
   const assertMoveRoute = (line) => {
     assert.ok(line.includes('a run already in flight finishes on the version it started with'), line);
     assert.ok(!/\.\.\s/.test(line), line);
     assert.ok(line.includes('commit the paths its printed `git add` names'), line);
-    assert.ok(!line.includes('commit .github/workflows/harness-run.yml and'), line);
+    assert.ok(!line.includes('commit .github/workflows/devscene-run.yml and'), line);
   };
 
-  await t.test('on, with harness-run.yml pinned to another version, warns with the upgrade route and the stay route', async (subtest) => {
+  await t.test('on, with devscene-run.yml pinned to another version, warns with the upgrade route and the stay route', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await pushWorkflows(dir);
     rewritePins(dir, `$1 '${STALE_PIN}'`);
@@ -6080,12 +6082,12 @@ test('the remote-execution check grades local evidence and fails only what stops
     const line = reportLine(stderr, 'warn', 'remote-execution');
     assert.ok(line?.includes(UPGRADE_ROUTE), `${stdout}\n${stderr}`);
     assert.ok(line.includes(STALE_PIN), line);
-    assert.ok(line.includes(`autonomous-sdlc-harness@${STALE_PIN} doctor`), line);
+    assert.ok(line.includes(`devscene@${STALE_PIN} doctor`), line);
     assert.ok(line.includes('git push --no-verify origin'), line);
     assertMoveRoute(line);
   });
 
-  await t.test('on, with harness-run.yml pinned to another version and defaultBranch unusable, joins the push fragment without a double full stop', async (subtest) => {
+  await t.test('on, with devscene-run.yml pinned to another version and defaultBranch unusable, joins the push fragment without a double full stop', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await pushWorkflows(dir);
     rewritePins(dir, `$1 '${STALE_PIN}'`);
@@ -6103,7 +6105,7 @@ test('the remote-execution check grades local evidence and fails only what stops
     assertMoveRoute(line);
   });
 
-  await t.test('on, with harness-run.yml pinned to this version, passes and says so', async (subtest) => {
+  await t.test('on, with devscene-run.yml pinned to this version, passes and says so', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await pushWorkflows(dir);
     const stub = await ghStub(subtest);
@@ -6138,7 +6140,7 @@ test('the remote-execution check grades local evidence and fails only what stops
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'remote-execution');
-    assert.ok(line?.includes('carries no HARNESS_CLI_VERSION line'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('carries no DEVSCENE_CLI_VERSION line'), `${stdout}\n${stderr}`);
   });
 
   await t.test('the upgrade route it names clears the warning', async (subtest) => {
@@ -6158,16 +6160,16 @@ test('the remote-execution check grades local evidence and fails only what stops
     assert.ok(reportLine(after.stdout, 'pass', 'remote-execution')?.includes("rendered for this CLI's own version"), `${after.stdout}\n${after.stderr}`);
   });
 
-  const RUN_ACTORS_LINE = /^[ \t]*HARNESS_RUN_ACTORS:.*\r?\n/gm;
-  const BEFORE_RUN_ACTORS = 'was written before `HARNESS_RUN_ACTORS`';
+  const RUN_ACTORS_LINE = /^[ \t]*DEVSCENE_RUN_ACTORS:.*\r?\n/gm;
+  const BEFORE_RUN_ACTORS = 'was written before `DEVSCENE_RUN_ACTORS`';
 
-  await t.test('on, with harness-run.yml written before HARNESS_RUN_ACTORS, warns with the upgrade route', async (subtest) => {
+  await t.test('on, with devscene-run.yml written before DEVSCENE_RUN_ACTORS, warns with the upgrade route', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await pushWorkflows(dir);
     const path = join(dir, REMOTE_RUN_WORKFLOW);
     const before = readFileSync(path, 'utf8');
     const after = before.replace(RUN_ACTORS_LINE, '');
-    assert.notEqual(after, before, 'harness-run.yml carries no HARNESS_RUN_ACTORS line to remove');
+    assert.notEqual(after, before, 'devscene-run.yml carries no DEVSCENE_RUN_ACTORS line to remove');
     writeFileSync(path, after, 'utf8');
     const stub = await ghStub(subtest);
 
@@ -6180,7 +6182,7 @@ test('the remote-execution check grades local evidence and fails only what stops
     assert.ok(line.includes('docs/remote-execution.md, section 7, Upgrading'), line);
   });
 
-  await t.test('on, with harness-run.yml as init writes it, says nothing about HARNESS_RUN_ACTORS', async (subtest) => {
+  await t.test('on, with devscene-run.yml as init writes it, says nothing about DEVSCENE_RUN_ACTORS', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await pushWorkflows(dir);
     const stub = await ghStub(subtest);
@@ -6207,7 +6209,7 @@ test('the remote-execution check grades local evidence and fails only what stops
 
     const line = reportLine(stderr, 'warn', 'remote-execution');
     assert.ok(line?.includes(QA_SKIP), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('/autonomous-sdlc-harness:branch-qa-test'), line);
+    assert.ok(line.includes('/devscene:branch-qa-test'), line);
   });
 
   await t.test('on, with phases.qa false, passes without the QA warning', async (subtest) => {
@@ -6267,7 +6269,7 @@ test('daemon-path names gh when remote execution is on, and not when it is off',
  * The `remote-github` check and `doctor --check-github`.
  *
  * **The rule these cases enforce: GitHub is asked only when the flag asks, and "cannot tell" is never
- * graded as "missing".** `HARNESS_GH_CLI` points at a stub that logs every invocation and answers per
+ * graded as "missing".** `DEVSCENE_GH_CLI` points at a stub that logs every invocation and answers per
  * subcommand from files each case writes, so each row of the grading table is one answer changed from
  * a healthy set. A timed-out call is simulated by the stub signalling itself, which hands the check
  * exactly what `runGh`'s bound does — a `null` status — without spending that 30 s bound per case.
@@ -6278,9 +6280,9 @@ test('daemon-path names gh when remote execution is on, and not when it is off',
  */
 const GH_CALLS = Object.freeze({
   auth: ['auth', 'status'],
-  run: ['workflow', 'view', 'harness-run.yml'],
+  run: ['workflow', 'view', 'devscene-run.yml'],
   secrets: ['secret', 'list', '--json', 'name'],
-  resume: ['workflow', 'view', 'harness-resume.yml'],
+  resume: ['workflow', 'view', 'devscene-resume.yml'],
   workflows: ['api', 'repos/{owner}/{repo}/actions/workflows?per_page=100'],
   variables: ['variable', 'list', '--json', 'name,value'],
   retention: ['api', 'repos/{owner}/{repo}/actions/permissions/artifact-and-log-retention'],
@@ -6324,7 +6326,7 @@ async function answeringGhStub(t) {
  * files in `byPath`, listed with `name` equal to `path` as GitHub lists a file it could not parse.
  */
 function workflowListing(byPath = []) {
-  const workflows = ['harness-run', 'harness-resume', 'harness-trigger', 'harness-control'].map((name, id) => {
+  const workflows = ['devscene-run', 'devscene-resume', 'devscene-trigger', 'devscene-control'].map((name, id) => {
     const path = `.github/workflows/${name}.yml`;
     return { id, name: byPath.includes(path) ? path : name, path, state: 'active' };
   });
@@ -6335,9 +6337,9 @@ function workflowListing(byPath = []) {
 function answerGh(stub, overrides = {}) {
   const healthy = {
     auth: { out: 'Logged in to github.com\n' },
-    run: { out: 'Harness run - harness-run.yml\n' },
-    secrets: { out: JSON.stringify([{ name: 'CLAUDE_CODE_OAUTH_TOKEN' }, { name: 'HARNESS_PUSH_URL' }]) },
-    resume: { out: 'Harness resume - harness-resume.yml\n' },
+    run: { out: 'devscene-run - devscene-run.yml\n' },
+    secrets: { out: JSON.stringify([{ name: 'CLAUDE_CODE_OAUTH_TOKEN' }, { name: 'DEVSCENE_PUSH_URL' }]) },
+    resume: { out: 'devscene-resume - devscene-resume.yml\n' },
     workflows: { out: workflowListing() },
     variables: { out: '[]' },
     retention: { out: JSON.stringify({ days: 90, maximum_allowed_days: 400 }) },
@@ -6373,18 +6375,18 @@ async function checkGithub(dir, stub, gh = stub.path) {
 
 /** The reads the check adds when the issue trigger applies, answered apart from {@link GH_CALLS}. */
 const TRIGGER_GH_CALLS = Object.freeze({
-  trigger: ['workflow', 'view', 'harness-trigger.yml'],
-  control: ['workflow', 'view', 'harness-control.yml'],
+  trigger: ['workflow', 'view', 'devscene-trigger.yml'],
+  control: ['workflow', 'view', 'devscene-control.yml'],
   labels: ['label', 'list', '--json', 'name', '--limit', '1000'],
   prSetting: ['api', 'repos/{owner}/{repo}/actions/permissions/workflow'],
 });
 
-/** Answer the trigger reads: both workflows known, a `sdlc-harness` label and the pull-request setting on, then per-call overrides. */
+/** Answer the trigger reads: both workflows known, a `devscene` label and the pull-request setting on, then per-call overrides. */
 function answerTriggerGh(stub, overrides = {}) {
   const healthy = {
-    trigger: { out: 'Harness trigger - harness-trigger.yml\n' },
-    control: { out: 'Harness control - harness-control.yml\n' },
-    labels: { out: JSON.stringify([{ name: 'bug' }, { name: 'sdlc-harness' }]) },
+    trigger: { out: 'devscene-trigger - devscene-trigger.yml\n' },
+    control: { out: 'devscene-control - devscene-control.yml\n' },
+    labels: { out: JSON.stringify([{ name: 'bug' }, { name: 'devscene' }]) },
     prSetting: { out: JSON.stringify({ default_workflow_permissions: 'read', can_approve_pull_request_reviews: true }) },
   };
   for (const [call, args] of Object.entries(TRIGGER_GH_CALLS)) {
@@ -6427,7 +6429,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     assert.deepEqual(ghInvocations(stub), [], 'a default doctor run invoked gh');
     const line = reportLine(stdout, 'pass', 'remote-github');
-    assert.ok(line?.includes('not asked — run `npx autonomous-sdlc-harness doctor --check-github`'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('not asked — run `npx devscene doctor --check-github`'), `${stdout}\n${stderr}`);
   });
 
   await t.test('--check-github with remote execution off asks nothing', async (subtest) => {
@@ -6455,10 +6457,10 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.deepEqual(ghInvocations(stub), Object.values(GH_CALLS).map((args) => args.join(' ')));
   });
 
-  await t.test('a HARNESS_RUNNER value is reported as the runner label', async (subtest) => {
+  await t.test('a DEVSCENE_RUNNER value is reported as the runner label', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
-    answerGh(stub, { variables: { out: JSON.stringify([{ name: 'HARNESS_RUNNER', value: 'fixture-runner' }]) } });
+    answerGh(stub, { variables: { out: JSON.stringify([{ name: 'DEVSCENE_RUNNER', value: 'fixture-runner' }]) } });
 
     const { stdout, stderr } = await checkGithub(dir, stub);
 
@@ -6468,7 +6470,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
   await t.test('both credential secrets pass with the billing note', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
-    const names = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'HARNESS_PUSH_URL'];
+    const names = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'DEVSCENE_PUSH_URL'];
     answerGh(stub, { secrets: { out: JSON.stringify(names.map((name) => ({ name }))) } });
 
     const { status, stdout, stderr } = await checkGithub(dir, stub);
@@ -6481,8 +6483,8 @@ test('the remote-github check asks GitHub only under --check-github and grades e
   const failing = [
     ['gh does not spawn', {}, `${FIXTURE_GH_CLI}-absent`, 'install the GitHub CLI', 0],
     ['gh auth status exits non-zero', { auth: { err: 'You are not logged into any GitHub hosts.\n', status: 1 } }, undefined, 'gh auth login', 1],
-    ['GitHub does not know harness-run.yml', { run: { err: 'could not find any workflows named harness-run.yml\n', status: 1 } }, undefined, "push .github/workflows/harness-run.yml to the repository's default branch", 9],
-    ['neither credential secret is set', { secrets: { out: JSON.stringify([{ name: 'HARNESS_PUSH_URL' }]) } }, undefined, 'billing follows ANTHROPIC_API_KEY when both are set', 8],
+    ['GitHub does not know devscene-run.yml', { run: { err: 'could not find any workflows named devscene-run.yml\n', status: 1 } }, undefined, "push .github/workflows/devscene-run.yml to the repository's default branch", 9],
+    ['neither credential secret is set', { secrets: { out: JSON.stringify([{ name: 'DEVSCENE_PUSH_URL' }]) } }, undefined, 'billing follows ANTHROPIC_API_KEY when both are set', 8],
   ];
   for (const [name, overrides, ghName, expected, calls] of failing) {
     await t.test(`fails when ${name}`, async (subtest) => {
@@ -6500,9 +6502,9 @@ test('the remote-github check asks GitHub only under --check-github and grades e
   }
 
   const warning = [
-    ['HARNESS_PUSH_URL is absent', { secrets: { out: JSON.stringify([{ name: 'CLAUDE_CODE_OAUTH_TOKEN' }]) } }, 'notifications from a remote run reach no one'],
-    ['GitHub does not know harness-resume.yml', { resume: { err: 'could not find any workflows named harness-resume.yml\n', status: 1 } }, 'usage auto-resume is unavailable'],
-    ['HARNESS_REMOTE_STOP is set', { variables: { out: JSON.stringify([{ name: 'HARNESS_REMOTE_STOP', value: '1' }]) } }, 'every remote start and continuation is stopped'],
+    ['DEVSCENE_PUSH_URL is absent', { secrets: { out: JSON.stringify([{ name: 'CLAUDE_CODE_OAUTH_TOKEN' }]) } }, 'notifications from a remote run reach no one'],
+    ['GitHub does not know devscene-resume.yml', { resume: { err: 'could not find any workflows named devscene-resume.yml\n', status: 1 } }, 'usage auto-resume is unavailable'],
+    ['DEVSCENE_REMOTE_STOP is set', { variables: { out: JSON.stringify([{ name: 'DEVSCENE_REMOTE_STOP', value: '1' }]) } }, 'every remote start and continuation is stopped'],
     ['a gh call is stopped past its bound', { secrets: { kill: true } }, 'cannot tell which repository secrets are set: `gh secret list --json name` gave no answer, because it was stopped before it answered (timed out)'],
     ['gh cannot reach GitHub', { auth: { err: 'error connecting to api.github.com\ncheck your internet connection or https://githubstatus.com\n', status: 1 } }, 'cannot tell whether gh is authenticated'],
     ['the repository keeps artifacts for fewer than 30 days', { retention: { out: JSON.stringify({ days: 7 }) } }, 'the repository keeps artifacts for 7 days, so a remote run parked or paused longer than that loses its state bundle: raise it under Settings → Actions → General → Artifact and log retention'],
@@ -6524,7 +6526,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     });
   }
 
-  await t.test('an unset HARNESS_RUN_ACTORS in a user-owned repository names the owner as the only actor', async (subtest) => {
+  await t.test('an unset DEVSCENE_RUN_ACTORS in a user-owned repository names the owner as the only actor', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub);
@@ -6533,10 +6535,10 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'remote-github');
-    assert.ok(line?.includes('HARNESS_RUN_ACTORS is unset, so only the repository owner, fixture-owner, may start, steer, answer and review a run'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('DEVSCENE_RUN_ACTORS is unset, so only the repository owner, fixture-owner, may start, steer, answer and review a run'), `${stdout}\n${stderr}`);
   });
 
-  await t.test('an unset HARNESS_RUN_ACTORS in an organisation-owned repository warns with gh variable set', async (subtest) => {
+  await t.test('an unset DEVSCENE_RUN_ACTORS in an organisation-owned repository warns with gh variable set', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub, { owner: { out: JSON.stringify({ owner: { login: 'fixture-org', type: 'Organization' } }) } });
@@ -6545,8 +6547,8 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
-    assert.ok(line?.includes('HARNESS_RUN_ACTORS is unset and fixture-org is an Organization, not a user, so no person may start, steer, answer or review a run'), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('`gh variable set HARNESS_RUN_ACTORS --body <login,login>`'), line);
+    assert.ok(line?.includes('DEVSCENE_RUN_ACTORS is unset and fixture-org is an Organization, not a user, so no person may start, steer, answer or review a run'), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('`gh variable set DEVSCENE_RUN_ACTORS --body <login,login>`'), line);
   });
 
   await t.test('a refused owner read is a cannot-tell warning and no second one', async (subtest) => {
@@ -6562,26 +6564,26 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.ok(!line.includes('no person may'), line);
   });
 
-  await t.test('HARNESS_RUN_ACTORS of * with the subscription token warns and reads no owner', async (subtest) => {
+  await t.test('DEVSCENE_RUN_ACTORS of * with the subscription token warns and reads no owner', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
-    answerGh(stub, { variables: { out: JSON.stringify([{ name: 'HARNESS_RUN_ACTORS', value: '*' }]) } });
+    answerGh(stub, { variables: { out: JSON.stringify([{ name: 'DEVSCENE_RUN_ACTORS', value: '*' }]) } });
 
     const { status, stdout, stderr } = await checkGithub(dir, stub);
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
-    assert.ok(line?.includes("HARNESS_RUN_ACTORS is `*` while CLAUDE_CODE_OAUTH_TOKEN is set, so every writer's runs spend one person's subscription"), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes("DEVSCENE_RUN_ACTORS is `*` while CLAUDE_CODE_OAUTH_TOKEN is set, so every writer's runs spend one person's subscription"), `${stdout}\n${stderr}`);
     assert.ok(line.includes('every collaborator with write access may start, steer, answer and review a run'), line);
     assert.ok(!ghInvocations(stub).includes(GH_CALLS.owner.join(' ')), ghInvocations(stub).join('\n'));
   });
 
-  await t.test('HARNESS_RUN_ACTORS of * with only ANTHROPIC_API_KEY carries no subscription warning', async (subtest) => {
+  await t.test('DEVSCENE_RUN_ACTORS of * with only ANTHROPIC_API_KEY carries no subscription warning', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub, {
-      variables: { out: JSON.stringify([{ name: 'HARNESS_RUN_ACTORS', value: '*' }]) },
-      secrets: { out: JSON.stringify([{ name: 'ANTHROPIC_API_KEY' }, { name: 'HARNESS_PUSH_URL' }]) },
+      variables: { out: JSON.stringify([{ name: 'DEVSCENE_RUN_ACTORS', value: '*' }]) },
+      secrets: { out: JSON.stringify([{ name: 'ANTHROPIC_API_KEY' }, { name: 'DEVSCENE_PUSH_URL' }]) },
     });
 
     const { status, stdout, stderr } = await checkGithub(dir, stub);
@@ -6591,11 +6593,11 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.ok(!`${stdout}\n${stderr}`.includes('subscription'), `${stdout}\n${stderr}`);
   });
 
-  await t.test('a listed HARNESS_RUN_ACTORS is a note naming each login, and reads no owner', async (subtest) => {
+  await t.test('a listed DEVSCENE_RUN_ACTORS is a note naming each login, and reads no owner', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub, {
-      variables: { out: JSON.stringify([{ name: 'HARNESS_RUN_ACTORS', value: 'alice, bob' }]) },
+      variables: { out: JSON.stringify([{ name: 'DEVSCENE_RUN_ACTORS', value: 'alice, bob' }]) },
       // Writers all on the list, so the beyond-the-list warning does not turn this pass into a warn.
       collaborators: { out: JSON.stringify([{ login: 'alice', permissions: { push: true } }, { login: 'bob', permissions: { push: true } }]) },
     });
@@ -6604,7 +6606,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'remote-github');
-    assert.ok(line?.includes('HARNESS_RUN_ACTORS admits alice, bob, so only those logins may'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('DEVSCENE_RUN_ACTORS admits alice, bob, so only those logins may'), `${stdout}\n${stderr}`);
     assert.ok(!ghInvocations(stub).includes(GH_CALLS.owner.join(' ')), ghInvocations(stub).join('\n'));
   });
 
@@ -6614,7 +6616,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
       { login: 'fixture-owner', permissions: { admin: true, maintain: true, push: true, triage: true, pull: true } },
       ...more.map(([login, push]) => ({ login, permissions: { admin: false, maintain: false, push, triage: true, pull: true } })),
     ]);
-  const writersWarning = 'can write to the repository without being on HARNESS_RUN_ACTORS';
+  const writersWarning = 'can write to the repository without being on DEVSCENE_RUN_ACTORS';
 
   await t.test('a writer beyond the list while the subscription token is set warns, naming them and the edited-workflow risk', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
@@ -6653,7 +6655,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
     assert.ok(
-      line?.includes('cannot tell whether any writer is beyond HARNESS_RUN_ACTORS') && line.includes('a full page of 100 collaborators'),
+      line?.includes('cannot tell whether any writer is beyond DEVSCENE_RUN_ACTORS') && line.includes('a full page of 100 collaborators'),
       `${stdout}\n${stderr}`,
     );
     assert.ok(!line.includes(writersWarning), line);
@@ -6663,7 +6665,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub, {
-      variables: { out: JSON.stringify([{ name: 'HARNESS_RUN_ACTORS', value: 'bob, fixture-owner' }]) },
+      variables: { out: JSON.stringify([{ name: 'DEVSCENE_RUN_ACTORS', value: 'bob, fixture-owner' }]) },
       collaborators: { out: collaborators(['Bob', true]) },
     });
 
@@ -6683,14 +6685,14 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'remote-github');
-    assert.ok(line?.includes('writers beyond HARNESS_RUN_ACTORS not checked: `gh api repos/{owner}/{repo}/collaborators?per_page=100` needs push access (it exited 1: HTTP 403'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('writers beyond DEVSCENE_RUN_ACTORS not checked: `gh api repos/{owner}/{repo}/collaborators?per_page=100` needs push access (it exited 1: HTTP 403'), `${stdout}\n${stderr}`);
   });
 
   await t.test('only ANTHROPIC_API_KEY makes no collaborators read', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub, {
-      secrets: { out: JSON.stringify([{ name: 'ANTHROPIC_API_KEY' }, { name: 'HARNESS_PUSH_URL' }]) },
+      secrets: { out: JSON.stringify([{ name: 'ANTHROPIC_API_KEY' }, { name: 'DEVSCENE_PUSH_URL' }]) },
       collaborators: { out: collaborators(['Bob', true]) },
     });
 
@@ -6701,11 +6703,11 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.ok(!`${stdout}\n${stderr}`.includes(writersWarning), `${stdout}\n${stderr}`);
   });
 
-  await t.test('HARNESS_RUN_ACTORS of * makes no collaborators read', async (subtest) => {
+  await t.test('DEVSCENE_RUN_ACTORS of * makes no collaborators read', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub, {
-      variables: { out: JSON.stringify([{ name: 'HARNESS_RUN_ACTORS', value: '*' }]) },
+      variables: { out: JSON.stringify([{ name: 'DEVSCENE_RUN_ACTORS', value: '*' }]) },
       collaborators: { out: collaborators(['Bob', true]) },
     });
 
@@ -6715,23 +6717,23 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.ok(!`${stdout}\n${stderr}`.includes(writersWarning), `${stdout}\n${stderr}`);
   });
 
-  await t.test('fails naming the file and init --force when harness-run.yml is listed by its path', async (subtest) => {
+  await t.test('fails naming the file and init --force when devscene-run.yml is listed by its path', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
-    answerGh(stub, { workflows: { out: workflowListing(['.github/workflows/harness-run.yml']) } });
+    answerGh(stub, { workflows: { out: workflowListing(['.github/workflows/devscene-run.yml']) } });
 
     const { status, stdout, stderr } = await checkGithub(dir, stub);
 
     assert.equal(status, 1, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'fail', 'remote-github');
-    assert.ok(line?.includes('GitHub lists .github/workflows/harness-run.yml by its path'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('GitHub lists .github/workflows/devscene-run.yml by its path'), `${stdout}\n${stderr}`);
     assert.ok(line.includes('init --force'), line);
   });
 
-  await t.test('with forge absent, a harness-control.yml listed by its path is not judged', async (subtest) => {
+  await t.test('with forge absent, a devscene-control.yml listed by its path is not judged', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
-    answerGh(stub, { workflows: { out: workflowListing(['.github/workflows/harness-control.yml']) } });
+    answerGh(stub, { workflows: { out: workflowListing(['.github/workflows/devscene-control.yml']) } });
 
     const { status, stdout, stderr } = await checkGithub(dir, stub);
 
@@ -6775,7 +6777,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const calls = ghInvocations(stub);
     for (const args of Object.values(TRIGGER_GH_CALLS)) assert.ok(!calls.includes(args.join(' ')), calls.join('\n'));
-    assert.ok(!reportLine(stdout, 'pass', 'remote-github')?.includes('harness-trigger.yml'), stdout);
+    assert.ok(!reportLine(stdout, 'pass', 'remote-github')?.includes('devscene-trigger.yml'), stdout);
   });
 
   await t.test('with the trigger on, both known passes and names the label', async (subtest) => {
@@ -6788,8 +6790,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'remote-github');
-    assert.ok(line?.includes('GitHub knows harness-trigger.yml and harness-control.yml, and the label `sdlc-harness` exists'), `${stdout}\n${stderr}`);
-    assert.ok(!line.includes('earlier release'), line);
+    assert.ok(line?.includes('GitHub knows devscene-trigger.yml and devscene-control.yml, and the label `devscene` exists'), `${stdout}\n${stderr}`);
     const calls = ghInvocations(stub);
     for (const args of Object.values(TRIGGER_GH_CALLS)) assert.ok(calls.includes(args.join(' ')), calls.join('\n'));
   });
@@ -6804,14 +6805,14 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
-    assert.ok(line?.includes('HARNESS_PUSH_URL is not a repository secret'), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('GitHub knows harness-trigger.yml and harness-control.yml, and the label `sdlc-harness` exists'), line);
+    assert.ok(line?.includes('DEVSCENE_PUSH_URL is not a repository secret'), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('GitHub knows devscene-trigger.yml and devscene-control.yml, and the label `devscene` exists'), line);
   });
 
   await t.test('with the trigger on, a failing grade still carries the trigger confirmation', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     const stub = await answeringGhStub(subtest);
-    answerGh(stub, { secrets: { out: JSON.stringify([{ name: 'HARNESS_PUSH_URL' }]) } });
+    answerGh(stub, { secrets: { out: JSON.stringify([{ name: 'DEVSCENE_PUSH_URL' }]) } });
     answerTriggerGh(stub);
 
     const { status, stdout, stderr } = await checkGithub(dir, stub);
@@ -6819,21 +6820,21 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.equal(status, 1, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'fail', 'remote-github');
     assert.ok(line?.includes('neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY is a repository secret'), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('GitHub knows harness-trigger.yml and harness-control.yml, and the label `sdlc-harness` exists'), line);
+    assert.ok(line.includes('GitHub knows devscene-trigger.yml and devscene-control.yml, and the label `devscene` exists'), line);
   });
 
-  await t.test('with the trigger on, an unknown harness-trigger.yml warns with the push', async (subtest) => {
+  await t.test('with the trigger on, an unknown devscene-trigger.yml warns with the push', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub);
-    answerTriggerGh(stub, { trigger: { err: 'could not find any workflows named harness-trigger.yml\n', status: 1 } });
+    answerTriggerGh(stub, { trigger: { err: 'could not find any workflows named devscene-trigger.yml\n', status: 1 } });
 
     const { status, stdout, stderr } = await checkGithub(dir, stub);
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
-    assert.ok(line?.includes("GitHub does not know harness-trigger.yml"), `${stdout}\n${stderr}`);
-    assert.ok(line.includes("so labelling an issue starts nothing: push .github/workflows/harness-trigger.yml to the repository's default branch"), line);
+    assert.ok(line?.includes("GitHub does not know devscene-trigger.yml"), `${stdout}\n${stderr}`);
+    assert.ok(line.includes("so labelling an issue starts nothing: push .github/workflows/devscene-trigger.yml to the repository's default branch"), line);
   });
 
   await t.test('with the trigger on, a missing label warns with gh label create', async (subtest) => {
@@ -6846,57 +6847,58 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
-    assert.ok(line?.includes('no label `sdlc-harness` exists, so nobody can apply it: `gh label create sdlc-harness`'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('no label `devscene` exists, so nobody can apply it: `gh label create devscene`'), `${stdout}\n${stderr}`);
   });
 
   await t.test('with the trigger on, an unreadable label list is cannot tell', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub);
-    answerTriggerGh(stub, { labels: { out: '{"name":"sdlc-harness"}' } });
+    answerTriggerGh(stub, { labels: { out: '{"name":"devscene"}' } });
 
     const { status, stdout, stderr } = await checkGithub(dir, stub);
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
-    assert.ok(line?.includes('cannot tell whether the label `sdlc-harness` exists'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('cannot tell whether the label `devscene` exists'), `${stdout}\n${stderr}`);
   });
 
-  await t.test('with the trigger on, an unknown harness-control.yml warns with the push', async (subtest) => {
+  await t.test('with the trigger on, an unknown devscene-control.yml warns with the push', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub);
-    answerTriggerGh(stub, { control: { err: 'could not find any workflows named harness-control.yml\n', status: 1 } });
+    answerTriggerGh(stub, { control: { err: 'could not find any workflows named devscene-control.yml\n', status: 1 } });
 
     const { status, stdout, stderr } = await checkGithub(dir, stub);
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
-    assert.ok(line?.includes('GitHub does not know harness-control.yml'), `${stdout}\n${stderr}`);
-    assert.ok(line.includes("so comments and reviews start nothing: push .github/workflows/harness-control.yml to the repository's default branch"), line);
-    assert.ok(!line.includes('GitHub knows harness-trigger.yml'), line);
+    assert.ok(line?.includes('GitHub does not know devscene-control.yml'), `${stdout}\n${stderr}`);
+    assert.ok(line.includes("so comments and reviews start nothing: push .github/workflows/devscene-control.yml to the repository's default branch"), line);
+    assert.ok(!line.includes('GitHub knows devscene-trigger.yml'), line);
   });
 
-  await t.test('with the trigger on, harness-control.yml listed by its path fails with the control route', async (subtest) => {
+  await t.test('with the trigger on, devscene-control.yml listed by its path fails with the generic route', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     const stub = await answeringGhStub(subtest);
     // Gate 12 round 7's observation: GitHub listed the unparsed file with its name equal to its path.
-    answerGh(stub, { workflows: { out: workflowListing(['.github/workflows/harness-control.yml']) } });
+    answerGh(stub, { workflows: { out: workflowListing(['.github/workflows/devscene-control.yml']) } });
     answerTriggerGh(stub);
 
     const { status, stdout, stderr } = await checkGithub(dir, stub);
 
     assert.notEqual(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'fail', 'remote-github');
-    assert.ok(line?.includes('GitHub lists .github/workflows/harness-control.yml by its path rather than its name'), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('if: >-'), line);
+    assert.ok(line?.includes('GitHub lists .github/workflows/devscene-control.yml by its path rather than its name'), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('actionlint'), line);
     assert.ok(line.includes('init --force'), line);
-    assert.ok(!line.includes('GitHub knows harness-trigger.yml and harness-control.yml'), line);
+    assert.ok(line.includes('keeps a .bak'), line);
+    assert.ok(!line.includes('GitHub knows devscene-trigger.yml and devscene-control.yml'), line);
   });
 
   const prSettingOff = { prSetting: { out: JSON.stringify({ default_workflow_permissions: 'read', can_approve_pull_request_reviews: false }) } };
 
-  await t.test('with the trigger on, the pull-request setting off and no HARNESS_GIT_TOKEN warns naming the setting', async (subtest) => {
+  await t.test('with the trigger on, the pull-request setting off and no DEVSCENE_GIT_TOKEN warns naming the setting', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub);
@@ -6906,9 +6908,9 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
-    assert.ok(line?.includes('Allow GitHub Actions to create and approve pull requests is off and HARNESS_GIT_TOKEN is not a repository secret'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('Allow GitHub Actions to create and approve pull requests is off and DEVSCENE_GIT_TOKEN is not a repository secret'), `${stdout}\n${stderr}`);
     assert.ok(line.includes('Settings -> Actions -> General -> Workflow permissions'), line);
-    assert.ok(line.includes('`gh secret set HARNESS_GIT_TOKEN`'), line);
+    assert.ok(line.includes('`gh secret set DEVSCENE_GIT_TOKEN`'), line);
   });
 
   await t.test('with the trigger on, the pull-request setting off and an unreadable secret list is cannot tell', async (subtest) => {
@@ -6921,14 +6923,14 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
-    assert.ok(line?.includes('whether HARNESS_GIT_TOKEN is set could not be read'), `${stdout}\n${stderr}`);
-    assert.ok(!line.includes('HARNESS_GIT_TOKEN is not a repository secret'), line);
+    assert.ok(line?.includes('whether DEVSCENE_GIT_TOKEN is set could not be read'), `${stdout}\n${stderr}`);
+    assert.ok(!line.includes('DEVSCENE_GIT_TOKEN is not a repository secret'), line);
   });
 
-  await t.test('with the trigger on, the pull-request setting off and HARNESS_GIT_TOKEN set is a note', async (subtest) => {
+  await t.test('with the trigger on, the pull-request setting off and DEVSCENE_GIT_TOKEN set is a note', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     const stub = await answeringGhStub(subtest);
-    const names = ['CLAUDE_CODE_OAUTH_TOKEN', 'HARNESS_PUSH_URL', 'HARNESS_GIT_TOKEN'];
+    const names = ['CLAUDE_CODE_OAUTH_TOKEN', 'DEVSCENE_PUSH_URL', 'DEVSCENE_GIT_TOKEN'];
     answerGh(stub, { secrets: { out: JSON.stringify(names.map((name) => ({ name }))) } });
     answerTriggerGh(stub, prSettingOff);
 
@@ -6936,7 +6938,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'remote-github');
-    assert.ok(line?.includes('a run opens its draft pull request with HARNESS_GIT_TOKEN'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('a run opens its draft pull request with DEVSCENE_GIT_TOKEN'), `${stdout}\n${stderr}`);
   });
 
   await t.test('with the trigger on, a refused pull-request-setting read is a not-checked note', async (subtest) => {
@@ -6952,33 +6954,10 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.ok(line?.includes('the pull-request setting was not checked: `gh api repos/{owner}/{repo}/actions/permissions/workflow` may need more access than this login has (it exited 1: HTTP 403'), `${stdout}\n${stderr}`);
   });
 
-  await t.test('with the trigger on and the variable unset, a committed workflow falling back to harness is asked about and noted', async (subtest) => {
-    const dir = await pushedTriggerFixture(subtest);
-    const trigger = join(dir, '.github', 'workflows', 'harness-trigger.yml');
-    const current = readFileSync(trigger, 'utf8');
-    const previousRelease = current.replace("(vars.HARNESS_TRIGGER_LABEL || 'sdlc-harness')", "(vars.HARNESS_TRIGGER_LABEL || 'harness')");
-    assert.notEqual(previousRelease, current, 'the fixture trigger workflow carries no sdlc-harness fallback');
-    writeFileSync(trigger, previousRelease);
-    const stub = await answeringGhStub(subtest);
-    answerGh(stub);
-    answerTriggerGh(stub, { labels: { out: JSON.stringify([{ name: 'harness' }]) } });
-
-    const { status, stdout, stderr } = await checkGithub(dir, stub);
-
-    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
-    const line = reportLine(stdout, 'pass', 'remote-github');
-    assert.ok(line?.includes('and the label `harness` exists'), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('was written by an earlier release and falls back to `harness`, which keeps starting runs'), line);
-    assert.ok(line.includes('init --force` re-renders it and the scripts to `sdlc-harness`'), line);
-    assert.ok(line.includes('setting HARNESS_TRIGGER_LABEL keeps a name of your choosing under either'), line);
-    // The edit leaves the HARNESS_RUN_ACTORS line in place, so the forge grade stays pass.
-    assert.ok(reportLine(stdout, 'pass', 'forge') !== undefined, `${stdout}\n${stderr}`);
-  });
-
-  await t.test('with the trigger on, HARNESS_TRIGGER_LABEL names the label and allowed bots are a note', async (subtest) => {
+  await t.test('with the trigger on, DEVSCENE_TRIGGER_LABEL names the label and allowed bots are a note', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     const stub = await answeringGhStub(subtest);
-    const variables = [{ name: 'HARNESS_TRIGGER_LABEL', value: 'go' }, { name: 'HARNESS_TRIGGER_ALLOWED_BOTS', value: 'renovate[bot], dependabot[bot]' }];
+    const variables = [{ name: 'DEVSCENE_TRIGGER_LABEL', value: 'go' }, { name: 'DEVSCENE_TRIGGER_ALLOWED_BOTS', value: 'renovate[bot], dependabot[bot]' }];
     answerGh(stub, { variables: { out: JSON.stringify(variables) } });
     answerTriggerGh(stub, { labels: { out: JSON.stringify([{ name: 'go' }]) } });
 
@@ -6987,7 +6966,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'remote-github');
     assert.ok(line?.includes('the label `go` exists'), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('HARNESS_TRIGGER_ALLOWED_BOTS admits renovate[bot], dependabot[bot], each of which can start a run without a permission check'), line);
+    assert.ok(line.includes('DEVSCENE_TRIGGER_ALLOWED_BOTS admits renovate[bot], dependabot[bot], each of which can start a run without a permission check'), line);
   });
 });
 
@@ -6995,8 +6974,8 @@ test('the remote-github check asks GitHub only under --check-github and grades e
  * The `forge` check: the key's reporter, graded from local evidence and never worse than `warn`.
  * Every case runs `doctor` with the recording `gh` stub, so a case that spawned `gh` fails.
  */
-const REMOTE_TRIGGER_WORKFLOW = '.github/workflows/harness-trigger.yml';
-const REMOTE_CONTROL_WORKFLOW = '.github/workflows/harness-control.yml';
+const REMOTE_TRIGGER_WORKFLOW = '.github/workflows/devscene-trigger.yml';
+const REMOTE_CONTROL_WORKFLOW = '.github/workflows/devscene-control.yml';
 
 /** Apply `config set` edits in order, then optionally re-run `init`, asserting each exits 0. */
 async function configure(dir, edits, { init = false } = {}) {
@@ -7044,8 +7023,8 @@ test('the forge check names every forge state and never fails', async (t) => {
   await t.test('none with both forge workflows left in place passes and names both as unused', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await configure(dir, [['forge', 'github']], { init: true });
-    assert.ok(existsSync(join(dir, REMOTE_TRIGGER_WORKFLOW)), 'init did not write harness-trigger.yml');
-    assert.ok(existsSync(join(dir, REMOTE_CONTROL_WORKFLOW)), 'init did not write harness-control.yml');
+    assert.ok(existsSync(join(dir, REMOTE_TRIGGER_WORKFLOW)), 'init did not write devscene-trigger.yml');
+    assert.ok(existsSync(join(dir, REMOTE_CONTROL_WORKFLOW)), 'init did not write devscene-control.yml');
     await configure(dir, [['forge', 'none']]);
     const stub = await ghStub(subtest);
 
@@ -7079,7 +7058,7 @@ test('the forge check names every forge state and never fails', async (t) => {
     const line = reportLine(stderr, 'warn', 'forge');
     assert.ok(line?.includes('GitHub cannot reach this machine'), `${stdout}\n${stderr}`);
     assert.ok(line.includes('config set execution.target github-actions'), line);
-    assert.ok(line.includes('HARNESS_RUNNER'), line);
+    assert.ok(line.includes('DEVSCENE_RUNNER'), line);
   });
 
   await t.test('github with remote execution on and the trigger workflow absent warns with init as the remedy', async (subtest) => {
@@ -7093,10 +7072,10 @@ test('the forge check names every forge state and never fails', async (t) => {
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'forge');
     assert.ok(line?.includes(`${REMOTE_TRIGGER_WORKFLOW}, ${REMOTE_CONTROL_WORKFLOW} are absent, so labelling an issue starts nothing, and comments and reviews start nothing`), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('re-run `npx autonomous-sdlc-harness init`'), line);
+    assert.ok(line.includes('re-run `npx devscene init`'), line);
   });
 
-  await t.test('github with harness-control.yml absent warns naming it and init', async (subtest) => {
+  await t.test('github with devscene-control.yml absent warns naming it and init', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     rmSync(join(dir, REMOTE_CONTROL_WORKFLOW));
     const stub = await ghStub(subtest);
@@ -7107,16 +7086,16 @@ test('the forge check names every forge state and never fails', async (t) => {
     const line = reportLine(stderr, 'warn', 'forge');
     assert.ok(line?.includes(`${REMOTE_CONTROL_WORKFLOW} is absent, so comments and reviews start nothing`), `${stdout}\n${stderr}`);
     assert.ok(!line.includes(REMOTE_TRIGGER_WORKFLOW), line);
-    assert.ok(line.includes('re-run `npx autonomous-sdlc-harness init`'), line);
+    assert.ok(line.includes('re-run `npx devscene init`'), line);
   });
 
-  await t.test('github with harness-control.yml present but not on origin warns with the push remedy', async (subtest) => {
+  await t.test('github with devscene-control.yml present but not on origin warns with the push remedy', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await configure(dir, [['forge', 'github']], { init: true });
     rmSync(join(dir, REMOTE_CONTROL_WORKFLOW));
     await pushWorkflows(dir);
     await configure(dir, [], { init: true });
-    assert.ok(existsSync(join(dir, REMOTE_CONTROL_WORKFLOW)), 'init did not re-write harness-control.yml');
+    assert.ok(existsSync(join(dir, REMOTE_CONTROL_WORKFLOW)), 'init did not re-write devscene-control.yml');
     const stub = await ghStub(subtest);
 
     const { status, stdout, stderr } = await doctorWithStub(dir, stub);
@@ -7165,25 +7144,25 @@ test('the forge check names every forge state and never fails', async (t) => {
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'forge');
-    assert.ok(line?.includes('HARNESS_TRIGGER_LABEL label (default `sdlc-harness`) starts a task run'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('DEVSCENE_TRIGGER_LABEL label (default `devscene`) starts a task run'), `${stdout}\n${stderr}`);
     assert.ok(line.includes(REMOTE_CONTROL_WORKFLOW), line);
-    assert.ok(line.includes('`@sdlc-harness <verb>` comment'), line);
-    assert.ok(line.includes('a mention of `@sdlc-harness` anywhere else in a comment is read by an agent, which carries out answer, pause, resume, status and asks the commenter to confirm stop, clear'), line);
+    assert.ok(line.includes('`@dev-scene <verb>` comment'), line);
+    assert.ok(line.includes('a mention of `@dev-scene` anywhere else in a comment is read by an agent, which carries out answer, pause, resume, status and asks the commenter to confirm stop, clear'), line);
     assert.ok(line.includes('a run opens a draft pull request when it starts, marked ready for review when it completes'), line);
     assert.ok(line.includes('carries them'), line);
     assert.ok(!line.includes('still to come'), line);
     assert.ok(line.includes('doctor --check-github'), line);
   });
 
-  const BEFORE_RUN_ACTORS = 'written before `HARNESS_RUN_ACTORS`';
+  const BEFORE_RUN_ACTORS = 'written before `DEVSCENE_RUN_ACTORS`';
 
-  await t.test('github with harness-control.yml written before HARNESS_RUN_ACTORS warns naming it alone and init --force', async (subtest) => {
+  await t.test('github with devscene-control.yml written before DEVSCENE_RUN_ACTORS warns naming it alone and init --force', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await configure(dir, [['forge', 'github']], { init: true });
     const path = join(dir, REMOTE_CONTROL_WORKFLOW);
     const before = readFileSync(path, 'utf8');
-    const after = before.replace(/^[ \t]*HARNESS_RUN_ACTORS:.*\r?\n/gm, '');
-    assert.notEqual(after, before, 'harness-control.yml carries no HARNESS_RUN_ACTORS line to remove');
+    const after = before.replace(/^[ \t]*DEVSCENE_RUN_ACTORS:.*\r?\n/gm, '');
+    assert.notEqual(after, before, 'devscene-control.yml carries no DEVSCENE_RUN_ACTORS line to remove');
     writeFileSync(path, after, 'utf8');
     await pushWorkflows(dir);
     const stub = await ghStub(subtest);
@@ -7195,10 +7174,10 @@ test('the forge check names every forge state and never fails', async (t) => {
     assert.ok(line?.includes(`${REMOTE_CONTROL_WORKFLOW} was ${BEFORE_RUN_ACTORS} and passes the scripts no list`), `${stdout}\n${stderr}`);
     assert.ok(!line.includes(`${REMOTE_TRIGGER_WORKFLOW} was`), line);
     assert.ok(!line.includes(`${REMOTE_TRIGGER_WORKFLOW}, ${REMOTE_CONTROL_WORKFLOW} were`), line);
-    assert.ok(line.includes('`npx autonomous-sdlc-harness init --force`'), line);
+    assert.ok(line.includes('`npx devscene init --force`'), line);
   });
 
-  await t.test('github with both forge workflows as init writes them says nothing about HARNESS_RUN_ACTORS', async (subtest) => {
+  await t.test('github with both forge workflows as init writes them says nothing about DEVSCENE_RUN_ACTORS', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await configure(dir, [['forge', 'github']], { init: true });
     await pushWorkflows(dir);
@@ -7214,13 +7193,13 @@ test('the forge check names every forge state and never fails', async (t) => {
 
   const NO_MENTION_CREDENTIAL = 'passes the mention agent no credential secret';
 
-  await t.test('github with harness-control.yml passing no credential secret warns naming the mention and init --force', async (subtest) => {
+  await t.test('github with devscene-control.yml passing no credential secret warns naming the mention and init --force', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await configure(dir, [['forge', 'github']], { init: true });
     const path = join(dir, REMOTE_CONTROL_WORKFLOW);
     const before = readFileSync(path, 'utf8');
     const after = before.replace(/^.*secrets\.(CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY).*\r?\n/gm, '');
-    assert.notEqual(after, before, 'harness-control.yml carries no credential secret line to remove');
+    assert.notEqual(after, before, 'devscene-control.yml carries no credential secret line to remove');
     writeFileSync(path, after, 'utf8');
     await pushWorkflows(dir);
     const stub = await ghStub(subtest);
@@ -7229,13 +7208,13 @@ test('the forge check names every forge state and never fails', async (t) => {
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'forge');
-    assert.ok(line?.includes(`${REMOTE_CONTROL_WORKFLOW} ${NO_MENTION_CREDENTIAL}, so a mention of \`@sdlc-harness\` anywhere in a comment is answered that it was not read`), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('the `@sdlc-harness <verb>` commands still work'), line);
-    assert.ok(line.includes('`npx autonomous-sdlc-harness init --force`'), line);
+    assert.ok(line?.includes(`${REMOTE_CONTROL_WORKFLOW} ${NO_MENTION_CREDENTIAL}, so a mention of \`@dev-scene\` anywhere in a comment is answered that it was not read`), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('the `@dev-scene <verb>` commands still work'), line);
+    assert.ok(line.includes('`npx devscene init --force`'), line);
     assert.ok(!line.includes(BEFORE_RUN_ACTORS), line);
   });
 
-  await t.test('github with harness-control.yml as init writes it says nothing about a mention credential', async (subtest) => {
+  await t.test('github with devscene-control.yml as init writes it says nothing about a mention credential', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await configure(dir, [['forge', 'github']], { init: true });
     await pushWorkflows(dir);
@@ -7259,7 +7238,7 @@ test('the forge check names every forge state and never fails', async (t) => {
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'forge');
     assert.ok(line?.includes('the remote-github check above reports what GitHub says'), `${stdout}\n${stderr}`);
-    assert.ok(!line.includes('`npx autonomous-sdlc-harness doctor --check-github` asks GitHub'), line);
+    assert.ok(!line.includes('`npx devscene doctor --check-github` asks GitHub'), line);
   });
 });
 

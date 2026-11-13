@@ -19,11 +19,11 @@
  * **The declared mirrors.** Two files outside the package spell literals this module owns:
  * - `cli/templates/scripts/docs-search-server.sh` mirrors all three — {@link RETRIEVAL_CACHE_DIRNAME},
  *   {@link RETRIEVAL_RUNTIME_DIRNAME} and {@link RUNTIME_CLI_RELATIVE} — as the path
- *   `$(hr_cache_dir)/retrieval/runtime/node_modules/autonomous-sdlc-harness/dist/cli.js`, which it
+ *   `$(hr_cache_dir)/retrieval/runtime/node_modules/devscene/dist/cli.js`, which it
  *   `exec`s. `hr_cache_dir` itself mirrors `machineCacheDir()`, declared in `machine/paths.ts` →
  *   choice 2.
- * - `cli/templates/github/workflows/harness-run.yml` mirrors {@link RETRIEVAL_CACHE_DIRNAME} in the
- *   `actions/cache` path `${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval`, in both
+ * - `cli/templates/github/workflows/devscene-run.yml` mirrors {@link RETRIEVAL_CACHE_DIRNAME} in the
+ *   `actions/cache` path `${XDG_CACHE_HOME:-$HOME/.cache}/devscene/retrieval`, in both
  *   the `run` and the `warm` job; its prefix mirrors `machineCacheDir()`, declared in the same choice.
  *
  * A change to a mirrored literal is an edit to every file that mirrors it, in the same change; a
@@ -49,7 +49,7 @@ export const RETRIEVAL_RUNTIME_DIRNAME = 'runtime';
 const RETRIEVAL_MODELS_DIRNAME = 'models';
 
 /** The CLI entry inside {@link retrievalRuntimeDir}, relative to it. */
-export const RUNTIME_CLI_RELATIVE = 'node_modules/autonomous-sdlc-harness/dist/cli.js';
+export const RUNTIME_CLI_RELATIVE = 'node_modules/devscene/dist/cli.js';
 
 /** The runtime's installed copy of this package, two levels above its entry. */
 const RUNTIME_CLI_PACKAGE_RELATIVE = dirname(dirname(RUNTIME_CLI_RELATIVE));
@@ -138,7 +138,7 @@ export async function loadRetrievalModule<T>(specifier: string): Promise<T> {
   } catch (error) {
     if ((error as NodeJS.ErrnoException | null)?.code !== 'ERR_MODULE_NOT_FOUND') throw error;
     throw new HarnessError(
-      `docs retrieval needs the optional package ${name}, which this installation cannot load. Run \`npx autonomous-sdlc-harness init\` in a repository with docs.retrieval on: it installs the package into ${retrievalRuntimeDir()}, and the retrieval commands run from that installation`,
+      `docs retrieval needs the optional package ${name}, which this installation cannot load. Run \`npx devscene init\` in a repository with docs.retrieval on: it installs the package into ${retrievalRuntimeDir()}, and the retrieval commands run from that installation`,
     );
   }
 }

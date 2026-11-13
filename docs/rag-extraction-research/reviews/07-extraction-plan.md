@@ -10,7 +10,7 @@ Confirmed:
 - **This repository.** `2c01123c` is a single commit of 350 files, none of them retrieval files. `e43781aa` and `cba2ac24` are dated 2026-09-16. `dev` has 142 commits, all by one author, and no `Co-Authored-By` trailer on the moving paths.
 - **The moving paths.** They have 25 commits on `dev`. `docs-retrieval-service/` has 50 tracked files, `evals/docs-retrieval/` has 51, and `docs/retrieval-eval-results.md` is 1.4 MB.
 - **Citations into this repository.** `supply-chain.yml:62` and `:100` are right, as are `run-gates.sh:193` and `cli/package.json:19-32`.
-- **The corpus-reader trap.** `service.py:83-101` reads `<cwd>/harness.config.json` and keeps its `layers` even when `--docs-root` is given, and `evals/docs-retrieval/README.md:52` says the same of `self-docs`.
+- **The corpus-reader trap.** `service.py:83-101` reads `<cwd>/devscene.config.json` and keeps its `layers` even when `--docs-root` is given, and `evals/docs-retrieval/README.md:52` says the same of `self-docs`.
 - **State-directory counts.** `harness-runs/` has 2 642 tracked files, and #55 (`624867e7`) has 53 run artifacts among its 105 files.
 - **straightedge.** It has 8 commits and a single `general` layer, carries the `setup-pending` "declined" block and has the `.extraction-source/` comment; `06595cc` says "Nothing is published yet".
 - **Detection rows.** Rows 1 and 4 are as `docs/cli.md` § 4 states them.
@@ -35,7 +35,7 @@ Confirmed:
 2. **§2 leaves the TS half with no CLI, and its tests and evals depend on files marked "Stay". §3.2 bar items 1, 2 and 4 therefore cannot pass with the inventory as listed.**
    - **No CLI.** `cli/src/commands/docs.ts`, which holds the `index`, `search`, `serve` and `fetch-models` verbs, is "Stay", and nothing in the moving set replaces it.
    - **Tests.** `cli/test/docs-retrieval.test.mjs`, a "Duplicated" suite, drives `docs index/search/serve` through `runCli` and `CLI_ENTRY`. It also imports `../dist/core/mainRepoAnchor.js` (line 25).
-   - **Test helper.** `runCli` and `CLI_ENTRY` come from `cli/test/helpers/fixture.mjs`, which is not in the inventory. It has 710 lines, re-exports `dist/config/model.js`, and its `writeRetrievalConfig` writes a `harness.config.json`. `docs-retrieval-refresh-end-state.test.mjs` uses it too.
+   - **Test helper.** `runCli` and `CLI_ENTRY` come from `cli/test/helpers/fixture.mjs`, which is not in the inventory. It has 710 lines, re-exports `dist/config/model.js`, and its `writeRetrievalConfig` writes a `devscene.config.json`. `docs-retrieval-refresh-end-state.test.mjs` uses it too.
    - **Evals.**
      - `query-log-pass.mjs:58` and `index-build.mjs:38` spawn `cli/dist/cli.js docs serve`.
      - `python-backend.mjs:48`, `vector-agreement.mjs:50`, `mcp-backend-pass.mjs:46`, `bm25-history.mjs:81` and `bm25-refresh-rule.mjs:45` import `pythonBackend.js`, which is "Stay".
@@ -48,10 +48,10 @@ Confirmed:
      - Add "the evals' `cli/dist/cli.js` spawns" to cut row 11/12.
 
 3. **Step 8's exit check, "a grep of `.claude/` for the §3.2 names is empty", cannot pass.**
-   - Adoption itself writes those names. In straightedge, `git grep -lE "harness.config|autonomous-sdlc-harness|HARNESS_" main -- .claude` matches 8 files: `CLAUDE.md`, `settings.json`, `settings.autonomous.json`, `harness-task-offer.md`, `context/conventions.md` and others.
+   - Adoption itself writes those names. In straightedge, `git grep -lE "harness.config|devscene|HARNESS_" main -- .claude` matches 8 files: `CLAUDE.md`, `settings.json`, `settings.autonomous.json`, `harness-task-offer.md`, `context/conventions.md` and others.
    - **Change:**
      - Scope the check to the analyze-written prose: `.claude/context/*.md` and the filled sections of `CLAUDE.md`.
-     - Grep there only for the product-code names a cut should have removed: `harness_docs_retrieval`, `HARNESS_DOCS_RETRIEVAL`, `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL`, `harness-docs`, `cli/dist`, `docs_index` and `retrievalApplies`.
+     - Grep there only for the product-code names a cut should have removed: `devscene_docs_retrieval`, `DEVSCENE_DOCS_RETRIEVAL`, `DEVSCENE_RETRIEVAL`, `devscene-docs`, `cli/dist`, `docs_index` and `retrievalApplies`.
 
 4. **§5, §6 steps 2–12, Open question 1 and the Fork verdict contradict ruling R3.7.**
    - R3.7, the maintainer's ruling: finish the sandbox series (#170), then the DevScene rename (#151–#156), and only then RagScene. No RagScene work runs before the rename is done, `ragscenedev` included.
@@ -98,7 +98,7 @@ Confirmed:
 
 ## Should Fix
 
-5. **§1, "64 commits … The last is `570292c83` (#309)", is off by one.** `git log --oneline -- autonomous-sdlc-harness/` gives 64 commits, but the newest is `32ed0bf18` (#311), the removal. The range #232–#309 is 63 commits. **Change:** "63 commits from #232 to #309, plus the #311 removal (64 in all)".
+5. **§1, "64 commits … The last is `570292c83` (#309)", is off by one.** `git log --oneline -- devscene/` gives 64 commits, but the newest is `32ed0bf18` (#311), the removal. The range #232–#309 is 63 commits. **Change:** "63 commits from #232 to #309, plus the #311 removal (64 in all)".
 
 6. **§1 gitleaks:**
    - **The line number.** `gitleaks git` reports line 29 in commit `504a4df6`, but at `dev`'s tip the string is on line 30 (`grep -n "N3_TOKEN =" …` → `30:`).
@@ -140,11 +140,11 @@ Confirmed:
 
 13. **What the stable-point criteria assume about the move.** With R3.7, step 14 always runs after the rename, so its "and the freeze over" prerequisite is redundant. Keep the move outside any later harness-wide freeze, and say so once rather than as F5.
 
-14. **The "functional" bar has gaps that let couplings through to `harness-analyze`.**
+14. **The "functional" bar has gaps that let couplings through to `analyze`.**
     - Item 6's grep is case-sensitive on `HARNESS_`, so shimmed `HarnessError`, `HarnessConfig` and `retrievalApplies` survive, and a conventions writer would encode them as rules.
     - **Change:**
       - Add `Harness[A-Z]`, `retrievalApplies`, `docs_index` and `stateDir` to the grep.
-      - Add two testable items: "each backend indexes a directory that has no `harness.config.json`", and "`serve` answers one `search_docs` over stdio in each runtime".
+      - Add two testable items: "each backend indexes a directory that has no `devscene.config.json`", and "`serve` answers one `search_docs` over stdio in each runtime".
       - Make "CI green" name the workflow and the job.
 
 15. **§5 and §6 contradict the synthesis without saying so.**
@@ -162,7 +162,7 @@ Confirmed:
 
 17. **Secrets.** State that none are needed before release: the stubs need no model token, and the local watcher pushes over SSH. Name the release-time ones: npm and PyPI trusted publishing, and `CLAUDE_CODE_OAUTH_TOKEN` only if the remote workflows are turned on.
 18. **Public-to-private transfer (§5, OQ3).** The docs do not cover it, so the "Inference" label is right. Fold it into OQ3's throwaway test, together with the numbering.
-19. **Moved research docs.** Their `path:line` citations point into the harness tree. Add a one-line header saying they cite `autonomous-sdlc-harness@<sha>`, so they stay resolvable rather than dangling.
+19. **Moved research docs.** Their `path:line` citations point into the harness tree. Add a one-line header saying they cite `devscene@<sha>`, so they stay resolvable rather than dangling.
 20. **Step 15** could name the harness-side deletions it implies: the frozen engine files, the `docs-retrieval-service/` copy, gate 10 and gate 11, and the `uv-audit` and `model-revisions` jobs. The issue can then size that branch.
 
 ## Re-review
@@ -178,7 +178,7 @@ Checked against the revised file (5 109 words, 17 steps, `## Review response`), 
 ### Must Fix
 
 R1. **§5's catch 2 is partly wrong, and step 1 would amend #156 from it.**
-- `HARNESS_RETRIEVAL_CACHE` **does exist** on `dev`, four times in the adopter-rendered `cli/templates/github/workflows/harness-run.yml` (`:600`, `:658`, `:938`, `:958`). Dropping it from #156's table would leave it unrenamed.
+- `HARNESS_RETRIEVAL_CACHE` **does exist** on `dev`, four times in the adopter-rendered `cli/templates/github/workflows/devscene-run.yml` (`:600`, `:658`, `:938`, `:958`). Dropping it from #156's table would leave it unrenamed.
 - `HARNESS_RETRIEVAL_LOG` does not exist. The log variable is `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG` (`queryLog.ts:53`).
 - The table also omits four names:
   - `HARNESS_DOCS_RETRIEVAL_MODEL_CACHE` (`models.py:85`, `Dockerfile:35`, `compose.yaml:36`);
@@ -203,10 +203,10 @@ R3. **The `self-docs` eval cannot be "repointed at an explicit path list" inside
 - All 20 queries in `queries/self-docs.jsonl` are labelled with harness anchors, such as `.claude/context/conventions.md#…` and `docs/config.md#5-key-reference`. Those files do not exist in RagScene. After step 12, RagScene's own `.claude/context/conventions.md` exists with different anchors.
 - The bar-8 grep also hits eval material:
   - `self-docs.jsonl` (`stateDir`);
-  - `arm-a/run-arm-a.sh` (8 lines: `HARNESS_AGENT_CLI` and `HARNESS_EVAL_CORPUS_ROOT`, contributor variables #154 keeps under their old names).
+  - `arm-a/run-arm-a.sh` (8 lines: `DEVSCENE_AGENT_CLI` and `HARNESS_EVAL_CORPUS_ROOT`, the contributor variables the script reads).
 - **Change:**
   - Give `self-docs` an external corpus root, pinned to a harness checkout as `gate10-catalog` already is, or drop it. Fold this into Open question 5.
-  - Add `HARNESS_AGENT_CLI` and `HARNESS_EVAL_CORPUS_ROOT` to cut row 6/7.
+  - Add `DEVSCENE_AGENT_CLI` and `HARNESS_EVAL_CORPUS_ROOT` to cut row 6/7.
   - Exempt label data (`queries/*.jsonl`, `transcripts/`) from bar item 8.
 
 R4. **The move's steps leave out the watcher.**

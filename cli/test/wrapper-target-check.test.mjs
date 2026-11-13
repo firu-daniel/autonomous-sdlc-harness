@@ -58,7 +58,7 @@ const TEMPLATE_SCRIPTS = join(PACKAGE_ROOT, 'templates', 'scripts');
 const CONFIG = {
   version: 1,
   defaultBranch: 'trunk',
-  stateDir: 'sdlc-harness/',
+  stateDir: 'devscene/',
   githooksDir: 'githooks',
   layers: [],
   commands: {},
@@ -69,7 +69,7 @@ const REFRESH_REFUSED = /^refresh-branch\.sh: refusing to refresh: /m;
 const output = (result) => `${result.stdout}\n${result.stderr}`;
 
 /**
- * A bare origin; a main checkout on `feat_main` carrying `harness.config.json`, `githooks/` and the
+ * A bare origin; a main checkout on `feat_main` carrying `devscene.config.json`, `githooks/` and the
  * two wrappers with their `lib/`; a linked worktree `wt` on `feat_w`, bootstrapped as
  * `setup-worktree.sh` step 4 does, with one commit origin has not seen; and a scratch clone of the
  * same origin on `feat_s`, behind origin's `trunk`, whose `core.sshCommand` writes a marker.
@@ -96,7 +96,7 @@ async function fixture(t) {
 
   await runGit(main, ['init', '--quiet', '-b', 'trunk']);
   await identity(main);
-  await writeFile(join(main, 'harness.config.json'), `${JSON.stringify(CONFIG)}\n`);
+  await writeFile(join(main, 'devscene.config.json'), `${JSON.stringify(CONFIG)}\n`);
   await mkdir(join(main, 'githooks'));
   await writeFile(join(main, 'githooks', 'README'), 'hooks\n');
   await mkdir(join(main, 'scripts'));
@@ -104,7 +104,7 @@ async function fixture(t) {
     await cp(join(TEMPLATE_SCRIPTS, name), join(main, 'scripts', name));
   }
   await cp(join(TEMPLATE_SCRIPTS, 'lib'), join(main, 'scripts', 'lib'), { recursive: true });
-  await runGit(main, ['add', 'harness.config.json', 'githooks', 'scripts']);
+  await runGit(main, ['add', 'devscene.config.json', 'githooks', 'scripts']);
   await runGit(main, ['commit', '--quiet', '-m', 'fixture: seed']);
   await runGit(main, ['config', 'core.hooksPath', 'githooks']);
   await runGit(main, ['remote', 'add', 'origin', origin]);
@@ -226,8 +226,8 @@ test('(h) A commondir planted in the main .git cannot make another repository th
   await runGit(fake, ['config', 'user.name', 'Harness Fixture']);
   await runGit(fake, ['reset', '--quiet', '--hard', 'HEAD~1']);
   await runGit(fake, ['checkout', '--quiet', '-b', 'feat_fake']);
-  await writeFile(join(fake, 'harness.config.json'), `${JSON.stringify({ ...CONFIG, githooksDir: '.git/hooks' })}\n`);
-  await runGit(fake, ['add', 'harness.config.json']);
+  await writeFile(join(fake, 'devscene.config.json'), `${JSON.stringify({ ...CONFIG, githooksDir: '.git/hooks' })}\n`);
+  await runGit(fake, ['add', 'devscene.config.json']);
   await runGit(fake, ['commit', '--quiet', '-m', 'fixture: fake']);
   for (const name of ['pre-push', 'post-merge']) {
     const hook = join(fake, '.git', 'hooks', name);

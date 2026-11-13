@@ -24,11 +24,11 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
 const FORBIDDEN = 'GitHub Actions is not permitted to create or approve pull requests';
-const OPENED_MARKER = '<!-- sdlc-harness event=opened branch=feat_x -->\n';
+const OPENED_MARKER = '<!-- devscene event=opened branch=feat_x -->\n';
 
 const STUB = `#!/usr/bin/env node
 const { appendFileSync, existsSync, readFileSync, writeFileSync } = require('node:fs');
@@ -75,7 +75,7 @@ async function openFixture(t, { forge = 'github', provenance = true } = {}) {
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   config.forge = forge;
@@ -88,7 +88,7 @@ async function openFixture(t, { forge = 'github', provenance = true } = {}) {
   const files = [`${STATE_DIR}/task_prompts/feat_x_task_prompt.md`, `${STATE_DIR}/flow_progress/feat_x_progress.md`];
   mkdirSync(join(dir, STATE_DIR, 'task_prompts'), { recursive: true });
   mkdirSync(join(dir, STATE_DIR, 'flow_progress'), { recursive: true });
-  const origin = provenance ? `\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`sdlc-harness\`.\n` : '';
+  const origin = provenance ? `\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`devscene\`.\n` : '';
   writeFileSync(join(dir, files[0]), `# Add comments\n\nDo it.\n${origin}`);
   writeFileSync(join(dir, files[1]), '# Progress\n');
   await runGit(dir, ['add', '--force', ...files]);
@@ -109,7 +109,7 @@ async function openFixture(t, { forge = 'github', provenance = true } = {}) {
     /** @param {Record<string, string>} [env] */
     open: (env = {}) =>
       runBash(dir, [SCRIPT, 'open', 'feat_x'], {
-        HARNESS_GH_CLI: stub,
+        DEVSCENE_GH_CLI: stub,
         STUB_LOG: log,
         GITHUB_REPOSITORY: REPOSITORY,
         GITHUB_SERVER_URL: 'https://github.com',
@@ -161,14 +161,14 @@ test('no pull request: one draft opened with HARNESS_PR_TOKEN alone, labelled ru
   assert.match(made[0].body, /It stays a draft while the run works/);
   assert.match(made[0].body, /\nStarted from #7\.\n/);
   assert.doesNotMatch(made[0].body, /\b(closes|fixes|resolves) #/i);
-  assert.ok(made[0].body.endsWith('<!-- sdlc-harness event=pull-request branch=feat_x -->\n'), made[0].body);
-  assert.deepEqual(labelAdds(calls, 12), ['labels[]=sdlc-harness: running']);
+  assert.ok(made[0].body.endsWith('<!-- devscene event=pull-request branch=feat_x -->\n'), made[0].body);
+  assert.deepEqual(labelAdds(calls, 12), ['labels[]=devscene: running']);
   assert.deepEqual(labelAdds(calls, 7), []);
   assert.equal(allComments(calls).length, 1);
   const [posted] = commentsOn(calls, 7);
   assert.match(posted.body, /draft pull request #12/);
   assert.match(posted.body, /https:\/\/github\.com\/octo\/fixture\/pull\/12/);
-  assert.match(posted.body, /`@sdlc-harness` commands keep working on this issue/);
+  assert.match(posted.body, /`@dev-scene` commands keep working on this issue/);
   assert.ok(posted.body.endsWith(OPENED_MARKER), posted.body);
 });
 
@@ -219,7 +219,7 @@ test('a task prompt with no provenance line opens the pull request and posts no 
   assert.equal(creates(calls).length, 1);
   assert.doesNotMatch(creates(calls)[0].body, /Started from #/);
   assert.equal(allComments(calls).length, 0);
-  assert.deepEqual(labelAdds(calls, 12), ['labels[]=sdlc-harness: running']);
+  assert.deepEqual(labelAdds(calls, 12), ['labels[]=devscene: running']);
 });
 
 test('with forge none, open calls no gh at all', async (t) => {

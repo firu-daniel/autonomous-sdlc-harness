@@ -3,7 +3,7 @@ real Postgres with `pgvector` and `pg_textsearch`, and an untrusted query reache
 bound parameter.
 
 Every case runs against a throwaway database from `fresh_database_url`, and the module is skipped
-loudly wherever `HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL` is unset. Vectors come from the
+loudly wherever `DEVSCENE_DOCS_RETRIEVAL_TEST_DATABASE_URL` is unset. Vectors come from the
 `hash-v1` stub embedder, so they are real 384-wide vectors with no weights.
 
 The Seq Scan case reaches that plan through the store itself, `rebuild_indexes()` below the
@@ -17,10 +17,10 @@ from collections.abc import Awaitable, Callable
 import psycopg
 import pytest
 
-from harness_docs_retrieval.chunk import DocChunk, chunk_markdown
-from harness_docs_retrieval.models import EMBEDDING_DIMENSIONS
-from harness_docs_retrieval.search import ARM_CANDIDATES
-from harness_docs_retrieval.store import (
+from devscene_docs_retrieval.chunk import DocChunk, chunk_markdown
+from devscene_docs_retrieval.models import EMBEDDING_DIMENSIONS
+from devscene_docs_retrieval.search import ARM_CANDIDATES
+from devscene_docs_retrieval.store import (
     DIMENSIONS_META_KEY,
     EMBEDDER_META_KEY,
     INDEX_STATE_META_KEY,
@@ -30,7 +30,7 @@ from harness_docs_retrieval.store import (
     StoredChunk,
     open_postgres_store,
 )
-from harness_docs_retrieval.stubs import RETRIEVAL_STUB_ENV, resolve_models
+from devscene_docs_retrieval.stubs import RETRIEVAL_STUB_ENV, resolve_models
 
 pytestmark = pytest.mark.container
 

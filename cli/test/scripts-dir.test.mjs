@@ -1,12 +1,10 @@
 /**
  * Where `init` puts the scripts, and what `doctor` says about it, against the compiled CLI.
  *
- * **The rule these tests exist to enforce: a new adoption writes its scripts to
- * `harness-scripts/`, an existing one never moves, and an absent key means `scripts`.** The first
- * half is what `init` writes into a config it generates; the second is that a config already on
- * disk is kept byte for byte by `init` and `init --force` alike, and generated against; the third is
- * that a config omitting `scriptsDir` keeps finding its scripts where every release before 0.6.6
- * wrote them, and is warned to say so explicitly.
+ * **The rule these tests exist to enforce: `scriptsDir` has one default, `devscene-scripts/`, and an
+ * existing config never moves.** A config `init` generates carries it, a config omitting the key
+ * resolves to it with no warning, and a config already on disk is kept byte for byte by `init` and
+ * `init --force` alike, and generated against.
  *
  * The kept-config cases are graded on the bytes on disk rather than on a message, and `doctor` runs
  * without `--check-github`, so no case reaches the network.
@@ -67,7 +65,7 @@ async function runOk(dir, args) {
 }
 
 /**
- * Write a hand-made `harness.config.json` carrying `scriptsDir` only when `scriptsDir` is given, and
+ * Write a hand-made `devscene.config.json` carrying `scriptsDir` only when `scriptsDir` is given, and
  * return its bytes. `defaultBranch` is the fixture's own unborn branch, so `doctor` grades the
  * config's subject rather than a branch the fixture does not have.
  */
@@ -77,12 +75,12 @@ async function seedConfig(dir, scriptsDir) {
   const config = {
     version: 1,
     defaultBranch: branch,
-    stateDir: 'sdlc-harness',
+    stateDir: 'devscene',
     ...(scriptsDir === undefined ? {} : { scriptsDir }),
     layers: [{ name: 'general', path: '.', conventions: '.claude/context/conventions.md' }],
     commands: { typecheck: `bash ${wrapperDir}/${TYPECHECK_WRAPPER}`, test: `bash ${wrapperDir}/${TEST_WRAPPER}` },
   };
-  const path = join(dir, 'harness.config.json');
+  const path = join(dir, 'devscene.config.json');
   writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
   return readFileSync(path);
 }
@@ -98,25 +96,25 @@ function assertScriptsUnder(dir, scriptsDir) {
   }
 }
 
-/** `doctor` exits 0 with the two script-wiring checks passing and no `scriptsDir` warning. */
+/** `doctor` exits 0 with the two script-wiring checks passing and no `config` warning. */
 async function assertDoctorClean(dir) {
   const { stdout, stderr } = await runOk(dir, ['doctor']);
   for (const id of ['command-wrappers', 'command-permissions']) {
     assert.match(stdout, passLine(id), `${id} did not pass\n${stdout}\n${stderr}`);
     assert.doesNotMatch(stderr, warnLine(id));
   }
-  assert.doesNotMatch(stderr, /scriptsDir: is not set/);
+  assert.doesNotMatch(stderr, warnLine('config'), `doctor warned on the config\n${stderr}`);
 }
 
 test('a configless init writes scriptsDir as the init directory and puts every script there', async (t) => {
   const dir = await fixtureFor(t);
   await runOk(dir, ['init']);
 
-  const config = readJson(join(dir, 'harness.config.json'));
+  const config = readJson(join(dir, 'devscene.config.json'));
   assert.equal(config.scriptsDir, INIT_SCRIPTS_DIR);
+  assert.equal(config.scriptsDir, DEFAULTS.scriptsDir);
   assert.equal(config.commands.test, `bash ${INIT_SCRIPTS_DIR}/${TEST_WRAPPER}`);
   assertScriptsUnder(dir, INIT_SCRIPTS_DIR);
-  assert.equal(existsSync(join(dir, DEFAULTS.scriptsDir)), false, `init created ${DEFAULTS.scriptsDir}/`);
 
   await assertDoctorClean(dir);
 });
@@ -126,12 +124,11 @@ test('init --scripts-dir writes that directory and puts every script there', asy
   const scriptsDir = 'tools/harness';
   await runOk(dir, ['init', '--scripts-dir', scriptsDir]);
 
-  const config = readJson(join(dir, 'harness.config.json'));
+  const config = readJson(join(dir, 'devscene.config.json'));
   assert.equal(config.scriptsDir, scriptsDir);
   assert.equal(config.commands.test, `bash ${scriptsDir}/${TEST_WRAPPER}`);
   assertScriptsUnder(dir, scriptsDir);
   assert.equal(existsSync(join(dir, INIT_SCRIPTS_DIR)), false, `init created ${INIT_SCRIPTS_DIR}/`);
-  assert.equal(existsSync(join(dir, DEFAULTS.scriptsDir)), false, `init created ${DEFAULTS.scriptsDir}/`);
 
   await assertDoctorClean(dir);
 });
@@ -139,7 +136,7 @@ test('init --scripts-dir writes that directory and puts every script there', asy
 test('a seeded scriptsDir "scripts" config is kept byte for byte by init, init --force and doctor', async (t) => {
   const dir = await fixtureFor(t);
   const seeded = await seedConfig(dir, 'scripts');
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
 
   await runOk(dir, ['init']);
   assert.deepEqual(readFileSync(configPath), seeded, 'init rewrote the seeded config');
@@ -156,18 +153,14 @@ test('a seeded scriptsDir "scripts" config is kept byte for byte by init, init -
   assert.deepEqual(await snapshotTree(dir), before, 'doctor changed the tree');
 });
 
-test('a seeded config with no scriptsDir keeps its scripts under the absent-key directory and is warned', async (t) => {
+test('a seeded config with no scriptsDir resolves to the init directory, is kept, and is not warned', async (t) => {
   const dir = await fixtureFor(t);
   const seeded = await seedConfig(dir, undefined);
 
   const init = await runOk(dir, ['init']);
-  assert.deepEqual(readFileSync(join(dir, 'harness.config.json')), seeded, 'init rewrote the seeded config');
-  assertScriptsUnder(dir, DEFAULTS.scriptsDir);
-  assert.equal(existsSync(join(dir, INIT_SCRIPTS_DIR)), false, `init created ${INIT_SCRIPTS_DIR}/`);
-  assert.match(init.stderr, /scriptsDir: is not set/);
+  assert.deepEqual(readFileSync(join(dir, 'devscene.config.json')), seeded, 'init rewrote the seeded config');
+  assertScriptsUnder(dir, INIT_SCRIPTS_DIR);
+  assert.doesNotMatch(init.stderr, /scriptsDir/, `init warned about scriptsDir\n${init.stderr}`);
 
-  const { stderr } = await runOk(dir, ['doctor']);
-  assert.match(stderr, warnLine('config'));
-  assert.match(stderr, /scriptsDir/);
-  assert.match(stderr, /config set scriptsDir/);
+  await assertDoctorClean(dir);
 });

@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "harness.config.json",
+  "title": "devscene.config.json",
   "description": "Repo-scoped configuration for the autonomous SDLC harness. This file lives at the root of the repository that adopts the harness and is committed, so every contributor and every headless run reads the same values. Machine-local values belong in the plugin's user configuration instead.",
   "type": "object",
   "additionalProperties": false,
@@ -50,7 +50,7 @@
     "stateDir": {
       "type": "string",
       "minLength": 1,
-      "default": "sdlc-harness/",
+      "default": "devscene/",
       "pattern": "^[A-Za-z0-9_][A-Za-z0-9._/-]*/?$",
       "not": { "pattern": "(^|/)\\." },
       "description": "Repo-relative directory every run artifact is written into. MUST NOT be a dot-directory, and no path segment of it may begin with a dot: the run-artifact tree has to be writable by an unattended run, and a dot-path is where a host reserves directories an unattended run may not write to. Do not 'fix' this to a dot-name.",
@@ -65,8 +65,8 @@
     "scriptsDir": {
       "type": "string",
       "minLength": 1,
-      "default": "scripts",
-      "description": "Repo-relative directory the generated wrapper scripts are written to. These wrappers are what an automated run is permitted to execute, so the location has to be stable and committed. `init` writes `harness-scripts` into a configuration it generates; the default below is what an absent key means — `scripts`, where releases before 0.6.6 wrote — kept so a configuration that omits the key never silently moves."
+      "default": "devscene-scripts",
+      "description": "Repo-relative directory the generated wrapper scripts are written to. These wrappers are what an automated run is permitted to execute, so the location has to be stable and committed."
     },
     "githooksDir": {
       "type": "string",
@@ -100,7 +100,7 @@
       "type": "object",
       "additionalProperties": false,
       "description": "What stack detection concluded about this repository's layout, and what a later review decided about that conclusion. Recorded so an adopted repository says which layout was detected and on what evidence, instead of leaving a fallback profile indistinguishable from a deliberately chosen one. It sits directly above the 'layers' profile it explains.",
-      "$comment": "Optional, with no `default` and **no `required` array inside it or inside `review`** — deliberately. It is an added optional key with no default, which by `version`'s own description does not raise the format version: nothing in an older file is misread by its absence. And a repository whose config predates this key must still be able to take `config set detection.review '<json>'` without first hand-writing a `preset` and a `signal` no run recorded, so no sub-key may be required. `harness.config.json` is exempt from `--force`, so a plain `init` re-run keeps the record already in the file; `init --reset-config` is what rebuilds it.",
+      "$comment": "Optional, with no `default` and **no `required` array inside it or inside `review`** — deliberately. It is an added optional key with no default, which by `version`'s own description does not raise the format version: nothing in an older file is misread by its absence. And a repository whose config predates this key must still be able to take `config set detection.review '<json>'` without first hand-writing a `preset` and a `signal` no run recorded, so no sub-key may be required. `devscene.config.json` is exempt from `--force`, so a plain `init` re-run keeps the record already in the file; `init --reset-config` is what rebuilds it.",
       "properties": {
         "preset": {
           "type": "string",
@@ -125,17 +125,17 @@
         "review": {
           "type": "object",
           "additionalProperties": false,
-          "description": "The verdict a layer-profile review reached on the detected profile, so a decline leaves a trace rather than nothing. Written by the '/autonomous-sdlc-harness:harness-analyze' command's 'layers' target through 'config set detection.review', never by 'init'; read by 'doctor', whose 'layer-profile' check this record is what clears.",
+          "description": "The verdict a layer-profile review reached on the detected profile, so a decline leaves a trace rather than nothing. Written by the '/devscene:analyze' command's 'layers' target through 'config set detection.review', never by 'init'; read by 'doctor', whose 'layer-profile' check this record is what clears.",
           "properties": {
             "verdict": {
               "type": "string",
               "enum": ["applied", "considered-no-change", "proposed-and-refused"],
-              "description": "What the review decided: 'applied' — a revised layer profile was written; 'considered-no-change' — the target examined the profile and declined to propose a revision; 'proposed-and-refused' — a revision was proposed and the operator refused it. Written by '/autonomous-sdlc-harness:harness-analyze'; read by 'doctor'."
+              "description": "What the review decided: 'applied' — a revised layer profile was written; 'considered-no-change' — the target examined the profile and declined to propose a revision; 'proposed-and-refused' — a revision was proposed and the operator refused it. Written by '/devscene:analyze'; read by 'doctor'."
             },
             "rationale": {
               "type": "string",
               "minLength": 1,
-              "description": "One line saying why that verdict was reached, so a later reader has the reasoning and not only the outcome. Written by '/autonomous-sdlc-harness:harness-analyze'; read by a human."
+              "description": "One line saying why that verdict was reached, so a later reader has the reasoning and not only the outcome. Written by '/devscene:analyze'; read by a human."
             },
             "at": {
               "type": "string",
@@ -157,7 +157,7 @@
         "required": ["path"]
       },
       "description": "The architectural layers of the codebase. One implementer and one reviewer are dispatched per layer, each receiving that layer's name, 'path' and 'conventions' as arguments rather than existing as a separate agent per layer, and a task is assigned to exactly one layer, so this list is what decides who does a given piece of work. At least one row must have 'path' set to \".\" — the layer unmatched work is assigned to.",
-      "$comment": "The `contains` clause states a requirement of the flow rather than a claim about the adopter's tree: work that matches no layer's `path` exists on every run — the flow's own artifacts under `stateDir`, `harness.config.json`, the scripts and githooks directories, CI files — so somewhere to route it is never optional. Without the row the orchestrator escalates a configuration gap mid-run, which is the most expensive moment to discover a one-line config mistake, and the schema cannot distinguish 'the layers genuinely tile the tree' from 'the row was forgotten'. The cost is one row every `init` preset already emits. `contains` asserts at least one such row and never exactly one: this schema is draft-07, which has no `maxContains`, so an upper bound is not expressible here, and a second catch-all row is degenerate — two candidates for the same work — rather than dangerous, so it is deliberately not rejected. The constraint is on `path`, not on the name `general`: any layer may carry it.",
+      "$comment": "The `contains` clause states a requirement of the flow rather than a claim about the adopter's tree: work that matches no layer's `path` exists on every run — the flow's own artifacts under `stateDir`, `devscene.config.json`, the scripts and githooks directories, CI files — so somewhere to route it is never optional. Without the row the orchestrator escalates a configuration gap mid-run, which is the most expensive moment to discover a one-line config mistake, and the schema cannot distinguish 'the layers genuinely tile the tree' from 'the row was forgotten'. The cost is one row every `init` preset already emits. `contains` asserts at least one such row and never exactly one: this schema is draft-07, which has no `maxContains`, so an upper bound is not expressible here, and a second catch-all row is degenerate — two candidates for the same work — rather than dangerous, so it is deliberately not rejected. The constraint is on `path`, not on the name `general`: any layer may carry it.",
       "items": {
         "type": "object",
         "additionalProperties": false,

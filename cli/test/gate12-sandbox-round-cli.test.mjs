@@ -119,11 +119,11 @@ test('each preflight refusal exits 2 and creates nothing', async (t) => {
     assert.match(result.stderr, /origin is 'fixture\/gate12', not --repo 'other\/repo'/);
   });
 
-  await t.test('no harness.config.json', async (t) => {
+  await t.test('no devscene.config.json', async (t) => {
     const fixture = await fixtureFor(t);
-    await unlink(join(fixture.dir, 'harness.config.json'));
+    await unlink(join(fixture.dir, 'devscene.config.json'));
     const result = await assertRefused(fixture, ['plant', '--repo', GATE12_SLUG], 2);
-    assert.match(result.stderr, /carries no harness\.config\.json/);
+    assert.match(result.stderr, /carries no devscene\.config\.json/);
   });
 
   await t.test('the default branch workflow lacks the install step', async (t) => {
@@ -142,7 +142,11 @@ test('each preflight refusal exits 2 and creates nothing', async (t) => {
       join(fixture.dir, 'scripts', 'lib', 'gate12-sandbox-round'),
       { recursive: true },
     );
-    await cp(join(WORKSPACE_ROOT, 'scripts', 'lib', 'harness-run-lib.sh'), join(fixture.dir, 'scripts', 'lib', 'harness-run-lib.sh'));
+    // The template run library: the copy `init` ships, not this checkout's self-adopted one.
+    await cp(
+      join(WORKSPACE_ROOT, 'cli', 'templates', 'scripts', 'lib', 'harness-run-lib.sh'),
+      join(fixture.dir, 'scripts', 'lib', 'harness-run-lib.sh'),
+    );
     const result = await assertRefused(fixture, ['plant', '--repo', GATE12_SLUG], 2, { script });
     assert.match(result.stderr, /is the checkout this script sits in/);
   });
@@ -225,13 +229,13 @@ test("the gh stub synthesises one stable run per branch named at run time", asyn
   const gh = await ghStub(fixture.binDir, { 'run list': { synthesiseRun: true } });
   const list = async (branch) => {
     const result = await runBash(fixture.dir, [
-      gh, 'run', 'list', '--repo', GATE12_SLUG, '--workflow', 'harness-run.yml', '--branch', branch,
+      gh, 'run', 'list', '--repo', GATE12_SLUG, '--workflow', 'devscene-run.yml', '--branch', branch,
       '--json', 'databaseId,createdAt,displayTitle', '--limit', '20',
     ]);
     assert.equal(result.status, 0, result.stderr);
     const runs = JSON.parse(result.stdout);
     assert.equal(runs.length, 1);
-    assert.equal(runs[0].displayTitle, `harness run ${branch}`);
+    assert.equal(runs[0].displayTitle, `devscene run ${branch}`);
     assert.match(runs[0].createdAt, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
     return runs[0].databaseId;
   };

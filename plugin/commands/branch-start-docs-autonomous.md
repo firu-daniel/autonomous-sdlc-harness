@@ -4,18 +4,18 @@ description: Run the current branch's documentation checklist end-to-end autonom
 
 # Scope: Run the current branch's docs checklist end-to-end, autonomously (write every doc → branch ready for review)
 
-**Skip this flow unless `phases.docs` is `true` in `harness.config.json`.**
+**Skip this flow unless `phases.docs` is `true` in `devscene.config.json`.**
 
 ## Resolved values
 
-The tokens below are not ordinary **path placeholders** (`<branch>`, `<slug>`, which this file's own text resolves): they resolve from the adopting repository's `harness.config.json`, except `<MAIN_REPO>` and `<repo_root>`, which are derived at runtime. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
+The tokens below are not ordinary **path placeholders** (`<branch>`, `<slug>`, which this file's own text resolves): they resolve from the adopting repository's `devscene.config.json`, except `<MAIN_REPO>` and `<repo_root>`, which are derived at runtime. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `devscene/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<docs_root>` | config value | `docs.root` — the repo-relative directory holding the documentation corpus this flow builds. Read **only** when `phases.docs` is `true`, which is the same gate that decides whether this flow runs at all. |
 | `<scripts_dir>` | config value | `scriptsDir` — the directory the outer-loop scripts live in. This file names two of them — `autonomous-watcher.sh`, as the owner of the responsibilities this command deliberately does not have, and `push-branch.sh`, in the hard boundary, under `<MAIN_REPO>` — and invokes neither. |
-| `<MAIN_REPO>` | derived at runtime | The main checkout — the path a bare `printenv HARNESS_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
+| `<MAIN_REPO>` | derived at runtime | The main checkout — the path a bare `printenv DEVSCENE_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
 | `<repo_root>` | derived at runtime | The absolute root of the checkout this run is executing in — the run copy, or the main repo in the manual entry point — which step 1 derives from a **bare** `git rev-parse --show-toplevel` and writes `$REPO_ROOT`. A command spells it as the literal absolute path it resolves to, never through a substitution or a variable. |
 | `<default_branch>` | config value | `defaultBranch` — the branch work starts from and merges back into. Never a remembered branch name. Bound for completeness — no step in this file consumes it. |
 | `<protected_branches>` | config value | `protectedBranches` — the branches the hard boundary below forbids merging into, pushing to, or opening a PR against. The effective set is these together with `<default_branch>`. The `pre-push` git hook enforces that set; above it, the plugin's `PreToolUse` protected-branch guard together with the generated permission profile's `Bash(git push:*)` **`ask`** entry — evaluated before any `allow`, and refused in an unattended run — is the best-effort layer. |
@@ -24,7 +24,7 @@ The tokens below are not ordinary **path placeholders** (`<branch>`, `<slug>`, w
 
 ## Context
 
-This is the **docs-catalog** autonomous engine command — a **lean sibling** of `/autonomous-sdlc-harness:branch-start-plan-autonomous`. It walks a pre-authored documentation checklist and, for each entry, dispatches a `docs-writer` to produce one doc and a `docs-reviewer` to accuracy-check it, commits the doc, and moves on — ending at "branch ready for review." It builds the documentation corpus under `<docs_root>`: one doc per business feature and one per cross-cutting concept, plus an `INDEX.md` retrieval map.
+This is the **docs-catalog** autonomous engine command — a **lean sibling** of `/devscene:branch-start-plan-autonomous`. It walks a pre-authored documentation checklist and, for each entry, dispatches a `docs-writer` to produce one doc and a `docs-reviewer` to accuracy-check it, commits the doc, and moves on — ending at "branch ready for review." It builds the documentation corpus under `<docs_root>`: one doc per business feature and one per cross-cutting concept, plus an `INDEX.md` retrieval map.
 
 It is **much leaner than the code engine** because documentation has no code-shaped risk surface. There is:
 
@@ -40,7 +40,7 @@ You are the **orchestrator** for the whole session. You do not write docs and yo
 
 ## Two entry points, one engine
 
-- **(a) Manual / interactive** — you invoke `/autonomous-sdlc-harness:branch-start-docs-autonomous` yourself in the branch's checkout and watch the `[docs · <slug> · …]` heartbeat live. Simplest for validating the flow on a short checklist.
+- **(a) Manual / interactive** — you invoke `/devscene:branch-start-docs-autonomous` yourself in the branch's checkout and watch the `[docs · <slug> · …]` heartbeat live. Simplest for validating the flow on a short checklist.
 - **(b) Watcher / headless** — the watcher (`<scripts_dir>/autonomous-watcher.sh`) launches this same command with `-p` plus the generated permission profile via `--settings`, inside the per-branch run copy it created from a `<branch>_docs.md` inbox drop. Usage-gated auto-pause/resume is the watcher's, and this engine honors `<state_dir>/PAUSE` so it yields cleanly.
 
 ## Steps

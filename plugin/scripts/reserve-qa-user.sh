@@ -19,7 +19,7 @@
 # pattern and is DENIED in an unattended session — the same rationale
 # `find-free-port.sh`, `poll-dev-server.sh` and `kill-dev-server.sh` document.
 #
-# Prerequisite: `jq` (>= 1.5) on PATH. The adopter's `harness.config.json` is
+# Prerequisite: `jq` (>= 1.5) on PATH. The adopter's `devscene.config.json` is
 # read through `harness-config-lib.sh`, whose reader needs it; an absent `jq`
 # and one older than that floor each exit 1 with their own message rather than
 # being reported as an invalid configuration file.
@@ -29,7 +29,7 @@
 # the exit status is 0. Every failure prints one line to stderr and exits with a
 # code the caller branches on:
 #
-#   1  environment  — no `jq` on PATH, no repository, no `harness.config.json`,
+#   1  environment  — no `jq` on PATH, no repository, no `devscene.config.json`,
 #                     an unreadable or invalid one (including one a pre-1.5 `jq`
 #                     cannot parse), `phases.qa` not `true`, `qa.credentialsPath`
 #                     unset, the credentials file absent or empty, no accounts
@@ -55,7 +55,7 @@
 #
 # WHERE THE CREDENTIALS FILE COMES FROM. The repository is resolved from `$PWD`
 # (the flow's own commands run from the repository root), the adopter's
-# `harness.config.json` is read at that root, and the file is read at
+# `devscene.config.json` is read at that root, and the file is read at
 # `<repo_root>/<qa.credentialsPath>`. It is NOT derived from this script's own
 # location: this file lives in the plugin's own root, which is not the
 # adopter's checkout. Both `phases.qa` and `qa.credentialsPath` gate the read —
@@ -63,7 +63,7 @@
 # as an absent credentials file, so no new outcome is invented for it.
 #
 # THE KEY CONVENTION THIS ENUMERATION DEPENDS ON. Accounts are keyed
-# `HARNESS_QA_<n>_*` and slot <n> exists when `HARNESS_QA_<n>_EMAIL=` carries a
+# `DEVSCENE_QA_<n>_*` and slot <n> exists when `DEVSCENE_QA_<n>_EMAIL=` carries a
 # non-empty value on its own line — a commented-out or valueless block is not a
 # configured account. That prefix is the one the generated credentials template
 # ships (`cli/templates/claude/qa-accounts.env.example`, "Add accounts by
@@ -74,13 +74,13 @@
 #
 # WHY THE LOCKS LIVE IN THE MAIN CHECKOUT'S STATE DIRECTORY. The lock set is
 # `<main>/<stateDir>/qa_user_locks/`, where <main> is the repository's MAIN
-# checkout (`hc_main_root_var`: the `HARNESS_MAIN_REPO` anchor when it is set
+# checkout (`hc_main_root_var`: the `DEVSCENE_MAIN_REPO` anchor when it is set
 # and usable; else, in a run clone, the main checkout its
 # `objects/info/alternates` names and whose run registry records this clone at
 # this path, or a refusal; else the `git rev-parse --git-common-dir` answer —
 # so every run copy names the same one) and <stateDir> is `stateDir` from
-# `harness.config.json` (default
-# `sdlc-harness`), read from the main checkout's configuration when it has one.
+# `devscene.config.json` (default
+# `devscene`), read from the main checkout's configuration when it has one.
 # Parallel runs live in separate run copies of the same repository, so the set has to be one directory they all reach or
 # it excludes nothing — which rules out the working copy's own state directory.
 # It also has to be writable from inside the command sandbox an unattended run
@@ -124,7 +124,7 @@
 #
 # REPRO — reproduce any decision by hand. <repo> is a checkout that has adopted
 # the harness with `phases.qa: true`, `qa.credentialsPath` set, and a
-# credentials file holding `HARNESS_QA_1_EMAIL=` and `HARNESS_QA_2_EMAIL=`:
+# credentials file holding `DEVSCENE_QA_1_EMAIL=` and `DEVSCENE_QA_2_EMAIL=`:
 #
 #   cd <repo> && bash <plugin>/scripts/reserve-qa-user.sh [slot]
 #
@@ -137,11 +137,11 @@
 #   run outside any repository      -> exit 1
 #   a bare repository's worktree, a submodule, a separate git dir -> exit 1
 #   `jq` absent from PATH           -> exit 1
-#   <repo> with no harness.config.json, or `phases.qa` false, or
+#   <repo> with no devscene.config.json, or `phases.qa` false, or
 #   `qa.credentialsPath` unset, or the credentials file absent/empty -> exit 1
 #
 #   from a `git clone --shared <main> <clone>`, anchored:
-#     cd <clone> && HARNESS_MAIN_REPO=<main> bash <plugin>/scripts/reserve-qa-user.sh
+#     cd <clone> && DEVSCENE_MAIN_REPO=<main> bash <plugin>/scripts/reserve-qa-user.sh
 #                                   -> the slot is parked under
 #                                      <main>/<stateDir>/qa_user_locks, not the clone's
 #   the same clone, anchor unset    -> parked under <main>'s lock set when <main>'s
@@ -179,7 +179,7 @@ if [ -z "$root" ]; then
 fi
 
 if ! hc_config_file "$root" >/dev/null; then
-  echo "reserve-qa-user: no harness.config.json at $root; nothing to reserve" >&2
+  echo "reserve-qa-user: no devscene.config.json at $root; nothing to reserve" >&2
   exit 1
 fi
 
@@ -187,7 +187,7 @@ fi
 # absent `jq` would otherwise surface as the invalid-configuration message below
 # and send the caller looking at a file that is perfectly fine.
 if ! hc_have_jq; then
-  echo "reserve-qa-user: jq (>= 1.5) is not on PATH; cannot read harness.config.json" >&2
+  echo "reserve-qa-user: jq (>= 1.5) is not on PATH; cannot read devscene.config.json" >&2
   exit 1
 fi
 
@@ -196,7 +196,7 @@ fi
 # older than the library's 1.5 floor fails the load here too, which is why the
 # message names it.
 if ! hc_config_readable "$root"; then
-  echo "reserve-qa-user: harness.config.json at $root is unreadable, not valid JSON, or needs jq >= 1.5" >&2
+  echo "reserve-qa-user: devscene.config.json at $root is unreadable, not valid JSON, or needs jq >= 1.5" >&2
   exit 1
 fi
 
@@ -219,12 +219,12 @@ if [ ! -s "$creds" ]; then
 fi
 
 # --- the configured slots (ascending) ---------------------------------------
-# Slot <n> is the `HARNESS_QA_<n>_EMAIL=` block with a non-empty value. Only
+# Slot <n> is the `DEVSCENE_QA_<n>_EMAIL=` block with a non-empty value. Only
 # which slots exist is read here; no value is ever read or printed.
 
 slots=()
-for n in $(grep -Eo '^HARNESS_QA_[0-9]+_EMAIL=.+' "$creds" \
-  | sed -E 's/^HARNESS_QA_([0-9]+)_EMAIL=.*/\1/' | sort -un); do
+for n in $(grep -Eo '^DEVSCENE_QA_[0-9]+_EMAIL=.+' "$creds" \
+  | sed -E 's/^DEVSCENE_QA_([0-9]+)_EMAIL=.*/\1/' | sort -un); do
   slots+=("$n")
 done
 if [ "${#slots[@]}" -eq 0 ]; then
@@ -242,7 +242,7 @@ if [ -z "$main" ]; then
 fi
 cfg_root="$main"
 hc_config_file "$main" >/dev/null || cfg_root="$root"
-state_rel=$(hc_config_dir "$cfg_root" stateDir sdlc-harness) || state_rel="sdlc-harness"
+state_rel=$(hc_config_dir "$cfg_root" stateDir devscene) || state_rel="devscene"
 
 LOCK_DIR="$main/$state_rel/qa_user_locks"
 mkdir -p "$LOCK_DIR" 2>/dev/null || true

@@ -20,12 +20,12 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from unittest import mock
 
-from harness_docs_retrieval.chunk import DocChunk
-from harness_docs_retrieval.jscompat import js_trim
-from harness_docs_retrieval.refresh import RefreshResult
-from harness_docs_retrieval.service import RetrievalSession
-from harness_docs_retrieval.store import DocStore, RankedId, StoredChunk
-from harness_docs_retrieval.stubs import RETRIEVAL_STUB_ENV, resolve_models
+from devscene_docs_retrieval.chunk import DocChunk
+from devscene_docs_retrieval.jscompat import js_trim
+from devscene_docs_retrieval.refresh import RefreshResult
+from devscene_docs_retrieval.service import RetrievalSession
+from devscene_docs_retrieval.store import DocStore, RankedId, StoredChunk
+from devscene_docs_retrieval.stubs import RETRIEVAL_STUB_ENV, resolve_models
 
 _TOKEN = re.compile(r"[^\W_]+")
 

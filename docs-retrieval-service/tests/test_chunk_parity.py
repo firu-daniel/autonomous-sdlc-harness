@@ -18,8 +18,8 @@ from typing import Any
 
 import pytest
 
-from harness_docs_retrieval.chunk import chunk_markdown
-from harness_docs_retrieval.corpus import corpus_files, read_corpus_file
+from devscene_docs_retrieval.chunk import chunk_markdown
+from devscene_docs_retrieval.corpus import corpus_files, read_corpus_file
 from ts_bridge import run_bridge
 
 CORPORA = ("fixture-catalog", "self-docs")

@@ -89,7 +89,7 @@ import test from 'node:test';
 import { runBash, runGit } from './helpers/fixture.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REGISTRY_PATH = `${STATE_DIR}/autonomous_logs/registry.json`;
 const REVIEW = 'feat_x_review.md';
 const REVIEW_REL = `${STATE_DIR}/user_reviews/${REVIEW}`;
@@ -144,7 +144,7 @@ async function createReviewFixture(t, { remote = false, baseHooks = false, kindl
   /** A hook body writing `<markers>/<name>`, then `tail`. */
   const markerBody = (name, tail = 'exit 0') => `#!/bin/sh\n: > '${join(markers, name)}'\n${tail}\n`;
 
-  const configPath = join(w.dir, 'harness.config.json');
+  const configPath = join(w.dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   delete config.commands.depInstall;
   delete config.commands.build;
@@ -165,7 +165,7 @@ async function createReviewFixture(t, { remote = false, baseHooks = false, kindl
   const ghStub = join(w.dir, 'watcher-test', 'gh');
   const ghLog = join(w.dir, 'watcher-test', 'gh.log');
   await writeFile(ghStub, GH_STUB, { mode: 0o755 });
-  const tick = (env = {}) => w.tick({ HARNESS_GH_CLI: ghStub, STUB_LOG: ghLog, PUSH_RETRY_DELAY_SECS: '0', ...env });
+  const tick = (env = {}) => w.tick({ DEVSCENE_GH_CLI: ghStub, STUB_LOG: ghLog, PUSH_RETRY_DELAY_SECS: '0', ...env });
   const inbox = join(w.dir, STATE_DIR, 'autonomous_inbox');
   /** Assign `fields` to the run's record; a field whose value is `undefined` is removed. */
   const patchRecord = async (fields) => {

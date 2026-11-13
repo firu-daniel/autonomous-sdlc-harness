@@ -186,7 +186,7 @@ import {
   pushEnvCandidates,
   type PushEnvCandidate,
 } from '../generators/notifications.js';
-import { IN_FLIGHT_RUNS_NOTE, pinnedCliCommand, unparseableControlRoute, upgradeWorkflowsCommand } from '../generators/githubWorkflows.js';
+import { IN_FLIGHT_RUNS_NOTE, pinnedCliCommand, upgradeWorkflowsCommand } from '../generators/githubWorkflows.js';
 import {
   DOCS_SEARCH_SERVER_SCRIPT_NAME,
   outerLoopScriptPath,
@@ -280,7 +280,6 @@ import {
   GH_CLI_VARIABLE,
   ghCli,
   GIT_TOKEN_SECRET,
-  LEGACY_TRIGGER_LABEL,
   MENTION_ACT_VERBS,
   MENTION_CONFIRM_VERBS,
   OAUTH_TOKEN_SECRET,
@@ -296,7 +295,6 @@ import {
   RUNNER_VARIABLE,
   TRIGGER_ALLOWED_BOTS_VARIABLE,
   TRIGGER_LABEL_VARIABLE,
-  triggerFallbackLabel,
   WORKFLOW_CONTROL_FILE,
   WORKFLOW_CONTROL_PATH,
   WORKFLOW_RESUME_FILE,
@@ -377,7 +375,7 @@ import {
  * is not decoration: the rule for which occurrences carry it is stated once in `commands/init.ts`,
  * beside its own `CLI`.
  */
-const CLI = 'npx autonomous-sdlc-harness';
+const CLI = 'npx devscene';
 
 /** The remedy every check that needs `gh` gives when it cannot run it. */
 const GH_INSTALL_REMEDY = `install the GitHub CLI (https://cli.github.com) and run \`gh auth login\`, or point ${GH_CLI_VARIABLE} at it`;
@@ -1180,7 +1178,7 @@ const JJ_DIR = '.jj';
  * **A plain git repository passes as "not graded"**, in {@link BASE_FRESHNESS_CHECK}'s wording. That
  * arm is what keeps `doctor` silent about jj for every adopter who does not use it.
  *
- * It reads **no configuration** — so it answers the same on a repository whose `harness.config.json`
+ * It reads **no configuration** — so it answers the same on a repository whose `devscene.config.json`
  * is broken, which is a repository an adopter is especially likely to be running `doctor` against —
  * and it writes nothing.
  */
@@ -1445,7 +1443,7 @@ const BASE_FRESHNESS_CHECK: Check = {
  * file that enforces it. The hook is `create-if-absent` (`generators/githooks.ts`), so it carries
  * the set that was substituted into its `case` label when `init` wrote it, while every documented
  * way of correcting `defaultBranch` afterwards — `init --reset-config --default-branch <name>`,
- * `config set defaultBranch <name>`, an edit to `harness.config.json` — changes only the config. The
+ * `config set defaultBranch <name>`, an edit to `devscene.config.json` — changes only the config. The
  * measured state is a repository reporting 18 pass, 4 warn, 0 fail whose hook **allowed** a push to
  * the integration line and **refused** one to an ordinary feature branch, because nothing anywhere
  * compared the rendered list to the value it was rendered from. This is that comparison, and it is
@@ -1680,7 +1678,7 @@ const JQ_CHECK: Check = {
   run: () => {
     if (!resolvesOnPath('jq')) {
       return fail(
-        `jq does not resolve on PATH: the plugin's guards and the generated outer-loop scripts both read harness.config.json through it, so every guard exits 0 silently and every script takes its closed path — install jq ${JQ_MIN_MAJOR}.${JQ_MIN_MINOR} or newer`,
+        `jq does not resolve on PATH: the plugin's guards and the generated outer-loop scripts both read devscene.config.json through it, so every guard exits 0 silently and every script takes its closed path — install jq ${JQ_MIN_MAJOR}.${JQ_MIN_MINOR} or newer`,
       );
     }
 
@@ -1716,7 +1714,7 @@ const JQ_CHECK: Check = {
     }
 
     return pass(
-      `jq ${version} is on PATH (\`jq --version\` printed ${JSON.stringify(printed)}), at or above the ${JQ_MIN_MAJOR}.${JQ_MIN_MINOR} floor the plugin's guards and the generated outer-loop scripts both need to resolve harness.config.json`,
+      `jq ${version} is on PATH (\`jq --version\` printed ${JSON.stringify(printed)}), at or above the ${JQ_MIN_MAJOR}.${JQ_MIN_MINOR} floor the plugin's guards and the generated outer-loop scripts both need to resolve devscene.config.json`,
     );
   },
 };
@@ -2205,7 +2203,7 @@ function footprintRow(inspected: InspectedEntry, cap: string): FootprintRow {
   // `machine_footprint_report` prints `—` for the same entry; the two may not disagree.
   const { config: loaded, problems } = loadConfig(entry.root);
   if (loaded === undefined) {
-    const reason = problems[0]?.message ?? 'no readable harness.config.json';
+    const reason = problems[0]?.message ?? 'no readable devscene.config.json';
     // No readable configuration means no known `stateDir`, so there is no run registry to read and
     // the schema default is a GUESS at another checkout's layout. `autonomous-watcher.sh`'s
     // `footprint_live_runs` reaches its registry through `hr_state_path`, which fails with the same
@@ -2290,7 +2288,7 @@ const MACHINE_FOOTPRINT_CHECK: Check = {
 
 /**
  * The environment variable the run watcher reaches its agent binary through, and the name it falls
- * back to — `autonomous-watcher.sh`'s `AGENT_CLI="${HARNESS_AGENT_CLI:-claude}"`, the one place a
+ * back to — `autonomous-watcher.sh`'s `AGENT_CLI="${DEVSCENE_AGENT_CLI:-claude}"`, the one place a
  * run's engine binary is chosen.
  *
  * **It is read out of the installed unit, never out of this process.** A user agent inherits the
@@ -2300,7 +2298,7 @@ const MACHINE_FOOTPRINT_CHECK: Check = {
  * renders `PATH` and nothing else, so an unedited unit falls through to the default here just as the
  * watcher's `:-` does, and a unit an operator added the key to is graded against the CLI it names.
  */
-const AGENT_CLI_VARIABLE = 'HARNESS_AGENT_CLI';
+const AGENT_CLI_VARIABLE = 'DEVSCENE_AGENT_CLI';
 const DEFAULT_AGENT_CLI = 'claude';
 
 /** One binary an unattended run invokes by name, and every configured reason it has to. */
@@ -2497,7 +2495,7 @@ function commandHeads(config: HarnessConfig, repoRoot: string): CommandHeads {
  * outer-loop script runs; `jq`, which the generated `lib/harness-run-lib.sh` reaches every
  * configuration through and which {@link JQ_CHECK} already treats as a hard floor; and the agent CLI
  * above, whose name arrives as the installed unit's value — `undefined` or empty when the unit does
- * not set it, which is the default case because `${HARNESS_AGENT_CLI:-claude}` reads an empty value
+ * not set it, which is the default case because `${DEVSCENE_AGENT_CLI:-claude}` reads an empty value
  * as unset too. **A conditional fourth joins them only when {@link remoteExecutionApplies}:** the
  * binary run as `gh`, which `remote-run.sh` dispatches every remote run through. Its name is the
  * unit's own {@link GH_CLI_VARIABLE} value when set and non-empty, else {@link DEFAULT_GH_CLI}, on
@@ -2753,12 +2751,12 @@ const DAEMON_PATH_CHECK: Check = {
  * the workflow — the pass text names and leaves to that flag.
  *
  * **Every finding is reported, and the grade is the worst of them.** Two `fail`s: no
- * `harness-run.yml`, because no remote run can be dispatched; and no `gh`, because the watcher
- * dispatches through it. Five `warn`s: a `harness-run.yml` whose text does not read
+ * `devscene-run.yml`, because no remote run can be dispatched; and no `gh`, because the watcher
+ * dispatches through it. Five `warn`s: a `devscene-run.yml` whose text does not read
  * {@link RUN_ACTORS_VARIABLE} ({@link carriesRunActors}), remedied by {@link upgradeWorkflowsCommand} —
  * local evidence, because the workflow is what GitHub runs and only its text says whether the list
  * reaches the gate and the scripts; listed beside the pin warning when both fire, and an unreadable
- * file adds nothing to the pin note. A `harness-run.yml` pinned (`remote/githubActions.ts` →
+ * file adds nothing to the pin note. A `devscene-run.yml` pinned (`remote/githubActions.ts` →
  * {@link renderedCliVersions}) to a version other than this CLI's — never a `fail`, because the job
  * installs its pin and the adopter may stay on it deliberately; the remedy is
  * `generators/githubWorkflows.ts` → {@link upgradeWorkflowsCommand}, the alternative `doctor` at the
@@ -2766,8 +2764,8 @@ const DAEMON_PATH_CHECK: Check = {
  * packages. The warning also prints that module's {@link IN_FLIGHT_RUNS_NOTE}; its move route names
  * no commit set of its own but the paths the upgrade's printed `git add` names; and its `push`
  * fragment is a complete sentence in both of its forms, so the join adds no punctuation of its own.
- * Under `--remote-job` the job runs `doctor` at its own pin, so this cannot arise there. A file with no pin, or unreadable, is a note. No `harness-resume.yml`, because a usage-paused
- * hosted run then waits for `/autonomous-sdlc-harness:branch-resume`; a `harness-run.yml` that
+ * Under `--remote-job` the job runs `doctor` at its own pin, so this cannot arise there. A file with no pin, or unreadable, is a note. No `devscene-resume.yml`, because a usage-paused
+ * hosted run then waits for `/devscene:branch-resume`; a `devscene-run.yml` that
  * `origin/<defaultBranch>` does not carry, because GitHub dispatches only a workflow its default
  * branch has — the run starts once it is pushed, so nothing is broken here, and its remedy's push
  * skips the hook because the `pre-push` hook `init` wired refuses every push to the default branch
@@ -2782,7 +2780,7 @@ const DAEMON_PATH_CHECK: Check = {
  *
  * **A missing `origin/<defaultBranch>`, or an unusable `defaultBranch`, leaves the origin row
  * ungraded** and the detail says so: that ref's absence is {@link REMOTE_CHECK}'s `fail`, and
- * reporting it again would make one finding two. It is asked only when `harness-run.yml` exists here,
+ * reporting it again would make one finding two. It is asked only when `devscene-run.yml` exists here,
  * for the same reason. The ref is read as this checkout last fetched it.
  *
  * With remote execution off, a workflow file left in place is a `pass` that says it does nothing:
@@ -2819,7 +2817,7 @@ const REMOTE_EXECUTION_CHECK: Check = {
     }
     if (!resumePresent) {
       warnings.push(
-        `${WORKFLOW_RESUME_PATH} is absent, so a hosted run paused on usage waits for /autonomous-sdlc-harness:branch-resume instead of resuming on its own: re-run \`${CLI} init\` to write it`,
+        `${WORKFLOW_RESUME_PATH} is absent, so a hosted run paused on usage waits for /devscene:branch-resume instead of resuming on its own: re-run \`${CLI} init\` to write it`,
       );
     }
 
@@ -2832,7 +2830,7 @@ const REMOTE_EXECUTION_CHECK: Check = {
 
     if (ctx.config.phases?.qa === true) {
       warnings.push(
-        "phases.qa is true, but a remote run skips the interactive-test phase — GitHub Actions jobs have no browser wiring, application dependencies or QA credentials for it (docs/remote-execution.md → §3, The interactive-test phase): run /autonomous-sdlc-harness:branch-qa-test <branch> locally before merging a remote run's branch",
+        "phases.qa is true, but a remote run skips the interactive-test phase — GitHub Actions jobs have no browser wiring, application dependencies or QA credentials for it (docs/remote-execution.md → §3, The interactive-test phase): run /devscene:branch-qa-test <branch> locally before merging a remote run's branch",
       );
     }
 
@@ -3026,31 +3024,29 @@ function writersOf(stdout: string): { readonly logins: readonly string[]; readon
  *
  * Grades, worst wins and every finding is reported:
  * - `fail` — `gh` does not spawn or `gh auth status` refuses (nothing further is asked); GitHub does
- *   not know `harness-run.yml`; neither credential secret is set; a harness workflow GitHub lists by
+ *   not know `devscene-run.yml`; neither credential secret is set; a harness workflow GitHub lists by
  *   its path, which is how it lists a file it could not parse — judged from the workflow listing
  *   ({@link WORKFLOWS_ENDPOINT}) because `gh workflow view` answers for an unparsed file too, as Gate 12
- *   round 7 observed. `harness-trigger.yml` and `harness-control.yml` are judged only when
+ *   round 7 observed. `devscene-trigger.yml` and `devscene-control.yml` are judged only when
  *   {@link forgeTriggerApplies}.
- * - `warn` — `HARNESS_PUSH_URL` absent; `harness-resume.yml` unknown to GitHub; `HARNESS_REMOTE_STOP`
+ * - `warn` — `DEVSCENE_PUSH_URL` absent; `devscene-resume.yml` unknown to GitHub; `DEVSCENE_REMOTE_STOP`
  *   set; the workflow listing unread, or not reaching a judged harness workflow because the repository
  *   has more workflows than one page lists, so whether GitHub could parse it cannot be told; artifact retention below {@link ARTIFACT_RETENTION_WARN_DAYS} days; when
- *   {@link forgeTriggerApplies}, `harness-trigger.yml` or `harness-control.yml` unknown to GitHub, no
- *   label by the effective trigger name, or the pull-request setting off with no `HARNESS_GIT_TOKEN`
+ *   {@link forgeTriggerApplies}, `devscene-trigger.yml` or `devscene-control.yml` unknown to GitHub, no
+ *   label by the effective trigger name, or the pull-request setting off with no `DEVSCENE_GIT_TOKEN`
  *   secret; and any call that timed out, could not reach GitHub, or answered in a shape not
  *   understood — *cannot tell* is not *missing*, so it never fails.
  * - the pull-request setting off while the secret list was unreadable is a *cannot tell* warning,
- *   never the missing-`HARNESS_GIT_TOKEN` one.
- * - the effective trigger label is `HARNESS_TRIGGER_LABEL`, else the fallback the committed
- *   `harness-trigger.yml` carries ({@link triggerFallbackLabel}), else {@link DEFAULT_TRIGGER_LABEL};
- *   a fallback of {@link LEGACY_TRIGGER_LABEL} is a note, since it still starts runs.
+ *   never the missing-`DEVSCENE_GIT_TOKEN` one.
+ * - the effective trigger label is `DEVSCENE_TRIGGER_LABEL`, else {@link DEFAULT_TRIGGER_LABEL}.
  * - both credential secrets present is a note, not a finding: billing follows `ANTHROPIC_API_KEY`.
- * - a non-empty `HARNESS_TRIGGER_ALLOWED_BOTS` is a note naming the bots, which start runs without a
+ * - a non-empty `DEVSCENE_TRIGGER_ALLOWED_BOTS` is a note naming the bots, which start runs without a
  *   permission check. When the trigger does not apply, no trigger, control or pull-request-setting
  *   read is made.
  * - the retention read refused (typically HTTP 403: the endpoint needs admin access) is a note too —
  *   the read is best-effort, and a collaborator without admin can still run remotely. A refused
  *   pull-request-setting read is a note on the same terms.
- * - the pull-request setting off with `HARNESS_GIT_TOKEN` set is a note: the `open` step at the run's
+ * - the pull-request setting off with `DEVSCENE_GIT_TOKEN` set is a note: the `open` step at the run's
  *   start opens the pull request with that token instead, and `deliver` opens one only when none is
  *   open at completion.
  * - all three trigger answers positive — both workflows known and the label present — is confirmed on
@@ -3060,7 +3056,7 @@ function writersOf(stdout: string): { readonly logins: readonly string[]; readon
  *   those reads — `gh` not runnable, no usable login, or no readable answer to the login probe — asks
  *   GitHub nothing about the trigger.
  * - who may start, steer, answer and review a run is {@link effectiveRunActors} of
- *   `HARNESS_RUN_ACTORS`, read only when the variable listing was. An unset list adds a read of the
+ *   `DEVSCENE_RUN_ACTORS`, read only when the variable listing was. An unset list adds a read of the
  *   repository's owner ({@link REPOSITORY_ENDPOINT}); any answer but a readable owner — refused, timed
  *   out, unreachable or an unread shape — is a *cannot tell* warning, and the list then grades as
  *   admitting nobody with no second warning. `*`, a list of logins, and an unset list in a user-owned
@@ -3166,10 +3162,7 @@ const REMOTE_GITHUB_CHECK: Check = {
           }
           if (name !== path) continue;
           unparsed.add(path);
-          const route =
-            path === WORKFLOW_CONTROL_PATH
-              ? unparseableControlRoute(version)
-              : `Check ${path} with actionlint, or re-render it with \`${pinnedCliCommand(version)} init --force\`, which keeps a .bak; then commit it and push it to the repository's default branch.`;
+          const route = `Check ${path} with actionlint, or re-render it with \`${pinnedCliCommand(version)} init --force\`, which keeps a .bak; then commit it and push it to the repository's default branch.`;
           failures.push(`GitHub lists ${path} by its path rather than its name, which it does for a workflow file it cannot parse, so that workflow runs for no event: ${route}`);
         }
         if (unseen.length > 0) {
@@ -3284,20 +3277,7 @@ const REMOTE_GITHUB_CHECK: Check = {
 
       // The label's name is a repository variable, so an unread variable listing leaves nothing to compare.
       const configured = variableValues?.get(TRIGGER_LABEL_VARIABLE)?.trim() ?? '';
-      let labelName = configured;
-      if (configured === '') {
-        // Unset, the committed workflow's own fallback starts a run; it is never re-rendered by an upgrade.
-        let committed: string | undefined;
-        try {
-          committed = triggerFallbackLabel(readFileSync(join(root, ...WORKFLOW_TRIGGER_PATH.split('/')), 'utf8'));
-        } catch {
-          committed = undefined;
-        }
-        labelName = committed ?? DEFAULT_TRIGGER_LABEL;
-        if (variableValues !== undefined && labelName === LEGACY_TRIGGER_LABEL) {
-          notes.push(`${WORKFLOW_TRIGGER_PATH} was written by an earlier release and falls back to \`${LEGACY_TRIGGER_LABEL}\`, which keeps starting runs; \`${CLI} init --force\` re-renders it and the scripts to \`${DEFAULT_TRIGGER_LABEL}\`, and setting ${TRIGGER_LABEL_VARIABLE} keeps a name of your choosing under either`);
-        }
-      }
+      const labelName = configured === '' ? DEFAULT_TRIGGER_LABEL : configured;
       let labelFound = false;
       if (variableValues === undefined) {
         warnings.push(`cannot tell whether the trigger label exists: its name is the ${TRIGGER_LABEL_VARIABLE} variable, and ${variables.call} gave no readable answer`);
@@ -4035,7 +4015,7 @@ const STATE_DIR_CHECK: Check = {
     }
 
     // `resolve` rather than `join`: the two clauses above have already established that the value is
-    // relative and dot-free, and resolving drops the trailing separator a configured `sdlc-harness/`
+    // relative and dot-free, and resolving drops the trailing separator a configured `devscene/`
     // carries, so the path this check names is the one every other message names.
     const root = resolvePath(ctx.repoRoot, raw);
     if (!isDirectory(root)) {
@@ -4460,7 +4440,7 @@ function detectionProvenance(detection: HarnessDetection): string {
  *
  * **It is deliberately blind to the conventions documents.** {@link SETUP_ANALYSIS_CHECK} above
  * grades those, and its skeleton warning was the last indirect trace that a fallback profile had
- * never been examined — a trace `/autonomous-sdlc-harness:harness-analyze conventions` clears by filling the documents,
+ * never been examined — a trace `/devscene:analyze conventions` clears by filling the documents,
  * leaving `doctor` green about a profile nobody looked at. This check reads no document, so that
  * command does not move it.
  *
@@ -6540,7 +6520,7 @@ export const CHECKS: readonly Check[] = Object.freeze([
  * changed any path in {@link jobSurfacePaths}, the files a remote job runs or loads from its checkout.
  *
  * Every value it grades by is the trusted side's: the configuration, its `defaultBranch` and the
- * surface list derived from it come from `<trusted ref>:harness.config.json`, never from `HEAD`, so a
+ * surface list derived from it come from `<trusted ref>:devscene.config.json`, never from `HEAD`, so a
  * branch cannot widen what it may change by rewriting its own configuration. The trusted ref and the
  * base are `refs/remotes/origin/<branch>` and `refs/remotes/origin/<defaultBranch>`, or, under
  * `@<commit>`, the recorded commit for the configuration and — under `@<commit>@<base>` — the recorded

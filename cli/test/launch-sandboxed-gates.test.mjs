@@ -49,7 +49,7 @@ import { scaleBound } from './helpers/timing.mjs';
 const PROBE_LIB = join(WORKSPACE_ROOT, 'scripts', 'lib', 'sandbox-probe');
 const RENDER_STUB = join(PACKAGE_ROOT, 'test', 'fixtures', 'sandbox-probe', 'render-watcher-stub.sh');
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const SCRIPTS = 'scripts';
 const LAUNCHER = `${SCRIPTS}/launch-sandboxed-gates.sh`;
 const RUNNER = `${SCRIPTS}/run-test-suite.sh`;
@@ -178,10 +178,11 @@ async function launcherFixture(t, { host = 1, bwrap = true, setsid = false } = {
   const fixture = await createFixture({
     files: {
       'package.json': { name: 'fixture-project', private: true, version: '0.0.0' },
-      'harness.config.json': {
+      'devscene.config.json': {
         version: 1,
         defaultBranch: 'main',
         stateDir: STATE_DIR,
+        scriptsDir: SCRIPTS,
         layers: [{ name: 'general', path: '.', conventions: '.claude/context/conventions.md' }],
         commands: { typecheck: '<none>', test: 'bash stub.sh' },
       },
@@ -588,7 +589,8 @@ test('(r) a clone whose record only the sandbox probe\'s sp__render wrote is lau
     '-c',
     'for lib in "$1" "$2" "$3"; do . "$lib"; done; SP_SCRIPTS="$4"; SP_REGISTRY="$5"; sp__render "$6" "$7" || { printf "%s\\n" "$SP__RENDER_REFUSAL" >&2; exit 1; }; printf "%s\\n" "$SP__RENDERED"',
     '_',
-    join(WORKSPACE_ROOT, 'scripts', 'lib', 'harness-run-lib.sh'),
+    // The template run library, the copy `init` ships: not this checkout's self-adopted one.
+    join(WORKSPACE_ROOT, 'cli', 'templates', 'scripts', 'lib', 'harness-run-lib.sh'),
     join(PROBE_LIB, 'core.sh'),
     join(PROBE_LIB, 'session.sh'),
     stubScripts,

@@ -23,7 +23,7 @@
  * (`helpers/timing.mjs`) and sits below the per-test timeout (`--test-timeout=1800000`) even at the
  * scale's cap, for the reason `watcher-remote-job.test.mjs`'s header gives. Every fixture
  * is torn down in process by `createWatcherFixture`'s `t.after`. No case reaches the network: `gh` is a
- * stub reached through `HARNESS_GH_CLI`. The stop case's killed job is the exception to `runBash`: it is
+ * stub reached through `DEVSCENE_GH_CLI`. The stop case's killed job is the exception to `runBash`: it is
  * spawned as its own detached group, which the case waits on for at most `KILL_WAIT_TENTHS`, scaled
  * likewise, and then kills and reaps whether or not the session was seen to start.
  */
@@ -41,7 +41,7 @@ import { INIT_SCRIPTS_DIR, runBash, runGit } from './helpers/fixture.mjs';
 import { scaleBound } from './helpers/timing.mjs';
 import { createWatcherFixture, finishedLedgerBody } from './helpers/watcher.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REPOSITORY = 'octo/fixture';
 const ISSUE = 7;
 const PR_URL = `https://github.com/${REPOSITORY}/pull/12`;
@@ -92,9 +92,9 @@ const nowSecs = () => Math.floor(Date.now() / 1000);
 /** GitHub's `createdAt` shape — whole seconds, `Z` — for an epoch second. */
 const iso = (secs) => new Date(secs * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
 
-/** A canned `run list` answer carrying one `harness pause <branch>` run created at <secs>. */
+/** A canned `run list` answer carrying one `devscene pause <branch>` run created at <secs>. */
 const pauseRunList = (branch, secs) =>
-  JSON.stringify([{ databaseId: 99, displayTitle: `harness pause ${branch}`, status: 'completed', createdAt: iso(secs) }]);
+  JSON.stringify([{ databaseId: 99, displayTitle: `devscene pause ${branch}`, status: 'completed', createdAt: iso(secs) }]);
 
 /** Stub body: acknowledge PAUSE and exit 0 once it appears. `STATE` is the state directory. */
 const HONOUR_PAUSE = (tenths) =>
@@ -111,7 +111,7 @@ const lastLine = (text) => text.trimEnd().split('\n').at(-1);
  * task prompt whose provenance line names {@link ISSUE}, through a throwaway clone.
  */
 async function wireForge(w, scratch) {
-  const configPath = join(w.dir, 'harness.config.json');
+  const configPath = join(w.dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   config.forge = 'github';
@@ -126,7 +126,7 @@ async function wireForge(w, scratch) {
     await mkdir(join(clone, STATE_DIR, 'task_prompts'), { recursive: true });
     await writeFile(
       join(clone, prompt),
-      `# A task\n\nDo it.\n\n---\n\nStarted from https://github.com/${REPOSITORY}/issues/${ISSUE} by @alice, who applied the label \`sdlc-harness\`.\n`,
+      `# A task\n\nDo it.\n\n---\n\nStarted from https://github.com/${REPOSITORY}/issues/${ISSUE} by @alice, who applied the label \`devscene\`.\n`,
       'utf8',
     );
     await runGit(clone, ['add', '--force', prompt]);
@@ -194,7 +194,7 @@ async function createSequenceFixture(t) {
     GH_TOKEN: '',
     HARNESS_PR_TOKEN: '',
     RUNNER_TEMP: runnerTemp,
-    HARNESS_GH_CLI: ghStub,
+    DEVSCENE_GH_CLI: ghStub,
     STUB_LOG: ghLog,
     STUB_RUN_LIST: '[]',
     HOME: join(w.dir, 'home'),
@@ -209,7 +209,7 @@ async function createSequenceFixture(t) {
       REMOTE_CONTROL_POLL_SECS: '1',
       REMOTE_AUTO_RESUME_DELAY_SECS: '0',
       STATE: state,
-      HARNESS_AGENT_CLI: stubPath,
+      DEVSCENE_AGENT_CLI: stubPath,
       CLAR: w.clarDir,
       POLL_INTERVAL_SECS: '1',
       ...env,
@@ -354,13 +354,13 @@ async function playSequence(t, { job2Env = () => ({}), job2Stub = HONOUR_PAUSE(P
   const completed = calls.filter(
     (c) =>
       c.line.startsWith(`api --method POST repos/${REPOSITORY}/issues/${ISSUE}/comments `) &&
-      (c.body ?? '').includes(`<!-- sdlc-harness event=completed branch=${s.branch} -->`),
+      (c.body ?? '').includes(`<!-- devscene event=completed branch=${s.branch} -->`),
   );
   assert.equal(completed.length, 1, calls.map((c) => c.line).join('\n'));
   assert.ok(completed[0].body.includes(PR_URL), completed[0].body);
 }
 
-test('user pause: park, answer, a harness pause run, then a pause resume completes and delivers', async (t) => {
+test('user pause: park, answer, a devscene pause run, then a pause resume completes and delivers', async (t) => {
   await playSequence(t, {
     job2Env: () => {
       const start = nowSecs() - 10;

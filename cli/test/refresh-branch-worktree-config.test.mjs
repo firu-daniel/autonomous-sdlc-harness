@@ -12,7 +12,7 @@
  * `reference-transaction` hook of the wrapper's fetch, under the main hooks directory; and a
  * main-checkout `defaultBranch` starting with `-` is refused with exit 1 before git can read it as an
  * option; and `defaultBranch` and the protected set come from the MAIN checkout's
- * `harness.config.json`, never from the worktree's own committed copy, which the sandbox can
+ * `devscene.config.json`, never from the worktree's own committed copy, which the sandbox can
  * rewrite.**
  * Case (a)'s marker assertion is the proof of the pin: a refusal case passing proves nothing about it.
  * Cases (a) and (d) move the main checkout's `refs/remotes/origin/trunk` back one commit before the
@@ -42,7 +42,7 @@ const CONFIG = {
   version: 1,
   defaultBranch: BASE,
   protectedBranches: [BASE, 'release/*'],
-  stateDir: 'sdlc-harness/',
+  stateDir: 'devscene/',
   githooksDir: 'githooks',
   layers: [],
   commands: {},
@@ -88,12 +88,12 @@ async function worktreeFixture(t) {
   await runGit(main, ['init', '--quiet', '-b', BASE]);
   await runGit(main, ['config', 'user.email', 'fixture@example.invalid']);
   await runGit(main, ['config', 'user.name', 'Harness Fixture']);
-  await writeFile(join(main, 'harness.config.json'), `${JSON.stringify(CONFIG)}\n`);
+  await writeFile(join(main, 'devscene.config.json'), `${JSON.stringify(CONFIG)}\n`);
   await writeFile(join(main, 'f.txt'), 'a\n');
   await mkdir(join(main, 'scripts'));
   await cp(join(TEMPLATE_SCRIPTS, 'refresh-branch.sh'), join(main, 'scripts', 'refresh-branch.sh'));
   await cp(join(TEMPLATE_SCRIPTS, 'lib'), join(main, 'scripts', 'lib'), { recursive: true });
-  await runGit(main, ['add', 'harness.config.json', 'f.txt', 'scripts']);
+  await runGit(main, ['add', 'devscene.config.json', 'f.txt', 'scripts']);
   await runGit(main, ['commit', '--quiet', '-m', 'fixture: seed']);
   await runGit(main, ['remote', 'add', 'origin', origin]);
   await runGit(main, ['push', '--quiet', '-u', 'origin', BASE]);
@@ -216,7 +216,7 @@ test('(f) A main-checkout defaultBranch starting with `-` is refused before git 
   await chmod(program, 0o755);
   // Left uncommitted in the main checkout: the wrapper reads the file, not the commit.
   await writeFile(
-    join(f.main, 'harness.config.json'),
+    join(f.main, 'devscene.config.json'),
     `${JSON.stringify({ ...CONFIG, defaultBranch: `--upload-pack=${program}` })}\n`,
   );
   const wtHead = await f.head(f.wt);
@@ -227,12 +227,12 @@ test('(f) A main-checkout defaultBranch starting with `-` is refused before git 
   assert.equal(await f.head(f.wt), wtHead);
 });
 
-test('(g) A worktree harness.config.json naming another defaultBranch is ignored: the main one’s base is merged', async (t) => {
+test('(g) A worktree devscene.config.json naming another defaultBranch is ignored: the main one’s base is merged', async (t) => {
   const f = await worktreeFixture(t);
   // `other` is the seed commit, which feat_w already contains: merging it would be "nothing to do".
   await runGit(f.main, ['push', '--quiet', '--no-verify', 'origin', 'HEAD~1:refs/heads/other']);
   await writeFile(
-    join(f.wt, 'harness.config.json'),
+    join(f.wt, 'devscene.config.json'),
     `${JSON.stringify({ ...CONFIG, defaultBranch: 'other', protectedBranches: [] })}\n`,
   );
   await runGit(f.wt, ['commit', '--quiet', '--no-verify', '-am', 'fixture: worktree names another base']);
@@ -243,11 +243,11 @@ test('(g) A worktree harness.config.json naming another defaultBranch is ignored
   assert.ok(await f.contains(f.wt, f.baseSha), output(result));
 });
 
-test('(h) A worktree harness.config.json dropping a protected pattern does not unprotect the branch', async (t) => {
+test('(h) A worktree devscene.config.json dropping a protected pattern does not unprotect the branch', async (t) => {
   const f = await worktreeFixture(t);
   await runGit(f.wt, ['checkout', '--quiet', '-b', 'release/x']);
   await writeFile(
-    join(f.wt, 'harness.config.json'),
+    join(f.wt, 'devscene.config.json'),
     `${JSON.stringify({ ...CONFIG, protectedBranches: [] })}\n`,
   );
   await runGit(f.wt, ['commit', '--quiet', '--no-verify', '-am', 'fixture: worktree drops release/*']);
@@ -255,14 +255,14 @@ test('(h) A worktree harness.config.json dropping a protected pattern does not u
   const result = await f.refresh(f.mainScript, [f.wt]);
   assert.equal(result.status, 2, output(result));
   assert.match(result.stderr, /HEAD is on protected branch 'release\/x'/, output(result));
-  assert.ok(result.stderr.includes(join(f.main, 'harness.config.json')), output(result));
+  assert.ok(result.stderr.includes(join(f.main, 'devscene.config.json')), output(result));
   assert.equal(await f.head(f.wt), wtHead);
   assert.ok(!(await f.contains(f.wt, f.baseSha)), output(result));
 });
 
-test('(i) A main checkout whose harness.config.json cannot be read is refused with exit 1, never answered from the worktree’s', async (t) => {
+test('(i) A main checkout whose devscene.config.json cannot be read is refused with exit 1, never answered from the worktree’s', async (t) => {
   const f = await worktreeFixture(t);
-  await writeFile(join(f.main, 'harness.config.json'), 'x');
+  await writeFile(join(f.main, 'devscene.config.json'), 'x');
   const wtHead = await f.head(f.wt);
   const result = await f.refresh(f.mainScript, [f.wt]);
   assert.equal(result.status, 1, output(result));
@@ -271,12 +271,12 @@ test('(i) A main checkout whose harness.config.json cannot be read is refused wi
   assert.deepEqual(await f.markers(), []);
 });
 
-test('(j) An unreadable worktree harness.config.json is never read: the main one decides, and the merge lands', async (t) => {
+test('(j) An unreadable worktree devscene.config.json is never read: the main one decides, and the merge lands', async (t) => {
   const f = await worktreeFixture(t);
   // No config.worktree key left, so the per-working-copy check never consults the worktree's copy:
   // only the base and protected-set decisions could still read it.
   await runGit(f.wt, ['config', '--worktree', '--unset', 'core.hooksPath']);
-  await writeFile(join(f.wt, 'harness.config.json'), 'x');
+  await writeFile(join(f.wt, 'devscene.config.json'), 'x');
   await runGit(f.wt, ['commit', '--quiet', '--no-verify', '-am', 'fixture: worktree config unreadable']);
   const result = await f.refresh(f.mainScript, [f.wt]);
   assert.equal(result.status, 0, output(result));

@@ -28,7 +28,7 @@
  *   `cli/test/sandbox-prerequisites-shell-mirror.test.mjs`, which asserts all three against this
  *   module's exports. Its platform, kernel-release and `PATH` reads still mirror `probeSandboxHost`,
  *   as `cli/src/doctor/checks.ts` declares.
- * - `cli/templates/github/workflows/harness-run.yml`, step `Install the sandbox prerequisites`,
+ * - `cli/templates/github/workflows/devscene-run.yml`, step `Install the sandbox prerequisites`,
  *   mirrors {@link SANDBOX_INSTALLERS}' installer families in this order (`apt-get`, then `dnf`; the
  *   step's `-y -qq` and `sudo -n` flags legitimately differ from the adopter-facing commands here),
  *   {@link SANDBOX_HOST_BINARIES}' packages, {@link APPARMOR_USERNS_SYSCTL_PATH},

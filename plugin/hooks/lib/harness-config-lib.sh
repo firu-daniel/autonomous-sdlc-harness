@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # harness-config-lib.sh — the one place every guard hook and the two QA-user
 # helpers resolve the repository they are judging, read that repository's
-# `harness.config.json`, answer "is this branch protected?", and build the
+# `devscene.config.json`, answer "is this branch protected?", and build the
 # path-anchored prefixes the allow-only guards match a command piece against.
 #
 # WHO SOURCES THIS, AND HOW. The guard hooks in `plugin/hooks/*.sh` and
@@ -18,7 +18,7 @@
 # is exactly the defect this paragraph exists to prevent, and the port's leak
 # sweep greps for it.)
 #
-# JURISDICTION. Config is read at `<repo_root>/harness.config.json` and nowhere
+# JURISDICTION. Config is read at `<repo_root>/devscene.config.json` and nowhere
 # else, where `<repo_root>` is resolved from the command the hook was handed —
 # never from a hardcoded path and never from an assumed session root. A
 # repository with no such file has not adopted the harness: the guards have no
@@ -113,15 +113,15 @@
 #   adopted + valid    hc_protected_patterns "$root"
 #                      hc_branch_is_protected "$root" "$(hc_current_branch "$root")"; echo $?
 #                      -> the resolved set, then 0 or 1
-#   adopted + broken   printf 'x' > "$root/harness.config.json"
+#   adopted + broken   printf 'x' > "$root/devscene.config.json"
 #                      hc_branch_is_protected "$root" main; echo $?      -> 2
-#   not adopted        mv "$root/harness.config.json" "$root/../saved.json"
+#   not adopted        mv "$root/devscene.config.json" "$root/../saved.json"
 #                      hc_config_file "$root"; echo $?                   -> 1, prints nothing
 #
 #   from a payload     cmd=$(hc_payload_command "$payload")
 #                      root=$(hc_resolve_repo_root "$cmd" "$(hc_payload_cwd "$payload")")
 #
-#   main checkout      HARNESS_MAIN_REPO=<a main checkout> bash -c '. <lib>; hc_main_root <any checkout>'
+#   main checkout      DEVSCENE_MAIN_REPO=<a main checkout> bash -c '. <lib>; hc_main_root <any checkout>'
 #                      -> the anchor's physical path; with the anchor unset, or set
 #                         to a directory that is not a main checkout, today's
 #                         common-dir answer for <any checkout> that is not a clone
@@ -659,7 +659,7 @@ hc_repo_root() {
 # directly, never inside `$(…)`, or the two variables are lost with the
 # subshell. Three arms, the first that applies deciding:
 #
-#   1. THE ANCHOR. `HARNESS_MAIN_REPO`, which the launcher sets, when it is an
+#   1. THE ANCHOR. `DEVSCENE_MAIN_REPO`, which the launcher sets, when it is an
 #      absolute directory whose `.git` is a directory free of `commondir`: that
 #      directory, for any <root>. An absent or unusable value falls through.
 #   2. THE CLONE ARM, taken when `<root>/.git` is a real directory and
@@ -688,7 +688,7 @@ hc_repo_root() {
 #      a checkout's toplevel, as `hc_repo_root` returns it.
 #
 # THE CLONE ARM'S READS. It runs no `git` command and reads only <root>'s
-# `objects/info/alternates` and `HEAD`, and <candidate>'s `harness.config.json`
+# `objects/info/alternates` and `HEAD`, and <candidate>'s `devscene.config.json`
 # and run registry — the records `hr_clone_target_check_var`
 # (`cli/templates/scripts/lib/harness-run-lib.sh`) already trusts. It never
 # reads the clone's `.git/config` or hooks, and never creates the registry or
@@ -700,7 +700,7 @@ hc_repo_root() {
 # No guard calls this function or `hc_main_root`, so no guard's decision
 # depends on the anchor or the registry; the QA-lock helpers do.
 hc_main_root_var() {
-  local root="${1-}" common="" anchor="${HARNESS_MAIN_REPO-}" root_c="" gd=""
+  local root="${1-}" common="" anchor="${DEVSCENE_MAIN_REPO-}" root_c="" gd=""
   local alt="" alt_line="" extra="" alt_c="" cand="" hf="" head_line="" branch=""
   local state_rel="" registry="" out="" kind="" wt="" wt_c="" want="" want_c=""
   HC_MAIN_ROOT=""
@@ -762,7 +762,7 @@ hc_main_root_var() {
       HC_MAIN_ROOT_REFUSAL="$hf is not a regular file holding one line naming a checked-out branch"
       return 1
     fi
-    state_rel=$(hc_config_dir "$cand" stateDir sdlc-harness) || state_rel="sdlc-harness"
+    state_rel=$(hc_config_dir "$cand" stateDir devscene) || state_rel="devscene"
     registry="$cand/$state_rel/autonomous_logs/registry.json"
     if ! hc_have_jq; then
       HC_MAIN_ROOT_REFUSAL="jq is not on PATH, so the run registry $registry cannot be read"
@@ -868,7 +868,7 @@ hc_config_file_var() {
   local root="${1-}" f
   HC_CFG_FILE=""
   [ -n "$root" ] || return 1
-  f="$root/harness.config.json"
+  f="$root/devscene.config.json"
   [ -f "$f" ] && [ -r "$f" ] || return 1
   HC_CFG_FILE="$f"
   return 0
@@ -884,7 +884,7 @@ hc_config_file() {
 # ---------------------------------------------------------------------------
 # THE PER-PROCESS CONFIGURATION CACHE — one `jq` per process, not one per key.
 #
-# WHY. Every reader used to re-open and re-parse `harness.config.json`, so a
+# WHY. Every reader used to re-open and re-parse `devscene.config.json`, so a
 # single `allow-safe-compounds.sh` decision on a two-piece compound cost 18 `jq`
 # forks (7 in `hc_safe_prefixes`, 8 in `hc_path_anchored_patterns` — five of them
 # re-reading the same `commands.*` keys `hc_safe_prefixes` had just read — 2 for
@@ -900,7 +900,7 @@ hc_config_file() {
 # nothing is written to disk, and the cache dies with the answer it served.
 #
 # THE ONE STALENESS BOUNDARY, STATED PLAINLY. The entry is keyed by ROOT, not by
-# the file's contents: a caller that REWRITES `harness.config.json` in place and
+# the file's contents: a caller that REWRITES `devscene.config.json` in place and
 # reads again WITHIN THE SAME PROCESS is answered from the document it replaced.
 # No shipped caller does that — every guard is one process per decision and the
 # two QA helpers read the configuration once — and detecting it would cost a
@@ -1651,7 +1651,7 @@ hc_path_anchored_patterns() {
   work=$(hc_work_root "$root") || return 1
   project=$(hc_project_name "$root") || return 1
   app_rel=$(hc_config_dir "$root" appDir .) || app_rel="."
-  state_rel=$(hc_config_dir "$root" stateDir sdlc-harness) || state_rel="sdlc-harness"
+  state_rel=$(hc_config_dir "$root" stateDir devscene) || state_rel="devscene"
 
   if [ "$app_rel" = "." ]; then
     app_abs="$root"

@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
-from harness_docs_retrieval.errors import ServiceError
+from devscene_docs_retrieval.errors import ServiceError
 
 
 class Embedder(Protocol):
@@ -82,8 +82,8 @@ RERANKER_ID = f"{ID_NAMESPACE}/{RERANK_MODEL}:{MODEL_PRECISION}:sigmoid:v{MODEL_
 
 MODEL_IDS = (EMBEDDING_MODEL, RERANK_MODEL)
 
-MODEL_CACHE_ENV = "HARNESS_DOCS_RETRIEVAL_MODEL_CACHE"
-MANIFEST_NAME = "harness-docs-retrieval-models.json"
+MODEL_CACHE_ENV = "DEVSCENE_DOCS_RETRIEVAL_MODEL_CACHE"
+MANIFEST_NAME = "devscene-docs-retrieval-models.json"
 MANIFEST_VERSION = 1
 
 _MODELS_EXTRA_HINT = (
@@ -93,7 +93,7 @@ _MODELS_EXTRA_HINT = (
 
 
 def model_cache_dir() -> Path:
-    """`MODEL_CACHE_ENV`, else `$XDG_CACHE_HOME`, else `~/.cache`, under `harness-docs-retrieval`.
+    """`MODEL_CACHE_ENV`, else `$XDG_CACHE_HOME`, else `~/.cache`, under `devscene-docs-retrieval`.
 
     An empty variable counts as unset.
     """
@@ -102,7 +102,7 @@ def model_cache_dir() -> Path:
         return Path(override)
     xdg = os.environ.get("XDG_CACHE_HOME", "")
     base = Path(xdg) if xdg else Path.home() / ".cache"
-    return base / "harness-docs-retrieval" / "models"
+    return base / "devscene-docs-retrieval" / "models"
 
 
 def hub_model_dir(cache_dir: Path, model_id: str) -> Path:
@@ -249,13 +249,13 @@ def _require_fetched_pin(cache_dir: Path, model_id: str) -> None:
     if entry is None:
         raise ServiceError(
             f"the docs-retrieval model cache at {cache_dir} has no fetched weights for {model_id}: "
-            "run harness-docs-retrieval fetch-models where an operator is present"
+            "run devscene-docs-retrieval fetch-models where an operator is present"
         )
     if entry.revision != pin:
         raise ServiceError(
             f"the docs-retrieval model cache at {cache_dir} records {model_id} at revision "
             f"{entry.revision}, but the pinned revision is {pin}: "
-            "run harness-docs-retrieval fetch-models where an operator is present"
+            "run devscene-docs-retrieval fetch-models where an operator is present"
         )
 
 

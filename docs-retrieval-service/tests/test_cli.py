@@ -9,8 +9,8 @@ import argparse
 
 import pytest
 
-from harness_docs_retrieval import cli
-from harness_docs_retrieval.errors import ServiceError
+from devscene_docs_retrieval import cli
+from devscene_docs_retrieval.errors import ServiceError
 
 
 def _configure_nothing(parser: argparse.ArgumentParser) -> None:
@@ -23,12 +23,12 @@ def _raise_service_error(args: argparse.Namespace) -> int:
 
 def test_missing_sub_command_exits_2_and_prints_usage(capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main([]) == 2
-    assert "usage: harness-docs-retrieval" in capsys.readouterr().err
+    assert "usage: devscene-docs-retrieval" in capsys.readouterr().err
 
 
 def test_unknown_sub_command_exits_2(capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main(["no-such-command"]) == 2
-    assert "usage: harness-docs-retrieval" in capsys.readouterr().err
+    assert "usage: devscene-docs-retrieval" in capsys.readouterr().err
 
 
 def test_service_error_exits_1_with_one_line_and_no_traceback(
@@ -38,7 +38,7 @@ def test_service_error_exits_1_with_one_line_and_no_traceback(
     monkeypatch.setattr(cli, "SUB_COMMANDS", [*cli.SUB_COMMANDS, row])
     assert cli.main(["boom"]) == 1
     err = capsys.readouterr().err
-    assert err == "harness-docs-retrieval: x\n"
+    assert err == "devscene-docs-retrieval: x\n"
     assert "Traceback" not in err
 
 

@@ -13,7 +13,7 @@ exceptions its own sections name — the floor margin, and the numbers inside a 
 
 The eval is not CLI surface. `cli/src/retrieval/session.ts` refuses to open a retrieval session unless
 `retrievalApplies(config)` — `phases.docs` **and** `docs.retrieval` both true — and this repository's
-`harness.config.json` has `phases.docs: false` and no `docs` key at all. That file is deliberately
+`devscene.config.json` has `phases.docs: false` and no `docs` key at all. That file is deliberately
 **unchanged** by the eval: the runner under `evals/docs-retrieval/` supplies `phases` and `docs`
 itself and, on the TypeScript path, drives `corpusFiles` → `refreshIndex` → `searchDocs` directly
 — with `--backend python` it drives the package's `serve-http` instead (see `### The Python
@@ -24,10 +24,10 @@ retrieval on in a checkout is not a precondition for measuring it.
 
 That licence covers the gate and nothing else. The same header forbids a second copy of the
 conventions list anywhere, so the runner **reads `layers[]` and `stateDir` out of the
-`harness.config.json` at `--repo`** and overrides `docs.root` alone. The consequence is the only one an
+`devscene.config.json` at `--repo`** and overrides `docs.root` alone. The consequence is the only one an
 adopter needs: **point `--repo` at your checkout and the conventions documents your own `layers[]`
 names are in the corpus automatically**, with nothing to configure here — a layer added to that file is
-covered by the next run. A checkout with **no** `harness.config.json`, or one whose configuration you
+covered by the next run. A checkout with **no** `devscene.config.json`, or one whose configuration you
 do not want read, is served by `--docs-root` and `--conventions` instead, which compose an ad-hoc
 corpus from paths you name; that corpus reports itself as `ad-hoc` and reads no configuration at all.
 
@@ -42,7 +42,7 @@ are listed in `### The Python backend`.
   cache is machine-shared, so it is provisioned once and every worktree sees it. The command that
   fills it is `docs/cli.md` §11 → `### docs fetch-models`, which needs no configuration and no
   retrieval gate; the refusal names the cache directory and every missing file.
-- **The stub is unset**: `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` is empty or absent. Set, it swaps
+- **The stub is unset**: `DEVSCENE_RETRIEVAL_STUB` is empty or absent. Set, it swaps
   both models for deterministic hash stubs, and the eval refuses to write any figure while it is set.
 - **The retrieval packages resolve from this checkout's build**: `unresolvedRetrievalPeers()`
   (`cli/src/retrieval/runtime.ts`), read from `cli/dist`, is empty. In a clone of this repository
@@ -149,7 +149,7 @@ eval's own `parseArgs` and names the corpus and the index directory the recorded
 with. The corpus is named the same two ways `corpusConfig` accepts one and the choice is forwarded
 untouched: a built-in id through `corpus`, or an ad-hoc corpus through `docsRoot` plus the repeatable
 `conventions` — the route that reads a documentation directory **in place**, with no
-`harness.config.json` in the target and no `init`, writing nothing into it but the `dataDir` this
+`devscene.config.json` in the target and no `init`, writing nothing into it but the `dataDir` this
 measurement owns and removes. Naming neither is refused by `corpusConfig`, and the returned `corpus`
 field is the id it resolved, so an ad-hoc figure is stamped `ad-hoc` and never passes for a built-in
 one. Create `harness-runs/scratch/cold-build.mjs`:
@@ -268,11 +268,11 @@ docker compose up -d --wait postgres
 ```
 
 **The database URL.** The eval's own modules — the runner's Python path, the MCP pass and the
-vector-agreement pass — read `HARNESS_DOCS_RETRIEVAL_DATABASE_URL` when it is set, and otherwise default
+vector-agreement pass — read `DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL` when it is set, and otherwise default
 to the compose database, through `cli/src/retrieval/pythonBackend.ts` → `pythonDatabaseUrl`, as the
 launcher does. That default reaches only those modules' child processes. A
 `bash scripts/python-service.sh run …` typed directly into a shell gets no default, and refuses with
-the variable unset (`docs-retrieval-service/src/harness_docs_retrieval/service.py` →
+the variable unset (`docs-retrieval-service/src/devscene_docs_retrieval/service.py` →
 `load_service_config`; `docs-retrieval-service/README.md` → `## Standing it up`, *"It is required"*).
 
 **The four runs**, from the repository root. Each prints the arm table and writes nothing:
@@ -381,9 +381,9 @@ cache, and this checkout's synced Python environment, whose directory is keyed b
 checkout root (`scripts/python-service.sh` → `checkout_key`):
 
 ```
-du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval/models" >> harness-runs/scratch/backend-comparison/footprint.txt
-du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/models/Xenova" >> harness-runs/scratch/backend-comparison/footprint.txt
-du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval/venvs/$(printf '%s' "$(git rev-parse --show-toplevel)" | cksum | awk '{print $1}')" >> harness-runs/scratch/backend-comparison/footprint.txt
+du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/devscene-docs-retrieval/models" >> harness-runs/scratch/backend-comparison/footprint.txt
+du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/devscene/retrieval/models/Xenova" >> harness-runs/scratch/backend-comparison/footprint.txt
+du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/devscene-docs-retrieval/venvs/$(printf '%s' "$(git rev-parse --show-toplevel)" | cksum | awk '{print $1}')" >> harness-runs/scratch/backend-comparison/footprint.txt
 ```
 
 Then, from `docs-retrieval-service/`, the two compose images — `service` lists nothing unless
@@ -391,10 +391,10 @@ Then, from `docs-retrieval-service/`, the two compose images — `service` lists
 index's size in its database:
 
 ```
-docker image ls harness-docs-retrieval-postgres >> ../harness-runs/scratch/backend-comparison/footprint.txt
-docker image ls harness-docs-retrieval-service >> ../harness-runs/scratch/backend-comparison/footprint.txt
+docker image ls devscene-docs-retrieval-postgres >> ../harness-runs/scratch/backend-comparison/footprint.txt
+docker image ls devscene-docs-retrieval-service >> ../harness-runs/scratch/backend-comparison/footprint.txt
 docker system df -v >> ../harness-runs/scratch/backend-comparison/footprint.txt
-docker compose exec -T postgres psql -U harness -d docs_retrieval -c "SELECT pg_size_pretty(pg_total_relation_size('chunks'))" >> ../harness-runs/scratch/backend-comparison/footprint.txt
+docker compose exec -T postgres psql -U devscene -d docs_retrieval -c "SELECT pg_size_pretty(pg_total_relation_size('chunks'))" >> ../harness-runs/scratch/backend-comparison/footprint.txt
 ```
 
 **6. The cold container and the cold Python index.** The Python service runs on the host in an
@@ -421,10 +421,10 @@ the variable for this shell first, taking the value from `docs-retrieval-service
 `## Standing it up`:
 
 ```
-export HARNESS_DOCS_RETRIEVAL_DATABASE_URL=<the compose connection string>
+export DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL=<the compose connection string>
 ```
 
-Then index `self-docs` through this checkout's own `harness.config.json`, timed, with its `index:`
+Then index `self-docs` through this checkout's own `devscene.config.json`, timed, with its `index:`
 line captured beside the timing:
 
 ```
@@ -447,7 +447,7 @@ typed at your terminal and written into no file. Initialise it with this checkou
 node <checkout>/cli/dist/cli.js init --docs --docs-retrieval --non-interactive --cwd <repo>
 ```
 
-Install the package with `docs/retrieval.md`'s own form, because `harness-docs-retrieval` must resolve
+Install the package with `docs/retrieval.md`'s own form, because `devscene-docs-retrieval` must resolve
 on the launcher's `PATH` (`docs/retrieval.md` → `## Turning on the Python backend`, step 3). From this
 checkout's `docs-retrieval-service/`:
 
@@ -473,11 +473,11 @@ claude -p "<a question one known section of docs/ answers; call search_docs>" --
 
 The TypeScript server the launcher starts is the runtime `init` installed machine-wide, not this
 checkout's build. When that runtime predates the `docs.retrievalBackend` key, it refuses
-`harness.config.json` with *"docs.retrievalBackend: unknown key"*, and the session's `system/init`
-shows `harness-docs` as `failed` (`docs/retrieval-eval-results.md` → `## The Python backend against the
+`devscene.config.json` with *"docs.retrievalBackend: unknown key"*, and the session's `system/init`
+shows `devscene-docs` as `failed` (`docs/retrieval-eval-results.md` → `## The Python backend against the
 TypeScript one` → `### One agent session through .mcp.json`). In that case, skip the
 `config set … typescript` line below. Delete the `docs.retrievalBackend` key from `<repo>`'s
-`harness.config.json` by hand instead, because an absent key selects the TypeScript backend. Then run
+`devscene.config.json` by hand instead, because an absent key selects the TypeScript backend. Then run
 `doctor` and the session as below, and record in `agent-session.md` that the key was deleted rather
 than set.
 
@@ -497,8 +497,8 @@ claude --version >> <checkout>/harness-runs/scratch/backend-comparison/agent-ses
 node <checkout>/cli/dist/cli.js --version >> <checkout>/harness-runs/scratch/backend-comparison/agent-session.md
 ```
 
-What to read in each stream: `system/init` lists `harness-docs` as `connected`; exactly one
-`mcp__harness-docs__search_docs` call is made; no permission denial appears anywhere; and the tool
+What to read in each stream: `system/init` lists `devscene-docs` as `connected`; exactly one
+`mcp__devscene-docs__search_docs` call is made; no permission denial appears anywhere; and the tool
 result's text shape — the `note: ` lines, the ranked `path#heading` lines with their snippets, or
 `no confident match` — compared between the two streams.
 
@@ -1014,7 +1014,7 @@ copy and the cut query set are removed in process. The query set and the transcr
 
 *What the comparison does not cover, settled rather than hidden.* Arms B–E index `docs.root` **plus
 every conventions document** — for a catalog read through `--docs-root`, the ones passed as
-`--conventions`, which are the ones the catalog's own `harness.config.json` → `layers[].conventions`
+`--conventions`, which are the ones the catalog's own `devscene.config.json` → `layers[].conventions`
 names. Neither arm A variant is pointed at them, though both can read them from the corpus root. And
 A-index's index need not link every half of a mixed catalog. Both are limits of the comparison, not
 defects to correct: the results report each half, and the labels that land in a conventions document,
@@ -1023,7 +1023,7 @@ apart from the pooled figure, and no root index is written to close the gap.
 *The invocation.* None of these spends a token. Confirm the agent CLI's print-mode flags — `-p`,
 `--output-format stream-json`, `--verbose`, `--allowed-tools`, `--disallowed-tools`,
 `--strict-mcp-config` and `--model` — against its own help, naming the binary the way
-`HARNESS_AGENT_CLI` below does if it is not `claude`:
+`DEVSCENE_AGENT_CLI` below does if it is not `claude`:
 
 ```
 claude --help
@@ -1110,7 +1110,7 @@ realistic adopter case, since an adopter's agents navigate with it loaded too. A
 `toolCalls`, the session's tool calls counted by name: it is how a reader later tells whether A-index
 grepped instead of following its index, and whether any session used a tool outside the fence.
 
-The agent binary is reached through `${HARNESS_AGENT_CLI:-claude}` — set `HARNESS_AGENT_CLI` to name it
+The agent binary is reached through `${DEVSCENE_AGENT_CLI:-claude}` — set `DEVSCENE_AGENT_CLI` to name it
 if `claude` is not what is on your PATH. That single indirection is the place the engine binary is
 chosen (`ARCHITECTURE.md` §4).
 
@@ -1199,7 +1199,7 @@ bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catal
 ```
 
 On the real catalog, one repetition of both variants per run, with one `--conventions` per document
-the catalog's own `harness.config.json` names — the checkout-side paths given as `"$PWD/…"` from this
+the catalog's own `devscene.config.json` names — the checkout-side paths given as `"$PWD/…"` from this
 repository's root, because every relative path after `--repo` resolves inside the catalog:
 
 ```

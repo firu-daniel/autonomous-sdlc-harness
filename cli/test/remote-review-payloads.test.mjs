@@ -1,5 +1,5 @@
 /**
- * `remote-run.sh review` — the verb the supervised `/autonomous-sdlc-harness:branch-user-review`
+ * `remote-run.sh review` — the verb the supervised `/devscene:branch-user-review`
  * runs — driven against a mirror or a cut copy carrying each payload a GitHub job's agent or a local
  * session could plant.
  *
@@ -69,13 +69,13 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REGISTRY = `${STATE_DIR}/autonomous_logs/registry.json`;
 const REVIEW_REL = `${STATE_DIR}/user_reviews/feat_x_review.md`;
 const REVIEW_BYTES = 'The button is not centred.\n';
 const REVIEW_SUBJECT = 'chore: add user review for feat_x';
 const REVIEW_DISPATCH =
-  'workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=user_review -f resume=none -f chain=0';
+  'workflow run devscene-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=user_review -f resume=none -f chain=0';
 const PIN = ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'submodule.recurse=false'];
 const REF = 'refs/heads/feat_x';
 
@@ -89,7 +89,7 @@ const args = process.argv.slice(2);
 appendFileSync(process.env.STUB_LOG, JSON.stringify(args) + '\\n');
 const line = args.join(' ');
 if (line.startsWith('run list')) {
-  process.stdout.write(JSON.stringify([{ databaseId: 101, displayTitle: 'harness run feat_x', status: 'completed',
+  process.stdout.write(JSON.stringify([{ databaseId: 101, displayTitle: 'devscene run feat_x', status: 'completed',
     conclusion: 'success', createdAt: '2026-01-01T00:01:00Z', url: 'https://github.com/o/r/actions/runs/101' }]));
 } else if (args[0] === 'api') {
   process.stdout.write(JSON.stringify({ artifacts: [{ name: 'harness-state', expired: false }] }));
@@ -140,7 +140,7 @@ async function reviewFixture(t, { mirror = 'clone', baseHooks = false } = {}) {
   /** A hook body writing `<markers>/<name>`, then `tail`. */
   const markerBody = (name, tail = 'exit 0') => `#!/bin/sh\n: > '${join(markers, name)}'\n${tail}\n`;
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   delete config.commands.depInstall;
@@ -223,7 +223,7 @@ async function reviewFixture(t, { mirror = 'clone', baseHooks = false } = {}) {
     registry: () => (existsSync(join(dir, REGISTRY)) ? readFileSync(join(dir, REGISTRY), 'utf8') : null),
     review: () =>
       runBash(dir, [SCRIPT, 'review', 'feat_x', '--review-file', reviewFile], {
-        HARNESS_GH_CLI: stub,
+        DEVSCENE_GH_CLI: stub,
         STUB_LOG: ghLog,
         STUB_BUNDLE: bundleDir,
         HARNESS_TRIGGER_LOOKUP_SECS: '0',

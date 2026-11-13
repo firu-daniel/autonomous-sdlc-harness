@@ -18,7 +18,7 @@
  * branch below reads the resolved label, never the raw argument.
  *
  * Server-side time is Python's only: its server prints one stderr line per call that searched, whose
- * prefix is `docs-retrieval-service/src/harness_docs_retrieval/mcp_server.py` → `TIMING_LINE_PREFIX`.
+ * prefix is `docs-retrieval-service/src/devscene_docs_retrieval/mcp_server.py` → `TIMING_LINE_PREFIX`.
  * TypeScript's in-process figure is the runner's arm E.
  *
  * Resident memory is the `rss` sum over the process subtree rooted at the spawned process. For Python

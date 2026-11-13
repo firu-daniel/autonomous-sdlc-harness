@@ -228,7 +228,7 @@ Figures from `docs/retrieval-eval-results.md` → `### Footprint` and `### Cold 
 **What blocks a lexical-only index today, in both runtimes:**
 - **Store.**
   - TS: `cli/src/retrieval/store.ts:80` declares `embedding vector(${dimensions}) NOT NULL`.
-  - Python: `docs-retrieval-service/src/harness_docs_retrieval/store.py:124` declares the same.
+  - Python: `docs-retrieval-service/src/devscene_docs_retrieval/store.py:124` declares the same.
   - No row can exist without a vector.
 - **Refresh.**
   - TS: `refresh.ts:58-63` requires an `embedder`, `:75-79` stores its id, and `:97` embeds every changed chunk.

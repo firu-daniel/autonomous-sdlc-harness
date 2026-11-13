@@ -9,12 +9,12 @@ argument-hint: "[<branch>]"
 
 The tokens below are not ordinary **path placeholders** (`<branch>`, `<MAIN_REPO>`, `<worktree>`, `<branch_fold>`, `<scratch>`, `<engine>`, which this
 file's own text resolves — `<MAIN_REPO>` in step 1, `<worktree>` from the registry record in step 4, `<branch_fold>` and `<scratch>` in step 2 and `<engine>` in step 6): they
-resolve from the adopting repository's `harness.config.json`. They are declared here once, and after this
+resolve from the adopting repository's `devscene.config.json`. They are declared here once, and after this
 table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `devscene/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<scripts_dir>` | config value | `scriptsDir` — the directory the outer-loop scripts live in, repo-relative; a script is invoked from the root of the checkout this session runs in. This file names two of them: `remote-run.sh`, which it invokes — its `sync` verb, for a remote record, and its `fetch` and `discard` verbs, for a prefix naming a branch with no record, all in step 2, and its `dispatch` verb, on the GitHub route in step 6 — and `autonomous-watcher.sh`, **only** in the scope fence, as a file it must not modify and never invokes. It modifies neither. |
 
 ---
@@ -29,7 +29,7 @@ run's **run copy**. On its next poll tick the watcher detects RESUME, clears the
 ledger (`<state_dir>/flow_progress/<branch>_progress.md`), skipping every phase already marked `[x]` or `[-]`. You do
 not re-launch. Wraps "Pause / resume a run" in `${CLAUDE_PLUGIN_ROOT}/docs/AUTONOMOUS_FLOW.md`.
 
-Only a **paused** run can be resumed this way (a `parked` run resumes via `/autonomous-sdlc-harness:branch-answer`; a `failed` /
+Only a **paused** run can be resumed this way (a `parked` run resumes via `/devscene:branch-answer`; a `failed` /
 `completed` run is re-triggered by a fresh inbox drop). For a local run this command writes ONE marker file
 and reports; for a run that executes on GitHub it writes no marker and sends the resume dispatch itself. Its
 only other local write is the step 2 scratch directory under `<state_dir>/scratch/`, which it removes before
@@ -38,12 +38,12 @@ it ends. The only scripts it invokes are `<scripts_dir>/remote-run.sh sync`, for
 `<scripts_dir>/remote-run.sh dispatch`, on the GitHub route. It must NOT modify
 `<scripts_dir>/autonomous-watcher.sh`, `<scripts_dir>/remote-run.sh`, the engines, or the instruction forks.
 
-**Usage:** type `/autonomous-sdlc-harness:branch-resume`, optionally targeting a branch with a leading `<branch>:` prefix, e.g.
-`/autonomous-sdlc-harness:branch-resume feat_settings_search`.
+**Usage:** type `/devscene:branch-resume`, optionally targeting a branch with a leading `<branch>:` prefix, e.g.
+`/devscene:branch-resume feat_settings_search`.
 
 ## Steps
 
-1. Resolve `<MAIN_REPO>` as the path a bare `printenv HARNESS_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none; the registry is
+1. Resolve `<MAIN_REPO>` as the path a bare `printenv DEVSCENE_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none; the registry is
    `<MAIN_REPO>/<state_dir>/autonomous_logs/registry.json` (shaped `{"runs": {"<branch>": {...}}}`).
 2. **Which-branch resolution.** If `$ARGUMENTS` starts with `<branch>:` (or is just a bare `<branch>`),
    parse it. Otherwise read the registry: if **exactly one** run has `status: "paused"`, target it;
@@ -80,7 +80,7 @@ it ends. The only scripts it invokes are `<scripts_dir>/remote-run.sh sync`, for
      unchanged.
 3. **State check.** Read the target's status with `jq -r '.runs["<branch>"].status'`. If it is not
    `paused`, report the actual status and stop — RESUME only acts on a paused run (for a `parked` run use
-   `/autonomous-sdlc-harness:branch-answer`; a `completed`/`failed` run needs a fresh inbox drop). If the **global kill switch**
+   `/devscene:branch-answer`; a `completed`/`failed` run needs a fresh inbox drop). If the **global kill switch**
    `<MAIN_REPO>/<state_dir>/AUTONOMOUS_STOP` is present, warn that the watcher defers all resumes until it is
    removed.
 4. From the registry record for `<branch>`, read the `worktree` field. Write an empty
@@ -92,7 +92,7 @@ it ends. The only scripts it invokes are `<scripts_dir>/remote-run.sh sync`, for
 
 6. **GitHub route** — in place of steps 3–5. Never write `RESUME`. The local kill switch
    `<MAIN_REPO>/<state_dir>/AUTONOMOUS_STOP` does not gate a dispatch to GitHub; the job-side brake is the
-   repository variable `HARNESS_REMOTE_STOP` — say so when the local kill switch is present. `<engine>` is
+   repository variable `DEVSCENE_REMOTE_STOP` — say so when the local kill switch is present. `<engine>` is
    the record's `engine` field or `fetch`'s `engine:`; when it is empty, report the GitHub route
    (`docs/remote-execution.md` → `### Working a run from GitHub alone`) and stop — never guess the engine,
    since the workflow input defaults to `task`. By state:
@@ -108,7 +108,7 @@ it ends. The only scripts it invokes are `<scripts_dir>/remote-run.sh sync`, for
    - **`park_loop`**: explain that the run is held because its resumes made no progress, and ask via
      `AskUserQuestion` whether to clear the hold. On yes, run the `paused` dispatch above with
      `--park-loop-clear` added. On no, send nothing.
-   - Any other state: report it and stop (for a `parked` run use `/autonomous-sdlc-harness:branch-answer`).
+   - Any other state: report it and stop (for a `parked` run use `/devscene:branch-answer`).
 
    Report the dispatch's result: exit 0, the resume was sent and the job resumes from the committed
    flow-progress ledger; exit 2 or 3, report its message — nothing reached the run.

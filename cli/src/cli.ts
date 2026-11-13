@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * autonomous-sdlc-harness — CLI entry point.
+ * DevScene — CLI entry point.
  *
  * Scope of this file: argv handling and dispatch, and nothing else. It parses the global
  * flags into a `CommandContext`, resolves the command against `commands/registry.ts`, and
@@ -8,7 +8,7 @@
  * reads no config and touches no filesystem — it only resolves `--cwd` to an absolute path.
  *
  * **This is the only place an error becomes an exit code.** A `HarnessError` thrown
- * anywhere below prints `autonomous-sdlc-harness: <message>` on stderr and yields its own
+ * anywhere below prints `devscene: <message>` on stderr and yields its own
  * `exitCode`; any other thrown value prints with an `(unexpected)` suffix and yields
  * `EXIT.INTERNAL`. No other module inspects or assigns exit codes, and nothing in the CLI
  * calls `process.exit()` — the contract lives in `core/errors.ts`.
@@ -62,7 +62,7 @@ const GLOBAL_OPTIONS: ReadonlyArray<{
     key: 'force',
     aliases: ['--force'],
     summary:
-      'Overwrite an existing generated file, after a .bak; never harness.config.json, which init reads (--reset-config rebuilds it)',
+      'Overwrite an existing generated file, after a .bak; never devscene.config.json, which init reads (--reset-config rebuilds it)',
   },
   {
     key: 'quiet',
@@ -158,9 +158,9 @@ function optionLines(): readonly string[] {
 
 function usage(): string {
   return [
-    `autonomous-sdlc-harness ${version}`,
+    `devscene ${version}`,
     '',
-    'Usage: npx autonomous-sdlc-harness <command> [options]',
+    'Usage: npx devscene <command> [options]',
     '',
     'Commands:',
     ...commandListLines(),
@@ -168,7 +168,7 @@ function usage(): string {
     'Options:',
     ...optionLines(),
     '',
-    "Run `npx autonomous-sdlc-harness <command> --help` for a command's own usage.",
+    "Run `npx devscene <command> --help` for a command's own usage.",
   ].join('\n');
 }
 
@@ -193,7 +193,7 @@ async function dispatch(rawArgv: readonly string[]): Promise<number> {
 
   const command = findSubcommand(parsed.command);
   if (command === undefined) {
-    console.error(`autonomous-sdlc-harness: unknown command '${parsed.command}'`);
+    console.error(`devscene: unknown command '${parsed.command}'`);
     console.error(usage());
     return EXIT.FAILURE;
   }
@@ -223,11 +223,11 @@ async function main(rawArgv: readonly string[]): Promise<number> {
     return await dispatch(rawArgv);
   } catch (error) {
     if (error instanceof HarnessError) {
-      console.error(`autonomous-sdlc-harness: ${error.message}`);
+      console.error(`devscene: ${error.message}`);
       return error.exitCode;
     }
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`autonomous-sdlc-harness: ${message} (unexpected)`);
+    console.error(`devscene: ${message} (unexpected)`);
     return EXIT.INTERNAL;
   }
 }

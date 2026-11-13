@@ -14,7 +14,7 @@
  * legitimately.
  *
  * Registered as a tree guard by Task 11 of `fix_clone_main_repo_resolution`, which adds this
- * file's `treeGuards` entry to `harness.config.json`.
+ * file's `treeGuards` entry to `devscene.config.json`.
  *
  * A later suite adds a corpus case as a row in `CASES`, with no new runner code. A `forbidden` entry
  * is either a string, matched by `includes`, or a `RegExp` without the `g` flag, matched by `test`.
@@ -78,13 +78,19 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import test from 'node:test';
 
+import { MAIN_REPO_ANCHOR_READ } from '../dist/core/mainRepoAnchor.js';
 import { WORKSPACE_ROOT } from './helpers/fixture.mjs';
 
+// Concatenation, not a template literal: `NEW_CLAUSE` carries the literal text `${CLAUDE_PLUGIN_ROOT}`.
 const NEW_CLAUSE =
-  'the path a bare `printenv HARNESS_MAIN_REPO` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none';
+  'the path a bare `' +
+  MAIN_REPO_ANCHOR_READ +
+  '` prints, else the path `${CLAUDE_PLUGIN_ROOT}/instructions/main_repo_resolution.md` → `## The fallback` resolves, and a stop with its sentence when it resolves none';
 
 const OLD_CLAUSE =
-  'the path a bare `printenv HARNESS_MAIN_REPO` prints, else the first `worktree ` line of a bare `git worktree list --porcelain`';
+  'the path a bare `' +
+  MAIN_REPO_ANCHOR_READ +
+  '` prints, else the first `worktree ` line of a bare `git worktree list --porcelain`';
 
 const LITERAL_SPELLING =
   'Spell it as a literal absolute path in the command, never through a substitution or a variable.';

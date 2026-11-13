@@ -10,10 +10,10 @@ landed the nineteen `branch-*` commands beside this file: the four supervised
 ones, the semi-autonomous pair, the two autonomous entry points, the four
 user-review commands across those modes, the phase-gated documentation and
 browser-QA commands, and the five run-control entry points. Not every command
-here is a `branch-*` one: item 15 added `/autonomous-sdlc-harness:harness-analyze`, the supervised
+here is a `branch-*` one: item 15 added `/devscene:analyze`, the supervised
 first-session command that fills the conventions documents `init` writes as
 skeletons from the adopted repository's real code.
-`/autonomous-sdlc-harness:harness-read-mention` is the one command a shipped
+`/devscene:read-mention` is the one command a shipped
 script, rather than a person or the watcher's flow launch, runs:
 `remote-run.sh control` runs it on GitHub Actions as a read-only session's first
 message, to read a mention of the harness handle, and it loads

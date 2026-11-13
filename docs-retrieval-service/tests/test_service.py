@@ -17,17 +17,17 @@ import psycopg
 import pytest
 
 from fakes import FakeSession, InMemoryDocStore, doc_chunk
-from harness_docs_retrieval import service, wire
-from harness_docs_retrieval.errors import ServiceError
-from harness_docs_retrieval.models import (
+from devscene_docs_retrieval import service, wire
+from devscene_docs_retrieval.errors import ServiceError
+from devscene_docs_retrieval.models import (
     EMBEDDING_DIMENSIONS,
     MANIFEST_NAME,
     MODEL_CACHE_ENV,
     MODEL_IDS,
 )
-from harness_docs_retrieval.refresh import RefreshResult
-from harness_docs_retrieval.search import ABSTAIN_MESSAGE, render_results
-from harness_docs_retrieval.service import (
+from devscene_docs_retrieval.refresh import RefreshResult
+from devscene_docs_retrieval.search import ABSTAIN_MESSAGE, render_results
+from devscene_docs_retrieval.service import (
     CONFIG_FILENAME,
     Answer,
     ServiceConfig,
@@ -36,8 +36,8 @@ from harness_docs_retrieval.service import (
     open_session,
     parse_arguments,
 )
-from harness_docs_retrieval.store import DATABASE_URL_ENV, DIMENSIONS_META_KEY, DocStore
-from harness_docs_retrieval.stubs import RETRIEVAL_STUB_ENV
+from devscene_docs_retrieval.store import DATABASE_URL_ENV, DIMENSIONS_META_KEY, DocStore
+from devscene_docs_retrieval.stubs import RETRIEVAL_STUB_ENV
 from model_cache import plant_model_files
 from ts_bridge import run_bridge
 
@@ -164,7 +164,7 @@ def test_an_empty_cache_refuses_before_loading_anything(
     missing = ", ".join(f"{model_id}/{MANIFEST_NAME}" for model_id in MODEL_IDS)
     assert str(raised.value) == (
         f"the docs-retrieval model cache at {cache} is missing {missing}: "
-        "run harness-docs-retrieval fetch-models where an operator is present, "
+        "run devscene-docs-retrieval fetch-models where an operator is present, "
         "which downloads the models"
     )
 
@@ -310,8 +310,8 @@ def test_warnings_become_notes_ahead_of_the_body(capsys: pytest.CaptureFixture[s
     )
     assert not got.is_error
     assert capsys.readouterr().err == (
-        "harness-docs: warning: docs.root docs is not a directory\n"
-        "harness-docs: warning: conventions document x is missing\n"
+        "devscene-docs: warning: docs.root docs is not a directory\n"
+        "devscene-docs: warning: conventions document x is missing\n"
     )
 
 
@@ -321,7 +321,7 @@ def test_a_refresh_failure_is_an_error_but_not_a_refusal() -> None:
     assert got == Answer(
         text=(
             "search_docs: refreshing the docs index failed: the database went away; "
-            "run `npx autonomous-sdlc-harness doctor` in this repository"
+            "run `npx devscene doctor` in this repository"
         ),
         is_error=True,
         refused=False,
@@ -355,7 +355,7 @@ def test_a_multi_line_failure_message_reaches_the_text_as_its_first_line() -> No
     assert "\n" not in got.text
     assert got.text == (
         "search_docs: refreshing the docs index failed: boom; "
-        "run `npx autonomous-sdlc-harness doctor` in this repository"
+        "run `npx devscene doctor` in this repository"
     )
 
 

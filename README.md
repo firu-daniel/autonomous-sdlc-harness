@@ -1,6 +1,6 @@
-# autonomous-sdlc-harness
+# DevScene
 
-An autonomous software-delivery harness for Claude Code.
+DevScene is an autonomous software-delivery harness for Claude Code.
 You ask for a change, and you get back a branch that has been planned, implemented and independently reviewed, pushed and ready for your review.
 It has two entry points, used together: locally, through the plugin and CLI installed below, and from GitHub, where labelling an issue starts a run and comments and reviews steer it to a draft pull request.
 The GitHub route works once one maintainer has done a one-time local setup.
@@ -9,33 +9,33 @@ You install two things: a Claude Code plugin and a Node CLI.
 1. Install the plugin (step A):
 
    ```bash
-   claude plugin marketplace add firu-daniel/autonomous-sdlc-harness
-   claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness
+   claude plugin marketplace add firu-daniel/devscene
+   claude plugin install devscene@devscene
    ```
 
 2. Wire your repository (step B):
 
    ```bash
-   npx autonomous-sdlc-harness init
+   npx devscene init
    ```
 
 3. Teach it the codebase: type this in an **interactive** Claude Code session opened on the repository, not in the terminal (step C):
 
    ```
-   /autonomous-sdlc-harness:harness-analyze
+   /devscene:analyze
    ```
 
 4. Verify (step D):
 
    ```bash
-   npx autonomous-sdlc-harness doctor
+   npx devscene doctor
    ```
 
 5. Start the daemon (step E):
 
    ```bash
-   npx autonomous-sdlc-harness daemon install
-   npx autonomous-sdlc-harness daemon start
+   npx devscene daemon install
+   npx devscene daemon start
    ```
 
 **Before you run it:**
@@ -43,7 +43,7 @@ You install two things: a Claude Code plugin and a Node CLI.
 - **Published.** The npm package and the plugin marketplace are both live, so the checklist runs as written. This command answers with the published version and exits `0`:
 
   ```bash
-  npm view autonomous-sdlc-harness version
+  npm view devscene version
   ```
 
 - **Contributors.** From a clone, the plugin installs as a directory source, and the built CLI is `node cli/dist/cli.js`. Both routes, and the scratch repository step 3 then needs, are [`docs/development.md`](docs/development.md) §1 and §5.
@@ -52,11 +52,11 @@ You install two things: a Claude Code plugin and a Node CLI.
 ```mermaid
 flowchart TB
   subgraph ship["What ships"]
-    P["plugin/ — the Claude Code plugin<br/>agents · branch-* commands · /autonomous-sdlc-harness:harness-analyze · harness-read-mention<br/>PreToolUse guard hooks · instruction cores and forks<br/>samples · helper scripts · flow documents"]
-    C["cli/ — the npm package autonomous-sdlc-harness<br/>init · doctor · config · daemon · docs"]
+    P["plugin/ — the Claude Code plugin<br/>agents · branch-* commands · /devscene:analyze · read-mention<br/>PreToolUse guard hooks · instruction cores and forks<br/>samples · helper scripts · flow documents"]
+    C["cli/ — the npm package devscene<br/>init · doctor · config · daemon · docs"]
   end
   subgraph repo["An adopted repository, after init"]
-    CFG["harness.config.json — layers, commands,<br/>protectedBranches, stateDir, phases"]
+    CFG["devscene.config.json — layers, commands,<br/>protectedBranches, stateDir, phases"]
     PROF["a generated permission profile,<br/>committable project settings, a pre-push backstop"]
     SCR["scriptsDir — the outer-loop scripts:<br/>watcher, commit, push, worktree, notify"]
     ST["stateDir — the run-artifact tree:<br/>plans, reviews, ledgers, statistics, inbox, logs"]
@@ -66,8 +66,8 @@ flowchart TB
   C -->|writes| SCR
   C -->|writes| ST
   D["a file is dropped:<br/>stateDir/autonomous_inbox/&lt;branch&gt;_task_prompt.md"] --> W
-  ASK["an ordinary session: 'add a pin button'<br/>→ the offer → /autonomous-sdlc-harness:branch-prompt"] --> D
-  N -.->|"writes it by hand, or through /autonomous-sdlc-harness:branch-prompt"| D
+  ASK["an ordinary session: 'add a pin button'<br/>→ the offer → /devscene:branch-prompt"] --> D
+  N -.->|"writes it by hand, or through /devscene:branch-prompt"| D
   W["autonomous-watcher.sh — route by filename,<br/>prepare a working copy with create-worktree.sh,<br/>place and commit the prompt, launch headless,<br/>classify the exit"]
   W -->|"one -p session under the generated profile"| E
   P -.->|"supplies the command, agents and instructions the session runs"| E
@@ -78,7 +78,7 @@ flowchart TB
   B --> N
 ```
 
-**The plugin carries the process assets a run executes.** These are the instruction cores and their thin forks, the agent definitions, the `branch-*` slash commands, the `/autonomous-sdlc-harness:harness-analyze` setup command, the `/autonomous-sdlc-harness:harness-read-mention` command the control job runs to read a mention, the guard hooks, the helper scripts and the sample fixtures. It also carries the two flow documents that describe the loop they run.
+**The plugin carries the process assets a run executes.** These are the instruction cores and their thin forks, the agent definitions, the `branch-*` slash commands, the `/devscene:analyze` setup command, the `/devscene:read-mention` command the control job runs to read a mention, the guard hooks, the helper scripts and the sample fixtures. It also carries the two flow documents that describe the loop they run.
 
 Every reference inside the plugin is written `${CLAUDE_PLUGIN_ROOT}/…`. It is the only form that resolves under both a git-sourced install and a directory-sourced one.
 
@@ -114,7 +114,7 @@ npm test
 npm run dev
 ```
 
-`examples/notes-app/` is a small TypeScript notes application the harness was adopted into. Its `sdlc-harness/` directory holds the artifacts of one **real** end-to-end run over it, the branch `feat_note_updated_at`. They are its task prompt, its story index and per-task plans, its interactive-test plan and the seven per-test files under it, its code review and per-finding files, and the three failing meta-review rounds that review took to converge. They also include its flow-progress ledger, its dispatch-additions record, its improvement-observations intake and its statistics report.
+`examples/notes-app/` is a small TypeScript notes application the harness was adopted into. Its `devscene/` directory holds the artifacts of one **real** end-to-end run over it, the branch `feat_note_updated_at`. They are its task prompt, its story index and per-task plans, its interactive-test plan and the seven per-test files under it, its code review and per-finding files, and the three failing meta-review rounds that review took to converge. They also include its flow-progress ledger, its dispatch-additions record, its improvement-observations intake and its statistics report.
 
 What "end-to-end" covers there is set by that project's phase configuration, stated under [Scope and limits](#scope-and-limits). Read [`examples/notes-app/README.md`](examples/notes-app/README.md) first. It carries the decisions and disclosures the directory's own files do not.
 
@@ -122,29 +122,29 @@ The last three commands are the ones the generated wrapper scripts wrap. That di
 
 ### Adopting it in your own repository
 
-**A. Install the harness — once per machine (checklist step 1).** Adds this repository as a plugin marketplace, then installs the one plugin it publishes, `autonomous-sdlc-harness`. Working from a clone instead: see **Contributors** under **Before you run it**.
+**A. Install the harness — once per machine (checklist step 1).** Adds this repository as a plugin marketplace, then installs the one plugin it publishes, `devscene`. Working from a clone instead: see **Contributors** under **Before you run it**.
 
 ```bash
-claude plugin marketplace add firu-daniel/autonomous-sdlc-harness
-claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness
+claude plugin marketplace add firu-daniel/devscene
+claude plugin install devscene@devscene
 ```
 
 **B. Wire a project — once per repo (checklist step 2).** One deterministic pass with no model call in it. It creates what is absent and keeps what you have edited. What it writes is [`docs/cli.md`](docs/cli.md) §2.
 
 ```bash
-npx autonomous-sdlc-harness init
+npx devscene init
 ```
 
-`init` writes its scripts into `harness-scripts/`, leaving a `scripts/` you already have untouched; a repository adopted by an earlier release keeps its scripts where they are. To pick another directory, run this instead ([`docs/cli.md`](docs/cli.md) §2):
+`init` writes its scripts into `devscene-scripts/`, leaving a `scripts/` you already have untouched; a repository adopted by an earlier release keeps its scripts where they are. To pick another directory, run this instead ([`docs/cli.md`](docs/cli.md) §2):
 
 ```bash
-npx autonomous-sdlc-harness init --scripts-dir tools/harness
+npx devscene init --scripts-dir tools/harness
 ```
 
-**C. Teach it the codebase — once per repo, LLM-assisted (checklist step 3).** It fills the conventions documents from the repository's real code. It *proposes* a layer-profile revision and never writes `harness.config.json` itself. To run one target at a time, type this instead:
+**C. Teach it the codebase — once per repo, LLM-assisted (checklist step 3).** It fills the conventions documents from the repository's real code. It *proposes* a layer-profile revision and never writes `devscene.config.json` itself. To run one target at a time, type this instead:
 
 ```
-/autonomous-sdlc-harness:harness-analyze <target>
+/devscene:analyze <target>
 ```
 
 This step is limited once: see **The `.claude/` write wall** under **Before you run it**. How the offer to run it reaches a first session is [`docs/analyze.md`](docs/analyze.md) §9.
@@ -152,22 +152,22 @@ This step is limited once: see **The `.claude/` write wall** under **Before you 
 **D. Verify (checklist step 4).** Reports everything wrong with a wired repository, not just the first thing. The exit status is the contract: `0` when no check failed, `1` when at least one did. The checks are [`docs/cli.md`](docs/cli.md) §7.
 
 ```bash
-npx autonomous-sdlc-harness doctor
+npx devscene doctor
 ```
 
 **E. Run (checklist step 5).** Installs this repository's own run daemon into the host's service manager and starts it. On launchd the lifecycle is driven for you. On systemd the unit is written and the `systemctl --user` commands are printed for you to run ([`docs/cli.md`](docs/cli.md) §9).
 
 ```bash
-npx autonomous-sdlc-harness daemon install
-npx autonomous-sdlc-harness daemon start
+npx devscene daemon install
+npx devscene daemon start
 ```
 
-Then just ask for the change. An ordinary interactive session in this repository offers to run a change request autonomously, and on a yes it invokes `/autonomous-sdlc-harness:branch-prompt` with the request. The offer is defined by two files `init` writes: [`cli/templates/claude/CLAUDE.md`](cli/templates/claude/CLAUDE.md) and [`cli/templates/claude/harness-task-offer.md`](cli/templates/claude/harness-task-offer.md).
+Then just ask for the change. An ordinary interactive session in this repository offers to run a change request autonomously, and on a yes it invokes `/devscene:branch-prompt` with the request. The offer is defined by two files `init` writes: [`cli/templates/claude/CLAUDE.md`](cli/templates/claude/CLAUDE.md) and [`cli/templates/claude/devscene-task-offer.md`](cli/templates/claude/devscene-task-offer.md).
 
 Two direct routes reach the same drop. The first is the command itself, typed into an interactive Claude Code session with the task description on the same line:
 
 ```
-/autonomous-sdlc-harness:branch-prompt <task description>
+/devscene:branch-prompt <task description>
 ```
 
 The second is a file named `<branch>_task_prompt.md` written into `<state_dir>/autonomous_inbox/` ([`docs/config.md`](docs/config.md) §3). The next poll pass acts on either, as [`docs/watcher.md`](docs/watcher.md) §1 describes.
@@ -175,20 +175,20 @@ The second is a file named `<branch>_task_prompt.md` written into `<state_dir>/a
 **F. A teammate clones.** `git clone` → open the repository in Claude Code → **accept the workspace trust dialog** → the plugin resolves from the keys `init` committed into `.claude/settings.json`, with `/reload-plugins` for a session that was already open. Then generate this clone's permission profile — it carries one checkout's absolute paths, so it is ignored rather than committed and each clone makes its own:
 
 ```bash
-npx autonomous-sdlc-harness init
+npx devscene init
 ```
 
 Then verify:
 
 ```bash
-npx autonomous-sdlc-harness doctor
+npx devscene doctor
 ```
 
-Which keys are written is [`docs/cli.md`](docs/cli.md) §2. `harness.config.json` is committed; the permission profile is not committed, which is why the teammate runs `init` once.
+Which keys are written is [`docs/cli.md`](docs/cli.md) §2. `devscene.config.json` is committed; the permission profile is not committed, which is why the teammate runs `init` once.
 
 ### Working from GitHub
 
-Once the setup is done, labelling an issue `sdlc-harness` starts a run, and a review that requests changes on a pull request from the run's branch starts a user-review round. Who may start or work a run from GitHub is an allow-list: by default only the owner of a repository a personal account owns, and nobody in an organisation-owned one, and the maintainer names anyone else in the repository variable `HARNESS_RUN_ACTORS` ([`docs/github-issue-trigger.md`](docs/github-issue-trigger.md#3-who-can-start-a-run)). With `forge` set to `github` and `execution.target` to `github-actions`, a team member the list admits who uses only this route needs nothing local: no clone, no plugin and no `init`. Anyone may use both routes at once.
+Once the setup is done, labelling an issue `devscene` starts a run, and a review that requests changes on a pull request from the run's branch starts a user-review round. Who may start or work a run from GitHub is an allow-list: by default only the owner of a repository a personal account owns, and nobody in an organisation-owned one, and the maintainer names anyone else in the repository variable `DEVSCENE_RUN_ACTORS` ([`docs/github-issue-trigger.md`](docs/github-issue-trigger.md#3-who-can-start-a-run)). With `forge` set to `github` and `execution.target` to `github-actions`, a team member the list admits who uses only this route needs nothing local: no clone, no plugin and no `init`. Anyone may use both routes at once.
 
 The setup, the comment commands, what still needs a local machine and the caveats are in [`docs/github-run-control.md`](docs/github-run-control.md#the-github-entry-point).
 
@@ -208,7 +208,7 @@ One report per branch lands at `<state_dir>/branch_statistics/<branch>/statistic
 
 **The lessons ledger turns a review escape into a rule.** A defect that only a human's hands-on review caught becomes one line in [`cli/templates/state-dir/lessons.md`](cli/templates/state-dir/lessons.md). The agent that turns a review into a fix plan is its only writer. Every agent that plans or grades work reads it before it starts, and an entry binds like a conventions rule. The append rules are in the ledger's own header.
 
-**The improvement ledger counts the harness's own defects, and no agent reads it.** A run records the harness and workflow problems it hit in one intake file per branch, `<state_dir>/improvement_observations/<branch>.md` ([`plugin/docs/AUTONOMOUS_FLOW.md`](plugin/docs/AUTONOMOUS_FLOW.md) → `## Improvement observations`). A human folds the intakes into [`cli/templates/state-dir/improvement_suggestions.md`](cli/templates/state-dir/improvement_suggestions.md). Why it is one file per branch is in [`cli/templates/state-dir/improvement_observations/README.md`](cli/templates/state-dir/improvement_observations/README.md), and the entry categories are in [`plugin/instructions/improvement_observations_instructions.md`](plugin/instructions/improvement_observations_instructions.md) → `## The entry format`. A real intake from the captured run is [`examples/notes-app/sdlc-harness/improvement_observations/feat_note_updated_at.md`](examples/notes-app/sdlc-harness/improvement_observations/feat_note_updated_at.md).
+**The improvement ledger counts the harness's own defects, and no agent reads it.** A run records the harness and workflow problems it hit in one intake file per branch, `<state_dir>/improvement_observations/<branch>.md` ([`plugin/docs/AUTONOMOUS_FLOW.md`](plugin/docs/AUTONOMOUS_FLOW.md) → `## Improvement observations`). A human folds the intakes into [`cli/templates/state-dir/improvement_suggestions.md`](cli/templates/state-dir/improvement_suggestions.md). Why it is one file per branch is in [`cli/templates/state-dir/improvement_observations/README.md`](cli/templates/state-dir/improvement_observations/README.md), and the entry categories are in [`plugin/instructions/improvement_observations_instructions.md`](plugin/instructions/improvement_observations_instructions.md) → `## The entry format`. A real intake from the captured run is [`examples/notes-app/devscene/improvement_observations/feat_note_updated_at.md`](examples/notes-app/devscene/improvement_observations/feat_note_updated_at.md).
 
 **Why both.** The two ledgers close different loops. The lessons ledger improves the **work product**: a class of defect that escaped once is refused the next time. The improvement ledger improves the **process**: the harness's own gaps, which a human triages across runs because frequency is the diagnosis.
 
@@ -230,7 +230,7 @@ What this harness does not do, in three groups: the shape of the system as desig
 
 ### What the shipped evidence covers, and what it does not
 
-- **The captured example run does not exercise every phase.** [`examples/notes-app/`](examples/notes-app/README.md) turns `phases.parity` and `phases.docs` off in its own [`harness.config.json`](examples/notes-app/harness.config.json), because it ports nothing and has no docs catalogue. So the capture shows neither the parity reviewer nor the docs phase.
+- **The captured example run does not exercise every phase.** [`examples/notes-app/`](examples/notes-app/README.md) turns `phases.parity` and `phases.docs` off in its own [`devscene.config.json`](examples/notes-app/devscene.config.json), because it ports nothing and has no docs catalogue. So the capture shows neither the parity reviewer nor the docs phase.
 - **Nothing has been measured with the eval corpus yet.** [`evals/`](evals/README.md) holds one case, `plan-shape/`, marked PROVISIONAL because its runner is gated behind early access. No arm has been run, so this repository publishes no eval result.
 - **Parts of the outer loop ship unexercised, and the tree says which.** [`docs/outer-loop-verification.md`](docs/outer-loop-verification.md) records what the outer-loop scripts do when driven against fixtures, and which paths ship undriven because they need a real service manager, headless session or rate-limit window. [`docs/guard-verification.md`](docs/guard-verification.md) does the same for the `PreToolUse` guard set and its per-call cost.
 
@@ -250,7 +250,7 @@ What this harness does not do, in three groups: the shape of the system as desig
 - [`docs/team-accounts-research.md`](docs/team-accounts-research.md) — running the harness on GitHub for a team whose members each have their own Claude account: which credentials may be shared, whose usage each consumes, GitHub's options for per-member credentials, three options for the harness and a recommendation.
 - [`docs/copilot-foundry-research.md`](docs/copilot-foundry-research.md) — adopting the harness in a company whose only AI coding licence is GitHub Copilot: what Copilot CLI, the Claude partner agent and VS Code offer against what the harness needs, why a Copilot-token proxy is not an option, and running Claude Code on Microsoft Foundry — credentials, metering, and the model and effort constraints.
 - [`docs/orchestrator-cost-measurement.md`](docs/orchestrator-cost-measurement.md) — where an autonomous run's cached-context cost goes, by agent and by phase; how often the orchestrator adds knowledge to a dispatch; and whether a session started with `--agent` keeps the agent's `tools:` allowlist.
-- [`docs/analyze.md`](docs/analyze.md) — `/autonomous-sdlc-harness:harness-analyze`'s decisions of record: what it fills in from real code, what it refuses to guess, and how the offer to run it reaches a session.
+- [`docs/analyze.md`](docs/analyze.md) — `/devscene:analyze`'s decisions of record: what it fills in from real code, what it refuses to guess, and how the offer to run it reaches a session.
 - [`docs/cli.md`](docs/cli.md) — the five subcommands, their flags and exit codes, the `init` re-run contract, the stack-detection table, and the failure modes the generated permission profile encodes.
 - [`docs/retrieval.md`](docs/retrieval.md) — RAG (docs retrieval): opt-in and local; measured on a real catalog, verdict withdrawn, kept opt-in by maintainer decision; its design, measured facts, when to turn it on, what it buys and what it costs.
 - [`docs/retrieval-eval.md`](docs/retrieval-eval.md) — the docs-retrieval relevance eval: how to run it against any checkout, what each metric means, the decision rule, and the regression floor the gate enforces.
@@ -264,7 +264,7 @@ What this harness does not do, in three groups: the shape of the system as desig
 - [`docs/typecheck-key-decision.md`](docs/typecheck-key-decision.md) — whether `commands.typecheck` stays a required key, with option (b), the explicit `none` sentinel, ratified and implemented.
 - [`docs/second-runtime-port-decision.md`](docs/second-runtime-port-decision.md) — why the second-runtime reference port was withdrawn: the planning loop as a graph the orchestrator already walks, the frameworks considered, the checkpointer and cost reasoning, and the maintainer's arguments.
 - [`plugin/docs/AUTONOMOUS_FLOW.md`](plugin/docs/AUTONOMOUS_FLOW.md) — the canonical statement of the inner loop, with [`plugin/docs/AUTONOMOUS_FLOW_WHITEBOARD.md`](plugin/docs/AUTONOMOUS_FLOW_WHITEBOARD.md) as its narrative companion.
-- [`schemas/README.md`](schemas/README.md) — the JSON Schema for `harness.config.json`, and what belongs in that committed file versus machine-local configuration.
+- [`schemas/README.md`](schemas/README.md) — the JSON Schema for `devscene.config.json`, and what belongs in that committed file versus machine-local configuration.
 - [`evals/README.md`](evals/README.md) — the evaluation corpus, with one case written and its runner still unverified.
 - [`examples/notes-app/README.md`](examples/notes-app/README.md) — the minimal project the harness was adopted into, with the artifacts of one real end-to-end run.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — the engine axis: runtime and model, where the engine is reached, the adapter contract, and the open-weight backend path, designed and not implemented.

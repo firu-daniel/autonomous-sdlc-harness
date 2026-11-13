@@ -174,7 +174,7 @@ function oversizedArgString(args, env) {
  * this isolation, as it already was.
  *
  * `HARNESS_GITHUB_DEFAULT_COMMIT` is blanked because the remote bundle library switches to the
- * trusted configuration whenever it is non-empty, and a `harness-run` job exports it to every later
+ * trusted configuration whenever it is non-empty, and a `devscene-run` job exports it to every later
  * step, a session's gate runs included; a case that exercises trusted mode passes it explicitly.
  *
  * {@link MAIN_REPO_ANCHOR_VARIABLE} is blanked because the plugin's readers act on the main checkout
@@ -679,9 +679,9 @@ export function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
-/** `<cacheHome>/autonomous-sdlc-harness/retrieval`, as `machineCacheDir()` and `retrieval/runtime.ts` spell it. */
+/** `<cacheHome>/devscene/retrieval`, as `machineCacheDir()` and `retrieval/runtime.ts` spell it. */
 function retrievalCacheDir(cacheHome) {
-  return join(cacheHome, 'autonomous-sdlc-harness', 'retrieval');
+  return join(cacheHome, 'devscene', 'retrieval');
 }
 
 /**
@@ -710,12 +710,12 @@ const RETRIEVAL_MODEL_REVISIONS = Object.freeze({
  * @returns {Record<string, string>}
  */
 export function retrievalEnv(cacheHome) {
-  return { XDG_CACHE_HOME: cacheHome, AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB: 'hash-v1' };
+  return { XDG_CACHE_HOME: cacheHome, DEVSCENE_RETRIEVAL_STUB: 'hash-v1' };
 }
 
 /**
  * Plant every model file as an empty file at
- * `<cacheHome>/autonomous-sdlc-harness/retrieval/models/<model id>/<revision>/<file>`, which the
+ * `<cacheHome>/devscene/retrieval/models/<model id>/<revision>/<file>`, which the
  * retrieval verbs check for even under the stub.
  *
  * @param {string} cacheHome
@@ -735,7 +735,7 @@ export async function plantModelFiles(cacheHome) {
 }
 
 /**
- * Plant the retrieval runtime under `<cacheHome>/autonomous-sdlc-harness/retrieval/runtime` as the
+ * Plant the retrieval runtime under `<cacheHome>/devscene/retrieval/runtime` as the
  * three things `retrievalRuntimeState()` tests: the CLI entry, that CLI's manifest at `version`, and a
  * manifest per optional peer of `cli/package.json`.
  *
@@ -756,9 +756,9 @@ export async function plantRetrievalRuntime(cacheHome, { version } = {}) {
     planted.push(target);
   };
 
-  await plant(join(modules, 'autonomous-sdlc-harness', 'dist', 'cli.js'), 'process.exit(0);\n');
+  await plant(join(modules, 'devscene', 'dist', 'cli.js'), 'process.exit(0);\n');
   await plant(
-    join(modules, 'autonomous-sdlc-harness', 'package.json'),
+    join(modules, 'devscene', 'package.json'),
     `${JSON.stringify({ version: version ?? manifest.version })}\n`,
   );
   for (const name of Object.keys(manifest.peerDependencies ?? {})) {
@@ -769,7 +769,7 @@ export async function plantRetrievalRuntime(cacheHome, { version } = {}) {
 }
 
 /**
- * Write a valid `harness.config.json` into `dir` with retrieval on: `phases.docs` true, `docs.root`
+ * Write a valid `devscene.config.json` into `dir` with retrieval on: `phases.docs` true, `docs.root`
  * `docs`, and one catch-all layer whose conventions document is `conventions.md`.
  *
  * @param {string} dir
@@ -779,11 +779,11 @@ export async function writeRetrievalConfig(dir) {
   const config = {
     version: 1,
     defaultBranch: 'main',
-    stateDir: 'sdlc-harness',
+    stateDir: 'devscene',
     layers: [{ name: 'general', path: '.', conventions: 'conventions.md' }],
     commands: { typecheck: 'echo typecheck', test: 'echo test' },
     phases: { docs: true },
     docs: { root: 'docs', retrieval: true },
   };
-  await writeFile(insideFixture(dir, 'harness.config.json'), `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+  await writeFile(insideFixture(dir, 'devscene.config.json'), `${JSON.stringify(config, null, 2)}\n`, 'utf8');
 }

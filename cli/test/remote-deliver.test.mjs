@@ -16,7 +16,7 @@
  *
  * The fixture is `remote-report.test.mjs`'s — `feat_x` on origin with its provenance line for issue 7 and
  * its ledger — plus a bundle directory whose `status.json` (schema `1`) the test writes. `gh` is a stub
- * reached through `HARNESS_GH_CLI`: it logs each argument vector with any `body=@` / `--body-file`
+ * reached through `DEVSCENE_GH_CLI`: it logs each argument vector with any `body=@` / `--body-file`
  * content and the `GH_TOKEN` it ran with, answers `pr list` from `STUB_PRS`, `pr create` with
  * `https://github.com/octo/fixture/pull/12`, `pr ready` with nothing, and fails a call starting
  * `STUB_FAIL_ON` with `STUB_FAIL_MESSAGE` up to `STUB_FAIL_TIMES` times. No case reaches the network.
@@ -30,7 +30,7 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
 const FORBIDDEN = 'GitHub Actions is not permitted to create or approve pull requests';
@@ -87,7 +87,7 @@ async function deliverFixture(t, { forge = 'github', qa = false, status = 'compl
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   if (forge === null) delete config.forge;
@@ -102,7 +102,7 @@ async function deliverFixture(t, { forge = 'github', qa = false, status = 'compl
   const files = [`${STATE_DIR}/task_prompts/feat_x_task_prompt.md`, `${STATE_DIR}/flow_progress/feat_x_progress.md`];
   mkdirSync(join(dir, STATE_DIR, 'task_prompts'), { recursive: true });
   mkdirSync(join(dir, STATE_DIR, 'flow_progress'), { recursive: true });
-  const provenance = issue ? `\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`sdlc-harness\`.\n` : '';
+  const provenance = issue ? `\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`devscene\`.\n` : '';
   writeFileSync(join(dir, files[0]), `# Add comments\n\nDo it.\n${provenance}`);
   writeFileSync(join(dir, files[1]), '# Progress\n');
   await runGit(dir, ['add', '--force', ...files]);
@@ -130,7 +130,7 @@ async function deliverFixture(t, { forge = 'github', qa = false, status = 'compl
     /** @param {Record<string, string>} [env] */
     deliver: (env = {}) =>
       runBash(dir, [SCRIPT, 'deliver', 'feat_x', bundle], {
-        HARNESS_GH_CLI: stub,
+        DEVSCENE_GH_CLI: stub,
         STUB_LOG: log,
         GITHUB_REPOSITORY: REPOSITORY,
         GITHUB_SERVER_URL: 'https://github.com',
@@ -170,7 +170,7 @@ const labelAdds = (calls, n) =>
   calls
     .filter((call) => call.line.startsWith(`api --method POST repos/${REPOSITORY}/issues/${n}/labels `))
     .map((call) => call.args.at(-1));
-const MARKER = '<!-- sdlc-harness event=completed branch=feat_x -->\n';
+const MARKER = '<!-- devscene event=completed branch=feat_x -->\n';
 
 const FLIP_ARGS = ['pr', 'ready', '12', '--repo', REPOSITORY];
 const UNDO_ARGS = [...FLIP_ARGS, '--undo'];
@@ -191,7 +191,7 @@ test('an open draft is marked ready with HARNESS_PR_TOKEN, commented on it and o
   assert.equal(flips.length, 1);
   assert.deepEqual(flips[0].args, FLIP_ARGS);
   assert.equal(flips[0].token, PR_TOKEN);
-  assert.match(result.stdout, /^remote-run\.sh: deliver: marked pull request #12 ready for review with HARNESS_GIT_TOKEN$/m);
+  assert.match(result.stdout, /^remote-run\.sh: deliver: marked pull request #12 ready for review with DEVSCENE_GIT_TOKEN$/m);
   for (const call of calls) if (call !== flips[0]) assert.notEqual(call.token, PR_TOKEN, call.line);
   assert.equal(allComments(calls).length, 2);
   const [onPr] = commentsOn(calls, 12);
@@ -203,8 +203,8 @@ test('an open draft is marked ready with HARNESS_PR_TOKEN, commented on it and o
   assert.match(onIssue.body, /https:\/\/github\.com\/octo\/fixture\/pull\/12/);
   assert.ok(onIssue.body.endsWith(MARKER), onIssue.body);
   assert.doesNotMatch(onIssue.body, /branch-qa-test/);
-  assert.deepEqual(labelAdds(calls, 7), ['labels[]=sdlc-harness: done']);
-  assert.deepEqual(labelAdds(calls, 12), ['labels[]=sdlc-harness: done']);
+  assert.deepEqual(labelAdds(calls, 7), ['labels[]=devscene: done']);
+  assert.deepEqual(labelAdds(calls, 12), ['labels[]=devscene: done']);
 });
 
 test('with HARNESS_PR_TOKEN unset, an open draft is marked ready with the job token and the line says so', async (t) => {
@@ -230,7 +230,7 @@ test('a flip refused with HARNESS_PR_TOKEN is retried once with the job token, a
   assert.deepEqual(flips.map((call) => [call.args, call.token]), [[FLIP_ARGS, PR_TOKEN], [FLIP_ARGS, JOB_TOKEN]]);
   const warnings = warningsOf(result);
   assert.equal(warnings.length, 1);
-  assert.match(warnings[0], /HARNESS_GIT_TOKEN was refused: .*nope.*retrying once with the job's token/);
+  assert.match(warnings[0], /DEVSCENE_GIT_TOKEN was refused: .*nope.*retrying once with the job's token/);
   assert.match(result.stdout, /^remote-run\.sh: deliver: marked pull request #12 ready for review with the job's token$/m);
   assert.match(commentsOn(calls, 12)[0].body, /now marked ready for your review/);
 });
@@ -247,7 +247,7 @@ test('with HARNESS_PR_TOKEN set, an open non-draft is turned back to a draft wit
     result.stdout,
     /^remote-run\.sh: deliver: turned pull request #12 back to a draft so marking it ready fires ready_for_review on this tip$/m,
   );
-  assert.match(result.stdout, /ready for review with HARNESS_GIT_TOKEN$/m);
+  assert.match(result.stdout, /ready for review with DEVSCENE_GIT_TOKEN$/m);
   assert.deepEqual(warningsOf(result), []);
   assert.match(commentsOn(calls, 12)[0].body, /now marked ready for your review/);
 });
@@ -304,7 +304,7 @@ test('a refused flip is one warning line, exit 0, the refused sentence, and both
   assert.equal(onIssue.length, 1);
   assert.match(onIssue[0].body, /still a draft — marking it ready for review was refused/);
   assert.doesNotMatch(onIssue[0].body, /is ready for your review/);
-  assert.deepEqual(labelAdds(calls, 12), ['labels[]=sdlc-harness: done']);
+  assert.deepEqual(labelAdds(calls, 12), ['labels[]=devscene: done']);
 });
 
 test('with no pull request open, the fallback draft create runs with HARNESS_PR_TOKEN and then the flip', async (t) => {
@@ -322,10 +322,10 @@ test('with no pull request open, the fallback draft create runs with HARNESS_PR_
   assert.equal(made[0].args[made[0].args.indexOf('--title') + 1], 'Add comments');
   assert.match(made[0].body, /\nStarted from #7\.\n/);
   assert.doesNotMatch(made[0].body, /\b(closes|fixes|resolves) #/i);
-  for (const cmd of ['@sdlc-harness answer <n>', '@sdlc-harness pause', '@sdlc-harness resume', '@sdlc-harness stop', '@sdlc-harness clear', '@sdlc-harness status']) {
+  for (const cmd of ['@dev-scene answer <n>', '@dev-scene pause', '@dev-scene resume', '@dev-scene stop', '@dev-scene clear', '@dev-scene status']) {
     assert.ok(made[0].body.includes(`\`${cmd}\``), made[0].body);
   }
-  assert.ok(made[0].body.endsWith('<!-- sdlc-harness event=pull-request branch=feat_x -->\n'), made[0].body);
+  assert.ok(made[0].body.endsWith('<!-- devscene event=pull-request branch=feat_x -->\n'), made[0].body);
   const createAt = calls.indexOf(made[0]);
   const flips = readies(calls);
   assert.equal(flips.length, 1);
@@ -354,7 +354,7 @@ test('with no issue, only the pull request is commented on and labelled', async 
   const calls = f.calls();
   assert.equal(allComments(calls).length, 1);
   assert.equal(commentsOn(calls, 12).length, 1);
-  assert.deepEqual(labelAdds(calls, 12), ['labels[]=sdlc-harness: done']);
+  assert.deepEqual(labelAdds(calls, 12), ['labels[]=devscene: done']);
   assert.deepEqual(labelAdds(calls, 7), []);
 });
 
@@ -367,7 +367,7 @@ for (const [label, status] of [['a parked bundle', 'parked'], ['no status.json',
   });
 }
 
-test('the Actions refusal is not retried, and the issue alone names the setting and HARNESS_GIT_TOKEN', async (t) => {
+test('the Actions refusal is not retried, and the issue alone names the setting and DEVSCENE_GIT_TOKEN', async (t) => {
   const f = await deliverFixture(t);
   const result = await f.deliver({
     STUB_FAIL_ON: 'pr create',
@@ -380,9 +380,9 @@ test('the Actions refusal is not retried, and the issue alone names the setting 
   assert.equal(readies(calls).length, 0);
   const [posted] = commentsOn(calls, 7);
   assert.match(posted.body, /Allow GitHub Actions to create and approve pull requests/);
-  assert.match(posted.body, /HARNESS_GIT_TOKEN/);
+  assert.match(posted.body, /DEVSCENE_GIT_TOKEN/);
   assert.equal(allComments(calls).length, 1);
-  assert.deepEqual(labelAdds(calls, 7), ['labels[]=sdlc-harness: done']);
+  assert.deepEqual(labelAdds(calls, 7), ['labels[]=devscene: done']);
 });
 
 test('another create failure is retried once without --draft, and the not-a-draft result is not flipped', async (t) => {
@@ -424,6 +424,6 @@ test('with phases.qa true each comment names the local branch-qa-test still owed
   const result = await f.deliver({ STUB_PRS: openDraft });
   assert.equal(result.status, 0, result.stderr);
   const calls = f.calls();
-  assert.match(commentsOn(calls, 7)[0].body, /\/autonomous-sdlc-harness:branch-qa-test feat_x/);
-  assert.match(commentsOn(calls, 12)[0].body, /\/autonomous-sdlc-harness:branch-qa-test feat_x/);
+  assert.match(commentsOn(calls, 7)[0].body, /\/devscene:branch-qa-test feat_x/);
+  assert.match(commentsOn(calls, 12)[0].body, /\/devscene:branch-qa-test feat_x/);
 });

@@ -8,7 +8,7 @@
  * differs from it by one character leaves that session prompting mid-fence, and a merge that edits
  * an adopter's own `permissions` changes access they never asked this tool to touch.
  *
- * The rule is read off the rendered `.claude/CLAUDE.md` and the written `harness.config.json`, never
+ * The rule is read off the rendered `.claude/CLAUDE.md` and the written `devscene.config.json`, never
  * imported from the generator: the contract is that the two views agree, so the expected string is
  * built from what an adopter's files say.
  *
@@ -40,7 +40,7 @@ import { createFixture, readJson, runCli } from './helpers/fixture.mjs';
 
 const SETTINGS_FILE = '.claude/settings.json';
 const CLAUDE_MD = '.claude/CLAUDE.md';
-const CONFIG_FILE = 'harness.config.json';
+const CONFIG_FILE = 'devscene.config.json';
 const SCRIPT_FILE = 'task-offer-check.sh';
 
 /** The fence's opt-out item, as the rendered project file opens it. */

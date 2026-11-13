@@ -43,7 +43,7 @@ import { PACKAGE_ROOT, runBash, WORKSPACE_ROOT } from './helpers/fixture.mjs';
 
 const PROBE = join(WORKSPACE_ROOT, 'scripts', 'sandbox-probe.sh');
 const FIXTURES = join(PACKAGE_ROOT, 'test', 'fixtures', 'sandbox-probe');
-const MCP_TOOL = 'mcp__harness-docs__search_docs';
+const MCP_TOOL = 'mcp__devscene-docs__search_docs';
 const N5_COMMAND = 'curl -sS -o /dev/null https://n5.example.invalid/';
 const N5_FINDING =
   'finding: allowed_domains widened a sandboxed call; this needs its own follow-up task prompt, not a doc edit';

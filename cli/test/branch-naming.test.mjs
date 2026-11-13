@@ -104,9 +104,9 @@ function pushBranch(name) {
 
 before(async () => {
   dir = await initFixture();
-  config = JSON.parse(readFileSync(join(dir, 'harness.config.json'), 'utf8'));
+  config = JSON.parse(readFileSync(join(dir, 'devscene.config.json'), 'utf8'));
   config.protectedBranches = [...(config.protectedBranches ?? []), PROTECTED_GLOB];
-  writeFileSync(join(dir, 'harness.config.json'), `${JSON.stringify(config, null, 2)}\n`);
+  writeFileSync(join(dir, 'devscene.config.json'), `${JSON.stringify(config, null, 2)}\n`);
 });
 
 after(async () => {
@@ -219,7 +219,7 @@ test('a name with run-workflow history is taken, and the derivation takes `_2`',
   const derived = await libCall(dir, 'hr_derive_branch "$PWD" "$@"', ['feat: invoices', 'issue_7', '', gh], env);
   assert.deepEqual({ status: derived.status, stdout: derived.stdout }, { status: 0, stdout: 'feat_invoices_2\n' });
   const calls = readFileSync(log, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
-  assert.deepEqual(calls.at(-1), ['run', 'list', '--workflow', 'harness-run.yml', '--branch', 'feat_invoices_2', '--limit', '1', '--json', 'databaseId']);
+  assert.deepEqual(calls.at(-1), ['run', 'list', '--workflow', 'devscene-run.yml', '--branch', 'feat_invoices_2', '--limit', '1', '--json', 'databaseId']);
 });
 
 test('history on both `<name>` and `<name>_2` derives `<name>_3`', async () => {

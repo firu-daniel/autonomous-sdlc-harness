@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # task-offer-check.sh — answer the change-request fence's opt-out test: print
 # the main checkout of the working directory's checkout and exit 0 only when
-# one was found and `.claude/harness-no-offer` is absent there.
+# one was found and `.claude/devscene-no-offer` is absent there.
 #
 # EXIT MAP.
 #   0  the offer may proceed; the canonical main checkout is the one line on
@@ -16,7 +16,7 @@
 # `bash <scriptsDir>/task-offer-check.sh` — matched by the exact `Bash(…)` rule
 # the generated `.claude/settings.json` carries. It judges the checkout of the
 # WORKING DIRECTORY, never the one holding this file, and reads no
-# `HARNESS_MAIN_REPO`. `jq` is reached on the clone arm only.
+# `DEVSCENE_MAIN_REPO`. `jq` is reached on the clone arm only.
 #
 # REUSED FROM `lib/harness-run-lib.sh`: `hr_repo_root`, `hr_main_repo`,
 # `hr_copy_sync_main_of`, `hr_clone_target_check_var`. `toc_alternates_candidate`
@@ -51,7 +51,7 @@
 #
 #   main checkout  (cd "$d" && bash scripts/task-offer-check.sh; echo $?)
 #                  -> the canonical "$d" on stdout, then 0
-#   opted out      mkdir -p "$d/.claude" && : > "$d/.claude/harness-no-offer"
+#   opted out      mkdir -p "$d/.claude" && : > "$d/.claude/devscene-no-offer"
 #                  (cd "$d" && bash scripts/task-offer-check.sh; echo $?)
 #                  -> nothing printed, 1
 #   not a checkout (cd "$w" && bash "$d/scripts/task-offer-check.sh"; echo $?)
@@ -106,6 +106,6 @@ else
 fi
 
 [ -n "$main" ] || exit 1
-[ ! -e "$main/.claude/harness-no-offer" ] || exit 1
+[ ! -e "$main/.claude/devscene-no-offer" ] || exit 1
 printf '%s\n' "$main"
 exit 0

@@ -73,7 +73,7 @@ const BACKEND_ROUTES = Object.freeze({
     '  block, run again in this session.',
   ],
   python: [
-    '- Backend `python`: `harness-docs-retrieval serve-http` over a throwaway mirror of the corpus, each arm',
+    '- Backend `python`: `devscene-docs-retrieval serve-http` over a throwaway mirror of the corpus, each arm',
     "  through `POST /search` with its `mode`; latency is the server's own `search_ms` — `search_docs` alone,",
     '  timed inside the Python process, excluding the per-call refresh and the HTTP hop; the connection string',
     '  is not recorded.',
@@ -231,7 +231,7 @@ function provenanceSection(corpus) {
     '  taken before such a document existed is therefore a different corpus.',
     layers[0] === undefined
       ? '- `layers[]`: none — this corpus is read as a repository of its own and carries no conventions documents.'
-      : "- `layers[]`, read out of the resolved checkout's `harness.config.json` and never composed here:",
+      : "- `layers[]`, read out of the resolved checkout's `devscene.config.json` and never composed here:",
     ...layers.map(layerLine),
     ...(corpus.backend === undefined ? [] : BACKEND_ROUTES[corpus.backend]),
     `- Query set: \`${corpus.queries.path}\` — ${corpus.queries.positives} positive, ${corpus.queries.negatives} negative.`,
@@ -241,7 +241,7 @@ function provenanceSection(corpus) {
     ...(corpus.backend === 'python'
       ? [
           `- Abstention threshold recorded: \`${ABSTAIN_SCORE_THRESHOLD}\`, read off the \`search.js\` this run loaded. The`,
-          "  Python server applies its own `docs-retrieval-service/src/harness_docs_retrieval/search.py` →",
+          "  Python server applies its own `docs-retrieval-service/src/devscene_docs_retrieval/search.py` →",
           '  `ABSTAIN_SCORE_THRESHOLD`, which this run does not read.',
         ]
       : [`- Abstention threshold in force: \`${ABSTAIN_SCORE_THRESHOLD}\`, read off the \`search.js\` this run loaded.`]),

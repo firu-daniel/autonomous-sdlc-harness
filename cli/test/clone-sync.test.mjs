@@ -35,7 +35,7 @@
  *
  * The record of the measurement is `docs/cli.md` §6, transcribed from this header.
  *
- * Each case builds a main checkout with `harness.config.json`, `autonomous_logs/` and a local bare
+ * Each case builds a main checkout with `devscene.config.json`, `autonomous_logs/` and a local bare
  * origin, plus the clone `hr_clone_create_var` makes, under the system temp directory, and sources
  * the library from the template tree. The trust check's own suite is
  * `cli/test/clone-trust-check.test.mjs`; the payload cases call sync-in without it on purpose.
@@ -53,7 +53,7 @@ const LIB = join(PACKAGE_ROOT, 'templates', 'scripts', 'lib', 'harness-run-lib.s
 const CONFIG = {
   version: 1,
   defaultBranch: 'trunk',
-  stateDir: 'sdlc-harness/',
+  stateDir: 'devscene/',
   githooksDir: 'githooks',
   layers: [],
   commands: {},
@@ -90,7 +90,7 @@ const SYNC_OUT = `if [ "$#" -ge 4 ]; then hr_copy_sync_out_var "$1" "$2" "$3" "$
 printf 'status=%s\\nrefusal=%s\\n' "$s" "$HR_SYNC_REFUSAL"`;
 
 /**
- * A bare origin; a main checkout on `trunk` carrying `harness.config.json`, with its registry
+ * A bare origin; a main checkout on `trunk` carrying `devscene.config.json`, with its registry
  * directory made; and the clone of {@link BRANCH} `hr_clone_create_var` makes at `<root>/main-feat_c`.
  *
  * @param {import('node:test').TestContext} t
@@ -106,13 +106,13 @@ async function fixture(t) {
   await runGit(main, ['init', '--quiet', '-b', 'trunk']);
   await runGit(main, ['config', 'user.email', 'fixture@example.invalid']);
   await runGit(main, ['config', 'user.name', 'Harness Fixture']);
-  await writeFile(join(main, 'harness.config.json'), `${JSON.stringify(CONFIG)}\n`);
-  await runGit(main, ['add', 'harness.config.json']);
+  await writeFile(join(main, 'devscene.config.json'), `${JSON.stringify(CONFIG)}\n`);
+  await runGit(main, ['add', 'devscene.config.json']);
   await runGit(main, ['commit', '--quiet', '-m', 'fixture: seed']);
   await runGit(main, ['remote', 'add', 'origin', origin]);
   await runGit(main, ['push', '--quiet', 'origin', 'trunk']);
   await runGit(main, ['fetch', '--quiet', 'origin']);
-  await mkdir(join(main, 'sdlc-harness', 'autonomous_logs'), { recursive: true });
+  await mkdir(join(main, 'devscene', 'autonomous_logs'), { recursive: true });
 
   const created = globals(
     await lib(

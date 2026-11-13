@@ -20,7 +20,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from harness_docs_retrieval.jscompat import utf16_sort_key
+from devscene_docs_retrieval.jscompat import utf16_sort_key
 
 
 @dataclass(frozen=True)
@@ -116,7 +116,7 @@ _MISSING = object()
 
 
 def corpus_files(repo_root: str, config: Mapping[str, Any]) -> CorpusFiles:
-    """The corpus of `config`, which carries `harness.config.json`'s own keys, at `repo_root`."""
+    """The corpus of `config`, which carries `devscene.config.json`'s own keys, at `repo_root`."""
     absolute: list[str] = []
     warnings: list[str] = []
     real_root = os.path.realpath(repo_root)

@@ -1,4 +1,4 @@
-# The harness-docs-retrieval service image.
+# The devscene-docs-retrieval service image.
 #
 # Carries: CPython 3.12, the service package, and the locked runtime with the `models` extra —
 # the Linux CPU-only `torch` that `uv.lock` resolves from the pytorch-cpu index, so no CUDA wheel.
@@ -32,7 +32,7 @@ RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin harn
 
 ENV PATH=/app/.venv/bin:$PATH \
     HF_HUB_OFFLINE=1 \
-    HARNESS_DOCS_RETRIEVAL_MODEL_CACHE=/models
+    DEVSCENE_DOCS_RETRIEVAL_MODEL_CACHE=/models
 
 USER harness
 
@@ -42,5 +42,5 @@ WORKDIR /repo
 
 EXPOSE 8080
 
-ENTRYPOINT ["harness-docs-retrieval"]
+ENTRYPOINT ["devscene-docs-retrieval"]
 CMD ["serve-http", "--host", "0.0.0.0", "--port", "8080", "--repo", "/repo"]

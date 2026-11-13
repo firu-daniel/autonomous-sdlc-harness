@@ -72,7 +72,7 @@
 # --no-ext-diff --no-textconv` fed the list on stdin, are scanned by
 # `lib/harness-run-lib.sh` → `hr_stream_has_credential` against the values
 # `hr_credential_values_var` collects once: `GH_TOKEN`/`GITHUB_TOKEN`,
-# `HARNESS_PR_TOKEN`/`HARNESS_GIT_TOKEN`, each `http.*.extraheader` in the main
+# `HARNESS_PR_TOKEN`/`DEVSCENE_GIT_TOKEN`, each `http.*.extraheader` in the main
 # `.git/config`, the passwords in each file a `credential.*.helper` there of
 # exactly `store --file <absolute path>` names, and those in `$HOME/.git-credentials`
 # and the XDG credential file — each raw and as the base64 of
@@ -129,7 +129,7 @@
 # only a forge-side ruleset does. This
 # script refuses too, so it is safe when called from outside an unattended
 # profile — and it takes its protected set from the MAIN checkout's
-# `harness.config.json` at run time (THE TARGET'S `harness.config.json` IS NOT
+# `devscene.config.json` at run time (THE TARGET'S `devscene.config.json` IS NOT
 # TRUSTED EITHER below) through `lib/harness-run-lib.sh`, which is where that
 # set is kept in step across all of them. There is no second list to keep in sync with: a branch name written
 # into this file would enforce the wrong set the moment `protectedBranches`
@@ -184,11 +184,11 @@
 # (`hr_remote_url_configured`); the permission profile also write-protects both
 # directories.
 #
-# THE TARGET'S `harness.config.json` IS NOT TRUSTED EITHER. A worktree's own
+# THE TARGET'S `devscene.config.json` IS NOT TRUSTED EITHER. A worktree's own
 # copy is a tracked file in a sandbox-writable tree, so a sandboxed command
 # could commit one whose `protectedBranches` drops the branch it is on. So the
 # protected set — `protectedBranches` and `defaultBranch` — is read from the
-# MAIN checkout's `harness.config.json`, as the pin's `githooksDir` is: the checkout the target check above derives from this
+# MAIN checkout's `devscene.config.json`, as the pin's `githooksDir` is: the checkout the target check above derives from this
 # file's own location, and a file the permission profile write-protects. The
 # target's own copy is never read for it, whichever checkout is the target, and
 # a main checkout whose configuration cannot be read is a refusal (exit 0, a
@@ -213,7 +213,7 @@
 # refuse a new file under it (GW1). The pin accepts only `<main>/<githooksDir>` or
 # `<main>/.git/hooks` — the two directories the permission profile
 # write-protects on both sides — compared against the main checkout's own
-# `harness.config.json`, which the profile also protects; any other directory,
+# `devscene.config.json`, which the profile also protects; any other directory,
 # such as a foreign `core.hooksPath` `init` left in place, is refused. The pin is
 # exported as `GIT_CONFIG_COUNT` for the library's git calls, which needs git
 # 2.31 or newer — an older git ignores it — and every git call this file spells
@@ -304,7 +304,7 @@
 #
 #   b=$(mktemp -d)/origin.git; git init -q --bare "$b"
 #   d=$(mktemp -d); git -C "$d" init -q -b feat_x; git -C "$d" remote add origin "$b"
-#   printf '%s' '{"version":1,"defaultBranch":"trunk","protectedBranches":["trunk","release/*"],"stateDir":"sdlc-harness/","layers":[],"commands":{}}' > "$d/harness.config.json"
+#   printf '%s' '{"version":1,"defaultBranch":"trunk","protectedBranches":["trunk","release/*"],"stateDir":"devscene/","layers":[],"commands":{}}' > "$d/devscene.config.json"
 #   mkdir -p "$d/scripts"; cp -R <this script> <its lib/> "$d/scripts/"
 #   git -C "$d" add -A && git -C "$d" commit -qm "seed"
 #   # `push-branch.sh` below is `bash "$d/scripts/push-branch.sh"`: a copy
@@ -318,7 +318,7 @@
 #                     `git -C "$b" branch` lists no feat_x
 #   protected branch  git -C "$d" checkout -q -b trunk; push-branch.sh "$d"
 #                     -> exit 0, refusal message, "$b" unchanged
-#   unresolvable      printf 'x' > "$d/harness.config.json"; push-branch.sh "$d"
+#   unresolvable      printf 'x' > "$d/devscene.config.json"; push-branch.sh "$d"
 #                     -> exit 0, refusal message, nothing pushed
 #   push fails        git -C "$d" remote set-url origin /nonexistent.git
 #                     -> exit 0 with a visible failure line
@@ -405,7 +405,7 @@
 #
 #   The protected set is the main checkout's, on a clean worktree as above:
 #   git -C "$w" checkout -q -b release/x
-#   printf '%s' '{"version":1,"defaultBranch":"trunk","protectedBranches":[],"stateDir":"sdlc-harness/","layers":[],"commands":{}}' > "$w/harness.config.json"
+#   printf '%s' '{"version":1,"defaultBranch":"trunk","protectedBranches":[],"stateDir":"devscene/","layers":[],"commands":{}}' > "$w/devscene.config.json"
 #   git -C "$w" commit -qam "drop the protected set"
 #
 #   a dropped pattern bash "$d/scripts/push-branch.sh" "$w"
@@ -458,16 +458,16 @@ if ! main_top="$(hr_wrapper_main_of "$script_dir")"; then
   echo "push-branch.sh: refusing to push: cannot place this script in a main checkout (its .git is a symbolic link, or a directory holding a commondir)"
   exit 0
 fi
-# THE TARGET'S `harness.config.json` IS NOT TRUSTED EITHER (header): fail
+# THE TARGET'S `devscene.config.json` IS NOT TRUSTED EITHER (header): fail
 # closed, non-fatally, on a main configuration that cannot be read — the line
 # the protected-branch decision below prints for the same state. Loaded
 # unsubstituted, ahead of the target check, so a clone target gets this line
 # rather than the clone arm's registry sentence, and ahead of the pin, so on
 # the main checkout and a worktree it replaces the pin's `cannot resolve
-# githooksDir from …` line. It reads only `<main_top>/harness.config.json` and
+# githooksDir from …` line. It reads only `<main_top>/devscene.config.json` and
 # makes no git call.
 if ! hr_config_load "$main_top"; then
-  echo "push-branch.sh: cannot resolve '$main_top/harness.config.json' — refusing to push"
+  echo "push-branch.sh: cannot resolve '$main_top/devscene.config.json' — refusing to push"
   exit 0
 fi
 if ! hr_wrapper_target_check_var "$main_top" "$top_nogit"; then
@@ -515,7 +515,7 @@ case "$branch" in
 esac
 
 # The protected-branch decision, from the MAIN checkout's configuration (THE
-# TARGET'S `harness.config.json` IS NOT TRUSTED EITHER, header), never the
+# TARGET'S `devscene.config.json` IS NOT TRUSTED EITHER, header), never the
 # target's.
 cfg_root="$main_top"
 hr_branch_is_protected "$cfg_root" "$branch"
@@ -529,7 +529,7 @@ case "$protected" in
     # Fail closed, and stay non-fatal: a configuration that cannot be read is a
     # branch that cannot be judged, so the push does not happen — but the run
     # that called this is not stopped over it.
-    echo "push-branch.sh: cannot resolve '$cfg_root/harness.config.json' — refusing to push"
+    echo "push-branch.sh: cannot resolve '$cfg_root/devscene.config.json' — refusing to push"
     exit 0
     ;;
 esac

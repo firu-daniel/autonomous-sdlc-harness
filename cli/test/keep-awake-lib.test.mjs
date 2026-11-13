@@ -50,10 +50,10 @@ function writeExecutable(dir, name, body) {
   chmodSync(join(dir, name), 0o755);
 }
 
-/** A temp root holding `config` as `harness.config.json` (no file when `undefined`). */
+/** A temp root holding `config` as `devscene.config.json` (no file when `undefined`). */
 function configRoot(config) {
   const dir = tempDir('keep-awake-config-');
-  if (config !== undefined) writeFileSync(join(dir, 'harness.config.json'), JSON.stringify(config));
+  if (config !== undefined) writeFileSync(join(dir, 'devscene.config.json'), JSON.stringify(config));
   return dir;
 }
 
@@ -101,7 +101,7 @@ test('hr_keep_awake_mode_var takes each arm in order with its exact reason and q
     ['GITHUB_ACTIONS=true', { githubActions: 'true' }, ['off', `GITHUB_ACTIONS is true — ${RUNNER_SLEEPS}`, '1']],
     ['key false', { config: { defaultBranch: 'main', execution: { keepAwake: false } } }, ['off', 'execution.keepAwake is false', '1']],
     ['key "yes"', { config: { defaultBranch: 'main', execution: { keepAwake: 'yes' } } }, ['off', 'execution.keepAwake is not a boolean', '']],
-    ['config unreadable (no defaultBranch)', { config: { execution: { keepAwake: true } } }, ['off', 'harness.config.json could not be read', '']],
+    ['config unreadable (no defaultBranch)', { config: { execution: { keepAwake: true } } }, ['off', 'devscene.config.json could not be read', '']],
     ['macos + caffeinate', { host: 'macos', tool: 'caffeinate' }, ['caffeinate', '', '']],
     ['macos, no tool', { host: 'macos', tool: '' }, ['off', 'caffeinate does not resolve on PATH', '']],
     ['linux + systemd-inhibit', { host: 'linux', tool: 'systemd-inhibit' }, ['logind', '', '']],
@@ -298,7 +298,7 @@ async function hold(mode, { mains = true, probeStatus = 0 } = {}) {
   }
 }
 
-const LOCK_FLAGS = ['--what=sleep:handle-lid-switch', '--mode=block', '--who=autonomous-sdlc-harness', '--why=run feat_x'];
+const LOCK_FLAGS = ['--what=sleep:handle-lid-switch', '--mode=block', '--who=devscene', '--why=run feat_x'];
 
 test('hr_keep_awake_hold_var caffeinate holds with -s -i -w <pid> and ends with the pid', async () => {
   const got = await hold('caffeinate');

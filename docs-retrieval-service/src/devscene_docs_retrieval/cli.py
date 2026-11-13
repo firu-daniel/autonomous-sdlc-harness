@@ -1,8 +1,8 @@
-"""The `harness-docs-retrieval` console entry point and its sub-command table.
+"""The `devscene-docs-retrieval` console entry point and its sub-command table.
 
 The rule this module exists to enforce: `SUB_COMMANDS` is the single source for usage text and
 dispatch, and `main` is the only place an anticipated failure becomes an exit status — a
-`ServiceError` prints exactly one line, `harness-docs-retrieval: <message>`, on stderr and exits
+`ServiceError` prints exactly one line, `devscene-docs-retrieval: <message>`, on stderr and exits
 `1`, with no traceback. Anything else propagates.
 
 Exit statuses: `0` success, `1` a `ServiceError`, `2` a missing or unknown sub-command.
@@ -15,21 +15,21 @@ import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from harness_docs_retrieval.errors import ServiceError
-from harness_docs_retrieval.http_app import serve_http
-from harness_docs_retrieval.mcp_server import serve_mcp
-from harness_docs_retrieval.models import (
+from devscene_docs_retrieval.errors import ServiceError
+from devscene_docs_retrieval.http_app import serve_http
+from devscene_docs_retrieval.mcp_server import serve_mcp
+from devscene_docs_retrieval.models import (
     EMBEDDING_MODEL,
     RERANK_MODEL,
     fetch_models,
     model_cache_dir,
 )
-from harness_docs_retrieval.refresh import RefreshResult
-from harness_docs_retrieval.self_check import run_self_check
-from harness_docs_retrieval.service import add_service_options, load_service_config, open_session
-from harness_docs_retrieval.stubs import RETRIEVAL_STUB_ENV, stub_models_selected
+from devscene_docs_retrieval.refresh import RefreshResult
+from devscene_docs_retrieval.self_check import run_self_check
+from devscene_docs_retrieval.service import add_service_options, load_service_config, open_session
+from devscene_docs_retrieval.stubs import RETRIEVAL_STUB_ENV, stub_models_selected
 
-PROG = "harness-docs-retrieval"
+PROG = "devscene-docs-retrieval"
 
 
 @dataclass(frozen=True)

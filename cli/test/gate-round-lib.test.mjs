@@ -12,7 +12,7 @@
  * Each case copies the run library (`cli/templates/scripts/lib/harness-run-lib.sh`, which owns
  * `HR_TEST_RUN_LABEL_PATTERN` and `HR_TEST_RUN_LOG_SUBDIR`) and the round library into its own
  * directory under `os.tmpdir()`, removed in process, beside a fake repository root holding
- * `cli/test/*.test.mjs` files and the lane `sdlc-harness/test_run_logs/feat-x/`. A bash driver
+ * `cli/test/*.test.mjs` files and the lane `devscene/test_run_logs/feat-x/`. A bash driver
  * sources both copies, sets the four `GR_*` values, runs `gr_run_round` over a stub unit function
  * that logs each call and records a status the case scripts, and prints the resolved lane and the
  * round's status. Every case passes both `RUN_TEST_SUITE_*` values explicitly: this suite itself
@@ -37,7 +37,7 @@ const RUN_LIB = join(PACKAGE_ROOT, 'templates', 'scripts', 'lib', 'harness-run-l
 const ROUND_LIB = join(WORKSPACE_ROOT, 'scripts', 'lib', 'gate-round-lib.sh');
 
 const IDS = ['1', '2a', '2b', '3a', '4', '6a', '14a', '16'];
-const LANE_DIR = 'sdlc-harness/test_run_logs/feat-x';
+const LANE_DIR = 'devscene/test_run_logs/feat-x';
 const LABEL = 'task_round_2';
 const GATES_HEADER = 'phase\tgate\tstatus\tseconds';
 const TESTS_HEADER = 'file\tstatus\tseconds\ttests\tfailed';
@@ -344,15 +344,15 @@ test('an unreadable previous record gives the first-round outcome', async (t) =>
 test('gr_init leaves the lane empty, and the round writes nothing in it, for an unusable seam', async (t) => {
   const cases = [
     ['an absolute directory', (f) => ({ dir: f.lane })],
-    ['a .. segment', () => ({ dir: 'sdlc-harness/test_run_logs/../test_run_logs/feat-x' })],
-    ['a parent other than test_run_logs', () => ({ dir: 'sdlc-harness/other_logs/feat-x' })],
-    ['a missing directory', () => ({ dir: 'sdlc-harness/test_run_logs/feat-missing' })],
+    ['a .. segment', () => ({ dir: 'devscene/test_run_logs/../test_run_logs/feat-x' })],
+    ['a parent other than test_run_logs', () => ({ dir: 'devscene/other_logs/feat-x' })],
+    ['a missing directory', () => ({ dir: 'devscene/test_run_logs/feat-missing' })],
     ['a label starting with -', () => ({ label: '-task_round_2' })],
     ['no run library sourced first', () => ({ withRunLib: false })],
   ];
   for (const [name, options] of cases) {
     const f = await fixture(t);
-    await mkdir(join(f.repo, 'sdlc-harness', 'other_logs', 'feat-x'), { recursive: true });
+    await mkdir(join(f.repo, 'devscene', 'other_logs', 'feat-x'), { recursive: true });
     await writePrevious(f, 'task_round_1', fullRows(['6a']));
     const before = (await readdir(f.lane)).sort();
     const r = await round(f, options(f));
@@ -360,7 +360,7 @@ test('gr_init leaves the lane empty, and the round writes nothing in it, for an 
     assert.equal(r.stdout, 'lane=\nstatus=0\n', name);
     assert.deepEqual(r.calls, IDS.map((id) => `full ${id}`), name);
     assert.deepEqual((await readdir(f.lane)).sort(), before, name);
-    assert.deepEqual(await readdir(join(f.repo, 'sdlc-harness', 'other_logs', 'feat-x')), [], name);
+    assert.deepEqual(await readdir(join(f.repo, 'devscene', 'other_logs', 'feat-x')), [], name);
   }
 });
 

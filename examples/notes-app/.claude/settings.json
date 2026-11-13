@@ -1,12 +1,12 @@
 {
   "enabledPlugins": {
-    "autonomous-sdlc-harness@autonomous-sdlc-harness": true
+    "devscene@devscene": true
   },
   "extraKnownMarketplaces": {
-    "autonomous-sdlc-harness": {
+    "devscene": {
       "source": {
         "source": "github",
-        "repo": "firu-daniel/autonomous-sdlc-harness"
+        "repo": "firu-daniel/devscene"
       }
     }
   },

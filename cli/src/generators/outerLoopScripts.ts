@@ -16,7 +16,7 @@
  *
  * 1. **These templates carry no `{{token}}` and are copied verbatim.** The wrapper generator
  *    renders tokens because a wrapper's body is a *detected* value; nothing here is. Every one of
- *    these scripts reads `<repo_root>/harness.config.json` at run time through the one shared
+ *    these scripts reads `<repo_root>/devscene.config.json` at run time through the one shared
  *    library the `lib` row below writes beside them, because a guard whose protected-branch set was
  *    frozen into a file when `init` ran enforces the wrong set the moment `protectedBranches` changes —
  *    and that failure is silent. Verbatim copies are also what makes the `create-if-absent` re-run
@@ -367,7 +367,7 @@ export function writeOuterLoopScripts({ repoRoot, config, plan }: OuterLoopScrip
     written.length === 0
       ? []
       : [
-          `${written.length} outer-loop ${written.length === 1 ? 'script was' : 'scripts were'} written into ${scriptsDir}/: they are copied verbatim rather than generated, because each one reads harness.config.json at run time instead of carrying values frozen in when init ran — so a re-run leaves an edited copy exactly as it is, and --force regenerates it after copying the current file to <name>.bak`,
+          `${written.length} outer-loop ${written.length === 1 ? 'script was' : 'scripts were'} written into ${scriptsDir}/: they are copied verbatim rather than generated, because each one reads devscene.config.json at run time instead of carrying values frozen in when init ran — so a re-run leaves an edited copy exactly as it is, and --force regenerates it after copying the current file to <name>.bak`,
         ];
 
   return { scriptsDir, written, notes };

@@ -51,7 +51,7 @@ within a row.
 - Query set: `evals/docs-retrieval/queries/fixture-catalog.jsonl` — 9 positive, 3 negative.
 - `k`: 5; repetitions per query: 1.
 - Embedder: `Xenova/bge-small-en-v1.5:q8:cls:384:v1`. Reranker: `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1` — loaded and run outside the stub.
-- `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
+- `DEVSCENE_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
 - Abstention threshold in force: `0.32`, read off the `search.js` this run loaded.
 - The figures above are the **post-calibration** ones for the one arm that threshold applies to. The
   pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold
@@ -1785,14 +1785,14 @@ within a row.
   under it joins the corpus that measures it — and where that root is this checkout's own `docs/`, this
   file, `docs/retrieval-eval-results.md`, is one of its members and is counted in the stamp above. A stamp
   taken before such a document existed is therefore a different corpus.
-- `layers[]`, read out of the resolved checkout's `harness.config.json` and never composed here:
+- `layers[]`, read out of the resolved checkout's `devscene.config.json` and never composed here:
   - `cli` (path `cli`) → `.claude/context/cli.md`
   - `plugin` (path `plugin`) → `.claude/context/plugin.md`
   - `general` (path `.`) → `.claude/context/conventions.md`
 - Query set: `evals/docs-retrieval/queries/self-docs.jsonl` — 15 positive, 5 negative.
 - `k`: 5; repetitions per query: 1.
 - Embedder: `Xenova/bge-small-en-v1.5:q8:cls:384:v1`. Reranker: `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1` — loaded and run outside the stub.
-- `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
+- `DEVSCENE_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
 - Abstention threshold in force: `0.32`, read off the `search.js` this run loaded.
 - The figures above are the **post-calibration** ones for the one arm that threshold applies to. The
   pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold
@@ -4631,12 +4631,12 @@ within a row.
   under it joins the corpus that measures it — and where that root is this checkout's own `docs/`, this
   file, `docs/retrieval-eval-results.md`, is one of its members and is counted in the stamp above. A stamp
   taken before such a document existed is therefore a different corpus.
-- `layers[]`, read out of the resolved checkout's `harness.config.json` and never composed here:
+- `layers[]`, read out of the resolved checkout's `devscene.config.json` and never composed here:
   - `ad-hoc-1` (path `.`) → `.claude/context/conventions.md`
 - Query set: `evals/docs-retrieval/queries/gate10-catalog.jsonl` — 44 positive, 25 negative.
 - `k`: 5; repetitions per query: 1.
 - Embedder: `Xenova/bge-small-en-v1.5:q8:cls:384:v1`. Reranker: `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1` — loaded and run outside the stub.
-- `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
+- `DEVSCENE_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
 - Abstention threshold in force: `0.32`, read off the `search.js` this run loaded.
 - The figures above are the **post-calibration** ones for the one arm that threshold applies to. The
   pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold
@@ -16656,7 +16656,7 @@ within a row.
 - Query set: `evals/docs-retrieval/queries/fixture-catalog.jsonl` — 9 positive, 3 negative.
 - `k`: 5; repetitions per query: 1.
 - Embedder: `Xenova/bge-small-en-v1.5:q8:cls:384:v1`. Reranker: `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1` — loaded and run outside the stub.
-- `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
+- `DEVSCENE_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
 - Abstention threshold in force: `0.32`, read off the `search.js` this run loaded.
 - The figures above are the **post-calibration** ones for the one arm that threshold applies to. The
   pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold
@@ -18392,14 +18392,14 @@ within a row.
   file, `docs/retrieval-eval-results.md`, is one of its members and is counted in the stamp above. A stamp
   taken before such a document existed is therefore a different corpus.
 - `layers[]`: none — this corpus is read as a repository of its own and carries no conventions documents.
-- Backend `python`: `harness-docs-retrieval serve-http` over a throwaway mirror of the corpus, each arm
+- Backend `python`: `devscene-docs-retrieval serve-http` over a throwaway mirror of the corpus, each arm
   through `POST /search` with its `mode`; latency is the server's own `search_ms` — `search_docs` alone,
   timed inside the Python process, excluding the per-call refresh and the HTTP hop; the connection string
   is not recorded.
 - Query set: `evals/docs-retrieval/queries/fixture-catalog.jsonl` — 9 positive, 3 negative.
 - `k`: 5; repetitions per query: 1.
 - Embedder: `py-st/BAAI/bge-small-en-v1.5:fp32:cls:384:v1`. Reranker: `py-st/cross-encoder/ms-marco-MiniLM-L-6-v2:fp32:sigmoid:v1` — loaded and run outside the stub.
-- `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
+- `DEVSCENE_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
 - Abstention threshold in force: `0.32`, read off the `search.js` this run loaded.
 - The figures above are the **post-calibration** ones for the one arm that threshold applies to. The
   pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold
@@ -20134,7 +20134,7 @@ within a row.
   under it joins the corpus that measures it — and where that root is this checkout's own `docs/`, this
   file, `docs/retrieval-eval-results.md`, is one of its members and is counted in the stamp above. A stamp
   taken before such a document existed is therefore a different corpus.
-- `layers[]`, read out of the resolved checkout's `harness.config.json` and never composed here:
+- `layers[]`, read out of the resolved checkout's `devscene.config.json` and never composed here:
   - `cli` (path `cli`) → `.claude/context/cli.md`
   - `plugin` (path `plugin`) → `.claude/context/plugin.md`
   - `general` (path `.`) → `.claude/context/conventions.md`
@@ -20143,7 +20143,7 @@ within a row.
 - Query set: `evals/docs-retrieval/queries/self-docs.jsonl` — 15 positive, 5 negative.
 - `k`: 5; repetitions per query: 1.
 - Embedder: `Xenova/bge-small-en-v1.5:q8:cls:384:v1`. Reranker: `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1` — loaded and run outside the stub.
-- `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
+- `DEVSCENE_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
 - Abstention threshold in force: `0.32`, read off the `search.js` this run loaded.
 - The figures above are the **post-calibration** ones for the one arm that threshold applies to. The
   pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold
@@ -23003,18 +23003,18 @@ within a row.
   under it joins the corpus that measures it — and where that root is this checkout's own `docs/`, this
   file, `docs/retrieval-eval-results.md`, is one of its members and is counted in the stamp above. A stamp
   taken before such a document existed is therefore a different corpus.
-- `layers[]`, read out of the resolved checkout's `harness.config.json` and never composed here:
+- `layers[]`, read out of the resolved checkout's `devscene.config.json` and never composed here:
   - `cli` (path `cli`) → `.claude/context/cli.md`
   - `plugin` (path `plugin`) → `.claude/context/plugin.md`
   - `general` (path `.`) → `.claude/context/conventions.md`
-- Backend `python`: `harness-docs-retrieval serve-http` over a throwaway mirror of the corpus, each arm
+- Backend `python`: `devscene-docs-retrieval serve-http` over a throwaway mirror of the corpus, each arm
   through `POST /search` with its `mode`; latency is the server's own `search_ms` — `search_docs` alone,
   timed inside the Python process, excluding the per-call refresh and the HTTP hop; the connection string
   is not recorded.
 - Query set: `evals/docs-retrieval/queries/self-docs.jsonl` — 15 positive, 5 negative.
 - `k`: 5; repetitions per query: 1.
 - Embedder: `py-st/BAAI/bge-small-en-v1.5:fp32:cls:384:v1`. Reranker: `py-st/cross-encoder/ms-marco-MiniLM-L-6-v2:fp32:sigmoid:v1` — loaded and run outside the stub.
-- `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
+- `DEVSCENE_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
 - Abstention threshold in force: `0.32`, read off the `search.js` this run loaded.
 - The figures above are the **post-calibration** ones for the one arm that threshold applies to. The
   pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold
@@ -26318,7 +26318,7 @@ variable's name:
 - `MCP_TIMEOUT`'s 30,000 ms is a **different setting** — MCP server **startup** — and conflating the two is
   the likeliest origin of the struck rule.
 - What can end a long MCP call is **silence, not duration**. `CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT` is
-  1,800,000 ms for **stdio** servers, which the `harness-docs` server is, and trips only when the tool sends
+  1,800,000 ms for **stdio** servers, which the `devscene-docs` server is, and trips only when the tool sends
   neither a response nor a progress notification. `CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS` (120,000 ms) moves a
   long call to a background task, which does not fail it. Measured: a stdio MCP tool sleeping 75 s returned
   `DONE after 75.0s` under `claude -p`.
@@ -26437,7 +26437,7 @@ eval-route cross-check.
 
 **Host stamp.** MacBook Air, Apple M4, 10 cores (4 performance + 6 efficiency), 16 GB, macOS 15.7.4
 (24G517), `uname -sr` → `Darwin 24.6.0`, arm64, Node `v22.23.2`, npm 10.9.8, Claude Code 2.1.278, the
-package `autonomous-sdlc-harness@0.2.0` installed from the registry, load average `1.92 1.76 1.76`, nothing
+package `devscene@0.2.0` installed from the registry, load average `1.92 1.76 1.76`, nothing
 else of consequence running. The Node version differs from the 177-chunk figures' `v20.19.5`: **recorded,
 not reconciled.**
 
@@ -26454,7 +26454,7 @@ incremental refresh cannot masquerade as a cold one. The **model cache was warm*
 download is gate 10's leg (i), and it is out of this section's scope.
 
 **The four runs, kept rather than averaged.** CLI route, `docs index` into a fresh index directory each
-time. CPU sat at 452–459% throughout all four, and `du -sh sdlc-harness/docs_index` returned **72M** after
+time. CPU sat at 452–459% throughout all four, and `du -sh devscene/docs_index` returned **72M** after
 every one of them.
 
 | Run | Context | Wall time | Seconds |
@@ -26543,7 +26543,7 @@ reports its latency separately from library-level arm E, because it is the only 
 the per-call incremental refresh and the MCP round trip — what an agent actually waits for.
 
 **The fixture repository, and its configuration.** `docs serve` refuses unless `phases.docs` and
-`docs.retrieval` are both true, and this repository's `harness.config.json` satisfies neither and is
+`docs.retrieval` are both true, and this repository's `devscene.config.json` satisfies neither and is
 deliberately left alone — so **these numbers are not this repository's own configuration**. The pass
 mirrors the resolved `self-docs` corpus into a git-initialized repository under the system temp
 directory, one commit, removed at the end: 13 files copied at their own repo-relative paths, which
@@ -26563,8 +26563,8 @@ every round trip timed from the client side.
 
 | Leg | What it asserted |
 | --- | --- |
-| `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG` set | The log holds exactly one JSON line per call, in call order, each line's `query` byte-identical to the query as sent; every line carries every key `cli/src/retrieval/queryLog.ts` declares — `outcome`, `timestamp`, `query`, `k`, `hits`, `bestScore`, `abstained`, `refresh`, `durationMs` — with none absent and `outcome` one of `answered`, `refresh-failed`, `search-failed`. |
-| `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG` unset | The same query set again with the key deleted from the child's environment: the fixture's file listing is byte-for-byte the same set of paths before and after, and the log the other leg wrote is neither re-opened nor extended — the same 20 lines, unchanged. |
+| `DEVSCENE_RETRIEVAL_LOG` set | The log holds exactly one JSON line per call, in call order, each line's `query` byte-identical to the query as sent; every line carries every key `cli/src/retrieval/queryLog.ts` declares — `outcome`, `timestamp`, `query`, `k`, `hits`, `bestScore`, `abstained`, `refresh`, `durationMs` — with none absent and `outcome` one of `answered`, `refresh-failed`, `search-failed`. |
+| `DEVSCENE_RETRIEVAL_LOG` unset | The same query set again with the key deleted from the child's environment: the fixture's file listing is byte-for-byte the same set of paths before and after, and the log the other leg wrote is neither re-opened nor extended — the same 20 lines, unchanged. |
 
 **The latencies.** Server-side is each record's own `durationMs`, read back out of the JSONL rather
 than out of the client; client-side is the round trip the caller waits for. Library-level arm E is
@@ -26577,7 +26577,7 @@ read out of this file's generated region for the same corpus.
 | Library-level arm E (`fused-rerank`), `docs/retrieval-eval-results.md` generated region, at `{ files: 14, chunks: 213 }` (2026-09-23T19:27:46.757Z) — a different corpus from this pass's | 1005.1 | 1225.7 |
 | Library-level arm E at `{ files: 13, chunks: 177 }` (2026-09-21T19:00:20.828Z), since regenerated — the row the gap and provenance below are read against | 1145.3 | 1263.5 |
 | Library-level arm E as the region stood when this pass ran, since regenerated | 600.7 | 748.2 |
-| Client-side round trip of the `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG` unset leg, for comparison | 873.2 | 908.8 |
+| Client-side round trip of the `DEVSCENE_RETRIEVAL_LOG` unset leg, for comparison | 873.2 | 908.8 |
 
 **What the server answered, read back out of the JSONL.** 13 of the 20 records carry `abstained: false`
 with `hits` in {5} and a `bestScore` no lower than `0.33899036049842834`; the other 7 carry
@@ -26599,7 +26599,7 @@ on 19 of them — nothing re-embedded, so what the per-call refresh costs from t
 the corpus walk and the hash comparison alone.
 
 **Provenance.** 7 of the 20 calls abstained. Both legs ran with
-`AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` deleted from the child's environment, so the child loaded
+`DEVSCENE_RETRIEVAL_STUB` deleted from the child's environment, so the child loaded
 the real embedder `Xenova/bge-small-en-v1.5` and the real reranker `Xenova/ms-marco-MiniLM-L-6-v2`;
 the abstention threshold in force is the one this checkout's `search.js` carries. This pass ran at
 its own corpus snapshot `{ files: 13, chunks: 177 }`, off the cold build's own counts, while
@@ -26742,7 +26742,7 @@ when authoring started, so every record is written.
   is not a comparison over like-phrased sets.
 
 **The label pre-flight.** A launcher in the run's scratch directory reads `HARNESS_EVAL_CORPUS_ROOT`, reads
-the conventions documents the catalog's own `harness.config.json` `layers[]` names, and calls
+the conventions documents the catalog's own `devscene.config.json` `layers[]` names, and calls
 `corpusConfig({ repoRoot, docsRoot: 'docs', conventions, corpusId: 'gate10-catalog' })` → `buildIndex` in
 memory → `loadQueries` → `assertLabelsResolve`, and nothing else. Run on 2026-09-23 over the complete set,
 and re-run the same day after the operator's corrections below:
@@ -26762,7 +26762,7 @@ import { assertLabelsResolve, loadQueries } from '../../evals/docs-retrieval/que
 
 const repoRoot = process.env.HARNESS_EVAL_CORPUS_ROOT;
 if (!repoRoot) throw new Error('HARNESS_EVAL_CORPUS_ROOT is not set');
-const harness = JSON.parse(readFileSync(join(repoRoot, 'harness.config.json'), 'utf8'));
+const harness = JSON.parse(readFileSync(join(repoRoot, 'devscene.config.json'), 'utf8'));
 const conventions = harness.layers.map((layer) => layer.conventions);
 const { id, config, repoRoot: root } = corpusConfig({ repoRoot, docsRoot: 'docs', conventions, corpusId: 'gate10-catalog' });
 const queries = loadQueries('evals/docs-retrieval/queries/gate10-catalog.jsonl');
@@ -26898,7 +26898,7 @@ run made — lists all seven flags `evals/docs-retrieval/arm-a/run-arm-a.sh` pas
 **What each session loaded.** The catalog's root carries `.claude/CLAUDE.md`, `.claude/settings.json`,
 `.claude/settings.autonomous.json` and `.mcp.json`, and no root `CLAUDE.md`. A session started there:
 
-- ran with the catalog's `autonomous-sdlc-harness` plugin enabled and its `.claude/CLAUDE.md` loaded —
+- ran with the catalog's `devscene` plugin enabled and its `.claude/CLAUDE.md` loaded —
   the realistic setup for an agent navigating a harness-adopted repository, accepted as such by the
   operator;
 - fired **no hook**: the plugin's only hook is a `PreToolUse` hook matching `Bash`, which the runner
@@ -26964,7 +26964,7 @@ const { percentile } = await import(join(checkout, 'evals/docs-retrieval/metrics
 
 const repoRoot = process.env.HARNESS_EVAL_CORPUS_ROOT;
 if (!repoRoot) throw new Error('HARNESS_EVAL_CORPUS_ROOT is not set');
-const harness = JSON.parse(readFileSync(join(repoRoot, 'harness.config.json'), 'utf8'));
+const harness = JSON.parse(readFileSync(join(repoRoot, 'devscene.config.json'), 'utf8'));
 const conventions = harness.layers.map((layer) => layer.conventions).filter(Boolean);
 const { config, repoRoot: root } = corpusConfig({ repoRoot, docsRoot: 'docs', conventions, corpusId: 'gate10-catalog' });
 const queries = loadQueries(join(checkout, 'evals/docs-retrieval/queries/gate10-catalog.jsonl'));
@@ -27662,7 +27662,7 @@ session follow them.
   scratch copy and moved here afterwards through `results.mjs` → `transplantCorpusBlock`
   (`docs/retrieval-eval.md` → `### Measuring the Python backend against the TypeScript one`, step 2).
 - **The routes.** TypeScript is this checkout's `cli/dist` driven in process, the same path the
-  unlabelled blocks were taken through. Python is the package `harness-docs-retrieval` 0.1.0
+  unlabelled blocks were taken through. Python is the package `devscene-docs-retrieval` 0.1.0
   (`docs-retrieval-service/pyproject.toml`), run as `serve-http` over a throwaway mirror of the corpus,
   with each arm sent through `POST /search` with its `mode`. Its latency is the server's own `search_ms`:
   `search_docs` alone, timed inside the Python process, with the HTTP hop untimed.
@@ -27771,7 +27771,7 @@ the query vectors and the Python side's HNSW graph were not measured. `self-docs
    lists in the rendered comparison.
    - **The configuration is the same on both sides.** Both stores issue the same statements: the index
      `USING bm25 (text) WITH (text_config='english')` and the order `text <@> to_bm25query($1,
-     'chunks_bm25')` (`cli/src/retrieval/store.ts` and `docs-retrieval-service/src/harness_docs_retrieval/store.py`
+     'chunks_bm25')` (`cli/src/retrieval/store.ts` and `docs-retrieval-service/src/devscene_docs_retrieval/store.py`
      → `BM25_INDEX_DEFINITION`, `BM25_ORDER_CLAUSE`). `pg_extension.extversion` reads `pg_textsearch`
      1.3.1 on both. The servers are PGlite 0.5.8's PostgreSQL 18.3 and the compose image's
      PostgreSQL 18.2, and `EXPLAIN` shows both choosing the `chunks_bm25` index scan. These readings
@@ -27814,7 +27814,7 @@ the query vectors and the Python side's HNSW graph were not measured. `self-docs
      the user and database of `PYTHON_DEFAULT_DATABASE_URL`. For the first state, that was the compose
      database as the hand run left it. For the second, a database was made with `CREATE DATABASE <name>`
      on the same server, after a `DROP DATABASE IF EXISTS <name>`, selected for the index run and the
-     statements by setting `HARNESS_DOCS_RETRIEVAL_DATABASE_URL` to the compose URL with that database
+     statements by setting `DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL` to the compose URL with that database
      name, and dropped with `DROP DATABASE IF EXISTS <name>` afterwards.
 
      The probe was a scratch launcher run in a session, as **What was taken in a session.** in
@@ -27863,7 +27863,7 @@ the query vectors and the Python side's HNSW graph were not measured. `self-docs
      arm B's index-state mechanisms, source (3), as well as (1) and (2). Those blocks cannot separate the
      two, so for them the split stays unexplained. On the fresh reading arm B's top five ordered refs
      agree on every query, but each backend fuses every arm's top `ARM_CANDIDATES` hits, 50
-     (`cli/src/retrieval/search.ts` and `docs-retrieval-service/src/harness_docs_retrieval/search.py`),
+     (`cli/src/retrieval/search.ts` and `docs-retrieval-service/src/devscene_docs_retrieval/search.py`),
      and arm B's ranks past five were not compared. On `q-fc-route-choice` arm D differs at rank 5 while
      arms B and C return the same five refs on both sides, so arms D and E's differences there are not
      attributed to either arm and stay unexplained (`### A fresh fixture-catalog reading, both backends
@@ -27921,7 +27921,7 @@ high, but arm C, the arm a shared id would serve, returns the same ordered refs 
 The threshold is `ABSTAIN_SCORE_THRESHOLD`, `0.32`, as both blocks of each pair record it and as
 `## Threshold calibration` set it. It is not retuned here. Neither corpus has an entry whose abstention
 disagrees with that threshold on either side. The Python blocks record the value read off the TypeScript
-`search.js`, not the Python server's own `docs-retrieval-service/src/harness_docs_retrieval/search.py` →
+`search.js`, not the Python server's own `docs-retrieval-service/src/devscene_docs_retrieval/search.py` →
 `ABSTAIN_SCORE_THRESHOLD`, which no endpoint exposes. So that no Python entry disagrees with it is the
 evidence that the server's abstentions are consistent with `0.32` on these queries.
 
@@ -27965,7 +27965,7 @@ stored text is the same on both sides. For a negative query, Python's abstention
 - **The compose database.** It was not emptied: the question is about the shipped end state whatever the
   database held. Before the Python run, `chunks` held 1454 rows and `meta`'s `index_state` read
   `rebuilt`. After it, `index_state` read `rebuilt` and `chunks` held 41 rows.
-- **The Python package.** `harness-docs-retrieval` 0.1.0 (`docs-retrieval-service/pyproject.toml`).
+- **The Python package.** `devscene-docs-retrieval` 0.1.0 (`docs-retrieval-service/pyproject.toml`).
   `self-check` printed `ok` for packages (python 3.14.7) and for weights. Its `FAIL index` line is the
   expected one for a checkout with no service config, and the Python run's own
   `assertPythonBackendAvailable` accepted the backend.
@@ -27973,8 +27973,8 @@ stored text is the same on both sides. For a negative query, Python's abstention
   `Xenova/bge-small-en-v1.5:q8:cls:384:v1`, reranker `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1`.
   Python: embedder `py-st/BAAI/bge-small-en-v1.5:fp32:cls:384:v1`, reranker
   `py-st/cross-encoder/ms-marco-MiniLM-L-6-v2:fp32:sigmoid:v1`. Threshold `0.32`, `k` 5, `--repeat 1`, and
-  the stamp `{ files: 9, chunks: 41 }` on both. `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` was unset, as both
-  blocks record, and `HARNESS_DOCS_RETRIEVAL_DATABASE_URL` was unset, so the Python run used the compose
+  the stamp `{ files: 9, chunks: 41 }` on both. `DEVSCENE_RETRIEVAL_STUB` was unset, as both
+  blocks record, and `DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL` was unset, so the Python run used the compose
   database.
 - **Where the blocks went.** Both were written into a gitignored scratch file holding only the two
   generated-region markers, and the comparison read that file alone. Neither block is recorded in this
@@ -27988,7 +27988,7 @@ and state were read in the form below, with `-c "SHOW pg_textsearch.library_vers
 `-c "SELECT value FROM meta WHERE key = 'index_state'"` in place of the last argument:
 
 ```
-docker exec harness-docs-retrieval-postgres-1 psql -U harness -d docs_retrieval -At -c "SELECT version()"
+docker exec devscene-docs-retrieval-postgres-1 psql -U devscene -d docs_retrieval -At -c "SELECT version()"
 ```
 
 PGlite's were read through `evals/docs-retrieval/bm25-history.mjs` → `openPgliteEngine()`, with these
@@ -28098,7 +28098,7 @@ arm E rows:
 The two sides time different spans. TypeScript times the `searchDocs` call in process
 (`evals/docs-retrieval/arms.mjs`). Python's figure is the server's own `search_ms`, which times
 `search_docs` alone inside the Python process and leaves the HTTP hop untimed
-(`docs-retrieval-service/src/harness_docs_retrieval/service.py` → `Answer`). **Neither includes the
+(`docs-retrieval-service/src/devscene_docs_retrieval/service.py` → `Answer`). **Neither includes the
 per-call index refresh.** Each block took one repetition per query, so run-to-run spread was not measured
 and is not available to set beside the Python-minus-TypeScript gap.
 
@@ -28108,12 +28108,12 @@ the shipped stdio server over the same mirror fixture with a warm index, 20 call
 
 | Backend | Server | Client-side round trip p50 / p95 ms | Server-side `search_ms` p50 / p95 ms |
 | --- | --- | --- | --- |
-| TypeScript | `harness-docs` `0.5.0` | 567.8 / 620.6 | not exposed (`— / —`) |
-| Python | `harness-docs` `0.1.0` | 499.4 / 553.7 | 470.8 / 525.1 |
+| TypeScript | `devscene-docs` `0.5.0` | 567.8 / 620.6 | not exposed (`— / —`) |
+| Python | `devscene-docs` `0.1.0` | 499.4 / 553.7 | 470.8 / 525.1 |
 
 **The client-side figure includes the per-call refresh and the stdio hop.** It is what an agent waits for.
 Python's server-side figure is the same `search_ms` span as its library figure, read from the server's
-stderr timing line (`docs-retrieval-service/src/harness_docs_retrieval/mcp_server.py` →
+stderr timing line (`docs-retrieval-service/src/devscene_docs_retrieval/mcp_server.py` →
 `TIMING_LINE_PREFIX`), so it also excludes the refresh. TypeScript
 exposes no server-side time. The earlier TypeScript-only MCP figure is in `## The query-log pass` and is
 not restated here.
@@ -28149,7 +28149,7 @@ docker compose stop postgres
 ```
 
 ```
- Container harness-docs-retrieval-postgres-1 Healthy 
+ Container devscene-docs-retrieval-postgres-1 Healthy 
 real 2.62
 ```
 
@@ -28211,40 +28211,40 @@ expanded `${XDG_CACHE_HOME:-$HOME/.cache}` and `<key>` for the checkout key the 
 - The Python weight cache, fp32:
 
   ```
-  du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval/models"
-  225M	<cache>/harness-docs-retrieval/models
+  du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/devscene-docs-retrieval/models"
+  225M	<cache>/devscene-docs-retrieval/models
   ```
 
 - The TypeScript weight cache, q8:
 
   ```
-  du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/models/Xenova"
-   56M	<cache>/autonomous-sdlc-harness/retrieval/models/Xenova
+  du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/devscene/retrieval/models/Xenova"
+   56M	<cache>/devscene/retrieval/models/Xenova
   ```
 
 - The Python environment, with the `models` extra:
 
   ```
-  du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval/venvs/$(printf '%s' "$(git rev-parse --show-toplevel)" | cksum | awk '{print $1}')"
-  929M	<cache>/harness-docs-retrieval/venvs/<key>
+  du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/devscene-docs-retrieval/venvs/$(printf '%s' "$(git rev-parse --show-toplevel)" | cksum | awk '{print $1}')"
+  929M	<cache>/devscene-docs-retrieval/venvs/<key>
   ```
 
 - The Postgres image. `docker system df -v`'s row for it splits the size into a shared part and a unique
   part. The shared part is common with the `pgvector/pgvector` `0.8.1-pg18` base it builds on:
 
   ```
-  docker image ls harness-docs-retrieval-postgres
-  harness-docs-retrieval-postgres:latest   13811c585780        657MB          159MB   U    
+  docker image ls devscene-docs-retrieval-postgres
+  devscene-docs-retrieval-postgres:latest   13811c585780        657MB          159MB   U    
   ```
 
   ```
-  harness-docs-retrieval-postgres   latest       13811c585780   5 days ago     657MB     649.5MB       7.901MB       1
+  devscene-docs-retrieval-postgres   latest       13811c585780   5 days ago     657MB     649.5MB       7.901MB       1
   ```
 
   The columns are `DISK USAGE` and `CONTENT SIZE` for the first, and `SIZE`, `SHARED SIZE`,
   `UNIQUE SIZE` and `CONTAINERS` for the second.
 - The service image is not in an adopter's path and had not been built. `docker image ls
-  harness-docs-retrieval-service` printed its header line and no row.
+  devscene-docs-retrieval-service` printed its header line and no row.
 - The volume, from `docker system df -v`:
 
   ```
@@ -28254,7 +28254,7 @@ expanded `${XDG_CACHE_HOME:-$HOME/.cache}` and `<key>` for the checkout key the 
 - The index in its database, which is the `chunks` table with its indexes:
 
   ```
-  docker compose exec -T postgres psql -U harness -d docs_retrieval -c "SELECT pg_size_pretty(pg_total_relation_size('chunks'))"
+  docker compose exec -T postgres psql -U devscene -d docs_retrieval -c "SELECT pg_size_pretty(pg_total_relation_size('chunks'))"
    6928 kB
   ```
 
@@ -28291,24 +28291,24 @@ output was not captured.
 - TypeScript, first attempt (`agent-session-typescript.failed.jsonl`): `config set
   docs.retrievalBackend typescript`.
 - TypeScript, second attempt (`agent-session-typescript.jsonl`): the key deleted from `<repo>`'s
-  `harness.config.json` by hand. An absent key selects the TypeScript backend.
+  `devscene.config.json` by hand. An absent key selects the TypeScript backend.
 
 **What came back.** Each figure is from the stream's `system/init` and `result` events and its
 `tool_use` / `tool_result` blocks. Session and account identifiers are left out.
 
 | | Python | TypeScript, first attempt | TypeScript, second attempt |
 | --- | --- | --- | --- |
-| `harness-docs` in `system/init` | `"status":"connected"` | `"status":"failed"` | `"status":"connected"` |
-| `mcp__harness-docs__search_docs` calls | 1, `{"query":"Python docs-retrieval backend database connection lost","k":8}` | 0 | 1, the same input |
+| `devscene-docs` in `system/init` | `"status":"connected"` | `"status":"failed"` | `"status":"connected"` |
+| `mcp__devscene-docs__search_docs` calls | 1, `{"query":"Python docs-retrieval backend database connection lost","k":8}` | 0 | 1, the same input |
 | `permission_denials` | `[]` | `[]` | `[]` |
 | Tool result | 8 ranked hits, no error | none | 8 ranked hits, no error |
 | `result` | `success`, 5 turns | `success`, 1 turn, no answer from `search_docs` | `success`, 6 turns |
 
 **The failed first attempt is a finding, recorded and not acted on.** Its stream shows only that
-`harness-docs` was `failed` at `system/init`, and the agent answered without the tool. The stream does
+`devscene-docs` was `failed` at `system/init`, and the agent answered without the tool. The stream does
 not record why. `agent-session.md` records the cause the operator found. The launcher's runtime is the
-published `autonomous-sdlc-harness@0.5.0` that `init` installed machine-wide, and it refused
-`harness.config.json` with *"docs.retrievalBackend: unknown key"*. So, on this machine, once the key was
+published `devscene@0.5.0` that `init` installed machine-wide, and it refused
+`devscene.config.json` with *"docs.retrievalBackend: unknown key"*. So, on this machine, once the key was
 set to `typescript` the TypeScript server would not start. The Python session ran with the key set and
 connected. For the same reason, the second TypeScript session's server is that published runtime, not
 this checkout's `cli/dist`.
@@ -30953,9 +30953,9 @@ chunks_bm25` issued after its last refresh, differs from `reference-reindex` on 
   read `1.5.1`, and `pg_extension.extversion` read `pg_textsearch` `1.5.1` and `vector` `0.8.7`.
 - **The environment.** `npm run build` ran first. `bash scripts/python-service.sh sync --with-models`
   synced this checkout's environment, and the Python weights were present under
-  `~/.cache/harness-docs-retrieval/models`; none was fetched. A bare `bash scripts/python-service.sh run
+  `~/.cache/devscene-docs-retrieval/models`; none was fetched. A bare `bash scripts/python-service.sh run
   self-check` reported `ok` for packages and weights and `FAIL index`, with
-  `HARNESS_DOCS_RETRIEVAL_DATABASE_URL` unset; every `--backend python` run passed the module's own
+  `DEVSCENE_DOCS_RETRIEVAL_DATABASE_URL` unset; every `--backend python` run passed the module's own
   availability check.
 - **The runs.** 2026-10-21, at commit `3dbf4b27` with a clean tree. They were the four refresh-level
   commands of `docs/retrieval-eval.md` → `### The BM25 index-state probe`, each with `--end-state route-2`
@@ -31104,14 +31104,14 @@ the after-fix run compares with.
 
 - **The code.** 2026-10-21, at commit `625c57b4` with a clean tree, after `npm run build`. `git diff
   --stat d15e5cc3 HEAD -- cli/src` lists nothing, so `cli/dist` is the base commit's retrieval code. The
-  TypeScript model cache under `~/.cache/autonomous-sdlc-harness/retrieval/models` held both models, and
+  TypeScript model cache under `~/.cache/devscene/retrieval/models` held both models, and
   none was fetched.
 - **The engine.** A scratch probe opened an in-memory PGlite with both extensions before the runs. It read
   `version()` `PostgreSQL 18.6 (PGlite 0.5.10) on wasm32-unknown-emscripten`, `SHOW
   pg_textsearch.library_version` `1.5.1`, and `pg_extension.extversion` `pg_textsearch` `1.5.1` and
   `vector` `0.8.7`.
 - **The `self-docs` snapshot.** A scratch program wrote every file of commit `d15e5cc3` under `docs/`,
-  `.claude/context/`, `evals/docs-retrieval/queries/` and `harness.config.json`, 76 files, from `git
+  `.claude/context/`, `evals/docs-retrieval/queries/` and `devscene.config.json`, 76 files, from `git
   ls-tree -r --name-only` and `git show`, into a scratch directory, and removed it once the readings
   below were taken. The runs read it as `--repo`. Its stamp is `{ files: 71, chunks: 829 }`, with 15
   positive and 5 negative queries.
@@ -31428,7 +31428,7 @@ By the stamp rule, nothing here is compared value for value with any other `gate
   `--other fixture-catalog` stood. No time was taken: this leg reads scores and plans only. The Python
   backend was not run.
 - **The command.** It is leg (vii)'s TypeScript command, with `--docs-root expause_web/docs` and seven
-  `--conventions`. Those are the seven documents the catalog's own `harness.config.json` names:
+  `--conventions`. Those are the seven documents the catalog's own `devscene.config.json` names:
   `.claude/context/data-layer.md`, `domain.md`, `presentation.md`, `tests.md`, `flutter.md`, `backend.md`
   and `conventions.md`. The captures went to
   `harness-runs/scratch/fix-bm25/route-2-typescript-gate10-catalog-1.txt` and `…-2.txt`.
@@ -31623,7 +31623,7 @@ values Task 8's commit re-recorded.
 - **The code.** 2026-10-21, at commit `0c4630e5` with a clean tree, after `npm run build`. That commit
   makes `refreshIndex` call `DocStore.rebuildIndexes()`, which issues `END_STATE_STATEMENTS`, `REINDEX
   INDEX chunks_bm25` alone (`cli/src/retrieval/store.ts`). The TypeScript model cache under
-  `~/.cache/autonomous-sdlc-harness/retrieval/models` held both models.
+  `~/.cache/devscene/retrieval/models` held both models.
 - **The engine.** `harness-runs/scratch/fix-bm25/versions.mjs` opened an in-memory PGlite with both
   extensions before the runs. It read `version()` `PostgreSQL 18.6 (PGlite 0.5.10) on
   wasm32-unknown-emscripten`, `SHOW pg_textsearch.library_version` `1.5.1`, and `pg_extension.extversion`
@@ -31963,8 +31963,8 @@ scenario that differed before it to matching, except `self-docs` `file-edited`, 
   after commit `1023cde1` and before `483b56ad`, which changed only the header of
   `evals/docs-retrieval/bm25-refresh-rule.mjs`. On that code `refresh_index` ends every refresh that wrote
   anything, and every refresh whose `index_state` is not `rebuilt`, with `DocStore.rebuild_indexes()`,
-  which issues `END_STATE_STATEMENTS` (`docs-retrieval-service/src/harness_docs_retrieval/refresh.py`,
-  `docs-retrieval-service/src/harness_docs_retrieval/store.py`).
+  which issues `END_STATE_STATEMENTS` (`docs-retrieval-service/src/devscene_docs_retrieval/refresh.py`,
+  `docs-retrieval-service/src/devscene_docs_retrieval/store.py`).
 - **The engine.** Read before the first run, on the compose Postgres: `version()` `PostgreSQL 18.6
   (Debian 18.6-1.pgdg12+2) on aarch64-unknown-linux-gnu`, `SHOW pg_textsearch.library_version` `1.5.1`,
   and `pg_extension.extversion` `pg_textsearch` `1.5.1` and `vector` `0.8.7`.
@@ -32074,7 +32074,7 @@ was run on 2026-10-22 at commit `a161a3d4`, against the compose Postgres (`Postg
 `pg_textsearch` `1.5.1`), from this checkout's root:
 
 ```
-HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL=postgresql://harness:harness@127.0.0.1:5432/docs_retrieval bash scripts/python-service.sh test tests/test_refresh_end_state_postgres.py
+DEVSCENE_DOCS_RETRIEVAL_TEST_DATABASE_URL=postgresql://devscene:devscene@127.0.0.1:5432/docs_retrieval bash scripts/python-service.sh test tests/test_refresh_end_state_postgres.py
 ```
 
 - **With step (6) removed**, the `if wrote or index_state != INDEX_STATE_REBUILT:` block of `refresh.py`
@@ -32094,7 +32094,7 @@ HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL=postgresql://harness:harness@127.0.0.1:
 the same compose Postgres, twice:
 
 ```
-HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL=postgresql://harness:harness@127.0.0.1:5432/docs_retrieval bash scripts/python-service.sh test tests/test_backend_parity_e2e.py -v
+DEVSCENE_DOCS_RETRIEVAL_TEST_DATABASE_URL=postgresql://devscene:devscene@127.0.0.1:5432/docs_retrieval bash scripts/python-service.sh test tests/test_backend_parity_e2e.py -v
 ```
 
 Both runs reported `test_both_backends_answer_byte_identically PASSED`,

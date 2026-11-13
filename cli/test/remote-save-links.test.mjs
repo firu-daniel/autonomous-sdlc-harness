@@ -18,7 +18,7 @@
  * outside directory holding it. The bundle is then walked with `lstat`, following nothing: no entry
  * may be a link, no file may contain the token, and the file set and each file's bytes must be
  * exactly the honest sources the case left in place. `gh` is a recorder stub through
- * `HARNESS_GH_CLI`, and every `save` but (T)'s passes `HARNESS_GITHUB_DEFAULT_COMMIT` empty so that
+ * `DEVSCENE_GH_CLI`, and every `save` but (T)'s passes `HARNESS_GITHUB_DEFAULT_COMMIT` empty so that
  * an ambient value cannot select trusted mode; (TR) sets it only for the restore it drives.
  *
  * RED ONCE — each mutation applied once to `cli/templates/scripts/lib/harness-run-lib.sh` (M3 and
@@ -45,14 +45,14 @@
  *   directory half fail too, though not on a leak: `hr_remote_copy_tree` refuses a linked top-level
  *   source by returning 1 with no skip line, so `hr_remote_bundle_write` stops there. (D) fails on
  *   `the bundle's file set`, holding only `status.json`; (P)'s directory half on `no skip line for
- *   …/sdlc-harness/task_plans/feat_x`. (F), (N), (P)'s file half, (R), (T) and (TR) stay green.
+ *   …/devscene/task_plans/feat_x`. (F), (N), (P)'s file half, (R), (T) and (TR) stay green.
  * - (M6) M5 and M2 together → (D) fails, `a link is in the bundle: clarifications/feat_x`; (P)'s
  *   directory half, `a link is in the bundle: planning/task_plans/feat_x`; (N), `a link is in the
  *   bundle: clarifications/feat_x/question_2.md`; (U), `the sentinel's bytes are in the bundle:
  *   clarifications/feat_x/question_1.md`. (F), (P)'s file half, (R), (T) and (TR) stay green.
  * - (M7) `state=$(hr_state_dir "$root")` in place of `hr_remote_bundle_restore`'s
  *   `state=$HR_REMOTE_STATE_DIR` → (TR) fails, `PAUSE_PROGRESS.md was not restored under
- *   sdlc-harness`: the bundle went to `planted-state` instead. Every other case stays green.
+ *   devscene`: the bundle went to `planted-state` instead. Every other case stays green.
  * - (M8) `hr_remote_status_write`'s `[ -L "$out" ]` removal deleted → (W1) fails, `the status
  *   write landed in the linked directory`: `mv` moved the file into the directory the link names.
  *   (W2), (W3), (W4) and every other case stay green, since `mv` onto a link to a file or a
@@ -68,7 +68,7 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REGISTRY = 'autonomous_logs/registry.json';
 const STATUS_SOURCE = 'autonomous_logs/remote_status.json';
 
@@ -95,7 +95,7 @@ function put(path, content) {
 
 /**
  * An `init`-wired fixture with `execution.target` `github-actions`, a recorder `gh`, the honest
- * sources seeded under `stateDir` (`state`, default `sdlc-harness`), and the sentinel beside it.
+ * sources seeded under `stateDir` (`state`, default `devscene`), and the sentinel beside it.
  *
  * @param {import('node:test').TestContext} t
  */
@@ -107,7 +107,7 @@ async function saveFixture(t, state = STATE_DIR) {
   const { dir } = fixture;
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
@@ -159,7 +159,7 @@ async function saveFixture(t, state = STATE_DIR) {
     },
     save(env = {}) {
       return runBash(dir, [SCRIPT, 'save', 'feat_x', out], {
-        HARNESS_GH_CLI: stub,
+        DEVSCENE_GH_CLI: stub,
         STUB_LOG: join(stubDir, 'gh.log'),
         HARNESS_GITHUB_DEFAULT_COMMIT: '',
         GITHUB_RUN_ID: '',
@@ -322,13 +322,13 @@ test('(R) a linked registry with no status source leaves the never-started empty
 test('(T) save reads the stateDir of the trusted configuration, not the checkout\'s', async (t) => {
   const fx = await saveFixture(t);
   const expected = fx.honest();
-  for (const args of [['add', 'harness.config.json'], ['commit', '--quiet', '--no-verify', '-m', 'fixture: trusted configuration']]) {
+  for (const args of [['add', 'devscene.config.json'], ['commit', '--quiet', '--no-verify', '-m', 'fixture: trusted configuration']]) {
     const ran = await runGit(fx.dir, args);
     assert.equal(ran.status, 0, ran.stderr);
   }
   const commit = (await runGit(fx.dir, ['rev-parse', 'HEAD'])).stdout.trim();
 
-  const configPath = join(fx.dir, 'harness.config.json');
+  const configPath = join(fx.dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.stateDir = 'planted-state';
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
@@ -340,7 +340,7 @@ test('(T) save reads the stateDir of the trusted configuration, not the checkout
   assert.equal(result.status, 0, result.stderr);
   assertBundle(fx, expected, result.stderr);
   assert.ok(
-    result.stderr.includes(`remote-run.sh: save: the checkout's harness.config.json names stateDir 'planted-state', the trusted configuration at ${commit} names '${STATE_DIR}'; using '${STATE_DIR}'`),
+    result.stderr.includes(`remote-run.sh: save: the checkout's devscene.config.json names stateDir 'planted-state', the trusted configuration at ${commit} names '${STATE_DIR}'; using '${STATE_DIR}'`),
     `no difference line\n${result.stderr}`,
   );
 });
@@ -416,13 +416,13 @@ test('(TR) restore places the bundle under the trusted stateDir, not the checkou
   const saved = await fx.save();
   assert.equal(saved.status, 0, saved.stderr);
   const bundlePause = readFileSync(join(fx.out, 'PAUSE_PROGRESS.md'));
-  for (const args of [['add', 'harness.config.json'], ['commit', '--quiet', '--no-verify', '-m', 'fixture: trusted configuration']]) {
+  for (const args of [['add', 'devscene.config.json'], ['commit', '--quiet', '--no-verify', '-m', 'fixture: trusted configuration']]) {
     const ran = await runGit(fx.dir, args);
     assert.equal(ran.status, 0, ran.stderr);
   }
   const commit = (await runGit(fx.dir, ['rev-parse', 'HEAD'])).stdout.trim();
 
-  const configPath = join(fx.dir, 'harness.config.json');
+  const configPath = join(fx.dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.stateDir = 'planted-state';
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);

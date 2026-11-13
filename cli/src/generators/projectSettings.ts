@@ -83,7 +83,7 @@ import { taskOfferCheckRule } from './outerLoopScripts.js';
 import { PROFILE_PATH } from './profileEntries.js';
 
 /** The marketplace's name, mirroring `.claude-plugin/marketplace.json`'s `name`. */
-export const MARKETPLACE_NAME = 'autonomous-sdlc-harness';
+export const MARKETPLACE_NAME = 'devscene';
 
 /**
  * The key `enabledPlugins` holds — `<plugin>@<marketplace>`, the composite a project-scope
@@ -93,8 +93,7 @@ export const MARKETPLACE_NAME = 'autonomous-sdlc-harness';
  * them re-deriving it from the two names would be a third place the composition rule lives.
  *
  * The plugin and the marketplace deliberately carry the same name, so the composite reads
- * `autonomous-sdlc-harness@autonomous-sdlc-harness`; the doubling is correct and must not be
- * collapsed.
+ * `devscene@devscene`; the doubling is correct and must not be collapsed.
  */
 export const PLUGIN_KEY = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`;
 
@@ -487,7 +486,7 @@ export function writeProjectSettings({ repoRoot, plan, config, flags }: ProjectS
     marketplaceSlug,
     warnings,
     notes: [
-      `${SETTINGS_PATH} is committed, and committing it is the whole of the plugin's onboarding step: a teammate clones the repository, opens it in the agent runner, accepts the workspace trust dialog, and the plugin resolves from these keys — run /reload-plugins if the session was already open. The config is committed too, but ${PROFILE_PATH} is not: it is machine-local and the managed .gitignore block ignores it, so the teammate then runs \`npx autonomous-sdlc-harness init\` once to generate theirs, and then doctor.`,
+      `${SETTINGS_PATH} is committed, and committing it is the whole of the plugin's onboarding step: a teammate clones the repository, opens it in the agent runner, accepts the workspace trust dialog, and the plugin resolves from these keys — run /reload-plugins if the session was already open. The config is committed too, but ${PROFILE_PATH} is not: it is machine-local and the managed .gitignore block ignores it, so the teammate then runs \`npx devscene init\` once to generate theirs, and then doctor.`,
     ],
   };
 }

@@ -19,7 +19,7 @@ import test from 'node:test';
 import { runCli, runGit } from './helpers/fixture.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const INBOX = `${STATE_DIR}/autonomous_inbox`;
 const ARCHIVE = `${INBOX}/.processed`;
 const IDENTITY = ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid'];
@@ -44,7 +44,7 @@ const missingProbe = (marker) =>
 
 /**
  * A watcher fixture adopted on `origin`'s default branch with `config` applied to its
- * `harness.config.json`; `regenerate` re-runs `init --force` so the base profile matches a taken
+ * `devscene.config.json`; `regenerate` re-runs `init --force` so the base profile matches a taken
  * opt-out.
  *
  * @param {import('node:test').TestContext} t
@@ -54,7 +54,7 @@ async function refusalFixture(t, { edit = () => {}, regenerate = false } = {}) {
   const w = await createWatcherFixture(t);
   if (w === null) return null;
 
-  const configPath = join(w.dir, 'harness.config.json');
+  const configPath = join(w.dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   delete config.commands.depInstall;
   delete config.commands.build;
@@ -84,8 +84,8 @@ async function refusalFixture(t, { edit = () => {}, regenerate = false } = {}) {
     drop: () => writeFile(join(w.dir, INBOX, `${w.branch}_task_prompt.md`), 'do the thing\n', 'utf8'),
     tickWith: (sandboxProbe) =>
       sandboxProbe === undefined
-        ? w.tick({ HARNESS_GH_CLI: ghStub, STUB_LOG: ghLog })
-        : w.tick({ HARNESS_GH_CLI: ghStub, STUB_LOG: ghLog }, { sandboxProbe }),
+        ? w.tick({ DEVSCENE_GH_CLI: ghStub, STUB_LOG: ghLog })
+        : w.tick({ DEVSCENE_GH_CLI: ghStub, STUB_LOG: ghLog }, { sandboxProbe }),
     /** The inbox's drops: its `.processed/` archive and the `README.md` `init` writes are not drops. */
     inbox: () => readdirSync(join(w.dir, INBOX)).filter((name) => name !== '.processed' && name !== 'README.md'),
     archive: () => (existsSync(join(w.dir, ARCHIVE)) ? readdirSync(join(w.dir, ARCHIVE)) : []),

@@ -26,7 +26,7 @@
 # REPRO — reproduce any answer by hand, against a throwaway fixture:
 #
 #   root=$(mktemp -d); git -C "$root" init -q
-#   printf '{"defaultBranch":"main","stateDir":"sdlc-harness/","phases":{"qa":true}}' > "$root/harness.config.json"
+#   printf '{"defaultBranch":"main","stateDir":"devscene/","phases":{"qa":true}}' > "$root/devscene.config.json"
 #   . <repo>/<scripts_dir>/lib/harness-run-lib.sh
 #   . <repo>/<scripts_dir>/lib/flow-walker-gates.sh
 #
@@ -34,11 +34,11 @@
 #                     fw_next_review_index "$root/f"   -> 4   (a gap is never back-filled)
 #                     fw_round_count "$root/f"         -> 2
 #                     fw_next_review_index "$root/nope"; fw_round_count "$root/nope"  -> 0, 0
-#   run mode          fw_run_mode_skipped "$root" sdlc-harness/ feat_x none      -> none
-#                     fw_run_mode_skipped "$root" sdlc-harness/ feat_x ''; echo $?  -> 1, prints nothing
-#                     mkdir -p "$root/sdlc-harness/flow_progress"
-#                     printf '## Run mode\n- skipped: parity, qa\n' > "$root/sdlc-harness/flow_progress/feat_x_progress.md"
-#                     fw_run_mode_skipped "$root" sdlc-harness/ feat_x none      -> parity, qa   (the ledger wins)
+#   run mode          fw_run_mode_skipped "$root" devscene/ feat_x none      -> none
+#                     fw_run_mode_skipped "$root" devscene/ feat_x ''; echo $?  -> 1, prints nothing
+#                     mkdir -p "$root/devscene/flow_progress"
+#                     printf '## Run mode\n- skipped: parity, qa\n' > "$root/devscene/flow_progress/feat_x_progress.md"
+#                     fw_run_mode_skipped "$root" devscene/ feat_x none      -> parity, qa   (the ledger wins)
 #                     fw_id_in_list qa 'parity, qa'; echo $?   -> 0
 #                     fw_id_in_list qa none; echo $?           -> 1
 #   phase flag        fw_phase_on "$root" qa; echo $?     -> 0

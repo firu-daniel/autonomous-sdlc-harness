@@ -35,7 +35,7 @@ import {
   finishedLedgerBody,
 } from './helpers/watcher.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REGISTRY_PATH = `${STATE_DIR}/autonomous_logs/registry.json`;
 const LIB_PATH = `${INIT_SCRIPTS_DIR}/lib/harness-run-lib.sh`;
 const RUN_TIMEOUT_MS = scaleBound(120_000);
@@ -239,7 +239,7 @@ test('in a job, a refused push is annotated, stops the job, and writes no step s
       REMOTE_CONTROL_POLL_SECS: '1',
       REMOTE_AUTO_RESUME_DELAY_SECS: '0',
       POLL_INTERVAL_SECS: '1',
-      HARNESS_GH_CLI: join(rec, 'gh-never-called'),
+      DEVSCENE_GH_CLI: join(rec, 'gh-never-called'),
     }),
     { timeoutMs: RUN_TIMEOUT_MS, signal: t.signal },
   );

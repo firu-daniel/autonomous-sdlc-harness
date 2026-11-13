@@ -20,7 +20,7 @@
 #      reported as already gone. Then it
 #   2. deletes that run's per-run profile — `hr_run_profile_file "$slug"
 #      "$branch"`, i.e. `${XDG_STATE_HOME:-$HOME/.local/state}/
-#      autonomous-sdlc-harness/run-profiles/<slug>/<sanitized branch>.json`,
+#      devscene/run-profiles/<slug>/<sanitized branch>.json`,
 #      with `slug` from `hr_repo_slug "$main_repo"` (never the inherited
 #      `HARNESS_REPO_SLUG`, which this sweep does not read: in job mode the
 #      watcher sets it to the remote slug). No glob, no hand-built path. Three
@@ -51,7 +51,7 @@
 # THE THREE REFUSALS. It never touches
 #
 #   * a PROTECTED branch — the set resolved at run time from this repository's
-#     `harness.config.json` (`protectedBranches`, or that key's schema default,
+#     `devscene.config.json` (`protectedBranches`, or that key's schema default,
 #     unioned with `defaultBranch`), through lib/harness-run-lib.sh. There is no
 #     list of branch names in this file: one written here would delete branches
 #     an adopter had protected, the moment their configuration named anything
@@ -114,7 +114,7 @@
 # from this side — so every input it cannot resolve ends the run
 # instead of being worked around:
 #
-#   * the shared library, or `<repo_root>/harness.config.json`, cannot be read
+#   * the shared library, or `<repo_root>/devscene.config.json`, cannot be read
 #     (absent, unreadable, invalid JSON, more than one document, no
 #     `defaultBranch`, or `jq` missing or older than 1.5) — it cannot prove any
 #     branch is unprotected;
@@ -144,7 +144,7 @@
 #   --dry-run   report what would be removed; remove nothing
 #
 # Environment:
-#   HARNESS_FETCH_TIMEOUT   seconds to allow the `fetch --prune` before it is
+#   DEVSCENE_FETCH_TIMEOUT  seconds to allow the `fetch --prune` before it is
 #                           killed and the round skipped (default 60, clamped to
 #                           1..3600; anything else falls back to the default).
 #                           The bound exists because this sweep runs inside the
@@ -163,13 +163,13 @@
 #   export XDG_STATE_HOME=$(mktemp -d)
 #   w=$(mktemp -d); b="$w/origin.git"; git init -q --bare "$b"
 #   d="$w/demo"; git init -q -b trunk "$d"; git -C "$d" remote add origin "$b"
-#   printf '%s' '{"version":1,"projectName":"demo","defaultBranch":"trunk","protectedBranches":["trunk","release/*"],"stateDir":"sdlc-harness/","layers":[],"commands":{}}' > "$d/harness.config.json"
+#   printf '%s' '{"version":1,"projectName":"demo","defaultBranch":"trunk","protectedBranches":["trunk","release/*"],"stateDir":"devscene/","layers":[],"commands":{}}' > "$d/devscene.config.json"
 #   mkdir -p "$d/scripts/lib"   # copy this script + lib/ there
 #   git -C "$d" add -A && git -C "$d" commit -qm seed
 #   git -C "$d" push -q -u origin trunk
 #   for r in feat_gone feat_old feat_live release/1.0; do git -C "$d" branch "$r"; \
 #     git -C "$d" push -q -u origin "$r"; done
-#   mkdir -p "$d/sdlc-harness/autonomous_logs"
+#   mkdir -p "$d/devscene/autonomous_logs"
 #   bash -c '. "$1/scripts/lib/harness-run-lib.sh"
 #     hr_clone_create_var "$1" feat_gone trunk || echo "$HR_CLONE_REFUSAL"' _ "$d"
 #   bash -c '. "$1/scripts/lib/harness-run-lib.sh"; r=$(hr_state_path "$1" \
@@ -182,7 +182,7 @@
 #                 bash -c '. "$1/scripts/lib/harness-run-lib.sh"
 #                   f=$(hr_run_profile_file "$(hr_repo_slug "$1")" feat_gone)
 #                   mkdir -p "${f%/*}" && printf "{}" > "$f"' _ "$d"
-#                 -> `$XDG_STATE_HOME/autonomous-sdlc-harness/run-profiles/
+#                 -> `$XDG_STATE_HOME/devscene/run-profiles/
 #                    <slug>/feat_gone.json`; the preview names it, the sweep
 #                    removes it
 #   manifest      likewise plant its absent-path manifest:
@@ -217,7 +217,7 @@
 #                 -> the skip line for feat_gone; its clone, branch and planted
 #                    profile are untouched (same with "parked", "park_loop" and
 #                    "paused")
-#   unresolvable  printf 'x' > "$d/harness.config.json"
+#   unresolvable  printf 'x' > "$d/devscene.config.json"
 #                 -> one line, exit 0, nothing deleted
 #   offline       git -C "$d" remote set-url origin /nonexistent.git
 #                 -> the fetch message, exit 0, nothing deleted
@@ -289,7 +289,7 @@ fi
 cfg_status=0
 hr_config_load "$main_repo" || cfg_status=$?
 if [ "$cfg_status" -ne 0 ]; then
-  echo "cleanup-merged-worktrees.sh: cannot resolve '$main_repo/harness.config.json' — refusing to delete anything"
+  echo "cleanup-merged-worktrees.sh: cannot resolve '$main_repo/devscene.config.json' — refusing to delete anything"
   echo "  (no configuration there, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)"
   exit 0
 fi
@@ -450,7 +450,7 @@ run_bounded() {
 # that round rather than the loop. It is NOT short next to `POLL_INTERVAL_SECS`
 # (15): a sweep that spends the whole ceiling does hold the loop for it, which is
 # the price of bounding the fetch at all and the reason the ceiling is not larger.
-# `HARNESS_FETCH_TIMEOUT` raises it for an adopter on a link where 60 s is not
+# `DEVSCENE_FETCH_TIMEOUT` raises it for an adopter on a link where 60 s is not
 # generous, and lowers it for the test that drives this ceiling.
 #
 # VALIDATED BY VALUE, NOT BY SHAPE. An earlier form of this clause tested the
@@ -465,7 +465,7 @@ run_bounded() {
 # unparsable or out-of-range string as readily as for a number that fails the
 # test, and the default is what survives either way. The upper clamp is what keeps
 # a fat-fingered value from expressing "wait forever" in seconds.
-fetch_timeout="${HARNESS_FETCH_TIMEOUT:-60}"
+fetch_timeout="${DEVSCENE_FETCH_TIMEOUT:-60}"
 if ! { [ "$fetch_timeout" -ge 1 ] && [ "$fetch_timeout" -le 3600 ]; } 2>/dev/null; then
   fetch_timeout=60
 fi

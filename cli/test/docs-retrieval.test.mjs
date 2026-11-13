@@ -101,7 +101,7 @@ test('(a)-(e) docs index refreshes incrementally, deletes, and rebuilds on a new
 
   // (e) The rebuild's clear() is not counted as deletions.
   assert.equal(
-    await indexOk(dir, { ...env, AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB: 'hash-v2' }),
+    await indexOk(dir, { ...env, DEVSCENE_RETRIEVAL_STUB: 'hash-v2' }),
     'docs index: 2 files, 7 chunks; embedded 7, unchanged 0, deleted 0; rebuilt for a new embedder',
   );
 });
@@ -127,13 +127,13 @@ test('(g) docs index refuses with docs.retrieval false', async (t) => {
   const result = await runCli(dir, ['docs', 'index'], env);
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /docs retrieval is off in harness\.config\.json/);
+  assert.match(result.stderr, /docs retrieval is off in devscene\.config\.json/);
   assert.deepEqual(await snapshotTree(dir), before);
 });
 
 test('(h) docs index refuses with the model files removed, naming a missing file', async (t) => {
   const { dir, cacheHome, env } = await retrievalFixture(t);
-  await rm(join(cacheHome, 'autonomous-sdlc-harness', 'retrieval', 'models'), { recursive: true, force: true });
+  await rm(join(cacheHome, 'devscene', 'retrieval', 'models'), { recursive: true, force: true });
   const before = await snapshotTree(dir);
 
   const result = await runCli(dir, ['docs', 'index'], env);
@@ -266,7 +266,7 @@ test('search (f): docs search --dry-run answers from memory and leaves the tree 
   assert.ok(hybrid.split('\n')[0].startsWith('1. docs/guide.md#offline (score '), hybrid);
 
   assert.deepEqual(await snapshotTree(dir), before);
-  assert.equal(existsSync(join(dir, 'sdlc-harness', 'docs_index')), false);
+  assert.equal(existsSync(join(dir, 'devscene', 'docs_index')), false);
 });
 
 test('docs refuses an unknown sub-verb and an unknown flag, naming docs --help', async (t) => {
@@ -350,7 +350,7 @@ test('serve (e): docs serve with docs.retrieval false exits non-zero before the 
 
   assert.notEqual(result.status, 0);
   assert.equal(result.stdout, '');
-  assert.match(result.stderr, /docs retrieval is off in harness\.config\.json/);
+  assert.match(result.stderr, /docs retrieval is off in devscene\.config\.json/);
 });
 
 test('serve (f): docs serve --dry-run exits non-zero before the handshake and writes nothing', async (t) => {
@@ -393,7 +393,7 @@ test('serve (g): a skipped corpus file becomes a note line on the tool result, d
 });
 
 /** The variable `cli/src/retrieval/queryLog.ts` owns; its only spelling outside that module. */
-const LOG_ENV = 'AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG';
+const LOG_ENV = 'DEVSCENE_RETRIEVAL_LOG';
 
 /**
  * The key set of one record, which the `feat_docs_retrieval_eval` branch reads as a contract: it is

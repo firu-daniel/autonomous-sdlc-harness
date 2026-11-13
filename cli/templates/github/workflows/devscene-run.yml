@@ -1,11 +1,11 @@
-# harness-run.yml — runs one autonomous-sdlc-harness run in a GitHub Actions job,
-# on a GitHub-hosted or a self-hosted runner chosen by the HARNESS_RUNNER variable.
+# devscene-run.yml — runs one devscene run in a GitHub Actions job,
+# on a GitHub-hosted or a self-hosted runner chosen by the DEVSCENE_RUNNER variable.
 #
-# WHO WRITES IT. `autonomous-sdlc-harness init`, only when harness.config.json's
+# WHO WRITES IT. `devscene init`, only when devscene.config.json's
 # `execution.target` is `github-actions`. Written create-if-absent: from then on
 # it is yours to tune, and a re-run of `init` keeps your copy.
 # `init --upgrade-workflows` re-renders it at that CLI's version, after a `.bak`,
-# and only when the HARNESS_CLI_VERSION below differs.
+# and only when the DEVSCENE_CLI_VERSION below differs.
 #
 # THE INPUT CONTRACT. Composed on the shell side by `remote-run.sh` alone:
 #   action           run | pause | warm | stop. Only `run` and `warm` start a
@@ -17,7 +17,7 @@
 #   answers          JSON object {"<n>": "<answer text>"}     (resume=answer)
 #   park_loop_clear  true clears the restored park-loop count
 #   chain            automatic dispatches since the last user action; 0 from a user
-# `run-name` is `harness <action> <branch>`: the job's pause poll and
+# `run-name` is `devscene <action> <branch>`: the job's pause poll and
 # `remote-run.sh continue` / `poll` match runs by that title, so it is a wire.
 #
 # TWO RULES EVERY EDIT KEEPS.
@@ -27,18 +27,18 @@
 #   * Every GitHub expression has a space after its opening braces. `init`
 #     renders this file with the CLI's double-brace token renderer, which reads
 #     a letter straight after the braces as a token; the only token here is the
-#     CLI version, HARNESS_CLI_VERSION in each job's `env:`.
+#     CLI version, DEVSCENE_CLI_VERSION in each job's `env:`.
 #
 # DECLARED MIRRORS — a rename on either side is an edit to both:
-#   cli/src/remote/githubActions.ts   the file names, HARNESS_RUNNER,
-#                                     HARNESS_REMOTE_STOP, CLAUDE_CODE_OAUTH_TOKEN,
-#                                     ANTHROPIC_API_KEY, HARNESS_PUSH_URL,
-#                                     HARNESS_GIT_TOKEN, the artifact harness-state,
-#                                     HARNESS_CLI_VERSION, HARNESS_RUN_ACTORS,
-#                                     HARNESS_TRIGGER_ALLOWED_BOTS
+#   cli/src/remote/githubActions.ts   the file names, DEVSCENE_RUNNER,
+#                                     DEVSCENE_REMOTE_STOP, CLAUDE_CODE_OAUTH_TOKEN,
+#                                     ANTHROPIC_API_KEY, DEVSCENE_PUSH_URL,
+#                                     DEVSCENE_GIT_TOKEN, the artifact harness-state,
+#                                     DEVSCENE_CLI_VERSION, DEVSCENE_RUN_ACTORS,
+#                                     DEVSCENE_TRIGGER_ALLOWED_BOTS
 #   cli/src/generators/githubWorkflows.ts   --upgrade-workflows
 #   cli/src/generators/projectSettings.ts   the marketplace and plugin key
-#                                     autonomous-sdlc-harness@autonomous-sdlc-harness
+#                                     devscene@devscene
 #   cli/src/config/model.ts           DEFAULTS.scriptsDir and retrievalApplies
 #   cli/src/machine/paths.ts          machineCacheDir, under which the retrieval
 #                                     runtime sits in `retrieval/`
@@ -66,14 +66,14 @@
 #                                     `Install the sandbox prerequisites` to
 #                                     read sandbox.optOut on its failing arm,
 #                                     held by workflow-sandbox-install.test.mjs
-#   harness-control.yml               the concurrency group
+#   devscene-control.yml              the concurrency group
 #                                     `harness-review-<branch>`, shared by its
 #                                     review jobs and the `collect` job here;
 #                                     and, read by its `Fetch the pinned
 #                                     plugin` step, the first
-#                                     `HARNESS_CLI_VERSION:` env line (key, then
+#                                     `DEVSCENE_CLI_VERSION:` env line (key, then
 #                                     the quoted version) and the release-tag
-#                                     shape `autonomous-sdlc-harness--v<version>`
+#                                     shape `devscene--v<version>`
 #                                     of the `Install the pinned plugin` step
 #
 # THE COLLECT JOB. When a run ends, `remote-run.sh collect` starts the next
@@ -81,7 +81,7 @@
 # answered "collected" while the run was in flight, so a reviewer waits at most
 # for that run and never resubmits. It is a job of its own, not a step of
 # `run`, for two reasons: a step cannot hold a concurrency group, and this one
-# must share `harness-review-<branch>` with harness-control.yml's review jobs so
+# must share `harness-review-<branch>` with devscene-control.yml's review jobs so
 # the two never place a round at once; and the settledness test reads "the
 # `run` job is completed", which no step inside that job could see. Under
 # `!cancelled()` a failed `run` job still reaches it, and the run's state bundle
@@ -89,10 +89,10 @@
 # cancelled before any step ran, for example one no runner acquired, reaches it
 # too, and `collect` reports that run once (remote-run.sh's header, its
 # `collect` paragraph), because the job itself could report nothing; a workflow
-# run cancelled or stopped as a whole skips it. The group name mirrors harness-control.yml's, and
+# run cancelled or stopped as a whole skips it. The group name mirrors devscene-control.yml's, and
 # RUN_JOB_NAME in remote-run.sh mirrors the `run` job's key (DECLARED MIRRORS
 # above). It reads no secret: its own token pushes the round, dispatches it and
-# comments. It checks out the default branch, as harness-control.yml's review
+# comments. It checks out the default branch, as devscene-control.yml's review
 # jobs do, never the run's branch: `collect` fetches that branch itself and
 # `review` cuts its own working copy of it, which create-worktree.sh refuses
 # for a branch already checked out. Its step is `continue-on-error` for the
@@ -111,11 +111,11 @@
 # default branch with that branch as its input, so the two already agree.
 # `stop` is exempt because a deleted branch's stop marker is sent from the
 # default branch, its own ref being gone, and the stop check matches the
-# `harness stop <branch>` title across every branch's runs, under any ref.
+# `devscene stop <branch>` title across every branch's runs, under any ref.
 #
 # THE RUN-ACTOR GATE. The first step of `open`, `run`, `deliver` and `collect`,
 # byte-identical in all four, refuses a `github.triggering_actor` the repository
-# variable HARNESS_RUN_ACTORS does not admit, so the Run workflow form, `gh
+# variable DEVSCENE_RUN_ACTORS does not admit, so the Run workflow form, `gh
 # workflow run` and a re-run by someone not on the list launch nothing; a
 # refused job sets no SCRIPTS_DIR, so its `always()` and `!cancelled()` steps
 # skip too, and a `run` reached after a refused `open` is refused by its own
@@ -129,16 +129,16 @@
 #   * `github-actions[bot]` passes: every harness dispatch is made with
 #     GITHUB_TOKEN and names it. Measured 2026-10-05 for the trigger, the comment
 #     commands and `collect`; inferred for the `remote-run.sh continue` chain and
-#     the harness-resume.yml poller, which Gate 12 observation (xv) confirms.
+#     the devscene-resume.yml poller, which Gate 12 observation (xv) confirms.
 #   * Not closed: a writer who edits this file on a branch can remove the gate
 #     or dispatch as the bot. That writer can already read the secret (G7).
-#   * Resolved before it: `run`'s job-level HARNESS_PUSH_URL secret, at job
+#   * Resolved before it: `run`'s job-level DEVSCENE_PUSH_URL secret, at job
 #     start. The credential secrets are read only by later `run` steps, and
-#     HARNESS_GIT_TOKEN only by the last step of `open` and of `deliver`.
+#     DEVSCENE_GIT_TOKEN only by the last step of `open` and of `deliver`.
 #
 # THE JOB'S OWN FILES. `Check out the run's branch` checks out the run's branch,
 # and every later step runs or loads that tree's files: its scriptsDir scripts,
-# harness.config.json, .claude/settings.json and .mcp.json. A previous job's
+# devscene.config.json, .claude/settings.json and .mcp.json. A previous job's
 # agent can commit any of them. `Refuse a branch that changed the job's own
 # files` runs the pinned CLI's `doctor --job-surfaces=<default branch>`, which
 # reads the trusted configuration from the GitHub default branch, the branch
@@ -170,7 +170,7 @@
 #     runtime ships. They are the npm runs left in the checkout, so both still
 #     read a branch-written .npmrc or node_modules/.
 #
-# WHY THE RUN JOB CUTS NO RUN COPY. `Run the harness` runs
+# WHY THE RUN JOB CUTS NO RUN COPY. `Run DevScene` runs
 # `autonomous-watcher.sh job` in the job's own checkout, $GITHUB_WORKSPACE,
 # which job mode treats as both the main checkout and the run's working copy
 # (that script's anchors comment and its JOB MODE). So no step creates a run
@@ -198,29 +198,29 @@
 # has it, and a self-hosted one must run it (docs/remote-execution.md, section
 # 8). A sha, not a tag: a tag is mutable, and this job holds the Claude
 # credential and write tokens. A pin moves when
-# `npx autonomous-sdlc-harness@<version> init --upgrade-workflows` re-renders
+# `npx devscene@<version> init --upgrade-workflows` re-renders
 # this file at a newer release's pins; a hand bump replaces the sha and its
 # comment line together. The version stays on its own line, never trailing the
 # `uses:` value: a value carrying ` #` is never a plain scalar.
 #
 # WHAT IT READS.
 #   Secrets: CLAUDE_CODE_OAUTH_TOKEN and/or ANTHROPIC_API_KEY (one is required;
-#     billing follows the API key when both are set), HARNESS_GIT_TOKEN (optional:
+#     billing follows the API key when both are set), DEVSCENE_GIT_TOKEN (optional:
 #     a personal or App token, read only by `open` and `deliver`; it opens the
 #     run's draft pull request when the run starts and flips it ready for review
 #     at completion, `deliver` opening one only when none is open, so your CI
 #     runs on `opened` and on `ready_for_review` without an approval click. The
 #     `run` job's pushes use GITHUB_TOKEN, so they trigger no CI, and no push
 #     from this workflow can carry a `.github/workflows/` edit: A WORKFLOW-FILE
-#     CHANGE CANNOT BE PUSHED FROM THIS WORKFLOW below), HARNESS_PUSH_URL
+#     CHANGE CANNOT BE PUSHED FROM THIS WORKFLOW below), DEVSCENE_PUSH_URL
 #     (optional notifications).
-#   Variables: HARNESS_RUNNER, HARNESS_REMOTE_STOP (any value stops every job
-#     before it launches anything), HARNESS_RUN_ACTORS (THE RUN-ACTOR GATE),
-#     HARNESS_STEP_TIMEOUT_MINUTES,
-#     HARNESS_SELF_PAUSE_AFTER_MINUTES, HARNESS_MAX_CHAIN, and the watcher
+#   Variables: DEVSCENE_RUNNER, DEVSCENE_REMOTE_STOP (any value stops every job
+#     before it launches anything), DEVSCENE_RUN_ACTORS (THE RUN-ACTOR GATE),
+#     DEVSCENE_STEP_TIMEOUT_MINUTES,
+#     DEVSCENE_SELF_PAUSE_AFTER_MINUTES, DEVSCENE_MAX_CHAIN, and the watcher
 #     tunables listed in the `run` job's `env:` under their own names. An unset
 #     variable arrives empty and the script reading it applies its own default.
-#   harness.config.json, at run time: `scriptsDir` and whether docs retrieval
+#   devscene.config.json, at run time: `scriptsDir` and whether docs retrieval
 #     applies. No configured value is frozen into this file.
 #
 # A WORKFLOW-FILE CHANGE CANNOT BE PUSHED FROM THIS WORKFLOW. A workflow edit is
@@ -297,20 +297,20 @@
 # a checkout persists its credential.
 #
 # THE JOB TOKEN AND THE SESSION. The `run` job's job-level GH_TOKEN (GITHUB_TOKEN)
-# and HARNESS_PUSH_URL reach the watcher's own passes: its pushes, its
+# and DEVSCENE_PUSH_URL reach the watcher's own passes: its pushes, its
 # remote-run.sh calls and its notifications. The watcher strips both, and every
 # `sandbox.credentials.envVars` name but the agent's own credential, from the
 # agent session's environment. That is hygiene that blocks a casual read, and a
 # boundary only beside the sandbox's PID namespace and no-new-privileges,
 # measured on the GitHub-hosted `ubuntu-26.04` image `20261101.186.1` only
 # (docs/sandbox-record.md, section 5) and unverified on other images and on
-# self-hosted runners. HARNESS_GIT_TOKEN is referenced only by `open` and
+# self-hosted runners. DEVSCENE_GIT_TOKEN is referenced only by `open` and
 # `deliver`, which run no agent and run the default branch's scripts.
 #
 # THE CLAUDE CLI. `Install the claude CLI when absent` installs
 # @anthropic-ai/claude-code unpinned, and only when the runner has no `claude`.
 # The latest is wanted: the agent runner tracks the model API, and
-# harness-control.yml installs it the same way but is never re-rendered by
+# devscene-control.yml installs it the same way but is never re-rendered by
 # `--upgrade-workflows` (cli/src/generators/githubWorkflows.ts, choice 5), so a
 # version frozen into the templates would stay frozen there. zizmor's
 # `adhoc-packages` finding stands on it, and pinning does not clear it: it flags
@@ -363,12 +363,12 @@
 # WHY THE TIMEOUT IS COMPUTED INTO GITHUB_ENV. The first step computes every
 # budget value from `runner.environment` into GITHUB_ENV, so the harness step's
 # timeout-minutes reads a single `env` value rather than an expression over the
-# runner kind. Gate 12 round 2, on 2026-09-29, found every harness-run.yml run
-# accepted and its `Run the harness` step run: the expression-valued
+# runner kind. Gate 12 round 2, on 2026-09-29, found every devscene-run.yml run
+# accepted and its `Run DevScene` step run: the expression-valued
 # timeout-minutes is accepted.
 #
 # THE PLUGIN PIN. The job clones the marketplace repository at the release tag
-# autonomous-sdlc-harness--v<HARNESS_CLI_VERSION> (docs/development.md, section 7)
+# devscene--v<DEVSCENE_CLI_VERSION> (docs/development.md, section 7)
 # and adds the clone as a directory source, so what it installs is the tag's
 # plugin whatever the default branch carries. Both the add and the install run
 # from $RUNNER_TEMP, outside the checkout, so the committed .claude/settings.json's
@@ -391,8 +391,8 @@
 # block unprivileged user namespaces, and loads it with `apparmor_parser -r`.
 # Then, on Linux, it always verifies that bwrap's child can itself create a
 # user namespace, and a failed verification fails the job unless
-# `sandbox.optOut` is taken, so `Run the harness` never starts a session that
-# cannot run Bash: no step from this one to `Run the harness` carries a status
+# `sandbox.optOut` is taken, so `Run DevScene` never starts a session that
+# cannot run Bash: no step from this one to `Run DevScene` carries a status
 # function. What still runs after that failure: the `run` job's bundle-saving
 # and reporting steps, and the `deliver` and `collect` jobs, both `needs:` it
 # under `!cancelled()`. The `run` job has started, so remote-run.sh's
@@ -415,14 +415,14 @@
 # means "as long as this repository allows" — the same bound as leaving it
 # unset. It is explicit so that lowering it is a visible edit. The real bound is
 # the repository's Artifact and log retention setting, which
-# `autonomous-sdlc-harness doctor --check-github` reads. Gate 12 round 2, on
+# `devscene doctor --check-github` reads. Gate 12 round 2, on
 # 2026-09-29, observed the cap rather than a rejection on `actions/upload-artifact@v4`:
 # the artifact's `expires_at` fell 90 days after its creation, with the
 # repository's artifact-and-log-retention at {"days":90,"maximum_allowed_days":400}.
 # That was v4; the v7 pinned above has not yet been observed by a gate round.
 
-name: harness-run
-run-name: harness ${{ inputs.action }} ${{ inputs.branch }}
+name: devscene-run
+run-name: devscene ${{ inputs.action }} ${{ inputs.branch }}
 
 on:
   workflow_dispatch:
@@ -483,7 +483,7 @@ defaults:
 jobs:
   wrong-ref:
     if: (inputs.action == 'run' || inputs.action == 'pause') && github.ref_name != inputs.branch
-    runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.DEVSCENE_RUNNER || 'ubuntu-latest' }}
     permissions: {}
     steps:
       - name: Refuse a dispatch from another ref
@@ -496,7 +496,7 @@ jobs:
 
   open:
     if: inputs.action == 'run' && github.ref_name == inputs.branch && inputs.chain == 0
-    runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.DEVSCENE_RUNNER || 'ubuntu-latest' }}
     permissions:
       contents: read
       issues: write
@@ -505,10 +505,10 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       HARNESS_REMOTE_SLUG: ${{ github.repository }}
       HARNESS_INPUT_BRANCH: ${{ inputs.branch }}
-      HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
-      HARNESS_RUN_ACTORS: ${{ vars.HARNESS_RUN_ACTORS }}
+      DEVSCENE_REMOTE_STOP: ${{ vars.DEVSCENE_REMOTE_STOP }}
+      DEVSCENE_RUN_ACTORS: ${{ vars.DEVSCENE_RUN_ACTORS }}
     steps:
-      - name: Refuse an actor not on HARNESS_RUN_ACTORS before opening
+      - name: Refuse an actor not on DEVSCENE_RUN_ACTORS before opening
         env:
           IN_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
           IN_OWNER: ${{ github.repository_owner }}
@@ -521,7 +521,7 @@ jobs:
           fi
           lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
           want=$(lower "$actor")
-          rest="${HARNESS_RUN_ACTORS-},"
+          rest="${DEVSCENE_RUN_ACTORS-},"
           listed=""
           while [ -n "$rest" ]; do
             entry="${rest%%,*}"
@@ -531,11 +531,11 @@ jobs:
             [ -n "$entry" ] || continue
             listed=1
             if [ "$entry" = '*' ]; then
-              echo "@$actor passes: HARNESS_RUN_ACTORS carries *, which admits every writer."
+              echo "@$actor passes: DEVSCENE_RUN_ACTORS carries *, which admits every writer."
               exit 0
             fi
             if [ -n "$want" ] && [ "$(lower "$entry")" = "$want" ]; then
-              echo "@$actor passes: listed in HARNESS_RUN_ACTORS."
+              echo "@$actor passes: listed in DEVSCENE_RUN_ACTORS."
               exit 0
             fi
           done
@@ -543,21 +543,21 @@ jobs:
             why="@${actor:-(no actor)} is not listed in it."
           elif [ "$IN_OWNER_TYPE" = User ] && [ -n "$IN_OWNER" ]; then
             if [ -n "$want" ] && [ "$(lower "$IN_OWNER")" = "$want" ]; then
-              echo "@$actor passes: HARNESS_RUN_ACTORS is unset, which admits the owner of this user-owned repository alone."
+              echo "@$actor passes: DEVSCENE_RUN_ACTORS is unset, which admits the owner of this user-owned repository alone."
               exit 0
             fi
             why="it is unset, which admits the owner of this user-owned repository, @$IN_OWNER, alone, and @${actor:-(no actor)} is not that owner."
           else
             why="it is unset, and this repository has no single owner to admit (its owner type is ${IN_OWNER_TYPE:-unreadable}), so it admits nobody."
           fi
-          echo "::error::@${actor:-(no actor)} dispatched or re-ran this run, and the repository variable HARNESS_RUN_ACTORS does not admit them: $why Nothing was launched and no credential was read. Add the login to the comma-separated repository variable HARNESS_RUN_ACTORS, or set it to * for every writer (docs/remote-execution.md, section 7 step 4, and section 11)."
+          echo "::error::@${actor:-(no actor)} dispatched or re-ran this run, and the repository variable DEVSCENE_RUN_ACTORS does not admit them: $why Nothing was launched and no credential was read. Add the login to the comma-separated repository variable DEVSCENE_RUN_ACTORS, or set it to * for every writer (docs/remote-execution.md, section 7 step 4, and section 11)."
           exit 1
 
-      - name: Stop when HARNESS_REMOTE_STOP is set before opening
+      - name: Stop when DEVSCENE_REMOTE_STOP is set before opening
         run: |
-          if [ -n "$HARNESS_REMOTE_STOP" ]; then
+          if [ -n "$DEVSCENE_REMOTE_STOP" ]; then
             echo "HARNESS_STOPPED=1" >> "$GITHUB_ENV"
-            echo "::notice::HARNESS_REMOTE_STOP is set: nothing is launched."
+            echo "::notice::DEVSCENE_REMOTE_STOP is set: nothing is launched."
           fi
 
       - name: Check out the default branch for opening
@@ -584,20 +584,20 @@ jobs:
       - name: Read the configuration for opening
         if: env.HARNESS_STOPPED != '1'
         run: |
-          scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
+          scripts_dir=$(jq -r '.scriptsDir // "devscene-scripts"' devscene.config.json)
           echo "SCRIPTS_DIR=${scripts_dir%/}" >> "$GITHUB_ENV"
 
       - name: Open the draft pull request
         if: env.HARNESS_STOPPED != '1'
         continue-on-error: true
         env:
-          HARNESS_PR_TOKEN: ${{ secrets.HARNESS_GIT_TOKEN }}
+          HARNESS_PR_TOKEN: ${{ secrets.DEVSCENE_GIT_TOKEN }}
         run: bash "$SCRIPTS_DIR/remote-run.sh" open "$HARNESS_INPUT_BRANCH"
 
   run:
     needs: open
     if: ${{ !cancelled() && inputs.action == 'run' && github.ref_name == inputs.branch }}
-    runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.DEVSCENE_RUNNER || 'ubuntu-latest' }}
     permissions:
       contents: write
       actions: write
@@ -609,7 +609,7 @@ jobs:
       group: harness-run-${{ inputs.branch }}
       cancel-in-progress: false
     env:
-      HARNESS_CLI_VERSION: '{{cliVersion}}'
+      DEVSCENE_CLI_VERSION: '{{cliVersion}}'
       HARNESS_JOB_MODE: '1'
       HARNESS_REMOTE_SLUG: ${{ github.repository }}
       HARNESS_GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
@@ -619,9 +619,9 @@ jobs:
       HARNESS_INPUT_ANSWERS: ${{ inputs.answers }}
       HARNESS_INPUT_PARK_LOOP_CLEAR: ${{ inputs.park_loop_clear }}
       HARNESS_INPUT_CHAIN: ${{ inputs.chain }}
-      HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
-      HARNESS_RUN_ACTORS: ${{ vars.HARNESS_RUN_ACTORS }}
-      HARNESS_MAX_CHAIN: ${{ vars.HARNESS_MAX_CHAIN }}
+      DEVSCENE_REMOTE_STOP: ${{ vars.DEVSCENE_REMOTE_STOP }}
+      DEVSCENE_RUN_ACTORS: ${{ vars.DEVSCENE_RUN_ACTORS }}
+      DEVSCENE_MAX_CHAIN: ${{ vars.DEVSCENE_MAX_CHAIN }}
       STALL_WARN_SECS: ${{ vars.STALL_WARN_SECS }}
       STALL_KILL_SECS: ${{ vars.STALL_KILL_SECS }}
       STALL_MAX_RESTARTS: ${{ vars.STALL_MAX_RESTARTS }}
@@ -634,14 +634,14 @@ jobs:
       REMOTE_AUTO_RESUME_MAX: ${{ vars.REMOTE_AUTO_RESUME_MAX }}
       REMOTE_AUTO_RESUME_DELAY_SECS: ${{ vars.REMOTE_AUTO_RESUME_DELAY_SECS }}
       REMOTE_CONTROL_POLL_SECS: ${{ vars.REMOTE_CONTROL_POLL_SECS }}
-      HARNESS_PUSH_URL: ${{ secrets.HARNESS_PUSH_URL }}
+      DEVSCENE_PUSH_URL: ${{ secrets.DEVSCENE_PUSH_URL }}
       GH_TOKEN: ${{ github.token }}
       HARNESS_HOSTED_JOB_LIMIT_MINUTES: '360'
       HARNESS_SELF_HOSTED_JOB_LIMIT_MINUTES: '7200'
       HARNESS_STEP_ALLOWANCE_MINUTES: '30'
       HARNESS_SELF_PAUSE_MARGIN_MINUTES: '90'
     steps:
-      - name: Refuse an actor not on HARNESS_RUN_ACTORS
+      - name: Refuse an actor not on DEVSCENE_RUN_ACTORS
         env:
           IN_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
           IN_OWNER: ${{ github.repository_owner }}
@@ -654,7 +654,7 @@ jobs:
           fi
           lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
           want=$(lower "$actor")
-          rest="${HARNESS_RUN_ACTORS-},"
+          rest="${DEVSCENE_RUN_ACTORS-},"
           listed=""
           while [ -n "$rest" ]; do
             entry="${rest%%,*}"
@@ -664,11 +664,11 @@ jobs:
             [ -n "$entry" ] || continue
             listed=1
             if [ "$entry" = '*' ]; then
-              echo "@$actor passes: HARNESS_RUN_ACTORS carries *, which admits every writer."
+              echo "@$actor passes: DEVSCENE_RUN_ACTORS carries *, which admits every writer."
               exit 0
             fi
             if [ -n "$want" ] && [ "$(lower "$entry")" = "$want" ]; then
-              echo "@$actor passes: listed in HARNESS_RUN_ACTORS."
+              echo "@$actor passes: listed in DEVSCENE_RUN_ACTORS."
               exit 0
             fi
           done
@@ -676,21 +676,21 @@ jobs:
             why="@${actor:-(no actor)} is not listed in it."
           elif [ "$IN_OWNER_TYPE" = User ] && [ -n "$IN_OWNER" ]; then
             if [ -n "$want" ] && [ "$(lower "$IN_OWNER")" = "$want" ]; then
-              echo "@$actor passes: HARNESS_RUN_ACTORS is unset, which admits the owner of this user-owned repository alone."
+              echo "@$actor passes: DEVSCENE_RUN_ACTORS is unset, which admits the owner of this user-owned repository alone."
               exit 0
             fi
             why="it is unset, which admits the owner of this user-owned repository, @$IN_OWNER, alone, and @${actor:-(no actor)} is not that owner."
           else
             why="it is unset, and this repository has no single owner to admit (its owner type is ${IN_OWNER_TYPE:-unreadable}), so it admits nobody."
           fi
-          echo "::error::@${actor:-(no actor)} dispatched or re-ran this run, and the repository variable HARNESS_RUN_ACTORS does not admit them: $why Nothing was launched and no credential was read. Add the login to the comma-separated repository variable HARNESS_RUN_ACTORS, or set it to * for every writer (docs/remote-execution.md, section 7 step 4, and section 11)."
+          echo "::error::@${actor:-(no actor)} dispatched or re-ran this run, and the repository variable DEVSCENE_RUN_ACTORS does not admit them: $why Nothing was launched and no credential was read. Add the login to the comma-separated repository variable DEVSCENE_RUN_ACTORS, or set it to * for every writer (docs/remote-execution.md, section 7 step 4, and section 11)."
           exit 1
 
       - name: Compute the time budget
         env:
           IN_RUNNER_ENVIRONMENT: ${{ runner.environment }}
-          IN_STEP_TIMEOUT: ${{ vars.HARNESS_STEP_TIMEOUT_MINUTES }}
-          IN_SELF_PAUSE: ${{ vars.HARNESS_SELF_PAUSE_AFTER_MINUTES }}
+          IN_STEP_TIMEOUT: ${{ vars.DEVSCENE_STEP_TIMEOUT_MINUTES }}
+          IN_SELF_PAUSE: ${{ vars.DEVSCENE_SELF_PAUSE_AFTER_MINUTES }}
         run: |
           started=$(date +%s)
           kind="${IN_RUNNER_ENVIRONMENT:-${RUNNER_ENVIRONMENT:-github-hosted}}"
@@ -702,19 +702,19 @@ jobs:
           fi
           step="${IN_STEP_TIMEOUT:-$((limit - HARNESS_STEP_ALLOWANCE_MINUTES))}"
           if ! positive "$step"; then
-            echo "::error::HARNESS_STEP_TIMEOUT_MINUTES must be a positive integer, got '$step'"
+            echo "::error::DEVSCENE_STEP_TIMEOUT_MINUTES must be a positive integer, got '$step'"
             exit 1
           fi
           {
             echo "HARNESS_JOB_STARTED_EPOCH=$started"
-            echo "HARNESS_STEP_TIMEOUT_MINUTES=$step"
+            echo "DEVSCENE_STEP_TIMEOUT_MINUTES=$step"
             echo "HARNESS_JOB_DEADLINE_EPOCH=$((started + step * 60))"
           } >> "$GITHUB_ENV"
           if [ "$kind" != self-hosted ]; then
             pause="${IN_SELF_PAUSE:-$((step - HARNESS_SELF_PAUSE_MARGIN_MINUTES))}"
             if [ -z "$IN_SELF_PAUSE" ] && [ "$pause" -lt 60 ]; then pause=60; fi
             if ! positive "$pause"; then
-              echo "::error::HARNESS_SELF_PAUSE_AFTER_MINUTES must be a positive integer, got '$pause'"
+              echo "::error::DEVSCENE_SELF_PAUSE_AFTER_MINUTES must be a positive integer, got '$pause'"
               exit 1
             fi
             echo "REMOTE_SELF_PAUSE_AFTER_SECS=$((pause * 60))" >> "$GITHUB_ENV"
@@ -723,11 +723,11 @@ jobs:
             echo "runner $kind: step timeout ${step} min, self-pause disabled"
           fi
 
-      - name: Stop when HARNESS_REMOTE_STOP is set
+      - name: Stop when DEVSCENE_REMOTE_STOP is set
         run: |
-          if [ -n "$HARNESS_REMOTE_STOP" ]; then
+          if [ -n "$DEVSCENE_REMOTE_STOP" ]; then
             echo "HARNESS_STOPPED=1" >> "$GITHUB_ENV"
-            echo "::notice::HARNESS_REMOTE_STOP is set: nothing is launched."
+            echo "::notice::DEVSCENE_REMOTE_STOP is set: nothing is launched."
           fi
 
       - name: Check out the run's branch
@@ -765,7 +765,7 @@ jobs:
         if: env.HARNESS_STOPPED != '1'
         working-directory: ${{ runner.temp }}
         run: |
-          npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH" \
+          npx --yes "devscene@$DEVSCENE_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH" \
             || { echo "::error::this branch's own commits changed files the job runs or loads, named in this step's doctor report; nothing from it runs in this job."; exit 1; }
 
       - name: Record the default branch's commit
@@ -773,7 +773,7 @@ jobs:
         run: |
           sha=$(git -C "$GITHUB_WORKSPACE" rev-parse --verify --quiet "refs/remotes/origin/$HARNESS_GITHUB_DEFAULT_BRANCH^{commit}") || { echo "::error::cannot read the default branch's commit from the job's fresh checkout; nothing from this branch runs in this job."; exit 1; }
           echo "HARNESS_GITHUB_DEFAULT_COMMIT=$sha" >> "$GITHUB_ENV"
-          default_branch=$(git -C "$GITHUB_WORKSPACE" show "$sha:harness.config.json" | jq -r '.defaultBranch // empty') && [ -n "$default_branch" ] || { echo "::error::cannot read defaultBranch from the default branch's harness.config.json; nothing from this branch runs in this job."; exit 1; }
+          default_branch=$(git -C "$GITHUB_WORKSPACE" show "$sha:devscene.config.json" | jq -r '.defaultBranch // empty') && [ -n "$default_branch" ] || { echo "::error::cannot read defaultBranch from the default branch's devscene.config.json; nothing from this branch runs in this job."; exit 1; }
           base=$(git -C "$GITHUB_WORKSPACE" rev-parse --verify --quiet "refs/remotes/origin/$default_branch^{commit}") || { echo "::error::cannot read origin/$default_branch's commit from the job's fresh checkout; nothing from this branch runs in this job."; exit 1; }
           echo "HARNESS_DEFAULT_BRANCH_COMMIT=$base" >> "$GITHUB_ENV"
 
@@ -781,11 +781,11 @@ jobs:
         id: config
         if: env.HARNESS_STOPPED != '1'
         run: |
-          scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
-          retrieval=$(jq -r '(.phases.docs == true and .docs.retrieval == true)' harness.config.json)
+          scripts_dir=$(jq -r '.scriptsDir // "devscene-scripts"' devscene.config.json)
+          retrieval=$(jq -r '(.phases.docs == true and .docs.retrieval == true)' devscene.config.json)
           {
             echo "SCRIPTS_DIR=${scripts_dir%/}"
-            echo "HARNESS_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval"
+            echo "DEVSCENE_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/devscene/retrieval"
           } >> "$GITHUB_ENV"
           echo "retrieval=$retrieval" >> "$GITHUB_OUTPUT"
 
@@ -822,23 +822,23 @@ jobs:
       - name: Install the pinned plugin
         if: env.HARNESS_STOPPED != '1'
         run: |
-          source_repo=$(jq -r '.extraKnownMarketplaces["autonomous-sdlc-harness"].source.repo // empty' .claude/settings.json 2>/dev/null || true)
+          source_repo=$(jq -r '.extraKnownMarketplaces["devscene"].source.repo // empty' .claude/settings.json 2>/dev/null || true)
           if [ -z "$source_repo" ]; then
-            echo "::error::.claude/settings.json names no marketplace source for autonomous-sdlc-harness. Run init locally with --marketplace <owner>/<repo> and commit the file."
+            echo "::error::.claude/settings.json names no marketplace source for devscene. Run init locally with --marketplace <owner>/<repo> and commit the file."
             exit 1
           fi
-          upgrade_route="to run another version, re-render this repository's workflows with 'npx autonomous-sdlc-harness@<version> init --upgrade-workflows', then commit the paths its printed 'git add' names and push them to the default branch (docs/remote-execution.md, section 7, Upgrading)"
-          tag="autonomous-sdlc-harness--v$HARNESS_CLI_VERSION"
+          upgrade_route="to run another version, re-render this repository's workflows with 'npx devscene@<version> init --upgrade-workflows', then commit the paths its printed 'git add' names and push them to the default branch (docs/remote-execution.md, section 7, Upgrading)"
+          tag="devscene--v$DEVSCENE_CLI_VERSION"
           marketplace_dir="$RUNNER_TEMP/harness-marketplace"
           # --quiet does not cover the detached-HEAD advice a tag checkout prints; only advice.detachedHead gates it.
           if ! git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$tag" "https://github.com/$source_repo.git" "$marketplace_dir"; then
-            echo "::error::$source_repo has no release tag $tag, so the plugin this workflow was rendered for cannot be installed. If $HARNESS_CLI_VERSION was released, its release is missing the tag; otherwise, $upgrade_route."
+            echo "::error::$source_repo has no release tag $tag, so the plugin this workflow was rendered for cannot be installed. If $DEVSCENE_CLI_VERSION was released, its release is missing the tag; otherwise, $upgrade_route."
             exit 1
           fi
-          (cd "$RUNNER_TEMP" && claude plugin marketplace add ./harness-marketplace && claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness)
-          installed=$(claude plugin list --json | jq -r '[.[] | select(.id == "autonomous-sdlc-harness@autonomous-sdlc-harness" and .scope == "user")][0].version // empty')
-          if [ "$installed" != "$HARNESS_CLI_VERSION" ]; then
-            echo "::error::the installed plugin is version '${installed:-none}', but this workflow was rendered for $HARNESS_CLI_VERSION and cloned $tag; $upgrade_route."
+          (cd "$RUNNER_TEMP" && claude plugin marketplace add ./harness-marketplace && claude plugin install devscene@devscene)
+          installed=$(claude plugin list --json | jq -r '[.[] | select(.id == "devscene@devscene" and .scope == "user")][0].version // empty')
+          if [ "$installed" != "$DEVSCENE_CLI_VERSION" ]; then
+            echo "::error::the installed plugin is version '${installed:-none}', but this workflow was rendered for $DEVSCENE_CLI_VERSION and cloned $tag; $upgrade_route."
             exit 1
           fi
 
@@ -847,18 +847,18 @@ jobs:
         # actions/cache/restore v6.1.0
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: ${{ env.HARNESS_RETRIEVAL_CACHE }}
-          key: harness-retrieval-${{ runner.os }}-${{ env.HARNESS_CLI_VERSION }}
+          path: ${{ env.DEVSCENE_RETRIEVAL_CACHE }}
+          key: harness-retrieval-${{ runner.os }}-${{ env.DEVSCENE_CLI_VERSION }}
 
       - name: Generate the job's permission profile
         if: env.HARNESS_STOPPED != '1'
         working-directory: ${{ runner.temp }}
         run: |
-          npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" --cwd "$GITHUB_WORKSPACE" init --plugin-root-entries
+          npx --yes "devscene@$DEVSCENE_CLI_VERSION" --cwd "$GITHUB_WORKSPACE" init --plugin-root-entries
           changed=$(git -C "$GITHUB_WORKSPACE" status --porcelain --untracked-files=no)
           if [ -n "$changed" ]; then
             printf '%s\n' "$changed"
-            echo "::error::init $HARNESS_CLI_VERSION changed tracked files. Run 'npx autonomous-sdlc-harness@$HARNESS_CLI_VERSION init' locally and commit the result."
+            echo "::error::init $DEVSCENE_CLI_VERSION changed tracked files. Run 'npx devscene@$DEVSCENE_CLI_VERSION init' locally and commit the result."
             exit 1
           fi
 
@@ -998,7 +998,7 @@ jobs:
       - name: Preflight with doctor
         if: env.HARNESS_STOPPED != '1'
         working-directory: ${{ runner.temp }}
-        run: npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --remote-job
+        run: npx --yes "devscene@$DEVSCENE_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --remote-job
 
       - name: Bootstrap the checkout
         if: env.HARNESS_STOPPED != '1'
@@ -1008,9 +1008,9 @@ jobs:
         if: env.HARNESS_STOPPED != '1'
         run: bash "$SCRIPTS_DIR/remote-run.sh" restore "$HARNESS_INPUT_BRANCH" --resume "$HARNESS_INPUT_RESUME"
 
-      - name: Run the harness
+      - name: Run DevScene
         if: env.HARNESS_STOPPED != '1'
-        timeout-minutes: ${{ fromJSON(env.HARNESS_STEP_TIMEOUT_MINUTES || env.HARNESS_HOSTED_JOB_LIMIT_MINUTES) }}
+        timeout-minutes: ${{ fromJSON(env.DEVSCENE_STEP_TIMEOUT_MINUTES || env.HARNESS_HOSTED_JOB_LIMIT_MINUTES) }}
         env:
           IN_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           IN_API: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -1020,7 +1020,7 @@ jobs:
           unset IN_OAUTH IN_API
           bash "$SCRIPTS_DIR/autonomous-watcher.sh" job "$HARNESS_INPUT_BRANCH" "$HARNESS_INPUT_ENGINE" "$HARNESS_INPUT_RESUME"
 
-      # A cancelled or timed-out `Run the harness` step kills the watcher with its session, so
+      # A cancelled or timed-out `Run DevScene` step kills the watcher with its session, so
       # run_job's exit sweep never runs and the session's sandbox placeholders stay on disk; a
       # leftover <scriptsDir>/.git makes push-branch.sh refuse to place itself and push nothing.
       # Best-effort: it never fails the job.
@@ -1094,7 +1094,7 @@ jobs:
   deliver:
     needs: run
     if: ${{ inputs.action == 'run' && !cancelled() && github.ref_name == inputs.branch }}
-    runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.DEVSCENE_RUNNER || 'ubuntu-latest' }}
     permissions:
       contents: read
       actions: read
@@ -1104,10 +1104,10 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       HARNESS_REMOTE_SLUG: ${{ github.repository }}
       HARNESS_INPUT_BRANCH: ${{ inputs.branch }}
-      HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
-      HARNESS_RUN_ACTORS: ${{ vars.HARNESS_RUN_ACTORS }}
+      DEVSCENE_REMOTE_STOP: ${{ vars.DEVSCENE_REMOTE_STOP }}
+      DEVSCENE_RUN_ACTORS: ${{ vars.DEVSCENE_RUN_ACTORS }}
     steps:
-      - name: Refuse an actor not on HARNESS_RUN_ACTORS before delivering
+      - name: Refuse an actor not on DEVSCENE_RUN_ACTORS before delivering
         env:
           IN_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
           IN_OWNER: ${{ github.repository_owner }}
@@ -1120,7 +1120,7 @@ jobs:
           fi
           lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
           want=$(lower "$actor")
-          rest="${HARNESS_RUN_ACTORS-},"
+          rest="${DEVSCENE_RUN_ACTORS-},"
           listed=""
           while [ -n "$rest" ]; do
             entry="${rest%%,*}"
@@ -1130,11 +1130,11 @@ jobs:
             [ -n "$entry" ] || continue
             listed=1
             if [ "$entry" = '*' ]; then
-              echo "@$actor passes: HARNESS_RUN_ACTORS carries *, which admits every writer."
+              echo "@$actor passes: DEVSCENE_RUN_ACTORS carries *, which admits every writer."
               exit 0
             fi
             if [ -n "$want" ] && [ "$(lower "$entry")" = "$want" ]; then
-              echo "@$actor passes: listed in HARNESS_RUN_ACTORS."
+              echo "@$actor passes: listed in DEVSCENE_RUN_ACTORS."
               exit 0
             fi
           done
@@ -1142,21 +1142,21 @@ jobs:
             why="@${actor:-(no actor)} is not listed in it."
           elif [ "$IN_OWNER_TYPE" = User ] && [ -n "$IN_OWNER" ]; then
             if [ -n "$want" ] && [ "$(lower "$IN_OWNER")" = "$want" ]; then
-              echo "@$actor passes: HARNESS_RUN_ACTORS is unset, which admits the owner of this user-owned repository alone."
+              echo "@$actor passes: DEVSCENE_RUN_ACTORS is unset, which admits the owner of this user-owned repository alone."
               exit 0
             fi
             why="it is unset, which admits the owner of this user-owned repository, @$IN_OWNER, alone, and @${actor:-(no actor)} is not that owner."
           else
             why="it is unset, and this repository has no single owner to admit (its owner type is ${IN_OWNER_TYPE:-unreadable}), so it admits nobody."
           fi
-          echo "::error::@${actor:-(no actor)} dispatched or re-ran this run, and the repository variable HARNESS_RUN_ACTORS does not admit them: $why Nothing was launched and no credential was read. Add the login to the comma-separated repository variable HARNESS_RUN_ACTORS, or set it to * for every writer (docs/remote-execution.md, section 7 step 4, and section 11)."
+          echo "::error::@${actor:-(no actor)} dispatched or re-ran this run, and the repository variable DEVSCENE_RUN_ACTORS does not admit them: $why Nothing was launched and no credential was read. Add the login to the comma-separated repository variable DEVSCENE_RUN_ACTORS, or set it to * for every writer (docs/remote-execution.md, section 7 step 4, and section 11)."
           exit 1
 
-      - name: Stop when HARNESS_REMOTE_STOP is set before delivering
+      - name: Stop when DEVSCENE_REMOTE_STOP is set before delivering
         run: |
-          if [ -n "$HARNESS_REMOTE_STOP" ]; then
+          if [ -n "$DEVSCENE_REMOTE_STOP" ]; then
             echo "HARNESS_STOPPED=1" >> "$GITHUB_ENV"
-            echo "::notice::HARNESS_REMOTE_STOP is set: nothing is launched."
+            echo "::notice::DEVSCENE_REMOTE_STOP is set: nothing is launched."
           fi
 
       - name: Check out the default branch for delivering
@@ -1183,7 +1183,7 @@ jobs:
       - name: Read the configuration for delivering
         if: env.HARNESS_STOPPED != '1'
         run: |
-          scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
+          scripts_dir=$(jq -r '.scriptsDir // "devscene-scripts"' devscene.config.json)
           echo "SCRIPTS_DIR=${scripts_dir%/}" >> "$GITHUB_ENV"
 
       # A run job refused before its upload saved no bundle; deliver then reads no status and posts nothing.
@@ -1199,13 +1199,13 @@ jobs:
         if: env.HARNESS_STOPPED != '1'
         continue-on-error: true
         env:
-          HARNESS_PR_TOKEN: ${{ secrets.HARNESS_GIT_TOKEN }}
+          HARNESS_PR_TOKEN: ${{ secrets.DEVSCENE_GIT_TOKEN }}
         run: bash "$SCRIPTS_DIR/remote-run.sh" deliver "$HARNESS_INPUT_BRANCH" "$RUNNER_TEMP/harness-state"
 
   collect:
     needs: [run, deliver]
     if: ${{ inputs.action == 'run' && !cancelled() && github.ref_name == inputs.branch }}
-    runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.DEVSCENE_RUNNER || 'ubuntu-latest' }}
     permissions:
       contents: write
       actions: write
@@ -1218,11 +1218,11 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       HARNESS_REMOTE_SLUG: ${{ github.repository }}
       HARNESS_INPUT_BRANCH: ${{ inputs.branch }}
-      HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
-      HARNESS_TRIGGER_ALLOWED_BOTS: ${{ vars.HARNESS_TRIGGER_ALLOWED_BOTS }}
-      HARNESS_RUN_ACTORS: ${{ vars.HARNESS_RUN_ACTORS }}
+      DEVSCENE_REMOTE_STOP: ${{ vars.DEVSCENE_REMOTE_STOP }}
+      DEVSCENE_TRIGGER_ALLOWED_BOTS: ${{ vars.DEVSCENE_TRIGGER_ALLOWED_BOTS }}
+      DEVSCENE_RUN_ACTORS: ${{ vars.DEVSCENE_RUN_ACTORS }}
     steps:
-      - name: Refuse an actor not on HARNESS_RUN_ACTORS before collecting
+      - name: Refuse an actor not on DEVSCENE_RUN_ACTORS before collecting
         env:
           IN_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
           IN_OWNER: ${{ github.repository_owner }}
@@ -1235,7 +1235,7 @@ jobs:
           fi
           lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
           want=$(lower "$actor")
-          rest="${HARNESS_RUN_ACTORS-},"
+          rest="${DEVSCENE_RUN_ACTORS-},"
           listed=""
           while [ -n "$rest" ]; do
             entry="${rest%%,*}"
@@ -1245,11 +1245,11 @@ jobs:
             [ -n "$entry" ] || continue
             listed=1
             if [ "$entry" = '*' ]; then
-              echo "@$actor passes: HARNESS_RUN_ACTORS carries *, which admits every writer."
+              echo "@$actor passes: DEVSCENE_RUN_ACTORS carries *, which admits every writer."
               exit 0
             fi
             if [ -n "$want" ] && [ "$(lower "$entry")" = "$want" ]; then
-              echo "@$actor passes: listed in HARNESS_RUN_ACTORS."
+              echo "@$actor passes: listed in DEVSCENE_RUN_ACTORS."
               exit 0
             fi
           done
@@ -1257,14 +1257,14 @@ jobs:
             why="@${actor:-(no actor)} is not listed in it."
           elif [ "$IN_OWNER_TYPE" = User ] && [ -n "$IN_OWNER" ]; then
             if [ -n "$want" ] && [ "$(lower "$IN_OWNER")" = "$want" ]; then
-              echo "@$actor passes: HARNESS_RUN_ACTORS is unset, which admits the owner of this user-owned repository alone."
+              echo "@$actor passes: DEVSCENE_RUN_ACTORS is unset, which admits the owner of this user-owned repository alone."
               exit 0
             fi
             why="it is unset, which admits the owner of this user-owned repository, @$IN_OWNER, alone, and @${actor:-(no actor)} is not that owner."
           else
             why="it is unset, and this repository has no single owner to admit (its owner type is ${IN_OWNER_TYPE:-unreadable}), so it admits nobody."
           fi
-          echo "::error::@${actor:-(no actor)} dispatched or re-ran this run, and the repository variable HARNESS_RUN_ACTORS does not admit them: $why Nothing was launched and no credential was read. Add the login to the comma-separated repository variable HARNESS_RUN_ACTORS, or set it to * for every writer (docs/remote-execution.md, section 7 step 4, and section 11)."
+          echo "::error::@${actor:-(no actor)} dispatched or re-ran this run, and the repository variable DEVSCENE_RUN_ACTORS does not admit them: $why Nothing was launched and no credential was read. Add the login to the comma-separated repository variable DEVSCENE_RUN_ACTORS, or set it to * for every writer (docs/remote-execution.md, section 7 step 4, and section 11)."
           exit 1
 
       - name: Check out the default branch for collecting
@@ -1288,7 +1288,7 @@ jobs:
 
       - name: Read the configuration for collecting
         run: |
-          scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
+          scripts_dir=$(jq -r '.scriptsDir // "devscene-scripts"' devscene.config.json)
           echo "SCRIPTS_DIR=${scripts_dir%/}" >> "$GITHUB_ENV"
 
       - name: Set the git identity for collecting
@@ -1302,18 +1302,18 @@ jobs:
 
   warm:
     if: inputs.action == 'warm'
-    runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.DEVSCENE_RUNNER || 'ubuntu-latest' }}
     permissions:
       contents: read
     env:
-      HARNESS_CLI_VERSION: '{{cliVersion}}'
-      HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
+      DEVSCENE_CLI_VERSION: '{{cliVersion}}'
+      DEVSCENE_REMOTE_STOP: ${{ vars.DEVSCENE_REMOTE_STOP }}
     steps:
-      - name: Stop when HARNESS_REMOTE_STOP is set
+      - name: Stop when DEVSCENE_REMOTE_STOP is set
         run: |
-          if [ -n "$HARNESS_REMOTE_STOP" ]; then
+          if [ -n "$DEVSCENE_REMOTE_STOP" ]; then
             echo "HARNESS_STOPPED=1" >> "$GITHUB_ENV"
-            echo "::notice::HARNESS_REMOTE_STOP is set: nothing is launched."
+            echo "::notice::DEVSCENE_REMOTE_STOP is set: nothing is launched."
           fi
 
       - name: Check out the dispatched ref
@@ -1331,8 +1331,8 @@ jobs:
             echo "::error::this runner lacks: jq."
             exit 1
           fi
-          retrieval=$(jq -r '(.phases.docs == true and .docs.retrieval == true)' harness.config.json)
-          echo "HARNESS_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval" >> "$GITHUB_ENV"
+          retrieval=$(jq -r '(.phases.docs == true and .docs.retrieval == true)' devscene.config.json)
+          echo "DEVSCENE_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/devscene/retrieval" >> "$GITHUB_ENV"
           echo "retrieval=$retrieval" >> "$GITHUB_OUTPUT"
           if [ "$retrieval" != true ]; then
             echo "::notice::docs retrieval does not apply to this configuration: there is no cache to warm."
@@ -1352,9 +1352,9 @@ jobs:
         # actions/cache v6.1.0
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: ${{ env.HARNESS_RETRIEVAL_CACHE }}
-          key: harness-retrieval-${{ runner.os }}-${{ env.HARNESS_CLI_VERSION }}
+          path: ${{ env.DEVSCENE_RETRIEVAL_CACHE }}
+          key: harness-retrieval-${{ runner.os }}-${{ env.DEVSCENE_CLI_VERSION }}
 
       - name: Install what is missing
         if: env.HARNESS_STOPPED != '1' && steps.config.outputs.retrieval == 'true'
-        run: npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" init
+        run: npx --yes "devscene@$DEVSCENE_CLI_VERSION" init

@@ -14,7 +14,7 @@ Item format: `- [ ] <ID>. **<title, ≤ 8 words>** — <description, ≤ 25 word
 
 **Hard constraint:** after the split, the total words an agent loads on a dispatch (agent definition + every file it is told to read up front + its work report template) must be **lower** than today. The new mechanism must not land as another 1 000 words of prose explaining itself. Files read only on demand (via a `ref:`) are counted separately.
 
-Proposed storage (to be evaluated, not assumed): `<state_dir>/work_reports/<branch>/<phase>/<agent>/report_<index>.md`, where `<state_dir>` defaults to `sdlc-harness/`, `<index>` is the next free integer starting at 0 (the same rule findings files use today), and `<phase>` is a ledger-phase id or another key that disambiguates one agent running in several phases (e.g. `layer-implementer` in implementation `A`, code-review fixes `C`, user-review fixes `R3`). See `plugin/instructions/autonomous_pause_and_ledger.md` → `### 1.3 Templates` for the ledger ids. Supervised and semi-autonomous flows have no ledger — the key must still work there.
+Proposed storage (to be evaluated, not assumed): `<state_dir>/work_reports/<branch>/<phase>/<agent>/report_<index>.md`, where `<state_dir>` defaults to `devscene/`, `<index>` is the next free integer starting at 0 (the same rule findings files use today), and `<phase>` is a ledger-phase id or another key that disambiguates one agent running in several phases (e.g. `layer-implementer` in implementation `A`, code-review fixes `C`, user-review fixes `R3`). See `plugin/instructions/autonomous_pause_and_ledger.md` → `### 1.3 Templates` for the ledger ids. Supervised and semi-autonomous flows have no ledger — the key must still work there.
 
 ## Method — what each research file must do
 

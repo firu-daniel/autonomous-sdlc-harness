@@ -11,9 +11,9 @@ key, its description composed from the same template with the same constants int
 from collections.abc import Mapping
 from typing import Any
 
-from harness_docs_retrieval.search import ABSTAIN_MESSAGE, DEFAULT_RESULTS, MAX_RESULTS
+from devscene_docs_retrieval.search import ABSTAIN_MESSAGE, DEFAULT_RESULTS, MAX_RESULTS
 
-DOCS_SERVER_NAME = "harness-docs"
+DOCS_SERVER_NAME = "devscene-docs"
 
 SEARCH_TOOL_NAME = "search_docs"
 

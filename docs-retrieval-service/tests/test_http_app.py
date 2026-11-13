@@ -16,11 +16,11 @@ import httpx
 import pytest
 
 from fakes import FakeSession, InMemoryDocStore, doc_chunk
-from harness_docs_retrieval import http_app
-from harness_docs_retrieval.http_app import create_app
-from harness_docs_retrieval.refresh import RefreshResult
-from harness_docs_retrieval.search import SearchHit, SearchResult
-from harness_docs_retrieval.service import Answer, answer
+from devscene_docs_retrieval import http_app
+from devscene_docs_retrieval.http_app import create_app
+from devscene_docs_retrieval.refresh import RefreshResult
+from devscene_docs_retrieval.search import SearchHit, SearchResult
+from devscene_docs_retrieval.service import Answer, answer
 
 QUERY = "hybrid search fusion"
 
@@ -168,7 +168,7 @@ def test_a_refresh_failure_is_a_500() -> None:
     assert response.json() == {
         "error": (
             "search_docs: refreshing the docs index failed: the database went away; "
-            "run `npx autonomous-sdlc-harness doctor` in this repository"
+            "run `npx devscene doctor` in this repository"
         )
     }
 

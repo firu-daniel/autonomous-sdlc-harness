@@ -32,7 +32,7 @@
  *   `job: launching run for '<b>'`, and `check_stalled_runs`'s
  *   `-> reset to the last commit and resume (restart #`, `-> failed (` and the reason
  *   `the branch's own commits change a job surface, or that could not be checked`.
- * - `cli/templates/github/workflows/harness-run.yml`: the `run` job's step names, and the refusal
+ * - `cli/templates/github/workflows/devscene-run.yml`: the `run` job's step names, and the refusal
  *   step's `::error::` message and its echo line.
  * - `scripts/lib/gate12-sandbox-round/plants.sh` → `G12_JS4_MARKER`, `G12_SB2PN_TOKEN_FILE` as a link target and as a plant name, and `G12_SB2PN_SCRIPT` as a plant name.
  * - `cli/src/doctor/checks.ts` → `JOB_SURFACES_CHECK`'s title, for the doctor-report line: its
@@ -75,7 +75,7 @@ function extract(text, re, what) {
 const LIB = 'cli/templates/scripts/lib/harness-run-lib.sh';
 const REMOTE_RUN = 'cli/templates/scripts/remote-run.sh';
 const WATCHER = 'cli/templates/scripts/autonomous-watcher.sh';
-const WORKFLOW = 'cli/templates/github/workflows/harness-run.yml';
+const WORKFLOW = 'cli/templates/github/workflows/devscene-run.yml';
 const PLANTS = 'scripts/lib/gate12-sandbox-round/plants.sh';
 const CHECKS = 'cli/src/doctor/checks.ts';
 
@@ -133,7 +133,7 @@ const STEP = {
   config: 'Read the configuration',
   bootstrap: 'Bootstrap the checkout',
   preflight: 'Preflight with doctor',
-  harness: 'Run the harness',
+  harness: 'Run DevScene',
   save: 'Save the state bundle',
 };
 const refuseBlock = workflow.slice(workflow.indexOf(`- name: ${STEP.refuse}`));
@@ -154,7 +154,7 @@ test('every step name this suite cans is a step of the run job', () => {
 const TS = '2026-11-04T10:00:00.0000000Z';
 const WTS = '2026-11-04T10:00:00';
 const TOKEN = '0123456789abcdef0123456789abcdef';
-const RUNNER_STATE = '/home/runner/work/gate12/gate12/sdlc-harness';
+const RUNNER_STATE = '/home/runner/work/gate12/gate12/devscene';
 const branchOf = (row, arm) => `gate12_${row.toLowerCase()}_${arm}_20261104000000`;
 const watcherLine = (text) => `${WTS} ${WATCHER_TAG} ${text}`;
 const shq = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
@@ -474,7 +474,7 @@ test('JS1: a later harness run listed by gh run list leaves the expected shape p
   const later = [branchOf('JS1', 'settings'), branchOf('JS1', 'remote-run')].map((b, i) => ({
     databaseId: 900 + i,
     createdAt: '2026-11-04T11:00:00Z',
-    displayTitle: `harness run ${b}`,
+    displayTitle: `devscene run ${b}`,
     status: 'completed',
   }));
   await stage(fixture, js1(), { 'run list': { stdout: `${JSON.stringify(later)}\n` } });

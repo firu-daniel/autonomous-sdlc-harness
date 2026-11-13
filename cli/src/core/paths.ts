@@ -40,7 +40,7 @@ export function worktreeGlob(work: string, projectName: string): string {
 }
 
 /**
- * `<project_name>`'s default — the repository directory name. `harness.config.json` may set
+ * `<project_name>`'s default — the repository directory name. `devscene.config.json` may set
  * `projectName` explicitly; this is what `init` seeds when it does not.
  */
 export function defaultProjectName(repoRoot: string): string {

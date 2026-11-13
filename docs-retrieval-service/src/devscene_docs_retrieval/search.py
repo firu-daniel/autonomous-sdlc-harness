@@ -17,8 +17,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from harness_docs_retrieval.errors import ServiceError
-from harness_docs_retrieval.jscompat import (
+from devscene_docs_retrieval.errors import ServiceError
+from devscene_docs_retrieval.jscompat import (
     js_to_fixed,
     js_trim,
     js_trim_end,
@@ -26,8 +26,8 @@ from harness_docs_retrieval.jscompat import (
     utf16_len,
     utf16_slice,
 )
-from harness_docs_retrieval.models import Embedder, Reranker
-from harness_docs_retrieval.store import DocStore, RankedId, StoredChunk
+from devscene_docs_retrieval.models import Embedder, Reranker
+from devscene_docs_retrieval.store import DocStore, RankedId, StoredChunk
 
 # A hit at rank `r` contributes `1 / (RRF_K + r)`.
 RRF_K = 60

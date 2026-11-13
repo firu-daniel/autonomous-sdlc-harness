@@ -96,7 +96,7 @@ import { INIT_SCRIPTS_DIR, runBash, runGit } from './helpers/fixture.mjs';
 import { scaleBound } from './helpers/timing.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const PROMPT_DELIMITER = '----- end of prompt -----';
 
 /** The bound on one watcher run — the header argues the value. */
@@ -170,9 +170,9 @@ const nowSecs = () => Math.floor(Date.now() / 1000);
 /** GitHub's `createdAt` shape — whole seconds, `Z` — for an epoch second. */
 const iso = (secs) => new Date(secs * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
 
-/** A canned `run list` answer carrying one `harness pause feat_x` run created at <secs>. */
+/** A canned `run list` answer carrying one `devscene pause feat_x` run created at <secs>. */
 const pauseRunList = (secs) =>
-  JSON.stringify([{ databaseId: 99, displayTitle: 'harness pause feat_x', status: 'completed', createdAt: iso(secs) }]);
+  JSON.stringify([{ databaseId: 99, displayTitle: 'devscene pause feat_x', status: 'completed', createdAt: iso(secs) }]);
 
 /** Stub bodies. `STATE` is the state directory and `REC` the recorder directory. */
 const HONOUR_PAUSE = (tenths) =>
@@ -228,7 +228,7 @@ async function createJobFixture(t, { runAnalytics = false } = {}) {
   const ghLog = join(recorder, 'gh.log');
   await writeFile(ghStub, GH_STUB, { mode: 0o755 });
 
-  const config = JSON.parse(readFileSync(join(w.dir, 'harness.config.json'), 'utf8'));
+  const config = JSON.parse(readFileSync(join(w.dir, 'devscene.config.json'), 'utf8'));
 
   // Every job input a runner would set is pinned empty here, so a suite run inside a real
   // GitHub Actions job reads none of that job's own values.
@@ -246,12 +246,12 @@ async function createJobFixture(t, { runAnalytics = false } = {}) {
     RUNNER_TEMP: runnerTemp,
     REMOTE_CONTROL_POLL_SECS: '1',
     REMOTE_AUTO_RESUME_DELAY_SECS: '0',
-    HARNESS_GH_CLI: ghStub,
+    DEVSCENE_GH_CLI: ghStub,
     STUB_LOG: ghLog,
     STUB_RUN_LIST: '[]',
     STATE: join(w.dir, STATE_DIR),
     REC: recorder,
-    HARNESS_AGENT_CLI: stubPath,
+    DEVSCENE_AGENT_CLI: stubPath,
     CLAR: w.clarDir,
     POLL_INTERVAL_SECS: '1',
     USAGE_LANE_STATE_ENABLED: '1',
@@ -348,8 +348,8 @@ test('none: the launch line, the start and stop records, and the parked detail',
     assert.equal(j.status().decision, 'stop');
     const parked = j.notifications().filter((n) => n.event === 'parked');
     assert.equal(parked.length, 1);
-    assert.match(parked[0].detail, new RegExp(`/autonomous-sdlc-harness:branch-answer ${j.branch}`));
-    assert.match(parked[0].detail, /Run workflow on harness-run\.yml .*resume answer/);
+    assert.match(parked[0].detail, new RegExp(`/devscene:branch-answer ${j.branch}`));
+    assert.match(parked[0].detail, /Run workflow on devscene-run\.yml .*resume answer/);
     assert.match(parked[0].detail, /engine `task`/);
     assert.match(parked[0].detail, /from the branch `[^`]+` \(Use workflow from\)/);
     j.assertLaneUntouched();
@@ -368,7 +368,7 @@ test('a local run that parks names neither the job command nor the GitHub route'
 
   const parked = w.notifications().filter((n) => n.event === 'parked');
   assert.equal(parked.length, 1, w.watcherLog());
-  assert.doesNotMatch(parked[0].detail, /\/autonomous-sdlc-harness:branch-answer/);
+  assert.doesNotMatch(parked[0].detail, /\/devscene:branch-answer/);
   assert.doesNotMatch(parked[0].detail, /Run workflow on/);
 });
 
@@ -477,7 +477,7 @@ test('answer: a seeded park_loop_cycles and a no-progress re-park become park_lo
   assert.equal(j.status().park_loop_cycles, '2');
   const loop = j.notifications().filter((n) => n.event === 'park_loop');
   assert.equal(loop.length, 1);
-  assert.match(loop[0].detail, /\/autonomous-sdlc-harness:branch-status feat_x/);
+  assert.match(loop[0].detail, /\/devscene:branch-status feat_x/);
   assert.match(loop[0].detail, /resume answer, park_loop_clear true/);
   j.assertLaneUntouched();
 });
@@ -545,7 +545,7 @@ test('pause note: kept only for a pause resume of a paused job of the same engin
     const result = await f.j.job([f.j.branch, 'task', 'pause']);
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
     const prompt = f.j.prompts().at(-1);
-    assert.match(prompt, /RESUME from a PAUSE: read sdlc-harness\/PAUSE_PROGRESS\.md/);
+    assert.match(prompt, /RESUME from a PAUSE: read devscene\/PAUSE_PROGRESS\.md/);
     assert.doesNotMatch(prompt, STOP_KILL);
     assert.equal(readFileSync(f.notePath, 'utf8'), NOTE);
     assert.deepEqual(f.superseded(), []);
@@ -666,7 +666,7 @@ test('a job killed mid-run leaves running / continue', async (t) => {
   j.assertLaneUntouched();
 });
 
-test('control poll: a harness pause run newer than the start pauses the run for the user', async (t) => {
+test('control poll: a devscene pause run newer than the start pauses the run for the user', async (t) => {
   const j = await createJobFixture(t);
   if (j === null) return;
 
@@ -682,7 +682,7 @@ test('control poll: a harness pause run newer than the start pauses the run for 
   assert.equal(j.status().decision, 'stop');
   const paused = j.notifications().filter((n) => n.event === 'paused');
   assert.equal(paused.length, 1);
-  assert.match(paused[0].detail, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+  assert.match(paused[0].detail, /\/devscene:branch-resume feat_x/);
   assert.match(paused[0].detail, /resume pause/);
   assert.ok(j.ghCalls().some((c) => c.startsWith('run list')), j.ghCalls().join('\n'));
   j.assertLaneUntouched();
@@ -719,8 +719,8 @@ test('control poll: a pause the listing shows only after a poll that missed it i
   assert.equal(lastLine(result.stdout), 'job: paused stop');
   assert.equal(j.status().pause_reason, 'user');
   assert.ok(j.ghCalls().filter((c) => c.startsWith('run list')).length >= 2, j.ghCalls().join('\n'));
-  assert.match(result.stdout, /job: control poll of 'feat_x' since \d+ \(exit 5\): remote-run\.sh: no 'harness pause feat_x' run/);
-  assert.match(result.stdout, /job: control poll of 'feat_x' since \d+ \(exit 0\): remote-run\.sh: a 'harness pause feat_x' run/);
+  assert.match(result.stdout, /job: control poll of 'feat_x' since \d+ \(exit 5\): remote-run\.sh: no 'devscene pause feat_x' run/);
+  assert.match(result.stdout, /job: control poll of 'feat_x' since \d+ \(exit 0\): remote-run\.sh: a 'devscene pause feat_x' run/);
 });
 
 test('control poll: a usage refusal is a failed poll', async (t) => {
@@ -970,7 +970,7 @@ test('usage: a short reset is waited out in the job, a reset past the deadline g
 
     const last = paused.at(-1).detail;
     assert.match(last, /the in-job wait passed 2s after the reset without a resume/);
-    assert.match(last, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+    assert.match(last, /\/devscene:branch-resume feat_x/);
     assert.match(last, /resume pause/);
     assert.doesNotMatch(last, /usage limit reached — resumes automatically after/);
 
@@ -1029,13 +1029,13 @@ test('auto-resume: bounded, and reset by a user action', async (t) => {
 
 test('phases.qa: a job tells the task and user_review engines the QA phase is skipped, and says so on completion', async (t) => {
   const SKIP_CLAUSE = /executes in a GitHub Actions job \(execution: github-actions\), where the interactive-test phase is unsupported/;
-  const SKIP_DETAIL = /interactive tests skipped \(unsupported on GitHub Actions\): run \/autonomous-sdlc-harness:branch-qa-test feat_x locally/;
+  const SKIP_DETAIL = /interactive tests skipped \(unsupported on GitHub Actions\): run \/devscene:branch-qa-test feat_x locally/;
 
   for (const qa of [true, false]) {
     await t.test(`phases.qa ${qa}`, async (t) => {
       const j = await createJobFixture(t);
       if (j === null) return;
-      const configPath = join(j.dir, 'harness.config.json');
+      const configPath = join(j.dir, 'devscene.config.json');
       const config = JSON.parse(readFileSync(configPath, 'utf8'));
       await writeFile(configPath, `${JSON.stringify({ ...config, phases: { ...config.phases, qa } }, null, 2)}\n`, 'utf8');
 
@@ -1066,7 +1066,7 @@ const FORGE_ISSUE = 7;
  * left as it was: the push goes through a throwaway clone.
  */
 async function wireForge(j, forge) {
-  const configPath = join(j.dir, 'harness.config.json');
+  const configPath = join(j.dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   if (forge === null) delete config.forge;
@@ -1082,7 +1082,7 @@ async function wireForge(j, forge) {
     await mkdir(join(clone, STATE_DIR, 'task_prompts'), { recursive: true });
     await writeFile(
       join(clone, prompt),
-      `# A task\n\nDo it.\n\n---\n\nStarted from https://github.com/${FORGE_REPOSITORY}/issues/${FORGE_ISSUE} by @alice, who applied the label \`sdlc-harness\`.\n`,
+      `# A task\n\nDo it.\n\n---\n\nStarted from https://github.com/${FORGE_REPOSITORY}/issues/${FORGE_ISSUE} by @alice, who applied the label \`devscene\`.\n`,
       'utf8',
     );
     await runGit(clone, ['add', '--force', prompt]);
@@ -1136,7 +1136,7 @@ test('report: a job whose sessions keep failing reports failed on its issue once
 
   const calls = j.ghCalls();
   // The fixture has no pull request, so each `failed` report labels the issue once.
-  assert.equal(calls.filter((c) => c.includes('labels[]=sdlc-harness: failed')).length, 1, calls.join('\n'));
+  assert.equal(calls.filter((c) => c.includes('labels[]=devscene: failed')).length, 1, calls.join('\n'));
 });
 
 const TASK_LEDGER_IDS = ['P1', 'P2', 'P3', 'A', 'A1.5g', 'A1.5f', 'A2g', 'A2f', 'Bg', 'Bm', 'C', 'C2g', 'C2m', 'C2f', 'E', 'G', 'D'];
@@ -1194,7 +1194,7 @@ test('progress: a job reports a ledger phase change on its pull request', async 
     const j = await createJobFixture(t);
     if (j === null) return;
     await wireForge(j, 'github');
-    const configPath = join(j.dir, 'harness.config.json');
+    const configPath = join(j.dir, 'devscene.config.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
     config.execution = { ...config.execution, progressComments: false };
     await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
@@ -1253,7 +1253,7 @@ test('unfinished: a zero exit over an unfinished ledger is resumed, bounded, the
     const notes = j.notifications();
     const paused = notes.filter((n) => n.event === 'paused');
     assert.equal(paused.length, 1, JSON.stringify(notes));
-    assert.match(paused[0].detail, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+    assert.match(paused[0].detail, /\/devscene:branch-resume feat_x/);
     assert.equal(notes.some((n) => n.event === 'completed'), false, JSON.stringify(notes));
     assert.equal(notes.some((n) => /API overload/.test(n.detail ?? '')), false, JSON.stringify(notes));
   });
@@ -1292,7 +1292,7 @@ test('unfinished: a zero exit over an unfinished ledger is resumed, bounded, the
     const notes = j.notifications();
     const paused = notes.filter((n) => n.event === 'paused');
     assert.equal(paused.length, 1, JSON.stringify(notes));
-    assert.match(paused[0].detail, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+    assert.match(paused[0].detail, /\/devscene:branch-resume feat_x/);
     assert.equal(notes.some((n) => n.event === 'completed'), false, JSON.stringify(notes));
     assert.match(j.watcherLog(), /paused \(unfinished\)/);
   });
@@ -1379,7 +1379,7 @@ test('resumed, no ledger: an answer resume that exits 0 before any ledger is nev
   assert.equal(notes.some((n) => n.event === 'completed'), false, JSON.stringify(notes));
   const paused = notes.filter((n) => n.event === 'paused');
   assert.equal(paused.length, 1, JSON.stringify(notes));
-  assert.match(paused[0].detail, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+  assert.match(paused[0].detail, /\/devscene:branch-resume feat_x/);
   const log = j.watcherLog();
   assert.match(log, /has no readable ledger \(absent: .*\) after an answer resume — not classifying it completed/);
   assert.doesNotMatch(log, /completed — branch ready for review/);

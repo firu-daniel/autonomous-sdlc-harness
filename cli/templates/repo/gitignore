@@ -1,5 +1,5 @@
 # Machine-local files this repository names by path but never commits. Each path is a
-# value in harness.config.json, so it is the same for everyone who clones, while the file
+# value in devscene.config.json, so it is the same for everyone who clones, while the file
 # it names never leaves the machine. Where one of these has a committed `.example`
 # sibling, that sibling is what a fresh clone copies from. The client env file is the one whose
 # DIRECTORY is the configured value (`appDir`) while its name is fixed: setup-worktree.sh symlinks
@@ -20,7 +20,7 @@
 # offer. It lives at the main worktree's root and is checked there from every worktree of this
 # checkout, so one answer covers them all - its existence is the whole signal, so it has no
 # contents to commit.
-.claude/harness-no-offer
+.claude/devscene-no-offer
 # The run daemon's transcripts, event logs and run registry are machine-local. The
 # directory itself is committed, because its README is the contract for what belongs in
 # it, so the contents are ignored and that one file is excepted - an ignore rule on the

@@ -1,6 +1,6 @@
 # Main-checkout resolution — the `<MAIN_REPO>` fallback (canonical, single source of truth)
 
-Load this file only when a bare `printenv HARNESS_MAIN_REPO` printed nothing, and resolve `<MAIN_REPO>` by `## The fallback` below. A reader whose `printenv HARNESS_MAIN_REPO` printed a path uses that path and never opens this file.
+Load this file only when a bare `printenv DEVSCENE_MAIN_REPO` printed nothing, and resolve `<MAIN_REPO>` by `## The fallback` below. A reader whose `printenv DEVSCENE_MAIN_REPO` printed a path uses that path and never opens this file.
 
 This rule is its own file rather than a section of `${CLAUDE_PLUGIN_ROOT}/instructions/dispatch_discipline_instructions.md`, because that file's `## Activation` closes the set of documents that may point at it.
 
@@ -27,7 +27,7 @@ Run every command **bare and literal**: no substitution, no variable, no pipe, n
 3. **F3.** The alternates file holds exactly one line, and that line is an absolute path ending in `/.git/objects`. Anything else: stop. `<candidate>` is that line with `/.git/objects` removed.
 4. **F4.** `<candidate>` is not `<copy>`: equal strings stop. `Read` `<candidate>/.git/HEAD`; it must read, which shows `<candidate>/.git` is a directory. `Read` `<candidate>/.git/commondir`; only a "does not exist" answer passes.
 5. **F5.** Run `git rev-parse --abbrev-ref HEAD`; its output is `<branch>`. An output of `HEAD` is a detached HEAD: stop.
-6. **F6.** `Read` `<candidate>/harness.config.json`. Take `stateDir` from it, default `sdlc-harness`, with any trailing `/` removed, and `projectName`, default the last path segment of `<candidate>`. A config that does not exist takes both defaults. `Read` the registry, `<candidate>/<stateDir value>/autonomous_logs/registry.json`. Its `.runs` object must hold a `<branch>` entry whose `copy_kind` is `clone` and whose `worktree` is `<copy>`. Anything else: stop.
+6. **F6.** `Read` `<candidate>/devscene.config.json`. Take `stateDir` from it, default `devscene`, with any trailing `/` removed, and `projectName`, default the last path segment of `<candidate>`. A config that does not exist takes both defaults. `Read` the registry, `<candidate>/<stateDir value>/autonomous_logs/registry.json`. Its `.runs` object must hold a `<branch>` entry whose `copy_kind` is `clone` and whose `worktree` is `<copy>`. Anything else: stop.
 7. **F7.** Build `<parent of candidate>/<projectName>-<branch>`, with every `/` in `<branch>` turned into `-` and `<parent of candidate>` being `<candidate>` with its last path segment removed. It must equal `<copy>`. Anything else: stop.
 8. **F8.** Every check held: `<MAIN_REPO>` is `<candidate>`.
 
@@ -41,7 +41,7 @@ The outer loop's clone check is `cli/templates/scripts/lib/harness-run-lib.sh` �
   - The canonical-path comparison. No allow-listable literal command canonicalises a path, so a spelling mismatch stops the reader instead.
   - Condition 1's read of the `HEAD` file. F5's bare `git rev-parse --abbrev-ref HEAD` replaces it.
 - **Platform posture.** `docs/sandbox-verification.md` row CL5 shows a sandboxed command's write-open of the alternates file refused on macOS; on Linux the row is unmeasured (`blocked: F9`). So nothing trusts the alternates file alone: F6 needs a registry at the candidate that records this copy at this path, and the main checkout's own registry is write-protected; F7 puts the candidate at the work root. The residual is a directory at the work root shaped as a main checkout, with its own registry naming this copy.
-- **Known cost.** A main checkout that itself borrows objects through `alternates` takes the clone arm and stops. Such a repository sets `HARNESS_MAIN_REPO` instead.
+- **Known cost.** A main checkout that itself borrows objects through `alternates` takes the clone arm and stops. Such a repository sets `DEVSCENE_MAIN_REPO` instead.
 - **No new permission.** The commands are covered by the profile's `Bash(git rev-parse:*)`, `Bash(git worktree:*)` and its two `Read(…/**)` rules, so the unattended profile needs no new one.
 
 ## Who may cite this

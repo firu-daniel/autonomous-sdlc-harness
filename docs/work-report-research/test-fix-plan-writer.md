@@ -17,7 +17,7 @@ Goal (b) gains little here, because the rules most likely to be missed are alrea
 
 ## Read tree
 
-The basis is this repository (`harness.config.json`: layers `cli`, `plugin` and `general`; `phases` qa, docs and parity all `false`). The agent's own heading says "no auto-loaded context" (:46), but that is inaccurate: `CLAUDE.md` is auto-loaded regardless.
+The basis is this repository (`devscene.config.json`: layers `cli`, `plugin` and `general`; `phases` qa, docs and parity all `false`). The agent's own heading says "no auto-loaded context" (:46), but that is inaccurate: `CLAUDE.md` is auto-loaded regardless.
 
 **Lead 13: which read list wins.** The agent should win: its :51 is the specific instruction, saying to read only the fix layer's document and "Never read all of them up front". `CLAUDE.md`'s rows are generic routing for undirected work. But no file states that precedence, and `CLAUDE.md` says to "read the relevant file before starting work in that area", so a model may follow both. That is why the worst case is counted.
 
@@ -36,7 +36,7 @@ The basis is this repository (`harness.config.json`: layers `cli`, `plugin` and 
 | Earlier-round logs (:49) | on demand (rounds 2–4) | variable |
 | Failing test/gate source and the code it exercises (:50) | on demand | variable |
 | The fix layer's conventions document (:51): `context/cli.md` 2 647, `plugin.md` 4 174, `conventions.md` 5 864 (notes-app 2 304–5 125) | on demand (in practice one or more per dispatch) | 2 647–5 864 each |
-| `<docs_root>` / `mcp__harness-docs__search_docs` (:53) | on demand, only with `phases.docs` and `docs.retrieval` | n/a here |
+| `<docs_root>` / `mcp__devscene-docs__search_docs` (:53) | on demand, only with `phases.docs` and `docs.retrieval` | n/a here |
 | The architecture findings file (revision prompt, :41) | up-front on revision | variable |
 
 ## Dispatch sites and phases

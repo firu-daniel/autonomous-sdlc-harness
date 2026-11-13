@@ -3,7 +3,7 @@
  * branch's next user-review round through the `review` verb the local relay uses.
  *
  * **The rule these tests exist to enforce: only a review requesting changes, by a write-or-admin
- * reviewer `HARNESS_RUN_ACTORS` admits, on a recognised same-repository harness branch carrying a story index, starts a round; the
+ * reviewer `DEVSCENE_RUN_ACTORS` admits, on a recognised same-repository harness branch carrying a story index, starts a round; the
  * round collects every review requesting changes, every other submitted review carrying a summary, and
  * every inline comment since the previous round, by
  * every authorised author, each review's body under its own `## Review by @<login>` section and each
@@ -18,11 +18,11 @@
  * The fixture is `remote-control.test.mjs`'s — `init`, `execution.target` `github-actions`, `forge`
  * `github`, the adopted tree pushed to the fixture's bare `origin`, and `feat_x` pushed carrying its task
  * prompt and its flow-progress ledger — plus `feat_x`'s story index. `gh` is a stub reached through
- * `HARNESS_GH_CLI`: it logs each argument vector with the content of any `body=@<path>`, answers the
+ * `DEVSCENE_GH_CLI`: it logs each argument vector with the content of any `body=@<path>`, answers the
  * paginated `pulls/<n>/comments` and `pulls/<n>/reviews` listings from `STUB_PR_COMMENTS` and
  * `STUB_PR_REVIEWS` (raw API objects, one page each), the permission call per login from
  * `STUB_PERMISSIONS`, `run list` from `STUB_RUN_LIST` (by default one completed
- * `harness run <branch>` run with no state bundle, which reads as `failed`), a run's jobs from
+ * `devscene run <branch>` run with no state bundle, which reads as `failed`), a run's jobs from
  * `STUB_JOBS` (none by default), its artifact list and `run download` from `STUB_BUNDLES` (run id ->
  * `status.json` fields; none by default), the post-dispatch `headSha` lookup with origin's tip under
  * `STUB_LIST_DISPATCHED`, and the labels GET with `[]`. `HARNESS_TRIGGER_LOOKUP_SECS` is `0`, so a
@@ -37,14 +37,14 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
 const REVIEW_DIR = `${STATE_DIR}/user_reviews`;
 const REVIEW_ID = 900;
 const REVIEW_URL = `https://github.com/${REPOSITORY}/pull/12#pullrequestreview-${REVIEW_ID}`;
 const REVIEW_DISPATCH =
-  'workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=user_review -f resume=none -f chain=0';
+  'workflow run devscene-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=user_review -f resume=none -f chain=0';
 
 const STUB = `#!/usr/bin/env node
 const { appendFileSync, readFileSync } = require('node:fs');
@@ -79,7 +79,7 @@ if (args[0] === 'pr' && args[1] === 'list') {
 } else if (args[0] === 'run' && args[1] === 'list' && process.env.STUB_LIST_DISPATCHED && args.includes('url,displayTitle,headSha')) {
   const branch = args[args.indexOf('--branch') + 1];
   const tip = require('node:child_process').execFileSync('git', ['ls-remote', 'origin', 'refs/heads/' + branch], { encoding: 'utf8' }).split('\\t')[0];
-  process.stdout.write(JSON.stringify([{ displayTitle: 'harness run ' + branch, headSha: tip, url: 'https://example.test/runs/777' }]));
+  process.stdout.write(JSON.stringify([{ displayTitle: 'devscene run ' + branch, headSha: tip, url: 'https://example.test/runs/777' }]));
 } else if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/issues\\/[0-9]+\\/labels$/.test(args[1] ?? '')) {
   process.stdout.write('[]');
 } else if (args[0] === 'api') {
@@ -87,7 +87,7 @@ if (args[0] === 'pr' && args[1] === 'list') {
 } else if (args[0] === 'run' && args[1] === 'list') {
   const branch = args[args.indexOf('--branch') + 1];
   process.stdout.write(process.env.STUB_RUN_LIST
-    || JSON.stringify([{ databaseId: 601, displayTitle: 'harness run ' + branch, status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' }]));
+    || JSON.stringify([{ databaseId: 601, displayTitle: 'devscene run ' + branch, status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' }]));
 }
 `;
 
@@ -108,7 +108,7 @@ async function reviewFixture(t) {
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   config.forge = 'github';
@@ -138,7 +138,7 @@ async function reviewFixture(t) {
     const files = {};
     if (prompt) {
       files[`${STATE_DIR}/task_prompts/${branch}_task_prompt.md`] =
-        `# A task\n\nDo it.\n\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`sdlc-harness\`.\n`;
+        `# A task\n\nDo it.\n\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`devscene\`.\n`;
     }
     if (ledger) files[`${STATE_DIR}/flow_progress/${branch}_progress.md`] = '# Progress\n';
     if (story) files[`${STATE_DIR}/story_plans/${branch}_story_plan.md`] = '# Stories\n';
@@ -183,7 +183,7 @@ async function reviewFixture(t) {
         sender: { login, type },
       }));
       return runBash(dir, [SCRIPT, 'control'], {
-        HARNESS_GH_CLI: stub,
+        DEVSCENE_GH_CLI: stub,
         STUB_LOG: log,
         GITHUB_EVENT_NAME: 'pull_request_review',
         GITHUB_EVENT_PATH: eventPath,
@@ -191,10 +191,10 @@ async function reviewFixture(t) {
         GITHUB_SERVER_URL: 'https://github.com',
         GITHUB_RUN_ID: '',
         RUNNER_TEMP: runnerTemp,
-        HARNESS_REMOTE_STOP: '',
-        HARNESS_TRIGGER_ALLOWED_BOTS: '',
-        HARNESS_RUN_ACTORS: '*',
-        HARNESS_TRIGGER_LABEL: '',
+        DEVSCENE_REMOTE_STOP: '',
+        DEVSCENE_TRIGGER_ALLOWED_BOTS: '',
+        DEVSCENE_RUN_ACTORS: '*',
+        DEVSCENE_TRIGGER_LABEL: '',
         STUB_PERMISSIONS: JSON.stringify({ alice: 'write' }),
         STUB_PRS: '',
         STUB_PR_COMMENTS: '',
@@ -222,7 +222,7 @@ async function reviewFixture(t) {
 }
 
 const allComments = (calls) => calls.filter((call) => /^api --method POST repos\/[^ ]+\/issues\/\d+\/comments /.test(call.line));
-const replies = (calls) => allComments(calls).filter((call) => /<!-- sdlc-harness event=reply /.test(call.body));
+const replies = (calls) => allComments(calls).filter((call) => /<!-- devscene event=reply /.test(call.body));
 const dispatches = (calls) => calls.filter((call) => call.line.startsWith('workflow run '));
 
 /** One inline comment, as the pull request's comments endpoint returns it. */
@@ -255,7 +255,7 @@ const review = (id, login, fields = {}) => ({
 
 /** The marker line closing a round that consumed <reviews> and <comments>. */
 const markerOf = (reviews, comments) =>
-  new RegExp(`\\n<!-- sdlc-harness round collected_at=\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ reviews=${reviews.join(',')} comments=${comments.join(',')} -->\\n$`);
+  new RegExp(`\\n<!-- devscene round collected_at=\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ reviews=${reviews.join(',')} comments=${comments.join(',')} -->\\n$`);
 
 /** Assert a started round: exit 0, `feat_x_review<suffix>.md` committed on origin, one dispatch, no reply. */
 const assertRound = async (f, result, name = 'feat_x_review.md') => {
@@ -401,7 +401,7 @@ for (const [name, fields] of [['with an empty body', { state: 'COMMENTED', body:
 test("a COMMENTED review an earlier round's marker records is absent", async (t) => {
   const f = await reviewFixture(t);
   await f.commitOn('feat_x', {
-    [`${REVIEW_DIR}/feat_x_review.md`]: 'Round one.\n\n<!-- sdlc-harness round collected_at=2000-01-01T00:00:00Z reviews=5 comments= -->\n',
+    [`${REVIEW_DIR}/feat_x_review.md`]: 'Round one.\n\n<!-- devscene round collected_at=2000-01-01T00:00:00Z reviews=5 comments= -->\n',
   }, 'chore: add user review for feat_x');
   const result = await f.control({}, {
     STUB_PERMISSIONS: JSON.stringify({ alice: 'write', bob: 'write' }),
@@ -429,7 +429,7 @@ test('two reviews requesting changes become one round with two sections and one 
 test("an id already recorded in a previous round's marker is absent", async (t) => {
   const f = await reviewFixture(t);
   await f.commitOn('feat_x', {
-    [`${REVIEW_DIR}/feat_x_review.md`]: 'Round one.\n\n<!-- sdlc-harness round collected_at=2000-01-01T00:00:00Z reviews=5 comments=1 -->\n',
+    [`${REVIEW_DIR}/feat_x_review.md`]: 'Round one.\n\n<!-- devscene round collected_at=2000-01-01T00:00:00Z reviews=5 comments=1 -->\n',
   }, 'chore: add user review for feat_x');
   const result = await f.control({}, {
     STUB_PERMISSIONS: JSON.stringify({ alice: 'write', bob: 'write' }),
@@ -449,7 +449,7 @@ test("an id already recorded in a previous round's marker is absent", async (t) 
 test('a review a marker already records, with nothing else pending, is answered with its round and places nothing', async (t) => {
   const f = await reviewFixture(t);
   await f.commitOn('feat_x', {
-    [`${REVIEW_DIR}/feat_x_review.md`]: `Round one.\n\n<!-- sdlc-harness round collected_at=2000-01-01T00:00:00Z reviews=${REVIEW_ID} comments= -->\n`,
+    [`${REVIEW_DIR}/feat_x_review.md`]: `Round one.\n\n<!-- devscene round collected_at=2000-01-01T00:00:00Z reviews=${REVIEW_ID} comments= -->\n`,
   }, 'chore: add user review for feat_x');
   const before = await f.originRefs();
   const result = await f.control();
@@ -464,7 +464,7 @@ test('a review a marker already records, with nothing else pending, is answered 
 test('a comment from before the marked boundary is absent, and one inside the overlap is present', async (t) => {
   const f = await reviewFixture(t);
   await f.commitOn('feat_x', {
-    [`${REVIEW_DIR}/feat_x_review.md`]: 'Round one.\n\n<!-- sdlc-harness round collected_at=2026-01-02T00:00:00Z reviews=800 comments= -->\n',
+    [`${REVIEW_DIR}/feat_x_review.md`]: 'Round one.\n\n<!-- devscene round collected_at=2026-01-02T00:00:00Z reviews=800 comments= -->\n',
   }, 'chore: add user review for feat_x');
   const result = await f.control({}, {
     STUB_PR_COMMENTS: JSON.stringify([
@@ -511,12 +511,12 @@ test('a read reviewer is refused with a reply, and nothing is pushed', async (t)
   await assertRefused(f, result, before, /permission of @alice as read/);
 });
 
-test('a review by a writer HARNESS_RUN_ACTORS does not admit places no round and is refused naming the list', async (t) => {
+test('a review by a writer DEVSCENE_RUN_ACTORS does not admit places no round and is refused naming the list', async (t) => {
   const f = await reviewFixture(t);
   const before = await f.originRefs();
-  const result = await f.control({}, { HARNESS_RUN_ACTORS: 'carol' });
-  const reply = await assertRefused(f, result, before, /@alice is not on the repository variable HARNESS_RUN_ACTORS/);
-  assert.match(reply.body, /whom the repository variable `HARNESS_RUN_ACTORS` admits/);
+  const result = await f.control({}, { DEVSCENE_RUN_ACTORS: 'carol' });
+  const reply = await assertRefused(f, result, before, /@alice is not on the repository variable DEVSCENE_RUN_ACTORS/);
+  assert.match(reply.body, /whom the repository variable `DEVSCENE_RUN_ACTORS` admits/);
 });
 
 test('a head carrying neither a task prompt nor a ledger is refused as not a harness branch', async (t) => {
@@ -539,11 +539,11 @@ test('a head without the story index is refused: the round cannot start on it', 
   await f.pushBranch('feat_z', { story: false });
   const before = await f.originRefs();
   await assertRefused(f, await f.control({ head: 'feat_z' }), before,
-    /`feat_z` carries no story index \(`sdlc-harness\/story_plans\/feat_z_story_plan\.md`\).*cannot start on this branch/);
+    /`feat_z` carries no story index \(`devscene\/story_plans\/feat_z_story_plan\.md`\).*cannot start on this branch/);
 });
 
-/** A `run list` answer whose newest `harness run feat_x` run, 501, is `in_progress`. */
-const IN_PROGRESS = JSON.stringify([{ databaseId: 501, displayTitle: 'harness run feat_x', status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]);
+/** A `run list` answer whose newest `devscene run feat_x` run, 501, is `in_progress`. */
+const IN_PROGRESS = JSON.stringify([{ databaseId: 501, displayTitle: 'devscene run feat_x', status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]);
 
 /** Assert the in-flight answer: exit 0, one reply matching <pattern>, no dispatch, origin unchanged. */
 const assertAcknowledged = async (f, result, before, pattern) => {
@@ -571,7 +571,7 @@ test('a review while the newest run is in progress is collected, not refused; no
 test('a review already recorded in a round while the branch is in flight is answered with that round', async (t) => {
   const f = await reviewFixture(t);
   await f.commitOn('feat_x', {
-    [`${REVIEW_DIR}/feat_x_review.md`]: `Round one.\n\n<!-- sdlc-harness round collected_at=2000-01-01T00:00:00Z reviews=${REVIEW_ID} comments= -->\n`,
+    [`${REVIEW_DIR}/feat_x_review.md`]: `Round one.\n\n<!-- devscene round collected_at=2000-01-01T00:00:00Z reviews=${REVIEW_ID} comments= -->\n`,
   }, 'chore: add user review for feat_x');
   const before = await f.originRefs();
   const result = await f.control({}, { STUB_RUN_LIST: IN_PROGRESS });
@@ -597,7 +597,7 @@ test('a run whose run job has completed parked is in flight, and the reply names
     STUB_BUNDLES: JSON.stringify({ 501: { status: 'parked' } }),
   });
   const reply = await assertAcknowledged(f, result, before, /^@alice: your review was collected\. `feat_x` is `parked`; /);
-  assert.match(reply.body, /comment `@sdlc-harness answer <n>`/);
+  assert.match(reply.body, /comment `@dev-scene answer <n>`/);
 });
 
 test('a review on a stopped paused run names it stopped, with resume as the way on', async (t) => {
@@ -605,13 +605,13 @@ test('a review on a stopped paused run names it stopped, with resume as the way 
   const before = await f.originRefs();
   const result = await f.control({}, {
     STUB_RUN_LIST: JSON.stringify([
-      { databaseId: 700, displayTitle: 'harness stop feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T01:00:00Z', url: 'https://example.test/runs/700' },
-      { databaseId: 601, displayTitle: 'harness run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' },
+      { databaseId: 700, displayTitle: 'devscene stop feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T01:00:00Z', url: 'https://example.test/runs/700' },
+      { databaseId: 601, displayTitle: 'devscene run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' },
     ]),
     STUB_BUNDLES: JSON.stringify({ 601: { status: 'paused', pause_reason: 'user' } }),
   });
   const reply = await assertAcknowledged(f, result, before, /^@alice: your review was collected\. `feat_x` is `stopped`; /);
-  assert.match(reply.body, /Comment `@sdlc-harness resume` to resume the run from its committed ledger\./);
+  assert.match(reply.body, /Comment `@dev-scene resume` to resume the run from its committed ledger\./);
   assert.doesNotMatch(reply.body, /`paused`/);
 });
 

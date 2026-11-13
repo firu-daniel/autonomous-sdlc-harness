@@ -20,7 +20,7 @@
  * refuses the whole sweep on the same fault) and `profile_remove`'s re-check.
  *
  * Each case builds, under the system temp directory, a bare origin and a main checkout `demo` on
- * `trunk` carrying `harness.config.json`, the template sweep and `lib/harness-run-lib.sh` copied
+ * `trunk` carrying `devscene.config.json`, the template sweep and `lib/harness-run-lib.sh` copied
  * into `scripts/`, and the registry directory. Clones come from the copied library's
  * `hr_clone_create_var`, at `hr_worktree_dir`'s `<root>/demo-<branch>`. A branch is made gone by
  * pushing it with an upstream and deleting it on origin. Every case runs {@link sweepBoth}: the
@@ -51,7 +51,7 @@ const CONFIG = {
   projectName: 'demo',
   defaultBranch: 'trunk',
   protectedBranches: ['release/*'],
-  stateDir: 'sdlc-harness/',
+  stateDir: 'devscene/',
   githooksDir: 'githooks',
   layers: [],
   commands: {},
@@ -91,15 +91,15 @@ async function fixture(t) {
   await runGit(main, ['init', '--quiet', '-b', 'trunk']);
   await runGit(main, ['config', 'user.email', 'fixture@example.invalid']);
   await runGit(main, ['config', 'user.name', 'Harness Fixture']);
-  await writeFile(join(main, 'harness.config.json'), `${JSON.stringify(CONFIG)}\n`);
-  await writeFile(join(main, '.gitignore'), 'sdlc-harness/\n');
+  await writeFile(join(main, 'devscene.config.json'), `${JSON.stringify(CONFIG)}\n`);
+  await writeFile(join(main, '.gitignore'), 'devscene/\n');
   await copyFile(join(TEMPLATES, 'cleanup-merged-worktrees.sh'), join(main, 'scripts', 'cleanup-merged-worktrees.sh'));
   await copyFile(join(TEMPLATES, 'lib', 'harness-run-lib.sh'), join(main, 'scripts', 'lib', 'harness-run-lib.sh'));
   await runGit(main, ['add', '-A']);
   await runGit(main, ['commit', '--quiet', '-m', 'fixture: seed']);
   await runGit(main, ['remote', 'add', 'origin', origin]);
   await runGit(main, ['push', '--quiet', '-u', 'origin', 'trunk']);
-  const logs = join(main, 'sdlc-harness', 'autonomous_logs');
+  const logs = join(main, 'devscene', 'autonomous_logs');
   await mkdir(logs, { recursive: true });
   const registry = join(logs, 'registry.json');
   const lib = join(main, 'scripts', 'lib', 'harness-run-lib.sh');
@@ -114,7 +114,7 @@ async function fixture(t) {
   const ownSlug = await slug();
   /** The per-run profile path, built from its documented shape rather than by `hr_run_profile_file`. */
   const profilePath = (branch, slugValue = ownSlug) =>
-    join(state, 'autonomous-sdlc-harness', 'run-profiles', slugValue, `${branch.replaceAll('/', '-')}.json`);
+    join(state, 'devscene', 'run-profiles', slugValue, `${branch.replaceAll('/', '-')}.json`);
 
   return {
     root,

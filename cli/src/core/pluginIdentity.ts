@@ -24,14 +24,14 @@
  * same reason: the `<plugin>:branch-prompt` skill that file's answer-1 path invokes is that name, and
  * a shipped literal there would survive a rename in every adopter's checkout with nothing reporting it.
  */
-export const PLUGIN_NAME = 'autonomous-sdlc-harness';
+export const PLUGIN_NAME = 'devscene';
 
 /**
  * The analyze command as every line addressing the adopter names it, plugin-qualified.
  *
  * `docs/development.md` → `## 5. Verifying a change` → gate 6 records the spelling rule.
  */
-export const ANALYZE_COMMAND = `/${PLUGIN_NAME}:harness-analyze`;
+export const ANALYZE_COMMAND = `/${PLUGIN_NAME}:analyze`;
 
 /** The user-review command as every line addressing the adopter names it, plugin-qualified. */
 export const USER_REVIEW_COMMAND = `/${PLUGIN_NAME}:branch-user-review`;

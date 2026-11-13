@@ -45,7 +45,7 @@ function heartbeat(template, i, agent) {
   return ['heartbeat', template.replace('<i>', String(i)).replace('<agent_name>', agent)];
 }
 
-const findings = (folder, n) => `sdlc-harness/${folder}/${BRANCH}/review_${n}.md`;
+const findings = (folder, n) => `devscene/${folder}/${BRANCH}/review_${n}.md`;
 
 function writer(i, findingsFile) {
   return [

@@ -4,7 +4,7 @@
  * fence item that names it (`cli/templates/claude/CLAUDE.md` → item **4. Opt-out.**).
  *
  * **The rule these tests exist to enforce: the fence's opt-out script answers as the #214 one-liner
- * did in every listed layout, under bash and zsh, whether or not `HARNESS_MAIN_REPO` is set — the
+ * did in every listed layout, under bash and zsh, whether or not `DEVSCENE_MAIN_REPO` is set — the
  * main checkout and exit 0 only where it resolved one and found no marker there, and otherwise a
  * non-zero exit with nothing on stdout — and refuses the one accepted stricter case.** That stricter
  * case — a registered clone carrying a non-empty `config.worktree` (an empty one is the shape
@@ -19,7 +19,7 @@
  * RED ONCE — 2026-10-30, each mutation made only on a throwaway copy of the script and `lib/` under
  * the system temp root (or of the template text in memory), run once against a scratch copy of this
  * file pointed at it, and never committed:
- * - the anchor case: the copy printing `HARNESS_MAIN_REPO` and exiting 0 when it is set — the
+ * - the anchor case: the copy printing `DEVSCENE_MAIN_REPO` and exiting 0 when it is set — the
  *   anchored run differed from the unanchored one in every layout case and the no-git case.
  * - the unregistered clone and the stricter case: `hr_clone_target_check_var` replaced by `true` in
  *   the copy — `unregisteredClone`, both planted clones and the jq-less `registeredClone` printed the
@@ -27,7 +27,7 @@
  * - `twoLineClone`: the copy's `alternates` line-count refusals dropped stayed green, because
  *   `hr_clone_target_check_var` refuses a second `alternates` line too; dropped together with that
  *   call, `twoLineClone` printed the main checkout and exited 0.
- * - the marker case: the copy's `harness-no-offer` test removed — `main` printed itself with the
+ * - the marker case: the copy's `devscene-no-offer` test removed — `main` printed itself with the
  *   marker present.
  * - the template case: `` `$(git rev-parse --show-toplevel)` `` reinserted into the item in memory —
  *   the template test failed.
@@ -45,11 +45,11 @@ import { buildRunCopyLayouts, createRegisteredClone } from './helpers/run-copy-l
 
 const TEMPLATE = join(WORKSPACE_ROOT, 'cli', 'templates', 'claude', 'CLAUDE.md');
 const SCRIPT = join(WORKSPACE_ROOT, 'cli', 'templates', 'scripts', 'task-offer-check.sh');
-const MARKER = join('.claude', 'harness-no-offer');
+const MARKER = join('.claude', 'devscene-no-offer');
 
 const ITEM_START = '4. **Opt-out.**';
 const TOKEN = '{{taskOfferCheckCommand}}';
-const ALLOWED_SPANS = ['.claude/harness-no-offer', TOKEN];
+const ALLOWED_SPANS = ['.claude/devscene-no-offer', TOKEN];
 const SHELL_SYNTAX = ['$(', '&&', '||', '|', ';', 'sed '];
 
 const RESOLVED = ['main', 'worktree', 'registeredClone'];

@@ -4,7 +4,7 @@
 >
 > **Review comments.** A fix plan written from a round placed from a pull-request review carries the ` **Review comments:** <id>` suffix on each `## Out of scope / verified-OK` bullet that came from an inline comment. This sample's observations come from a hand-written review, so its bullets carry none; the worked example is `- **Observation 2 — "…"** Verified-OK. … **Review comments:** 2735551234`.
 >
-> **Placeholders used below, and where each comes from.** `<branch>` is the branch under review, read at runtime from a bare `git rev-parse --abbrev-ref HEAD`. `<state_dir>` is `harness.config.json` → `stateDir` (default `sdlc-harness/`), the run-artifact tree every artifact path here is relative to. `<parity_vocabulary>` is `harness.config.json` → `parity.referenceName`, and every sentence that uses it applies **only when `phases.parity` is `true`**. A readiness entry's `_(layer: …)_` tag values are `layers[].name` values.
+> **Placeholders used below, and where each comes from.** `<branch>` is the branch under review, read at runtime from a bare `git rev-parse --abbrev-ref HEAD`. `<state_dir>` is `devscene.config.json` → `stateDir` (default `devscene/`), the run-artifact tree every artifact path here is relative to. `<parity_vocabulary>` is `devscene.config.json` → `parity.referenceName`, and every sentence that uses it applies **only when `phases.parity` is `true`**. A readiness entry's `_(layer: …)_` tag values are `layers[].name` values.
 >
 > **Illustrative values.** The feature, branch, symbols and commit SHA are a worked example; source paths sit under the example layer paths `src/data`, `src/domain` and `src/presentation`, and a real fix plan uses the adopting repository's own `layers[].path` values.
 

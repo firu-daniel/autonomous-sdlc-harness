@@ -95,7 +95,7 @@
 # `<main_repo>`, unless it is the checkout itself; then `$HOME` -> `~`. The main
 # checkout is `--main-repo` when given and non-empty, else `hr_main_repo`'s
 # answer for the checkout — which, inside a clone, is the clone itself, so the
-# watcher passes `--main-repo` explicitly. `HARNESS_MAIN_REPO` is never read.
+# watcher passes `--main-repo` explicitly. `DEVSCENE_MAIN_REPO` is never read.
 # Round ids, gate ids and round file paths pass through the same pairs,
 # through mode `rounds`' `redact_path`: the pairs only, without the home step and without
 # the 160-character cut free-text fields get, so a long path or label is
@@ -139,7 +139,7 @@
 # REPRO — against a throwaway fixture:
 #
 #   d=$(mktemp -d); git -C "$d" init -q -b feat_x
-#   printf '%s' '{"version":1,"defaultBranch":"main","stateDir":"sdlc-harness/","layers":[],"commands":{}}' > "$d/harness.config.json"
+#   printf '%s' '{"version":1,"defaultBranch":"main","stateDir":"devscene/","layers":[],"commands":{}}' > "$d/devscene.config.json"
 #   cp -R <scripts_dir>/. "$d/scripts/"   # this file and its lib/
 #   printf '%s\n' \
 #     '{"type":"system","subtype":"init","session_id":"s1"}' \
@@ -149,7 +149,7 @@
 #
 #   record     (cd "$d" && bash scripts/run-analytics.sh s.jsonl feat_x)
 #                -> `recorded 1 session(s) for feat_x`, both files under
-#                   sdlc-harness/run_analytics/feat_x/
+#                   devscene/run_analytics/feat_x/
 #   re-run     same call                       -> `unchanged: no new session for feat_x`
 #   md back    rm the .md; same call           -> `recorded 0 session(s) for feat_x`
 #   nothing    a stream with no init event, no record -> `no session in …`, no file
@@ -160,7 +160,7 @@
 #              CLAUDE_CONFIG_DIR=$d/home, same call
 #                -> that dispatch's subagents[] entry carries the transcript's four
 #                   token totals and token_source `transcript`
-#   round      no record yet; l=$d/sdlc-harness/test_run_logs/feat_x; mkdir -p "$l"
+#   round      no record yet; l=$d/devscene/test_run_logs/feat_x; mkdir -p "$l"
 #              printf 'pass\n' > "$l/r_round_1.verdict"
 #              printf 'phase\tgate\tstatus\tseconds\nfull\ttest\tok\t3\nend\tcomplete\n' > "$l/r_round_1.gates.tsv"
 #              same call -> `recorded 1 session(s) and 1 round(s) for feat_x`, schema 2
@@ -290,7 +290,7 @@ fi
 out_dir=$(hr_state_path "$top" "run_analytics/$branch")
 case "$?" in
   0) ;;
-  2) die "cannot resolve '$top/harness.config.json' (absent, invalid, no defaultBranch, or jq older than 1.5)" ;;
+  2) die "cannot resolve '$top/devscene.config.json' (absent, invalid, no defaultBranch, or jq older than 1.5)" ;;
   *) die "cannot resolve the state directory of '$top'" ;;
 esac
 json_out="$out_dir/run-analytics.json"

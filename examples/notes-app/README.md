@@ -7,7 +7,7 @@ of record, so what that section names is what the leg holds this tree to.
 
 **What this is.** A minimal TypeScript single-page notes application — a `localStorage` gateway, a
 domain layer over it, a DOM surface over that — which the harness was adopted into, together with
-the artifacts of one **real** end-to-end run over it under `sdlc-harness/`. That run is the branch
+the artifacts of one **real** end-to-end run over it under `devscene/`. That run is the branch
 `feat_note_updated_at`, which made a note record when it was last edited and put that on its row
 across all three layers, and it completed every phase this project's configuration turns on:
 `phases.qa` is true, so the capture carries seven interactive tests driven against the live page;
@@ -19,11 +19,11 @@ that needs a login is a fixture nobody can run.
 
 **A snapshot, not a live adoption.** `init`, `doctor` and every wrapper under `scripts/` derive the
 repository root from git — the wrappers by walking up from their own directory to the nearest one
-holding `harness.config.json` that `git -C <dir> rev-parse --show-toplevel` confirms as its own
+holding `devscene.config.json` that `git -C <dir> rev-parse --show-toplevel` confirms as its own
 top, falling back to asking git which checkout their directory belongs to, so git never starts at
 a `<scriptsDir>/.git` placeholder (`docs/sandbox-verification.md` §5 F15), followed by a `cd`;
 `init` and `doctor` through `rev-parse --show-toplevel` too (`cli/src/core/git.ts`) — and this
-directory carries no `.git` of its own, so git does not confirm the `harness.config.json` here as a
+directory carries no `.git` of its own, so git does not confirm the `devscene.config.json` here as a
 top, the wrappers' walk goes on upward, and all of them resolve to the repository that **contains**
 it rather than to it. `node cli/dist/cli.js doctor --cwd examples/notes-app` is therefore not a
 thing to run here, and neither is `bash scripts/typecheck.sh`: it `cd`s out of this directory and
@@ -35,15 +35,17 @@ scratch tree and run them there. Every leg of the capture happened in exactly su
 repository outside this checkout, on the precedent `docs/development.md` §5 gates 7–9 set.
 
 **The capture is frozen; the fixture is live.** Everything here that records the harness's *output*
-— the run artifacts under `sdlc-harness/`, and the prose of the five documents under
+— the run artifacts under `devscene/`, and the prose of the five documents under
 `.claude/context/` and of `.claude/CLAUDE.md` — is a record of what the harness produced on
 **2026-09-07**. **No rule introduced after that date grades it.** It is never edited to satisfy one,
 and a failure measured against it is evidence of what the harness used to do, never evidence that
 the new rule is wrong. `docs/development.md` §5 states the same exemption once, from the same date,
 so that a criterion added later inherits it instead of having to remember it.
 
+**The capture predates the rename.** The run was captured under the product's earlier name, `autonomous-sdlc-harness`, so the captured artifacts name the CLI, the plugin and its commands that way; the product is now DevScene (`devscene`), and nothing in the capture was respelled.
+
 What stays current is this project's own tree and the **presence** of what `init` wrote: `src/`,
-`test/`, `tools/`, the toolchain manifests, `harness.config.json`, `scripts/`, `githooks/`, and the
+`test/`, `tools/`, the toolchain manifests, `devscene.config.json`, `scripts/`, `githooks/`, and the
 file set the keep rule below selects — which is what gate 9's four legs hold it to. A change that
 adds or alters a token-carrying `cli/templates/` file still owes this directory the rendered
 artifact. A change to conventions-document **rules** owes it nothing. Where the two halves disagree,
@@ -52,31 +54,39 @@ gate 9 leg (iv) already names the side that moves: the fixture.
 **What was kept and what was omitted.** `init` writes more into an adopter's tree than what is
 here, and one rule in three clauses decided the difference. A generated artifact with **no
 `cli/templates/` counterpart** is composed from this project's own configuration and is kept:
-`harness.config.json`, `.claude/settings.json`, and every run artifact under `sdlc-harness/`. One
+`devscene.config.json`, `.claude/settings.json`, and every run artifact under `devscene/`. One
 **rendered from a counterpart carrying a `{{…}}` token** is kept, because rendering put this
 project's own values into it: `.claude/CLAUDE.md`, the five filled documents under `.claude/context/`
 (`conventions.md`, `data-layer.md`, `domain.md`, `presentation.md`, `tests.md` — one per
 `layers[]` row, `tests.md` among them because this project's `test/` directory made today's
-`layered-clean-arch` detection add that row), `.claude/harness-task-offer.md`,
+`layered-clean-arch` detection add that row), `.claude/devscene-task-offer.md`,
 `.claude/settings.autonomous.json`, `.claude/push-notify.env.example`,
 `.claude/qa-accounts.env.example`, `.claude/qa_test_scenarios.md`, the three wrappers under
 `scripts/`, `githooks/pre-push`, `.gitattributes` and `.gitignore`. One whose **counterpart carries
 no token** is omitted, whether `init` copied it byte for byte or merged it: the outer-loop
 scripts with their shared library `scripts/lib/harness-run-lib.sh`, the run-artifact tree's root
 README and its per-directory contract READMEs, and the untouched ledger
-`sdlc-harness/improvement_suggestions.md`. Each omitted family is written into an adopter's tree
-from `cli/templates/` by `autonomous-sdlc-harness init`; a copy of one here would carry nothing of
+`devscene/improvement_suggestions.md`. Each omitted family is written into an adopter's tree
+from `cli/templates/` by `devscene init`; a copy of one here would carry nothing of
 this project, duplicate a file this repository already ships, and open a drift surface with no
 guard.
 
 **The rule has exactly two exceptions, and each is bought by a kept file that points at the missing
-one.** *A link buys the first:* the other untouched ledger, `sdlc-harness/lessons.md`, is carried,
+one.** *A link buys the first:* the other untouched ledger, `devscene/lessons.md`, is carried,
 because the kept `.claude/CLAUDE.md` — the file the harness advertises as always loaded, and so the
 likeliest first open — links it by relative path, and a fixture that renders a 404 there costs more
-than one duplicated seed. `diff cli/templates/state-dir/lessons.md sdlc-harness/lessons.md` exits 0
-with no output: the run never appended to the ledger, so carrying it restores the capture rather
-than editing it. Nothing enforces that identity, so a change to the template is a `diff` against
-this copy, and that `diff` is expected to stay empty. *A presupposition buys the second:*
+than one duplicated seed. The run never appended to the ledger, so carrying it restores the capture
+rather than editing it. `diff cli/templates/state-dir/lessons.md devscene/lessons.md` prints
+exactly two line pairs and nothing else, and both differences sit in the template while the capture
+is unchanged: (a) the opening **What this is.** paragraph, whose wording the template revised after
+the capture was taken, so the template ends it *"…or a run in a second run copy — the working copy
+the watcher prepares for one run — appends its lesson to the wrong branch."* and the capture ends it
+*"…or a run in a second working copy appends its lesson to the wrong branch."*; (b) the closing
+`_Written by …_` line, which differs only in the product name — the template's reads
+`devscene init`, while the capture's keeps the product's earlier name (the historical-name paragraph
+above gives that spelling). Nothing enforces this state, so a change to the template is a `diff`
+against this copy, and any further template change shows up as a third pair in that `diff`.
+*A presupposition buys the second:*
 `.mcp.json` — the wiring `init` wrote for that run — is carried, because the kept
 `.claude/settings.autonomous.json` beside it starts the servers it declares. `init` gates the two
 halves on one condition and writes them in one run, and refuses its own output when the profile
@@ -94,7 +104,7 @@ capture points at it.
 
 A second consequence of the omission rule shows the same way: because a per-directory README was,
 for most of that tree, the only member the run left behind, omitting them omits those directories
-outright — the ten that ship under `sdlc-harness/` are the ones the run actually wrote an artifact
+outright — the ten that ship under `devscene/` are the ones the run actually wrote an artifact
 into (`branch_statistics/`, `code_reviews/`, `dispatch_additions/`, `flow_progress/`,
 `improvement_observations/`, `review_plan_reviews/`, `story_plans/`, `task_plans/`,
 `task_prompts/`, `ui_test_plans/`). That is why a citation inside the capture into
@@ -147,8 +157,8 @@ This is the only place the rewrite is recorded, and it is why a rewritten profil
 — a stated mechanical substitution, not an edit for style.
 
 One residual survives that pass and is **not** a machine path:
-`.claude/settings.json`'s `"repo": "firu-daniel/autonomous-sdlc-harness"` is the harness's own
-published marketplace slug, written by `init` from this package's own `repository.url`
+`.claude/settings.json`'s `"repo": "firu-daniel/devscene"` is the product's published marketplace
+slug, written by `init` from this package's own `repository.url`
 (`cli/src/generators/projectSettings.ts`), and rewriting it would misname the marketplace an adopter
 is told to add. The operator's account name as a standalone token appears nowhere in this tree.
 
@@ -158,17 +168,17 @@ is told to add. The operator's account name as a standalone token appears nowher
 from this repository at commit **`a08302fb2e3cfa1c2642f0857bd6152a59e8c528`**. That is the commit
 the whole capture was taken against. `init` put three questions and **every answer was the offered
 default**, taken the way a first-time adopter would: the interactive-test driver
-(`web-playwright`), the closing offer to run `/autonomous-sdlc-harness:harness-analyze` in the repository's first session
+(`web-playwright`), the closing offer to run `/devscene:analyze` in the repository's first session
 (**yes**), and push notifications for unattended runs (**no**, so no endpoint follow-up was put and
 no push settings were written). Nothing else was pinned and nothing was answered to make the output
-resemble any earlier capture. The phase set in `harness.config.json` is what those answers produced.
+resemble any earlier capture. The phase set in `devscene.config.json` is what those answers produced.
 
-**Two things the shipped tree says that read wrong at first glance.** `harness.config.json` carries
+**Two things the shipped tree says that read wrong at first glance.** `devscene.config.json` carries
 `qa.credentialsPath: ".claude/qa-accounts.env"` because `init` writes that key whenever the
 interactive-test phase is on, and it was not edited out; the file it names is never created and is
 gitignored, so this project ships no accounts and needs none — the committed
 `.claude/qa-accounts.env.example` beside it is what a fresh clone would copy from. And
-`sdlc-harness/code_reviews/feat_note_updated_at_code_review/finding_2.md` reasons in its
+`devscene/code_reviews/feat_note_updated_at_code_review/finding_2.md` reasons in its
 `## Disposition` about `git checkout` / `git rebase` sitting under `ask` "in this run's permission
 profile": the captured run was launched from a supervised session with
 `claude --dangerously-skip-permissions` and **not** with
@@ -176,10 +186,10 @@ profile": the captured run was launched from a supervised session with
 profile an unattended run would have selected, not about the one this run had in force. Both are
 what the harness and the run wrote, and neither is edited here.
 
-**Its configuration is its own, and `examples/harness.config.json` is not it.** The sibling
-`examples/harness.config.json` is a fabricated `acme-shop` configuration: `npm run validate:config`
+**Its configuration is its own, and `examples/devscene.config.json` is not it.** The sibling
+`examples/devscene.config.json` is a fabricated `acme-shop` configuration: `npm run validate:config`
 validates it, `docs/guard-verification.md` copies it verbatim into the guard fixture, and every
-document under `schemas/negative/` is derived from it. This project's `harness.config.json` is a
+document under `schemas/negative/` is derived from it. This project's `devscene.config.json` is a
 real one, generated by `init` from this tree's actual layout. The two are never interchanged, and
 `npm run validate:config:example` is what keeps this one from drifting.
 
@@ -206,7 +216,7 @@ real one, generated by `init` from this tree's actual layout. The two are never 
    `docs/development.md` §5's fixture gate (gate 9).
 3. **An edited capture is no longer a capture** — that is the rule everything `init`, the analyze
    command or the run wrote is held to here. It is why the generated `.claude/` documents name the
-   analyze command without the `/autonomous-sdlc-harness:` plugin prefix this file writes it with
+   analyze command without the `/devscene:` plugin prefix this file writes it with
    — this README is this tree's prose *about* the capture rather than part of it, so it spells the
    command qualified throughout, while the captured `.claude/` documents keep the bare spelling
    their run wrote; `docs/development.md` §6 records the prefix sweep that put this file inside it
@@ -217,7 +227,7 @@ real one, generated by `init` from this tree's actual layout. The two are never 
    member, plus this README, which the capture never had. An undisclosed edit is the one that costs
    a reader the capture, so this list is the whole of it.
 4. **The capture's shape is `init → analyze → run → analyze`.** The closing
-   `/autonomous-sdlc-harness:harness-analyze` pass ran after the branch landed and merged the whole
+   `/devscene:analyze` pass ran after the branch landed and merged the whole
    corpus against the shipped code — seven targets, six documents, every one classified `merge` and
    none skipped, the mirror image of the opening pass where every one was `write`. It is why the
    conventions documents here describe the project **as it stands beside them** rather than one
@@ -229,7 +239,7 @@ real one, generated by `init` from this tree's actual layout. The two are never 
    was left uncorrected because there was nothing to correct: that document records the
    `data-qa-id` vocabulary as unstated in its `## Not determined` section, so it enumerates no
    closed set that the branch could have staled. `.claude/CLAUDE.md` gained the root-static-asset
-   constraint and a `Root static asset` row, and `harness.config.json`'s `detection.review` verdict
+   constraint and a `Root static asset` row, and `devscene.config.json`'s `detection.review` verdict
    was re-recorded as `considered-no-change`. Read the corpus as current for this branch; read
    `## Not determined` in each document as the open questions the pair genuinely could not settle
    from the tree.

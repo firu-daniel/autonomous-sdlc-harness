@@ -19,8 +19,8 @@ from pathlib import Path
 
 import pytest
 
-from harness_docs_retrieval.errors import ServiceError
-from harness_docs_retrieval.models import (
+from devscene_docs_retrieval.errors import ServiceError
+from devscene_docs_retrieval.models import (
     EMBEDDER_ID,
     EMBEDDING_MODEL,
     MANIFEST_NAME,
@@ -53,7 +53,7 @@ def test_cache_dir_prefers_the_override(monkeypatch: pytest.MonkeyPatch, tmp_pat
 def test_cache_dir_falls_back_to_xdg(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv(MODEL_CACHE_ENV, "")
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
-    assert model_cache_dir() == tmp_path / "xdg" / "harness-docs-retrieval" / "models"
+    assert model_cache_dir() == tmp_path / "xdg" / "devscene-docs-retrieval" / "models"
 
 
 @pytest.mark.parametrize("xdg", [None, ""])
@@ -66,7 +66,7 @@ def test_cache_dir_falls_back_to_home(
     else:
         monkeypatch.setenv("XDG_CACHE_HOME", xdg)
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    assert model_cache_dir() == tmp_path / "home" / ".cache" / "harness-docs-retrieval" / "models"
+    assert model_cache_dir() == tmp_path / "home" / ".cache" / "devscene-docs-retrieval" / "models"
 
 
 def test_empty_cache_reports_every_model_by_manifest(tmp_path: Path) -> None:
@@ -131,7 +131,7 @@ def test_pins_are_full_commit_hashes() -> None:
 def test_importing_the_module_loads_no_model_library() -> None:
     probe = (
         "import sys\n"
-        "import harness_docs_retrieval.models\n"
+        "import devscene_docs_retrieval.models\n"
         "loaded = sorted(n for n in ('sentence_transformers', 'torch') if n in sys.modules)\n"
         "print(','.join(loaded))\n"
     )

@@ -1,5 +1,5 @@
 /**
- * The `harness-run.yml` and `harness-resume.yml` workflow templates, read as text.
+ * The `devscene-run.yml` and `devscene-resume.yml` workflow templates, read as text.
  *
  * **The contract these tests enforce.** The seven `workflow_dispatch` inputs `remote-run.sh`
  * sends, with `action`'s options exactly `run`, `pause`, `warm` and `stop`; a job only for `run`
@@ -19,11 +19,11 @@
  * and `warm` `contents: read`; the `deliver` job's last step, `Open the pull request and report`,
  * running `remote-run.sh deliver` after `Download the state bundle`, which downloads
  * `STATE_ARTIFACT_NAME` and exits 0 with one `::notice::` line when it cannot,
- * `continue-on-error: true`, with `HARNESS_PR_TOKEN` drawn from `secrets.HARNESS_GIT_TOKEN`
+ * `continue-on-error: true`, with `HARNESS_PR_TOKEN` drawn from `secrets.DEVSCENE_GIT_TOKEN`
  * through `env:`; the `open` job's last step, `Open the draft pull request`, running
  * `remote-run.sh open`, its `if:` exactly `env.HARNESS_STOPPED != '1'`, `continue-on-error: true`,
  * the same `HARNESS_PR_TOKEN` through `env:` and no expression in its `run:` line; no line of the
- * `run` job naming `HARNESS_GIT_TOKEN` or `HARNESS_PR_TOKEN`; the `run` job's `Store the push
+ * `run` job naming `DEVSCENE_GIT_TOKEN` or `HARNESS_PR_TOKEN`; the `run` job's `Store the push
  * credential outside the checkout` step right after `Set the git identity`, before `Bootstrap the
  * checkout` and `Restore the previous job's state`, and `Erase the push credential` its last step,
  * under `always()` and `continue-on-error: true`; the `open` and `deliver` checkouts the default
@@ -56,13 +56,13 @@
  * runs `git worktree add`, the only `git clone` is `Install the pinned plugin`'s, and `Run the
  * harness` alone runs `autonomous-watcher.sh job`, in the checkout.
  *
- * For `harness-resume.yml`: the `schedule` and `workflow_dispatch` triggers; `permissions: {}` at workflow
+ * For `devscene-resume.yml`: the `schedule` and `workflow_dispatch` triggers; `permissions: {}` at workflow
  * level and the `poll` job's grants exactly `contents: read`, `actions: write`, `issues: write` and
  * `pull-requests: write`; `remote-run.sh poll` its only call into the script family;
- * `HARNESS_PUSH_URL` passed through `env:`; no template token at all; every GitHub expression spaced; none inside a `run:` block;
+ * `DEVSCENE_PUSH_URL` passed through `env:`; no template token at all; every GitHub expression spaced; none inside a `run:` block;
  * its state upload under `always()` named `POLL_STATE_ARTIFACT_NAME`, as `remote-run.sh` spells it.
  *
- * For `harness-trigger.yml`: the `issues` and `repository_dispatch` triggers, `labeled` the only
+ * For `devscene-trigger.yml`: the `issues` and `repository_dispatch` triggers, `labeled` the only
  * `issues` type so `opened` never starts a second run, and `TRIGGER_DISPATCH_EVENT_TYPE` the only
  * dispatch type; `permissions: {}` at workflow level and the `trigger` job's grants exactly
  * `contents: write`, `actions: write` and `issues: write`; the
@@ -72,9 +72,9 @@
  * credential secrets never reach the job reading issue text; no `concurrency:` key, which would drop a
  * pending trigger; no template token; every expression spaced, and none inside a `run:` block; the
  * job's `env:` passing `RUN_ACTORS_VARIABLE` from `vars.` on the line after
- * `HARNESS_TRIGGER_ALLOWED_BOTS`, and the `# DECLARED MIRRORS` block naming it.
+ * `DEVSCENE_TRIGGER_ALLOWED_BOTS`, and the `# DECLARED MIRRORS` block naming it.
  *
- * For `harness-control.yml`: the `issue_comment`, `pull_request_review`, `issues`, `pull_request` and
+ * For `devscene-control.yml`: the `issue_comment`, `pull_request_review`, `issues`, `pull_request` and
  * `delete` triggers, `created`, `submitted`, `closed` and `closed` their only types, and neither
  * `pull_request_target` nor `pull_request_review_comment` outside a comment line; the `run-name`
  * falling back to the deleted ref; `permissions: {}` at workflow level and the `control` job's grants
@@ -95,25 +95,25 @@
  * `Set up Node`, `Install the claude CLI when absent` and `Fetch the pinned plugin`, which come before
  * the act step, each `if: github.event_name == 'issue_comment' && steps.needs.outputs.agent != 'no'`
  * and `continue-on-error: true`, the last
- * reading `CLI_VERSION_VARIABLE` from `harness-run.yml`, cloning the release-tag prefix that file's
+ * reading `CLI_VERSION_VARIABLE` from `devscene-run.yml`, cloning the release-tag prefix that file's
  * `Install the pinned plugin` step clones, and writing `HARNESS_MENTION_PLUGIN_DIR` to
  * `$GITHUB_ENV`; one `concurrency:` group on the job,
  * `harness-review-` plus the head ref for a review and the run's own id for a comment, with
  * `cancel-in-progress: false`, so review jobs on one branch run one at a time and no comment job is
  * ever replaced; no template token; every expression spaced, and none inside a `run:` block; the
  * job's `env:` passing `RUN_ACTORS_VARIABLE` from `vars.` on the line after
- * `HARNESS_TRIGGER_ALLOWED_BOTS`, and the `# DECLARED MIRRORS` block naming it.
+ * `DEVSCENE_TRIGGER_ALLOWED_BOTS`, and the `# DECLARED MIRRORS` block naming it.
  *
  * For all four: every `uses:` value names `<owner>/<repo>[/<path>]@` a 40-hex commit, never a tag or a
  * branch, with `# <action> v<major>.<minor>.<patch>` on the line directly above it, naming the same
  * action; the `# ACTION PINS.` header names exactly the set of those action-and-version pairs, so a pin
  * the file dropped or a bump the header forgot fails. The checkout credential: `persist-credentials:
- * false` on exactly the checkouts `CREDENTIAL_SHAPES` lists unpersisted — `harness-run.yml`'s `run`
+ * false` on exactly the checkouts `CREDENTIAL_SHAPES` lists unpersisted — `devscene-run.yml`'s `run`
  * and `warm` — every other checkout keeping it because its job pushes or fetches with it or, for
  * `poll`, runs `git ls-remote` against origin, and a `# THE CHECKOUT CREDENTIAL.` block
- * (`# THE CHECKOUT.` in `harness-trigger.yml`) naming why; and no `actions/upload-artifact` step
- * carrying `.git/config` off the runner — `harness-run.yml`'s path under `${{ runner.temp }}`,
- * `harness-resume.yml`'s exactly `POLL_STATE_DIR`, a state-directory subpath, and none in the other two.
+ * (`# THE CHECKOUT.` in `devscene-trigger.yml`) naming why; and no `actions/upload-artifact` step
+ * carrying `.git/config` off the runner — `devscene-run.yml`'s path under `${{ runner.temp }}`,
+ * `devscene-resume.yml`'s exactly `POLL_STATE_DIR`, a state-directory subpath, and none in the other two.
  * And outside a `|` / `>` block body, no mapping value that opens as a plain scalar carries `: ` or
  * ` #`: the first breaks the parse, the second silently truncates the value as a comment. These are
  * text-level readings; no YAML parser is loaded.
@@ -238,7 +238,7 @@ test('only run and warm start a job, and pause only a failing one from the wrong
 
 test('the wrong-ref job reads the ref and the branch through env and fails, naming the ref to use', () => {
   const start = LINES.indexOf('  wrong-ref:');
-  assert.notEqual(start, -1, 'harness-run.yml carries a wrong-ref job');
+  assert.notEqual(start, -1, 'devscene-run.yml carries a wrong-ref job');
   const block = blockUnder(start);
   const text = block.join('\n');
   assert.match(text, /^ {10}IN_REF: \$\{\{ github\.ref_name \}\}$/m);
@@ -254,7 +254,7 @@ test('the wrong-ref job reads the ref and the branch through env and fails, nami
 
 test('the collect job follows run unless cancelled, shares the review group, reads no secret and runs collect', () => {
   const start = LINES.indexOf('  collect:');
-  assert.notEqual(start, -1, 'harness-run.yml carries a collect job');
+  assert.notEqual(start, -1, 'devscene-run.yml carries a collect job');
   const block = blockUnder(start);
   const text = block.join('\n');
   assert.ok(block.includes('    needs: [run, deliver]'), text);
@@ -415,11 +415,11 @@ test('the run-actor gate, under bash -e -o pipefail, passes the bot and admitted
 
 /**
  * Asserts a workflow's job passes `RUN_ACTORS_VARIABLE` from `vars.` on the line right after its
- * `HARNESS_TRIGGER_ALLOWED_BOTS` env line, and that its `# DECLARED MIRRORS` block names it.
+ * `DEVSCENE_TRIGGER_ALLOWED_BOTS` env line, and that its `# DECLARED MIRRORS` block names it.
  */
 function assertPassesRunActors(file, lines) {
-  const bots = lines.findIndex((l) => /^ {6}HARNESS_TRIGGER_ALLOWED_BOTS: /.test(l));
-  assert.notEqual(bots, -1, `${file} passes HARNESS_TRIGGER_ALLOWED_BOTS`);
+  const bots = lines.findIndex((l) => /^ {6}DEVSCENE_TRIGGER_ALLOWED_BOTS: /.test(l));
+  assert.notEqual(bots, -1, `${file} passes DEVSCENE_TRIGGER_ALLOWED_BOTS`);
   assert.equal(lines[bots + 1], `      ${RUN_ACTORS_VARIABLE}: \${{ vars.${RUN_ACTORS_VARIABLE} }}`, file);
   const start = lines.findIndex((l) => l.startsWith('# DECLARED MIRRORS'));
   assert.notEqual(start, -1, `${file} carries a DECLARED MIRRORS block`);
@@ -440,9 +440,9 @@ test('the control job passes the run-actor allow-list from vars, and declares it
 });
 
 test('the run-name title, the runner line and the permissions', () => {
-  assert.ok(LINES.includes('run-name: harness ${{ inputs.action }} ${{ inputs.branch }}'));
+  assert.ok(LINES.includes('run-name: devscene ${{ inputs.action }} ${{ inputs.branch }}'));
   for (const line of LINES.filter((l) => /^\s*runs-on:/.test(l))) {
-    assert.equal(line.trim(), "runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}");
+    assert.equal(line.trim(), "runs-on: ${{ vars.DEVSCENE_RUNNER || 'ubuntu-latest' }}");
   }
   const pushing = ['contents: write', 'actions: write', 'issues: write', 'pull-requests: write'];
   assertPermissions(LINES, {
@@ -482,10 +482,10 @@ test('the deliver job opens the pull request and reports as its last step, after
   const step = list[deliver].join('\n');
   assert.equal(ifOf(step), "env.HARNESS_STOPPED != '1'");
   assert.match(step, /^\s*continue-on-error: true$/m);
-  assert.match(step, /^\s*HARNESS_PR_TOKEN: \$\{\{ secrets\.HARNESS_GIT_TOKEN \}\}$/m);
+  assert.match(step, /^\s*HARNESS_PR_TOKEN: \$\{\{ secrets\.DEVSCENE_GIT_TOKEN \}\}$/m);
   const [body] = runBodies(list[deliver]);
   assert.equal(body, 'bash "$SCRIPTS_DIR/remote-run.sh" deliver "$HARNESS_INPUT_BRANCH" "$RUNNER_TEMP/harness-state"');
-  assert.deepEqual(names.slice(0, 2), [GATE_STEPS.deliver, 'Stop when HARNESS_REMOTE_STOP is set before delivering']);
+  assert.deepEqual(names.slice(0, 2), [GATE_STEPS.deliver, 'Stop when DEVSCENE_REMOTE_STOP is set before delivering']);
 });
 
 test('the deliver job downloads STATE_ARTIFACT_NAME, and a missing bundle is one notice and exit 0', () => {
@@ -524,10 +524,10 @@ test('the open job opens the draft pull request only in a person-started job, be
   const step = list[open].join('\n');
   assert.equal(ifOf(step), "env.HARNESS_STOPPED != '1'");
   assert.match(step, /^\s*continue-on-error: true$/m);
-  assert.match(step, /^\s*HARNESS_PR_TOKEN: \$\{\{ secrets\.HARNESS_GIT_TOKEN \}\}$/m);
+  assert.match(step, /^\s*HARNESS_PR_TOKEN: \$\{\{ secrets\.DEVSCENE_GIT_TOKEN \}\}$/m);
   const [body] = runBodies(list[open]);
   assert.equal(body, 'bash "$SCRIPTS_DIR/remote-run.sh" open "$HARNESS_INPUT_BRANCH"');
-  assert.deepEqual(names.slice(0, 2), [GATE_STEPS.open, 'Stop when HARNESS_REMOTE_STOP is set before opening']);
+  assert.deepEqual(names.slice(0, 2), [GATE_STEPS.open, 'Stop when DEVSCENE_REMOTE_STOP is set before opening']);
 });
 
 test('open and deliver gate every step after the stop check on it, and share one job-level env', () => {
@@ -540,24 +540,24 @@ test('open and deliver gate every step after the stop check on it, and share one
     'GH_TOKEN: ${{ github.token }}',
     'HARNESS_REMOTE_SLUG: ${{ github.repository }}',
     'HARNESS_INPUT_BRANCH: ${{ inputs.branch }}',
-    'HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}',
+    'DEVSCENE_REMOTE_STOP: ${{ vars.DEVSCENE_REMOTE_STOP }}',
     `${RUN_ACTORS_VARIABLE}: \${{ vars.${RUN_ACTORS_VARIABLE} }}`,
   ]);
 });
 
-// The rule: the job that runs the agent never references HARNESS_GIT_TOKEN, so no step of it can
+// The rule: the job that runs the agent never references DEVSCENE_GIT_TOKEN, so no step of it can
 // hand that token to the session or write it into the checkout.
-test('no line of the run job names HARNESS_GIT_TOKEN or HARNESS_PR_TOKEN', () => {
+test('no line of the run job names DEVSCENE_GIT_TOKEN or HARNESS_PR_TOKEN', () => {
   const block = blockUnder(jobStart('run'));
   assert.ok(block.length > 0);
-  for (const line of block) assert.doesNotMatch(line, /HARNESS_GIT_TOKEN|HARNESS_PR_TOKEN/, line);
+  for (const line of block) assert.doesNotMatch(line, /DEVSCENE_GIT_TOKEN|HARNESS_PR_TOKEN/, line);
 });
 
 test('the run job stores its push credential before anything reaches origin and erases it last', () => {
   const { list, at } = namedJobSteps('run');
   const store = at('Store the push credential outside the checkout');
   assert.equal(store, at('Set the git identity') + 1, 'the credential is stored right after the git identity');
-  for (const later of ["Restore the previous job's state", 'Bootstrap the checkout', 'Run the harness', 'Push the branch']) {
+  for (const later of ["Restore the previous job's state", 'Bootstrap the checkout', 'Run DevScene', 'Push the branch']) {
     assert.ok(store < at(later), `the store precedes ${later}`);
   }
   assert.equal(ifOf(list[store].join('\n')), "env.HARNESS_STOPPED != '1'");
@@ -716,9 +716,9 @@ test('the preflight runs doctor --remote-job, after the profile is generated and
   };
   const preflight = at('Preflight with doctor');
   assert.ok(at("Generate the job's permission profile") < preflight);
-  assert.ok(preflight < at('Run the harness'));
+  assert.ok(preflight < at('Run DevScene'));
   const [body] = runBodies(steps()[preflight].split('\n'));
-  assert.equal(body, 'npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --remote-job');
+  assert.equal(body, 'npx --yes "devscene@$DEVSCENE_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --remote-job');
 });
 
 /** A step's own top-level `<key>:` value, or `undefined` when the step does not set it. */
@@ -738,13 +738,13 @@ function dedent(body) {
 const REFUSAL_STEP = "Refuse a branch that changed the job's own files";
 const RECORD_STEP = "Record the default branch's commit";
 const REFUSAL_BODY = [
-  'npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH" \\',
+  'npx --yes "devscene@$DEVSCENE_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH" \\',
   '  || { echo "::error::this branch\'s own commits changed files the job runs or loads, named in this step\'s doctor report; nothing from it runs in this job."; exit 1; }',
 ].join('\n');
 const RECORD_BODY = [
   'sha=$(git -C "$GITHUB_WORKSPACE" rev-parse --verify --quiet "refs/remotes/origin/$HARNESS_GITHUB_DEFAULT_BRANCH^{commit}") || { echo "::error::cannot read the default branch\'s commit from the job\'s fresh checkout; nothing from this branch runs in this job."; exit 1; }',
   'echo "HARNESS_GITHUB_DEFAULT_COMMIT=$sha" >> "$GITHUB_ENV"',
-  'default_branch=$(git -C "$GITHUB_WORKSPACE" show "$sha:harness.config.json" | jq -r \'.defaultBranch // empty\') && [ -n "$default_branch" ] || { echo "::error::cannot read defaultBranch from the default branch\'s harness.config.json; nothing from this branch runs in this job."; exit 1; }',
+  'default_branch=$(git -C "$GITHUB_WORKSPACE" show "$sha:devscene.config.json" | jq -r \'.defaultBranch // empty\') && [ -n "$default_branch" ] || { echo "::error::cannot read defaultBranch from the default branch\'s devscene.config.json; nothing from this branch runs in this job."; exit 1; }',
   'base=$(git -C "$GITHUB_WORKSPACE" rev-parse --verify --quiet "refs/remotes/origin/$default_branch^{commit}") || { echo "::error::cannot read origin/$default_branch\'s commit from the job\'s fresh checkout; nothing from this branch runs in this job."; exit 1; }',
   'echo "HARNESS_DEFAULT_BRANCH_COMMIT=$base" >> "$GITHUB_ENV"',
 ].join('\n');
@@ -832,7 +832,7 @@ test('no run-job step runs npm or npx in the checkout: each runs from $RUNNER_TE
   assert.equal(invoking, 4, 'the refusal, the claude CLI install, the profile and the preflight');
 });
 
-// RED ONCE, each mutation of harness-run.yml run once, observed failing as recorded, and reverted:
+// RED ONCE, each mutation of devscene-run.yml run once, observed failing as recorded, and reverted:
 //   the refusal step moved below `Install the pinned plugin`  -> the first case's order assertion fails (and the second case's)
 //   the refusal step moved to right after `Read the configuration` -> the second case's "after the refusal" fails (and the first case's order)
 //   `&& env.SCRIPTS_DIR != ''` dropped from `Push the branch`'s if: -> the second case's always() assertion fails
@@ -875,7 +875,7 @@ function assertRunJobCutsNoCopy(text) {
     }
   }
   assert.deepEqual(cloning, [PLUGIN_STEP], 'the only git clone is the marketplace checkout');
-  assert.deepEqual(watching, ['Run the harness'], 'one step runs the watcher in job mode');
+  assert.deepEqual(watching, ['Run DevScene'], 'one step runs the watcher in job mode');
 }
 
 const RENDERED = renderTemplate(
@@ -897,13 +897,14 @@ test('the no-copy assertion fails on a rendered file whose run job calls create-
     (_, indent, call) => `${indent}bash "$SCRIPTS_DIR/create-worktree.sh"\n${indent}${call}`,
   );
   assert.notEqual(mutated, RENDERED, 'the perturbation landed');
-  assert.throws(() => assertRunJobCutsNoCopy(mutated), /Run the harness names create-worktree\.sh/);
+  assert.throws(() => assertRunJobCutsNoCopy(mutated), /Run DevScene names create-worktree\.sh/);
 });
 
 test('no configured directory is frozen into the file', () => {
   assert.doesNotMatch(TEXT, /(^|[^A-Za-z0-9_])scripts\//m);
-  // A segment of its own: the machine cache path's `autonomous-sdlc-harness/` is not the state dir.
-  assert.doesNotMatch(TEXT, /(^|[^A-Za-z0-9_-])sdlc-harness\//m);
+  // A segment of its own, and not the machine cache path's `$HOME/.cache}/devscene/`, which shares
+  // the state dir's default spelling without being it.
+  assert.doesNotMatch(TEXT, /(?<!\.cache\}\/)(?<![A-Za-z0-9_-])devscene\//m);
 });
 
 test('the poller: a schedule, a hand trigger, and exactly its four permissions', () => {
@@ -926,7 +927,7 @@ test('the poller runs remote-run.sh poll and nothing else of the family', () => 
 });
 
 test('the poller passes the push secret through env, so its failed notice can be delivered', () => {
-  assert.match(RESUME_TEXT, /^ {6}HARNESS_PUSH_URL: \$\{\{ secrets\.HARNESS_PUSH_URL \}\}$/m);
+  assert.match(RESUME_TEXT, /^ {6}DEVSCENE_PUSH_URL: \$\{\{ secrets\.DEVSCENE_PUSH_URL \}\}$/m);
 });
 
 /** The `#   <action>   v<x.y.z>` lines under `# ACTION PINS.`, as `<action> v<x.y.z>`, up to a bare `#` or a line of prose. */
@@ -1247,10 +1248,10 @@ test("control: the job's if: prefilters on the handle, the marker and the review
   assert.ok(cond.includes("(github.event_name == 'delete' && github.event.ref_type == 'branch')"));
 });
 
-test('control: the run-name never matches a harness <action> <branch> title', () => {
+test('control: the run-name never matches a devscene <action> <branch> title', () => {
   assert.ok(
     CONTROL_LINES.includes(
-      'run-name: harness control ${{ github.event.issue.number || github.event.pull_request.number || github.event.ref }}',
+      'run-name: devscene control ${{ github.event.issue.number || github.event.pull_request.number || github.event.ref }}',
     ),
   );
 });
@@ -1408,19 +1409,19 @@ test('control: the comment-only steps run after the agent check and before the a
   assert.ok(names.indexOf('Fetch the pinned plugin') > names.indexOf('Install the claude CLI when absent'));
 });
 
-test("control: Fetch the pinned plugin reads harness-run.yml's pin, clones its release tag and hands the directory on", () => {
+test("control: Fetch the pinned plugin reads devscene-run.yml's pin, clones its release tag and hands the directory on", () => {
   const fetch = controlSteps().find((s) => s.name === 'Fetch the pinned plugin').text;
   const [body] = runBodies(fetch.split('\n'));
   assert.ok(body.includes(`${CLI_VERSION_VARIABLE}:`), 'reads the pin variable');
-  assert.ok(body.includes(`.github/workflows/${WORKFLOW_RUN_FILE}`), 'reads it from harness-run.yml');
-  assert.ok(body.includes('autonomous-sdlc-harness--v'), 'clones the release tag');
+  assert.ok(body.includes(`.github/workflows/${WORKFLOW_RUN_FILE}`), 'reads it from devscene-run.yml');
+  assert.ok(body.includes('devscene--v'), 'clones the release tag');
   assert.match(body, /^\s*echo "HARNESS_MENTION_PLUGIN_DIR=\$plugin_dir" >> "\$GITHUB_ENV"$/m);
   assert.ok(!body.includes('claude plugin install'), 'installs nothing');
   const install = stepCarrying('claude plugin install');
   assert.equal(tagPrefix(fetch), tagPrefix(install));
 });
 
-test('control: the claude CLI install mirrors harness-run.yml', () => {
+test('control: the claude CLI install mirrors devscene-run.yml', () => {
   const body = (lines, name) => {
     const at = lines.findIndex((l) => l.trim() === `- name: ${name}`);
     assert.notEqual(at, -1);

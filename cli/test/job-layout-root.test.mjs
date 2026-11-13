@@ -22,7 +22,7 @@ import test from 'node:test';
 import { createFixture, runBash, runCli, runGit } from './helpers/fixture.mjs';
 import { installRunnerGitShim, plantPlaceholder } from './helpers/runner-git-shim.mjs';
 
-const SCRIPTS_DIR = 'harness-scripts';
+const SCRIPTS_DIR = 'devscene-scripts';
 const STATE_DIR = 'job-state';
 const PLACEHOLDERS = ['empty-file', 'device'];
 const LABEL = 'job_round_1';
@@ -43,7 +43,7 @@ async function jobFixture(t, shape) {
   const fixture = await createFixture({
     files: {
       'package.json': { name: 'fixture-project', private: true, version: '0.0.0' },
-      'harness.config.json': {
+      'devscene.config.json': {
         version: 1,
         projectName: 'fixture-project',
         defaultBranch: 'main',

@@ -3,11 +3,11 @@
  * closing or merging its pull request, or deleting its branch stops the run.
  *
  * **The rule these tests exist to enforce: a close or a branch deletion by an authorised actor stops an
- * unfinished run exactly as `@sdlc-harness stop` does, says why, and deletes nothing; anything else is a
+ * unfinished run exactly as `@dev-scene stop` does, says why, and deletes nothing; anything else is a
  * log line with no write to GitHub.** Each stopping case is asserted on the `action=stop` marker, the
- * `run cancel`, the `stopped` comment naming the actor and the reason, the `sdlc-harness: stopped`
+ * `run cancel`, the `stopped` comment naming the actor and the reason, the `devscene: stopped`
  * label, and the absence of any `run delete`, artifact `DELETE` or `--method DELETE` on anything but a
- * state label. A deletion also reports on the branch's unmerged pull request still labelled running. A close by a writer `HARNESS_RUN_ACTORS` does not admit is unauthorised; a branch
+ * state label. A deletion also reports on the branch's unmerged pull request still labelled running. A close by a writer `DEVSCENE_RUN_ACTORS` does not admit is unauthorised; a branch
  * deletion is never screened by that list, only a bot sender is. Each ignored case — an unauthorised closer, an issue with no start comment, a fork's pull
  * request, a pull request whose head branch is already gone from `origin`, a `reopened` action, a
  * deleted tag, a completed run, a branch already stopped — is asserted on stdout's one line and on the
@@ -16,7 +16,7 @@
  *
  * Not covered here: the workflow's `on:` and `if:` prefilter for these events
  * (`cli/test/workflow-templates.test.mjs`, Task 13), and the skip of a branch absent on `origin` by
- * `harness-resume.yml` and the automatic resume (`cli/test/remote-run.test.mjs`, Task 10).
+ * `devscene-resume.yml` and the automatic resume (`cli/test/remote-run.test.mjs`, Task 10).
  *
  * The fixture and the `gh` stub are `remote-control.test.mjs`'s, copied rather than imported, with three
  * answers added: `repo view` from `STUB_DEFAULT_BRANCH`, a `contents/…` read from `STUB_CONTENTS`, and a
@@ -31,17 +31,17 @@ import test from 'node:test';
 import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
 const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
-const STATE_DIR = 'sdlc-harness';
+const STATE_DIR = 'devscene';
 const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
-const MARKER = (event, branch) => `<!-- sdlc-harness event=${event} branch=${branch} -->`;
+const MARKER = (event, branch) => `<!-- devscene event=${event} branch=${branch} -->`;
 const BOT = 'github-actions[bot]';
 const COMMENTS_JQ = '.[] | {login: .user.login, body: .body}';
-const STOP_DISPATCH = (ref) => `workflow run harness-run.yml --ref ${ref} -f action=stop -f branch=feat_x`;
-const STOPPED_LABEL = 'sdlc-harness: stopped';
+const STOP_DISPATCH = (ref) => `workflow run devscene-run.yml --ref ${ref} -f action=stop -f branch=feat_x`;
+const STOPPED_LABEL = 'devscene: stopped';
 const HEAD_SHA = 'abcdef1234567890abcdef1234567890abcdef12';
 const GITHUB_DEFAULT = 'trunk';
-const PROMPT = `# A task\n\nDo it.\n\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`sdlc-harness\`.\n`;
+const PROMPT = `# A task\n\nDo it.\n\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`devscene\`.\n`;
 
 const STUB = `#!/usr/bin/env node
 const { appendFileSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
@@ -81,7 +81,7 @@ if (args[0] === 'repo' && args[1] === 'view') {
 } else if (args[0] === 'run' && args[1] === 'list') {
   const branch = args[args.indexOf('--branch') + 1];
   process.stdout.write(process.env.STUB_RUN_LIST
-    || JSON.stringify([{ databaseId: 501, displayTitle: 'harness run ' + branch, status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]));
+    || JSON.stringify([{ databaseId: 501, displayTitle: 'devscene run ' + branch, status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]));
 } else if (args[0] === 'run' && args[1] === 'download') {
   const dir = args[args.indexOf('-D') + 1];
   mkdirSync(dir, { recursive: true });
@@ -107,7 +107,7 @@ async function closeFixture(t) {
   const init = await runCli(dir, ['init']);
   assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 
-  const configPath = join(dir, 'harness.config.json');
+  const configPath = join(dir, 'devscene.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   config.forge = 'github';
@@ -151,7 +151,7 @@ async function closeFixture(t) {
       const eventPath = join(stubDir, `event-${events}.json`);
       writeFileSync(eventPath, JSON.stringify(payload));
       return runBash(dir, [SCRIPT, 'control'], {
-        HARNESS_GH_CLI: stub,
+        DEVSCENE_GH_CLI: stub,
         STUB_LOG: log,
         GITHUB_EVENT_NAME: eventName,
         GITHUB_EVENT_PATH: eventPath,
@@ -159,10 +159,10 @@ async function closeFixture(t) {
         GITHUB_SERVER_URL: 'https://github.com',
         GITHUB_RUN_ID: '',
         RUNNER_TEMP: runnerTemp,
-        HARNESS_REMOTE_STOP: '',
-        HARNESS_TRIGGER_ALLOWED_BOTS: '',
-        HARNESS_RUN_ACTORS: '*',
-        HARNESS_TRIGGER_LABEL: '',
+        DEVSCENE_REMOTE_STOP: '',
+        DEVSCENE_TRIGGER_ALLOWED_BOTS: '',
+        DEVSCENE_RUN_ACTORS: '*',
+        DEVSCENE_TRIGGER_LABEL: '',
         STUB_PERMISSIONS: JSON.stringify({ alice: 'write', bob: 'read' }),
         STUB_PRS: '',
         STUB_COMMENTS: JSON.stringify([startComment('feat_x')]),
@@ -231,7 +231,7 @@ function assertStopped(f, result, { ref = 'feat_x', on }) {
   assert.ok(!lines.some((line) => line.startsWith('run delete')), JSON.stringify(lines));
   assert.ok(!lines.some((line) => /artifacts/.test(line) && /DELETE/.test(line)), JSON.stringify(lines));
   for (const call of calls.filter((c) => c.args.includes('--method') && c.args[c.args.indexOf('--method') + 1] === 'DELETE')) {
-    assert.match(call.line, /\/issues\/\d+\/labels\/sdlc-harness/, call.line);
+    assert.match(call.line, /\/issues\/\d+\/labels\/devscene/, call.line);
   }
   return posted[0].body;
 }
@@ -261,7 +261,7 @@ test('pull request #9 closed unmerged: the comment and the label go to #9', asyn
   const f = await closeFixture(t);
   const body = assertStopped(f, await f.control('pull_request', prClosed()), { on: 9 });
   assert.match(body, /Stopped because @alice closed pull request #9\./);
-  assert.match(body, /reopen this pull request and comment `@sdlc-harness resume` here/);
+  assert.match(body, /reopen this pull request and comment `@dev-scene resume` here/);
 });
 
 test('pull request #9 merged: the note says merged', async (t) => {
@@ -275,7 +275,7 @@ test('pull request #9 merged: the note says merged', async (t) => {
 test('branch deleted: the marker rides GitHub\'s default branch and the issue is read at the run\'s commit', async (t) => {
   const f = await closeFixture(t);
   const result = await f.control('delete', deleted(), {
-    STUB_RUN_LIST: JSON.stringify([{ databaseId: 501, displayTitle: 'harness run feat_x', status: 'in_progress', headSha: HEAD_SHA, createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]),
+    STUB_RUN_LIST: JSON.stringify([{ databaseId: 501, displayTitle: 'devscene run feat_x', status: 'in_progress', headSha: HEAD_SHA, createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]),
   });
   const body = assertStopped(f, result, { ref: GITHUB_DEFAULT, on: 7 });
   assert.match(body, /Stopped because @alice deleted the branch `feat_x`\./);
@@ -288,8 +288,8 @@ test('branch deleted: the marker rides GitHub\'s default branch and the issue is
 test('branch deleted with its unmerged pull request still labelled running: #9 is commented and labelled stopped beside the issue', async (t) => {
   const f = await closeFixture(t);
   const result = await f.control('delete', deleted(), {
-    STUB_RUN_LIST: JSON.stringify([{ databaseId: 501, displayTitle: 'harness run feat_x', status: 'in_progress', headSha: HEAD_SHA, createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]),
-    STUB_PRS: JSON.stringify([{ number: 9, isCrossRepository: false, mergedAt: null, labels: [{ name: 'sdlc-harness: running' }] }]),
+    STUB_RUN_LIST: JSON.stringify([{ databaseId: 501, displayTitle: 'devscene run feat_x', status: 'in_progress', headSha: HEAD_SHA, createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]),
+    STUB_PRS: JSON.stringify([{ number: 9, isCrossRepository: false, mergedAt: null, labels: [{ name: 'devscene: running' }] }]),
   });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   const calls = f.calls();
@@ -312,26 +312,26 @@ test('a close by a read user is one line naming the login and the reason, with n
   assertIgnored(f, result, /close ignored: @bob is not authorised: .*permission of @bob as read/);
 });
 
-test('a close by a write user HARNESS_RUN_ACTORS does not admit is one line naming the list, with no stop', async (t) => {
+test('a close by a write user DEVSCENE_RUN_ACTORS does not admit is one line naming the list, with no stop', async (t) => {
   const f = await closeFixture(t);
   const result = await f.control('issues', issueClosed('closed', 'carol'), {
-    HARNESS_RUN_ACTORS: 'alice',
+    DEVSCENE_RUN_ACTORS: 'alice',
     STUB_PERMISSIONS: JSON.stringify({ alice: 'write', carol: 'write' }),
   });
-  assertIgnored(f, result, /close ignored: @carol is not authorised: @carol is not on the repository variable HARNESS_RUN_ACTORS/);
+  assertIgnored(f, result, /close ignored: @carol is not authorised: @carol is not on the repository variable DEVSCENE_RUN_ACTORS/);
 });
 
-test('the same close by a user HARNESS_RUN_ACTORS admits stops the run', async (t) => {
+test('the same close by a user DEVSCENE_RUN_ACTORS admits stops the run', async (t) => {
   const f = await closeFixture(t);
-  const result = await f.control('issues', issueClosed(), { HARNESS_RUN_ACTORS: 'alice' });
+  const result = await f.control('issues', issueClosed(), { DEVSCENE_RUN_ACTORS: 'alice' });
   assertStopped(f, result, { on: 7 });
 });
 
-test('a branch deletion by a user HARNESS_RUN_ACTORS does not admit still stops the run: a deletion screens bots only', async (t) => {
+test('a branch deletion by a user DEVSCENE_RUN_ACTORS does not admit still stops the run: a deletion screens bots only', async (t) => {
   const f = await closeFixture(t);
   const result = await f.control('delete', deleted(), {
-    HARNESS_RUN_ACTORS: 'carol',
-    STUB_RUN_LIST: JSON.stringify([{ databaseId: 501, displayTitle: 'harness run feat_x', status: 'in_progress', headSha: HEAD_SHA, createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]),
+    DEVSCENE_RUN_ACTORS: 'carol',
+    STUB_RUN_LIST: JSON.stringify([{ databaseId: 501, displayTitle: 'devscene run feat_x', status: 'in_progress', headSha: HEAD_SHA, createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]),
   });
   const body = assertStopped(f, result, { ref: GITHUB_DEFAULT, on: 7 });
   assert.match(body, /Stopped because @alice deleted the branch `feat_x`\./);
@@ -374,7 +374,7 @@ test('a deleted tag does nothing and calls no gh', async (t) => {
 test('a completed run is left alone', async (t) => {
   const f = await closeFixture(t);
   const result = await f.control('issues', issueClosed(), {
-    STUB_RUN_LIST: JSON.stringify([{ databaseId: 601, displayTitle: 'harness run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' }]),
+    STUB_RUN_LIST: JSON.stringify([{ databaseId: 601, displayTitle: 'devscene run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' }]),
     STUB_ARTIFACTS: JSON.stringify({ artifacts: [{ name: 'harness-state', expired: false }] }),
     STUB_BUNDLE_STATUS: 'completed',
   });
@@ -385,8 +385,8 @@ test('a branch already stopped is left alone', async (t) => {
   const f = await closeFixture(t);
   const result = await f.control('pull_request', prClosed({ merged: true }), {
     STUB_RUN_LIST: JSON.stringify([
-      { databaseId: 700, displayTitle: 'harness stop feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T01:00:00Z', url: 'https://example.test/runs/700' },
-      { databaseId: 501, displayTitle: 'harness run feat_x', status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' },
+      { databaseId: 700, displayTitle: 'devscene stop feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T01:00:00Z', url: 'https://example.test/runs/700' },
+      { databaseId: 501, displayTitle: 'devscene run feat_x', status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' },
     ]),
   });
   assertIgnored(f, result, /close ignored: the run on `feat_x` is already stopped/);

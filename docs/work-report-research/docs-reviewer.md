@@ -12,7 +12,7 @@
 
 ## Read tree
 
-`harness.config.json` here has `phases.docs: false` (`harness.config.json:52`), so in this repository every dispatch takes the disabled no-op. All counts below are **this repository's measured files**, as a stand-in for a docs-enabled adopter. The adopter template equivalents are `cli/templates/claude/CLAUDE.md` 1 320 and `cli/templates/claude/context/conventions.md` 974 before `harness-analyze` fills it.
+`devscene.config.json` here has `phases.docs: false` (`devscene.config.json:52`), so in this repository every dispatch takes the disabled no-op. All counts below are **this repository's measured files**, as a stand-in for a docs-enabled adopter. The adopter template equivalents are `cli/templates/claude/CLAUDE.md` 1 320 and `cli/templates/claude/context/conventions.md` 974 before `analyze` fills it.
 
 | File | Up-front / on-demand | Words |
 |---|---|---|
@@ -20,7 +20,7 @@
 | `plugin/agents/docs-writer.md` (whole file, "Read … before you grade", `:55`; unreadable → `blocker:`, `:57`) | up-front | 3 483 |
 | `.claude/CLAUDE.md` (auto-loaded) | up-front | 1 695 |
 | `.claude/context/conventions.md`. `.claude/CLAUDE.md:40` routes "**Any implementation, review or planning**" to it, and the row is always generated (`cli/src/generators/claudeContext.ts:470`) | up-front (lead 13) | 5 864 |
-| `harness.config.json` (`phases.docs`, `phases.parity`, `layers`, `stateDir`; `docs-reviewer.md:12`, `:16`, `:24`) | up-front | 154 |
+| `devscene.config.json` (`phases.docs`, `phases.parity`, `layers`, `stateDir`; `docs-reviewer.md:12`, `:16`, `:24`) | up-front | 154 |
 | `doc_path` (the doc under review; the writer targets ~100–150 lines, `docs-writer.md` → `## Research methodology` item 6) | up-front, variable | ~1 000–1 500 |
 | `existing_doc` (catalog, only when passed, `:36`) / scoped branch diff `diff_ref` (update, `:46`) | up-front, variable | variable |
 | Boundary-owning layer's `layers[].conventions` doc, for operation spelling and stored-data vocabulary (checks 3–4, `:80-81`): here `.claude/context/cli.md` 2 647 or `plugin.md` 4 174 | on demand | 2 647–4 174 |
@@ -123,7 +123,7 @@ Up-front:
 | `docs-writer.md` (whole-file read; plus the 15-word ignore line from the cross-report requirements) | 3 483 | 3 498 | +15 |
 | `.claude/CLAUDE.md` | 1 695 | 1 695 | 0 |
 | `.claude/context/conventions.md` (lead 13) | 5 864 | 5 864 | 0 |
-| `harness.config.json` | 154 | 154 | 0 |
+| `devscene.config.json` | 154 | 154 | 0 |
 | **Fixed up-front total** | **13 726** | **~13 103** | **−623** |
 | *Conditional:* `docs-writer.md` read narrowed to five sections (the ignore line sits at `:63`, outside them) | 3 483 | 1 591 | −1 892 |
 | *Fixed total with narrowed read* | 13 726 | ~11 196 | −2 530 |
