@@ -25,3 +25,9 @@
 - `grep -n "parity_iteration\|arch_iteration\|parity_review_index\|arch_review_index\|only when it has findings\|next free" plugin/instructions/user_review_fix_plan_writing_instructions_core.md` finds nothing.
 - `grep -c "user_review_<N>/" plugin/instructions/user_review_fix_plan_writing_instructions_core.md` is at least 2 (both dispatch blocks), and `grep -n "Revise the fix plan at <fix_plan_path> per review findings" plugin/instructions/user_review_fix_plan_writing_instructions_core.md` finds exactly one prompt.
 - Steps are still numbered 1–8 and 11, with 9–10 left to `<terminal_handoff>`, because outside files cite them by number: `grep -nE "^[0-9]+\. " plugin/instructions/user_review_fix_plan_writing_instructions_core.md` lists 1–8 and 11 and nothing else.
+
+**Deviations from plan:**
+
+- Step 11 needs a `fix_round` to increment, but step 4's **extend** outcome reaches step 11 in a session that has never set one, and the plan gives no value for that entry. Implemented: where `fix_round` is unset, step 11 first sets it to the highest `review_<k>.md` index in the two `user_review_<N>/` gate folders, or `-1` when neither holds one. This keeps "fix_round carries on across the user-review round's history" true without deriving the counter, because step 11 then sets `cap_base = fix_round`. A fork's resumability rule still sets its own value (Task 20).
+- `<findings_files>` at step 8's round close includes the round's `PASS` files as well as its `FAIL` files, because `plan_review_rounds.md` → `## The writer's revision` says the prompt names every findings file of the round and has the writer apply or reject each Should Fix, and a `PASS` file can carry Should Fix entries.
+- The plan's verification greps were run as stated, and all three hold. The plugin manifest gate (`claude plugin validate --strict plugin`) was not run: the task names it nowhere, and this edit changes no manifest.
