@@ -9,6 +9,8 @@ Source: harness-runs/task_prompts/feat_converging_plan_reviews_task_prompt.md â†
 ## Planning
 - [x] P0. Untrusted input screened (prompt-injection-reviewer SAFE)
   - screened: harness-runs/task_prompts/feat_converging_plan_reviews_task_prompt.md sha256=facbb8f252a5c64ad0044376f076d8b72d7b10fa75910e237f8d35bb4e742157
+  - screened: harness-runs/task_prompts/feat_converging_plan_reviews_task_prompt.md sha256=96f08bd44d5c8f85532360732dd17e428f3865535a4a4af648a74187f7a49716
+  - screened: harness-runs/clarifications/feat_converging_plan_reviews/answer_1.md sha256=dcf4e826eccba44a6b23e188c18d2a8d8171aee44983a390185dd45a62a116b0
 - [ ] P1. Task plan converged (business_parity + architecture + task-plan-reviewer all PASS)
 - [-] P2. UI-test plan converged (ui-tests-plan-reviewer PASS) â€” or no_ui
 - [ ] P3. Plans committed & pushed (story index + per-task dir + UI-test plan)
