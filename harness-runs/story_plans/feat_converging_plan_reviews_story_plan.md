@@ -54,7 +54,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_converging_plan_reviews
 22. [x] **Task 22** — Hand the planning rounds' incidental findings to `branch-reviewer` and `skeptic-reviewer` as leads _(layer: plugin)_ _(points: 10)_
 23. [x] **Task 23** — Restate the implementation-flow readers of the plan-gate folders and add the new commit points _(layer: plugin)_ _(points: 10)_
 24. [x] **Task 24** — Restate the plan loop's routing in `AUTONOMOUS_FLOW.md` and its whiteboard _(layer: plugin)_ _(points: 10)_
-25. [ ] **Task 25** — Restate the flow-graph schema as format 2, move every fixture onto it, and add the round negatives _(layer: general)_ _(points: 20)_
+25. [x] **Task 25** — Restate the flow-graph schema as format 2, move every fixture onto it, and add the round negatives _(layer: general)_ _(points: 20)_
 26. [ ] **Task 26** — Add `gate-in-round` to `check-flow-graph.sh` and restate its FAIL-cycle check for round nodes _(layer: general)_ _(points: 20)_
 27. [ ] **Task 27** — Bring this checkout's self-adopted scripts and run-artifact READMEs level with the templates _(layer: general)_ _(points: 10)_
 28. [ ] **Task 32** — Make Gate 12's FR6 grader and its contract accept a restore that withholds the task-plan drafts _(layer: general)_ _(points: 10)_

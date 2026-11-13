@@ -1,13 +1,13 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "flow graph",
-  "description": "The routing of one harness flow as data: which agent each node dispatches, where each of its outcomes routes, which counter a revision loop increments and what fires when that counter reaches its cap. The walker resolves the values here; the dispatch prompts stay in the flow's instruction core. This schema checks shape only: reachability, capped FAIL cycles, known run-mode and ledger ids, and agreement with the core are checked by scripts/check-flow-graph.sh, because JSON Schema cannot express them. Every <…> binding is named here and resolved by the flow's mode fork, never by this file.",
+  "description": "The routing of one harness flow as data: which agent each node dispatches, where each of its outcomes routes, which round node closes a set of gates and routes on their recorded verdicts, which counter a revision loop increments and what fires when that counter reaches its cap. The walker resolves the values here; the dispatch prompts stay in the flow's instruction core. This schema checks shape only: reachability, capped FAIL cycles, every failing gate belonging to a round, known run-mode and ledger ids, and agreement with the core are checked by scripts/check-flow-graph.sh, because JSON Schema cannot express them. Every <…> binding is named here and resolved by the flow's mode fork, never by this file.",
   "type": "object",
   "additionalProperties": false,
   "required": ["formatVersion", "flow", "description", "start", "entries", "counters", "paths", "reports", "nodes"],
   "properties": {
     "formatVersion": {
-      "const": 1,
+      "const": 2,
       "description": "Version of this graph format. A change to the key set raises it, so a walker never routes on a graph whose shape it does not know."
     },
     "flow": {
@@ -51,7 +51,7 @@
       "type": "object",
       "propertyNames": { "$ref": "#/definitions/identifier" },
       "additionalProperties": { "type": "string", "minLength": 1 },
-      "description": "Named run-artifact path templates, with {state_dir} and {branch} resolved by the walker. An escalation's evidence names one of these as the file the operator is pointed at."
+      "description": "Named run-artifact path templates, with {state_dir} and {branch} resolved by the walker, and {round} resolved to the round number in a round node's revisionNote. An escalation's evidence names one of these as the file the operator is pointed at; a round node's plan and revisionNote name these too."
     },
     "reports": {
       "type": "array",
@@ -64,7 +64,7 @@
       "minProperties": 1,
       "propertyNames": { "$ref": "#/definitions/nodeId" },
       "additionalProperties": { "$ref": "#/definitions/node" },
-      "description": "Every node of the flow, by id. A dispatch node sends one agent out and routes on what it returns; a terminal node ends the graph by handing off to its binding."
+      "description": "Every node of the flow, by id. A dispatch node sends one agent out and routes on what it returns; a round node dispatches nothing and routes on the verdicts its gates recorded this round; a terminal node ends the graph by handing off to its binding."
     }
   },
   "definitions": {
@@ -86,13 +86,66 @@
       "required": ["kind"],
       "properties": {
         "kind": {
-          "enum": ["dispatch", "terminal"],
-          "description": "dispatch sends an agent and routes on its outcome; terminal ends the graph."
+          "enum": ["dispatch", "round", "terminal"],
+          "description": "dispatch sends an agent and routes on its outcome; round routes on its gates' recorded verdicts; terminal ends the graph."
         }
       },
       "if": { "properties": { "kind": { "const": "terminal" } } },
       "then": { "$ref": "#/definitions/terminalNode" },
-      "else": { "$ref": "#/definitions/dispatchNode" }
+      "else": {
+        "if": { "properties": { "kind": { "const": "round" } } },
+        "then": { "$ref": "#/definitions/roundNode" },
+        "else": { "$ref": "#/definitions/dispatchNode" }
+      }
+    },
+    "roundNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "gates", "writer", "counter", "convergingFrom", "outcomes"],
+      "properties": {
+        "kind": { "const": "round" },
+        "gates": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/nodeId" },
+          "description": "The dispatch nodes whose verdicts this round closes, in gate order. The walker reads which nodes are gates off this list and names none in its code."
+        },
+        "writer": {
+          "$ref": "#/definitions/nodeId",
+          "description": "The dispatch node that writes the plan the gates review, and revises it when the round fails."
+        },
+        "counter": {
+          "$ref": "#/definitions/identifier",
+          "description": "The counters entry that alone drives this loop's cap and its gates' review mode. The round number that names round files is kept apart from it."
+        },
+        "convergingFrom": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The 0-based counter value from which the gates review in converging mode; below it they review in full."
+        },
+        "plan": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/identifier" },
+          "description": "The paths entries naming the plan the gates review."
+        },
+        "revisionNote": {
+          "$ref": "#/definitions/identifier",
+          "description": "The paths entry naming the writer's revision note for a round; its template carries {round}."
+        },
+        "outcomes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["PASS", "FAIL"],
+          "properties": {
+            "PASS": { "$ref": "#/definitions/edge" },
+            "FAIL": { "$ref": "#/definitions/edge" }
+          },
+          "description": "Where the round routes: PASS when no gate failed the round, FAIL otherwise. Exactly these two."
+        }
+      }
     },
     "terminalNode": {
       "type": "object",
@@ -278,14 +331,14 @@
         "summary": {
           "type": "string",
           "minLength": 1,
-          "description": "The operator-facing sentence, with {cap} resolved to the counter's cap."
+          "description": "The operator-facing sentence, with {cap} resolved to the counter's cap and, on an escalation reached from a round node, {open_gates} resolved to the comma-joined ids of the gates that failed the closing round."
         },
         "roundCounts": {
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
           "items": { "$ref": "#/definitions/identifier" },
-          "description": "The dispatch nodes, by node id, whose findings-folder round counts a cap escalation reports. The walker reads each one's findingsFolder, so each must name a dispatch node that carries one; a node the walk recorded as skipped is omitted."
+          "description": "The dispatch nodes, by node id, whose round counts a cap escalation reports. The walker reads each one's findingsFolder and counts its FAIL round files, so each must name a dispatch node that carries one; a node the walk recorded as skipped is omitted."
         },
         "evidence": {
           "$ref": "#/definitions/identifier",
