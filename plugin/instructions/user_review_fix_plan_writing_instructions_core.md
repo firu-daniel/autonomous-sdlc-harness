@@ -88,7 +88,7 @@ Every **other** `<…>` name in this file is either a **config value** declared 
    Write the user-review fix plan. Branch: <branch>. User review: <user_review_path>. Output: <fix_plan_path>.
    ```
 
-   Then set `fix_round = 0` and `cap_base = 0`.
+   Then set `fix_round` to one past the highest `review_<k>.md` index in the two `user_review_<N>/` gate folders (steps 7–8), read with an `ls` (names only, never contents), or `0` when neither holds one; and set `cap_base = fix_round`.
 
    **The round counters.** `fix_round` is the review round's index `<k>`: it names both gates' round files and the revision note, and carries on across user-review round `<N>`'s history. `cap_base` is `fix_round` at the last step-5 or step-11 writer dispatch, or at a fork's resume of this loop in a new session — the fork sets it. `fix_round − cap_base` is the loop's **counter**: it alone drives the cap (step 8's round close) and `<review_mode>`, and it is never derived from round files. For the round under review:
 
