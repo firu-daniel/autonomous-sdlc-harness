@@ -21,3 +21,4 @@
 
 - `grep -n "is on disk" docs/flow-graph-walker.md` finds no sentence giving a per-folder next free index as the reason for `arg.iteration`.
 - Every case name the document quotes exists verbatim in the suite it names: for each quoted `(n) …` name, `grep -F` of it in `cli/test/flow-walker-resume.test.mjs` or `cli/test/flow-walker-ui-and-reentry.test.mjs` finds one line.
+  - **Deviations from plan:** One quoted name, resume case `(1) a reviewer in flight is re-dispatched, and the counter and the round's recorded findings carry on`, is quoted as the runtime case name, with a plain apostrophe; the suite's source spells it inside a single-quoted JS string as `round\'s`, so `grep -F` of the quoted name finds 0 lines, and `grep -F` with the source's `\'` escape finds 1. Every other quoted case name (resume `(2)`–`(10)`, ui-and-reentry `(6)` and `(13)`) returned 1 from its own `grep -cF` run in this session.
