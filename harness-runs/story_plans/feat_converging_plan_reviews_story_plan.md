@@ -32,7 +32,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_converging_plan_reviews
 
 1. [x] **Task 1** — Report a plan-review round's evidence from the gate library: verdicts, FAIL counts and `fw_round_evidence` _(layer: cli)_ _(points: 20)_
 2. [x] **Task 2** — Restate the planning graph as format 2 with the `plan_round` decision node _(layer: cli)_ _(points: 10)_
-3. [ ] **Task 3** — Walk round nodes in `flow-walker.sh`: every gate every round, round-numbered arguments, review mode, cap payload and the round number on `start` _(layer: cli)_ _(points: 20)_
+3. [x] **Task 3** — Walk round nodes in `flow-walker.sh`: every gate every round, round-numbered arguments, review mode, cap payload and the round number on `start` _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Re-pin `flow-walker.test.mjs` to round routing and add the every-gate, once-per-round, cap and review-mode cases _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 5** — Re-pin `flow-walker-resume.test.mjs` and add the mid-round resume and convergence-from-the-ledger cases _(layer: cli)_ _(points: 20)_
 6. [ ] **Task 6** — Carry `flow-walker-ui-and-reentry.test.mjs` onto round routing, keep case (6)'s counter reset, and pin a fresh cap budget after an answered cap park _(layer: cli)_ _(points: 15)_

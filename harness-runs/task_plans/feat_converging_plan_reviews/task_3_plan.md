@@ -28,3 +28,13 @@
 - In that fixture, with `review_0.md`–`review_4.md` in each gate folder, `start --entry plan_writer` prints the writer dispatch with heartbeat `iter 0` and `arg.iteration: 5`.
 - `grep -n "fw_round_count\|formatVersion' 1\|reads 1\|formatVersion not 1" cli/templates/scripts/flow-walker.sh` finds nothing.
 - `grep -n "fw_round_count" cli/templates/scripts/lib/flow-walker-gates.sh` finds nothing, and `grep -rn "fw_round_count" cli/templates` finds nothing.
+
+**Deviations from plan:**
+
+- The REPRO's FAIL walk prints three `arg.findings_file:` lines, not "one": every gate records a file every round (`PASS` included, `--findings` required), so a revision gets one line per gate file, per the **Work** bullet's "one `arg.findings_file: <path>` line per `revision_findings` item". The header's REPRO states the three.
+- `--findings` now refuses a value carrying a tab (exit 1), because `revision_findings` is stored TAB-joined; not in the plan.
+- `{open_gates}` is joined with `, ` (the plan says "comma-joined"; `, ` matches the prose `summary` and the `- skipped:` lists `fw_id_in_list` already reads).
+- `cli/templates/scripts/lib/flow-walker-gates.sh`: beyond the function and its REPRO lines, the header's "that folder's round count" phrase and `fw_fail_count`'s comment "Not `fw_round_count`" were reworded, because both described the deleted function and the plan's own `grep -rn "fw_round_count" cli/templates` must find nothing.
+- `start` with no `--entry` applies the round-number rule to the graph's `start` node (`plan_writer`, a round writer), so a fresh write after earlier rounds does not overwrite their files.
+- Gate verdicts recorded on `start` carry the absolute file paths `fw_round_evidence` prints; a revision after such a `start` prints those absolute paths in `arg.findings_file:`.
+- **Evidence downgrade.** Verification bullets 1–3 (the header REPRO, the `start --entry business_parity_review` and `start --entry plan_writer` fixtures) were **not executed**: the tool layer refused both an inline `mktemp -d` fixture walk and a `python3` probe under `harness-runs/scratch/` (*"Permission to use Bash has been denied because Claude Code is running in don't ask mode"*), and `scripts/scratch-run.sh` does not exist in this checkout (its self-adopted copy is Task 27's). Those claims rest on reading the code path by path against each bullet, plus `bash scripts/typecheck.sh`'s `check-shell-parse` pass under bash 3.2.57 over the edited files. Tasks 4–6's suites are the first execution of these paths. Bullets 4 and 5 (the greps) were run and found nothing.

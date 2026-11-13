@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # flow-walker-gates.sh — the mechanical answers the flow walker needs at a
 # gate, each defined once: the next free `review_<n>` index in a findings
-# folder, that folder's round count, a round file's verdict, a folder's count
+# folder, a round file's verdict, a folder's count
 # of `FAIL` round files, a plan-review round's evidence, the run mode's skipped
 # ids, whether a `phases.*` flag is on, and the escalation evidence a story
 # index or UI-test index carries.
@@ -38,8 +38,7 @@
 #
 #   review index      mkdir "$root/f"; : > "$root/f/review_0.md"; : > "$root/f/review_3.md"
 #                     fw_next_review_index "$root/f"   -> 4   (a gap is never back-filled)
-#                     fw_round_count "$root/f"         -> 2
-#                     fw_next_review_index "$root/nope"; fw_round_count "$root/nope"  -> 0, 0
+#                     fw_next_review_index "$root/nope"  -> 0
 #   round verdicts    mkdir "$root/g"; printf 'verdict: FAIL\n' > "$root/g/review_0.md"; : > "$root/plan.md"
 #                     git -C "$root" add g/review_0.md plan.md
 #                     git -C "$root" -c user.name=r -c user.email=r@r commit -qm r
@@ -98,22 +97,6 @@ fw_next_review_index() {
   return 0
 }
 
-# Print how many entries start with `review_` — the core's
-# `ls <findings_folder> | grep -c '^review_'`, not the highest index.
-fw_round_count() {
-  local folder="${1-}" name count=0
-  [ -d "$folder" ] || { printf '0\n'; return 0; }
-  ls -1 -- "$folder" 2>/dev/null | {
-    while IFS= read -r name; do
-      case "$name" in
-        review_*) count=$((count + 1)) ;;
-      esac
-    done
-    printf '%s\n' "$count"
-  }
-  return 0
-}
-
 # Print `PASS` or `FAIL` when <file> carries exactly one line that is
 # byte-exactly `verdict: PASS` or `verdict: FAIL` (a trailing CR tolerated);
 # print nothing and return 1 when it is absent, carries none, or carries more.
@@ -131,7 +114,7 @@ fw_review_verdict() {
 }
 
 # Print how many `review_<n>.md` entries `fw_review_verdict` reads as `FAIL`,
-# or 0 when the folder is absent. Not `fw_round_count`: a `PASS` round writes
+# or 0 when the folder is absent. Not a count of files: a `PASS` round writes
 # a file too.
 fw_fail_count() {
   local folder="${1-}" name n count=0
