@@ -76,7 +76,7 @@ At the end of every round of the task-plan loop, the autonomous fork commits the
 - **The evidence:** a usable saved walk (`.flow_walker_state`), which already continues at the interrupted dispatch, and, without one, the round files on disk. The current round is the highest round number with files. The next due reviewer is the first gate, in gate order, with no file for that round. The verdicts so far are read from the files.
 - **When the evidence is complete and consistent, dispatch the next due reviewer.** That means each earlier gate of the round has exactly one file carrying a verdict line, and the plan files are not newer than the round's earliest review file by commit order.
 - **Otherwise, start the round again from the first reviewer.** Every reviewer of the restarted round **replaces** its own file for that round, if one exists. Its brief says the file is from an interrupted round and that it reviews again in the round's mode. The previous version stays in history through the pause commit.
-- **The round counter is recovered from the round files on either path.** It is never reset to 0 while round files exist, so converging mode and the cap stay correct across a resume. This replaces the reset `flow-walker-ui-and-reentry.test.mjs` case `(6)` pins today; re-pin it.
+- **The round counter is never derived from round files.** It carries over only when a saved walk is continued, as the walker already does: `flow-walker-resume.test.mjs` cases `(1)` and `(5)`. That covers a pause, a self-pause, an overload, a stall restart and a writer's question park. Every `start` begins at 0, as `flow-walker-ui-and-reentry.test.mjs` case `(6)` pins today; keep that case unchanged. A finished walk (a cap park, a convergence) is never continued, so answering a cap park starts a fresh cap budget. Round file numbering carries on across the branch's history, separate from the counter. Converging mode keys on the current walk's counter.
 
 Never build a mechanism that guarantees the next-due-reviewer path. When the session cannot tell, the first-reviewer restart is the answer, and it costs one round's earlier review dispatches.
 
@@ -99,8 +99,8 @@ Never build a mechanism that guarantees the next-due-reviewer path. When the ses
   - A tracked change outside the planning paths still defers the pause as §2.2 states.
   - Resuming continues at the interrupted dispatch with the round's findings intact.
 - **Mid-round resume:**
-  - With the saved walk deleted, after the plan and the first reviewer's round file are committed, re-entry dispatches the second reviewer, with the counter restored.
-  - With the evidence inconsistent (a missing verdict line, or plan files newer than the round's first review), re-entry restarts at the first reviewer, which replaces its own round file, and the counter is still restored.
+  - With the saved walk deleted, after the plan and the first reviewer's round file are committed, re-entry dispatches the second reviewer, and the counter starts at 0, because no saved walk carries it.
+  - With the evidence inconsistent (a missing verdict line, or plan files newer than the round's first review), re-entry restarts at the first reviewer, which replaces its own round file.
 - **PASS files:** a passing reviewer writes its round file, and a round of three PASS files reaches `ui_writer`.
 - **Convergence from the ledger:** a committed but unconverged plan with `P1` `[ ]` is reviewed on re-entry, never treated as converged.
 
