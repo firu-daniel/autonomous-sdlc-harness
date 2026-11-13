@@ -46,7 +46,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_converging_plan_reviews
 14. [x] **Task 14** — Make `user-review-fix-plan-writer`'s revision work by target file and leave a revision note _(layer: plugin)_ _(points: 10)_
 15. [x] **Task 15** — Give `task-plan-reviewer` round files, the two Must Fix fields and its converging variants _(layer: plugin)_ _(points: 15)_
 16. [x] **Task 16** — Give `architecture-reviewer`'s plan-review mode round files, the two Must Fix fields and its converging variants _(layer: plugin)_ _(points: 15)_
-17. [ ] **Task 17** — Give `business-parity-reviewer`'s plan-review mode round files, the two Must Fix fields and its converging variants _(layer: plugin)_ _(points: 15)_
+17. [x] **Task 17** — Give `business-parity-reviewer`'s plan-review mode round files, the two Must Fix fields and its converging variants _(layer: plugin)_ _(points: 15)_
 18. [ ] **Task 18** — Add the planning-pause commit to `autonomous_pause_and_ledger.md` §2.2 and §2.5, and restate §1.7's planning resume _(layer: plugin)_ _(points: 15)_
 19. [ ] **Task 19** — Commit each plan-review round in the autonomous task-plan fork, and read convergence from `P1` on every resume _(layer: plugin)_ _(points: 20)_
 20. [ ] **Task 20** — Commit each fix-plan review round in the autonomous fix-plan fork, and read convergence from `R1` on every resume _(layer: plugin)_ _(points: 20)_
