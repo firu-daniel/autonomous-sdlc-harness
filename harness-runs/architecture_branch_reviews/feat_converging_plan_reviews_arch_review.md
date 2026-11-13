@@ -6,7 +6,7 @@ Branch `feat_converging_plan_reviews`, reviewed 2026-11-13 in implemented-soluti
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Add `plan_orchestration_instructions_autonomous.md` to the `plan_review_rounds.md` citer roster _(layer: plugin)_
+1. [x] **Finding 1** — Add `plan_orchestration_instructions_autonomous.md` to the `plan_review_rounds.md` citer roster _(layer: plugin)_
 2. [ ] **Finding 2** — Add `user_review_fixes_instructions_autonomous.md` to the `plan_review_rounds.md` citer roster _(layer: plugin)_
 
 ## Must Fix

@@ -23,6 +23,7 @@ These documents point at a section of this file:
 - `${CLAUDE_PLUGIN_ROOT}/instructions/user_review_fix_plan_writing_instructions_core.md`
 - `${CLAUDE_PLUGIN_ROOT}/instructions/task_plan_writing_instructions_autonomous.md`
 - `${CLAUDE_PLUGIN_ROOT}/instructions/user_review_fix_plan_writing_instructions_autonomous.md`
+- `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_autonomous.md`
 - `${CLAUDE_PLUGIN_ROOT}/agents/task-plan-reviewer.md`
 - `${CLAUDE_PLUGIN_ROOT}/agents/architecture-reviewer.md`
 - `${CLAUDE_PLUGIN_ROOT}/agents/business-parity-reviewer.md`
