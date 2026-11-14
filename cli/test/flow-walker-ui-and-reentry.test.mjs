@@ -33,7 +33,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import { INIT_SCRIPTS_DIR } from './helpers/fixture.mjs';
-import { run, walk, walkerFixture, walkerStatePath, walkerUnavailable, WALKER_FLOW } from './helpers/walker.mjs';
+import { blocksOf, run, walk, walkerFixture, walkerStatePath, walkerUnavailable, WALKER_FLOW } from './helpers/walker.mjs';
 
 const SKIP = walkerUnavailable();
 const BRANCH = 'feat_x';
@@ -102,10 +102,27 @@ const architecture = gate('architecture_review', 'architecture-reviewer', ARCH_H
 // template names the agent.
 const planReview = gate('plan_review', 'task-plan-reviewer', PLAN_WRITE_HB, 'task-plan-reviewer', []);
 
-/** Round `n` with the parity gate skipped, each verdict planting its round file first. */
+/**
+ * Round `n`'s set with the parity gate skipped, as one printed action — walker OUTPUT, `set`: "one
+ * dispatch block per due gate, in `gates` order, back to back; the passed-through skip: / round: /
+ * ledger: lines in the first block only".
+ */
+const set = (n, i, { mode } = {}) => [...architecture(n, i, { mode }), ...planReview(n, i, { mode })];
+
+/** walker OUTPUT, `wait`: "action: wait / node: <round> / recorded: <gate> <outcome> / pending: <gate> per gate still out". */
+function wait(recorded, pending) {
+  return [
+    ['action', 'wait'],
+    ['node', 'plan_round'],
+    ['recorded', recorded],
+    ...pending.map((name) => ['pending', name]),
+  ];
+}
+
+/** Round `n`'s set with the parity gate skipped, recorded in gate order, each verdict planting its round file first. */
 const gates = (n, { architecture: a = 'PASS', plan = 'PASS' } = {}) => [
-  { outcome: a, review: ['architecture_reviews', n] },
-  { outcome: plan, review: ['task_plan_reviews', n] },
+  { node: 'architecture_review', outcome: a, review: ['architecture_reviews', n] },
+  { node: 'plan_review', outcome: plan, review: ['task_plan_reviews', n] },
 ];
 
 const RETURNED = { outcome: 'returned' };
@@ -175,8 +192,11 @@ function capEscalation(round, rounds, openGates) {
 
 const has = (actions, key, value) => actions.flat().some(([k, v]) => k === key && v === value);
 
+/** Every dispatch block for `nodes`, a set's gate blocks read out of it one by one. */
 const dispatchesOf = (actions, ...nodes) =>
-  actions.filter((pairs) => pairs.some(([k, v]) => k === 'node' && nodes.includes(v)) && pairs[0][1] === 'dispatch');
+  actions
+    .flatMap(blocksOf)
+    .filter((pairs) => pairs[0][1] === 'dispatch' && pairs.some(([k, v]) => k === 'node' && nodes.includes(v)));
 
 async function fixture(t, phases) {
   const fx = await walkerFixture({ ...phases, branch: BRANCH });
@@ -198,8 +218,8 @@ test('(1) a no_ui writer return skips the UI reviewer and flips P2', { skip: SKI
 
   assert.deepEqual(actions, [
     writer(0),
-    architecture(0, 0),
-    planReview(0, 0),
+    set(0, 0),
+    wait('architecture_review PASS', ['plan_review']),
     uiWriter(0, undefined, LEFT_TASK_PLAN_LOOP),
     // `### 1`, "No-UI short-circuit": "**skip the `ui-tests-plan-reviewer` dispatch and the rest of
     // this loop entirely** … fall through to `## Convergence`"; Override 5 flips `P2` when the loop
@@ -285,15 +305,15 @@ test('(5) the UI loop starts its counter at 0 after a task-plan loop that FAILed
 
   assert.deepEqual(actions, [
     writer(0),
-    architecture(0, 0),
-    planReview(0, 0),
+    set(0, 0),
+    wait('architecture_review PASS', ['plan_review']),
     // Each `FAIL` round closes once and sends the writer one revision: the counter reaches 2.
     writer(1, roundFiles(0), { passed: [closed(0, 'FAIL')] }),
-    architecture(1, 1),
-    planReview(1, 1),
+    set(1, 1),
+    wait('architecture_review PASS', ['plan_review']),
     writer(2, roundFiles(1), { passed: [closed(1, 'FAIL')] }),
-    architecture(2, 2),
-    planReview(2, 2),
+    set(2, 2),
+    wait('architecture_review PASS', ['plan_review']),
     // `## UI-test-plan write loop`: "`iteration` is reset to 0 at the start of this loop" — `iter 0`,
     // not the task-plan loop's 2.
     uiWriter(0, undefined, [closed(2, 'PASS'), ['ledger', 'P1']]),
@@ -314,13 +334,13 @@ test('(6) re-entry mid-loop restarts the counter and continues the findings fold
 
   assert.deepEqual(actions, [
     writer(0),
-    architecture(0, 0),
-    planReview(0, 0),
+    set(0, 0),
+    wait('architecture_review FAIL', ['plan_review']),
     writer(1, roundFiles(0), { passed: [closed(0, 'FAIL')] }),
     // Round 0's files are on disk, so the round numbering carries on at 1 — read off the round files,
     // not off any counter — while the heartbeat's counter is 0 again and the review mode with it.
     writer(0, undefined, { round: 1 }),
-    architecture(1, 0, { mode: 'full' }),
+    set(1, 0, { mode: 'full' }),
   ]);
 });
 
@@ -352,17 +372,17 @@ test('(9) an --entry outside the flow\'s entries is refused and changes no state
   await run(dir, [{ start: true }]);
   const before = readFileSync(walkerStatePath(dir));
 
-  // A `start` enters only at a loop's writer, a loop's **first** gate or the hand-off; a draft sent
-  // back for review always starts at its loop's first gate, so `plan_review`, not a first gate, is
-  // refused.
-  assertRefused(await walk(dir, ['start', ...flags('--entry', 'plan_review', '--skipped', 'none')]));
+  // A `start` enters only at a loop's writer, a loop's review node or the hand-off; a draft sent back
+  // for review enters at its loop's round node, `plan_round`, never at a gate, so
+  // `architecture_review` is refused.
+  assertRefused(await walk(dir, ['start', ...flags('--entry', 'architecture_review', '--skipped', 'none')]));
   assert.deepEqual(readFileSync(walkerStatePath(dir)), before);
 });
 
-test('(10) current re-prints the pending dispatch byte-identically and changes no state', { skip: SKIP }, async (t) => {
+test('(10) current re-prints the pending set byte-identically and changes no state', { skip: SKIP }, async (t) => {
   const dir = await fixture(t, { parity: false, qa: true });
   const actions = await run(dir, [{ start: true }, RETURNED]);
-  assert.deepEqual(actions.at(-1), architecture(0, 0));
+  assert.deepEqual(actions.at(-1), set(0, 0));
   const before = readFileSync(walkerStatePath(dir));
 
   // `autonomous_pause_and_ledger.md` §2.5: a dispatch that died on an API overload is re-dispatched,
@@ -454,7 +474,7 @@ test('(13) an answered cap park starts a fresh cap budget, and the round series 
  * `this` is this suite.
  *
  *   all gates pass first time ................................ flow-walker (1)
- *   parity FAIL once, then PASS, every gate re-runs .......... flow-walker (2)
+ *   parity FAIL in a set, then PASS, the whole set re-runs ... flow-walker (2)
  *   architecture FAIL until the cap, with round counts ....... flow-walker (3)
  *   phases.parity: false ..................................... flow-walker (4)
  *   run-mode parity skip ..................................... flow-walker (5), (6)
