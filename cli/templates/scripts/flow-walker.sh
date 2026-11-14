@@ -20,35 +20,48 @@
 # USAGE — each call one literal command from the repository root:
 #
 #   bash <scripts_dir>/flow-walker.sh start   --flow <flow> --branch <branch> [--entry <node>] [--skipped <ids|none>]
-#   bash <scripts_dir>/flow-walker.sh next    --flow <flow> --branch <branch> --outcome <outcome> [--findings <path>] [--skipped <ids|none>]
+#   bash <scripts_dir>/flow-walker.sh next    --flow <flow> --branch <branch> --outcome <outcome> [--node <node>] [--findings <path>] [--skipped <ids|none>]
 #   bash <scripts_dir>/flow-walker.sh current --flow <flow> --branch <branch>
 #
-#   `current` is read-only: it re-prints the saved pending action byte for
-#   byte, and is how a planning (re-)entry finds a saved walk to continue. Its
-#   output names the saved `awaiting`: `action: dispatch` is `dispatch`,
+#   `current` is read-only and takes no lock: it re-prints the saved pending
+#   action byte for byte, and is how a planning (re-)entry finds a saved walk
+#   to continue. Its output names the saved `awaiting`: one `action: dispatch`
+#   block of a non-gate node is `dispatch`; gate blocks are `set`;
 #   `binding: <ask>` is `answer`, any other `binding:` (`<escalate>`,
 #   `<terminal_handoff>`) is `done` — a finished walk, re-printed but continued
 #   by nothing: `next` refuses it with exit 1.
 #
-#   <outcome>  a key of the pending node's `outcomes`, or `answered` while an
-#              `<ask>` is pending. `FAIL` requires `--findings`; so do `PASS`
-#              and `FAIL` at a round gate — a node some `round` node lists in
-#              its `gates` — whose reviewer writes a file every round.
+#   <outcome>  a key of the pending node's `outcomes` (of the `--node` gate
+#              while a set is pending), or `answered` while an `<ask>` is
+#              pending. `FAIL` requires `--findings`; so do `PASS` and `FAIL`
+#              at a round gate — a node some `round` node lists in its
+#              `gates` — whose reviewer writes a file every round.
+#   --node     the node the outcome is for, `[a-z0-9_]` only. Required while a
+#              set is pending, naming a gate of the set with no recorded
+#              outcome; otherwise optional and, when given, the pending node.
 #   --findings the reviewer's findings_file; it may not carry a tab.
 #   --skipped  the run mode's skipped ids; read only when no flow-progress
 #              ledger exists, and re-read on every arrival at a gated node.
 #   The graph is `<this script's dir>/flows/<flow>.graph.json`, formatVersion
-#   2; the root is a bare `git rev-parse --show-toplevel` in the working
+#   3; the root is a bare `git rev-parse --show-toplevel` in the working
 #   directory.
 #
-# ROUNDS — a `round` node dispatches nothing. Every gate it lists runs every
-# round, a gate's PASS and FAIL alike routing on; arriving at the round node
-# closes the round: FAIL when a gate recorded FAIL this round (a skipped gate
-# counts as passed), else PASS, followed through the node's `outcomes` as an
-# agent's outcome is. Two numbers are kept apart: the loop COUNTER
-# (`counter.<name>`, the heartbeat's `{iteration}`) alone drives the cap and
-# the review mode; the ROUND NUMBER names the round files, is the same index
-# in every gate's folder, and carries on across the branch's planning history.
+# ROUNDS — a `round` node dispatches nothing. Arriving at it (the writer's
+# outcome, or a `start`) OPENS the round: each gate's skip constructs are
+# evaluated in `gates` order before anything is printed, and every gate not
+# skipped is due, all dispatched at once as one SET. Each gate's outcome is
+# recorded by its own `next --node <gate>`, in any order; until the last one
+# the walker prints `wait`. The last outcome is the JOIN: when any gate's
+# outcome was `error` or `blocker` (HELD, not routed when recorded), the
+# first held gate's binding is printed and the round is not closed; otherwise
+# the round closes FAIL when a gate recorded FAIL (a skipped gate counts as
+# passed), else PASS — with every gate skipped, at once on arrival — followed
+# through the node's `outcomes` as an agent's outcome is. A round closes only
+# at the join or at `start`'s complete-round rule. Two numbers are kept apart:
+# the loop COUNTER (`counter.<name>`, the heartbeat's `{iteration}`) alone
+# drives the cap and the review mode; the ROUND NUMBER names the round files,
+# is the same index in every gate's folder, and carries on across the branch's
+# planning history.
 #
 # OUTPUT — stdout, `key: value` lines, in this order:
 #
@@ -64,6 +77,11 @@
 #             round: <n> <PASS|FAIL> (<n> the round it closed) and ledger: <id>
 #             lines for what the walk passed through /
 #             heartbeat: <template, {iteration} = the counter>  (#<total_dispatches>)
+#   set       one dispatch block per due gate, in `gates` order, back to back;
+#             the passed-through skip: / round: / ledger: lines in the first
+#             block only. A set of one gate is a single dispatch block.
+#   wait      action: wait / node: <round> / recorded: <gate> <outcome> /
+#             pending: <gate> per gate still out, in `gates` order
 #   binding   action: binding / binding: <name> / node: / then
 #             <ask>               agent: / resume: <node>
 #             <escalate>          agent: (none when node: is a round node) /
@@ -72,7 +90,11 @@
 #                                 rounds: <node> <its folder's FAIL files> (a
 #                                 node recorded `skipped` omitted) / evidence
 #                                 lines / summary: ({cap}; {open_gates} the
-#                                 closing round's FAIL gates, `, `-joined)
+#                                 closing round's FAIL gates, `, `-joined);
+#                                 at a join with a held outcome, node: and
+#                                 agent: are the first held gate's in `gates`
+#                                 order, reason: its outcome, then held: <gate>
+#                                 <outcome> per held gate, and no round: line
 #             <terminal_handoff>  report: <key> <value> per recorded key
 #             then its skip: / round: / ledger: lines.
 #
@@ -82,36 +104,60 @@
 #   1  refusal: bad usage, undeclared outcome, `next` before `start`, `current`
 #      with no walk saved (a re-entry's "no saved walk"), a flow or
 #      branch other than the state's, unknown flow, a formatVersion other than
-#      2, FAIL without --findings, PASS or FAIL at a round gate without
-#      --findings, no run-mode record, an unresolvable phase flag
+#      3, FAIL without --findings, PASS or FAIL at a round gate without
+#      --findings, no run-mode record, an unresolvable phase flag, a `--node`
+#      other than the pending node; while a set is pending: no `--node`, a
+#      `--node` that is not a pending gate of the round, a second outcome for
+#      one gate
 #   2  the configuration, the graph or the state file cannot be resolved or
-#      written, the round evidence cannot be read, or lib/harness-run-lib.sh
-#      predates this walker
+#      written (a graph entering at a round's gate included), the round
+#      evidence cannot be read, lib/harness-run-lib.sh predates this walker,
+#      or the lock was held for over 120 s — once no flow-walker.sh call is
+#      running, remove the lock directory with `rmdir`, then run `current`
 #   Every non-zero exit prints one `flow-walker: <cause>` line on stderr and
 #   leaves the state file byte-identical.
 #
 # STATE — `<state_dir>/.flow_walker_state`, machine-local, flat `key=value`
-# lines: flow, branch, the pending node, `awaiting` (dispatch / answer / done),
-# `counter.<name>`, `round.number`, the open round's `round.verdict.<gate>` and
-# `round.findings.<gate>`, `revision_findings` (the closed round's files,
-# TAB-joined; `ui_review`'s FAIL stores one), the prompt variants, the
+# lines: flow, branch, the pending node (the round node while a set is
+# pending), `awaiting` (dispatch / set / answer / done), `counter.<name>`,
+# `round.number`, the open round's `round.verdict.<gate>` and
+# `round.findings.<gate>`, a gate's held `error` / `blocker` as
+# `round.held.<gate>`, the set's gates (`set.gates`) and its first block's
+# passed-through lines (`set.pass`), `revision_findings` (the closed round's
+# files, TAB-joined; `ui_review`'s FAIL stores one), the prompt variants, the
 # recorded `report.<key>` values, the nodes skipped as `skipped`, and the
 # pending action's printed lines (`out=`), which `current` re-prints
-# unchanged. Only `start` overwrites it, and every `start` sets every counter
-# to 0 — a fresh write, an extend, an extend after a cap park and a skip past
-# a loop alike; only a re-entry that continues a saved walk (`current`, then
-# `next` or a re-dispatch of the printed action) carries the counter, the
-# prompt variants and the round's records across a session boundary.
-# `round.number` is never the counter: `start` reads it off the round files
-# through `fw_round_evidence` when the entry is a round's writer (the next
-# round) or one of its gates (the round on disk, continued at its first
-# missing gate when every earlier gate reads a verdict and no plan change
-# postdates it, else restarted at its first gate; a complete round with a
-# FAIL is closed, or moved past when its revision note exists), and is 0 for
-# any other entry or with no round file on disk. A complete all-PASS round is
-# reviewed again: convergence is never inferred from files. The state is a
-# position, never a phase record: the flow-progress ledger stays the only
-# durable record. Replaced by temp file and `mv`.
+# unchanged — while a set is pending, the blocks of the gates with no recorded
+# outcome, the first carrying the fan-out's passed-through lines. Only `start`
+# overwrites it, and every `start` sets every counter to 0 — a fresh write, an
+# extend, an extend after a cap park and a skip past a loop alike; only a
+# re-entry that continues a saved walk (`current`, then `next` or a
+# re-dispatch of the printed action) carries the counter, the prompt variants
+# and the round's records across a session boundary. `round.number` is never
+# the counter: `start` reads it off the round files through
+# `fw_round_evidence` when the entry is a round's writer (the next round) or
+# the round node itself, and is 0 for any other entry or with no round file
+# on disk. At a round node: no round file opens round 0's whole set; a round
+# with files missing whose evidence is consistent — no present gate reads
+# `unreadable`, and `plan:` is `not-newer` — records the present gates'
+# verdicts and files and opens the set with only the gates whose file is
+# `missing`; any other incomplete round opens the whole set at that round. A
+# complete round that is unreadable or has no FAIL opens the whole set at
+# that round; a FAIL with the next revision note on disk opens the next
+# round's whole set; a FAIL without it records every verdict and closes the
+# round. A complete all-PASS round is reviewed again: convergence is never
+# inferred from files. The state is a position, never a phase record: the
+# flow-progress ledger stays the only durable record. Replaced by temp file
+# and `mv`.
+#
+# CONCURRENCY — `start` and `next` hold the lock directory
+# `<state_dir>/.flow_walker_state.lock` from before the state is read to after
+# it is replaced, so a set's gates may be recorded by simultaneous calls and
+# exactly one of them prints the round's result. It is taken with `mkdir`,
+# retried every 0.1 s, removed once as stale when older than a minute, given
+# up after 120 s (exit 2), always left empty, and released on every exit path
+# by the call that took it. `current` takes none: the state is replaced by
+# `mv`, so a read is never torn.
 #
 # BASH 3.2 AND JQ 1.5 ARE THE FLOORS: no associative array and no array-reading
 # builtin. The graph is flattened by one `jq` per call.
@@ -128,20 +174,28 @@
 #   bash s/flow-walker.sh start --flow task_plan_writing --branch feat_x --skipped none
 #     -> dispatch plan_writer, prompt: initial, arg.iteration: 0
 #   ... next --flow task_plan_writing --branch feat_x --outcome returned --skipped none
-#     -> dispatch business_parity_review, arg.iteration: 0, arg.review_mode: full
-#   ... next ... --outcome PASS --findings b0.md --skipped none -> architecture_review, arg.iteration: 0
-#   ... next ... --outcome PASS --findings a0.md --skipped none -> plan_review, arg.iteration: 0
-#   ... next ... --outcome PASS --findings p0.md --skipped none
+#     -> three blocks: business_parity_review, architecture_review, plan_review,
+#        each arg.iteration: 0, arg.review_mode: full
+#   ... next ... --node plan_review --outcome PASS --findings p0.md --skipped none
+#     -> wait, recorded: plan_review PASS, pending: business_parity_review /
+#        architecture_review
+#   ... next ... --node business_parity_review --outcome PASS --findings b0.md --skipped none
+#     -> wait, pending: architecture_review
+#   ... next ... --node architecture_review --outcome PASS --findings a0.md --skipped none
 #     -> round: 0 PASS, ledger: P1, ui_writer, prompt: initial
 #   ... next ... --outcome returned --skipped none -> ui_review
 #   ... next ... --outcome PASS --skipped none   -> binding: <terminal_handoff>,
 #                                                  four report: lines, ledger: P2
 #   ... next ... --outcome PASS   -> exit 1: the walk has finished
-#   A FAIL round: start again, `returned`, `PASS --findings b0.md`, then
-#   ... next ... --outcome FAIL --findings a0.md --skipped none -> plan_review, arg.iteration: 0
-#   ... next ... --outcome PASS --findings p0.md --skipped none
+#   A FAIL round: start again, `returned`, then the three gates in any order,
+#   b0.md and p0.md PASS and `--node architecture_review --outcome FAIL
+#   --findings a0.md`; the last call
 #     -> round: 0 FAIL, plan_writer, prompt: revision, arg.iteration: 1,
 #        arg.findings_file: b0.md / a0.md / p0.md, heartbeat iter 1
+#   A held round: start again, `returned`, `--node architecture_review
+#   --outcome error`, then the other two PASS; the last call
+#     -> binding: <escalate>, node: architecture_review, reason: error,
+#        held: architecture_review error, no round: line
 
 set -uo pipefail
 
@@ -194,10 +248,11 @@ A_ENTRY=""
 A_SKIPPED=""
 A_OUTCOME=""
 A_FINDINGS=""
+A_NODE=""
 while [ "$#" -gt 0 ]; do
   flag="$1"
   case "$CMD:$flag" in
-    *:--flow|*:--branch|start:--entry|start:--skipped|next:--skipped|next:--outcome|next:--findings) ;;
+    *:--flow|*:--branch|start:--entry|start:--skipped|next:--skipped|next:--outcome|next:--findings|next:--node) ;;
     *) refuse "'$flag' is not a flag of '$CMD'" ;;
   esac
   [ "$#" -ge 2 ] || refuse "$flag requires a value"
@@ -217,6 +272,12 @@ while [ "$#" -gt 0 ]; do
     --skipped) A_SKIPPED="$value" ;;
     --outcome) A_OUTCOME="$value" ;;
     --findings) A_FINDINGS="$value" ;;
+    --node)
+      case "$value" in
+        ''|*[!a-z0-9_]*) refuse "'$value' is not a node name" ;;
+      esac
+      A_NODE="$value"
+      ;;
   esac
 done
 
@@ -311,7 +372,7 @@ round_of_gate() { g_round_of gates "$1"; }
 round_of_writer() { g_round_of writer "$1"; }
 
 g_get formatVersion || refuse "graph $GRAPH_FILE carries no formatVersion"
-[ "$GV" = 2 ] || refuse "graph $GRAPH_FILE has formatVersion '$GV'; this walker reads 2"
+[ "$GV" = 3 ] || refuse "graph $GRAPH_FILE has formatVersion '$GV'; this walker reads 3"
 g_need flow
 [ "$GV" = "$A_FLOW" ] || fault "graph $GRAPH_FILE declares flow '$GV', not '$A_FLOW'"
 
@@ -319,6 +380,9 @@ g_need flow
 
 ST_LINES="$NL"
 OUT=""
+# The pending action `current` re-prints, when it is not what this call prints
+# (a `wait` saves the set's remaining blocks).
+SAVE_OUT=""
 PASS=""
 OPEN_GATES=""
 
@@ -393,7 +457,8 @@ load_state() {
 }
 
 save_state() {
-  local dir tmp line
+  local dir tmp line saved="$OUT"
+  [ -z "$SAVE_OUT" ] || saved="$SAVE_OUT"
   dir="${STATE_FILE%/*}"
   [ -d "$dir" ] || mkdir -p "$dir" || fault "cannot create $dir"
   tmp="$STATE_FILE.tmp.$$"
@@ -402,10 +467,53 @@ save_state() {
     while IFS= read -r line; do
       if [ -n "$line" ]; then printf 'out=%s\n' "$line"; fi
     done <<EOF
-$OUT
+$saved
 EOF
   } > "$tmp" 2>/dev/null || { rm -f "$tmp"; fault "cannot write $tmp"; }
   mv -f "$tmp" "$STATE_FILE" 2>/dev/null || { rm -f "$tmp"; fault "cannot replace $STATE_FILE"; }
+}
+
+# --- The lock (start and next only) -------------------------------------------
+
+LOCK="$STATE_FILE.lock"
+LOCK_HELD=0
+
+lock_release() {
+  if [ "$LOCK_HELD" -eq 1 ]; then
+    rmdir "$LOCK" 2>/dev/null
+    LOCK_HELD=0
+  fi
+}
+
+# `mkdir` is the atomic test-and-set; the directory stays empty so `git status`
+# never lists it. A lock older than a minute is removed once per call.
+lock_take() {
+  local dir="${STATE_FILE%/*}" tries=0 stale=0
+  [ -d "$dir" ] || mkdir -p "$dir" 2>/dev/null || fault "cannot create $dir"
+  trap 'lock_release' EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  while :; do
+    if mkdir "$LOCK" 2>/dev/null; then
+      LOCK_HELD=1
+      return 0
+    fi
+    if [ ! -d "$LOCK" ]; then
+      # Released between the two tests, or not creatable at all.
+      mkdir "$LOCK" 2>/dev/null && { LOCK_HELD=1; return 0; }
+      [ -d "$LOCK" ] || fault "cannot create $LOCK"
+    fi
+    if [ "$stale" -eq 0 ] && [ -n "$(find "$LOCK" -maxdepth 0 -mmin +1 2>/dev/null)" ]; then
+      stale=1
+      rmdir "$LOCK" 2>/dev/null
+      continue
+    fi
+    [ "$tries" -lt 1200 ] \
+      || fault "cannot lock $LOCK: held for over 120 s; once no flow-walker.sh call is running, remove $LOCK with rmdir, then run flow-walker.sh current"
+    sleep 0.1
+    tries=$((tries + 1))
+  done
 }
 
 # --- Rendering helpers ------------------------------------------------------
@@ -455,40 +563,37 @@ add_skipped_node() {
   if [ -n "$SV" ]; then st_set skipped_nodes "$SV,$1"; else st_set skipped_nodes "$1"; fi
 }
 
-render_dispatch() {
-  local node="$1" variant="$2" agent idx hb count
+# Set BLOCK to <node>'s dispatch block, <pass> as its passed-through lines, and
+# BLOCK_VARIANT to the prompt variant it carries. Writes no state.
+render_block() {
+  local node="$1" variant="$2" pass="$3" agent idx hb count
   g_need "nodes.$node.agent"
   agent="$GV"
-  OUT="action: dispatch${NL}node: $node${NL}agent: $agent$NL"
-  st_set node "$node"
-  st_set awaiting dispatch
-  st_set resume ""
-  st_set prompt ""
+  BLOCK="action: dispatch${NL}node: $node${NL}agent: $agent$NL"
   if g_get "nodes.$node.prompts.0"; then
     [ -n "$variant" ] || variant=initial
     case "$variant" in
       initial|revision) ;;
       *) fault "graph gives '$node' the unknown prompt variant '$variant'" ;;
     esac
-    OUT="${OUT}prompt: $variant$NL"
-    st_set prompt "$variant"
-    st_set "prompt.$node" "$variant"
+    BLOCK="${BLOCK}prompt: $variant$NL"
   else
     variant=""
   fi
+  BLOCK_VARIANT="$variant"
   if round_of_writer "$node"; then
     st_num round.number
-    OUT="${OUT}arg.iteration: $SV$NL"
+    BLOCK="${BLOCK}arg.iteration: $SV$NL"
   fi
   if [ "$variant" = revision ]; then
     st_get revision_findings
     [ -n "$SV" ] || fault "a revision of '$node' is due and no findings file is recorded"
     list_lines "arg.findings_file: " "$SV"
-    OUT="$OUT$LL"
+    BLOCK="$BLOCK$LL"
   fi
   if round_of_gate "$node"; then
     st_num round.number
-    OUT="${OUT}arg.iteration: $SV$NL"
+    BLOCK="${BLOCK}arg.iteration: $SV$NL"
     g_need "nodes.$RN.counter"
     st_num "counter.$GV"
     count="$SV"
@@ -497,21 +602,67 @@ render_dispatch() {
       ''|*[!0-9]*) fault "graph gives round node '$RN' the non-numeric convergingFrom '$GV'" ;;
     esac
     if [ "$count" -lt "$GV" ]; then
-      OUT="${OUT}arg.review_mode: full$NL"
+      BLOCK="${BLOCK}arg.review_mode: full$NL"
     else
-      OUT="${OUT}arg.review_mode: converging$NL"
+      BLOCK="${BLOCK}arg.review_mode: converging$NL"
     fi
   elif g_get "nodes.$node.findingsFolder"; then
     render_path "$GV"
     idx="$(fw_next_review_index "$ROOT/$SUBST")"
-    OUT="${OUT}arg.iteration: $idx$NL"
+    BLOCK="${BLOCK}arg.iteration: $idx$NL"
   fi
-  OUT="$OUT$PASS"
+  BLOCK="$BLOCK$pass"
   g_need "nodes.$node.heartbeat"
   st_get counter.iteration
   subst "$GV" "{iteration}" "$SV"
   hb="$SUBST"
-  OUT="${OUT}heartbeat: $hb  (#<total_dispatches>)$NL"
+  BLOCK="${BLOCK}heartbeat: $hb  (#<total_dispatches>)$NL"
+}
+
+render_dispatch() {
+  local node="$1"
+  render_block "$node" "$2" "$PASS"
+  OUT="$BLOCK"
+  st_set node "$node"
+  st_set awaiting dispatch
+  st_set resume ""
+  st_set prompt ""
+  if [ -n "$BLOCK_VARIANT" ]; then
+    st_set prompt "$BLOCK_VARIANT"
+    st_set "prompt.$node" "$BLOCK_VARIANT"
+  fi
+}
+
+# Exit 0 when gate <g> has an outcome recorded this round (a verdict or a held
+# outcome).
+gate_recorded() {
+  if st_get "round.verdict.$1" && [ -n "$SV" ]; then return 0; fi
+  if st_get "round.held.$1" && [ -n "$SV" ]; then return 0; fi
+  return 1
+}
+
+# Set OUT to the blocks of round <rn>'s set gates with no recorded outcome, in
+# `gates` order, the first carrying the fan-out's passed-through lines. Set
+# SET_PENDING to those gates, one `pending: <gate>` line each.
+render_set() {
+  local rn="$1" i=0 g gates pass
+  st_get set.gates
+  gates="$SV"
+  st_get set.pass
+  list_lines "" "$SV"
+  pass="$LL"
+  OUT=""
+  SET_PENDING=""
+  while g_get "nodes.$rn.gates.$i"; do
+    g="$GV"
+    i=$((i + 1))
+    fw_id_in_list "$g" "$gates" || continue
+    gate_recorded "$g" && continue
+    render_block "$g" "" "$pass"
+    OUT="$OUT$BLOCK"
+    pass=""
+    SET_PENDING="${SET_PENDING}pending: $g$NL"
+  done
 }
 
 render_terminal() {
@@ -642,7 +793,7 @@ arrive() {
         return 0
         ;;
       round)
-        close_round "$node"
+        open_round "$node" ""
         return 0
         ;;
       dispatch) ;;
@@ -663,9 +814,96 @@ arrive() {
   done
 }
 
-# A round node dispatches nothing: it routes on the verdicts its gates recorded
-# this round (a gate the walk skipped recorded none and counts as passed),
-# hands the round's findings files to the revision, and clears the round.
+# Open round <rn>: evaluate every gate's skip constructs in `gates` order (a
+# skipped gate is in no block, and its `to` is not followed), then print one
+# block per due gate — every unskipped gate, or with <only> (comma-joined) just
+# those — and await the set. No gate due closes the round at once.
+open_round() {
+  local rn="$1" only="$2" i=0 g due="" applied
+  while g_get "nodes.$rn.gates.$i"; do
+    g="$GV"
+    i=$((i + 1))
+    eval_skip "$g"
+    applied="$SKIP_APPLIED"
+    if [ -n "$applied" ]; then
+      record_reports "nodes.$g.skip.$SKIP_INDEX"
+      PASS="${PASS}skip: $g $applied$NL"
+      [ "$applied" != skipped ] || add_skipped_node "$g"
+      continue
+    fi
+    if [ -n "$only" ] && ! fw_id_in_list "$g" "$only"; then continue; fi
+    due="${due:+$due,}$g"
+  done
+  [ "$i" -gt 0 ] || fault "round node '$rn' lists no gates"
+  if [ -z "$due" ]; then
+    close_round "$rn"
+    return 0
+  fi
+  st_set node "$rn"
+  st_set awaiting set
+  st_set resume ""
+  st_set prompt ""
+  st_set set.gates "$due"
+  subst "${PASS%"$NL"}" "$NL" "$TAB"
+  st_set set.pass "$SUBST"
+  render_set "$rn"
+}
+
+# Record <outcome> for gate <g> of the set pending at round <rn>, then print
+# `wait`, or at the set's last outcome, the join.
+record_in_set() {
+  local rn="$1" g="$A_NODE" n edge i=0 h first="" fo="" held=""
+  [ -n "$g" ] || refuse "a round's set is pending at '$rn': name the gate with --node"
+  st_num round.number
+  n="$SV"
+  st_get set.gates
+  fw_id_in_list "$g" "$SV" || refuse "'$g' is not pending in round $n"
+  gate_recorded "$g" && refuse "an outcome for '$g' is already recorded in round $n"
+  edge="nodes.$g.outcomes.$A_OUTCOME"
+  g_has_prefix "$edge." || refuse "outcome '$A_OUTCOME' is not declared by node '$g'"
+  case "$A_OUTCOME" in
+    PASS|FAIL)
+      [ -n "$A_FINDINGS" ] \
+        || refuse "outcome $A_OUTCOME at round gate '$g' requires --findings with the reviewer's findings_file"
+      st_set "round.verdict.$g" "$A_OUTCOME"
+      st_set "round.findings.$g" "$A_FINDINGS"
+      record_reports "$edge"
+      ;;
+    *)
+      g_get "$edge.binding" || fault "graph gives round gate '$g' the outcome '$A_OUTCOME', neither a verdict nor a binding"
+      st_set "round.held.$g" "$A_OUTCOME"
+      ;;
+  esac
+  render_set "$rn"
+  if [ -n "$SET_PENDING" ]; then
+    SAVE_OUT="$OUT"
+    OUT="action: wait${NL}node: $rn${NL}recorded: $g $A_OUTCOME$NL$SET_PENDING"
+    return 0
+  fi
+  # The join. A held outcome stops the round: no `round:` line, no counter move.
+  while g_get "nodes.$rn.gates.$i"; do
+    i=$((i + 1))
+    st_get "round.held.$GV"
+    [ -n "$SV" ] || continue
+    held="${held}held: $GV $SV$NL"
+    if [ -z "$first" ]; then first="$GV"; fo="$SV"; fi
+  done
+  if [ -z "$first" ]; then
+    close_round "$rn"
+    return 0
+  fi
+  g_need "nodes.$first.outcomes.$fo.binding"
+  h="$GV"
+  g_need "nodes.$first.agent"
+  OUT="action: binding${NL}binding: $h${NL}node: $first${NL}agent: $GV${NL}reason: $fo$NL$held"
+  st_set node "$first"
+  st_set awaiting done
+}
+
+# A round node dispatches nothing: at the join it routes on the verdicts its
+# gates recorded this round (a gate the walk skipped recorded none and counts
+# as passed), hands the round's findings files to the revision, and clears the
+# round.
 close_round() {
   local rn="$1" i=0 g outcome=PASS list="" open=""
   while g_get "nodes.$rn.gates.$i"; do
@@ -680,8 +918,11 @@ close_round() {
     [ -z "$SV" ] || list="${list:+$list$TAB}$SV"
     st_unset "round.verdict.$g"
     st_unset "round.findings.$g"
+    st_unset "round.held.$g"
   done
   [ "$i" -gt 0 ] || fault "round node '$rn' lists no gates"
+  st_unset set.gates
+  st_unset set.pass
   st_num round.number
   PASS="${PASS}round: $SV $outcome$NL"
   st_set revision_findings "$list"
@@ -734,13 +975,14 @@ follow_edge() {
   arrive "$GV" "$variant"
 }
 
-# Set the round number and START_NODE for a `start` whose entry <entry> is
-# round node <rn>'s writer (<role> `writer`) or one of its gates (`gate`),
-# from the round files on disk. Never touches a counter, and never infers
+# Set the round number, START_NODE and START_MODE (`arrive`, `subset` with
+# START_ONLY the gates to open, or `close`) for a `start` whose entry <entry>
+# is round node <rn>'s writer (<role> `writer`) or <rn> itself (`set`), from
+# the round files on disk. Never touches a counter, and never infers
 # convergence: a round whose files all read PASS is reviewed again.
 start_round() {
   local rn="$1" role="$2" entry="$3" i=0 k=2 g ev status line rest
-  local r="" note="" plan="" ng=0 j m=-1 unread=0 failed=0 first ok
+  local r="" note="" plan="" ng=0 j missing="" unread=0 failed=0
   FW_ARGS=("$ROOT" "")
   if g_get "nodes.$rn.revisionNote"; then
     g_need "paths.$GV"
@@ -760,7 +1002,7 @@ start_round() {
   while g_get "nodes.$rn.gates.$i"; do
     g="$GV"
     i=$((i + 1))
-    if [ "$role" = gate ]; then
+    if [ "$role" = set ]; then
       eval_skip "$g"
       [ -z "$SKIP_APPLIED" ] || continue
     fi
@@ -790,6 +1032,7 @@ start_round() {
 $ev
 EOF
   START_NODE="$entry"
+  START_MODE=arrive
   if [ "$r" = none ]; then
     st_set round.number 0
     return 0
@@ -801,57 +1044,47 @@ EOF
     st_set round.number "$((r + 1))"
     return 0
   fi
-  g_need "nodes.$rn.gates.0"
-  first="$GV"
   st_set round.number "$r"
   j=0
   while [ "$j" -lt "$ng" ]; do
     case "${FW_GV[$j]}" in
-      missing) [ "$m" -ge 0 ] || m="$j" ;;
+      missing) missing="${missing:+$missing,}${FW_GN[$j]}" ;;
       unreadable) unread=1 ;;
       FAIL) failed=1 ;;
     esac
     j=$((j + 1))
   done
-  if [ "$m" -ge 0 ]; then
-    # Continue at the first missing gate only when every gate before it reads
-    # a verdict and no plan change postdates the round's files.
-    ok=0
-    [ "$plan" = not-newer ] || ok=1
-    j=0
-    while [ "$ok" -eq 0 ] && [ "$j" -lt "$m" ]; do
-      case "${FW_GV[$j]}" in
-        PASS|FAIL) ;;
-        *) ok=1 ;;
-      esac
-      j=$((j + 1))
-    done
-    if [ "$ok" -eq 0 ]; then
-      start_record "$m"
-      START_NODE="${FW_GN[$m]}"
-    else
-      START_NODE="$first"
+  if [ -n "$missing" ]; then
+    # Open only the missing gates when the evidence is consistent: no present
+    # gate unreadable, and no plan change postdates the round's files.
+    if [ "$unread" -eq 0 ] && [ "$plan" = not-newer ]; then
+      start_record "$ng"
+      START_MODE=subset
+      START_ONLY="$missing"
     fi
     return 0
   fi
   if [ "$unread" -eq 1 ] || [ "$failed" -eq 0 ]; then
-    START_NODE="$first"
+    :
   elif [ "$note" = present ]; then
     st_set round.number "$((r + 1))"
-    START_NODE="$first"
   else
     start_record "$ng"
-    START_NODE="$rn"
+    START_MODE=close
   fi
 }
 
-# Record the verdicts and files of the first <n> gates start_round read, each
-# file repo-relative as render_path gives it.
+# Record the verdict and file of each of the <n> gates start_round read that
+# carries one, each file repo-relative as render_path gives it.
 start_record() {
   local n="$1" j=0
   while [ "$j" -lt "$n" ]; do
-    st_set "round.verdict.${FW_GN[$j]}" "${FW_GV[$j]}"
-    st_set "round.findings.${FW_GN[$j]}" "${FW_GF[$j]#"$ROOT/"}"
+    case "${FW_GV[$j]}" in
+      PASS|FAIL)
+        st_set "round.verdict.${FW_GN[$j]}" "${FW_GV[$j]}"
+        st_set "round.findings.${FW_GN[$j]}" "${FW_GF[$j]#"$ROOT/"}"
+        ;;
+    esac
     j=$((j + 1))
   done
 }
@@ -872,6 +1105,7 @@ case "$CMD" in
       [ "$found" -eq 0 ] || refuse "'$A_ENTRY' is not an entry of flow '$A_FLOW'"
       entry="$A_ENTRY"
     fi
+    lock_take
     st_set flow "$A_FLOW"
     st_set branch "$A_BRANCH"
     while IFS= read -r line; do
@@ -889,22 +1123,37 @@ EOF
     st_set skipped_nodes ""
     st_set round.number 0
     START_NODE="$entry"
+    START_MODE=arrive
     if round_of_writer "$entry"; then
       start_round "$RN" writer "$entry"
+    elif g_get "nodes.$entry.kind" && [ "$GV" = round ]; then
+      start_round "$entry" set "$entry"
     elif round_of_gate "$entry"; then
-      start_round "$RN" gate "$entry"
+      fault "graph $GRAPH_FILE enters at '$entry', a gate of round '$RN': a round's gates are entered through '$RN'"
     fi
-    arrive "$START_NODE" initial
+    case "$START_MODE" in
+      subset) open_round "$START_NODE" "$START_ONLY" ;;
+      close) close_round "$START_NODE" ;;
+      *) arrive "$START_NODE" initial ;;
+    esac
     save_state
     ;;
   next)
+    lock_take
     load_state
     st_get node
     node="$SV"
     st_get awaiting
-    case "$SV" in
+    awaiting="$SV"
+    if [ "$awaiting" != set ] && [ "$awaiting" != done ] && [ -n "$A_NODE" ] && [ "$A_NODE" != "$node" ]; then
+      refuse "'$A_NODE' is not pending: the pending node is '$node'"
+    fi
+    case "$awaiting" in
       done)
         refuse "the walk finished at '$node'; no outcome is pending (run 'start' to walk again)"
+        ;;
+      set)
+        record_in_set "$node"
         ;;
       answer)
         [ "$A_OUTCOME" = answered ] \
@@ -934,7 +1183,7 @@ EOF
         follow_edge "nodes.$node.outcomes.$A_OUTCOME" "$node"
         ;;
       *)
-        fault "$STATE_FILE carries an unknown awaiting value '$SV'"
+        fault "$STATE_FILE carries an unknown awaiting value '$awaiting'"
         ;;
     esac
     save_state
