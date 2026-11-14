@@ -22,3 +22,5 @@
 - `grep -n "is an edge change in the graph, not a walker change\|next due reviewer\|first reviewer" docs/flow-graph-walker.md` finds nothing.
 - `grep -n "^### Item 8 — a round's gates fan out, and the round node joins$" docs/flow-graph-walker.md` matches once, and `grep -n "What a second driver must do" docs/flow-graph-walker.md` matches under it.
 - Each test title the **Evidence.** paragraph cites appears verbatim in `cli/test/flow-walker-resume.test.mjs` (`grep -F` per title).
+  - **Deviations from plan:** The literal `grep -F` of titles `(1)` and `(11)` does not match the suite's source, because the suite writes each title as a single-quoted JS string with its apostrophe escaped (`round\'s`, `gate\'s`). The doc cites the titles as the runner reports them, with a bare apostrophe. Evidence: `grep -cF` over the three apostrophe-free titles `(8)`, `(9)`, `(12)` printed `3`; `grep -cF` over `(1)` and `(11)` with the apostrophe written `\'` printed `2`.
+  - **Deviations from plan:** The **What a second driver must do** paragraph also cites `ROADMAP.md` → `Script-driven planning pilot` beside #159, the row that issue resolves to.
