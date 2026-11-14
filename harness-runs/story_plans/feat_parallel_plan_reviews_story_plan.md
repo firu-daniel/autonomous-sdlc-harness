@@ -65,7 +65,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_parallel_plan_reviews/t
 20. [x] **Task 19** — Restate the flow-graph schema as format 3 and move every fixture onto it, with the new negatives _(layer: general)_ _(points: 20)_
 21. [x] **Task 20** — Add `round-fan-out` to `check-flow-graph.sh` and walk fan-out edges in reachability _(layer: general)_ _(points: 15)_
 22. [x] **Task 21** — Bring this checkout's self-adopted walker, graph and analytics copies level with the templates _(layer: general)_ _(points: 10)_
-23. [ ] **Task 24** — Record headless-concurrency probe BG11, owed, in `docs/sandbox-verification.md` _(layer: general)_ _(points: 10)_
+23. [x] **Task 24** — Record headless-concurrency probe BG11, owed, in `docs/sandbox-verification.md` _(layer: general)_ _(points: 10)_
 24. [ ] **Task 22** — Record the fan-out, the join, recording, concurrency, resume and the second driver in `docs/flow-graph-walker.md` _(layer: general)_ _(points: 20)_
 25. [ ] **Task 23** — Restate the fix-plan resume decision and the walker pointers in `docs/converging-plan-reviews.md` _(layer: general)_ _(points: 5)_
 26. [ ] **Task 25** — Mark `Parallel plan reviews` done in `ROADMAP.md` and restate `Parallel dispatch in waves` _(layer: general)_ _(points: 5)_
