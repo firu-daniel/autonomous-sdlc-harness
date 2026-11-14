@@ -4,14 +4,18 @@
  * **The rule these tests exist to enforce: the walker reproduces the round routing
  * `plugin/instructions/task_plan_writing_instructions_core.md` → `## The walker — routing is its,
  * judgement is yours` hands it, under the round contract (`plugin/instructions/plan_review_rounds.md`)
- * — every gate runs every round, one round node closes the round, the loop counter alone drives the
- * cap and the review mode, and the round number names the round files — and every expectation cites
- * the rule it pins, by heading and quoted substring.** Each expected action is a literal written here
- * and never read out of the walker's graph: an expectation derived from the graph would prove only
- * that the walker agrees with itself.
+ * — the writer's return opens a round as one set of every due gate, each gate's outcome is recorded
+ * by name and answered with `wait` until the last, that last outcome is the join that closes the
+ * round (or, with an outcome held, escalates it), the loop counter alone drives the cap and the
+ * review mode, and the round number names the round files — and every expectation cites the rule it
+ * pins, by heading and quoted substring.** The set and the join are cited from the shipped walker's
+ * own `ROUNDS` header (`cli/templates/scripts/flow-walker.sh`). Each expected action is a literal
+ * written here and never read out of the walker's graph: an expectation derived from the graph would
+ * prove only that the walker agrees with itself.
  *
  * Not covered here, deliberately: resuming a saved walk, the UI-test-plan review loop, re-entry
- * through `--entry`, and `current`. Those are separate suites'.
+ * through `--entry`, `current`, the fan-out's refusals, and gates recorded by simultaneous calls.
+ * Those are other suites'.
  *
  * Every fixture repository is built under the system temp directory and torn down in process; no
  * case is ever aimed at this checkout (`.claude/context/conventions.md` → `## The testing bar`).
@@ -99,6 +103,41 @@ const architecture = gate('architecture_review', 'architecture-reviewer', ARCH_H
 // template names the agent.
 const planReview = gate('plan_review', 'task-plan-reviewer', PLAN_WRITE_HB, 'task-plan-reviewer');
 
+/**
+ * A round's set: one dispatch block per due gate, in gate order, back to back — the first carrying
+ * the passed-through lines (`flow-walker.sh` → `# OUTPUT`, `set`: "the passed-through skip: /
+ * round: / ledger: lines in the first block only").
+ */
+const set = (...blocks) => blocks.flat();
+
+/** Every gate of round `n` at counter `i`, parity included, none passing anything through. */
+const fullSet = (n, i, options) => set(parity(n, i, options), architecture(n, i, options), planReview(n, i, options));
+
+/**
+ * `# ROUNDS`: "Each gate's outcome is recorded by its own `next --node <gate>`, in any order; until
+ * the last one the walker prints `wait`" — naming the outcome just recorded and every gate still out.
+ *
+ * @param {[string, string]} recorded the gate and its outcome.
+ * @param {readonly string[]} pending the gates still out, in gate order.
+ */
+function wait([gateName, outcome], pending) {
+  return [
+    ['action', 'wait'],
+    ['node', 'plan_round'],
+    ['recorded', `${gateName} ${outcome}`],
+    ...pending.map((name) => ['pending', name]),
+  ];
+}
+
+/** The two `wait`s of a three-gate set recorded in gate order, `PASS` unless named. */
+function waits(verdicts = {}) {
+  const v = { parity: 'PASS', architecture: 'PASS', ...verdicts };
+  return [
+    wait(['business_parity_review', v.parity], ['architecture_review', 'plan_review']),
+    wait(['architecture_review', v.architecture], ['plan_review']),
+  ];
+}
+
 const findings = (folder, n) => `devscene/${folder}/${BRANCH}/review_${n}.md`;
 
 /** Every file round `n` records with all three gates run, in gate order. */
@@ -112,7 +151,8 @@ const roundFiles = (n) => [
 const closed = (n, verdict) => ['round', `${n} ${verdict}`];
 
 /**
- * One round's three gate verdicts, each planting its round file — `PASS` included — before it is fed.
+ * One round's three gate verdicts, recorded by name in gate order, each planting its round file —
+ * `PASS` included — before it is fed.
  *
  * @param {number} n the round number.
  * @param {{ parity?: string, architecture?: string, plan?: string }} [verdicts] `PASS` unless named.
@@ -120,9 +160,9 @@ const closed = (n, verdict) => ['round', `${n} ${verdict}`];
 function gates(n, verdicts = {}) {
   const v = { parity: 'PASS', architecture: 'PASS', plan: 'PASS', ...verdicts };
   return [
-    { outcome: v.parity, review: ['business_parity_reviews', n] },
-    { outcome: v.architecture, review: ['architecture_reviews', n] },
-    { outcome: v.plan, review: ['task_plan_reviews', n] },
+    { node: 'business_parity_review', outcome: v.parity, review: ['business_parity_reviews', n] },
+    { node: 'architecture_review', outcome: v.architecture, review: ['architecture_reviews', n] },
+    { node: 'plan_review', outcome: v.plan, review: ['task_plan_reviews', n] },
   ];
 }
 
@@ -176,39 +216,39 @@ async function fixture(t, phases) {
   return fx.dir;
 }
 
-test('(1) every gate passes first time: writer, parity, architecture, plan review, then the hand-off', { skip: SKIP }, async (t) => {
+test('(1) every gate passes first time: the writer, one set of three gates, then the join hands off', { skip: SKIP }, async (t) => {
   const dir = await fixture(t, { parity: true, qa: false });
   const actions = await run(dir, [...OPEN, ...gates(0)]);
 
   assert.deepEqual(actions, [
     writer(0),
-    // `### 2`: "Business parity comes **before** architecture"; each gate's `PASS` routes on to the
-    // next gate, and `plan_review`'s to the round node.
-    parity(0, 0),
-    architecture(0, 0),
-    planReview(0, 0),
-    // A round in which no gate recorded `FAIL` closes `PASS` and leaves the task-plan loop.
+    // `# ROUNDS`: "every gate not skipped is due, all dispatched at once as one SET" — one action
+    // carrying the three gates' blocks in gate order.
+    fullSet(0, 0),
+    // Each outcome but the set's last is answered with `wait`, naming the gates still out.
+    ...waits(),
+    // The last outcome is the join: a round in which no gate recorded `FAIL` closes `PASS` and
+    // leaves the task-plan loop.
     handoff('passed', 0),
   ]);
 });
 
-test('(2) a parity FAIL still dispatches architecture and plan review, then one revision carries every file of the round', { skip: SKIP }, async (t) => {
+test('(2) a parity FAIL holds the round open until the join, then one revision carries every file of the round', { skip: SKIP }, async (t) => {
   const dir = await fixture(t, { parity: true, qa: false });
   const actions = await run(dir, [...OPEN, ...gates(0, { parity: 'FAIL' }), RETURNED, ...gates(1)]);
 
   assert.deepEqual(actions, [
     writer(0),
-    parity(0, 0),
-    // Every gate runs every round: a `FAIL` is recorded and the walk moves on to the next reviewer.
-    architecture(0, 0),
-    planReview(0, 0),
-    // The round node closes round 0 `FAIL`: one revision, naming every file the round recorded —
-    // `PASS` files included — in gate order, feeding round 1.
+    fullSet(0, 0),
+    // Every gate runs every round: a `FAIL` is recorded like any verdict and the set waits on the
+    // gates still out.
+    ...waits({ parity: 'FAIL' }),
+    // At the join the round node closes round 0 `FAIL`: one revision, naming every file the round
+    // recorded — `PASS` files included — in gate order, feeding round 1.
     writer(1, roundFiles(0), { passed: [closed(0, 'FAIL')] }),
-    // Every gate re-runs on the revised plan, each at round 1 in its own folder.
-    parity(1, 1),
-    architecture(1, 1),
-    planReview(1, 1),
+    // The revised plan opens round 1 as a new set, each gate at round 1 in its own folder.
+    fullSet(1, 1),
+    ...waits(),
     handoff('passed', 1),
   ]);
 });
@@ -230,12 +270,13 @@ test('(3) architecture FAILs every round until the cap, counted once per round, 
     writer(3, roundFiles(2), { passed: [closed(2, 'FAIL')] }),
     writer(4, roundFiles(3), { passed: [closed(3, 'FAIL')] }),
   ]);
+  // Every round opens one set of all three gates, at the round number and the counter.
   assert.deepEqual(dispatchesOf(actions, 'architecture_review'), [
-    architecture(0, 0),
-    architecture(1, 1),
-    architecture(2, 2),
-    architecture(3, 3),
-    architecture(4, 4),
+    fullSet(0, 0),
+    fullSet(1, 1),
+    fullSet(2, 2),
+    fullSet(3, 3),
+    fullSet(4, 4),
   ]);
 
   // The fifth `FAIL` round reaches the 5-revision cap: `<escalate>` from the round node, with every
@@ -248,19 +289,21 @@ test('(4) with phases.parity false the parity gate is skipped and records no pas
   const dir = await fixture(t, { parity: false, qa: false });
   const actions = await run(dir, [
     ...OPEN,
-    { outcome: 'PASS', review: ['architecture_reviews', 0] },
-    { outcome: 'PASS', review: ['task_plan_reviews', 0] },
+    { node: 'architecture_review', outcome: 'PASS', review: ['architecture_reviews', 0] },
+    { node: 'plan_review', outcome: 'PASS', review: ['task_plan_reviews', 0] },
   ]);
 
   assert.deepEqual(actions, [
     writer(0),
-    // `### 2`: "Skip this gate unless `phases.parity` is `true` in `devscene.config.json`. … the loop
-    // proceeds to the next step" — no parity dispatch.
-    architecture(0, 0, { passed: [['skip', 'business_parity_review skipped']] }),
-    planReview(0, 0),
+    // `### 2`: "Skip this gate unless `phases.parity` is `true` in `devscene.config.json`" — the
+    // skip is decided at the fan-out (`# ROUNDS`: "each gate's skip constructs are evaluated in
+    // `gates` order before anything is printed"), so the set holds two gates and its first block
+    // carries the skip line.
+    set(architecture(0, 0, { passed: [['skip', 'business_parity_review skipped']] }), planReview(0, 0)),
+    wait(['architecture_review', 'PASS'], ['plan_review']),
     // … "A skipped gate is **not** a converged gate … records no pass for it, and reports none at
     // `## Convergence`": the gate's value is `skipped`, never `passed`. A skipped gate records no
-    // verdict, so the round closes on the other two.
+    // verdict, so the join closes the round on the other two.
     handoff('skipped', 0),
   ]);
   assert.ok(
@@ -279,8 +322,9 @@ test('(4) with phases.parity false the parity gate is skipped and records no pas
  */
 const PASSED_BY_EXCLUSION = [
   writer(0),
-  architecture(0, 0, { passed: [['skip', 'business_parity_review passed-by-exclusion']] }),
-  planReview(0, 0),
+  // Excluded at the fan-out: a two-gate set, the skip line in its first block.
+  set(architecture(0, 0, { passed: [['skip', 'business_parity_review passed-by-exclusion']] }), planReview(0, 0)),
+  wait(['architecture_review', 'PASS'], ['plan_review']),
   // `## Convergence`: "the `task-plan-reviewer` returned `verdict: PASS` … or were passed by
   // exclusion, where the run mode skipped them".
   handoff('passed-by-exclusion', 0),
@@ -288,8 +332,8 @@ const PASSED_BY_EXCLUSION = [
 
 const PASS_WITHOUT_PARITY = [
   ...OPEN,
-  { outcome: 'PASS', review: ['architecture_reviews', 0] },
-  { outcome: 'PASS', review: ['task_plan_reviews', 0] },
+  { node: 'architecture_review', outcome: 'PASS', review: ['architecture_reviews', 0] },
+  { node: 'plan_review', outcome: 'PASS', review: ['task_plan_reviews', 0] },
 ];
 
 test('(5) a run-mode parity skip in the ledger passes the parity gate by exclusion', { skip: SKIP }, async (t) => {
@@ -338,9 +382,8 @@ test('(7) writer questions route through <ask> and resume the writer on the prom
     writer(0),
     ask,
     writer(0),
-    parity(0, 0),
-    architecture(0, 0),
-    planReview(0, 0),
+    fullSet(0, 0),
+    ...waits({ parity: 'FAIL' }),
     writer(1, roundFiles(0), { passed: [closed(0, 'FAIL')] }),
     ask,
     // "dispatch the writer again with the answers appended to the prompt" — the prompt it had, so a
@@ -349,21 +392,32 @@ test('(7) writer questions route through <ask> and resume the writer on the prom
   ]);
 });
 
-test('(8) a reviewer blocker escalates', { skip: SKIP }, async (t) => {
+test('(8) a reviewer blocker is held until the join, which escalates it', { skip: SKIP }, async (t) => {
   const dir = await fixture(t, { parity: true, qa: false });
   const actions = await run(dir, [
     ...OPEN,
-    { outcome: 'PASS', review: ['business_parity_reviews', 0] },
-    { outcome: 'blocker' },
+    { node: 'business_parity_review', outcome: 'PASS', review: ['business_parity_reviews', 0] },
+    { node: 'architecture_review', outcome: 'blocker' },
+    { node: 'plan_review', outcome: 'PASS', review: ['task_plan_reviews', 0] },
   ]);
 
-  // `## Stop conditions`: "Any agent returns `error:` or `blocker:` → `<escalate>`."
-  assert.deepEqual(actions.at(-1), [
-    ['action', 'binding'],
-    ['binding', '<escalate>'],
-    ['node', 'architecture_review'],
-    ['agent', 'architecture-reviewer'],
-    ['reason', 'blocker'],
+  assert.deepEqual(actions, [
+    writer(0),
+    fullSet(0, 0),
+    wait(['business_parity_review', 'PASS'], ['architecture_review', 'plan_review']),
+    // `# ROUNDS`: a gate's `error` or `blocker` is "HELD, not routed when recorded" — the set
+    // still waits on the gate out.
+    wait(['architecture_review', 'blocker'], ['plan_review']),
+    // … and at the join "the first held gate's binding is printed and the round is not closed":
+    // `<escalate>` naming that gate, one `held` line per held gate, and no `round` line.
+    [
+      ['action', 'binding'],
+      ['binding', '<escalate>'],
+      ['node', 'architecture_review'],
+      ['agent', 'architecture-reviewer'],
+      ['reason', 'blocker'],
+      ['held', 'architecture_review blocker'],
+    ],
   ]);
 });
 
@@ -382,8 +436,8 @@ test('(9) a gapped findings series is never back-filled, and rounds count FAIL f
   // The round number carries on past the highest `review_<n>.md` on disk — round 4, never a gap
   // index — while the counter starts at 0.
   assert.deepEqual(actions[0], writer(0, undefined, { round: 4 }));
-  assert.deepEqual(actions[2], architecture(4, 0));
-  assert.deepEqual(actions[6], architecture(5, 1));
+  assert.deepEqual(actions[1], fullSet(4, 0));
+  assert.deepEqual(actions[5], fullSet(5, 1));
 
   // One architecture `FAIL` round and four plan-review `FAIL` rounds reach the 5-revision cap. Each
   // gate's count is its folder's `FAIL` files: architecture's planted `review_3.md` and its round 5–8
@@ -398,9 +452,11 @@ test('(10) an outcome the pending node does not declare is refused and changes n
 
   // `### 2`, "Parse the return" lists `verdict: PASS` and `verdict: FAIL`, and `## Stop conditions`
   // adds `error:` / `blocker:`; `no_ui` is the UI-test writer's outcome (`### 1. Spawn
-  // ui-tests-plan-writer`, "No-UI short-circuit"), never a parity reviewer's.
+  // ui-tests-plan-writer`, "No-UI short-circuit"), never a parity reviewer's. `--node` names a
+  // pending gate of the set, so the refusal is the outcome's.
   const refused = await walk(dir, [
-    'next', '--flow', WALKER_FLOW, '--branch', BRANCH, '--outcome', 'no_ui', '--skipped', 'none',
+    'next', '--flow', WALKER_FLOW, '--branch', BRANCH,
+    '--node', 'business_parity_review', '--outcome', 'no_ui', '--skipped', 'none',
   ]);
 
   assert.equal(refused.status, 1);
@@ -409,21 +465,21 @@ test('(10) an outcome the pending node does not declare is refused and changes n
   assert.deepEqual(readFileSync(walkerStatePath(dir)), before);
 });
 
-test('(11) a middle gate fails and every later reviewer is still dispatched', { skip: SKIP }, async (t) => {
+test('(11) a gate FAILs while another is out: the set waits, and the join revises on both files', { skip: SKIP }, async (t) => {
   const dir = await fixture(t, { parity: false, qa: false });
   const actions = await run(dir, [
     ...OPEN,
-    { outcome: 'FAIL', review: ['architecture_reviews', 0] },
-    { outcome: 'PASS', review: ['task_plan_reviews', 0] },
+    { node: 'architecture_review', outcome: 'FAIL', review: ['architecture_reviews', 0] },
+    { node: 'plan_review', outcome: 'PASS', review: ['task_plan_reviews', 0] },
   ]);
 
   assert.deepEqual(actions, [
     writer(0),
-    architecture(0, 0, { passed: [['skip', 'business_parity_review skipped']] }),
-    // The architecture `FAIL` short-circuits nothing: plan review runs in the same round.
-    planReview(0, 0),
-    // Exactly the two files the round recorded — the skipped parity gate recorded none — in gate
-    // order, the architecture `FAIL` file and the plan-review `PASS` file.
+    set(architecture(0, 0, { passed: [['skip', 'business_parity_review skipped']] }), planReview(0, 0)),
+    // The architecture `FAIL` short-circuits nothing: plan review is still out in the same round.
+    wait(['architecture_review', 'FAIL'], ['plan_review']),
+    // At the join, exactly the two files the round recorded — the skipped parity gate recorded
+    // none — in gate order, the architecture `FAIL` file and the plan-review `PASS` file.
     writer(1, [findings('architecture_reviews', 0), findings('task_plan_reviews', 0)], {
       passed: [closed(0, 'FAIL')],
     }),
@@ -461,16 +517,11 @@ test('(14) the review mode switches to converging at the third round', { skip: S
     ...gates(2),
   ]);
 
+  // Every block of a set carries the same mode.
   assert.deepEqual(dispatchesOf(actions, 'business_parity_review', 'architecture_review', 'plan_review'), [
-    parity(0, 0, { mode: 'full' }),
-    architecture(0, 0, { mode: 'full' }),
-    planReview(0, 0, { mode: 'full' }),
-    parity(1, 1, { mode: 'full' }),
-    architecture(1, 1, { mode: 'full' }),
-    planReview(1, 1, { mode: 'full' }),
-    parity(2, 2, { mode: 'converging' }),
-    architecture(2, 2, { mode: 'converging' }),
-    planReview(2, 2, { mode: 'converging' }),
+    fullSet(0, 0, { mode: 'full' }),
+    fullSet(1, 1, { mode: 'full' }),
+    fullSet(2, 2, { mode: 'converging' }),
   ]);
   assert.deepEqual(actions.at(-1), handoff('passed', 2));
 });
@@ -500,9 +551,10 @@ test('(16) PASS at a round gate without --findings is refused and changes no sta
   const before = readFileSync(walkerStatePath(dir));
 
   // Every round gate writes a round file on `PASS` as on `FAIL`, so its verdict is never fed
-  // without the file it stands for.
+  // without the file it stands for — even named by `--node` as a pending gate of the set.
   const refused = await walk(dir, [
-    'next', '--flow', WALKER_FLOW, '--branch', BRANCH, '--outcome', 'PASS', '--skipped', 'none',
+    'next', '--flow', WALKER_FLOW, '--branch', BRANCH,
+    '--node', 'business_parity_review', '--outcome', 'PASS', '--skipped', 'none',
   ]);
 
   assert.equal(refused.status, 1);
@@ -514,11 +566,15 @@ test('(16) PASS at a round gate without --findings is refused and changes no sta
 /*
  * The task prompt's `## Tests` → **Walker / graph**, bullet by bullet:
  *
- * - a round in which a middle gate fails still dispatches every later reviewer — `(11)`, and `(2)`
- *   for the first gate;
+ * - the writer's return opens one set of every due gate, each outcome but the last answered with
+ *   `wait` — every case from `(1)`; a set of two where parity is skipped at the fan-out — `(4)`–`(6)`
+ *   and `(11)`;
+ * - a gate's `FAIL` leaves the rest of the set out and the join revises on every file of the round —
+ *   `(11)`, and `(2)` for the first gate;
+ * - a gate's `blocker` is held until the join, which escalates it without closing the round — `(8)`;
  * - the counter increments once per round — `(12)`, and `(3)`'s writer dispatches;
  * - the cap escalation names every open gate — `(13)`, and `(3)` / `(9)` for one open gate;
  * - `arg.review_mode` is `full` for rounds 1–2 and `converging` from round 3 — `(14)`;
- * - continuing a saved walk mid-round re-dispatches the reviewer in flight and keeps the round's
- *   recorded findings — `cli/test/flow-walker-resume.test.mjs`, not this suite.
+ * - continuing a saved walk mid-round — `cli/test/flow-walker-resume.test.mjs`, not this suite;
+ * - the fan-out's refusals and gates recorded by simultaneous calls — other suites, not this one.
  */

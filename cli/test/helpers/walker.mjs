@@ -12,6 +12,11 @@
  * Every round gate's findings file — its `PASS` as well as its `FAIL` — is planted **before** the
  * verdict it stands for is fed, because the walker reads the round number, each reviewer's
  * `arg.iteration` and each gate's `FAIL` count from the folders' real contents.
+ *
+ * A step's `node` is passed as `--node`, which the walker requires while a round's set of gates is
+ * pending. `runConcurrently` issues a step list's calls at once — still against the copy `init`
+ * shipped into the fixture, as the rule above requires — and `blocksOf` splits one action into its
+ * `action:`-headed blocks.
  */
 
 import assert from 'node:assert/strict';
@@ -162,34 +167,88 @@ export async function plantLedger(dir, branch, skippedCsv) {
 }
 
 /**
- * Drive a scripted sequence and return every action, refusing on the first non-zero exit.
+ * A step is `{ start: true }` or `{ outcome }`; a step carrying `node` passes it as
+ * `--node <node>` before `--outcome`. A `PASS` or `FAIL` step carries `review: [folder, n, verdict?]`,
+ * planted first — with `verdict` defaulting to the step's own outcome — and passed as `--findings`.
  *
- * A step is `{ start: true }` or `{ outcome }`; a `PASS` or `FAIL` step carries
- * `review: [folder, n, verdict?]`, planted first — with `verdict` defaulting to the step's own
- * outcome — and passed as `--findings`. `skipped` is passed on every call as `--skipped`, and
- * `null` omits the flag so only a ledger can answer the run-mode gates.
+ * @typedef {{ start?: boolean, entry?: string, node?: string, outcome?: string, review?: [string, number, ('PASS' | 'FAIL')?] }} WalkerStep
+ */
+
+/**
+ * One step's argument vector, its findings file planted on the way.
  *
  * @param {string} dir
- * @param {ReadonlyArray<{ start?: boolean, entry?: string, outcome?: string, review?: [string, number, ('PASS' | 'FAIL')?] }>} steps
+ * @param {WalkerStep} step
+ * @param {{ branch: string, skipped: string | null }} options
+ */
+async function stepArgs(dir, step, { branch, skipped }) {
+  const args = ['start'];
+  if (!step.start) {
+    args[0] = 'next';
+    if (step.node !== undefined) args.push('--node', step.node);
+    args.push('--outcome', step.outcome);
+  }
+  args.push('--flow', FLOW, '--branch', branch);
+  if (step.entry !== undefined) args.push('--entry', step.entry);
+  if (step.review !== undefined) {
+    const [folder, n, verdict = step.outcome === 'PASS' ? 'PASS' : 'FAIL'] = step.review;
+    args.push('--findings', await plantReview(dir, `${folder}/${branch}`, n, verdict));
+  }
+  if (skipped !== null) args.push('--skipped', skipped);
+  return args;
+}
+
+/**
+ * Drive a scripted sequence and return every action, refusing on the first non-zero exit.
+ *
+ * `skipped` is passed on every call as `--skipped`, and `null` omits the flag so only a ledger can
+ * answer the run-mode gates.
+ *
+ * @param {string} dir
+ * @param {ReadonlyArray<WalkerStep>} steps
  * @param {{ branch?: string, skipped?: string | null }} [options]
  * @returns {Promise<Array<Array<[string, string]>>>}
  */
 export async function run(dir, steps, { branch = 'feat_x', skipped = 'none' } = {}) {
   const actions = [];
   for (const step of steps) {
-    const args = step.start ? ['start'] : ['next', '--outcome', step.outcome];
-    args.push('--flow', FLOW, '--branch', branch);
-    if (step.entry !== undefined) args.push('--entry', step.entry);
-    if (step.review !== undefined) {
-      const [folder, n, verdict = step.outcome === 'PASS' ? 'PASS' : 'FAIL'] = step.review;
-      args.push('--findings', await plantReview(dir, `${folder}/${branch}`, n, verdict));
-    }
-    if (skipped !== null) args.push('--skipped', skipped);
+    const args = await stepArgs(dir, step, { branch, skipped });
     const result = await walk(dir, args);
     assert.equal(result.status, 0, `\`${args.join(' ')}\` exited ${result.status}\n${result.stdout}\n${result.stderr}`);
     actions.push(result.action);
   }
   return actions;
+}
+
+/**
+ * Issue every step's call at once: each step's file is planted first, then every `next` starts
+ * before any has finished. Asserts no status — which call won the lock is the caller's question.
+ *
+ * @param {string} dir
+ * @param {ReadonlyArray<WalkerStep>} steps
+ * @param {{ branch?: string, skipped?: string | null }} [options]
+ * @returns {Promise<Array<{ status: number, stdout: string, stderr: string, action: Array<[string, string]> }>>}
+ *   one result per step, in step order.
+ */
+export async function runConcurrently(dir, steps, { branch = 'feat_x', skipped = 'none' } = {}) {
+  const argv = [];
+  for (const step of steps) argv.push(await stepArgs(dir, step, { branch, skipped }));
+  return Promise.all(argv.map((args) => walk(dir, args)));
+}
+
+/**
+ * One parsed action split at each `action` pair, every block opening with its own.
+ *
+ * @param {ReadonlyArray<[string, string]>} action
+ * @returns {Array<Array<[string, string]>>}
+ */
+export function blocksOf(action) {
+  const blocks = [];
+  for (const pair of action) {
+    if (pair[0] === 'action' || blocks.length === 0) blocks.push([]);
+    blocks.at(-1).push(pair);
+  }
+  return blocks;
 }
 
 /** The pending node's state file, for a refusal asserted on the bytes on disk. */
