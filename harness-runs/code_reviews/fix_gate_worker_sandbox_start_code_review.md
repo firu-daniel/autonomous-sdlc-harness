@@ -40,7 +40,7 @@ The one Should Fix is a claim in the run form's header. BG2's measured survival 
 Each entry resolves to `harness-runs/code_reviews/fix_gate_worker_sandbox_start_code_review/finding_<K>.md` through its `**Finding K**` reference. Entries are sorted with the smallest, safest edits first.
 
 1. [x] **Finding 3** — Name Task 6 of `fix_gate_worker_sandbox_start` instead of "this task" in the WS block of `docs/sandbox-verification.md` _(layer: general)_
-2. [ ] **Finding 2** — Re-wrap the two over-long header lines in the run form and its byte copy _(layer: cli, general)_
+2. [x] **Finding 2** — Re-wrap the two over-long header lines in the run form and its byte copy _(layer: cli, general)_
 3. [ ] **Finding 1** — Mark BG2 as the `nohup` shape's measurement in the run form's header, and record the `trap '' HUP` shape's survival as owed row WS6 _(layer: cli, general)_
 
 ---

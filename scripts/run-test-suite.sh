@@ -94,8 +94,8 @@
 # query does not list them. Residual: a gate that scans the state directory's
 # committable files does not re-scan a change made there after the run. A
 # session can write `.commit` as it can write `.verdict`, so reuse adds no trust
-# surface. Not reusing, the run form removes `.verdict`, `.commit` and `.start` before it
-# starts a run, so a stale `.commit` never outlives its verdict. A run
+# surface. Not reusing, the run form removes `.verdict`, `.commit` and `.start`
+# before it starts a run, so a stale `.commit` never outlives its verdict. A run
 # removes a `.running` file only while it still holds its own PID. `.running`'s
 # content is the worker's PID as an ownership token; its MTIME IS THE
 # HEARTBEAT, refreshed every HEARTBEAT_SECONDS while the worker is alive. A
@@ -129,9 +129,10 @@
 # `pending` in both cases. Only seeing neither within the window is the refusal
 # `the detached run of <label> did not start`; `<label>.start` then holds what
 # the worker wrote to stderr before it died or stalled, followed by the run
-# form's one marker line naming the worker's PID and the window. The poll bounds a process that
-# has not begun, never a gate. The worker refreshes `.running` while it waits on
-# its own gate, so the heartbeat stops when the worker stops.
+# form's one marker line naming the worker's PID and the window. The poll
+# bounds a process that has not begun, never a gate. The worker refreshes
+# `.running` while it waits on its own gate, so the heartbeat stops when the
+# worker stops.
 #
 # RESIDUALS OF THE DETACHED SHAPE. A gate that never exits keeps the heartbeat
 # fresh, so `--wait` prints `pending` indefinitely: nothing in this script
