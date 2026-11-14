@@ -22,7 +22,7 @@ This list is the **single source of truth** for the fix loop. The loop walks the
 6. [x] **Finding 6** — `(q) job mode: the registry run_job leaves accepts the main checkout…` refused before `pending`. _(layer: cli)_
 7. [x] **Finding 7** — `(s) job mode: the wrappers leg's control-clone record…` refused before `pending`. _(layer: cli)_
 8. [x] **Finding 8** — `(t) F15: job mode with <main>/scripts/.git protected and absent…` refused before `pending`. _(layer: cli)_
-9. [ ] **Finding 9** — `(n) a redirected XDG_STATE_HOME or HOME does not choose the clone's profile` refused before `pending`. _(layer: cli)_
+9. [x] **Finding 9** — `(n) a redirected XDG_STATE_HOME or HOME does not choose the clone's profile` refused before `pending`. _(layer: cli)_
 10. [ ] **Finding 10** — `(l) the vector binds the target's .git read-only…` refused before `pending`. _(layer: cli)_
 11. [ ] **Finding 11** — `(m) the vector pins Claude Code's built-in protected paths…` refused before `pending`. _(layer: cli)_
 

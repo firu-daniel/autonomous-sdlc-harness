@@ -32,3 +32,9 @@ not ok 516 - (n) a redirected XDG_STATE_HOME or HOME does not choose the clone's
 
 - [ ] No code change of its own. If Finding 2's change to the launcher's launch `case` has not landed, land it first, as Finding 2 specifies.
 - [ ] If the failure persists after Finding 2, diagnose it as a new finding in the next round. Do not change the test.
+
+## Already passing
+
+- **(a)** Named test: `(n) a redirected XDG_STATE_HOME or HOME does not choose the clone's profile`; file run: `cli/test/launch-sandboxed-gates.test.mjs`.
+- **(b)** Command: `npm test --workspace cli -- test/launch-sandboxed-gates.test.mjs`, from the repository root, foreground. The named test is a top-level `test(...)` and reports on its own TAP line: `ok 17 - (n) a redirected XDG_STATE_HOME or HOME does not choose the clone's profile` (duration_ms 9142.04475). File summary: `# tests 21`, `# pass 21`, `# fail 0`. Passing after an earlier fix: Finding 2's launcher change to the launch `case` in `cli/templates/scripts/launch-sandboxed-gates.sh`, already landed on this branch.
+- **(c)** No code file was edited; this record is the only write.
