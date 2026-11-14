@@ -100,8 +100,13 @@
 #     transcript, or a record from before token accounting) renders — in its
 #     five token cells.
 #   - A by_tool row for Agent / Task is labelled sub-agent wall time, with a
-#     line saying so; `#### Slowest calls` drops Agent / Task from
+#     line saying it sums every dispatch's own wall time, so dispatches sent
+#     together count once each and the sum can exceed the orchestrator's wait,
+#     which `### Time`'s `Sub-agents (union)` (time.subagent_wall_ms, — for a
+#     record without it) shows; `#### Slowest calls` drops Agent / Task from
 #     tools.slowest, so records written before slowest excluded them match.
+#   - `### Sub-agents` carries a line, when it has a row, that overlapping
+#     dispatches' wall shares can sum past 1.
 #
 # RESUMED SESSIONS. A record keyed "<session_id>#<N>" is a resume, and its result
 # event reports total_cost_usd, by_model cost, duration_api_ms and the sub-agent
@@ -369,10 +374,11 @@ def session_md($k; $sh):
          ["A resume of an earlier session: the result event's cost, per-model cost, `duration_api_ms` and sub-agent counts are cumulative, so this section shows this occurrence's share.", ""]
        else [] end)
     + ["### Time", ""]
-    + table(["Wall", "duration_ms", "duration_api_ms", "Host-suspended", "Idle", "Active", "Suspend source"];
+    + table(["Wall", "duration_ms", "duration_api_ms", "Host-suspended", "Idle", "Active",
+             "Sub-agents (union)", "Suspend source"];
             [[($t.wall_ms | fmt_dur), ($t.duration_ms | fmt_dur), ($sh.duration_api_ms | fmt_dur),
               ($t.host_suspended_ms | fmt_dur), ($t.idle_ms | fmt_dur), ($t.active_ms | fmt_dur),
-              $t.suspend_source]])
+              ($t.subagent_wall_ms | fmt_dur), $t.suspend_source]])
     + ["", "### Idle gaps (over \($t.idle_threshold_s | fmt) s)", ""]
     + table(["Start", "Length", "Context", "Class"];
             [($t.idle_gaps // [])[] | [.start_at, (.length_ms | fmt_dur), .context, .class]])
@@ -386,7 +392,7 @@ def session_md($k; $sh):
              | [(if .tool | is_dispatch then "\(.tool) — sub-agent wall time" else .tool end),
                 .context, .count, (.total_ms | fmt_dur), (.max_ms | fmt_dur)]])
     + (if [($tl.by_tool // [])[] | select(.tool | is_dispatch)] | length > 0 then
-         ["", "`Agent` / `Task` rows are sub-agent wall time: how long the orchestrator was blocked on each dispatch, which `### Sub-agents` breaks down per dispatch. They are not time spent in a tool."]
+         ["", "`Agent` / `Task` rows are sub-agent wall time: each row sums every dispatch's own wall time, which `### Sub-agents` breaks down per dispatch, so dispatches sent together count once each and the sum can exceed the time the orchestrator waited, which is `### Time`'s `Sub-agents (union)`. They are not time spent in a tool."]
        else [] end)
     + ["", "#### Slowest calls (sub-agent dispatches excluded)", ""]
     + table(["Tool", "Context", "Started", "Duration", "Result bytes", "Error", "Permission denied"];
@@ -406,6 +412,9 @@ def session_md($k; $sh):
                       .output_tokens, .input_tokens,
                       in_total(.input_tokens; .cache_read_tokens; .cache_write_tokens),
                       .cache_read_tokens, .cache_write_tokens, .wall_share]])
+    + (if ($sa | length) > 0 then
+         ["", "Wall share is each dispatch's own duration over the session's wall, so overlapping dispatches' wall shares can sum past 1."]
+       else [] end)
     + (if $untracked == 0 then []
        elif $sh.token_source == "legacy" then
          ["", "— in a token column: this session was recorded before token accounting, and its stream-derived sub-agent figures are partial, so none is shown."]
