@@ -348,11 +348,14 @@ g12_fr4() {
 # FR6: the save step prints two skip forms, each failing the row: `remote-run.sh: save: skipped …`
 # (save_link_free and verb_save in cli/templates/scripts/remote-run.sh) and
 # `remote state bundle: skipped …` (hr_remote_copy_tree and hr_remote_bundle_source_ok in
-# cli/templates/scripts/lib/harness-run-lib.sh, run by hr_remote_bundle_write). The saved, restored
-# and placed lines are verb_save's and verb_restore's in remote-run.sh.
+# cli/templates/scripts/lib/harness-run-lib.sh, run by hr_remote_bundle_write). The saved, restored,
+# placed and withheld lines are verb_save's and verb_restore's in remote-run.sh.
 # verb_restore prints the placed line only when HR_REMOTE_PLANNING_PLACED + HR_REMOTE_PLANNING_KEPT is
-# non-zero. So with no such line, the parked job's artifact decides whether a planning file was saved:
-# read through g12_artifact at planning/, the bundle's planning directory (HR_REMOTE_PLANNING_DIR in
+# non-zero, and the withheld line only when HR_REMOTE_PLANNING_WITHHELD is non-zero — a job restore
+# whose checkout tracks the story index withholds the bundle's task-plan drafts rather than placing
+# them (hr_remote_bundle_restore in cli/templates/scripts/lib/harness-run-lib.sh). Either line passes
+# the restore half; only with neither does the parked job's artifact decide whether a planning file
+# was saved: read through g12_artifact at planning/, the bundle's planning directory (HR_REMOTE_PLANNING_DIR in
 # cli/templates/scripts/lib/harness-run-lib.sh), counting regular files only, as neither of
 # hr_remote_bundle_restore's tallies counts a link. FR6 is graded on the save and restore lines plus
 # that artifact read, which is what its Read from names, so the header's sentence holds for it.
@@ -374,12 +377,13 @@ g12_fr6_save() {
 }
 
 g12_fr6_restore() {
-  local restored placed art files count
+  local restored placed withheld art files count
   g12_fr_job resumed || return 0
   g12_fr_ran "$G12_STEP_RESTORE" || return 0
   g12_arm_log "$G12_STEP_RESTORE" || return 0
   restored="$(printf '%s\n' "$G12_ARM_LOG" | grep -F -- "restored the bundle of run $G12_FR_PARKED " | head -n 1)"
   placed="$(printf '%s\n' "$G12_ARM_LOG" | grep -E 'placed [0-9]+ planning file\(s\)' | head -n 1)"
+  withheld="$(printf '%s\n' "$G12_ARM_LOG" | grep -E 'withheld [0-9]+ planning file\(s\)' | head -n 1)"
   if [ -z "$restored" ]; then
     g12_arm_set fail "$G12_STEP_RESTORE in run $G12_ARM_ID carries no restored the bundle of run $G12_FR_PARKED line" "$G12_ARM_LOG"
     return
@@ -387,6 +391,11 @@ g12_fr6_restore() {
   if [ -n "$placed" ]; then
     placed="placed${placed#*placed}"
     g12_arm_set pass "run $G12_ARM_ID restored the bundle of run $G12_FR_PARKED; ${placed%% for *}"
+    return
+  fi
+  if [ -n "$withheld" ]; then
+    withheld="withheld${withheld#*withheld}"
+    g12_arm_set pass "run $G12_ARM_ID restored the bundle of run $G12_FR_PARKED; ${withheld%% for *}"
     return
   fi
   # Not g12_arm_gh_failed: its evidence names G12_ARM_ID, the resumed job, not the parked one read here.
@@ -413,7 +422,7 @@ g12_fr6_restore() {
     g12_arm_set pass "run $G12_ARM_ID restored the bundle of run $G12_FR_PARKED; placed: none to place, the park preceded any plan file"
     return
   fi
-  g12_arm_set fail "$G12_STEP_RESTORE in run $G12_ARM_ID carries no placed <n> planning file(s) line, but run $G12_FR_PARKED's bundle holds $count planning file(s)" \
+  g12_arm_set fail "$G12_STEP_RESTORE in run $G12_ARM_ID carries no placed <n> planning file(s) line and no withheld <n> planning file(s) line, but run $G12_FR_PARKED's bundle holds $count planning file(s)" \
     "$G12_ARM_LOG"$'\n'"run $G12_FR_PARKED's bundle planning files:"$'\n'"$files"
 }
 

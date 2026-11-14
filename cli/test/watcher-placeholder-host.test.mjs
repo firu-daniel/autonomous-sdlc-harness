@@ -40,7 +40,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
-import { chmod, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
@@ -712,10 +712,15 @@ async function jobFixture(t) {
   const manifestDir = join(runnerTemp, JOB_MANIFEST_DIR);
   const settingsLocal = join(f.dir, '.claude', 'settings.local.json');
 
+  const logPath = join(f.dir, STATE_DIR, 'autonomous_logs', `${f.branch}.log`);
+
   /**
    * One `run_job` of the branch with the seam answering `host`. With `plant`, the session hangs
    * until `plant` has run (HUNG_BODY) and the stall watchdog is on; otherwise the session body is
-   * whatever the case set.
+   * whatever the case set. The job's watchdog polls on its own, so `STALL_KILL_SECS` is out of
+   * reach until the session is `silent` and the run log and stream are backdated, as the local
+   * pass's `touch -t` does: at `2`, a launch slower than the kill window was killed before its
+   * session started, and the relaunch took the hang arm.
    */
   async function job(host, env = {}, plant = null) {
     const script = ['. "$1" status >/dev/null', 'job_mode_enter', probes(host), 'run_job "$2" task none'].join('\n');
@@ -745,7 +750,7 @@ async function jobFixture(t) {
       REGISTRY: join(f.dir, REGISTRY_PATH),
       ...(plant === null
         ? {}
-        : { STALL_CHECK_ENABLED: '1', STALL_WARN_SECS: '1', STALL_KILL_SECS: '2', STALL_BUSY_CPU_PCT: '100000' }),
+        : { STALL_CHECK_ENABLED: '1', STALL_WARN_SECS: '1', STALL_KILL_SECS: '3600', STALL_BUSY_CPU_PCT: '100000' }),
       ...env,
     });
     let settled = null;
@@ -765,6 +770,13 @@ async function jobFixture(t) {
       }
       await plant();
       await writeFile(join(rec, 'go'), '', 'utf8');
+      const silentBy = Date.now() + HUNG_WAIT_MS;
+      while (!existsSync(join(rec, 'silent'))) {
+        assert.ok(Date.now() < silentBy, `the session did not go silent within ${HUNG_WAIT_MS} ms\n${f.watcherLog()}`);
+        await delay(100);
+      }
+      const longAgo = new Date('2020-01-01T00:00:00Z');
+      for (const path of [logPath, logPath.replace(/\.log$/, '.stream.jsonl')]) await utimes(path, longAgo, longAgo);
       // No deadline here: the stub's own bound ends the job, and `STALL_TIMEOUT_MS` bounds `runBash`.
       while (settled === null && !stallVerdictNotified(f.notifications(), f.branch)) await delay(100);
       await writeFile(join(rec, HUNG_RELEASE), '', 'utf8');
@@ -811,11 +823,27 @@ test('job: (1) a stall kill in a job sweeps its recorded leftovers before the re
 
   const log = f.watcherLog();
   for (const path of f.leftovers) assert.equal(present(path), false, `${path} is still there:\n${log}`);
-  for (const line of lines) assert.ok(log.includes(`placeholder sweep: removed ${line}`), log);
+  const reset = log.indexOf(`stall-watchdog: '${f.branch}' -> reset to the last commit and resume`);
+  assert.notEqual(reset, -1, log);
+  for (const line of lines) {
+    const removed = log.indexOf(`placeholder sweep: removed ${line}`);
+    assert.ok(removed !== -1 && removed < reset, `${line} was not removed before the reset:\n${log}`);
+  }
   const resumed = existsSync(join(f.rec, 'resumed-registry.json'))
     ? JSON.parse(readFileSync(join(f.rec, 'resumed-registry.json'), 'utf8')).runs[f.branch]
     : null;
-  assert.notEqual(resumed, null, `the session was not relaunched:\n${log}`);
+  const cpErr = join(f.rec, 'resumed-cp.err');
+  assert.notEqual(
+    resumed,
+    null,
+    [
+      'the session was not relaunched:',
+      `relaunched marker: ${existsSync(join(f.rec, 'relaunched')) ? 'present' : 'absent'}`,
+      `registry copy stderr: ${existsSync(cpErr) ? JSON.stringify(readFileSync(cpErr, 'utf8')) : 'absent'}`,
+      `prompts: ${f.prompts().length}`,
+      log,
+    ].join('\n'),
+  );
   assert.equal(resumed.stall_restarts, '1', log);
   assert.equal(f.prompts().length, 2, log);
   assert.match(f.prompts()[1], /This is a RESUME/, f.prompts()[1]);

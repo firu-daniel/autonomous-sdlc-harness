@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
 # flow-walker-gates.sh — the mechanical answers the flow walker needs at a
 # gate, each defined once: the next free `review_<n>` index in a findings
-# folder, that folder's round count, the run mode's skipped ids, whether a
-# `phases.*` flag is on, and the escalation evidence a story index or UI-test
-# index carries.
+# folder, a round file's verdict, a folder's count
+# of `FAIL` round files, a plan-review round's evidence, the run mode's skipped
+# ids, whether a `phases.*` flag is on, and the escalation evidence a story
+# index or UI-test index carries.
 #
 # IT ANSWERS AND NEVER DECIDES. Which node comes next, whether a counter hit
-# its cap and what the walker prints are the walker's. Nothing here writes
-# anything — not even the walker's state file — and the findings-folder
-# functions list names only and open no file.
+# its cap, which round a resume re-enters and what the walker prints are the
+# walker's; round evidence is an answer, the round decision is not. Nothing
+# here writes anything — not even the walker's state file. The findings-folder
+# functions list names only and open no file, except `fw_review_verdict` and
+# `fw_fail_count`, which read a round file's verdict line and nothing else
+# from it. The verdict line contract is
+# `plugin/instructions/plan_review_rounds.md` → `## The round file`: exactly
+# one line `verdict: PASS` or `verdict: FAIL`.
 #
 # SOURCED, NEVER EXECUTED, AND IT SOURCES NOTHING. It sets no shell option, so
 # the sourcing script's shell is left exactly as found. `fw_phase_on` calls
@@ -32,8 +38,23 @@
 #
 #   review index      mkdir "$root/f"; : > "$root/f/review_0.md"; : > "$root/f/review_3.md"
 #                     fw_next_review_index "$root/f"   -> 4   (a gap is never back-filled)
-#                     fw_round_count "$root/f"         -> 2
-#                     fw_next_review_index "$root/nope"; fw_round_count "$root/nope"  -> 0, 0
+#                     fw_next_review_index "$root/nope"  -> 0
+#   round verdicts    mkdir "$root/g"; printf 'verdict: FAIL\n' > "$root/g/review_0.md"; : > "$root/plan.md"
+#                     git -C "$root" add g/review_0.md plan.md
+#                     git -C "$root" -c user.name=r -c user.email=r@r commit -qm r
+#                     fw_review_verdict "$root/g/review_0.md"           -> FAIL
+#                     fw_review_verdict "$root/f/review_0.md"; echo $?  -> 1, prints nothing
+#                     fw_fail_count "$root/g"; fw_fail_count "$root/nope"   -> 1, 0
+#   round evidence    fw_round_evidence "$root" "$root/n_{round}.md" "$root/plan.md" -- a="$root/g" b="$root/h"
+#                     -> round: 0
+#                        gate: a FAIL <root>/g/review_0.md
+#                        gate: b missing <root>/h/review_0.md
+#                        note: absent
+#                        plan: not-newer
+#                     : > "$root/n_1.md"; printf 'x\n' >> "$root/plan.md"; (the same call)
+#                     -> ... note: present / plan: newer
+#                     fw_round_evidence "$root" "$root/n_{round}.md" "$root/plan.md" -- b="$root/h"
+#                     -> round: none / note: absent / plan: unknown
 #   run mode          fw_run_mode_skipped "$root" devscene/ feat_x none      -> none
 #                     fw_run_mode_skipped "$root" devscene/ feat_x ''; echo $?  -> 1, prints nothing
 #                     mkdir -p "$root/devscene/flow_progress"
@@ -76,19 +97,120 @@ fw_next_review_index() {
   return 0
 }
 
-# Print how many entries start with `review_` — the core's
-# `ls <findings_folder> | grep -c '^review_'`, not the highest index.
-fw_round_count() {
-  local folder="${1-}" name count=0
+# Print `PASS` or `FAIL` when <file> carries exactly one line that is
+# byte-exactly `verdict: PASS` or `verdict: FAIL` (a trailing CR tolerated);
+# print nothing and return 1 when it is absent, carries none, or carries more.
+fw_review_verdict() {
+  local file="${1-}" v
+  [ -f "$file" ] || return 1
+  v=$(awk '
+    { l = $0; sub(/\r$/, "", l) }
+    l == "verdict: PASS" || l == "verdict: FAIL" { n++; v = substr(l, 10) }
+    END { if (n == 1) print v }
+  ' "$file" 2>/dev/null)
+  [ -n "$v" ] || return 1
+  printf '%s\n' "$v"
+  return 0
+}
+
+# Print how many `review_<n>.md` entries `fw_review_verdict` reads as `FAIL`,
+# or 0 when the folder is absent. Not a count of files: a `PASS` round writes
+# a file too.
+fw_fail_count() {
+  local folder="${1-}" name n count=0
   [ -d "$folder" ] || { printf '0\n'; return 0; }
   ls -1 -- "$folder" 2>/dev/null | {
     while IFS= read -r name; do
       case "$name" in
-        review_*) count=$((count + 1)) ;;
+        review_*.md) ;;
+        *) continue ;;
       esac
+      n="${name#review_}"
+      n="${n%.md}"
+      case "$n" in
+        ''|*[!0-9]*) continue ;;
+      esac
+      [ "$(fw_review_verdict "$folder/$name")" = FAIL ] && count=$((count + 1))
     done
     printf '%s\n' "$count"
   }
+  return 0
+}
+
+# fw_round_evidence <root> <note_template> <plan_path>... -- <node>=<folder>...
+# Every path absolute; <note_template> carries the literal `{round}`; the pairs
+# are the gates the caller names, in gate order. Prints, in this order:
+#   round: <R> | round: none   R = the highest <n> among the folders' review_<n>.md
+#   gate: <node> <PASS|FAIL|missing|unreadable> <folder>/review_<R>.md   one per pair
+#   note: present | absent     <note_template> with {round} = R+1
+#   plan: not-newer | newer | unknown
+# `round: none` is followed by `note: absent` and `plan: unknown` only. `plan:`
+# is judged against the first pair whose round-R file exists: `unknown` when
+# none does or that file has no commit; `newer` when a commit after the file's
+# last one, or an uncommitted or untracked change, touches a plan path.
+# Returns 2, printing no `plan:` line, when `git` cannot answer in <root>, and 2
+# with nothing printed when the arguments carry no `--` or a pair no `=`.
+fw_round_evidence() {
+  local root="${1-}" note="${2-}" plans pairs np=0 nq=0 i pair node folder
+  local r=-1 n file v first='' c out
+  [ "$#" -ge 2 ] || return 2
+  shift 2
+  plans=()
+  pairs=()
+  while [ "$#" -gt 0 ] && [ "$1" != -- ]; do
+    plans[$np]="$1"; np=$((np + 1)); shift
+  done
+  [ "$#" -gt 0 ] || return 2
+  shift
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      *=*) ;;
+      *) return 2 ;;
+    esac
+    pairs[$nq]="$1"; nq=$((nq + 1)); shift
+  done
+  i=0
+  while [ "$i" -lt "$nq" ]; do
+    pair="${pairs[$i]}"
+    n=$(fw_next_review_index "${pair#*=}")
+    [ $((n - 1)) -gt "$r" ] && r=$((n - 1))
+    i=$((i + 1))
+  done
+  if [ "$r" -lt 0 ]; then
+    printf 'round: none\nnote: absent\nplan: unknown\n'
+    return 0
+  fi
+  printf 'round: %s\n' "$r"
+  i=0
+  while [ "$i" -lt "$nq" ]; do
+    pair="${pairs[$i]}"
+    node="${pair%%=*}"
+    folder="${pair#*=}"
+    file="$folder/review_$r.md"
+    if [ ! -e "$file" ]; then
+      v=missing
+    else
+      [ -n "$first" ] || first="$file"
+      v=$(fw_review_verdict "$file") || v=unreadable
+    fi
+    printf 'gate: %s %s %s\n' "$node" "$v" "$file"
+    i=$((i + 1))
+  done
+  case "$note" in
+    *'{round}'*) note="${note%%\{round\}*}$((r + 1))${note#*\{round\}}" ;;
+  esac
+  if [ -e "$note" ]; then printf 'note: present\n'; else printf 'note: absent\n'; fi
+  [ -n "$first" ] || { printf 'plan: unknown\n'; return 0; }
+  git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 2
+  git -C "$root" rev-parse --verify -q HEAD >/dev/null 2>&1 || { printf 'plan: unknown\n'; return 0; }
+  c=$(git -C "$root" rev-list -1 HEAD -- "$first" 2>/dev/null) || return 2
+  [ -n "$c" ] || { printf 'plan: unknown\n'; return 0; }
+  [ "$np" -gt 0 ] || { printf 'plan: not-newer\n'; return 0; }
+  out=$(git -C "$root" rev-list "$c..HEAD" -- "${plans[@]}" 2>/dev/null) || return 2
+  if [ -z "$out" ]; then
+    out=$(git -C "$root" --no-optional-locks status --porcelain -- "${plans[@]}" 2>/dev/null) || return 2
+  fi
+  if [ -n "$out" ]; then printf 'plan: newer\n'; else printf 'plan: not-newer\n'; fi
   return 0
 }
 

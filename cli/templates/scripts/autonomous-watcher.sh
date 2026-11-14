@@ -2103,23 +2103,39 @@ placeholder_manifest_writable_root() {
 # session's placeholders are its own mounts, so a live run skips the sweep,
 # logged unless <quiet> is 1. Returns 0.
 placeholder_sweep_pass() {
+  PLACEHOLDER_SWEEP_NONE=""
   hr_placeholder_host_probe_var
   [ "$HR_PLACEHOLDER_HOST" = "1" ] || return 0
   placeholder_sweep_unprobed "${1-}" "${2-0}"
 }
 
 # placeholder_sweep_unprobed <exclude_branch> <quiet> — placeholder_sweep_pass
-# on any host. Its other caller: job_sweep.
+# on any host. Sets PLACEHOLDER_SWEEP_NONE to why a pass that was not skipped
+# removed and kept nothing, else empty; logged by the stall kill tier alone,
+# since the pass-start sweep runs on every poll. Its other caller: job_sweep.
+PLACEHOLDER_SWEEP_NONE=""
 placeholder_sweep_unprobed() {
   local exclude="${1-}" quiet="${2-0}" live line
+  PLACEHOLDER_SWEEP_NONE=""
   live="$(running_count "$exclude")"
   if [ "$live" != "0" ]; then
     [ "$quiet" = "1" ] || log "placeholder sweep: skipped, $live run(s) of this repository live"
     return 0
   fi
-  placeholder_manifests_var "$JOB_MODE" "$HARNESS_REPO_SLUG" || return 0
-  [ "${#PLACEHOLDER_MANIFESTS[@]}" -gt 0 ] || return 0
-  hr_placeholder_sweep_var "${PLACEHOLDER_MANIFESTS[@]}" || return 0
+  if ! placeholder_manifests_var "$JOB_MODE" "$HARNESS_REPO_SLUG"; then
+    PLACEHOLDER_SWEEP_NONE="no manifest path resolves"
+    return 0
+  fi
+  if [ "${#PLACEHOLDER_MANIFESTS[@]}" -eq 0 ]; then
+    PLACEHOLDER_SWEEP_NONE="no manifest found"
+    return 0
+  fi
+  if ! hr_placeholder_sweep_var "${PLACEHOLDER_MANIFESTS[@]}"; then
+    PLACEHOLDER_SWEEP_NONE="no manifest readable"
+    return 0
+  fi
+  [ -n "$HR_PLACEHOLDER_REMOVED$HR_PLACEHOLDER_KEPT" ] ||
+    PLACEHOLDER_SWEEP_NONE="no recorded path present"
   while IFS= read -r line; do
     [ -n "$line" ] && log "placeholder sweep: removed $line"
   done <<EOF
@@ -4852,6 +4868,8 @@ check_stalled_runs() {
       done
       if [ "$tree_left" = "0" ]; then
         placeholder_sweep_pass "$b" 0
+        [ -z "$PLACEHOLDER_SWEEP_NONE" ] ||
+          log "placeholder sweep: nothing swept after killing '$b' — $PLACEHOLDER_SWEEP_NONE"
       else
         log "placeholder sweep: skipped, '$b''s process tree has not exited"
       fi

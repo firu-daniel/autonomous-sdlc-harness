@@ -1,0 +1,25 @@
+### Task 15 — Give `task-plan-reviewer` round files, the two Must Fix fields and its converging variants
+
+**Goal:** Make `plugin/agents/task-plan-reviewer.md` write a round file every round, `PASS` included, take the two new dispatch keys, write each Must Fix with its `Raised against:` and `Must hold:` lines, and — in converging mode — check only its previous Must Fix items, the writer's changes and the recorded rejections, with a stated converging variant for each of its rules that assumes a whole-plan sweep.
+
+**Depends on:** Task 11, whose `## Loop` step 4 dispatch block is `story_path:`, `task_files_dir:`, `prompt_path:`, `findings_folder: <state_dir>/task_plan_reviews/<branch>/`, `iteration: <iteration>` (the round number, the same in every gate's folder), `review_mode: <review_mode>` (`full` or `converging`) and `revision_note: <state_dir>/plan_revisions/<branch>/task_plan_revision_<iteration>.md`, and which passes the verdict **and** `findings_file:` to the walker on `PASS` and `FAIL`. Task 10's `plugin/instructions/plan_review_rounds.md` → `## The round file`, `## The Must Fix entry`, `## Converging mode`, `## Incidental findings — where they go and who reads them`, `## A rejection recorded under precedence`.
+
+**Where this task stops.** The two sibling plan reviewers are **Tasks 16 and 17**; the round contract is the module's and is cited, not restated. The UI-test-plan reviewer is untouched.
+
+### Targets
+
+- `plugin/agents/task-plan-reviewer.md`
+
+**Work:**
+
+- [ ] `## Invocation contract`: five keys → seven, with `review_mode` and `revision_note` rows; *"You create `<findings_folder>` yourself, and only when you have findings to write. The PASS branch … must not touch disk."* becomes: you create it with your first round file, and you write your round file on every outcome (cite `## The round file`). Rewrite **"Your return is parsed, not read."**: the caller passes `verdict: PASS` or `verdict: FAIL` with your `findings_file:` to the walker; a `FAIL` no longer re-dispatches the writer directly — every plan gate runs in the round, and when the round closes with any `FAIL` the writer is re-dispatched once with every findings file of the round (`Revise the task plan per findings at <findings_files>.`); at the fifth failing round the loop escalates. Keep the byte-exact verdict-line rule and the *"every Must Fix you write must name **which file** to change"* sentence.
+- [ ] `## Process` and `### Per-task-file structure`'s whole-set reading: in `review_mode: converging`, read per `## Converging mode` instead of the whole set, and state this reviewer's converging variants: the index↔file correspondence and story-index structure checks run where the round's changes touch the readiness list, a heading or the task set; the completeness checks (*"Every requirement in the task prompt maps to at least one per-task file"* and the required-set checks) run on the requirements and units the changed text reaches; the `<state_dir>/lessons.md` check runs on the changed text.
+- [ ] The **Scope register derivation duty**: its converging variant — execute every derivation entry as today; dispositions (i)–(iii), and *"**never none** when a missing site is verified"*, apply only to sites the round's changed text reaches, **except** that a round whose revision note shows a change to the register, to a derivation entry or to the plan's target set re-runs the duty in full. State it beside the existing bullets, not instead of them.
+- [ ] The recorded-rejection bullet (*"A recorded rejection is an addressed finding only once you have tested it."*): add one sentence, byte-identical to the one Tasks 16 and 17 add — *"A rejection recorded under precedence is tested as `${CLAUDE_PLUGIN_ROOT}/instructions/plan_review_rounds.md` → `## A rejection recorded under precedence` states, the one exception to the rule that `call stands` is unavailable for a Must Fix."* — and say the bullet runs every round in both modes.
+- [ ] `## Output contract`: PASS — write the round file (cite `## The round file`) and return `verdict: PASS` then `findings_file: <full_path>`; FAIL — the template's heading becomes `# Task plan review — round {iteration}`, followed by the `verdict:` and `review_mode:` lines, and each Must Fix entry carries `**Raised against:**` and `**Must hold:**` before `**Fix:**` (cite `## The Must Fix entry`); add the optional `## Incidental findings (not gating)` section to the template with the never-gating rule cited. *"Do not save a file when PASS."* and *"Only **Must Fix** triggers another writer iteration."* are restated to match.
+
+**Verification:**
+
+- `grep -n "only when you have findings\|Do not save a file when PASS\|must not touch disk\|which increments \`iteration\` and re-dispatches" plugin/agents/task-plan-reviewer.md` finds nothing.
+- `grep -c "A rejection recorded under precedence is tested as" plugin/agents/task-plan-reviewer.md` is `1`, and the sentence is byte-for-byte the literal quoted in the Work bullet above — the literal Tasks 16 and 17 copy.
+- The `tools:` line is unchanged: the round file is written with the `Write` it already carries.

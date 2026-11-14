@@ -142,7 +142,7 @@ const QA_DRIVER_CHOSEN = 'mobile-maestro';
 const QA_DRIVER_UNKNOWN = 'appium';
 
 /** Artifact directories the flow writes whatever the phases are, and the two long-lived ledgers. */
-const ALWAYS_ON_DIRS = ['task_plans', 'code_reviews', 'flow_progress', 'branch_statistics', 'run_analytics', 'clarifications'];
+const ALWAYS_ON_DIRS = ['task_plans', 'code_reviews', 'flow_progress', 'branch_statistics', 'run_analytics', 'clarifications', 'plan_revisions'];
 const LEDGERS = ['lessons.md', 'improvement_suggestions.md'];
 
 /** Directories that belong to a phase, so their presence is the phase toggle made visible. */

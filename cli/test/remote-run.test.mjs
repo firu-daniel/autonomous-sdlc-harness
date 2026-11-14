@@ -1163,7 +1163,7 @@ test('a walk paused mid-planning in one checkout continues in a fresh one, its p
   assert.equal(existsSync(join(c.dir, STORY_INDEX)), false);
 });
 
-test('restore keeps a planning file the fresh checkout already carries, and reports it kept', async (t) => {
+test('restore withholds a planning draft once the checkout tracks the story index, and reports it withheld', async (t) => {
   const a = await remoteFixture(t);
   mkdirSync(join(a.dir, STATE_DIR, 'story_plans'), { recursive: true });
   writeFileSync(join(a.dir, STORY_INDEX), 'draft from the paused job\n');
@@ -1179,7 +1179,9 @@ test('restore keeps a planning file the fresh checkout already carries, and repo
   const head = (await runGit(b.dir, ['rev-parse', 'HEAD'])).stdout.trim();
   const restored = await restoreFrom(b, out, head);
   assert.equal(restored.status, 0, restored.stderr);
-  assert.match(restored.stdout, /placed 0 planning file\(s\) for feat_x; kept 1/);
+  assert.match(restored.stdout, /withheld 1 planning file\(s\) for feat_x; the checkout tracks its story index/);
+  assert.doesNotMatch(restored.stdout, /remote-run\.sh: placed /);
+  assert.doesNotMatch(restored.stdout, /withheld the saved walk/);
   assert.equal(readFileSync(join(b.dir, STORY_INDEX), 'utf8'), 'committed on the branch\n');
   assert.equal((await runGit(b.dir, ['status', '--porcelain', '--', STORY_INDEX])).stdout, '');
 });

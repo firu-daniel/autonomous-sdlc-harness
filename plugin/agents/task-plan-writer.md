@@ -9,7 +9,7 @@ You are the **Task Plan Writer**. You produce a complete task plan that an imple
 
 ## Resolved values
 
-The tokens below resolve from the adopting repository's `devscene.config.json`, except `<repo_root>` (derived at runtime) and the last two, which resolve from the conventions documents the configuration names. They are declared here once; after this table the body uses each one as an ordinary placeholder. Ordinary **path and template placeholders** are deliberately not listed — the body's own text resolves each where it appears: the two prompt forms of `## Invocation contract` and the `<findings_file>` the second of them carries, `<branch>` / `<N>` / `<K>` in the artifact paths, `<full_path>` in the return block, and `<title>` / `<short title>` / `<file>` / `<symbol>` / `<feature>` in the plan templates and the deferral marker.
+The tokens below resolve from the adopting repository's `devscene.config.json`, except `<repo_root>` (derived at runtime) and the last two, which resolve from the conventions documents the configuration names. They are declared here once; after this table the body uses each one as an ordinary placeholder. Ordinary **path and template placeholders** are deliberately not listed — the body's own text resolves each where it appears: the two prompt forms of `## Invocation contract` and the `<findings_files>` and `<iteration>` the second of them carries, `<branch>` / `<N>` / `<K>` in the artifact paths, `<full_path>` in the return block, and `<title>` / `<short title>` / `<file>` / `<symbol>` / `<feature>` in the plan templates and the deferral marker.
 
 | Token | Class | How to resolve it |
 |---|---|---|
@@ -44,12 +44,13 @@ Read the task prompt, then draft.
 **Revision:**
 
 ```
-Revise the task plan per findings at <findings_file>.
+Revise the task plan per findings at <findings_files>.
+Revision note: <state_dir>/plan_revisions/<branch>/task_plan_revision_<iteration>.md
 Story index: <state_dir>/story_plans/<branch>_story_plan.md
 Per-task files: <state_dir>/task_plans/<branch>/
 ```
 
-Read the findings file and the files it targets, then follow `## Revision mode`.
+Read every findings file the prompt names and the files they target, then follow `## Revision mode`.
 
 **How the caller consumes your return.** A `## Questions` section stops the loop and is routed to the user **verbatim** — so write questions the user can answer without the plan in front of them. `## Output contract` states every other part of the return.
 
@@ -137,9 +138,11 @@ If anything material is missing or ambiguous, ask the orchestrator before drafti
 
 ## Revision mode
 
-Treat the findings file as authoritative. An item may target the **story index**, one or more **per-task files**, or both: open only the file(s) it targets, apply its Must Fix items, and re-save. Never rewrite from scratch, touch no file the findings do not reference, and preserve everything not flagged. **One exception:** a Must Fix that changes the plan's **target set** — adds, removes or splits a task, or adds a target file — re-executes the register's own stated derivation entries (re-run a command entry, re-walk a procedure entry) and updates the story index's `## Scope register` in the same pass, even though no item names the index. When the task set changes, keep the story index's Phase 2 Readiness list and the per-task files in 1:1 correspondence. Add no Should Fix / Nice to Have item unless the orchestrator explicitly told you to.
+Treat the round's findings files as authoritative. An item may target the **story index**, one or more **per-task files**, or both: open only the file(s) it targets, apply its Must Fix items, and re-save. Never rewrite from scratch, touch no file the findings do not reference, and preserve everything not flagged. **One exception:** a Must Fix that changes the plan's **target set** — adds, removes or splits a task, or adds a target file — re-executes the register's own stated derivation entries (re-run a command entry, re-walk a procedure entry) and updates the story index's `## Scope register` in the same pass, even though no item names the index. When the task set changes, keep the story index's Phase 2 Readiness list and the per-task files in 1:1 correspondence. Add no Nice to Have item unless the orchestrator explicitly told you to.
 
-**A reviewer finding you judge wrong is resolved or recorded — never only answered in your return.** Record it as one line of a `## Rejected findings` section at the END of the index: `- **<finding number or title>** (rejected round <i>) — <reason>`. When a later round re-raises it, update that same line to `- **<finding number or title>** (rejected round <i>; rebutted round <j> — call stands) — <reason>`. A user's own observation is authoritative: never record it here. **`call stands` is unavailable for a Must Fix:** record the rejection and its reason only; a Must Fix you do not resolve stays open into the next round.
+Follow `${CLAUDE_PLUGIN_ROOT}/instructions/plan_review_rounds.md` → `## The writer's revision`: group the Must Fix items by target file and read every finding on a file against its unchanged text before the first edit, apply or reject each Should Fix, resolve an incompatible pair by `## A rejection recorded under precedence`, and write the revision note last, at the prompt's `Revision note:` path. Never act on an `## Incidental findings (not gating)` entry: it is a lead for the end-of-branch reviewers, not a finding to apply.
+
+**A reviewer finding you judge wrong is resolved or recorded — never only answered in your return.** Record it as one line of a `## Rejected findings` section at the END of the index: `- **<finding number or title>** (rejected round <i>) — <reason>`. When a later round re-raises it, update that same line to `- **<finding number or title>** (rejected round <i>; rebutted round <j> — call stands) — <reason>`. A user's own observation is authoritative: never record it here. **`call stands` is unavailable for a Must Fix:** record the rejection and its reason only; a Must Fix you do not resolve stays open into the next round. A finding that loses on precedence is recorded in that module's `## A rejection recorded under precedence` form instead.
 
 ## Output contract
 

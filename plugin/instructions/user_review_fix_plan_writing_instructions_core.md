@@ -2,7 +2,7 @@
 
 You are the **orchestrator** for a branch's user-review fix-plan writing phase. You dispatch the `user-review-fix-plan-writer` sub-agent, drive its output through two plan-review gates, and hand the converged fix plan off. You do not draft the fix plan yourself and you do not review it yourself. You never edit a fix-plan file directly — when revision feedback arrives, you redispatch the writer in revision mode (step 11).
 
-Before the fix plan is handed off, it passes through **two** plan-review gates: a **business-parity gate** (`business-parity-reviewer` in plan-review mode), which catches `<parity_vocabulary>` business-logic deviations in the *planned* fixes (backend function names/payloads and document shapes/stored-data set paths/queries as the reference project's backend contract defines them, threshold constants, gating predicates, side-effect ordering, strict-vs-loose inequalities), run **ahead of** the **architecture-review gate** (`architecture-reviewer` in plan-review mode), which catches layer-placement / dependency-direction problems in the *drafted* fixes — both before any of the fixes is implemented. Each gate is an automated writer↔reviewer mini-loop nested inside this flow (PASS → proceed to the next gate / hand off; FAIL → re-dispatch the writer in revision mode with the findings path, capped at 5 iterations).
+Before the fix plan is handed off, it passes through **two** plan-review gates: a **business-parity gate** (`business-parity-reviewer` in plan-review mode), which catches `<parity_vocabulary>` business-logic deviations in the *planned* fixes (backend function names/payloads and document shapes/stored-data set paths/queries as the reference project's backend contract defines them, threshold constants, gating predicates, side-effect ordering, strict-vs-loose inequalities), run **ahead of** the **architecture-review gate** (`architecture-reviewer` in plan-review mode), which catches layer-placement / dependency-direction problems in the *drafted* fixes — both before any of the fixes is implemented. Both gates run in every **review round**, and the round is closed once, after the architecture gate: no gate recorded `FAIL` → hand off; otherwise re-dispatch the writer in revision mode with every findings file of the round, capped at five rounds.
 
 > **You were dispatched via a mode fork — read that fork's binding table too.** This file supplies no mode-specific values.
 
@@ -28,8 +28,8 @@ The `Used at` column is load-bearing, not documentation — it is what tells a f
 
 | Binding | Used at | Meaning (short) |
 |---|---|---|
-| `<escalate>` | `## Flow` step 2 (no user-review file exists for this branch); step 7's `parity_iteration >= 5` cap; step 8's `arch_iteration >= 5` cap | This flow's path for halting and reporting an **agent/flow blocker**. This core states no `<state_dir>/STOP` check and no dispatch cap of its own, so neither halt appears here. Where a fork adds them: a STOP-file halt is a **user-initiated stop, not a blocker**, and is **never** routed through `<escalate>` — it halts as that fork words it — while this family's dispatch-cap halt **is** routed through it (`mode_contract.md` → `<escalate>`). |
-| `<ask>` | `## Flow` step 6 (the writer returns a `## Questions` section) — re-entered from steps 7, 8 and 11, each of which routes back through step 6 | This flow's clarification path — what to do when the flow **needs an answer before it can continue**. Distinct from `<escalate>`: an answer can bring the flow back. |
+| `<escalate>` | `## Flow` step 2 (no user-review file exists for this branch); step 8's round close, at the `fix_round` cap | This flow's path for halting and reporting an **agent/flow blocker**. This core states no `<state_dir>/STOP` check and no dispatch cap of its own, so neither halt appears here. Where a fork adds them: a STOP-file halt is a **user-initiated stop, not a blocker**, and is **never** routed through `<escalate>` — it halts as that fork words it — while this family's dispatch-cap halt **is** routed through it (`mode_contract.md` → `<escalate>`). |
+| `<ask>` | `## Flow` step 6 (the writer returns a `## Questions` section) — re-entered from step 8's round close and from step 11, each of which routes back through step 6 | This flow's clarification path — what to do when the flow **needs an answer before it can continue**. Distinct from `<escalate>`: an answer can bring the flow back. |
 | `<terminal_handoff>` | `## Flow` step 4's **stop** outcome (the existing plan is good — this loop has nothing to do); the steps 9–10 line in `## Flow`; `## Convergence`; step 11's trigger — this binding's rejection-with-feedback branch is the **first of the two entries step 11's own opening line names** (the second is a fork's own resumability rule; step 4's **extend** outcome also routes into step 11, from outside that line, so "two" counts that line's enumeration, not every route in) | What happens when both gates converge — present-and-stop, or emit-a-summary-and-fall-through — and, at step 4's stop outcome, what happens when there is nothing to converge. |
 | `<existing_artifact_decision>` | `## Flow` step 4 | How this flow decides what to do when a fix-plan index already exists at the round-matched output path. |
 | `<repo_root>` | `## Flow` steps 2–3 and both gate dispatch blocks — every `<state_dir>/…` path in this file is written relative and resolves against this anchor | Absolute root of the checkout this flow runs in. |
@@ -37,15 +37,15 @@ The `Used at` column is load-bearing, not documentation — it is what tells a f
 
 **`<app_root>` is declared here, not consumed here.** This core invokes no wrapper script, so no section of it uses this binding. That is not a problem under `mode_contract.md` rule (1): rule (1) makes an **unbound** binding a stop condition, and both forks over this core bind `<app_root>`, so it is never unbound — a declared-but-unused binding simply sits idle. It is declared at all so this family's forks can bind both path anchors as a pair, from one table: rule (4) forbids this core from carrying a machine path itself, and the `<app_dir>`-rooted reads a fork *adds* (rule (3)) need a root that resolves against the run's own checkout. It is **not** what the wrapper calls a fork adds resolve against — a commit-wrapper call a fork adds names the main checkout's copy of `<scripts_dir>/commit-on-branch.sh`, with `--repo <repo_root>`, as a push names the main checkout's copy of the push wrapper; `<app_root>` anchors neither call (`mode_contract.md` → `## Binding vocabulary`, its `<app_root>` row). (Rule (5)'s narrowing — *a binding the **cited** core declares for sections the citing flow never executes is not a stop condition* — is **not** what applies: it is scoped to a core→core citation, and this core cites no other core.)
 
-Every **other** `<…>` name in this file is either a **config value** declared in `## Resolved values` above or a **path placeholder**, not a binding (`${CLAUDE_PLUGIN_ROOT}/instructions/mode_contract.md` → `### Bindings vs. path placeholders`). This family computes its paths inside the flow rather than in a separate `## Setup` section, so for placeholder-resolution purposes **`## Flow` steps 1–3 are this core's Setup**: `<branch>`, `<user_review_path>`, `<fix_plan_path>` and `<fix_finding_dir>` all resolve there. `<findings_file>`, `<feedback>`, the round index `<N>`, the cap counters `<parity_iteration>` / `<arch_iteration>` and the findings-file indices `<parity_review_index>` / `<arch_review_index>` are neither kind — they are bound below, at their point of use. An unresolved placeholder is not a stop condition; it means you arrived here without reading steps 1–3.
+Every **other** `<…>` name in this file is either a **config value** declared in `## Resolved values` above or a **path placeholder**, not a binding (`${CLAUDE_PLUGIN_ROOT}/instructions/mode_contract.md` → `### Bindings vs. path placeholders`). This family computes its paths inside the flow rather than in a separate `## Setup` section, so for placeholder-resolution purposes **`## Flow` steps 1–3 are this core's Setup**: `<branch>`, `<user_review_path>`, `<fix_plan_path>` and `<fix_finding_dir>` all resolve there. `<findings_file>`, `<findings_files>`, `<feedback>`, `<review_mode>`, `<revision_note>`, the user-review round `<N>` and the counters `fix_round` and `cap_base` are neither kind — they are bound below, at their point of use. An unresolved placeholder is not a stop condition; it means you arrived here without reading steps 1–3.
 
 ---
 
 ## Flow
 
-**Safety scaffolding is your fork's to state, not this core's.** This core states no dispatch counter and no `STOP`-file check around its dispatches; each gate below is bounded by its own 5-iteration cap and nothing else. A fork that adds scaffolding states it in its own text — this core neither requires nor forbids it.
+**Safety scaffolding is your fork's to state, not this core's.** This core states no dispatch counter and no `STOP`-file check around its dispatches; the review round below is bounded by its five-round cap at step 8's round close and nothing else. A fork that adds scaffolding states it in its own text — this core neither requires nor forbids it.
 
-**Dispatch composition — binding on every dispatch this flow makes.** It binds all four dispatch sites below: the writer's initial-write prompt (step 5), the writer's revision prompts (steps 7, 8 and 11), and the two gate reviewers (step 7's `business-parity-reviewer`, step 8's `architecture-reviewer`). The prompt you send is exactly the block that step defines, plus at most the sanctioned `context_notes:` line. The rule — **Knowledge, not conclusions** — and the record you owe for anything you added are canonical in `${CLAUDE_PLUGIN_ROOT}/instructions/dispatch_discipline_instructions.md`: **read that file once at session start; it binds every dispatch you make.** No part of that boundary is restated here.
+**Dispatch composition — binding on every dispatch this flow makes.** It binds all four dispatch sites below: the writer's initial-write prompt (step 5), the writer's revision prompts (steps 8 and 11), and the two gate reviewers (step 7's `business-parity-reviewer`, step 8's `architecture-reviewer`). The prompt you send is exactly the block that step defines, plus at most the sanctioned `context_notes:` line. The rule — **Knowledge, not conclusions** — and the record you owe for anything you added are canonical in `${CLAUDE_PLUGIN_ROOT}/instructions/dispatch_discipline_instructions.md`: **read that file once at session start; it binds every dispatch you make.** No part of that boundary is restated here.
 
 **Step numbers are stable and are cited by number from outside this file.** Steps 9–10 are `<terminal_handoff>` and live in your fork; their numbers are not reused for anything else, and the remaining steps keep the numbers they have always had.
 
@@ -70,6 +70,8 @@ Every **other** `<…>` name in this file is either a **config value** declared 
    | Round 1 (unsuffixed review) | `<state_dir>/user_reviews/<branch>_fix_plan.md` | `<state_dir>/user_reviews/<branch>_fix_plan/` |
    | Round N (`_<N>` suffix) | `<state_dir>/user_reviews/<branch>_fix_plan_<N>.md` | `<state_dir>/user_reviews/<branch>_fix_plan_<N>/` |
 
+   `<N>` is the user-review round: `1` for the unsuffixed review, `<N>` for a `_<N>` suffix. It also names the gate folders (steps 7–8) and the revision notes.
+
    The writer agent produces both in one invocation; you only pass it the index output path (`<fix_plan_path>`) and it derives the folder.
 
 4. **If the fix plan already exists** at that index output path, do NOT silently overwrite. Apply `<existing_artifact_decision>`, which decides between:
@@ -86,61 +88,70 @@ Every **other** `<…>` name in this file is either a **config value** declared 
    Write the user-review fix plan. Branch: <branch>. User review: <user_review_path>. Output: <fix_plan_path>.
    ```
 
+   Then set `fix_round` to one past the highest `review_<k>.md` index in the two `user_review_<N>/` gate folders (steps 7–8), read with an `ls` (names only, never contents), or `0` when neither holds one; and set `cap_base = fix_round`.
+
+   **The round counters.** `fix_round` is the review round's index `<k>`: it names both gates' round files and the revision note, and carries on across user-review round `<N>`'s history. `cap_base` is `fix_round` at the last step-5 or step-11 writer dispatch, or at a fork's resume of this loop in a new session — the fork sets it. `fix_round − cap_base` is the loop's **counter**: it alone drives the cap (step 8's round close) and `<review_mode>`, and it is never derived from round files. For the round under review:
+
+   - `<review_mode>` is `full` while `fix_round − cap_base < 2`, and `converging` from 2.
+   - `<revision_note>` is `<state_dir>/plan_revisions/<branch>/fix_plan_<N>_revision_<fix_round>.md` — the note of the revision that feeds round `fix_round`.
+
 6. **If the writer returns a `## Questions` section** above its output contract: **stop and route the questions through `<ask>` verbatim**. If answers come back, redispatch the writer with each answer appended to the prompt between the markers of `${CLAUDE_PLUGIN_ROOT}/instructions/untrusted_input.md` → `## The markers` and go back to step 6. Do not invent answers and do not paraphrase the questions.
 
-7. **Business-parity-review gate (plan-review mode).** **Skip this gate unless `phases.parity` is `true` in `devscene.config.json`.** A skipped gate is **not** a converged gate: the flow proceeds straight to step 8, records no pass for it, and reports none at `## Convergence`.
+7. **Business-parity-review gate (plan-review mode).** **Skip this gate unless `phases.parity` is `true` in `devscene.config.json`.** A skipped gate dispatches nothing and writes no round file: the flow proceeds straight to step 8, the round close counts the gate as passed, and `## Convergence` reports no verdict for it.
 
-   Once the writer has returned a real plan with no outstanding `## Questions`, review the *drafted* fix plan for `<parity_vocabulary>` business-logic parity problems **before** the architecture gate and **before** the hand-off — catching a parity deviation in the planned fixes before architecture-review effort is spent and before the plan is acted on. This is an automated writer↔reviewer mini-loop nested inside this flow, bounded only by a 5-iteration cap. Do NOT pause between parity iterations — the plan is handed off only once both gates PASS (or a cap trips).
+   Once the writer has returned a real plan with no outstanding `## Questions`, review the *drafted* fix plan for `<parity_vocabulary>` business-logic parity problems **before** the architecture gate and **before** the hand-off — catching a parity deviation in the planned fixes before architecture-review effort is spent and before the plan is acted on. This gate is the first half of review round `fix_round`; step 8 is the second, and step 8's round close decides what follows. Do NOT pause between rounds — the plan is handed off only once a round closes with no `FAIL` (or the cap trips).
 
-   **Gate — re-read the run mode.** Before this step's first action — before `parity_iteration` is set and before anything is dispatched — re-read the run mode from the record `${CLAUDE_PLUGIN_ROOT}/instructions/run_mode_instructions.md` → `## The durable record` defines for this flow. If `parity` is among the skipped ids, **do not dispatch `business-parity-reviewer`**: no dispatch, no `parity_iteration`, no findings folder, no revision loop. Note the skip for the convergence disclosure and **proceed to step 8 exactly as a `verdict: PASS` does** — a gate a run mode excludes is *passed by exclusion*, not pending, so this flow's convergence condition is unchanged. Otherwise run the step in full, as written below.
+   **Gate — re-read the run mode.** Before this step's first action — before anything is dispatched — re-read the run mode from the record `${CLAUDE_PLUGIN_ROOT}/instructions/run_mode_instructions.md` → `## The durable record` defines for this flow. If `parity` is among the skipped ids, **do not dispatch `business-parity-reviewer`**: no dispatch, no round file, no findings folder. Note the skip for the convergence disclosure and **proceed to step 8 exactly as a `verdict: PASS` does** — a gate a run mode excludes is *passed by exclusion*, not pending, so this flow's convergence condition is unchanged. Otherwise run the step in full, as written below.
 
-   `parity_iteration` is this gate's **cap counter** and nothing else. Set `parity_iteration = 0` when a revision chain begins — after a step-5 initial write or a step-11 revision — and **keep** it, never reset it, when a step-7 or step-8 FAIL loops back here through step 6. Dispatch `business-parity-reviewer` in **plan-review mode**, pointing it at the **fix-plan index + per-finding folder** as the "plan" to review. The arg set is the same plan-review-mode shape the architecture gate uses (`story_path` / `task_files_dir` / `prompt_path` / `findings_folder` / `iteration`), with the parity findings folder — the **fix-plan index plays the role of the "story index"** and the **per-finding folder plays the role of `task_files_dir`**:
-
-   ```
-   story_path: <fix_plan_path>
-   task_files_dir: <fix_finding_dir>
-   prompt_path: <user_review_path>
-   findings_folder: <state_dir>/business_parity_user_review_reviews/<branch>/
-   iteration: <parity_review_index>
-   ```
-
-   `<parity_review_index>` is the **next free index** in that folder, resolved immediately before **every** dispatch of this reviewer: `ls <state_dir>/business_parity_user_review_reviews/<branch>/` and take one past the highest `review_<n>.md`, or `0` when the folder is absent or holds none. The folder is flat per branch, so an earlier round's files are still there — passing `parity_iteration` instead would overwrite them. Here `<fix_plan_path>` is the fix-plan index (from step 3), `<fix_finding_dir>` is its per-finding folder (the mirrored folder from step 3), and `<user_review_path>` is the active user-review file the writer consumed (from step 2) — the same variables this flow already resolves. The reviewer creates `<state_dir>/business_parity_user_review_reviews/<branch>/` itself only when it has findings to write — do NOT `mkdir -p` it.
-
-   Parse the return:
-   - `verdict: PASS` → proceed to step 8 (the architecture-review gate).
-   - `verdict: FAIL` → `<findings_file>` is the reviewer's returned `findings_file:`. Increment `parity_iteration`. If `parity_iteration >= 5`, `<escalate>` with the latest findings path (`<findings_file>`) plus a one-paragraph summary ("5 business-parity-review iterations on the fix plan did not converge"), **naming the fix-plan index's `## Rejected findings` section and its open entries when the index carries one**. Otherwise re-dispatch the `user-review-fix-plan-writer` in **revision mode** to fix the parity findings (same agent and revision mode as step 11, but with the parity-findings prompt below rather than step 11's feedback prompt):
-
-     ```
-     Revise the fix plan at <fix_plan_path> per business-parity findings: <findings_file>.
-     ```
-
-     Then go back to **step 6** — re-check for `## Questions` on the revised plan, then (if none) re-run the parity review on the revised plan (with the incremented `parity_iteration` and a freshly resolved `<parity_review_index>`), then the architecture review.
-
-8. **Architecture-review gate (plan-review mode).** Once the writer has returned a real plan with no outstanding `## Questions` and the business-parity gate has PASSed (or was skipped because `phases.parity` is `false`, or was passed by exclusion because the run mode skipped it), review the *drafted* fix plan for architecture problems **before** the hand-off. This is an automated writer↔reviewer mini-loop nested inside this flow, bounded only by a 5-iteration cap. Do NOT pause between architecture iterations — the plan is handed off only once both gates PASS (or a cap trips).
-
-   **Gate — re-read the run mode.** Before this step's first action — before `arch_iteration` is set and before anything is dispatched — re-read the run mode from the record `${CLAUDE_PLUGIN_ROOT}/instructions/run_mode_instructions.md` → `## The durable record` defines for this flow. If `architecture` is among the skipped ids, **do not dispatch `architecture-reviewer`**: no dispatch, no `arch_iteration`, no findings folder, no revision loop. Note the skip for the convergence disclosure and **proceed to `## Convergence` exactly as a `verdict: PASS` does** — a gate a run mode excludes is *passed by exclusion*, not pending, so this flow's convergence condition is unchanged. Otherwise run the step in full, as written below.
-
-   `arch_iteration` is this gate's **cap counter** and nothing else. Set `arch_iteration = 0` when a revision chain begins — after a step-5 initial write or a step-11 revision — and **keep** it, never reset it, when a step-7 or step-8 FAIL loops back here through step 6. Dispatch `architecture-reviewer` in **plan-review mode**, pointing it at the **fix-plan index + per-finding folder** as the "plan" to review. The arg set is the same plan-review-mode shape the planning flow uses for insertion point 1 (`story_path` / `task_files_dir` / `prompt_path` / `findings_folder` / `iteration`), with the fix-plan artifacts substituted — the **fix-plan index plays the role of the "story index"** and the **per-finding folder plays the role of `task_files_dir`**, so the reviewer's plan-review reading of "story `## Context` + per-task files" maps cleanly onto "fix-plan `## Context` + per-finding files":
+   Dispatch `business-parity-reviewer` in **plan-review mode**, pointing it at the **fix-plan index + per-finding folder** as the "plan" to review. The arg set is the same plan-review-mode shape the architecture gate uses (`story_path` / `task_files_dir` / `prompt_path` / `findings_folder` / `iteration` / `review_mode` / `revision_note`), with the parity findings folder — the **fix-plan index plays the role of the "story index"** and the **per-finding folder plays the role of `task_files_dir`**:
 
    ```
    story_path: <fix_plan_path>
    task_files_dir: <fix_finding_dir>
    prompt_path: <user_review_path>
-   findings_folder: <state_dir>/architecture_user_review_reviews/<branch>/
-   iteration: <arch_review_index>
+   findings_folder: <state_dir>/business_parity_user_review_reviews/<branch>/user_review_<N>/
+   iteration: <fix_round>
+   review_mode: <review_mode>
+   revision_note: <revision_note>
    ```
 
-   `<arch_review_index>` is the **next free index** in that folder, resolved immediately before **every** dispatch of this reviewer: `ls <state_dir>/architecture_user_review_reviews/<branch>/` and take one past the highest `review_<n>.md`, or `0` when the folder is absent or holds none. The folder is flat per branch, so an earlier round's files are still there — passing `arch_iteration` instead would overwrite them. Here `<fix_plan_path>` is the fix-plan index (from step 3), `<fix_finding_dir>` is its per-finding folder (the mirrored folder from step 3), and `<user_review_path>` is the active user-review file the writer consumed (from step 2) — the same variables this flow already resolves. The reviewer creates `<state_dir>/architecture_user_review_reviews/<branch>/` itself only when it has findings to write — do NOT `mkdir -p` it.
+   Here `<fix_plan_path>` is the fix-plan index (from step 3), `<fix_finding_dir>` is its per-finding folder (the mirrored folder from step 3), `<user_review_path>` is the active user-review file the writer consumed (from step 2), and `<N>`, `<review_mode>` and `<revision_note>` are as steps 3 and 5 state. The reviewer writes its round file per `${CLAUDE_PLUGIN_ROOT}/instructions/plan_review_rounds.md` → `## The round file`, creating `<state_dir>/business_parity_user_review_reviews/<branch>/user_review_<N>/` itself with its first round file — do NOT `mkdir -p` it — and reviews a `converging` round per that file's `## Converging mode`.
 
-   Parse the return:
-   - `verdict: PASS` → **both gates have now passed**: go to `## Convergence`.
-   - `verdict: FAIL` → `<findings_file>` is the reviewer's returned `findings_file:`. Increment `arch_iteration`. If `arch_iteration >= 5`, `<escalate>` with the latest findings path (`<findings_file>`) plus a one-paragraph summary ("5 architecture-review iterations on the fix plan did not converge"), **naming the fix-plan index's `## Rejected findings` section and its open entries when the index carries one**. Otherwise re-dispatch the `user-review-fix-plan-writer` in **revision mode** to fix the architecture findings (same agent and revision mode as step 11, but with the architecture-findings prompt below rather than step 11's feedback prompt):
+   Parse the return: record the verdict and `<findings_file>`, the reviewer's returned `findings_file:` — **on `PASS` and on `FAIL`** — and go to step 8 either way.
+
+8. **Architecture-review gate (plan-review mode).** Once the writer has returned a real plan with no outstanding `## Questions` and step 7 has recorded the business-parity gate's verdict (or the gate was skipped because `phases.parity` is `false`, or was passed by exclusion because the run mode skipped it), review the *drafted* fix plan for architecture problems **before** the hand-off. This gate is the second half of review round `fix_round`, and the round close below ends the round. Do NOT pause between rounds — the plan is handed off only once a round closes with no `FAIL` (or the cap trips).
+
+   **Gate — re-read the run mode.** Before this step's first action — before anything is dispatched — re-read the run mode from the record `${CLAUDE_PLUGIN_ROOT}/instructions/run_mode_instructions.md` → `## The durable record` defines for this flow. If `architecture` is among the skipped ids, **do not dispatch `architecture-reviewer`**: no dispatch, no round file, no findings folder. Note the skip for the convergence disclosure and **proceed to the round close below exactly as a `verdict: PASS` does** — a gate a run mode excludes is *passed by exclusion*, not pending, so this flow's convergence condition is unchanged. Otherwise run the step in full, as written below.
+
+   Dispatch `architecture-reviewer` in **plan-review mode**, pointing it at the **fix-plan index + per-finding folder** as the "plan" to review. The arg set is the same plan-review-mode shape the planning flow uses for insertion point 1 (`story_path` / `task_files_dir` / `prompt_path` / `findings_folder` / `iteration` / `review_mode` / `revision_note`), with the fix-plan artifacts substituted — the **fix-plan index plays the role of the "story index"** and the **per-finding folder plays the role of `task_files_dir`**, so the reviewer's plan-review reading of "story `## Context` + per-task files" maps cleanly onto "fix-plan `## Context` + per-finding files":
+
+   ```
+   story_path: <fix_plan_path>
+   task_files_dir: <fix_finding_dir>
+   prompt_path: <user_review_path>
+   findings_folder: <state_dir>/architecture_user_review_reviews/<branch>/user_review_<N>/
+   iteration: <fix_round>
+   review_mode: <review_mode>
+   revision_note: <revision_note>
+   ```
+
+   Here `<fix_plan_path>` is the fix-plan index (from step 3), `<fix_finding_dir>` is its per-finding folder (the mirrored folder from step 3), `<user_review_path>` is the active user-review file the writer consumed (from step 2), and `<N>`, `<review_mode>` and `<revision_note>` are as steps 3 and 5 state. The reviewer writes its round file per `${CLAUDE_PLUGIN_ROOT}/instructions/plan_review_rounds.md` → `## The round file`, creating `<state_dir>/architecture_user_review_reviews/<branch>/user_review_<N>/` itself with its first round file — do NOT `mkdir -p` it — and reviews a `converging` round per that file's `## Converging mode`.
+
+   Parse the return: record the verdict and `<findings_file>`, the reviewer's returned `findings_file:` — **on `PASS` and on `FAIL`** — and go to the round close.
+
+   **Round close** — once per round, after this gate's verdict is recorded or its exclusion noted:
+
+   - **No gate recorded `FAIL` this round** → go to `## Convergence`.
+   - **Otherwise** set `fix_round += 1`. When `fix_round − cap_base` has reached 5, `<escalate>` with every findings file of the round plus a one-paragraph summary ("5 review rounds on the fix plan did not converge") **naming every gate that failed the round**, and **naming the fix-plan index's `## Rejected findings` section and its open entries when the index carries any**. Otherwise re-dispatch the `user-review-fix-plan-writer` in **revision mode** (same agent and revision mode as step 11, with this findings prompt rather than step 11's feedback prompt):
 
      ```
-     Revise the fix plan at <fix_plan_path> per architecture findings: <findings_file>.
+     Revise the fix plan at <fix_plan_path> per review findings: <findings_files>.
+     Revision note: <revision_note>
      ```
 
-     Then go back to **step 6** — re-check for `## Questions` on the revised plan, then (if none) re-run the parity review (step 7, when `phases.parity` is `true`) followed by the architecture review on the revised plan with the incremented `arch_iteration` and a freshly resolved `<arch_review_index>`.
+     `<findings_files>` is every `<findings_file>` the round's gates recorded, `PASS` and `FAIL` alike, in gate order — business parity, then architecture — joined by `, `; `<revision_note>` is step 5's path at the incremented `fix_round`. The writer revises per `${CLAUDE_PLUGIN_ROOT}/instructions/plan_review_rounds.md` → `## The writer's revision`.
+
+     Then go back to **step 6** — re-check for `## Questions` on the revised plan, then (if none) run the next round from step 7.
 
 **Steps 9–10 are `<terminal_handoff>` — see the fork you were dispatched via.** They are where the writer's contract summary is delivered and where the flow acts on the response; `## Convergence` below states the facts they carry. Their numbers are not reused for anything else.
 
@@ -148,11 +159,14 @@ Every **other** `<…>` name in this file is either a **config value** declared 
 
     ```
     Revise the fix plan at <fix_plan_path> per user feedback: <feedback>.
+    Revision note: <revision_note>
     ```
 
-    `<feedback>` travels between the markers of `${CLAUDE_PLUGIN_ROOT}/instructions/untrusted_input.md` → `## The markers`, `<source>` being `live answer` for feedback typed in the session, or each appended file's repo-relative path when a fork's resumability rule enters here.
+    `<feedback>` travels between the markers of `${CLAUDE_PLUGIN_ROOT}/instructions/untrusted_input.md` → `## The markers`, its marked blocks following the `Revision note:` line, `<source>` being `live answer` for feedback typed in the session, or each appended file's repo-relative path when a fork's resumability rule enters here.
 
-    Then go back to step 6 — re-check for `## Questions` on the revised plan, then re-run **both** gates on it (the parity gate, step 7, when `phases.parity` is `true`, then the architecture gate, step 8) before it is re-presented.
+    Before dispatching, set `fix_round += 1` and then `cap_base = fix_round`; `<revision_note>` is step 5's path at that `fix_round`. Where this session has not set `fix_round` — step 4's **extend** outcome, or a fork's resumability rule that enters here — first set it to the highest `review_<k>.md` index in the two `user_review_<N>/` gate folders, read with an `ls` (names only, never contents), or `-1` when neither holds one.
+
+    Then go back to step 6 — re-check for `## Questions` on the revised plan, then re-run **both** gates on it as one round (the parity gate, step 7, when `phases.parity` is `true`, then the architecture gate, step 8, and its round close) before it is re-presented.
 
     This step is mode-free and stays here: only its **trigger** differs by mode, and each fork names its own entry into it.
 
@@ -160,7 +174,7 @@ Every **other** `<…>` name in this file is either a **config value** declared 
 
 ## Convergence
 
-The flow has converged when **both** gates PASS — business-parity (step 7) first, then architecture (step 8) — on the same revision, since any revision re-runs both. When `phases.parity` is `false` the business-parity gate never runs and convergence is the architecture gate's PASS alone. A gate the run mode excluded counts as passed for this condition, so a round whose run mode skips `parity`, `architecture` or both converges on the gates that actually ran — and on neither, where it skips both.
+The flow has converged when **both** gates PASS — business-parity (step 7) first, then architecture (step 8) — on the same round, since every round runs both. A gate the run mode or `phases.parity` excluded counts as passed for this condition: when `phases.parity` is `false` convergence is the architecture gate's PASS alone, and a round whose run mode skips `parity`, `architecture` or both converges on the gates that actually ran — and on neither, where it skips both.
 
 **Write the dispatch-additions record.** This loop has no phases, so it has exactly one write point: if the loop above owes a block under `${CLAUDE_PLUGIN_ROOT}/instructions/dispatch_discipline_instructions.md` → `## The entry format`, run that file's record step **once here, before the hand-off** — it owns where the record is written, what a block contains and how it is committed. It is best-effort and never a gate: a failure there is logged and this loop hands off unchanged.
 
@@ -180,8 +194,9 @@ Whether the flow stops at the hand-off or falls through past it is `<terminal_ha
 
 - Do NOT read the fix-plan index or any per-finding file to verify quality — the writer's contract output is the source of truth.
 - Do NOT read that user-review file yourself either — the writer reads it; you only pass the path.
-- Do NOT read the business-parity-review findings under `<state_dir>/business_parity_user_review_reviews/<branch>/` to verify quality — pass the path to the writer's revision dispatch; the reviewer's PASS/FAIL contract is the source of truth.
-- Do NOT read the architecture-review findings under `<state_dir>/architecture_user_review_reviews/<branch>/` to verify quality — pass the path to the writer's revision dispatch; the reviewer's PASS/FAIL contract is the source of truth.
+- Do NOT read the business-parity-review round files under `<state_dir>/business_parity_user_review_reviews/<branch>/user_review_<N>/` to verify quality — pass their paths, never their contents, to the writer's revision dispatch; the reviewer's PASS/FAIL contract is the source of truth.
+- Do NOT read the architecture-review round files under `<state_dir>/architecture_user_review_reviews/<branch>/user_review_<N>/` to verify quality — pass their paths, never their contents, to the writer's revision dispatch; the reviewer's PASS/FAIL contract is the source of truth.
+- Do NOT read the revision notes under `<state_dir>/plan_revisions/<branch>/` — the writer writes them and the reviewers read them; you only pass the path.
 - Do NOT edit the fix-plan index or any per-finding file directly. When revision feedback arrives, redispatch the writer in revision mode (step 11).
 - Do NOT decide for yourself what happens after `## Convergence`, and do NOT auto-proceed into it. That section states the facts the hand-off carries; `<terminal_handoff>` states what the flow does with them, including any command that is invoked out-of-band in a fresh session rather than by you.
 - Do NOT execute this file without a fork's binding table. A **Mode-contract binding** — one of the six names this file's `## Mode contract — bindings this file uses` table declares — that is **used by a section you are executing** and that no fork has bound is a stop condition: halt and report rather than guessing a value. Every **other** `<…>` name here is a **config value**, a **path placeholder** or a counter, **not** a binding: an unresolved one is not a stop condition, it means you arrived without reading `## Resolved values` and `## Flow` steps 1–3.

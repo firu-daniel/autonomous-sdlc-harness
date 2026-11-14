@@ -102,6 +102,7 @@ export const STATE_DIR_ENTRIES: ReadonlyArray<StateDirEntry> = Object.freeze([
   Object.freeze({ dir: 'architecture_branch_reviews' }),
   Object.freeze({ dir: 'architecture_branch_review_point_reviews' }),
   Object.freeze({ dir: 'architecture_user_review_reviews' }),
+  Object.freeze({ dir: 'plan_revisions' }),
   Object.freeze({ dir: 'user_reviews' }),
   Object.freeze({ dir: 'user_review_fix_plan_point_reviews' }),
   Object.freeze({ dir: 'flow_progress' }),

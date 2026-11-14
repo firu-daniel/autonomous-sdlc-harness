@@ -940,7 +940,13 @@
 # bundle's `planning/` drafts at their paths under the state directory, never
 # over a file the checkout already has, and when it placed or kept any prints
 # `placed <n> planning file(s) for <branch>; kept <n> the checkout already
-# carries`. Every path it writes — the download directory, the answers, the
+# carries`. Once the checkout tracks the story index, the task-plan drafts are
+# withheld rather than placed, since each round's end commits them, and
+# `restore` prints `withheld <n> planning file(s) for <branch>; the checkout
+# tracks its story index, so the committed round stands`; when a withheld draft
+# is missing from or differs from the committed round, the saved walk is
+# withheld too and `restore` prints `withheld the saved walk for <branch>; a
+# bundled draft differs from the committed round`. Every path it writes — the download directory, the answers, the
 # park-loop clear — is under the same state directory `hr_remote_bundle_restore`
 # places the bundle in, resolved as `save`'s is below. Then, under --resume
 # answer, it
@@ -3070,6 +3076,8 @@ verb_restore() {
         echo "remote-run.sh: restored the bundle of run $id into $root"
         [ $((HR_REMOTE_PLANNING_PLACED + HR_REMOTE_PLANNING_KEPT)) -eq 0 ] \
           || echo "remote-run.sh: placed $HR_REMOTE_PLANNING_PLACED planning file(s) for $branch; kept $HR_REMOTE_PLANNING_KEPT the checkout already carries"
+        [ "$HR_REMOTE_PLANNING_WITHHELD" -eq 0 ] || echo "remote-run.sh: withheld $HR_REMOTE_PLANNING_WITHHELD planning file(s) for $branch; the checkout tracks its story index, so the committed round stands"
+        [ "$HR_REMOTE_WALKER_WITHHELD" -eq 0 ] || echo "remote-run.sh: withheld the saved walk for $branch; a bundled draft differs from the committed round"
         ;;
       2) restore_refuse "the bundle in '$download' is unrecognised for $branch; nothing restored" ;;
       *) restore_fail "restoring '$download' into '$root' failed" ;;

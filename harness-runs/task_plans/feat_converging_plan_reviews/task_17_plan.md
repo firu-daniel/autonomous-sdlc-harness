@@ -1,0 +1,23 @@
+### Task 17 — Give `business-parity-reviewer`'s plan-review mode round files, the two Must Fix fields and its converging variants
+
+**Goal:** In `plugin/agents/business-parity-reviewer.md`, make plan-review sub-cases (a) (task plan) and (b) (user-review fix plan) write a round file every round, take `review_mode:` and `revision_note:`, run converging mode, and write the two new Must Fix lines, while implemented-solution mode and the disabled-phase no-op keep their contracts.
+
+**Depends on:** Task 11 (sub-case (a)'s block: `findings_folder: <state_dir>/business_parity_reviews/<branch>/`, `iteration: <iteration>` the round number, `review_mode: <review_mode>`, `revision_note: <state_dir>/plan_revisions/<branch>/task_plan_revision_<iteration>.md`). Task 12 (sub-case (b)'s block: `findings_folder: <state_dir>/business_parity_user_review_reviews/<branch>/user_review_<N>/`, `iteration: <fix_round>`, `review_mode: <review_mode>`, `revision_note: <state_dir>/plan_revisions/<branch>/fix_plan_<N>_revision_<fix_round>.md`). Task 10 (`plugin/instructions/plan_review_rounds.md` sections). Task 15, whose recorded-rejection sentence this task copies byte-for-byte: *"A rejection recorded under precedence is tested as `${CLAUDE_PLUGIN_ROOT}/instructions/plan_review_rounds.md` → `## A rejection recorded under precedence` states, the one exception to the rule that `call stands` is unavailable for a Must Fix."*
+
+**Where this task stops.** With `phases.parity` `false` the walker and the fix-plan core skip this gate, so no dispatch arrives; the opening *"A dispatch that arrives anyway is a caller bug … write **no** findings file, and return `verdict: PASS`"* no-op is unchanged. Implemented-solution mode is unchanged, and keeps the literal *"Do not write any file when PASS"*, which `plugin/instructions/plan_orchestration_instructions_autonomous.md` quotes.
+
+### Targets
+
+- `plugin/agents/business-parity-reviewer.md`
+
+**Work:**
+
+- [ ] `## Invocation contract`: *"You create `<findings_folder>` yourself, and only when you have findings to write. All three callers …"* becomes per mode — plan-review sub-cases create it with their first round file and write one every round (cite `## The round file`); implemented-solution mode keeps *only when you have findings to write*. Both plan-review blocks gain `review_mode:` and `revision_note:`; (b)'s `findings_folder:` and `iteration:` values become the ones above; the key table gains the two rows, and its `iteration` row says the round number.
+- [ ] `## Process` step 2 (*"You are the parity coherence guardian — you read the whole set."*): in `review_mode: converging`, read per `## Converging mode`; this reviewer's converging variant of check **(j) Missing whole behaviour** and **(i) The whole business flow** is that they run on every ported behaviour and flow the round's changed text adds, removes, splits or references — a dropped task or a moved bullet is in reach. The recorded-rejection paragraph gains the Task 15 sentence, byte-identical, and states that it runs every round in both modes.
+- [ ] `## Output contract`: a **plan-review PASS** paragraph — write the round file and return `verdict: PASS` then `findings_file: <full_path>`; `### Clean review (both modes)` keeps *"Do not write any file when PASS."* for implemented-solution mode and the disabled-phase no-op, said so. `### Plan-review mode FAIL`: heading `# Business parity review — round {iteration}` followed by the `verdict:` / `review_mode:` lines; every Must Fix carries `**Raised against:**` and `**Must hold:**` before `**Fix:**` beside its existing `<reference_impl>` anchor (cite `## The Must Fix entry`); the optional `## Incidental findings (not gating)` section is added to the template.
+- [ ] `## Findings-folder / index-path convention`: insertion point 3 becomes `<state_dir>/business_parity_user_review_reviews/<branch>/user_review_<N>/review_{iteration}.md`; insertion point 1 adds that `{iteration}` is the round. *"Your return is parsed, not read."* gains: in plan-review mode the caller passes your `findings_file:` on both verdicts, and a `FAIL` reaches the writer only when the round closes, with every findings file of the round.
+
+**Verification:**
+
+- `grep -n "Do not write any file when PASS" plugin/agents/business-parity-reviewer.md` still finds the implemented-solution sentence, and `grep -n "business_parity_user_review_reviews/<branch>/review_" plugin/agents/business-parity-reviewer.md` finds nothing.
+- `grep -h "A rejection recorded under precedence is tested as" plugin/agents/task-plan-reviewer.md plugin/agents/architecture-reviewer.md plugin/agents/business-parity-reviewer.md` prints three identical lines.

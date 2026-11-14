@@ -12,7 +12,8 @@
 #      or a node with a binding edge `<escalate>`, an `onCap` `<escalate>` included.
 #   3. fail-cycle-capped — for every `FAIL` edge u → v carrying no `increment` of a counter with a
 #      `cap`, u is not reachable from v once every capped-incrementing edge and every binding edge is
-#      removed. The `<ask>` resume loop is exempt: MAX_TOTAL_DISPATCHES bounds it, not a counter.
+#      removed. A round node's computed `FAIL` edge is an outcome edge like any other. The `<ask>`
+#      resume loop is exempt: MAX_TOTAL_DISPATCHES bounds it, not a counter.
 #   4. run-mode-id-known — every `skip[].runModeId` is a `| `<id>` |` row of run_mode_instructions.md →
 #      `## The closed directive set — the only four things a run mode may switch off`.
 #   5. ledger-id-known — every edge `ledger` value is a `- [ ] <ID>.` entry of the task-engine template
@@ -20,11 +21,14 @@
 #      `**User-review engine**`.
 #   6. findings-folder-in-core — every `findingsFolder`, `{state_dir}` / `{branch}` written back as
 #      `<state_dir>` / `<branch>`, is a backticked path in the flow core's `## Setup (once per session)`
-#      step 2 table.
+#      step 2 table; and, when the graph carries `paths.revision_note`, that path with `{state_dir}` /
+#      `{branch}` / `{round}` written back as `<state_dir>` / `<branch>` / `<iteration>` has its
+#      directory part as a backticked path in that table and appears whole in the core's `## Loop`.
 #   7. cap-matches-core — `counters.iteration.cap` equals every integer the flow core states in its
 #      `## Setup (once per session)` step-4 `MAX_TOTAL_DISPATCHES = ` line (`iteration >= <N>`,
 #      `caps at <N> revisions`) and in its `## Safety contract — applies before EVERY Agent dispatch`
 #      step-2 halt line (`<N>-revision caps`); each of those three phrases must yield a value.
+#   8. gate-in-round — every dispatch node with a findingsFolder whose FAIL edge routes to a node and carries no increment is listed in the gates of exactly one round node, and every round node's gates and writer name dispatch nodes.
 # An owner document, section or phrase that yields nothing is a finding, never an empty pass.
 #
 # Usage: check-flow-graph.sh [<graph>]
@@ -124,7 +128,19 @@ def closure($edges):
     ($E[] | select(.outcome == "FAIL" and (.binding | not))
       | select((.increment != null and ((.increment as $i | $capped | index([$i])) != null)) | not)
       | . as $e | select([$e.to] | closure($F) | index([$e.from]) != null)
-      | "fail-cycle-capped\tFAIL edge `\($e.from)` -> `\($e.to)` increments no capped counter, and `\($e.to)` reaches `\($e.from)` again") )
+      | "fail-cycle-capped\tFAIL edge `\($e.from)` -> `\($e.to)` increments no capped counter, and `\($e.to)` reaches `\($e.from)` again"),
+    ( [ $nodes | to_entries[] | select(.value.kind == "round") ] as $rounds
+      | ( ($nodes | to_entries[]
+            | select(.value.kind == "dispatch" and (.value | has("findingsFolder")))
+            | select(((.value.outcomes // {}).FAIL // {}) as $f | ($f | has("to")) and (($f | has("increment")) | not))
+            | .key as $k
+            | ([$rounds[] | select(any((.value.gates // [])[]; . == $k))] | length) as $c
+            | select($c != 1)
+            | "gate-in-round\tnode `\($k)` has a FAIL edge carrying no increment and is in the gates of \($c) round nodes, not exactly one"),
+          ($rounds[] | .key as $r
+            | ((.value.gates // [])[], (.value.writer // empty))
+            | select(. as $x | ($nodes[$x].kind // "") != "dispatch")
+            | "gate-in-round\tround node `\($r)` names `\(.)` as a gate or writer, which is not a dispatch node") ) ) )
 '
 
 # Globals the owner-document reads fill once; each check reads them per graph.
@@ -155,7 +171,7 @@ in_list() {
 
 # Prints `<check-id>\t<detail>` per finding for graph $1.
 run_checks() {
-  local g="$1" out flow core core_text setup table step4 halt cap value id f n src pat text found
+  local g="$1" out flow core core_text setup table step4 halt cap value id f n src pat text found rn rn_dir loop
   if [ ! -f "$g" ]; then
     printf 'graph\tfile not found\n'
     return
@@ -201,6 +217,15 @@ run_checks() {
       [ -z "$f" ] && continue
       grep -qF "\`$f\`" <<<"$table" || printf 'findings-folder-in-core\tfindingsFolder \x27%s\x27 is not in %s ## Setup step 2 table\n' "$f" "$core"
     done <<<"$(jq -r '.nodes[]? | .findingsFolder // empty | gsub("\\{state_dir\\}"; "<state_dir>") | gsub("\\{branch\\}"; "<branch>")' "$g")"
+  fi
+
+  rn="$(jq -r '.paths.revision_note // empty | gsub("\\{state_dir\\}"; "<state_dir>") | gsub("\\{branch\\}"; "<branch>") | gsub("\\{round\\}"; "<iteration>")' "$g")"
+  if [ -n "$rn" ]; then
+    rn_dir="${rn%/*}/"
+    grep -qF "\`$rn_dir\`" <<<"$table" || printf 'findings-folder-in-core\trevision_note \x27%s\x27 is not in %s ## Setup step 2 table\n' "$rn_dir" "$core"
+    # Not backtick-delimited: the core carries it inside `revision_note: …` / `Revision note: …` lines.
+    loop="$(between "$core_text" "## Loop" "## ")"
+    grep -qF "$rn" <<<"$loop" || printf 'findings-folder-in-core\trevision_note \x27%s\x27 is not in %s ## Loop\n' "$rn" "$core"
   fi
 
   cap="$(jq -r '.counters.iteration.cap // empty' "$g")"
