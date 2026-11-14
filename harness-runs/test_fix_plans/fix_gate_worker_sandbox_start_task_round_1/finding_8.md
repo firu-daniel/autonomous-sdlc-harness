@@ -32,3 +32,9 @@ not ok 515 - (t) F15: job mode with <main>/scripts/.git protected and absent rea
 
 - [ ] No code change of its own. If Finding 2's change to the launcher's launch `case` has not landed, land it first, as Finding 2 specifies.
 - [ ] If the failure persists after Finding 2, diagnose it as a new finding in the next round. Do not change the test.
+
+## Already passing
+
+- **(a) Named test and file run:** `(t) F15: job mode with <main>/scripts/.git protected and absent reaches its verdict past the placeholder`, in `cli/test/launch-sandboxed-gates.test.mjs` (the whole file was run; it was not narrowed).
+- **(b) Command and result:** `npm test --workspace cli -- test/launch-sandboxed-gates.test.mjs`, run from the repository root in the foreground. The named test reported `ok 16 - (t) F15: job mode with <main>/scripts/.git protected and absent reaches its verdict past the placeholder` (duration_ms 3743.482458). File totals: `# tests 21`, `# pass 21`, `# fail 0`. The `nohup: can't detach from console` refusal from the log did not occur, which fits the Finding 2 launcher change having already landed.
+- **(c) No code file was edited:** this record is the only write. No readiness marker was touched.
