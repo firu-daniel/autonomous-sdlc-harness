@@ -32,13 +32,13 @@
 
 **Cost.** A correct lower-precedence finding can lose. The guard is the losing reviewer's check in its next round: it tests only whether the two findings are genuinely incompatible and whether the winner still stands, and re-raises once when either fails.
 
-### A resumed fix-plan session restarts the round at its first gate
+### A resumed fix-plan session restarts the whole round
 
-**Decision.** The autonomous fix-plan fork never takes a next-due-gate resume: a resumed round restarts at the business-parity gate, and each gate replaces its own `review_<k>.md` for that round (`plugin/instructions/user_review_fix_plan_writing_instructions_autonomous.md` → `## Override 2 — resumability`).
+**Decision.** The autonomous fix-plan fork never resumes a round part-way: a resumed round restarts with both due gates dispatched together, and each gate replaces its own `review_<k>.md` for that round (`plugin/instructions/user_review_fix_plan_writing_instructions_autonomous.md` → `## Override 2 — resumability`).
 
-**Reason.** Telling a complete round from an interrupted one needs the round files' verdict lines, and the fix-plan loop's orchestrator reads no findings file's contents (`plugin/instructions/user_review_fix_plan_writing_instructions_core.md` → `## Context discipline`). The task-plan loop can resume at the next due gate because the walker, not the orchestrator, reads that evidence; the fix-plan loop has no walker (`## 2. Known tech debt`).
+**Reason.** Telling a complete round from an interrupted one needs the round files' verdict lines, and the fix-plan loop's orchestrator reads no findings file's contents (`plugin/instructions/user_review_fix_plan_writing_instructions_core.md` → `## Context discipline`). The task-plan loop can dispatch only the gates without a round file because the walker, not the orchestrator, reads that evidence; the fix-plan loop has no walker (`## 2. Known tech debt`).
 
-**Cost.** One parity review at most: the restart repeats the parity gate when the interruption fell after it.
+**Cost.** One gate's review at most, repeated when the interruption fell after that gate wrote its file, and no wall time beyond the round's slowest gate.
 
 ### The round counter is kept apart from the round files' numbering
 
@@ -54,7 +54,8 @@ The task-plan loop's routing decisions are recorded where the walker's other dec
 
 - every gate every round, closed by the `plan_round` round node, and the `formatVersion` 2 bump — `docs/flow-graph-walker.md` → `### Item 7 — every gate every round, closed by a round node`;
 - the repeated `arg.findings_file:` key, `arg.iteration` as the round number and `arg.review_mode` — `docs/flow-graph-walker.md` → `### Item 2 — each node's dispatch block stays in the core`;
-- what `start` reads, the next-due-gate resume and convergence read from `P1` alone — `docs/flow-graph-walker.md` → `### Item 3a — walker state is machine-local, and a re-entry continues it`;
+- the round's fan-out and join, outcome recording by gate, the concurrency guarantee and the `formatVersion` 3 bump — `docs/flow-graph-walker.md` → `### Item 8 — a round's gates fan out, and the round node joins`;
+- what `start` reads, the resume that dispatches only the gates without a round file, and convergence read from `P1` alone — `docs/flow-graph-walker.md` → `### Item 3a — walker state is machine-local, and a re-entry continues it`;
 - the cap counting rounds, and `rounds:` counting `verdict: FAIL` files — `docs/flow-graph-walker.md` → `### The iteration cap — the graph owns it, the core keeps two descriptions held by a check`.
 
 Committing unconverged plans every round, and what the remote bundle then carries, is `docs/remote-execution.md` → **Planning drafts cross the job boundary in the bundle.**
@@ -63,7 +64,7 @@ Committing unconverged plans every round, and what the remote bundle then carrie
 
 ## 2. Known tech debt
 
-The user-review fix-plan loop's routing is prose, restated by hand in `plugin/instructions/user_review_fix_plan_writing_instructions_core.md` → `## Flow`. Moving it onto a walker graph is a separate task, tracked on its own, and is the precondition for giving that loop the walker's next-due-gate resume. No row in `ROADMAP.md` or `docs/development.md` → `## 6. The roadmap this tree defers to` carries that task yet.
+The user-review fix-plan loop's routing is prose, restated by hand in `plugin/instructions/user_review_fix_plan_writing_instructions_core.md` → `## Flow`. Moving it onto a walker graph is a separate task, tracked on its own, and is the precondition for giving that loop the walker's resume that dispatches only the gates without a round file. No row in `ROADMAP.md` or `docs/development.md` → `## 6. The roadmap this tree defers to` carries that task yet.
 
 ---
 
