@@ -59,7 +59,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_parallel_plan_reviews/t
 14. [x] **Task 17** — Restate `autonomous_pause_and_ledger.md` for a round's set: `R1`, resume fallback, PAUSE and overload _(layer: plugin)_ _(points: 15)_
 15. [x] **Task 13** — Restate the autonomous task-plan fork's resume, PAUSE, overload and `P1` rules for the set _(layer: plugin)_ _(points: 15)_
 16. [x] **Task 14** — Restate the semi-autonomous task-plan fork and the two entry commands that order the gates _(layer: plugin)_ _(points: 10)_
-17. [ ] **Task 15** — Dispatch the fix-plan core's steps 7 and 8 together, with the round close as the join _(layer: plugin)_ _(points: 20)_
+17. [x] **Task 15** — Dispatch the fix-plan core's steps 7 and 8 together, with the round close as the join _(layer: plugin)_ _(points: 20)_
 18. [ ] **Task 16** — Restate the autonomous fix-plan fork's convergence, resume, PAUSE and overload rules for the set _(layer: plugin)_ _(points: 15)_
 19. [ ] **Task 18** — Redraw the plan loop's gates as a fan-out in `AUTONOMOUS_FLOW.md` and its whiteboard _(layer: plugin)_ _(points: 10)_
 20. [ ] **Task 19** — Restate the flow-graph schema as format 3 and move every fixture onto it, with the new negatives _(layer: general)_ _(points: 20)_
