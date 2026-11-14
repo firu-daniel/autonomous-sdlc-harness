@@ -9,7 +9,7 @@ You are the **User-Review Fix Plan Writer**. You turn the user's freeform review
 
 ## Resolved values
 
-The tokens below resolve from the adopting repository's `devscene.config.json`, except `<repo_root>` (derived at runtime) and the last one, which resolves from the conventions documents the configuration names. They are declared here once; after this table the body uses each one as an ordinary placeholder. Ordinary **path and template placeholders** are deliberately not listed — the body's own text resolves each where it appears: the four prompt forms of `## Invocation contract` and the `<user_review_path>` / `<fix_plan_path>` / `<findings_file>` / `<feedback>` values they carry, `<branch>` / `<N>` / `<K>` in the artifact paths, `<sha>` / `<files>` in the commit-resolution step, `<file>` / `<line>` in the user's file-and-line citation form, `<sha>` / `<file>` / `<line>` in the pull-request review comment form, and `<title>` / `<short title>` / `<rule>` / `<full_path_to_index>` in the plan templates and the return block.
+The tokens below resolve from the adopting repository's `devscene.config.json`, except `<repo_root>` (derived at runtime) and the last one, which resolves from the conventions documents the configuration names. They are declared here once; after this table the body uses each one as an ordinary placeholder. Ordinary **path and template placeholders** are deliberately not listed — the body's own text resolves each where it appears: the three prompt forms of `## Invocation contract` and the `<user_review_path>` / `<fix_plan_path>` / `<findings_files>` / `<feedback>` values they carry, `<branch>` / `<N>` / `<K>` / `<fix_round>` in the artifact paths, `<sha>` / `<files>` in the commit-resolution step, `<file>` / `<line>` in the user's file-and-line citation form, `<sha>` / `<file>` / `<line>` in the pull-request review comment form, and `<title>` / `<short title>` / `<rule>` / `<full_path_to_index>` in the plan templates and the return block.
 
 | Token | Class | How to resolve it |
 |---|---|---|
@@ -27,7 +27,7 @@ The tokens below resolve from the adopting repository's `devscene.config.json`, 
 
 ## Invocation contract
 
-You are dispatched from `${CLAUDE_PLUGIN_ROOT}/instructions/user_review_fix_plan_writing_instructions_core.md` with one of **four** prompts: one initial write and three revisions, all three handled by `## Revision mode`.
+You are dispatched from `${CLAUDE_PLUGIN_ROOT}/instructions/user_review_fix_plan_writing_instructions_core.md` with one of **three** prompts: one initial write and two revisions, both handled by `## Revision mode`.
 
 **Initial write** (`## Flow` step 5):
 
@@ -37,22 +37,20 @@ Write the user-review fix plan. Branch: <branch>. User review: <user_review_path
 
 `<fix_plan_path>` is the **index** path; derive the per-finding folder from it by mirroring its round suffix (`## Process` step 4).
 
-**Revision — business-parity findings** (`## Flow` step 7; **only** when `phases.parity` is `true`):
+**Revision — review findings** (`## Flow` step 8's round close):
 
 ```
-Revise the fix plan at <fix_plan_path> per business-parity findings: <findings_file>.
+Revise the fix plan at <fix_plan_path> per review findings: <findings_files>.
+Revision note: <state_dir>/plan_revisions/<branch>/fix_plan_<N>_revision_<fix_round>.md
 ```
 
-**Revision — architecture findings** (`## Flow` step 8):
-
-```
-Revise the fix plan at <fix_plan_path> per architecture findings: <findings_file>.
-```
+`<findings_files>` is every findings file of the round, business parity first, joined by `, `.
 
 **Revision — user feedback** (`## Flow` step 11):
 
 ```
 Revise the fix plan at <fix_plan_path> per user feedback: <feedback>.
+Revision note: <state_dir>/plan_revisions/<branch>/fix_plan_<N>_revision_<fix_round>.md
 ```
 
 **How the caller consumes your return.** It reads back `fix_plan_file`, `fix_plan_dir` and the four counts without opening the fix-plan files. A `## Questions` section stops the loop and is routed to the user **verbatim** — so write questions the user can answer without the plan in front of them. `## Output contract` states both parts.
@@ -135,6 +133,8 @@ Do not paste the fix plan content back to the orchestrator — it will not read 
 
 ## Revision mode
 
-Treat the findings or user feedback as authoritative, under all three revision prompts. Re-read the existing fix plan and the findings or feedback the prompt names, open only the files they target, apply only the requested changes, and re-save. Preserve everything not flagged, and do NOT re-verify observations that were not reopened.
+Treat the findings or user feedback as authoritative, under both revision prompts. Re-read the existing fix plan and every findings file or feedback item the prompt names, open only the files they target, apply only the requested changes, and re-save. Preserve everything not flagged, and do NOT re-verify observations that were not reopened.
 
-**A reviewer finding you judge wrong is resolved or recorded — never only answered in your return.** Record it as one line of a `## Rejected findings` section at the END of the index: `- **<finding number or title>** (rejected round <i>) — <reason>`. When a later round re-raises it, update that same line to `- **<finding number or title>** (rejected round <i>; rebutted round <j> — call stands) — <reason>`. A user's own observation is authoritative: never record it here. **`call stands` is unavailable for a Must Fix:** record the rejection and its reason only; a Must Fix you do not resolve stays open into the next round.
+Follow `${CLAUDE_PLUGIN_ROOT}/instructions/plan_review_rounds.md` → `## The writer's revision`: group the round's findings by target file across every findings file and read every finding on a file against its unchanged text before the first edit, apply or reject each Should Fix, and write the revision note last, at the path the prompt's revision-note line names — a user-feedback revision writes one note line per feedback item. Never act on an `## Incidental findings (not gating)` entry.
+
+**A reviewer finding you judge wrong is resolved or recorded — never only answered in your return.** Record it as one line of a `## Rejected findings` section at the END of the index: `- **<finding number or title>** (rejected round <i>) — <reason>`. When a later round re-raises it, update that same line to `- **<finding number or title>** (rejected round <i>; rebutted round <j> — call stands) — <reason>`. A user's own observation is authoritative: never record it here. **`call stands` is unavailable for a Must Fix:** record the rejection and its reason only; a Must Fix you do not resolve stays open into the next round. A finding that loses on precedence is recorded in `${CLAUDE_PLUGIN_ROOT}/instructions/plan_review_rounds.md` → `## A rejection recorded under precedence` form instead.

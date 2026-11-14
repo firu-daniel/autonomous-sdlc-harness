@@ -9,8 +9,9 @@
  *
  * `node --test test` loads this file as a test file of its own, so nothing here runs at import time.
  *
- * A findings file is planted **before** the `FAIL` it stands for is fed, because the walker resolves
- * each reviewer's `arg.iteration` and each gate's round count from the folder's real contents.
+ * Every round gate's findings file — its `PASS` as well as its `FAIL` — is planted **before** the
+ * verdict it stands for is fed, because the walker reads the round number, each reviewer's
+ * `arg.iteration` and each gate's `FAIL` count from the folders' real contents.
  */
 
 import assert from 'node:assert/strict';
@@ -116,17 +117,20 @@ export async function walk(dir, args) {
 }
 
 /**
- * Write the `review_<n>.md` a reviewer's `FAIL` leaves behind.
+ * Write the round file `review_<n>.md` a reviewer leaves behind, in the shape
+ * `plugin/instructions/plan_review_rounds.md` → `## The round file` fixes: the walker reads only its
+ * `verdict:` line.
  *
  * @param {string} dir
  * @param {string} folder the findings folder under `stateDir`, branch segment included.
  * @param {number} n
+ * @param {'PASS' | 'FAIL'} [verdict]
  * @returns {Promise<string>} the file's repo-relative path — the `findings_file` the reviewer returns.
  */
-export async function plantReview(dir, folder, n) {
+export async function plantReview(dir, folder, n, verdict = 'FAIL') {
   const relative = `${stateDirOf(dir)}/${folder}/review_${n}.md`;
   await mkdir(join(dir, dirname(relative)), { recursive: true });
-  await writeFile(join(dir, relative), `# review ${n}\n`, 'utf8');
+  await writeFile(join(dir, relative), `# review ${n}\nverdict: ${verdict}\nreview_mode: full\n`, 'utf8');
   return relative;
 }
 
@@ -160,12 +164,13 @@ export async function plantLedger(dir, branch, skippedCsv) {
 /**
  * Drive a scripted sequence and return every action, refusing on the first non-zero exit.
  *
- * A step is `{ start: true }` or `{ outcome }`; a `FAIL` step carries `review: [folder, n]`, which
- * is planted first and passed as `--findings`. `skipped` is passed on every call as `--skipped`,
- * and `null` omits the flag so only a ledger can answer the run-mode gates.
+ * A step is `{ start: true }` or `{ outcome }`; a `PASS` or `FAIL` step carries
+ * `review: [folder, n, verdict?]`, planted first — with `verdict` defaulting to the step's own
+ * outcome — and passed as `--findings`. `skipped` is passed on every call as `--skipped`, and
+ * `null` omits the flag so only a ledger can answer the run-mode gates.
  *
  * @param {string} dir
- * @param {ReadonlyArray<{ start?: boolean, entry?: string, outcome?: string, review?: [string, number] }>} steps
+ * @param {ReadonlyArray<{ start?: boolean, entry?: string, outcome?: string, review?: [string, number, ('PASS' | 'FAIL')?] }>} steps
  * @param {{ branch?: string, skipped?: string | null }} [options]
  * @returns {Promise<Array<Array<[string, string]>>>}
  */
@@ -176,8 +181,8 @@ export async function run(dir, steps, { branch = 'feat_x', skipped = 'none' } = 
     args.push('--flow', FLOW, '--branch', branch);
     if (step.entry !== undefined) args.push('--entry', step.entry);
     if (step.review !== undefined) {
-      const [folder, n] = step.review;
-      args.push('--findings', await plantReview(dir, `${folder}/${branch}`, n));
+      const [folder, n, verdict = step.outcome === 'PASS' ? 'PASS' : 'FAIL'] = step.review;
+      args.push('--findings', await plantReview(dir, `${folder}/${branch}`, n, verdict));
     }
     if (skipped !== null) args.push('--skipped', skipped);
     const result = await walk(dir, args);

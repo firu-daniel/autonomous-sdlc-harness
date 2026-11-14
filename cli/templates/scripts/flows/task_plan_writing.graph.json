@@ -1,7 +1,7 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "flow": "task_plan_writing",
-  "description": "The routing of ${CLAUDE_PLUGIN_ROOT}/instructions/task_plan_writing_instructions_core.md as data: the task-plan loop, the UI-test-plan loop and convergence, with the values the walker resolves (counters, path templates, heartbeats, findings folders, skip gates, cap summaries). The dispatch blocks each agent receives are not here; they stay in that core. Copied verbatim into the adopter's scripts directory, never rendered.",
+  "description": "The routing of ${CLAUDE_PLUGIN_ROOT}/instructions/task_plan_writing_instructions_core.md as data: the task-plan loop, whose gates run every round and whose one decision node closes each round, the UI-test-plan loop and convergence, with the values the walker resolves (counters, path templates, heartbeats, findings folders, skip gates, cap summaries). The dispatch blocks each agent receives are not here; they stay in that core. Copied verbatim into the adopter's scripts directory, never rendered.",
   "start": "plan_writer",
   "entries": ["plan_writer", "business_parity_review", "ui_writer", "ui_review", "convergence"],
   "counters": {
@@ -9,6 +9,8 @@
   },
   "paths": {
     "story_index": "{state_dir}/story_plans/{branch}_story_plan.md",
+    "task_files": "{state_dir}/task_plans/{branch}/",
+    "revision_note": "{state_dir}/plan_revisions/{branch}/task_plan_revision_{round}.md",
     "ui_test_index": "{state_dir}/ui_test_plans/{branch}_ui_test_plan.md"
   },
   "reports": ["business_parity_review", "architecture_review", "plan_review", "ui_test"],
@@ -49,18 +51,7 @@
           "to": "architecture_review",
           "report": { "business_parity_review": "passed" }
         },
-        "FAIL": {
-          "to": "plan_writer",
-          "increment": "iteration",
-          "prompt": "revision",
-          "onCap": {
-            "binding": "<escalate>",
-            "reason": "cap",
-            "summary": "the plan loop reached its {cap}-revision cap; the business-parity gate was open when it fired",
-            "roundCounts": ["business_parity_review", "architecture_review", "plan_review"],
-            "evidence": "story_index"
-          }
-        },
+        "FAIL": { "to": "architecture_review" },
         "error": { "binding": "<escalate>", "reason": "error" },
         "blocker": { "binding": "<escalate>", "reason": "blocker" }
       }
@@ -83,18 +74,7 @@
           "to": "plan_review",
           "report": { "architecture_review": "passed" }
         },
-        "FAIL": {
-          "to": "plan_writer",
-          "increment": "iteration",
-          "prompt": "revision",
-          "onCap": {
-            "binding": "<escalate>",
-            "reason": "cap",
-            "summary": "the plan loop reached its {cap}-revision cap; the architecture gate was open when it fired",
-            "roundCounts": ["business_parity_review", "architecture_review", "plan_review"],
-            "evidence": "story_index"
-          }
-        },
+        "FAIL": { "to": "plan_review" },
         "error": { "binding": "<escalate>", "reason": "error" },
         "blocker": { "binding": "<escalate>", "reason": "blocker" }
       }
@@ -106,11 +86,24 @@
       "findingsFolder": "{state_dir}/task_plan_reviews/{branch}/",
       "outcomes": {
         "PASS": {
-          "to": "ui_writer",
-          "reset": "iteration",
-          "ledger": "P1",
+          "to": "plan_round",
           "report": { "plan_review": "passed" }
         },
+        "FAIL": { "to": "plan_round" },
+        "error": { "binding": "<escalate>", "reason": "error" },
+        "blocker": { "binding": "<escalate>", "reason": "blocker" }
+      }
+    },
+    "plan_round": {
+      "kind": "round",
+      "gates": ["business_parity_review", "architecture_review", "plan_review"],
+      "writer": "plan_writer",
+      "counter": "iteration",
+      "convergingFrom": 2,
+      "plan": ["story_index", "task_files"],
+      "revisionNote": "revision_note",
+      "outcomes": {
+        "PASS": { "to": "ui_writer", "reset": "iteration", "ledger": "P1" },
         "FAIL": {
           "to": "plan_writer",
           "increment": "iteration",
@@ -118,13 +111,11 @@
           "onCap": {
             "binding": "<escalate>",
             "reason": "cap",
-            "summary": "the plan loop reached its {cap}-revision cap; the plan-review gate was open when it fired",
+            "summary": "the plan loop reached its {cap}-revision cap; the gates open when it fired: {open_gates}",
             "roundCounts": ["business_parity_review", "architecture_review", "plan_review"],
             "evidence": "story_index"
           }
-        },
-        "error": { "binding": "<escalate>", "reason": "error" },
-        "blocker": { "binding": "<escalate>", "reason": "blocker" }
+        }
       }
     },
     "ui_writer": {

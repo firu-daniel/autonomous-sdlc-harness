@@ -61,7 +61,7 @@ test('(a) a file naming the home prints in grep -rn form, and the status is 0', 
   assert.equal(run.stderr, '');
 });
 
-test('(b) the excluded places print nothing, while the clarifications README still prints', async (t) => {
+test('(b) the excluded places print nothing, while the clarifications README and a nested walker state still print', async (t) => {
   const tree = await scratchDir(t);
   const silent = [
     'node_modules/pkg/index.js',
@@ -71,14 +71,20 @@ test('(b) the excluded places print nothing, while the clarifications README sti
     'harness-runs/scratch/probe.py',
     '__pycache__/mod.pyc',
     'harness-runs/clarifications/some_branch/answer.md',
+    'harness-runs/.flow_walker_state',
   ];
   await writeTree(tree, {
     ...Object.fromEntries(silent.map((path) => [path, `${HIT_TEXT}\n`])),
     'harness-runs/clarifications/README.md': `${HIT_TEXT}\n`,
+    'nested/.flow_walker_state': `${HIT_TEXT}\n`,
   });
   const run = await runCheck(tree);
   assert.equal(run.status, 0, run.stderr);
-  assert.equal(run.stdout, `./harness-runs/clarifications/README.md:1:${HIT_TEXT}\n`);
+  const printed = run.stdout.split('\n').filter(Boolean).sort();
+  assert.deepEqual(printed, [
+    `./harness-runs/clarifications/README.md:1:${HIT_TEXT}`,
+    `./nested/.flow_walker_state:1:${HIT_TEXT}`,
+  ]);
   assert.equal(run.stderr, '');
 });
 
