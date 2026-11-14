@@ -218,7 +218,8 @@
 #     record written before this field lacks the key.
 #     A gap is consecutive timestamped events, any context, further apart than
 #     idle_threshold_s. Class at its start: in_flight_request (some context's last
-#     event is a user event or the init, with no assistant event after it; context
+#     event is a user event or the init, with no assistant event after it
+#     and no dispatch it opened still running; context
 #     = the most recently active such) > tool_running (an open tool call; context
 #     = the latest-started's) > unknown (context = the last event's).
 #   requests: {items: [{started_at, context, message_id, latency_ms, output_tokens,
@@ -456,7 +457,7 @@ def add_call($u; $ck; $t; $at):
     | if $u.name == "Agent" or $u.name == "Task" then
         .dispatch[$u.id] = {type: ($u.input.subagent_type // "subagent"),
                             description: ($u.input.description // null | redact),
-                            start_t: $st, started_at: $sat, agent_id: null}
+                            start_t: $st, started_at: $sat, agent_id: null, parent: $ck}
         | .dispatch_order += [$u.id]
       else . end
   end;
@@ -515,7 +516,10 @@ def on_user($e; $t; $ck):
                               command: ($c.raw_command | redact_text)} + $nf]
              end
          end)
-  | .ctx[$ck].awaiting = true;
+  # A context still blocked on a dispatch it opened has no request in flight.
+  | .dispatch as $d
+  | if ([.open | keys[] | $d[.] | select(. != null and .parent == $ck)] | length) == 0
+    then .ctx[$ck].awaiting = true else . end;
 
 def finalize:
   .result as $r

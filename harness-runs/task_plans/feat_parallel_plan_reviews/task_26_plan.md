@@ -25,3 +25,9 @@
 - `grep -n "awaiting = true" cli/templates/scripts/lib/run-analytics.jq` shows `on_user`'s assignment guarded by the open-dispatch condition, and `new_session`'s initial `awaiting: true` unchanged.
 - `grep -n "no dispatch it opened still running" cli/templates/scripts/lib/run-analytics.jq` matches in the header's idle-gap paragraph.
 - The existing suites that assert `idle_gaps` (`cli/test/run-analytics.test.mjs`) dispatch at most one sub-agent at a time, so the guard leaves their expectations unchanged; they run in Phase G, not here.
+
+**Deviations from plan:**
+
+- `sess-gap-request` runs one hour after `sess-gap-tool` (prompt 01:00:00, set sent 01:00:05, prompts 01:00:06, `Read` call 01:00:30, its result 01:00:35, `architecture-reviewer` result 01:00:40, next sub-agent assistant event 01:04:40), so the two sessions are sequential as `run-analytics-two-sessions.jsonl`'s are; its gap is asserted as start `2026-01-01T01:00:40.000Z`, 240 000 ms, `in_flight_request`, `task-plan-reviewer` — the plan's 00:00:40 start shifted by one hour, length, class and context unchanged.
+- `on_user`'s guard binds `.dispatch as $d` before reading `.open`'s keys: a first draft read `.dispatch[$id]` inside `.open | keys[] as $id | …`, where `.` is `.open`, so the guard never matched and both overlap cases failed exactly as under the named mutation. The mutation itself (unconditional `.ctx[$ck].awaiting = true`) was then applied to the template, run red on both overlap cases with the control green, and reverted.
+- `cli/test/run-analytics.test.mjs` and `cli/test/run-analytics-overlap.test.mjs` were not run: deferred to the Run gates phase, which runs every test file the suite runs.

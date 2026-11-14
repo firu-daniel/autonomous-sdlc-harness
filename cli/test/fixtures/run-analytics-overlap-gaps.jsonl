@@ -1,0 +1,23 @@
+{"type":"system","subtype":"init","session_id":"sess-gap-tool","cwd":"@FIXTURE_ROOT@"}
+{"type":"user","timestamp":"2026-01-01T00:00:00.000Z","message":{"role":"user","content":"Review the plan."}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:05.000Z","message":{"id":"m1","usage":{"output_tokens":20,"input_tokens":2},"content":[{"type":"tool_use","id":"agA","name":"Agent","input":{"subagent_type":"architecture-reviewer","description":"Review the architecture","prompt":"Review it."}},{"type":"tool_use","id":"agB","name":"Agent","input":{"subagent_type":"task-plan-reviewer","description":"Review the task plans","prompt":"Review them."}}]}}
+{"type":"user","parent_tool_use_id":"agA","timestamp":"2026-01-01T00:00:06.000Z","message":{"role":"user","content":"Review it."}}
+{"type":"user","parent_tool_use_id":"agB","timestamp":"2026-01-01T00:00:06.000Z","message":{"role":"user","content":"Review them."}}
+{"type":"assistant","parent_tool_use_id":"agB","timestamp":"2026-01-01T00:00:30.000Z","message":{"id":"b1","usage":{"output_tokens":5,"input_tokens":1},"content":[{"type":"tool_use","id":"tuB1","name":"Bash","input":{"command":"@FIXTURE_ROOT@/scripts/check.sh"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:40.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"agA","content":[{"type":"text","text":"architecture review written"}]}]}}
+{"type":"user","parent_tool_use_id":"agB","timestamp":"2026-01-01T00:04:40.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tuB1","content":[{"type":"text","text":"ok"}]}]}}
+{"type":"user","timestamp":"2026-01-01T00:05:00.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"agB","content":[{"type":"text","text":"task plan review written"}]}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:08:00.000Z","message":{"id":"m2","usage":{"output_tokens":5,"input_tokens":1},"content":[{"type":"text","text":"Both reviews are in."}]}}
+{"type":"result","subtype":"success","timestamp":"2026-01-01T00:08:01.000Z","duration_ms":481000,"duration_api_ms":20000,"total_cost_usd":0.5,"num_turns":2,"usage":{"input_tokens":3,"output_tokens":25,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}
+{"type":"system","subtype":"init","session_id":"sess-gap-request","cwd":"@FIXTURE_ROOT@"}
+{"type":"user","timestamp":"2026-01-01T01:00:00.000Z","message":{"role":"user","content":"Review the plan."}}
+{"type":"assistant","timestamp":"2026-01-01T01:00:05.000Z","message":{"id":"m3","usage":{"output_tokens":20,"input_tokens":2},"content":[{"type":"tool_use","id":"agC","name":"Agent","input":{"subagent_type":"architecture-reviewer","description":"Review the architecture","prompt":"Review it."}},{"type":"tool_use","id":"agD","name":"Agent","input":{"subagent_type":"task-plan-reviewer","description":"Review the task plans","prompt":"Review them."}}]}}
+{"type":"user","parent_tool_use_id":"agC","timestamp":"2026-01-01T01:00:06.000Z","message":{"role":"user","content":"Review it."}}
+{"type":"user","parent_tool_use_id":"agD","timestamp":"2026-01-01T01:00:06.000Z","message":{"role":"user","content":"Review them."}}
+{"type":"assistant","parent_tool_use_id":"agD","timestamp":"2026-01-01T01:00:30.000Z","message":{"id":"d1","usage":{"output_tokens":5,"input_tokens":1},"content":[{"type":"tool_use","id":"tuD1","name":"Read","input":{"file_path":"@FIXTURE_ROOT@/plan.md"}}]}}
+{"type":"user","parent_tool_use_id":"agD","timestamp":"2026-01-01T01:00:35.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tuD1","content":[{"type":"text","text":"the plan"}]}]}}
+{"type":"user","timestamp":"2026-01-01T01:00:40.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"agC","content":[{"type":"text","text":"architecture review written"}]}]}}
+{"type":"assistant","parent_tool_use_id":"agD","timestamp":"2026-01-01T01:04:40.000Z","message":{"id":"d2","usage":{"output_tokens":5,"input_tokens":1},"content":[{"type":"text","text":"Task plans reviewed."}]}}
+{"type":"user","timestamp":"2026-01-01T01:04:45.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"agD","content":[{"type":"text","text":"task plan review written"}]}]}}
+{"type":"assistant","timestamp":"2026-01-01T01:04:50.000Z","message":{"id":"m4","usage":{"output_tokens":5,"input_tokens":1},"content":[{"type":"text","text":"Both reviews are in."}]}}
+{"type":"result","subtype":"success","timestamp":"2026-01-01T01:04:51.000Z","duration_ms":291000,"duration_api_ms":15000,"total_cost_usd":0.4,"num_turns":2,"usage":{"input_tokens":3,"output_tokens":25,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}
