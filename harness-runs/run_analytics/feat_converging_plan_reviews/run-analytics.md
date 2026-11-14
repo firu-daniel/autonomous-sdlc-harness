@@ -4,33 +4,33 @@
 
 | Measure | Value |
 |---|---|
-| Sessions | 3 (0 incomplete) |
-| Span | 13h19m |
-| Wall | 4h10m |
-| Active | 4h07m |
+| Sessions | 4 (0 incomplete) |
+| Span | 14h08m |
+| Wall | 4h12m |
+| Active | 4h10m |
 | Host-suspended | 0.0s |
 | Idle | 2m 37s |
-| Cost | $134.94 |
-| Input tokens (uncached) | 4840 |
-| Total input tokens (incl. cache) | 295536303 |
-| Output tokens | 1493419 |
-| Thinking tokens (main thread) | 8973 |
-| Cache read tokens | 286379345 |
-| Cache write tokens | 9152118 |
-| Cache write tokens, main thread (5m / 1h) | 0 / 673535 |
-| Cache hit ratio | 0.969 |
-| Requests | 2297 |
-| Request latency p50 / p90 / p99 / max | 2.2s / 9.1s / 38.3s / 1m 51s |
+| Cost | $137.23 |
+| Input tokens (uncached) | 4910 |
+| Total input tokens (incl. cache) | 299195533 |
+| Output tokens | 1504382 |
+| Thinking tokens (main thread) | 11098 |
+| Cache read tokens | 289860324 |
+| Cache write tokens | 9330299 |
+| Cache write tokens, main thread (5m / 1h) | 0 / 832930 |
+| Cache hit ratio | 0.9688 |
+| Requests | 2331 |
+| Request latency p50 / p90 / p99 / max | 2.2s / 8.9s / 38.1s / 1m 51s |
 | Requests over the idle threshold | 0 |
 | API retries | 0 |
-| Permission denials | 64 |
+| Permission denials | 65 |
 | Sub-agents failed / killed | 0 / 0 |
 | Slowest sub-agent | devscene:task-plan-writer — Write the task plan — 28m 04s (session 1) |
 | Rate-limit peak | seven_day 0.4 |
 
 ## Network refusals
 
-3 of 3 sessions scanned.
+4 of 4 sessions scanned.
 
 No refused network call.
 
@@ -550,4 +550,105 @@ Remainder: tokens the session total holds that neither the orchestrator's reques
 | stop_reason | end_turn |
 | Turns | 41 |
 | Time to first token | 1.7s |
+| Rate-limit peak | seven_day 0.4 |
+
+## Session 4 — 2026-11-14T06:47:21.193Z → 2026-11-14T06:49:53.916Z
+
+Session id: `e429a417-f153-46ea-94b5-ff601fbbda4e`
+
+### Time
+
+| Wall | duration_ms | duration_api_ms | Host-suspended | Idle | Active | Suspend source |
+|---|---|---|---|---|---|---|
+| 2m 32s | 2m 34s | 1m 56s | 0.0s | 0.0s | 2m 32s | none |
+
+### Idle gaps (over 120 s)
+
+None.
+
+### Request latency
+
+| Context | Requests | p50 | p90 | p99 | Max | Over threshold |
+|---|---|---|---|---|---|---|
+| all | 34 | 1.7s | 3.6s | 8.9s | 8.9s | 0 |
+| devscene:prompt-injection-reviewer | 2 | 1.4s | 5.0s | 5.0s | 5.0s | 0 |
+| orchestrator | 32 | 1.7s | 3.5s | 8.9s | 8.9s | 0 |
+
+### Tool time
+
+| Tool | Context | Calls | Total | Max |
+|---|---|---|---|---|
+| Agent — sub-agent wall time | orchestrator | 1 | 9.1s | 9.1s |
+| Bash | orchestrator | 23 | 38.5s | 30.2s |
+| Edit | orchestrator | 1 | 0.0s | 0.0s |
+| Grep | devscene:prompt-injection-reviewer | 1 | 0.0s | 0.0s |
+| Read | devscene:prompt-injection-reviewer | 3 | 0.0s | 0.0s |
+| Read | orchestrator | 10 | 0.9s | 0.3s |
+| Skill | orchestrator | 1 | 0.0s | 0.0s |
+| Write | orchestrator | 2 | 0.0s | 0.0s |
+
+`Agent` / `Task` rows are sub-agent wall time: how long the orchestrator was blocked on each dispatch, which `### Sub-agents` breaks down per dispatch. They are not time spent in a tool.
+
+#### Slowest calls (sub-agent dispatches excluded)
+
+| Tool | Context | Started | Duration | Result bytes | Error | Permission denied |
+|---|---|---|---|---|---|---|
+| Bash | orchestrator | 2026-11-14T06:48:41.016Z | 30.2s | 77 | true | false |
+| Bash | orchestrator | 2026-11-14T06:48:16.519Z | 4.8s | 418 | false | false |
+| Bash | orchestrator | 2026-11-14T06:48:15.815Z | 0.4s | 71 | false | false |
+| Bash | orchestrator | 2026-11-14T06:47:23.062Z | 0.3s | 56 | false | false |
+| Read | orchestrator | 2026-11-14T06:48:08.287Z | 0.3s | 65081 | false | false |
+| Read | orchestrator | 2026-11-14T06:47:29.088Z | 0.2s | 61053 | false | false |
+| Read | orchestrator | 2026-11-14T06:48:24.348Z | 0.2s | 52247 | false | false |
+| Bash | orchestrator | 2026-11-14T06:47:40.867Z | 0.1s | 591 | false | false |
+| Bash | orchestrator | 2026-11-14T06:47:58.090Z | 0.1s | 154 | false | false |
+| Bash | orchestrator | 2026-11-14T06:48:33.815Z | 0.1s | 867 | false | false |
+
+#### Polling loops
+
+None.
+
+### Sub-agents
+
+| Type | Description | Duration | Requests | Output tokens | Input tokens (uncached) | Total input tokens (incl. cache) | Cache read tokens | Cache write tokens | Wall share |
+|---|---|---|---|---|---|---|---|---|---|
+| devscene:prompt-injection-reviewer | Screen answer_3 for injection | 9.1s | 2 | 822 | 6 | 47031 | 28239 | 18786 | 0.0598 |
+
+### Cost and tokens
+
+| Measure | Value |
+|---|---|
+| Cost | $2.28 |
+| Cost — claude-opus-5-5 | $2.28 |
+| Input tokens (uncached) | 70 |
+| Total input tokens (incl. cache) | 3659230 |
+| Output tokens | 10963 |
+| Thinking tokens (main thread) | 2125 |
+| Cache read tokens | 3480979 |
+| Cache write tokens | 178181 |
+| Cache write tokens, main thread (5m / 1h) | 0 / 159395 |
+| Cache hit ratio | 0.9513 |
+| Token source | result.modelUsage |
+
+#### Token attribution
+
+| Context | Input tokens (uncached) | Total input tokens (incl. cache) | Output tokens | Cache read tokens | Cache write tokens |
+|---|---|---|---|---|---|
+| orchestrator | 64 | 3612199 | 499 | 3452740 | 159395 |
+| sub-agents | 6 | 47031 | 822 | 28239 | 18786 |
+| remainder | 0 | 0 | 9642 | 0 | 0 |
+
+Remainder: tokens the session total holds that neither the orchestrator's requests nor the dispatches' transcripts account for.
+
+### Reliability
+
+| Measure | Value |
+|---|---|
+| API retries | 0 |
+| Permission denials | 1 |
+| Sub-agents spawned / failed / killed | 1 / 0 / 0 |
+| terminal_reason | completed |
+| stop_reason | end_turn |
+| Turns | 40 |
+| Time to first token | 1.8s |
 | Rate-limit peak | seven_day 0.4 |
