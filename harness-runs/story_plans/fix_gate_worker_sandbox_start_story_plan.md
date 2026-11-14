@@ -24,7 +24,7 @@ Since Claude Code 2.1.323, every local autonomous run on macOS parks at Phase G 
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_gate_worker_sandbox_start/task_<K>_plan.md`. They are in ship order, by dependency: first the `general` probe the fix is gated on, then the `cli` template fix and its tests, then the `general` copy into this checkout and the record.
 
-1. [ ] **Task 1** — Add `scripts/gate-worker-start-probe.sh`, an in-session probe of the gate worker's start with `nohup` and detach controls _(layer: general)_ _(points: 20)_
+1. [x] **Task 1** — Add `scripts/gate-worker-start-probe.sh`, an in-session probe of the gate worker's start with `nohup` and detach controls _(layer: general)_ _(points: 20)_
 2. [ ] **Task 2** — Run the probe, then start the worker without `nohup` and capture its start-up stderr in `<label>.start` _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Test the new launch line and the `<label>.start` contract, and list the file in the lane README template _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Test the probe's grading and its teardown against a temp work base _(layer: cli)_ _(points: 15)_
