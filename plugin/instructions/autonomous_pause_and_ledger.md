@@ -170,7 +170,7 @@ Two mechanisms, so a reader never has to guess which applies:
   mode excluded its `parity` / `architecture` id, or `phases.parity` is `false` so the business-parity gate
   does not run at all — so the gate-bearing phase entry flips `[x]` in the ordinary way and is correctly
   **not** `[-]`-eligible **under either provenance**. `P1` flips when the task plan converges; `R1` flips
-  "when **both gates PASS** (business-parity step 7, then architecture step 8)" — and a gate passed by
+  "when **both gates PASS** (business-parity step 7 and architecture step 8, one round)" — and a gate passed by
   exclusion **counts as passed**, so `P1` and `R1` still flip `[x]` on a round where either exclusion
   applies. `R4` — the QA entry the `qa` id and `phases.qa` each switch off whole — is the **one**
   `[-]`-eligible entry in that template.
@@ -210,7 +210,7 @@ live counterpart, so it is never a §1.8 disagreement. For what a directive id i
 `${CLAUDE_PLUGIN_ROOT}/instructions/run_mode_instructions.md` — none of that is restated here.
 
 **Planning entries are coarse on purpose.** Planning converges as a unit (a revision re-runs
-parity → architecture → structural together), so there is no durable "parity passed but architecture didn't"
+the round's gates together, as one set), so there is no durable "parity passed but architecture didn't"
 mid-state to checkpoint. The **Implementation** review phases *do* split into generate/fix (`*g` / `*f`),
 which is where resume precision pays off: resume between "review generated + committed" and "findings fixed"
 **skips regeneration** (no reviewer re-dispatch) and resumes the fix loop from the findings index. `Bm`/`C2m`
@@ -387,8 +387,8 @@ exit 1 is a refusal or a git failure, with no commit made.
    nothing: an unconverged plan is in branch history by design, and `P1` / `R1` is the only signal a
    planning loop converged. Without a usable walk the within-round position is read, best effort, by the
    walker's `start` from the round files (task plan; the loop counter starts at 0, because only a continued
-   saved walk carries it) or by the fork's own rule (fix plan), with the round's first reviewer as the
-   fallback. This holds on every resume of a planning loop — after a pause, a park or an overload
+   saved walk carries it) or by the fork's own rule (fix plan), with the round's whole set of due
+   reviewers as the fallback. This holds on every resume of a planning loop — after a pause, a park or an overload
    self-pause, and on a re-entry with or without a saved walk.
 5. `PAUSE_PROGRESS.md` (§2) is read only as a **human-readable hint / audit trail** — the ledger is
    authoritative. This composes with the clarification park/resume (`Override 2(a)`): the top-level answered pairs
@@ -524,7 +524,7 @@ The safety contract runs **before every Agent dispatch** and already does the pe
      every line of that output not beginning with `??` names a path inside the fork's planning path set (the
      fork names its set and its partial subject): commit the round so far, then honour the pause.
      1. Commit the fork's whole planning path set, as explicit paths, under the fork's partial subject, with
-        `<n>` / `<k>` the round of the dispatch the pause interrupts:
+        `<n>` / `<k>` the round of the dispatch the pause interrupts — for a set, the set's round:
         `bash <MAIN_REPO>/<scripts_dir>/commit-on-branch.sh --repo <repo_root> <path>... -- "<subject>"` —
         the call's only command, spelled as §1.6 spells it, with no shell expansion anywhere in it. Untracked
         planning artifacts are committed by this same call. Exit 3 (nothing to commit) is normal; a landed
@@ -556,6 +556,12 @@ The safety contract runs **before every Agent dispatch** and already does the pe
      d. **End the session** — truly stop and yield. Do NOT spin, poll, sleep, or re-dispatch. Ending the
         session is what makes the pause free of dispatch cost (same rule as a clarification park).
 
+**A round's set.** A plan-writing fork whose next action is a set of gate dispatches runs this check
+once, before the set's first dispatch, never between two of them. A PAUSE placed while a set is out waits
+for every dispatch of the set to return, and is honoured at the join: the set's returns are all in and
+recorded, the round's result is known, the fork's per-round commit has landed, and the check before the
+next dispatch pauses, its **Planning artifacts only** commit exiting 3. `<n>` / `<k>` is the set's round.
+
 Do **not** delete `<state_dir>/PAUSE` yourself (the watcher owns its lifecycle, and `rm` is not allow-listed in
 the generated profile — only `rm -rf` is on its deny floor, so a bare `rm` is refused). The
 `PAUSE_PROGRESS.md` append and `PAUSE_ACK` write are ordinary `<state_dir>/…` writes (allowed under the profile)
@@ -564,8 +570,9 @@ and are the run's only actions before ending.
 Granularity note: the safety contract only regains control **between** dispatches, so pause is inherently
 between-dispatch — an in-flight sub-agent (a long QA test, a review generation) finishes first. Letting a
 pending committer also finish (the dirty-tracked case above) costs at most one bounded dispatch and is worth
-it for a clean-boundary resume. A plan-writing fork's pause defers no dispatch at all: its partial commit
-(**Planning artifacts only** above) is what makes the boundary clean.
+it for a clean-boundary resume. A plan-writing fork's pause defers no dispatch beyond the set already out:
+a plan round's set returns as a whole before the check runs again (**A round's set.** above), and its
+partial commit (**Planning artifacts only** above) is what makes the boundary clean.
 
 ### 2.3 Resuming
 The **watcher** owns the resume: on a `<state_dir>/RESUME` trigger for a `paused` run (kill-switch off, under
@@ -579,7 +586,9 @@ Otherwise the re-entered fork reads `PAUSE_PROGRESS.md` as a hint and resumes vi
 reconciliation is needed, because the pause was taken at a clean tracked-tree boundary and every completed
 phase's artifacts are already committed and pushed. A planning pause's partial commit (§2.2 **Planning
 artifacts only**) is what makes that boundary clean, so the resumed walk continues at the interrupted dispatch
-with the round's files committed. A **§2.5 overload self-pause** is the one exception — it
+with the round's files committed — after a pause at a set's join (§2.2 **A round's set.**), at the step the
+join led to: the writer's revision after a `FAIL` round; after a `PASS` round, the loop's next step past
+convergence (the task-plan loop's UI-test writer, the fix-plan loop's hand-off). A **§2.5 overload self-pause** is the one exception — it
 may land mid-unit — and it needs no reconciliation either, for the different reason given there: the stray
 edits belong to a unit whose detail-index box is still `[ ]`, so the normal loop re-runs it and supersedes
 them.
@@ -636,7 +645,12 @@ session sleeps. Writing `PAUSE_ACK` and ending the session is the **only** durab
 
 **Action** — identical artifacts to §2.2, minus the request file (there is no `<state_dir>/PAUSE` to leave alone):
    0. **Planning artifacts only** — a plan-writing fork first commits and pushes the round so far exactly as
-      §2.2's bullet of that name states, with `<n>` / `<k>` the round of the dispatch that died. It is local
+      §2.2's bullet of that name states, with `<n>` / `<k>` the round of the dispatch that died. Where some
+      dispatches of a set returned and others died, the returned verdicts are recorded first, their round
+      files stand and are committed by this step, and the dead gates alone are re-dispatched as one set; a
+      resume dispatches the gates still pending — or, in a fork whose own resume restarts the whole round,
+      the whole set, each gate replacing its own round file. The three-attempt budget counts consecutive
+      failures of that re-dispatch. The commit is local
       `git` work and a push, not an API dispatch, so the overload does not bar it. A tracked change outside
       the fork's planning path set skips the commit, and the self-pause proceeds regardless of tree state, as
       below. Without it a session that self-pauses between a writer's revision and the round's commit leaves
