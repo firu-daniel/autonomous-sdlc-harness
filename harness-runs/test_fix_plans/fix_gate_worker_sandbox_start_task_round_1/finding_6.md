@@ -31,3 +31,9 @@ not ok 513 - (q) job mode: the registry run_job leaves accepts the main checkout
 
 - [ ] No code change of its own. If Finding 2's change to the launcher's launch `case` has not landed, land it first, as Finding 2 specifies.
 - [ ] If the failure persists after Finding 2, diagnose it as a new finding in the next round. Do not change the test.
+
+## Already passing
+
+- **(a) Test and file run:** `(q) job mode: the registry run_job leaves accepts the main checkout, a finished record elsewhere notwithstanding` in `cli/test/launch-sandboxed-gates.test.mjs`, run as a whole file. The fix site was also read: in `cli/templates/scripts/launch-sandboxed-gates.sh`, the launch `case` arms now begin `( trap '' HUP; exec "$setsid_bin" bash` / `( trap '' HUP; exec bash` (no `nohup`), landed by Finding 2 in `2c67a1b6`.
+- **(b) Command and result:** `npm test --workspace cli -- test/launch-sandboxed-gates.test.mjs`, run from the repository root, printed `ok 14 - (q) job mode: the registry run_job leaves accepts the main checkout, a finished record elsewhere notwithstanding`. The file totals were `# tests 21`, `# pass 21`, `# fail 0`. The named test is its own top-level `test(...)`, so the TAP line separates it from the other cases.
+- **(c) No code file edited:** this record is the only write. The test is unchanged, and so is the launcher.
