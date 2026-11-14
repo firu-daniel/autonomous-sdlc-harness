@@ -14,7 +14,7 @@
 
 Each entry resolves to the self-contained `feat_converging_plan_reviews_task_round_1/finding_<K>.md` through its `**Finding K**` reference.
 
-1. [ ] **Finding 1** — Job-mode stall kill: the relaunched session leaves no registry snapshot, and the kill-time placeholder sweep removes nothing. _(layer: cli)_
+1. [x] **Finding 1** — Job-mode stall kill: the relaunched session leaves no registry snapshot, and the kill-time placeholder sweep removes nothing. _(layer: cli)_
 
 ---
 

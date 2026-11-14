@@ -125,8 +125,9 @@ export const HUNG_RELEASE_BOUND_SECS = scaleBound(90);
 /**
  * The hung session's stub body. First launch: mark `hung`, print until `<REC>/go`, mark `silent`,
  * then wait silently — nothing on stdout or stderr, so the watchdog keeps reading it as silent —
- * for `<REC>/release`, leaving `<REC>/release-missed` if `boundSecs` pass first. Relaunch: copy
- * the registry to `<REC>/resumed-registry.json`. Bash 3.2 forms only.
+ * for `<REC>/release`, leaving `<REC>/release-missed` if `boundSecs` pass first. Relaunch: mark
+ * `relaunched`, then copy the registry to `<REC>/resumed-registry.json`, the copy's stderr to
+ * `<REC>/resumed-cp.err`. Bash 3.2 forms only.
  *
  * @param {number} boundSecs whole seconds, measured on bash's own `SECONDS`.
  * @returns {string}
@@ -146,7 +147,8 @@ export function hungBody(boundSecs) {
     '    sleep 0.2',
     '  done',
     'else',
-    '  cp "$REGISTRY" "$REC/resumed-registry.json"',
+    '  : > "$REC/relaunched"',
+    '  cp "$REGISTRY" "$REC/resumed-registry.json" 2>"$REC/resumed-cp.err" || :',
     'fi',
   ].join('\n');
 }
