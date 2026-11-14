@@ -68,7 +68,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_parallel_plan_reviews/t
 23. [x] **Task 24** — Record headless-concurrency probe BG11, owed, in `docs/sandbox-verification.md` _(layer: general)_ _(points: 10)_
 24. [x] **Task 22** — Record the fan-out, the join, recording, concurrency, resume and the second driver in `docs/flow-graph-walker.md` _(layer: general)_ _(points: 20)_
 25. [x] **Task 23** — Restate the fix-plan resume decision and the walker pointers in `docs/converging-plan-reviews.md` _(layer: general)_ _(points: 5)_
-26. [ ] **Task 25** — Mark `Parallel plan reviews` done in `ROADMAP.md` and restate `Parallel dispatch in waves` _(layer: general)_ _(points: 5)_
+26. [x] **Task 25** — Mark `Parallel plan reviews` done in `ROADMAP.md` and restate `Parallel dispatch in waves` _(layer: general)_ _(points: 5)_
 
 ## Scope register
 

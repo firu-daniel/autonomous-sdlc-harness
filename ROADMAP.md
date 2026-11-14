@@ -18,62 +18,61 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | 6 | [Task researcher](#flow-and-orchestration) |
 | 7 | [Contract-first task plans](#flow-and-orchestration) |
 | 8 | [Narrower plan and branch reviewers](#quality-and-testing) |
-| 9 | [Parallel plan reviews](#flow-and-orchestration) |
-| 10 | [Parallel dispatch in waves](#flow-and-orchestration) |
-| 11 | [Multi-plan programs](#flow-and-orchestration) |
-| 12 | [Ultra-fast mode](#flow-and-orchestration) |
-| 13 | [Review severity markers](#quality-and-testing) |
-| 14 | [Script-driven autonomous flow](#flow-and-orchestration) |
-| 15 | [Test-driven development](#quality-and-testing) |
-| 16 | [Outbound HTTP listener](#security-and-containment) |
-| 17 | [RagScene](#scene-products) |
-| 18 | [GraphScene](#scene-products) |
-| 19 | [Docs-catalog retrieval](#engines-environments-and-integrations) — kept opt-in by maintainer decision after a withdrawn verdict; improving it and measuring where it pays is open |
-| 20 | [Citation groundedness gate](#quality-and-testing) |
-| 21 | [Structured agent outputs](#quality-and-testing) |
-| 22 | [Golden-task eval suite](#quality-and-testing) |
-| 23 | [Trace export](#planning-artifacts-and-reporting) |
-| 24 | [Engine / provider abstraction](#engines-environments-and-integrations) |
-| 25 | [Model-change drift gate](#quality-and-testing) |
-| 26 | [Budget governor](#engines-environments-and-integrations) |
-| 27 | [Other issue trackers](#engines-environments-and-integrations) |
-| 28 | [First published eval result](#evidence-and-adoption) |
-| 29 | [Outcome-graded eval case](#evidence-and-adoption) |
-| 30 | [Measuring the lessons ledger](#evidence-and-adoption) |
-| 31 | [MCP servers](#engines-environments-and-integrations) |
-| 32 | [Cross-repo tasks](#flow-and-orchestration) |
-| 33 | [Watcher settings surface](#flow-and-orchestration) |
-| 34 | [`branch-summary.md`](#planning-artifacts-and-reporting) |
-| 35 | [Task breakdown and estimates file](#planning-artifacts-and-reporting) |
-| 36 | [User flow diagram](#planning-artifacts-and-reporting) |
-| 37 | [Business (data) flow diagram](#planning-artifacts-and-reporting) |
-| 38 | [Integration tests](#quality-and-testing) |
-| 39 | [Regression tests](#quality-and-testing) |
-| 40 | [Fix-plan structure review](#quality-and-testing) |
-| 41 | [Deploy to a test environment](#engines-environments-and-integrations) |
-| 42 | [Cloud QA](#engines-environments-and-integrations) |
-| 43 | [Mobile QA drivers](#engines-environments-and-integrations) |
-| 44 | [Design-source ingestion](#engines-environments-and-integrations) |
-| 45 | [Second end-to-end capture](#evidence-and-adoption) |
-| 46 | [Interactive session vs harness run](#evidence-and-adoption) |
-| 47 | [`init` warns when there is no remote](#evidence-and-adoption) |
-| 48 | [OS-level sandbox in the autonomous profile](#security-and-containment) |
-| 49 | [`doctor` sandbox checks](#security-and-containment) |
-| 50 | [Threat model](#documentation) |
-| 51 | [Suggested protected branches at `init`](#security-and-containment) |
-| 52 | [Guided default-branch change](#evidence-and-adoption) |
-| 53 | [Release tags in the protected set](#security-and-containment) |
-| 54 | [Notifications settings command](#flow-and-orchestration) |
+| 9 | [Parallel dispatch in waves](#flow-and-orchestration) |
+| 10 | [Multi-plan programs](#flow-and-orchestration) |
+| 11 | [Ultra-fast mode](#flow-and-orchestration) |
+| 12 | [Review severity markers](#quality-and-testing) |
+| 13 | [Script-driven autonomous flow](#flow-and-orchestration) |
+| 14 | [Test-driven development](#quality-and-testing) |
+| 15 | [Outbound HTTP listener](#security-and-containment) |
+| 16 | [RagScene](#scene-products) |
+| 17 | [GraphScene](#scene-products) |
+| 18 | [Docs-catalog retrieval](#engines-environments-and-integrations) — kept opt-in by maintainer decision after a withdrawn verdict; improving it and measuring where it pays is open |
+| 19 | [Citation groundedness gate](#quality-and-testing) |
+| 20 | [Structured agent outputs](#quality-and-testing) |
+| 21 | [Golden-task eval suite](#quality-and-testing) |
+| 22 | [Trace export](#planning-artifacts-and-reporting) |
+| 23 | [Engine / provider abstraction](#engines-environments-and-integrations) |
+| 24 | [Model-change drift gate](#quality-and-testing) |
+| 25 | [Budget governor](#engines-environments-and-integrations) |
+| 26 | [Other issue trackers](#engines-environments-and-integrations) |
+| 27 | [First published eval result](#evidence-and-adoption) |
+| 28 | [Outcome-graded eval case](#evidence-and-adoption) |
+| 29 | [Measuring the lessons ledger](#evidence-and-adoption) |
+| 30 | [MCP servers](#engines-environments-and-integrations) |
+| 31 | [Cross-repo tasks](#flow-and-orchestration) |
+| 32 | [Watcher settings surface](#flow-and-orchestration) |
+| 33 | [`branch-summary.md`](#planning-artifacts-and-reporting) |
+| 34 | [Task breakdown and estimates file](#planning-artifacts-and-reporting) |
+| 35 | [User flow diagram](#planning-artifacts-and-reporting) |
+| 36 | [Business (data) flow diagram](#planning-artifacts-and-reporting) |
+| 37 | [Integration tests](#quality-and-testing) |
+| 38 | [Regression tests](#quality-and-testing) |
+| 39 | [Fix-plan structure review](#quality-and-testing) |
+| 40 | [Deploy to a test environment](#engines-environments-and-integrations) |
+| 41 | [Cloud QA](#engines-environments-and-integrations) |
+| 42 | [Mobile QA drivers](#engines-environments-and-integrations) |
+| 43 | [Design-source ingestion](#engines-environments-and-integrations) |
+| 44 | [Second end-to-end capture](#evidence-and-adoption) |
+| 45 | [Interactive session vs harness run](#evidence-and-adoption) |
+| 46 | [`init` warns when there is no remote](#evidence-and-adoption) |
+| 47 | [OS-level sandbox in the autonomous profile](#security-and-containment) |
+| 48 | [`doctor` sandbox checks](#security-and-containment) |
+| 49 | [Threat model](#documentation) |
+| 50 | [Suggested protected branches at `init`](#security-and-containment) |
+| 51 | [Guided default-branch change](#evidence-and-adoption) |
+| 52 | [Release tags in the protected set](#security-and-containment) |
+| 53 | [Notifications settings command](#flow-and-orchestration) |
 
 ## Flow and orchestration
 
 | Feature | What it is | Status |
 |---|---|---|
 | Ultra-fast mode | A reduced flow — plan, plan review, implementation, branch review, review fixes — with an optional duration flag. When a duration is given, the orchestrator splits it across phases (e.g. 40% planning, 20% implementation, 40% branch review and fixes) and gives each agent a time window to return in. | Open |
-| Parallel dispatch in waves | Planning and implementation agents with no dependency on each other run in parallel batches instead of one at a time. On the implementation side it is what **Contract-first task plans** make possible: each wave dispatches one implementer per layer — baseline models, then abstract contracts, then implementations and wiring. On the planning side it starts with **Parallel plan reviews**. | Open |
+| Parallel dispatch in waves | Planning and implementation agents with no dependency on each other run in parallel batches instead of one at a time. On the implementation side it is what **Contract-first task plans** make possible: each wave dispatches one implementer per layer — baseline models, then abstract contracts, then implementations and wiring. On the planning side, **Parallel plan reviews** already runs a round's plan gates as one wave. | Open |
 | Task researcher | A pre-planning agent with four responsibilities: (a) web research where the task needs it — it is granted `WebSearch` and `WebFetch`, and whether and how it stays sandboxed is still to be decided; (b) a feasibility check, asking clarifying questions at minute one; (c) a research report file for the run, which also gives the plan writer short leads; (d) rough estimates for the full requirements, flagging any task above 300 story points to be split into several branches of at most 300 each. The split itself is **Multi-plan programs**. | Open |
 | Contract-first task plans | Refactor the task-plan writer to fewer responsibilities: it writes the skeleton and the contracts between tasks — the required output and behaviour of each sub-task — rather than every implementation detail. Today the plan is so detailed that implementers mostly transcribe it, which leaves them no room to improvise and binds them to the plan when it is wrong. Where the work allows it (source code more than corpus or documentation work, and never as an absolute rule), a story is ordered in three stages, each dispatchable in parallel per layer: (a) the baseline — data models, domain entities, mappers; (b) abstract contracts — data-module functions returning the data models, domain functions or use cases calling them, the presentation layer's hooks or components — as signatures, nullable stubs or "not implemented" bodies; (c) the implementations of those contracts and the tasks that link them together. Starts with research into the writer's full current responsibilities. | Open |
-| Parallel plan reviews | The task-plan and user-review fix-plan reviewers run in parallel, each writing its own findings file; then either the plan writer reads every file, or a merging agent (possibly a new one) folds them into one. It builds on **Converging plan reviews**: that item's round decision point becomes the join, and its sequence of gates becomes the fan-out. | Open |
+| Parallel plan reviews | In the task-plan loop and the user-review fix-plan loop, a round's gates fan out together, each reviewer writing its own findings file, and the round node joins them; the plan writer then reads every findings file of the round. It builds on **Converging plan reviews**: that item's round decision point is the join, and its sequence of gates is the fan-out. | Done |
 | Committer as a script | A script that commits and pushes, replacing the `committer` agent. | Open |
 | Script-driven planning pilot | A script walks the planning graph and runs each node as its own headless session, taking planning out of the orchestrator session; an opt-in measured pilot that ends with a cost comparison deciding whether the unit loop follows ([#159](https://github.com/firu-daniel/devscene/issues/159)). | Open |
 | Script-driven autonomous flow | The whole autonomous flow on the script-driven graph, removing the orchestrator session. Follows the planning pilot if its cost comparison favours it. | Open |
