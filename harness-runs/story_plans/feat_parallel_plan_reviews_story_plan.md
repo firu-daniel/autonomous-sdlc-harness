@@ -54,7 +54,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_parallel_plan_reviews/t
 9. [x] **Task 9** — Attribute overlapping sub-agents correctly in run analytics, with a union wall time _(layer: cli)_ _(points: 20)_
 10. [x] **Task 26** — Classify an idle gap during overlapping dispatches by the context still working, not the orchestrator _(layer: cli)_ _(points: 15)_
 11. [x] **Task 10** — Restate `plan-round-commit.test.mjs` case (b) for a pause before the fan-out and a partial set _(layer: cli)_ _(points: 10)_
-12. [ ] **Task 11** — State in `plan_review_rounds.md` that a round's gates are independent and run as one set _(layer: plugin)_ _(points: 5)_
+12. [x] **Task 11** — State in `plan_review_rounds.md` that a round's gates are independent and run as one set _(layer: plugin)_ _(points: 5)_
 13. [ ] **Task 12** — Restate the task-plan core for the set: walker forms, one-message dispatch, held binding, review entry _(layer: plugin)_ _(points: 20)_
 14. [ ] **Task 17** — Restate `autonomous_pause_and_ledger.md` for a round's set: `R1`, resume fallback, PAUSE and overload _(layer: plugin)_ _(points: 15)_
 15. [ ] **Task 13** — Restate the autonomous task-plan fork's resume, PAUSE, overload and `P1` rules for the set _(layer: plugin)_ _(points: 15)_

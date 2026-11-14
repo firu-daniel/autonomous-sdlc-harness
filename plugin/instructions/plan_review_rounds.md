@@ -39,6 +39,8 @@ A citer **points and never restates**, and no plugin asset beyond this list poin
 
 A reviewer writes `<findings_folder>/review_<iteration>.md` every round, **`PASS` included**, creating the folder itself on its first file. If `review_<iteration>.md` is already present it is from an interrupted round: review again in the mode the dispatch names, and replace it.
 
+A round's gates review the same plan revision as one set, dispatched together: never open another gate's round file of the round under review — it may still be being written. `## Converging mode` item 4 reads only the previous round's.
+
 - Line 1: `# <title> — round <iteration>`, `<title>` being the reviewer's own (`Task plan review`, `Architecture review`, `Business parity review`).
 - Then, before any section, exactly one line `verdict: PASS` or `verdict: FAIL` and exactly one line `review_mode: full` or `review_mode: converging`.
 - On `PASS` the file holds only those lines plus any `## Should Fix`, `## Nice to Have` and `## Incidental findings (not gating)` sections.
