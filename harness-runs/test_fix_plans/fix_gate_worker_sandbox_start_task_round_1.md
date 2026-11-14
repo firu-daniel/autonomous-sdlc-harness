@@ -15,7 +15,7 @@ Gates 13a–13c reported `BLOCKED` (the Python service environment is not provis
 This list is the **single source of truth** for the fix loop. The loop walks the `[ ]` entries from top to bottom, and only the committing role flips an entry to `[x]`. A `[ ]` marker anywhere else, such as a sub-step bullet inside a per-finding file, is informational only. Each entry resolves to a self-contained `finding_<K>.md` through its `**Finding K**` reference. The entries are sorted lowest blast-radius first. Finding 2 is the suspected root cause of Findings 3–11, so it comes before them. Each of those still keeps its own entry.
 
 1. [x] **Finding 1** — Gate 6a: exclude the flow walker's machine-local state file `harness-runs/.flow_walker_state` from `scripts/check-machine-paths.sh`. _(layer: cli, general)_
-2. [ ] **Finding 2** — Start the launcher's supervisor through `( trap '' HUP; exec … )` instead of `nohup`; fixes `(g)(h) a started run is pending…`. _(layer: cli, general)_
+2. [x] **Finding 2** — Start the launcher's supervisor through `( trap '' HUP; exec … )` instead of `nohup`; fixes `(g)(h) a started run is pending…`. _(layer: cli, general)_
 3. [ ] **Finding 3** — `(i) a bwrap that exits at once: did not start, quoting its line` gets `nohup`'s line instead of the bwrap stub's. _(layer: cli)_
 4. [ ] **Finding 4** — `(k) a registered clone takes its protected paths from the recorded per-run profile…` refused before `pending`. _(layer: cli)_
 5. [ ] **Finding 5** — `(r) a clone whose record only the sandbox probe's sp__render wrote is launched…` refused before `pending`. _(layer: cli)_
