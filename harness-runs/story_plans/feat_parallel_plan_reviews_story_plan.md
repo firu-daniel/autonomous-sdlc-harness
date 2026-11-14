@@ -44,7 +44,7 @@ Manual setup required:
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_parallel_plan_reviews/task_<K>_plan.md`. Ordered bottom-up by ship sequence in the configured layer order — `cli`, then `plugin`, then the catch-all `general` last. Task 26 sits at position 10, right after Task 9, whose file it edits second; from position 10 on the entry number and the task number differ. Task 17 sits at position 14, right after Task 12 and ahead of the two autonomous forks (Tasks 13 and 16), because those forks point at the pause mechanics Task 17 states once, so the pointers resolve when each fork lands. Task 24 sits at position 23, ahead of Tasks 22 and 23, because Task 22's decision record cites the BG11 row Task 24 writes.
 
 1. [x] **Task 1** — Judge a round's plan freshness against every present round file in `fw_round_evidence` _(layer: cli)_ _(points: 10)_
-2. [ ] **Task 2** — Restate the planning graph as format 3: the round's gates fan out, the round node joins _(layer: cli)_ _(points: 10)_
+2. [x] **Task 2** — Restate the planning graph as format 3: the round's gates fan out, the round node joins _(layer: cli)_ _(points: 10)_
 3. [ ] **Task 3** — Walk a round as a set in `flow-walker.sh`: fan-out, any-order recording under a lock, wait, held binding, join, resume _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Give the walker test driver `--node` and concurrent calls, and re-pin `flow-walker.test.mjs` to the set _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 5** — Add `flow-walker-fan-out.test.mjs`: any-order joins, refusals, skipped gates and the held binding _(layer: cli)_ _(points: 15)_
