@@ -47,7 +47,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_parallel_plan_reviews/t
 2. [x] **Task 2** — Restate the planning graph as format 3: the round's gates fan out, the round node joins _(layer: cli)_ _(points: 10)_
 3. [x] **Task 3** — Walk a round as a set in `flow-walker.sh`: fan-out, any-order recording under a lock, wait, held binding, join, resume _(layer: cli)_ _(points: 20)_
 4. [x] **Task 4** — Give the walker test driver `--node` and concurrent calls, and re-pin `flow-walker.test.mjs` to the set _(layer: cli)_ _(points: 20)_
-5. [ ] **Task 5** — Add `flow-walker-fan-out.test.mjs`: any-order joins, refusals, skipped gates and the held binding _(layer: cli)_ _(points: 15)_
+5. [x] **Task 5** — Add `flow-walker-fan-out.test.mjs`: any-order joins, refusals, skipped gates and the held binding _(layer: cli)_ _(points: 15)_
 6. [ ] **Task 6** — Add `flow-walker-concurrency.test.mjs`: simultaneous recording and the stale lock _(layer: cli)_ _(points: 15)_
 7. [ ] **Task 7** — Re-pin `flow-walker-resume.test.mjs` to the set and add the partial-return and pause-at-join cases _(layer: cli)_ _(points: 20)_
 8. [ ] **Task 8** — Re-pin `flow-walker-ui-and-reentry.test.mjs` where it assumes a single next reviewer _(layer: cli)_ _(points: 15)_
