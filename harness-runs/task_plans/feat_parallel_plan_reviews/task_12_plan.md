@@ -20,7 +20,7 @@
 
 **Verification:**
 
-- `grep -n "comes \*\*before\*\*\|the first gate of the loop\|business_parity_review\`, whose skip" plugin/instructions/task_plan_writing_instructions_core.md` finds nothing.
+- `grep -n "comes \*\*before\*\*\|the first gate of the loop\|pass the walk to" plugin/instructions/task_plan_writing_instructions_core.md` finds nothing.
 - `grep -n "\-\-node <node>" plugin/instructions/task_plan_writing_instructions_core.md` shows the `next` form in `## The walker`; `grep -n "action: wait\|held:" …` shows both described there.
 - `grep -n "iteration >= 5\|caps at 5 revisions\|5-revision caps\|MAX_TOTAL_DISPATCHES = 40" plugin/instructions/task_plan_writing_instructions_core.md` still finds all four — `scripts/check-flow-graph.sh` → `cap-matches-core` reads the first three.
 - Every `### N.` step heading and every `##` heading is unchanged (`git diff` shows no heading line), because the forks, `docs/flow-graph-walker.md` and the reviewers cite them.

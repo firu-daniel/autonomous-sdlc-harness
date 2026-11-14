@@ -2,7 +2,7 @@
 
 **Goal:** This repository has adopted its own harness (`.claude/context/conventions.md` → `## Documents of record`), so `scripts/` holds `init`'s output for this checkout. Make the copies of every outer-loop template this branch changed byte-identical to their templates, so this checkout's own next planning run walks the format-3 graph with the walker that reads it and records overlapping sub-agents correctly.
 
-**Depends on:** Task 1 (`cli/templates/scripts/lib/flow-walker-gates.sh`), Task 2 (`cli/templates/scripts/flows/task_plan_writing.graph.json`), Task 3 (`cli/templates/scripts/flow-walker.sh`) and Task 9 (`cli/templates/scripts/lib/run-analytics.jq`, `cli/templates/scripts/lib/run-analytics-report.jq`). Each template is final when this task runs; this task edits nothing in them.
+**Depends on:** Task 1 (`cli/templates/scripts/lib/flow-walker-gates.sh`), Task 2 (`cli/templates/scripts/flows/task_plan_writing.graph.json`), Task 3 (`cli/templates/scripts/flow-walker.sh`) Task 9 (`cli/templates/scripts/lib/run-analytics.jq`, `cli/templates/scripts/lib/run-analytics-report.jq`) and Task 26 (its second edit to `cli/templates/scripts/lib/run-analytics.jq`). Each template is final when this task runs; this task edits nothing in them.
 
 **Where this task stops.** Only copies whose template changed on this branch. Nothing is rendered: these outer-loop files are copied verbatim, never templated (`docs/cli.md` → *"Two families land in `scriptsDir`"*). No `harness-runs/` README changes, because no state-dir template changed.
 

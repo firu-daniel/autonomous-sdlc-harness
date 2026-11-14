@@ -2,7 +2,7 @@
 
 **Goal:** Make the planning graph declare that a round's gates are independent and may run at the same time, so any driver — today's orchestrator or the #159 script — reads the fan-out off the data, and no gate's edge encodes a sequence any more.
 
-**Where this layer stops.** This task edits the graph only. What a format-3 graph **means** at run time — opening a round on arrival from its writer, the set, the join — is the walker's (**Task 3**), which refuses any other `formatVersion`; the schema that holds the shape is **Task 19**'s and the static checks are **Task 20**'s. Until they land, `npm run validate:flow-graph` and `check-flow-graph.sh` disagree with this file; that is expected inside the branch.
+**Where this layer stops.** This task edits the graph only. What a format-3 graph **means** at run time — opening a round on arrival from its writer, the set, the join — is the walker's (**Task 3**), which refuses any other `formatVersion`; the schema that holds the shape is **Task 19**'s and the static checks are **Task 20**'s. Shipping the graph ahead of its schema is a deliberate departure from contract-before-consumer, whose reason the story index `## Context` states (**Schema after graph.**); no gate reads the graph against the schema before Phase G, by which time Task 19 has landed.
 
 ### Targets
 
