@@ -33,3 +33,12 @@
 - Every gate-run line the template's `WHY NOT NOHUP` paragraph quotes appears verbatim in WS1, WS2 or WS3, under the gate-run label.
 - `grep -nE '^\| (F17|WS[1-5]) ' docs/sandbox-verification.md` lists F17, WS1, WS2, WS3, WS4 and WS5, each on exactly one line.
 - Grep the new text for an absolute path under the home directory or `/Users/`, and find none.
+
+**Deviations from plan:**
+
+- **The re-take** (`bash scripts/gate-worker-start-probe.sh`, one foreground call, 2026-11-14, Claude Code 2.1.325, Darwin 24.6.0, macOS 15.7.4, bash 3.2.57(1)-release; exited normally, every leg printed): `sandbox: sandboxed`, `nohup: fail`, `detach: fail`, `launch-line: fail` (lane listed before the launch, setup status 0), `run-form: pass` (`pending`, exit 3; wait 1 `pass`, exit 0; no `gwsp_run.start`), `tmpdir: fail` (bare `mktemp -d` refused under `/var/folders/…`). No reading contradicts Task 2's gate: the three `nohup` legs match the gate run byte for byte, and `run-form` reads `pass`. The whole output is the evidence quoted in WS1–WS5 and the Stamp; it was read back from the call, not kept as a file (a redirect of it to `harness-runs/scratch/` was refused by the permission layer).
+- **The `env` line's time of day is elided** (`2026-11-14T…Z`) in the Stamp, to honour the no-wall-clock rule; the date stands.
+- **WS4 carries a third reading**, Task 1's pre-fix `run-form: fail` line, labelled *Before the fix*, so the row shows the change; WS4's re-take is the after-fix reading the plan asks for.
+- **WS5's Verdict cell reads `recorded`**, not the probe's `fail`, with the probe's `fail` quoted in Observed and attributed to the bare call (F2's class).
+- **The unsandboxed control** (the probe from a terminal, `launch-line` expected `pass`) was not taken: F17 says so, and the re-take path is stated there.
+- **Verification as run:** `grep -nE '^\| (F17|WS[1-5]) '` lists each id on exactly one line; `git diff -U0` of the doc grepped for `/Users/`, the user name, `/home/` and an unelided `/var/folders/` path found none; each of the three gate-run summary lines of `WHY NOT NOHUP` was found verbatim in the doc (`grep -oFf`, two hits each: gate run and re-take). The pattern file for that last check, `harness-runs/scratch/task6_gate_lines.txt`, could not be removed — `rm` was refused by the permission layer — and is left in the ignored scratch directory.
