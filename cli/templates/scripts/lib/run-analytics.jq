@@ -208,10 +208,14 @@
 # Session record, of modes sessions, overlay and attach (top-level keys exactly these):
 #   session_id, complete, first_at, last_at  (ISO timestamps, verbatim)
 #   time: {wall_ms, duration_ms, duration_api_ms, host_suspended_ms, idle_ms,
-#          active_ms, idle_threshold_s, suspend_source,
+#          active_ms, subagent_wall_ms, idle_threshold_s, suspend_source,
 #          idle_gaps: [{start_at, length_ms, context, class}]}
 #     host_suspended_ms = max(0, wall_ms - duration_ms); duration_ms is the result
 #     event's monotonic clock, which excludes suspend. active_ms = wall - idle.
+#     subagent_wall_ms: the length of the union of the dispatch intervals
+#     [start, start + duration_ms] over subagents[] with a numeric duration_ms,
+#     null when none has one; dispatches sent together overlap and count once. A
+#     record written before this field lacks the key.
 #     A gap is consecutive timestamped events, any context, further apart than
 #     idle_threshold_s. Class at its start: in_flight_request (some context's last
 #     event is a user event or the init, with no assistant event after it; context
@@ -241,7 +245,9 @@
 #     agent_id: the dispatch's transcript id, from the closing tool_result's
 #     tool_use_result.agentId or a system task_* event's task_id; never redacted.
 #     token_source and the four token fields are null here (mode attach fills them).
-#     requests is counted from the stream.
+#     requests is counted from the stream. duration_ms is the dispatch's own
+#     tool_use-to-tool_result span and wall_share is it over wall_ms, so
+#     overlapping dispatches' wall_share values may sum past 1.
 #   cost: {total_cost_usd, by_model, token_source, input_tokens, output_tokens,
 #          cache_read_tokens, cache_write_tokens, cache_hit_ratio, thinking_tokens,
 #          cache_write_5m_tokens, cache_write_1h_tokens}
@@ -517,6 +523,16 @@ def finalize:
   | ([.gaps[].length_ms] | add // 0) as $idle
   | (reduce (($r.permission_denials // [])[] | .tool_use_id | strings) as $id
        (.denied; .[$id] = true)) as $den
+  | ([.dispatch_order[] as $id | .dispatch[$id].start_t as $s | .calls[$id].duration_ms as $d
+      | select(($s | type) == "number" and ($d | type) == "number") | [$s, $s + $d]]
+     | if length == 0 then null
+       else sort_by(.[0])
+         | reduce .[] as $iv ({total: 0, hi: null};
+             if .hi == null or $iv[0] > .hi then .total += ($iv[1] - $iv[0]) | .hi = $iv[1]
+             elif $iv[1] > .hi then .total += ($iv[1] - .hi) | .hi = $iv[1]
+             else . end)
+         | .total
+       end) as $sa_union
   | [.reqs[] | del(._parent)] as $ri
   | (.reqs | group_by(._parent) | map({key: .[0]._parent, value: .}) | from_entries) as $byp
   | [.corder[] as $id | .calls[$id]
@@ -541,6 +557,7 @@ def finalize:
                               then ([0, $wall - $r.duration_ms] | max) else null end),
           idle_ms: $idle,
           active_ms: (if $wall != null then $wall - $idle else null end),
+          subagent_wall_ms: $sa_union,
           idle_threshold_s: $idle_threshold_s,
           suspend_source: "none",
           idle_gaps: .gaps},

@@ -51,7 +51,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_parallel_plan_reviews/t
 6. [x] **Task 6** — Add `flow-walker-concurrency.test.mjs`: simultaneous recording and the stale lock _(layer: cli)_ _(points: 15)_
 7. [x] **Task 7** — Re-pin `flow-walker-resume.test.mjs` to the set and add the partial-return and pause-at-join cases _(layer: cli)_ _(points: 20)_
 8. [x] **Task 8** — Re-pin `flow-walker-ui-and-reentry.test.mjs` where it assumes a single next reviewer _(layer: cli)_ _(points: 15)_
-9. [ ] **Task 9** — Attribute overlapping sub-agents correctly in run analytics, with a union wall time _(layer: cli)_ _(points: 20)_
+9. [x] **Task 9** — Attribute overlapping sub-agents correctly in run analytics, with a union wall time _(layer: cli)_ _(points: 20)_
 10. [ ] **Task 26** — Classify an idle gap during overlapping dispatches by the context still working, not the orchestrator _(layer: cli)_ _(points: 15)_
 11. [ ] **Task 10** — Restate `plan-round-commit.test.mjs` case (b) for a pause before the fan-out and a partial set _(layer: cli)_ _(points: 10)_
 12. [ ] **Task 11** — State in `plan_review_rounds.md` that a round's gates are independent and run as one set _(layer: plugin)_ _(points: 5)_
