@@ -31,3 +31,9 @@ not ok 514 - (s) job mode: the wrappers leg's control-clone record, which carrie
 
 - [ ] No code change of its own. If Finding 2's change to the launcher's launch `case` has not landed, land it first, as Finding 2 specifies.
 - [ ] If the failure persists after Finding 2, diagnose it as a new finding in the next round. Do not change the test.
+
+## Already passing
+
+- **(a)** Named test: `(s) job mode: the wrappers leg's control-clone record, which carries no status, does not refuse the main checkout`; file run: `cli/test/launch-sandboxed-gates.test.mjs`.
+- **(b)** Command: `npm test --workspace cli -- test/launch-sandboxed-gates.test.mjs` (from the repository root, after `pretest` compiled). Result: `ok 15 - (s) job mode: the wrappers leg's control-clone record, which carries no status, does not refuse the main checkout`; file totals `# tests 21`, `# pass 21`, `# fail 0`. Already passing after Finding 2's launcher change (commit `2c67a1b6`).
+- **(c)** No code file was edited; this section is the only write.

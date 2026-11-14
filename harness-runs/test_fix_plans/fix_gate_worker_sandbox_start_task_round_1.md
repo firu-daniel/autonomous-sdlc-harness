@@ -20,7 +20,7 @@ This list is the **single source of truth** for the fix loop. The loop walks the
 4. [x] **Finding 4** — `(k) a registered clone takes its protected paths from the recorded per-run profile…` refused before `pending`. _(layer: cli)_
 5. [x] **Finding 5** — `(r) a clone whose record only the sandbox probe's sp__render wrote is launched…` refused before `pending`. _(layer: cli)_
 6. [x] **Finding 6** — `(q) job mode: the registry run_job leaves accepts the main checkout…` refused before `pending`. _(layer: cli)_
-7. [ ] **Finding 7** — `(s) job mode: the wrappers leg's control-clone record…` refused before `pending`. _(layer: cli)_
+7. [x] **Finding 7** — `(s) job mode: the wrappers leg's control-clone record…` refused before `pending`. _(layer: cli)_
 8. [ ] **Finding 8** — `(t) F15: job mode with <main>/scripts/.git protected and absent…` refused before `pending`. _(layer: cli)_
 9. [ ] **Finding 9** — `(n) a redirected XDG_STATE_HOME or HOME does not choose the clone's profile` refused before `pending`. _(layer: cli)_
 10. [ ] **Finding 10** — `(l) the vector binds the target's .git read-only…` refused before `pending`. _(layer: cli)_
