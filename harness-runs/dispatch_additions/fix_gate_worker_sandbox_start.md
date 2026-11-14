@@ -24,3 +24,13 @@
 - **added:** `context_notes:`
 - **verbatim:** context_notes: The cli-layer dispatch for this finding already edited cli/templates/scripts/run-test-suite.sh (uncommitted in the working tree); scripts/run-test-suite.sh and docs/sandbox-verification.md are not yet changed — source: that dispatch's return, this session.
 - **why the agent could not derive it:** finding_1.md describes the whole fix across both layers; which half the preceding cli dispatch had already landed was only in that dispatch's return.
+
+## [G · Item 1 · general · iter 0] → layer-implementer  (#30)
+- **added:** `context_notes:`
+- **verbatim:** context_notes: The cli-layer dispatch for this finding made no change and returned a blocker because steps 1, 2 and 4 (scripts/check-machine-paths.sh, docs/development.md) lie outside its `cli` path, and step 3's test edit cannot land without step 1 — source: that dispatch's return, this session; no file of this finding has been edited yet.
+- **why the agent could not derive it:** that the preceding cli dispatch had edited nothing, and why, was only in that dispatch's return; finding_1.md assumes a cli layer ran its share.
+
+## [G · Item 2 · general · iter 0] → layer-implementer  (#33)
+- **added:** `context_notes:`
+- **verbatim:** context_notes: The cli-layer dispatch for this finding made no change and returned a blocker because the copy to scripts/launch-sandboxed-gates.sh and the docs/sandbox-verification.md rows lie outside its `cli` path — source: that dispatch's return, this session; no file of this finding has been edited yet, including cli/templates/scripts/launch-sandboxed-gates.sh.
+- **why the agent could not derive it:** that the preceding cli dispatch had left the template unedited was only in that dispatch's return; finding_2.md assumes a cli layer ran its share.
