@@ -57,7 +57,9 @@
 # into `<label>.start`, then `disown`; WHY NOT NOHUP) and answers
 # `pending`. A gate run is therefore not a tool task, and no tool-level time
 # limit applies to it (`docs/sandbox-verification.md` → row BG2: Claude Code
-# 2.1.309, macOS, headless, sandboxed). Every round is collected by
+# 2.1.309, macOS, headless, sandboxed, measured on the former `nohup … &`
+# shape; the `trap '' HUP` shape's survival past its call and its session is
+# owed, row WS6). Every round is collected by
 # `--wait <label>` issued as a foreground call, repeatedly, until it prints a
 # verdict; those repeated calls are what keep a session's turn open and its STOP
 # and PAUSE checks running. Each call polls for at most one wait slice and then
