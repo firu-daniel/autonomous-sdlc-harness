@@ -52,8 +52,9 @@
 # verdict (ONE RUN PER LABEL), which leaves the log as it is.
 #
 # THE WAIT FORM, AND WHY IT EXISTS. The run form never runs the gates itself: it
-# re-invokes this script as a WORKER detached from the calling shell (`nohup`,
-# stdin, stdout and stderr all away from the caller, then `disown`) and answers
+# re-invokes this script as a WORKER detached from the calling shell (a subshell
+# that ignores HUP and `exec`s it, stdin and stdout away from the caller, stderr
+# into `<label>.start`, then `disown`; WHY NOT NOHUP) and answers
 # `pending`. A gate run is therefore not a tool task, and no tool-level time
 # limit applies to it (`docs/sandbox-verification.md` → row BG2: Claude Code
 # 2.1.309, macOS, headless, sandboxed). Every round is collected by
@@ -93,7 +94,7 @@
 # query does not list them. Residual: a gate that scans the state directory's
 # committable files does not re-scan a change made there after the run. A
 # session can write `.commit` as it can write `.verdict`, so reuse adds no trust
-# surface. Not reusing, the run form removes `.verdict` and `.commit` before it
+# surface. Not reusing, the run form removes `.verdict`, `.commit` and `.start` before it
 # starts a run, so a stale `.commit` never outlives its verdict. A run
 # removes a `.running` file only while it still holds its own PID. `.running`'s
 # content is the worker's PID as an ownership token; its MTIME IS THE
@@ -126,7 +127,9 @@
 # claimed `.running` OR has already written `.verdict` — a gate pair fast enough
 # to finish between two polls, whose `.running` is already gone — and answers
 # `pending` in both cases. Only seeing neither within the window is the refusal
-# `the detached run of <label> did not start`. The poll bounds a process that
+# `the detached run of <label> did not start`; `<label>.start` then holds what
+# the worker wrote to stderr before it died or stalled, followed by the run
+# form's one marker line naming the worker's PID and the window. The poll bounds a process that
 # has not begun, never a gate. The worker refreshes `.running` while it waits on
 # its own gate, so the heartbeat stops when the worker stops.
 #
@@ -213,7 +216,30 @@
 #                    place before `.verdict` and only by a worker that found the
 #                    tree clean outside the state directory on that same commit
 #                    at its start and its finish; what the reuse compares
-# A refusal writes none of these files, and no log.
+#   <label>.start    the worker's stderr until it claims `.running`, then
+#                    removed by the worker; on the start-up refusal the run
+#                    form appends one line,
+#                    `== run-test-suite.sh: worker <pid> of <label> neither claimed .running nor wrote .verdict within <STALE_SECONDS>s ==`
+# A refusal writes none of these files, and no log — except `<label>.start` on
+# the start-up refusal.
+#
+# WHY NOT NOHUP. The worker was started with `nohup`, which in an unattended
+# macOS session's sandbox exits 127 before it runs anything, so every run form
+# refused. Gate run of `bash scripts/gate-worker-start-probe.sh`, before this
+# fix, Claude Code 2.1.325 (`claude --version`), macOS 15.7.4, Darwin 24.6.0,
+# GNU bash 3.2.57, SANDBOXED, 2026-11-14 (`docs/sandbox-verification.md` §5 F17,
+# rows WS1–WS3):
+#   gwsp: nohup: fail — nohup true exited 127, stderr: nohup: can't detach from console: Inappropriate ioctl for device; trap '' HUP control exited 0, stderr: (empty)
+#   gwsp: detach: fail — nohup arm not started, stderr: nohup: can't detach from console: Inappropriate ioctl for device; trap arm started, stderr: (empty)
+#   gwsp: launch-line: fail — lane devscene/test_run_logs/gwsp-probe listed: (empty); gwsp_launch.running absent, gwsp_launch.verdict absent; launch stderr: nohup: can't detach from console: Inappropriate ioctl for device
+# The `nohup` stderr record, whole: `nohup: can't detach from console:
+# Inappropriate ioctl for device` (status 127). The `launch-line` stderr
+# record, whole: `nohup: can't detach from console: Inappropriate ioctl for
+# device`, the lane existing before the launch and empty after it. A detached
+# `( trap '' HUP; exec … )` started in the same call. The launch is that
+# subshell: `trap ''` ignores HUP and `exec` carries the ignored disposition
+# into the worker, as `nohup` did, so the worker still enters with HUP ignored
+# and SIGNALS' HUP row holds.
 #
 # Usage:
 #   run-test-suite.sh <label>          start typecheck then test detached and print `pending`, or print a finished verdict of <label> it reuses; label matching the run library's HR_TEST_RUN_LABEL_PATTERN
@@ -230,7 +256,8 @@
 #      STALE_SECONDS — or (either form) a `.running` whose heartbeat cannot be
 #      read: `cannot read the heartbeat of '<path>'` — or (run form) a worker
 #      that neither claimed `.running` nor wrote `.verdict` within STALE_SECONDS:
-#      `the detached run of <label> did not start`
+#      `the detached run of <label> did not start`, its start-up stderr and
+#      marker line left in `<label>.start`
 #   3  pending — the run form's normal answer once its detached run has started, or the wait form (or run form) while a run is in flight; issue the wait form
 # The no-detach form exits 3 for a live label, and otherwise with the verdict exit, 0 or 1 — of the verdict it reuses, or of its own run.
 
@@ -302,6 +329,7 @@ log_file="$log_dir/$label.log"
 running_file="$log_dir/$label.running"
 verdict_file="$log_dir/$label.verdict"
 commit_file="$log_dir/$label.commit"
+start_file="$log_dir/$label.start"
 
 # Print a verdict file's line and exit with its status.
 emit_verdict() {
@@ -455,7 +483,7 @@ if [ "$mode" = nodetach ] && [ "$worker_marker" != "$label" ]; then
     emit_verdict
   fi
   mkdir -p "$log_dir" || refuse "cannot create '$log_dir'"
-  rm -f "$verdict_file" "$verdict_file.tmp" "$commit_file" "$commit_file.tmp"
+  rm -f "$verdict_file" "$verdict_file.tmp" "$commit_file" "$commit_file.tmp" "$start_file"
   worker_marker="$label"
 fi
 
@@ -471,10 +499,21 @@ if [ "$worker_marker" != "$label" ]; then
   fi
 
   mkdir -p "$log_dir" || refuse "cannot create '$log_dir'"
-  rm -f "$verdict_file" "$verdict_file.tmp" "$commit_file" "$commit_file.tmp"
+  rm -f "$verdict_file" "$verdict_file.tmp" "$commit_file" "$commit_file.tmp" "$start_file"
 
-  # `nohup` by name on PATH: the suite shadows it to exercise the refusal below.
-  RUN_TEST_SUITE_WORKER="$label" nohup bash "$script_dir/$(basename "${BASH_SOURCE[0]}")" "$label" </dev/null >/dev/null 2>&1 &
+  # A lane that cannot take `.start` launches as before, so the refusal's bytes
+  # never depend on it; the braces keep the failed redirect's message off stderr.
+  start_err=/dev/null
+  if { : > "$start_file"; } 2>/dev/null; then start_err="$start_file"; fi
+
+  # `bash` by name on PATH inside the subshell: the suite shadows it to exercise
+  # the refusal below. `exec` keeps the subshell's PID, so `.running`'s `$$`
+  # equals `$!`, and the worker enters with HUP ignored (WHY NOT NOHUP).
+  (
+    trap '' HUP
+    export RUN_TEST_SUITE_WORKER="$label"
+    exec bash "$script_dir/$(basename "${BASH_SOURCE[0]}")" "$label"
+  ) </dev/null >/dev/null 2>>"$start_err" &
   worker_pid=$!
   disown
 
@@ -489,10 +528,17 @@ if [ "$worker_marker" != "$label" ]; then
     [ "$SECONDS" -lt "$start_deadline" ] || break
     sleep 1
   done
+  if [ "$start_err" = "$start_file" ]; then
+    { printf '== run-test-suite.sh: worker %s of %s neither claimed .running nor wrote .verdict within %ss ==\n' \
+      "$worker_pid" "$label" "$STALE_SECONDS" >> "$start_file"; } 2>/dev/null
+  fi
   refuse "the detached run of $label did not start"
 fi
 
 printf '%s\n' "$$" > "$running_file"
+# Start-up is over: `.start` held this worker's stderr only until the claim.
+exec 2>/dev/null
+rm -f "$start_file"
 clean_tree_commit_var start_commit
 trap 'on_signal 15' TERM
 trap 'on_signal 2' INT
