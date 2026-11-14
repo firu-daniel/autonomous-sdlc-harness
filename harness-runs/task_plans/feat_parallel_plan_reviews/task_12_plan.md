@@ -24,3 +24,7 @@
 - `grep -n "\-\-node <node>" plugin/instructions/task_plan_writing_instructions_core.md` shows the `next` form in `## The walker`; `grep -n "action: wait\|held:" …` shows both described there.
 - `grep -n "iteration >= 5\|caps at 5 revisions\|5-revision caps\|MAX_TOTAL_DISPATCHES = 40" plugin/instructions/task_plan_writing_instructions_core.md` still finds all four — `scripts/check-flow-graph.sh` → `cap-matches-core` reads the first three.
 - Every `### N.` step heading and every `##` heading is unchanged (`git diff` shows no heading line), because the forks, `docs/flow-graph-walker.md` and the reviewers cite them.
+
+**Deviations from plan:**
+
+- Splitting the `## Stop conditions` `error:` / `blocker:` entry in two moves the gate-error entry to position 6, and both new entries route to `<escalate>`. So `## Mode contract — bindings this file uses` → the `<escalate>` row's `Used at` cell now reads `## Stop conditions` entries 4–6 instead of 4–5. That table is not in `### Targets`, but the cell is load-bearing, so the edit was needed to keep it correct. The same citation in `plugin/instructions/task_plan_writing_instructions_autonomous.md` → `## Mode contract — bindings` (the `<escalate>` row) was also updated from 4–5 to 4–6. The grep `grep -rn "entries 4–5" plugin docs cli/test` found no other citer.
