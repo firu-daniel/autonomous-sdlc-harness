@@ -14,8 +14,9 @@
 # the command is the same in both. Not `--exclude=.git`: GNU and BSD grep both match it against a
 # file's base name, so it would also skip every nested file named `.git`. Not `--exclude=./.git`:
 # GNU grep matches a recursive subfile's base name only, so it would exclude nothing on Linux.
-# The pipe is safe because the gate grades OUTPUT, so no filtering stage's exit status (1 when it
-# filters everything) is ever read; grep's own error lines take the stderr route below, not this pipe.
+# The pipe — this filter, the clarifications filter and the walker-state filter below — is safe
+# because the gate grades OUTPUT, so no filtering stage's exit status (1 when it filters everything)
+# is ever read; grep's own error lines take the stderr route below, not this pipe.
 #
 # THE EXCLUDED DIRECTORIES. `node_modules`, `dist` and `.git` hold nothing a commit of this tree
 # carries as source. `test_run_logs` holds the Run gates phase's logs: they carry machine paths by
@@ -37,6 +38,14 @@
 # excludes `:` so it cannot run past the `grep -n` `path:line:` separator into the hit text, which
 # always contains `$HOME` and therefore a `/`; a directory name carrying a `:` is printed, the
 # fail-closed direction.
+#
+# THE WALKER-STATE FILTER. The third filter drops `harness-runs/.flow_walker_state`, the flow
+# walker's state file — "machine-local" in `scripts/flow-walker.sh`'s `STATE —` header and listed in
+# `.gitignore` — whose `revision_findings` line stores findings paths as the orchestrator passed
+# them, absolute ones included. It anchors on that exact path rather than using
+# `--exclude=.flow_walker_state`, which grep matches against the base name and so would also skip a
+# same-named file anywhere else, such as one under `examples/notes-app/devscene/`; that file is
+# printed, the fail-closed direction.
 #
 # THE ONE DROPPED ERROR (docs/sandbox-verification.md §5 F11). Inside the gate launcher's Linux
 # `bwrap` worker, `grep -r` printed `grep: ./.bash_profile: Permission denied` and the like, and the
@@ -62,7 +71,7 @@ err="$(mktemp "${TMPDIR:-/tmp}/check-machine-paths.XXXXXX")" || {
 }
 trap 'rm -f "$err"' EXIT
 
-grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git --exclude-dir=test_run_logs --exclude-dir=scratch --exclude-dir=__pycache__ 2>"$err" | grep -v '^\./\.git:[0-9][0-9]*:' | grep -v '^\./harness-runs/clarifications/[^/:][^/:]*/'
+grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git --exclude-dir=test_run_logs --exclude-dir=scratch --exclude-dir=__pycache__ 2>"$err" | grep -v '^\./\.git:[0-9][0-9]*:' | grep -v '^\./harness-runs/clarifications/[^/:][^/:]*/' | grep -v '^\./harness-runs/\.flow_walker_state:'
 
 prefix='grep: '
 suffix=': Permission denied'

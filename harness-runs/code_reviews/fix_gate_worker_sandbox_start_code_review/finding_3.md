@@ -1,0 +1,7 @@
+### 3. The WS rows of a standing document say "this task" for the re-take, which names no task once the run is over
+
+**File:** `docs/sandbox-verification.md` → **The Run gates worker start.** — the `Setup:` paragraph ("and the **re-take (this task, after the fix)**") and rows `WS1`–`WS5` ("**Re-take (this task, after the fix):**", "**Re-take (this task):**").
+
+`docs/sandbox-verification.md` is a document of record that is read long after the run. "This task" was correct only while Task 6 was writing the rows. A later reader cannot tell which task, or which branch, took the re-take, and could take it to be the Task 2 gate run that each row sets beside it. Everything else in the block names its source explicitly, for example "Task 2's implementer session of the same run".
+
+**Fix:** in `docs/sandbox-verification.md`, inside the **The Run gates worker start.** block only (its `Setup:` paragraph and rows `WS1`–`WS5`), replace every `this task` with `Task 6 of \`fix_gate_worker_sandbox_start\``. That is, `**re-take (this task, after the fix)**` becomes `**re-take (Task 6 of \`fix_gate_worker_sandbox_start\`, after the fix)**`, `**Re-take (this task, after the fix):**` becomes `**Re-take (Task 6 of \`fix_gate_worker_sandbox_start\`, after the fix):**`, and `**Re-take (this task):**` becomes `**Re-take (Task 6 of \`fix_gate_worker_sandbox_start\`):**`. Change nothing else. This fix edits no test file, so it runs no test.

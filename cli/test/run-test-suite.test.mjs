@@ -11,7 +11,10 @@
  * no gate run — by either form only while HEAD is the commit `.commit` records and the tree outside
  * the state directory is clean; `.commit` is written only by a run clean at its start and finish,
  * and the no-detach form's reuse restamps `.verdict`. Both gates are told the label and the log
- * directory.**
+ * directory. `<label>.start` holds a worker's own stderr until it claims `.running`, so it survives
+ * only a worker that never started, ending in the run form's marker line; a run form that starts a
+ * run clears a stale one, the no-detach form clears one and launches no worker, and a reuse leaves
+ * it as found. The worker enters with HUP ignored: HUP to it alone still ends in `pass`.**
  * Every case seeds `commands.test` with a stub that counts its own runs, so "exactly once" is an
  * assertion on a counter file; the stub's own output must reach the log and neither stream. A
  * `<none>` typecheck is asserted as not run — a marker line and no counter — never as a pass.
@@ -205,6 +208,27 @@ const REFUSAL = 'run-test-suite.sh: no run in flight for task_round_1\n';
 const NOT_STARTED = 'run-test-suite.sh: the detached run of task_round_1 did not start\n';
 /** The file a held stub waits on; every fixture's teardown writes it. */
 const RELEASE = 'stub-release';
+const START = `${LOG_DIR}/task_round_1.start`;
+
+/** Resolved before any case shadows `bash`, so the fake below can hand every other call to it. */
+const REAL_BASH = (() => {
+  const { stdout, status } = spawnSync('/bin/sh', ['-c', 'command -v bash'], { encoding: 'utf8' });
+  assert.equal(status, 0, 'no bash on PATH');
+  return stdout.trim();
+})();
+
+/**
+ * The env putting a fake `bash` first on `PATH`. The run form's launch resolves `bash` by name with
+ * `RUN_TEST_SUITE_WORKER` exported, so the fake runs the shell lines `onWorker` there; every other
+ * call — `runBash` itself, a gate — has no marker and reaches the real interpreter.
+ */
+function fakeBashEnv(dir, onWorker) {
+  const fakeBin = join(dir, 'fake-bin');
+  mkdirSync(fakeBin);
+  const script = ['#!/bin/sh', 'if [ -n "${RUN_TEST_SUITE_WORKER-}" ]; then', onWorker, 'fi', `exec '${REAL_BASH}' "$@"`, ''];
+  writeFileSync(join(fakeBin, 'bash'), script.join('\n'), { mode: 0o755 });
+  return { PATH: `${fakeBin}:${process.env.PATH}` };
+}
 
 /** Plants `task_round_1.running` holding `pid`, its mtime — the heartbeat — `ageSeconds` in the past. */
 function plantRunning(dir, { pid, ageSeconds }) {
@@ -563,12 +587,11 @@ test('a worker that finishes inside the start-up poll still answers `pending`, a
 
 test('a worker that never starts refuses with exit 2, one stderr line and no gate run', async (t) => {
   const dir = await wiredFixture(t);
-  const fakeBin = join(dir, 'fake-bin');
-  mkdirSync(fakeBin);
-  writeFileSync(join(fakeBin, 'nohup'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  const workerStderr = 'FAKE-BASH: the worker was not started';
+  const env = fakeBashEnv(dir, `  printf '%s\\n' '${workerStderr}' >&2\n  exit 126`);
 
   // The short start-up window is this case's subject.
-  const result = await wrapper(dir, [LABEL], { PATH: `${fakeBin}:${process.env.PATH}`, [STALE_ENV]: '3' });
+  const result = await wrapper(dir, [LABEL], { ...env, [STALE_ENV]: '3' });
 
   assert.equal(result.status, 2);
   assert.equal(result.stdout, '');
@@ -578,6 +601,41 @@ test('a worker that never starts refuses with exit 2, one stderr line and no gat
   }
   assert.equal(existsSync(join(dir, COUNTER)), false, 'the test gate ran');
   assert.equal(existsSync(join(dir, TC_COUNTER)), false, 'the typecheck gate ran');
+  const start = text(dir, START).split('\n');
+  assert.equal(start.length, 3, `.start holds other than two lines: ${JSON.stringify(start)}`);
+  assert.equal(start[0], workerStderr);
+  const marker = /^== run-test-suite\.sh: worker [1-9][0-9]* of task_round_1 neither claimed \.running nor wrote \.verdict within 3s ==$/;
+  assert.match(start[1], marker);
+  assert.equal(start[2], '', '.start does not end in a newline');
+});
+
+test('a started run leaves no `<label>.start`, and a stale one is gone once a fresh run has its verdict', async (t) => {
+  const dir = await wiredFixture(t);
+
+  assert.equal((await finishedRun(dir)).stdout, 'pass\n');
+  assert.equal(existsSync(join(dir, START)), false, 'a started worker left its .start');
+
+  writeFileSync(join(dir, START), 'STALE-START\n');
+  assert.equal((await finishedRun(dir)).stdout, 'pass\n');
+  assert.deepEqual(counterLines(dir), ['ran', 'ran'], 'the second run form did not start a fresh run');
+  assert.equal(existsSync(join(dir, START)), false, 'a stale .start survived a fresh run');
+});
+
+test('HUP to the worker\'s PID alone is ignored: once the gate is released the verdict is `pass` and `.running` goes', async (t) => {
+  const dir = await wiredFixture(t);
+
+  await startRun(dir, { STUB_RELEASE: join(dir, RELEASE) });
+  await untilInFlight(dir);
+  const worker = pidOf(dir);
+  process.kill(worker, 'SIGHUP');
+
+  writeFileSync(join(dir, RELEASE), '');
+  const waited = await collect(dir);
+  assert.equal(waited.stdout, 'pass\n', `the HUP stopped the run: ${waited.stderr}`);
+  assert.equal(waited.status, 0);
+  assert.equal(text(dir, VERDICT), 'pass\n');
+  await pollUntil(() => !existsSync(join(dir, RUNNING)), '.running removed after the verdict');
+  assert.deepEqual(counterLines(dir), ['ran'], 'the command did not run exactly once');
 });
 
 for (const [name, plant] of [
@@ -966,12 +1024,12 @@ const USAGE_REFUSAL =
 
 test('--no-detach runs both gates in its own process and answers `pass` itself, with no detach', async (t) => {
   const dir = await wiredFixture(t);
-  const fakeBin = join(dir, 'fake-bin');
-  const nohupRecord = join(dir, 'nohup-called.txt');
-  mkdirSync(fakeBin);
-  writeFileSync(join(fakeBin, 'nohup'), `#!/bin/sh\nprintf 'called\\n' > '${nohupRecord}'\nexit 1\n`, { mode: 0o755 });
+  const workerRecord = join(dir, 'worker-launched.txt');
+  const env = fakeBashEnv(dir, `  printf 'called\\n' >> '${workerRecord}'\n  exit 1`);
+  mkdirSync(join(dir, LOG_DIR), { recursive: true });
+  writeFileSync(join(dir, START), 'STALE-START\n');
 
-  const result = await wrapper(dir, ['--no-detach', LABEL], { PATH: `${fakeBin}:${process.env.PATH}` });
+  const result = await wrapper(dir, ['--no-detach', LABEL], env);
 
   assert.equal(result.stdout, 'pass\n');
   assert.equal(result.status, 0);
@@ -981,7 +1039,8 @@ test('--no-detach runs both gates in its own process and answers `pass` itself, 
   assert.equal(text(dir, VERDICT), 'pass\n');
   assert.equal(existsSync(join(dir, RUNNING)), false, '.running outlived the run');
   assert.equal(text(dir, 'stub-env.txt'), 'unset\n', 'the worker marker reached the gate');
-  assert.equal(existsSync(nohupRecord), false, 'the no-detach form called nohup');
+  assert.equal(existsSync(workerRecord), false, 'the no-detach form launched a worker');
+  assert.equal(existsSync(join(dir, START)), false, 'the no-detach form left a stale .start');
 });
 
 test('--no-detach with a failing gate answers `fail <log path>` with exit 1, and the log carries the marker lines', async (t) => {
@@ -1067,6 +1126,20 @@ for (const [verdictName, stubExit, line, status] of [
     await assertReused(dir, line, status);
   });
 }
+
+test('a reusing run form leaves a planted `<label>.start` and the rest of the lane as it found them', async (t) => {
+  const dir = await wiredFixture(t);
+  await commitClean(dir);
+  await finishedCleanRun(dir);
+  writeFileSync(join(dir, START), 'PLANTED-START\n');
+  const lane = () => readdirSync(join(dir, LOG_DIR)).sort();
+  const before = lane();
+
+  await assertReused(dir, 'pass\n', 0);
+
+  assert.deepEqual(lane(), before, 'the reusing run form changed the lane\'s file list');
+  assert.equal(text(dir, START), 'PLANTED-START\n', 'the reusing run form touched .start');
+});
 
 // Each case first proves its baseline is reused, so its "not reused" is the perturbation's doing.
 test('not reused after HEAD moved: the run form starts a fresh run, whose `.commit` names the new HEAD', async (t) => {
