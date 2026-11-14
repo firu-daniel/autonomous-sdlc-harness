@@ -32,3 +32,9 @@ not ok 510 - (k) a registered clone takes its protected paths from the recorded 
 
 - [ ] No code change of its own. If Finding 2's change to the launcher's launch `case` has not landed, land it first, as Finding 2 specifies.
 - [ ] If the failure persists after Finding 2, diagnose it as a new finding in the next round. Do not change the test.
+
+## Already passing
+
+- **(a) Named test and file run:** `(k) a registered clone takes its protected paths from the recorded per-run profile, and refuses without one`, in `cli/test/launch-sandboxed-gates.test.mjs` — run after Finding 2's launcher change (commit `2c67a1b6`, "start supervisor without nohup in macOS sandbox") had landed on this branch.
+- **(b) Command and result:** `npm test --workspace cli -- test/launch-sandboxed-gates.test.mjs`, from the repository root, foreground. The named test reported `ok 11 - (k) a registered clone takes its protected paths from the recorded per-run profile, and refuses without one`; the file's summary was `# tests 21`, `# pass 21`, `# fail 0`. The TAP line names the test individually, so its result is separable from the file's other cases.
+- **(c) No code file edited:** this record is the only write. No file under `cli/` was changed, and no readiness marker was touched.
