@@ -129,7 +129,7 @@ test('(a) the task-plan round commit stages exactly the planning files, and repe
   await assertReadmeLeftAlone(f.dir);
 });
 
-test('(b) a pause commit before the first reviewer, then one between two reviewers, each takes only what changed', async (t) => {
+test('(b) a pause commit before the fan-out, then an overload self-pause with two of the set\'s files in, each takes only what changed', async (t) => {
   const f = await fixture(t, taskSeed);
   const s = f.stateDir;
   const paths = TASK_PLAN_PATHS(s, BRANCH);
@@ -137,7 +137,7 @@ test('(b) a pause commit before the first reviewer, then one between two reviewe
   await assertLandsOnce(f, paths, `chore: Plan round 0 for ${BRANCH}`);
   await write(f.dir, 'README.md', '# fixture project\n\nunrelated\n');
 
-  // The writer returned, no reviewer has run: only the plan files and the revision note changed.
+  // The writer returned; the set has not gone out: only the plan files and the revision note changed.
   await write(f.dir, `${s}/task_plans/${BRANCH}/task_1_plan.md`, '### Task 1\n\nrevised\n');
   await write(f.dir, `${s}/task_plans/${BRANCH}/task_2_plan.md`, '### Task 2\n');
   await write(f.dir, `${s}/plan_revisions/${BRANCH}/task_plan_revision_1.md`, 'revision 1\n');
@@ -149,10 +149,14 @@ test('(b) a pause commit before the first reviewer, then one between two reviewe
   ]);
   await assertReadmeLeftAlone(f.dir);
 
-  // One reviewer has written its round file since the last commit; the next has not run.
+  // Two dispatches of the set returned; the third died.
   await write(f.dir, `${s}/architecture_reviews/${BRANCH}/review_1.md`, 'PASS\n');
+  await write(f.dir, `${s}/task_plan_reviews/${BRANCH}/review_1.md`, 'FAIL\n');
   await assertLandsOnce(f, paths, `chore: Plan round 1 partial for ${BRANCH}`);
-  assert.deepEqual(await headFiles(f.dir), [`${s}/architecture_reviews/${BRANCH}/review_1.md`]);
+  assert.deepEqual(await headFiles(f.dir), [
+    `${s}/architecture_reviews/${BRANCH}/review_1.md`,
+    `${s}/task_plan_reviews/${BRANCH}/review_1.md`,
+  ]);
   await assertReadmeLeftAlone(f.dir);
 });
 
