@@ -24,7 +24,7 @@ This list is the **single source of truth** for the fix loop. The loop walks the
 8. [x] **Finding 8** — `(t) F15: job mode with <main>/scripts/.git protected and absent…` refused before `pending`. _(layer: cli)_
 9. [x] **Finding 9** — `(n) a redirected XDG_STATE_HOME or HOME does not choose the clone's profile` refused before `pending`. _(layer: cli)_
 10. [x] **Finding 10** — `(l) the vector binds the target's .git read-only…` refused before `pending`. _(layer: cli)_
-11. [ ] **Finding 11** — `(m) the vector pins Claude Code's built-in protected paths…` refused before `pending`. _(layer: cli)_
+11. [x] **Finding 11** — `(m) the vector pins Claude Code's built-in protected paths…` refused before `pending`. _(layer: cli)_
 
 ---
 

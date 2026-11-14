@@ -31,3 +31,9 @@ not ok 520 - (m) the vector pins Claude Code's built-in protected paths at the t
 
 - [ ] No code change of its own. If Finding 2's change to the launcher's launch `case` has not landed, land it first, as Finding 2 specifies.
 - [ ] If the failure persists after Finding 2, diagnose it as a new finding in the next round. Do not change the test.
+
+## Already passing
+
+- **(a) Named test and file run:** `(m) the vector pins Claude Code's built-in protected paths at the target's root, .claude read-only after every denyWrite entry`, in `cli/test/launch-sandboxed-gates.test.mjs`.
+- **(b) Command and result:** `npm test --workspace cli -- test/launch-sandboxed-gates.test.mjs`, from the repository root, in the foreground; the TAP output reports `ok 21 - (m) the vector pins Claude Code's built-in protected paths at the target's root, .claude read-only after every denyWrite entry` (file totals `# tests 21`, `# pass 21`, `# fail 0`). Already passing after an earlier fix — Finding 2's launcher change to the `nohup` supervisor launch, per this finding's `**Suspected shared cause:**`, which is recorded here as context, not as the reason for closing.
+- **(c) No code file was edited**; this section is the only write.
