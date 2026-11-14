@@ -26,7 +26,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_gate_worker_sandbox_star
 
 1. [x] **Task 1** — Add `scripts/gate-worker-start-probe.sh`, an in-session probe of the gate worker's start with `nohup` and detach controls _(layer: general)_ _(points: 20)_
 2. [x] **Task 2** — Run the probe, then start the worker without `nohup` and capture its start-up stderr in `<label>.start` _(layer: cli)_ _(points: 15)_
-3. [ ] **Task 3** — Test the new launch line and the `<label>.start` contract, and list the file in the lane README template _(layer: cli)_ _(points: 20)_
+3. [x] **Task 3** — Test the new launch line and the `<label>.start` contract, and list the file in the lane README template _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Test the probe's grading and its teardown against a temp work base _(layer: cli)_ _(points: 15)_
 5. [ ] **Task 5** — Bring this checkout's `scripts/run-test-suite.sh` and lane README level with their templates _(layer: general)_ _(points: 10)_
 6. [ ] **Task 6** — Re-take the probe on the fixed run form and record F17 and rows WS1–WS5 in `docs/sandbox-verification.md` _(layer: general)_ _(points: 20)_
