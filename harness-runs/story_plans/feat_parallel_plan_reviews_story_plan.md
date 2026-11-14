@@ -63,7 +63,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_parallel_plan_reviews/t
 18. [x] **Task 16** — Restate the autonomous fix-plan fork's convergence, resume, PAUSE and overload rules for the set _(layer: plugin)_ _(points: 15)_
 19. [x] **Task 18** — Redraw the plan loop's gates as a fan-out in `AUTONOMOUS_FLOW.md` and its whiteboard _(layer: plugin)_ _(points: 10)_
 20. [x] **Task 19** — Restate the flow-graph schema as format 3 and move every fixture onto it, with the new negatives _(layer: general)_ _(points: 20)_
-21. [ ] **Task 20** — Add `round-fan-out` to `check-flow-graph.sh` and walk fan-out edges in reachability _(layer: general)_ _(points: 15)_
+21. [x] **Task 20** — Add `round-fan-out` to `check-flow-graph.sh` and walk fan-out edges in reachability _(layer: general)_ _(points: 15)_
 22. [ ] **Task 21** — Bring this checkout's self-adopted walker, graph and analytics copies level with the templates _(layer: general)_ _(points: 10)_
 23. [ ] **Task 24** — Record headless-concurrency probe BG11, owed, in `docs/sandbox-verification.md` _(layer: general)_ _(points: 10)_
 24. [ ] **Task 22** — Record the fan-out, the join, recording, concurrency, resume and the second driver in `docs/flow-graph-walker.md` _(layer: general)_ _(points: 20)_

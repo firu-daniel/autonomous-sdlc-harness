@@ -6,14 +6,15 @@
 #
 # THE CONTRACT. Each line below is one check id and its definition; `--negatives` reads the ids off
 # these lines, so a check added here without a fixture fails there.
-#   1. reachable-from-start — every node is reached from `start` over outcome `to` edges, `skip[].to`
-#      and `<ask>` `resume`.
-#   2. reaches-terminal — from every node, some path over those same edges reaches a `terminal` node
-#      or a node with a binding edge `<escalate>`, an `onCap` `<escalate>` included.
+#   1. reachable-from-start — every node is reached from `start` over outcome `to` edges, `skip[].to`,
+#      `<ask>` `resume`, and the fan-out edge from every `round` node to each node in its `gates`.
+#   2. reaches-terminal — from every node, some path over those same edges, fan-out included, reaches
+#      a `terminal` node or a node with a binding edge `<escalate>`, an `onCap` `<escalate>` included.
 #   3. fail-cycle-capped — for every `FAIL` edge u → v carrying no `increment` of a counter with a
 #      `cap`, u is not reachable from v once every capped-incrementing edge and every binding edge is
-#      removed. A round node's computed `FAIL` edge is an outcome edge like any other. The `<ask>`
-#      resume loop is exempt: MAX_TOTAL_DISPATCHES bounds it, not a counter.
+#      removed. A round node's computed `FAIL` edge is an outcome edge like any other. The fan-out
+#      edges are not walked: a round re-dispatches its gates only after its writer, so they close no
+#      uncapped cycle. The `<ask>` resume loop is exempt: MAX_TOTAL_DISPATCHES bounds it, not a counter.
 #   4. run-mode-id-known — every `skip[].runModeId` is a `| `<id>` |` row of run_mode_instructions.md →
 #      `## The closed directive set — the only four things a run mode may switch off`.
 #   5. ledger-id-known — every edge `ledger` value is a `- [ ] <ID>.` entry of the task-engine template
@@ -29,6 +30,7 @@
 #      `caps at <N> revisions`) and in its `## Safety contract — applies before EVERY Agent dispatch`
 #      step-2 halt line (`<N>-revision caps`); each of those three phrases must yield a value.
 #   8. gate-in-round — every dispatch node with a findingsFolder whose FAIL edge routes to a node and carries no increment is listed in the gates of exactly one round node, and every round node's gates and writer name dispatch nodes.
+#   9. round-fan-out — for every round node, each of its gates routes PASS, FAIL and every skip[].to to that round node and nowhere else, its writer's returned edge routes to it, and no other edge targets it.
 # An owner document, section or phrase that yields nothing is a finding, never an empty pass.
 #
 # Usage: check-flow-graph.sh [<graph>]
@@ -114,12 +116,15 @@ def closure($edges):
           else empty end ),
       ( ($n.skip // [])[] | {from: $u, to: .to, outcome: "skip", increment: null, binding: false} ) ] as $E
 | [ (.counters // {}) | to_entries[] | select(.value | has("cap")) | .key ] as $capped
-| ([$start] | closure($E)) as $R
+| [ $nodes | to_entries[] | select(.value.kind == "round") ] as $rounds
+| ($E + [ $rounds[] | .key as $r | (.value.gates // [])[]
+          | {from: $r, to: ., outcome: "fan-out", increment: null, binding: false} ]) as $W
+| ([$start] | closure($W)) as $R
 | ( [ $nodes | to_entries[]
       | select(.value.kind == "terminal"
                or ([(.value.outcomes // {})[] | select(.binding == "<escalate>" or .onCap.binding == "<escalate>")] | length > 0))
       | .key ]
-    | closure($E | map({from: .to, to: .from})) ) as $G
+    | closure($W | map({from: .to, to: .from})) ) as $G
 | [ $E[] | select((.binding | not) and ((.increment != null and ((.increment as $i | $capped | index([$i])) != null)) | not)) ] as $F
 | ( ($nodes | keys[] | select(. as $k | $R | index([$k]) | not)
       | "reachable-from-start\tnode `\(.)` is not reached from start `\($start)`"),
@@ -129,8 +134,7 @@ def closure($edges):
       | select((.increment != null and ((.increment as $i | $capped | index([$i])) != null)) | not)
       | . as $e | select([$e.to] | closure($F) | index([$e.from]) != null)
       | "fail-cycle-capped\tFAIL edge `\($e.from)` -> `\($e.to)` increments no capped counter, and `\($e.to)` reaches `\($e.from)` again"),
-    ( [ $nodes | to_entries[] | select(.value.kind == "round") ] as $rounds
-      | ( ($nodes | to_entries[]
+    ( ( ($nodes | to_entries[]
             | select(.value.kind == "dispatch" and (.value | has("findingsFolder")))
             | select(((.value.outcomes // {}).FAIL // {}) as $f | ($f | has("to")) and (($f | has("increment")) | not))
             | .key as $k
@@ -140,7 +144,22 @@ def closure($edges):
           ($rounds[] | .key as $r
             | ((.value.gates // [])[], (.value.writer // empty))
             | select(. as $x | ($nodes[$x].kind // "") != "dispatch")
-            | "gate-in-round\tround node `\($r)` names `\(.)` as a gate or writer, which is not a dispatch node") ) ) )
+            | "gate-in-round\tround node `\($r)` names `\(.)` as a gate or writer, which is not a dispatch node") ) ),
+    ( $rounds[] | .key as $r | (.value.gates // []) as $gates | (.value.writer // null) as $w
+      | ( ( $gates[] as $g | ($nodes[$g] // {}) as $gn
+            | ( ( ("PASS", "FAIL") as $o | (($gn.outcomes // {})[$o] // {}) as $e
+                  | select((($e | has("to")) and $e.to == $r) | not)
+                  | "round-fan-out\tround `\($r)`: gate `\($g)` outcome `\($o)` routes to `\($e.to // "nowhere")`, not to `\($r)`"),
+                ( ($gn.skip // [])[] | select(.to != $r)
+                  | "round-fan-out\tround `\($r)`: gate `\($g)` outcome `skip` routes to `\(.to)`, not to `\($r)`") ) ),
+          ( $w // empty | . as $wn | ((($nodes[$wn] // {}).outcomes // {}).returned // {}) as $e
+            | select((($e | has("to")) and $e.to == $r) | not)
+            | "round-fan-out\tround `\($r)`: writer `\($wn)` outcome `returned` routes to `\($e.to // "nowhere")`, not to `\($r)`"),
+          ( $E[] | select(.to == $r)
+            | select(( ((.binding | not) and (.outcome == "PASS" or .outcome == "FAIL" or .outcome == "skip")
+                        and (.from as $f | $gates | index([$f]) != null))
+                       or ((.binding | not) and .outcome == "returned" and .from == $w) ) | not)
+            | "round-fan-out\tround `\($r)` is targeted by `\(.from)` outcome `\(.outcome)`, which is neither a PASS, FAIL or skip edge of one of its gates nor the returned edge of its writer") ) ) )
 '
 
 # Globals the owner-document reads fill once; each check reads them per graph.
