@@ -55,6 +55,9 @@
 #                     -> ... note: present / plan: newer
 #                     fw_round_evidence "$root" "$root/n_{round}.md" "$root/plan.md" -- b="$root/h"
 #                     -> round: none / note: absent / plan: unknown
+#                     mkdir "$root/h"; printf 'verdict: PASS\n' > "$root/h/review_0.md"; (the first call)
+#                     -> ... gate: b PASS <root>/h/review_0.md ... plan: unknown   (every present
+#                        round file is judged, and h/review_0.md has no commit)
 #   run mode          fw_run_mode_skipped "$root" devscene/ feat_x none      -> none
 #                     fw_run_mode_skipped "$root" devscene/ feat_x ''; echo $?  -> 1, prints nothing
 #                     mkdir -p "$root/devscene/flow_progress"
@@ -145,18 +148,21 @@ fw_fail_count() {
 #   note: present | absent     <note_template> with {round} = R+1
 #   plan: not-newer | newer | unknown
 # `round: none` is followed by `note: absent` and `plan: unknown` only. `plan:`
-# is judged against the first pair whose round-R file exists: `unknown` when
-# none does or that file has no commit; `newer` when a commit after the file's
-# last one, or an uncommitted or untracked change, touches a plan path.
+# is judged against every pair whose round-R file exists, which is judging it
+# against the earliest-committed one: `unknown` when none exists or any has no
+# commit; `newer` when, for any of them, a commit after that file's last one
+# touches a plan path, or an uncommitted or untracked change touches one.
 # Returns 2, printing no `plan:` line, when `git` cannot answer in <root>, and 2
 # with nothing printed when the arguments carry no `--` or a pair no `=`.
 fw_round_evidence() {
   local root="${1-}" note="${2-}" plans pairs np=0 nq=0 i pair node folder
-  local r=-1 n file v first='' c out
+  local r=-1 n file v present nf=0 commits c out
   [ "$#" -ge 2 ] || return 2
   shift 2
   plans=()
   pairs=()
+  present=()
+  commits=()
   while [ "$#" -gt 0 ] && [ "$1" != -- ]; do
     plans[$np]="$1"; np=$((np + 1)); shift
   done
@@ -190,7 +196,7 @@ fw_round_evidence() {
     if [ ! -e "$file" ]; then
       v=missing
     else
-      [ -n "$first" ] || first="$file"
+      present[$nf]="$file"; nf=$((nf + 1))
       v=$(fw_review_verdict "$file") || v=unreadable
     fi
     printf 'gate: %s %s %s\n' "$node" "$v" "$file"
@@ -200,13 +206,23 @@ fw_round_evidence() {
     *'{round}'*) note="${note%%\{round\}*}$((r + 1))${note#*\{round\}}" ;;
   esac
   if [ -e "$note" ]; then printf 'note: present\n'; else printf 'note: absent\n'; fi
-  [ -n "$first" ] || { printf 'plan: unknown\n'; return 0; }
+  [ "$nf" -gt 0 ] || { printf 'plan: unknown\n'; return 0; }
   git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 2
   git -C "$root" rev-parse --verify -q HEAD >/dev/null 2>&1 || { printf 'plan: unknown\n'; return 0; }
-  c=$(git -C "$root" rev-list -1 HEAD -- "$first" 2>/dev/null) || return 2
-  [ -n "$c" ] || { printf 'plan: unknown\n'; return 0; }
+  i=0
+  while [ "$i" -lt "$nf" ]; do
+    c=$(git -C "$root" rev-list -1 HEAD -- "${present[$i]}" 2>/dev/null) || return 2
+    [ -n "$c" ] || { printf 'plan: unknown\n'; return 0; }
+    commits[$i]="$c"
+    i=$((i + 1))
+  done
   [ "$np" -gt 0 ] || { printf 'plan: not-newer\n'; return 0; }
-  out=$(git -C "$root" rev-list "$c..HEAD" -- "${plans[@]}" 2>/dev/null) || return 2
+  out=''
+  i=0
+  while [ -z "$out" ] && [ "$i" -lt "$nf" ]; do
+    out=$(git -C "$root" rev-list "${commits[$i]}..HEAD" -- "${plans[@]}" 2>/dev/null) || return 2
+    i=$((i + 1))
+  done
   if [ -z "$out" ]; then
     out=$(git -C "$root" --no-optional-locks status --porcelain -- "${plans[@]}" 2>/dev/null) || return 2
   fi

@@ -196,6 +196,49 @@ test('fw_round_evidence reports a round literally', { skip: SKIP }, async (t) =>
     });
   });
 
+  await t.test('a plan commit between two gate files of one round', async () => {
+    // The earlier-committed file sits on the second pair, so judging only the first pair would
+    // print `not-newer`.
+    await plant('ev_split/plan.md', '# index\n');
+    await plant('ev_split/b/review_0.md', PASS);
+    await commit('ev_split/plan.md', 'ev_split/b/review_0.md');
+    await plant('ev_split/plan.md', '# index, revised\n');
+    await commit('ev_split/plan.md');
+    await plant('ev_split/a/review_0.md', FAIL);
+    await commit('ev_split/a/review_0.md');
+    assert.deepEqual(await evidence('ev_split', 'ev_split/plan.md'), {
+      status: 0,
+      stdout: [
+        'round: 0',
+        `gate: a FAIL ${at('ev_split', 'a', 0)}`,
+        `gate: b PASS ${at('ev_split', 'b', 0)}`,
+        'note: absent',
+        'plan: newer',
+        '',
+      ].join('\n'),
+      stderr: '',
+    });
+  });
+
+  await t.test('one round file committed and one uncommitted', async () => {
+    await plant('ev_half/plan.md', '# index\n');
+    await plant('ev_half/a/review_0.md', FAIL);
+    await commit('ev_half/plan.md', 'ev_half/a/review_0.md');
+    await plant('ev_half/b/review_0.md', PASS);
+    assert.deepEqual(await evidence('ev_half', 'ev_half/plan.md'), {
+      status: 0,
+      stdout: [
+        'round: 0',
+        `gate: a FAIL ${at('ev_half', 'a', 0)}`,
+        `gate: b PASS ${at('ev_half', 'b', 0)}`,
+        'note: absent',
+        'plan: unknown',
+        '',
+      ].join('\n'),
+      stderr: '',
+    });
+  });
+
   await t.test('an uncommitted review file', async () => {
     await plant('ev_open/plan.md', '# index\n');
     await commit('ev_open/plan.md');
