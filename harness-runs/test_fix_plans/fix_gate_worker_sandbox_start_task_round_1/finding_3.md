@@ -26,3 +26,9 @@ not ok 508 - (i) a bwrap that exits at once: did not start, quoting its line
 - [ ] No code change of its own. If Finding 2's change to the launcher's launch `case` has not landed, land it first, as Finding 2 specifies.
 - [ ] Then confirm by reading the code that, after Finding 2, the supervisor's stderr still goes straight to `$errfile` (`2>"$errfile"` stays on the subshell). With that, `bwrap: boom` is the line the `IFS= read -r first <"$errfile"` read picks up. If it is not, add only what is needed in the launcher so that it is, and record it in this finding's deviation note.
 - [ ] Do not change the test.
+
+## Already passing
+
+- **(a) Test and file run:** `(i) a bwrap that exits at once: did not start, quoting its line` in `cli/test/launch-sandboxed-gates.test.mjs`, run as a whole file. The fix site was also read: in `cli/templates/scripts/launch-sandboxed-gates.sh`, both arms of the launch `case` (the ones that begin `( trap '' HUP; exec "$setsid_bin" bash` / `( trap '' HUP; exec bash`, landed by Finding 2 in `2c67a1b6`) keep `2>"$errfile"` on the subshell, and `IFS= read -r first <"$errfile"` feeds the refusal.
+- **(b) Command and result:** `npm test --workspace cli -- test/launch-sandboxed-gates.test.mjs`, run from the repository root, printed `ok 9 - (i) a bwrap that exits at once: did not start, quoting its line`. The file totals were `# tests 21`, `# pass 21`, `# fail 0`. The named test is its own top-level `test(...)`, so the TAP line separates it from the other cases.
+- **(c) No code file edited:** this record is the only write. The test is unchanged, and so is the launcher.
